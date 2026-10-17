@@ -2120,7 +2120,7 @@ def main():
 	try:
 		if args.reminder:
 			store=Store(state_dir,create=False);require_server(store);reminder=store.reminder(advance=True);store.set_meta(AGENT_CALL_ENDED_META,now())
-			if'unacked 'in reminder or not run_notices(state_dir,show_running=True):print(f"arena-preview: {reminder}",file=sys.stderr,flush=True)
+			if'unacked 'in reminder or not run_notices(state_dir,show_running=True):print(reminder,file=sys.stderr,flush=True)
 			return 0
 		if not args.command:parser.error('a command is required; run arena-preview --help for the command list')
 		if args.command=='skills':print_skills();return 0
@@ -2209,7 +2209,7 @@ def main():
 		read_only=args.command in{'stale-reports','note-list','report-state'}
 		if not read_only:
 			routine=os.environ.get('ARENA_PREVIEW_SHELL_HOOK')!='1'or os.environ.get('ARENA_PREVIEW_ROUTE')=='1';reminder=store.reminder(routine=routine)
-			if reminder:print(f"arena-preview: {reminder}",file=sys.stderr,flush=True)
+			if reminder:print(reminder,file=sys.stderr,flush=True)
 		if args.command!='serve'and not read_only:store.touch_agent()
 		if args.command=='serve':
 			from http.server import ThreadingHTTPServer;require_renderer()

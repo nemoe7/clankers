@@ -4979,9 +4979,7 @@ def test_reminder_prioritizes_an_inbox_item_over_a_live_run():
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout == ""
-    assert result.stderr.startswith("arena-preview: calls 1 unacked 1 note | "), (
-      result.stderr
-    )
+    assert result.stderr.startswith("calls 1 unacked 1 note | "), result.stderr
 
 
 def test_reminder_reports_a_finished_run_without_a_second_line(capsys):
@@ -5329,7 +5327,7 @@ def test_dispatch_reminder():
       )
       assert "Tasks" in result.stdout or "task" in result.stdout
       line = result.stderr.strip()
-      assert line == "arena-preview: " + pending_prefix + reminder_tail(line, remaining)
+      assert line == pending_prefix + reminder_tail(line, remaining)
       assert reminder_store.state()["notes"][0]["seen_at"] is None
     result = subprocess.run(
       [sys.executable, reminder_script, "read"],
@@ -5340,7 +5338,7 @@ def test_dispatch_reminder():
     )
     assert "Inbox" in result.stdout
     line = result.stderr.strip()
-    assert line == "arena-preview: " + pending_prefix + reminder_tail(line, 1)
+    assert line == pending_prefix + reminder_tail(line, 1)
     delivered = reminder_store.state()["notes"][0]["seen_at"]
     assert delivered is not None
     assert reminder_store.state()["notes"][0]["acknowledged_at"] is None
@@ -5446,7 +5444,7 @@ def test_reminder_rotation():
       )
       tail = tail_at(cursor)
       assert result.stdout == ""
-      assert result.stderr.strip() == f"arena-preview: calls {polls} {pending}{tail}"
+      assert result.stderr.strip() == f"calls {polls} {pending}{tail}"
     result = subprocess.run(
       [sys.executable, rotate_script, "task-list"],
       capture_output=True,
@@ -5456,7 +5454,7 @@ def test_reminder_rotation():
     )
     assert "Tasks" in result.stdout
     tail = tail_at(offset + 2)
-    assert result.stderr.strip() == f"arena-preview: calls 2 {pending}{tail}"
+    assert result.stderr.strip() == f"calls 2 {pending}{tail}"
     # A read does not remove the calls since the first unread message. Only a fresh backlog
     # resets the tally. A message landing on an unacked pile leaves it running.
     rotate_store.read()
@@ -5657,6 +5655,7 @@ def test_reminder_stamps_the_call_end():
         env={**os.environ, "ARENA_PREVIEW_STATE_DIR": end_dir},
       )
       assert result.returncode == 0, result.stderr
+      assert not result.stderr.startswith("arena-preview: ")
       ended = store.state()["agent_call_ended_at"]
       assert ended, "the post-call reminder stamps the call end"
       assert preview.import_stamp(ended) is not None
@@ -8492,7 +8491,7 @@ def test_cli_hook_keeps_pending_counts_without_duplicate_routine_guidance(capsys
       ):
         assert preview.main() == 0
       line = capsys.readouterr().err.strip()
-      assert line.startswith("arena-preview: unacked 1 note")
+      assert line.startswith("unacked 1 note")
       assert (" | " in line) == (hook == "0")
     with (
       patch.dict(

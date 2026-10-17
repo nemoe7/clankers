@@ -14,6 +14,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview: remove the CLI prefix from routine reminder lines on stderr.
+
 - Arena rules: state that preselected options, recommendations, and silence are not answers.
 
 - Rule layout: split the approval exemption and testing guidance into atomic bullets.

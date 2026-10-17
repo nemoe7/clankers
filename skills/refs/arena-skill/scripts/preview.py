@@ -6833,7 +6833,7 @@ def main():
       # A pending inbox item outranks a routed status. Otherwise one routed status or one
       # reminder line is enough for the agent to act.
       if "unacked " in reminder or not run_notices(state_dir, show_running=True):
-        print(f"arena-preview: {reminder}", file=sys.stderr, flush=True)
+        print(reminder, file=sys.stderr, flush=True)
       return 0
     if not args.command:
       parser.error(
@@ -7031,7 +7031,7 @@ def main():
       )
       reminder = store.reminder(routine=routine)
       if reminder:
-        print(f"arena-preview: {reminder}", file=sys.stderr, flush=True)
+        print(reminder, file=sys.stderr, flush=True)
     if args.command != "serve" and not read_only:
       # Store the agent CLI call as a durable debug-trap signal.
       # A preview left open after a turn then reports no agent activity.
