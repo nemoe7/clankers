@@ -1631,7 +1631,8 @@ class Store:
 	def clear_polling(self):
 		with closing(self.connect())as db,db:db.execute('DELETE FROM meta WHERE key IN (?, ?)',(POLLING_META,POLL_SINCE_META))
 	def polling(self):age=seconds_since(self.meta_value(POLLING_META));return age is not None and 0<=age<POLLING_FRESH_SECONDS
-	def request_interrupt(self,tab,report_id=None):
+	def request_interrupt(self,tab,report_id=None,armed=True):
+		if not armed:self.take_interrupt();return{'agent_interrupt_pending':False}
 		if not isinstance(tab,str)or tab not in{'notes','reports','tasks','downloads'}:raise ValueError('tab must name a preview tab')
 		notice='Read ARENA.md, root AGENTS.md, every nested AGENTS.md, and arena-skill SKILL.md in full again before continuing.'
 		if tab=='reports'and report_id is not None:self.report(report_id);notice+=f" Report {report_id} violates the rules. Fix it."
@@ -2026,7 +2027,10 @@ def handler(store):
 					host=payload.get('host')
 					if host is not None and(not isinstance(host,str)or not AGENT_HOST_RE.fullmatch(host)):raise ValueError('host must be one https origin, with no path')
 					store.set_agent_key(candidate,host);self.reply(200,json.dumps(store.agent_key(),ensure_ascii=False));return
-				if interrupt_post:self.reply(200,json.dumps(store.request_interrupt(payload.get('tab'),payload.get('report_id')),ensure_ascii=False));return
+				if interrupt_post:
+					armed=payload.get('armed',True)
+					if not isinstance(armed,bool):raise ValueError('armed must be true or false')
+					self.reply(200,json.dumps(store.request_interrupt(payload.get('tab'),payload.get('report_id'),armed),ensure_ascii=False));return
 				if skip_poll_post:
 					armed=payload.get('skip',True)
 					if not isinstance(armed,bool):raise ValueError('skip must be true or false')

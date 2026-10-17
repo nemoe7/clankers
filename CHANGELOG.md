@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview: let a second header reread press cancel the pending request. Keep consumed requests in force.
+
 - Arena rules: move the PR update procedure to the skill reference.
 
 - Preview: use Lucide control icons except the Markdown mark, with a separate loader during a header reread write.

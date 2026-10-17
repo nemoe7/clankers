@@ -4994,7 +4994,10 @@ class Store:
     age = seconds_since(self.meta_value(POLLING_META))
     return age is not None and 0 <= age < POLLING_FRESH_SECONDS
 
-  def request_interrupt(self, tab, report_id=None):
+  def request_interrupt(self, tab, report_id=None, armed=True):
+    if not armed:
+      self.take_interrupt()
+      return {"agent_interrupt_pending": False}
     if not isinstance(tab, str) or tab not in {
       "notes",
       "reports",
@@ -6262,10 +6265,15 @@ def handler(store):
           self.reply(200, json.dumps(store.agent_key(), ensure_ascii=False))
           return
         if interrupt_post:
+          armed = payload.get("armed", True)
+          if not isinstance(armed, bool):
+            raise ValueError("armed must be true or false")
           self.reply(
             200,
             json.dumps(
-              store.request_interrupt(payload.get("tab"), payload.get("report_id")),
+              store.request_interrupt(
+                payload.get("tab"), payload.get("report_id"), armed
+              ),
               ensure_ascii=False,
             ),
           )

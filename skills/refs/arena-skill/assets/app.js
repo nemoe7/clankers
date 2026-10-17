@@ -2462,12 +2462,13 @@ function paintInterrupt(pending) {
   button.setAttribute('aria-pressed', pending ? 'true' : 'false');
   button.dataset.state = pending || button.dataset.error ? 'bad' : '';
   label(button, button.dataset.error || (pending
-    ? 'Read-set reread is pending'
+    ? 'Read-set reread is pending. Click to cancel.'
     : 'Ask the agent to read the full read set again before continuing'));
 }
 $('#agent-interrupt').addEventListener('click', async () => {
   const button = $('#agent-interrupt');
   if (button.disabled) return;
+  const armed = button.getAttribute('aria-pressed') !== 'true';
   delete button.dataset.error;
   button.disabled = true;
   button.setAttribute('aria-busy', 'true');
@@ -2476,7 +2477,7 @@ $('#agent-interrupt').addEventListener('click', async () => {
   try {
     await optimisticWrite(() => {}, async () => (await request('/api/agent-interrupt', {
       method: 'POST', headers: writeHeaders('application/json'),
-      body: JSON.stringify({ tab, report_id: tab === 'reports' ? $('#report-select').value || null : null })
+      body: JSON.stringify({ armed, tab, report_id: tab === 'reports' ? $('#report-select').value || null : null })
     })).json(), (state, result) => { state.agent_interrupt_pending = result.agent_interrupt_pending; });
   } catch (error) {
     button.dataset.error = `Request failed: ${error.message}. Click to retry.`;

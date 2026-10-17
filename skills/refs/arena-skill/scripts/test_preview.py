@@ -9123,6 +9123,31 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
         request("POST", "/api/agent-interrupt", '{"tab":"invalid"}', headers)[0] == 400
       )
       assert not store.state()["agent_interrupt_pending"]
+      store.request_interrupt("notes")
+      store.request_skip_poll()
+      for payload in [
+        {"tab": "notes", "armed": False},
+        {"tab": "reports", "report_id": "missing-report", "armed": False},
+      ]:
+        status, _, body = request(
+          "POST", "/api/agent-interrupt", json.dumps(payload), headers
+        )
+        assert status == 200, body
+        assert not json.loads(body)["agent_interrupt_pending"]
+        assert not store.state()["agent_interrupt_pending"]
+        assert store.take_interrupt() is None
+        assert store.skip_poll_requested()
+      for bad in ["false", 0, None, [], {}]:
+        store.request_interrupt("notes")
+        status, _, _ = request(
+          "POST",
+          "/api/agent-interrupt",
+          json.dumps({"tab": "notes", "armed": bad}),
+          headers,
+        )
+        assert status == 400
+        assert store.state()["agent_interrupt_pending"]
+        store.take_interrupt()
     finally:
       app.shutdown()
       app.server_close()

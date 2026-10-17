@@ -253,9 +253,10 @@ test('preview client', async (t) => {
       }
       if (url === '/api/agent-interrupt') {
         writeTokens.push(options.headers['X-Preview-Token']);
-        interruptCalls.push(JSON.parse(options.body));
-        state.agent_interrupt_pending = true;
-        return response({ agent_interrupt_pending: true });
+        const posted = JSON.parse(options.body);
+        interruptCalls.push(posted);
+        state.agent_interrupt_pending = posted.armed !== false;
+        return response({ agent_interrupt_pending: state.agent_interrupt_pending });
       }
       if (url === '/api/tasks/order') {
         writeTokens.push(options.headers['X-Preview-Token']);
@@ -4173,6 +4174,13 @@ test('preview client', async (t) => {
       assert.equal(button.getAttribute('aria-busy'), 'false');
       assert.equal(button.dataset.state, 'bad', 'the server-reported pending flag is red');
       assert.equal(button.disabled, false);
+      assert.equal(interruptCalls.at(-1).armed, true, 'the request explicitly arms the flag');
+      await button.events.click();
+      assert.equal(interruptCalls.at(-1).armed, false, 'a second press explicitly disarms the flag');
+      assert.equal(button.getAttribute('aria-pressed'), 'false');
+      assert.equal(state.agent_interrupt_pending, false);
+      await button.events.click();
+      assert.equal(button.getAttribute('aria-pressed'), 'true', 'a cleared flag can be armed again');
       state.agent_interrupt_pending = false;
       await refresh();
       assert.equal(button.getAttribute('aria-pressed'), 'false', 'the hook consumption clears the button');
@@ -4186,9 +4194,18 @@ test('preview client', async (t) => {
       assert.equal(interruptCalls.at(-1).report_id, selected);
       assert.equal(get('#report-select').value, selected);
       assert.equal(get('#report-status').textContent, reportStatus, 'the action has no report status line');
+      state.agent_interrupt_pending = false;
+      await refresh();
       get('#tasks-tab').events.click();
       await button.events.click();
       assert.equal(interruptCalls.at(-1).tab, 'tasks');
+      assert.equal(interruptCalls.at(-1).armed, true);
+      failedWrites.add('/api/agent-interrupt');
+      await button.events.click();
+      assert.equal(button.getAttribute('aria-pressed'), 'true', 'a refused disarm retains the pending flag');
+      failedWrites.delete('/api/agent-interrupt');
+      await button.events.click();
+      assert.equal(button.getAttribute('aria-pressed'), 'false', 'a refused disarm can be retried');
       assert.equal(sent.length, notesBefore, 'the action writes no note');
       assert.equal(get('#note').value, draft, 'the action keeps the composer draft');
       state.agent_interrupt_pending = false;
