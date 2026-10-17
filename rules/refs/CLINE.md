@@ -13,14 +13,10 @@
 
 ## Cline tools
 
-- Cline built-ins: `read_files`, `search_codebase`, `run_commands`, `fetch_web_content`, `editor`, `apply_patch`, `skills`, `ask_question`, `submit_and_exit`.
-- Use `read_files`, `search_codebase`, `editor` for reading, searching, listing, creating, editing, and inspecting files.
 - Use `run_commands` only for actual execution: tests, linters, formatters, builds, git, and application commands.
 - NEVER use `run_commands`, shell scripts, pipes, redirection, or temporary scripts as substitutes for file tools.
 - MUST edit files only with `editor` / `apply_patch`.
 - If tools cannot write: stay read-only, NEVER modify by any other means, and MUST report the limitation.
-- Use `fetch_web_content` for web retrieval.
-- Use `ask_question` when clarification is needed.
 - NEVER call a tool merely to satisfy these rules.
 - If a required tool fails for a non-syntax reason, report the failure.
 - NEVER retry or work around it, except per Test Timeout.

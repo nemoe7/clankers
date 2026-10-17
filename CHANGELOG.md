@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Cline rules: remove tool catalogs. Keep command, file-write, failure, and timeout limits.
+
 - Arena reminder: name context-reread triggers, including compaction, summary, and rule violations.
 
 - Arena suite: require a full read-set reread after a rule violation. Keep routine-slip receipts and separate report duties.
