@@ -69,3 +69,8 @@ def test_run_check_counts_only_the_problems_it_added(capsys):
   errors = ["an earlier problem"]
   check.run_check("sample", errors, lambda: errors.append("a new problem"))
   assert capsys.readouterr().out.startswith("FAIL sample: 1 problem(s) in ")
+
+
+def test_lint_count_claims_include_root_agent_guide():
+  root = check.ROOT / "AGENTS.md"
+  assert any(document == root for document, _ in check.LINT_COUNT_CLAIMS)

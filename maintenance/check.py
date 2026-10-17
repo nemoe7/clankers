@@ -127,7 +127,10 @@ CODE_SPAN_RE = re.compile(r"`[^`]*`")
 SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?:\s+|$)")
 LIST_OR_BLOCK_RE = re.compile(r"^(?:[-*+>|#]|\d+[.)] )")
 
-LINT_COUNT_CLAIMS = ((RULES / "README.md", r"(\d+) files in all"),)
+LINT_COUNT_CLAIMS = (
+  (RULES / "README.md", r"(\d+) files in all"),
+  (ROOT / "AGENTS.md", r"(\d+) files, `rules/refs/` included"),
+)
 
 # Rule refs baselines hold full wording. Live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
