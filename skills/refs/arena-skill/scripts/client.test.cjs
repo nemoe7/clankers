@@ -3273,6 +3273,46 @@ test('preview client', async (t) => {
     }
   });
 
+  await t.test('Ctrl+Shift+V keeps long clipboard text out of attachments without changing normal paste', async () => {
+    const composer = get('#compose');
+    const draft = get('#note').value;
+    const before = chips();
+    const text = 'long clipboard line\n'.repeat(50);
+    const pasted = () => event({ clipboardData: { files: [], getData: () => text } });
+    const shortcut = () => event({ key: 'V', ctrlKey: true, shiftKey: true });
+    const clear = async () => {
+      for (const chip of get('#staged-files').children.slice()) await chip.children[1].events.click();
+    };
+    assert.equal(typeof composer.events.keydown, 'function');
+    const key = shortcut();
+    composer.events.keydown(key);
+    const plain = pasted();
+    composer.events.paste(plain);
+    assert.equal(key.prevented, undefined, 'the native paste shortcut stays available');
+    assert.equal(plain.prevented, undefined, 'the browser inserts plain text');
+    assert.deepEqual(chips(), before, 'plain-text paste stages no file');
+    assert.equal(get('#note').value, draft, 'the handler does not replace the draft');
+    try {
+      const normal = pasted();
+      composer.events.paste(normal);
+      assert.equal(normal.prevented, true, 'the shortcut applies to one paste only');
+      assert.ok(chips().length > before.length);
+      await clear();
+      for (const cancel of [
+        () => composer.events.keyup(event({ key: 'Shift' })),
+        () => composer.events.focusout(event({})),
+        () => composer.events.keydown(event({ key: 'x', ctrlKey: false, shiftKey: false })),
+      ]) {
+        composer.events.keydown(shortcut());
+        cancel();
+        const next = pasted();
+        composer.events.paste(next);
+        assert.equal(next.prevented, true, 'an abandoned shortcut does not affect a later paste');
+        await clear();
+      }
+    } finally { await clear(); }
+  });
+
   await t.test("The queue records per-job opt-in and a browser worker claims one URL at a time", async () => {
     // The queue records per-job opt-in and a browser worker claims one URL at a time. Remote fetches
     // omit credentials and referrers. None of these mocks assert actual browser CORS behavior.

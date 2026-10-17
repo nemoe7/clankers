@@ -316,8 +316,16 @@ function stageFiles(files) {
 }
 $('#attach-file').addEventListener('click', () => picker.click());
 picker.addEventListener('change', () => stageFiles(Array.from(picker.files || [])));
+let pasteAsText = false;
+compose.addEventListener('keydown', event => {
+  pasteAsText = event.key.toLowerCase() === 'v' && event.ctrlKey && event.shiftKey;
+});
+compose.addEventListener('keyup', () => { pasteAsText = false; });
+compose.addEventListener('focusout', () => { pasteAsText = false; });
 compose.addEventListener('paste', event => {
-  if (send.disabled) return;
+  const plainText = pasteAsText;
+  pasteAsText = false;
+  if (send.disabled || plainText) return;
   const clip = event.clipboardData;
   const images = Array.from(clip?.files || []).filter(file => file.type.startsWith('image/'));
   const text = clip?.getData('text/plain') || '';

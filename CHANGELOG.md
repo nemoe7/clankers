@@ -48,6 +48,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview composer: keep Ctrl+Shift+V as native text paste. Retain ordinary long-text and image attachment behavior.
+
 - Arena gate: consume a header reread request only in an agent shell. Keep hosted processes, platform probes, and routed runs active.
 
 - Preview tasks: add a bottom drop target and save its appended order. Restore the saved order after a refused write.

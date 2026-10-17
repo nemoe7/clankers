@@ -48,7 +48,7 @@ Latest measurements as of 2026-10-17. `maintenance/check.py --update` rebuilds t
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 294 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 283 `tok` |
 | [`skills/amending-violations/SKILL.md`](skills/amending-violations/SKILL.md) | `o200k_base` | 1,607 `tok` |
-| [`skills/arena-skill/assets/app.js`](skills/arena-skill/assets/app.js) | `UTF-8 file size` | 66,715 `B` |
+| [`skills/arena-skill/assets/app.js`](skills/arena-skill/assets/app.js) | `UTF-8 file size` | 66,987 `B` |
 | [`skills/arena-skill/assets/index.html`](skills/arena-skill/assets/index.html) | `UTF-8 file size` | 14,414 `B` |
 | [`skills/arena-skill/assets/markdown-it.min.js`](skills/arena-skill/assets/markdown-it.min.js) | `UTF-8 file size` | 114,836 `B` |
 | [`skills/arena-skill/assets/message-markdown.js`](skills/arena-skill/assets/message-markdown.js) | `UTF-8 file size` | 2,690 `B` |
