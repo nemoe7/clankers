@@ -16,6 +16,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Rules docs: state that Cline and Kilo load project AGENTS.md and configured overlays.
 
+- Rule structure: move Glossary below Constitution and rebase/push rules to Git.
+
 ## 2026-10-16
 
 ### Added
