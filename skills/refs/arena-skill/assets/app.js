@@ -1770,8 +1770,16 @@ async function writeTaskOrder(ids, stored) {
 }
 function draggableTaskRow(task, list) {
   const row = taskRow(task);
-  row.draggable = true;
-  row.addEventListener('dragstart', event => {
+  const handle = document.createElement('button');
+  handle.className = 'task-drag-handle';
+  handle.type = 'button';
+  handle.draggable = true;
+  handle.textContent = '•';
+  handle.setAttribute('aria-label', `Drag to reorder ${task.title}`);
+  handle.title = `Drag to reorder ${task.title}`;
+  row.dataset.dragHandle = 'true';
+  row.insertBefore(handle, row.children[0]);
+  handle.addEventListener('dragstart', event => {
     draggingTaskId = row.title;
     dragStartPayload = lastTasksPayload;
     previewIds = null;
@@ -1792,7 +1800,7 @@ function draggableTaskRow(task, list) {
     void writeTaskOrder(ids, dragStartPayload);
     endTaskDrag();
   });
-  row.addEventListener('dragend', cancelTaskDrag);
+  handle.addEventListener('dragend', cancelTaskDrag);
   return row;
 }
 for (const list of [$('#tasks-current-body'), $('#tasks-upcoming-body')]) {

@@ -97,6 +97,8 @@ test('preview client', async (t) => {
     }
     return elements.get(id);
   };
+  const taskParts = row => row.children.filter(child => child.className !== 'task-drag-handle');
+  const taskPart = (row, className) => row.children.find(child => child.className === className);
   // The first shape of a control's icon: a control holds one SVG, and its shapes sit in draw
   // order, so the same index reads the same shape however many the icon carries.
   const shapeOf = element => element.children.at(-1).children[0];
@@ -680,12 +682,13 @@ test('preview client', async (t) => {
     // The second task shows the Upcoming row shape.
     assert.equal(upcomingBody.children.length, 1, 'the head stays out of Upcoming');
     assert.equal(upcomingBody.children[0].tagName, 'li');
-    assert.equal(upcomingBody.children[0].children[0].textContent, 'Second in line');
-    assert.equal(upcomingBody.children[0].children[0].className, 'task-title');
-    assert.equal(upcomingBody.children[0].children[1].tagName, 'details');
-    assert.equal(upcomingBody.children[0].children[1].children.length, 2, 'a summary and one list');
-    assert.equal(upcomingBody.children[0].children[1].children[0].tagName, 'summary');
-    assert.match(upcomingBody.children[0].children[1].children[0].textContent, /\d+ detail/, 'the summary counts the details');
+    const rowParts = taskParts(upcomingBody.children[0]);
+    assert.equal(rowParts[0].textContent, 'Second in line');
+    assert.equal(rowParts[0].className, 'task-title');
+    assert.equal(rowParts[1].tagName, 'details');
+    assert.equal(rowParts[1].children.length, 2, 'a summary and one list');
+    assert.equal(rowParts[1].children[0].tagName, 'summary');
+    assert.match(rowParts[1].children[0].textContent, /\d+ detail/, 'the summary counts the details');
   });
 
   await t.test("Canonical task types carry badges and filter legacy missing types as Misc", async () => {
@@ -749,17 +752,21 @@ test('preview client', async (t) => {
     await refresh();
     const head = get('#tasks-current-body').children[0];
     assert.equal(head.title, 'code-work', 'the first open task keeps the seat');
-    const badge = head.children[1];
+    const headParts = taskParts(head);
+    const badge = headParts[1];
     assert.equal(badge.className, 'task-type', 'the badge rides beside the title');
     assert.ok(badge.textContent.trim().length > 0, 'the code row carries a type badge label');
     assert.equal(badge.dataset.taskType, 'code');
-    assert.equal(head.children[2].className, 'task-details',
+    assert.equal(headParts[2].className, 'task-details',
       'the details collapse follows the badge');
     const docsRow = get('#tasks-upcoming-body').children[0];
-    assert.equal(docsRow.children[1].className, 'task-type',
+    assert.equal(taskParts(docsRow)[1].className, 'task-type',
       'a typed row carries its badge beside the title');
-    assert.equal(get('#tasks-upcoming-body').children[1].children.length, 1,
-      'an Unspecified task keeps the row shape it had before types existed');
+    const unspecifiedRow = get('#tasks-upcoming-body').children[1];
+    assert.equal(taskParts(unspecifiedRow).length, 1,
+      'an Unspecified task keeps only its title outside the handle');
+    assert.equal(taskPart(unspecifiedRow, 'task-title').textContent, 'Legacy task');
+    assert.equal(unspecifiedRow.children[0].className, 'task-drag-handle');
     const filter = get('#task-type-filter');
     filter.value = 'docs';
     filter.events.change();
@@ -783,7 +790,7 @@ test('preview client', async (t) => {
     await refresh();
   });
 
-  await t.test("A queue drag previews the seat, writes the drawn order, and restores a refused write", async () => {
+  await t.test("A queue drag uses the bullet handle, keeps title text selectable, and restores refused writes", async () => {
     const prior = state.tasks;
     const stamp = new Date().toISOString();
     const settle = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -798,9 +805,24 @@ test('preview client', async (t) => {
     try {
       await refresh();
       const rows = () => [...get('#tasks-current-body').children, ...get('#tasks-upcoming-body').children];
-      const grab = row => row.events.dragstart(event({ target: row, dataTransfer: { setData() {} } }));
+      const dragHandle = row => row.children.find(child => child.className === 'task-drag-handle');
+      const taskTitle = row => row.children.find(child => child.className === 'task-title');
+      const grab = row => {
+        const handle = dragHandle(row);
+        handle.events.dragstart(event({
+          target: handle, dataTransfer: { setData() {} },
+        }));
+      };
       assert.deepEqual(rows().map(row => row.title), ['first', 'second', 'third']);
-      assert.equal(rows()[0].draggable, true, 'a queue row is draggable');
+      assert.notEqual(rows()[0].draggable, true, 'the task row leaves text selection to the browser');
+      assert.notEqual(taskTitle(rows()[0]).draggable, true, 'the title is not a drag target');
+      assert.equal(dragHandle(rows()[0]).draggable, true, 'the bullet handle starts the drag');
+      assert.equal(dragHandle(rows()[0]).textContent, '•', 'the list bullet is the drag handle');
+      assert.equal(rows()[0].dataset.dragHandle, 'true', 'the draggable row hides its native marker');
+      assert.equal(rows()[0].events.dragstart, undefined, 'dragstart is not attached to the task row');
+      assert.equal(taskTitle(rows()[0]).events.dragstart, undefined, 'dragstart is not attached to the title');
+      assert.match(dragHandle(rows()[0]).getAttribute('aria-label'), /reorder/i,
+        'the drag handle has an accessible name');
       // A drag previews the seat: the queue redraws in the drawn order, and the seat keeps a mark.
       grab(rows()[2]);
       assert.equal(rows()[2].dataset.dragging, 'true', 'the dragged row reads as dragged');
@@ -815,7 +837,7 @@ test('preview client', async (t) => {
       const drop = event({ target: rows()[0] });
       rows()[0].events.drop(drop);
       assert.equal(drop.prevented, true, 'the drop takes the dragged row');
-      rows()[1].events.dragend(event({ target: rows()[1] }));
+      dragHandle(rows()[1]).events.dragend(event({ target: dragHandle(rows()[1]) }));
       assert.ok(rows().every(row => row.dataset.dragging === undefined), 'the dragged cue clears');
       assert.ok(rows().every(row => row.dataset.drop === undefined), 'the seat mark clears');
       await settle();
@@ -827,7 +849,7 @@ test('preview client', async (t) => {
       grab(rows()[2]);
       rows()[0].events.dragover(event({ target: rows()[0] }));
       assert.deepEqual(rows().map(row => row.title), ['second', 'third', 'first'], 'a preview moves the row under the hand');
-      rows()[0].events.dragend(event({ target: rows()[0] }));
+      dragHandle(rows()[0]).events.dragend(event({ target: dragHandle(rows()[0]) }));
       assert.deepEqual(rows().map(row => row.title), ['third', 'first', 'second'], 'a cancelled drag restores the stored rows');
       assert.equal(orderWrites.length, 1, 'a cancelled drag writes nothing');
       // A drop on the list background moves the row to the end of that list.
@@ -835,7 +857,7 @@ test('preview client', async (t) => {
       grab(last);
       const background = event({ target: get('#tasks-upcoming-body') });
       get('#tasks-upcoming-body').events.drop(background);
-      last.events.dragend(event({ target: last }));
+      dragHandle(last).events.dragend(event({ target: dragHandle(last) }));
       await settle();
       assert.deepEqual(orderWrites.at(-1), ['third', 'second', 'first'], 'the background drop appends the row');
       // A refused write drops the drawn rows and names the failure.
@@ -843,7 +865,7 @@ test('preview client', async (t) => {
       const refused = rows()[2];
       grab(refused);
       rows()[0].events.drop(event({ target: rows()[0] }));
-      refused.events.dragend(event({ target: refused }));
+      dragHandle(refused).events.dragend(event({ target: dragHandle(refused) }));
       await settle();
       assert.deepEqual(rows().map(row => row.title), ['third', 'second', 'first'], 'the refused write keeps the stored rows');
       assert.match(get('#tasks-status').textContent, /not saved/i);
@@ -867,7 +889,7 @@ test('preview client', async (t) => {
     };
     await refresh();
     const head = get('#tasks-current-body').children[0];
-    assert.ok(head.children[1].textContent.trim().length > 0,
+    assert.ok(taskPart(head, 'task-type').textContent.trim().length > 0,
       'the operations row carries a type badge label');
     const filter = get('#task-type-filter');
     filter.value = 'docs';
@@ -968,7 +990,7 @@ test('preview client', async (t) => {
       assert.deepEqual(hits(head()), ['Beta'], 'title matches are marked case-insensitively');
       assert.ok(!details().open, 'a title-only match does not open unrelated details');
       const draft = get('#note').value;
-      const title = head().children[0];
+      const title = taskPart(head(), 'task-title');
       const marked = title.children.find(child => child.className === 'search-hit');
       marked.closest = selector => selector.includes('.task-title') ? title : null;
       documentEvents.click({ target: marked, preventDefault() {} });
@@ -1011,7 +1033,7 @@ test('preview client', async (t) => {
     upcomingBody = get('#tasks-upcoming-body');
     assert.equal(upcomingBody.children.length, 1);
     assert.equal(upcomingBody.children[0].title, 'waits-on-report');
-    assert.equal(upcomingBody.children[0].children[0].dataset.blocked, 'true');
+    assert.equal(taskPart(upcomingBody.children[0], 'task-title').dataset.blocked, 'true');
     // With every upcoming task blocked, no task reads as current work.
     state.tasks.upcoming[1].blocked = true;
     await refresh();
@@ -1041,7 +1063,7 @@ test('preview client', async (t) => {
     upcomingBody = get('#tasks-upcoming-body');
     assert.equal(upcomingBody.children.length, 1);
     assert.equal(upcomingBody.children[0].title, 'waits-on-report');
-    assert.equal(upcomingBody.children[0].children[0].dataset.blocked, 'true');
+    assert.equal(taskPart(upcomingBody.children[0], 'task-title').dataset.blocked, 'true');
     // With every upcoming task blocked, no task reads as current work.
     state.tasks.upcoming[1].blocked = true;
     await refresh();
@@ -1055,7 +1077,7 @@ test('preview client', async (t) => {
 
   await t.test("The details are a real list, so each carries its own marker rather than being a line in a ", async () => {
     // The details are a real list, so each carries its own marker rather than being a line in a span.
-    detailList = upcomingBody.children[0].children[1].children[1];
+    detailList = taskPart(upcomingBody.children[0], 'task-details').children[1];
     assert.equal(detailList.tagName, 'ul');
     assert.equal(detailList.className, 'task-detail-list');
     assert.equal(detailList.children.length, 1);
@@ -1107,8 +1129,11 @@ test('preview client', async (t) => {
     await refresh();
     const row = get('#tasks-upcoming-body').children[0];
     assert.equal(row.title, 'answered-task', 'the filler holds the head seat');
-    assert.equal(row.children.length, 2, 'the receipt rides inside the details block');
-    const details = row.children[1];
+    const rowParts = taskParts(row);
+    assert.equal(rowParts.length, 2, 'the title and details stay beside the drag handle');
+    assert.equal(row.children[0].className, 'task-drag-handle');
+    assert.equal(row.dataset.dragHandle, 'true');
+    const details = taskPart(row, 'task-details');
     assert.equal(details.className, 'task-details');
     assert.ok(!details.open, 'the receipt stays hidden until expanded');
     assert.match(details.children[0].textContent, /\d+ details/,
@@ -1146,12 +1171,14 @@ test('preview client', async (t) => {
       'an unchanged poll refreshes the relative age');
     state.reports = [];
     await refresh();
-    const plain = get('#tasks-upcoming-body').children[0].children[1].children[2].children[0].children[0];
+    const plain = taskPart(get('#tasks-upcoming-body').children[0], 'task-details')
+      .children[2].children[0].children[0];
     assert.equal(plain.tagName, 'code', 'unpublishing removes a source link without a task-data change');
     assert.equal(plain.textContent, 'answer-abc123');
     state.reports = [{ id: 'answer-source', title: 'Source report', updated_at: new Date().toISOString() }];
     await refresh();
-    const restored = get('#tasks-upcoming-body').children[0].children[1].children[2].children[0].children[0];
+    const restored = taskPart(get('#tasks-upcoming-body').children[0], 'task-details')
+      .children[2].children[0].children[0];
     assert.equal(restored.tagName, 'a', 'republishing restores the source link without a task-data change');
     // The row builds this block from the record, so hostile answer text stays text.
     state.tasks = {
@@ -1168,8 +1195,9 @@ test('preview client', async (t) => {
     await refresh();
     const host = get('#tasks-upcoming-body').children[0];
     assert.equal(host.title, 'hostile-task', 'the filler still holds the head seat');
-    assert.equal(host.children.length, 2, 'a task with no manual details still wraps the receipt');
-    const hostileText = host.children[1].children[1].children[0].children[2];
+    assert.equal(taskParts(host).length, 2, 'the receipt stays in details beside the bullet handle');
+    assert.equal(host.children[0].className, 'task-drag-handle');
+    const hostileText = taskPart(host, 'task-details').children[1].children[0].children[2];
     assert.equal(hostileText.tagName, 'p', 'the answer text lands in a paragraph, not markup');
     assert.equal(hostileText.textContent, '<img onerror=alert(1)>', 'answer text stays text');
     state.tasks = prior;
@@ -1181,10 +1209,11 @@ test('preview client', async (t) => {
     currentBody = get('#tasks-current-body');
     assert.equal(get('#tasks-current').hidden, false);
     assert.equal(currentBody.children.length, 1);
-    assert.equal(currentBody.children[0].children[0].textContent, '<img onerror=alert(1)> dir');
-    assert.equal(currentBody.children[0].children[0].className, 'task-title');
+    const currentTitle = taskPart(currentBody.children[0], 'task-title');
+    assert.equal(currentTitle.textContent, '<img onerror=alert(1)> dir');
+    assert.equal(currentTitle.className, 'task-title');
     assert.equal(currentBody.children[0].title, 'docs-archive');
-    taskControl = currentBody.children[0].children[0];
+    taskControl = currentTitle;
     assert.equal(taskControl.dataset.taskId, 'docs-archive');
     assert.equal(taskControl.attributes.role, 'button');
     assert.equal(taskControl.tabIndex, 0, 'keyboard users can reach the task ID');
@@ -1219,7 +1248,7 @@ test('preview client', async (t) => {
 
   await t.test("An unchanged poll must not rebuild the rows, or an opened details snaps shut three seconds", async () => {
     // An unchanged poll must not rebuild the rows, or an opened details snaps shut three seconds later.
-    opened = upcomingBody.children[0].children[1];
+    opened = taskPart(upcomingBody.children[0], 'task-details');
     opened.open = true;
     const taskData = JSON.stringify(state.tasks);
     get('#tasks-status').textContent = 'stale age';
@@ -1227,8 +1256,9 @@ test('preview client', async (t) => {
     assert.ok(get('#tasks-status').textContent.endsWith(context.time(state.tasks.updated_at)),
       'an unchanged poll refreshes the Updated age');
     assert.equal(JSON.stringify(state.tasks), taskData, 'age refresh does not change task data');
-    assert.equal(upcomingBody.children[0].children[1], opened, 'the row survives an unchanged poll');
-    assert.equal(upcomingBody.children[0].children[1].open, true);
+    assert.equal(taskPart(upcomingBody.children[0], 'task-details'), opened,
+      'the row survives an unchanged poll');
+    assert.equal(opened.open, true);
   });
 
   await t.test("The log and the tasks lost their own copy buttons", async () => {
@@ -3746,7 +3776,7 @@ test('preview client', async (t) => {
     try {
       const body = get('#tasks-upcoming-body');
       const row = body.children.find(item => item.title === 'hover-stays');
-      const title = row.children[0];
+      const title = taskPart(row, 'task-title');
       assert.equal(title.className, 'task-title');
       documentEvents.click({ target: title, preventDefault: () => {} });
       assert.equal(get('#note').value.startsWith('RE: hover-stays'), true, 'the quote still lands');
