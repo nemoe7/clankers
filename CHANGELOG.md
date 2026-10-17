@@ -16,6 +16,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview: mark a report read when its body opens, without a scroll or dwell. Keep the view heartbeat and answer fallback. Retry a failed read on a later check.
+
 - Preview: remove the CLI prefix from routine reminder lines on stderr.
 
 - Arena rules: state that preselected options, recommendations, and silence are not answers.
@@ -27,6 +29,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Rules docs: state that Cline and Kilo load project AGENTS.md and configured overlays.
 
 - Rule structure: move Glossary below Constitution and rebase/push rules to Git.
+
+### Fixed
+
+- Preview: cancel a prior copy timer before it can clear newer button feedback.
 
 ## 2026-10-16
 

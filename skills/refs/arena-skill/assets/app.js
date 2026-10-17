@@ -895,8 +895,6 @@ function renderState() {
   updateReportNavigation();
   updateReportTop();
   renderReportAcknowledgement();
-  // The panel can show a report's end while its last scroll event was lost (a re-render moved the
-  // panel, or the event landed a pixel short), so the poll takes the same look the tab click does.
   checkReportRead();
 }
 async function refreshState() {
@@ -1195,6 +1193,7 @@ function quoteTaskId(title) {
   title.title = title.dataset.taskId;
 }
 // The tab buttons share one confirmation, and null text means there was nothing to copy.
+const copyTimers = new WeakMap();
 async function copyFrom(button, text, what, glyph = 'copy', failure = null) {
   // The label a copy came in with is the label it leaves behind, so a restored `Copy the state`
   // never names the wrong job.
@@ -1202,16 +1201,18 @@ async function copyFrom(button, text, what, glyph = 'copy', failure = null) {
   const words = text === null ? null : await copyText(text);
   const message = words || failure || (text === null ? `There is no ${what} to copy`
     : `Clipboard blocked; select the ${what} and copy it`);
+  clearTimeout(copyTimers.get(button));
   setIcon(button, words ? 'check' : 'x', 15);
   label(button, message);
   button.title = message;
   button.dataset.state = words ? 'good' : 'bad';
-  setTimeout(() => {
+  copyTimers.set(button, setTimeout(() => {
     setIcon(button, typeof glyph === 'function' ? glyph() : glyph, 15);
     label(button, before);
     button.title = before;
     button.dataset.state = '';
-  }, 1500);
+    copyTimers.delete(button);
+  }, 1500));
 }
 function growSlot(area) {
   // The same 2px of border the composer adds. See grow().
@@ -1846,22 +1847,18 @@ function updateReportPip(reports) {
   pip.setAttribute('aria-label', unseen.length ? 'Unread report' : 'No unread reports');
   $('#mark-report-acks-seen').disabled = ackBatchPending || !reports.some(ackUnread);
 }
-// Mark a report read at its scroll end, or after one second in view if it fits the panel. A quick pass must not mark it.
-// Republishing clears the stamp so changed text remains unread.
-const REPORT_READ_DWELL = 1000;
-let readPending = null;
-function clearReadTimer() {
-  if (readPending) { clearTimeout(readPending.timer); readPending = null; }
-}
 function unseenReportId() {
   const state = getState();
   const reports = (state && state.reports) || [];
   const report = reports.find(item => item.id === $('#report-select').value);
   return report && !report.seen_at ? report.id : null;
 }
+const pendingReportReads = new Set();
 async function markReportRead(id) {
-  clearReadTimer();
   const original = getState()?.reports.find(report => report.id === id)?.updated_at;
+  const readKey = `${id}:${original}`;
+  if (pendingReportReads.has(readKey)) return;
+  pendingReportReads.add(readKey);
   const at = new Date().toISOString();
   const apply = (state, result) => {
     const report = state.reports.find(item => item.id === id);
@@ -1874,7 +1871,7 @@ async function markReportRead(id) {
       })).json());
   } catch (error) {
     // A later look retries a failed read stamp.
-  }
+  } finally { pendingReportReads.delete(readKey); }
 }
 // An agent ack holds a star and the tab dot until the owner opens the report. The open is the
 // gesture, not the read: the receipt sits at the top of the panel, so the visit clears it.
@@ -1941,18 +1938,10 @@ function checkReportRead() {
   const shown = shownReportId();
   if (shown && !document.hidden) void markReportViewed(shown);
   const id = panel.hidden ? null : unseenReportId();
-  const viewport = panel.clientHeight;
-  // Wait for visible report content before recording a read. Zero-height panels and pending report requests provide nothing to read.
-  if (!id || !viewport || !panel.scrollHeight) { clearReadTimer(); return; }
-  if (panel.scrollHeight > viewport + 1) {
-    // There is more report than panel, so reaching the end is the gesture that reads it.
-    if (panel.scrollTop + viewport >= panel.scrollHeight - 2) markReportRead(id);
-    else clearReadTimer();
-    return;
-  }
-  if (readPending && readPending.id === id) return;
-  clearReadTimer();
-  readPending = { id, timer: setTimeout(() => markReportRead(id), REPORT_READ_DWELL) };
+  const report = getState()?.reports.find(item => item.id === id);
+  const body = $('#report');
+  if (id && !document.hidden && body.dataset.reportId === id &&
+      body.dataset.updatedAt === (report?.updated_at || '')) void markReportRead(id);
 }
 $('#reports-panel').addEventListener('scroll', () => { checkReportRead(); updateReportTop(); });
 // A hidden page is not a pair of eyes: leaving the report, or hiding the page, clears the view.
@@ -1979,7 +1968,6 @@ function showTab(tab) {
     refreshState();
     loadReport();
   } else {
-    clearReadTimer();
     if (left) void markReportViewed(left, false);
     releaseHeldReport(null);
   }

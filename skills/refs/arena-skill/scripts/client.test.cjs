@@ -129,6 +129,7 @@ test('preview client', async (t) => {
   let reportSubmitWait = null;
   const sent = [];
   const readStamps = [];
+  let readStampFailures = 0;
   const ackSeenCalls = [];
   const ackSeenFailures = new Set();
   const viewCalls = [];
@@ -413,6 +414,7 @@ test('preview client', async (t) => {
       }
       if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
         readStamps.push(url);
+        if (readStampFailures) { readStampFailures -= 1; return response({ error: 'Read stamp failed' }, false); }
         const id = decodeURIComponent(url.split('/')[3]);
         const seen_at = new Date().toISOString();
         const report = state.reports.find(item => item.id === id);
@@ -508,7 +510,6 @@ test('preview client', async (t) => {
   let pip;
   let agentAck;
   let panel;
-  let wait;
   let logStamp;
   let messageRow;
   let visibleRows;
@@ -1745,8 +1746,8 @@ test('preview client', async (t) => {
     await get('#refresh-report').events.click();
     await tick();
     assert.equal(get('#report').innerHTML, '<h1>Report</h1>');
-    assert.equal(get('#report-select').children[0].textContent, '1. * Fielded',
-      'a report with no read stamp carries the asterisk in the select');
+    assert.equal(get('#report-select').children[0].textContent, '1. Fielded',
+      'opening the report clears its unread asterisk');
     assert.equal(get('#report-submit').hidden, false);
     assert.equal(Number(get('#report-form').dataset.fields), reportFields);
     assert.equal(textInput.value, 'ada');
@@ -1977,7 +1978,7 @@ test('preview client', async (t) => {
     assert.equal(get('#report-ack-history').children.length, 2);
     assert.equal(get('#report-ack-history').children[0].innerHTML, '<p>First</p>');
     assert.equal(get('#report-ack-history').children[1].children[0].textContent, 'Second');
-    assert.equal(pip.hidden, false, 'acknowledging an answer does not mark the report read');
+    assert.equal(pip.hidden, true, 'the open report body is read independently of its answer receipt');
     state.reports[0].latest_answer_id = 'b765432-bbbbbbbbbbbbbbbbbbbbbbbbb';
     state.reports[0].latest_answer_at = '2026-09-24T10:02:00';
     state.reports[0].latest_answer_acknowledged_at = null;
@@ -1996,6 +1997,9 @@ test('preview client', async (t) => {
   });
 
   await t.test("An edited report keeps its star but drops the pip", async () => {
+    // Check edits while Reports is hidden. Opening now stamps the loaded body immediately.
+    get('#notes-tab').events.click();
+    await tick();
     // An edited report keeps its star but drops the pip: ever_seen remembers the open.
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(),
       seen_at: null, ever_seen: 1 }];
@@ -2031,8 +2035,8 @@ test('preview client', async (t) => {
     await tick(); await tick();
     assert.deepEqual(ackSeenCalls, ['/api/reports/r1/ack-seen'],
       'opening the report stamps the ack open once');
-    assert.equal(viewCalls.length, viewsBefore,
-      'the half-minute throttle holds a repeat look at the same report to one stamp');
+    assert.equal(viewCalls.length, viewsBefore + 1,
+      'returning to Reports starts a new active look');
     assert.equal(viewActive[viewActive.length - 1], true, 'that stamp counts as an active look');
     assert.equal(pip.hidden, true, 'the dot goes with the open');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
@@ -2041,11 +2045,11 @@ test('preview client', async (t) => {
     await tick(); await tick();
     assert.deepEqual(ackSeenCalls, ['/api/reports/r1/ack-seen'],
       'a later open stamps nothing, because the ack is already seen');
-    assert.equal(viewCalls.length, viewsBefore, 'a refresh on the same report stamps no look');
+    assert.equal(viewCalls.length, viewsBefore + 1, 'a refresh on the same report stamps no look');
     // Leaving the report clears the stamp, so a page sitting in the background holds nothing.
     await get('#notes-tab').events.click();
     await tick(); await tick();
-    assert.equal(viewCalls.length, viewsBefore + 1, 'leaving the report sends the clear');
+    assert.equal(viewCalls.length, viewsBefore + 2, 'leaving the report sends the clear');
     assert.equal(viewActive[viewActive.length - 1], false, 'the clear ends the look');
   });
 
@@ -2093,93 +2097,102 @@ test('preview client', async (t) => {
       '1. Fielded', 'the star goes with the in-view ack');
   });
 
-  await t.test("What stamps a report is the browser showing it: one second in view for one that fits the", async () => {
+  await t.test('Opening a short report stamps it without a dwell', async () => {
     panel = get('#reports-panel');
-    wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
     state.reports = [{ id: 'r1', title: 'Fits', updated_at: new Date().toISOString(), seen_at: null }];
     readStamps.length = 0;
     panel.scrollHeight = 400; panel.clientHeight = 400; panel.scrollTop = 0;
     get('#reports-tab').events.click();
     await tick(); await tick();
-    assert.equal(readStamps.length, 0, 'a report that fits is not stamped on sight');
-    await wait(1200);
-    assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'one second in view stamps it');
+    assert.deepEqual(readStamps, ['/api/reports/r1/seen']);
   });
 
-  await t.test("A report longer than the panel is not stamped while its end is out of reach, and the panel", async () => {
-    // A report longer than the panel is not stamped while its end is out of reach, and the panel is
-    // the element that scrolls, so its own position is what counts.
+  await t.test('Opening a long report stamps it before scrolling', async () => {
     state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
     readStamps.length = 0;
     panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 0;
     get('#reports-tab').events.click();
     await tick(); await tick();
-    assert.equal(readStamps.length, 0, 'an unscrolled long report is not stamped');
-    panel.scrollTop = 600;
+    assert.deepEqual(readStamps, ['/api/reports/r1/seen']);
     panel.events.scroll();
     await tick();
-    assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'reaching the end stamps it at once');
+    assert.equal(readStamps.length, 1, 'scrolling does not repeat the stamp');
   });
 
-  await t.test("A report showing its end stays read when the last scroll event missed: the poll rechecks", async () => {
-    // State polls mark a report read when its end is visible, even if no scroll event fires.
-    state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
+  await t.test('A poll keeps the open report read without another stamp', async () => {
     readStamps.length = 0;
-    panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 0;
-    get('#reports-tab').events.click();
-    await tick(); await tick();
-    assert.deepEqual(readStamps, [], 'an unscrolled long report is not stamped');
-    // The owner reaches the end, but no scroll event follows the position.
-    panel.scrollTop = 600;
     await refresh();
     await tick(); await tick();
-    assert.deepEqual(readStamps, ['/api/reports/r1/seen'],
-      'the poll stamps a report that shows its end');
+    assert.deepEqual(readStamps, []);
   });
 
-  await t.test("Sending answers reads the report, so the submission stamps the read too", async () => {
-    // An answered report is a read report, whatever the panel position says.
-    state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
+  await t.test('Sending answers preserves the open report read stamp', async () => {
     readStamps.length = 0;
-    panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 0;
-    get('#reports-tab').events.click();
-    await tick(); await tick();
-    assert.deepEqual(readStamps, [], 'an unscrolled long report is not stamped yet');
     await get('#report-form').events.submit(event({}));
     await tick();
-    assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'a submission stamps the read');
+    assert.deepEqual(readStamps, [], 'a read report needs no duplicate stamp');
   });
 
-  await t.test("Leaving the tab before the dwell is over stamps nothing, so a flick past a short report do", async () => {
-    // Leaving the tab before the dwell is over stamps nothing, so a flick past a short report does
-    // not count as reading it.
+  await t.test('A report loaded after leaving the tab stays unread', async () => {
+    get('#notes-tab').events.click();
+    state.reports = [{ id: 'r1', title: 'Hidden', updated_at: new Date().toISOString(), seen_at: null }];
     readStamps.length = 0;
-    panel.scrollHeight = 400; panel.clientHeight = 400; panel.scrollTop = 0;
+    await refresh();
+    let release;
+    reportHtmlWait = new Promise(resolve => { release = resolve; });
     get('#reports-tab').events.click();
     await tick(); await tick();
+    assert.deepEqual(readStamps, [], 'pending report HTML is not read');
+    get('#notes-tab').events.click();
+    reportHtmlWait = null;
+    release();
+    await tick(); await tick();
+    assert.deepEqual(readStamps, [], 'a response after leaving the tab is not read');
+    get('#reports-tab').events.click();
+    await tick(); await tick();
+    assert.deepEqual(readStamps, ['/api/reports/r1/seen']);
     get('#notes-tab').events.click();
     await tick();
-    await wait(1200);
-    assert.equal(readStamps.length, 0, 'a report left before its dwell ends is not stamped');
+    assert.ok(state.reports[0].seen_at, 'leaving retains the completed read');
     get('#reports-tab').events.click();
-    await tick();
+    await tick(); await tick();
   });
 
-  await t.test('Marking a report read preserves its scroll position and clears its star', async () => {
-    // Mark the report read without replacing its content or changing its scroll position.
-    state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
-    await refresh();
-    await tick();
-    assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
-      '1. * Long', 'an unseen report is starred before the stamp lands');
+  await t.test('A hidden page does not read automatically, but a submission keeps its fallback', async () => {
+    context.document.hidden = true;
+    try {
+      state.reports = [{ id: 'r1', title: 'Hidden page', updated_at: new Date().toISOString(), seen_at: null }];
+      readStamps.length = 0;
+      await refresh(); await tick(); await tick();
+      assert.deepEqual(readStamps, [], 'a hidden page has no automatic read stamp');
+      await get('#report-form').events.submit(event({}));
+      await tick();
+      assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'sending answers retains the read fallback');
+    } finally { context.document.hidden = false; }
+  });
+
+  await t.test('A failed read stamp waits for a later check before retrying', async () => {
+    state.reports = [{ id: 'r1', title: 'Retry', updated_at: new Date().toISOString(), seen_at: null }];
     readStamps.length = 0;
-    panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 600;
-    panel.events.scroll();
-    await tick();
-    assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'reaching the end stamps the report');
-    assert.equal(panel.scrollTop, 600, 'the stamp does not move the panel');
+    readStampFailures = 1;
+    await refresh(); await tick(); await tick();
+    assert.equal(readStamps.length, 1, 'the failed write must not loop through its own rollback');
+    assert.equal(state.reports[0].seen_at, null);
+    await refresh(); await tick(); await tick();
+    assert.equal(readStamps.length, 2, 'a later poll retries the failed stamp once');
+    assert.ok(state.reports[0].seen_at);
+  });
+
+  await t.test('Reading a refreshed report preserves its scroll and clears its star', async () => {
+    panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 450;
+    state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date(Date.now() + 1000).toISOString(), seen_at: null }];
+    readStamps.length = 0;
+    await refresh();
+    await tick(); await tick();
+    assert.deepEqual(readStamps, ['/api/reports/r1/seen']);
+    assert.equal(panel.scrollTop, 450, 'the stamp does not move the panel');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
-      '1. Long', 'the asterisk goes as soon as the stamp lands');
+      '1. Long', 'the read stamp clears the star');
     assert.equal(pip.hidden, true, 'the pip clears in place');
   });
 
