@@ -153,8 +153,10 @@ def reminder_tail(cursor, remaining, stale=0):
 
 REMINDERS = (
   (
-    "Context check: ARENA.md, SKILL.md, and all repository AGENTS.md files. "
-    "Read only files whose current text is absent from context."
+    "Context check: read ARENA.md, root/nested AGENTS.md, and arena-skill SKILL.md "
+    "fully when current full text is absent from context (including session start "
+    "and post-compaction/summary/context replacement); reread all after a rule "
+    "violation or reread request."
   ),
   "`task-list` at turn start. Update it as work changes.",
   "Take the smallest open task next.",
