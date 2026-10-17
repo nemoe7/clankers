@@ -863,7 +863,10 @@ def test_http_boundaries():
       )
       assert jump is not None
       static_icons = re.findall(r"<svg\b[^>]*>", page)
-      assert static_icons and all('class="lucide ' in item for item in static_icons)
+      assert static_icons and all(
+        'class="lucide ' in item or 'class="markdown-icon"' in item
+        for item in static_icons
+      )
       arrow = jump.group(1)
       assert 'width="14" height="14"' in arrow
       assert 'stroke="currentColor"' in arrow and 'stroke-width="2"' in arrow

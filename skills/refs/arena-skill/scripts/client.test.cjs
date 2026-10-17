@@ -630,7 +630,8 @@ test('preview client', async (t) => {
     await get('#preview-note').events.click();
     assert.equal(get('#note').hidden, true);
     assert.equal(get('#preview-note').getAttribute('aria-pressed'), 'true');
-    assert.equal(get('#preview-note').children[0].getAttribute('class'), 'lucide lucide-file-code-2', 'Markdown preview uses a Lucide file icon');
+    assert.equal(get('#preview-note').children[0].getAttribute('class'), 'markdown-icon', 'Markdown preview keeps its brand exception');
+    assert.equal(get('#preview-note').children[0].children[0].getAttribute('fill'), 'currentColor', 'the Markdown mark is a filled path');
     assert.equal(get('#preview-note').children.length, 1, 'the markdown mark stands alone');
     assert.equal(get('#draft-preview').innerHTML, '<strong>draft</strong>');
     assert.equal(sent.length, 0);

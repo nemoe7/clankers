@@ -86,7 +86,7 @@ function stored(name) {
   try { return localStorage.getItem(`${key}:${name}`); }
   catch { return null; }
 }
-/*! @license Lucide 1.59.0 - ISC. Copyright (c) 2026 Lucide Icons and Contributors. See lucide.LICENSE for this and the Feather MIT license. */
+/*! @license Lucide 1.59.0 - ISC. Copyright (c) 2026 Lucide Icons and Contributors. See lucide.LICENSE for this and the Feather MIT license. Markdown mark: Simple Icons (CC0-1.0). */
 // One table holds each shape a control can swap in, so a control redraws from the same source as its static twin in index.html.
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ICONS = {
@@ -102,10 +102,8 @@ const ICONS = {
   x: [['path', { d: 'M18 6 6 18' }], ['path', { d: 'm6 6 12 12' }]],
   eye: [['path', { d: 'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0' }],
     ['circle', { cx: '12', cy: '12', r: '3' }]],
-  'file-code-2': [['path', { d: 'M4 12.15V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3.35' }],
-    ['path', { d: 'M14 2v5a1 1 0 0 0 1 1h5' }],
-    ['path', { d: 'm5 16-3 3 3 3' }],
-    ['path', { d: 'm9 22 3-3-3-3' }]],
+  markdown: [['path', { d: 'M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z',
+    fill: 'currentColor', stroke: 'none' }]],
   flag: [['path', { d: 'M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528' }]],
   'loader-circle': [['path', { d: 'M21 12a9 9 0 1 1-6.219-8.56' }]],
   dot: [['circle', { cx: '12', cy: '12', r: '1' }]],
@@ -113,7 +111,7 @@ const ICONS = {
 function icon(name, size = 15) {
   const svg = document.createElementNS(SVG_NS, 'svg');
   for (const [key, value] of Object.entries({
-    class: `lucide lucide-${name}`, width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+    class: name === 'markdown' ? 'markdown-icon' : `lucide lucide-${name}`, width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
     'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
     'aria-hidden': 'true', focusable: 'false',
   })) svg.setAttribute(key, value);
@@ -128,7 +126,7 @@ function setIcon(button, name, size) {
   button.replaceChildren(icon(name, size));
 }
 function setPreviewIcon(button) {
-  button.replaceChildren(icon('file-code-2', 15));
+  button.replaceChildren(icon('markdown', 15));
   label(button, 'Preview Markdown');
 }
 function save(name, value) {

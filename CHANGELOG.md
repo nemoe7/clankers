@@ -22,7 +22,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Arena rules: move the PR update procedure to the skill reference.
 
-- Preview: use Lucide icons for all controls, with a separate loader during a header reread write.
+- Preview: use Lucide control icons except the Markdown mark, with a separate loader during a header reread write.
 
 - Rule sources: rename the generic core files to CORE.md. Keep installed AGENTS.md names.
 
