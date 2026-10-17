@@ -40,6 +40,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview tasks: add a bottom drop target and save its appended order. Restore the saved order after a refused write.
+
 - Preview: cancel a prior copy timer before it can clear newer button feedback.
 
 ## 2026-10-16
