@@ -68,12 +68,18 @@
 - Trivial one-liners need no test.
 - NEVER assert hard-coded values; assert relations instead.
 
-## Code style
+## Setup
 
-- In `nemoe7` repositories: 2-space indentation overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off.
 - In `nemoe7` repositories: Python uses Ruff defaults and the project's `ruff.toml` when it has one.
 - Without one, create `ruff.toml` exactly with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.16.6"`.
+
+## Verification
+
 - In `nemoe7` repositories: MUST run these gates before every commit: `ruff check` and `ruff format`, with no CLI rule overrides.
+
+## Style
+
+- In `nemoe7` repositories: 2-space indentation overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off.
 - Add code/config comments ONLY when method complexity needs them.
 - Leave unrelated code alone.
 - Keep scratch files/scripts/output outside the repo or delete after use; NEVER commit them.

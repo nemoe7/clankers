@@ -77,16 +77,24 @@
 - Trivial one-liners need no test.
 - NEVER assert hard-coded pixel values, configuration values, or implementation measurements; assert relations (growth, presence, absence) instead.
 
-## Code style
+## Setup
+
+- Apply these Setup rules only in repositories owned by `nemoe7`; follow other repositories' conventions.
+- For a Python project, MUST use the project's own `ruff.toml` when it has one.
+- When the project has none, the conventions are `Ruff defaults`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, and `required-version = "0.16.6"`.
+- For a Python project with no `ruff.toml`, MUST create one exactly as above before running the gates.
+
+## Verification
+
+- Apply these Verification rules only in repositories owned by `nemoe7`; follow other repositories' conventions.
+- For a Python project, MUST run the gates before every commit: `ruff check` and `ruff format`, with no CLI rule overrides.
+
+## Style
 
 - These rules apply to repositories owned by `nemoe7`; other repositories follow their own conventions.
 - 2-space indentation (overrides formatter defaults).
 - Markdown: markdownlint defaults + MD060; MD013 disabled.
 - For a Python project, MUST use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
-- For a Python project, MUST use the project's own `ruff.toml` when it has one.
-- When the project has none, the conventions are `Ruff defaults`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, and `required-version = "0.16.6"`.
-- For a Python project with no `ruff.toml`, MUST create one exactly as above before running the gates.
-- For a Python project, MUST run the gates before every commit: `ruff check` and `ruff format`, with no CLI rule overrides.
 - NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
 - Leave unrelated code untouched.
 - MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and leave them out of every commit.
