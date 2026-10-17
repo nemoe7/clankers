@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena rules: move the PR update procedure to the skill reference.
+
 - Preview: use a flag icon for the header reread action.
 
 - Rule sources: rename the generic core files to CORE.md. Keep installed AGENTS.md names.

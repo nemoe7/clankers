@@ -202,8 +202,7 @@
 - Retry once to confirm the failure, NEVER loop the retry, and NEVER ask the user for a token, a password, or a one-time code.
 - MUST ask through `ask_user` immediately; NEVER end the turn in silence: ask the owner to reconnect GitHub in Arena and reply in chat for a new turn with fresh credentials.
 - Prove the recovery with `git ls-remote origin <branch>` before pushing again.
-- `gh pr edit` may fail on older repos.
-- Update PR title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`
+- Update PR title/body through the [REST recipe](.agents/skills/arena-skill/references/REFERENCE.md#commands).
 - **NEVER `-f body=@path`**.
 - Stage PR text in the workspace, NEVER /tmp.
 - After every PATCH, re-fetch title and body and diff against the staged file to confirm the change is live; a 200 is not proof.
