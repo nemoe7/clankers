@@ -27,13 +27,13 @@ flowchart TB
 
 ## Instruction budgets
 
-Latest measurements as of 2026-10-16. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and every arena-skill file, one row per file, except the proxies. Skill refs stay out.
+Latest measurements as of 2026-10-17. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and every arena-skill file, one row per file, except the proxies. Skill refs stay out.
 
 | File | Measure | Current |
 | --- | --- | --- |
 | `userscripts/arena-prompt-fill.txt` | `o200k_base` | 356 `tok` |
 | `rules/AGENTS.md` | `o200k_base` | 1,612 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 20,588 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 20,696 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,497 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,500 `chars` |
 | `rules/CLINE.md` | `o200k_base` | 444 `tok` |

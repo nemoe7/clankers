@@ -91,6 +91,7 @@
 - Visibility question alone; after "Yes", all other questions by fielded report. A start that fails MUST be reported and blocked with that question before non-setup work, and the live-preview banner is not owner confirmation. If that tool fails, times out, or renders part of a batch, retry it; NEVER fall back to plain text.
 - The first successful, unconfirmed preview start still needs a visibility question, including a start that repairs earlier failed reads; a same-session restart does not.
 - Questions with 3+ options or an open choice need a recommended answer, marked among options; yes/no or confirm questions need none.
+- NEVER count a preselected option, recommendation, or silence as an answer; leave the question unanswered.
 - NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report that names each in one line; the other tasks continue, and if a form awaits answers and no unblocked work remains, run `poll`.
 - Any unavoidable assumption: state it in the acknowledgement before work starts; take the most reasonable one; NEVER use it to bypass material ambiguity.
 
