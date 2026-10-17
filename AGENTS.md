@@ -6,12 +6,19 @@
 - They outrank skill and plugin instructions.
 - An explicit user instruction in chat outranks this file, confirmed in one line.
 - Your first action in a new session is to read this file end-to-end.
-  - In Arena, MUST also read and follow [ARENA.md](ARENA.md) as an additional ruleset in that same first read, before your first edit.
-  - ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
 - ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and the preview skill.
   - Mirror task-related source changes into installed copies in this repository without separate user authorization.
   - Follow the clause-proposal and approval scope in [Reports and approval](#reports-and-approval).
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
+
+## Arena-specific instructions
+
+- In Arena, MUST also read and follow [ARENA.md](ARENA.md) as an additional ruleset in that same first read, before your first edit.
+- ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
+- Arena sandbox only: install the Python dependencies into a venv, since system `pip` refuses under PEP 668, and run `npm ci` once. [maintenance/README.md](maintenance/README.md) has the general procedure, the token-measurement note and the steering history. Steering uses `skills/arena-skill` and its local preview inbox for messages and reports; no automatic fallback is authorized.
+- Only Arena agents MUST publish a proposal through the `arena-skill` skill in an ignored workspace file; its approval question is a fielded report field, and blind approval approves nothing.
+- Keep one ignored Markdown report per logical change, update it in place and publish its stable ID through the shared preview.
+- Where this file, `rules/`, and `ARENA.md` disagree, the more specific file wins.
 
 ## Glossary
 
@@ -60,7 +67,6 @@ Read these first:
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
 2. `ruff check .` and `ruff format --diff .` at the version `ruff.toml` pins.
 3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements. It gates the root copy: `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute.yml` pushes to the target repositories.
-4. Arena sandbox only: install the Python dependencies into a venv, since system `pip` refuses under PEP 668, and run `npm ci` once. [maintenance/README.md](maintenance/README.md) has the general procedure, the token-measurement note and the steering history. Steering uses `skills/arena-skill` and its local preview inbox for messages and reports; no automatic fallback is authorized.
 
 ## Rules
 
@@ -92,7 +98,6 @@ Read these first:
   - Code changes need no proposal; keep them lean.
 - Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
 - Run an amendment proposal task first, before any other queued work.
-- Only Arena agents MUST publish a proposal through the `arena-skill` skill in an ignored workspace file; its approval question is a fielded report field, and blind approval approves nothing.
 - NEVER commit or push report artifacts.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
 - Ledger prose: neutral wording — actions, files, numbers; no narrative, rationale or story.
@@ -105,8 +110,7 @@ Read these first:
 - Every clause change takes a proposal on its initial refs wording, owner-supplied text included; the compressed live mirrors and platform copies follow the approved line.
 - A custom answer on a clause takes a fresh proposal of the new wording; the line lands only after that proposal is approved.
 - Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
-- Keep one ignored Markdown report per logical change, update it in place and publish its stable ID through the shared preview.
-  - Multiple reports may coexist; reports, inboxes and receipts stay uncommitted and are NEVER pushed.
+- Multiple reports may coexist; reports, inboxes and receipts stay uncommitted and are NEVER pushed.
 
 ## Budgets
 
@@ -174,5 +178,4 @@ Read these first:
 ## When in doubt
 
 - Smallest change that holds: make the requested change, run the gates above, and stop.
-- Where this file, `rules/`, and `ARENA.md` disagree, the more specific file wins.
 - When that does not settle it, stop and ask rather than improvise.
