@@ -20,10 +20,10 @@
 - Follow repo docs, conventions, patterns.
 - MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
 - Comments, docs, responses: terse, unambiguous; no storyline or narrative unless asked.
-- Use [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another changelog format.
+- Maintain changelogs per [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another format.
 - Open on the substance, NEVER preamble or postamble.
 - Cite code, diffs and tool output by path and line instead of repeating.
-- Step straight on after a tool call succeeds, with no result narration.
+- Continue after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
 
 ## Scope

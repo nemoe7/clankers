@@ -58,10 +58,10 @@
 - Follow repo docs, conventions and patterns.
 - MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
 - Comments, docs, responses: terse, unambiguous; NEVER a wall of text; NEVER padded prose where a list or table is faster; 4 sentences max per paragraph; no storyline or narrative unless asked.
-- Use [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another changelog format.
+- Maintain changelogs per [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another format.
 - Open on the substance, NEVER preamble or postamble.
 - Cite code, diffs and tool output by path and line instead of repeating.
-- Step straight on after a tool call succeeds, with no result narration.
+- Continue after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
 - ALWAYS take the smallest open task; a user-stated priority outranks size. Re-sort on arrivals; NEVER use arrival order.
 - Work while tasks remain; end when verified and stopped.
