@@ -313,6 +313,13 @@ mark code { color: var(--text); }
 .tasks-layout { display: flex; flex-direction: column; gap: 18px; }
 .task-div { min-width: 0; overflow-wrap: anywhere; }
 .task-list { margin: 0; padding-left: 20px; }
+.task[data-drag-handle="true"] { position: relative; list-style: none; }
+.task-drag-handle {
+  position: absolute; top: 0; left: -1.4em; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.4em; height: 1.5em; min-height: 0; margin: 0; padding: 0; border: 0; background: transparent;
+  color: var(--text); cursor: grab; line-height: 1; user-select: none;
+}
+.task-drag-handle:active { cursor: grabbing; }
 .task-title { cursor: pointer; }
 /* A blocked task is not actionable yet, so it drops to the muted tone the details use. */
 .task-title[data-blocked="true"] { color: var(--muted); }
