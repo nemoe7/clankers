@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview: slow top and bottom scroll-fade growth. Keep maximum depth and reduced-motion behavior.
+
 - CORE and Arena rules: align changelog and tool-continuation verbs. Keep the format exception.
 
 - House rules: align amendment reports and size targets. Remove the glossary alias.

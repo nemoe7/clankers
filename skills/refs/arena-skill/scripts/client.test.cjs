@@ -4323,3 +4323,18 @@ test('the toolbar and filter controls share the ui control sizes', () => {
   assert.equal(heightOf(fetchRule[2]), heightOf(searchRule[2]),
     'the downloads input height follows the message search height');
 });
+
+
+test('scroll fades grow over a longer distance than their maximum depth', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const lengths = new Map([...css.matchAll(/--(edge-fade|edge-ramp):\s*([\d.]+)px/g)]
+    .map(([, name, value]) => [name, Number(value)]));
+  assert.ok(lengths.get('edge-ramp') > lengths.get('edge-fade'), 'the scroll ramp must be longer than the fade depth');
+  const ranges = [...css.matchAll(/animation-timeline:\s*(?:auto,\s*)?scroll\(self\),\s*scroll\(self\);\s*animation-range:\s*([^;]+);/g)]
+    .map(match => match[1]);
+  assert.ok(ranges.length > 0);
+  for (const range of ranges) {
+    assert.ok(range.includes('var(--edge-ramp)'), 'all scrollable ranges use the longer ramp');
+    assert.equal(range.includes('var(--edge-fade)'), false, 'maximum mask depth does not set ramp distance');
+  }
+});
