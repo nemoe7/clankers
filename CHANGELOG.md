@@ -60,6 +60,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview backup docs: state that NDJSON, clipboard copy, and restore include report Markdown.
+
 - Platform matrix: state the contributing-rule-gap condition. Keep all rule files unchanged.
 
 - Userscript test comment: remove the false header-first sentence. Keep the title-first explanation and assertions.

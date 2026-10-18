@@ -20,11 +20,14 @@ A changed answer sets `ack_edited_at`. A report answer stays outside the message
 New reply clears its indicator on click while the seen write runs. Failed writes restore it, and newer replies stay unread. A stale state poll cannot undo a successful receipt.
 Reports keep their first-publish sequence. Schema migrations add nullable columns and backfill sequence IDs.
 
-The NDJSON file tracks notes, tasks, and report answers. It does not contain report snapshots,
-queued jobs, or uploaded/downloaded bytes. Normal note/task/answer writes refresh it.
+The NDJSON file tracks notes, tasks, report answers, and report Markdown. It does not contain queued jobs or uploaded/downloaded bytes. Normal note/task/answer writes refresh it.
 Fetch queue writes do not, and the import command leaves it unchanged.
-The clipboard Copy state button exports notes, tasks and answers for reports still in the tab.
-A restore uses `import-state [FILE]` for notes, tasks and report answers together. The command accepts copied NDJSON, a JSON array or a state object, from a file or stdin. It replaces the live state in one transaction. `--merge` merges by ID instead. The backup stays unchanged. `--replace-tasks` replaces only tasks.
+
+The clipboard Copy state button exports the same NDJSON.
+
+A restore uses `import-state [FILE]` for notes, tasks, report answers, and report Markdown together. The command accepts copied NDJSON, a JSON array or a state object, from a file or stdin. It replaces the live state in one transaction.
+
+`--merge` merges by ID instead. The backup stays unchanged. `--replace-tasks` replaces only tasks.
 Republish surviving report sources after restoring a database without reports.
 
 ## Reports and inputs
