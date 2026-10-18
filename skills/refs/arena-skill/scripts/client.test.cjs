@@ -3649,7 +3649,11 @@ test('preview client', async (t) => {
     history.scrollTop = 600;
     history.events.scroll();
     const scrollIntoView = answer.scrollIntoView.bind(answer);
-    answer.scrollIntoView = () => { scrollIntoView(); history.scrollTop = 240; };
+    answer.scrollIntoView = options => {
+      assert.equal(options.behavior, 'smooth', 'New reply scrolls with animation');
+      assert.equal(get('#log-edited').hidden, true, 'render the optimistic receipt before starting the animation');
+      scrollIntoView(); history.scrollTop = 240;
+    };
     const replaceChildren = history.replaceChildren.bind(history);
     history.replaceChildren = (...children) => { replaceChildren(...children); history.scrollTop = 0; };
     try {
@@ -3662,6 +3666,65 @@ test('preview client', async (t) => {
     } finally {
       history.replaceChildren = replaceChildren;
       answer.scrollIntoView = scrollIntoView;
+    }
+  });
+
+  await t.test('Old-message jumps mount their target and honor reduced motion', async () => {
+    const history = get('#history');
+    try {
+      for (const reduce of [false, true]) {
+        reducedMotion = reduce;
+        const id = `old-jump-${reduce}`;
+        state = {
+          notes: [{ id, text: 'Old question', at: '2026-10-13T03:00:00',
+            acknowledged_at: '2026-10-13T03:01:00', ack_kind: 'reply', ack_text: 'First answer',
+            ack_edited_at: '2026-10-13T03:02:00', ack_edited_seen_count: 0,
+            replies: [{ kind: 'reply', text: 'Later answer', at: '2026-10-13T03:02:00' }] }],
+          reports: [], tasks: { upcoming: [], finished: [] }, fetch_jobs: [], last_check: null
+        };
+        get('#log-search').value = '';
+        get('#log-search').events.input();
+        await refresh();
+        const row = history.children.find(item => item.children[2].children[0].dataset.full === id);
+        const answer = row.children[1];
+        answer.scrollIntoView = options => {
+          assert.equal(history.contains(answer), true);
+          assert.equal(options.behavior, reduce ? 'auto' : 'smooth', 'mounted New reply honors motion settings');
+        };
+        await get('#log-edited').events.click();
+        state.notes[0].replies.push({kind: 'reply', text: 'Newest answer', at: '2026-10-13T03:03:00'});
+        state.notes.push(...Array.from({length: reduce ? 1000 : 500}, (_, index) => ({
+          id: `later-${reduce}-${index}`, text: 'Later question', at: '2026-10-13T03:03:00'
+        })));
+        await refresh();
+        assert.equal(history.contains(row), false, 'the old target starts outside the mounted window');
+        answer.scrollIntoView = options => {
+          assert.equal(history.contains(answer), true, 'mount before scrolling the reply');
+          assert.equal(options.behavior, reduce ? 'auto' : 'smooth');
+          answer.scrolledIntoView = true;
+        };
+        await get('#log-edited').events.click();
+        assert.equal(history.contains(row), true);
+        assert.equal(answer.scrolledIntoView, true);
+        assert.equal(answer.focused, true);
+        assert.equal(answer.dataset.highlight, 'true');
+
+        // Follow another old row through its reference.
+        const referenceId = `reference-${reduce}`;
+        state.notes.unshift({id: referenceId, text: 'Referenced question', at: '2026-10-13T02:00:00'});
+        await refresh();
+        assert.equal(history.children.some(item => item.children[2].children[0].dataset.full === referenceId), false);
+        const target = new Element();
+        target.className = 'ack-reference';
+        target.dataset = {referenceType: 'note', referenceId};
+        documentEvents.click({target, preventDefault() {}});
+        const reference = history.children.find(item => item.children[2].children[0].dataset.full === referenceId);
+        assert.ok(reference, 'a reference reveals its old message');
+        assert.equal(reference.scrolledIntoView, true);
+        assert.equal(reference.focused, true);
+      }
+    } finally {
+      reducedMotion = false;
     }
   });
 

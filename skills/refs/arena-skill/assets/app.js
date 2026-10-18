@@ -493,6 +493,16 @@ function linkReferences(html, references) {
     return `<a class="ack-reference" href="#${panel}" data-reference-type="${type}" data-reference-id="${id}"><code>${id}</code></a>`;
   });
 }
+function revealMessage(id) {
+  const row = messageNodes.get(id);
+  if (!row || $('#history').contains(row)) return row;
+  const notes = (getState()?.notes || []).filter(item => !item.quiet);
+  const index = notes.findIndex(item => item.id === id);
+  if (index < 0) return;
+  historyShown = Math.max(historyShown, notes.length - index);
+  renderHistoryWindow(notes);
+  return row;
+}
 $('#log-edited').addEventListener('click', async () => {
   const item = unreadEdits[0];
   if (!item) return;
@@ -500,8 +510,9 @@ $('#log-edited').addEventListener('click', async () => {
   delete button.dataset.error;
   showTab($('#notes-tab'));
   clearLogSearch();
-  const answer = messageNodes.get(item.id).children[1];
-  answer.scrollIntoView({block: 'center'});
+  const row = revealMessage(item.id);
+  if (!row) return;
+  const answer = row.children[1];
   answer.setAttribute('tabindex', '-1');
   answer.focus({preventScroll: true});
   markJumpHighlight(answer);
@@ -512,7 +523,7 @@ $('#log-edited').addEventListener('click', async () => {
       Number(message.ack_edited_seen_count || 0), receipt?.ack_edited_seen_count ?? replyCount);
   };
   try {
-    await optimisticWrite(apply, async () => {
+    const write = optimisticWrite(apply, async () => {
       const response = await request(`/api/messages/${encodeURIComponent(item.id)}/replies/seen`, {
         method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({count: replyCount})
       });
@@ -525,6 +536,9 @@ $('#log-edited').addEventListener('click', async () => {
       const message = state.notes.find(note => note.id === item.id);
       return !message || Number(message.ack_edited_seen_count || 0) >= receipt.ack_edited_seen_count;
     });
+    // Render the optimistic receipt first so its history refresh cannot cancel the animation.
+    answer.scrollIntoView({block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+    await write;
   } catch (error) {
     button.dataset.error = `Could not save reply status: ${error.message}`;
     updateEdits(getState().notes);
@@ -2024,7 +2038,7 @@ function followReference(type, id) {
     if (!(getState()?.notes || []).some(item => item.id === id)) return;
     showTab($('#notes-tab'));
     clearLogSearch();
-    const row = messageNodes.get(id);
+    const row = revealMessage(id);
     if (!row) return;
     row.scrollIntoView({block: 'center'});
     row.setAttribute('tabindex', '-1');
