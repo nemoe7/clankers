@@ -58,6 +58,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Platform matrix: state the contributing-rule-gap condition. Keep all rule files unchanged.
+
 - Userscript test comment: remove the false header-first sentence. Keep the title-first explanation and assertions.
 
 - Preview import test comment: remove the false Seen-state sentence. Keep assertions unchanged.
