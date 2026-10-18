@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview task guide: remove the export sentence. Keep task operations and runtime behavior unchanged.
+
 - Preview task guide: remove the reminder-output suffix. Keep task tracking and runtime behavior unchanged.
 
 - Preview comments: state page visibility and message-table layout directly. Keep behavior and CSS values.
