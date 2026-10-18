@@ -875,24 +875,36 @@ def gh_check_json(root, arguments):
     )
     if result.returncode:
       return None
-    return json.loads(result.stdout)
+    return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
   except (OSError, subprocess.TimeoutExpired, ValueError):
     return None
 
 
 def pr_check_rollup(root, slug, sha):
-  """Read the pinned commit's combined check state and full context count."""
+  """Read all pages and select the latest checks, as gh pr checks does."""
   owner, name = slug.split("/", 1)
   query = (
-    "query($owner:String!,$name:String!,$sha:String!){"
+    "query($owner:String!,$name:String!,$sha:String!,$endCursor:String){"
     "repository(owner:$owner,name:$name){object(expression:$sha){... on Commit{"
-    "statusCheckRollup{state contexts(first:1){totalCount}}}}}}"
+    "statusCheckRollup{contexts(first:100,after:$endCursor){"
+    "pageInfo{hasNextPage endCursor} nodes{__typename "
+    "... on CheckRun{name status conclusion startedAt "
+    "checkSuite{workflowRun{workflow{name}}}} "
+    "... on StatusContext{context state createdAt}}}}}}}}"
+  )
+  projection = (
+    ".data.repository.object.statusCheckRollup.contexts.nodes[]? | "
+    'if .__typename == "CheckRun" then '
+    '{kind:"check",name,workflow:(.checkSuite.workflowRun.workflow.name // ""),'
+    'state:(if .status == "COMPLETED" then .conclusion else .status end),at:.startedAt} '
+    'else {kind:"status",name:.context,workflow:"",state,at:.createdAt} end | @json'
   )
   data = gh_check_json(
     root,
     [
       "api",
       "graphql",
+      "--paginate",
       "-f",
       f"query={query}",
       "-f",
@@ -902,30 +914,35 @@ def pr_check_rollup(root, slug, sha):
       "-f",
       f"sha={sha}",
       "--jq",
-      ".data.repository.object",
+      projection,
     ],
   )
-  if not isinstance(data, dict) or "statusCheckRollup" not in data:
+  if not isinstance(data, list):
     return None
-  rollup = data["statusCheckRollup"]
-  if rollup is None:
-    return "PENDING", 0
-  if not isinstance(rollup, dict):
-    return None
-  state = rollup.get("state")
-  contexts = rollup.get("contexts")
-  if state not in (
-    "SUCCESS",
-    "PENDING",
-    "EXPECTED",
-    "ERROR",
-    "FAILURE",
-  ) or not isinstance(contexts, dict):
-    return None
-  count = contexts.get("totalCount")
-  if not isinstance(count, int) or isinstance(count, bool) or count < 0:
-    return None
-  return state, count
+  latest = {}
+  for node in data:
+    if not isinstance(node, dict) or not all(
+      isinstance(node.get(field), str)
+      for field in ("kind", "name", "workflow", "state", "at")
+    ):
+      return None
+    if node["kind"] not in ("check", "status") or not node["name"]:
+      return None
+    try:
+      stamp = datetime.fromisoformat(node["at"].replace("Z", "+00:00"))
+    except ValueError:
+      return None
+    if stamp.tzinfo is None:
+      return None
+    key = (node["kind"], node["name"], node["workflow"])
+    if key not in latest or stamp > latest[key][0]:
+      latest[key] = stamp, node["state"]
+  states = {state for _, state in latest.values()}
+  if states & {"ERROR", "FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"}:
+    return "FAILURE", len(latest)
+  if not states or states - {"SUCCESS", "SKIPPED", "NEUTRAL"}:
+    return "PENDING", len(latest)
+  return "SUCCESS", len(latest)
 
 
 def pr_checks_discovery(

@@ -48,6 +48,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Preview violation flag: print the target first and the blocked Bash call on the second line. Require the full read-set reread before the fix. Keep cancellation and one-shot consumption.
 
+- Preview CI checks: use the latest check and workflow run, or status context. Read all pages. Do not let an old failed run block a later successful run.
+
 - Preview CI wait: observe visible checks for the full 30-second window without required-check settings. Fail on an empty, pending, or failing rollup at the deadline. Mark a successful watch as best effort.
 
 - Preview inbox: resolve report, answer, and task references when quoting parent text. Keep pending receipt targets.

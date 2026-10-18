@@ -8189,7 +8189,20 @@ def fake_gh(heads, counts, calls, required=3, states=("SUCCESS",)):
       ]
       count = counts[min(len(reads) - 1, len(counts) - 1)]
       state = states[min(len(reads) - 1, len(states) - 1)]
-      if any("isRequired" in arg for arg in argv):
+      if "--paginate" in argv:
+        output = "\n".join(
+          json.dumps(
+            {
+              "kind": "check",
+              "name": f"check-{i}",
+              "workflow": "CI",
+              "state": state,
+              "at": "2026-10-18T00:00:00Z",
+            }
+          )
+          for i in range(count)
+        )
+      elif any("isRequired" in arg for arg in argv):
         output = "\n".join(json.dumps(f"check-{i}") for i in range(count))
       else:
         output = json.dumps(
@@ -8279,6 +8292,34 @@ def test_pr_check_wait_needs_no_required_check_settings():
     assert not any("refUpdateRule" in str(call) for call in calls)
 
 
+def test_pr_check_rollup_uses_latest_check_and_status_runs():
+  old = {
+    "kind": "check",
+    "name": "Contract",
+    "workflow": "PR Check",
+    "state": "FAILURE",
+    "at": "2026-10-18T08:00:00Z",
+  }
+  new = {**old, "state": "SUCCESS", "at": "2026-10-18T09:00:00Z"}
+  for nodes, expected in [
+    ([old, new], ("SUCCESS", 1)),
+    ([new, old], ("SUCCESS", 1)),
+    ([new, {**new, "state": "QUEUED", "at": "2026-10-18T10:00:00Z"}], ("PENDING", 1)),
+    ([new, {**old, "workflow": "Other"}], ("FAILURE", 2)),
+    (
+      [
+        {**old, "kind": "status", "workflow": ""},
+        {**new, "kind": "status", "workflow": ""},
+      ],
+      ("SUCCESS", 1),
+    ),
+    ([old, {**new, "kind": "status", "workflow": ""}], ("FAILURE", 2)),
+    ([{**old, "at": "2026-10-18T10:00:00+02:00"}, new], ("SUCCESS", 1)),
+  ]:
+    with patch("preview.gh_check_json", return_value=nodes):
+      assert preview.pr_check_rollup(".", "owner/repo", "sha") == expected
+
+
 def test_pr_check_rollup_boundaries():
   for error in (OSError("gh missing"), subprocess.TimeoutExpired("gh", 5)):
     with patch("preview.subprocess.run", side_effect=error):
@@ -8288,25 +8329,38 @@ def test_pr_check_rollup_boundaries():
     result = subprocess.CompletedProcess([], code, stdout=output, stderr="")
     with patch("preview.subprocess.run", return_value=result):
       assert preview.pr_check_rollup(".", "owner/repo", "sha") is None
+  node = {
+    "kind": "check",
+    "name": "test",
+    "workflow": "CI",
+    "state": "SUCCESS",
+    "at": "2026-10-18T00:00:00Z",
+  }
   for data, expected in [
-    ({"statusCheckRollup": None}, ("PENDING", 0)),
-    (
-      {"statusCheckRollup": {"state": "SUCCESS", "contexts": {"totalCount": 201}}},
-      ("SUCCESS", 201),
-    ),
+    ([], ("PENDING", 0)),
+    ([{**node, "name": f"test-{i}"} for i in range(201)], ("SUCCESS", 201)),
     (None, None),
     ({}, None),
-    ({"statusCheckRollup": []}, None),
-    ({"statusCheckRollup": {"state": [], "contexts": {"totalCount": 1}}}, None),
-    ({"statusCheckRollup": {"state": "UNKNOWN", "contexts": {"totalCount": 1}}}, None),
-    ({"statusCheckRollup": {"state": "SUCCESS", "contexts": {"totalCount": -1}}}, None),
-    (
-      {"statusCheckRollup": {"state": "SUCCESS", "contexts": {"totalCount": True}}},
-      None,
-    ),
+    ([None], None),
+    ([{}], None),
+    ([{**node, "state": []}], None),
+    ([{**node, "state": "UNKNOWN"}], ("PENDING", 1)),
+    ([{**node, "at": "bad timestamp"}], None),
+    ([{**node, "at": "2026-10-18T00:00:00"}], None),
+    ([{**node, "workflow": []}], None),
+    ([{**node, "name": 1}], None),
+    ([{**node, "state": "SKIPPED"}], ("SUCCESS", 1)),
+    ([{**node, "state": "NEUTRAL"}], ("SUCCESS", 1)),
   ]:
     with patch("preview.gh_check_json", return_value=data):
       assert preview.pr_check_rollup(".", "owner/repo", "sha") == expected
+  output = "\n".join(json.dumps({**node, "name": f"test-{i}"}) for i in range(201))
+  result = subprocess.CompletedProcess([], 0, stdout=output, stderr="")
+  with patch("preview.subprocess.run", return_value=result) as run:
+    assert preview.pr_check_rollup(".", "owner/repo", "sha") == ("SUCCESS", 201)
+    command = run.call_args.args[0]
+    assert "--paginate" in command
+    assert any("pageInfo{hasNextPage endCursor}" in arg for arg in command)
 
 
 def test_pr_check_wait_uses_the_deadline_state():
