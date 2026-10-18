@@ -353,6 +353,9 @@ def test_compact_copies_drift_and_runtime():
     shutil.copytree(minify.SOURCE / "assets", skill / "assets")
     (skill / "scripts").mkdir()
     shutil.copyfile(
+      minify.TARGETS[0] / "scripts/arena-preview", skill / "scripts/arena-preview"
+    )
+    shutil.copyfile(
       minify.TARGETS[0] / "scripts/preview.py", skill / "scripts/preview.py"
     )
     shutil.copyfile(

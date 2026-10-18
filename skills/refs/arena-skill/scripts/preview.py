@@ -3296,7 +3296,7 @@ def poll_inbox(store, sleeper=None):
   # A full wait ends for messages, tasks, or failed branch checks. A heartbeat lights the page dot.
   # The Bash timeout can cut it short, so tell agents to retry with a tool timeout of 1800.
   print(
-    "arena-preview: poll waits up to 1800 s. Set the bash tool timeout to 1800 s,"
+    "poll waits up to 1800 s. Set the bash tool timeout to 1800 s,"
     " so a cut wait still returns its listing.",
     file=sys.stderr,
     flush=True,
@@ -6682,10 +6682,13 @@ class PreviewArgumentParser(argparse.ArgumentParser):
   def print_usage(self, file=None):
     pass
 
+  def exit(self, status=0, message=None):
+    super().exit(
+      status, message.removeprefix("arena-preview: ") if message else message
+    )
+
 
 def main():
-  # The wrapper runs this file as `arena-preview`, so the parser prints that name in
-  # usage and errors.
   parser = PreviewArgumentParser(description=CLI_DESCRIPTION, prog="arena-preview")
   parser.add_argument(
     "-r",

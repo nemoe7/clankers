@@ -5947,7 +5947,7 @@ def test_poll_blocked_tasks():
       assert sleeps == [], "unblocked work ends the wait before the first sleep"
       assert "open-task" in printed[-1]
       # The early return names the task on stderr, so no session reads it as an empty wait.
-      assert printed[0].startswith("arena-preview: poll waits up to 1800 s.")
+      assert printed[0].startswith("poll waits up to 1800 s.")
       # One line, one stream: the agent reads both, so a duplicate only costs tokens.
       assert printed[1] == (
         "CONTINUE: unblocked task open-task. Work it or block it; do not end the turn."
@@ -5991,7 +5991,7 @@ def test_poll_retry_disclaimer():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
       builtins.print = original
     assert code == 1
-    assert printed[0].startswith("arena-preview: poll waits up to 1800 s.")
+    assert printed[0].startswith("poll waits up to 1800 s.")
     assert f"Set the bash tool timeout to {saved[0] * saved[1]} s" in printed[0]
 
 
@@ -6048,7 +6048,7 @@ def test_skip_poll():
       code, sleeps = run_poll()
       assert code == 0
       assert sleeps == [], "a skip ends the wait before the first sleep"
-      assert printed[0].startswith("arena-preview: poll waits up to 1800 s.")
+      assert printed[0].startswith("poll waits up to 1800 s.")
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
@@ -6093,7 +6093,7 @@ def test_skip_poll():
       printed.clear()
       code, sleeps = run_poll()
       assert code == 0 and sleeps == []
-      assert printed[0].startswith("arena-preview: poll waits up to 1800 s.")
+      assert printed[0].startswith("poll waits up to 1800 s.")
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
@@ -7848,13 +7848,40 @@ def test_cli_argument_errors_omit_usage(args):
   )
   assert cli.returncode == 2
   assert not cli.stdout
-  assert cli.stderr.startswith("arena-preview"), cli.stderr
+  prefix = "arena-preview serve: error: " if args[:1] == ["serve"] else "error: "
+  assert cli.stderr.startswith(prefix), cli.stderr
+  assert "arena-preview: " not in cli.stderr
   assert "error:" in cli.stderr and "preview.py" not in cli.stderr
   assert "usage:" not in cli.stderr.casefold()
   if not args:
     assert "run arena-preview --help for the command list" in cli.stderr
   if args and args[-1].startswith("not-"):
     assert args[-1] in cli.stderr
+
+
+def test_cli_wrapper_errors_have_no_program_prefix():
+  source = Path(preview.__file__).with_name("arena-preview").read_text(encoding="utf-8")
+  with tempfile.TemporaryDirectory() as directory:
+    wrapper = Path(directory) / "arena-preview"
+    wrapper.write_text(source, encoding="utf-8")
+    for initialize, expected in [
+      (False, "run from a Git repository"),
+      (True, "missing"),
+    ]:
+      if initialize:
+        subprocess.run(["git", "init", "-q", directory], check=True)
+      result = subprocess.run(
+        ["bash", str(wrapper)],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "HOME": directory},
+      )
+      assert result.returncode == 2
+      assert expected in result.stderr
+      assert "arena-preview: " not in result.stderr
+      assert result.stdout == ""
 
 
 def test_cli_missing_task_id_keeps_validation(tmp_path, monkeypatch, capsys):

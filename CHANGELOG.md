@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview CLI: remove the literal program prefix from poll, root-parser, and wrapper messages. Keep usage, subcommand prefixes, messages, and exit codes.
+
 - Preview task docs: state the 120-character CLI step limit. Keep storage and CLI limits unchanged.
 
 - Preview import help: remove the unsupported force-flag suffix. Keep import behavior unchanged.
