@@ -42,6 +42,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview CI wait: require the declared GitHub checks before starting the watch. Fail when no required set is declared. Limit registration to 30 seconds and keep wait details in maintenance docs.
+
 - Preview inbox: resolve report, answer, and task references when quoting parent text. Keep pending receipt targets.
 
 - Rules README: state the unconditional Arena PR merge ban.

@@ -19,7 +19,7 @@ from contextlib import closing,contextmanager,nullcontext
 from datetime import datetime,timedelta,timezone
 from fnmatch import fnmatchcase
 from pathlib import Path
-from urllib.parse import parse_qs,unquote,urlsplit,urlunsplit
+from urllib.parse import parse_qs,quote,unquote,urlsplit,urlunsplit
 from zoneinfo import ZoneInfo
 HAS_RENDERER=None
 sqlite3=None
@@ -303,36 +303,52 @@ def pr_check_watch(result,root,stopped):
 		pr_check_once(result,root)
 		if result:return
 		stopped.wait(PR_CHECK_POLL_SECONDS)
-PR_CHECK_DISCOVERY_SECONDS=120
+PR_CHECK_DISCOVERY_SECONDS=30
 PR_CHECK_DISCOVERY_STEP=5
 def pr_head_sha(root,branch,slug):
 	try:listed=subprocess.run(['gh','pr','list','--head',branch,'--json','headRefOid','--jq','.[0].headRefOid'],cwd=root,capture_output=True,text=True,check=False)
 	except OSError:return None
 	if listed.returncode:return None
 	return listed.stdout.strip()
-def check_run_count(root,slug,sha):
-	try:counted=subprocess.run(['gh','api',f"repos/{slug}/commits/{sha}/check-runs",'--jq','.total_count'],cwd=root,capture_output=True,text=True,check=False)
-	except OSError:return None
-	if counted.returncode:return None
-	try:return int(counted.stdout.strip())
-	except ValueError:return None
+def gh_check_json(root,arguments,*,lines=False):
+	try:
+		result=subprocess.run(['gh',*arguments],cwd=root,capture_output=True,text=True,check=False)
+		if result.returncode:return None
+		if lines:return[json.loads(line)for line in result.stdout.splitlines()if line.strip()]
+		return json.loads(result.stdout)
+	except(OSError,ValueError):return None
+def pr_check_requirements(root,slug,branch):
+	metadata=gh_check_json(root,['pr','view',branch,'--json','baseRefName,number'])
+	if not isinstance(metadata,dict)or not metadata.get('baseRefName')or not metadata.get('number'):return None
+	owner,name=slug.split('/',1);base=metadata['baseRefName'];query='query($owner:String!,$name:String!,$ref:String!){repository(owner:$owner,name:$name){ref(qualifiedName:$ref){refUpdateRule{requiredStatusCheckContexts}}}}';protected=gh_check_json(root,['api','graphql','-f',f"query={query}",'-f',f"owner={owner}",'-f',f"name={name}",'-f',f"ref=refs/heads/{base}",'--jq','.data.repository.ref.refUpdateRule.requiredStatusCheckContexts // []']);rules=gh_check_json(root,['api',f"repos/{slug}/rules/branches/{quote(base,safe='')}",'--paginate','--jq','.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context | @json'],lines=True)
+	if not isinstance(protected,list)or not isinstance(rules,list):return None
+	return metadata['number'],set(protected)|set(rules)
+def registered_required_checks(root,slug,sha,number):owner,name=slug.split('/',1);query='query($owner:String!,$name:String!,$sha:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){object(expression:$sha){... on Commit{statusCheckRollup{contexts(first:100,after:$endCursor){nodes{... on CheckRun{name isRequired(pullRequestNumber:$number)}... on StatusContext{context isRequired(pullRequestNumber:$number)}}pageInfo{hasNextPage endCursor}}}}}}}';names=gh_check_json(root,['api','graphql','--paginate','-f',f"query={query}",'-f',f"owner={owner}",'-f',f"name={name}",'-f',f"sha={sha}",'-F',f"number={number}",'--jq','.data.repository.object.statusCheckRollup.contexts.nodes[]? | select(.isRequired) | (.name // .context) | @json'],lines=True);return set(names)if names is not None else None
 def pr_checks_discovery(root='.',seconds=PR_CHECK_DISCOVERY_SECONDS,step=PR_CHECK_DISCOVERY_STEP,sleep=None):
 	pause=sleep or time.sleep;branch=workspace_branch(root);slug=repo_slug(root)
 	if not branch or not slug:return'no branch pull request to watch'
 	pinned=pr_head_sha(root,branch,slug)
 	if pinned is None:return'gh did not read the pull request head'
 	if not pinned:return'no branch pull request to watch'
+	requirements=pr_check_requirements(root,slug,branch)
+	if requirements is None:return'gh did not read the required check set'
+	number,required=requirements
+	if not required:return'no required check set is declared for the pull request base'
 	polls=seconds//step+1
 	for poll in range(polls):
 		if poll:
 			head=pr_head_sha(root,branch,slug)
 			if head is None:return'gh did not read the pull request head'
 			if head!=pinned:return f"the pull request head moved from {pinned[:7]} to {head[:7]}"
-		count=check_run_count(root,slug,pinned)
-		if count is None:return'gh did not read the check runs'
-		if count:return None
+		registered=registered_required_checks(root,slug,pinned,number)
+		if registered is None:return'gh did not read the required check runs'
+		if required<=registered:
+			head=pr_head_sha(root,branch,slug)
+			if head is None:return'gh did not read the pull request head'
+			if head!=pinned:return f"the pull request head moved from {pinned[:7]} to {head[:7]}"
+			return None
 		if poll+1<polls:pause(step)
-	return f"no check appeared on {pinned[:7]} within {seconds} seconds"
+	return f"required checks did not all appear on {pinned[:7]} within {seconds} seconds"
 SESSION_ID_TABLES=('notes','note'),('submissions','answer'),('reports','report'),('tasks','task')
 HEX7_RE=re.compile('[0-9a-f]{7}')
 MINT_ATTEMPTS=16

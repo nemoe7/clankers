@@ -126,8 +126,6 @@ Every message carries one class. The prefix names the class, and the class fixes
 | verdict | an all-caps opener, such as `WAIT BLOCKED:` or `READ INBOX NOW.` | stdout for the gate and a poll, stderr for a wait, 130 or 1, and 0 when a poll line hands the turn back |
 | hint | `arena-preview:` | stderr, 0, or 2 from the wrapper |
 
-A detached `gh pr checks` wait first looks for a check on the branch head, once every five seconds for up to 120. The watch runs only after a check appears, and a window that runs out, a moved head or a gh fault fails the run.
-
 ## Tasks
 
 Task IDs have 1–64 lowercase letters, digits or hyphens and start with a letter or digit; use a short kebab-case title. Titles have at most 200 characters. A task has at most 40 details of 2000 characters each. Existing IDs update; omitted fields keep stored values.

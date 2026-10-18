@@ -150,6 +150,8 @@ npm ci
 
 ## Minified assets and scripts
 
+The PR-check helper reads required checks from GitHub branch protection and applicable rulesets. It waits for the complete required set to register on the pinned head before starting the watch. The registration window is 30 seconds. A missing required set, a moved head, a GitHub read failure, or an expired window fails the wait.
+
 The profile gate and EXIT hook have case labels in `skills/refs/arena-skill/scripts/install.sh`. `maintenance/workflows/test_preview_gate.py` compares those labels with the table in `skills/refs/arena-skill/references/REFERENCE.md`.
 
 The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all three `scripts/` files. Edit readable `skills/refs/arena-skill/` sources, never generated copies. Markdown compression is separate.
