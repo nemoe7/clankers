@@ -232,7 +232,11 @@
 - Treat a run that takes 10 seconds or more as a long run.
 - Start a long run, a test suite or a check wait, on a stable tree, and NEVER edit the files it covers while it runs.
 - The freeze covers the root tree only: with queued tasks that edit other files, start a worktree for that work while the root gate runs (`arena-preview worktree start`), and do not wait read-only.
-- NEVER call `get_process_output` to wait for a run, and NEVER run `arena-preview poll` mid-task as a run wait.
+- NEVER sleep while a gate runs in the background.
+- When only the task with a running gate remains, MUST mark that task blocked.
+- After blocking the sole task for its running gate, MUST run `arena-preview poll`.
+- NEVER call `get_process_output` to wait for a run.
+- NEVER run `arena-preview poll` as a gate wait unless the sole remaining task is blocked for that gate.
 - Keep the work moving and read the verdict on the next bash or `arena-preview` call, which prints it once as `run <name> done: exit N`, with one status line per call until then.
 - Read the verdict line before any push.
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both and drop large/temp artifacts.

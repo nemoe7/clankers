@@ -172,7 +172,11 @@
 - Start a background test or PR-check run on a stable tree, and NEVER edit the files it covers while it runs.
 - The freeze covers the root tree only: a queued task that edits other files starts a worktree while the root gate runs (`arena-preview worktree start`), never read-only tracing.
 - A >=10-second run is long; MUST use `arena-preview route <name> -- <command>`.
-- NEVER call `get_process_output` to wait for a run, nor run `arena-preview poll` mid-task as a run wait.
+- NEVER sleep during a background gate.
+- If only a task with a running gate remains, MUST block it.
+- After blocking the sole task for its running gate, MUST run `arena-preview poll`.
+- NEVER call `get_process_output` to wait for a run.
+- NEVER wait for a gate with `arena-preview poll` unless only that gate's blocked task remains.
 - Keep the work moving; the next bash or `arena-preview` call prints the verdict once as `run <name> done: exit N`, with one status line per call until then.
 - Read the verdict line before any push.
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both, dropping large or temp artifacts.

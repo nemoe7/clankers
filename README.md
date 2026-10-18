@@ -37,7 +37,7 @@ Latest measurements as of 2026-10-18. `maintenance/check.py --update` rebuilds t
 | [`gpt-plugins/skills/gpt-planning/SKILL.md`](gpt-plugins/skills/gpt-planning/SKILL.md) | `o200k_base` | 359 `tok` |
 | [`gpt-plugins/skills/gpt-question/SKILL.md`](gpt-plugins/skills/gpt-question/SKILL.md) | `o200k_base` | 162 `tok` |
 | [`gpt-plugins/skills/gpt-quirks/SKILL.md`](gpt-plugins/skills/gpt-quirks/SKILL.md) | `o200k_base` | 134 `tok` |
-| [`rules/ARENA.md`](rules/ARENA.md) | `UTF-8 file size` | 20,617 `B` |
+| [`rules/ARENA.md`](rules/ARENA.md) | `UTF-8 file size` | 20,845 `B` |
 | [`rules/CHATGPT-CUSTOM.txt`](rules/CHATGPT-CUSTOM.txt) | `Unicode chars` | 1,500 `chars` |
 | [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 1,498 `chars` |
 | [`rules/CLINE.md`](rules/CLINE.md) | `o200k_base` | 353 `tok` |
@@ -58,7 +58,7 @@ Latest measurements as of 2026-10-18. `maintenance/check.py --update` rebuilds t
 | [`skills/arena-skill/scripts/arena-preview`](skills/arena-skill/scripts/arena-preview) | `UTF-8 file size` | 574 `B` |
 | [`skills/arena-skill/scripts/install.sh`](skills/arena-skill/scripts/install.sh) | `UTF-8 file size` | 16,002 `B` |
 | [`skills/arena-skill/scripts/preview.py`](skills/arena-skill/scripts/preview.py) | `UTF-8 file size` | 182,936 `B` |
-| [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 3,961 `tok` |
+| [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,023 `tok` |
 | [`skills/squash/SKILL.md`](skills/squash/SKILL.md) | `o200k_base` | 1,377 `tok` |
 | [`skills/web-interface-guidelines/SKILL.md`](skills/web-interface-guidelines/SKILL.md) | `o200k_base` | 528 `tok` |
 | [`system-prompts/NEMOGPT.md`](system-prompts/NEMOGPT.md) | `o200k_base` | 3,375 `tok` |

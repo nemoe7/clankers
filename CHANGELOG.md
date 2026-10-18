@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena gate rules: prohibit sleep and use a blocked-task poll when only the task with a running gate remains.
+
 - House, CORE, Arena, and monitoring rules: keep one Use clause and move existing clauses into domain sections.
 
 - Maintenance: pin the TOML parser under markdownlint-cli2. Keep other dependency pins unchanged.
