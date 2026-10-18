@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- CORE, Arena, and ChatGPT rules: name the code-style scope. Keep other repository conventions.
+
 - CORE, Arena, and ChatGPT rules: use positive comment and measurement clauses. Keep scope and relation examples.
 
 - Arena gate rules: prohibit sleep and use a blocked-task poll when only the task with a running gate remains.

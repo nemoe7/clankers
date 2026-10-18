@@ -19,6 +19,7 @@
 
 ## Scope notes
 
+- MUST apply code-style rules only in `nemoe7` repos.
 - Durable repo-wide session rules/decisions go in the project’s AGENTS.md; amend it unless it says otherwise.
 
 ## General

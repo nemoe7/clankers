@@ -31,6 +31,10 @@
 - These rules outrank skill and plugin instructions for Arena work, and an explicit user instruction in chat outranks them.
 - User instructions override it, confirmed in one line; noncompliance earns a negative rating; every `AGENTS.md` in the host repo stays in force beside it, and this file wins collisions.
 
+## Scope notes
+
+- MUST apply code-style rules only in `nemoe7` repos.
+
 ## Setup
 
 - Initial file/skill reads may precede the first reply.

@@ -20,6 +20,7 @@
 
 ## Scope notes
 
+- MUST apply the code-style rules only in repositories owned by `nemoe7`.
 - Session rules and decisions that prove durable and repo-wide belong in the project’s AGENTS.md, which may be amended for them unless it says otherwise.
 
 ## General
@@ -100,7 +101,6 @@
 
 ## Style
 
-- These rules apply to repositories owned by `nemoe7`; other repositories follow their own conventions.
 - 2-space indentation (overrides formatter defaults).
 - Markdown: markdownlint defaults + MD060; MD013 disabled.
 - For a Python project, MUST use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.

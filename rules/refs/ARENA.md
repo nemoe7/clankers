@@ -33,6 +33,10 @@
 - Failure to comply with this file results in a negative rating.
 - In Arena, every `AGENTS.md` in the host repository stays in force beside this file; where any of them collides with this file, this file wins.
 
+## Scope notes
+
+- MUST apply the code-style rules only in repositories owned by `nemoe7`.
+
 ## Setup
 
 - The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
@@ -179,7 +183,6 @@
 
 ## Style
 
-- These rules apply to repositories owned by `nemoe7`; other repositories follow their own conventions.
 - 2-space indentation overrides formatter defaults.
 - Markdown: defaults + MD060, MD013 off.
 - For a Python project, use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
