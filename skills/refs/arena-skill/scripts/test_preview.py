@@ -9211,33 +9211,43 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
     headers = {"Content-Type": "application/json"}
     try:
       assert request("POST", "/api/agent-interrupt", "{}")[0] == 415
-      for tab, expected in [
-        ("notes", None),
-        ("reports", "open-report"),
-        ("tasks", "current-work"),
+      instruction = (
+        "This Bash call was blocked. Read ARENA.md, root AGENTS.md, every nested "
+        "AGENTS.md, and arena-skill SKILL.md in full again, then fix the violation "
+        "before continuing."
+      )
+      for payload, expected in [
+        ({"tab": "notes", "report_id": "open-report"}, "VIOLATION"),
+        ({"tab": "downloads", "report_id": "open-report"}, "VIOLATION"),
+        (
+          {"tab": "reports", "report_id": "open-report"},
+          "VIOLATION: report open-report",
+        ),
+        ({"tab": "reports"}, "VIOLATION"),
+        ({"tab": "tasks", "report_id": "open-report"}, "VIOLATION: task current-work"),
       ]:
         status, _, body = request(
-          "POST",
-          "/api/agent-interrupt",
-          json.dumps({"tab": tab, "report_id": "open-report"}),
-          headers,
+          "POST", "/api/agent-interrupt", json.dumps(payload), headers
         )
         assert status == 200, body
         assert json.loads(body)["agent_interrupt_pending"]
         assert store.state()["agent_interrupt_pending"]
+        capsys.readouterr()
         with (
           patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(store.path.parent)}),
           patch.object(sys, "argv", [str(Path(preview.__file__)), "interrupt-tick"]),
         ):
           assert preview.main() == 1
           message = capsys.readouterr().err
-          assert all(name in message for name in ["ARENA.md", "AGENTS.md", "SKILL.md"])
-          if expected:
-            assert expected in message
+          assert message.splitlines() == [expected, instruction]
           assert preview.main() == 0
           assert capsys.readouterr().err == ""
         assert not store.state()["agent_interrupt_pending"]
         assert store.state()["notes"] == []
+      store.write_task("current-work", status="finished")
+      store.request_interrupt("tasks")
+      assert store.take_interrupt().splitlines() == ["VIOLATION", instruction]
+      assert store.take_interrupt() is None
       assert (
         request("POST", "/api/agent-interrupt", '{"tab":"invalid"}', headers)[0] == 400
       )

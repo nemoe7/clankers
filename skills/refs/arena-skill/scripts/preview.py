@@ -5129,24 +5129,19 @@ class Store:
       "downloads",
     }:
       raise ValueError("tab must name a preview tab")
-    notice = (
-      "Read ARENA.md, root AGENTS.md, every nested AGENTS.md, and arena-skill "
-      "SKILL.md in full again before continuing."
-    )
+    header = "VIOLATION"
     if tab == "reports" and report_id is not None:
       self.report(report_id)
-      notice += f" Report {report_id} violates the rules. Fix it."
+      header = f"VIOLATION: report {report_id}"
     elif tab == "tasks":
       task = current_task((self.tasks() or {}).get("upcoming", []))
       if task:
-        notice += (
-          f" Work on task {task['id']}: {task['title']}."
-          " If you are working on something else, correct the task list."
-        )
-      else:
-        notice += (
-          " No current task is listed. Correct the task list if work is in progress."
-        )
+        header = f"VIOLATION: task {task['id']}"
+    notice = (
+      f"{header}\nThis Bash call was blocked. Read ARENA.md, root AGENTS.md, "
+      "every nested AGENTS.md, and arena-skill SKILL.md in full again, then fix "
+      "the violation before continuing."
+    )
     self.set_meta(AGENT_INTERRUPT_META, notice)
     return {"agent_interrupt_pending": True}
 
