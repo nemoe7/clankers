@@ -6987,7 +6987,7 @@ def main():
   )
   state_import = commands.add_parser(
     "import-state",
-    help="Import an NDJSON backup; replaces the live state unless --merge; -f forces",
+    help="Import an NDJSON backup; replaces the live state unless --merge",
   )
   state_import.add_argument("source", nargs="?", type=Path)
   state_import.add_argument("-r", "--replace-tasks", action="store_true")

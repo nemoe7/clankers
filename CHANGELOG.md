@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview import help: remove the unsupported force-flag suffix. Keep import behavior unchanged.
+
 - Preview task help: remove false empty-detail clearing guidance. Keep task validation unchanged.
 
 - Arena guide: remove the duplicate key warning. Keep the explicit key ban.
