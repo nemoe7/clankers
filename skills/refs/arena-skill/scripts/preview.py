@@ -21,7 +21,7 @@ from contextlib import closing, contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from fnmatch import fnmatchcase
 from pathlib import Path
-from urllib.parse import parse_qs, quote, unquote, urlsplit, urlunsplit
+from urllib.parse import parse_qs, unquote, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 # markdown-it-py loads on first use: serve needs it, and a gate tick that never renders
@@ -835,7 +835,7 @@ PR_CHECK_DISCOVERY_STEP = 5
 
 
 def pr_head_sha(root, branch, slug):
-  """The head SHA of the branch pull request, an empty string when it has none, or None on a fault."""
+  """Read the branch PR head, an empty string for no PR, or None on a fault."""
   try:
     listed = subprocess.run(
       [
@@ -853,98 +853,46 @@ def pr_head_sha(root, branch, slug):
       capture_output=True,
       text=True,
       check=False,
+      timeout=PR_CHECK_DISCOVERY_STEP,
     )
-  except OSError:
+  except (OSError, subprocess.TimeoutExpired):
     return None
   if listed.returncode:
     return None
   return listed.stdout.strip()
 
 
-def gh_check_json(root, arguments, *, lines=False):
-  """Read GitHub check data, or return None on a command or JSON fault."""
+def gh_check_json(root, arguments):
+  """Read GitHub check data, or return None on a command, timeout, or JSON fault."""
   try:
     result = subprocess.run(
-      ["gh", *arguments], cwd=root, capture_output=True, text=True, check=False
+      ["gh", *arguments],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+      timeout=PR_CHECK_DISCOVERY_STEP,
     )
     if result.returncode:
       return None
-    if lines:
-      return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
     return json.loads(result.stdout)
-  except (OSError, ValueError):
+  except (OSError, subprocess.TimeoutExpired, ValueError):
     return None
 
 
-def pr_check_requirements(root, slug, branch):
-  """Read the PR number and required contexts from branch protection and rulesets."""
-  metadata = gh_check_json(root, ["pr", "view", branch, "--json", "baseRefName,number"])
-  if (
-    not isinstance(metadata, dict)
-    or not metadata.get("baseRefName")
-    or not metadata.get("number")
-  ):
-    return None
-  owner, name = slug.split("/", 1)
-  base = metadata["baseRefName"]
-  query = (
-    "query($owner:String!,$name:String!,$ref:String!){"
-    "repository(owner:$owner,name:$name){ref(qualifiedName:$ref){"
-    "refUpdateRule{requiredStatusCheckContexts}}}}"
-  )
-  protected = gh_check_json(
-    root,
-    [
-      "api",
-      "graphql",
-      "-f",
-      f"query={query}",
-      "-f",
-      f"owner={owner}",
-      "-f",
-      f"name={name}",
-      "-f",
-      f"ref=refs/heads/{base}",
-      "--jq",
-      ".data.repository.ref.refUpdateRule.requiredStatusCheckContexts // []",
-    ],
-  )
-  rules = gh_check_json(
-    root,
-    [
-      "api",
-      f"repos/{slug}/rules/branches/{quote(base, safe='')}",
-      "--paginate",
-      "--jq",
-      (
-        '.[] | select(.type == "required_status_checks") | '
-        ".parameters.required_status_checks[].context | @json"
-      ),
-    ],
-    lines=True,
-  )
-  if not isinstance(protected, list) or not isinstance(rules, list):
-    return None
-  return metadata["number"], set(protected) | set(rules)
-
-
-def registered_required_checks(root, slug, sha, number):
-  """Read required checks on the pinned commit. GitHub determines which apps qualify."""
+def pr_check_rollup(root, slug, sha):
+  """Read the pinned commit's combined check state and full context count."""
   owner, name = slug.split("/", 1)
   query = (
-    "query($owner:String!,$name:String!,$sha:String!,$number:Int!,$endCursor:String){"
+    "query($owner:String!,$name:String!,$sha:String!){"
     "repository(owner:$owner,name:$name){object(expression:$sha){... on Commit{"
-    "statusCheckRollup{contexts(first:100,after:$endCursor){nodes{"
-    "... on CheckRun{name isRequired(pullRequestNumber:$number)}"
-    "... on StatusContext{context isRequired(pullRequestNumber:$number)}"
-    "}pageInfo{hasNextPage endCursor}}}}}}}"
+    "statusCheckRollup{state contexts(first:1){totalCount}}}}}}"
   )
-  names = gh_check_json(
+  data = gh_check_json(
     root,
     [
       "api",
       "graphql",
-      "--paginate",
       "-f",
       f"query={query}",
       "-f",
@@ -953,17 +901,31 @@ def registered_required_checks(root, slug, sha, number):
       f"name={name}",
       "-f",
       f"sha={sha}",
-      "-F",
-      f"number={number}",
       "--jq",
-      (
-        ".data.repository.object.statusCheckRollup.contexts.nodes[]? | "
-        "select(.isRequired) | (.name // .context) | @json"
-      ),
+      ".data.repository.object",
     ],
-    lines=True,
   )
-  return set(names) if names is not None else None
+  if not isinstance(data, dict) or "statusCheckRollup" not in data:
+    return None
+  rollup = data["statusCheckRollup"]
+  if rollup is None:
+    return "PENDING", 0
+  if not isinstance(rollup, dict):
+    return None
+  state = rollup.get("state")
+  contexts = rollup.get("contexts")
+  if state not in (
+    "SUCCESS",
+    "PENDING",
+    "EXPECTED",
+    "ERROR",
+    "FAILURE",
+  ) or not isinstance(contexts, dict):
+    return None
+  count = contexts.get("totalCount")
+  if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+    return None
+  return state, count
 
 
 def pr_checks_discovery(
@@ -972,14 +934,11 @@ def pr_checks_discovery(
   step=PR_CHECK_DISCOVERY_STEP,
   sleep=None,
 ):
-  """Wait for the declared required check set on the branch pull request's head commit.
+  """Observe visible checks for the full window before the requested CLI watch.
 
-  Return None once every required check exists, so the caller runs its watch. Return the failure reason
-  when the wait must fail: no branch pull request, a gh fault, a head that moved, or a
-  window that ran out. The wait pins the head it reads first, so a later push never
-  satisfies it, and a window that runs out is a failure, never a pass.
+  Pin the head and fail on a moved head, read fault, empty rollup, or non-green deadline state.
+  Success is best effort: checks can still appear after this window.
   """
-  # The pause resolves at call time, so a test can watch the window without waiting it.
   pause = sleep or time.sleep
   branch = workspace_branch(root)
   slug = repo_slug(root)
@@ -990,13 +949,8 @@ def pr_checks_discovery(
     return "gh did not read the pull request head"
   if not pinned:
     return "no branch pull request to watch"
-  requirements = pr_check_requirements(root, slug, branch)
-  if requirements is None:
-    return "gh did not read the required check set"
-  number, required = requirements
-  if not required:
-    return "no required check set is declared for the pull request base"
-  polls = seconds // step + 1
+  started = time.monotonic()
+  polls = (seconds + step - 1) // step + 1
   for poll in range(polls):
     if poll:
       head = pr_head_sha(root, branch, slug)
@@ -1004,19 +958,25 @@ def pr_checks_discovery(
         return "gh did not read the pull request head"
       if head != pinned:
         return f"the pull request head moved from {pinned[:7]} to {head[:7]}"
-    registered = registered_required_checks(root, slug, pinned, number)
-    if registered is None:
-      return "gh did not read the required check runs"
-    if required <= registered:
+    rollup = pr_check_rollup(root, slug, pinned)
+    if rollup is None:
+      return "gh did not read the check rollup"
+    remaining = seconds - (time.monotonic() - started)
+    if remaining <= 0 or poll + 1 == polls:
+      state, count = rollup
+      if not count:
+        return f"no visible checks appeared on {pinned[:7]} within {seconds} seconds"
+      if state != "SUCCESS":
+        return (
+          f"visible checks are {state.lower()} on {pinned[:7]} after {seconds} seconds"
+        )
       head = pr_head_sha(root, branch, slug)
       if head is None:
         return "gh did not read the pull request head"
       if head != pinned:
         return f"the pull request head moved from {pinned[:7]} to {head[:7]}"
       return None
-    if poll + 1 < polls:
-      pause(step)
-  return f"required checks did not all appear on {pinned[:7]} within {seconds} seconds"
+    pause(min(step, remaining))
 
 
 # The record kinds whose IDs are session-local: minted here, unresolvable elsewhere.
@@ -2801,16 +2761,19 @@ def run_command(state_dir, name, argv):
     )
     return 2
   started = time.monotonic()
-  # Register the required check set before watching. A discovery failure never starts the watch.
-  discovery = (
-    pr_checks_discovery(resolve_repo_root()) if pr_checks_command(argv) else None
-  )
+  # Observe the full window before watching. A discovery failure never starts the watch.
+  check_watch = pr_checks_command(argv)
+  discovery = pr_checks_discovery(resolve_repo_root()) if check_watch else None
   if discovery:
     completed = subprocess.CompletedProcess(
       argv, 1, f"pr-checks wait failed: {discovery}\n", ""
     )
   else:
     completed = subprocess.run(argv, capture_output=True, text=True, check=False)
+    if check_watch and completed.returncode == 0:
+      completed.stdout += (
+        "\nBest effort: all visible checks passed; later checks can still appear.\n"
+      )
   seconds = round(time.monotonic() - started, 1)
   output = (completed.stdout + completed.stderr).splitlines()
   tail = clean_run_tail(output[-RUN_TAIL_LINES:])

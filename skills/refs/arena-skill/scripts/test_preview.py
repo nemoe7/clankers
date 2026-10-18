@@ -8162,7 +8162,7 @@ def pr_check_root(directory):
   return root
 
 
-def fake_gh(heads, counts, calls, required=3):
+def fake_gh(heads, counts, calls, required=3, states=("SUCCESS",)):
   """A stand-in for subprocess.run that answers the discovery reads and records every call."""
 
   def run(argv, **kwargs):
@@ -8188,12 +8188,21 @@ def fake_gh(heads, counts, calls, required=3):
         and any("statusCheckRollup" in arg for arg in c)
       ]
       count = counts[min(len(reads) - 1, len(counts) - 1)]
-      return subprocess.CompletedProcess(
-        argv,
-        0,
-        stdout="\n".join(json.dumps(f"check-{i}") for i in range(count)),
-        stderr="",
-      )
+      state = states[min(len(reads) - 1, len(states) - 1)]
+      if any("isRequired" in arg for arg in argv):
+        output = "\n".join(json.dumps(f"check-{i}") for i in range(count))
+      else:
+        output = json.dumps(
+          {
+            "statusCheckRollup": {
+              "state": state,
+              "contexts": {"totalCount": count},
+            }
+            if count
+            else None
+          }
+        )
+      return subprocess.CompletedProcess(argv, 0, stdout=output, stderr="")
     if argv[:3] == ["gh", "api", "graphql"]:
       return subprocess.CompletedProcess(
         argv, 0, stdout=json.dumps([f"check-{i}" for i in range(required)]), stderr=""
@@ -8206,10 +8215,7 @@ def fake_gh(heads, counts, calls, required=3):
 
 
 def test_the_pr_check_wait_finds_checks_before_it_watches(capsys):
-  """A pull-request check wait finds the first check before it runs the watch.
-
-  The wait pins the head it reads first, asks again every five seconds, and runs the watch
-  only once a check exists on that head."""
+  """The bounded watch checks the pinned head for the full window before the CLI watch."""
   with tempfile.TemporaryDirectory() as directory:
     root = pr_check_root(directory)
     calls = []
@@ -8221,6 +8227,7 @@ def test_the_pr_check_wait_finds_checks_before_it_watches(capsys):
         "preview.subprocess.run", side_effect=fake_gh(["abc1234"], [0, 0, 3], calls)
       ),
       patch("preview.time.sleep", sleeps.append),
+      patch("preview.time.monotonic", return_value=0),
     ):
       code = preview.run_command(
         directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]
@@ -8228,19 +8235,24 @@ def test_the_pr_check_wait_finds_checks_before_it_watches(capsys):
     out = capsys.readouterr().out
     assert code == 0, out
     assert "watched" in out, "the watch runs once a check exists"
-    assert sleeps == [preview.PR_CHECK_DISCOVERY_STEP] * 2, sleeps
+    polls = preview.PR_CHECK_DISCOVERY_SECONDS // preview.PR_CHECK_DISCOVERY_STEP
+    assert sleeps == [preview.PR_CHECK_DISCOVERY_STEP] * polls, sleeps
     reads = [call for call in calls if any("statusCheckRollup" in arg for arg in call)]
-    assert len(reads) == 3 and all("sha=abc1234" in call for call in reads), reads
+    assert len(reads) == polls + 1, reads
+    assert all("sha=abc1234" in call for call in reads), reads
+    assert "best effort" in out.lower(), out
 
 
-def test_pr_check_wait_does_not_accept_a_partial_required_set():
+def test_pr_check_wait_does_not_stop_on_early_green():
   with tempfile.TemporaryDirectory() as directory:
     root = pr_check_root(directory)
     calls, pauses = [], []
     with (
       patch("preview.repo_slug", return_value="owner/repo"),
+      patch("preview.time.monotonic", return_value=0),
       patch(
-        "preview.subprocess.run", side_effect=fake_gh(["abc1234"], [1, 1, 3], calls)
+        "preview.subprocess.run",
+        side_effect=fake_gh(["abc1234"], [1, 1, 3], calls, required=1),
       ),
     ):
       assert (
@@ -8250,7 +8262,7 @@ def test_pr_check_wait_does_not_accept_a_partial_required_set():
     assert pauses == [5, 5]
 
 
-def test_pr_check_wait_refuses_an_undeclared_required_set():
+def test_pr_check_wait_needs_no_required_check_settings():
   with tempfile.TemporaryDirectory() as directory:
     root = pr_check_root(directory)
     calls = []
@@ -8262,36 +8274,93 @@ def test_pr_check_wait_refuses_an_undeclared_required_set():
       ),
     ):
       result = preview.pr_checks_discovery(root, seconds=0)
-    assert result and "no required check set" in result
+    assert result is None, result
+    assert not any("/rules/branches/" in str(call) for call in calls)
+    assert not any("refUpdateRule" in str(call) for call in calls)
 
 
-def test_required_check_source_and_registration_boundaries():
-  with patch(
-    "preview.gh_check_json",
-    side_effect=[{"baseRefName": "release/x", "number": 111}, ["classic"], ["ruleset"]],
-  ) as read:
-    assert preview.pr_check_requirements(".", "owner/repo", "branch") == (
-      111,
-      {"classic", "ruleset"},
-    )
-    assert "repos/owner/repo/rules/branches/release%2Fx" in read.call_args.args[1]
-  with patch(
-    "preview.gh_check_json",
-    side_effect=[{"baseRefName": "main", "number": 111}, None, []],
-  ):
-    assert preview.pr_check_requirements(".", "owner/repo", "branch") is None
+def test_pr_check_rollup_boundaries():
+  for error in (OSError("gh missing"), subprocess.TimeoutExpired("gh", 5)):
+    with patch("preview.subprocess.run", side_effect=error):
+      assert preview.pr_head_sha(".", "branch", "owner/repo") is None
+      assert preview.pr_check_rollup(".", "owner/repo", "sha") is None
   for code, output in ((1, "auth failed"), (0, "not JSON")):
     result = subprocess.CompletedProcess([], code, stdout=output, stderr="")
     with patch("preview.subprocess.run", return_value=result):
-      assert preview.registered_required_checks(".", "owner/repo", "sha", 111) is None
-  result = subprocess.CompletedProcess([], 0, stdout='"first"\n"second"\n', stderr="")
-  with patch("preview.subprocess.run", return_value=result):
-    assert preview.registered_required_checks(".", "owner/repo", "sha", 111) == {
-      "first",
-      "second",
-    }
-  with patch("preview.gh_check_json", return_value=[]):
-    assert preview.registered_required_checks(".", "owner/repo", "sha", 111) == set()
+      assert preview.pr_check_rollup(".", "owner/repo", "sha") is None
+  for data, expected in [
+    ({"statusCheckRollup": None}, ("PENDING", 0)),
+    (
+      {"statusCheckRollup": {"state": "SUCCESS", "contexts": {"totalCount": 201}}},
+      ("SUCCESS", 201),
+    ),
+    (None, None),
+    ({}, None),
+    ({"statusCheckRollup": []}, None),
+    ({"statusCheckRollup": {"state": [], "contexts": {"totalCount": 1}}}, None),
+    ({"statusCheckRollup": {"state": "UNKNOWN", "contexts": {"totalCount": 1}}}, None),
+    ({"statusCheckRollup": {"state": "SUCCESS", "contexts": {"totalCount": -1}}}, None),
+    (
+      {"statusCheckRollup": {"state": "SUCCESS", "contexts": {"totalCount": True}}},
+      None,
+    ),
+  ]:
+    with patch("preview.gh_check_json", return_value=data):
+      assert preview.pr_check_rollup(".", "owner/repo", "sha") == expected
+
+
+def test_pr_check_wait_uses_the_deadline_state():
+  for state, successful in [
+    ("PENDING", False),
+    ("EXPECTED", False),
+    ("FAILURE", False),
+    ("ERROR", False),
+    ("SUCCESS", True),
+  ]:
+    with tempfile.TemporaryDirectory() as directory:
+      root = pr_check_root(directory)
+      calls, pauses = [], []
+      with (
+        patch("preview.repo_slug", return_value="owner/repo"),
+        patch("preview.time.monotonic", return_value=0),
+        patch(
+          "preview.subprocess.run",
+          side_effect=fake_gh(["abc1234"], [1, 3], calls, states=("FAILURE", state)),
+        ),
+      ):
+        result = preview.pr_checks_discovery(
+          root, seconds=5, step=5, sleep=pauses.append
+        )
+      assert (result is None) == successful, (state, result)
+      assert pauses == [5]
+
+
+def test_pr_check_wait_counts_api_time_against_the_window():
+  with tempfile.TemporaryDirectory() as directory:
+    root = pr_check_root(directory)
+    pauses = []
+    with (
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch("preview.time.monotonic", side_effect=[0, 6, 10]),
+      patch("preview.subprocess.run", side_effect=fake_gh(["abc1234"], [3], [])),
+    ):
+      assert (
+        preview.pr_checks_discovery(root, seconds=10, step=5, sleep=pauses.append)
+        is None
+      )
+    assert pauses == [4]
+
+
+def test_pr_check_wait_rechecks_the_head_before_success():
+  with tempfile.TemporaryDirectory() as directory:
+    root = pr_check_root(directory)
+    with (
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch(
+        "preview.subprocess.run", side_effect=fake_gh(["abc1234", "def5678"], [3], [])
+      ),
+    ):
+      assert "head moved" in preview.pr_checks_discovery(root, seconds=0)
 
 
 def test_the_pr_check_wait_fails_when_no_check_appears(capsys):
@@ -8305,13 +8374,14 @@ def test_the_pr_check_wait_fails_when_no_check_appears(capsys):
       patch("preview.repo_slug", return_value="owner/repo"),
       patch("preview.subprocess.run", side_effect=fake_gh(["abc1234"], [0], calls)),
       patch("preview.time.sleep", sleeps.append),
+      patch("preview.time.monotonic", return_value=0),
     ):
       code = preview.run_command(
         directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]
       )
     out = capsys.readouterr().out
     assert code == 1, "a timeout is a failure, never a pass"
-    assert "required checks did not all appear" in out, out
+    assert "no visible checks" in out, out
     polls = preview.PR_CHECK_DISCOVERY_SECONDS // preview.PR_CHECK_DISCOVERY_STEP
     assert sleeps == [preview.PR_CHECK_DISCOVERY_STEP] * polls, (
       "the window polls to its end"
@@ -8333,6 +8403,7 @@ def test_the_pr_check_wait_fails_on_a_moved_head(capsys):
         side_effect=fake_gh(["abc1234", "def5678"], [0], calls),
       ),
       patch("preview.time.sleep", sleeps.append),
+      patch("preview.time.monotonic", return_value=0),
     ):
       code = preview.run_command(
         directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]

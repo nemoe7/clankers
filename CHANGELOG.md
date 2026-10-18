@@ -48,7 +48,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Preview violation flag: print the target first and the blocked Bash call on the second line. Require the full read-set reread before the fix. Keep cancellation and one-shot consumption.
 
-- Preview CI wait: require the declared GitHub checks before starting the watch. Fail when no required set is declared. Limit registration to 30 seconds and keep wait details in maintenance docs.
+- Preview CI wait: observe visible checks for the full 30-second window without required-check settings. Fail on an empty, pending, or failing rollup at the deadline. Mark a successful watch as best effort.
 
 - Preview inbox: resolve report, answer, and task references when quoting parent text. Keep pending receipt targets.
 

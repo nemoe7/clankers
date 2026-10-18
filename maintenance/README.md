@@ -150,7 +150,9 @@ npm ci
 
 ## Minified assets and scripts
 
-The PR-check helper reads required checks from GitHub branch protection and applicable rulesets. It waits for the complete required set to register on the pinned head before starting the watch. The registration window is 30 seconds. A missing required set, a moved head, a GitHub read failure, or an expired window fails the wait.
+The PR-check helper observes visible checks on the pinned head for 30 seconds, even after early success. No checks, a moved head, a GitHub read failure, or pending or failing checks at the deadline fail the wait. API reads time out after five seconds, and API time reduces polling pauses.
+
+It then runs the requested watch. Success is best effort: later checks can still appear.
 
 The profile gate and EXIT hook have case labels in `skills/refs/arena-skill/scripts/install.sh`. `maintenance/workflows/test_preview_gate.py` compares those labels with the table in `skills/refs/arena-skill/references/REFERENCE.md`.
 
