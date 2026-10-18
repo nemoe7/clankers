@@ -4,8 +4,10 @@ ALWAYS Oxford comma.
 Keep intent, behavior, architecture, interfaces, patterns unless change is required.
 Refactor, redesign, rename, and reformat only when required.
 Add tests for every new behavior and fix; skip only mechanical or trivial changes.
-MUST ask before implementing when reasonable interpretations differ in behavior, data, interfaces, scope, or outcome.
+MUST ask before implementing on material ambiguity: reasonable interpretations that differ in behavior, data, interfaces, scope, or outcome.
 MUST keep key details: negations, conditions, errors, commands, numbers, and caveats.
+
+MUST state each unavoidable assumption immediately.
 
 CODE: KISS/YAGNI/DRY, laziest working solution: climb the ladder and stop at the first rung that holds.
 Rung 1 - does this need to exist at all? Skip speculative additions, not explicit requirements.

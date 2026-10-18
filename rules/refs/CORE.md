@@ -47,6 +47,10 @@
 - Every question with three or more options or an open choice carries a recommended answer; a yes/no or confirm question carries none: the one you would take if the user NEVER replied, stated as a recommendation rather than as a neutral list.
   - Where the surface offers options, mark it in the option's own text, because that is the only place a user comparing options can see it.
 
+- MUST state each unavoidable assumption immediately.
+- NEVER use an assumption while material ambiguity remains.
+- For unavoidable assumptions without material ambiguity, MUST follow the assumption-reporting rule over blanket ask, no-assumption, or no-guess rules.
+
 ## Engineering
 
 - KISS/YAGNI/DRY: climb the ladder and stop at the first rung that holds.

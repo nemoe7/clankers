@@ -15,4 +15,6 @@
 - Plans MUST define exact atomic commits per logical change, including commit messages.
 - Plans are incomplete without defined TDD and commits.
 - MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
-- Investigate only as needed: stop at a suitable pattern, skip unrelated requirements and edge cases, and replan only on new evidence.
+- MUST stop investigation when a pattern meets the task's stated requirements.
+- Skip unrelated requirements and edge cases.
+- Replan only on new evidence.

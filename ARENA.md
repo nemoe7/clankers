@@ -109,7 +109,9 @@
 - Questions with 3+ options or an open choice need a recommended answer, marked among options; yes/no or confirm questions need none.
 - NEVER count a preselected option, recommendation, or silence as an answer; leave the question unanswered.
 - NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report that names each in one line; the other tasks continue, and if a form awaits answers and no unblocked work remains, run `poll`.
-- Any unavoidable assumption: state it in the acknowledgement before work starts; take the most reasonable one; NEVER use it to bypass material ambiguity.
+- MUST state each unavoidable assumption in the acknowledgement before work.
+- NEVER assume while material ambiguity remains.
+- Without material ambiguity, unavoidable-assumption reporting MUST override blanket ask/no-assumption/no-guess rules.
 
 ## Engineering
 

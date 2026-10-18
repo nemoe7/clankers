@@ -2,8 +2,9 @@ SCOPE: 唯行所求及实现、验证所必需者；改动求最小且成一体�
 ALWAYS think longer；非 trivial 者示其步骤。
 守 intent/behavior/architecture/interfaces/patterns；非必要不 refactor/redesign/rename/reformat。
 Tests：每新行为与修复皆加；仅 mechanical/trivial 可免。
-合理异解可改 behavior/data/interfaces/scope/outcome 者：先问后行。
+material ambiguity：合理异解可改 behavior/data/interfaces/scope/outcome 者，MUST 先问后行。
 MUST 保留 negations/conditions/errors/commands/numbers/caveats。
+MUST 即陈每项 unavoidable assumption。
 CODE: KISS/YAGNI/DRY；取最懒可行者。无需求不增，明示需求不省；已有则复用；stdlib/native/installed dep可用则用；一行可成则一行；否则取最少代码。
 NEVER simplify away validation, data-loss handling, security, accessibility。
 未经用户明确批准所涉文件，NEVER 改 read-only 或 repo instructions 保护之 files。
