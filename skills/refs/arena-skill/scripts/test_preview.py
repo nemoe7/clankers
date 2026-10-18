@@ -9302,3 +9302,63 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
       next(item for item in store.state()["notes"] if item["id"] == oversized["id"])
       == before_oversized
     )
+
+
+def test_preview_order_survives_agent_updates_and_notifies_the_next_hook():
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.set_meta("port", guard_port())
+    for task_id in ("first", "second", "third"):
+      store.write_task(task_id, task_id, ["A step"], task_type="code")
+    store.write_task("third", order=1)
+    store.reorder_tasks(["first", "third"])
+    ordered = [task["id"] for task in store.list_tasks()]
+    before = store.task_record("third")
+    with pytest.raises(ValueError, match="order"):
+      store.write_task("third", title="Must roll back", order=1)
+    assert store.task_record("third") == before
+    store.write_task("third", details=["Updated step"])
+    store.write_task("third", order=store.task_record("third")["order"])
+    assert [task["id"] for task in store.list_tasks()] == ordered
+    store.write_task("new", "New task", ["A step"], task_type="code")
+    assert [task["id"] for task in store.list_tasks()][:-1] == ordered
+    assert "Task order changed in the preview" not in store.reminder(routine=False)
+    live_detached_placeholder(directory, "order-check", ["bash", "-c", "true"])
+    command = [sys.executable, str(Path(preview.__file__)), "--reminder"]
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": directory}
+    listing = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "task-list"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert listing.returncode == 0, listing.stderr
+    assert "Task order changed in the preview" not in listing.stdout + listing.stderr
+    first = subprocess.run(
+      command, capture_output=True, text=True, check=False, env=env
+    )
+    assert first.returncode == 0, first.stderr
+    assert "Task order changed in the preview" in first.stderr
+    assert first.stdout == ""
+    second = subprocess.run(
+      command, capture_output=True, text=True, check=False, env=env
+    )
+    assert second.returncode == 0, second.stderr
+    assert "Task order changed in the preview" not in second.stderr + second.stdout
+    rejected = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "task", "third", "--order", "1"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert rejected.returncode != 0
+    assert "order" in rejected.stderr.lower()
+    assert [task["id"] for task in store.list_tasks()] == ordered + ["new"]
+    with pytest.raises(ValueError, match="order"):
+      store.write_task("third", order=1)
+    store.write_task("third", status="finished", order=1)
+    store.write_task("third", status="upcoming")
+    store.import_tasks([store.task_record("third") | {"order": 1}])
+    assert store.list_tasks()[0]["id"] == "third"

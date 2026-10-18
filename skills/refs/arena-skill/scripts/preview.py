@@ -1410,6 +1410,11 @@ MAX_TASK_DETAIL = 2000
 MAX_TASK_DETAILS = 40
 # A task detail is one step: a longer line is a wall of text, and the tool refuses it.
 TASK_STEP_MAX = 120
+TASK_ORDER_OWNED_META = "task_order_owned"
+TASK_ORDER_PENDING_META = "task_order_notice_pending"
+TASK_ORDER_NOTICE = (
+  "Task order changed in the preview; preserve its upcoming task order."
+)
 ECHO_DETAIL = 200
 TASK_COLUMNS = (
   "id, title, details, status, position, updated_at, completed_at, blocked, report_id,"
@@ -4138,6 +4143,17 @@ class Store:
         index = max(0, min(stored["order"] - 1, len(siblings)))
       else:
         index = len(siblings)
+      if (
+        not restoring
+        and stored
+        and stored["status"] == status == "upcoming"
+        and order is not None
+        and index + 1 != stored["order"]
+        and meta_number(db, TASK_ORDER_OWNED_META)
+      ):
+        raise ValueError(
+          "Task order belongs to the preview; omit --order for this update"
+        )
       siblings.insert(index, record)
       record["order"] = index + 1
       db.execute(
@@ -4190,6 +4206,10 @@ class Store:
       for task_id in ids:
         if task_id not in stored:
           raise ValueError(f"No upcoming task holds {task_id}")
+      db.executemany(
+        "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+        [(TASK_ORDER_OWNED_META, "1"), (TASK_ORDER_PENDING_META, "1")],
+      )
       drawn = iter(ids)
       wanted = set(ids)
       sequence = [next(drawn) if task_id in wanted else task_id for task_id in stored]
@@ -5213,7 +5233,11 @@ class Store:
     pending clears the count, so the printed number reports the bash calls since the owner's first still-unread
     message. Only `--reminder` advances it. A new note or form answer resets it only when it starts a fresh
     backlog, and `read` does not."""
+    order_notice = False
     with closing(self.connect()) as db, db:
+      if advance and meta_number(db, TASK_ORDER_PENDING_META):
+        order_notice = True
+        db.execute("DELETE FROM meta WHERE key = ?", (TASK_ORDER_PENDING_META,))
       uploads = db.execute(
         "SELECT count(*) FROM notes JOIN uploads USING (id)"
         " WHERE acknowledged_at IS NULL AND quiet = 0"
@@ -5262,7 +5286,10 @@ class Store:
     unacked = [f"unacked {', '.join(counts)}"] if counts else []
     head = ["blocked"] if blocked else [f"calls {polls}"] if polls and counts else []
     tail = reminder_tail(cursor, remaining, len(stale)) if routine else ""
-    parts = [" ".join([*head, *unacked]).strip(), tail]
+    parts = [" ".join([*head, *unacked]).strip()]
+    if order_notice:
+      parts.append(TASK_ORDER_NOTICE)
+    parts.append(tail)
     return " | ".join(parts).strip(" |")
 
   def calls_since_message(self):
@@ -6902,7 +6929,11 @@ def main():
       store.set_meta(AGENT_CALL_ENDED_META, now())
       # A pending inbox item outranks a routed status. Otherwise one routed status or one
       # reminder line is enough for the agent to act.
-      if "unacked " in reminder or not run_notices(state_dir, show_running=True):
+      if (
+        "unacked " in reminder
+        or TASK_ORDER_NOTICE in reminder
+        or not run_notices(state_dir, show_running=True)
+      ):
         print(reminder, file=sys.stderr, flush=True)
       return 0
     if not args.command:

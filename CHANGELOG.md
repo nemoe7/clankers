@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview tasks: preserve browser task order on agent updates. Print one notice on the next Bash hook.
+
 - CORE, Arena, Kilo Plan, and ChatGPT rules: state assumptions, stop at material ambiguity, and retain reporting priority.
 
 - CORE, Arena, and ChatGPT rules: name the code-style scope. Keep other repository conventions. Require explicit file approval for read-only and repository-protected files.
