@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena guide: remove the duplicate key warning. Keep the explicit key ban.
+
 - Arena context: require the saved context to state that a full read-set reread is mandatory after replacement and before other tool calls.
 
 - Preview context reminder: state the mandatory read and tool order after compaction. Keep full-text, session-start, violation, and reread-request conditions.
