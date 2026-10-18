@@ -267,7 +267,7 @@ _arena_preview_gate() {
       ;;
   esac
   # A backtick inside double quotes runs as a command, so the shell eats the ticks before the tool sees the text.
-  # The warning lands before the ack runs, and it names the file form.
+  # The warning runs before the acknowledgement and recommends single-quoted inline text.
   # case: ack-ticks
   case "\$BASH_COMMAND" in
     *"arena-preview ack"*|*"preview.py ack"*)

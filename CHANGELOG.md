@@ -56,6 +56,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview installer comment: describe the inline acknowledgement warning.
+
 - Preview violation flag: print the target first and the blocked Bash call on the second line. Require the full read-set reread before the fix. Keep cancellation and one-shot consumption.
 
 - Preview CI checks: use the latest check and workflow run, or status context. Read all pages. Do not let an old failed run block a later successful run.
