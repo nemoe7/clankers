@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview recovery guide: remove repeated restart, state, and port text. Keep the restore procedure and operating safeguards.
+
 - Preview transfer guide: use the direct opening and remove size explanations. Keep encoding, decoder, and staging rules.
 
 - Preview task guide: remove the export sentence. Keep task operations and runtime behavior unchanged.
