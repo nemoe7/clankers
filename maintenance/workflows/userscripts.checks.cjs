@@ -2362,7 +2362,7 @@ function checkStateDownload(api, session, logging) {
     "",
   );
   // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish. The conversation header still opens with the repository name, and its first word is the repository.
-  // That read comes before the tab title. The tab title is the reliable read, so it comes before the greppier header read.
+  // The tab title is the reliable read, so it comes before the greppier header read.
   var headerSpan = { textContent: "clankers read ARENA.md AGENTS.md in full before your first edit" };
   var headerDoc = {
     querySelector: function () { return null; },
