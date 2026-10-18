@@ -1977,7 +1977,7 @@ function checkReportRead() {
       body.dataset.updatedAt === (report?.updated_at || '')) void markReportRead(id);
 }
 $('#reports-panel').addEventListener('scroll', () => { checkReportRead(); updateReportTop(); });
-// A hidden page is not a pair of eyes: leaving the report, or hiding the page, clears the view.
+// Leaving the report or hiding the page clears its viewed state.
 document.addEventListener('visibilitychange', () => {
   const shown = shownReportId();
   if (document.hidden) {
