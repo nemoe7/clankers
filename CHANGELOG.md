@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena guide: remove direct-client and master-key details, a default explanation, and rating text. Move gate-test wiring to maintenance docs.
+
 - Preview docs and test comments: remove redundant text and a historical aside. Use a direct verb.
 
 - Preview acknowledgements: accept inline Markdown only. Reject stdin input and remove file-based guidance. Keep stored receipts and the shell-quoting warning.

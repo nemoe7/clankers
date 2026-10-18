@@ -71,7 +71,7 @@ arena-preview poll
 - Use the full ID, not a sequence number.
 - A second ack adds a reply without replacing the earlier answer.
 - Receipt is not completion.
-- Failure to ack immediately earns a negative rating.
+- Acknowledge each delivered ID immediately.
 - After each `ack` of a note that asks for work, record it with `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
 
 ```bash
@@ -141,7 +141,7 @@ The backend answers over one public HTTPS URL. An Arena session reads it through
 https://<backend-host>/v1/<route>?key=<agent-key>&<parameters>
 ```
 
-- The key rides in the query as `key`. The backend also accepts an `X-Extension-Key` header, for a direct client.
+- The key rides in the query as `key`.
 - The tool returns text. JSON arrives as a code block. A long body arrives in chunks, so continue through the chunks the tool reports.
 - The tool fails on a binary response with HTTP 500. The routes below return text or JSON only.
 - Keep every URL honest. The key travels in it, and the fetch layer records it.
@@ -154,7 +154,7 @@ https://<backend-host>/v1/<route>?key=<agent-key>&<parameters>
 | `/v1/fetch` | `key`, `url`, `mode`, `encoding`, `gzip`, `stage`, `id`, `index` | Text, JSON with base64, or one staged chunk |
 | `/v1/llm` | `key`, `prompt`, `model`, `system`, `image`, `file`, `ref`, `diff`, `repo`, `max_tokens`, or `id` | A job id, then status and text |
 
-`/v1/health` needs no key, `/v1/key` takes `master` and answers the live agent key, and `/v1/ping` takes `key` and answers the route list with the model state and the caps.
+`/v1/health` needs no key, and `/v1/ping` takes `key` and answers the route list with the model state and the caps.
 
 Examples:
 
@@ -199,7 +199,7 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 | `repo` | the repository for `diff` or `file` |
 | `max_tokens` | an output cap, when the endpoint honors it |
 
-- Always name `repo` in a call that takes one, `logs`, `diff` and `file` included. The backend default is a convenience, not a rule.
+- Always name `repo` in a call that takes one, `logs`, `diff` and `file` included.
 - The backend refuses a malformed `owner/name`. It reports the upstream status when the context read fails.
 - Ask for a description, a transcription, or a judgement, not for the image back.
 - Never put an agent key, a token, or a private file in a prompt.

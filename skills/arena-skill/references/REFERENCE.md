@@ -93,8 +93,6 @@ The page's Message log toolbar carries a Skip poll button. A listing that carrie
 
 ## The gate's cases
 
-The profile gate and the EXIT hook beside it hold one case per shape below. Every case carries a label in `install.sh`, and a test compares this table with those labels.
-
 | Case | Trigger | Answer |
 | --- | --- | --- |
 | `pr-state` | visible `gh pr close`, `gh pr reopen`, `gh pr merge`, equivalent API writes, or destructive head-ref operations | `exit 130` before bypasses. A read line skips the veto spawn. Reads, comments, title/body edits, and permitted working-branch pushes pass |
