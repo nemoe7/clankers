@@ -1752,7 +1752,13 @@ class Store:
 		with self.transaction(shared)as db:
 			for table in('notes','submissions'):
 				cursor=db.execute(f"UPDATE {table} SET task_id = ? WHERE id = ?",(task_id,record_id))
-				if cursor.rowcount:return
+				if cursor.rowcount:
+					if table=='notes':
+						uploads=db.execute('SELECT * FROM uploads WHERE note_id = ? ORDER BY seq',(record_id,)).fetchall()
+						if uploads:
+							stored=db.execute('SELECT details FROM tasks WHERE id = ?',(task_id,)).fetchone();details=json.loads(stored['details'])if stored else[];paths=[f"Attachment: {upload_row(row,self.path.parent)['path']}"for row in uploads];added=[path for path in paths if path not in details]
+							if added:return self.write_task(task_id,details=added,append_details=True,shared=db)
+					return
 		raise ValueError(f"Unknown note: {record_id}; no task marker written")
 	def pending_ack(self):
 		with self.connect()as db:rows=db.execute('SELECT id, at FROM notes WHERE acknowledged_at IS NULL AND quiet = 0 UNION ALL SELECT id, at FROM submissions WHERE acknowledged_at IS NULL ORDER BY at').fetchall()
@@ -2293,7 +2299,7 @@ def main():
 				except FileNotFoundError:raise ValueError(f"No report is stored under {args.report}")from None
 				if args.blocked is None:args.blocked=True
 			if args.msg_id:
-				with store.transaction()as shared:record=store.write_task(task_id,args.title_arg,details,args.status,args.order,args.blocked,args.report,task_type=args.task_type,shared=shared,append_details=args.append_details);store.mark_task(args.msg_id,task_id,shared=shared)
+				with store.transaction()as shared:record=store.write_task(task_id,args.title_arg,details,args.status,args.order,args.blocked,args.report,task_type=args.task_type,shared=shared,append_details=args.append_details);record=store.mark_task(args.msg_id,task_id,shared=shared)or record
 			else:record=store.write_task(task_id,args.title_arg,details,args.status,args.order,args.blocked,args.report,task_type=args.task_type,append_details=args.append_details)
 			print(format_task(record))
 		elif args.command=='task-remove':print(format_task(store.remove_task(store.resolve_id(args.task_id))))

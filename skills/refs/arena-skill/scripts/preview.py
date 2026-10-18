@@ -5393,8 +5393,8 @@ class Store:
     raise FileNotFoundError("Message not found")
 
   def mark_task(self, record_id, task_id, shared=None):
-    """Mark the message record that holds a task. Store the marker so the receipt shows whether the agent queued
-    the message. Raise on unknown IDs inside the caller transaction."""
+    """Mark the message task and append new attachment paths. Return the updated task when paths change.
+    Raise on unknown IDs inside the caller transaction."""
     identifier(record_id)
     identifier(task_id)
     with self.transaction(shared) as db:
@@ -5403,6 +5403,24 @@ class Store:
           f"UPDATE {table} SET task_id = ? WHERE id = ?", (task_id, record_id)
         )
         if cursor.rowcount:
+          if table == "notes":
+            uploads = db.execute(
+              "SELECT * FROM uploads WHERE note_id = ? ORDER BY seq", (record_id,)
+            ).fetchall()
+            if uploads:
+              stored = db.execute(
+                "SELECT details FROM tasks WHERE id = ?", (task_id,)
+              ).fetchone()
+              details = json.loads(stored["details"]) if stored else []
+              paths = [
+                f"Attachment: {upload_row(row, self.path.parent)['path']}"
+                for row in uploads
+              ]
+              added = [path for path in paths if path not in details]
+              if added:
+                return self.write_task(
+                  task_id, details=added, append_details=True, shared=db
+                )
           return
     raise ValueError(f"Unknown note: {record_id}; no task marker written")
 
@@ -7290,7 +7308,7 @@ def main():
             shared=shared,
             append_details=args.append_details,
           )
-          store.mark_task(args.msg_id, task_id, shared=shared)
+          record = store.mark_task(args.msg_id, task_id, shared=shared) or record
       else:
         record = store.write_task(
           task_id,

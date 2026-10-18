@@ -6,6 +6,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-18
 
+### Added
+
+- Preview tasks: include complete attachment paths when linking notes. Keep ordinary step limits, storage caps, and atomic writes.
+
 ### Changed
 
 - CORE, Arena, Kilo Plan, and ChatGPT rules: state assumptions, stop at material ambiguity, and retain reporting priority.

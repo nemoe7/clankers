@@ -9170,3 +9170,135 @@ def test_ack_has_one_flagless_markdown_input(capsys):
       assert error.value.code != 0
     assert store.state()["notes"][0]["replies"] == []
     capsys.readouterr()
+
+
+def test_linked_upload_paths_are_complete_idempotent_and_atomic():
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory) / ("workspace-" + "x" * preview.TASK_STEP_MAX)
+    store = preview.Store(root, create=True)
+    store.set_meta("port", guard_port())
+    note = store.note_with_uploads(
+      "upload-note",
+      "Use both files",
+      [
+        ("first file.txt", "text/plain", b"one"),
+        ("second.bin", "application/octet-stream", b"two"),
+      ],
+    )
+    paths = [item["path"] for item in note["attachments"]]
+    assert all(len(path) > preview.TASK_STEP_MAX for path in paths)
+    before_note = store.state()["notes"][0]
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(root)}
+
+    def cli(*args):
+      return subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+      )
+
+    result = cli(
+      "task",
+      "uploaded-work",
+      "Use uploads",
+      "--details",
+      "Keep this step",
+      "--task-type",
+      "code",
+      "--msg-id",
+      note["id"],
+    )
+    assert result.returncode == 0, result.stderr
+    details = store.task_record("uploaded-work")["details"]
+    assert details[0] == "Keep this step"
+    for path in paths:
+      assert sum(path in step for step in details) == 1
+      assert path in result.stdout
+    after_note = store.state()["notes"][0]
+    assert after_note["task_id"] == "uploaded-work"
+    for key in ("id", "text", "acknowledged_at", "seen_at", "attachments"):
+      assert after_note[key] == before_note[key]
+    repeated = cli("task", "uploaded-work", "--msg-id", note["id"])
+    assert repeated.returncode == 0, repeated.stderr
+    assert store.task_record("uploaded-work")["details"] == details
+    boundary = cli(
+      "task",
+      "boundary-work",
+      "Boundary",
+      "--task-type",
+      "code",
+      "--details",
+      "x" * preview.TASK_STEP_MAX,
+    )
+    assert boundary.returncode == 0, boundary.stderr
+    assert store.task_record("boundary-work")["details"] == [
+      "x" * preview.TASK_STEP_MAX
+    ]
+    ordinary = cli(
+      "task",
+      "ordinary-work",
+      "Ordinary",
+      "--task-type",
+      "code",
+      "--details",
+      "Attachment: " + "x" * preview.TASK_STEP_MAX,
+    )
+    assert ordinary.returncode != 0
+    assert store.task_record("ordinary-work") is None
+    store.write_task(
+      "full-work",
+      "Full task",
+      [f"Step {i}" for i in range(preview.MAX_TASK_DETAILS)],
+      task_type="code",
+    )
+    untouched = store.note_with_uploads(
+      "full-note", "Must keep this marker empty", [("file.txt", "text/plain", b"three")]
+    )
+    before_task = store.task_record("full-work")
+    before_full_note = next(
+      item for item in store.state()["notes"] if item["id"] == untouched["id"]
+    )
+    refused = cli("task", "full-work", "--msg-id", untouched["id"])
+    assert refused.returncode != 0
+    assert store.task_record("full-work") == before_task
+    assert (
+      next(item for item in store.state()["notes"] if item["id"] == untouched["id"])
+      == before_full_note
+    )
+
+    oversized = store.note_with_uploads(
+      "oversized-note", "Keep storage caps", [("file.txt", "text/plain", b"four")]
+    )
+    before_oversized = next(
+      item for item in store.state()["notes"] if item["id"] == oversized["id"]
+    )
+    with (
+      patch.dict(os.environ, env),
+      patch.object(
+        sys,
+        "argv",
+        [
+          str(Path(preview.__file__)),
+          "task",
+          "oversized-work",
+          "Oversized",
+          "--task-type",
+          "code",
+          "--details",
+          "Keep this step",
+          "--msg-id",
+          oversized["id"],
+        ],
+      ),
+      patch.object(
+        preview, "MAX_TASK_DETAIL", len(oversized["attachments"][0]["path"])
+      ),
+    ):
+      assert preview.main() != 0
+    assert store.task_record("oversized-work") is None
+    assert (
+      next(item for item in store.state()["notes"] if item["id"] == oversized["id"])
+      == before_oversized
+    )
