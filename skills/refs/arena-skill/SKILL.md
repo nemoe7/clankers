@@ -170,14 +170,14 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 
 ## Transfers
 
-`/v1/fetch` carries a binary response that the tool cannot. Pick the smallest form that survives the trip:
+`/v1/fetch` carries binary data as text. Pick the smallest applicable form:
 
 | Form | Parameter | Use for |
 | --- | --- | --- |
 | text | `mode=text` or `auto` | UTF-8 without NUL bytes |
-| base64 | `mode=base64` | any binary, the default that decodes everywhere, at +33% characters |
-| base85 | `mode=base64&encoding=b85` | binary when the decoder is Python, at +25% |
-| gzip and base64 | `gzip=1` | logs, JSON, HTML and text-shaped bytes, below plain base64 |
+| base64 | `mode=base64` | any binary, the default that decodes everywhere |
+| base85 | `mode=base64&encoding=b85` | binary when the decoder is Python |
+| gzip and base64 | `gzip=1` | logs, JSON, HTML and text-shaped bytes |
 | staged chunks | `stage=1`, then `id` and `index` | anything large, and every staged read |
 
 - A staged request answers `id`, `bytes`, `chunks` and the chunk size. Read each with `index`, decode it and append until the `chunks` count ends; a bad index fails with the tool's own error.

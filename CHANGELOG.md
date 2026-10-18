@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview transfer guide: use the direct opening and remove size explanations. Keep encoding, decoder, and staging rules.
+
 - Preview task guide: remove the export sentence. Keep task operations and runtime behavior unchanged.
 
 - Preview task guide: remove the reminder-output suffix. Keep task tracking and runtime behavior unchanged.
