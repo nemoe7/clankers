@@ -71,7 +71,7 @@
 ## Setup
 
 - In `nemoe7` repositories: Python uses Ruff defaults and the project's `ruff.toml` when it has one.
-- Without one, create `ruff.toml` exactly with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.16.6"`.
+- Without `ruff.toml`, MUST keep these defaults in this rule file and create `ruff.toml` exactly before gates: `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.16.6"`.
 
 ## Verification
 

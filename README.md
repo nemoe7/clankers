@@ -42,7 +42,7 @@ Latest measurements as of 2026-10-18. `maintenance/check.py --update` rebuilds t
 | [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 1,498 `chars` |
 | [`rules/CLINE.md`](rules/CLINE.md) | `o200k_base` | 353 `tok` |
 | [`rules/COMMIT-SPEC.txt`](rules/COMMIT-SPEC.txt) | `o200k_base` | 93 `tok` |
-| [`rules/CORE.md`](rules/CORE.md) | `o200k_base` | 1,618 `tok` |
+| [`rules/CORE.md`](rules/CORE.md) | `o200k_base` | 1,632 `tok` |
 | [`rules/KILO.md`](rules/KILO.md) | `o200k_base` | 76 `tok` |
 | [`rules/kilo/code.md`](rules/kilo/code.md) | `o200k_base` | 240 `tok` |
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 298 `tok` |

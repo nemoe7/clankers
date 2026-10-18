@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- CORE rules: keep portable Ruff defaults in the rule file. Keep all settings unchanged.
+
 - Kilo rules: name the approved plan file and project gates. Remove repeated working-directory text.
 
 ## 2026-10-17
