@@ -17,14 +17,16 @@
 ## General
 
 - MUST keep negations, conditions, errors, commands, numbers, caveats.
-- Follow repo docs, conventions, patterns.
+- MUST follow repo docs/conventions.
 - MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
-- Comments, docs, responses: terse, unambiguous; no storyline or narrative unless asked.
+- Comments/docs/responses MUST be terse, unambiguous; cut words, NEVER meaning; no storyline or narrative unless asked.
 - Maintain changelogs per [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another format.
 - Open on the substance, NEVER preamble or postamble.
 - Cite code, diffs and tool output by path and line instead of repeating.
 - Continue after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
+
+- Prefer existing repo patterns.
 
 ## Scope
 
@@ -56,7 +58,7 @@
 
 ## Testing
 
-- New behavior, fixes, refactors: when a test fits, failing test first, smallest passing change, refactor without behavior change, recheck.
+- New behavior, fixes, refactors: when a test fits, prefer failing test first, smallest passing change, refactor without behavior change, recheck.
 - Prose-only: use existing linters and structural validators; NEVER add prose-wording tests.
 - Keep exact-text tests for executable interface/protocol contracts.
 - Test public interfaces and integration boundaries.

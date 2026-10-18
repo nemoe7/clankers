@@ -1,10 +1,10 @@
-SCOPE: MUST only requested+needed implementation/checks; smallest coherent change; stop when verified.
-ALWAYS think longer; show nontrivial steps.
+SCOPE: MUST only requested+needed implementation/checks; smallest coherent change; stop when verified
+ALWAYS think longer; show nontrivial steps
 ALWAYS Oxford comma.
 Keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only as needed.
 Test new behavior/fixes, not mechanical/trivial.
 MUST ask first if readings differ in behavior/data/interfaces/scope/outcome.
-Keep negations/conditions/errors/commands/numbers/caveats.
+MUST keep negations/conditions/errors/commands/numbers/caveats.
 CODE: KISS/YAGNI/DRY; laziest fit: 1 needed?; 2 existing; 3 stdlib; 4 native; 5 installed dep; 6 one line; 7 minimum code.
 NEVER cut validation/data-loss handling/security/accessibility.
 Guard clauses, early returns.

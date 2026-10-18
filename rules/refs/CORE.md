@@ -17,8 +17,8 @@
 
 ## General
 
-- Preserve key details: negations, conditions, errors, commands, numbers, caveats.
-- Follow repo docs and conventions; prefer existing patterns.
+- MUST keep key details: negations, conditions, errors, commands, numbers, and caveats.
+- MUST follow repository documentation and conventions.
 - MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
 - Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning; no storyline or narrative unless the user asks for it.
 - Maintain changelogs in the [Keep a Changelog](https://keepachangelog.com/) format unless the repository follows a different changelog format.
@@ -26,6 +26,8 @@
 - Cite code, diffs, file contents and tool output by path and line instead of repeating them.
 - Continue straight to the next step after a tool call succeeds, with no narration of the result.
 - Batch independent tool calls into one block whenever the surface permits.
+
+- Prefer existing repository patterns.
 
 ## Scope
 
