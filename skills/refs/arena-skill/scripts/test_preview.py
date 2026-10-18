@@ -4328,7 +4328,7 @@ def test_shared_save_import():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout.strip()
     # The imported note carries its receipt, so `read` has nothing pending. The receipt is what
-    # makes it acknowledged. Reading alone never stamps Seen.
+    # makes it acknowledged.
     assert "0 pending" in read_out or "pending" not in read_out or "Inbox" in read_out
     restored = preview.Store(mixed_root)
     restored.set_meta("port", guard_port())

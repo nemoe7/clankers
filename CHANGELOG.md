@@ -58,6 +58,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview import test comment: remove the false Seen-state sentence. Keep assertions unchanged.
+
 - Preview installer comment: describe the inline acknowledgement warning.
 
 - Preview violation flag: print the target first and the blocked Bash call on the second line. Require the full read-set reread before the fix. Keep cancellation and one-shot consumption.
