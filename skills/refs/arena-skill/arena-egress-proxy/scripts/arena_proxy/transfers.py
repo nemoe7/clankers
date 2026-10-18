@@ -13,7 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-CHUNK_BYTES = 49152
+CHUNK_BYTES = 8192
 FETCH_TIMEOUT_SECONDS = 30
 DEFAULT_FETCH_CAP = 8_000_000
 DEFAULT_STAGE_CAP = 32_000_000
@@ -63,7 +63,7 @@ def fetch_url(url, cap, timeout=FETCH_TIMEOUT_SECONDS):
   if not allowed_url(url):
     raise TransferError(400, "url must be https://, or http:// on a loopback host")
   # The fetch proxy takes a caller-supplied URL by design. The guard above checks it.
-  request = urllib.request.Request(url, headers={"User-Agent": "arena-proxy/2"})
+  request = urllib.request.Request(url, headers={"User-Agent": "arena-proxy/3"})
   try:
     with urllib.request.urlopen(request, timeout=timeout) as response:
       declared = int(response.headers.get("Content-Length") or 0)

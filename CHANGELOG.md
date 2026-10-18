@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Proxy data replies: bound JSON pages and record sets, add field selection and stable next reads, and return binary metadata before chunks. Keep model context, keys, HTTP statuses, caps, and expiry.
+
 - Preview CLI: remove the literal program prefix from poll, root-parser, and wrapper messages. Keep usage, subcommand prefixes, messages, and exit codes.
 
 - Preview task docs: state the 120-character CLI step limit. Keep storage and CLI limits unchanged.

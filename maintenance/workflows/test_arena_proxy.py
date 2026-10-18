@@ -2,12 +2,14 @@
 
 import base64
 import contextlib
+import gzip
 import http.client
 import importlib
 import io
 import json
 import sys
 import threading
+import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -44,16 +46,61 @@ class StubHandler(BaseHTTPRequestHandler):
     self.server.seen.append(
       {"path": self.path, "auth": self.headers.get("Authorization")}
     )
-    if self.path.startswith("/repos/o/r/actions/runs/1/logs"):
+    resource = self.path.split("?", 1)[0]
+    if resource in getattr(self.server, "github_replies", {}):
+      self._write(
+        200,
+        json.dumps(self.server.github_replies[resource]).encode(),
+        "application/json",
+      )
+    elif self.path.startswith("/repos/o/r/actions/runs/1/logs"):
       self._write(200, log_zip(), "application/zip")
     elif self.path.startswith("/repos/o/r/pulls/9"):
       self._write(200, b"diff --git a/x b/x\n+added line\n", "text/plain")
     elif self.path.startswith("/repos/o/r/code-scanning/alerts"):
-      self._write(200, json.dumps([{"number": 7}]).encode(), "application/json")
+      page = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get(
+        "page", ["1"]
+      )[0]
+      alerts = getattr(self.server, "alert_pages", {}).get(
+        page, getattr(self.server, "alerts", [{"number": 7}])
+      )
+      next_page = getattr(self.server, "alert_next", {}).get(page)
+      headers = {}
+      if next_page:
+        host, port = self.server.server_address
+        headers["Link"] = (
+          f'<http://{host}:{port}/repos/o/r/code-scanning/alerts?page={next_page}&state=open>; rel="next"'
+        )
+      self._write(
+        getattr(self.server, "alert_status", 200),
+        json.dumps(alerts).encode(),
+        "application/json",
+        headers,
+      )
+    elif self.path.startswith("/repos/o/r/labels"):
+      self._write(
+        200,
+        json.dumps(
+          getattr(
+            self.server,
+            "labels",
+            [
+              {
+                "name": "triage",
+                "color": "ff0000",
+                "description": "unused-detail" * 1000,
+              }
+            ],
+          )
+        ).encode(),
+        "application/json",
+      )
     elif self.path.startswith("/blob"):
-      self._write(200, BINARY, "image/png")
+      self._write(200, getattr(self.server, "blob_body", BINARY), "image/png")
     elif self.path.startswith("/text"):
-      self._write(200, b"plain words\n", "text/plain")
+      self._write(
+        200, getattr(self.server, "text_body", b"plain words\n"), "text/plain"
+      )
     else:
       self._write(404, b'{"message": "Not Found"}', "application/json")
 
@@ -68,14 +115,22 @@ class StubHandler(BaseHTTPRequestHandler):
     )
     self._write(
       200,
-      json.dumps({"choices": [{"message": {"content": "review text"}}]}).encode(),
+      json.dumps(
+        {
+          "choices": [
+            {"message": {"content": getattr(self.server, "reply_text", "review text")}}
+          ]
+        }
+      ).encode(),
       "application/json",
     )
 
-  def _write(self, status, body, content_type):
+  def _write(self, status, body, content_type, headers=None):
     self.send_response(status)
     self.send_header("Content-Type", content_type)
     self.send_header("Content-Length", str(len(body)))
+    for name, value in (headers or {}).items():
+      self.send_header(name, value)
     self.end_headers()
     self.wfile.write(body)
 
@@ -243,7 +298,7 @@ def test_gh_forwards_path_query_and_token(tmp_path):
       f"/v1/gh?key={KEY}&path=repos/o/r/code-scanning/alerts&state=open&per_page=5",
     )
     assert status == 200
-    assert json.loads(body) == [{"number": 7}]
+    assert json.loads(body)["items"] == [{"number": 7}]
     sent = handle.stub.seen[-1]
     assert sent["auth"] == f"Bearer {TOKEN}"
     assert "state=open" in sent["path"] and "per_page=5" in sent["path"]
@@ -264,7 +319,7 @@ def test_gh_folds_the_run_log_tail_into_the_route(tmp_path):
     status, body = call(handle.port, logs)
     assert status == 200
     assert "1_Set up job.txt" in body and "test line two" in body
-    # A path that is not a run log answers the API as it stands, so the tail stays folded in.
+    # A non-log text answer keeps its text and does not enter the log parser.
     status, body = call(handle.port, f"/v1/gh?key={KEY}&path=repos/o/r/pulls/9")
     assert status == 200 and "added line" in body
     # A run log the token cannot reach answers the API status, not a tail.
@@ -303,7 +358,7 @@ def test_fetch_returns_text_for_text_bytes(tmp_path):
   with backend(tmp_path) as handle:
     status, body = call(handle.port, f"/v1/fetch?key={KEY}&url={handle.stub_url}/text")
     assert status == 200
-    assert body == "plain words\n"
+    assert json.loads(body)["text"] == "plain words\n"
 
 
 def test_fetch_returns_base64_for_binary(tmp_path):
@@ -314,7 +369,9 @@ def test_fetch_returns_base64_for_binary(tmp_path):
     assert status == 200
     payload = json.loads(body)
     assert payload["encoding"] == "base64"
-    assert base64.b64decode(payload["payload"]) == BINARY
+    assert "payload" not in payload
+    pieces = list(compact_pages(handle.port, payload["hint"] + "&key=" + KEY))
+    assert b"".join(base64.b64decode(piece["payload"]) for piece in pieces) == BINARY
 
 
 def test_fetch_text_mode_refuses_binary(tmp_path):
@@ -480,15 +537,18 @@ class DeadConnection:
     pass
 
 
-def test_a_caller_that_leaves_early_is_no_fault():
+def test_a_caller_that_leaves_early_is_no_fault(tmp_path):
   """A closed socket must not raise out of the handler, or the traceback floods the log."""
-  request = b"GET /v1/nothing HTTP/1.1\r\nHost: probe\r\n\r\n"
-  handler = core.ExtensionHandler(
-    DeadConnection(request),
-    ("127.0.0.1", 42440),
-    SimpleNamespace(),
-  )
-  assert handler.close_connection is True
+  store = core.Store(tmp_path)
+  blob_id = store.put_blob(b"plain words")[0]
+  for target in ("/v1/nothing", f"/v1/fetch?key={KEY}&id={blob_id}&offset=bad"):
+    request = f"GET {target} HTTP/1.1\r\nHost: probe\r\n\r\n".encode()
+    handler = core.ExtensionHandler(
+      DeadConnection(request),
+      ("127.0.0.1", 42440),
+      SimpleNamespace(agent_key=KEY, store=store),
+    )
+    assert handler.close_connection is True
 
 
 def test_unknown_route_lists_the_routes(tmp_path):
@@ -514,3 +574,303 @@ def test_agent_key_is_fresh_on_every_call():
   first = core.agent_key()
   second = core.agent_key()
   assert first != second and len(first) >= 32
+
+
+def compact_pages(port, target):
+  for _ in range(100):
+    status, body = call(port, target)
+    assert status == 200
+    assert len(body) <= 16_000
+    payload = json.loads(body)
+    assert isinstance(payload, dict)
+    yield payload
+    if payload["complete"]:
+      return
+    following = payload["next"]
+    assert following.startswith("/v1/")
+    assert "key=" not in following
+    target = following + "&key=" + KEY
+  raise AssertionError("a bounded continuation must complete")
+
+
+def test_compact_gh_pages_keep_every_record_within_limits(tmp_path):
+  with backend(tmp_path) as handle:
+    handle.stub.alerts = [
+      {
+        "number": number,
+        "state": "open",
+        "rule": {"id": "test/rule", "description": "description" * 40},
+        "most_recent_instance": {
+          "ref": "refs/heads/main",
+          "commit_sha": "a" * 40,
+          "message": {"text": 'warning " λ' * 200},
+          "location": {"path": "x.py", "start_line": number + 1},
+        },
+        "dismissed_by": {"login": "unused-detail" * 100},
+      }
+      for number in range(40)
+    ]
+    numbers = []
+    target = f"/v1/gh?key={KEY}&path=repos/o/r/code-scanning/alerts"
+    for payload in compact_pages(handle.port, target):
+      assert len(payload["items"]) <= 20
+      assert all("dismissed_by" not in item for item in payload["items"])
+      numbers.extend(item["number"] for item in payload["items"])
+    assert numbers == list(range(40))
+
+
+def test_compact_fetch_text_pages_preserve_escaped_unicode(tmp_path):
+  text = 'quote " slash \\ λ\n' * 2400
+  with backend(tmp_path) as handle:
+    handle.stub.text_body = text.encode()
+    target = f"/v1/fetch?key={KEY}&url={handle.stub_url}/text"
+    pieces = [payload["text"] for payload in compact_pages(handle.port, target)]
+    assert "".join(pieces) == text
+
+
+def test_compact_fetch_binary_starts_with_metadata(tmp_path):
+  with backend(tmp_path) as handle:
+    status, body = call(handle.port, f"/v1/fetch?key={KEY}&url={handle.stub_url}/blob")
+    assert status == 200 and len(body) <= 16_000
+    payload = json.loads(body)
+    assert payload["bytes"] == len(BINARY)
+    assert payload["id"] and payload["chunks"] >= 1
+    assert "payload" not in payload
+
+
+def test_compact_model_pages_keep_status_and_complete_text(tmp_path):
+  text = "review λ\n" * 4000
+  with backend(tmp_path) as handle:
+    handle.stub.reply_text = text
+    status, body = call(handle.port, f"/v1/llm?key={KEY}&prompt=review")
+    assert status == 202
+    job = json.loads(body)["job"]
+    assert wait_for_job(handle.port, job)["status"] == "done"
+    pieces = []
+    for payload in compact_pages(handle.port, f"/v1/llm?key={KEY}&id={job}"):
+      assert payload["status"] == "done"
+      pieces.append(payload["text"])
+    assert "".join(pieces) == text
+
+
+def test_compact_unknown_gh_shape_needs_explicit_fields(tmp_path):
+  with backend(tmp_path) as handle:
+    target = f"/v1/gh?key={KEY}&path=repos/o/r/labels"
+    status, body = call(handle.port, target + "&view=fields")
+    assert status == 200 and len(body) <= 16_000
+    payload = json.loads(body)
+    assert "/name" in payload["fields"]
+    assert "unused-detail" not in body
+    selected = list(compact_pages(handle.port, target + "&fields=/name"))
+    assert selected[0]["items"] == [{"name": "triage"}]
+    assert "fields=" not in handle.stub.seen[-1]["path"]
+    handle.stub.labels = [{"omitted": "source-value", "large": "x" * 2000}]
+    selected = list(
+      compact_pages(handle.port, target + "&fields=/omitted&fields=/large")
+    )
+    assert selected[0]["items"][0]["omitted"] == "source-value"
+    assert selected[0]["partial_values"] is True
+
+
+def test_gh_preserves_upstream_401_and_live_agent_key(tmp_path):
+  with backend(tmp_path) as handle:
+    handle.stub.alert_status = 401
+    handle.stub.alerts = {"message": "Bad credentials"}
+    target = f"/v1/gh?key={KEY}&path=repos/o/r/code-scanning/alerts"
+    status, body = call(handle.port, target)
+    assert status == 401 and len(body) <= 16_000
+    assert "Bad credentials" in body
+    assert call(handle.port, f"/v1/ping?key={KEY}")[0] == 200
+
+
+def test_compact_gh_drains_cached_records_before_next_upstream_page(tmp_path):
+  with backend(tmp_path) as handle:
+    handle.stub.alert_pages = {
+      "1": [{"number": i} for i in range(23)],
+      "2": [{"number": i} for i in range(23, 30)],
+    }
+    handle.stub.alert_next = {"1": "2"}
+    pages = list(
+      compact_pages(
+        handle.port, f"/v1/gh?key={KEY}&path=repos/o/r/code-scanning/alerts&state=open"
+      )
+    )
+    assert [item["number"] for page in pages for item in page["items"]] == list(
+      range(30)
+    )
+    assert [len(page["items"]) for page in pages] == [20, 3, 7]
+    assert len(handle.stub.seen) == 2
+    assert "state=open" in handle.stub.seen[-1]["path"]
+    assert all(entry["auth"] == f"Bearer {TOKEN}" for entry in handle.stub.seen)
+
+
+def test_compact_binary_chunks_keep_both_encodings_and_gzip(tmp_path):
+  data = BINARY * 2000
+  with backend(tmp_path) as handle:
+    handle.stub.blob_body = data
+    for encoding, decoder in (("base64", base64.b64decode), ("b85", base64.b85decode)):
+      target = (
+        f"/v1/fetch?key={KEY}&url={handle.stub_url}/blob&encoding={encoding}&gzip=1"
+      )
+      status, body = call(handle.port, target)
+      assert status == 200
+      metadata = json.loads(body)
+      assert "payload" not in metadata and metadata["chunks"] > 1
+      pieces = list(compact_pages(handle.port, metadata["hint"] + "&key=" + KEY))
+      assert all(piece["encoding"] == encoding + "+gzip" for piece in pieces)
+      assert (
+        b"".join(gzip.decompress(decoder(piece["payload"])) for piece in pieces) == data
+      )
+    handle.stub.blob_body = b""
+    status, body = call(
+      handle.port, f"/v1/fetch?key={KEY}&url={handle.stub_url}/blob&mode=base64"
+    )
+    assert status == 200
+    metadata = json.loads(body)
+    pieces = list(compact_pages(handle.port, metadata["hint"] + "&key=" + KEY))
+    assert len(pieces) == metadata["chunks"] == 1
+    assert base64.b64decode(pieces[0]["payload"]) == b""
+
+
+def test_compact_field_discovery_and_value_reads_keep_pointer_scope(tmp_path):
+  nested = {f"field-{index:02}": "x" * 20000 for index in range(25)}
+  with backend(tmp_path) as handle:
+    handle.stub.labels = [{"a/b~": nested}]
+    target = f"/v1/gh?key={KEY}&path=repos/o/r/labels"
+    status, body = call(handle.port, target)
+    assert status == 200
+    blob_id = json.loads(body)["id"]
+    scope = f"/v1/gh?key={KEY}&id={blob_id}&view=fields&pointer=/0/a~1b~0"
+    pages = list(compact_pages(handle.port, scope))
+    assert [field for page in pages for field in page["fields"]] == [
+      "/" + key for key in sorted(nested)
+    ]
+    scope = f"/v1/gh?key={KEY}&id={blob_id}&view=value&pointer=/0/a~1b~0/field-00"
+    text = "".join(page["text"] for page in compact_pages(handle.port, scope))
+    assert json.loads(text) == nested["field-00"]
+    assert (
+      call(handle.port, f"/v1/gh?key={KEY}&id={blob_id}&fields=not-a-pointer")[0] == 400
+    )
+
+
+def test_compact_reads_keep_fetch_and_stage_caps_and_reject_bad_offsets(tmp_path):
+  with backend(tmp_path, fetch_cap=2) as handle:
+    assert (
+      call(handle.port, f"/v1/fetch?key={KEY}&url={handle.stub_url}/blob")[0] == 413
+    )
+  with backend(tmp_path, stage_cap=2) as handle:
+    assert (
+      call(handle.port, f"/v1/fetch?key={KEY}&url={handle.stub_url}/blob")[0] == 413
+    )
+  with backend(tmp_path) as handle:
+    status, body = call(handle.port, f"/v1/fetch?key={KEY}&url={handle.stub_url}/text")
+    assert status == 200
+    blob_id = json.loads(body)["id"]
+    for offset in ("-1", "not-a-number", "1000000"):
+      assert (
+        call(handle.port, f"/v1/fetch?key={KEY}&id={blob_id}&offset={offset}")[0] == 400
+      )
+
+
+def test_compact_known_shapes_omit_bulk_and_secret_values(tmp_path):
+  marker = "large-unused-or-secret-value"
+  code = {"number": 8, "state": "open", "dismissed_by": marker}
+  secret = {
+    "number": 8,
+    "state": "open",
+    "secret_type": "test-token",
+    "secret": marker,
+    "html_url": "https://example.com/alert",
+    "locations_url": "https://example.com/locations",
+  }
+  location = {
+    "type": "commit",
+    "details": {
+      "path": "x.py",
+      "start_line": 4,
+      "blob_url": "https://example.com/blob",
+      "commit_url": "https://example.com/commit",
+      "unused": marker,
+    },
+  }
+  instance = {
+    "ref": "refs/heads/main",
+    "location": {"path": "x.py", "start_line": 4},
+    "unused": marker,
+  }
+  artifact = {
+    "id": 2,
+    "name": "bundle",
+    "size_in_bytes": 42,
+    "expired": False,
+    "unused": marker,
+  }
+  job = {
+    "id": 3,
+    "name": "tests",
+    "status": "completed",
+    "conclusion": "failure",
+    "steps": [{"name": marker}],
+  }
+  run = {
+    "id": 4,
+    "name": "CI",
+    "status": "completed",
+    "conclusion": "failure",
+    "repository": {"description": marker},
+  }
+  cases = [
+    ("code-scanning/alerts", [code], "number", 8),
+    ("code-scanning/alerts/8", code, "number", 8),
+    ("code-scanning/alerts/8/instances", [instance], "ref", "refs/heads/main"),
+    ("secret-scanning/alerts", [secret], "number", 8),
+    ("secret-scanning/alerts/8/locations", [location], "type", "commit"),
+    ("actions/artifacts", {"total_count": 1, "artifacts": [artifact]}, "id", 2),
+    ("actions/runs/4/jobs", {"total_count": 1, "jobs": [job]}, "id", 3),
+    ("actions/runs", {"total_count": 1, "workflow_runs": [run]}, "id", 4),
+  ]
+  with backend(tmp_path) as handle:
+    handle.stub.github_replies = {
+      "/repos/o/r/" + path: value for path, value, _, _ in cases
+    }
+    for path, _, field, expected in cases:
+      pages = list(
+        compact_pages(handle.port, f"/v1/gh?key={KEY}&path=repos/o/r/{path}")
+      )
+      items = [item for page in pages for item in page["items"]]
+      assert len(items) == 1 and items[0][field] == expected
+      assert marker not in json.dumps(pages)
+      if path.endswith("/locations"):
+        assert len([name for name in items[0]["details"] if name.endswith("_url")]) == 1
+    base = handle.stub_url
+    status, raw = github_api.request(
+      "repos/o/r/secret-scanning/alerts", TOKEN, api=base
+    )
+    assert status == 200 and json.loads(raw) == [secret]
+
+
+def test_compact_github_links_stay_within_the_configured_api():
+  api = "https://api.example.com/api/v3"
+  assert (
+    github_api.next_target(
+      '<https://api.example.com/api/v3/repos/o/r?page=2>; rel="next"', api
+    )
+    == "repos/o/r?page=2"
+  )
+  assert (
+    github_api.next_target(
+      '<https://api.example.com/api/v3/repos/o/r?page=1>; rel="prev"', api
+    )
+    is None
+  )
+  for target in (
+    "https://other.example.com/api/v3/repos/o/r",
+    "http://api.example.com/api/v3/repos/o/r",
+    "https://api.example.com/outside/repos/o/r",
+  ):
+    try:
+      github_api.next_target(f'<{target}>; rel="next"', api)
+    except ValueError:
+      pass
+    else:
+      raise AssertionError("an upstream next link must stay within the configured API")

@@ -7,6 +7,7 @@ string so no key lands in a log.
 """
 
 import argparse
+import gzip
 import hmac
 import json
 import os
@@ -15,7 +16,7 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import VERSION, github_api, transfers
+from . import VERSION, github_api, output, transfers
 from .llm import LlmService
 from .store import Store
 
@@ -98,8 +99,14 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       # A caller that leaves before the answer is not a fault: close without a traceback.
       self.close_connection = True
     except Exception as error:
+      if isinstance(error, transfers.TransferError):
+        status, message = error.status, error.message
+      elif isinstance(error, output.OutputError):
+        status, message = 400, str(error)
+      else:
+        status, message = 500, f"internal error: {type(error).__name__}"
       try:
-        self._send_json(500, {"error": f"internal error: {type(error).__name__}"})
+        self._send_json(status, {"error": message})
       except (BrokenPipeError, ConnectionResetError):
         self.close_connection = True
 
@@ -216,71 +223,211 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       },
     )
 
-  def _gh(self, params):
-    """Answer one api.github.com path, with the run-log tail folded in.
+  def _put_blob(self, data):
+    if len(data) > self.server.stage_cap:
+      raise transfers.TransferError(413, "response exceeds the configured stage cap")
+    return self.server.store.put_blob(data)
 
-    The caller sends the real API path in `path` and that path's own query beside it,
-    so no route mirrors the API. A path that ends `/actions/runs/<id>/logs` would
-    answer a zip archive the tool cannot read, so it answers the text tail instead.
-    """
-    path = params.get("path", [""])[0].strip()
-    if not path or "://" in path or path.startswith("/") or ".." in path.split("/"):
-      self._send_json(
-        400,
-        {
-          "error": "path must be a relative api.github.com path",
-          "example": "path=repos/OWNER/REPO/code-scanning/alerts",
-        },
+  def _cache(self, value):
+    return self._put_blob(output.serialize(value).encode())[0]
+
+  def _gh(self, params):
+    cached = None
+    blob_id = params.get("id", [""])[0]
+    if blob_id:
+      blob = self.server.store.get_blob(blob_id)
+      if blob is None:
+        self._send_json(404, {"error": "unknown or expired id"})
+        return
+      try:
+        cached = json.loads(blob["path"].read_bytes())
+        if cached.get("kind") not in ("github", "github-text"):
+          raise ValueError()
+      except (ValueError, AttributeError):
+        raise output.OutputError("id is not a GitHub response") from None
+      if params.get("advance", [""])[0] != "1":
+        self._gh_page(cached, blob_id, params)
+        return
+      target = cached.get("next_target")
+      if not target:
+        self._send_json(404, {"error": "no next GitHub page"})
+        return
+      path = target.split("?", 1)[0]
+    else:
+      path = params.get("path", [""])[0].strip()
+      if not path or "://" in path or path.startswith("/") or ".." in path.split("/"):
+        self._send_json(400, {"error": "path must be a relative api.github.com path"})
+        return
+      controls = {
+        "key",
+        "path",
+        "failed",
+        "id",
+        "offset",
+        "view",
+        "fields",
+        "pointer",
+        "advance",
+      }
+      query = urllib.parse.urlencode(
+        [
+          (name, value)
+          for name, values in sorted(params.items())
+          if name not in controls
+          for value in values
+        ]
       )
-      return
-    query = urllib.parse.urlencode(
-      [
-        (name, value)
-        for name, values in sorted(params.items())
-        if name not in ("key", "path", "failed")
-        for value in values
-      ]
-    )
-    target = f"{path}" + (f"?{query}" if query else "")
-    if (
+      target = path + ("?" + query if query else "")
+    logs = (
       path.startswith("repos/") and path.endswith("/logs") and "/actions/runs/" in path
-    ):
-      status, body = github_api.request(
-        target,
-        self.server.token,
-        cap=transfers.DEFAULT_STAGE_CAP,
-        api=self.server.api,
-      )
-      if status != 200:
-        self._send(status, body)
-        return
-      failed = params.get("failed", [""])[0].strip().lower() in ("1", "true", "yes")
-      tail = github_api.log_tail(body, only_failed=failed)
-      if tail is None:
-        self._send_json(502, {"error": "the log download was not a zip archive"})
-        return
-      self._send(200, tail.encode("utf-8"), "text/plain; charset=utf-8")
-      return
-    status, body = github_api.request(
+    )
+    status, body, links = github_api.request(
       target,
       self.server.token,
-      cap=API_CAP_BYTES,
+      cap=transfers.DEFAULT_STAGE_CAP if logs else API_CAP_BYTES,
       api=self.server.api,
+      with_links=True,
     )
-    if status == 200 and len(body) > API_CAP_BYTES:
+    cap = transfers.DEFAULT_STAGE_CAP if logs else API_CAP_BYTES
+    if len(body) > cap:
       self._send_json(
-        502,
+        502 if status == 200 else status,
         {
-          "error": f"response exceeds {API_CAP_BYTES} bytes",
+          "error": f"response exceeds {cap} bytes",
           "hint": "narrow the request, for example with per_page",
         },
       )
       return
-    self._send(status, body)
+    record = {
+      "path": path,
+      "status": status,
+      "pointer": params.get("pointer", [cached.get("pointer", "") if cached else ""])[
+        0
+      ],
+      "fields": params.get("fields", cached.get("fields", []) if cached else []),
+      "view": params.get("view", [cached.get("view", "") if cached else ""])[0],
+    }
+    if logs and status == 200:
+      failed = params.get("failed", [""])[0].strip().lower() in ("1", "true", "yes")
+      text = github_api.log_tail(body, only_failed=failed)
+      if text is None:
+        self._send_json(502, {"error": "the log download was not a zip archive"})
+        return
+      record.update(kind="github-text", text=text)
+    else:
+      try:
+        value = json.loads(body)
+      except ValueError:
+        value = None
+      if status != 200 or value is None:
+        record.update(kind="github-text", text=body.decode("utf-8", "replace"))
+      else:
+        try:
+          next_target = github_api.next_target(links, self.server.api)
+        except ValueError as error:
+          self._send_json(502, {"error": str(error)})
+          return
+        record.update(kind="github", data=value, next_target=next_target)
+    blob_id = self._cache(record)
+    self._gh_page(record, blob_id, dict(params, offset=["0"]))
+
+  def _gh_page(self, record, blob_id, params):
+    route = "/v1/gh"
+    offset = output.number(params, "offset")
+    metadata = {"id": blob_id, "source": "github"}
+    status = record["status"]
+    if record["kind"] == "github-text":
+      self._send_json(
+        status,
+        output.text_page(
+          record["text"],
+          offset,
+          metadata,
+          lambda end: output.link(route, id=blob_id, offset=end),
+        ),
+      )
+      return
+    selected = params.get("fields", record["fields"])
+    view = params.get("view", ["items" if "fields" in params else record["view"]])[0]
+    pointer = params.get("pointer", [record.get("pointer", "")])[0]
+    changed = (
+      selected != record["fields"]
+      or view != record["view"]
+      or pointer != record.get("pointer", "")
+    )
+    if changed and view != "value":
+      record = dict(record, fields=selected, view=view, pointer=pointer)
+      blob_id = self._cache(record)
+      metadata["id"] = blob_id
+    try:
+      value = output.pointer(record["data"], pointer)
+    except (KeyError, IndexError):
+      self._send_json(404, {"error": "unknown field"})
+      return
+    if view == "value":
+      text = output.serialize(value)
+      self._send_json(
+        status,
+        output.text_page(
+          text,
+          offset,
+          metadata,
+          lambda end: output.link(
+            route, id=blob_id, view="value", pointer=pointer, offset=end
+          ),
+        ),
+      )
+      return
+    rows = output.records(value)
+    profile = output.profile(record["path"])
+    metadata.update(
+      offset=offset,
+      details=output.link(route, id=blob_id, view="fields", pointer=pointer),
+      value=output.link(route, id=blob_id, view="value", pointer=pointer),
+    )
+    upstream = (
+      output.link(route, id=blob_id, advance=1) if record.get("next_target") else None
+    )
+
+    def following(end):
+      return output.link(route, id=blob_id, offset=end)
+
+    if view == "fields" or (not view and not selected and not profile):
+      available = sorted({field for row in rows for field in output.fields(row)})
+      payload = output.item_page(
+        available, offset, metadata, following, key="fields", upstream=upstream
+      )
+    elif view in ("", "items"):
+      projected = (
+        [output.project(row, selected or output.defaults(profile, row)) for row in rows]
+        if selected or profile
+        else []
+      )
+      items = [item for item, _ in projected]
+      metadata["partial_values"] = any(partial for _, partial in projected)
+      if not selected and not profile:
+        raise output.OutputError(
+          "discover fields before selecting an unknown response shape"
+        )
+      payload = output.item_page(items, offset, metadata, following, upstream=upstream)
+    else:
+      raise output.OutputError("view must be fields, items, or value")
+    self._send_json(status, payload)
 
   def _fetch(self, params):
     if "id" in params:
-      self._chunk(params)
+      if "offset" in params:
+        blob = self.server.store.get_blob(params["id"][0])
+        if blob is None:
+          self._send_json(404, {"error": "unknown or expired id"})
+          return
+        data = blob["path"].read_bytes()
+        if not transfers.is_text(data):
+          self._send_json(415, {"error": "the bytes are not UTF-8 text"})
+          return
+        self._fetch_text(data, params["id"][0], params)
+      else:
+        self._chunk(params)
       return
     url = params.get("url", [""])[0]
     if not url:
@@ -299,7 +446,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       )
       return
     try:
-      data, content_type = transfers.fetch_url(url, self.server.fetch_cap)
+      data, _content_type = transfers.fetch_url(url, self.server.fetch_cap)
     except transfers.TransferError as error:
       self._send_json(error.status, {"error": error.message})
       return
@@ -315,13 +462,23 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       if not transfers.is_text(data):
         self._send_json(415, {"error": "the bytes are not UTF-8 text; use mode=base64"})
         return
-      self._send(200, data, content_type or "text/plain; charset=utf-8")
+      self._fetch_text(data, self._put_blob(data)[0], params)
       return
     if mode == "auto" and transfers.is_text(data) and not compress:
-      self._send(200, data, content_type or "text/plain; charset=utf-8")
+      self._fetch_text(data, self._put_blob(data)[0], params)
       return
-    payload, label = transfers.encode(data, encoding, compress)
-    self._send_json(200, {"encoding": label, "bytes": len(data), "payload": payload})
+    self._stage(params, data)
+
+  def _fetch_text(self, data, blob_id, params):
+    self._send_json(
+      200,
+      output.text_page(
+        data.decode("utf-8"),
+        output.number(params, "offset"),
+        {"id": blob_id, "bytes": len(data)},
+        lambda end: output.link("/v1/fetch", id=blob_id, offset=end),
+      ),
+    )
 
   def _stage(self, params, data):
     if len(data) > self.server.stage_cap:
@@ -332,7 +489,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       return
     encoding = params.get("encoding", ["base64"])[0]
     compress = params.get("gzip", ["0"])[0] in ("1", "true", "yes")
-    blob_id, size = self.server.store.put_blob(data)
+    blob_id, size = self._put_blob(data)
     self._send_json(
       200,
       {
@@ -341,44 +498,52 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         "encoding": f"{encoding}+gzip" if compress else encoding,
         "chunk_bytes": transfers.CHUNK_BYTES,
         "chunks": transfers.chunk_count(size),
-        "hint": f"/v1/fetch?id={blob_id}&index=0",
+        "hint": output.link(
+          "/v1/fetch", id=blob_id, index=0, encoding=encoding, gzip=int(compress)
+        ),
       },
     )
 
   def _chunk(self, params):
-    blob = self.server.store.get_blob(params["id"][0])
-    index = params.get("index", ["0"])[0]
+    blob_id = params["id"][0]
+    blob = self.server.store.get_blob(blob_id)
     if blob is None:
       self._send_json(404, {"error": "unknown or expired id"})
       return
-    if not index.isdigit():
-      self._send_json(400, {"error": "index must be a chunk number"})
-      return
+    index = output.number(params, "index")
     data = blob["path"].read_bytes()
-    piece = transfers.slice_for_chunk(data, int(index))
+    piece = b"" if not data and index == 0 else transfers.slice_for_chunk(data, index)
     if piece is None:
-      self._send_json(
-        404,
-        {
-          "error": f"index out of range; this id holds {transfers.chunk_count(len(data))} chunks"
-        },
-      )
+      self._send_json(404, {"error": "index out of range"})
       return
     encoding = params.get("encoding", ["base64"])[0]
+    if encoding not in transfers.ENCODINGS:
+      self._send_json(400, {"error": "encoding must be base64 or b85"})
+      return
     compress = params.get("gzip", ["0"])[0] in ("1", "true", "yes")
-    payload, label = transfers.encode(piece, encoding, compress)
+    if compress:
+      piece = gzip.compress(piece)
+    payload = transfers.ENCODINGS[encoding](piece)
+    chunks = transfers.chunk_count(len(data))
+    complete = index + 1 == chunks
     self._send_json(
       200,
       {
-        "id": params["id"][0],
-        "index": int(index),
-        "chunks": transfers.chunk_count(len(data)),
-        "encoding": label
-        if label == "text"
-        else f"{encoding}+gzip"
-        if compress
-        else encoding,
+        "id": blob_id,
+        "index": index,
+        "chunks": chunks,
+        "encoding": f"{encoding}+gzip" if compress else encoding,
         "payload": payload,
+        "complete": complete,
+        "next": None
+        if complete
+        else output.link(
+          "/v1/fetch",
+          id=blob_id,
+          index=index + 1,
+          encoding=encoding,
+          gzip=int(compress),
+        ),
       },
     )
 
@@ -388,14 +553,19 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       if job is None:
         self._send_json(404, {"error": "unknown or expired job id"})
         return
+      text = job["text"] or ""
+      metadata = {"status": job["status"], "model": job["model"], "error": job["error"]}
+      if metadata["error"] and len(output.serialize(metadata)) > output.MAX_CHARS // 2:
+        text = metadata["error"]
+        metadata["error"] = "read text for the complete error"
       self._send_json(
         200,
-        {
-          "status": job["status"],
-          "model": job["model"],
-          "text": job["text"],
-          "error": job["error"],
-        },
+        output.text_page(
+          text,
+          output.number(params, "offset"),
+          metadata,
+          lambda end: output.link("/v1/llm", id=params["id"][0], offset=end),
+        ),
       )
       return
     if not self.server.llm.enabled():
@@ -415,7 +585,17 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     self._send_json(202, {"job": job_id, "poll": f"/v1/llm?id={job_id}"})
 
   def _send_json(self, status, payload):
-    self._send(status, json.dumps(payload, indent=2).encode("utf-8") + b"\n")
+    body = output.serialize(payload).encode("utf-8")
+    route = urllib.parse.urlsplit(self.path).path.rstrip("/")
+    if route in ("/v1/gh", "/v1/fetch", "/v1/llm") and len(body) > output.MAX_CHARS:
+      status = 502 if 200 <= status < 300 else status
+      body = output.serialize(
+        {
+          "error": "response metadata exceeds the output limit",
+          "hint": "request fewer fields or a smaller resource",
+        }
+      ).encode()
+    self._send(status, body)
 
   def _send(self, status, body, content_type="application/json; charset=utf-8"):
     self.send_response(status)
