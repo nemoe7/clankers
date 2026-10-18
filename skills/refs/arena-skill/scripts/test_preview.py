@@ -1963,19 +1963,21 @@ def test_read_names_every_attachment():
 def test_read_attaches_reply_threads():
   with tempfile.TemporaryDirectory() as thread_dir:
     store = preview.Store(thread_dir, create=True)
-    store.note("root", "hello", at="2026-10-13T00:00:00+00:00")
+    store.note("root", "hello\nline two\n\nlast", at="2026-10-13T00:00:00+00:00")
     store.note("middle", "RE: root\nfrom the middle", at="2026-10-13T00:01:00+00:00")
     store.acknowledge(["root"], "read")
     store.acknowledge(["middle"], "read")
-    store.note("child", "RE: middle\nworld", at="2026-10-13T00:02:00+00:00")
+    store.note("child", "RE: middle\n\nworld", at="2026-10-13T00:02:00+00:00")
     listing = store.read()
     child = listing["pending"][0]
     assert [record["id"] for record in child["thread"]] == ["root", "middle"]
     rendered = preview.format_read(listing)
     assert (
-      "`root`\nhello\n`middle`\nRE: root\nfrom the middle\n`child`\nRE: middle\nworld"
+      "`child`\n> > hello\n> > line two\n> > \n> > last\n> \n> from the middle\n\nworld"
       in rendered
     )
+    assert "`root`" not in rendered and "`middle`" not in rendered
+    assert "RE:" not in rendered
     store.note("pending", "already pending")
     store.note("duplicate", "RE: pending\nno duplicate")
     store.note("missing", "RE: absent\nno parent")
@@ -1984,12 +1986,43 @@ def test_read_attaches_reply_threads():
     store.acknowledge(["cycle-a", "cycle-b"], "read")
     store.note("cycle-c", "RE: cycle-a\nc")
     pending = {record["id"]: record for record in store.read()["pending"]}
-    assert not pending["duplicate"].get("thread")
+    assert [record["id"] for record in pending["duplicate"]["thread"]] == ["pending"]
+    assert "pending" in pending
+    rendered = preview.format_read(store.read())
+    assert rendered.count("`pendin`") == 1
+    assert "> already pending\n\nno duplicate" in rendered
     assert not pending["missing"].get("thread")
+    assert preview.format_pending_item(pending["missing"]) == (
+      "`missin`\nReferenced message unavailable.\n\nno parent"
+    )
     assert [record["id"] for record in pending["cycle-c"]["thread"]] == [
       "cycle-b",
       "cycle-a",
     ]
+    assert "> > b\n> \n> a\n\nc" in preview.format_pending_item(pending["cycle-c"])
+    attached = preview.format_pending_item(
+      {
+        "id": "reply",
+        "text": "RE: parent\nreply text",
+        "thread": [
+          {
+            "id": "parent",
+            "text": "one\n\n> two",
+            "attachments": [
+              {
+                "name": "saved.html",
+                "path": "/state/uploads/saved.html",
+                "present": False,
+              }
+            ],
+          }
+        ],
+      }
+    )
+    assert attached == (
+      "`reply`\n> one\n> \n> > two\n"
+      "> attachments: saved.html: /state/uploads/saved.html (missing)\n\nreply text"
+    )
 
 
 def test_attachment_size_reads_short():

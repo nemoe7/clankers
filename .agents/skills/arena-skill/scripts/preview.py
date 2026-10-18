@@ -423,7 +423,7 @@ def message_row(row):
 	if'replies'in record:record['replies']=replies_list(record['replies'])
 	return record
 def reply_reference(text):match=REPLY_REFERENCE.match(text or'');return match.group(1)if match else None
-def reply_thread(record,notes,pending_ids):
+def reply_thread(record,notes):
 	thread,seen=[],{record['id']};target=reply_reference(record.get('text'))
 	while target:
 		parent=notes.get(target)
@@ -432,7 +432,7 @@ def reply_thread(record,notes,pending_ids):
 			if len(matches)!=1:break
 			parent=matches[0]
 		parent_id=parent['id']
-		if parent_id in seen or parent_id in pending_ids:break
+		if parent_id in seen:break
 		thread.append(parent);seen.add(parent_id);target=reply_reference(parent.get('text'))
 	return list(reversed(thread))
 def restore_reply_seen_count(value,replies):
@@ -678,7 +678,14 @@ def format_pending_record(item):
 	attachments=item.get('attachments')or[]
 	if attachments:names=', '.join(attachment_line(record)for record in attachments);lines.append(f"attachments: {names}")
 	return'\n'.join(lines)
-def format_pending_item(item):thread=item.get('thread')or[];return'\n'.join([*(format_pending_record(record)for record in thread),format_pending_record(item)])
+def format_pending_item(item):
+	if not reply_reference(item.get('text')):return format_pending_record(item)
+	context=''
+	for parent in item.get('thread')or[]:
+		body=REPLY_REFERENCE.sub('',parent.get('text')or'',count=1).lstrip('\r\n');body=format_pending_record(parent|{'text':body}).partition('\n')[2]
+		if context:body=context+'\n\n'+body
+		context='\n'.join('> '+line for line in body.split('\n'))
+	body=REPLY_REFERENCE.sub('',item.get('text')or'',count=1).lstrip('\r\n');context=context or'Referenced message unavailable.';return format_pending_record(item|{'text':context+'\n\n'+body})
 def format_read(listing):
 	checked_at=listing.get('checked_at');pending=listing.get('pending')or[];count=len(pending)
 	if checked_at:first=f"Inbox {local_stamp(checked_at)}: {count} pending"
@@ -1720,12 +1727,12 @@ class Store:
 		with self.transaction(autosave=False)as db:
 			pending=[message_row(row)|{'kind':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq')];notes={}
 			for row in db.execute('SELECT * FROM notes ORDER BY at, seq'):record=message_row(row);notes[record['id']]=record
-			pending_note_ids={item['id']for item in pending if item['kind']=='note'};attachments={}
+			attachments={}
 			for row in db.execute('SELECT * FROM uploads ORDER BY seq'):record=upload_row(row,self.path.parent);attachments.setdefault(record['note_id'],[]).append(record)
 			for record in notes.values():add_note_attachments(record,attachments.get(record['id'],[]))
 			for item in pending:
 				if item['kind']=='note':
-					add_note_attachments(item,attachments.get(item['id'],[]));thread=reply_thread(item,notes,pending_note_ids)
+					add_note_attachments(item,attachments.get(item['id'],[]));thread=reply_thread(item,notes)
 					if thread:item['thread']=thread
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):item[key]=clip_stamp(item[key])
 			pending.sort(key=lambda item:item['at']);checked=now();db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(checked,));waiting=db.execute('SELECT value FROM meta WHERE key = ?',(SKIP_POLL_META,)).fetchone();return{'checked_at':clip_stamp(checked),'pending':pending,'skip_poll':clip_stamp(waiting[0])if waiting else None}

@@ -56,8 +56,8 @@ arena-preview poll
 - A pending item repeats until acknowledged.
 - The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call.
 - A `skip_poll` stamp means the owner pressed Skip poll in the page: the poll consumes it and the turn ends there, with no note and no second poll.
-- A note that starts `RE: <id>` also shows its stored parent notes before the reply.
-- A parent that is still pending shows once.
+- Read `RE: <id>` as reply ID, parent text with `> ` on each line, blank line, reply text; omit context-parent entries and RE headers.
+- Keep pending parents as separate acknowledgement targets.
 
 - Acknowledge each delivered ID with its own answer where the owner reads it.
 - Use `ack <id> <Markdown>` for a rendered answer.

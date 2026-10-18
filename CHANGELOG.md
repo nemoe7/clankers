@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview inbox: quote parent text in linked replies. Keep nested quotes, attachment details, and pending receipt targets.
+
 - Preview tasks: preserve browser task order on agent updates. Print one notice on the next Bash hook.
 
 - CORE, Arena, Kilo Plan, and ChatGPT rules: state assumptions, stop at material ambiguity, and retain reporting priority.

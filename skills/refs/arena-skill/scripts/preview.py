@@ -1198,8 +1198,8 @@ def reply_reference(text):
   return match.group(1) if match else None
 
 
-def reply_thread(record, notes, pending_ids):
-  """Return parent notes that do not print as separate pending items."""
+def reply_thread(record, notes):
+  """Return parent notes from oldest to newest, without repeated IDs."""
   thread, seen = [], {record["id"]}
   target = reply_reference(record.get("text"))
   while target:
@@ -1210,7 +1210,7 @@ def reply_thread(record, notes, pending_ids):
         break
       parent = matches[0]
     parent_id = parent["id"]
-    if parent_id in seen or parent_id in pending_ids:
+    if parent_id in seen:
       break
     thread.append(parent)
     seen.add(parent_id)
@@ -1874,10 +1874,18 @@ def format_pending_record(item):
 
 
 def format_pending_item(item):
-  thread = item.get("thread") or []
-  return "\n".join(
-    [*(format_pending_record(record) for record in thread), format_pending_record(item)]
-  )
+  if not reply_reference(item.get("text")):
+    return format_pending_record(item)
+  context = ""
+  for parent in item.get("thread") or []:
+    body = REPLY_REFERENCE.sub("", parent.get("text") or "", count=1).lstrip("\r\n")
+    body = format_pending_record(parent | {"text": body}).partition("\n")[2]
+    if context:
+      body = context + "\n\n" + body
+    context = "\n".join("> " + line for line in body.split("\n"))
+  body = REPLY_REFERENCE.sub("", item.get("text") or "", count=1).lstrip("\r\n")
+  context = context or "Referenced message unavailable."
+  return format_pending_record(item | {"text": context + "\n\n" + body})
 
 
 def format_read(listing):
@@ -5334,7 +5342,6 @@ class Store:
       for row in db.execute("SELECT * FROM notes ORDER BY at, seq"):
         record = message_row(row)
         notes[record["id"]] = record
-      pending_note_ids = {item["id"] for item in pending if item["kind"] == "note"}
       attachments = {}
       for row in db.execute("SELECT * FROM uploads ORDER BY seq"):
         record = upload_row(row, self.path.parent)
@@ -5344,7 +5351,7 @@ class Store:
       for item in pending:
         if item["kind"] == "note":
           add_note_attachments(item, attachments.get(item["id"], []))
-          thread = reply_thread(item, notes, pending_note_ids)
+          thread = reply_thread(item, notes)
           if thread:
             item["thread"] = thread
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
