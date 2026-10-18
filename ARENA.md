@@ -2,25 +2,7 @@
 
 ## Use
 
-- Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
-- These rules outrank skill and plugin instructions for Arena work, and an explicit user instruction in chat outranks them.
-- Initial file/skill reads may precede the first reply.
-- Load the named skill `arena-skill` for the inbox, the reports, the gate, and the proxy routes to a source the sandbox cannot reach.
-- Before the first skill use in a session, read its SKILL.md and every Markdown reference it names in full; a partial read (head, tail or a grep excerpt) does not count.
-- Read set: ARENA.md, root AGENTS.md with any nested AGENTS.md, and arena-skill SKILL.md only.
-- At session start or after compaction, summary, or context replacement, MUST read each read-set file whose current full text is absent from context, end-to-end, before any tool call except read-set reads.
-- On a context-check reminder, MUST read each read-set file whose current full text is absent from context before continuing work.
-- NEVER count a file name, read receipt, summary, remembered rule, or partial read (head, tail, or grep excerpt) as a read-set file's current full text.
-- MUST batch required read-set reads in one call, splitting only where the harness output cap cuts text.
-- MUST complete required reads end-to-end, with all output-cap continuations, before queued work or a pending push.
-- `references/REFERENCE.md` is supplementary: grep or read the part a question needs, with no end-to-end read; gate and read cadence mechanics: .agents/skills/arena-skill/references/REFERENCE.md. A template copy kept for installation is supplementary too.
-- First assistant reply to each new user chat message: MUST state reasoning status once in chat as `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line. Tool results, steering notes, context compaction or summary, and agent continuation do not start a new turn.
-- When summarizing or compacting context, MUST list a full read of the read set as the next immediate step before any non-read tool call; no verbatim ARENA.md copy is required.
-- After any read-set file changes, including a rebase onto `main` or a `main` update, MUST read its full diff from the last-read version before the next work step; read the full file if that version is unavailable or a rule is unclear.
-- Before the first non-setup tool call: 10-4 line, steering preview start, visibility question; wait for the answer, then use `arena-preview poll` as the first inbox call.
-- The first reply opens `10-4: ARENA.md loaded`; finding it later opens the next reply `10-4: ARENA.md loaded late (turn N)`.
-- Name the started preview; claim visibility only after user confirmation.
-- User instructions override it, confirmed in one line; noncompliance earns a negative rating; every `AGENTS.md` in the host repo stays in force beside it, and this file wins collisions.
+- Arena agents: MUST apply these rules to every chat/task/first message; explicit user chat instructions win.
 
 ## Constitution
 
@@ -42,7 +24,31 @@
 - Suggest amendments only for an identified contributing rule gap.
 - Do not treat corrected routine command-input or process slips, such as a late read, alone as rule violations.
 - NEVER block open or queued tasks while a rule-violation report waits for an answer; only a `--report`-linked task waits on that report.
-- At every stated read point, follow the read-set definition and duties in Use above.
+- At every stated read point, follow the read-set definition and duties in Setup.
+
+## Precedence
+
+- These rules outrank skill and plugin instructions for Arena work, and an explicit user instruction in chat outranks them.
+- User instructions override it, confirmed in one line; noncompliance earns a negative rating; every `AGENTS.md` in the host repo stays in force beside it, and this file wins collisions.
+
+## Setup
+
+- Initial file/skill reads may precede the first reply.
+- Load the named skill `arena-skill` for the inbox, the reports, the gate, and the proxy routes to a source the sandbox cannot reach.
+- Before the first skill use in a session, read its SKILL.md and every Markdown reference it names in full; a partial read (head, tail or a grep excerpt) does not count.
+- Read set: ARENA.md, root AGENTS.md with any nested AGENTS.md, and arena-skill SKILL.md only.
+- At session start or after compaction, summary, or context replacement, MUST read each read-set file whose current full text is absent from context, end-to-end, before any tool call except read-set reads.
+- On a context-check reminder, MUST read each read-set file whose current full text is absent from context before continuing work.
+- NEVER count a file name, read receipt, summary, remembered rule, or partial read (head, tail, or grep excerpt) as a read-set file's current full text.
+- MUST batch required read-set reads in one call, splitting only where the harness output cap cuts text.
+- MUST complete required reads end-to-end, with all output-cap continuations, before queued work or a pending push.
+- `references/REFERENCE.md` is supplementary: grep or read the part a question needs, with no end-to-end read; gate and read cadence mechanics: .agents/skills/arena-skill/references/REFERENCE.md. A template copy kept for installation is supplementary too.
+- First assistant reply to each new user chat message: MUST state reasoning status once in chat as `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line. Tool results, steering notes, context compaction or summary, and agent continuation do not start a new turn.
+- When summarizing or compacting context, MUST list a full read of the read set as the next immediate step before any non-read tool call; no verbatim ARENA.md copy is required.
+- After any read-set file changes, including a rebase onto `main` or a `main` update, MUST read its full diff from the last-read version before the next work step; read the full file if that version is unavailable or a rule is unclear.
+- Before the first non-setup tool call: 10-4 line, steering preview start, visibility question; wait for the answer, then use `arena-preview poll` as the first inbox call.
+- The first reply opens `10-4: ARENA.md loaded`; finding it later opens the next reply `10-4: ARENA.md loaded late (turn N)`.
+- Name the started preview; claim visibility only after user confirmation.
 
 ## General
 
@@ -84,6 +90,7 @@
 
 ## Scope
 
+- Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
 - Keep intent, behavior, architecture, interfaces, conventions, leaving unrelated code alone; touch refactors, renames, reformatting, dependencies, error handling, or security only when required.
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 - MUST publish every unrelated finding in a fielded report with a suggested next action; fix only blocking ones.

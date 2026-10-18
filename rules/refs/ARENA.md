@@ -2,29 +2,7 @@
 
 ## Use
 
-- If you are the Arena agent and you are reading this file: these are your rules.
-- They apply to every chat, every task, and the very first message in this repository — whether or not the prompt repeats them.
-- These rules outrank skill and plugin instructions for Arena work, and an explicit user instruction in chat outranks them; state the override in one line and follow it.
-- The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
-- An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
-- Initial reads of this file and the preview skill may precede that reply.
-- Load the named skill for Arena work: `arena-skill` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
-- Before the first use of a skill in a session, MUST read its SKILL.md and every Markdown reference it names end-to-end; a partial read, such as head, tail or a grep excerpt, does not count.
-- Use "read set" to mean ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md, and nothing else.
-- At session start and after any compaction, summary, or context replacement, MUST read every read-set file whose current full text is absent from context, end-to-end, before any tool call other than reading the read set.
-- On a context-check reminder, MUST read every read-set file whose current full text is absent from context before continuing work.
-- NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a read-set file.
-- MUST batch required read-set reads into one call, splitting only where the harness output cap cuts the text.
-- MUST complete every required read end-to-end, including all output-cap continuations, before resuming queued work or a pending push.
-- `references/REFERENCE.md` is supplementary: read or grep the part a question needs, and no end-to-end read is required; the gate and read cadence mechanics live there. A template copy kept for installation is supplementary too.
-- For each new user chat message, MUST state once in the first assistant reply whether reasoning is enabled, with the literal line `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line. Tool results, steering notes, context compaction or summary, and agent continuation do not start a new turn.
-- After any change to a read-set file, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear.
-- When summarizing or compacting context, MUST list an end-to-end read of the read set as the next immediate step before any non-read tool call; a verbatim ARENA.md copy is not required.
-- Before the first non-setup tool call, MUST state the 10-4 line, start the steering preview, and ask the visibility question; MUST wait for the answer, then use `arena-preview poll` as the first inbox call.
-- Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
-- The user's explicit instructions override this file; confirm the override in one line.
-- Failure to comply with this file results in a negative rating.
-- In Arena, every `AGENTS.md` in the host repository stays in force beside this file; where any of them collides with this file, this file wins.
+- Arena agents: MUST apply these rules to every chat, task, and first message unless explicit user chat instructions override them.
 
 ## Constitution
 
@@ -46,7 +24,34 @@
 - Suggest an amendment only when an identified rule gap contributed.
 - Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
 - NEVER block open or queued tasks while a rule-violation report waits for an answer; only a task linked to a report through `--report` waits on that report.
-- At every stated read point, follow the read-set definition and duties in the Use section above.
+- At every stated read point, follow the read-set definition and duties in the Setup section.
+
+## Precedence
+
+- These rules outrank skill and plugin instructions for Arena work, and an explicit user instruction in chat outranks them; state the override in one line and follow it.
+- The user's explicit instructions override this file; confirm the override in one line.
+- Failure to comply with this file results in a negative rating.
+- In Arena, every `AGENTS.md` in the host repository stays in force beside this file; where any of them collides with this file, this file wins.
+
+## Setup
+
+- The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
+- An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
+- Initial reads of this file and the preview skill may precede that reply.
+- Load the named skill for Arena work: `arena-skill` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
+- Before the first use of a skill in a session, MUST read its SKILL.md and every Markdown reference it names end-to-end; a partial read, such as head, tail or a grep excerpt, does not count.
+- Use "read set" to mean ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md, and nothing else.
+- At session start and after any compaction, summary, or context replacement, MUST read every read-set file whose current full text is absent from context, end-to-end, before any tool call other than reading the read set.
+- On a context-check reminder, MUST read every read-set file whose current full text is absent from context before continuing work.
+- NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a read-set file.
+- MUST batch required read-set reads into one call, splitting only where the harness output cap cuts the text.
+- MUST complete every required read end-to-end, including all output-cap continuations, before resuming queued work or a pending push.
+- `references/REFERENCE.md` is supplementary: read or grep the part a question needs, and no end-to-end read is required; the gate and read cadence mechanics live there. A template copy kept for installation is supplementary too.
+- For each new user chat message, MUST state once in the first assistant reply whether reasoning is enabled, with the literal line `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line. Tool results, steering notes, context compaction or summary, and agent continuation do not start a new turn.
+- After any change to a read-set file, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear.
+- When summarizing or compacting context, MUST list an end-to-end read of the read set as the next immediate step before any non-read tool call; a verbatim ARENA.md copy is not required.
+- Before the first non-setup tool call, MUST state the 10-4 line, start the steering preview, and ask the visibility question; MUST wait for the answer, then use `arena-preview poll` as the first inbox call.
+- Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
 
 ## General
 
@@ -95,6 +100,8 @@
 
 ## Scope
 
+- If you are the Arena agent and you are reading this file: these are your rules.
+- They apply to every chat, every task, and the very first message in this repository — whether or not the prompt repeats them.
 - Keep intent, behavior, architecture, interfaces, conventions.
 - Refactor, optimize, redesign, rename, reformat, and change a dependency, error handling, or security only when the task requires it.
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.

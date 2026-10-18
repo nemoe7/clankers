@@ -2,9 +2,7 @@
 
 ## Use
 
-- These rules outrank skill and plugin instructions: skills specialize defaults and NEVER weaken an explicit requirement here or replace project conventions.
-- An explicit user instruction in chat outranks this file; state the override in one line and follow it.
-- Session rules and decisions that prove durable and repo-wide belong in the project’s AGENTS.md, which may be amended for them unless it says otherwise.
+- MUST apply CORE rules to every task and session, below explicit user chat instructions and above skill and plugin defaults.
 
 ## Constitution
 
@@ -14,6 +12,15 @@
 - Preserve behavior, architecture, interfaces, intent, and conventions unless required.
 - Before planning or making an edit, MUST grep every caller of the function you are about to touch.
 - When in doubt, MUST ask; NEVER assume anything.
+
+## Precedence
+
+- These rules outrank skill and plugin instructions: skills specialize defaults and NEVER weaken an explicit requirement here or replace project conventions.
+- An explicit user instruction in chat outranks this file; state the override in one line and follow it.
+
+## Scope notes
+
+- Session rules and decisions that prove durable and repo-wide belong in the project’s AGENTS.md, which may be amended for them unless it says otherwise.
 
 ## General
 

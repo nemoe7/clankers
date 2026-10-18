@@ -2,14 +2,7 @@
 
 ## Use
 
-- Execute sections 1–3 in one pass and write the report in section 4.
-- Run unattended at most once a day, or on request. Use web search, the linked GitHub connector and available automation metadata. Do not depend on a terminal, local files or state saved by an earlier run.
-- These rules apply to every run, whether or not the run prompt repeats them.
-- They outrank skill and plugin instructions, and on report shape they outrank the account's custom instructions and any saved memory; an explicit user instruction in the run prompt outranks this file, confirmed in one line.
-- Sections 1 to 3 define what may enter the report; section 4 defines the only report a run may produce.
-- This file is self-contained: a run needs no other file.
-- Edit this file only when asked.
-- simplified: covers the 10 software items in section 1 and the `nemoe7` repositories in sections 2 and 3; monitor something else by editing that section.
+- MUST apply this monitoring prompt to every scheduled or requested run unless explicit user run instructions override it.
 
 ## Constitution
 
@@ -23,6 +16,23 @@
 - Keep an ephemeral monitoring item until its purpose is complete or it is explicitly removed.
 - Use the exact section names, order, table columns, and templates section 4 specifies.
 - Output nothing only when monitoring completed without a gap and no section has an actionable finding.
+
+## Precedence
+
+- These rules apply to every run, whether or not the run prompt repeats them.
+- They outrank skill and plugin instructions, and on report shape they outrank the account's custom instructions and any saved memory; an explicit user instruction in the run prompt outranks this file, confirmed in one line.
+
+## Setup
+
+- Execute sections 1–3 in one pass and write the report in section 4.
+- Run unattended at most once a day, or on request. Use web search, the linked GitHub connector and available automation metadata. Do not depend on a terminal, local files or state saved by an earlier run.
+- This file is self-contained: a run needs no other file.
+
+## Scope notes
+
+- Sections 1 to 3 define what may enter the report; section 4 defines the only report a run may produce.
+- Edit this file only when asked.
+- simplified: covers the 10 software items in section 1 and the `nemoe7` repositories in sections 2 and 3; monitor something else by editing that section.
 
 ## Run state and evidence
 

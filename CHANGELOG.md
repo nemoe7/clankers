@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- House, CORE, Arena, and monitoring rules: keep one Use clause and move existing clauses into domain sections.
+
 - Maintenance: pin the TOML parser under markdownlint-cli2. Keep other dependency pins unchanged.
 
 - CORE, Arena, and ChatGPT rules: retain required clauses, preferences, and testing exceptions.

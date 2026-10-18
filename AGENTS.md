@@ -2,14 +2,7 @@
 
 ## Use
 
-- Guide for agents working in this repository: these rules apply to every task and session here, whether or not a prompt repeats them.
-- They outrank skill and plugin instructions.
-- An explicit user instruction in chat outranks this file, confirmed in one line.
-- Your first action in a new session is to read this file end-to-end.
-- ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and the preview skill.
-  - Mirror task-related source changes into installed copies in this repository without separate user authorization.
-  - Follow the clause-proposal and approval scope in [Reports and approval](#reports-and-approval).
-- Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
+- MUST apply these repository rules to every task and session here unless explicit user chat instructions override them.
 
 ## Arena-specific instructions
 
@@ -35,6 +28,19 @@
 - Group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain.
 - Omit Unreleased.
 - Omit version numbers from CHANGELOG entries.
+
+## Precedence
+
+- Guide for agents working in this repository: these rules apply to every task and session here, whether or not a prompt repeats them.
+- They outrank skill and plugin instructions.
+- An explicit user instruction in chat outranks this file, confirmed in one line.
+
+## Setup
+
+- Your first action in a new session is to read this file end-to-end.
+- ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and the preview skill.
+  - Mirror task-related source changes into installed copies in this repository without separate user authorization.
+  - Follow the clause-proposal and approval scope in [Reports and approval](#reports-and-approval).
 
 ## Glossary
 
@@ -82,6 +88,7 @@ Read these first:
 
 ## Reports and approval
 
+- Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 - MUST include ARENA and CHATGPT amendment proposals in the same report as each CORE amendment proposal.
 - MUST name the failure and the check that verifies each proposed amendment.
 - Apply this section's AGENTS.md proposal and approval requirements only to `rules/**/CORE.md`; other AGENTS.md files are exempt.

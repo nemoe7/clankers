@@ -2,8 +2,7 @@
 
 ## Use
 
-- Outranks skills/plugins, and an explicit user instruction in chat outranks this file: they specialize defaults and NEVER weaken an explicit requirement or replace a convention; state any chat override in one line.
-- Durable repo-wide session rules/decisions go in the project’s AGENTS.md; amend it unless it says otherwise.
+- MUST apply CORE to every task/session, below explicit user chat instructions and above skill/plugin defaults.
 
 ## Constitution
 
@@ -13,6 +12,14 @@
 - MUST keep behavior, architecture, interfaces, intent, conventions unless required.
 - Grep every caller before planning or editing a function.
 - When in doubt, MUST ask; NEVER assume anything.
+
+## Precedence
+
+- Outranks skills/plugins, and an explicit user instruction in chat outranks this file: they specialize defaults and NEVER weaken an explicit requirement or replace a convention; state any chat override in one line.
+
+## Scope notes
+
+- Durable repo-wide session rules/decisions go in the project’s AGENTS.md; amend it unless it says otherwise.
 
 ## General
 
