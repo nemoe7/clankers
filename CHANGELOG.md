@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview task help: remove false empty-detail clearing guidance. Keep task validation unchanged.
+
 - Arena guide: remove the duplicate key warning. Keep the explicit key ban.
 
 - Arena context: require the saved context to state that a full read-set reread is mandatory after replacement and before other tool calls.

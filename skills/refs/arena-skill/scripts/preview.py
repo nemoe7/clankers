@@ -6921,7 +6921,7 @@ def main():
     "--task-details",
     dest="task_details",
     action="append",
-    help="One step per line, 120 characters or fewer, repeatable; an empty string clears the list",
+    help="One step per line, 120 characters or fewer, repeatable",
   )
   task.add_argument(
     "-A",
