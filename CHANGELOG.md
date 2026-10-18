@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview task guide: remove the reminder-output suffix. Keep task tracking and runtime behavior unchanged.
+
 - Preview comments: state page visibility and message-table layout directly. Keep behavior and CSS values.
 
 - Proxy data replies: bound JSON pages and record sets, add field selection and stable next reads, and return binary metadata before chunks. Keep model context, keys, HTTP statuses, caps, and expiry.

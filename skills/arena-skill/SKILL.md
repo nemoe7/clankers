@@ -69,7 +69,7 @@ arena-preview poll
 - A second ack adds a reply without replacing the earlier answer.
 - Receipt is not completion.
 - Acknowledge each delivered ID immediately.
-- After each `ack` of a note that asks for work, record it with `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
+- After each `ack` of a note requesting work, record it with `task <id> ... --msg-id <full-id>`.
 
 ```bash
 arena-preview ack <id> '<Markdown>'
