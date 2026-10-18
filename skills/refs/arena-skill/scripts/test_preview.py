@@ -7132,29 +7132,38 @@ def test_unpublish_route_allows_owner_to_remove_unseen_report():
     assert store.state()["reports"] == []
 
 
-def test_ack_reads_stdin_when_the_text_carries_backticks():
-  """Redirected input preserves backticks and quotes. Empty input writes no receipt."""
+def test_ack_accepts_inline_markdown_and_rejects_stdin():
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.set_meta("port", guard_port())
-    store.note("stdin-note", "Question")
+    store.note("inline-note", "Question")
     text = "Use `arena-preview read` and 'single quotes'.\n\nA second line."
-    source = Path(directory) / "reply.md"
-    source.write_text(text, encoding="utf-8")
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": directory}
-    argv = [sys.executable, preview.__file__, "ack", "stdin-note", "-"]
-    empty = subprocess.run(
-      argv, input="", capture_output=True, text=True, env=env, check=False
-    )
-    assert empty.returncode != 0
-    assert store.state()["notes"][0]["acknowledged_at"] is None
-    with source.open(encoding="utf-8") as stream:
-      result = subprocess.run(
-        argv, stdin=stream, capture_output=True, text=True, env=env, check=True
+    argv = [sys.executable, preview.__file__, "ack", "inline-note"]
+    for redirected in ("", text):
+      rejected = subprocess.run(
+        argv + ["-"],
+        input=redirected,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
       )
-    assert result.stdout.startswith("ok stdin-")
+      assert rejected.returncode != 0
+      assert "inline" in rejected.stderr.lower()
+      assert store.state()["notes"][0]["acknowledged_at"] is None
+    result = subprocess.run(
+      argv + [text],
+      input="ignored stdin",
+      capture_output=True,
+      text=True,
+      env=env,
+      check=True,
+    )
+    assert result.stdout.startswith("ok inline")
     note = store.state()["notes"][0]
     assert note["ack_kind"] == "reply" and note["ack_text"] == text
+    assert note["replies"] == []
 
 
 def test_tick_warning_reads_the_quoting_shape():
@@ -7164,7 +7173,8 @@ def test_tick_warning_reads_the_quoting_shape():
   ack text in double quotes with a backtick in it.
   """
   lossy = preview.tick_warning('arena-preview ack abc "see `read` now"')
-  assert lossy and "backtick" in lossy and "stdin" in lossy
+  assert lossy and "backtick" in lossy and "Single-quote" in lossy
+  assert "stdin" not in lossy
   assert preview.tick_warning('arena-preview ack "see `read` now"')
   # An escaped tick reaches the tool as text, so it stays quiet. An even backslash run
   # leaves the tick bare, and the shell still substitutes it.
@@ -9132,12 +9142,12 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
 
 
 def test_ack_has_one_flagless_markdown_input(capsys):
-  """Inline and stdin use the same rendered receipt for notes and report answers."""
+  """Inline Markdown uses the same rendered receipt for notes and report answers."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.set_meta("port", guard_port())
     store.note("inline-note", "Question")
-    store.submission("stdin-answer", "form", "REPORT form: answer")
+    store.submission("inline-answer", "form", "REPORT form: answer")
     text = "**Received** `without flags`"
     with (
       patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": directory}),
@@ -9146,8 +9156,8 @@ def test_ack_has_one_flagless_markdown_input(capsys):
       assert preview.main() == 0
     with (
       patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": directory}),
-      patch.object(sys, "argv", [preview.__file__, "ack", "-"]),
-      patch("sys.stdin.read", return_value=text),
+      patch.object(sys, "argv", [preview.__file__, "ack", text]),
+      patch("sys.stdin.read", side_effect=AssertionError("Unexpected stdin read")),
     ):
       assert preview.main() == 0
     note = store.state()["notes"][0]

@@ -2160,8 +2160,7 @@ def tick_warning(line):
     return None
   return (
     "arena-preview gate: that ack text sits in double quotes, so the shell runs each"
-    " unescaped backtick as a command and the ticks vanish. Single-quote the text, or"
-    " pass stdin with `ack <id> - < reply.md`."
+    " unescaped backtick as a command and the ticks vanish. Single-quote the text."
   )
 
 
@@ -6797,10 +6796,10 @@ def main():
   )
   ack = commands.add_parser(
     "ack",
-    help="Answer notes with Markdown; omit IDs for one pending item; - reads stdin",
+    help="Answer notes with inline Markdown; omit IDs for one pending item",
   )
   ack.add_argument("ids", nargs="*")
-  ack.add_argument("markdown", help="Markdown answer, or - to read it from stdin")
+  ack.add_argument("markdown", help="Literal inline Markdown answer")
   publish = commands.add_parser(
     "publish", help="Publish a report; -i names the ID, -t the title"
   )
@@ -7210,10 +7209,11 @@ def main():
         format_fetch_job(store.enqueue_fetch(args.url, args.allow_proxy, pending=True))
       )
     elif args.command == "ack":
-      try:
-        text = sys.stdin.read() if args.markdown == "-" else args.markdown
-      except (OSError, UnicodeError) as error:
-        raise ValueError(f"Cannot read acknowledgement stdin: {error}") from None
+      if args.markdown == "-":
+        raise ValueError(
+          "Pass literal inline Markdown; acknowledgement stdin is not supported"
+        )
+      text = args.markdown
       ids = (
         [store.resolve_id(token) for token in args.ids]
         if args.ids

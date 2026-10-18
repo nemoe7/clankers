@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview acknowledgements: accept inline Markdown only. Reject stdin input and remove file-based guidance. Keep stored receipts and the shell-quoting warning.
+
 - Preview inbox: quote parent text in linked replies. Keep nested quotes, attachment details, and pending receipt targets.
 
 - Preview tasks: preserve browser task order on agent updates. Print one notice on the next Bash hook.

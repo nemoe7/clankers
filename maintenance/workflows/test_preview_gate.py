@@ -374,12 +374,13 @@ def test_the_gate_names_a_backtick_the_shell_will_eat():
   """An ack whose inline text sits in double quotes draws a warning before the loss.
 
   The trap reads the command line before the shell expands it, so the backtick is still there
-  to see. The warning names the file form, and the ack still runs.
+  to see. The warning recommends single quotes, and the ack still runs.
   """
   lossy = run(': arena-preview ack abc "use `echo tick` now"')
   assert lossy.returncode == 0, lossy.stderr
   assert "backtick" in lossy.stderr, lossy.stderr
-  assert "stdin" in lossy.stderr, lossy.stderr
+  assert "Single-quote" in lossy.stderr, lossy.stderr
+  assert "stdin" not in lossy.stderr, lossy.stderr
   # Single quotes keep the ticks: the line stays quiet.
   safe = run(": arena-preview ack abc 'use `echo tick` now'")
   assert safe.returncode == 0, safe.stderr
