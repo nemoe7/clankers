@@ -75,7 +75,7 @@
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
 - Trivial one-liners need no test.
-- NEVER assert hard-coded values; assert relations instead.
+- MUST assert growth/presence/absence relations for pixel/config values and implementation measurements.
 
 ## Setup
 

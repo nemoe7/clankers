@@ -165,7 +165,7 @@
 - Use the project's existing frameworks, fixtures, helpers, and conventions.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
-- NEVER assert hard-coded pixel values, configuration values, or implementation measurements; assert relations (growth, presence, absence) instead.
+- MUST assert relations (growth, presence, or absence) for pixel values, configuration values, and implementation measurements.
 - MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks. No frameworks, no fixtures, no per-function suites beyond it.
 - Mechanical changes get proportional checks.
 - After every file edit, grep-verify the change actually landed before building on it.
@@ -187,7 +187,7 @@
 - For a Python project, Ruff is configured by the project's own `ruff.toml` when it has one, holding the AGENTS.md conventions and nothing else until flagged.
 - For a Python project with no `ruff.toml`, create one with exactly that before running gates.
 - For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
-- NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
+- Add code or configuration comments only when method complexity requires them.
 
 ## Git
 

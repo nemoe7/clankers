@@ -84,7 +84,7 @@
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
 - Trivial one-liners need no test.
-- NEVER assert hard-coded pixel values, configuration values, or implementation measurements; assert relations (growth, presence, absence) instead.
+- MUST assert relations (growth, presence, or absence) for pixel values, configuration values, and implementation measurements.
 
 ## Setup
 
@@ -104,7 +104,7 @@
 - 2-space indentation (overrides formatter defaults).
 - Markdown: markdownlint defaults + MD060; MD013 disabled.
 - For a Python project, MUST use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
-- NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
+- Add code or configuration comments only when method complexity requires them.
 - Leave unrelated code untouched.
 - MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and leave them out of every commit.
 

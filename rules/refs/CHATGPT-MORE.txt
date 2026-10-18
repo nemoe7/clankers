@@ -18,7 +18,7 @@ When the agent hands a command to the user to run instead of running it, MUST pr
 WORK: For a complex request, ship the lazier version and question the requirement in the same response; NEVER stall on an answer you can default.
 If the user insists on the full version, build it without re-arguing.
 MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks.
-NEVER assert hard-coded pixel values, configuration values, or implementation measurements; assert relations (growth, presence, absence) instead.
+MUST assert relations (growth, presence, or absence) for pixel values, configuration values, and implementation measurements.
 Before editing, MUST grep every caller of the function you are about to touch, and fix once where all callers route through.
 For bugs, failures, and regressions: reproduce, isolate, hypothesize, verify, fix the root cause rather than the symptom, cover it, and recheck.
 NEVER lazy about understanding: read the code and trace the flow first.
