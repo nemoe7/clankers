@@ -1199,7 +1199,7 @@ def reply_reference(text):
 
 
 def reply_thread(record, notes):
-  """Return parent notes from oldest to newest, without repeated IDs."""
+  """Return parent records from oldest to newest, without repeated IDs."""
   thread, seen = [], {record["id"]}
   target = reply_reference(record.get("text"))
   while target:
@@ -5338,9 +5338,18 @@ class Store:
         )
       ]
       notes = {}
-      for row in db.execute("SELECT * FROM notes ORDER BY at, seq"):
-        record = message_row(row)
-        notes[record["id"]] = record
+      for table in ("notes", "submissions"):
+        for row in db.execute(f"SELECT * FROM {table} ORDER BY at, seq"):
+          record = message_row(row)
+          notes[record["id"]] = record
+      for row in db.execute("SELECT id, markdown FROM reports"):
+        notes[row["id"]] = {"id": row["id"], "text": row["markdown"]}
+      for row in db.execute(f"SELECT {TASK_COLUMNS} FROM tasks"):
+        task = task_row(row)
+        notes[task["id"]] = {
+          "id": task["id"],
+          "text": "\n".join([task["title"], *task["details"]]),
+        }
       attachments = {}
       for row in db.execute("SELECT * FROM uploads ORDER BY seq"):
         record = upload_row(row, self.path.parent)

@@ -1959,6 +1959,56 @@ def test_read_names_every_attachment():
     )
 
 
+def test_read_attaches_published_report_parent():
+  with tempfile.TemporaryDirectory() as thread_dir:
+    store = preview.Store(thread_dir, create=True)
+    source = Path(thread_dir) / "guide.md"
+    source.write_text("# Guide\n\nKeep the draft.\n", encoding="utf-8")
+    store.publish("guide-report", "Guide", source)
+    store.note("reply", "RE: guide-report\nproposal")
+    listing = store.read()
+    assert [item["id"] for item in listing["pending"]] == ["reply"]
+    reply = listing["pending"][0]
+    assert [item["id"] for item in reply.get("thread", [])] == ["guide-report"]
+    assert preview.format_pending_item(reply) == (
+      "`reply`\n> # Guide\n> \n> Keep the draft.\n> \n\nproposal"
+    )
+
+
+def test_read_attaches_answer_and_task_parents():
+  with tempfile.TemporaryDirectory() as thread_dir:
+    store = preview.Store(thread_dir, create=True)
+    source = Path(thread_dir) / "decision.md"
+    source.write_text("Choice: {#choice}\n\n- ( ) keep\n- ( ) drop\n", encoding="utf-8")
+    store.publish("parent-report", "Decision", source)
+    store.submit_report(
+      "parent-report",
+      "answer",
+      {"choice": "keep"},
+      revision=store.report("parent-report")["updated_at"],
+    )
+    store.write_task("parent-task", "Task guide", ["Keep all rules."], task_type="docs")
+    store.note("answer-reply", "RE: answer\nfollow answer")
+    store.note("task-reply", "RE: parent-task\nfollow task")
+    store.note("ambiguous", "RE: parent-\ndo not guess")
+    pending = {item["id"]: item for item in store.read()["pending"]}
+    assert "answer" in pending
+    assert [item["id"] for item in pending["answer-reply"].get("thread", [])] == [
+      "answer"
+    ]
+    assert ">   Choice (choice): keep\n\nfollow answer" in preview.format_pending_item(
+      pending["answer-reply"]
+    )
+    assert [item["id"] for item in pending["task-reply"].get("thread", [])] == [
+      "parent-task"
+    ]
+    assert (
+      "> Task guide\n> Keep all rules.\n\nfollow task"
+      in preview.format_pending_item(pending["task-reply"])
+    )
+    assert not pending["ambiguous"].get("thread")
+
+
 def test_read_attaches_reply_threads():
   with tempfile.TemporaryDirectory() as thread_dir:
     store = preview.Store(thread_dir, create=True)
