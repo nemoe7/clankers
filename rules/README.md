@@ -39,7 +39,7 @@ Platform constraints made the three rule surfaces differ, so each row names one 
 
 | Domain | Agents | Arena | ChatGPT |
 | --- | --- | --- | --- |
-| Git/Hub | <ul><li>NEVER push unasked. </li><li>MUST branch from main. </li></ul> | <ul><li>ALWAYS push, PR open. </li><li>Rebase merge only. </li><li>NEVER merge unauthorized. </li><li>Planned list before commits. </li><li>GitHub reconnect after one retry. </li><li>CI reported at turn end. </li><li>Backoff polls for PR checks. </li></ul> | <ul><li>ALWAYS a PR. </li><li>ALWAYS rebase merge. </li><li>Poll all checks. </li><li>NEVER end before CI. </li><li>NEVER multiple commits. </li><li>Planned list first. </li></ul> |
+| Git/Hub | <ul><li>NEVER push unasked. </li><li>MUST branch from main. </li></ul> | <ul><li>ALWAYS push, PR open. </li><li>Rebase merge only. </li><li>NEVER merge even with authorization. </li><li>Planned list before commits. </li><li>GitHub reconnect after one retry. </li><li>CI reported at turn end. </li><li>Backoff polls for PR checks. </li></ul> | <ul><li>ALWAYS a PR. </li><li>ALWAYS rebase merge. </li><li>Poll all checks. </li><li>NEVER end before CI. </li><li>NEVER multiple commits. </li><li>Planned list first. </li></ul> |
 | Questions | The question tool. NEVER plain text. | Fielded report forms. NEVER plain text. | — |
 | Changelogs | Use Keep a Changelog unless the repository uses another format. | Use Keep a Changelog unless the repository uses another format. | — |
 | Mermaid Diagrams | Default where rendered. Phone-sized. | NEVER in chat. Docs only. | MUST for pipelines/flows unless target explicitly cannot render Mermaid. NEVER ASCII. |

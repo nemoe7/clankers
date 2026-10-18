@@ -38,6 +38,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Rules README: state the unconditional Arena PR merge ban.
+
 - Preview messages: reveal old messages before reply and reference jumps. Use scroll animation for New reply. Keep reduced motion, focus, highlights, and viewed receipts.
 
 ## 2026-10-17
