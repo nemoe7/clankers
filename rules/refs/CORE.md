@@ -121,6 +121,10 @@
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push unless asked.
 
+## Boundaries
+
+- NEVER change files marked read-only or protected by repository instructions without explicit user approval of those files.
+
 ## Responses
 
 - Report changes, findings, checks, results, useful files, decisions, unresolved issues, assumptions, and limitations, without unnecessary prose but with the detail the task requires or the user requests.

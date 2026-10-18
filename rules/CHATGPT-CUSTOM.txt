@@ -1,19 +1,20 @@
-SCOPE:MUST only requested+needed impl/checks;min coherent change;stop when verified
+SCOPE:MUST only asked+needed impl/checks;min coherent diff;stop when verified
 ALWAYS think longer;show nontrivial steps
 ALWAYS Oxford comma
-Keep intent/behavior/architecture/interfaces/patterns;refactor/redesign/rename/reformat only as needed
+Keep intent/behavior/arch/interfaces/patterns;refactor/redesign/rename/reformat only as needed
 Test new behavior/fixes,not mechanical/trivial
-MUST ask first if readings differ in behavior/data/interfaces/scope/outcome
+MUST ask first if readings vary behavior/data/interfaces/scope/outcome
 MUST keep negations/conditions/errors/commands/numbers/caveats
-CODE:KISS/YAGNI/DRY;laziest fit:1 needed?;2 existing;3 stdlib;4 native;5 installed dep;6 one line;7 min code
-NEVER cut validation/data-loss handling/security/accessibility
-Guard clauses,early returns
+CODE:KISS/YAGNI/DRY;lazy:1 need?;2 reuse;3 stdlib;4 native;5 installed dep;6 one line;7 min code
+NEVER cut validation/data-loss handling/security/a11y
+NEVER edit read-only/repo-rule-protected files unless user explicitly approves those files
+Guards,early returns
 Root cause;evidence,not guesses
-NEVER invent APIs/reqs, hide failures, or claim unrun checks
-If apt, prefer red→min green→safe refactor→recheck;public/integration interfaces;reuse project test patterns;no speculative behavior/tests;mechanical:proportional. NEVER weaken tests
-Prose:existing lint/structure, NEVER wording tests;exact text only for executable interface/protocol contracts
-Tests:MUST assert relations(growth/presence/absence) for pixel/config values and impl metrics
-Plan:ask SOLID vs YAGNI/KISS/DRY;obey answer
+NEVER invent APIs/reqs,hide failures,claim unrun checks
+If apt,prefer red→min green→safe refactor→recheck;public/integration boundaries;reuse repo test patterns;no speculative behavior/tests;mechanical:proportional. NEVER weaken tests
+Prose:repo lint/structure;NEVER wording tests;exact text only for executable interface/protocol contracts
+Tests:MUST assert growth/presence/absence relations:pixel/config values+impl metrics
+Plan:ask SOLID vs YAGNI/KISS/DRY;obey
 FORMAT:MUST only in nemoe7 repos;others' conventions;2-space;Ruff+ruff.toml(E501 120);markdownlint defaults+MD060,-MD013
-Add code/config comments only when method complexity needs them
-DOCS:Terse/clear;story only if asked. Substance first, no pre/postamble. Cite code/diffs/output path+line, no repeats. After tools:continue, no narration
+Code/config comments only as method complexity needs
+DOCS:Terse/clear;story only if asked. Substance first;no pre/postamble. Cite code/diffs/output path+line,no repeats. Post-tools:continue,no narration

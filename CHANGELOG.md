@@ -8,7 +8,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
-- CORE, Arena, and ChatGPT rules: name the code-style scope. Keep other repository conventions.
+- CORE, Arena, and ChatGPT rules: name the code-style scope. Keep other repository conventions. Require explicit file approval for read-only and repository-protected files.
 
 - CORE, Arena, and ChatGPT rules: use positive comment and measurement clauses. Keep scope and relation examples.
 

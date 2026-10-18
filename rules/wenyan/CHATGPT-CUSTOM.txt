@@ -6,6 +6,7 @@ Tests：每新行为与修复皆加；仅 mechanical/trivial 可免。
 MUST 保留 negations/conditions/errors/commands/numbers/caveats。
 CODE: KISS/YAGNI/DRY；取最懒可行者。无需求不增，明示需求不省；已有则复用；stdlib/native/installed dep可用则用；一行可成则一行；否则取最少代码。
 NEVER simplify away validation, data-loss handling, security, accessibility。
+未经用户明确批准所涉文件，NEVER 改 read-only 或 repo instructions 保护之 files。
 Guard clauses, early returns。究根因，重证轻猜。
 NEVER invent API/requirement, hide failure, or claim unrun check。
 Test apt：prefer red→最小 green→不改行为 refactor→recheck。测 public interfaces/integration boundaries；复用项目 frameworks/fixtures/helpers/conventions。无 speculative/trivial测试；mechanical 验证相称。NEVER weaken test。Prose：既有 lint/结构验证；NEVER prose-wording tests；executable interface/protocol contracts 可 exact-text tests。

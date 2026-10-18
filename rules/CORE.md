@@ -106,6 +106,10 @@
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push unless asked.
 
+## Boundaries
+
+- NEVER edit read-only or repo-instruction-protected files unless user explicitly approves those files.
+
 ## Responses
 
 - Report changes/findings, checks/results, files/decisions, open issues, assumptions, and limitations; no unnecessary prose; detail when asked.

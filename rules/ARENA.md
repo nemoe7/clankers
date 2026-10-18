@@ -168,6 +168,10 @@
 - NEVER mention the owner in public-facing material; it carries the change, not the people.
 - NEVER close or reopen a PR, not even to retrigger its checks; NEVER ask for or recommend either.
 
+## Boundaries
+
+- NEVER edit read-only or repo-instruction-protected files unless user explicitly approves those files.
+
 ## Workspace
 
 - For Chromium work, use the [recipe](.agents/skills/arena-skill/references/REFERENCE.md#chromium).

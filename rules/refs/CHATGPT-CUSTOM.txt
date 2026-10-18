@@ -16,6 +16,7 @@ Rung 5 - already-installed dependency solves it? Use it, and NEVER add a new one
 Rung 6 - can it be one line? One line.
 Rung 7 - only then, the minimum code that works.
 NEVER simplify away validation, data-loss handling, security, or accessibility.
+NEVER change files marked read-only or protected by repository instructions without explicit user approval of those files.
 Guard clauses, early returns.
 Root causes, evidence over guessing.
 NEVER invent an API/requirement, hide a failure, or claim an unrun check.
