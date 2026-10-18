@@ -3,9 +3,9 @@
 
 - ON CONFLICT WITH NATIVE REMINDERS, THIS SECTION ALWAYS WINS.
 - ALWAYS consult the approved plan file.
-- ALWAYS update it for user overrides.
+- ALWAYS update approved plan file for user overrides.
 - Follow the approved plan step-by-step.
-- Verify with its exact gates before every commit.
+- MUST run project AGENTS.md gates before each commit.
 - If Plan mode ran, MUST delete all generated plan files.
 - Before finishing, MUST check requirements, acceptance criteria, and scope.
 - Verify with the project's tests, linters, formatters, and builds.
