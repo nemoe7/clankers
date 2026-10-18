@@ -2069,7 +2069,7 @@ test('preview client', async (t) => {
     assert.equal(pip.title, 'A report is unread');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
       '1. * Fielded', 'an acked answer stars a report already read once');
-    // An earlier subtest already stamped the look, so the count stands as the throttle's base.
+    // An earlier subtest already stamped the look, so the count is the throttle's base.
     const viewsBefore = viewCalls.length;
     assert.ok(viewsBefore >= 1, 'an earlier look stamped the view');
     await get('#reports-tab').events.click();

@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview docs and test comments: remove redundant text and a historical aside. Use a direct verb.
+
 - Preview acknowledgements: accept inline Markdown only. Reject stdin input and remove file-based guidance. Keep stored receipts and the shell-quoting warning.
 
 - Preview inbox: quote parent text in linked replies. Keep nested quotes, attachment details, and pending receipt targets.

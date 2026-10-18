@@ -148,8 +148,6 @@ npm ci
 
 `--update` rebuilds the budget table from `EXPECTED_BUDGETS` before checking, including added and retired skills. Test it with `python3 -m pytest maintenance/measurements/test_measurements.py`.
 
-The checker is maintenance tooling.
-
 ## Minified assets and scripts
 
 The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all three `scripts/` files. Edit readable `skills/refs/arena-skill/` sources, never generated copies. Markdown compression is separate.

@@ -1606,8 +1606,7 @@ def test_http_boundaries():
       except ValueError:
         pass
       assert "broken" not in {item["id"] for item in store.state()["reports"]}
-      # A report stored before that guard existed is still unrenderable, so the route answers with a
-      # JSON error rather than closing the connection, which is what an uncaught ValueError did.
+      # A report stored before that guard existed is still unrenderable, so the route answers with a JSON error.
       stale = sqlite3.connect(root / "state.sqlite3")
       stale.execute(
         "INSERT INTO reports (id, title, markdown, updated_at, seq) VALUES (?, ?, ?, ?, ?)",
