@@ -53,7 +53,7 @@
 - `references/REFERENCE.md` is supplementary: read or grep the part a question needs, and no end-to-end read is required; the gate and read cadence mechanics live there. A template copy kept for installation is supplementary too.
 - For each new user chat message, MUST state once in the first assistant reply whether reasoning is enabled, with the literal line `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line. Tool results, steering notes, context compaction or summary, and agent continuation do not start a new turn.
 - After any change to a read-set file, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear.
-- When summarizing or compacting context, MUST list an end-to-end read of the read set as the next immediate step before any non-read tool call; a verbatim ARENA.md copy is not required.
+- When summarizing or compacting context, MUST state in the saved context that an end-to-end reread of the read set is mandatory immediately after context replacement and before any tool call other than reading the read set (a verbatim ARENA.md copy is not required).
 - Before the first non-setup tool call, MUST state the 10-4 line, start the steering preview, and ask the visibility question; MUST wait for the answer, then use `arena-preview poll` as the first inbox call.
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
 

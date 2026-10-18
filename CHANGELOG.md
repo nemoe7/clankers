@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena context: require the saved context to state that a full read-set reread is mandatory after replacement and before other tool calls.
+
 - Arena guide: remove direct-client and master-key details, a default explanation, and rating text. Move gate-test wiring to maintenance docs.
 
 - Preview docs and test comments: remove redundant text and a historical aside. Use a direct verb.
