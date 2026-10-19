@@ -5806,6 +5806,38 @@ def test_state_commands_break_while_the_server_is_not_up():
     assert "server is not up" in cli.stderr
 
 
+def test_poll_finishes_before_the_tool_timeout(monkeypatch, capsys):
+  assert preview.POLL_WAIT_SECONDS == 1799
+  with tempfile.TemporaryDirectory() as poll_dir:
+    store = preview.Store(poll_dir, create=True)
+    clock = [0.0]
+    sleeps = []
+    original_read = store.read
+
+    def read(*args, **kwargs):
+      clock[0] += 0.75
+      return original_read(*args, **kwargs)
+
+    def sleep(seconds):
+      sleeps.append(seconds)
+      clock[0] += seconds
+
+    monkeypatch.setattr(preview, "POLL_WAIT_SECONDS", 5)
+    monkeypatch.setattr(preview.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(preview, "pr_check_watch", lambda *args: None)
+    monkeypatch.setattr(store, "read", read)
+    assert preview.poll_inbox(store, sleeper=sleep) == 1
+    output = capsys.readouterr()
+    assert "Set the bash tool timeout to 1800 s" in output.err
+    assert "no new messages" in output.out
+    assert "End the turn" in output.out
+    assert "POLL AGAIN" not in output.out
+    assert clock[0] == 5
+    assert sleeps == [1, 1, 0.75]
+    assert store.polling() is False
+    assert store.state()["polling_since"] is None
+
+
 def test_poll_inbox():
   with tempfile.TemporaryDirectory() as poll_dir:
     store = preview.Store(poll_dir, create=True)
@@ -5947,7 +5979,7 @@ def test_poll_blocked_tasks():
       assert sleeps == [], "unblocked work ends the wait before the first sleep"
       assert "open-task" in printed[-1]
       # The early return names the task on stderr, so no session reads it as an empty wait.
-      assert printed[0].startswith("poll waits up to 1800 s.")
+      assert printed[0].startswith("poll waits up to 1799 s.")
       # One line, one stream: the agent reads both, so a duplicate only costs tokens.
       assert printed[1] == (
         "CONTINUE: unblocked task open-task. Work it or block it; do not end the turn."
@@ -5991,7 +6023,7 @@ def test_poll_retry_disclaimer():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
       builtins.print = original
     assert code == 1
-    assert printed[0].startswith("poll waits up to 1800 s.")
+    assert printed[0].startswith("poll waits up to 1799 s.")
     assert f"Set the bash tool timeout to {saved[0] * saved[1]} s" in printed[0]
 
 
@@ -6048,7 +6080,7 @@ def test_skip_poll():
       code, sleeps = run_poll()
       assert code == 0
       assert sleeps == [], "a skip ends the wait before the first sleep"
-      assert printed[0].startswith("poll waits up to 1800 s.")
+      assert printed[0].startswith("poll waits up to 1799 s.")
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
@@ -6093,7 +6125,7 @@ def test_skip_poll():
       printed.clear()
       code, sleeps = run_poll()
       assert code == 0 and sleeps == []
-      assert printed[0].startswith("poll waits up to 1800 s.")
+      assert printed[0].startswith("poll waits up to 1799 s.")
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )

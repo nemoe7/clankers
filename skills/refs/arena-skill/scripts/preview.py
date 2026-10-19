@@ -2138,8 +2138,8 @@ def print_read(store):
 
 POLL_INTERVAL = 1
 
-# One loop a second, so the wait spans the bash tool's 1800-second ceiling.
 POLL_MAX_LOOPS = 1800
+POLL_WAIT_SECONDS = 1799
 POLLING_META = "polling_at"
 # Stamp the wait start once.
 # The page then shows the agent wait length.
@@ -2906,9 +2906,8 @@ def gate_line_hint(line):
 def poll_timeout_line(line):
   """True when the shell `timeout` command wraps an arena-preview poll.
 
-  The poll holds its own 1800-second span, so a `timeout` wrapper only kills the
-  wait mid-flight and the turn loses its listing. The bash tool's own timeout
-  parameter ends the wait cleanly instead. The check reads
+  The poll has a 1799-second deadline, so a `timeout` wrapper can kill the
+  wait before it returns its listing. Give the Bash tool 1800 seconds instead. The check reads
   command pieces, so a line that merely mentions both words, like a script that
   documents the ban, stays fine.
   """
@@ -3292,12 +3291,11 @@ def run_log_report(state_dir, name):
 def poll_inbox(store, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
+  deadline = time.monotonic() + POLL_WAIT_SECONDS
   listing = {"checked_at": None, "pending": []}
   # A full wait ends for messages, tasks, or failed branch checks. A heartbeat lights the page dot.
-  # The Bash timeout can cut it short, so tell agents to retry with a tool timeout of 1800.
   print(
-    "poll waits up to 1800 s. Set the bash tool timeout to 1800 s,"
-    " so a cut wait still returns its listing.",
+    f"poll waits up to {POLL_WAIT_SECONDS} s. Set the bash tool timeout to 1800 s.",
     file=sys.stderr,
     flush=True,
   )
@@ -3312,6 +3310,8 @@ def poll_inbox(store, sleeper=None):
   ).start()
   try:
     for index in range(POLL_MAX_LOOPS):
+      if time.monotonic() >= deadline:
+        break
       listing = store.read(include_quiet=False)
       if listing["pending"]:
         full = store.read()
@@ -3363,14 +3363,17 @@ def poll_inbox(store, sleeper=None):
         print(format_read(listing), flush=True)
         return 0
       if index + 1 < POLL_MAX_LOOPS:
-        sleeper(POLL_INTERVAL)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+          break
+        sleeper(min(POLL_INTERVAL, remaining))
         store.stamp_polling()
   finally:
     stop_checks.set()
     store.clear_polling()
   # The wait ran its whole span with nothing to read: the turn ends here.
   store.mark_turn_ended()
-  print("Poll ended: 0 pending.", flush=True)
+  print("Poll returned with no new messages. End the turn.", flush=True)
   return 1
 
 
@@ -7151,8 +7154,8 @@ def main():
       if poll_timeout_line(args.line):
         print(
           "TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`."
-          " The poll holds its own 1800-second span. Set the bash tool timeout"
-          " 1800 instead, so a cut wait still returns its listing.",
+          " Set the Bash tool timeout to 1800 seconds; the poll returns within"
+          " its 1799-second wait.",
           flush=True,
         )
         return 1
