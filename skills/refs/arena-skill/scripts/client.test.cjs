@@ -4319,23 +4319,28 @@ test('the phone footer keeps Send beside a long status', () => {
   // The stacked key and status lines must shrink inside the footer row, so a long staged-files
   // line wraps within its own column and never pushes the Send note button onto a line of its own.
   const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
-  const rule = /\.compose \.row > \.stack {[^}]*}/.exec(css);
+  const rule = /\.compose\s+\.row\s*>\s*\.stack\s*{[^}]*}/.exec(css);
   assert.ok(rule, 'the footer stack has its own rule');
-  assert.match(rule[0], /flex: 1 1 0\b/, 'the status stack starts from zero width so Send stays on its line');
+  assert.match(rule[0], /flex:\s*1\s+1\s+0\b/, 'the status stack starts from zero width so Send stays on its line');
 });
 
 test('a wide table scrolls sideways on its own and keeps its words whole', () => {
   // Report and message text can wrap anywhere. Each table scrolls independently, as on GitHub.
   // Cells wrap only between words, so longer words stay whole.
   const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
-  const table = /\.report table, \.message-text table {[^}]*}/.exec(css);
-  assert.ok(table, 'the tables have their own rule');
-  for (const part of ['display: block', 'width: max-content', 'max-width: 100%', 'overflow-x: auto']) {
-    assert.ok(table[0].includes(part), `the table rule sets ${part}`);
+  const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const body = selector => {
+    const rule = rules.find(match => match[1].split(',').some(name => name.trim() === selector));
+    assert.ok(rule, `${selector} has a rule`);
+    return rule[2];
+  };
+  for (const selector of ['.report table', '.message-text table']) {
+    for (const [property, value] of [['display', 'block'], ['width', 'max-content'], ['max-width', '100%'], ['overflow-x', 'auto']]) {
+      assert.match(body(selector), new RegExp(`(?:^|;)\\s*${property}:\\s*${value}\\s*(?:;|$)`));
+    }
   }
-  for (const cells of [/\.report th, \.report td {[^}]*}/, /\.message-text th, \.message-text td {[^}]*}/]) {
-    const rule = cells.exec(css);
-    assert.ok(rule && rule[0].includes('overflow-wrap: normal'), `${cells.source} keeps words whole`);
+  for (const selector of ['.report th', '.report td', '.message-text th', '.message-text td']) {
+    assert.match(body(selector), /(?:^|;)\s*overflow-wrap:\s*normal\s*(?:;|$)/);
   }
 });
 
