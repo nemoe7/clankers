@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.51
+// @name         Arena.ai | NemoUtils | v1.10.52
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.51
+// @version      1.10.52
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2850,7 +2850,7 @@
             null, null, "autosave-compare", undefined, undefined, sameSaveDetail(baseline, body));
           return;
         }
-        if (!force && inSync && body.stamp === (baseline && baseline.lastsave)) return;
+        if (!force && inSync && body.digest === (baseline && baseline.digest)) return;
         var plan = { kind: "download", name: stateFileName(scope.repo, scope.branch, body.stamp, body.counts) };
         var moved = saveMoved(scope.branch, rememberedBase, base, lastScope, rememberedBranch);
         var asks = overwriteAsk(moved, plan, Boolean(handle), force);

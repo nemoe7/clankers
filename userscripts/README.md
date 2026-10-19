@@ -123,11 +123,11 @@ The script saves the pause, so a reload keeps it. Each feature switch stays in t
 
 ## Arena state saves
 
-The userscript fetches a candidate from `GET /api/userscript-autosave`. It compares the last state with a successful completion receipt through `POST /api/userscript-autosave/compare`. It checks the selected file against the remembered digest, not timestamps.
+The userscript fetches a candidate from `GET /api/userscript-autosave`. It compares the server's two retained completion stamps with the browser's last successful receipt. After the pair matches, it uses the digest to skip an unchanged candidate.
 
-Equal states need no write. Missing records, a scope mismatch, or an unknown baseline stop automatic replacement.
+A stamp-pair mismatch stops automatic replacement. A changed digest writes the candidate.
 
-A new empty selected file can receive its first save. `State — force save` keeps the explicit override.
+A new empty selected file can receive its first save. `State — force save` keeps the explicit override. Its successful completion receipt sets the pair that later automatic saves use.
 
 Only a successful file close or download-manager callback permits the completion receipt, sent to `POST /api/userscript-autosave`. Failed receipts retry without another file write. Browser-link downloads have no completion callback and do not advance the saved baseline.
 

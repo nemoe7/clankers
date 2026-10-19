@@ -37,6 +37,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview autosave: preserve the candidate stamp through confirmation when a task exists. Let later automatic saves skip unchanged state by digest after the saved pair matches.
 - Preview autosave: renumber task orders in the canonical core. Keep digests and compare snapshots stable across a second pass.
 - Preview report removal: unblock only tasks linked to the removed report in the same transaction. Keep removal guards, answers, sources, task status, and history.
 - Preview poll: use a 1799-second deadline and return a no-new-messages end-turn notice. Keep the Bash timeout at 1800 seconds and retain early-return events.

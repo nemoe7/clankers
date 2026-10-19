@@ -3486,11 +3486,11 @@ def autosave_record(record):
     raise ValueError("Unsupported autosave history fields")
   uuid.UUID(record["save_id"])
   autosave_scope_key(record["scope"])
-  core, stamp = autosave_core_and_stamp(record["core"])
+  core = autosave_core(record["core"])
   if autosave_digest(core) != record.get("digest"):
     raise ValueError("Autosave history digest does not match")
-  if record.get("stamp") is not None and record["stamp"] != stamp:
-    raise ValueError("Autosave history stamp does not match")
+  if record.get("stamp") is not None and import_stamp(record["stamp"]) is None:
+    raise ValueError("Autosave history stamp is invalid")
   if import_stamp(record.get("confirmed_at")) is None:
     raise ValueError("Autosave history needs a confirmation time")
   receipts = record.get("receipts", {})
@@ -4604,7 +4604,10 @@ class Store:
     key = autosave_scope_key(scope)
     if scope != self.userscript_scope():
       raise ValueError("Autosave confirmation is outside this repository and branch")
-    core, stamp = autosave_core_and_stamp(payload.get("core"))
+    core = autosave_core(payload.get("core"))
+    stamp = payload.get("stamp", payload.get("lastsave"))
+    if stamp is not None and import_stamp(stamp) is None:
+      raise ValueError("Autosave confirmation stamp is invalid")
     digest = autosave_digest(core)
     if digest != payload.get("digest"):
       raise ValueError("Autosave confirmation digest does not match")

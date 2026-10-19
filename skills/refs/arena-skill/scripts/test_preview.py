@@ -10016,6 +10016,7 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
         for invalid in (
           {**first, "save_id": 42},
           {**first, "scope": {"repo": "other", "branch": ""}},
+          {**first, "stamp": "bad timestamp"},
           {**first, "core": first["history"] + [{"kind": "userscript-autosave"}]},
         ):
           assert (
@@ -10272,6 +10273,26 @@ def test_autosave_compare_matches_each_retained_save():
     assert answer["result"] == "different", answer
     assert answer["candidate_stamp"] == third["stamp"]
     assert "digest" not in json.dumps(answer)
+
+
+def test_task_autosave_confirmation_keeps_candidate_stamp():
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    with patch("preview.now", return_value="2026-10-19T08:34:00.000000+00:00"):
+      store.write_task("task", "Task", ["Step"], task_type="misc")
+    with patch("preview.now", return_value="2026-10-19T08:34:52.922405+00:00"):
+      candidate = store.userscript_snapshot()
+    receipt = {key: candidate[key] for key in ("save_id", "scope", "digest", "core")}
+    receipt.update(lastsave=candidate["stamp"], beforelastsave=candidate["lastsave"])
+    with patch("preview.now", return_value="2026-10-19T08:34:53.662658+00:00"):
+      assert store.confirm_userscript_save(receipt)["confirmed"]
+    current = store.userscript_snapshot()
+    assert current["lastsave"] == candidate["stamp"]
+    assert current["beforelastsave"] is None
+    with tempfile.TemporaryDirectory() as restored_directory:
+      restored = preview.Store(restored_directory, create=True)
+      restored.import_state(current["text"])
+      assert restored.userscript_history()[-1]["stamp"] == candidate["stamp"]
 
 
 def test_autosave_core_is_idempotent_across_task_order():

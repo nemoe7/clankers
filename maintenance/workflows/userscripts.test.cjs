@@ -1490,6 +1490,11 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: stale.save_id, digest: stale.digest });
     assert.equal(saved.get(receiptKey).lastsave, "t9");
     assert.equal(saved.get(receiptKey).beforelastsave, "t9");
+    tick();
+    await respond("GET", "/api/userscript-autosave", 200, {
+      ...stale, save_id: "after-force", stamp: "t10", lastsave: "t9", beforelastsave: "t9",
+    });
+    assert.equal(writes.length, 2, "future autosaves pass after Force save");
 
     failWrite = true;
     menus.get("State — force save")();
