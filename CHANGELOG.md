@@ -20,9 +20,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Preview client tests: sync both distributed copies. Check source and compact CSS with the same assertions.
 - Preview page token: remove generation, page and state fields, headers, and token-only retries. Retain download claims and proxy keys.
 - Arena userscript popups: use natural prose. Keep conditions, dynamic values, ranges, and actions.
-- Preview violation flag: wake poll and print its text. Remove the flag-specific Bash block.
+- Preview violation flag: block Bash and print the notice. Wake a running poll with the same text.
 - Arena report publication: check the stored revision and rendered field count before the CLI reports success.
 - Arena acknowledgements: add task options to save one receipt and its linked task in one transaction. Keep standalone commands.
+- Arena acknowledgements: read a reply note after the quoted parent lines and never quote owner messages in an ack.
 - Arena report diffs: put edge whitespace outside strike and highlight spans. Keep the renderer unchanged.
 - Arena PR checks: reset the registration window on a new head. Continue root work during remote CI and retain local gate freezes.
 - Arena report-removal guide: release linked task blocks on an answer or unpublishing. Do not treat removal as approval.
