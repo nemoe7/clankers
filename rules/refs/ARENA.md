@@ -45,6 +45,7 @@
 - On a resumed or next turn, check whether the preview runs, restart it if needed, read read-set files whose current full text is absent from context, find nested AGENTS.md files and read missing or changed instructions, then continue an open task or poll if none.
 - Load the named skill for Arena work: `arena-skill` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
 - Use "read set" to mean ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md, and nothing else.
+- MUST use the read tool, NEVER Bash, to read every required read-set file in full.
 - After compaction, summary, or context replacement within a turn, read every read-set file whose current full text is absent from context end-to-end before other tool calls. For a resumed or next turn, use the resumed start sequence.
 - On a context-check reminder, MUST read every read-set file whose current full text is absent from context before continuing work.
 - NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a read-set file.

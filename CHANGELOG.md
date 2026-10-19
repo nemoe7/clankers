@@ -31,6 +31,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Arena gate wait: record a live local run and its blocked task without a report. Keep fielded reports for other blocks.
 - Preview task drag: remove the end-drop card. Keep an accented insertion line, list-background end drops, cancellation, and failed-write recovery.
 - Arena startup: set initial and resumed start sequences. Keep the 10-4 text, read the initial set first, and remove the extra full skill-reference read.
+- Arena read set: require the read tool, never Bash, for full-file reads.
 - Preview proxy guide: bound JSON reads to 20 records and 16,000 characters. Add field discovery, continuation reads, binary metadata, and model-page completion.
 - Preview hook tables: move the section to the maintenance README and use the approved cell wording. Retarget the existing case-label check.
 
