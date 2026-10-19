@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena fielded reports: keep each question beside no more than one short paragraph or three bullets of relevant context on one vertical screen. Do not collect questions at a long report's end.
 - Preview WebSockets: carry JSON actions and state replies on one same-origin connection. Send SQLite change notices across processes. Keep binary HTTP, reconnect, heartbeat, and polling fallback, with `?transport=poll` to select polling.
 - Preview tasks: allow a later gate block after a linked report receives an answer. Keep the report link and clear its first wait when an answer arrives.
 - Preview userscript logs: record the code, HTTP status, failure kind, compare result, and a bounded detail string. Keep the console format.
