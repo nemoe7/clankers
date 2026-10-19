@@ -3435,6 +3435,13 @@ def autosave_core(records):
     if records:
       checked.import_state(json.dumps(records))
     core, _ = checked.state_lines(checked.state()["notes"], checked.tasks() or {})
+  # Renumber emitted tasks so a second canonical pass keeps every position and the digest.
+  order = dict.fromkeys(TASK_STATUSES, 0)
+  for row in core:
+    status = row.get("status")
+    if status in order and "title" in row and "markdown" not in row:
+      order[status] += 1
+      row["order"] = order[status]
   return core
 
 

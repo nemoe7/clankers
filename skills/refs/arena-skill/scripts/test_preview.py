@@ -10171,6 +10171,25 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
         thread.join()
 
 
+def test_autosave_core_is_idempotent_across_task_order():
+  core = [
+    {
+      "id": f"task-{index}",
+      "title": f"Task {index}",
+      "details": ["Step"],
+      "status": "finished",
+      "completed_at": f"2026-01-0{4 - index}T00:00:00+00:00",
+      "order": order,
+      "type": "misc",
+    }
+    for index, order in enumerate((3, 4, 2, 1))
+  ]
+  once = preview.autosave_core(core)
+  twice = preview.autosave_core(once)
+  assert once == twice, "the canonical core is stable across a second pass"
+  assert preview.autosave_digest(once) == preview.autosave_digest(twice)
+
+
 def test_websocket_transport(tmp_path, monkeypatch):
   monkeypatch.setattr(preview, "WS_TICK_SECONDS", 0.02, raising=False)
   monkeypatch.setattr(preview, "WS_HEARTBEAT_SECONDS", 0.1, raising=False)

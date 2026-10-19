@@ -1202,6 +1202,10 @@ def autosave_core(records):
 		checked=Store(directory,create=True)
 		if records:checked.import_state(json.dumps(records))
 		core,_=checked.state_lines(checked.state()['notes'],checked.tasks()or{})
+	order=dict.fromkeys(TASK_STATUSES,0)
+	for row in core:
+		status=row.get('status')
+		if status in order and'title'in row and'markdown'not in row:order[status]+=1;row['order']=order[status]
 	return core
 def autosave_digest(core):encoded=json.dumps(core,sort_keys=True,ensure_ascii=False,separators=(',',':'));return hashlib.sha256(encoded.encode('utf-8')).hexdigest()
 def autosave_scope_key(scope):
