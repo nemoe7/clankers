@@ -1478,13 +1478,13 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     tick();
     await respond("GET", "/api/userscript-autosave", 200, stale);
     assert.ok(panel(), "a pair mismatch blocks the automatic save");
-    assert.match(panel().children[0].textContent, /differ/);
+    assert.equal(panel().children[0].textContent, "State mismatch. Overall state is ahead.");
     assert.equal(writes.length, 1);
     const refusal = logs.map(args => args[1]).filter(data => data && data.code === "autosave-compare").at(-1);
     assert.equal(refusal.detail, "saved t2/t1 server t9/t2 n0 t0", "the refusal names both stamp pairs");
-    menus.get("State — force save")();
+    panel().children[1].children.find(button => button.textContent === "Overwrite").listeners.click();
     await respond("GET", "/api/userscript-autosave", 200, stale);
-    assert.equal(writes.length, 2, "force save skips the compare");
+    assert.equal(writes.length, 2, "the overwrite button runs force save");
     await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: stale.save_id, digest: stale.digest });
     assert.equal(saved.get(receiptKey).lastsave, "t9");
     assert.equal(saved.get(receiptKey).beforelastsave, "t9");
@@ -1493,6 +1493,16 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       ...stale, save_id: "after-force", stamp: "t10", lastsave: "t9", beforelastsave: "t9",
     });
     assert.equal(writes.length, 2, "future autosaves pass after Force save");
+
+    const diverged = { ...stale, save_id: "diverged", stamp: "t11", lastsave: "t8", beforelastsave: "t7" };
+    tick();
+    await respond("GET", "/api/userscript-autosave", 200, diverged);
+    assert.ok(panel(), "an unrelated save pair still blocks the automatic save");
+    assert.match(panel().children[0].textContent, /differ/);
+    assert.equal(
+      panel().children[1].children.some(button => button.textContent === "Overwrite"), false,
+      "an unrelated pair offers no overwrite");
+    assert.equal(writes.length, 2);
 
     failWrite = true;
     menus.get("State — force save")();
