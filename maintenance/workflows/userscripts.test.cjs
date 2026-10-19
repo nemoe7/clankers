@@ -1322,6 +1322,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const requests = [];
     const stamp = "2026-10-15T09:00:00+00:00";
     const base = "https://preview.example";
+    const logs = [];
+    const collect = (...args) => logs.push(args);
     saved.set("clankers-arena-state-scope-o.r", "o.r");
     saved.set("clankers-arena-state-base-o.r", base);
     saved.set("clankers-arena-state-branch-o.r", "");
@@ -1367,7 +1369,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       fetch: () => Promise.reject(new Error("offline")),
       Blob: class { constructor(parts) { this.parts = parts; } },
       URL: { createObjectURL: () => "blob:x", revokeObjectURL: () => {} },
-      console: { log: () => {}, warn: () => {}, error: () => {}, debug: () => {}, info: () => {} },
+      console: { log: collect, warn: collect, error: collect, debug: () => {}, info: () => {} },
       GM_getValue: (key, fallback) => (saved.has(key) ? saved.get(key) : fallback),
       GM_setValue: (key, value) => { saved.set(key, value); },
       GM_deleteValue: (key) => { saved.delete(key); },
@@ -1480,6 +1482,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.ok(panel(), "a pair mismatch blocks the automatic save");
     assert.match(panel().children[0].textContent, /differ/);
     assert.equal(writes.length, 1);
+    const refusal = logs.map(args => args[1]).filter(data => data && data.code === "autosave-compare").at(-1);
+    assert.equal(refusal.detail, "saved t2/t1 server t9/t2 n0 t0", "the refusal names both stamp pairs");
     menus.get("State — force save")();
     await respond("GET", "/api/userscript-autosave", 200, stale);
     assert.equal(writes.length, 2, "force save skips the compare");
@@ -1536,11 +1540,29 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       removeEventListener: () => {},
     };
     vm.runInNewContext(source, context, { filename: "arena.user.js" });
-    const { sameSaves } = context.CLANKERS_CHECKS.stateDownload;
+    const { sameSaves, sameSaveDetail } = context.CLANKERS_CHECKS.stateDownload;
     assert.equal(sameSaves(null, { lastsave: "a", beforelastsave: null }), false);
     assert.equal(sameSaves({ lastsave: "a", beforelastsave: null }, { lastsave: "a", beforelastsave: null }), true);
     assert.equal(sameSaves({ lastsave: "a", beforelastsave: "b" }, { lastsave: "a", beforelastsave: null }), false);
     assert.equal(sameSaves({ lastsave: "a", beforelastsave: "b" }, { lastsave: "a", beforelastsave: "b" }), true);
+    assert.equal(
+      sameSaveDetail({ lastsave: "t2", beforelastsave: "t1" }, { lastsave: "t9", beforelastsave: "t2" }),
+      "saved t2/t1 server t9/t2 n0 t0",
+      "the detail names both stamp pairs and the counts"
+    );
+    assert.equal(
+      sameSaveDetail(null, { lastsave: "t9", beforelastsave: null, counts: { notes: 3, tasks: 2 } }),
+      "saved none/none server t9/none n3 t2",
+      "a missing baseline reads as none"
+    );
+    const longStamp = "2026-10-15T09:00:00";
+    assert.ok(
+      sameSaveDetail(
+        { lastsave: longStamp, beforelastsave: longStamp },
+        { lastsave: longStamp, beforelastsave: longStamp, counts: { notes: 999, tasks: 999 } }
+      ).length <= 160,
+      "the detail stays inside the log cap"
+    );
     const { logEvent } = context.CLANKERS_CHECKS.logging;
     logEvent("state", "failed", { code: "autosave-compare", status: 200, result: "unknown-baseline", detail: "digest" }, "error");
     const [line, data] = logged.at(-1);

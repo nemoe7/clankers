@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.50
+// @name         Arena.ai | NemoUtils | v1.10.51
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.50
+// @version      1.10.51
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2423,6 +2423,7 @@
       stateFileName: stateFileName,
       stateScopeKey: stateScopeKey,
       stateDownload: stateDownload,
+      sameSaveDetail: sameSaveDetail,
       stateMemory: stateMemory,
       stateRemembered: stateRemembered,
       stateDelivery: stateDelivery,
@@ -2787,6 +2788,16 @@
         (known.beforelastsave || null) === (body.beforelastsave || null);
     }
 
+    function saveStampPair(known) {
+      return (known && known.lastsave || "none") + "/" + (known && known.beforelastsave || "none");
+    }
+
+    function sameSaveDetail(known, body) {
+      var counts = body.counts || {};
+      return "saved " + saveStampPair(known) + " server " + saveStampPair(body) +
+        " n" + (counts.notes || 0) + " t" + (counts.tasks || 0);
+    }
+
     async function fetchStateFile(manual, force) {
       var base = previewBase(document);
       if (!base || stateBusy) return;
@@ -2836,7 +2847,7 @@
         var inSync = sameSaves(baseline, body);
         if (!force && !inSync && !(initialFile && !baseline)) {
           stateError("The saved and current states differ. Nothing was written. Review both states before using Force save.",
-            null, null, "autosave-compare", undefined, undefined, "stamps");
+            null, null, "autosave-compare", undefined, undefined, sameSaveDetail(baseline, body));
           return;
         }
         if (!force && inSync && body.stamp === (baseline && baseline.lastsave)) return;
