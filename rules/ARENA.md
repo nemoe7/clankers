@@ -183,7 +183,7 @@
 - Install dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
 - Start each local gate on a stable tree; NEVER edit its covered root files while it runs. A remote PR CI watch does not freeze the working tree.
 - The freeze covers the root tree only: a queued task that edits other files starts a worktree while the root gate runs (`arena-preview worktree start`), never read-only tracing.
-- A >=10-second run is long; MUST use `arena-preview route <name> -- <command>`.
+- A >=10-second run is long; MUST use `arena-preview run start <name> -- <command>`.
 - NEVER sleep during a background gate.
 - Link each local gate to its task at run start; the live run owns the task's blocked state.
 - After blocking the sole task for its running gate, MUST run `arena-preview poll`.

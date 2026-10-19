@@ -122,7 +122,8 @@ def test_edited_ack_stamp():
       [
         sys.executable,
         preview.__file__,
-        "import-state",
+        "state",
+        "import",
         str(saved),
       ],
       check=True,
@@ -276,7 +277,8 @@ def test_reply_seen_persistence():
         [
           sys.executable,
           preview.__file__,
-          "import-state",
+          "state",
+          "import",
           str(backup),
         ],
         check=True,
@@ -407,7 +409,7 @@ def test_report_unpublish():
     # The agent CLI can unpublish an unseen report and writes no dismissal note.
     store.publish("plain", "Pick one", source)
     allowed = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "unpublish", "plain"],
+      [sys.executable, str(Path(preview.__file__)), "report", "unpublish", "plain"],
       capture_output=True,
       text=True,
       check=False,
@@ -421,7 +423,7 @@ def test_report_unpublish():
     store.publish("blocked", "Pick one", source)
     store.submission("answer-2", "blocked", "REPORT blocked: one")
     held = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "unpublish", "blocked"],
+      [sys.executable, str(Path(preview.__file__)), "report", "unpublish", "blocked"],
       capture_output=True,
       text=True,
       check=False,
@@ -480,7 +482,7 @@ def test_stale_reports_command_lists_ids_and_reasons():
     store.acknowledge(["answered-reply"], "Received")
     before = store.state()["reports"]
     result = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "stale-reports"],
+      [sys.executable, str(Path(preview.__file__)), "report", "stale"],
       capture_output=True,
       text=True,
       check=False,
@@ -1803,7 +1805,8 @@ def test_http_boundaries():
         [
           sys.executable,
           str(Path(preview.__file__)),
-          "import-state",
+          "state",
+          "import",
           str(save_file),
         ],
         capture_output=True,
@@ -2881,6 +2884,7 @@ def test_task_refuses_a_note_id_as_its_name():
         sys.executable,
         str(Path(preview.__file__)),
         "task",
+        "set",
         "954ee49-9ac144955adcda4bcbd227497",
         "Named after the note",
         "--task-details",
@@ -3007,6 +3011,7 @@ def test_bare_task_reads_the_stored_row():
 
     written = cli(
       "task",
+      "set",
       "read-task",
       "Read the queue",
       "-d",
@@ -3018,7 +3023,7 @@ def test_bare_task_reads_the_stored_row():
     )
     assert written.returncode == 0, written.stderr
     before = store.list_tasks()[0]
-    read = cli("task", "read-task")
+    read = cli("task", "show", "read-task")
     assert read.returncode == 0, read.stderr
     expected = (
       f"task {before['id']}, order {before['order']}, status {before['status']}, "
@@ -3059,7 +3064,7 @@ def test_bare_task_reads_the_stored_row():
       return data, meta
 
     before_read = stored_content()
-    full_read = cli("task", "read-task")
+    full_read = cli("task", "show", "read-task")
     assert full_read.returncode == 0, full_read.stderr
     assert long_detail in full_read.stdout
     assert report_text in full_read.stdout and direct_text in full_read.stdout
@@ -3076,27 +3081,27 @@ def test_bare_task_reads_the_stored_row():
     assert "answer-unrelated" not in full_read.stdout
     assert "Unrelated answer must stay out" not in full_read.stdout
     assert stored_content() == before_read
-    written_again = cli("task", "read-task", "--append", "-d", "Another step")
+    written_again = cli("task", "set", "read-task", "--append", "-d", "Another step")
     assert written_again.returncode == 0, written_again.stderr
     assert long_detail not in written_again.stdout
     assert report_text not in written_again.stdout
-    listed = cli("task-list")
+    listed = cli("task", "list")
     assert listed.returncode == 0, listed.stderr
     assert long_detail in listed.stdout
     # The listing matches the page: both linked answers show, the unrelated one stays out.
     assert report_text in listed.stdout and direct_text in listed.stdout
     assert "Unrelated answer must stay out" not in listed.stdout
     store.write_task("read-task", status="finished")
-    finished = cli("task", "read-task")
+    finished = cli("task", "show", "read-task")
     assert finished.returncode == 0, finished.stderr
     assert long_detail in finished.stdout and report_text in finished.stdout
     store.unpublish("linked", dismissed_by_owner=True)
-    retained = cli("task", "read-task")
+    retained = cli("task", "show", "read-task")
     assert retained.returncode == 0, retained.stderr
     assert report_text in retained.stdout and direct_text in retained.stdout
     assert retained.stdout.count("answer-both") == 1
     assert "answer-unrelated" not in retained.stdout
-    missing = cli("task", "read-nothing")
+    missing = cli("task", "show", "read-nothing")
     assert missing.returncode != 0
     assert "No task is stored under read-nothing." in missing.stdout + missing.stderr
 
@@ -3165,7 +3170,7 @@ def test_clear_state():
     assert [row["id"] for row in store.state()["notes"]] == ["after-clear"]
     # The CLI form clears the same way and prints the counts.
     cli = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "clear-state"],
+      [sys.executable, str(Path(preview.__file__)), "state", "clear"],
       capture_output=True,
       text=True,
       check=False,
@@ -3588,10 +3593,12 @@ def test_short_flags_and_the_details_rename():
       ).stdout
 
     for flag in ("--details", "--task-details", "-d"):
-      out = cli("task", "flag-task", "Flags", flag, "one\ntwo", "--task-type", "misc")
+      out = cli(
+        "task", "set", "flag-task", "Flags", flag, "one\ntwo", "--task-type", "misc"
+      )
       assert "one" in out and "two" in out, flag
     manual_block = subprocess.run(
-      [sys.executable, script, "task", "flag-task", "--blocked"],
+      [sys.executable, script, "task", "set", "flag-task", "--blocked"],
       capture_output=True,
       text=True,
       check=False,
@@ -3599,14 +3606,23 @@ def test_short_flags_and_the_details_rename():
     )
     assert manual_block.returncode == 2 and "--blocked" in manual_block.stderr
     assert "blocked" not in cli(
-      "task", "flag-task", "Flags", "-u", "--task-type", "misc"
+      "task", "set", "flag-task", "Flags", "-u", "--task-type", "misc"
     )
     out = cli(
-      "task", "flag-task", "Flags", "-s", "finished", "-o", "1", "--task-type", "misc"
+      "task",
+      "set",
+      "flag-task",
+      "Flags",
+      "-s",
+      "finished",
+      "-o",
+      "1",
+      "--task-type",
+      "misc",
     )
     assert "status finished" in out and "order 1" in out
-    assert cli("task-list", "-f").splitlines()[0] == "Tasks 1"
-    assert cli("task-list").splitlines()[0] == "Tasks 0 upcoming"
+    assert cli("task", "list", "-f").splitlines()[0] == "Tasks 1"
+    assert cli("task", "list").splitlines()[0] == "Tasks 0 upcoming"
     store = preview.Store(flag_dir)
     store.set_meta("port", guard_port())
     store.note("1111111-2222-3333-4444-555555555555", "a note")
@@ -3622,7 +3638,7 @@ def test_short_flags_and_the_details_rename():
       thread.start()
       try:
         assert "short-report" in cli(
-          "publish", str(report), "-i", "short-report", "-t", "Short report"
+          "report", "publish", str(report), "-i", "short-report", "-t", "Short report"
         )
       finally:
         server.shutdown()
@@ -4032,6 +4048,7 @@ def test_task_report_flag_waits_for_an_answer_by_default():
           sys.executable,
           str(Path(preview.__file__)),
           "task",
+          "set",
           "waiting",
           "--report",
           "pick",
@@ -4070,6 +4087,7 @@ def test_task_report_link_refuses_missing_report():
         sys.executable,
         str(Path(preview.__file__)),
         "task",
+        "set",
         "wait",
         "Wait",
         "--report",
@@ -4320,7 +4338,8 @@ def test_shared_save_import():
       [
         sys.executable,
         script,
-        "import-state",
+        "state",
+        "import",
         str(mixed),
       ],
       capture_output=True,
@@ -4339,7 +4358,8 @@ def test_shared_save_import():
       [
         sys.executable,
         script,
-        "import-state",
+        "state",
+        "import",
         str(mixed),
       ],
       capture_output=True,
@@ -4353,7 +4373,7 @@ def test_shared_save_import():
     # Writer and reader move together: the store tasks round-trip via import-state.
     script_again = str(Path(preview.__file__))
     listed = subprocess.run(
-      [sys.executable, script_again, "task-list"],
+      [sys.executable, script_again, "task", "list"],
       capture_output=True,
       text=True,
       check=True,
@@ -4367,7 +4387,8 @@ def test_shared_save_import():
       [
         sys.executable,
         script_again,
-        "import-state",
+        "state",
+        "import",
         "--merge",
         "--replace-tasks",
       ],
@@ -4454,7 +4475,7 @@ def test_restore_import():
       encoding="utf-8",
     )
     imported = subprocess.run(
-      [sys.executable, script, "import-state", str(log)],
+      [sys.executable, script, "state", "import", str(log)],
       capture_output=True,
       text=True,
       check=True,
@@ -4477,6 +4498,7 @@ def test_restore_import():
         sys.executable,
         script,
         "task",
+        "set",
         "from-note",
         "Answer the note",
         "Answer it",
@@ -4499,6 +4521,7 @@ def test_restore_import():
         sys.executable,
         script,
         "task",
+        "set",
         "orphan",
         "No message",
         "Answer it",
@@ -4542,7 +4565,8 @@ def test_restore_import():
       [
         sys.executable,
         script,
-        "import-state",
+        "state",
+        "import",
         str(partial),
       ],
       capture_output=True,
@@ -4560,7 +4584,7 @@ def test_restore_import():
     }
     # Importing the same log again changes nothing: a stored ID keeps the record it has.
     again = subprocess.run(
-      [sys.executable, script, "import-state", str(log)],
+      [sys.executable, script, "state", "import", str(log)],
       capture_output=True,
       text=True,
       check=True,
@@ -4754,7 +4778,7 @@ def test_a_logs_call_reads_the_routed_run_status_and_output():
         env=env,
       )
 
-    live = cli("logs", "watch")
+    live = cli("run", "logs", "watch")
     assert live.returncode == 0, live.stderr
     assert live.stdout.startswith("run watch running "), live.stdout
     preview.run_command(
@@ -4762,11 +4786,11 @@ def test_a_logs_call_reads_the_routed_run_status_and_output():
       "watch",
       ["--", sys.executable, "-c", "print('first'); raise SystemExit(3)"],
     )
-    done = cli("logs", "watch")
+    done = cli("run", "logs", "watch")
     assert done.returncode == 0, done.stderr
     assert done.stdout.startswith("run watch done: exit 3 "), done.stdout
     assert "first" in done.stdout, done.stdout
-    missing = cli("logs", "nothing")
+    missing = cli("run", "logs", "nothing")
     assert missing.returncode == 1, missing.stdout
     assert "No routed run named nothing." in missing.stdout + missing.stderr
 
@@ -4786,7 +4810,7 @@ def test_a_failed_background_start_keeps_the_refusal(capsys, monkeypatch):
     )
     refused = capsys.readouterr().err
     assert refused.startswith("RUN BLOCKED: "), refused
-    assert "arena-preview route pr-checks" in refused, refused
+    assert "arena-preview run start pr-checks" in refused, refused
 
 
 def test_a_failed_spawn_records_a_terminal_route_failure(monkeypatch):
@@ -4976,7 +5000,8 @@ def test_route_cli_accepts_task_and_task_cli_rejects_manual_block(tmp_path):
     [
       sys.executable,
       str(Path(preview.__file__)),
-      "route",
+      "run",
+      "start",
       "--task",
       "linked",
       "checks",
@@ -4993,7 +5018,7 @@ def test_route_cli_accepts_task_and_task_cli_rejects_manual_block(tmp_path):
   assert record["task_id"] == "linked"
 
   blocked = subprocess.run(
-    [sys.executable, str(Path(preview.__file__)), "task", "linked", "--blocked"],
+    [sys.executable, str(Path(preview.__file__)), "task", "set", "linked", "--blocked"],
     capture_output=True,
     text=True,
     check=False,
@@ -5002,7 +5027,7 @@ def test_route_cli_accepts_task_and_task_cli_rejects_manual_block(tmp_path):
   assert blocked.returncode == 2
   assert "--blocked" in blocked.stderr
   help_text = subprocess.run(
-    [sys.executable, str(Path(preview.__file__)), "task", "--help"],
+    [sys.executable, str(Path(preview.__file__)), "task", "set", "--help"],
     capture_output=True,
     text=True,
     check=True,
@@ -5152,7 +5177,7 @@ def test_worktree_gate_flow():
       )
       assert blocked.returncode == 1 and "WORKTREE BLOCKED" in blocked.stderr
     routed = subprocess.run(
-      [sys.executable, script, "route", "task-c", "--", "true"],
+      [sys.executable, script, "run", "start", "task-c", "--", "true"],
       cwd=worktree,
       env=environment,
       capture_output=True,
@@ -5643,8 +5668,19 @@ def test_dispatch_reminder():
     assert preview.reminder_tail(task_at, 0) == preview.REMINDERS[task_at + 1]
     assert "0 tasks left." not in tails(0)
     for command, remaining in (
-      (["task-list"], 0),
-      (["task", "reminder-task", "Track work", "Step one", "--task-type", "misc"], 1),
+      (["task", "list"], 0),
+      (
+        [
+          "task",
+          "set",
+          "reminder-task",
+          "Track work",
+          "Step one",
+          "--task-type",
+          "misc",
+        ],
+        1,
+      ),
     ):
       result = subprocess.run(
         [sys.executable, reminder_script, *command],
@@ -5773,7 +5809,7 @@ def test_reminder_rotation():
       assert result.stdout == ""
       assert result.stderr.strip() == f"calls {polls} {pending}{tail}"
     result = subprocess.run(
-      [sys.executable, rotate_script, "task-list"],
+      [sys.executable, rotate_script, "task", "list"],
       capture_output=True,
       text=True,
       check=True,
@@ -5877,6 +5913,7 @@ def test_report_unread_markers():
           [
             sys.executable,
             str(Path(preview.__file__)),
+            "report",
             "publish",
             str(marker_source),
             "--id",
@@ -5895,6 +5932,7 @@ def test_report_unread_markers():
           [
             sys.executable,
             str(Path(preview.__file__)),
+            "report",
             "publish",
             str(marker_source),
             "--id",
@@ -6047,7 +6085,7 @@ def test_state_commands_break_while_the_server_is_not_up():
     )
     assert init.returncode == 0, init.stderr
     cli = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "task-list"],
+      [sys.executable, str(Path(preview.__file__)), "task", "list"],
       capture_output=True,
       text=True,
       check=False,
@@ -6822,7 +6860,8 @@ def test_import_state_has_no_force_option():
       [
         sys.executable,
         str(Path(preview.__file__)),
-        "import-state",
+        "state",
+        "import",
         str(source),
         "--force",
       ],
@@ -7879,6 +7918,7 @@ def test_task_detail_steps():
         sys.executable,
         script,
         "task",
+        "set",
         "steps",
         "Steps",
         "--task-details",
@@ -7893,7 +7933,16 @@ def test_task_detail_steps():
     ).stdout
     assert "read it" in out and "fix it" in out and "check it" in out
     wall = subprocess.run(
-      [sys.executable, script, "task", "wall", "Wall", "--task-details", "y" * 400],
+      [
+        sys.executable,
+        script,
+        "task",
+        "set",
+        "wall",
+        "Wall",
+        "--task-details",
+        "y" * 400,
+      ],
       capture_output=True,
       text=True,
       check=False,
@@ -7920,20 +7969,23 @@ def test_task_details_append_keeps_replacement_and_limits():
       )
 
     assert (
-      cli("task", "append-task", "Append", "one", "--task-type", "misc").returncode == 0
+      cli(
+        "task", "set", "append-task", "Append", "one", "--task-type", "misc"
+      ).returncode
+      == 0
     )
-    result = cli("task", "append-task", "--append", "--details", "two\nthree")
+    result = cli("task", "set", "append-task", "--append", "--details", "two\nthree")
     assert result.returncode == 0, result.stderr
     assert store.task_record("append-task")["details"] == ["one", "two", "three"]
-    assert cli("task", "append-task", "-A", "-d", "four").returncode == 0
+    assert cli("task", "set", "append-task", "-A", "-d", "four").returncode == 0
     assert store.task_record("append-task")["details"] == [
       "one",
       "two",
       "three",
       "four",
     ]
-    assert cli("task", "append-task", "Renamed", "replacement").returncode == 0
-    assert cli("task", "append-task", "--status", "finished").returncode == 0
+    assert cli("task", "set", "append-task", "Renamed", "replacement").returncode == 0
+    assert cli("task", "set", "append-task", "--status", "finished").returncode == 0
     assert store.task_record("append-task")["details"] == ["replacement"]
     for args in [
       ("--append",),
@@ -7941,12 +7993,19 @@ def test_task_details_append_keeps_replacement_and_limits():
       ("--append", "--details", "x" * 121),
       ("--append", "--details", "lost", "--msg-id", "aaaaaa"),
     ]:
-      assert cli("task", "append-task", *args).returncode != 0
+      assert cli("task", "set", "append-task", *args).returncode != 0
       assert store.task_record("append-task")["details"] == ["replacement"]
     store.note("bbbbbb", "Request")
     assert (
       cli(
-        "task", "append-task", "--append", "--details", "linked", "--msg-id", "bbbbbb"
+        "task",
+        "set",
+        "append-task",
+        "--append",
+        "--details",
+        "linked",
+        "--msg-id",
+        "bbbbbb",
       ).returncode
       == 0
     )
@@ -7954,7 +8013,8 @@ def test_task_details_append_keeps_replacement_and_limits():
     assert store.notes_matching("bbbbbb")[0]["task_id"] == "append-task"
     store.write_task("append-task", details=["kept"] * 40)
     assert (
-      cli("task", "append-task", "--append", "--details", "overflow").returncode != 0
+      cli("task", "set", "append-task", "--append", "--details", "overflow").returncode
+      != 0
     )
     assert store.task_record("append-task")["details"] == ["kept"] * 40
 
@@ -8034,7 +8094,7 @@ def test_note_list_pages(tmp_path):
 
   def run(*argv):
     return subprocess.run(
-      [sys.executable, preview.__file__, "note-list", *argv],
+      [sys.executable, preview.__file__, "note", "list", *argv],
       capture_output=True,
       text=True,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
@@ -8103,17 +8163,17 @@ def test_note_reread_prints_every_match():
         check=False,
       )
 
-    both = run("note", "beef001")
+    both = run("note", "show", "beef001")
     assert both.returncode == 0
     assert "first stored note" in both.stdout
     assert "second stored note" in both.stdout
     assert "acked 2026-09-22T12:00:00" in both.stdout
     assert "unacked" in both.stdout
-    one = run("note", "beef001-2222222222222222222222222")
+    one = run("note", "show", "beef001-2222222222222222222222222")
     assert one.returncode == 0
     assert "second stored note" in one.stdout
     assert "first stored note" not in one.stdout
-    gone = run("note", "ffff999")
+    gone = run("note", "show", "ffff999")
     assert gone.returncode == 1
     assert "No note matches" in gone.stderr
 
@@ -8443,7 +8503,7 @@ def test_egress_warning_covers_wget_and_git_clone():
     [],
     ["not-a-command"],
     ["serve", "--port"],
-    ["task", "demo", "--type", "not-a-type"],
+    ["task", "set", "demo", "--type", "not-a-type"],
   ],
 )
 def test_cli_argument_errors_omit_usage(args):
@@ -8495,12 +8555,13 @@ def test_cli_missing_task_id_keeps_validation(tmp_path, monkeypatch, capsys):
   preview.Store(tmp_path, create=True)
   monkeypatch.setattr(preview, "resolve_state_dir", lambda: tmp_path)
   monkeypatch.setattr(preview, "require_server", lambda store: None)
-  monkeypatch.setattr(sys, "argv", ["preview.py", "task"])
+  monkeypatch.setattr(sys, "argv", ["preview.py", "task", "set"])
   assert preview.main() == 1
   output = capsys.readouterr()
   assert not output.out
   assert (
-    'A task needs an ID: arena-preview task <id> "<title>" -m <msg-id>' in output.err
+    'A task needs an ID: arena-preview task set <id> "<title>" -m <msg-id>'
+    in output.err
   )
   assert "usage:" not in output.err.casefold()
 
@@ -8519,8 +8580,15 @@ def test_cli_help_keeps_usage():
   assert (
     "The platform's hooks call the -tick commands, `gate`, `inbox-line` and" in flat
   )
-  assert "-A append, -m message, -r report" in flat
-  assert "--task-type type" in flat
+  task_help = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), "task", "set", "--help"],
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout
+  flat_task = " ".join(task_help.split())
+  assert "-A, --append" in flat_task
+  assert "--task-type" in flat_task
 
 
 def test_reference_commands_table_lists_every_agent_facing_command():
@@ -8712,7 +8780,7 @@ def test_task_type_cli_flag_and_print():
 
     def cli(*arguments):
       return subprocess.run(
-        [sys.executable, str(Path(preview.__file__)), "task", *arguments],
+        [sys.executable, str(Path(preview.__file__)), "task", "set", *arguments],
         capture_output=True,
         text=True,
         check=False,
@@ -9345,7 +9413,7 @@ def test_cli_hook_keeps_pending_counts_without_duplicate_routine_guidance(capsys
             "ARENA_PREVIEW_ROUTE": "0",
           },
         ),
-        patch.object(sys, "argv", [script, "task-list"]),
+        patch.object(sys, "argv", [script, "task", "list"]),
       ):
         assert preview.main() == 0
       output = capsys.readouterr()
@@ -9363,7 +9431,7 @@ def test_cli_hook_keeps_pending_counts_without_duplicate_routine_guidance(capsys
           "ARENA_PREVIEW_ROUTE": "1",
         },
       ),
-      patch.object(sys, "argv", [script, "task-list"]),
+      patch.object(sys, "argv", [script, "task", "list"]),
     ):
       assert preview.main() == 0
     assert capsys.readouterr().err.strip(), (
@@ -9380,7 +9448,7 @@ def test_cli_hook_keeps_pending_counts_without_duplicate_routine_guidance(capsys
             "ARENA_PREVIEW_ROUTE": "0",
           },
         ),
-        patch.object(sys, "argv", [script, "task-list"]),
+        patch.object(sys, "argv", [script, "task", "list"]),
       ):
         assert preview.main() == 0
       line = capsys.readouterr().err.strip()
@@ -9430,7 +9498,9 @@ def test_ack_task_hints_only_name_messages_without_a_task(capsys):
       assert preview.main() == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == "ok " + " ".join(record_id[:6] for record_id in ids)
-    assert lines[1].startswith('link it with: arena-preview task <id> "<title>" -m ')
+    assert lines[1].startswith(
+      'link it with: arena-preview task set <id> "<title>" -m '
+    )
     assert "free-note" in lines[1] and "free-answer" in lines[1]
     assert "tracked-note" not in lines[1] and "tracked-answer" not in lines[1]
     with (
@@ -9738,7 +9808,7 @@ def test_report_unpublish_stale_keeps_guards_answers_and_sources(tmp_path, capsy
   assert plain.exists() and form.exists()
   with (
     patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(directory)}),
-    patch.object(sys, "argv", ["preview.py", "unpublish", "pending"]),
+    patch.object(sys, "argv", ["preview.py", "report", "unpublish", "pending"]),
   ):
     assert preview.main() == 0
   assert {row["id"] for row in store.state()["reports"]} == {"held", "unread"}
@@ -9785,7 +9855,7 @@ def test_a_missing_record_refusal_prints_on_stderr(tmp_path):
       env=env,
     )
 
-  report = cli("report-state", "no-such-report")
+  report = cli("report", "state", "no-such-report")
   assert report.returncode == 1, report.stdout
   assert report.stdout == ""
   assert "No report no-such-report" in report.stderr.splitlines()
@@ -9806,7 +9876,7 @@ def test_a_missing_task_names_the_task(tmp_path):
   store = preview.Store(tmp_path, create=True)
   store.set_meta("port", guard_port())
   cli = subprocess.run(
-    [sys.executable, str(Path(preview.__file__)), "task", "nothing-here"],
+    [sys.executable, str(Path(preview.__file__)), "task", "show", "nothing-here"],
     capture_output=True,
     text=True,
     check=False,
@@ -9825,7 +9895,7 @@ def test_a_missing_state_file_names_the_path(tmp_path):
   store.set_meta("port", guard_port())
   missing = tmp_path / "no-such.ndjson"
   cli = subprocess.run(
-    [sys.executable, str(Path(preview.__file__)), "import-state", str(missing)],
+    [sys.executable, str(Path(preview.__file__)), "state", "import", str(missing)],
     capture_output=True,
     text=True,
     check=False,
@@ -9856,7 +9926,7 @@ def test_the_import_receipt_names_the_fate(tmp_path):
     (["--merge"], "; merged by ID"),
   ):
     cli = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "import-state", *flags, source],
+      [sys.executable, str(Path(preview.__file__)), "state", "import", *flags, source],
       capture_output=True,
       text=True,
       check=False,
@@ -9906,6 +9976,7 @@ def test_a_published_field_reads_in_the_singular(tmp_path):
         [
           sys.executable,
           str(Path(preview.__file__)),
+          "report",
           "publish",
           "-i",
           "one-report",
@@ -9953,7 +10024,7 @@ def test_a_repeated_run_line_prints_once(tmp_path):
     preview.run_command(tmp_path, "repeat", ["--", sys.executable, "-c", code]) == 0
   )
   cli = subprocess.run(
-    [sys.executable, str(Path(preview.__file__)), "logs", "repeat"],
+    [sys.executable, str(Path(preview.__file__)), "run", "logs", "repeat"],
     capture_output=True,
     text=True,
     check=False,
@@ -10164,6 +10235,7 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
 
     result = cli(
       "task",
+      "set",
       "uploaded-work",
       "Use uploads",
       "--details",
@@ -10183,11 +10255,12 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
     assert after_note["task_id"] == "uploaded-work"
     for key in ("id", "text", "acknowledged_at", "seen_at", "attachments"):
       assert after_note[key] == before_note[key]
-    repeated = cli("task", "uploaded-work", "--msg-id", note["id"])
+    repeated = cli("task", "set", "uploaded-work", "--msg-id", note["id"])
     assert repeated.returncode == 0, repeated.stderr
     assert store.task_record("uploaded-work")["details"] == details
     boundary = cli(
       "task",
+      "set",
       "boundary-work",
       "Boundary",
       "--task-type",
@@ -10201,6 +10274,7 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
     ]
     ordinary = cli(
       "task",
+      "set",
       "ordinary-work",
       "Ordinary",
       "--task-type",
@@ -10223,7 +10297,7 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
     before_full_note = next(
       item for item in store.state()["notes"] if item["id"] == untouched["id"]
     )
-    refused = cli("task", "full-work", "--msg-id", untouched["id"])
+    refused = cli("task", "set", "full-work", "--msg-id", untouched["id"])
     assert refused.returncode != 0
     assert store.task_record("full-work") == before_task
     assert (
@@ -10245,6 +10319,7 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
         [
           str(Path(preview.__file__)),
           "task",
+          "set",
           "oversized-work",
           "Oversized",
           "--task-type",
@@ -10290,7 +10365,7 @@ def test_preview_order_survives_agent_updates_and_notifies_the_next_hook():
     command = [sys.executable, str(Path(preview.__file__)), "--reminder"]
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": directory}
     listing = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "task-list"],
+      [sys.executable, str(Path(preview.__file__)), "task", "list"],
       capture_output=True,
       text=True,
       check=False,
@@ -10310,7 +10385,15 @@ def test_preview_order_survives_agent_updates_and_notifies_the_next_hook():
     assert second.returncode == 0, second.stderr
     assert "Task order changed in the preview" not in second.stderr + second.stdout
     rejected = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "task", "third", "--order", "1"],
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "task",
+        "set",
+        "third",
+        "--order",
+        "1",
+      ],
       capture_output=True,
       text=True,
       check=False,
@@ -10440,6 +10523,7 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
             "argv",
             [
               str(Path(preview.__file__)),
+              "report",
               "publish",
               str(path),
               "--id",

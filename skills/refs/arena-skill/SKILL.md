@@ -23,13 +23,13 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
 1. Find this skill's actual path; installed and source paths differ. Report missing installed files; do not install or repair them without authorization.
 2. Use an ignored, persisted state directory, default `arena-state`. Verify `core.excludesFile` with `git check-ignore`; never add this directory to the repository `.gitignore`, put it in a cache/build folder, or commit/push its state and reports.
-3. Use `arena-preview <command>` for CLI calls, never the full script path. Start the server with Arena's long-lived process tool, named `<repo> - Steering`, not a timed shell. That tool MUST host `serve` alone. Run `read`, `ack`, `task`, `publish` and every other command as one-shot shell calls. Send a long command the gate does not start detached through `arena-preview route <name> -- <command>`; its verdict prints on a later call:
+3. Use `arena-preview <command>` for CLI calls, never the full script path. Start the server with Arena's long-lived process tool, named `<repo> - Steering`, not a timed shell. That tool MUST host `serve` alone. Run `read`, `ack`, `task set`, `report publish` and every other command as one-shot shell calls. Send a long command the gate does not start detached through `arena-preview run start <name> -- <command>`; its verdict prints on a later call:
 
    ```bash
    arena-preview serve --port 8000
    ```
 
-   If the server dies, warn the owner before restarting. If another service owns the port, choose a free one without stopping it. The gate warns when a serve names another port. Read a routed run's recorded output tail with `arena-preview logs <name>`, during the run or after its verdict.
+   If the server dies, warn the owner before restarting. If another service owns the port, choose a free one without stopping it. The gate warns when a serve names another port. Read a routed run's recorded output tail with `arena-preview run logs <name>`, during the run or after its verdict.
 
 4. Name the preview in chat. At first setup, ask one visibility question with `ask_user` as soon as the preview starts, options: Yes, No, ntfy, Continue without steering. Block all work beyond setup until the answer. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running; the first `read` follows the answer. Do not claim visibility before confirmation. If it stays hidden, use `ask_user` to ask how to continue. Reuse a visible preview after confirmation. Keep ARENA.md's activation acknowledgement when applicable.
 
@@ -72,7 +72,7 @@ arena-preview poll
 - A second ack adds a reply without replacing the earlier answer.
 - Receipt is not completion.
 - Acknowledge each delivered ID immediately.
-- For a delivered work request, record its own acknowledgement and linked task in one `ack` call with task options; use `task` separately for later updates.
+- For a delivered work request, record its own acknowledgement and linked task in one `ack` call with task options; use `task set` separately for later updates.
 
 ```bash
 arena-preview ack <id> '<Markdown>'
@@ -86,8 +86,8 @@ ALWAYS report a workaround or bypass through a preview report when it bypasses a
 
 ALWAYS report a reproducible skill defect or unresolved skill failure through a preview report, with evidence and a suggested fix; for a corrected routine command-input validation error, give a brief notice instead of a separate report or rule proposal.
 
-- Run `task-list` at turn start.
-- Before implementation, record approved work with `task <kebab-title-id> "<title>" [details ...] --task-type <type>`, put the current item first with `--order 1`, and update its status (`upcoming` or `finished`, no other value) and details as work changes; in every ack, put the task ID in backticks so the log links it.
+- Run `task list` at turn start.
+- Before implementation, record approved work with `task set <kebab-title-id> "<title>" [details ...] --task-type <type>`, put the current item first with `--order 1`, and update its status (`upcoming` or `finished`, no other value) and details as work changes; in every ack, put the task ID in backticks so the log links it.
 - Set `--task-type` to `report`, `code`, `docs`, `ops`, or `misc` when creating a task. No default applies. Keep the stored type when an update omits it.
 - For a task from a note or report answer, use `--msg-id <full-message-id>`; queue and acknowledge it in the same tool block.
 - The task marker does not replace `ack`.
@@ -101,13 +101,13 @@ When a task creates a commit, MUST add the landed commit's subject and short has
 
 ## Publish reports and forms
 
-Report carriage always goes through this skill: a short answer goes in the `ack` reply; a long answer or a question goes in a fielded report. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports with `arena-preview publish`; require its stored-revision and rendered-report checks to pass before announcing publication.
+Report carriage always goes through this skill: a short answer goes in the `ack` reply; a long answer or a question goes in a fielded report. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports with `arena-preview report publish`; require its stored-revision and rendered-report checks to pass before announcing publication.
 
 ```bash
-arena-preview publish <source.md> --id <id> --title <title>
+arena-preview report publish <source.md> --id <id> --title <title>
 ```
 
-Republish the same ID after each source update; if answers exist, use a new ID. List stale ones with `stale-reports`; remove one with `unpublish <id>`; its answers and source survive for a new ID. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Write an option set's custom slot inside the group, as `- ( ) custom: ___`.
+Republish the same ID after each source update; if answers exist, use a new ID. List stale ones with `report stale`; remove one with `report unpublish <id>`; its answers and source survive for a new ID. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Write an option set's custom slot inside the group, as `- ( ) custom: ___`.
 
 `read` lists report submissions as `kind: report`. Acknowledge each submission ID separately, including newer answers to an already answered form. Publishing a report never acknowledges a submission.
 

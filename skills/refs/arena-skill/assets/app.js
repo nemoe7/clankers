@@ -1374,7 +1374,7 @@ function showClock() {
 }
 showClock();
 setInterval(showClock, 1000);
-// Copy state exports notes, tasks, and report answers for `import-state`.
+// Copy state exports notes, tasks, and report answers for `state import`.
 // One request carries the server's NDJSON, which matches the save file.
 const copyStateButton = $('#copy-state');
 copyStateButton.addEventListener('click', async () => {
