@@ -77,7 +77,7 @@
 - Work while tasks remain; end when verified and stopped.
 - Run the repo's checks before every push, detached, NEVER inline; push only green, and an inline run counts as skipping the gate.
 - Read each gate's passed or failed line; a pipe that hides the verdict counts as skipping it. The wait scopes the next task.
-- After each push, watch the PR's checks to conclusion with `gh pr checks <PR> --watch`.
+- After a push, watch the latest pushed PR head to conclusion with `gh pr checks <PR> --watch`; replace superseded watches, continue other work, and read the latest verdict before turn end.
 - A fresh push can leave the checks list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand.
 - Stop and report HTTP 401 or any other command/API error; pending checks are not command errors.
 - An empty or absent list proves nothing; failed checks keep work open.
@@ -179,7 +179,7 @@
 - For Chromium work, use the [recipe](.agents/skills/arena-skill/references/REFERENCE.md#chromium).
 - For ui work, verify changes with screenshots taken by that pinned chromium package and read the rendered result before the change counts as landed.
 - Install dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
-- Start a background test or PR-check run on a stable tree, and NEVER edit the files it covers while it runs.
+- Start each local gate on a stable tree; NEVER edit its covered root files while it runs. A remote PR CI watch does not freeze the working tree.
 - The freeze covers the root tree only: a queued task that edits other files starts a worktree while the root gate runs (`arena-preview worktree start`), never read-only tracing.
 - A >=10-second run is long; MUST use `arena-preview route <name> -- <command>`.
 - NEVER sleep during a background gate.

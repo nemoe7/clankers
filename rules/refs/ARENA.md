@@ -85,7 +85,7 @@
 - Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) detached, NEVER inline.
 - Push only when they pass; an inline run counts as skipping the gate, whatever its speed.
 - Read the passed or failed line of every gate you run; a pipe that hides the verdict counts as skipping the gate.
-- After every push, watch the open PR's checks to conclusion with `gh pr checks <PR> --watch`; scope the next task while it runs.
+- After a push, watch the latest pushed head of the open PR to conclusion with `gh pr checks <PR> --watch`; replace a superseded head's watch with the latest head's watch, continue other work, and read the latest verdict before ending the turn.
 - A fresh push can leave the list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand.
 - Stop on HTTP 401 or any other command/API error, and report it.
 - Pending checks are not command errors.
@@ -239,7 +239,7 @@
 - For ui work, verify changes with screenshots taken by that pinned chromium package and read the rendered result before the change counts as landed.
 - Install repository tooling such as dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
 - Treat a run that takes 10 seconds or more as a long run.
-- Start a long run, a test suite or a check wait, on a stable tree, and NEVER edit the files it covers while it runs.
+- Start each local background gate on a stable tree and do not edit its covered root files while it runs; a remote PR CI watch does not freeze the working tree.
 - The freeze covers the root tree only: with queued tasks that edit other files, start a worktree for that work while the root gate runs (`arena-preview worktree start`), and do not wait read-only.
 - NEVER sleep while a gate runs in the background.
 - When only the task with a running gate remains, MUST mark that task blocked.

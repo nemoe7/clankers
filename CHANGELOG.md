@@ -8,6 +8,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena PR checks: reset the registration window on a new head. Continue root work during remote CI and retain local gate freezes.
 - Arena report-removal guide: release linked task blocks on an answer or unpublishing. Do not treat removal as approval.
 - Arena gate wait: record a live local run and its blocked task without a report. Keep fielded reports for other blocks.
 - Preview task drag: remove the end-drop card. Keep an accented insertion line, list-background end drops, cancellation, and failed-write recovery.

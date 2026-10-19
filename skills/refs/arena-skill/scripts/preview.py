@@ -953,7 +953,7 @@ def pr_checks_discovery(
 ):
   """Observe visible checks for the full window before the requested CLI watch.
 
-  Pin the head and fail on a moved head, read fault, empty rollup, or non-green deadline state.
+  Reset the window on a new head. Fail on a read fault, empty rollup, or non-green deadline state.
   Success is best effort: checks can still appear after this window.
   """
   pause = sleep or time.sleep
@@ -968,18 +968,33 @@ def pr_checks_discovery(
     return "no branch pull request to watch"
   started = time.monotonic()
   polls = (seconds + step - 1) // step + 1
-  for poll in range(polls):
+  poll = 0
+  while True:
     if poll:
       head = pr_head_sha(root, branch, slug)
       if head is None:
         return "gh did not read the pull request head"
+      if not head:
+        return "no branch pull request to watch"
       if head != pinned:
-        return f"the pull request head moved from {pinned[:7]} to {head[:7]}"
+        pinned = head
+        started = time.monotonic()
+        poll = 0
     rollup = pr_check_rollup(root, slug, pinned)
     if rollup is None:
       return "gh did not read the check rollup"
     remaining = seconds - (time.monotonic() - started)
     if remaining <= 0 or poll + 1 == polls:
+      head = pr_head_sha(root, branch, slug)
+      if head is None:
+        return "gh did not read the pull request head"
+      if not head:
+        return "no branch pull request to watch"
+      if head != pinned:
+        pinned = head
+        started = time.monotonic()
+        poll = 0
+        continue
       state, count = rollup
       if not count:
         return f"no visible checks appeared on {pinned[:7]} within {seconds} seconds"
@@ -987,13 +1002,9 @@ def pr_checks_discovery(
         return (
           f"visible checks are {state.lower()} on {pinned[:7]} after {seconds} seconds"
         )
-      head = pr_head_sha(root, branch, slug)
-      if head is None:
-        return "gh did not read the pull request head"
-      if head != pinned:
-        return f"the pull request head moved from {pinned[:7]} to {head[:7]}"
       return None
     pause(min(step, remaining))
+    poll += 1
 
 
 # The record kinds whose IDs are session-local: minted here, unresolvable elsewhere.

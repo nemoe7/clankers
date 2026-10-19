@@ -8512,10 +8512,13 @@ def test_pr_check_wait_rechecks_the_head_before_success():
     with (
       patch("preview.repo_slug", return_value="owner/repo"),
       patch(
-        "preview.subprocess.run", side_effect=fake_gh(["abc1234", "def5678"], [3], [])
+        "preview.subprocess.run",
+        side_effect=fake_gh(["abc1234", "def5678"], [3, 0], []),
       ),
     ):
-      assert "head moved" in preview.pr_checks_discovery(root, seconds=0)
+      assert "no visible checks appeared on def5678" in preview.pr_checks_discovery(
+        root, seconds=0
+      )
 
 
 def test_the_pr_check_wait_fails_when_no_check_appears(capsys):
@@ -8544,8 +8547,8 @@ def test_the_pr_check_wait_fails_when_no_check_appears(capsys):
     assert not [call for call in calls if call[0] != "gh"], "the watch never ran"
 
 
-def test_the_pr_check_wait_fails_on_a_moved_head(capsys):
-  """A head that moves during the window fails the wait, because the pin no longer holds."""
+def test_the_pr_check_wait_hands_off_to_a_moved_head(capsys):
+  """A new head receives a full registration window and its own verdict."""
   with tempfile.TemporaryDirectory() as directory:
     root = pr_check_root(directory)
     calls = []
@@ -8555,7 +8558,7 @@ def test_the_pr_check_wait_fails_on_a_moved_head(capsys):
       patch("preview.repo_slug", return_value="owner/repo"),
       patch(
         "preview.subprocess.run",
-        side_effect=fake_gh(["abc1234", "def5678"], [0], calls),
+        side_effect=fake_gh(["abc1234", "def5678"], [0, 3], calls),
       ),
       patch("preview.time.sleep", sleeps.append),
       patch("preview.time.monotonic", return_value=0),
@@ -8564,9 +8567,13 @@ def test_the_pr_check_wait_fails_on_a_moved_head(capsys):
         directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]
       )
     out = capsys.readouterr().out
-    assert code == 1, out
-    assert "head moved" in out, out
-    assert not [call for call in calls if call[0] != "gh"], "the watch never ran"
+    assert code == 0, out
+    assert "watched" in out, out
+    assert sleeps == [preview.PR_CHECK_DISCOVERY_STEP] * 7
+    reads = [call for call in calls if any("statusCheckRollup" in arg for arg in call)]
+    assert sum("sha=abc1234" in call for call in reads) == 1
+    assert sum("sha=def5678" in call for call in reads) == 7
+    assert len([call for call in calls if call[0] != "gh"]) == 1
 
 
 def test_the_pr_check_wait_fails_on_a_gh_fault(capsys):
