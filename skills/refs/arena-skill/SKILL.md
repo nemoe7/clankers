@@ -146,13 +146,17 @@ https://<backend-host>/v1/<route>?key=<agent-key>&<parameters>
 - The tool fails on a binary response with HTTP 500. The routes below return text or JSON only.
 - Keep every URL honest. The key travels in it, and the fetch layer records it.
 
+- Read `/v1/gh`, `/v1/fetch`, and `/v1/llm` data replies as compact JSON of at most 20 records and 16,000 serialized characters.
+- Request another page with the recorded key only when the task needs data that `complete` and `next` mark as omitted.
+- For unknown GitHub response shapes, use `view=fields`, then select only required JSON-pointer paths with `fields`.
+
 ## Routes
 
 | Route | Parameters | Returns |
 | --- | --- | --- |
-| `/v1/gh` | `key`, `path`, `failed=1` for failed steps only, plus the path's own query | The GitHub API response through the owner's token, or the text tail of a run-log path, or only its failed-step blocks with `failed=1` |
-| `/v1/fetch` | `key`, `url`, `mode`, `encoding`, `gzip`, `stage`, `id`, `index` | Text, JSON with base64, or one staged chunk |
-| `/v1/llm` | `key`, `prompt`, `model`, `system`, `image`, `file`, `ref`, `diff`, `repo`, `max_tokens`, or `id` | A job id, then status and text |
+| `/v1/gh` | `key`, `path`, `failed=1` for failed steps only, plus the path's own query, `fields`, `view=fields`, or returned continuation parameters | Compact JSON records or text, with a bounded next request |
+| `/v1/fetch` | `key`, `url`, `mode`, `encoding`, `gzip`, `stage`, `id`, `index`, or returned continuation parameters | Compact JSON text pages or binary metadata, with explicit bounded chunk reads |
+| `/v1/llm` | `key`, `prompt`, `model`, `system`, `image`, `file`, `ref`, `diff`, `repo`, `max_tokens`, or `id`, or returned continuation parameters | A job id, then status and a bounded text page |
 
 `/v1/health` needs no key, and `/v1/ping` takes `key` and answers the route list with the model state and the caps.
 
@@ -170,6 +174,8 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 
 ## Transfers
 
+Retrieve binary payloads only through returned bounded chunk requests after reading their metadata.
+
 `/v1/fetch` carries binary data as text. Pick the smallest applicable form:
 
 | Form | Parameter | Use for |
@@ -185,6 +191,8 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 - Reassembly: `printf %s "<payload>" | base64 -d >> file.bin`, plus `| gunzip` for a gzip payload. Prefer a text extraction, a smaller range or a summary over a large binary.
 
 ## Model calls
+
+Treat a completed model job as complete output only when its result page has `complete=true`.
 
 `/v1/llm` queues a job and answers 202 with a job id at once. Poll `/v1/llm?id=JOB` until `status` is `done` or `error`, then read `text`.
 

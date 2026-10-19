@@ -8,6 +8,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview proxy guide: bound JSON reads to 20 records and 16,000 characters. Add field discovery, continuation reads, binary metadata, and model-page completion.
 - Preview hook tables: move the section to the maintenance README and use the approved cell wording. Retarget the existing case-label check.
 
 ### Fixed
