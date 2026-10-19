@@ -3323,6 +3323,10 @@ def poll_inbox(store, sleeper=None):
     for index in range(POLL_MAX_LOOPS):
       if time.monotonic() >= deadline:
         break
+      notice = store.take_interrupt()
+      if notice:
+        print(notice, flush=True)
+        return 0
       listing = store.read(include_quiet=False)
       if listing["pending"]:
         full = store.read()
@@ -5169,7 +5173,7 @@ class Store:
       if task:
         header = f"VIOLATION: task {task['id']}"
     notice = (
-      f"{header}\nThis Bash call was blocked. Read ARENA.md, root AGENTS.md, "
+      f"{header}\nRead ARENA.md, root AGENTS.md, "
       "every nested AGENTS.md, and arena-skill SKILL.md in full again, then fix "
       "the violation before continuing."
     )
@@ -6761,7 +6765,7 @@ def main():
   init.add_argument("--tz", help="An IANA zone for CLI stamps. The TZ env still wins")
   commands.add_parser("read", help="Print every pending note, answer and upload")
   commands.add_parser(
-    "interrupt-tick", help="Consume the header request and stop one Bash call"
+    "interrupt-tick", help="Read the header request without blocking Bash"
   )
   commands.add_parser(
     "skills",
@@ -7090,7 +7094,7 @@ def main():
       notice = Store(state_dir, create=False).take_interrupt()
       if notice:
         print(notice, file=sys.stderr)
-        return 1
+        return 0
       return 0
     if args.command == "skills":
       print_skills()

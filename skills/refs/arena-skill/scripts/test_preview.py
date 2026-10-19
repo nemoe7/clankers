@@ -9476,7 +9476,7 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
     try:
       assert request("POST", "/api/agent-interrupt", "{}")[0] == 415
       instruction = (
-        "This Bash call was blocked. Read ARENA.md, root AGENTS.md, every nested "
+        "Read ARENA.md, root AGENTS.md, every nested "
         "AGENTS.md, and arena-skill SKILL.md in full again, then fix the violation "
         "before continuing."
       )
@@ -9501,7 +9501,7 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
           patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(store.path.parent)}),
           patch.object(sys, "argv", [str(Path(preview.__file__)), "interrupt-tick"]),
         ):
-          assert preview.main() == 1
+          assert preview.main() == 0
           message = capsys.readouterr().err
           assert message.splitlines() == [expected, instruction]
           assert preview.main() == 0
@@ -9953,3 +9953,22 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
       finally:
         server.shutdown()
         thread.join()
+
+
+def test_preview_violation_wakes_poll_and_does_not_wait(capsys):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+
+    def flag_during_wait(_):
+      store.request_interrupt("notes")
+
+    with (
+      patch("preview.pr_check_watch"),
+      patch("preview.run_notices", return_value=False),
+    ):
+      assert preview.poll_inbox(store, sleeper=flag_during_wait) == 0
+    output = capsys.readouterr().out
+    assert "VIOLATION" in output
+    assert "This Bash call was blocked" not in output
+    assert not store.state()["agent_interrupt_pending"]
+    assert not store.polling()

@@ -1025,7 +1025,7 @@ def test_pr_state_classifier_keeps_payloads_separate_from_shell_code():
       assert bool(preview_module.pr_state_warning(command)) == blocked, command
 
 
-def test_header_interrupt_precedes_hook_bypasses():
+def test_header_flag_does_not_change_bash_gate_verdicts():
   for command, line in [
     ("printf reached", "arena-preview read"),
     ("true", "true"),
@@ -1033,16 +1033,17 @@ def test_header_interrupt_precedes_hook_bypasses():
     with tempfile.TemporaryDirectory() as directory:
       root = Path(directory)
       store = preview_module.Store(root, create=True)
+      baseline = run(command, state=root, line=line)
       notice = "Header reread request"
       store.set_meta("agent_interrupt", notice)
       result = run(command, state=root, line=line)
-      assert result.returncode == 130, result.stderr
-      assert notice in result.stderr
-      assert "reached" not in result.stdout
-      assert store.meta_value("agent_interrupt") is None
+      assert result.returncode == baseline.returncode, result.stderr
+      assert result.stdout == baseline.stdout
+      assert notice not in result.stderr
+      assert store.meta_value("agent_interrupt") == notice
 
 
-def test_reread_waits_for_the_agent_shell():
+def test_violation_flag_waits_for_poll_not_the_agent_shell():
   for line, routed in (
     ("bash -l /tmp/arena-workspace/procs/preview/run.cmd", False),
     ("ss -ltn", False),
@@ -1064,8 +1065,14 @@ def test_reread_waits_for_the_agent_shell():
       assert store.state()["agent_interrupt_pending"], line
       log = calls.read_text() if calls.exists() else ""
       assert "interrupt-tick" not in log, (line, log)
-      agent = run("printf agent-work", state=root)
-      assert agent.returncode == 130, agent.stderr
-      assert "agent-work" not in agent.stdout
-      assert "Read ARENA.md" in agent.stderr
+      agent = run("printf agent-work", state=root, line="arena-preview read")
+      assert agent.returncode == 0, agent.stderr
+      assert agent.stdout == "agent-work"
+      assert "Read ARENA.md" not in agent.stderr
+      assert store.state()["agent_interrupt_pending"]
+      with (
+        patch("preview.pr_check_watch"),
+        patch("preview.run_notices", return_value=False),
+      ):
+        assert preview_module.poll_inbox(store) == 0
       assert not store.state()["agent_interrupt_pending"]
