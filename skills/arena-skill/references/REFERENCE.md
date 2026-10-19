@@ -91,41 +91,6 @@ When an acknowledgement refers to a report or task, use `ack` and put its exact 
 
 The page's Message log toolbar carries a Skip poll button. A listing that carries a `skip_poll` stamp reports it: the poll that finds it consumes it, prints `SKIP: owner pressed Skip poll. End the turn, no second poll.` on stdout, and the turn ends there. Never poll again after a skip. While a detached run has no exit, the press waits: the poll runs its span, the stamp stays armed, and the run's finish breaks the wait first.
 
-## The gate's cases
-
-| Case | Trigger | Answer |
-| --- | --- | --- |
-| `pr-state` | visible `gh pr close`, `gh pr reopen`, `gh pr merge`, equivalent API writes, or destructive head-ref operations | `exit 130` before bypasses. A read line skips the veto spawn. Reads, comments, title/body edits, and permitted working-branch pushes pass |
-| `shell-shape` | a caller that is not `bash`, `sh`, `dash`, `ksh` or `zsh` | pass, so a hosted process keeps its shell |
-| `shell-line` | every gated shell | the command line is read once per shell, so a command costs no read |
-| `platform-shell` | the platform's probe or its own hosted process | pass, and mark the shell once |
-| `task-reminder` | `git commit`, `git push` or `gh pr checks` | the task-list notice once per shell, then the line runs |
-| `main-moved` | `git commit` or `git push` | the drift check once per shell, from local refs at the commit line and with a fresh fetch at the push line, then the line runs |
-| `route-marker` | a shell the gate started itself (`ARENA_PREVIEW_ROUTE=1`) | pass, so a detached run never matches its own family |
-| `idle-wait` | a line that names both a `sleep` and an `arena-preview` call | `exit 130` before the sleep, so the turn takes queued work. A sleep on its own runs |
-| `long-run` | `gh pr checks`, `gh run watch`, or a test runner head (`pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test` and the rest) | the call ends clean and the run continues, or `exit 130` when the start fails. Any run of 10 seconds or more is a long run too, and MUST use `route` |
-| `bare-path` | a line that spells out the installed `preview.py` or `arena-preview` | the bare-call notice once per shell, then the line runs |
-| `proxy-route` | a read of code-scanning alerts or workflow run logs | the proxy notice once per shell, then the line runs |
-| `ack-ticks` | an `ack` whose inline text holds a backtick inside double quotes | the warning lands before the call runs |
-| `serve-port` | a `serve` on a port other than 8000 | the warning lands before the call runs |
-| `egress` | `curl`, `wget`, `git clone`, `git fetch` or `git ls-remote` | the egress notice lands before the call runs |
-| `commit-id` | a `git commit` whose staged message carries a session ID | `exit 130`, with the message unchanged |
-| `inert-line` | a line of the families the gate ignores | pass, with no count and no stamp |
-| `push-checkpoint` | a `git push` with a pending inbox | `exit 130` until the ack |
-| `inbox-line` | a line whose every piece is an inbox call | pass, whatever the call count holds |
-| `call-count` | a line over the call threshold with a pending inbox | `exit 130` until the ack |
-
-A blocked call repeats its reason on stderr, and every case above answers one bash call: the gate never holds the turn.
-
-Every message carries one class. The prefix names the class, and the class fixes the stream and the exit code.
-
-| Class | Prefix | Stream and exit |
-| --- | --- | --- |
-| advisory | `arena-preview gate:` | stderr, 0, and the call still runs |
-| refusal | `Preview error:` | stderr, 1 |
-| verdict | an all-caps opener, such as `WAIT BLOCKED:` or `READ INBOX NOW.` | stdout for the gate and a poll, stderr for a wait, 130 or 1, and 0 when a poll line hands the turn back |
-| hint | `arena-preview:` | stderr, 0, or 2 from the wrapper |
-
 ## Tasks
 
 Task IDs have 1–64 lowercase letters, digits or hyphens and start with a letter or digit; use a short kebab-case title. Titles have at most 200 characters. Use at most 40 task details, each on one line of 120 characters or fewer. Existing IDs update; omitted fields keep stored values.

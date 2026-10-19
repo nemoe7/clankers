@@ -252,7 +252,7 @@ def run_in(
   )
 
 
-REFERENCE = ROOT / "skills" / "refs" / "arena-skill" / "references" / "REFERENCE.md"
+REFERENCE = ROOT / "maintenance" / "README.md"
 
 
 def test_the_reference_table_holds_every_gate_case() -> None:
@@ -262,7 +262,7 @@ def test_the_reference_table_holds_every_gate_case() -> None:
   assert len(labels) >= 10, sorted(labels)
   reference = REFERENCE.read_text(encoding="utf-8")
   section = reference.split("## The gate's cases", 1)
-  assert len(section) == 2, "REFERENCE.md must carry the case table"
+  assert len(section) == 2, "maintenance/README.md must carry the case table"
   section = section[1].split("\n## ", 1)[0]
   rows = set(re.findall(r"^\| `([a-z][a-z0-9-]*)` \|", section, re.MULTILINE))
   assert rows == labels, (

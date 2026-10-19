@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-19
+
+### Changed
+
+- Preview hook tables: move the section to the maintenance README and use the approved cell wording. Retarget the existing case-label check.
+
 ## 2026-10-18
 
 ### Added
