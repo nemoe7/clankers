@@ -13,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview autosave: on a compare mismatch whose server save continues from the saved receipt, show an ahead notice. Its Overwrite button runs force save. Keep the earlier notice for an unrelated save pair.
 - Preview tasks: show only a task title in code blue while its linked gate is live. Use the same native list dot for draggable and finished tasks. Keep report waits muted and the rest of the row unchanged.
 - Preview routed runs: link live gates to tasks, add `route --task`, and remove manual `task --blocked`. Derive blocking until completion or orphan reconciliation, and guard destructive task changes.
 - Arena fielded reports: keep each question beside no more than one short paragraph or three bullets of relevant context on one vertical screen. Do not collect questions at a long report's end.

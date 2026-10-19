@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.52
+// @name         Arena.ai | NemoUtils | v1.10.53
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.52
+// @version      1.10.53
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2788,6 +2788,12 @@
         (known.beforelastsave || null) === (body.beforelastsave || null);
     }
 
+    function serverAhead(known, body) {
+      // The server save chain continues from the saved receipt, so the server saved later.
+      return Boolean(known) && (body.beforelastsave || null) === (known.lastsave || null) &&
+        (body.lastsave || null) !== (known.lastsave || null);
+    }
+
     function saveStampPair(known) {
       return (known && known.lastsave || "none") + "/" + (known && known.beforelastsave || "none");
     }
@@ -2846,8 +2852,14 @@
         }
         var inSync = sameSaves(baseline, body);
         if (!force && !inSync && !(initialFile && !baseline)) {
-          stateError("The saved and current states differ. Nothing was written. Review both states before using Force save.",
-            null, null, "autosave-compare", undefined, undefined, sameSaveDetail(baseline, body));
+          if (serverAhead(baseline, body)) {
+            stateError("State mismatch. Overall state is ahead.", "Overwrite",
+              function () { fetchStateFile(true, true); }, "autosave-compare",
+              undefined, undefined, sameSaveDetail(baseline, body));
+          } else {
+            stateError("The saved and current states differ. Nothing was written. Review both states before using Force save.",
+              null, null, "autosave-compare", undefined, undefined, sameSaveDetail(baseline, body));
+          }
           return;
         }
         if (!force && inSync && body.digest === (baseline && baseline.digest)) return;
