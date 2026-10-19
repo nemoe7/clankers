@@ -1429,12 +1429,13 @@ class Store:
 				elif completed_at is None:completed_at=stamp
 			else:completed_at=None
 			if blocked is None:blocked=stored['blocked']if stored else False
+			report_wait=report_id is not None
 			if report_id is None:report_id=stored.get('report_id')if stored else None
 			if task_type is None:
 				if stored is None and not restoring:raise ValueError('A new task needs an explicit type')
 				task_type=(stored.get('type')if stored else None)or TASK_MISC
 			if report_id:identifier(report_id)
-			if report_id and blocked and self.report_has_answers(db,report_id):blocked=False
+			if report_wait and report_id and blocked and self.report_has_answers(db,report_id):blocked=False
 			if report_id and blocked and(not stored or not stored['blocked']or stored.get('report_id')!=report_id):
 				report=db.execute('SELECT markdown FROM reports WHERE id = ?',(report_id,)).fetchone()
 				if report is not None and not parse_fields(report['markdown'])[1]:raise ValueError('A blocked task needs a report with answer fields')

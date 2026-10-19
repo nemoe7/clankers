@@ -4296,6 +4296,7 @@ class Store:
         completed_at = None
       if blocked is None:
         blocked = stored["blocked"] if stored else False
+      report_wait = report_id is not None
       if report_id is None:
         report_id = stored.get("report_id") if stored else None
       if task_type is None:
@@ -4304,7 +4305,9 @@ class Store:
         task_type = (stored.get("type") if stored else None) or TASK_MISC
       if report_id:
         identifier(report_id)
-      if report_id and blocked and self.report_has_answers(db, report_id):
+      if (
+        report_wait and report_id and blocked and self.report_has_answers(db, report_id)
+      ):
         # The wait is over before it starts when the report already has its answer.
         blocked = False
       if (

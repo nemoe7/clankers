@@ -3968,6 +3968,15 @@ def test_task_report_link_unblocks_on_answer():
       task_type="misc",
     )
     assert late["blocked"] is False
+    gate = link_store.write_task("ship", blocked=True)
+    assert gate["blocked"] is True and gate["report_id"] == "pick"
+    updated = link_store.write_task("ship", details=["Wait for the running gate"])
+    assert updated["blocked"] is True and updated["report_id"] == "pick"
+    assert link_store.write_task("ship", blocked=False)["blocked"] is False
+    assert link_store.write_task("late", blocked=True)["blocked"] is True
+    assert (
+      link_store.write_task("late", blocked=True, report_id="pick")["blocked"] is False
+    )
 
 
 def test_report_linked_task_sorts_ahead_in_its_status():
