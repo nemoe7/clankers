@@ -11,6 +11,7 @@ const PASTE_CHAR_LIMIT = 1500;
 const BINARY_TIMEOUT = 600_000;
 let pending = null;
 let stateBusy = false;
+let stateAgain = false;
 let reportRequest = 0;
 let listSignature = '';
 let lastState = null;
@@ -366,9 +367,104 @@ if (pendingFiles().length) {
   status.textContent = `Reselect ${pendingFiles().length} file${pendingFiles().length === 1 ? '' : 's'} before retrying; this page does not store file bytes.`;
 }
 
+let liveSocket = null;
+let socketRetry = null;
+let pollTimer = null;
+let lastSocketMessage = 0;
+let socketSequence = 0;
+const socketCalls = new Map();
+function startPolling() {
+  if (pollTimer === null) pollTimer = setInterval(refreshState, 3000);
+}
+function socketRefresh() {
+  if (stateBusy) stateAgain = true;
+  else void refreshState();
+}
+function connectSocket() {
+  if (typeof WebSocket !== 'function' || liveSocket && liveSocket.readyState < 2) return;
+  const url = new URL(window.location.href);
+  if (url.searchParams.get('transport') === 'poll') return;
+  url.pathname = '/api/ws';
+  url.search = '';
+  url.hash = '';
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  let socket;
+  try { socket = new WebSocket(url); } catch { return; }
+  liveSocket = socket;
+  const deadline = setTimeout(() => socket.close(), 10000);
+  socket.addEventListener('open', () => {
+    clearTimeout(deadline);
+    lastSocketMessage = Date.now();
+    clearInterval(pollTimer);
+    pollTimer = null;
+    socketRefresh();
+  });
+  socket.addEventListener('message', event => {
+    if (liveSocket !== socket) return;
+    try {
+      const value = JSON.parse(event.data);
+      lastSocketMessage = Date.now();
+      if (value.type === 'heartbeat') { socket.send(JSON.stringify({type: 'pong'})); return; }
+      if (value.type === 'change') { socketRefresh(); return; }
+      if (value.type !== 'response') throw new Error('Unknown WebSocket message');
+      const pending = socketCalls.get(value.id);
+      if (!pending) return;
+      if (!Number.isInteger(value.status) || value.status < 200 || value.status > 599 || typeof value.body !== 'string') {
+        throw new Error('Invalid WebSocket reply');
+      }
+      const response = new Response(value.status === 204 ? null : value.body,
+        {status: value.status, headers: {'Content-Type': value.contentType || 'application/json'}});
+      socketCalls.delete(value.id);
+      clearTimeout(pending.timer);
+      pending.resolve(response);
+    } catch { socket.close(1002); }
+  });
+  socket.addEventListener('error', () => socket.close());
+  socket.addEventListener('close', () => {
+    clearTimeout(deadline);
+    if (liveSocket !== socket) return;
+    liveSocket = null;
+    for (const pending of socketCalls.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new TypeError('WebSocket closed before a reply'));
+    }
+    socketCalls.clear();
+    startPolling();
+    void refreshState();
+    clearTimeout(socketRetry);
+    socketRetry = setTimeout(connectSocket, 1000);
+  });
+}
+function socketRequest(path, options, timeoutMs) {
+  const socket = liveSocket;
+  const id = String(++socketSequence);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socketCalls.delete(id);
+      reject(new TypeError('WebSocket reply timed out'));
+      socket.close();
+    }, timeoutMs);
+    socketCalls.set(id, {resolve, reject, timer});
+    try { socket.send(JSON.stringify({id, path, method: options.method || 'GET', headers: options.headers || {}, body: options.body || ''})); }
+    catch (error) {
+      socketCalls.delete(id);
+      clearTimeout(timer);
+      reject(error);
+      socket.close();
+    }
+  });
+}
+function checkSocket() {
+  if (liveSocket?.readyState === 1 && Date.now() - lastSocketMessage > 30000) liveSocket.close();
+}
+
 // Short requests keep their ten-second timer. Binary transfers have a longer deadline and no
 // automatic retry after a lost response: the server may have saved the bytes already.
 async function attempt(path, options, timeoutMs) {
+  if (liveSocket?.readyState === 1 && path.startsWith('/api/') &&
+      (options.body === undefined || typeof options.body === 'string')) {
+    return socketRequest(path, options, timeoutMs);
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -924,6 +1020,7 @@ async function refreshState() {
   finally {
     stateBusy = false;
     pollCommits = null;
+    if (stateAgain) { stateAgain = false; socketRefresh(); }
     if (queueReady && (lastState?.fetch_jobs || []).some(item => item.approval === 'approved'
       && (item.status === 'queued'
         || (item.status === 'fetching' && Date.parse(item.lease_until) <= Date.now())))) {
@@ -2526,7 +2623,9 @@ $('#skip-poll').addEventListener('click', async () => {
   finally { button.disabled = false; }
 });
 refreshState();
-setInterval(refreshState, 3000);
+startPolling();
+connectSocket();
+setInterval(checkSocket, 5000);
 // The wait timer repaints between state refreshes, so the seconds move without a request.
 setInterval(paintConnection, 1000);
 // Render mints each age label once, so a long-open page keeps a stale minute count.

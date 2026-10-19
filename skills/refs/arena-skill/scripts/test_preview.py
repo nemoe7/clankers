@@ -10169,3 +10169,157 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
       finally:
         server.shutdown()
         thread.join()
+
+
+def test_websocket_transport(tmp_path, monkeypatch):
+  monkeypatch.setattr(preview, "WS_TICK_SECONDS", 0.02, raising=False)
+  monkeypatch.setattr(preview, "WS_HEARTBEAT_SECONDS", 0.1, raising=False)
+  store = preview.Store(tmp_path / "state", create=True)
+  server = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+  worker = threading.Thread(target=server.serve_forever, daemon=True)
+  worker.start()
+  peers = []
+
+  def connect(origin=None):
+    peer = socket.create_connection(server.server_address, timeout=3)
+    peers.append(peer)
+    host = f"127.0.0.1:{server.server_port}"
+    nonce = base64.b64encode(bytes(range(16))).decode()
+    peer.sendall(
+      (
+        f"GET /api/ws HTTP/1.1\r\nHost: {host}\r\n"
+        "Connection: keep-alive, Upgrade\r\nUpgrade: websocket\r\n"
+        f"Sec-WebSocket-Key: {nonce}\r\nSec-WebSocket-Version: 13\r\n"
+        f"Origin: {origin or 'http://' + host}\r\n\r\n"
+      ).encode()
+    )
+    stream = peer.makefile("rb")
+    status = int(stream.readline().split()[1])
+    headers = {}
+    while (line := stream.readline()) not in (b"\r\n", b""):
+      name, value = line.decode().split(":", 1)
+      headers[name.lower()] = value.strip()
+    return peer, stream, status, headers
+
+  def send(peer, payload, opcode=1, final=True, masked=True):
+    data = (
+      payload
+      if isinstance(payload, bytes)
+      else json.dumps(payload, ensure_ascii=False).encode()
+    )
+    size = len(data)
+    header = bytes([(0x80 if final else 0) | opcode])
+    flag = 0x80 if masked else 0
+    header += (
+      bytes([flag | size])
+      if size < 126
+      else bytes([flag | 126]) + size.to_bytes(2, "big")
+    )
+    mask = b"mask"
+    peer.sendall(
+      header
+      + (mask if masked else b"")
+      + bytes(value ^ (mask[i % 4] if masked else 0) for i, value in enumerate(data))
+    )
+
+  def receive(peer, stream, kind=None, request_id=None):
+    for _ in range(30):
+      head = stream.read(2)
+      assert len(head) == 2
+      opcode, size = head[0] & 15, head[1] & 127
+      assert not head[1] & 128
+      if size in (126, 127):
+        size = int.from_bytes(stream.read(2 if size == 126 else 8), "big")
+      data = stream.read(size)
+      if opcode != 1:
+        return opcode, data
+      value = json.loads(data)
+      if value.get("type") == "heartbeat":
+        send(peer, {"type": "pong"})
+      if (kind is None or value.get("type") == kind) and (
+        request_id is None or value.get("id") == request_id
+      ):
+        return value
+    raise AssertionError("Missing WebSocket event")
+
+  try:
+    for origin in ("https://elsewhere.invalid", "https://["):
+      denied, stream, status, _ = connect(origin)
+      assert status == 403
+      stream.close()
+      denied.close()
+    peer, stream, status, headers = connect()
+    assert status == 101
+    expected = base64.b64encode(
+      hashlib.sha1(
+        base64.b64encode(bytes(range(16))) + b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+      ).digest()
+    ).decode()
+    assert headers["sec-websocket-accept"] == expected
+    assert receive(peer, stream, "change")["type"] == "change"
+    send(
+      peer,
+      {
+        "id": "write",
+        "method": "POST",
+        "path": "/api/notes",
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps({"id": "ws-note", "text": "socket write"}),
+      },
+    )
+    answer = receive(peer, stream, "response", "write")
+    assert answer["status"] == 201 and json.loads(answer["body"])["id"] == "ws-note"
+    preview.Store(tmp_path / "state").note("cli-note", "independent connection")
+    receive(peer, stream, "change")
+    send(peer, {"id": "read", "method": "GET", "path": "/api/state"})
+    state = json.loads(receive(peer, stream, "response", "read")["body"])
+    assert {"ws-note", "cli-note"} <= {note["id"] for note in state["notes"]}
+    assert receive(peer, stream, "heartbeat")["type"] == "heartbeat"
+    fragmented = json.dumps(
+      {"id": "fragment", "method": "GET", "path": "/api/state"}
+    ).encode()
+    send(peer, fragmented[:8], final=False)
+    send(peer, b"ping", opcode=9)
+    assert receive(peer, stream) == (10, b"ping")
+    send(peer, fragmented[8:], opcode=0)
+    assert receive(peer, stream, "response", "fragment")["status"] == 200
+    send(peer, b"{}", masked=False)
+    opcode, data = receive(peer, stream)
+    assert opcode == 8 and int.from_bytes(data[:2], "big") == 1002
+    stream.close()
+    peer.close()
+    peer, stream, status, _ = connect()
+    assert status == 101
+    receive(peer, stream, "change")
+    send(peer, b"\xff")
+    opcode, data = receive(peer, stream)
+    assert opcode == 8 and int.from_bytes(data[:2], "big") == 1007
+    stream.close()
+    for payload, opcode, expected in [
+      (b"bytes", 2, 1003),
+      (b"x" * 126, 9, 1002),
+      (b"{}", 0, 1002),
+    ]:
+      peer, stream, status, _ = connect()
+      assert status == 101
+      receive(peer, stream, "change")
+      send(peer, payload, opcode=opcode)
+      code, data = receive(peer, stream)
+      assert code == 8 and int.from_bytes(data[:2], "big") == expected
+      stream.close()
+      peer.close()
+    peer, stream, status, _ = connect()
+    assert status == 101
+    receive(peer, stream, "change")
+    peer.sendall(
+      b"\x81\xff" + (preview.WS_MAX_MESSAGE + 1).to_bytes(8, "big") + b"mask"
+    )
+    code, data = receive(peer, stream)
+    assert code == 8 and int.from_bytes(data[:2], "big") == 1009
+    stream.close()
+  finally:
+    for peer in peers:
+      peer.close()
+    server.shutdown()
+    worker.join()
+    server.server_close()
