@@ -784,6 +784,8 @@ POLL_WAIT_SECONDS=1799
 POLLING_META='polling_at'
 POLL_SINCE_META='polling_since'
 POLLING_FRESH_SECONDS=5.
+POLL_REPEAT_SECONDS=45
+POLL_REPEAT_META='poll_repeat'
 READ_SET_SLOT_META='read_set_slot'
 READ_SET_INTERVAL_MINUTES=20
 SKIP_POLL_META='skip_poll_at'
@@ -1219,6 +1221,8 @@ def route_command(state_dir,name,argv,task_id=None):
 	if not RUN_NAME.fullmatch(name or''):print('arena-preview route: the name takes 1 to 64 letters, digits, dot, dash or underscore.',flush=True);return 2
 	if argv[:1]==['--']:argv=argv[1:]
 	if not argv:print('arena-preview route: name a command after --, for example: route gates -- make check',flush=True);return 2
+	try:clear_poll_repeat(Store(state_dir,create=False))
+	except FileNotFoundError:pass
 	if not detach_run(state_dir,name,argv,task_id=task_id):print(f"arena-preview route: the start of `{name}` failed.",flush=True);return 1
 	print(f"routed {name}: background run. Verdict on later call. {WORKTREE_STEP}",file=sys.stderr,flush=True);return 0
 def run_log_report(state_dir,name):
@@ -1230,6 +1234,15 @@ def run_log_report(state_dir,name):
 	print(f"run {name} done: exit {record['exit']} {record.get('seconds')}s")
 	for line in clean_run_tail(record.get('tail')or[]):print(line)
 	return 0
+def poll_clock():return int(time.time())
+def clear_poll_repeat(store):
+	if store.meta_value(POLL_REPEAT_META):store.set_meta(POLL_REPEAT_META,0)
+def poll_repeat(store):
+	moment=poll_clock();previous=store.meta_value(POLL_REPEAT_META);store.set_meta(POLL_REPEAT_META,moment)
+	try:recent=previous is not None and 0<=moment-int(previous)<=POLL_REPEAT_SECONDS
+	except ValueError:recent=False
+	if not recent:return None
+	store.request_interrupt('tasks');return'VIOLATION: repeat poll inside 45 seconds. Read the read set, then work the task.'
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
 	deadline=time.monotonic()+POLL_WAIT_SECONDS;listing={'checked_at':None,'pending':[]};print(f"poll waits up to {POLL_WAIT_SECONDS} s. Set the bash tool timeout to 1800 s.",file=sys.stderr,flush=True);store.start_poll();failures=[];stop_checks=threading.Event();threading.Thread(target=pr_check_watch,args=(failures,resolve_repo_root(),stop_checks),daemon=True).start()
@@ -1240,10 +1253,10 @@ def poll_inbox(store,sleeper=None):
 			if notice:print(notice,flush=True);return 0
 			listing=store.read(include_quiet=False)
 			if listing['pending']:full=store.read();print(format_read(full),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);return 0
-			if run_notices(store.path.parent):print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
+			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
 			if failures:print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
-			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
+			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: UNBLOCKED TASK {names}. Start a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
 			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);return 0
 			if index+1<POLL_MAX_LOOPS:
 				remaining=deadline-time.monotonic()
@@ -2566,6 +2579,7 @@ def main():
 			if stale:print(stale,flush=True);return 1
 			return 0
 		store=Store(state_dir,create=args.command in{'serve','init','import-state'});global DISPLAY_ZONE;DISPLAY_ZONE=resolve_display_zone(store)
+		if args.command!='poll':clear_poll_repeat(store)
 		if args.command not in{'serve','init'}:require_server(store)
 		read_only=args.command in{'stale-reports','note-list','report-state'}
 		if not read_only:
@@ -2589,7 +2603,10 @@ def main():
 			record=store.agent_key()
 			if not record:print('No agent key recorded.',file=sys.stderr);return 1
 			print(format_key(record))
-		elif args.command=='poll':require_server(store);store.notice_expired_key();return poll_inbox(store)
+		elif args.command=='poll':
+			require_server(store);store.notice_expired_key();refusal=poll_repeat(store)
+			if refusal:print(refusal,flush=True);return 2
+			return poll_inbox(store)
 		elif args.command=='download-request':print(format_fetch_job(store.enqueue_fetch(args.url,args.allow_proxy,pending=True)))
 		elif args.command=='ack':
 			if args.markdown=='-':raise ValueError('Pass literal inline Markdown; acknowledgement stdin is not supported')

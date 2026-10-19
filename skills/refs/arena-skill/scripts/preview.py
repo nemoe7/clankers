@@ -2173,6 +2173,9 @@ POLLING_META = "polling_at"
 POLL_SINCE_META = "polling_since"
 # The page shows its polling dot while a poll heartbeat is no older than this.
 POLLING_FRESH_SECONDS = 5.0
+# A poll this soon after the last one is spam. The second poll raises a violation.
+POLL_REPEAT_SECONDS = 45
+POLL_REPEAT_META = "poll_repeat"
 # The latest wall-clock slot that created the hidden, agent-blocking read-set note.
 READ_SET_SLOT_META = "read_set_slot"
 READ_SET_INTERVAL_MINUTES = 20
@@ -3428,6 +3431,10 @@ def route_command(state_dir, name, argv, task_id=None):
       flush=True,
     )
     return 2
+  try:
+    clear_poll_repeat(Store(state_dir, create=False))
+  except FileNotFoundError:
+    pass
   if not detach_run(state_dir, name, argv, task_id=task_id):
     print(f"arena-preview route: the start of `{name}` failed.", flush=True)
     return 1
@@ -3469,6 +3476,38 @@ def run_log_report(state_dir, name):
   return 0
 
 
+def poll_clock():
+  """Epoch seconds for the poll repeat check. Tests replace it."""
+  return int(time.time())
+
+
+def clear_poll_repeat(store):
+  """A real command between two polls clears the repeat stamp."""
+  if store.meta_value(POLL_REPEAT_META):
+    store.set_meta(POLL_REPEAT_META, 0)
+
+
+def poll_repeat(store):
+  """Flag a repeated poll as a violation, or return None to run the poll.
+
+  A poll inside the repeat window after an earlier poll is spam. It raises the
+  violation the next Bash call reads, so the turn rereads the read set.
+  """
+  moment = poll_clock()
+  previous = store.meta_value(POLL_REPEAT_META)
+  store.set_meta(POLL_REPEAT_META, moment)
+  try:
+    recent = previous is not None and 0 <= moment - int(previous) <= POLL_REPEAT_SECONDS
+  except ValueError:
+    recent = False
+  if not recent:
+    return None
+  store.request_interrupt("tasks")
+  return (
+    "VIOLATION: repeat poll inside 45 seconds. Read the read set, then work the task."
+  )
+
+
 def poll_inbox(store, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
@@ -3508,6 +3547,8 @@ def poll_inbox(store, sleeper=None):
         return 0
       # A finished gate run ends this poll, so a separate closing poll still ends the turn.
       if run_notices(store.path.parent):
+        # The finished gate ends this poll, so the required closing poll is not spam.
+        clear_poll_repeat(store)
         print("DO NOT END TURN. POLL AGAIN.", flush=True)
         return 0
       # A failed check on the branch pull request ends the wait, so the turn fixes it now.
@@ -3526,9 +3567,10 @@ def poll_inbox(store, sleeper=None):
         listing["tasks"] = open_tasks
         names = ", ".join(item["id"] for item in open_tasks)
         # The early return continues the task. Process the still-up list before the next poll.
-        # The line rides stderr and stdout both, so a turn that reads only stdout still meets the warning.
+        # The line prints on stdout once, and it names the action the agent takes next.
         continue_line = (
-          f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn."
+          f"CONTINUE: UNBLOCKED TASK {names}. Start a worktree with:"
+          " arena-preview worktree start --gate <gate> <name> <destination>."
         )
         print(continue_line, flush=True)
         print(format_task_list(listing.get("tasks", [])), flush=True)
@@ -8068,6 +8110,10 @@ def main():
     )
     global DISPLAY_ZONE
     DISPLAY_ZONE = resolve_display_zone(store)
+    # Any real command but poll clears the repeat stamp, so a note, an ack, or a routed
+    # gate between two polls keeps both polls.
+    if args.command != "poll":
+      clear_poll_repeat(store)
     # Every state command breaks while no preview answers. Only the setup pair
     # stays open so the recovery command itself always runs.
     if args.command not in {"serve", "init"}:
@@ -8137,6 +8183,10 @@ def main():
     elif args.command == "poll":
       require_server(store)
       store.notice_expired_key()
+      refusal = poll_repeat(store)
+      if refusal:
+        print(refusal, flush=True)
+        return 2
       return poll_inbox(store)
     elif args.command == "download-request":
       # The agent path is pending. The browser form keeps its existing immediate queue path.
