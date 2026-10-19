@@ -2771,7 +2771,7 @@ def checked_worktree_name(name):
 
 
 def start_worktree(state_dir, name, destination, gate, allowed, cwd=None):
-  """Create one detached task worktree while a routed root gate runs."""
+  """Create one detached task worktree, beside a routed root gate when one runs."""
   name = checked_worktree_name(name)
   if not allowed or any(not pattern for pattern in allowed):
     raise ValueError("Give at least one --allow path glob.")
@@ -2792,9 +2792,10 @@ def start_worktree(state_dir, name, destination, gate, allowed, cwd=None):
   record_path = worktree_record_path(state_dir, name)
   if record_path.exists():
     raise ValueError(f"A worktree named {name} is already recorded.")
-  running = routed_record(state_dir, gate)
-  if not running.get("detached") or running.get("exit") is not None:
-    raise ValueError(f"Gate {gate} is not running.")
+  if gate is not None:
+    running = routed_record(state_dir, gate)
+    if not running.get("detached") or running.get("exit") is not None:
+      raise ValueError(f"Gate {gate} is not running.")
   base = git_worktree(root, "rev-parse", "HEAD").strip()
   destination.parent.mkdir(parents=True, exist_ok=True)
   git_worktree(root, "worktree", "add", "--detach", str(destination), base)
@@ -2841,11 +2842,13 @@ def collect_worktree(state_dir, name, cwd=None):
     raise ValueError(f"Worktree path is not a Git root: {worktree}")
   if git_worktree(worktree, "rev-parse", "HEAD").strip() != record.get("base"):
     raise ValueError(f"Worktree {name} has a commit. Keep task changes uncommitted.")
-  gate = routed_record(state_dir, record.get("gate"))
-  if gate.get("exit") is None:
-    raise ValueError(f"Gate {record.get('gate')} is still running.")
-  if gate.get("exit") != 0:
-    raise ValueError(f"Gate {record.get('gate')} did not pass.")
+  gate_name = record.get("gate")
+  if gate_name is not None:
+    gate = routed_record(state_dir, gate_name)
+    if gate.get("exit") is None:
+      raise ValueError(f"Gate {gate_name} is still running.")
+    if gate.get("exit") != 0:
+      raise ValueError(f"Gate {gate_name} did not pass.")
   allowed = record.get("allow")
   if not isinstance(allowed, list) or not all(
     isinstance(pattern, str) for pattern in allowed
@@ -3145,7 +3148,7 @@ LONG_RUN_WORDS = (
 )
 WORKTREE_STEP = (
   "NEXT: work queued file task in worktree while this runs: `arena-preview "
-  "worktree start --gate <gate-name> [--allow <glob>] <name> <destination>`."
+  "worktree start [--gate <gate-name>] [--allow <glob>] <name> <destination>`."
 )
 DETACHED_NOTICE = (
   "RUN DETACHED: `{name}` runs in background, call ends clean. Verdict on "
@@ -7976,14 +7979,14 @@ def main():
   )
   worktree_action = worktree.add_subparsers(dest="worktree_action", required=True)
   worktree_start = worktree_action.add_parser(
-    "start", help="Create a detached worktree while a named root gate runs"
+    "start", help="Create a detached worktree beside a root gate, or without one"
   )
   worktree_start.add_argument("name", help="A short worktree name")
   worktree_start.add_argument(
     "destination", type=Path, help="A new path outside the root"
   )
   worktree_start.add_argument(
-    "--gate", required=True, help="The running root gate name"
+    "--gate", default=None, help="The running root gate name (optional)"
   )
   worktree_start.add_argument(
     "--allow", action="append", default=[], help="A path glob task work may change"

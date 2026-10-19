@@ -5267,6 +5267,70 @@ def test_worktree_gate_flow():
     assert (root / "allowed" / "new.txt").read_text(encoding="utf-8") == "new\n"
 
 
+def test_worktree_start_without_a_gate_collects_at_once():
+  """A worktree with no gate records no link and collects its patch without a wait."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory) / "root"
+    root.mkdir()
+
+    def git(*args, cwd=root):
+      result = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+      )
+      assert result.returncode == 0, result.stderr
+      return result.stdout
+
+    git("init", "-b", "main")
+    git("config", "user.name", "Check")
+    git("config", "user.email", "check@example.invalid")
+    (root / "allowed").mkdir()
+    (root / "allowed" / "change.txt").write_text("before\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-m", "base")
+    state_dir = Path(directory) / "state"
+    preview.Store(state_dir, create=True)
+    worktree = Path(directory) / "task-c"
+    script = str(Path(preview.__file__))
+    environment = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(state_dir)}
+    started = subprocess.run(
+      [
+        sys.executable,
+        script,
+        "worktree",
+        "start",
+        "task-c",
+        str(worktree),
+        "--allow",
+        "allowed/**",
+      ],
+      cwd=root,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert started.returncode == 0, started.stderr
+    record = json.loads(
+      (state_dir / "worktrees" / "task-c.json").read_text(encoding="utf-8")
+    )
+    assert record["gate"] is None
+    (worktree / "allowed" / "change.txt").write_text("after\n", encoding="utf-8")
+    collected = subprocess.run(
+      [sys.executable, script, "worktree", "collect", "task-c"],
+      cwd=root,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert collected.returncode == 0, collected.stderr
+    assert "after" in collected.stdout
+
+
 def test_a_detached_run_prints_one_status_line_per_call(capsys):
   """A detached wait reads as alive: one status line per gate call, none in a poll."""
   with tempfile.TemporaryDirectory() as detached_dir:
