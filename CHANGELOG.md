@@ -10,6 +10,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Preview hook tables: move the section to the maintenance README and use the approved cell wording. Retarget the existing case-label check.
 
+### Fixed
+
+- Preview CLI reference: describe class and hint output without a fixed prefix. Keep streams, exit codes, and subcommand prefixes.
+
 ## 2026-10-18
 
 ### Added

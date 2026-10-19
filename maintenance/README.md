@@ -201,14 +201,14 @@ It uses readable assets for exact page assertions, then shipped assets for page 
 
 A blocked call repeats its reason on stderr, and every case above answers one bash call: the gate never holds the turn.
 
-Every message carries one class. The prefix names the class, and the class fixes the stream and the exit code.
+Every message carries one class. The class fixes the stream and the exit code.
 
 | Class | Prefix | Stream and exit |
 | --- | --- | --- |
 | advisory | `arena-preview gate:` | stderr, 0, and the call still runs |
 | refusal | `Preview error:` | stderr, 1 |
 | verdict | an all-caps opener, such as `WAIT BLOCKED:` or `READ INBOX NOW.` | stdout for the gate and a poll, stderr for a wait, 130 or 1, and 0 when a poll line hands the turn back |
-| hint | `arena-preview:` | stderr, 0, or 2 from the wrapper |
+| hint | no fixed prefix | stderr, 0, or 2 from the wrapper |
 
 ## Plugin collection
 
