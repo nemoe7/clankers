@@ -322,6 +322,9 @@ mark code { color: var(--text); }
 .task-title { cursor: pointer; }
 /* A blocked task is not actionable yet, so it drops to the muted tone the details use. */
 .task-title[data-blocked="true"] { color: var(--muted); }
+/* Only a title waiting on a live linked gate takes the same blue as the Code badge. */
+.task-title[data-waiting-gate="true"] { color: #90CAF9; }
+:root[data-theme="light"] .task-title[data-waiting-gate="true"] { color: #174A7E; }
 .task[data-highlight="true"], .answer[data-highlight="true"] { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 .answer[data-highlight="true"] { color: var(--text); }
 /* Details sit under the title in the muted face as a real list, and repeat in the row hover. */

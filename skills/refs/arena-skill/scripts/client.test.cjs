@@ -1112,6 +1112,35 @@ test('preview client', async (t) => {
     await refresh();
   });
 
+  await t.test("Only a task waiting on a live gate marks its title as gate-waiting", async () => {
+    const saved = state.tasks.upcoming;
+    try {
+      state.tasks.upcoming = [
+        { type: 'docs', id: 'waits-on-report', title: 'Report wait', details: [], status: 'upcoming',
+          order: 1, blocked: true, updated_at: new Date().toISOString() },
+        { type: 'docs', id: 'waits-on-gate', title: 'Gate wait', details: ['still running'], status: 'upcoming',
+          order: 2, blocked: true, runs: ['preview-checks'], updated_at: new Date().toISOString() }
+      ];
+      await refresh();
+      upcomingBody = get('#tasks-upcoming-body');
+      const rows = new Map(upcomingBody.children.map(row => [row.title, row]));
+      const reportTitle = taskPart(rows.get('waits-on-report'), 'task-title');
+      const gateRow = rows.get('waits-on-gate');
+      const gateTitle = taskPart(gateRow, 'task-title');
+      assert.equal(reportTitle.dataset.blocked, 'true');
+      assert.equal(reportTitle.dataset.waitingGate, undefined, 'a report-only wait stays muted');
+      assert.equal(gateTitle.dataset.blocked, 'true');
+      assert.equal(gateTitle.dataset.waitingGate, 'true',
+        'a live linked run marks its title for the blue style');
+      for (const part of [gateRow, taskPart(gateRow, 'task-type'), taskPart(gateRow, 'task-details')]) {
+        assert.equal(part.dataset.waitingGate, undefined, 'the blue marker stays off the row, badge, and details');
+      }
+    } finally {
+      state.tasks.upcoming = saved;
+      await refresh();
+    }
+  });
+
   await t.test("The details are a real list, so each carries its own marker rather than being a line in a ", async () => {
     // The details are a real list, so each carries its own marker rather than being a line in a span.
     detailList = taskPart(upcomingBody.children[0], 'task-details').children[1];
@@ -4439,6 +4468,16 @@ test('scroll fades grow over a longer distance than their maximum depth', () => 
     assert.ok(range.includes('var(--edge-ramp)'), 'all scrollable ranges use the longer ramp');
     assert.equal(range.includes('var(--edge-fade)'), false, 'maximum mask depth does not set ramp distance');
   }
+});
+
+test('only gate-waiting task titles use the existing code blue', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  assert.match(css,
+    /\.task-title\[data-waiting-gate="true"\]\s*\{\s*color:\s*#90CAF9;\s*}/,
+    'the dark title color matches the code badge blue');
+  assert.match(css,
+    /:root\[data-theme="light"\]\s+\.task-title\[data-waiting-gate="true"\]\s*\{\s*color:\s*#174A7E;\s*}/,
+    'the light title color matches the code badge blue');
 });
 
 test('the queue end uses an accented line without an end card', () => {
