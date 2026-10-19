@@ -13,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena rules: on a context-check reminder, read only the read-set files absent from context. The Setup clause drops the unconditional read.
 - Preview polls: raise a violation for a repeat poll inside 45 seconds. The next call blocks and rereads the read set.
 - Preview CLI: group the agent commands under `note`, `run`, `task`, `report` and `state`. Remove the old flat names.
 - Preview Bash gate: run every pre-Bash rule in one `pre` call, in the installed order. Replace the individual tick commands, and keep the 0, 2 and 130 answers.
