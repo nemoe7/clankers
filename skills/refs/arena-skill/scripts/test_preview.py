@@ -4358,7 +4358,7 @@ def test_shared_save_import():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout
     assert "notes 1" in imported and "answers 1" in imported and "tasks 1" in imported
-    # The import does not overwrite its source. Reimport merges by ID without duplicates.
+    # The import does not overwrite its source. A reimport never duplicates a row.
     assert any(
       "title" in json.loads(line)
       for line in mixed.read_text(encoding="utf-8").splitlines()
@@ -4391,24 +4391,22 @@ def test_shared_save_import():
     ).stdout.strip()
     assert "saved-task" in listed
     assert preview.Store(mixed_root).list_tasks()[0]["id"] == "saved-task"
-    # Use JSON for the reimport, since task-list now prints text.
-    tasks_json = json.dumps(preview.Store(mixed_root).list_tasks())
+    # Every import overrides. A reimport of the same file restores all three rows.
     reimport = subprocess.run(
       [
         sys.executable,
         script_again,
         "state",
         "import",
-        "--merge",
-        "--replace-tasks",
+        "-r",
+        str(mixed),
       ],
-      input=tasks_json,
       capture_output=True,
       text=True,
       check=True,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout.strip()
-    assert "tasks 1" in reimport
+    assert "notes 1" in reimport and "answers 1" in reimport and "tasks 1" in reimport
     read_out = subprocess.run(
       [sys.executable, script_again, "read"],
       capture_output=True,
@@ -6879,7 +6877,6 @@ def test_unified_import_atomicity():
     receipt_at = "2026-09-20T22:05:11+00:00"
     store.note("already-here", "Existing message")
     store.acknowledge(["already-here"], "Existing answer")
-    existing = next(n for n in store.state()["notes"] if n["id"] == "already-here")
     imported = [
       {
         "id": "already-here",
@@ -6897,10 +6894,9 @@ def test_unified_import_atomicity():
         "ack_text": "Received",
       },
     ]
-    assert store.import_state(json.dumps(imported), merge=True)["answers"] == 1
-    assert (
-      next(n for n in store.state()["notes"] if n["id"] == "already-here") == existing
-    )
+    assert store.import_state(json.dumps(imported))["answers"] == 1
+    note = next(n for n in store.state()["notes"] if n["id"] == "already-here")
+    assert note["ack_text"] == "Stale answer"
     assert store.submissions()[0]["ack_text"] == "Received"
     backup = store.save_path.read_bytes()
     invalid = [
@@ -6920,25 +6916,25 @@ def test_unified_import_atomicity():
       raise AssertionError("Invalid import accepted")
     except ValueError:
       pass
-    assert [t["id"] for t in store.list_tasks()] == ["task"]
-    assert {n["id"] for n in store.state()["notes"]} == {"restored", "already-here"}
+    assert store.list_tasks() == []
+    assert {n["id"] for n in store.state()["notes"]} == {"already-here"}
     assert {a["id"] for a in store.submissions()} == {"new-answer"}
     assert (
       store.save_path.read_bytes() if store.save_path.exists() else None
     ) == backup
 
 
-def test_import_accepts_a_snapshot_older_than_the_state():
-  """A paste of an old copy can merge with newer live messages."""
+def test_an_older_snapshot_replaces_the_live_state():
+  """Every import overrides, so an old copy replaces newer live messages."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.note("live", "Newest message", at="2026-10-04T15:00:00+00:00")
     older = json.dumps(
       [{"id": "old", "text": "Old message", "at": "2026-10-04T11:42:48"}]
     )
-    receipt = store.import_state(older, merge=True)
+    receipt = store.import_state(older)
     assert receipt == {"notes": 1, "answers": 0, "reports": 0, "tasks": 0}
-    assert {note["id"] for note in store.state()["notes"]} == {"live", "old"}
+    assert {note["id"] for note in store.state()["notes"]} == {"old"}
 
 
 def test_import_state_has_no_force_option():
@@ -6966,20 +6962,20 @@ def test_import_state_has_no_force_option():
     assert "unrecognized arguments: --force" in result.stderr
 
 
-def test_import_accepts_a_newer_snapshot():
-  """A save newer than the live state lands."""
+def test_a_newer_snapshot_replaces_the_live_state():
+  """A save newer than the live state lands and drops what it leaves out."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.note("live", "Older message", at="2026-10-04T11:42:48")
     newer = json.dumps(
       [{"id": "new", "text": "Newer message", "at": "2026-10-04T15:00:00+00:00"}]
     )
-    assert store.import_state(newer, merge=True)["notes"] == 1
-    assert {note["id"] for note in store.state()["notes"]} == {"live", "new"}
+    assert store.import_state(newer)["notes"] == 1
+    assert {note["id"] for note in store.state()["notes"]} == {"new"}
 
 
-def test_import_replaces_the_live_state_by_default():
-  "An import replaces the live notes, answers, reports and tasks. `merge` keeps them."
+def test_import_replaces_the_live_state():
+  "An import replaces the live notes, answers, reports and tasks."
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.note("live", "Live message", at="2026-10-04T11:42:48")
@@ -7013,11 +7009,10 @@ def test_import_replaces_the_live_state_by_default():
     assert store.list_tasks() == []
     store.import_state(
       json.dumps(
-        [{"id": "later", "text": "Merged message", "at": "2026-10-04T16:00:00+00:00"}]
-      ),
-      merge=True,
+        [{"id": "later", "text": "Later message", "at": "2026-10-04T16:00:00+00:00"}]
+      )
     )
-    assert {note["id"] for note in store.state()["notes"]} == {"new", "later"}
+    assert {note["id"] for note in store.state()["notes"]} == {"later"}
 
 
 def test_agent_key_route_records_the_key_for_the_page():
@@ -10034,33 +10029,36 @@ def test_a_missing_state_file_names_the_path(tmp_path):
 
 
 def test_the_import_receipt_names_the_fate(tmp_path):
-  """The receipt reports whether the import replaces the live state or merges by ID."""
+  """The receipt reports that the import replaced the live state, and merge is gone."""
   receipt = {"notes": 1, "answers": 2, "reports": 3, "tasks": 4}
   replaced = preview.format_import_receipt(receipt)
   assert replaced == (
     "Imported notes 1, answers 2, reports 3, tasks 4; the live state was replaced"
   )
-  merged = preview.format_import_receipt(receipt, merged=True)
-  assert merged.endswith(", tasks 4; merged by ID")
   store = preview.Store(tmp_path, create=True)
   store.set_meta("port", guard_port())
   store.note("kept-note", "Keep me")
   env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)}
   source = str(store.save_path)
   assert store.save_path.is_file(), "a state write saves the backup the import reads"
-  for flags, tail in (
-    ([], "; the live state was replaced"),
-    (["--merge"], "; merged by ID"),
-  ):
-    cli = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "state", "import", *flags, source],
-      capture_output=True,
-      text=True,
-      check=False,
-      env=env,
-    )
-    assert cli.returncode == 0, cli.stderr
-    assert cli.stdout.strip().endswith(tail), cli.stdout
+  cli = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), "state", "import", source],
+    capture_output=True,
+    text=True,
+    check=False,
+    env=env,
+  )
+  assert cli.returncode == 0, cli.stderr
+  assert cli.stdout.strip().endswith("; the live state was replaced"), cli.stdout
+  rejected = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), "state", "import", "--merge", source],
+    capture_output=True,
+    text=True,
+    check=False,
+    env=env,
+  )
+  assert rejected.returncode == 2
+  assert "unrecognized arguments: --merge" in rejected.stderr
 
 
 def test_a_queued_download_names_the_owner_click(tmp_path):
@@ -10872,7 +10870,7 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
         assert status == 200 and json.loads(body)["result"] == "unknown-baseline"
         with tempfile.TemporaryDirectory() as imported_directory:
           imported = preview.Store(imported_directory, create=True)
-          imported.import_state(current["text"], merge=True)
+          imported.import_state(current["text"])
           assert imported.userscript_history() == current["history"]
         original_scope = store.userscript_scope
         with patch.object(
@@ -10922,10 +10920,10 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
           json.loads(request("GET", "/api/userscript-autosave")[2])["history"]
           == current["history"]
         )
-        store.import_state(second["text"], merge=True)
+        store.import_state(second["text"])
         assert (
           json.loads(request("GET", "/api/userscript-autosave")[2])["history"]
-          == current["history"]
+          == second["history"]
         )
         records = [
           json.loads(line) for line in current["text"].splitlines() if line.strip()
