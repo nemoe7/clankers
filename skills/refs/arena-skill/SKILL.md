@@ -17,7 +17,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 2. Start the preview as Setup step 3 describes.
 3. Read the inbox with `arena-preview read`, and answer with `arena-preview ack`.
 4. When a call needs the recorded agent key, after a 401 or an owner question, run `arena-preview key`; it prints the key, the host and the stamp. The call breaks with the restart line while the preview server is not up.
-5. When a read cannot leave the sandbox, use [proxy routes](#proxy-access) through `fetch_page`.
+5. Try `fetch_page` on the actual source URL first; use [proxy routes](#proxy-access) through `fetch_page` only if that call cannot return the needed data.
 
 ## Setup
 
