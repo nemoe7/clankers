@@ -1522,3 +1522,45 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 
   });
 }
+
+{
+  const { test } = require("node:test");
+  test("state logs keep a bounded failure reason", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+    const logged = [];
+    const sink = (...args) => logged.push(args);
+    const context = {
+      console: { log: sink, warn: sink, error: sink },
+      GM_getValue: () => "info",
+      GM_setValue: () => {},
+      setTimeout: () => 0,
+      clearTimeout: () => {},
+      setInterval: () => 0,
+      clearInterval: () => {},
+      URL,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
+    vm.runInNewContext(source, context, { filename: "arena.user.js" });
+    const { compareDetail } = context.CLANKERS_CHECKS.stateDownload;
+    assert.equal(compareDetail({ status: 0, failure: "timeout" }, "a"), "status:timeout");
+    assert.equal(compareDetail({ status: 200, body: null }, "a"), "body");
+    assert.equal(compareDetail({ status: 200, body: { candidate_digest: "a" } }, "b"), "digest");
+    assert.equal(
+      compareDetail({ status: 200, body: { candidate_digest: "a", result: "different" } }, "a"),
+      "result:different",
+    );
+    const { logEvent } = context.CLANKERS_CHECKS.logging;
+    logEvent("state", "failed", { code: "autosave-compare", status: 200, result: "unknown-baseline", detail: "digest" }, "error");
+    const [line, data] = logged.at(-1);
+    assert.match(line, /\[state\]\[error\] failed/);
+    assert.equal(data.code, "autosave-compare");
+    assert.equal(data.status, 200);
+    assert.equal(data.result, "unknown-baseline");
+    assert.equal(data.detail, "digest");
+    logEvent("state", "failed", { detail: "x".repeat(500) }, "error");
+    assert.equal(logged.at(-1)[1].detail.length, 160);
+    logEvent("state", "failed", { result: "other", detail: "" }, "error");
+    assert.equal(logged.at(-1).length, 1, "unknown values and empty detail stay out of the log");
+  });
+}

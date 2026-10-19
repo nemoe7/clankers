@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.49
+// @name         Arena.ai | NemoUtils | v1.10.50
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.49
+// @version      1.10.50
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -57,7 +57,8 @@
     route: ["link", "manager", "stamped"],
     emoji: ["", "💬", "💭", "🖥️", "📖", "✏️", "🔍", "💤", "📜", "❓", "⚙️", "⏳", "🛡️"],
     level: LOG_LEVELS,
-    code: ["unknown", "manager-download", "copy-state", "missing-branch", "older-history", "wrong-file", "write", "file-api", "NotAllowedError", "AbortError", "NotFoundError", "SecurityError", "TypeError", "Error"],
+    code: ["unknown", "manager-download", "copy-state", "missing-branch", "older-history", "wrong-file", "write", "file-api", "autosave", "autosave-get", "autosave-compare", "save-receipt", "NotAllowedError", "AbortError", "NotFoundError", "SecurityError", "TypeError", "Error"],
+    result: ["equal", "different", "candidate-missing-records", "scope-mismatch", "unknown-baseline"],
   };
   var logMenuEntry = null;
 
@@ -98,6 +99,9 @@
       Object.keys(LOG_VALUES).forEach(function (key) {
         if (own.call(fields, key) && LOG_VALUES[key].indexOf(fields[key]) !== -1) data[key] = fields[key];
       });
+      if (own.call(fields, "detail") && typeof fields.detail === "string" && fields.detail) {
+        data.detail = fields.detail.slice(0, 160);
+      }
       if (current === "debug") {
         ["repo", "filename"].forEach(function (key) {
           if (own.call(fields, key) && typeof fields[key] === "string") data[key] = fields[key];
@@ -2443,6 +2447,7 @@
       stateDownloadRoute: stateDownloadRoute,
       writeToHandle: writeToHandle,
       writeStateDownload: writeStateDownload,
+      compareDetail: compareDetail,
       STATE_WATCH_MS: STATE_WATCH_MS,
     })) {
       return function () {};
@@ -2494,7 +2499,7 @@
     function stateJson(url, payload) {
       return new Promise(function (resolve) {
         if (typeof GM_xmlhttpRequest !== "function") {
-          resolve({ status: 0, body: null });
+          resolve({ status: 0, body: null, failure: "unavailable" });
           return;
         }
         GM_xmlhttpRequest({
@@ -2505,11 +2510,12 @@
           timeout: 15000,
           onload: function (answer) {
             var body = null;
-            try { body = JSON.parse(answer.responseText); } catch (err) { body = null; }
-            resolve({ status: answer.status, body: body });
+            var failure = null;
+            try { body = JSON.parse(answer.responseText); } catch (err) { failure = "parse"; }
+            resolve({ status: answer.status, body: body, failure: failure });
           },
-          onerror: function () { resolve({ status: 0, body: null }); },
-          ontimeout: function () { resolve({ status: 0, body: null }); },
+          onerror: function () { resolve({ status: 0, body: null, failure: "error" }); },
+          ontimeout: function () { resolve({ status: 0, body: null, failure: "timeout" }); },
         });
       });
     }
@@ -2524,7 +2530,8 @@
       if ((answer.status !== 200 && answer.status !== 201) || !body ||
           body.confirmed !== true || body.save_id !== receipt.save_id || body.digest !== receipt.digest) {
         stateError("The file is saved. Confirmation failed (" + answer.status + "), so the next cycle retries it without writing the file again.",
-          null, null, "save-receipt", answer.status);
+          null, null, "save-receipt", answer.status, undefined,
+          (answer.status === 200 || answer.status === 201 ? "body" : "status" + (answer.failure ? ":" + answer.failure : "")));
         return;
       }
       GM_setValue(receiptKey(storeKey), { save_id: receipt.save_id, digest: receipt.digest, scope: receipt.scope });
@@ -2687,8 +2694,8 @@
       }
     }
 
-    function stateError(line, actionLabel, action, code, status, showPanel) {
-      logEvent("state", "failed", { code: code || "unknown", status: status }, code === "file-api" ? "warn" : "error");
+    function stateError(line, actionLabel, action, code, status, showPanel, detail) {
+      logEvent("state", "failed", { code: code || "unknown", status: status, detail: detail }, code === "file-api" ? "warn" : "error");
       if (showPanel !== false) statePanel(line, actionLabel, action);
     }
 
@@ -2771,6 +2778,13 @@
       });
     }
 
+    function compareDetail(comparison, digest) {
+      if (comparison.status !== 200) return "status" + (comparison.failure ? ":" + comparison.failure : "");
+      if (!comparison.body) return "body";
+      if (comparison.body.candidate_digest !== digest) return "digest";
+      return "result:" + String(comparison.body.result);
+    }
+
     async function fetchStateFile(manual, force) {
       var base = previewBase(document);
       if (!base || stateBusy) return;
@@ -2788,7 +2802,8 @@
         var body = answer.body;
         if (answer.status !== 200 || !body || !Array.isArray(body.core) || !body.scope ||
             !body.save_id || !body.digest || typeof body.text !== "string") {
-          stateError(getLine(answer.status, base + "/api/userscript-autosave"), null, null, "autosave-get", answer.status);
+          stateError(getLine(answer.status, base + "/api/userscript-autosave"), null, null, "autosave-get", answer.status, undefined,
+            (answer.status === 200 ? "body" : "status" + (answer.failure ? ":" + answer.failure : "")));
           return;
         }
         clearErrorPanel();
@@ -2823,13 +2838,13 @@
         if (comparison.status !== 200 || !comparison.body || comparison.body.candidate_digest !== body.digest ||
             ["equal", "different", "candidate-missing-records", "scope-mismatch", "unknown-baseline"].indexOf(result) < 0) {
           stateError("The userscript could not compare the saved and current states (" + comparison.status + "). Nothing was written.",
-            null, null, "autosave-compare", comparison.status);
+            null, null, "autosave-compare", comparison.status, undefined, compareDetail(comparison, body.digest));
           return;
         }
         if (!force && result === "equal") return;
         if (!force && result !== "different" && !(initialFile && result === "unknown-baseline")) {
           stateError("Automatic save is blocked (" + result + "). Nothing was written. Review the saved and current states before using Force save.",
-            null, null, result);
+            null, null, result, undefined, undefined, "result:" + result);
           return;
         }
         var plan = { kind: "download", name: stateFileName(scope.repo, scope.branch, body.stamp, body.counts) };
@@ -2866,7 +2881,7 @@
         GM_setValue(pendingKey(storeKey), pending);
         await confirmPending(base, storeKey, pending);
       } catch (err) {
-        stateError("State save failed (" + (err.name || "unknown") + "). The saved baseline has not changed.", null, null, "autosave");
+        stateError("State save failed (" + (err.name || "unknown") + "). The saved baseline has not changed.", null, null, "autosave", undefined, undefined, String(err.message || "").slice(0, 160));
       } finally {
         stateBusy = false;
       }
