@@ -2123,15 +2123,14 @@ def format_fetch_job(job):
   return "\n".join(parts)
 
 
-def format_import_receipt(receipt, merged=False):
+def format_import_receipt(receipt):
   notes = receipt.get("notes", 0)
   answers = receipt.get("answers", 0)
   reports = receipt.get("reports", 0)
   tasks = receipt.get("tasks", 0)
-  fate = "merged by ID" if merged else "the live state was replaced"
   return (
     f"Imported notes {notes}, answers {answers}, reports {reports}, tasks {tasks};"
-    f" {fate}"
+    " the live state was replaced"
   )
 
 
@@ -5521,8 +5520,8 @@ class Store:
     self.autosave()  # the completion wrote an inbox note. Unfinished queue rows stay only in SQLite
     return fetch_row(result, self.path.parent)
 
-  def import_state(self, text, replace_tasks=False, merge=False):
-    "Import a backup. Replace live entries unless the caller requests merge."
+  def import_state(self, text, replace_tasks=False):
+    "Import a backup. Replace every live entry."
     records = parse_state_import(text)
     history = [
       autosave_record(row)
@@ -5554,11 +5553,10 @@ class Store:
     messages = [
       r for r in records if "markdown" not in r and ("title" not in r or "text" in r)
     ]
-    if not merge:
-      guard_task_runs(self.path.parent, action="replace state")
+    guard_task_runs(self.path.parent, action="replace state")
     with self.transaction(autosave=False) as db:
       db.execute("BEGIN IMMEDIATE")
-      if history and (not merge or not self.userscript_history(db)):
+      if history:
         receipts = {}
         for row in history:
           key = autosave_scope_key(row["scope"])
@@ -5572,9 +5570,8 @@ class Store:
           "INSERT OR REPLACE INTO meta VALUES (?, ?)",
           (AUTOSAVE_RECEIPTS, json.dumps(receipts)),
         )
-      if not merge:
-        for table in ("notes", "reports", "submissions", "tasks"):
-          db.execute(f"DELETE FROM {table}")
+      for table in ("notes", "reports", "submissions", "tasks"):
+        db.execute(f"DELETE FROM {table}")
       self.import_reports(reports, shared=db)
       self.import_tasks(tasks, replace_tasks, autosave=False, shared=db)
       for record in messages:
@@ -8160,15 +8157,10 @@ def main():
   state_verbs = state_group.add_subparsers(dest="verb", required=True)
   state_import = state_verbs.add_parser(
     "import",
-    help="Import an NDJSON backup; replaces the live state unless --merge",
+    help="Import an NDJSON backup; replaces the live state",
   )
   state_import.add_argument("source", nargs="?", type=Path)
   state_import.add_argument("-r", "--replace-tasks", action="store_true")
-  state_import.add_argument(
-    "--merge",
-    action="store_true",
-    help="keep the live notes, answers, reports and tasks, and merge the import by ID",
-  )
   state_verbs.add_parser(
     "clear",
     help="Empty every state table in place; the agent key record survives",
@@ -8552,11 +8544,7 @@ def main():
           ) from None
       else:
         text = sys.stdin.read()
-      print(
-        format_import_receipt(
-          store.import_state(text, args.replace_tasks, args.merge), args.merge
-        )
-      )
+      print(format_import_receipt(store.import_state(text, args.replace_tasks)))
     elif args.command == "clear-state":
       print(format_clear_state(store.clear_state()))
     elif args.command == "init":
