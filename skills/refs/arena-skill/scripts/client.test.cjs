@@ -820,8 +820,9 @@ test('preview client', async (t) => {
       assert.notEqual(rows()[0].draggable, true, 'the task row leaves text selection to the browser');
       assert.notEqual(taskTitle(rows()[0]).draggable, true, 'the title is not a drag target');
       assert.equal(dragHandle(rows()[0]).draggable, true, 'the bullet handle starts the drag');
-      assert.equal(dragHandle(rows()[0]).children[0].getAttribute('class'), 'lucide lucide-dot', 'the Lucide dot is the list bullet');
-      assert.equal(rows()[0].dataset.dragHandle, 'true', 'the draggable row hides its native marker');
+      assert.equal(dragHandle(rows()[0]).children.length, 0,
+        'the transparent handle leaves the native list dot visible');
+      assert.equal(rows()[0].dataset.dragHandle, 'true', 'the draggable row positions its handle over the native dot');
       assert.equal(rows()[0].events.dragstart, undefined, 'dragstart is not attached to the task row');
       assert.equal(taskTitle(rows()[0]).events.dragstart, undefined, 'dragstart is not attached to the title');
       assert.match(dragHandle(rows()[0]).getAttribute('aria-label'), /reorder/i,
@@ -4468,6 +4469,18 @@ test('scroll fades grow over a longer distance than their maximum depth', () => 
     assert.ok(range.includes('var(--edge-ramp)'), 'all scrollable ranges use the longer ramp');
     assert.equal(range.includes('var(--edge-fade)'), false, 'maximum mask depth does not set ramp distance');
   }
+});
+
+test('draggable and finished task rows use the same native list dot', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const row = /\.task\[data-drag-handle="true"\]\s*\{([^}]*)}/.exec(css);
+  assert.ok(row, 'the draggable row has a positioning rule');
+  assert.doesNotMatch(row[1], /list-style\s*:\s*none/,
+    'the draggable row keeps the native marker used by Finished tasks');
+  const hover = /\.task-drag-handle:hover:not\(:disabled\)\s*\{([^}]*)}/.exec(css);
+  assert.ok(hover, 'the transparent handle has a hover rule');
+  assert.match(hover[1], /background\s*:\s*transparent/,
+    'the handle never covers the native marker');
 });
 
 test('only gate-waiting task titles use the existing code blue', () => {

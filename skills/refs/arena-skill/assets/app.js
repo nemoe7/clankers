@@ -103,7 +103,6 @@ const ICONS = {
     fill: 'currentColor', stroke: 'none' }]],
   flag: [['path', { d: 'M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528' }]],
   'loader-circle': [['path', { d: 'M21 12a9 9 0 1 1-6.219-8.56' }]],
-  dot: [['circle', { cx: '12', cy: '12', r: '1' }]],
 };
 function icon(name, size = 15) {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -1890,7 +1889,6 @@ function draggableTaskRow(task, list) {
   handle.className = 'task-drag-handle';
   handle.type = 'button';
   handle.draggable = true;
-  setIcon(handle, 'dot', 24);
   handle.setAttribute('aria-label', `Drag to reorder ${task.title}`);
   handle.title = `Drag to reorder ${task.title}`;
   row.dataset.dragHandle = 'true';

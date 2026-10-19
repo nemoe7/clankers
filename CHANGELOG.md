@@ -12,7 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
-- Preview tasks: show only a task title in code blue while its linked gate is live. Keep report waits muted and the rest of the row unchanged.
+- Preview tasks: show only a task title in code blue while its linked gate is live. Use the same native list dot for draggable and finished tasks. Keep report waits muted and the rest of the row unchanged.
 - Preview routed runs: link live gates to tasks, add `route --task`, and remove manual `task --blocked`. Derive blocking until completion or orphan reconciliation, and guard destructive task changes.
 - Arena fielded reports: keep each question beside no more than one short paragraph or three bullets of relevant context on one vertical screen. Do not collect questions at a long report's end.
 - Preview WebSockets: carry JSON actions and state replies on one same-origin connection. Send SQLite change notices across processes. Keep binary HTTP, reconnect, heartbeat, and polling fallback, with `?transport=poll` to select polling.
