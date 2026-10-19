@@ -3481,7 +3481,7 @@ def test_bare_task_list_names_the_current_task():
     held = preview.format_task_list(bare.list_tasks()).splitlines()
     assert any("upcoming first" in line and "*" in line for line in held)
     assert any("current second" in line for line in held)
-    assert "* = blocked on a report answer" in held
+    assert "* = blocked on a report answer or linked run" in held
     assert preview.current_task(bare.list_tasks())["id"] == "second"
     # With every upcoming task blocked, no task reads as current work.
     bare.write_task("second", blocked=True)
@@ -3590,7 +3590,14 @@ def test_short_flags_and_the_details_rename():
     for flag in ("--details", "--task-details", "-d"):
       out = cli("task", "flag-task", "Flags", flag, "one\ntwo", "--task-type", "misc")
       assert "one" in out and "two" in out, flag
-    assert "blocked" in cli("task", "flag-task", "Flags", "-b", "--task-type", "misc")
+    manual_block = subprocess.run(
+      [sys.executable, script, "task", "flag-task", "--blocked"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert manual_block.returncode == 2 and "--blocked" in manual_block.stderr
     assert "blocked" not in cli(
       "task", "flag-task", "Flags", "-u", "--task-type", "misc"
     )
@@ -4819,6 +4826,176 @@ def test_a_second_line_keeps_the_standing_wait(monkeypatch):
     first = json.loads(record.read_text(encoding="utf-8"))["started_at"]
     assert preview.detach_run(standing_dir, "pytest", ["bash", "-c", "pytest -q"])
     assert json.loads(record.read_text(encoding="utf-8"))["started_at"] == first
+
+
+def test_routed_runs_derive_task_blocking(tmp_path, monkeypatch, capsys):
+  """Live run links block without changing the saved task schema."""
+  store = preview.Store(tmp_path, create=True)
+  store.write_task("first", "First task", ["Run the checks"], task_type="code")
+  store.write_task("second", "Second task", ["Keep working"], task_type="code")
+  monkeypatch.setenv(preview.DETACH_DRY_RUN, "1")
+
+  assert preview.detach_run(tmp_path, "alpha", ["true"])
+  alpha = json.loads((tmp_path / "runs" / "alpha.json").read_text(encoding="utf-8"))
+  assert alpha["task_id"] == "first"
+  first, second = store.list_tasks()
+  assert first["blocked"] is True and first["runs"] == ["alpha"]
+  assert second["blocked"] is False
+  assert preview.current_task([first, second])["id"] == "second"
+  with closing(store.connect()) as db:
+    assert db.execute("SELECT blocked FROM tasks WHERE id = 'first'").fetchone()[0] == 0
+
+  assert preview.detach_run(tmp_path, "bravo", ["true"], task_id="first")
+  first = store.task_record("first")
+  assert first["blocked"] is True and first["runs"] == ["alpha", "bravo"]
+  listed = preview.format_task_list(store.list_tasks())
+  assert "runs alpha, bravo" in listed
+
+  assert preview.run_command(tmp_path, "alpha", ["--", "true"]) == 0
+  capsys.readouterr()
+  first = store.task_record("first")
+  assert first["blocked"] is True and first["runs"] == ["bravo"]
+  assert preview.run_command(tmp_path, "bravo", ["--", "false"]) == 1
+  capsys.readouterr()
+  first = store.task_record("first")
+  assert first["blocked"] is False and "runs" not in first
+
+  store.autosave()
+  saved = [json.loads(line) for line in store.save_path.read_text().splitlines()]
+  saved_first = next(row for row in saved if row.get("id") == "first")
+  assert "runs" not in saved_first and "blocked" not in saved_first
+
+
+def test_route_task_selection_validation_and_repeated_name(tmp_path, monkeypatch):
+  """An explicit task overrides automatic selection, while a standing run keeps its link."""
+  store = preview.Store(tmp_path, create=True)
+  store.write_task(
+    "waiting", "Waiting", ["Wait for a report"], blocked=True, task_type="code"
+  )
+  store.write_task("current", "Current", ["Run the gate"], task_type="code")
+  store.write_task(
+    "finished", "Finished", ["Already done"], status="finished", task_type="code"
+  )
+  monkeypatch.setenv(preview.DETACH_DRY_RUN, "1")
+
+  assert preview.detach_run(tmp_path, "automatic", ["true"])
+  automatic = json.loads(
+    (tmp_path / "runs" / "automatic.json").read_text(encoding="utf-8")
+  )
+  assert automatic["task_id"] == "current"
+  assert preview.detach_run(tmp_path, "automatic", ["false"], task_id="waiting")
+  repeated = json.loads(
+    (tmp_path / "runs" / "automatic.json").read_text(encoding="utf-8")
+  )
+  assert repeated["task_id"] == "current" and repeated["argv"] == ["true"]
+
+  before = sorted((tmp_path / "runs").glob("*.json"))
+  for task_id in ("missing", "finished"):
+    with pytest.raises(ValueError, match=task_id):
+      preview.detach_run(tmp_path, f"invalid-{task_id}", ["true"], task_id=task_id)
+  assert sorted((tmp_path / "runs").glob("*.json")) == before
+
+  empty = tmp_path / "empty"
+  preview.Store(empty, create=True)
+  assert preview.detach_run(empty, "unlinked", ["true"])
+  unlinked = json.loads((empty / "runs" / "unlinked.json").read_text(encoding="utf-8"))
+  assert "task_id" not in unlinked
+
+
+def test_live_run_guards_task_lifecycle_and_orphan_release(tmp_path, monkeypatch):
+  """A task cannot disappear under a live run. Orphan reconciliation releases it."""
+  store = preview.Store(tmp_path, create=True)
+  store.write_task("linked", "Linked", ["Run the gate"], task_type="code")
+  monkeypatch.setenv(preview.DETACH_DRY_RUN, "1")
+  assert preview.detach_run(tmp_path, "gate", ["true"], task_id="linked")
+
+  guarded = (
+    lambda: store.write_task("linked", status="finished"),
+    lambda: store.remove_task("linked"),
+    lambda: store.amend_task("linked", "renamed"),
+    lambda: store.rename_entity("linked", "renamed"),
+  )
+  for change in guarded:
+    with pytest.raises(ValueError, match="gate"):
+      change()
+  assert store.task_record("linked")["status"] == "upcoming"
+
+  path = tmp_path / "runs" / "gate.json"
+  record = json.loads(path.read_text(encoding="utf-8"))
+  record["pid_started_at"] = "orphaned"
+  path.write_text(json.dumps(record), encoding="utf-8")
+  monkeypatch.setattr(preview, "process_start_identity", lambda pid: None)
+  released = store.task_record("linked")
+  assert released["blocked"] is False and "runs" not in released
+  assert json.loads(path.read_text(encoding="utf-8"))["exit"] == 1
+  assert store.write_task("linked", status="finished")["status"] == "finished"
+
+
+def test_live_run_guards_bulk_task_removal(tmp_path, monkeypatch):
+  """State replacement and clearing cannot remove a task owned by a live run."""
+  store = preview.Store(tmp_path, create=True)
+  store.write_task("linked", "Linked", ["Run the gate"], task_type="code")
+  monkeypatch.setenv(preview.DETACH_DRY_RUN, "1")
+  assert preview.detach_run(tmp_path, "gate", ["true"], task_id="linked")
+  store.autosave()
+  saved = store.save_path.read_text(encoding="utf-8")
+
+  for change in (
+    lambda: store.import_tasks([], replace=True),
+    lambda: store.import_state(saved),
+    store.clear_state,
+  ):
+    with pytest.raises(ValueError, match="gate"):
+      change()
+  assert store.task_record("linked")["status"] == "upcoming"
+
+
+def test_route_cli_accepts_task_and_task_cli_rejects_manual_block(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  store.write_task("linked", "Linked", ["Run the gate"], task_type="code")
+  environment = {
+    **os.environ,
+    "ARENA_PREVIEW_STATE_DIR": str(tmp_path),
+    preview.DETACH_DRY_RUN: "1",
+  }
+  routed = subprocess.run(
+    [
+      sys.executable,
+      str(Path(preview.__file__)),
+      "route",
+      "--task",
+      "linked",
+      "checks",
+      "--",
+      "true",
+    ],
+    capture_output=True,
+    text=True,
+    check=False,
+    env=environment,
+  )
+  assert routed.returncode == 0, routed.stderr
+  record = json.loads((tmp_path / "runs" / "checks.json").read_text(encoding="utf-8"))
+  assert record["task_id"] == "linked"
+
+  blocked = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), "task", "linked", "--blocked"],
+    capture_output=True,
+    text=True,
+    check=False,
+    env=environment,
+  )
+  assert blocked.returncode == 2
+  assert "--blocked" in blocked.stderr
+  help_text = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), "task", "--help"],
+    capture_output=True,
+    text=True,
+    check=True,
+    env=environment,
+  ).stdout
+  assert "--blocked" not in help_text and "--unblocked" in help_text
 
 
 def test_route_starts_the_run_detached(tmp_path, monkeypatch):

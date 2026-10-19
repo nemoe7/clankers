@@ -2010,7 +2010,7 @@ def format_task_list(tasks, full=False):
   shown = tasks if full else [t for t in tasks if t.get("status") == "upcoming"]
   lines = [f"Tasks {len(shown)}" if full else f"Tasks {len(shown)} upcoming"]
   if any(t.get("blocked") for t in shown):
-    lines.append("* = blocked on a report answer")
+    lines.append("* = blocked on a report answer or linked run")
   head = None if full else current_task(shown)
   for task in shown:
     order = task.get("order")
@@ -2024,6 +2024,8 @@ def format_task_list(tasks, full=False):
     line = f"{order}{blocked_mark}  {status} {id_}"
     if report_id:
       line += f" | waits on {report_id}"
+    if task.get("runs"):
+      line += f" | runs {', '.join(task['runs'])}"
     if task.get("type") and task.get("type") != TASK_UNSPECIFIED:
       line += f" | type {task.get('type')}"
     lines.append(line)
@@ -2057,6 +2059,8 @@ def format_task(record, full=False):
     first += f", type {task_type}"
   if report_id:
     first += f", report {report_id}"
+  if record.get("runs"):
+    first += f", runs {', '.join(record['runs'])}"
   if blocked:
     first += ", blocked"
   lines = [first, title] + [f"- {d}" for d in cut]
@@ -2853,6 +2857,58 @@ def live_runs(state_dir):
   return names
 
 
+def live_task_runs(state_dir):
+  """Map each task ID to its live routed-run names.
+
+  Run files own this state. Reading the map reconciles a vanished child first, so an
+  orphan releases its task through the same terminal record as a passed or failed run.
+  """
+  linked = {}
+  runs = Path(state_dir) / "runs"
+  if not runs.is_dir():
+    return linked
+  for path in sorted(runs.glob("*.json")):
+    record = json_record(path)
+    if record is None:
+      continue
+    record = reconcile_routed_record(path, record)
+    task_id = record.get("task_id")
+    if (
+      record.get("detached")
+      and record.get("exit") is None
+      and isinstance(task_id, str)
+      and task_id
+    ):
+      linked.setdefault(task_id, []).append(record.get("name") or path.stem)
+  return linked
+
+
+def link_task_runs(records, state_dir):
+  """Overlay run-owned blocking on task records without changing stored task rows."""
+  linked = live_task_runs(state_dir)
+  for record in records:
+    names = linked.get(record.get("id"))
+    if names:
+      record["runs"] = names
+      record["blocked"] = True
+    else:
+      record.pop("runs", None)
+  return records
+
+
+def guard_task_runs(state_dir, task_id=None, action="change"):
+  """Refuse a destructive task change while one of its linked runs is live."""
+  linked = live_task_runs(state_dir)
+  selected = linked if task_id is None else {task_id: linked.get(task_id, [])}
+  held = [(identifier, names) for identifier, names in selected.items() if names]
+  if not held:
+    return
+  labels = "; ".join(
+    f"{identifier}: {', '.join(names)}" for identifier, names in sorted(held)
+  )
+  raise ValueError(f"Cannot {action}; live task run(s): {labels}")
+
+
 def skip_poll_ready(store):
   "Return true when the owner requests a skip and no detached run is live."
   return store.skip_poll_requested() and not live_runs(store.path.parent)
@@ -3095,7 +3151,9 @@ def detached_seconds(started_at):
     return None
 
 
-def write_detached_placeholder(state_dir, name, argv, pid=None, pid_started_at=None):
+def write_detached_placeholder(
+  state_dir, name, argv, pid=None, pid_started_at=None, task_id=None
+):
   """Write the record a detached run carries while it runs, and return its path."""
   path = run_record_path(state_dir, name)
   record = {
@@ -3110,6 +3168,8 @@ def write_detached_placeholder(state_dir, name, argv, pid=None, pid_started_at=N
     "detached": True,
     "announced": False,
   }
+  if task_id:
+    record["task_id"] = task_id
   if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0:
     record["pid"] = pid
   if isinstance(pid_started_at, str) and pid_started_at:
@@ -3180,15 +3240,38 @@ def pr_check_wait(state_dir, line, command=None):
   return PR_CHECK_RUNS
 
 
-def detach_run(state_dir, name, argv):
+def run_task_id(state_dir, selected=None):
+  """Resolve an explicit task, or choose the current task for an automatic route."""
+  try:
+    store = Store(state_dir)
+  except FileNotFoundError:
+    if selected:
+      raise ValueError(f"No task is stored under {selected}") from None
+    return None
+  if selected:
+    try:
+      task_id = store.resolve_id(selected)
+    except ValueError as error:
+      raise ValueError(f"Cannot link routed run: {error}") from None
+    record = store.task_record(task_id)
+    if record is None:
+      raise ValueError(f"No task is stored under {selected}")
+    if record.get("status") != "upcoming":
+      raise ValueError(f"Task {task_id} is finished; a run needs an upcoming task")
+    return task_id
+  record = current_task(store.list_tasks())
+  return record.get("id") if record else None
+
+
+def detach_run(state_dir, name, argv, task_id=None):
   """Start one command detached under `name`, and say whether the spawn left.
 
   A detached child outlives the shell call that started it, so the run keeps going
   while the agent works on. The child executes the command through `route-run` and
   writes the finished record itself, so the verdict replays on a later call like any
   routed run. One live wait per name: a second line for the same family keeps the run
-  that already stands. Tests set `ARENA_PREVIEW_DETACH_DRY` to write the record and skip
-  the spawn.
+  and task link that already stand. An omitted task selects the current unblocked task.
+  Tests set `ARENA_PREVIEW_DETACH_DRY` to write the record and skip the spawn.
   """
   path = run_record_path(state_dir, name)
   standing = json_record(path)
@@ -3196,11 +3279,14 @@ def detach_run(state_dir, name, argv):
     standing = reconcile_routed_record(path, standing)
     if standing.get("exit") is None:
       return True
+  task_id = run_task_id(state_dir, task_id)
   if os.environ.get(DETACH_DRY_RUN):
     pid = os.getpid()
-    write_detached_placeholder(state_dir, name, argv, pid, process_start_identity(pid))
+    write_detached_placeholder(
+      state_dir, name, argv, pid, process_start_identity(pid), task_id
+    )
     return True
-  path = write_detached_placeholder(state_dir, name, argv)
+  path = write_detached_placeholder(state_dir, name, argv, task_id=task_id)
   # A plain `bash -c` reads no login profile, so a child never meets the gate that started it.
   # The marker covers a shell that sources the gate anyway, and BASH_ENV leaves with it.
   child_env = {
@@ -3239,7 +3325,7 @@ def detach_run(state_dir, name, argv):
   return True
 
 
-def route_command(state_dir, name, argv):
+def route_command(state_dir, name, argv, task_id=None):
   """Start a command detached under `name`, and return at once.
 
   This is the helper the trap uses for a long run it detects, and the call a line names
@@ -3262,7 +3348,7 @@ def route_command(state_dir, name, argv):
       flush=True,
     )
     return 2
-  if not detach_run(state_dir, name, argv):
+  if not detach_run(state_dir, name, argv, task_id=task_id):
     print(f"arena-preview route: the start of `{name}` failed.", flush=True)
     return 1
   print(
@@ -4208,6 +4294,7 @@ class Store:
       if not records:
         return None
       link_task_answers(db, records)
+    link_task_runs(records, self.path.parent)
     return {
       "finished": [item for item in records if item["status"] == "finished"],
       "upcoming": [item for item in records if item["status"] == "upcoming"],
@@ -4215,20 +4302,23 @@ class Store:
     }
 
   def list_tasks(self):
-    """Every task as stored, for an agent to read the list back."""
+    """Every task with report answers and derived live-run state."""
     with closing(self.connect()) as db:
       rows = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}"
       ).fetchall()
-      return link_task_answers(db, [task_row(row) for row in rows])
+      records = link_task_answers(db, [task_row(row) for row in rows])
+    return link_task_runs(records, self.path.parent)
 
   def task_record(self, task_id):
-    """Read one stored task without writing. Return None when no row holds the ID."""
+    """Read one task with derived live-run state, or None when no row holds its ID."""
     with closing(self.connect()) as db:
       row = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
       ).fetchone()
-    return task_row(row) if row else None
+    if row is None:
+      return None
+    return link_task_runs([task_row(row)], self.path.parent)[0]
 
   def free_id(self):
     """A six-character ID no stored row holds, so a server mint never lands on a record.
@@ -4341,9 +4431,11 @@ class Store:
         ).fetchone()
         if report is not None and not parse_fields(report["markdown"])[1]:
           raise ValueError("A blocked task needs a report with answer fields")
+      if status == "finished":
+        guard_task_runs(self.path.parent, task_id, "finish task")
       if status == "finished" and blocked:
         raise ValueError(
-          f"Task {task_id} is blocked; clear the mark with --unblocked first"
+          f"Task {task_id} is blocked; clear the report wait with --unblocked first"
         )
       siblings = [
         task_row(item)
@@ -4411,7 +4503,7 @@ class Store:
       for position, item in enumerate(siblings, 1):
         db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, item["id"]))
       self.renumber(db)
-    return record
+    return link_task_runs([record], self.path.parent)[0]
 
   def reorder_tasks(self, ids):
     """Move the named upcoming tasks into the drawn order and return the page payload.
@@ -4474,6 +4566,7 @@ class Store:
 
   def remove_task(self, task_id):
     "Remove one task and return its stored record for the output."
+    guard_task_runs(self.path.parent, task_id, "remove task")
     with self.transaction() as db:
       row = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
@@ -4511,6 +4604,7 @@ class Store:
     table, dependents = RENAME_TARGETS[kind]
 
     if kind == "task":
+      guard_task_runs(self.path.parent, prev_id, "rename task")
       check_task(new_id, None, None)
 
     with self.transaction() as db:
@@ -4542,6 +4636,7 @@ class Store:
       ).fetchone()
       if row is None:
         raise ValueError(f"No task is stored under {prev_id}")
+      guard_task_runs(self.path.parent, prev_id, "rename task")
       if db.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone():
         raise ValueError(f"A task is already stored under {task_id}")
       self.refuse_shared_id(db, "tasks", "reports", task_id)
@@ -5227,6 +5322,8 @@ class Store:
     messages = [
       r for r in records if "markdown" not in r and ("title" not in r or "text" in r)
     ]
+    if not merge:
+      guard_task_runs(self.path.parent, action="replace state")
     with self.transaction(autosave=False) as db:
       db.execute("BEGIN IMMEDIATE")
       if history and (not merge or not self.userscript_history(db)):
@@ -5375,6 +5472,8 @@ class Store:
           task_type,
         )
       )
+    if replace:
+      guard_task_runs(self.path.parent, action="replace tasks")
     with self.transaction(shared, autosave=autosave) as db:
       if replace:
         # Replacement records cannot inherit a title. Reject before removal to name the offending record.
@@ -6064,6 +6163,7 @@ class Store:
 
     Keep the agent key record that the page posts on load.
     Keep the recorded server port for the next command's live-server check."""
+    guard_task_runs(self.path.parent, action="clear state")
     counts = {}
     with self.transaction() as db:
       for table in (
@@ -7316,6 +7416,12 @@ def main():
       " call"
     ),
   )
+  route.add_argument(
+    "--task",
+    dest="task_id",
+    metavar="TASK-ID",
+    help="Link this run to an upcoming task instead of the current task",
+  )
   route.add_argument("name", help="A short name for the run, for example gates")
   route.add_argument(
     "command_args", nargs=argparse.REMAINDER, help="The command, after --"
@@ -7481,8 +7587,8 @@ def main():
     "task",
     help=(
       "Write or update a task; TASK-ID alone prints the stored row; -s status,"
-      " -o order, -d details, -A append, -m message, -r report, -b blocked,"
-      " -u unblocked, -a amend, --task-type type"
+      " -o order, -d details, -A append, -m message, -r report, -u unblocked,"
+      " -a amend, --task-type type"
     ),
   )
   task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
@@ -7504,19 +7610,12 @@ def main():
     help="Append provided details instead of replacing stored details",
   )
   task.add_argument(
-    "-b",
-    "--blocked",
-    dest="blocked",
-    action="store_true",
-    default=None,
-    help="Mark the task blocked, so a poll may wait",
-  )
-  task.add_argument(
     "-u",
     "--unblocked",
     dest="blocked",
     action="store_false",
-    help="Clear the blocked mark",
+    default=None,
+    help="Clear a report wait or legacy blocked mark",
   )
   task.add_argument(
     "-m",
@@ -7644,7 +7743,9 @@ def main():
       if warning:
         print(warning, file=sys.stderr)
         return 1
-      return route_command(state_dir, args.name, args.command_args)
+      return route_command(
+        state_dir, args.name, args.command_args, task_id=args.task_id
+      )
     if args.command == "route-run":
       warning = worktree_warning(state_dir, "gate")
       if warning:
