@@ -9391,6 +9391,11 @@ def test_idle_tick_blocks_a_sleep_beside_a_preview_call():
     blocked = cli("sleep 45; arena-preview logs gate-one")
     assert blocked.returncode == 130, blocked.stdout
     assert "WAIT BLOCKED" in blocked.stderr, blocked.stderr
+    logged = cli("sleep 45; tail /tmp/preview.log")
+    assert logged.returncode == 130, logged.stdout
+    assert "SLEEP BLOCKED" in logged.stderr, logged.stderr
+    reading = cli("tail -f /tmp/preview.log")
+    assert reading.returncode == 0, reading.stderr
 
 
 def test_pre_runs_every_rule_and_names_the_finished_steps():
