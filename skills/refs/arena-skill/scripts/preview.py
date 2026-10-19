@@ -1525,9 +1525,8 @@ RENAME_TABLES = ("notes", "submissions", "reports", "tasks")
 # The importer carries note, task, and answer lines through one schema.
 # Name keys here so the writer and reader stay aligned. The default save path stays inside the ignored state directory.
 CLI_DESCRIPTION = (
-  "Notes, reports, tasks and the preview server for Arena steering. The platform's"
-  " hooks call the -tick commands, `gate`, `inbox-line` and `route-run`; the rest are"
-  " the agent's."
+  "Notes, reports, tasks and the preview server for Arena steering. The installed"
+  " hook calls `pre`, `gate` and `route-run`; the rest are the agent's."
 )
 SAVED_STATE = "saved-state.ndjson"
 NOTE_LINE_KEYS = (
@@ -3020,13 +3019,14 @@ def skip_poll_ready(store):
   return store.skip_poll_requested() and not live_runs(store.path.parent)
 
 
-def run_notices(state_dir, show_running=False):
+def run_notices(state_dir, show_running=False, out=None):
   """Print one useful routed-run notice per call.
 
   A finished verdict wins over a live status. Each finished record prints once, while a
   live detached record can report its age on a later call. The return value lets a poll
   stop when a verdict arrives.
   """
+  out = sys.stdout if out is None else out
   runs = Path(state_dir) / "runs"
   if not runs.is_dir():
     return 0
@@ -3041,6 +3041,7 @@ def run_notices(state_dir, show_running=False):
     print(
       f"run {record.get('name')} done: exit {record.get('exit')} {record.get('seconds')}s"
       f" {record.get('verdict')}",
+      file=out,
       flush=True,
     )
     record["announced"] = True
@@ -7565,6 +7566,302 @@ def embed_report_images(markdown, report_dir):
   return IMAGE_IN_MARKDOWN.sub(swap, markdown)
 
 
+def gate_verdict(state_dir, push, line, out=None):
+  """Read the inbox gate and print its verdict to one stream.
+
+  Returns 0 for a pass, 1 for a block and 2 when the store cannot answer.
+  """
+  out = sys.stdout if out is None else out
+  # Finished runs announce here. The running heartbeat rides the reminder alone, so a
+  # call prints one status line, not one per gated command plus one at exit.
+  run_notices(state_dir, out=out)
+  if poll_timeout_line(line):
+    print(
+      "TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`."
+      " Set the Bash tool timeout to 1800 seconds; the poll returns within"
+      " its 1799-second wait.",
+      file=out,
+      flush=True,
+    )
+    return 1
+  try:
+    gate_store = Store(state_dir)
+    allowed = gate_store.gate(pending_only=push)
+    blocked_calls = (
+      gate_store.calls_since_message() if not allowed and not push else None
+    )
+  except FileNotFoundError:
+    allowed = True
+    blocked_calls = None
+  except Exception:
+    return 2
+  if not allowed:
+    if blocked_calls is not None:
+      print(f"BASH BLOCKED AFTER {blocked_calls} CALLS.", file=out, flush=True)
+    if push:
+      # Name the pending item and the steps that allow the push.
+      print(
+        "PUSH BLOCKED: a note or answer awaits an ack, so nothing left the"
+        " sandbox. Read the inbox, ack every item, push again.",
+        file=out,
+        flush=True,
+      )
+    print(
+      "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack"
+      " every note: `arena-preview ack <id> <markdown>`.",
+      file=out,
+      flush=True,
+    )
+    hint = gate_line_hint(line)
+    if hint:
+      print(hint, file=out, flush=True)
+    blocker = first_blocking_piece(line)
+    if blocker:
+      blocker = shell_command_text(blocker)
+      print(
+        f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",
+        file=out,
+        flush=True,
+      )
+    return 1
+  # A push whose content equals origin/main leaves the pull request without a diff,
+  # and GitHub then closes it. The checkpoint holds before any such push.
+  if push and main_identical():
+    print(
+      "HEAD equals `origin/main`, so the push carries nothing."
+      " Start new work from `origin/main`.",
+      file=out,
+      flush=True,
+    )
+    return 1
+  # A branch that lacks the commits origin/main carries replays onto a stale base,
+  # and the pull request then shows the main diff. The checkpoint holds that push.
+  stale = main_ancestor_warning() if push else ""
+  if stale:
+    print(stale, file=out, flush=True)
+    return 1
+  return 0
+
+
+# The pre-Bash rules, in the order `pre` runs them. Each name marks a step a shell
+# finishes once, so a later line in the same shell skips it.
+PRE_STEPS = (
+  "interrupt",
+  "read-set",
+  "remind",
+  "main-local",
+  "main-fresh",
+  "bare",
+  "proxy",
+  "gate",
+)
+
+# The shells the gate protects. Any other `$0` hosts a long-lived process.
+GATED_SHELLS = frozenset({"bash", "sh", "dash", "ksh", "zsh"})
+
+# The platform's probes and its own hosted shells. Never gated.
+PLATFORM_LINES = (
+  "arena-workspace",
+  "ss -ltn",
+  "netstat -ltn",
+  "source ~/.profile",
+  "mkdir -p '/home/user'",
+)
+
+
+def platform_line(line):
+  return any(pattern in line for pattern in PLATFORM_LINES)
+
+
+def state_file(state_dir):
+  return Path(state_dir) / "state.sqlite3"
+
+
+def pre_command(state_dir, line, command, root, done="", shell=""):
+  """Run every pre-Bash rule in order and report the steps this shell finished.
+
+  Notices ride stderr. Stdout carries one `_arena_preview_done` assignment. Returns 0
+  to continue, 2 to end the call clean and 130 to block it.
+  """
+  initial = done.split()
+  steps = list(initial)
+  finished = set(steps)
+  routed = os.environ.get("ARENA_PREVIEW_ROUTE") == "1"
+
+  def report(warning):
+    print(warning, file=sys.stderr, flush=True)
+
+  def mark(step):
+    if step not in finished:
+      finished.add(step)
+      steps.append(step)
+
+  def finish(status):
+    if steps != initial:
+      done_line = " ".join(steps)
+      print(f'_arena_preview_done="{done_line}"', flush=True)
+    return status
+
+  # case: pr-state
+  warning = pr_state_warning(command)
+  if warning:
+    report(warning)
+    return finish(130)
+  # case: shell-shape
+  if shell and shell not in GATED_SHELLS:
+    return finish(0)
+  # case: platform-shell
+  if platform_line(line):
+    return finish(0)
+  # case: violation-flag
+  if not routed and "interrupt" not in finished and state_file(state_dir).is_file():
+    mark("interrupt")
+    notice = Store(state_dir, create=False).take_interrupt()
+    if notice:
+      report(notice)
+      return finish(130)
+  # case: read-set-note
+  if not routed and "read-set" not in finished and state_file(state_dir).is_file():
+    mark("read-set")
+    tick_store = Store(state_dir)
+    if preview_server_available(tick_store):
+      warning = read_set_tick(
+        tick_store,
+        line,
+        moment=datetime.now(resolve_display_zone(tick_store)),
+        root=root,
+      )
+      if warning:
+        report(warning)
+        return finish(130)
+  # case: task-reminder
+  if "remind" not in finished and any(
+    word in command for word in ("git commit", "git push", "gh pr checks")
+  ):
+    mark("remind")
+    report(
+      "Finished a task? Update the task list:"
+      " arena-preview task <id> --status finished."
+    )
+  # case: main-moved
+  if "git commit" in command and "main-local" not in finished:
+    mark("main-local")
+    warning = main_drift_warning(Path.cwd(), fresh=False)
+    if warning:
+      report(warning)
+  elif "git push" in command and "main-fresh" not in finished:
+    mark("main-fresh")
+    warning = main_drift_warning(Path.cwd())
+    if warning:
+      report(warning)
+  # case: route-marker
+  if routed:
+    return finish(0)
+  # case: idle-wait
+  warning = idle_wait(line)
+  if warning:
+    report(warning)
+    return finish(130)
+  # case: long-run
+  status = pr_check_wait(state_dir, line, command)
+  if status == PR_CHECK_RUNS:
+    return finish(2)
+  if status == PR_CHECK_REFUSED:
+    return finish(130)
+  # case: bare-path
+  if "bare" not in finished and (
+    "/scripts/arena-preview" in line or "/scripts/preview.py" in line
+  ):
+    mark("bare")
+    report(
+      "Call it bare: arena-preview works from any directory, so drop the full path."
+    )
+  # case: proxy-route
+  if "proxy" not in finished and any(
+    word in line
+    for word in (
+      "code-scanning",
+      "code_scanning",
+      "gh run view",
+      "gh run download",
+      "actions/runs",
+    )
+  ):
+    mark("proxy")
+    report(
+      "Read that through the proxy: the arena skill carries the routes for"
+      " code-scanning alerts and run logs."
+    )
+  # case: ack-ticks
+  if "arena-preview ack" in command or "preview.py ack" in command:
+    warning = tick_warning(command)
+    if warning:
+      report(warning)
+  # case: serve-port
+  if "arena-preview serve" in command or "preview.py serve" in command:
+    warning = serve_warning(command)
+    if warning:
+      report(warning)
+  # case: egress
+  if (
+    any(word in command for word in ("curl", "wget", "git clone", "git fetch"))
+    or "git ls-remote" in command
+  ):
+    warning = egress_warning(command)
+    if warning:
+      report(warning)
+  # case: commit-id
+  if "git commit" in command:
+    warning = worktree_warning(state_dir, "commit", cwd=Path.cwd())
+    if warning:
+      report(warning)
+      return finish(130)
+    try:
+      commit_store = Store(state_dir)
+    except FileNotFoundError:
+      commit_store = None
+    if commit_store is not None:
+      found = commit_id_report(staged_session_id_hits(commit_store, str(Path.cwd())))
+      if found:
+        report(found)
+        return finish(130)
+  # case: inert-line
+  if (
+    any(
+      word in command
+      for word in (
+        "preview",
+        "profile",
+        "bashrc",
+        "arena-state",
+        "git commit",
+      )
+    )
+    or command.startswith(
+      ("gh", "sleep", "true", ":", "test", "git status", "git diff", "git add")
+    )
+    or any(word in command for word in ("arena-workspace", "ss -ltn", "netstat -ltn"))
+  ):
+    return finish(0)
+  # case: push-checkpoint
+  if "git push" in command:
+    warning = worktree_warning(state_dir, "push")
+    if warning:
+      report(warning)
+      return finish(130)
+    if gate_verdict(state_dir, True, line, out=sys.stderr) == 1:
+      return finish(130)
+  # case: inbox-line
+  if quiet_inbox_line(line):
+    return finish(0)
+  # case: call-count
+  if "gate" not in finished:
+    mark("gate")
+    if gate_verdict(state_dir, False, line, out=sys.stderr) == 1:
+      return finish(130)
+  return finish(0)
+
+
 class PreviewArgumentParser(argparse.ArgumentParser):
   def print_usage(self, file=None):
     pass
@@ -7596,9 +7893,6 @@ def main():
   init.add_argument("--tz", help="An IANA zone for CLI stamps. The TZ env still wins")
   commands.add_parser("read", help="Print every pending note, answer and upload")
   commands.add_parser(
-    "interrupt-tick", help="Read the header request without blocking Bash"
-  )
-  commands.add_parser(
     "skills",
     help="List skill names, full descriptions, and paths without loading skills",
   )
@@ -7625,20 +7919,23 @@ def main():
     "path", type=Path, help="One local PNG, JPEG, GIF or WebP file up to 2 MiB"
   )
   commands.add_parser("key", help="Print the recorded agent key, host and use line")
-  pr_state = commands.add_parser("pr-state-tick", help="Reject visible PR-state writes")
-  pr_state.add_argument("line", help="The command as the DEBUG hook read it")
-  inbox_line = commands.add_parser(
-    "inbox-line",
-    help="Report whether a command line that names an inbox call runs nothing else",
+  pre = commands.add_parser(
+    "pre", help="Run every pre-Bash gate rule in order, and name the steps it ran"
   )
-  inbox_line.add_argument("line", help="The command line, as the hook read it")
-  read_set_tick_parser = commands.add_parser(
-    "read-set-tick", help="Schedule a hidden read-set checkpoint before agent work"
+  pre.add_argument(
+    "--line", default="", help="The shell command line, as the hook read it"
   )
-  read_set_tick_parser.add_argument(
-    "line", help="The command line, as the hook read it"
+  pre.add_argument(
+    "--command",
+    dest="command_text",
+    default="",
+    help="The command the DEBUG trap reached",
   )
-  read_set_tick_parser.add_argument("--repo", default=".")
+  pre.add_argument("--repo", default=".", help="The repository the read set needs")
+  pre.add_argument("--shell", default="", help="The shell's own name")
+  pre.add_argument(
+    "--done", default="", help="The steps this shell already ran, space separated"
+  )
   run_group = commands.add_parser(
     "run", help="Start a long command and read its result"
   )
@@ -7695,60 +7992,12 @@ def main():
     "collect", help="Print the allowed detached-worktree patch after a green root gate"
   )
   worktree_collect.add_argument("name", help="The worktree name to collect")
-  worktree_tick = commands.add_parser(
-    "worktree-tick", help="Block a gate, commit or push from a detached task worktree"
-  )
-  worktree_tick.add_argument("action", choices=sorted(WORKTREE_ACTIONS))
-  ack_tick = commands.add_parser(
-    "ack-tick",
-    help="Warn when an inline ack text holds a backtick the shell will substitute",
-  )
-  ack_tick.add_argument("line", help="The command line, as the hook read it")
-  idle_tick = commands.add_parser(
-    "idle-tick", help="Refuse a line that sleeps beside a preview call"
-  )
-  idle_tick.add_argument("line", help="The command line, as the hook read it")
-  serve_tick = commands.add_parser(
-    "serve-tick",
-    help="Warn when a serve names a port other than the default",
-  )
-  serve_tick.add_argument("line", help="The command line, as the hook read it")
-  pr_check_tick = commands.add_parser(
-    "pr-check-tick",
-    help="Refuse a bash line that runs a PR-check wait the background tool must take",
-  )
-  pr_check_tick.add_argument("line", help="The command line, as the hook read it")
-  pr_check_tick.add_argument(
-    "--command", dest="current_command", help="The command the DEBUG trap reached"
-  )
-  main_drift_tick = commands.add_parser(
-    "main-drift-tick", help="Check remote branch drift at commit and push checkpoints"
-  )
-  main_drift_tick.add_argument("--repo", default=".")
-  main_drift_tick.add_argument(
-    "--local",
-    dest="local_read",
-    action="store_true",
-    help="Read the local refs alone, with no fetch",
-  )
-  egress_tick = commands.add_parser(
-    "egress-tick",
-    help="Warn when a line fetches a host the sandbox egress filter blocks",
-  )
-  egress_tick.add_argument("line", help="The command line, as the hook read it")
   rename = commands.add_parser(
     "rename",
     help="Move a note, answer, report or task to a new ID",
   )
   rename.add_argument("old_id", help="The stored ID, or a prefix that names one record")
   rename.add_argument("new_id", help="The ID to move the record to")
-  commit_tick = commands.add_parser(
-    "commit-tick",
-    help="Block a commit whose staged lines cite a session-local ID",
-  )
-  commit_tick.add_argument(
-    "--repo", default=".", help="The repository to read the staged diff from"
-  )
   gate = commands.add_parser(
     "gate",
     help="Read the inbox gate; -p blocks on any unacked note, -l names the blocked line",
@@ -7961,52 +8210,23 @@ def main():
       parser.error(
         "a command is required; run arena-preview --help for the command list"
       )
-    if args.command == "read-set-tick":
-      if fresh_state:
-        return 0
-      tick_store = Store(state_dir)
-      if not preview_server_available(tick_store):
-        return 0
-      warning = read_set_tick(
-        tick_store,
+    if args.command == "pre":
+      return pre_command(
+        state_dir,
         args.line,
-        moment=datetime.now(resolve_display_zone(tick_store)),
-        root=args.repo,
+        args.command_text,
+        args.repo,
+        done=args.done,
+        shell=args.shell,
       )
-      if warning:
-        print(warning, file=sys.stderr)
-        return 1
-      return 0
-    if args.command == "interrupt-tick":
-      if fresh_state:
-        return 0
-      notice = Store(state_dir, create=False).take_interrupt()
-      if notice:
-        print(notice, file=sys.stderr)
-        return 1
-      return 0
     if args.command == "skills":
       print_skills()
       return 0
-    if args.command == "pr-state-tick":
-      warning = pr_state_warning(args.line)
-      if warning:
-        print(warning, file=sys.stderr)
-        return 1
-      return 0
-    if args.command == "inbox-line":
-      return 0 if quiet_inbox_line(args.line) else 1
     if args.command == "image-data-uri":
       try:
         print(image_data_uri(args.path))
       except ValueError as error:
         print(error, file=sys.stderr)
-        return 1
-      return 0
-    if args.command == "worktree-tick":
-      warning = worktree_warning(state_dir, args.action)
-      if warning:
-        print(warning, file=sys.stderr)
         return 1
       return 0
     if args.command == "worktree":
@@ -8034,34 +8254,6 @@ def main():
       return run_command(state_dir, args.name, args.command_args)
     if args.command == "logs":
       return run_log_report(state_dir, args.name)
-    if args.command == "ack-tick":
-      warning = tick_warning(args.line)
-      if warning:
-        print(warning, file=sys.stderr)
-      return 0
-    if args.command == "idle-tick":
-      warning = idle_wait(args.line)
-      if warning:
-        print(warning, file=sys.stderr)
-        return 1
-      return 0
-    if args.command == "serve-tick":
-      warning = serve_warning(args.line)
-      if warning:
-        print(warning, file=sys.stderr)
-      return 0
-    if args.command == "main-drift-tick":
-      warning = main_drift_warning(args.repo, fresh=not args.local_read)
-      if warning:
-        print(warning, file=sys.stderr)
-      return 0
-    if args.command == "egress-tick":
-      warning = egress_warning(args.line)
-      if warning:
-        print(warning, file=sys.stderr)
-      return 0
-    if args.command == "pr-check-tick":
-      return pr_check_wait(state_dir, args.line, args.current_command)
     if args.command == "rename":
       require_server(Store(state_dir))
       try:
@@ -8081,85 +8273,8 @@ def main():
         return 1
       print(f"ok {kind} {old_id} -> {args.new_id}")
       return 0
-    if args.command == "commit-tick":
-      warning = worktree_warning(state_dir, "commit", cwd=args.repo)
-      if warning:
-        print(warning, file=sys.stderr)
-        return 1
-      try:
-        store = Store(state_dir)
-      except FileNotFoundError:
-        return 0
-      report = commit_id_report(staged_session_id_hits(store, args.repo))
-      if report:
-        print(report, file=sys.stderr)
-        return 1
-      return 0
     if args.command == "gate":
-      # Finished runs announce here. The running heartbeat rides the reminder alone, so a
-      # call prints one status line, not one per gated command plus one at exit.
-      run_notices(state_dir)
-      if poll_timeout_line(args.line):
-        print(
-          "TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`."
-          " Set the Bash tool timeout to 1800 seconds; the poll returns within"
-          " its 1799-second wait.",
-          flush=True,
-        )
-        return 1
-      try:
-        gate_store = Store(state_dir)
-        allowed = gate_store.gate(pending_only=args.push)
-        blocked_calls = (
-          gate_store.calls_since_message() if not allowed and not args.push else None
-        )
-      except FileNotFoundError:
-        allowed = True
-        blocked_calls = None
-      except Exception:
-        return 2
-      if not allowed:
-        if blocked_calls is not None:
-          print(f"BASH BLOCKED AFTER {blocked_calls} CALLS.", flush=True)
-        if args.push:
-          # Name the pending item and the steps that allow the push.
-          print(
-            "PUSH BLOCKED: a note or answer awaits an ack, so nothing left the"
-            " sandbox. Read the inbox, ack every item, push again.",
-            flush=True,
-          )
-        print(
-          "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack"
-          " every note: `arena-preview ack <id> <markdown>`.",
-          flush=True,
-        )
-        hint = gate_line_hint(args.line)
-        if hint:
-          print(hint, flush=True)
-        blocker = first_blocking_piece(args.line)
-        if blocker:
-          blocker = shell_command_text(blocker)
-          print(
-            f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",
-            flush=True,
-          )
-        return 1
-      # A push whose content equals origin/main leaves the pull request without a diff,
-      # and GitHub then closes it. The checkpoint holds before any such push.
-      if args.push and main_identical():
-        print(
-          "HEAD equals `origin/main`, so the push carries nothing."
-          " Start new work from `origin/main`.",
-          flush=True,
-        )
-        return 1
-      # A branch that lacks the commits origin/main carries replays onto a stale base,
-      # and the pull request then shows the main diff. The checkpoint holds that push.
-      stale = main_ancestor_warning() if args.push else ""
-      if stale:
-        print(stale, flush=True)
-        return 1
-      return 0
+      return gate_verdict(state_dir, args.push, args.line)
     store = Store(
       state_dir,
       create=args.command in {"serve", "init", "import-state"},

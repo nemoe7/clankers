@@ -25,6 +25,11 @@ from unittest.mock import patch
 import preview
 import pytest
 
+# The installed hook shell exports both markers, and a spawned CLI would answer as if it
+# sat inside the hook. Drop them here. A test that needs one sets it itself.
+for _marker in ("ARENA_PREVIEW_ROUTE", "ARENA_PREVIEW_SHELL_HOOK"):
+  os.environ.pop(_marker, None)
+
 _GUARD_LISTENER = None
 _GUARD_PORT = None
 
@@ -2939,8 +2944,13 @@ def test_tick_lines_skip_the_serve_and_store_imports():
         "-X",
         "importtime",
         preview.__file__,
-        "pr-state-tick",
+        "pre",
+        "--line",
         "git status",
+        "--command",
+        "git status",
+        "--done",
+        "interrupt read-set remind main-local main-fresh bare proxy gate",
       ],
       capture_output=True,
       text=True,
@@ -5158,24 +5168,24 @@ def test_worktree_gate_flow():
     assert nested.returncode == 1 and "registered root" in nested.stderr
     assert git("branch", "--show-current", cwd=worktree).strip() == ""
     blocked = subprocess.run(
-      [sys.executable, script, "worktree-tick", "gate"],
+      [sys.executable, script, "pre", "--line", "pytest -q", "--command", "pytest -q"],
       cwd=worktree,
       env=environment,
       capture_output=True,
       text=True,
       check=False,
     )
-    assert blocked.returncode == 1 and "WORKTREE BLOCKED" in blocked.stderr
-    for action in ("commit", "push"):
+    assert blocked.returncode == 130 and "WORKTREE BLOCKED" in blocked.stderr
+    for action in ("git commit -m x", "git push"):
       blocked = subprocess.run(
-        [sys.executable, script, "worktree-tick", action],
+        [sys.executable, script, "pre", "--line", action, "--command", action],
         cwd=worktree,
         env=environment,
         capture_output=True,
         text=True,
         check=False,
       )
-      assert blocked.returncode == 1 and "WORKTREE BLOCKED" in blocked.stderr
+      assert blocked.returncode == 130 and "WORKTREE BLOCKED" in blocked.stderr
     routed = subprocess.run(
       [sys.executable, script, "run", "start", "task-c", "--", "true"],
       cwd=worktree,
@@ -5186,14 +5196,22 @@ def test_worktree_gate_flow():
     )
     assert routed.returncode == 1 and "WORKTREE BLOCKED" in routed.stderr
     committed = subprocess.run(
-      [sys.executable, script, "commit-tick", "--repo", str(worktree)],
+      [
+        sys.executable,
+        script,
+        "pre",
+        "--line",
+        "git commit -m x",
+        "--command",
+        "git commit -m x",
+      ],
       cwd=worktree,
       env=environment,
       capture_output=True,
       text=True,
       check=False,
     )
-    assert committed.returncode == 1 and "WORKTREE BLOCKED" in committed.stderr
+    assert committed.returncode == 130 and "WORKTREE BLOCKED" in committed.stderr
     waiting = subprocess.run(
       [sys.executable, script, "worktree", "collect", "task-b"],
       cwd=root,
@@ -5518,7 +5536,17 @@ def test_a_long_run_line_detaches_the_wait():
 
     def run_tick(line):
       return subprocess.run(
-        [sys.executable, checks_script, "pr-check-tick", line],
+        [
+          sys.executable,
+          checks_script,
+          "pre",
+          "--line",
+          line,
+          "--command",
+          line,
+          "--repo",
+          checks_dir,
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -5531,21 +5559,21 @@ def test_a_long_run_line_detaches_the_wait():
       )
 
     banned = run_tick("gh pr checks 7 --watch")
-    assert banned.returncode == 1, banned.stderr
-    assert banned.stderr.startswith("RUN DETACHED: "), banned.stderr
+    assert banned.returncode == 2, banned.stderr
+    assert "RUN DETACHED: " in banned.stderr, banned.stderr
     assert "`pr-checks`" in banned.stderr, banned.stderr
     watch = run_tick("gh run watch 7")
-    assert watch.returncode == 1 and "`run-watch`" in watch.stderr, watch.stderr
+    assert watch.returncode == 2 and "`run-watch`" in watch.stderr, watch.stderr
     suite = run_tick("pytest -q")
-    assert suite.returncode == 1 and "`pytest`" in suite.stderr, suite.stderr
+    assert suite.returncode == 2 and "`pytest`" in suite.stderr, suite.stderr
     node = run_tick("node --test x.cjs")
-    assert node.returncode == 1 and "`node-tests`" in node.stderr, node.stderr
+    assert node.returncode == 2 and "`node-tests`" in node.stderr, node.stderr
     npm = run_tick("npm test")
-    assert npm.returncode == 1 and "`npm-tests`" in npm.stderr, npm.stderr
+    assert npm.returncode == 2 and "`npm-tests`" in npm.stderr, npm.stderr
     make = run_tick("cd app && make test")
-    assert make.returncode == 1 and "`make-tests`" in make.stderr, make.stderr
+    assert make.returncode == 2 and "`make-tests`" in make.stderr, make.stderr
     go = run_tick("go test ./...")
-    assert go.returncode == 1 and "`go-tests`" in go.stderr, go.stderr
+    assert go.returncode == 2 and "`go-tests`" in go.stderr, go.stderr
     recorded = json.loads(
       (Path(checks_dir) / "runs" / "pr-checks.json").read_text(encoding="utf-8")
     )
@@ -7226,7 +7254,10 @@ def read_set_cli(state, root, line):
     [
       sys.executable,
       str(Path(preview.__file__)),
-      "read-set-tick",
+      "pre",
+      "--line",
+      line,
+      "--command",
       line,
       "--repo",
       str(root),
@@ -7281,7 +7312,7 @@ def test_read_set_tick_cli_restores_blocking_with_the_server():
     root, state = read_set_cli_root(directory)
     preview.Store(state).set_meta("port", guard_port())
     blocked = read_set_cli(state, root, "git status")
-    assert blocked.returncode == 1
+    assert blocked.returncode == 130
     assert "READ SET BLOCKED" in blocked.stderr
     for line in ("arena-preview read", "arena-preview ack", "arena-preview poll"):
       allowed = read_set_cli(state, root, line)
@@ -7294,7 +7325,7 @@ def test_read_set_tick_cli_acknowledgement_holds_the_slot():
     root, state = read_set_cli_root(directory)
     preview.Store(state).set_meta("port", guard_port())
     blocked = read_set_cli(state, root, "git status")
-    assert blocked.returncode == 1
+    assert blocked.returncode == 130
     store = preview.Store(state)
     checkpoint_id = store.pending_read_set_note()["id"]
     ack = subprocess.run(
@@ -7903,7 +7934,7 @@ def test_serve_warning_reads_the_port():
   assert preview.serve_warning("arena-preview serve -p 8000") is None
   assert preview.serve_warning("arena-preview serve") is None
   assert preview.serve_warning("arena-preview read") is None
-  assert preview.serve_warning("arena-preview serve-tick 'arena-preview serve'") is None
+  assert preview.serve_warning("arena-preview serve-tick --help") is None
   assert preview.serve_warning("") is None and preview.serve_warning(None) is None
 
 
@@ -8575,11 +8606,9 @@ def test_cli_help_keeps_usage():
   )
   assert "usage:" in cli.stdout.casefold()
   assert not cli.stderr
-  # The description names the two command sets, so the hook names read as hooks.
+  # The description names the hook's commands, so they read as hooks.
   flat = " ".join(cli.stdout.split())
-  assert (
-    "The platform's hooks call the -tick commands, `gate`, `inbox-line` and" in flat
-  )
+  assert "The installed hook calls `pre`, `gate` and `route-run`" in flat
   task_help = subprocess.run(
     [sys.executable, str(Path(preview.__file__)), "task", "set", "--help"],
     capture_output=True,
@@ -8614,22 +8643,7 @@ def test_reference_commands_table_lists_every_agent_facing_command():
     check=True,
   ).stdout
   actual = set(re.search(r"\{([a-z,\-]+)\}", help_text).group(1).split(","))
-  internal = {
-    "interrupt-tick",
-    "read-set-tick",
-    "pr-state-tick",
-    "inbox-line",
-    "route-run",
-    "worktree-tick",
-    "ack-tick",
-    "idle-tick",
-    "serve-tick",
-    "pr-check-tick",
-    "main-drift-tick",
-    "egress-tick",
-    "commit-tick",
-    "gate",
-  }
+  internal = {"pre", "route-run", "gate"}
   assert documented <= actual, (
     f"table names unknown commands: {sorted(documented - actual)}"
   )
@@ -9291,7 +9305,15 @@ def test_idle_tick_blocks_a_sleep_beside_a_preview_call():
 
     def cli(line):
       return subprocess.run(
-        [sys.executable, str(Path(preview.__file__)), "idle-tick", line],
+        [
+          sys.executable,
+          str(Path(preview.__file__)),
+          "pre",
+          "--line",
+          line,
+          "--command",
+          line,
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -9303,8 +9325,44 @@ def test_idle_tick_blocks_a_sleep_beside_a_preview_call():
     looped = cli("for i in 1 2; do sleep 0.01; done")
     assert looped.returncode == 0, looped.stderr
     blocked = cli("sleep 45; arena-preview logs gate-one")
-    assert blocked.returncode == 1, blocked.stdout
+    assert blocked.returncode == 130, blocked.stdout
     assert "WAIT BLOCKED" in blocked.stderr, blocked.stderr
+
+
+def test_pre_runs_every_rule_and_names_the_finished_steps():
+  """One call answers 0 to continue, 2 to end the call and 130 to block it."""
+  with tempfile.TemporaryDirectory() as directory:
+    env = {
+      **os.environ,
+      "ARENA_PREVIEW_STATE_DIR": directory,
+      "ARENA_PREVIEW_DETACH_DRY": "1",
+    }
+
+    def cli(*arguments):
+      return subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), "pre", *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=directory,
+        env=env,
+      )
+
+    platform = cli("--line", "ss -ltn", "--command", "ss -ltn")
+    assert platform.returncode == 0, platform.stderr
+    assert platform.stdout == ""
+    plain = cli("--line", "printf hi", "--command", "printf hi")
+    assert plain.returncode == 0, plain.stderr
+    assert plain.stdout.strip() == '_arena_preview_done="gate"'
+    again = cli("--line", "printf hi", "--command", "printf hi", "--done", "gate")
+    assert again.returncode == 0, again.stderr
+    assert again.stdout == ""
+    blocked = cli("--line", "gh pr merge 7", "--command", "gh pr merge 7")
+    assert blocked.returncode == 130
+    assert "PR STATE BLOCKED" in blocked.stderr
+    detached = cli("--line", "pytest -q", "--command", "pytest -q", "--repo", directory)
+    assert detached.returncode == 2, detached.stderr
+    assert "RUN DETACHED" in detached.stderr
 
 
 def test_a_second_read_of_a_running_run_is_blocked(tmp_path, capsys):
@@ -10085,9 +10143,22 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
         capsys.readouterr()
         with (
           patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(store.path.parent)}),
-          patch.object(sys, "argv", [str(Path(preview.__file__)), "interrupt-tick"]),
+          patch.object(
+            sys,
+            "argv",
+            [
+              str(Path(preview.__file__)),
+              "pre",
+              "--line",
+              "printf x",
+              "--command",
+              "printf x",
+              "--done",
+              "read-set",
+            ],
+          ),
         ):
-          assert preview.main() == 1
+          assert preview.main() == 130
           message = capsys.readouterr().err
           assert message.splitlines() == [expected, instruction]
           assert preview.main() == 0

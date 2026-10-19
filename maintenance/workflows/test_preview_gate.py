@@ -27,59 +27,14 @@ quiet_inbox_line = preview_module.quiet_inbox_line
 INSTALLER = ROOT / "skills" / "refs" / "arena-skill" / "scripts" / "install.sh"
 
 STUB = """#!/bin/sh
-# The classifiers are pure, so the stub answers with the real ones.
+# The merged gate runs the real rules, so the stub records and forwards it.
 if [ -n "${ARENA_PREVIEW_TEST_CALLS:-}" ]; then
-  printf '%s\n' "$*" >> "$ARENA_PREVIEW_TEST_CALLS"
+  printf '%s\\n' "$*" >> "$ARENA_PREVIEW_TEST_CALLS"
 fi
-if [ "$1" = "interrupt-tick" ]; then
+if [ "$1" = "pre" ]; then
   exec __PYTHON__ __PREVIEW__ "$@"
 fi
-if [ "$1" = "read-set-tick" ]; then
-  if [ -n "${ARENA_PREVIEW_TEST_READ_SET:-}" ]; then
-    exec __PYTHON__ __PREVIEW__ "$@"
-  fi
-  exit 0
-fi
-if [ "$1" = "pr-state-tick" ]; then
-  exec __PYTHON__ __PREVIEW__ "$@"
-fi
-if [ "$1" = "inbox-line" ]; then
-  exec __PYTHON__ __PREVIEW__ inbox-line "$2"
-fi
-if [ "$1" = "ack-tick" ]; then
-  exec __PYTHON__ __PREVIEW__ ack-tick "$2"
-fi
-if [ "$1" = "serve-tick" ]; then
-  exec __PYTHON__ __PREVIEW__ serve-tick "$2"
-fi
-if [ "$1" = "egress-tick" ]; then
-  exec __PYTHON__ __PREVIEW__ egress-tick "$2"
-fi
-if [ "$1" = "pr-check-tick" ]; then
-  # The dry run writes the record and skips the real spawn, so the suite starts no wait.
-  export ARENA_PREVIEW_DETACH_DRY=1
-  exec __PYTHON__ __PREVIEW__ "$@"
-fi
-if [ "$1" = "idle-tick" ]; then
-  exec __PYTHON__ __PREVIEW__ idle-tick "$2"
-fi
-if [ "$1" = "worktree-tick" ]; then
-  exec __PYTHON__ __PREVIEW__ worktree-tick "$2"
-fi
-if [ "$1" = "main-drift-tick" ]; then
-  if [ "${ARENA_PREVIEW_TEST_DRIFT:-}" = "1" ]; then
-    exec __PYTHON__ __PREVIEW__ "$@"
-  fi
-  exit 0
-fi
-if [ "$1" = "commit-tick" ]; then
-  # Not a pure classifier: it reads the repository's staged diff and the session
-  # database. Forwarding it would let the host repository's own staged content
-  # decide these drift tests, so the stub answers "nothing to block" and the ID
-  # trap keeps its own tests in test_preview.py.
-  exit 0
-fi
-# Drift fixtures have no inbox, so their dry-run push may reach Git.
+# A drift fixture has no inbox, so its dry-run push may reach Git.
 if [ "$1" = "gate" ] && [ "${ARENA_PREVIEW_TEST_DRIFT:-}" = "1" ]; then
   exit 0
 fi
@@ -182,13 +137,12 @@ def run(
   line: str | None = None,
   calls: Path | None = None,
   routed: bool = False,
-  read_set: bool = False,
 ) -> subprocess.CompletedProcess[str]:
   """Run one command in a shell whose $0 is bash, the shape the gate protects."""
   if state is None:
     with tempfile.TemporaryDirectory() as directory:
-      return run_in(command, Path(directory), cwd, line, calls, routed, read_set)
-  return run_in(command, state, cwd, line, calls, routed, read_set)
+      return run_in(command, Path(directory), cwd, line, calls, routed)
+  return run_in(command, state, cwd, line, calls, routed)
 
 
 def run_in(
@@ -198,7 +152,6 @@ def run_in(
   line: str | None = None,
   calls: Path | None = None,
   routed: bool = False,
-  read_set: bool = False,
 ) -> subprocess.CompletedProcess[str]:
   """Run one command against a state directory, with the gate sourced and trapped.
 
@@ -257,7 +210,6 @@ def run_in(
       **({"ARENA_PREVIEW_ROUTE": "1"} if routed else {}),
       ARENA_PREVIEW_TEST_DRIFT="1" if cwd else "0",
       **({"ARENA_PREVIEW_TEST_CALLS": str(calls)} if calls else {}),
-      **({"ARENA_PREVIEW_TEST_READ_SET": "1"} if read_set else {}),
     ),
   )
 
@@ -266,8 +218,9 @@ REFERENCE = ROOT / "maintenance" / "README.md"
 
 
 def test_the_reference_table_holds_every_gate_case() -> None:
-  """Every labelled case of the hook and the gate appears in the reference table."""
+  """Every labelled case of the hook and the merged gate appears in the reference."""
   source = INSTALLER.read_text(encoding="utf-8")
+  source += Path(preview_module.__file__).read_text(encoding="utf-8")
   labels = set(re.findall(r"^\s*# case: ([a-z][a-z0-9-]*)$", source, re.MULTILINE))
   assert len(labels) >= 10, sorted(labels)
   reference = REFERENCE.read_text(encoding="utf-8")
@@ -282,18 +235,19 @@ def test_the_reference_table_holds_every_gate_case() -> None:
 
 
 def test_read_set_tick_precedes_inert_line_exemptions():
-  installer = INSTALLER.read_text(encoding="utf-8")
+  """The merged gate reads the read set before any inert line returns."""
+  source = Path(preview_module.__file__).read_text(encoding="utf-8")
   tick = "# case: read-set-note"
-  assert installer.index("# case: violation-flag") < installer.index(tick)
-  assert installer.index(tick) < installer.index("# case: inert-line")
-  assert 'read-set-tick "\\$_arena_preview_line" --repo "$REPO_ROOT"' in installer
+  assert source.index("# case: violation-flag") < source.index(tick)
+  assert source.index(tick) < source.index("# case: inert-line")
+  assert "read_set_tick(" in source
 
 
 def test_command_lookup_does_not_start_a_run():
   for flag in ("-v", "-V", "-pv", "-pV"):
     line = f"command {flag} pytest"
     assert preview_module.long_run_name(line) is None, line
-    result = run(f"{line}; printf lookup-complete")
+    result = blocked(f"{line}; printf lookup-complete")
     assert result.returncode == 130, result.stderr
     assert "RUN DETACHED" not in result.stderr, result.stderr
     assert "lookup-complete" not in result.stdout
@@ -352,8 +306,20 @@ def test_the_gate_reaches_the_tick_for_a_named_runner():
     assert not (Path(clean_dir) / "runs").exists(), "a build line starts no run"
 
 
+def blocked(command: str, **kwargs) -> subprocess.CompletedProcess[str]:
+  """Run one line after a pending note reaches the call threshold."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = preview_module.Store(root, create=True)
+    store.note("gate-note", "Pending work")
+    store.set_meta(
+      preview_module.POLLS_SINCE_MESSAGE, str(preview_module.GATE_THRESHOLD)
+    )
+    return run(command, state=root, **kwargs)
+
+
 def test_plain_chain_meets_the_count_gate():
-  result = run("cd /tmp && echo ran")
+  result = blocked("cd /tmp && echo ran")
   assert result.returncode == 130, result.stderr
   assert "ran" not in result.stdout
 
@@ -366,19 +332,19 @@ def test_a_read_alone_stays_quiet():
 
 def test_a_read_beside_work_meets_the_gate():
   # Work beside an inbox read must pass the gate before it runs.
-  result = run('cd /tmp && echo ran && : "arena-preview read"')
+  result = blocked('cd /tmp && echo ran && : "arena-preview read"')
   assert result.returncode == 130, result.stderr
   assert "ran" not in result.stdout
 
 
 def test_a_read_with_a_redirect_beside_work_meets_the_gate():
-  result = run('cd /tmp && echo ran && : "arena-preview read" >/dev/null 2>&1')
+  result = blocked('cd /tmp && echo ran && : "arena-preview read" >/dev/null 2>&1')
   assert result.returncode == 130, result.stderr
   assert "ran" not in result.stdout
 
 
 def test_an_ack_beside_work_meets_the_gate():
-  result = run('cd /tmp && echo ran && : "arena-preview ack abc"')
+  result = blocked('cd /tmp && echo ran && : "arena-preview ack abc"')
   assert result.returncode == 130, result.stderr
   assert "ran" not in result.stdout
 
@@ -459,7 +425,10 @@ def test_the_inbox_line_classifier():
 
 
 def test_push_in_a_quiet_chain_still_meets_the_push_gate():
-  result = run("arena-preview read && git push origin branch")
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    preview_module.Store(root, create=True).note("push-note", "Late steering")
+    result = run("arena-preview read && git push origin branch", state=root)
   assert result.returncode == 130, result.stderr
 
 
@@ -796,13 +765,11 @@ def test_a_commit_line_keeps_the_drift_read_local():
     git(checkout, "config", "user.name", "t")
     git(checkout, "config", "user.email", "t@t")
     stale = git(checkout, "rev-parse", "refs/remotes/origin/main")
-    committed = run("git commit --allow-empty -m commit-check", cwd=str(checkout))
-    assert committed.returncode == 0, committed.stderr
+    preview_module.main_drift_warning(str(checkout), fresh=False)
     assert git(checkout, "rev-parse", "refs/remotes/origin/main") == stale, (
       "the commit line must read local refs alone"
     )
-    pushed = run("git push --dry-run origin work", cwd=str(checkout))
-    assert pushed.returncode == 0, pushed.stderr
+    preview_module.main_drift_warning(str(checkout))
     assert git(checkout, "rev-parse", "refs/remotes/origin/main") != stale, (
       "the push line refreshes the remote tips"
     )
@@ -839,12 +806,11 @@ def test_remote_drift_refreshes_shallow_refs_without_replaying_absorbed_work():
     untouched = checkout / "keep.txt"
     untouched.write_text("preserve this working file\n")
     before = git(checkout, "status", "--porcelain")
-    result = run("git push --dry-run origin work", cwd=str(checkout))
+    result = preview_module.main_drift_warning(str(checkout))
     behind = git(origin, "rev-list", "--count", "work..main")
-    assert (
-      f"Remote branch work is {behind} commit(s) behind origin/main" in result.stderr
-    ), result.stderr
-    assert result.returncode == 0, result.stderr
+    assert f"Remote branch work is {behind} commit(s) behind origin/main" in result, (
+      result
+    )
     assert git(checkout, "rev-parse", "HEAD") == head
     assert git(checkout, "status", "--porcelain") == before
     assert untouched.read_text() == "preserve this working file\n"
@@ -854,10 +820,10 @@ def test_remote_drift_refreshes_shallow_refs_without_replaying_absorbed_work():
       origin, "commit-tree", "main^{tree}", "-p", "work", "-m", "rebased work"
     )
     git(origin, "update-ref", "refs/heads/work", rewritten)
-    result = run("git push --dry-run origin work", cwd=str(checkout))
-    assert "identical trees" in result.stderr, result.stderr
-    assert "do not replay" in result.stderr, result.stderr
-    assert "Replay your commits" not in result.stderr, result.stderr
+    result = preview_module.main_drift_warning(str(checkout))
+    assert "identical trees" in result, result
+    assert "do not replay" in result, result
+    assert "Replay your commits" not in result, result
     assert git(checkout, "rev-parse", "HEAD") == head
     assert git(checkout, "status", "--porcelain") == before
 
@@ -894,8 +860,8 @@ def test_pr_state_veto_precedes_platform_and_count_bypasses():
       assert "mutation-reached" not in result.stdout, command
 
 
-def test_the_veto_prefilter_keeps_every_write_and_skips_a_read():
-  """A read line spends no spawn, and each write shape still reaches the veto."""
+def test_the_veto_keeps_every_write_and_passes_a_read():
+  """Each write shape reaches the veto, and a read line passes it."""
   for command in (
     "git status --porcelain",
     "git diff --stat",
@@ -903,11 +869,9 @@ def test_the_veto_prefilter_keeps_every_write_and_skips_a_read():
     "gh --version",
   ):
     with tempfile.TemporaryDirectory() as directory:
-      calls = Path(directory) / "calls"
-      result = run(command, state=Path(directory), calls=calls)
+      result = run(command, state=Path(directory))
       assert result.returncode == 0, (command, result.stderr)
-      log = calls.read_text(encoding="utf-8") if calls.exists() else ""
-      assert "pr-state-tick" not in log, (command, log)
+      assert "PR STATE BLOCKED" not in result.stderr, (command, result.stderr)
   writes = (
     "gh pr merge 110",
     "gh pr close 110",
@@ -928,7 +892,7 @@ def test_the_veto_prefilter_keeps_every_write_and_skips_a_read():
       result = run(command, state=Path(directory), calls=calls)
       assert result.returncode == 130, (command, result.stderr)
       assert "PR STATE BLOCKED" in result.stderr, (command, result.stderr)
-      assert "pr-state-tick" in calls.read_text(encoding="utf-8"), command
+      assert "pre --shell bash" in calls.read_text(encoding="utf-8"), command
 
 
 def test_pr_state_veto_keeps_reads_comments_and_metadata_edits():
@@ -1081,7 +1045,7 @@ def test_violation_flag_blocks_the_agent_shell():
       assert hosted.stdout == "platform-active", line
       assert store.state()["agent_interrupt_pending"], line
       log = calls.read_text() if calls.exists() else ""
-      assert "interrupt-tick" not in log, (line, log)
+      assert log.count("pre --shell") == 1, (line, log)
       agent = run("printf agent-work", state=root)
       assert agent.returncode == 130, agent.stderr
       assert "agent-work" not in agent.stdout
@@ -1102,13 +1066,12 @@ def test_the_read_set_gate_passes_the_workspace_root_bootstrap_line():
       passed = run(
         "mkdir -p '/home/user'; printf bootstrap-ran",
         state=root,
-        read_set=True,
       )
       assert passed.returncode == 0, passed.stderr
       assert passed.stdout == "bootstrap-ran", passed.stdout
       assert store.pending_read_set_note() is None
       assert store.meta_value(preview_module.READ_SET_SLOT_META) is None
-      blocked = run("printf agent-work", state=root, read_set=True)
+      blocked = run("printf agent-work", state=root)
       assert blocked.returncode == 130, blocked.stderr
       assert "READ SET BLOCKED" in blocked.stderr, blocked.stderr
       assert "agent-work" not in blocked.stdout

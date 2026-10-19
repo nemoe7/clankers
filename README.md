@@ -56,8 +56,8 @@ Latest measurements as of 2026-10-19. `maintenance/check.py --update` rebuilds t
 | [`skills/arena-skill/README.md`](skills/arena-skill/README.md) | `o200k_base` | 1,872 `tok` |
 | [`skills/arena-skill/references/REFERENCE.md`](skills/arena-skill/references/REFERENCE.md) | `o200k_base` | 3,849 `tok` |
 | [`skills/arena-skill/scripts/arena-preview`](skills/arena-skill/scripts/arena-preview) | `UTF-8 file size` | 544 `B` |
-| [`skills/arena-skill/scripts/install.sh`](skills/arena-skill/scripts/install.sh) | `UTF-8 file size` | 16,539 `B` |
-| [`skills/arena-skill/scripts/preview.py`](skills/arena-skill/scripts/preview.py) | `UTF-8 file size` | 214,136 `B` |
+| [`skills/arena-skill/scripts/install.sh`](skills/arena-skill/scripts/install.sh) | `UTF-8 file size` | 8,201 `B` |
+| [`skills/arena-skill/scripts/preview.py`](skills/arena-skill/scripts/preview.py) | `UTF-8 file size` | 214,711 `B` |
 | [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,093 `tok` |
 | [`skills/squash/SKILL.md`](skills/squash/SKILL.md) | `o200k_base` | 1,377 `tok` |
 | [`skills/web-interface-guidelines/SKILL.md`](skills/web-interface-guidelines/SKILL.md) | `o200k_base` | 528 `tok` |
