@@ -8,6 +8,7 @@ import re
 import secrets
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -77,6 +78,7 @@ AGENT_KEY_EXPIRY_SECONDS=1200
 AGENT_KEY_EXPIRY_META='agent_key_expired_at'
 AGENT_SEEN_META='agent_seen_at'
 AGENT_INTERRUPT_META='agent_interrupt'
+CALL_GROUP_META='call_group'
 AGENT_CALL_ENDED_META='agent_call_ended_at'
 TURN_ENDED_META='turn_ended_at'
 REMOVED_META='state_removed_at'
@@ -2507,6 +2509,7 @@ def platform_line(line):return any(pattern in line for pattern in PLATFORM_LINES
 def state_file(state_dir):return Path(state_dir)/'state.sqlite3'
 def pre_command(state_dir,line,command,root,done='',shell=''):
 	initial=done.split();steps=list(initial);finished=set(steps);routed=os.environ.get('ARENA_PREVIEW_ROUTE')=='1'
+	if not routed and state_file(state_dir).is_file():Store(state_dir,create=False).set_meta(CALL_GROUP_META,os.getpgid(0))
 	def report(warning):print(warning,file=sys.stderr,flush=True)
 	def mark(step):
 		if step not in finished:finished.add(step);steps.append(step)
@@ -2567,6 +2570,20 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 		mark('gate')
 		if gate_verdict(state_dir,False,line,out=sys.stderr)==1:return finish(130)
 	return finish(0)
+def watch_call_group(store,stop=None,interval=1.,signal_group=os.killpg):
+	seen=None
+	while stop is None or not stop.is_set():
+		notice=store.meta_value(AGENT_INTERRUPT_META)
+		if notice and notice!=seen:
+			seen=notice
+			try:group=int(store.meta_value(CALL_GROUP_META)or 0)
+			except(TypeError,ValueError):group=0
+			if group>1:
+				try:signal_group(group,signal.SIGINT)
+				except(ProcessLookupError,PermissionError):pass
+				store.set_meta(CALL_GROUP_META,'')
+		if stop is None:time.sleep(interval)
+		elif stop.wait(interval):return
 class PreviewArgumentParser(argparse.ArgumentParser):
 	def print_usage(self,file=None):pass
 	def exit(self,status=0,message=None):super().exit(status,message.removeprefix('arena-preview: ')if message else message)
@@ -2619,7 +2636,7 @@ def main():
 		if args.command!='serve'and not read_only:store.touch_agent()
 		if args.command=='serve':
 			from http.server import ThreadingHTTPServer;require_renderer()
-			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store))as server:store.set_meta('port',str(server.server_port));print(f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever()
+			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store))as server:store.set_meta('port',str(server.server_port));threading.Thread(target=watch_call_group,args=(store,),daemon=True).start();print(f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever()
 		elif args.command=='read':require_server(store);store.notice_expired_key();print_read(store)
 		elif args.command=='note-list':
 			ids,total=store.list_note_ids(args.page,args.page_size);pages=max(1,(total+args.page_size-1)//args.page_size)

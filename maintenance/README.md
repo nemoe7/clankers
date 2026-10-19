@@ -183,7 +183,7 @@ It uses readable assets for exact page assertions, then shipped assets for page 
 | `shell-shape` | a caller that is not `bash`, `sh`, `dash`, `ksh` or `zsh` | pass, so a hosted process keeps its shell |
 | `shell-line` | every gated shell | the gate reads the command line once per shell, so a command costs no read |
 | `platform-shell` | the platform's probe or its own hosted process | pass, with no rule run |
-| `violation-flag` | a pending preview flag on an agent shell | `exit 130` with the full notice. A running poll prints it instead |
+| `violation-flag` | a pending preview flag on an agent shell | `exit 130` with the full notice. A running poll prints it instead, and `serve` signals the call group recorded at hook start |
 | `read-set-note` | the first command in an agent shell | create a due hidden checkpoint and block work. Defer it for a poll command, an active poll, or an unavailable server |
 | `task-reminder` | `git commit`, `git push` or `gh pr checks` | the task-list notice once per shell, then the line runs |
 | `main-moved` | `git commit` or `git push` | the drift check runs once per shell. It uses local refs at the commit line and a fresh `fetch` at the push line, then the line runs |
