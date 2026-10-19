@@ -1637,6 +1637,10 @@ function taskRow(task) {
   if (task.blocked) {
     title.dataset.blocked = 'true';
   }
+  // A live linked gate overrides that muted title color without changing the rest of the row.
+  if (task.runs && task.runs.length) {
+    title.dataset.waitingGate = 'true';
+  }
   title.tabIndex = 0;
   title.setAttribute('role', 'button');
   title.setAttribute('aria-label', `${task.title}. Task ID ${task.id}. Press Enter to quote it`);
