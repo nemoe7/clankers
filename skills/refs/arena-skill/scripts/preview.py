@@ -10,6 +10,7 @@ import re
 import secrets
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -194,6 +195,7 @@ AGENT_KEY_EXPIRY_SECONDS = 1200
 AGENT_KEY_EXPIRY_META = "agent_key_expired_at"
 AGENT_SEEN_META = "agent_seen_at"
 AGENT_INTERRUPT_META = "agent_interrupt"
+CALL_GROUP_META = "call_group"
 AGENT_CALL_ENDED_META = "agent_call_ended_at"
 # A poll that returns with nothing to read ends the turn. The header reads this mark, so the
 # silence after a turn never reads as a running bash call. The agent's next call clears it.
@@ -7696,6 +7698,10 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
   steps = list(initial)
   finished = set(steps)
   routed = os.environ.get("ARENA_PREVIEW_ROUTE") == "1"
+  # The hook start records the Bash call's process group, so serve can signal it
+  # when a violation flag lands while the call runs. A routed run keeps its own.
+  if not routed and state_file(state_dir).is_file():
+    Store(state_dir, create=False).set_meta(CALL_GROUP_META, os.getpgid(0))
 
   def report(warning):
     print(warning, file=sys.stderr, flush=True)
@@ -7869,6 +7875,30 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
     if gate_verdict(state_dir, False, line, out=sys.stderr) == 1:
       return finish(130)
   return finish(0)
+
+
+def watch_call_group(store, stop=None, interval=1.0, signal_group=os.killpg):
+  """Signal the recorded Bash call group once per violation flag."""
+  seen = None
+  while stop is None or not stop.is_set():
+    notice = store.meta_value(AGENT_INTERRUPT_META)
+    if notice and notice != seen:
+      seen = notice
+      try:
+        group = int(store.meta_value(CALL_GROUP_META) or 0)
+      except (TypeError, ValueError):
+        group = 0
+      if group > 1:
+        try:
+          signal_group(group, signal.SIGINT)
+        except (ProcessLookupError, PermissionError):
+          pass
+        # One flag signals one call. A stale group must never fire again.
+        store.set_meta(CALL_GROUP_META, "")
+    if stop is None:
+      time.sleep(interval)
+    elif stop.wait(interval):
+      return
 
 
 class PreviewArgumentParser(argparse.ArgumentParser):
@@ -8312,6 +8342,7 @@ def main():
       require_renderer()
       with ThreadingHTTPServer(("0.0.0.0", args.port), handler(store)) as server:
         store.set_meta("port", str(server.server_port))
+        threading.Thread(target=watch_call_group, args=(store,), daemon=True).start()
         print(
           f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",
           flush=True,

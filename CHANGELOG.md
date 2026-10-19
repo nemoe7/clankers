@@ -15,6 +15,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Arena rules: on a context-check reminder, read only the read-set files absent from context. The Setup clause drops the unconditional read.
 - Preview import: `state import` always replaces the live notes, answers, reports and tasks. `--merge` leaves the CLI, and the receipt always names the replacement.
+- Preview violation flag: `serve` signals the process group recorded at hook start, so a running Bash call ends at once. The next call still reads the block.
 - Preview polls: raise a violation for a repeat poll inside 45 seconds. The next call blocks and rereads the read set.
 - Preview CLI: group the agent commands under `note`, `run`, `task`, `report` and `state`. Remove the old flat names.
 - Preview Bash gate: run every pre-Bash rule in one `pre` call, in the installed order. Replace the individual tick commands, and keep the 0, 2 and 130 answers.

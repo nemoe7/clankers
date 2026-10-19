@@ -6426,6 +6426,70 @@ def test_a_repeat_poll_command_exits_2_with_the_violation():
     assert store.take_interrupt().startswith("VIOLATION")
 
 
+def test_the_gate_records_the_call_group():
+  """The pre hook stores the process group that serves a later violation signal."""
+  with tempfile.TemporaryDirectory() as group_dir:
+    state = Path(group_dir) / "state"
+    preview.Store(state, create=True)
+    result = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "pre",
+        "--line",
+        "printf hi",
+        "--command",
+        "printf hi",
+        "--repo",
+        group_dir,
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(state)},
+    )
+    assert result.returncode == 0, result.stderr
+    stored = preview.Store(state).meta_value(preview.CALL_GROUP_META)
+    assert int(stored) == os.getpgid(0)
+
+
+def test_a_violation_flag_signals_the_recorded_group():
+  """The watcher sends SIGINT to the recorded group and stops once the flag lands."""
+  code = (
+    "import signal, sys, time\n"
+    "signal.signal(signal.SIGINT, lambda *args: sys.exit(42))\n"
+    "print('ready', flush=True)\n"
+    "time.sleep(60)\n"
+  )
+  with tempfile.TemporaryDirectory() as watch_dir:
+    store = preview.Store(watch_dir, create=True)
+    child = subprocess.Popen(
+      [sys.executable, "-c", code],
+      start_new_session=True,
+      stdout=subprocess.PIPE,
+    )
+    stop = threading.Event()
+    watcher = None
+    try:
+      assert child.stdout.readline() == b"ready\n"
+      store.set_meta(preview.CALL_GROUP_META, child.pid)
+      watcher = threading.Thread(
+        target=preview.watch_call_group,
+        args=(store,),
+        kwargs={"stop": stop, "interval": 0.05},
+        daemon=True,
+      )
+      watcher.start()
+      store.request_interrupt("tasks")
+      assert child.wait(timeout=10) == 42
+    finally:
+      stop.set()
+      if watcher is not None:
+        watcher.join(timeout=5)
+      if child.poll() is None:
+        child.kill()
+
+
 def test_poll_retry_disclaimer():
   # The poll announces its own span up front: a call that ends early with nothing to
   # read was cut by the bash tool timeout, and the retry needs the tool timeout 1800.
