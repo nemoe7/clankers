@@ -133,6 +133,8 @@ A task row shows the answers linked to it in a read-only block under its details
 
 ## Report fields
 
+In report diffs, keep leading and trailing whitespace outside `~~...~~` and `==...==`; do not mark whitespace-only runs.
+
 | Markdown marker | Control |
 | --- | --- |
 | `- ( ) option` (`- (x)` to preselect) | One radio choice; the preselect is the marked recommended answer |
