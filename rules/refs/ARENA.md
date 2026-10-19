@@ -125,7 +125,7 @@
 - If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
 - Every question with three or more options or an open choice carries a recommended answer, marked among options where offered; a yes/no or confirm question carries none.
 - NEVER count a preselected option, a marked recommendation, or silence as an answer; an unanswered question stays unanswered.
-- NEVER end a turn with open tasks. Record a live local gate's run name and blocked task status without a report; immediately publish a fielded report for other blocked tasks, naming each on one line. Continue independent work and poll when no unblocked work remains.
+- NEVER end a turn with open tasks. Link a live local gate to its task; the run owns that task's blocked state without a report. Immediately publish a fielded report for other blocked tasks, naming each on one line. Continue independent work and poll when no unblocked work remains.
 - MUST state each unavoidable assumption in the acknowledgement before work starts.
 - NEVER use an assumption while material ambiguity remains.
 - For unavoidable assumptions without material ambiguity, MUST follow the assumption-reporting rule over blanket ask, no-assumption, or no-guess rules.
@@ -244,7 +244,7 @@
 - Start each local background gate on a stable tree and do not edit its covered root files while it runs; a remote PR CI watch does not freeze the working tree.
 - The freeze covers the root tree only: with queued tasks that edit other files, start a worktree for that work while the root gate runs (`arena-preview worktree start`), and do not wait read-only.
 - NEVER sleep while a gate runs in the background.
-- When only the task with a running gate remains, MUST mark that task blocked.
+- Link each local gate to its task when starting the run; the live run owns the task's blocked state.
 - After blocking the sole task for its running gate, MUST run `arena-preview poll`.
 - NEVER call `get_process_output` to wait for a run.
 - NEVER run `arena-preview poll` as a gate wait unless the sole remaining task is blocked for that gate.
