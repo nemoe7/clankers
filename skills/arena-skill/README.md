@@ -25,7 +25,7 @@ Fetch queue writes do not, and the import command leaves it unchanged.
 
 The clipboard Copy state button exports the same NDJSON.
 
-A restore uses `import-state [FILE]` for notes, tasks, report answers, and report Markdown together. The command accepts copied NDJSON, a JSON array or a state object, from a file or stdin. It replaces the live state in one transaction.
+A restore uses `state import [FILE]` for notes, tasks, report answers, and report Markdown together. The command accepts copied NDJSON, a JSON array or a state object, from a file or stdin. It replaces the live state in one transaction.
 
 `--merge` merges by ID instead. The backup stays unchanged. `--replace-tasks` replaces only tasks.
 Republish surviving report sources after restoring a database without reports.

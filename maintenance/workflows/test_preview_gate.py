@@ -330,7 +330,7 @@ def test_the_gate_refuses_to_replay_a_mixed_line():
     result = run("true; npm test", state=Path(directory))
     assert result.returncode == 130, result.stderr
     assert "RUN BLOCKED" in result.stderr, result.stderr
-    assert "arena-preview route" in result.stderr, result.stderr
+    assert "arena-preview run start" in result.stderr, result.stderr
     assert not (Path(directory) / "runs").exists()
 
 

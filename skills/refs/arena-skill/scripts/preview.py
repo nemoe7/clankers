@@ -2070,6 +2070,26 @@ def format_task(record, full=False):
   return "\n".join(lines)
 
 
+def print_task_row(store, task_id):
+  """Print one stored task in full, with the same miss text as a bare task ID."""
+  if not store.id_matches(task_id):
+    raise ValueError(f"No task is stored under {task_id}.")
+  resolved = store.resolve_id(task_id)
+  tasks = store.tasks() or {}
+  record = next(
+    (
+      item
+      for status in TASK_STATUSES
+      for item in tasks.get(status, [])
+      if item["id"] == resolved
+    ),
+    None,
+  )
+  if record is None:
+    raise ValueError(f"No task is stored under {resolved}.")
+  print(format_task(record, full=True))
+
+
 def format_key(record):
   lines = []
   if record.get("key"):
@@ -2868,7 +2888,7 @@ def run_command(state_dir, name, argv):
   """
   if not RUN_NAME.fullmatch(name or ""):
     print(
-      "arena-preview route: the name takes 1 to 64 letters, digits, dot, dash or"
+      "arena-preview run start: the name takes 1 to 64 letters, digits, dot, dash or"
       " underscore.",
       flush=True,
     )
@@ -2877,7 +2897,7 @@ def run_command(state_dir, name, argv):
     argv = argv[1:]
   if not argv:
     print(
-      "arena-preview route: name a command after --, for example: route gates -- make"
+      "arena-preview run start: name a command after --, for example: run start gates"
       " check",
       flush=True,
     )
@@ -3132,7 +3152,7 @@ DETACHED_NOTICE = (
 )
 DETACHED_BLOCK = (
   "RUN BLOCKED: background start failed, wait not started. Use `arena-preview "
-  "route {name} -- <the same line>` instead."
+  "run start {name} -- <the same line>` instead."
 )
 # A detached record older than this stops printing its status line, so a killed child
 # leaves no forever-running line.
@@ -3310,7 +3330,7 @@ def pr_check_wait(state_dir, line, command=None):
   if command is not None and line.strip() != command.strip():
     print(
       "RUN BLOCKED: automatic routing would replay a mixed shell line."
-      f" Use `arena-preview route {name} -- <remaining command>`;"
+      f" Use `arena-preview run start {name} -- <remaining command>`;"
       " do not repeat completed commands.",
       file=sys.stderr,
       flush=True,
@@ -3417,7 +3437,7 @@ def route_command(state_dir, name, argv, task_id=None):
   """
   if not RUN_NAME.fullmatch(name or ""):
     print(
-      "arena-preview route: the name takes 1 to 64 letters, digits, dot, dash or"
+      "arena-preview run start: the name takes 1 to 64 letters, digits, dot, dash or"
       " underscore.",
       flush=True,
     )
@@ -3426,7 +3446,7 @@ def route_command(state_dir, name, argv, task_id=None):
     argv = argv[1:]
   if not argv:
     print(
-      "arena-preview route: name a command after --, for example: route gates -- make"
+      "arena-preview run start: name a command after --, for example: run start gates"
       " check",
       flush=True,
     )
@@ -3436,7 +3456,7 @@ def route_command(state_dir, name, argv, task_id=None):
   except FileNotFoundError:
     pass
   if not detach_run(state_dir, name, argv, task_id=task_id):
-    print(f"arena-preview route: the start of `{name}` failed.", flush=True)
+    print(f"arena-preview run start: the start of `{name}` failed.", flush=True)
     return 1
   print(
     f"routed {name}: background run. Verdict on later call. {WORKTREE_STEP}",
@@ -7582,16 +7602,18 @@ def main():
     "skills",
     help="List skill names, full descriptions, and paths without loading skills",
   )
-  note_list = commands.add_parser(
-    "note-list",
+  note_group = commands.add_parser("note", help="Read stored notes")
+  note_verbs = note_group.add_subparsers(dest="verb", required=True)
+  note_list = note_verbs.add_parser(
+    "list",
     help="List stored note IDs by page, newest first, including acknowledged notes",
   )
   note_list.add_argument("--page", type=int, default=1, help="Page number (default: 1)")
   note_list.add_argument(
     "--page-size", type=int, default=20, help="IDs per page, 1 to 100 (default: 20)"
   )
-  note_reread = commands.add_parser(
-    "note",
+  note_reread = note_verbs.add_parser(
+    "show",
     help="Reread a stored note by its short or full ID",
   )
   note_reread.add_argument("id", help="Six or all characters of a note ID")
@@ -7617,8 +7639,12 @@ def main():
     "line", help="The command line, as the hook read it"
   )
   read_set_tick_parser.add_argument("--repo", default=".")
-  route = commands.add_parser(
-    "route",
+  run_group = commands.add_parser(
+    "run", help="Start a long command and read its result"
+  )
+  run_verbs = run_group.add_subparsers(dest="verb", required=True)
+  route = run_verbs.add_parser(
+    "start",
     help=(
       "Start a command detached, keep its output tail, and show the exit on a later"
       " call"
@@ -7644,7 +7670,7 @@ def main():
   route_run.add_argument(
     "command_args", nargs=argparse.REMAINDER, help="The command, after --"
   )
-  logs = commands.add_parser(
+  logs = run_verbs.add_parser(
     "logs", help="Print a routed run's status and its recorded output tail"
   )
   logs.add_argument("name", help="The run name to read")
@@ -7766,37 +7792,47 @@ def main():
   ack.add_argument("--task-title")
   ack.add_argument("--task-type", choices=TASK_TYPES)
   ack.add_argument("--task-detail", action="append")
-  publish = commands.add_parser(
+  report_group = commands.add_parser(
+    "report", help="Publish, withdraw and inspect reports"
+  )
+  report_verbs = report_group.add_subparsers(dest="verb", required=True)
+  publish = report_verbs.add_parser(
     "publish", help="Publish a report; -i names the ID, -t the title"
   )
   publish.add_argument("source", type=Path)
   publish.add_argument("-i", "--id", required=True)
   publish.add_argument("-t", "--title", required=True)
-  report = commands.add_parser("report", help="Report batch actions")
-  report_actions = report.add_subparsers(dest="report_action", required=True)
-  report_unpublish = report_actions.add_parser(
-    "unpublish", help="Remove stale reports through existing guards"
+  unpublish = report_verbs.add_parser(
+    "unpublish", help="Withdraw a report by ID, or every stale report with --stale"
   )
-  report_unpublish.add_argument("--stale", action="store_true", required=True)
-  unpublish = commands.add_parser(
-    "unpublish", help="Withdraw a published report by its ID"
+  unpublish.add_argument("report_id", nargs="?")
+  unpublish.add_argument(
+    "--stale", action="store_true", help="Withdraw every stale report"
   )
-  unpublish.add_argument("report_id")
-  commands.add_parser(
-    "stale-reports",
+  report_verbs.add_parser(
+    "stale",
     help="List stale published report IDs and reasons without changing state",
   )
-  report_state = commands.add_parser(
-    "report-state",
+  report_state = report_verbs.add_parser(
+    "state",
     help="Print publication, owner view stamp and answer visibility for one report or all",
   )
   report_state.add_argument("report_id", nargs="?")
-  task = commands.add_parser(
-    "task",
+  task_group = commands.add_parser("task", help="Read and update tasks")
+  task_verbs = task_group.add_subparsers(dest="verb", required=True)
+  task_list = task_verbs.add_parser(
+    "list", help="List the tasks; -f includes the finished ones"
+  )
+  task_list.add_argument(
+    "-f", "--full", action="store_true", help="print every task, finished included"
+  )
+  task_show = task_verbs.add_parser("show", help="Print one stored task in full")
+  task_show.add_argument("task_id", metavar="TASK-ID")
+  task = task_verbs.add_parser(
+    "set",
     help=(
-      "Write or update a task; TASK-ID alone prints the stored row; -s status,"
-      " -o order, -d details, -A append, -m message, -r report, -u unblocked,"
-      " -a amend, --task-type type"
+      "Write or update a task; -s status, -o order, -d details, -A append,"
+      " -m message, -r report, -u unblocked, -a amend, --task-type type"
     ),
   )
   task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
@@ -7857,16 +7893,12 @@ def main():
     default=None,
     help="1-based place in its div, not the end",
   )
-  task_remove = commands.add_parser("task-remove", help="Delete a task by its ID")
+  task_remove = task_verbs.add_parser("remove", help="Delete a task by its ID")
   task_remove.add_argument("task_id")
-  task_list = commands.add_parser(
-    "task-list", help="List the tasks; -f includes the finished ones"
-  )
-  task_list.add_argument(
-    "-f", "--full", action="store_true", help="print every task, finished included"
-  )
-  state_import = commands.add_parser(
-    "import-state",
+  state_group = commands.add_parser("state", help="Import or clear the stored state")
+  state_verbs = state_group.add_subparsers(dest="verb", required=True)
+  state_import = state_verbs.add_parser(
+    "import",
     help="Import an NDJSON backup; replaces the live state unless --merge",
   )
   state_import.add_argument("source", nargs="?", type=Path)
@@ -7876,11 +7908,35 @@ def main():
     action="store_true",
     help="keep the live notes, answers, reports and tasks, and merge the import by ID",
   )
-  commands.add_parser(
-    "clear-state",
+  state_verbs.add_parser(
+    "clear",
     help="Empty every state table in place; the agent key record survives",
   )
   args = parser.parse_args()
+  # The grouped commands keep one dispatch name per leaf. This map is the only place
+  # where a group and a verb become that name.
+  verb = getattr(args, "verb", None)
+  grouped_commands = {
+    ("note", "list"): "note-list",
+    ("note", "show"): "note",
+    ("run", "start"): "route",
+    ("run", "logs"): "logs",
+    ("report", "publish"): "publish",
+    ("report", "unpublish"): "unpublish",
+    ("report", "stale"): "stale-reports",
+    ("report", "state"): "report-state",
+    ("task", "list"): "task-list",
+    ("task", "show"): "task-show",
+    ("task", "set"): "task",
+    ("task", "remove"): "task-remove",
+    ("state", "import"): "import-state",
+    ("state", "clear"): "clear-state",
+  }
+  args.command = grouped_commands.get((args.command, verb), args.command)
+  if args.command == "unpublish" and args.stale:
+    if args.report_id:
+      parser.error("give a report ID or --stale, not both")
+    args.command = "report"
   state_dir = resolve_state_dir()
   # Read before the store opens: creating the database is what this call reports.
   fresh_state = not (Path(state_dir).resolve() / "state.sqlite3").is_file()
@@ -8238,7 +8294,9 @@ def main():
       if untracked:
         print(
           "link it with: "
-          + "; ".join(f'arena-preview task <id> "<title>" -m {i}' for i in untracked)
+          + "; ".join(
+            f'arena-preview task set <id> "<title>" -m {i}' for i in untracked
+          )
         )
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
@@ -8283,11 +8341,13 @@ def main():
         print(f"No report {args.report_id}", file=sys.stderr)
         raise SystemExit(1)
       print(format_report_state(rows), end="")
+    elif args.command == "task-show":
+      print_task_row(store, args.task_id)
     elif args.command == "task":
       task_id = args.id_arg
       if not task_id:
         raise ValueError(
-          'A task needs an ID: arena-preview task <id> "<title>" -m <msg-id>'
+          'A task needs an ID: arena-preview task set <id> "<title>" -m <msg-id>'
         )
       if (
         args.title_arg is None
@@ -8304,22 +8364,7 @@ def main():
       ):
         # A bare ID reads the stored row without writing. An ID that names nothing at
         # all reads as a task miss here, since this is the task command.
-        if not store.id_matches(task_id):
-          raise ValueError(f"No task is stored under {task_id}.")
-        resolved = store.resolve_id(task_id)
-        tasks = store.tasks() or {}
-        record = next(
-          (
-            item
-            for status in TASK_STATUSES
-            for item in tasks.get(status, [])
-            if item["id"] == resolved
-          ),
-          None,
-        )
-        if record is None:
-          raise ValueError(f"No task is stored under {resolved}.")
-        print(format_task(record, full=True))
+        print_task_row(store, task_id)
         return 0
       details = args.task_details
       if details is None and args.detail_arg:
