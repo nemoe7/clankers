@@ -6194,12 +6194,15 @@ def test_poll_inbox():
 def test_poll_requires_a_closing_poll_after_a_run_verdict(capsys):
   with tempfile.TemporaryDirectory() as poll_dir:
     store = preview.Store(poll_dir, create=True)
+    store.set_meta(preview.POLL_REPEAT_META, preview.poll_clock())
     assert preview.run_command(poll_dir, "check", ["true"]) == 0
     capsys.readouterr()
     assert preview.poll_inbox(store) == 0
     output = capsys.readouterr().out
     assert "run check done: exit 0" in output
     assert "DO NOT END TURN. POLL AGAIN." in output
+    # The gate verdict breaks the poll, so the closing poll is not spam.
+    assert store.meta_value(preview.POLL_REPEAT_META) == "0"
 
 
 def test_poll_blocked_tasks():
@@ -6229,11 +6232,12 @@ def test_poll_blocked_tasks():
       assert code == 0
       assert sleeps == [], "unblocked work ends the wait before the first sleep"
       assert "open-task" in printed[-1]
-      # The early return names the task on stderr, so no session reads it as an empty wait.
+      # The early return names the task on stdout, so no session reads it as an empty wait.
       assert printed[0].startswith("poll waits up to 1799 s.")
       # One line, one stream: the agent reads both, so a duplicate only costs tokens.
       assert printed[1] == (
-        "CONTINUE: unblocked task open-task. Work it or block it; do not end the turn."
+        "CONTINUE: UNBLOCKED TASK open-task. Start a worktree with:"
+        " arena-preview worktree start --gate <gate> <name> <destination>."
       )
       assert printed[2] != printed[1]
       assert "open-task" in printed[-1]
@@ -6252,6 +6256,46 @@ def test_poll_blocked_tasks():
       assert code == 0, "clearing the mark makes the next poll return at once"
     finally:
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+
+
+def test_repeat_polls_raise_a_violation(monkeypatch):
+  """A poll inside the repeat window raises the violation the next call reads."""
+  with tempfile.TemporaryDirectory() as spam_dir:
+    store = preview.Store(spam_dir, create=True)
+    moment = [1000]
+    monkeypatch.setattr(preview, "poll_clock", lambda: moment[0])
+    assert preview.poll_repeat(store) is None
+    refusal = preview.poll_repeat(store)
+    assert refusal.startswith("VIOLATION: repeat poll inside 45 seconds.")
+    notice = store.take_interrupt()
+    assert notice.startswith("VIOLATION")
+    assert "This Bash call was blocked" in notice
+    # The served window lets the next poll run.
+    moment[0] += 46
+    assert preview.poll_repeat(store) is None
+    # A real command between two quick polls clears the stamp.
+    preview.clear_poll_repeat(store)
+    assert preview.poll_repeat(store) is None
+    assert preview.poll_repeat(store) is not None
+
+
+def test_a_repeat_poll_command_exits_2_with_the_violation():
+  """The CLI refuses the repeated poll and arms the violation."""
+  with tempfile.TemporaryDirectory() as spam_dir:
+    store = preview.Store(spam_dir, create=True)
+    store.set_meta("port", guard_port())
+    store.set_meta(preview.POLL_REPEAT_META, int(time.time()))
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": spam_dir}
+    result = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "poll"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert result.returncode == 2, result.stderr
+    assert result.stdout.startswith("VIOLATION: repeat poll inside 45 seconds.")
+    assert store.take_interrupt().startswith("VIOLATION")
 
 
 def test_poll_retry_disclaimer():
