@@ -33,7 +33,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `stale-reports` | List stale published report IDs and reasons without changing state |
 | `report-state` | Print publication, owner view stamp, staleness and answer visibility for one report or all |
 | `rename <id> <new-id>` | Rename one stored note, report answer, report or task in place, so its answers, order and stamps survive |
-| `clear-state` | Empty every state table in place; preserve the agent key, refresh the save file to match, and keep a running server's page token and recorded port |
+| `clear-state` | Empty every state table in place; preserve the agent key, refresh the save file to match, and keep a running server's recorded port |
 | PR title/body | Update PR title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' \| gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -` |
 
 - Every command except `init` and `serve` breaks with a restart line while no preview answers, so the agent starts the server first.

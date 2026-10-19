@@ -141,10 +141,8 @@ test('preview client', async (t) => {
   const resultCalls = [];
   const failedCalls = [];
   let enqueueResponseLost = false;
-  let staleToken = false;
-  let servedToken = 'token-one';
   let pageFetches = 0;
-  const writeTokens = [];
+  const writeHeadersSeen = [];
   const response = (value, ok = true) => {
     const body = JSON.stringify(value);
     return { ok, status: ok ? 200 : 503, json: async () => JSON.parse(body), text: async () => body };
@@ -182,7 +180,7 @@ test('preview client', async (t) => {
       if (url === '/api/state') {
         // A gateway in front of a dead server answers with its own page, not the app's JSON.
         if (stateGatewayBody !== null) return { ok: false, status: 502, statusText: 'Bad Gateway', json: async () => ({}), text: async () => stateGatewayBody };
-        const snapshot = stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
+        const snapshot = stateFails ? response({ error: 'server gone' }, false) : response(state);
         if (stateResponseWait) await stateResponseWait;
         return snapshot;
       }
@@ -225,10 +223,7 @@ test('preview client', async (t) => {
       if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
       if (url === '/api/notes') {
         // Retry tests send notes. There is no save route.
-        writeTokens.push(options.headers['X-Preview-Token']);
-        if (staleToken && options.headers['X-Preview-Token'] !== servedToken) {
-          return { ok: false, status: 403, text: async () => JSON.stringify({ error: 'Bad or missing token' }) };
-        }
+        writeHeadersSeen.push(options.headers || {});
         const note = JSON.parse(options.body);
         sent.push(note);
         return sendHandler(note);
@@ -249,8 +244,8 @@ test('preview client', async (t) => {
         const id = options.body.get('id');
         const text = options.body.get('text');
         const files = options.body.getAll('file');
-        uploadCalls.push({ id, text, files, token: options.headers['X-Preview-Token'],
-          contentType: options.headers['Content-Type'] });
+        uploadCalls.push({ id, text, files, headers: options.headers || {},
+          contentType: (options.headers || {})['Content-Type'] });
         let saved = state.notes.find(note => note.id === id);
         if (!saved) {
           const records = files.map((file, index) => {
@@ -352,10 +347,8 @@ test('preview client', async (t) => {
         };
       }
       if (url === '/') {
-        // A fresh page carries the token the restarted server accepts, so the retry has one to take. The token rides an HTML attribute, the way the served page carries it.
-        // The minified script did not include this text. Save presses after a reset then failed.
         pageFetches += 1;
-        return { ok: true, status: 200, text: async () => `<body data-token="${servedToken}">` };
+        return { ok: true, status: 200, text: async () => '<body></body>' };
       }
       if (url.startsWith('/api/messages/') && url.endsWith('/replies/seen')) {
         if (replySeenWait) await replySeenWait;
@@ -394,7 +387,7 @@ test('preview client', async (t) => {
       if (url.startsWith('/api/reports/') && url.endsWith('/unpublish')) {
         const target = decodeURIComponent(url.split('/')[3]);
         unpublished.push(target);
-        writeTokens.push(options.headers['X-Preview-Token']);
+        writeHeadersSeen.push(options.headers || {});
         state.reports = state.reports.filter(report => report.id !== target);
         return response({ unpublished: target });
       }
@@ -2208,44 +2201,34 @@ test('preview client', async (t) => {
     delete state.copyStateFails;
   });
 
-  await t.test("A page outlives the server that served it", async () => {
-    staleToken = true;
+  await t.test('Writes after a state refresh carry no page-token header', async () => {
     storage.set(cacheKey, JSON.stringify({ notes: state.notes, tasks: state.tasks }));
     sendHandler = async note => response({ ...note, at: new Date().toISOString() });
     sendNote = async text => {
       get('#note').value = text;
       await get('#form').events.submit(event({}));
     };
-  });
-
-  await t.test('A poll updates the server token without a page fetch', async () => {
-    // The poll supplies the new token without a page fetch or reload.
-    servedToken = 'token-two';
     sendsBefore = sent.length;
     fetchesBefore = pageFetches;
     await refresh();
     await sendNote('after the poll');
-    assert.equal(pageFetches, fetchesBefore, 'the poll already refreshed the token');
-    assert.equal(sent.length, sendsBefore + 1, 'the send lands on the token from the poll');
-    assert.equal(writeTokens.at(-1), 'token-two', 'the send carries the token the new server accepts');
+    assert.equal(pageFetches, fetchesBefore);
+    assert.equal(sent.length, sendsBefore + 1);
+    assert.equal(Object.hasOwn(writeHeadersSeen.at(-1), 'X-Preview-Token'), false);
   });
 
-  await t.test("Second net: a write refused before any poll re-reads the page for its token and tries once", async () => {
-    // A write refused before any poll reads the page token and retries once.
-    servedToken = 'token-three';
-    await sendNote('before any poll');
-    await tick();
-    assert.equal(pageFetches, fetchesBefore + 1, 'a refused write re-reads the page for its token');
-    assert.equal(sent.length, sendsBefore + 2, 'the write lands on the retry');
-    assert.equal(writeTokens.at(-1), 'token-three', 'the retry carries the token the new server accepts');
-    staleToken = false;
-  });
-
-  await t.test("Give the page back the token its own page carried, so a later test that writes does not", async () => {
-    // Give the page back the token its own page carried, so a later test that writes does not
-    // inherit this one's stand-in token. The poll is what hands it over.
-    servedToken = '__TOKEN__';
-    await refresh();
+  await t.test('HTTP 401 and 403 keep the draft without fetching a replacement page', async () => {
+    for (const status of [401, 403]) {
+      sendHandler = async () => ({ ok: false, status, text: async () => JSON.stringify({ error: 'Access denied' }) });
+      const before = sent.length;
+      const pages = pageFetches;
+      const draft = `refused ${status}`;
+      await sendNote(draft);
+      assert.equal(sent.length, before + 1, 'a refused write is not retried');
+      assert.equal(pageFetches, pages, 'a refused write does not fetch the page');
+      assert.equal(get('#note').value, draft);
+    }
+    sendHandler = async note => response({ ...note, at: new Date().toISOString() });
   });
 
   await t.test("The fixture above is this test's own; later tests read the state that was live before it", async () => {
@@ -2741,7 +2724,7 @@ test('preview client', async (t) => {
     assert.deepEqual(uploadCalls[0].files, [first, thirdFile, second]);
     assert.equal(uploadCalls[0].text, 'Please review all attachments');
     assert.equal(uploadCalls[0].contentType, undefined, 'the browser supplies the multipart boundary');
-    assert.equal(uploadCalls[0].token, '__TOKEN__');
+    assert.equal(Object.hasOwn(uploadCalls[0].headers, 'X-Preview-Token'), false);
     assert.equal(sent.length, sendsBeforeFile, 'no separate upload notification note is posted');
     assert.equal(get('#staged-files').hidden, false, 'an unconfirmed response keeps every staged file');
     assert.match(get('#send-status').textContent, /^Save not confirmed:/);

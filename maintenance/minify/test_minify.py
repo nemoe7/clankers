@@ -5,7 +5,6 @@ import http.client
 import importlib.util
 import io
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -392,10 +391,10 @@ def test_compact_copies_drift_and_runtime():
       assert "__STYLE__" not in page and "__SCRIPT__" not in page
       assert "__MARKDOWN_SCRIPT__" not in page
       assert 'id="notes-panel"' in page and 'id="reports-panel"' in page
-      token = re.search(r'data-token="([^"]+)"', page)[1]
+      assert "data-token" not in page and "__TOKEN__" not in page
       for name in ("app.js", "message-markdown.js", "markdown-it.min.js", "style.css"):
         asset = (minify.TARGETS[0] / "assets" / name).read_text()
-        assert asset.replace("__TOKEN__", token).strip() in page
+        assert asset.strip() in page
     finally:
       client.close()
       server.shutdown()

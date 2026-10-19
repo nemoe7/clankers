@@ -6025,7 +6025,7 @@ class Store:
   def clear_state(self):
     """Empty every state table in one transaction and return the row counts.
 
-    Keep the server running, the schema, and the page token. Autosave updates the save file to match the empty state.
+    Keep the server running and the schema. Autosave updates the save file to match the empty state.
     Copy the state first to keep a backup.
 
     Keep the agent key record that the page posts on load.
@@ -6404,8 +6404,6 @@ def render(markdown, breaks=False):
 def handler(store):
   from http.server import BaseHTTPRequestHandler
 
-  token = secrets.token_urlsafe(32)
-
   class Handler(BaseHTTPRequestHandler):
     def setup(self):
       super().setup()
@@ -6456,16 +6454,13 @@ def handler(store):
             + "\n"
             + (ASSETS / "app.js").read_text(encoding="utf-8"),
           )
-          self.reply(200, page.replace("__TOKEN__", token), "text/html; charset=utf-8")
+          self.reply(200, page, "text/html; charset=utf-8")
           return
         if path == "/api/userscript-autosave":
           self.reply(200, json.dumps(store.userscript_snapshot(), ensure_ascii=False))
           return
         if path == "/api/state":
           state = store.state()
-          # Polling refreshes the page write token, so a post-restart save needs no browser reload.
-          # The token resists CSRF. The page already has authentication.
-          state["token"] = token
           try:
             for item in state["notes"] + [
               ack for report in state["reports"] for ack in report["acknowledgements"]

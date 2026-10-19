@@ -2098,7 +2098,7 @@ def render(markdown,breaks=False):
 	except ImportError as error:raise RuntimeError("Markdown rendering needs markdown-it-py. Install it in the preview's venv and restart the server with that venv's Python; steering still works.")from error
 	parser=MarkdownIt('commonmark',{'html':False,'breaks':breaks}).enable(['table','strikethrough']);highlight_markdown(parser);parser.add_render_rule('link_open',open_link);parser.add_render_rule('image',render_image);tagged,images=hold_out(markdown,SIZED_IMAGE,lambda match:sized_image(match,validateLink),'image');rendered=drop_paragraph_breaks(parser.render(unescape_fences(tagged)));return add_copy_buttons(put_back(rendered,images,'image'))
 def handler(store):
-	from http.server import BaseHTTPRequestHandler;token=secrets.token_urlsafe(32)
+	from http.server import BaseHTTPRequestHandler
 	class Handler(BaseHTTPRequestHandler):
 		def setup(self):super().setup();self.connection.settimeout(15)
 		def reply(self,status,body,content_type='application/json; charset=utf-8',filename=None):
@@ -2109,10 +2109,10 @@ def handler(store):
 		def do_GET(self):
 			path=urlsplit(self.path).path
 			try:
-				if path=='/':page=(ASSETS/'index.html').read_text(encoding='utf-8');page=page.replace('__STYLE__',(ASSETS/'style.css').read_text(encoding='utf-8'));page=page.replace('__MARKDOWN_SCRIPT__',(ASSETS/'markdown-it.min.js').read_text(encoding='utf-8'));page=page.replace('__SCRIPT__',(ASSETS/'message-markdown.js').read_text(encoding='utf-8')+'\n'+(ASSETS/'app.js').read_text(encoding='utf-8'));self.reply(200,page.replace('__TOKEN__',token),'text/html; charset=utf-8');return
+				if path=='/':page=(ASSETS/'index.html').read_text(encoding='utf-8');page=page.replace('__STYLE__',(ASSETS/'style.css').read_text(encoding='utf-8'));page=page.replace('__MARKDOWN_SCRIPT__',(ASSETS/'markdown-it.min.js').read_text(encoding='utf-8'));page=page.replace('__SCRIPT__',(ASSETS/'message-markdown.js').read_text(encoding='utf-8')+'\n'+(ASSETS/'app.js').read_text(encoding='utf-8'));self.reply(200,page,'text/html; charset=utf-8');return
 				if path=='/api/userscript-autosave':self.reply(200,json.dumps(store.userscript_snapshot(),ensure_ascii=False));return
 				if path=='/api/state':
-					state=store.state();state['token']=token
+					state=store.state()
 					try:
 						for item in state['notes']+[ack for report in state['reports']for ack in report['acknowledgements']]:
 							if'text'in item:item['html']=render(item['text'])

@@ -925,9 +925,9 @@ def test_http_boundaries():
       assert "default-src 'none'" in headers["Content-Security-Policy"]
       # default-src none blocks images too, so a report image needs its own directive.
       assert "img-src 'self' data: https:" in headers["Content-Security-Policy"]
-      # The token rides the page as an HTML attribute, so it survives the shipped minified build.
-      token = re.search(r'data-token="([^"]+)"', page)[1]
-      auth = {"Content-Type": "application/json", "X-Preview-Token": token}
+      assert "data-token" not in page and "__TOKEN__" not in page
+      assert "token" not in json.loads(request("GET", "/api/state")[2])
+      auth = {"Content-Type": "application/json"}
       status, _, draft = request(
         "POST",
         "/api/markdown",
@@ -941,7 +941,7 @@ def test_http_boundaries():
       assert request("POST", "/api/markdown", '{"text":" "}', auth)[0] == 400
       assert request("POST", "/api/markdown", '{"text":"draft"}')[0] == 415
       assert request("POST", "/api/notes", "{}")[0] == 415
-      assert request("POST", "/api/notes", "{}", {"X-Preview-Token": token})[0] == 415
+      assert request("POST", "/api/notes", "{}", {})[0] == 415
       assert request("POST", "/api/notes", "x" * 200_001, auth)[0] == 400
       for body in (
         "{",
@@ -1517,12 +1517,7 @@ def test_http_boundaries():
         request("POST", "/api/forms/f1/submit", '{"id":"s1","answers":{}}', auth)[0]
         == 404
       )
-      assert (
-        request("POST", "/api/reports/fields/submit", "{}", {"X-Preview-Token": token})[
-          0
-        ]
-        == 415
-      )
+      assert request("POST", "/api/reports/fields/submit", "{}", {})[0] == 415
       assert (
         request(
           "POST",
@@ -2320,7 +2315,6 @@ def test_http_note_attachment():
     worker = threading.Thread(target=app.serve_forever, daemon=True)
     worker.start()
     try:
-      token = re.search(r'data-token="([^"]+)"', request("GET", "/")[2])[1]
       boundary = b"preview-attachment-test"
 
       def part(name, content, extra=b""):
@@ -2349,14 +2343,13 @@ def test_http_note_attachment():
       )
       headers = {
         "Content-Type": "multipart/form-data; boundary=preview-attachment-test",
-        "X-Preview-Token": token,
       }
       assert (
         request(
           "POST",
           "/api/notes/with-file",
           b"{}",
-          {"Content-Type": "application/json", "X-Preview-Token": token},
+          {"Content-Type": "application/json"},
         )[0]
         == 415
       )
@@ -2452,15 +2445,12 @@ def test_download_queue():
     worker.start()
     try:
       page = request("GET", "/")[2]
-      token = re.search(r'data-token="([^"]+)"', page)[1]
-      auth = {"Content-Type": "application/json", "X-Preview-Token": token}
+      auth = {"Content-Type": "application/json"}
       assert request("GET", "/api/fetch-jobs")[0] == 404
       assert request("GET", "/downloads/file.zip")[0] == 404
       assert 'id="downloads-pip"' in page and 'id="fetch-approvals"' in page
       assert request("POST", "/api/fetch-jobs", "{}")[0] == 415
-      assert (
-        request("POST", "/api/fetch-jobs", "{}", {"X-Preview-Token": token})[0] == 415
-      )
+      assert request("POST", "/api/fetch-jobs", "{}", {})[0] == 415
       for value in (
         "http://example.org/a",
         "https://user:pass@example.org/a",

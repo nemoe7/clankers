@@ -48,12 +48,8 @@ function updateJob(id, updates) {
     if (job) Object.assign(job, result || updates);
   };
 }
-// Polls refresh the write token.
-// A save after a server restart works without a browser refresh.
-const pageToken = () => (document.body.dataset || {}).token || '__TOKEN__';
-let writeToken = pageToken();
 function writeHeaders(type) {
-  return { 'Content-Type': type, 'X-Preview-Token': writeToken };
+  return { 'Content-Type': type };
 }
 // Six characters name a note in the log whole, so the mint carries no tail. A clash keeps the
 // earlier record, so the mint steps past every ID the state in hand shows.
@@ -379,8 +375,7 @@ async function attempt(path, options, timeoutMs) {
     return await fetch(path, { ...options, cache: 'no-store', signal: controller.signal });
   } finally { clearTimeout(timer); }
 }
-// A page outlives the server it came from. A sandbox reset changes the write token, so a refused
-// write takes the new token from the page. Small writes retry once after a network failure.
+// Small writes retry once after a network failure.
 async function request(path, options = {}) {
   const { timeoutMs = 10_000, retryOnFailure = true, ...init } = options;
   let response;
@@ -390,15 +385,6 @@ async function request(path, options = {}) {
     if (!retryOnFailure) throw error;
     await new Promise((done) => setTimeout(done, 1000));
     response = await attempt(path, init, timeoutMs);
-  }
-  if (response.status === 401 || response.status === 403) {
-    const page = await (await fetch('/', { cache: 'no-store' })).text();
-    const token = (page.match(/data-token="([^"]+)"/) || [])[1];
-    if (token) {
-      writeToken = token;
-      const headers = { ...(init.headers || {}), 'X-Preview-Token': token };
-      response = await attempt(path, { ...init, headers }, timeoutMs);
-    }
   }
   if (!response.ok) {
     const message = await response.text();
@@ -826,7 +812,6 @@ $('#log-search').addEventListener('input', () => {
 function renderState() {
   const state = getState();
   if (!state) return;
-  if (state.token) writeToken = state.token;
   // Cache polled notes and tasks so the save button works after a server wipe. Publish reports again from their sources.
   // The copy exports notes, tasks, and report answers for the unified importer.
   save('state-cache', JSON.stringify({ notes: lastState.notes, tasks: lastState.tasks }));
@@ -989,7 +974,7 @@ $('#form').addEventListener('submit', async event => {
         // The same note ID, text and file set twice is safe: the server answers with the first
         // record, so one retry after a dropped connection cannot duplicate the note.
         const postFiles = () => request('/api/notes/with-file', {
-          method: 'POST', headers: { 'X-Preview-Token': writeToken }, body,
+          method: 'POST', body,
           timeoutMs: BINARY_TIMEOUT, retryOnFailure: false
         });
         try { response = await postFiles(); }

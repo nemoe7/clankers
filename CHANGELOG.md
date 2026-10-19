@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview page token: remove generation, page and state fields, headers, and token-only retries. Retain download claims and proxy keys.
 - Arena userscript popups: use natural prose. Keep conditions, dynamic values, ranges, and actions.
 - Preview violation flag: wake poll and print its text. Remove the flag-specific Bash block.
 - Arena report publication: check the stored revision and rendered field count before the CLI reports success.
