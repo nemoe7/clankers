@@ -1314,7 +1314,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 
 {
   const { test } = require("node:test");
-  test("autosave compares confirmed contents and confirms only completed writes", async () => {
+  test("autosave compares the two saved stamps and confirms only completed writes", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const saved = new Map();
     const menus = new Map();
@@ -1390,8 +1390,18 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const currentCore = [{ id: "n", text: "changed" }];
     const receiptKey = "clankers-arena-state-receipt-o.r";
     const pendingKey = "clankers-arena-state-pending-o.r";
-    const healthy = { save_id: "first", scope, core, digest: digest(core), stamp, text: core.map(JSON.stringify).join("\n") + "\n" };
-    const current = { ...healthy, save_id: "second", core: currentCore, digest: digest(currentCore), stamp: "2026-10-16T09:00:00+00:00", text: currentCore.map(JSON.stringify).join("\n") + "\n" };
+    const receipt = { save_id: "first", digest: digest(core), scope, lastsave: "t1", beforelastsave: null };
+    saved.set(receiptKey, receipt);
+    const healthy = {
+      save_id: "first", scope, core, digest: digest(core), stamp: "t1",
+      lastsave: "t1", beforelastsave: null, text: core.map(JSON.stringify).join("\n") + "\n",
+    };
+    const changedCore = [{ id: "n", text: "changed" }];
+    const changed = {
+      ...healthy, save_id: "second", core: changedCore, digest: digest(changedCore),
+      stamp: "t2", lastsave: "t1", beforelastsave: null,
+      text: changedCore.map(JSON.stringify).join("\n") + "\n",
+    };
     const panel = () => body.children.find(child => child.id === "clankers-state-panel") || null;
     const respond = async (method, suffix, status, value) => {
       const request = requests.at(-1);
@@ -1431,95 +1441,79 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       queueMicrotask(() => opening.onsuccess());
       return opening;
     } };
-    saved.set(receiptKey, { save_id: healthy.save_id, digest: healthy.digest, scope });
     iframe.src = "https://new-preview.example/";
     tick();
-    await respond("GET", "/api/userscript-autosave", 200, current);
-    await respond("POST", "/api/userscript-autosave/compare", 200, { result: "different", candidate_digest: current.digest });
+    await respond("GET", "/api/userscript-autosave", 200, changed);
     assert.ok(panel(), "a URL move with a known file asks before writing");
     assert.match(panel().children[0].textContent, /https:\/\/preview\.example.*https:\/\/new-preview\.example/);
     assert.deepEqual(writes, []);
     panel().children[1].children.find(button => button.textContent === "Overwrite").listeners.click();
-    await respond("GET", "/api/userscript-autosave", 200, current);
-    const comparison = await respond("POST", "/api/userscript-autosave/compare", 200, { result: "unknown-baseline", candidate_digest: current.digest });
-    assert.deepEqual(JSON.parse(comparison.data).core, currentCore);
-    assert.equal(writes.length, 1, "explicit Force save permits an unknown baseline");
-    assert.equal(requests.at(-1), comparison, "no receipt before file close");
-    assert.equal(saved.get(receiptKey).digest, healthy.digest);
+    await respond("GET", "/api/userscript-autosave", 200, changed);
+    assert.equal(writes.length, 1, "the accepted move writes the server state");
+    assert.equal(requests.at(-1).url.endsWith("/userscript-autosave"), true, "no compare request");
+    assert.equal(saved.get(receiptKey).lastsave, "t1", "the receipt waits for the close");
     finishClose();
     await settle();
     const confirm = requests.at(-1);
     assert.equal(confirm.method, "POST");
     assert.equal(new URL(confirm.url).pathname, "/api/userscript-autosave");
-    assert.equal(JSON.parse(confirm.data).digest, current.digest);
-    assert.ok(saved.get(pendingKey));
-    await respond("POST", "/api/userscript-autosave", 503, null);
-    assert.equal(saved.get(receiptKey).digest, healthy.digest, "a failed receipt cannot advance the baseline");
-    const requestCount = requests.length;
-    tick();
-    assert.equal(requests.length, requestCount + 1);
-    await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: current.save_id, digest: current.digest });
+    const sent = JSON.parse(confirm.data);
+    assert.equal(sent.digest, changed.digest);
+    assert.equal(sent.lastsave, "t2");
+    assert.equal(sent.beforelastsave, "t1");
+    await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: changed.save_id, digest: changed.digest });
     assert.equal(writes.length, 1, "receipt retry does not rewrite the file");
-    assert.equal(saved.get(receiptKey).digest, current.digest);
+    assert.equal(saved.get(receiptKey).lastsave, "t2");
+    assert.equal(saved.get(receiptKey).beforelastsave, "t1");
     assert.equal(saved.get(pendingKey), null);
-    assert.equal(JSON.parse(saved.get("clankers-arena-state-stamp-o.r")).stamp, current.stamp);
 
     closeWait = Promise.resolve();
+    const synced = { ...changed, lastsave: "t2", beforelastsave: "t1" };
     tick();
-    await respond("GET", "/api/userscript-autosave", 200, current);
-    await respond("POST", "/api/userscript-autosave/compare", 200, { result: "equal", candidate_digest: current.digest });
-    assert.equal(writes.length, 1);
-    fileText = JSON.stringify([{ id: "n", text: "edited outside the userscript" }]);
+    await respond("GET", "/api/userscript-autosave", 200, synced);
+    assert.equal(writes.length, 1, "an in-sync cycle with the same stamp writes nothing");
+    assert.equal(panel(), null);
+
+    const stale = { ...changed, save_id: "stale", stamp: "t9", lastsave: "t9", beforelastsave: "t2" };
     tick();
-    await respond("GET", "/api/userscript-autosave", 200, current);
-    await respond("POST", "/api/userscript-autosave/compare", 200, { result: "unknown-baseline", candidate_digest: current.digest });
+    await respond("GET", "/api/userscript-autosave", 200, stale);
+    assert.ok(panel(), "a pair mismatch blocks the automatic save");
+    assert.match(panel().children[0].textContent, /differ/);
     assert.equal(writes.length, 1);
-    assert.ok(panel());
+    menus.get("State — force save")();
+    await respond("GET", "/api/userscript-autosave", 200, stale);
+    assert.equal(writes.length, 2, "force save skips the compare");
+    await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: stale.save_id, digest: stale.digest });
+    assert.equal(saved.get(receiptKey).lastsave, "t9");
+    assert.equal(saved.get(receiptKey).beforelastsave, "t9");
 
     failWrite = true;
     menus.get("State — force save")();
-    await respond("GET", "/api/userscript-autosave", 200, { ...current, save_id: "failed-write" });
-    await respond("POST", "/api/userscript-autosave/compare", 200, { result: "different", candidate_digest: current.digest });
+    await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "failed-write" });
     assert.equal(saved.get(pendingKey), null, "a failed write does not create a pending receipt");
-    assert.equal(requests.at(-1).url.endsWith("/compare"), true, "a failed write sends no receipt");
     failWrite = false;
-    fileText = current.text;
-    for (const result of ["scope-mismatch", "candidate-missing-records"]) {
-      tick();
-      await respond("GET", "/api/userscript-autosave", 200, current);
-      await respond("POST", "/api/userscript-autosave/compare", 200, { result, candidate_digest: current.digest });
-      assert.equal(writes.length, 1, result + " must not overwrite automatically");
-    }
+
     availableHandle = null;
     menus.get("State — force save")();
-    await respond("GET", "/api/userscript-autosave", 200, { ...current, save_id: "link-only" });
-    await respond("POST", "/api/userscript-autosave/compare", 200, { result: "equal", candidate_digest: current.digest });
+    await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "link-only" });
     assert.equal(linkClicks.length, 1);
-    assert.equal(saved.get(receiptKey).save_id, current.save_id, "a link handoff does not confirm completion");
     assert.equal(saved.get(pendingKey), null);
 
     let download;
     context.GM_download = options => { download = options; };
     menus.get("State — force save")();
-    await respond("GET", "/api/userscript-autosave", 200, { ...current, save_id: "manager-failed" });
-    await respond("POST", "/api/userscript-autosave/compare", 200, { result: "equal", candidate_digest: current.digest });
-    assert.equal(saved.get(pendingKey), null, "manager start is not completion");
+    await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "manager-failed" });
     download.onerror({ error: "blocked" });
     await settle();
     assert.equal(linkClicks.length, 2);
-    assert.equal(saved.get(receiptKey).save_id, current.save_id);
     assert.ok(panel(), "a download failure remains visible after link fallback");
-    assert.equal(panel().getAttribute("data-auto-hide"), "false");
 
     menus.get("State — force save")();
-    await respond("GET", "/api/userscript-autosave", 200, { ...current, save_id: "manager-complete" });
-    await respond("POST", "/api/userscript-autosave/compare", 200, { result: "equal", candidate_digest: current.digest });
+    await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "manager-complete" });
     download.onload();
     await settle();
-    await respond("POST", "/api/userscript-autosave", 200, { confirmed: true, save_id: "manager-complete", digest: current.digest });
+    await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: "manager-complete", digest: stale.digest });
     assert.equal(saved.get(receiptKey).save_id, "manager-complete");
-
-
   });
 }
 
@@ -1542,14 +1536,11 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       removeEventListener: () => {},
     };
     vm.runInNewContext(source, context, { filename: "arena.user.js" });
-    const { compareDetail } = context.CLANKERS_CHECKS.stateDownload;
-    assert.equal(compareDetail({ status: 0, failure: "timeout" }, "a"), "status:timeout");
-    assert.equal(compareDetail({ status: 200, body: null }, "a"), "body");
-    assert.equal(compareDetail({ status: 200, body: { candidate_digest: "a" } }, "b"), "digest");
-    assert.equal(
-      compareDetail({ status: 200, body: { candidate_digest: "a", result: "different" } }, "a"),
-      "result:different",
-    );
+    const { sameSaves } = context.CLANKERS_CHECKS.stateDownload;
+    assert.equal(sameSaves(null, { lastsave: "a", beforelastsave: null }), false);
+    assert.equal(sameSaves({ lastsave: "a", beforelastsave: null }, { lastsave: "a", beforelastsave: null }), true);
+    assert.equal(sameSaves({ lastsave: "a", beforelastsave: "b" }, { lastsave: "a", beforelastsave: null }), false);
+    assert.equal(sameSaves({ lastsave: "a", beforelastsave: "b" }, { lastsave: "a", beforelastsave: "b" }), true);
     const { logEvent } = context.CLANKERS_CHECKS.logging;
     logEvent("state", "failed", { code: "autosave-compare", status: 200, result: "unknown-baseline", detail: "digest" }, "error");
     const [line, data] = logged.at(-1);

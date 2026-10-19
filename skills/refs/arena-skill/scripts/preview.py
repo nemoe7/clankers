@@ -3425,7 +3425,7 @@ AUTOSAVE_HISTORY = "userscript-autosave-history"
 AUTOSAVE_RECEIPTS = "userscript-autosave-receipts"
 
 
-def autosave_core(records):
+def autosave_core_and_stamp(records):
   if not isinstance(records, list) or not all(isinstance(row, dict) for row in records):
     raise TypeError("Autosave core must be an array of records")
   if any(row.get("kind") == "userscript-autosave" for row in records):
@@ -3435,6 +3435,7 @@ def autosave_core(records):
     if records:
       checked.import_state(json.dumps(records))
     core, _ = checked.state_lines(checked.state()["notes"], checked.tasks() or {})
+    stamp = checked.newest_stamp()
   # Renumber emitted tasks so a second canonical pass keeps every position and the digest.
   order = dict.fromkeys(TASK_STATUSES, 0)
   for row in core:
@@ -3442,7 +3443,11 @@ def autosave_core(records):
     if status in order and "title" in row and "markdown" not in row:
       order[status] += 1
       row["order"] = order[status]
-  return core
+  return core, stamp
+
+
+def autosave_core(records):
+  return autosave_core_and_stamp(records)[0]
 
 
 def autosave_digest(core):
@@ -3474,15 +3479,18 @@ def autosave_record(record):
     "scope",
     "digest",
     "core",
+    "stamp",
     "confirmed_at",
     "receipts",
   }:
     raise ValueError("Unsupported autosave history fields")
   uuid.UUID(record["save_id"])
   autosave_scope_key(record["scope"])
-  core = autosave_core(record["core"])
+  core, stamp = autosave_core_and_stamp(record["core"])
   if autosave_digest(core) != record.get("digest"):
     raise ValueError("Autosave history digest does not match")
+  if record.get("stamp") is not None and record["stamp"] != stamp:
+    raise ValueError("Autosave history stamp does not match")
   if import_stamp(record.get("confirmed_at")) is None:
     raise ValueError("Autosave history needs a confirmation time")
   receipts = record.get("receipts", {})
@@ -4569,19 +4577,22 @@ class Store:
 
   def userscript_snapshot(self):
     core, counts = self.state_lines(self.state()["notes"], self.tasks() or {})
-    core = autosave_core(core)
+    core, stamp = autosave_core_and_stamp(core)
     scope = self.userscript_scope()
     history = self.userscript_history()
     stamps = self.newest_stamps()
+    rows = [row for row in history if row["scope"] == scope and row.get("stamp")]
     return {
       "save_id": str(uuid.uuid4()),
       "scope": scope,
       "core": core,
       "digest": autosave_digest(core),
-      "history": [row for row in history if row["scope"] == scope],
+      "history": rows,
+      "lastsave": rows[-1]["stamp"] if rows else None,
+      "beforelastsave": rows[-2]["stamp"] if len(rows) > 1 else None,
       "text": state_ndjson(core + history),
       "counts": counts,
-      "stamp": self.newest_stamp(stamps),
+      "stamp": stamp,
       "stamps": stamps,
     }
 
@@ -4593,7 +4604,7 @@ class Store:
     key = autosave_scope_key(scope)
     if scope != self.userscript_scope():
       raise ValueError("Autosave confirmation is outside this repository and branch")
-    core = autosave_core(payload.get("core"))
+    core, stamp = autosave_core_and_stamp(payload.get("core"))
     digest = autosave_digest(core)
     if digest != payload.get("digest"):
       raise ValueError("Autosave confirmation digest does not match")
@@ -4617,6 +4628,7 @@ class Store:
           "scope": scope,
           "digest": digest,
           "core": core,
+          "stamp": stamp,
           "confirmed_at": now(),
         }
         previous = [item for item in history if item["scope"] == scope]
@@ -4635,10 +4647,12 @@ class Store:
     return {"confirmed": True, "save_id": save_id, "digest": digest}
 
   def compare_userscript_save(self, payload):
-    candidate = autosave_core(payload.get("core"))
-    digest = autosave_digest(candidate)
+    candidate, candidate_stamp = autosave_core_and_stamp(payload.get("core"))
     baseline = payload.get("baseline")
-    result = {"candidate_digest": digest, "counts": {"candidate": len(candidate)}}
+    result = {
+      "candidate_stamp": candidate_stamp,
+      "counts": {"candidate": len(candidate)},
+    }
     if not isinstance(baseline, dict):
       return {**result, "result": "unknown-baseline"}
     if (
@@ -4646,28 +4660,27 @@ class Store:
       or payload.get("scope") != self.userscript_scope()
     ):
       return {**result, "result": "scope-mismatch"}
-    saved = next(
-      (
-        row
-        for row in self.userscript_history()
-        if row["save_id"] == baseline.get("save_id")
-        and row["scope"] == baseline["scope"]
-        and row["digest"] == baseline.get("digest")
-      ),
-      None,
-    )
+    rows = [
+      row
+      for row in self.userscript_history()
+      if row["scope"] == baseline["scope"] and row.get("stamp") is not None
+    ]
+    lastsave = rows[-1]["stamp"] if rows else None
+    beforelastsave = rows[-2]["stamp"] if len(rows) > 1 else None
+    slots = {"lastsave": lastsave, "beforelastsave": beforelastsave}
+    result = {**result, **slots}
+    if (
+      baseline.get("lastsave") != lastsave
+      or baseline.get("beforelastsave") != beforelastsave
+      or not rows
+    ):
+      return {**result, "result": "unknown-baseline"}
+    saved = rows[-1]
     supplied = baseline.get("core")
-    if supplied is not None:
-      supplied = autosave_core(supplied)
-      if autosave_digest(supplied) != baseline.get("digest"):
-        return {**result, "result": "unknown-baseline"}
-    core = saved["core"] if saved else supplied
-    if core is None:
+    if supplied is not None and autosave_core(supplied) != autosave_core(saved["core"]):
       return {**result, "result": "unknown-baseline"}
-    core = autosave_core(core)
-    before = autosave_digest(core)
-    if before != baseline.get("digest"):
-      return {**result, "result": "unknown-baseline"}
+    core = autosave_core(saved["core"])
+    before = saved["stamp"]
 
     def identity(row):
       kind = (
@@ -4686,7 +4699,7 @@ class Store:
     )
     status = (
       "equal"
-      if before == digest
+      if candidate_stamp == before
       else "candidate-missing-records"
       if missing
       else "different"
@@ -4694,7 +4707,7 @@ class Store:
     return {
       **result,
       "result": status,
-      "baseline_digest": before,
+      "baseline_stamp": before,
       "counts": {
         "baseline": len(core),
         "candidate": len(candidate),

@@ -10006,6 +10006,8 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
         assert second["save_id"] != first["save_id"]
         assert len(second["history"]) == 1
         assert second["history"][0]["save_id"] == first["save_id"]
+        assert second["lastsave"] == first["stamp"]
+        assert second["beforelastsave"] is None
         bad = {**second, "digest": "0" * 64}
         assert (
           request("POST", "/api/userscript-autosave", json.dumps(bad), auth)[0] == 400
@@ -10020,14 +10022,31 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
             == 400
           )
         comparison = {
-          "baseline": first,
+          "baseline": {
+            "lastsave": second["lastsave"],
+            "beforelastsave": second["beforelastsave"],
+            "scope": second["scope"],
+            "core": first["core"],
+          },
           "scope": second["scope"],
           "core": second["core"],
         }
         status, _, body = request(
           "POST", "/api/userscript-autosave/compare", json.dumps(comparison), auth
         )
-        assert status == 200 and json.loads(body)["result"] == "equal"
+        answer = json.loads(body)
+        assert status == 200 and answer["result"] == "equal"
+        assert answer["candidate_stamp"] == second["stamp"]
+        assert answer["lastsave"] == first["stamp"]
+        assert answer["beforelastsave"] is None
+        assert set(answer) == {
+          "result",
+          "candidate_stamp",
+          "lastsave",
+          "beforelastsave",
+          "baseline_stamp",
+          "counts",
+        }
         assert (
           len(json.loads(request("GET", "/api/userscript-autosave")[2])["history"]) == 1
         )
@@ -10054,7 +10073,39 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
           json.loads(request("GET", "/api/userscript-autosave")[2])["history"]
           == current["history"]
         )
-        known = current["history"][-1]
+        assert all(row.get("stamp") for row in current["history"])
+        assert current["lastsave"] == current["history"][-1]["stamp"]
+        assert current["beforelastsave"] == current["history"][-2]["stamp"]
+        known = {
+          "lastsave": current["lastsave"],
+          "beforelastsave": current["beforelastsave"],
+          "scope": current["scope"],
+          "core": current["core"],
+        }
+        latest = {
+          "baseline": known,
+          "scope": current["scope"],
+          "core": current["core"],
+        }
+        status, _, body = request(
+          "POST", "/api/userscript-autosave/compare", json.dumps(latest), auth
+        )
+        answer = json.loads(body)
+        assert status == 200 and answer["result"] == "equal"
+        assert answer["candidate_stamp"] == current["stamp"]
+        older = {
+          "baseline": {
+            **known,
+            "lastsave": current["beforelastsave"],
+            "beforelastsave": None,
+          },
+          "scope": current["scope"],
+          "core": current["core"],
+        }
+        status, _, body = request(
+          "POST", "/api/userscript-autosave/compare", json.dumps(older), auth
+        )
+        assert status == 200 and json.loads(body)["result"] == "unknown-baseline"
         tampered = {
           "baseline": {**known, "core": []},
           "scope": current["scope"],
@@ -10078,17 +10129,6 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
           "POST", "/api/userscript-autosave/compare", json.dumps(fallback), auth
         )
         assert status == 200 and json.loads(body)["result"] == "unknown-baseline"
-        fallback["baseline"]["core"] = first["core"]
-        status, _, body = request(
-          "POST", "/api/userscript-autosave/compare", json.dumps(fallback), auth
-        )
-        assert status == 200 and json.loads(body)["result"] == "different"
-        assert set(json.loads(body)) == {
-          "result",
-          "candidate_digest",
-          "baseline_digest",
-          "counts",
-        }
         with tempfile.TemporaryDirectory() as imported_directory:
           imported = preview.Store(imported_directory, create=True)
           imported.import_state(current["text"], merge=True)
@@ -10116,7 +10156,15 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
           json.loads(request("GET", "/api/userscript-autosave")[2])["history"]
           == current["history"]
         )
-        comparison["core"] = []
+        comparison = {
+          "baseline": {
+            "lastsave": current["lastsave"],
+            "beforelastsave": current["beforelastsave"],
+            "scope": current["scope"],
+          },
+          "scope": current["scope"],
+          "core": [],
+        }
         status, _, body = request(
           "POST", "/api/userscript-autosave/compare", json.dumps(comparison), auth
         )
@@ -10169,6 +10217,60 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
       finally:
         server.shutdown()
         thread.join()
+
+
+def test_autosave_compare_matches_each_retained_save():
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    with patch("preview.now", return_value="2026-10-19T07:00:00.000001+00:00"):
+      store.note("first-note", "First")
+    first = store.userscript_snapshot()
+    assert store.confirm_userscript_save(first)["confirmed"]
+    with patch("preview.now", return_value="2026-10-19T07:00:01.000001+00:00"):
+      store.note("second-note", "Second")
+    second = store.userscript_snapshot()
+    assert store.confirm_userscript_save(second)["confirmed"]
+    history = store.userscript_history()
+    assert len(history) == 2
+    fresh = store.userscript_snapshot()
+    assert fresh["lastsave"] == history[-1]["stamp"]
+    assert fresh["beforelastsave"] == history[-2]["stamp"]
+    assert fresh["lastsave"] != fresh["beforelastsave"]
+    older = {
+      "baseline": {
+        "lastsave": fresh["beforelastsave"],
+        "beforelastsave": None,
+        "scope": fresh["scope"],
+        "core": first["core"],
+      },
+      "scope": fresh["scope"],
+      "core": fresh["core"],
+    }
+    answer = store.compare_userscript_save(older)
+    assert answer["result"] == "unknown-baseline", answer
+    equal = {
+      "baseline": {
+        "lastsave": fresh["lastsave"],
+        "beforelastsave": fresh["beforelastsave"],
+        "scope": fresh["scope"],
+        "core": fresh["core"],
+      },
+      "scope": fresh["scope"],
+      "core": fresh["core"],
+    }
+    answer = store.compare_userscript_save(equal)
+    assert answer["result"] == "equal", answer
+    assert answer["candidate_stamp"] == fresh["stamp"]
+    assert answer["lastsave"] == fresh["lastsave"]
+    assert answer["beforelastsave"] == fresh["beforelastsave"]
+    with patch("preview.now", return_value="2026-10-19T07:00:02.000001+00:00"):
+      store.note("third-note", "Third")
+    third = store.userscript_snapshot()
+    changed = {**equal, "core": third["core"]}
+    answer = store.compare_userscript_save(changed)
+    assert answer["result"] == "different", answer
+    assert answer["candidate_stamp"] == third["stamp"]
+    assert "digest" not in json.dumps(answer)
 
 
 def test_autosave_core_is_idempotent_across_task_order():

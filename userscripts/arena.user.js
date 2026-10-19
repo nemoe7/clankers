@@ -2447,7 +2447,7 @@
       stateDownloadRoute: stateDownloadRoute,
       writeToHandle: writeToHandle,
       writeStateDownload: writeStateDownload,
-      compareDetail: compareDetail,
+      sameSaves: sameSaves,
       STATE_WATCH_MS: STATE_WATCH_MS,
     })) {
       return function () {};
@@ -2534,7 +2534,10 @@
           (answer.status === 200 || answer.status === 201 ? "body" : "status" + (answer.failure ? ":" + answer.failure : "")));
         return;
       }
-      GM_setValue(receiptKey(storeKey), { save_id: receipt.save_id, digest: receipt.digest, scope: receipt.scope });
+      GM_setValue(receiptKey(storeKey), {
+        save_id: receipt.save_id, digest: receipt.digest, scope: receipt.scope,
+        lastsave: receipt.lastsave, beforelastsave: receipt.beforelastsave,
+      });
       GM_setValue(pendingKey(storeKey), null);
       rememberState(pending.scope, storeKey, pending.base, pending.branch, pending.stamp, pending.stamps);
       clearErrorPanel();
@@ -2778,11 +2781,10 @@
       });
     }
 
-    function compareDetail(comparison, digest) {
-      if (comparison.status !== 200) return "status" + (comparison.failure ? ":" + comparison.failure : "");
-      if (!comparison.body) return "body";
-      if (comparison.body.candidate_digest !== digest) return "digest";
-      return "result:" + String(comparison.body.result);
+    function sameSaves(known, body) {
+      if (!known) return false;
+      return (known.lastsave || null) === (body.lastsave || null) &&
+        (known.beforelastsave || null) === (body.beforelastsave || null);
     }
 
     async function fetchStateFile(manual, force) {
@@ -2831,22 +2833,13 @@
           if (text.trim() && baseline) baseline = Object.assign({}, baseline, { core: fileCore(text) });
           if (!text.trim() && baseline) baseline = Object.assign({}, baseline, { core: [] });
         }
-        var comparison = await stateJson(base + "/api/userscript-autosave/compare", {
-          baseline: baseline, scope: body.scope, core: body.core,
-        });
-        var result = comparison.body && comparison.body.result;
-        if (comparison.status !== 200 || !comparison.body || comparison.body.candidate_digest !== body.digest ||
-            ["equal", "different", "candidate-missing-records", "scope-mismatch", "unknown-baseline"].indexOf(result) < 0) {
-          stateError("The userscript could not compare the saved and current states (" + comparison.status + "). Nothing was written.",
-            null, null, "autosave-compare", comparison.status, undefined, compareDetail(comparison, body.digest));
+        var inSync = sameSaves(baseline, body);
+        if (!force && !inSync && !(initialFile && !baseline)) {
+          stateError("The saved and current states differ. Nothing was written. Review both states before using Force save.",
+            null, null, "autosave-compare", undefined, undefined, "stamps");
           return;
         }
-        if (!force && result === "equal") return;
-        if (!force && result !== "different" && !(initialFile && result === "unknown-baseline")) {
-          stateError("Automatic save is blocked (" + result + "). Nothing was written. Review the saved and current states before using Force save.",
-            null, null, result, undefined, undefined, "result:" + result);
-          return;
-        }
+        if (!force && inSync && body.stamp === (baseline && baseline.lastsave)) return;
         var plan = { kind: "download", name: stateFileName(scope.repo, scope.branch, body.stamp, body.counts) };
         var moved = saveMoved(scope.branch, rememberedBase, base, lastScope, rememberedBranch);
         var asks = overwriteAsk(moved, plan, Boolean(handle), force);
@@ -2874,7 +2867,10 @@
           return;
         }
         pending = {
-          receipt: { save_id: body.save_id, scope: body.scope, digest: body.digest, core: body.core },
+          receipt: {
+            save_id: body.save_id, scope: body.scope, digest: body.digest, core: body.core,
+            lastsave: body.stamp, beforelastsave: body.lastsave,
+          },
           scope: scope, base: base, branch: scope.branch || rememberedBranch, stamp: body.stamp,
           stamps: body.stamps, name: name, force: Boolean(force),
         };
