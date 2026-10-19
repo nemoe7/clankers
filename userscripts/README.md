@@ -121,15 +121,29 @@ One entry, `Userscript — pause all`, stops every feature where it stands: the 
 
 The script saves the pause, so a reload keeps it. Each feature switch stays in the menu while paused.
 
-## Arena state save notices
+## Arena state saves
 
-Persistent state notices clear after a successful file close or download-manager callback. Failed saves keep their notices. Temporary success messages keep their existing timeout.
+The userscript fetches a candidate from `GET /api/userscript-autosave`. It compares the last state with a successful completion receipt through `POST /api/userscript-autosave/compare`. It checks the selected file against the remembered digest, not timestamps.
 
-A browser-link download has no completion callback, so it does not clear a failure notice.
+Equal states need no write. Missing records, a scope mismatch, or an unknown baseline stop automatic replacement.
+
+A new empty selected file can receive its first save. `State — force save` keeps the explicit override.
+
+Only a successful file close or download-manager callback permits the completion receipt, sent to `POST /api/userscript-autosave`. Failed receipts retry without another file write. Browser-link downloads have no completion callback and do not advance the saved baseline.
+
+Failed saves keep their notices. A successful file close or download-manager callback clears persistent notices. Temporary success messages keep their timeout.
+
+The preview retains two saved core states with completion receipts per repository and branch. New save files include flat, versioned history. Manual Copy state stays core-only.
+
+Replacement imports check and restore supplied history. Legacy imports preserve it. Merge imports preserve existing history or adopt supplied history only when none exists.
+
+The existing minute timer defers each periodic request by a random 0–15 seconds. These autosave routes add no authentication or token check.
 
 ## Arena state reset window
 
-The `State — reset-window overwrite` switch ships On. Within 150 seconds either side of 02:00, 08:00, 14:00 and 20:00 PHT, a preview URL that changed writes to the file without the overwrite prompt. A branch change, a missing branch and every hour outside that window keep the prompt.
+The `State — reset-window overwrite` switch ships On.
+
+A preview URL change skips the overwrite prompt within 150 seconds of 02:00, 08:00, 14:00, or 20:00 PHT. The saved-state comparison must permit the write. A branch change, a missing branch, and every hour outside that window keep the prompt.
 
 ## Arena tab title
 

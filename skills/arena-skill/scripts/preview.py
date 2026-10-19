@@ -1189,6 +1189,35 @@ def parse_state_import(text):
 	if not isinstance(value,list)or not all(isinstance(r,dict)for r in value):raise ValueError('Import JSON records or copied state')
 	if not value:raise ValueError('Nothing to import')
 	return value
+AUTOSAVE_HISTORY='userscript-autosave-history'
+AUTOSAVE_RECEIPTS='userscript-autosave-receipts'
+def autosave_core(records):
+	if not isinstance(records,list)or not all(isinstance(row,dict)for row in records):raise TypeError('Autosave core must be an array of records')
+	if any(row.get('kind')=='userscript-autosave'for row in records):raise ValueError('Autosave core cannot contain history')
+	with tempfile.TemporaryDirectory()as directory:
+		checked=Store(directory,create=True)
+		if records:checked.import_state(json.dumps(records))
+		core,_=checked.state_lines(checked.state()['notes'],checked.tasks()or{})
+	return core
+def autosave_digest(core):encoded=json.dumps(core,sort_keys=True,ensure_ascii=False,separators=(',',':'));return hashlib.sha256(encoded.encode('utf-8')).hexdigest()
+def autosave_scope_key(scope):
+	if not isinstance(scope,dict)or set(scope)!={'repo','branch'}:raise TypeError('Autosave scope needs repository and branch')
+	if not all(isinstance(value,str)for value in scope.values())or not scope['repo']:raise ValueError('Invalid autosave scope')
+	return json.dumps(scope,sort_keys=True)
+def autosave_record(record):
+	if record.get('kind')!='userscript-autosave'or type(record.get('version'))is not int or record['version']!=1:raise ValueError('Unsupported autosave history version')
+	if not isinstance(record.get('save_id'),str):raise TypeError('Autosave save ID must be a UUID string')
+	if set(record)-{'kind','version','save_id','scope','digest','core','confirmed_at','receipts'}:raise ValueError('Unsupported autosave history fields')
+	uuid.UUID(record['save_id']);autosave_scope_key(record['scope']);core=autosave_core(record['core'])
+	if autosave_digest(core)!=record.get('digest'):raise ValueError('Autosave history digest does not match')
+	if import_stamp(record.get('confirmed_at'))is None:raise ValueError('Autosave history needs a confirmation time')
+	receipts=record.get('receipts',{})
+	if not isinstance(receipts,dict):raise TypeError('Autosave receipts must be an object')
+	for(save_id,digest)in receipts.items():
+		uuid.UUID(save_id)
+		if not isinstance(digest,str)or not re.fullmatch('[0-9a-f]{64}',digest):raise ValueError('Invalid autosave receipt digest')
+	if record['save_id']in receipts and receipts[record['save_id']]!=record['digest']:raise ValueError('Autosave receipt conflicts with its saved state')
+	return{**record,'core':core}
 def verify_publication(store,report_id,revision,count):
 	from http.client import HTTPConnection,HTTPException;failure='Publication verification failed. Check the preview before retrying.'
 	try:
@@ -1462,6 +1491,40 @@ class Store:
 			if row is None:raise ValueError(f"No task is stored under {prev_id}")
 			if db.execute('SELECT 1 FROM tasks WHERE id = ?',(task_id,)).fetchone():raise ValueError(f"A task is already stored under {task_id}")
 			self.refuse_shared_id(db,'tasks','reports',task_id);db.execute('DELETE FROM tasks WHERE id = ?',(prev_id,));db.execute('INSERT INTO tasks (id, title, details, status, position, created_at, updated_at, completed_at, blocked, report_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(task_id,row[1],row[2],row[3],row[4],row[5],stamp,row[6],row[7],row[8]));self.renumber(db)
+	def userscript_history(self,shared=None):
+		with self.transaction(shared,autosave=False)as db:row=db.execute('SELECT value FROM meta WHERE key = ?',(AUTOSAVE_HISTORY,)).fetchone();return json.loads(row[0])if row else[]
+	def userscript_scope(self):root=self.path.parent.parent;return{'repo':root.name,'branch':workspace_branch(root)or''}
+	def userscript_snapshot(self):core,counts=self.state_lines(self.state()['notes'],self.tasks()or{});core=autosave_core(core);scope=self.userscript_scope();history=self.userscript_history();stamps=self.newest_stamps();return{'save_id':str(uuid.uuid4()),'scope':scope,'core':core,'digest':autosave_digest(core),'history':[row for row in history if row['scope']==scope],'text':state_ndjson(core+history),'counts':counts,'stamp':self.newest_stamp(stamps),'stamps':stamps}
+	def confirm_userscript_save(self,payload):
+		save_id,scope=payload.get('save_id'),payload.get('scope')
+		if not isinstance(save_id,str):raise TypeError('Autosave save ID must be a UUID string')
+		uuid.UUID(save_id);key=autosave_scope_key(scope)
+		if scope!=self.userscript_scope():raise ValueError('Autosave confirmation is outside this repository and branch')
+		core=autosave_core(payload.get('core'));digest=autosave_digest(core)
+		if digest!=payload.get('digest'):raise ValueError('Autosave confirmation digest does not match')
+		with self.transaction()as db:
+			db.execute('BEGIN IMMEDIATE');row=db.execute('SELECT value FROM meta WHERE key = ?',(AUTOSAVE_RECEIPTS,)).fetchone();receipts=json.loads(row[0])if row else{};scope_receipts=receipts.setdefault(key,{})
+			if save_id in scope_receipts:
+				if scope_receipts[save_id]!=digest:raise ValueError('Autosave save ID already confirms another state')
+			else:
+				scope_receipts[save_id]=digest;history=self.userscript_history(db);record={'kind':'userscript-autosave','version':1,'save_id':save_id,'scope':scope,'digest':digest,'core':core,'confirmed_at':now()};previous=[item for item in history if item['scope']==scope];kept=previous[-1:]+[record]
+				for item in kept:item['receipts']=scope_receipts.copy()
+				history=[item for item in history if item['scope']!=scope]+kept;db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(AUTOSAVE_HISTORY,json.dumps(history)));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(AUTOSAVE_RECEIPTS,json.dumps(receipts)))
+		return{'confirmed':True,'save_id':save_id,'digest':digest}
+	def compare_userscript_save(self,payload):
+		candidate=autosave_core(payload.get('core'));digest=autosave_digest(candidate);baseline=payload.get('baseline');result={'candidate_digest':digest,'counts':{'candidate':len(candidate)}}
+		if not isinstance(baseline,dict):return{**result,'result':'unknown-baseline'}
+		if payload.get('scope')!=baseline.get('scope')or payload.get('scope')!=self.userscript_scope():return{**result,'result':'scope-mismatch'}
+		saved=next((row for row in self.userscript_history()if row['save_id']==baseline.get('save_id')and row['scope']==baseline['scope']and row['digest']==baseline.get('digest')),None);supplied=baseline.get('core')
+		if supplied is not None:
+			supplied=autosave_core(supplied)
+			if autosave_digest(supplied)!=baseline.get('digest'):return{**result,'result':'unknown-baseline'}
+		core=saved['core']if saved else supplied
+		if core is None:return{**result,'result':'unknown-baseline'}
+		core=autosave_core(core);before=autosave_digest(core)
+		if before!=baseline.get('digest'):return{**result,'result':'unknown-baseline'}
+		def identity(row):kind='report'if'markdown'in row else'task'if'title'in row else'answer'if'report_id'in row else'note';return kind,row['id']
+		missing=len({identity(row)for row in core}-{identity(row)for row in candidate});status='equal'if before==digest else'candidate-missing-records'if missing else'different';return{**result,'result':status,'baseline_digest':before,'counts':{'baseline':len(core),'candidate':len(candidate),'missing':missing}}
 	def autosave(self):
 		try:self.save_state({'notes':self.state()['notes'],'tasks':self.tasks()})
 		except Exception as error:print(f"preview: autosave failed: {error}",file=sys.stderr)
@@ -1494,7 +1557,7 @@ class Store:
 		if tasks is None:tasks={}
 		lines,counts=self.state_lines(notes,tasks);path=self.save_path
 		if path.parent!=Path('.'):path.parent.mkdir(parents=True,exist_ok=True)
-		path.write_text(state_ndjson(lines),encoding='utf-8');return{'path':str(path),**counts}
+		path.write_text(state_ndjson(lines+self.userscript_history()),encoding='utf-8');return{'path':str(path),**counts}
 	def uploads(self):
 		with closing(self.connect())as db:rows=db.execute('SELECT * FROM uploads ORDER BY seq').fetchall()
 		return[upload_row(row,self.path.parent)for row in rows]
@@ -1625,9 +1688,20 @@ class Store:
 			raise
 		self.autosave();return fetch_row(result,self.path.parent)
 	def import_state(self,text,replace_tasks=False,merge=False):
-		records=parse_state_import(text);reports=[r for r in records if'markdown'in r and'text'not in r];tasks=[r for r in records if'markdown'not in r and'title'in r and'text'not in r];messages=[r for r in records if'markdown'not in r and('title'not in r or'text'in r)]
+		records=parse_state_import(text);history=[autosave_record(row)for row in records if row.get('kind')=='userscript-autosave'];records=[row for row in records if row.get('kind')!='userscript-autosave'];groups={};imported_receipts={}
+		for row in history:
+			key=autosave_scope_key(row['scope']);groups.setdefault(key,[]).append(row);receipts=imported_receipts.setdefault(key,{})
+			for(save_id,digest)in{**row.get('receipts',{}),row['save_id']:row['digest']}.items():
+				if save_id in receipts and receipts[save_id]!=digest:raise ValueError('Conflicting autosave receipt digests')
+				receipts[save_id]=digest
+			if len(groups[key])>2 or len({item['save_id']for item in groups[key]})!=len(groups[key]):raise ValueError('Autosave history holds at most two distinct saves per scope')
+		reports=[r for r in records if'markdown'in r and'text'not in r];tasks=[r for r in records if'markdown'not in r and'title'in r and'text'not in r];messages=[r for r in records if'markdown'not in r and('title'not in r or'text'in r)]
 		with self.transaction(autosave=False)as db:
 			db.execute('BEGIN IMMEDIATE')
+			if history and(not merge or not self.userscript_history(db)):
+				receipts={}
+				for row in history:key=autosave_scope_key(row['scope']);receipts.setdefault(key,{}).update(row.get('receipts',{}));receipts[key][row['save_id']]=row['digest']
+				db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(AUTOSAVE_HISTORY,json.dumps(history)));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(AUTOSAVE_RECEIPTS,json.dumps(receipts)))
 			if not merge:
 				for table in('notes','reports','submissions','tasks'):db.execute(f"DELETE FROM {table}")
 			self.import_reports(reports,shared=db);self.import_tasks(tasks,replace_tasks,autosave=False,shared=db)
@@ -2036,6 +2110,7 @@ def handler(store):
 			path=urlsplit(self.path).path
 			try:
 				if path=='/':page=(ASSETS/'index.html').read_text(encoding='utf-8');page=page.replace('__STYLE__',(ASSETS/'style.css').read_text(encoding='utf-8'));page=page.replace('__MARKDOWN_SCRIPT__',(ASSETS/'markdown-it.min.js').read_text(encoding='utf-8'));page=page.replace('__SCRIPT__',(ASSETS/'message-markdown.js').read_text(encoding='utf-8')+'\n'+(ASSETS/'app.js').read_text(encoding='utf-8'));self.reply(200,page.replace('__TOKEN__',token),'text/html; charset=utf-8');return
+				if path=='/api/userscript-autosave':self.reply(200,json.dumps(store.userscript_snapshot(),ensure_ascii=False));return
 				if path=='/api/state':
 					state=store.state();state['token']=token
 					try:
@@ -2061,8 +2136,8 @@ def handler(store):
 			except FileNotFoundError as error:self.problem(404,error)
 			except(OSError,sqlite_api().Error,RuntimeError)as error:self.problem(503,error)
 		def do_POST(self):
-			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);report_ack_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/ack-seen',path);report_view=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/view',path);message_replies_seen=re.fullmatch('/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny|drop)',path);note_upload=path=='/api/notes/with-file';agent_key_post=path=='/api/key';skip_poll_post=path=='/api/skip-poll';interrupt_post=path=='/api/agent-interrupt';task_order_post=path=='/api/tasks/order';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
-			if path not in{'/api/notes','/api/markdown','/api/fetch-jobs','/api/fetch-jobs/claim'}and not report_submit and not report_seen and not report_ack_seen and not report_view and not message_replies_seen and not report_unpublish and not note_upload and not fetch_post and not agent_key_post and not skip_poll_post and not interrupt_post and not task_order_post:self.problem(404,'Not found');return
+			path=urlsplit(self.path).path;autosave_post=path in{'/api/userscript-autosave','/api/userscript-autosave/compare'};report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);report_ack_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/ack-seen',path);report_view=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/view',path);message_replies_seen=re.fullmatch('/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny|drop)',path);note_upload=path=='/api/notes/with-file';agent_key_post=path=='/api/key';skip_poll_post=path=='/api/skip-poll';interrupt_post=path=='/api/agent-interrupt';task_order_post=path=='/api/tasks/order';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
+			if path not in{'/api/notes','/api/markdown','/api/fetch-jobs','/api/fetch-jobs/claim'}and not report_submit and not report_seen and not report_ack_seen and not report_view and not message_replies_seen and not report_unpublish and not note_upload and not fetch_post and not agent_key_post and not skip_poll_post and not interrupt_post and not task_order_post and not autosave_post:self.problem(404,'Not found');return
 			content_type=self.headers.get('Content-Type','')
 			if note_upload:
 				if not content_type.lower().startswith('multipart/form-data;'):self.problem(415,'Expected multipart/form-data');return
@@ -2091,6 +2166,7 @@ def handler(store):
 				if len(data)!=length:self.problem(400,'Incomplete request body; retry the upload or request');return
 				payload=json.loads(data)
 				if not isinstance(payload,dict):self.problem(400,'Expected a JSON object');return
+				if autosave_post:result=store.compare_userscript_save(payload)if path.endswith('/compare')else store.confirm_userscript_save(payload);self.reply(200,json.dumps(result,ensure_ascii=False));return
 				if agent_key_post:
 					candidate=payload.get('key')
 					if not isinstance(candidate,str)or not AGENT_KEY_RE.fullmatch(candidate):raise ValueError('key must be 20 to 64 letters, digits, dashes or underscores')

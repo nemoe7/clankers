@@ -6,6 +6,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-19
 
+### Added
+
+- Arena autosave: add candidate, comparison, and completion receipts. Retain two saved states with completion receipts per scope and reject invalid flat history on import.
+
 ### Changed
 
 - Preview violation flag: wake poll and print its text. Remove the flag-specific Bash block.

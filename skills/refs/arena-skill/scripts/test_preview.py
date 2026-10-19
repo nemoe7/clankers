@@ -9972,3 +9972,201 @@ def test_preview_violation_wakes_poll_and_does_not_wait(capsys):
     assert "This Bash call was blocked" not in output
     assert not store.state()["agent_interrupt_pending"]
     assert not store.polling()
+
+
+def test_userscript_autosave_confirms_only_closed_file_receipts():
+  global app
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.note("saved-note", "Keep this state")
+    with preview.ThreadingHTTPServer(
+      ("127.0.0.1", 0), preview.handler(store)
+    ) as server:
+      app = server
+      thread = threading.Thread(target=server.serve_forever, daemon=True)
+      thread.start()
+      try:
+        status, _, body = request("GET", "/api/state")
+        auth = {
+          "Content-Type": "application/json",
+        }
+        status, _, body = request("GET", "/api/userscript-autosave")
+        assert status == 200
+        first = json.loads(body)
+        assert first["save_id"] and first["digest"] and first["core"]
+        assert first["history"] == []
+        status, _, _ = request(
+          "POST", "/api/userscript-autosave", json.dumps(first), auth
+        )
+        assert status == 200
+        assert (
+          request("POST", "/api/userscript-autosave", json.dumps(first), auth)[0] == 200
+        )
+        status, _, body = request("GET", "/api/userscript-autosave")
+        second = json.loads(body)
+        assert second["save_id"] != first["save_id"]
+        assert len(second["history"]) == 1
+        assert second["history"][0]["save_id"] == first["save_id"]
+        bad = {**second, "digest": "0" * 64}
+        assert (
+          request("POST", "/api/userscript-autosave", json.dumps(bad), auth)[0] == 400
+        )
+        for invalid in (
+          {**first, "save_id": 42},
+          {**first, "scope": {"repo": "other", "branch": ""}},
+          {**first, "core": first["history"] + [{"kind": "userscript-autosave"}]},
+        ):
+          assert (
+            request("POST", "/api/userscript-autosave", json.dumps(invalid), auth)[0]
+            == 400
+          )
+        comparison = {
+          "baseline": first,
+          "scope": second["scope"],
+          "core": second["core"],
+        }
+        status, _, body = request(
+          "POST", "/api/userscript-autosave/compare", json.dumps(comparison), auth
+        )
+        assert status == 200 and json.loads(body)["result"] == "equal"
+        assert (
+          len(json.loads(request("GET", "/api/userscript-autosave")[2])["history"]) == 1
+        )
+        assert (
+          "userscript-autosave"
+          not in json.loads(request("GET", "/api/copy-state")[2])["text"]
+        )
+        confirmed = [first["save_id"]]
+        for index in range(3):
+          store.note(f"later-note-{index}", f"Later state {index}")
+          snapshot = json.loads(request("GET", "/api/userscript-autosave")[2])
+          assert (
+            request("POST", "/api/userscript-autosave", json.dumps(snapshot), auth)[0]
+            == 200
+          )
+          confirmed.append(snapshot["save_id"])
+        current = json.loads(request("GET", "/api/userscript-autosave")[2])
+        assert [row["save_id"] for row in current["history"]] == confirmed[-2:]
+        assert all("history" not in row for row in current["history"])
+        assert (
+          request("POST", "/api/userscript-autosave", json.dumps(first), auth)[0] == 200
+        )
+        assert (
+          json.loads(request("GET", "/api/userscript-autosave")[2])["history"]
+          == current["history"]
+        )
+        known = current["history"][-1]
+        tampered = {
+          "baseline": {**known, "core": []},
+          "scope": current["scope"],
+          "core": current["core"],
+        }
+        status, _, body = request(
+          "POST", "/api/userscript-autosave/compare", json.dumps(tampered), auth
+        )
+        assert status == 200 and json.loads(body)["result"] == "unknown-baseline"
+        missing = {
+          "save_id": first["save_id"],
+          "scope": first["scope"],
+          "digest": first["digest"],
+        }
+        fallback = {
+          "baseline": missing,
+          "scope": current["scope"],
+          "core": current["core"],
+        }
+        status, _, body = request(
+          "POST", "/api/userscript-autosave/compare", json.dumps(fallback), auth
+        )
+        assert status == 200 and json.loads(body)["result"] == "unknown-baseline"
+        fallback["baseline"]["core"] = first["core"]
+        status, _, body = request(
+          "POST", "/api/userscript-autosave/compare", json.dumps(fallback), auth
+        )
+        assert status == 200 and json.loads(body)["result"] == "different"
+        assert set(json.loads(body)) == {
+          "result",
+          "candidate_digest",
+          "baseline_digest",
+          "counts",
+        }
+        with tempfile.TemporaryDirectory() as imported_directory:
+          imported = preview.Store(imported_directory, create=True)
+          imported.import_state(current["text"], merge=True)
+          assert imported.userscript_history() == current["history"]
+        original_scope = store.userscript_scope
+        with patch.object(
+          store, "userscript_scope", return_value={**first["scope"], "branch": "other"}
+        ):
+          other = json.loads(request("GET", "/api/userscript-autosave")[2])
+          assert other["history"] == []
+          assert (
+            request("POST", "/api/userscript-autosave", json.dumps(other), auth)[0]
+            == 200
+          )
+          assert (
+            request("POST", "/api/userscript-autosave", json.dumps(first), auth)[0]
+            == 400
+          )
+          assert (
+            len(json.loads(request("GET", "/api/userscript-autosave")[2])["history"])
+            == 1
+          )
+        assert store.userscript_scope() == original_scope()
+        assert (
+          json.loads(request("GET", "/api/userscript-autosave")[2])["history"]
+          == current["history"]
+        )
+        comparison["core"] = []
+        status, _, body = request(
+          "POST", "/api/userscript-autosave/compare", json.dumps(comparison), auth
+        )
+        assert (
+          status == 200 and json.loads(body)["result"] == "candidate-missing-records"
+        )
+        comparison["scope"] = {"repo": "other", "branch": "other"}
+        status, _, body = request(
+          "POST", "/api/userscript-autosave/compare", json.dumps(comparison), auth
+        )
+        assert status == 200 and json.loads(body)["result"] == "scope-mismatch"
+        store.import_state(first["text"])
+        assert (
+          json.loads(request("GET", "/api/userscript-autosave")[2])["history"]
+          == current["history"]
+        )
+        store.import_state(second["text"], merge=True)
+        assert (
+          json.loads(request("GET", "/api/userscript-autosave")[2])["history"]
+          == current["history"]
+        )
+        records = [
+          json.loads(line) for line in current["text"].splitlines() if line.strip()
+        ]
+        histories = [row for row in records if row.get("kind") == "userscript-autosave"]
+        assert len(histories) == 2
+        baseline_text = json.loads(request("GET", "/api/copy-state")[2])["text"]
+        for field, value in (("digest", "0" * 64), ("history", []), ("save_id", 42)):
+          original = dict(histories[0])
+          histories[0][field] = value
+          with pytest.raises((ValueError, TypeError)):
+            store.import_state("\n".join(json.dumps(row) for row in records))
+          assert (
+            json.loads(request("GET", "/api/copy-state")[2])["text"] == baseline_text
+          )
+          histories[0].clear()
+          histories[0].update(original)
+        histories[1]["receipts"][histories[0]["save_id"]] = "0" * 64
+        with pytest.raises(ValueError):
+          store.import_state("\n".join(json.dumps(row) for row in records))
+        histories[1]["receipts"][histories[0]["save_id"]] = histories[0]["digest"]
+        histories[0]["version"] = 999
+        before = json.loads(request("GET", "/api/copy-state")[2])["text"]
+        with pytest.raises(ValueError):
+          store.import_state("\n".join(json.dumps(row) for row in records))
+        assert json.loads(request("GET", "/api/copy-state")[2])["text"] == before
+        store.import_state(second["text"])
+        restored = json.loads(request("GET", "/api/userscript-autosave")[2])
+        assert [row["save_id"] for row in restored["history"]] == [first["save_id"]]
+      finally:
+        server.shutdown()
+        thread.join()

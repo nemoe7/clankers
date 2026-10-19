@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.47
+// @name         Arena.ai | NemoUtils | v1.10.48
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.47
+// @version      1.10.48
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2475,7 +2475,7 @@
       GM_setValue(overwriteKey(storeKey), false);
       GM_setValue(stampKey(storeKey), JSON.stringify(stateMemory(stamp, stamps)));
     }
-    var staleWarned = false;
+    var stateBusy = false;
     var picked = null;
     var pickedKey = null;
 
@@ -2491,25 +2491,59 @@
       return null;
     }
 
-    function getJson(url, done) {
-      if (typeof GM_xmlhttpRequest !== "function") return;
-      GM_xmlhttpRequest({
-        method: "GET",
-        url: url,
-        headers: {},
-        onload: function (answer) {
-          var body = null;
-          try {
-            body = JSON.parse(answer.responseText);
-          } catch (err) {
-            body = null;
-          }
-          done(answer.status, body);
-        },
-        onerror: function () {
-          done(0, null);
-        },
+    function stateJson(url, payload) {
+      return new Promise(function (resolve) {
+        if (typeof GM_xmlhttpRequest !== "function") {
+          resolve({ status: 0, body: null });
+          return;
+        }
+        GM_xmlhttpRequest({
+          method: payload === undefined ? "GET" : "POST",
+          url: url,
+          headers: payload === undefined ? {} : { "Content-Type": "application/json" },
+          data: payload === undefined ? undefined : JSON.stringify(payload),
+          timeout: 15000,
+          onload: function (answer) {
+            var body = null;
+            try { body = JSON.parse(answer.responseText); } catch (err) { body = null; }
+            resolve({ status: answer.status, body: body });
+          },
+          onerror: function () { resolve({ status: 0, body: null }); },
+          ontimeout: function () { resolve({ status: 0, body: null }); },
+        });
       });
+    }
+
+    function receiptKey(storeKey) { return "clankers-arena-state-receipt-" + storeKey; }
+    function pendingKey(storeKey) { return "clankers-arena-state-pending-" + storeKey; }
+
+    async function confirmPending(base, storeKey, pending) {
+      var answer = await stateJson(base + "/api/userscript-autosave", pending.receipt);
+      var receipt = pending.receipt;
+      var body = answer.body;
+      if ((answer.status !== 200 && answer.status !== 201) || !body ||
+          body.confirmed !== true || body.save_id !== receipt.save_id || body.digest !== receipt.digest) {
+        stateError("The file was saved, but confirmation failed (" + answer.status + "). The next cycle retries confirmation without writing again.",
+          null, null, "save-receipt", answer.status);
+        return;
+      }
+      GM_setValue(receiptKey(storeKey), { save_id: receipt.save_id, digest: receipt.digest, scope: receipt.scope });
+      GM_setValue(pendingKey(storeKey), null);
+      rememberState(pending.scope, storeKey, pending.base, pending.branch, pending.stamp, pending.stamps);
+      clearErrorPanel();
+      logEvent("state", "saved", { repo: pending.scope.repo, filename: pending.name });
+      if (pending.force) statePanel("Force save wrote " + pending.name + ".", null, null, true);
+    }
+
+    function fileCore(text) {
+      var records;
+      try {
+        records = JSON.parse(text);
+        if (!Array.isArray(records)) records = [records];
+      } catch (err) {
+        records = text.split(/\r?\n/).filter(function (line) { return line.trim(); }).map(function (line) { return JSON.parse(line); });
+      }
+      return records.filter(function (record) { return record.kind !== "userscript-autosave"; });
     }
 
     function pagePicker() {
@@ -2708,180 +2742,134 @@
       if (route === "link") {
         logEvent("state", "download", { route: "link", filename: name });
         linkDownload(url, name);
+        statePanel("Download requested. Completion is not confirmed, so the saved baseline has not changed.", null, null, true);
         setTimeout(function () {
           URL.revokeObjectURL(url);
         }, 1000);
-        return;
+        return Promise.resolve(false);
       }
-      GM_download({
-        url: url,
-        name: name,
-        saveAs: false,
-        onload: function () {
-          removeStatePanel(true);
-          logEvent("state", "saved", { route: "manager", filename: name });
-          URL.revokeObjectURL(url);
-        },
-        onerror: function (err) {
-          stateError(managerFailLine(err), null, null, "manager-download");
-          linkDownload(url, name);
-          setTimeout(function () {
+      return new Promise(function (resolve) {
+        GM_download({
+          url: url,
+          name: name,
+          saveAs: false,
+          onload: function () {
+            removeStatePanel(true);
+            logEvent("state", "saved", { route: "manager", filename: name });
             URL.revokeObjectURL(url);
-          }, 1000);
-        },
+            resolve(true);
+          },
+          onerror: function (err) {
+            stateError(managerFailLine(err), null, null, "manager-download");
+            linkDownload(url, name);
+            setTimeout(function () {
+              URL.revokeObjectURL(url);
+            }, 1000);
+            resolve(false);
+          },
+        });
       });
     }
 
-    function fetchStateFile(manual, force) {
+    async function fetchStateFile(manual, force) {
       var base = previewBase(document);
-      if (!base) {
-        logEvent("state", "no-preview", null, "debug");
-        return;
-      }
-      getJson(base + "/api/copy-state", function (status, body) {
-        if (status !== 200 || !body) {
-          stateError(copyLine(status, base), null, null, "copy-state", status);
+      if (!base || stateBusy) return;
+      stateBusy = true;
+      try {
+        var scope = stateScope(document);
+        var lastScope = GM_getValue(lastScopeKey(scope.repo), "");
+        var storeKey = scope.branch ? stateScopeKey(scope.repo, scope.branch) : lastScope || stateScopeKey(scope.repo, "");
+        var pending = GM_getValue(pendingKey(storeKey), null);
+        if (pending) {
+          await confirmPending(base, storeKey, pending);
+          return;
+        }
+        var answer = await stateJson(base + "/api/userscript-autosave");
+        var body = answer.body;
+        if (answer.status !== 200 || !body || !Array.isArray(body.core) || !body.scope ||
+            !body.save_id || !body.digest || typeof body.text !== "string") {
+          stateError(getLine(answer.status, base + "/api/userscript-autosave"), null, null, "autosave-get", answer.status);
           return;
         }
         clearErrorPanel();
-        var scope = stateScope(document);
-        var lastScope = GM_getValue(lastScopeKey(scope.repo), "");
         if (!scope.branch && !lastScope && !force) {
           stateError(STATE_LINES.noBranch, null, null, "missing-branch");
           return;
         }
-        var storeKey = scope.branch
-          ? stateScopeKey(scope.repo, scope.branch)
-          : lastScope || stateScopeKey(scope.repo, "");
-        var storedKey = lastScope || storeKey;
-        var rememberedBase = GM_getValue(baseKey(storedKey), "");
-        var rememberedBranch = GM_getValue(branchKey(storedKey), "");
-        var moved = saveMoved(scope.branch, rememberedBase, base, lastScope, rememberedBranch);
-        if (moved) {
-          logEvent("state", "moved", { repo: scope.repo });
-        }
-        var memory = stateRemembered(GM_getValue(stampKey(storeKey), ""));
-        if (force) {
-          logEvent("state", "forced");
-        }
-        var plan = stateDownload(
-          scope.repo,
-          scope.branch,
-          body.stamp,
-          body.counts,
-          memory,
-          body.stamps,
-          force,
-        );
-        if (plan.kind === "stale") {
-          stateError(STATE_LINES.history, null, null, "older-history", undefined, !staleWarned);
-          staleWarned = true;
+        var rememberedBase = GM_getValue(baseKey(lastScope || storeKey), "");
+        var rememberedBranch = GM_getValue(branchKey(lastScope || storeKey), "");
+        var handle = pickedKey === storeKey && picked ? picked : await stateHandle(fileKey(storeKey));
+        if (handle && !handleMatchesScope(handle, scope.repo, scope.branch)) {
+          stateError("The selected file is outside this scope: " + handle.name + ". Choose " + stateFileName(scope.repo, scope.branch, "", null) + ".",
+            "Choose file", chooseStateFile, "wrong-file");
           return;
         }
-        var hasPicker = Boolean(pagePicker());
-        var ready = pickedKey === storeKey && picked
-          ? Promise.resolve(picked)
-          : stateHandle(fileKey(storeKey));
-        ready.then(function (handle) {
-          if (handle && !handleMatchesScope(handle, scope.repo, scope.branch)) {
-            stateError(
-              "handle out of scope: " + handle.name + " is not " +
-                stateFileName(scope.repo, scope.branch, "", null),
-              null, null, "wrong-file",
-            );
-            handle = null;
-          }
-          var asks = overwriteAsk(moved, plan, Boolean(handle), force);
-          // Inside the reset window a URL-only move writes through, because the sandbox moves
-          // near the boundary. A branch move or an hour outside the window still asks.
-          var accepted =
-            asks &&
-            resetWindowAccepts(
-              new Date(),
-              resetWindowOn(),
-              scope.branch,
-              rememberedBase,
-              base,
-              rememberedBranch,
-            );
-          if (accepted) {
-            logEvent("state", "reset-accept", { repo: scope.repo });
-          }
-          if (asks && !accepted) {
-            logEvent("state", "confirmation", { filename: handle.name });
-            askOverwrite(handle, storeKey, manual, {
-              branch: scope.branch,
-              rememberedBranch: rememberedBranch,
-              lastScope: lastScope,
-              base: base,
-              rememberedBase: rememberedBase,
-              memory: memory,
-              stamp: body.stamp,
-              stamps: body.stamps,
-            });
-            return;
-          }
-          picked = handle || null;
-          pickedKey = handle ? storeKey : null;
-          var action = stateAction(stateDelivery(plan, Boolean(handle), hasPicker), manual);
-          if (action === "unchanged") {
-            logEvent("state", "no-write", { kind: plan.kind, repo: scope.repo }, "debug");
-            return;
-          }
-          if (action === "error") {
-            logEvent("state", "no-write", { kind: plan.kind }, "debug");
-            return;
-          }
-          if (action === "block") {
-            hintStateFile(manual);
-            return;
-          }
-          if (action === "hint") {
-            hintStateFile(manual);
-            logEvent("state", "deferred-picker", null, "warn");
-            return;
-          }
-          if (action === "write") {
-            logEvent("state", "requested", { status: status }, "debug");
-            writeToHandle(handle, body.text).then(
-              function () {
-                rememberState(
-                  scope,
-                  storeKey,
-                  base,
-                  scope.branch || rememberedBranch,
-                  body.stamp,
-                  body.stamps,
-                );
-                logEvent("state", "saved", { repo: scope.repo, filename: writtenName(handle, plan.name) });
-                if (force) {
-                  statePanel("Force save wrote " + writtenName(handle, plan.name) + ".", null, null, true);
-                }
-              },
-              function (err) {
-                picked = null;
-                pickedKey = null;
-                hintStateFile(true);
-                stateError(writeFailLine(err), "Choose file", chooseStateFile, "write");
-              },
-            );
-            return;
-          }
-          logEvent("state", "download", { route: "stamped", filename: plan.name });
-          if (force) {
-            statePanel("Force save downloaded " + plan.name + ".", null, null, true);
-          }
-          writeStateDownload(body.text, plan.name);
-          rememberState(
-            scope,
-            storeKey,
-            base,
-            scope.branch || rememberedBranch,
-            body.stamp,
-            body.stamps,
-          );
+        if (!handle && !force) {
+          hintStateFile(manual);
+          return;
+        }
+        var baseline = GM_getValue(receiptKey(storeKey), null);
+        var initialFile = false;
+        if (handle && !force) {
+          var text = await (await handle.getFile()).text();
+          initialFile = !text.trim() && !baseline;
+          if (text.trim() && baseline) baseline = Object.assign({}, baseline, { core: fileCore(text) });
+          if (!text.trim() && baseline) baseline = Object.assign({}, baseline, { core: [] });
+        }
+        var comparison = await stateJson(base + "/api/userscript-autosave/compare", {
+          baseline: baseline, scope: body.scope, core: body.core,
         });
-      });
+        var result = comparison.body && comparison.body.result;
+        if (comparison.status !== 200 || !comparison.body || comparison.body.candidate_digest !== body.digest ||
+            ["equal", "different", "candidate-missing-records", "scope-mismatch", "unknown-baseline"].indexOf(result) < 0) {
+          stateError("The saved and current states could not be compared (" + comparison.status + "). Nothing was written.",
+            null, null, "autosave-compare", comparison.status);
+          return;
+        }
+        if (!force && result === "equal") return;
+        if (!force && result !== "different" && !(initialFile && result === "unknown-baseline")) {
+          stateError("Automatic save stopped: " + result + ". Nothing was written. Review the saved and current states before Force save.",
+            null, null, result);
+          return;
+        }
+        var plan = { kind: "download", name: stateFileName(scope.repo, scope.branch, body.stamp, body.counts) };
+        var moved = saveMoved(scope.branch, rememberedBase, base, lastScope, rememberedBranch);
+        var asks = overwriteAsk(moved, plan, Boolean(handle), force);
+        var accepted = asks && resetWindowAccepts(new Date(), resetWindowOn(), scope.branch, rememberedBase, base, rememberedBranch);
+        if (asks && !accepted) {
+          askOverwrite(handle, storeKey, manual, {
+            branch: scope.branch, rememberedBranch: rememberedBranch, lastScope: lastScope,
+            base: base, rememberedBase: rememberedBase, memory: stateRemembered(GM_getValue(stampKey(storeKey), "")),
+            stamp: body.stamp, stamps: body.stamps,
+          });
+          return;
+        }
+        picked = handle || null;
+        pickedKey = handle ? storeKey : null;
+        var name = writtenName(handle, plan.name);
+        if (handle) {
+          try { await writeToHandle(handle, body.text); }
+          catch (err) {
+            picked = null;
+            pickedKey = null;
+            stateError(writeFailLine(err), "Choose file", chooseStateFile, "write");
+            return;
+          }
+        } else if (!(await writeStateDownload(body.text, plan.name))) {
+          return;
+        }
+        pending = {
+          receipt: { save_id: body.save_id, scope: body.scope, digest: body.digest, core: body.core },
+          scope: scope, base: base, branch: scope.branch || rememberedBranch, stamp: body.stamp,
+          stamps: body.stamps, name: name, force: Boolean(force),
+        };
+        GM_setValue(pendingKey(storeKey), pending);
+        await confirmPending(base, storeKey, pending);
+      } catch (err) {
+        stateError("Automatic save failed (" + (err.name || "unknown") + "). The saved baseline has not changed.", null, null, "autosave");
+      } finally {
+        stateBusy = false;
+      }
     }
 
     function chooseStateFile() {
