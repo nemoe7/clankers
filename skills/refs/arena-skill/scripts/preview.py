@@ -5571,12 +5571,12 @@ class Store:
       )
     return rows[0]["id"]
 
-  def acknowledge(self, ids, text):
+  def acknowledge(self, ids, text, shared=None):
     """Store the first acknowledgement as a receipt. Append each later reply without replacing earlier text. Use
     `ack_edited_at` for the latest reply stamp."""
     text = note_text(text)
     stamp = now()
-    with self.transaction() as db:
+    with self.transaction(shared) as db:
       for record_id in ids:
         identifier(record_id)
         for table in ("notes", "submissions"):
@@ -6897,6 +6897,10 @@ def main():
   )
   ack.add_argument("ids", nargs="*")
   ack.add_argument("markdown", help="Literal inline Markdown answer")
+  ack.add_argument("--task-id")
+  ack.add_argument("--task-title")
+  ack.add_argument("--task-type", choices=TASK_TYPES)
+  ack.add_argument("--task-detail", action="append")
   publish = commands.add_parser(
     "publish", help="Publish a report; -i names the ID, -t the title"
   )
@@ -7316,7 +7320,26 @@ def main():
         if args.ids
         else [store.pending_ack()]
       )
-      store.acknowledge(ids, text)
+      task_options = (args.task_id, args.task_title, args.task_type, args.task_detail)
+      if any(value is not None for value in task_options):
+        if len(args.ids) != 1 or not all(task_options):
+          raise ValueError(
+            "A combined acknowledgement needs one explicit message ID and all four task options"
+          )
+        details = task_steps(args.task_detail)
+        check_task_steps(details)
+        with store.transaction() as shared:
+          store.write_task(
+            args.task_id,
+            args.task_title,
+            details,
+            task_type=args.task_type,
+            shared=shared,
+          )
+          store.acknowledge(ids, text, shared=shared)
+          store.mark_task(ids[0], args.task_id, shared=shared)
+      else:
+        store.acknowledge(ids, text)
       short = [i[:6] for i in ids]
       print("ok " + " ".join(short))
       untracked = [

@@ -9779,3 +9779,57 @@ def test_preview_order_survives_agent_updates_and_notifies_the_next_hook():
     store.write_task("third", status="upcoming")
     store.import_tasks([store.task_record("third") | {"order": 1}])
     assert store.list_tasks()[0]["id"] == "third"
+
+
+def test_ack_task_cli_commits_both_records_or_neither(capsys):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.set_meta("port", guard_port())
+    store.note("first-note", "First request")
+    store.note("second-note", "Second request")
+    options = [
+      "--task-id",
+      "first-job",
+      "--task-title",
+      "First job",
+      "--task-type",
+      "code",
+      "--task-detail",
+      "Do the work",
+    ]
+
+    def call(ids, extra):
+      with (
+        patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": directory}),
+        patch.object(
+          sys, "argv", [str(Path(preview.__file__)), "ack", *ids, "Received", *extra]
+        ),
+      ):
+        result = preview.main()
+      capsys.readouterr()
+      return result
+
+    for ids, extra in [
+      ([], options),
+      (["first-note", "second-note"], options),
+      (["first-note"], options[:-2]),
+      (["first-note"], options[:-1] + ["x" * (preview.TASK_STEP_MAX + 1)]),
+      (["missing-note"], options),
+    ]:
+      assert call(ids, extra) == 1
+      assert store.task_record("first-job") is None
+      assert all(row["acknowledged_at"] is None for row in store.state()["notes"])
+    with patch.object(
+      preview.Store, "mark_task", side_effect=ValueError("write failed")
+    ):
+      assert call(["first-note"], options) == 1
+    assert store.task_record("first-job") is None
+    assert all(row["acknowledged_at"] is None for row in store.state()["notes"])
+    assert call(["first-note"], options) == 0
+    rows = {row["id"]: row for row in store.state()["notes"]}
+    assert rows["first-note"]["ack_text"] == "Received"
+    assert rows["first-note"]["task_id"] == "first-job"
+    assert rows["second-note"]["acknowledged_at"] is None
+    assert store.task_record("first-job")["type"] == "code"
+    assert call(["second-note"], []) == 0
+    assert store.task_record("first-job")["details"] == ["Do the work"]
