@@ -87,6 +87,7 @@
 - Report changes/findings, checks/results, files/decisions, open issues, assumptions, and limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines.
 - ALWAYS use the Oxford comma.
 - Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
+- Keep each fielded-report question's relevant context, prompt, and controls on one vertical screen: put it immediately after at most one short paragraph or three short bullets with only needed facts; NEVER collect questions at a long report's end.
 - Mermaid: ALWAYS in documentation, NEVER anywhere else.
 - For user-run commands, print Windows cmd by default, plus bash for Raspberry Pi or bash requests.
 - Task completion alone needs no report.
