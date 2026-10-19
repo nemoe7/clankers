@@ -160,7 +160,6 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   }
   // A switch label reads (ON)/(OFF) for the Arena bundle and `: ON — toggle` for ChatGPT.
   const reads = (label, on) => label.includes(moduleSwitch ? (on ? "(ON)" : "(OFF)") : (on ? ": ON" : ": OFF"));
-  const switchLike = (label) => moduleSwitch ? / \((ON|OFF)\)$/.test(label) : label.includes("— toggle");
 
   const defaults = load();
   assert.equal(defaults.menus.size, menusFor(stored));
@@ -1389,7 +1388,6 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const digest = core => require("node:crypto").createHash("sha256").update(JSON.stringify(core)).digest("hex");
     const scope = { repo: "r", branch: "" };
     const core = [{ id: "n", text: "saved" }];
-    const currentCore = [{ id: "n", text: "changed" }];
     const receiptKey = "clankers-arena-state-receipt-o.r";
     const pendingKey = "clankers-arena-state-pending-o.r";
     const receipt = { save_id: "first", digest: digest(core), scope, lastsave: "t1", beforelastsave: null };

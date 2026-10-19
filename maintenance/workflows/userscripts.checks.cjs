@@ -1324,8 +1324,6 @@ function checkTabTitle(api, logging) {
   var labelOnly = link(null, "Open nemoe7/clankers on GitHub");
   var emptyLink = link("", "");
   var setDoc = docWith(repoLink, "ChatGPT");
-  var keepDoc = docWith(null, "ChatGPT");
-  var goneDoc = docWith(null, TITLE_PREFIX + "clankers" + vtag);
   // One message per fixture: the same mark read twice would resurface as the hold.
   var chatPage = page([agentRoot([chatRow()])]);
   var reasoningPage = page([agentRoot([reasoningRow()])]);

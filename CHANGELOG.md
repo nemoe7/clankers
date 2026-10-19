@@ -46,6 +46,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Preview proxy guide: scope the 401 key-check step to the proxy agent-key check. Keep the inbox, retry, and second-401 steps.
 - Preview CLI reference: describe class and hint output without a fixed prefix. Keep streams, exit codes, and subcommand prefixes.
 
+### Removed
+
+- Maintenance: remove nine unreferenced prose wrappers, one routed-run constant, and userscript test helpers and fixtures.
+
 ## 2026-10-18
 
 ### Added

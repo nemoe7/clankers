@@ -186,11 +186,6 @@ def slash_sections(source: str, skip_metadata: bool = False) -> list[str]:
   return comments
 
 
-def slash_prose(source: str, skip_metadata: bool = False) -> str:
-  """Collect slash and block comments as one text value."""
-  return joined_comments(slash_sections(source, skip_metadata))
-
-
 def hash_sections(source: str, suffix: str) -> list[str]:
   """Collect hash and INI semicolon comments outside quoted strings."""
   comments: list[str] = []
@@ -223,11 +218,6 @@ def hash_sections(source: str, suffix: str) -> list[str]:
   return comments
 
 
-def hash_prose(source: str, suffix: str) -> str:
-  """Collect hash and INI semicolon comments as one text value."""
-  return joined_comments(hash_sections(source, suffix))
-
-
 def html_sections(source: str) -> list[str]:
   """Collect HTML and XML comment blocks."""
   comments: list[str] = []
@@ -244,11 +234,6 @@ def html_sections(source: str) -> list[str]:
       comments.append(text)
     start = end + 3
   return comments
-
-
-def html_prose(source: str) -> str:
-  """Collect HTML and XML comment blocks as one text value."""
-  return joined_comments(html_sections(source))
 
 
 def batch_sections(source: str) -> list[str]:
@@ -268,11 +253,6 @@ def batch_sections(source: str) -> list[str]:
       if text:
         comments.append(text)
   return comments
-
-
-def batch_prose(source: str) -> str:
-  """Collect batch REM and double-colon comments as one text value."""
-  return joined_comments(batch_sections(source))
 
 
 def userscript_metadata_sections(source: str) -> list[str]:

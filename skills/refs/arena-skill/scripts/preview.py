@@ -3000,9 +3000,6 @@ def poll_timeout_line(line):
   return False
 
 
-# The command families that wait on a pull request's checks.
-# A bash wait holds the turn open. The gate refuses it and names the background tool.
-PR_CHECK_COMMANDS = (("pr", "checks"), ("run", "watch"))
 # A wrapper in front of the head token changes only that token, so the scan steps past
 # one and the flags, assignments or seconds that follow it.
 PR_CHECK_WRAPPERS = (

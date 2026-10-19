@@ -1072,7 +1072,6 @@ def poll_timeout_line(line):
 		for(index,word)in enumerate(words):
 			if word in('arena-preview','preview.py')and index+1<len(words)and words[index+1]=='poll':return True
 	return False
-PR_CHECK_COMMANDS=('pr','checks'),('run','watch')
 PR_CHECK_WRAPPERS='env','command','timeout','xargs','nice','nohup','stdbuf','sudo'
 PR_CHECK_NAMES=('pr','checks','pr-checks'),('run','watch','run-watch')
 LONG_RUN_HEADS={'pytest':'pytest','py.test':'pytest','tox':'tox','nox':'nox'}
