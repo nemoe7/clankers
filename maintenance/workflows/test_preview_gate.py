@@ -33,6 +33,9 @@ fi
 if [ "$1" = "interrupt-tick" ]; then
   exec __PYTHON__ __PREVIEW__ "$@"
 fi
+if [ "$1" = "read-set-tick" ]; then
+  exit 0
+fi
 if [ "$1" = "pr-state-tick" ]; then
   exec __PYTHON__ __PREVIEW__ "$@"
 fi
@@ -269,6 +272,14 @@ def test_the_reference_table_holds_every_gate_case() -> None:
     f"table rows without a case: {sorted(rows - labels)}; "
     f"cases without a row: {sorted(labels - rows)}"
   )
+
+
+def test_read_set_tick_precedes_inert_line_exemptions():
+  installer = INSTALLER.read_text(encoding="utf-8")
+  tick = "# case: read-set-note"
+  assert installer.index("# case: violation-flag") < installer.index(tick)
+  assert installer.index(tick) < installer.index("# case: inert-line")
+  assert 'read-set-tick "\\$_arena_preview_line" --repo "$REPO_ROOT"' in installer
 
 
 def test_command_lookup_does_not_start_a_run():

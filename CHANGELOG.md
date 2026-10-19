@@ -8,6 +8,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+- Preview read-set checkpoints: schedule a hidden blocking note at each local 00, 20, and 40 minute slot. Keep polls and the owner view quiet, and defer a due note during polling.
 - Arena autosave: add candidate, comparison, and completion receipts. Retain two saved states with completion receipts per scope and reject invalid flat history on import.
 
 ### Changed

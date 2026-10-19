@@ -6946,6 +6946,204 @@ def test_quiet_note_never_wakes_the_poll():
     assert seen["owner-note"] is not None and seen["key-note"] is not None
 
 
+def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
+  capsys, monkeypatch
+):
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    (root / "ARENA.md").write_text("arena\n", encoding="utf-8")
+    (root / "AGENTS.md").write_text("root agents\n", encoding="utf-8")
+    nested = root / "src" / "AGENTS.md"
+    nested.parent.mkdir()
+    nested.write_text("nested agents\n", encoding="utf-8")
+    excluded = root / "node_modules" / "AGENTS.md"
+    excluded.parent.mkdir()
+    excluded.write_text("excluded agents\n", encoding="utf-8")
+    skill = root / ".agents" / "skills" / "arena-skill" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("skill\n", encoding="utf-8")
+    store = preview.Store(root / "state", create=True)
+    at_zero = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
+
+    warning = preview.read_set_tick(store, "git status", moment=at_zero, root=root)
+    assert warning and "READ SET BLOCKED" in warning
+    pending = store.read()["pending"]
+    assert len(pending) == 1
+    checkpoint = pending[0]
+    assert checkpoint["quiet"] == 1 and checkpoint["blocking"] == 1
+    assert [str(path) for path in preview.read_set_paths(root)] == [
+      str(root / "ARENA.md"),
+      str(root / "AGENTS.md"),
+      str(nested),
+      str(skill),
+    ]
+    assert all(str(path) in checkpoint["text"] for path in preview.read_set_paths(root))
+    assert "quiet (no ack required)" not in preview.format_read(store.read())
+    assert store.pending_ack() == checkpoint["id"]
+    assert store.reminder().startswith("unacked 1 note | ")
+    store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
+    assert not store.gate()
+    assert preview.read_set_tick(
+      store, "arena-preview read && git status", moment=at_zero, root=root
+    )
+    assert preview.read_set_tick(
+      store, "arena-preview poll && git status", moment=at_zero, root=root
+    )
+    assert (
+      preview.read_set_tick(
+        store, f"cd {root} && arena-preview read", moment=at_zero, root=root
+      )
+      is None
+    )
+    assert (
+      preview.read_set_tick(
+        store,
+        f"{sys.executable} {preview.__file__} read",
+        moment=at_zero,
+        root=root,
+      )
+      is None
+    )
+    store.mark_seen([checkpoint["id"]])
+    assert [item["id"] for item in store.read()["pending"]] == [checkpoint["id"]]
+    assert (
+      preview.read_set_tick(store, "arena-preview read", moment=at_zero, root=root)
+      is None
+    )
+    assert (
+      preview.read_set_tick(
+        store,
+        f"arena-preview ack {checkpoint['id']} done",
+        moment=at_zero,
+        root=root,
+      )
+      is None
+    )
+
+    monkeypatch.setattr(preview, "pr_check_watch", lambda *args: None)
+    monkeypatch.setattr(preview, "run_notices", lambda *args, **kwargs: False)
+    saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
+    sleeps = []
+    try:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 2
+      assert (
+        preview.poll_inbox(store, sleeper=lambda seconds: sleeps.append(seconds)) == 1
+      )
+      assert sleeps == [10]
+    finally:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+    assert checkpoint["id"] in [item["id"] for item in store.read()["pending"]]
+    assert checkpoint["id"] not in {
+      row["id"]
+      for row in store.state_lines(store.state()["notes"], store.tasks() or {})[0]
+    }
+    capsys.readouterr()
+
+    store.acknowledge([checkpoint["id"]], "Read in full")
+    assert preview.read_set_tick(store, "git status", moment=at_zero, root=root) is None
+    assert store.read()["pending"] == []
+    at_twenty = at_zero.replace(minute=20)
+    assert (
+      preview.read_set_tick(store, "arena-preview read", moment=at_twenty, root=root)
+      is None
+    )
+    next_pending = store.read()["pending"]
+    assert len(next_pending) == 1 and next_pending[0]["id"] != checkpoint["id"]
+    at_forty = at_zero.replace(minute=40)
+    assert preview.read_set_tick(store, "git status", moment=at_forty, root=root)
+    assert len(store.read()["pending"]) == 1, "one pending checkpoint never duplicates"
+
+
+def test_read_set_schedule_defers_for_polling_and_migrates_note_classes():
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    for path in (
+      root / "ARENA.md",
+      root / "AGENTS.md",
+      root / ".agents" / "skills" / "arena-skill" / "SKILL.md",
+    ):
+      path.parent.mkdir(parents=True, exist_ok=True)
+      path.write_text(path.name + "\n", encoding="utf-8")
+    store = preview.Store(root / "state", create=True)
+    ordinary = store.note("ordinary", "Owner work")
+    quiet = store.note("quiet", "Key rotated", quiet=True)
+    assert ordinary["blocking"] == 1 and quiet["blocking"] == 0
+    at_forty = datetime(2026, 10, 19, 10, 47, tzinfo=timezone.utc)
+    assert preview.read_set_slot(at_forty).endswith("10:40:00+00:00")
+    assert (
+      preview.read_set_tick(
+        store, "timeout 1 arena-preview poll", moment=at_forty, root=root
+      )
+      is None
+    )
+    assert (
+      preview.read_set_tick(store, "arena-preview poll", moment=at_forty, root=root)
+      is None
+    )
+    assert {item["id"] for item in store.read()["pending"]} == {
+      ordinary["id"],
+      quiet["id"],
+    }
+    store.start_poll()
+    assert store.schedule_read_set_note(moment=at_forty, root=root) is None
+    assert (
+      preview.read_set_tick(store, "git status", moment=at_forty, root=root) is None
+    )
+    assert not any(
+      item["blocking"] and item["quiet"] for item in store.read()["pending"]
+    )
+    store.clear_polling()
+    assert preview.read_set_tick(store, "git status", moment=at_forty, root=root)
+
+    database = sqlite3.connect(store.path)
+    database.execute("ALTER TABLE notes DROP COLUMN blocking")
+    database.commit()
+    database.close()
+    migrated = preview.Store(root / "state")
+    rows = {
+      row["id"]: row
+      for row in migrated.notes_matching(ordinary["id"])
+      + migrated.notes_matching(quiet["id"])
+    }
+    assert rows[ordinary["id"]]["blocking"] == 1
+    assert rows[quiet["id"]]["blocking"] == 0
+
+
+def test_read_set_tick_cli_blocks_work_but_not_recovery_commands():
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    for path in (
+      root / "ARENA.md",
+      root / "AGENTS.md",
+      root / ".agents" / "skills" / "arena-skill" / "SKILL.md",
+    ):
+      path.parent.mkdir(parents=True, exist_ok=True)
+      path.write_text(path.name + "\n", encoding="utf-8")
+    state = root / "state"
+    preview.Store(state, create=True)
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(state)}
+    command = [
+      sys.executable,
+      str(Path(preview.__file__)),
+      "read-set-tick",
+      "git status",
+      "--repo",
+      str(root),
+    ]
+    blocked = subprocess.run(
+      command, capture_output=True, text=True, check=False, env=env
+    )
+    assert blocked.returncode == 1
+    assert "READ SET BLOCKED" in blocked.stderr
+    for line in ("arena-preview read", "arena-preview poll"):
+      command[3] = line
+      allowed = subprocess.run(
+        command, capture_output=True, text=True, check=False, env=env
+      )
+      assert allowed.returncode == 0, allowed.stderr
+    assert len(preview.Store(state).read()["pending"]) == 1
+
+
 def test_quiet_note_route():
   """POST /api/notes takes the quiet flag from the userscript."""
   global app
@@ -8211,6 +8409,7 @@ def test_reference_commands_table_lists_every_agent_facing_command():
   actual = set(re.search(r"\{([a-z,\-]+)\}", help_text).group(1).split(","))
   internal = {
     "interrupt-tick",
+    "read-set-tick",
     "pr-state-tick",
     "inbox-line",
     "route-run",
