@@ -5440,14 +5440,18 @@ class Store:
       raise ValueError("tab must name a preview tab")
     header = "VIOLATION"
     if tab == "reports" and report_id is not None:
-      self.report(report_id)
-      header = f"VIOLATION: report {report_id}"
+      try:
+        self.report(report_id)
+      except FileNotFoundError:
+        pass
+      else:
+        header = f"VIOLATION: report {report_id}"
     elif tab == "tasks":
       task = current_task((self.tasks() or {}).get("upcoming", []))
       if task:
         header = f"VIOLATION: task {task['id']}"
     notice = (
-      f"{header}\nRead ARENA.md, root AGENTS.md, "
+      f"{header}\nThis Bash call was blocked. Read ARENA.md, root AGENTS.md, "
       "every nested AGENTS.md, and arena-skill SKILL.md in full again, then fix "
       "the violation before continuing."
     )
@@ -7597,7 +7601,7 @@ def main():
       notice = Store(state_dir, create=False).take_interrupt()
       if notice:
         print(notice, file=sys.stderr)
-        return 0
+        return 1
       return 0
     if args.command == "skills":
       print_skills()
