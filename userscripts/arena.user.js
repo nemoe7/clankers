@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.48
+// @name         Arena.ai | NemoUtils | v1.10.49
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.48
+// @version      1.10.49
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1647,7 +1647,7 @@
 
     function setCapByPrompt() {
       if (typeof prompt !== "function") return;
-      var answer = prompt("Rows cut per trim pass (1 to 1000)", String(capValue()));
+      var answer = prompt("How many rows should each trim pass remove? Enter 1 to 1000.", String(capValue()));
       if (answer === null) {
         registerCap();
         return;
@@ -1663,7 +1663,7 @@
 
     function setTickByPrompt() {
       if (typeof prompt !== "function") return;
-      var answer = prompt("Auto trim interval in seconds (1 to 60)", String(Math.round(tickMs() / 1000)));
+      var answer = prompt("How often should auto trim run? Enter 1 to 60 seconds.", String(Math.round(tickMs() / 1000)));
       if (answer === null) {
         registerInterval();
         return;
@@ -1680,7 +1680,7 @@
 
     function setCount() {
       if (typeof prompt !== "function") return;
-      var answer = prompt("Transcript rows to keep", keepPlan());
+      var answer = prompt("How many transcript rows should stay?", keepPlan());
       if (answer === null) {
         registerCount();
         return;
@@ -2188,11 +2188,11 @@
       if (!was || !now) return "unknown";
       return now < was ? "older" : now === was ? "same" : "forward";
     }
-    return (reasons.join("; ") || "Cause: unknown") +
-      "; stamps: overall " + compare(before.stamp, after.stamp) +
+    return (reasons.join(". ") || "Cause: unknown") +
+      ". Timestamp comparisons: overall " + compare(before.stamp, after.stamp) +
       ", notes " + compare(before.note, after.note) +
       ", and tasks " + compare(before.task, after.task) +
-      ". Stamps do not prove equal file contents. " + question;
+      ". Timestamps do not prove that the file contents match. " + question;
   }
 
   var RESET_WINDOW_MS = 150 * 1000;
@@ -2250,7 +2250,7 @@
   }
 
   function getLine(status, base) {
-    return "GET " + status + " " + base;
+    return "Could not read the preview state (GET " + status + ") at " + base;
   }
 
   function copyLine(status, base) {
@@ -2259,13 +2259,13 @@
 
   function writeFailLine(err) {
     return (
-      "write failed (" + ((err && err.name) || "unknown") +
-      "); press the choose entry for the file again"
+      "The file could not be saved (" + ((err && err.name) || "unknown") +
+      "). Choose the file again to retry."
     );
   }
 
   function managerFailLine(err) {
-    return "manager download failed (" + ((err && err.error) || "unknown") + "); using the link";
+    return "The download manager failed (" + ((err && err.error) || "unknown") + "). Trying a browser-link download.";
   }
 
   var STATE_LINES = {
@@ -2273,7 +2273,7 @@
     history: "history does not match",
     pickerClosed: "no file selected;",
     noPreview: "no preview detected",
-    noBranch: "session branch not found; state save blocked",
+    noBranch: "The session branch is missing. State save is blocked.",
   };
 
   function writtenName(handle, fallback) {
@@ -2523,7 +2523,7 @@
       var body = answer.body;
       if ((answer.status !== 200 && answer.status !== 201) || !body ||
           body.confirmed !== true || body.save_id !== receipt.save_id || body.digest !== receipt.digest) {
-        stateError("The file was saved, but confirmation failed (" + answer.status + "). The next cycle retries confirmation without writing again.",
+        stateError("The file is saved. Confirmation failed (" + answer.status + "), so the next cycle retries it without writing the file again.",
           null, null, "save-receipt", answer.status);
         return;
       }
@@ -2532,7 +2532,7 @@
       rememberState(pending.scope, storeKey, pending.base, pending.branch, pending.stamp, pending.stamps);
       clearErrorPanel();
       logEvent("state", "saved", { repo: pending.scope.repo, filename: pending.name });
-      if (pending.force) statePanel("Force save wrote " + pending.name + ".", null, null, true);
+      if (pending.force) statePanel("Saved " + pending.name + " using Force save.", null, null, true);
     }
 
     function fileCore(text) {
@@ -2700,7 +2700,7 @@
       logEvent("state", "file-needed", null, "warn");
       if (panelNeeded(manual, shown)) {
         statePanel(
-          "No save file is set, so state saves are blocked.",
+          "No save file is selected. Choose a file to enable state saves.",
           "Choose file",
           chooseStateFile
         );
@@ -2742,7 +2742,7 @@
       if (route === "link") {
         logEvent("state", "download", { route: "link", filename: name });
         linkDownload(url, name);
-        statePanel("Download requested. Completion is not confirmed, so the saved baseline has not changed.", null, null, true);
+        statePanel("The userscript requested a browser download. Completion is unconfirmed, so the saved baseline has not changed.", null, null, true);
         setTimeout(function () {
           URL.revokeObjectURL(url);
         }, 1000);
@@ -2800,7 +2800,7 @@
         var rememberedBranch = GM_getValue(branchKey(lastScope || storeKey), "");
         var handle = pickedKey === storeKey && picked ? picked : await stateHandle(fileKey(storeKey));
         if (handle && !handleMatchesScope(handle, scope.repo, scope.branch)) {
-          stateError("The selected file is outside this scope: " + handle.name + ". Choose " + stateFileName(scope.repo, scope.branch, "", null) + ".",
+          stateError("The selected file, " + handle.name + ", does not match this repository and branch. Choose " + stateFileName(scope.repo, scope.branch, "", null) + ".",
             "Choose file", chooseStateFile, "wrong-file");
           return;
         }
@@ -2822,13 +2822,13 @@
         var result = comparison.body && comparison.body.result;
         if (comparison.status !== 200 || !comparison.body || comparison.body.candidate_digest !== body.digest ||
             ["equal", "different", "candidate-missing-records", "scope-mismatch", "unknown-baseline"].indexOf(result) < 0) {
-          stateError("The saved and current states could not be compared (" + comparison.status + "). Nothing was written.",
+          stateError("The userscript could not compare the saved and current states (" + comparison.status + "). Nothing was written.",
             null, null, "autosave-compare", comparison.status);
           return;
         }
         if (!force && result === "equal") return;
         if (!force && result !== "different" && !(initialFile && result === "unknown-baseline")) {
-          stateError("Automatic save stopped: " + result + ". Nothing was written. Review the saved and current states before Force save.",
+          stateError("Automatic save is blocked (" + result + "). Nothing was written. Review the saved and current states before using Force save.",
             null, null, result);
           return;
         }
@@ -2866,7 +2866,7 @@
         GM_setValue(pendingKey(storeKey), pending);
         await confirmPending(base, storeKey, pending);
       } catch (err) {
-        stateError("Automatic save failed (" + (err.name || "unknown") + "). The saved baseline has not changed.", null, null, "autosave");
+        stateError("State save failed (" + (err.name || "unknown") + "). The saved baseline has not changed.", null, null, "autosave");
       } finally {
         stateBusy = false;
       }
@@ -2875,7 +2875,7 @@
     function chooseStateFile() {
       var pick = pagePicker();
       if (!pick) {
-        stateError("this browser cannot write files; the stamped download is used", null, null, "file-api");
+        stateError("This browser cannot write directly to a selected file. Force save can request a timestamped download.", null, null, "file-api");
         return;
       }
       pick({
@@ -2885,7 +2885,7 @@
         })(),
         types: [
           {
-            description: "NDJSON state",
+            description: "State file (NDJSON)",
             accept: { "application/x-ndjson": [".ndjson"] },
           },
         ],
@@ -3531,7 +3531,7 @@
     function setTitleTickByPrompt() {
       if (typeof prompt !== "function") return;
       var answer = prompt(
-        "Tab title tick in seconds (1 to 60)",
+        "How often should the tab title update? Enter 1 to 60 seconds.",
         String(Math.round(titleTickMs() / 1000)),
       );
       if (answer === null) {

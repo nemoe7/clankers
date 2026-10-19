@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena userscript popups: use natural prose. Keep conditions, dynamic values, ranges, and actions.
 - Preview violation flag: wake poll and print its text. Remove the flag-specific Bash block.
 - Arena report publication: check the stored revision and rendered field count before the CLI reports success.
 - Arena acknowledgements: add task options to save one receipt and its linked task in one transaction. Keep standalone commands.
