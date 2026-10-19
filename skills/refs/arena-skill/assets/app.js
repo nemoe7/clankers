@@ -1751,7 +1751,7 @@ function slideTaskRows(before) {
 // The dragged row takes its seat as the pointer moves, and a line marks that seat. The status line
 // keeps its stored stamp, so a preview never reads as a saved order.
 function previewTaskOrder(list, anchor) {
-  delete $('#tasks-drop-end').dataset.drop;
+  delete $('#tasks-upcoming-body').dataset.drop;
   const ids = drawnTaskIds(list, anchor ? anchor.title : null);
   const shown = previewIds;
   if (shown && shown.length === ids.length && shown.every((id, index) => id === ids[index])) {
@@ -1771,8 +1771,8 @@ function previewTaskOrder(list, anchor) {
   return ids;
 }
 function endTaskDrag() {
-  $('#tasks-drop-end').hidden = true;
-  delete $('#tasks-drop-end').dataset.drop;
+  delete $('#tasks-upcoming-body').dataset.drop;
+  delete $('#tasks-upcoming-body').dataset.dragging;
   draggingTaskId = null;
   dragStartPayload = null;
   previewIds = null;
@@ -1813,7 +1813,7 @@ function draggableTaskRow(task, list) {
     draggingTaskId = row.title;
     dragStartPayload = lastTasksPayload;
     previewIds = null;
-    $('#tasks-drop-end').hidden = false;
+    $('#tasks-upcoming-body').dataset.dragging = 'true';
     row.dataset.dragging = 'true';
     // Firefox starts no drag without payload data.
     if (event.dataTransfer) event.dataTransfer.setData('text/plain', row.title);
@@ -1834,12 +1834,12 @@ function draggableTaskRow(task, list) {
   handle.addEventListener('dragend', cancelTaskDrag);
   return row;
 }
-for (const list of [$('#tasks-current-body'), $('#tasks-upcoming-body'), $('#tasks-drop-end')]) {
+for (const list of [$('#tasks-current-body'), $('#tasks-upcoming-body')]) {
   list.addEventListener('dragover', event => {
     if (!draggingTaskId || event.target !== list) return;
     event.preventDefault();
     previewTaskOrder(list, null);
-    if (list.id === 'tasks-drop-end') list.dataset.drop = 'true';
+    if (list.id === 'tasks-upcoming-body') list.dataset.drop = 'true';
   });
   list.addEventListener('drop', event => {
     if (!draggingTaskId || event.target !== list) return;

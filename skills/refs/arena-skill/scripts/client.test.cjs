@@ -880,12 +880,14 @@ test('preview client', async (t) => {
       assert.deepEqual(rows().map(row => row.title), ['third', 'second', 'first'], 'the refused write keeps the stored rows');
       assert.match(get('#tasks-status').textContent, /not saved/i);
       orderFails = false;
-      const end = get('#tasks-drop-end');
+      const end = get('#tasks-upcoming-body');
+      assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8'),
+        /tasks-drop-end/, 'the dedicated end area is removed');
       const beforeEnd = rows().map(row => row.title);
       const moved = rows()[0];
       const expectedEnd = [...beforeEnd.slice(1), beforeEnd[0]];
       grab(moved);
-      assert.equal(end.hidden, false, 'a drag reveals the end target');
+      assert.equal(end.dataset.dragging, 'true', 'a drag keeps the list background reachable');
       rows().at(-1).events.dragover(event({ target: rows().at(-1) }));
       const endHover = event({ target: end });
       end.events.dragover(endHover);
@@ -901,7 +903,7 @@ test('preview client', async (t) => {
       await settle();
       assert.deepEqual(orderWrites.at(-1), expectedEnd, 'the end target saves the appended order');
       assert.equal(end.dataset.drop, undefined, 'the end-target mark clears after a drop');
-      assert.equal(end.hidden, true, 'a completed drag hides the end target');
+      assert.equal(end.dataset.dragging, undefined, 'a completed drag clears the list cue');
       orderFails = true;
       const refusedEnd = rows()[0];
       grab(refusedEnd);
@@ -4400,4 +4402,13 @@ test('scroll fades grow over a longer distance than their maximum depth', () => 
     assert.ok(range.includes('var(--edge-ramp)'), 'all scrollable ranges use the longer ramp');
     assert.equal(range.includes('var(--edge-fade)'), false, 'maximum mask depth does not set ramp distance');
   }
+});
+
+test('the queue end uses an accented line without an end card', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  assert.doesNotMatch(css, /\.task-drop-end/);
+  const hit = css.match(/\.task-list\[data-dragging\]\s*\{[^}]*padding-bottom:\s*(\d+)px/);
+  assert.ok(hit && px(hit[1]) > 0, 'the list keeps an end-drop hit region during a drag');
+  const line = css.match(/\.task-list\[data-drop\]\s*\{[^}]*box-shadow:\s*inset\s+0\s+(-?\d+)px/);
+  assert.ok(line && Number(line[1]) < 0, 'the accented line marks the list bottom');
 });
