@@ -2462,21 +2462,30 @@ def piece_head(piece):
 
 
 def idle_wait(line):
-  """Name a sleep that waits beside a preview call, so the gate stops it before it runs.
+  """Name a sleep beside a preview call or a log read, so the gate stops it before it runs.
 
   A sleep on its own runs, because the line holds nothing else. The gate reads the
   shell's own command line, so the login wrapper comes off first.
   """
   heads = [head for head in map(piece_head, command_pieces(agent_line(line))) if head]
-  if "sleep" not in heads or not any(
-    head in ("arena-preview", "preview.py") for head in heads
-  ):
+  if "sleep" not in heads:
     return None
-  return (
-    "WAIT BLOCKED: a sleep beside a preview call holds the turn. Take the next queued"
-    " task, or read the run on a later call. A routed run keeps its verdict, and"
-    " `arena-preview poll` waits when the queue is empty."
-  )
+  if any(head in ("arena-preview", "preview.py") for head in heads):
+    return (
+      "WAIT BLOCKED: a sleep beside a preview call holds the turn. Take the next queued"
+      " task, or read the run on a later call. A routed run keeps its verdict, and"
+      " `arena-preview poll` waits when the queue is empty."
+    )
+  if any(
+    token.strip("\"'").endswith(".log")
+    for piece in command_pieces(agent_line(line))
+    for token in piece.split()
+  ):
+    return (
+      "SLEEP BLOCKED: a sleep beside a .log read holds the turn. Use"
+      " `arena-preview poll` to wait, and `arena-preview logs <name>` to read a run."
+    )
+  return None
 
 
 def quiet_inbox_line(line):
