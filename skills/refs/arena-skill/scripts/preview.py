@@ -293,7 +293,7 @@ def meta_number(db, key):
 def gate_pending_count(db):
   """The unacknowledged items that hold a non-inbox Bash call."""
   return db.execute(
-    "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0)"
+    "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1)"
     " + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)"
   ).fetchone()[0]
 
@@ -1944,7 +1944,7 @@ def format_pending_record(item):
   header = "`" + str(item.get("id", ""))[:6] + "`"
   if display_kind != "note":
     header += f" {display_kind}"
-  if item.get("quiet"):
+  if item.get("quiet") and not item.get("blocking"):
     header += " quiet (no ack required)"
   if item.get("report_id"):
     header += f" report {item['report_id']}"
@@ -2165,9 +2165,35 @@ POLLING_META = "polling_at"
 POLL_SINCE_META = "polling_since"
 # The page shows its polling dot while a poll heartbeat is no older than this.
 POLLING_FRESH_SECONDS = 5.0
+# The latest wall-clock slot that created the hidden, agent-blocking read-set note.
+READ_SET_SLOT_META = "read_set_slot"
+READ_SET_INTERVAL_MINUTES = 20
 # The owner's Skip poll press is a one-shot request: the waiting poll ends at once, and no
 # note lands in the message log for a later turn to misread.
 SKIP_POLL_META = "skip_poll_at"
+
+
+def read_set_slot(moment=None):
+  """The current 00, 20, or 40 wall-clock slot, including its UTC offset."""
+  moment = moment or datetime.now(DISPLAY_ZONE or timezone.utc)
+  if moment.tzinfo is None:
+    moment = moment.replace(tzinfo=timezone.utc)
+  minute = (moment.minute // READ_SET_INTERVAL_MINUTES) * READ_SET_INTERVAL_MINUTES
+  return moment.replace(minute=minute, second=0, microsecond=0).isoformat()
+
+
+def read_set_paths(root=None):
+  """Existing files in the required read set, in stable reading order."""
+  root = Path(root or resolve_repo_root()).resolve()
+  agents = []
+  for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+    dirnames[:] = sorted(name for name in dirnames if name not in WORKSPACE_SKIP)
+    if "AGENTS.md" in filenames:
+      agents.append(Path(dirpath) / "AGENTS.md")
+  skill = root / ".agents" / "skills" / "arena-skill" / "SKILL.md"
+  return [
+    path for path in [root / "ARENA.md", *sorted(agents), skill] if path.is_file()
+  ]
 
 
 INERT_COMMANDS = (
@@ -2426,6 +2452,55 @@ def idle_wait(line):
 def quiet_inbox_line(line):
   """True when a command line that names an inbox call runs nothing else."""
   return first_blocking_piece(line) is None
+
+
+def read_set_actions(line):
+  """Preview subcommands on an otherwise inert line, or None when the line does work."""
+  actions = []
+  for piece in command_pieces(agent_line(line)):
+    tokens = [token for token in unquote_commands(piece).split() if token]
+    index = 0
+    while (
+      index < len(tokens) and "=" in tokens[index] and not tokens[index].startswith("-")
+    ):
+      index += 1
+    while index < len(tokens) and tokens[index].strip("\"'") in SHELL_KEYWORDS:
+      index += 1
+    if index >= len(tokens):
+      continue
+    head = tokens[index].rsplit("/", 1)[-1].strip("\"'")
+    if head in INERT_COMMANDS:
+      continue
+    if (
+      head.startswith("python")
+      and index + 1 < len(tokens)
+      and tokens[index + 1].rsplit("/", 1)[-1].strip("\"'") == "preview.py"
+    ):
+      index += 1
+      head = "preview.py"
+    if head not in ("arena-preview", "preview.py") or index + 1 >= len(tokens):
+      return None
+    actions.append(tokens[index + 1].strip("\"'"))
+  return tuple(actions)
+
+
+def read_set_tick(store, line, moment=None, root=None):
+  """Create a due checkpoint and block work until the agent acknowledges it."""
+  actions = read_set_actions(line)
+  if (actions and set(actions) == {"poll"}) or poll_timeout_line(line):
+    return None
+  pending = store.pending_read_set_note()
+  if pending is None:
+    if store.polling():
+      return None
+    pending = store.schedule_read_set_note(moment=moment, root=root)
+  if pending is None or (actions is not None and set(actions) <= {"read", "ack"}):
+    return None
+  return (
+    f"READ SET BLOCKED: checkpoint {pending['id']} is pending. Run"
+    " `arena-preview read`, read every listed path in full with the read tool, then"
+    f" `arena-preview ack {pending['id']} <markdown>`."
+  )
 
 
 # Commands around an inbox call end its quiet-line exemption and appear in the block hint.
@@ -3799,7 +3874,8 @@ class Store:
           text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,
           ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,
           ack_edited_seen_count INTEGER NOT NULL DEFAULT 0,
-          quiet INTEGER NOT NULL DEFAULT 0
+          quiet INTEGER NOT NULL DEFAULT 0,
+          blocking INTEGER NOT NULL DEFAULT 1
         );
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
@@ -3861,8 +3937,13 @@ class Store:
         )
       if "quiet" not in columns:
         # A quiet note carries information the agent needs when it looks, and it
-        # never wakes a poll or stops a command. The userscript posts the key this way.
+        # never wakes a poll. The userscript posts the key this way.
         db.execute("ALTER TABLE notes ADD COLUMN quiet INTEGER NOT NULL DEFAULT 0")
+      if "blocking" not in columns:
+        db.execute("ALTER TABLE notes ADD COLUMN blocking INTEGER NOT NULL DEFAULT 1")
+        # Every pre-feature quiet row is informational. Hidden read-set checkpoints
+        # are the first quiet rows that can block, so no legacy row belongs to that class.
+        db.execute("UPDATE notes SET blocking = CASE WHEN quiet = 1 THEN 0 ELSE 1 END")
       if "origin" in columns:
         # The author tag is gone from the note schema. Drop a column a restore might
         # still carry so SELECT * never resurfaces it on the state surface.
@@ -4052,6 +4133,7 @@ class Store:
     replies=None,
     ack_edited_seen_count=None,
     quiet=False,
+    blocking=None,
   ):
     """Store a message with its supplied receipt and read state. Never replace a restored receipt stamp. Leave
     existing IDs unchanged so imports stay idempotent."""
@@ -4061,6 +4143,7 @@ class Store:
     more = restore_replies(replies, receipt[0])
     seen_reply_count = restore_reply_seen_count(ack_edited_seen_count, more)
     seen = when(seen_at) if seen_at is not None else None
+    blocking = not quiet if blocking is None else bool(blocking)
     with self.transaction(shared, autosave=autosave) as db:
       if shared is None:
         db.execute("BEGIN IMMEDIATE")
@@ -4072,7 +4155,8 @@ class Store:
       db.execute(
         "INSERT INTO notes"
         " (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id,"
-        " replies, ack_edited_seen_count, quiet) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " replies, ack_edited_seen_count, quiet, blocking)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
           note_id,
           text,
@@ -4083,6 +4167,7 @@ class Store:
           more,
           seen_reply_count,
           1 if quiet else 0,
+          1 if blocking else 0,
         ),
       )
       if not quiet:
@@ -4091,6 +4176,73 @@ class Store:
       return message_row(
         db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone()
       )
+
+  def pending_read_set_note(self):
+    """Return the one outstanding hidden read-set checkpoint, if any."""
+    with closing(self.connect()) as db:
+      row = db.execute(
+        "SELECT * FROM notes"
+        " WHERE quiet = 1 AND blocking = 1 AND acknowledged_at IS NULL"
+        " ORDER BY at, seq LIMIT 1"
+      ).fetchone()
+    return message_row(row) if row else None
+
+  def schedule_read_set_note(self, moment=None, root=None):
+    """Atomically create at most one checkpoint for the current 20-minute slot."""
+    slot = read_set_slot(moment)
+    paths = read_set_paths(root)
+    with closing(self.connect()) as db, db:
+      db.execute("BEGIN IMMEDIATE")
+      heartbeat = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (POLLING_META,)
+      ).fetchone()
+      age = seconds_since(heartbeat["value"] if heartbeat else None)
+      if age is not None and 0 <= age < POLLING_FRESH_SECONDS:
+        return None
+      row = db.execute(
+        "SELECT * FROM notes"
+        " WHERE quiet = 1 AND blocking = 1 AND acknowledged_at IS NULL"
+        " ORDER BY at, seq LIMIT 1"
+      ).fetchone()
+      if row:
+        return message_row(row)
+      recorded = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (READ_SET_SLOT_META,)
+      ).fetchone()
+      if recorded and recorded["value"] == slot:
+        return None
+      for _ in range(MINT_ATTEMPTS):
+        note_id = new_id()
+        if not any(
+          db.execute(f"SELECT 1 FROM {table} WHERE id = ?", (note_id,)).fetchone()
+          for table in ("notes", "submissions", "uploads", "reports", "tasks")
+        ):
+          break
+      else:
+        raise RuntimeError(
+          "The state holds no free six-character ID for a read-set note"
+        )
+      listed = "\n".join(f"- `{path}`" for path in paths)
+      text = (
+        f"Read-set checkpoint for local slot {slot}. Read every listed path in full"
+        " with the read tool, then acknowledge this note.\n"
+        f"{listed}"
+      )
+      record = self.note(
+        note_id,
+        text,
+        shared=db,
+        autosave=False,
+        quiet=True,
+        blocking=True,
+      )
+      db.execute(
+        "INSERT INTO meta(key, value) VALUES (?, ?)"
+        " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (READ_SET_SLOT_META, slot),
+      )
+    self.autosave()
+    return record
 
   def submission(
     self,
@@ -5749,11 +5901,11 @@ class Store:
         db.execute("DELETE FROM meta WHERE key = ?", (TASK_ORDER_PENDING_META,))
       uploads = db.execute(
         "SELECT count(*) FROM notes JOIN uploads USING (id)"
-        " WHERE acknowledged_at IS NULL AND quiet = 0"
+        " WHERE acknowledged_at IS NULL AND blocking = 1"
       ).fetchone()[0]
       notes = (
         db.execute(
-          "SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0"
+          "SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1"
         ).fetchone()[0]
         - uploads
       )
@@ -5823,7 +5975,9 @@ class Store:
   def read(self, include_quiet=True):
     """Unacknowledged work and unseen quiet notes. Polls exclude quiet notes."""
     quiet_filter = (
-      " AND (quiet = 0 OR seen_at IS NULL)" if include_quiet else " AND quiet = 0"
+      " AND (quiet = 0 OR blocking = 1 OR seen_at IS NULL)"
+      if include_quiet
+      else " AND quiet = 0"
     )
     with self.transaction(autosave=False) as db:
       pending = [
@@ -5976,7 +6130,7 @@ class Store:
     """
     with self.connect() as db:
       rows = db.execute(
-        "SELECT id, at FROM notes WHERE acknowledged_at IS NULL AND quiet = 0"
+        "SELECT id, at FROM notes WHERE acknowledged_at IS NULL AND blocking = 1"
         " UNION ALL SELECT id, at FROM submissions WHERE acknowledged_at IS NULL"
         " ORDER BY at"
       ).fetchall()
@@ -6141,7 +6295,7 @@ class Store:
         # A dismissal informs the agent without waking a poll: the agent looks, it is not
         # roused for a report the owner already read.
         db.execute(
-          "INSERT INTO notes (id, text, at, quiet) VALUES (?, ?, ?, 1)",
+          "INSERT INTO notes (id, text, at, quiet, blocking) VALUES (?, ?, ?, 1, 0)",
           (
             new_id(),
             f"The owner dismissed the report {report_id} ({row['title']}).",
@@ -7406,6 +7560,13 @@ def main():
     help="Report whether a command line that names an inbox call runs nothing else",
   )
   inbox_line.add_argument("line", help="The command line, as the hook read it")
+  read_set_tick_parser = commands.add_parser(
+    "read-set-tick", help="Schedule a hidden read-set checkpoint before agent work"
+  )
+  read_set_tick_parser.add_argument(
+    "line", help="The command line, as the hook read it"
+  )
+  read_set_tick_parser.add_argument("--repo", default=".")
   route = commands.add_parser(
     "route",
     help=(
@@ -7694,6 +7855,20 @@ def main():
       parser.error(
         "a command is required; run arena-preview --help for the command list"
       )
+    if args.command == "read-set-tick":
+      if fresh_state:
+        return 0
+      tick_store = Store(state_dir)
+      warning = read_set_tick(
+        tick_store,
+        args.line,
+        moment=datetime.now(resolve_display_zone(tick_store)),
+        root=args.repo,
+      )
+      if warning:
+        print(warning, file=sys.stderr)
+        return 1
+      return 0
     if args.command == "interrupt-tick":
       if fresh_state:
         return 0
