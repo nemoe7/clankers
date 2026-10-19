@@ -4726,6 +4726,19 @@ def test_run_records_the_exit_and_announces_it_once(capsys):
     assert preview.run_command(directory, "empty", ["--"]) == 2
 
 
+def test_a_failed_check_discovery_names_the_unstarted_watch(tmp_path, monkeypatch):
+  """A discovery refusal ends the run with a verdict that names the unstarted wait."""
+  reason = "no visible checks appeared on abc1234 within 30 seconds"
+  monkeypatch.setattr(preview, "pr_checks_command", lambda argv: True)
+  monkeypatch.setattr(preview, "pr_checks_discovery", lambda root: reason)
+  assert preview.run_command(tmp_path, "pr-checks", ["--", "gh", "pr", "checks"]) == 1
+  record = json.loads(
+    (tmp_path / "runs" / "pr-checks.json").read_text(encoding="utf-8")
+  )
+  assert record["verdict"] == f"PR CHECKS NOT STARTED: {reason}"
+  assert record["tail"] == [f"PR CHECKS NOT STARTED: {reason}"]
+
+
 def test_a_logs_call_reads_the_routed_run_status_and_output():
   """A routed run reads back through the logs command, live and finished."""
   with tempfile.TemporaryDirectory() as log_dir:

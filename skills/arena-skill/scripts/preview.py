@@ -1035,7 +1035,7 @@ def run_command(state_dir,name,argv):
 	if argv[:1]==['--']:argv=argv[1:]
 	if not argv:print('arena-preview route: name a command after --, for example: route gates -- make check',flush=True);return 2
 	started=time.monotonic();check_watch=pr_checks_command(argv);discovery=pr_checks_discovery(resolve_repo_root())if check_watch else None
-	if discovery:completed=subprocess.CompletedProcess(argv,1,f"pr-checks wait failed: {discovery}\n",'')
+	if discovery:completed=subprocess.CompletedProcess(argv,1,f"PR CHECKS NOT STARTED: {discovery}\n",'')
 	else:
 		completed=subprocess.run(argv,capture_output=True,text=True,check=False)
 		if check_watch and completed.returncode==0:completed.stdout+='\nBest effort: all visible checks passed; later checks can still appear.\n'

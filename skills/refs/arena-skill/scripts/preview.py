@@ -2885,7 +2885,7 @@ def run_command(state_dir, name, argv):
   discovery = pr_checks_discovery(resolve_repo_root()) if check_watch else None
   if discovery:
     completed = subprocess.CompletedProcess(
-      argv, 1, f"pr-checks wait failed: {discovery}\n", ""
+      argv, 1, f"PR CHECKS NOT STARTED: {discovery}\n", ""
     )
   else:
     completed = subprocess.run(argv, capture_output=True, text=True, check=False)
