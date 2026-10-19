@@ -92,7 +92,8 @@ ALWAYS report a reproducible skill defect or unresolved skill failure through a 
 - For a task from a note or report answer, use `--msg-id <full-message-id>`; queue and acknowledge it in the same tool block.
 - The task marker does not replace `ack`.
 - Mark a task `--status finished` only after verification.
-- For a task that waits on a report, add `--report <report-id>`; the owner's answer clears its blocked mark, and until then the task sorts first in its group.
+- For a task that waits on a report, add `--report <report-id>`; an answer or unpublishing the report clears its blocked mark, and while blocked the task sorts first in its group.
+- Treat report removal as a queue-state change, never as approval for work that needs approval.
 
 - Write task details as actual work text; NEVER use report section headers or aliases as task details.
 

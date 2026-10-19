@@ -8,6 +8,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena report-removal guide: release linked task blocks on an answer or unpublishing. Do not treat removal as approval.
 - Arena gate wait: record a live local run and its blocked task without a report. Keep fielded reports for other blocks.
 - Preview task drag: remove the end-drop card. Keep an accented insertion line, list-background end drops, cancellation, and failed-write recovery.
 - Arena startup: set initial and resumed start sequences. Keep the 10-4 text, read the initial set first, and remove the extra full skill-reference read.
