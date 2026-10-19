@@ -16,6 +16,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Preview tasks: allow a later gate block after a linked report receives an answer. Keep the report link and clear its first wait when an answer arrives.
 - Preview userscript logs: record the code, HTTP status, failure kind, compare result, and a bounded detail string. Keep the console format.
 - Preview autosave: compare the stored and server save stamps. Write the server state only on a match. Force save skips the compare.
+- Preview autosave refusals: log the saved and server stamp pairs with the note and task counts.
 - Arena proxy reads: require a direct fetch of the actual source URL first. Use the proxy only when that call cannot return the needed data.
 - Preview client tests: sync both distributed copies. Check source and compact CSS with the same assertions.
 - Preview page token: remove generation, page and state fields, headers, and token-only retries. Retain download claims and proxy keys.
