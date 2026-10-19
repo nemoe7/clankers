@@ -13,7 +13,11 @@ import threading
 from pathlib import Path
 from unittest.mock import patch
 
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "skills" / "refs" / "arena-skill" / "scripts"))
+
 import minify
+import preview
 
 
 def test_preview_path():
@@ -33,7 +37,9 @@ def test_preview_path():
     python.parent.mkdir(parents=True)
     python.write_text(
       "#!/usr/bin/env bash\n"
-      'case " $*" in *" gate"*|*" inbox-line"*|*" pr-check-tick"*) exit 0 ;; esac\n'
+      'if [ "${2:-}" = "pre" ]; then\n'
+      f'  exec "{sys.executable}" "$@"\n'
+      "fi\n"
       'printf \'%s\\n\' "$@" > "$HOME/arena-preview-args"\n',
       encoding="utf-8",
     )
@@ -46,6 +52,7 @@ def test_preview_path():
     # A shell that carries the marker skips the gate by design, so a sweep started from a
     # routed child must drop it or every block case below passes for the wrong reason.
     environment.pop("ARENA_PREVIEW_ROUTE", None)
+    environment["ARENA_PREVIEW_STATE_DIR"] = str(home / "arena-state")
     install = minify.TARGETS[1] / "scripts/install.sh"
 
     # A fresh home models a reset. Reinstallation must restore the hook once.
@@ -151,7 +158,7 @@ def test_preview_path():
           "echo gh pr checks 7; echo plain; trap - EXIT"
         ),
       ],
-      cwd=minify.ROOT / "skills",
+      cwd=home,
       env=environment,
       capture_output=True,
       text=True,
@@ -161,11 +168,9 @@ def test_preview_path():
     assert event_result.stderr.count(reminder) == 1, event_result.stderr
     # A blocking gate must not exit a shell that hosts a long-lived process or an Arena probe.
     # A killed probe can report a dead preview or sandbox. Only an agent call shell meets the gate.
-    python.write_text(
-      '#!/usr/bin/env bash\ncase " $*" in *" gate "*|*" gate") exit 1 ;; esac\nexit 0\n',
-      encoding="utf-8",
-    )
-    python.chmod(0o755)
+    store = preview.Store(home / "arena-state", create=True)
+    store.note("gate-note", "Pending work")
+    store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
     launcher = home / "run.cmd"
     launcher.write_text("arena-preview serve --port 8000\n", encoding="utf-8")
     server = subprocess.run(
@@ -222,11 +227,7 @@ def test_preview_path():
     )
 
     # The count gate holds mid-work commands. A push waits on any pending item.
-    python.write_text(
-      '#!/usr/bin/env bash\ncase " $*" in *" gate --push "*) exit 1 ;; esac\nexit 0\n',
-      encoding="utf-8",
-    )
-    python.chmod(0o755)
+    store.set_meta(preview.POLLS_SINCE_MESSAGE, "0")
     push_shell = subprocess.run(
       ["bash", "-l", "-c", "git push origin main"],
       cwd=minify.ROOT / "skills",

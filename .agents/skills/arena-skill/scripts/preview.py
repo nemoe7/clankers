@@ -559,7 +559,7 @@ TASK_COLUMNS='id, title, details, status, position, updated_at, completed_at, bl
 TASK_ORDER="status DESC, CASE WHEN status = 'finished' THEN completed_at END DESC, CASE WHEN status = 'finished' THEN id END DESC, (blocked = 0 OR report_id IS NULL), position, id"
 RENAME_TARGETS={'note':('notes',(('uploads','note_id'),)),'answer':('submissions',()),'report':('reports',(('submissions','report_id'),('tasks','report_id'))),'task':('tasks',(('notes','task_id'),('submissions','task_id')))}
 RENAME_TABLES='notes','submissions','reports','tasks'
-CLI_DESCRIPTION="Notes, reports, tasks and the preview server for Arena steering. The platform's hooks call the -tick commands, `gate`, `inbox-line` and `route-run`; the rest are the agent's."
+CLI_DESCRIPTION="Notes, reports, tasks and the preview server for Arena steering. The installed hook calls `pre`, `gate` and `route-run`; the rest are the agent's."
 SAVED_STATE='saved-state.ndjson'
 NOTE_LINE_KEYS='id','text','at','acknowledged_at','ack_kind','ack_text','ack_edited_at','replies','ack_edited_seen_count','seen_at','task_id'
 TASK_LINE_KEYS='id','title','details','status','completed_at','order','report_id','type'
@@ -1079,8 +1079,8 @@ def guard_task_runs(state_dir,task_id=None,action='change'):
 	if not held:return
 	labels='; '.join(f"{identifier}: {', '.join(names)}"for(identifier,names)in sorted(held));raise ValueError(f"Cannot {action}; live task run(s): {labels}")
 def skip_poll_ready(store):return store.skip_poll_requested()and not live_runs(store.path.parent)
-def run_notices(state_dir,show_running=False):
-	runs=Path(state_dir)/'runs'
+def run_notices(state_dir,show_running=False,out=None):
+	out=sys.stdout if out is None else out;runs=Path(state_dir)/'runs'
 	if not runs.is_dir():return 0
 	records=[]
 	for path in sorted(runs.glob('*.json')):
@@ -1088,7 +1088,7 @@ def run_notices(state_dir,show_running=False):
 		if record is not None:records.append((path,reconcile_routed_record(path,record)))
 	for(path,record)in records:
 		if record.get('exit')is None or record.get('announced'):continue
-		print(f"run {record.get('name')} done: exit {record.get('exit')} {record.get('seconds')}s {record.get('verdict')}",flush=True);record['announced']=True;write_run_record(path,record);return 1
+		print(f"run {record.get('name')} done: exit {record.get('exit')} {record.get('seconds')}s {record.get('verdict')}",file=out,flush=True);record['announced']=True;write_run_record(path,record);return 1
 	if not show_running:return 0
 	for(_,record)in records:
 		if record.get('exit')is not None or not record.get('detached'):continue
@@ -2479,11 +2479,96 @@ def embed_report_images(markdown,report_dir):
 		except ValueError as error:return f"Publication skips local image {source}: {error}. Run arena-preview image-data-uri for the helper."
 		return f"![{alt}](data:{mime};base64,{encoded}{suffix})"
 	return IMAGE_IN_MARKDOWN.sub(swap,markdown)
+def gate_verdict(state_dir,push,line,out=None):
+	out=sys.stdout if out is None else out;run_notices(state_dir,out=out)
+	if poll_timeout_line(line):print('TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`. Set the Bash tool timeout to 1800 seconds; the poll returns within its 1799-second wait.',file=out,flush=True);return 1
+	try:gate_store=Store(state_dir);allowed=gate_store.gate(pending_only=push);blocked_calls=gate_store.calls_since_message()if not allowed and not push else None
+	except FileNotFoundError:allowed=True;blocked_calls=None
+	except Exception:return 2
+	if not allowed:
+		if blocked_calls is not None:print(f"BASH BLOCKED AFTER {blocked_calls} CALLS.",file=out,flush=True)
+		if push:print('PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox. Read the inbox, ack every item, push again.',file=out,flush=True)
+		print('READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every note: `arena-preview ack <id> <markdown>`.',file=out,flush=True);hint=gate_line_hint(line)
+		if hint:print(hint,file=out,flush=True)
+		blocker=first_blocking_piece(line)
+		if blocker:blocker=shell_command_text(blocker);print(f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",file=out,flush=True)
+		return 1
+	if push and main_identical():print('HEAD equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',file=out,flush=True);return 1
+	stale=main_ancestor_warning()if push else''
+	if stale:print(stale,file=out,flush=True);return 1
+	return 0
+PRE_STEPS='interrupt','read-set','remind','main-local','main-fresh','bare','proxy','gate'
+GATED_SHELLS=frozenset({'bash','sh','dash','ksh','zsh'})
+PLATFORM_LINES='arena-workspace','ss -ltn','netstat -ltn','source ~/.profile',"mkdir -p '/home/user'"
+def platform_line(line):return any(pattern in line for pattern in PLATFORM_LINES)
+def state_file(state_dir):return Path(state_dir)/'state.sqlite3'
+def pre_command(state_dir,line,command,root,done='',shell=''):
+	initial=done.split();steps=list(initial);finished=set(steps);routed=os.environ.get('ARENA_PREVIEW_ROUTE')=='1'
+	def report(warning):print(warning,file=sys.stderr,flush=True)
+	def mark(step):
+		if step not in finished:finished.add(step);steps.append(step)
+	def finish(status):
+		if steps!=initial:done_line=' '.join(steps);print(f'_arena_preview_done="{done_line}"',flush=True)
+		return status
+	warning=pr_state_warning(command)
+	if warning:report(warning);return finish(130)
+	if shell and shell not in GATED_SHELLS:return finish(0)
+	if platform_line(line):return finish(0)
+	if not routed and'interrupt'not in finished and state_file(state_dir).is_file():
+		mark('interrupt');notice=Store(state_dir,create=False).take_interrupt()
+		if notice:report(notice);return finish(130)
+	if not routed and'read-set'not in finished and state_file(state_dir).is_file():
+		mark('read-set');tick_store=Store(state_dir)
+		if preview_server_available(tick_store):
+			warning=read_set_tick(tick_store,line,moment=datetime.now(resolve_display_zone(tick_store)),root=root)
+			if warning:report(warning);return finish(130)
+	if'remind'not in finished and any(word in command for word in('git commit','git push','gh pr checks')):mark('remind');report('Finished a task? Update the task list: arena-preview task <id> --status finished.')
+	if'git commit'in command and'main-local'not in finished:
+		mark('main-local');warning=main_drift_warning(Path.cwd(),fresh=False)
+		if warning:report(warning)
+	elif'git push'in command and'main-fresh'not in finished:
+		mark('main-fresh');warning=main_drift_warning(Path.cwd())
+		if warning:report(warning)
+	if routed:return finish(0)
+	warning=idle_wait(line)
+	if warning:report(warning);return finish(130)
+	status=pr_check_wait(state_dir,line,command)
+	if status==PR_CHECK_RUNS:return finish(2)
+	if status==PR_CHECK_REFUSED:return finish(130)
+	if'bare'not in finished and('/scripts/arena-preview'in line or'/scripts/preview.py'in line):mark('bare');report('Call it bare: arena-preview works from any directory, so drop the full path.')
+	if'proxy'not in finished and any(word in line for word in('code-scanning','code_scanning','gh run view','gh run download','actions/runs')):mark('proxy');report('Read that through the proxy: the arena skill carries the routes for code-scanning alerts and run logs.')
+	if'arena-preview ack'in command or'preview.py ack'in command:
+		warning=tick_warning(command)
+		if warning:report(warning)
+	if'arena-preview serve'in command or'preview.py serve'in command:
+		warning=serve_warning(command)
+		if warning:report(warning)
+	if any(word in command for word in('curl','wget','git clone','git fetch'))or'git ls-remote'in command:
+		warning=egress_warning(command)
+		if warning:report(warning)
+	if'git commit'in command:
+		warning=worktree_warning(state_dir,'commit',cwd=Path.cwd())
+		if warning:report(warning);return finish(130)
+		try:commit_store=Store(state_dir)
+		except FileNotFoundError:commit_store=None
+		if commit_store is not None:
+			found=commit_id_report(staged_session_id_hits(commit_store,str(Path.cwd())))
+			if found:report(found);return finish(130)
+	if any(word in command for word in('preview','profile','bashrc','arena-state','git commit'))or command.startswith(('gh','sleep','true',':','test','git status','git diff','git add'))or any(word in command for word in('arena-workspace','ss -ltn','netstat -ltn')):return finish(0)
+	if'git push'in command:
+		warning=worktree_warning(state_dir,'push')
+		if warning:report(warning);return finish(130)
+		if gate_verdict(state_dir,True,line,out=sys.stderr)==1:return finish(130)
+	if quiet_inbox_line(line):return finish(0)
+	if'gate'not in finished:
+		mark('gate')
+		if gate_verdict(state_dir,False,line,out=sys.stderr)==1:return finish(130)
+	return finish(0)
 class PreviewArgumentParser(argparse.ArgumentParser):
 	def print_usage(self,file=None):pass
 	def exit(self,status=0,message=None):super().exit(status,message.removeprefix('arena-preview: ')if message else message)
 def main():
-	parser=PreviewArgumentParser(description=CLI_DESCRIPTION,prog='arena-preview');parser.add_argument('-r','--reminder',action='store_true',help='Print the unacked-count reminder line and exit');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve',help='Serve the preview page; -p names the port');serve.add_argument('-p','--port',type=int,default=DEFAULT_PORT,help=f"Port to bind (default: {DEFAULT_PORT})");init=commands.add_parser('init',help='Create the state directory and its database');init.add_argument('--tz',help='An IANA zone for CLI stamps. The TZ env still wins');commands.add_parser('read',help='Print every pending note, answer and upload');commands.add_parser('interrupt-tick',help='Read the header request without blocking Bash');commands.add_parser('skills',help='List skill names, full descriptions, and paths without loading skills');note_group=commands.add_parser('note',help='Read stored notes');note_verbs=note_group.add_subparsers(dest='verb',required=True);note_list=note_verbs.add_parser('list',help='List stored note IDs by page, newest first, including acknowledged notes');note_list.add_argument('--page',type=int,default=1,help='Page number (default: 1)');note_list.add_argument('--page-size',type=int,default=20,help='IDs per page, 1 to 100 (default: 20)');note_reread=note_verbs.add_parser('show',help='Reread a stored note by its short or full ID');note_reread.add_argument('id',help='Six or all characters of a note ID');image_uri=commands.add_parser('image-data-uri',help='Print Markdown text that carries one local image as a data URI');image_uri.add_argument('path',type=Path,help='One local PNG, JPEG, GIF or WebP file up to 2 MiB');commands.add_parser('key',help='Print the recorded agent key, host and use line');pr_state=commands.add_parser('pr-state-tick',help='Reject visible PR-state writes');pr_state.add_argument('line',help='The command as the DEBUG hook read it');inbox_line=commands.add_parser('inbox-line',help='Report whether a command line that names an inbox call runs nothing else');inbox_line.add_argument('line',help='The command line, as the hook read it');read_set_tick_parser=commands.add_parser('read-set-tick',help='Schedule a hidden read-set checkpoint before agent work');read_set_tick_parser.add_argument('line',help='The command line, as the hook read it');read_set_tick_parser.add_argument('--repo',default='.');run_group=commands.add_parser('run',help='Start a long command and read its result');run_verbs=run_group.add_subparsers(dest='verb',required=True);route=run_verbs.add_parser('start',help='Start a command detached, keep its output tail, and show the exit on a later call');route.add_argument('--task',dest='task_id',metavar='TASK-ID',help='Link this run to an upcoming task instead of the current task');route.add_argument('name',help='A short name for the run, for example gates');route.add_argument('command_args',nargs=argparse.REMAINDER,help='The command, after --');route_run=commands.add_parser('route-run',help='Run one command here and record its exit for a later call');route_run.add_argument('name',help='The run name the caller already recorded');route_run.add_argument('command_args',nargs=argparse.REMAINDER,help='The command, after --');logs=run_verbs.add_parser('logs',help="Print a routed run's status and its recorded output tail");logs.add_argument('name',help='The run name to read');worktree=commands.add_parser('worktree',help='Create or collect a detached task worktree beside a root gate');worktree_action=worktree.add_subparsers(dest='worktree_action',required=True);worktree_start=worktree_action.add_parser('start',help='Create a detached worktree while a named root gate runs');worktree_start.add_argument('name',help='A short worktree name');worktree_start.add_argument('destination',type=Path,help='A new path outside the root');worktree_start.add_argument('--gate',required=True,help='The running root gate name');worktree_start.add_argument('--allow',action='append',default=[],help='A path glob task work may change');worktree_collect=worktree_action.add_parser('collect',help='Print the allowed detached-worktree patch after a green root gate');worktree_collect.add_argument('name',help='The worktree name to collect');worktree_tick=commands.add_parser('worktree-tick',help='Block a gate, commit or push from a detached task worktree');worktree_tick.add_argument('action',choices=sorted(WORKTREE_ACTIONS));ack_tick=commands.add_parser('ack-tick',help='Warn when an inline ack text holds a backtick the shell will substitute');ack_tick.add_argument('line',help='The command line, as the hook read it');idle_tick=commands.add_parser('idle-tick',help='Refuse a line that sleeps beside a preview call');idle_tick.add_argument('line',help='The command line, as the hook read it');serve_tick=commands.add_parser('serve-tick',help='Warn when a serve names a port other than the default');serve_tick.add_argument('line',help='The command line, as the hook read it');pr_check_tick=commands.add_parser('pr-check-tick',help='Refuse a bash line that runs a PR-check wait the background tool must take');pr_check_tick.add_argument('line',help='The command line, as the hook read it');pr_check_tick.add_argument('--command',dest='current_command',help='The command the DEBUG trap reached');main_drift_tick=commands.add_parser('main-drift-tick',help='Check remote branch drift at commit and push checkpoints');main_drift_tick.add_argument('--repo',default='.');main_drift_tick.add_argument('--local',dest='local_read',action='store_true',help='Read the local refs alone, with no fetch');egress_tick=commands.add_parser('egress-tick',help='Warn when a line fetches a host the sandbox egress filter blocks');egress_tick.add_argument('line',help='The command line, as the hook read it');rename=commands.add_parser('rename',help='Move a note, answer, report or task to a new ID');rename.add_argument('old_id',help='The stored ID, or a prefix that names one record');rename.add_argument('new_id',help='The ID to move the record to');commit_tick=commands.add_parser('commit-tick',help='Block a commit whose staged lines cite a session-local ID');commit_tick.add_argument('--repo',default='.',help='The repository to read the staged diff from');gate=commands.add_parser('gate',help='Read the inbox gate; -p blocks on any unacked note, -l names the blocked line');gate.add_argument('-p','--push',action='store_true',help='Block while any note or answer awaits an ack, whatever the call count');gate.add_argument('-l','--line',default='',help='The command line, as the hook read it; a blocked call then names the commands to drop');commands.add_parser('poll',help='Block until the owner answers or a gate run finishes');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click; -a allows the proxy fallback');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('-a','--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack',help='Answer notes with inline Markdown; omit IDs for one pending item');ack.add_argument('ids',nargs='*');ack.add_argument('markdown',help='Literal inline Markdown answer');ack.add_argument('--task-id');ack.add_argument('--task-title');ack.add_argument('--task-type',choices=TASK_TYPES);ack.add_argument('--task-detail',action='append');report_group=commands.add_parser('report',help='Publish, withdraw and inspect reports');report_verbs=report_group.add_subparsers(dest='verb',required=True);publish=report_verbs.add_parser('publish',help='Publish a report; -i names the ID, -t the title');publish.add_argument('source',type=Path);publish.add_argument('-i','--id',required=True);publish.add_argument('-t','--title',required=True);unpublish=report_verbs.add_parser('unpublish',help='Withdraw a report by ID, or every stale report with --stale');unpublish.add_argument('report_id',nargs='?');unpublish.add_argument('--stale',action='store_true',help='Withdraw every stale report');report_verbs.add_parser('stale',help='List stale published report IDs and reasons without changing state');report_state=report_verbs.add_parser('state',help='Print publication, owner view stamp and answer visibility for one report or all');report_state.add_argument('report_id',nargs='?');task_group=commands.add_parser('task',help='Read and update tasks');task_verbs=task_group.add_subparsers(dest='verb',required=True);task_list=task_verbs.add_parser('list',help='List the tasks; -f includes the finished ones');task_list.add_argument('-f','--full',action='store_true',help='print every task, finished included');task_show=task_verbs.add_parser('show',help='Print one stored task in full');task_show.add_argument('task_id',metavar='TASK-ID');task=task_verbs.add_parser('set',help='Write or update a task; -s status, -o order, -d details, -A append, -m message, -r report, -u unblocked, -a amend, --task-type type');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('-d','--details','--task-details',dest='task_details',action='append',help='One step per line, 120 characters or fewer, repeatable');task.add_argument('-A','--append',dest='append_details',action='store_true',help='Append provided details instead of replacing stored details');task.add_argument('-u','--unblocked',dest='blocked',action='store_false',default=None,help='Clear a report wait or legacy blocked mark');task.add_argument('-m','--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('-r','--report',metavar='REPORT-ID',help='Report this task waits on; its answer clears the blocked mark');task.add_argument('-a','--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('-s','--status',choices=TASK_STATUSES,default=None);task.add_argument('--task-type',dest='task_type',choices=TASK_TYPES,default=None,help='Primary deliverable type; an omitted flag keeps a stored type');task.add_argument('-o','--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=task_verbs.add_parser('remove',help='Delete a task by its ID');task_remove.add_argument('task_id');state_group=commands.add_parser('state',help='Import or clear the stored state');state_verbs=state_group.add_subparsers(dest='verb',required=True);state_import=state_verbs.add_parser('import',help='Import an NDJSON backup; replaces the live state unless --merge');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('-r','--replace-tasks',action='store_true');state_import.add_argument('--merge',action='store_true',help='keep the live notes, answers, reports and tasks, and merge the import by ID');state_verbs.add_parser('clear',help='Empty every state table in place; the agent key record survives');args=parser.parse_args();verb=getattr(args,'verb',None);grouped_commands={('note','list'):'note-list',('note','show'):'note',('run','start'):'route',('run','logs'):'logs',('report','publish'):'publish',('report','unpublish'):'unpublish',('report','stale'):'stale-reports',('report','state'):'report-state',('task','list'):'task-list',('task','show'):'task-show',('task','set'):'task',('task','remove'):'task-remove',('state','import'):'import-state',('state','clear'):'clear-state'};args.command=grouped_commands.get((args.command,verb),args.command)
+	parser=PreviewArgumentParser(description=CLI_DESCRIPTION,prog='arena-preview');parser.add_argument('-r','--reminder',action='store_true',help='Print the unacked-count reminder line and exit');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve',help='Serve the preview page; -p names the port');serve.add_argument('-p','--port',type=int,default=DEFAULT_PORT,help=f"Port to bind (default: {DEFAULT_PORT})");init=commands.add_parser('init',help='Create the state directory and its database');init.add_argument('--tz',help='An IANA zone for CLI stamps. The TZ env still wins');commands.add_parser('read',help='Print every pending note, answer and upload');commands.add_parser('skills',help='List skill names, full descriptions, and paths without loading skills');note_group=commands.add_parser('note',help='Read stored notes');note_verbs=note_group.add_subparsers(dest='verb',required=True);note_list=note_verbs.add_parser('list',help='List stored note IDs by page, newest first, including acknowledged notes');note_list.add_argument('--page',type=int,default=1,help='Page number (default: 1)');note_list.add_argument('--page-size',type=int,default=20,help='IDs per page, 1 to 100 (default: 20)');note_reread=note_verbs.add_parser('show',help='Reread a stored note by its short or full ID');note_reread.add_argument('id',help='Six or all characters of a note ID');image_uri=commands.add_parser('image-data-uri',help='Print Markdown text that carries one local image as a data URI');image_uri.add_argument('path',type=Path,help='One local PNG, JPEG, GIF or WebP file up to 2 MiB');commands.add_parser('key',help='Print the recorded agent key, host and use line');pre=commands.add_parser('pre',help='Run every pre-Bash gate rule in order, and name the steps it ran');pre.add_argument('--line',default='',help='The shell command line, as the hook read it');pre.add_argument('--command',dest='command_text',default='',help='The command the DEBUG trap reached');pre.add_argument('--repo',default='.',help='The repository the read set needs');pre.add_argument('--shell',default='',help="The shell's own name");pre.add_argument('--done',default='',help='The steps this shell already ran, space separated');run_group=commands.add_parser('run',help='Start a long command and read its result');run_verbs=run_group.add_subparsers(dest='verb',required=True);route=run_verbs.add_parser('start',help='Start a command detached, keep its output tail, and show the exit on a later call');route.add_argument('--task',dest='task_id',metavar='TASK-ID',help='Link this run to an upcoming task instead of the current task');route.add_argument('name',help='A short name for the run, for example gates');route.add_argument('command_args',nargs=argparse.REMAINDER,help='The command, after --');route_run=commands.add_parser('route-run',help='Run one command here and record its exit for a later call');route_run.add_argument('name',help='The run name the caller already recorded');route_run.add_argument('command_args',nargs=argparse.REMAINDER,help='The command, after --');logs=run_verbs.add_parser('logs',help="Print a routed run's status and its recorded output tail");logs.add_argument('name',help='The run name to read');worktree=commands.add_parser('worktree',help='Create or collect a detached task worktree beside a root gate');worktree_action=worktree.add_subparsers(dest='worktree_action',required=True);worktree_start=worktree_action.add_parser('start',help='Create a detached worktree while a named root gate runs');worktree_start.add_argument('name',help='A short worktree name');worktree_start.add_argument('destination',type=Path,help='A new path outside the root');worktree_start.add_argument('--gate',required=True,help='The running root gate name');worktree_start.add_argument('--allow',action='append',default=[],help='A path glob task work may change');worktree_collect=worktree_action.add_parser('collect',help='Print the allowed detached-worktree patch after a green root gate');worktree_collect.add_argument('name',help='The worktree name to collect');rename=commands.add_parser('rename',help='Move a note, answer, report or task to a new ID');rename.add_argument('old_id',help='The stored ID, or a prefix that names one record');rename.add_argument('new_id',help='The ID to move the record to');gate=commands.add_parser('gate',help='Read the inbox gate; -p blocks on any unacked note, -l names the blocked line');gate.add_argument('-p','--push',action='store_true',help='Block while any note or answer awaits an ack, whatever the call count');gate.add_argument('-l','--line',default='',help='The command line, as the hook read it; a blocked call then names the commands to drop');commands.add_parser('poll',help='Block until the owner answers or a gate run finishes');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click; -a allows the proxy fallback');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('-a','--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack',help='Answer notes with inline Markdown; omit IDs for one pending item');ack.add_argument('ids',nargs='*');ack.add_argument('markdown',help='Literal inline Markdown answer');ack.add_argument('--task-id');ack.add_argument('--task-title');ack.add_argument('--task-type',choices=TASK_TYPES);ack.add_argument('--task-detail',action='append');report_group=commands.add_parser('report',help='Publish, withdraw and inspect reports');report_verbs=report_group.add_subparsers(dest='verb',required=True);publish=report_verbs.add_parser('publish',help='Publish a report; -i names the ID, -t the title');publish.add_argument('source',type=Path);publish.add_argument('-i','--id',required=True);publish.add_argument('-t','--title',required=True);unpublish=report_verbs.add_parser('unpublish',help='Withdraw a report by ID, or every stale report with --stale');unpublish.add_argument('report_id',nargs='?');unpublish.add_argument('--stale',action='store_true',help='Withdraw every stale report');report_verbs.add_parser('stale',help='List stale published report IDs and reasons without changing state');report_state=report_verbs.add_parser('state',help='Print publication, owner view stamp and answer visibility for one report or all');report_state.add_argument('report_id',nargs='?');task_group=commands.add_parser('task',help='Read and update tasks');task_verbs=task_group.add_subparsers(dest='verb',required=True);task_list=task_verbs.add_parser('list',help='List the tasks; -f includes the finished ones');task_list.add_argument('-f','--full',action='store_true',help='print every task, finished included');task_show=task_verbs.add_parser('show',help='Print one stored task in full');task_show.add_argument('task_id',metavar='TASK-ID');task=task_verbs.add_parser('set',help='Write or update a task; -s status, -o order, -d details, -A append, -m message, -r report, -u unblocked, -a amend, --task-type type');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('-d','--details','--task-details',dest='task_details',action='append',help='One step per line, 120 characters or fewer, repeatable');task.add_argument('-A','--append',dest='append_details',action='store_true',help='Append provided details instead of replacing stored details');task.add_argument('-u','--unblocked',dest='blocked',action='store_false',default=None,help='Clear a report wait or legacy blocked mark');task.add_argument('-m','--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('-r','--report',metavar='REPORT-ID',help='Report this task waits on; its answer clears the blocked mark');task.add_argument('-a','--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('-s','--status',choices=TASK_STATUSES,default=None);task.add_argument('--task-type',dest='task_type',choices=TASK_TYPES,default=None,help='Primary deliverable type; an omitted flag keeps a stored type');task.add_argument('-o','--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=task_verbs.add_parser('remove',help='Delete a task by its ID');task_remove.add_argument('task_id');state_group=commands.add_parser('state',help='Import or clear the stored state');state_verbs=state_group.add_subparsers(dest='verb',required=True);state_import=state_verbs.add_parser('import',help='Import an NDJSON backup; replaces the live state unless --merge');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('-r','--replace-tasks',action='store_true');state_import.add_argument('--merge',action='store_true',help='keep the live notes, answers, reports and tasks, and merge the import by ID');state_verbs.add_parser('clear',help='Empty every state table in place; the agent key record survives');args=parser.parse_args();verb=getattr(args,'verb',None);grouped_commands={('note','list'):'note-list',('note','show'):'note',('run','start'):'route',('run','logs'):'logs',('report','publish'):'publish',('report','unpublish'):'unpublish',('report','stale'):'stale-reports',('report','state'):'report-state',('task','list'):'task-list',('task','show'):'task-show',('task','set'):'task',('task','remove'):'task-remove',('state','import'):'import-state',('state','clear'):'clear-state'};args.command=grouped_commands.get((args.command,verb),args.command)
 	if args.command=='unpublish'and args.stale:
 		if args.report_id:parser.error('give a report ID or --stale, not both')
 		args.command='report'
@@ -2494,31 +2579,11 @@ def main():
 			if'unacked 'in reminder or TASK_ORDER_NOTICE in reminder or not run_notices(state_dir,show_running=True):print(reminder,file=sys.stderr,flush=True)
 			return 0
 		if not args.command:parser.error('a command is required; run arena-preview --help for the command list')
-		if args.command=='read-set-tick':
-			if fresh_state:return 0
-			tick_store=Store(state_dir)
-			if not preview_server_available(tick_store):return 0
-			warning=read_set_tick(tick_store,args.line,moment=datetime.now(resolve_display_zone(tick_store)),root=args.repo)
-			if warning:print(warning,file=sys.stderr);return 1
-			return 0
-		if args.command=='interrupt-tick':
-			if fresh_state:return 0
-			notice=Store(state_dir,create=False).take_interrupt()
-			if notice:print(notice,file=sys.stderr);return 1
-			return 0
+		if args.command=='pre':return pre_command(state_dir,args.line,args.command_text,args.repo,done=args.done,shell=args.shell)
 		if args.command=='skills':print_skills();return 0
-		if args.command=='pr-state-tick':
-			warning=pr_state_warning(args.line)
-			if warning:print(warning,file=sys.stderr);return 1
-			return 0
-		if args.command=='inbox-line':return 0 if quiet_inbox_line(args.line)else 1
 		if args.command=='image-data-uri':
 			try:print(image_data_uri(args.path))
 			except ValueError as error:print(error,file=sys.stderr);return 1
-			return 0
-		if args.command=='worktree-tick':
-			warning=worktree_warning(state_dir,args.action)
-			if warning:print(warning,file=sys.stderr);return 1
 			return 0
 		if args.command=='worktree':
 			if args.worktree_action=='start':record=start_worktree(state_dir,args.name,args.destination,args.gate,args.allow);print(f"Worktree {record['name']} at {record['worktree']}");return 0
@@ -2532,27 +2597,6 @@ def main():
 			if warning:print(warning,file=sys.stderr);return 1
 			return run_command(state_dir,args.name,args.command_args)
 		if args.command=='logs':return run_log_report(state_dir,args.name)
-		if args.command=='ack-tick':
-			warning=tick_warning(args.line)
-			if warning:print(warning,file=sys.stderr)
-			return 0
-		if args.command=='idle-tick':
-			warning=idle_wait(args.line)
-			if warning:print(warning,file=sys.stderr);return 1
-			return 0
-		if args.command=='serve-tick':
-			warning=serve_warning(args.line)
-			if warning:print(warning,file=sys.stderr)
-			return 0
-		if args.command=='main-drift-tick':
-			warning=main_drift_warning(args.repo,fresh=not args.local_read)
-			if warning:print(warning,file=sys.stderr)
-			return 0
-		if args.command=='egress-tick':
-			warning=egress_warning(args.line)
-			if warning:print(warning,file=sys.stderr)
-			return 0
-		if args.command=='pr-check-tick':return pr_check_wait(state_dir,args.line,args.current_command)
 		if args.command=='rename':
 			require_server(Store(state_dir))
 			try:old_id=Store(state_dir).resolve_id(args.old_id)
@@ -2561,32 +2605,7 @@ def main():
 			try:kind=Store(state_dir).rename_entity(old_id,args.new_id)
 			except ValueError as error:print(error,file=sys.stderr);return 1
 			print(f"ok {kind} {old_id} -> {args.new_id}");return 0
-		if args.command=='commit-tick':
-			warning=worktree_warning(state_dir,'commit',cwd=args.repo)
-			if warning:print(warning,file=sys.stderr);return 1
-			try:store=Store(state_dir)
-			except FileNotFoundError:return 0
-			report=commit_id_report(staged_session_id_hits(store,args.repo))
-			if report:print(report,file=sys.stderr);return 1
-			return 0
-		if args.command=='gate':
-			run_notices(state_dir)
-			if poll_timeout_line(args.line):print('TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`. Set the Bash tool timeout to 1800 seconds; the poll returns within its 1799-second wait.',flush=True);return 1
-			try:gate_store=Store(state_dir);allowed=gate_store.gate(pending_only=args.push);blocked_calls=gate_store.calls_since_message()if not allowed and not args.push else None
-			except FileNotFoundError:allowed=True;blocked_calls=None
-			except Exception:return 2
-			if not allowed:
-				if blocked_calls is not None:print(f"BASH BLOCKED AFTER {blocked_calls} CALLS.",flush=True)
-				if args.push:print('PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox. Read the inbox, ack every item, push again.',flush=True)
-				print('READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every note: `arena-preview ack <id> <markdown>`.',flush=True);hint=gate_line_hint(args.line)
-				if hint:print(hint,flush=True)
-				blocker=first_blocking_piece(args.line)
-				if blocker:blocker=shell_command_text(blocker);print(f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",flush=True)
-				return 1
-			if args.push and main_identical():print('HEAD equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',flush=True);return 1
-			stale=main_ancestor_warning()if args.push else''
-			if stale:print(stale,flush=True);return 1
-			return 0
+		if args.command=='gate':return gate_verdict(state_dir,args.push,args.line)
 		store=Store(state_dir,create=args.command in{'serve','init','import-state'});global DISPLAY_ZONE;DISPLAY_ZONE=resolve_display_zone(store)
 		if args.command!='poll':clear_poll_repeat(store)
 		if args.command not in{'serve','init'}:require_server(store)

@@ -15,6 +15,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Preview polls: raise a violation for a repeat poll inside 45 seconds. The next call blocks and rereads the read set.
 - Preview CLI: group the agent commands under `note`, `run`, `task`, `report` and `state`. Remove the old flat names.
+- Preview Bash gate: run every pre-Bash rule in one `pre` call, in the installed order. Replace the individual tick commands, and keep the 0, 2 and 130 answers.
 - Preview task handoff: keep the CONTINUE line on stdout. Name the task in capitals and print the worktree start command.
 - Preview autosave: on a compare mismatch whose server save continues from the saved receipt, show an ahead notice. Its Overwrite button runs force save. Keep the earlier notice for an unrelated save pair.
 - Preview tasks: show only a task title in code blue while its linked gate is live. Use the same native list dot for draggable and finished tasks. Keep report waits muted and the rest of the row unchanged.
