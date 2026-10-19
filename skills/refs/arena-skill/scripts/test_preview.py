@@ -7109,39 +7109,121 @@ def test_read_set_schedule_defers_for_polling_and_migrates_note_classes():
     assert rows[quiet["id"]]["blocking"] == 0
 
 
-def test_read_set_tick_cli_blocks_work_but_not_recovery_commands():
-  with tempfile.TemporaryDirectory() as directory:
-    root = Path(directory)
-    for path in (
-      root / "ARENA.md",
-      root / "AGENTS.md",
-      root / ".agents" / "skills" / "arena-skill" / "SKILL.md",
-    ):
-      path.parent.mkdir(parents=True, exist_ok=True)
-      path.write_text(path.name + "\n", encoding="utf-8")
-    state = root / "state"
-    preview.Store(state, create=True)
-    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(state)}
-    command = [
+def read_set_cli_root(directory):
+  """Build a read-set root and its empty state directory."""
+  root = Path(directory)
+  for path in (
+    root / "ARENA.md",
+    root / "AGENTS.md",
+    root / ".agents" / "skills" / "arena-skill" / "SKILL.md",
+  ):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(path.name + "\n", encoding="utf-8")
+  state = root / "state"
+  preview.Store(state, create=True)
+  return root, state
+
+
+def read_set_cli(state, root, line):
+  """Run one read-set tick under its own state, as the installed gate does."""
+  return subprocess.run(
+    [
       sys.executable,
       str(Path(preview.__file__)),
       "read-set-tick",
-      "git status",
+      line,
       "--repo",
       str(root),
-    ]
-    blocked = subprocess.run(
-      command, capture_output=True, text=True, check=False, env=env
-    )
+    ],
+    capture_output=True,
+    text=True,
+    check=False,
+    env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(state)},
+  )
+
+
+def dead_port(store):
+  """Record a port that refuses a probe: bound, then released."""
+  dead = socket.socket()
+  dead.bind(("127.0.0.1", 0))
+  port = dead.getsockname()[1]
+  dead.close()
+  store.set_meta("port", str(port))
+  return port
+
+
+def test_read_set_tick_cli_defers_a_due_slot_while_the_server_is_down():
+  with tempfile.TemporaryDirectory() as directory:
+    root, state = read_set_cli_root(directory)
+    dead_port(preview.Store(state))
+    result = read_set_cli(state, root, "git status")
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    after = preview.Store(state)
+    assert after.read()["pending"] == []
+    assert after.meta_value(preview.READ_SET_SLOT_META) is None
+
+
+def test_read_set_tick_cli_keeps_a_pending_checkpoint_while_the_server_is_down():
+  with tempfile.TemporaryDirectory() as directory:
+    root, state = read_set_cli_root(directory)
+    store = preview.Store(state)
+    moment = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
+    checkpoint = store.schedule_read_set_note(moment=moment, root=root)
+    slot = store.meta_value(preview.READ_SET_SLOT_META)
+    dead_port(store)
+    result = read_set_cli(state, root, "git status")
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    after = preview.Store(state)
+    assert after.pending_read_set_note()["id"] == checkpoint["id"]
+    assert after.meta_value(preview.READ_SET_SLOT_META) == slot
+
+
+def test_read_set_tick_cli_restores_blocking_with_the_server():
+  with tempfile.TemporaryDirectory() as directory:
+    root, state = read_set_cli_root(directory)
+    preview.Store(state).set_meta("port", guard_port())
+    blocked = read_set_cli(state, root, "git status")
     assert blocked.returncode == 1
     assert "READ SET BLOCKED" in blocked.stderr
-    for line in ("arena-preview read", "arena-preview poll"):
-      command[3] = line
-      allowed = subprocess.run(
-        command, capture_output=True, text=True, check=False, env=env
-      )
-      assert allowed.returncode == 0, allowed.stderr
+    for line in ("arena-preview read", "arena-preview ack", "arena-preview poll"):
+      allowed = read_set_cli(state, root, line)
+      assert allowed.returncode == 0, (line, allowed.stderr)
     assert len(preview.Store(state).read()["pending"]) == 1
+
+
+def test_read_set_tick_cli_acknowledgement_holds_the_slot():
+  with tempfile.TemporaryDirectory() as directory:
+    root, state = read_set_cli_root(directory)
+    preview.Store(state).set_meta("port", guard_port())
+    blocked = read_set_cli(state, root, "git status")
+    assert blocked.returncode == 1
+    store = preview.Store(state)
+    checkpoint_id = store.pending_read_set_note()["id"]
+    ack = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "ack",
+        checkpoint_id,
+        "Read in full",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(state)},
+    )
+    assert ack.returncode == 0, ack.stderr
+    after = preview.Store(state)
+    assert after.notes_matching(checkpoint_id)[0]["acknowledged_at"]
+    assert after.pending_read_set_note() is None
+    assert after.read()["pending"] == []
+    repeated = read_set_cli(state, root, "git status")
+    assert repeated.returncode == 0, repeated.stderr
+    assert repeated.stderr == ""
+    assert len(after.notes_matching(checkpoint_id)) == 1
+    assert after.read()["pending"] == []
 
 
 def test_quiet_note_route():

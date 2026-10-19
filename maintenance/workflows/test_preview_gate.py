@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shlex
+import socket
 import subprocess
 import sys
 import tempfile
@@ -34,6 +35,9 @@ if [ "$1" = "interrupt-tick" ]; then
   exec __PYTHON__ __PREVIEW__ "$@"
 fi
 if [ "$1" = "read-set-tick" ]; then
+  if [ -n "${ARENA_PREVIEW_TEST_READ_SET:-}" ]; then
+    exec __PYTHON__ __PREVIEW__ "$@"
+  fi
   exit 0
 fi
 if [ "$1" = "pr-state-tick" ]; then
@@ -178,12 +182,13 @@ def run(
   line: str | None = None,
   calls: Path | None = None,
   routed: bool = False,
+  read_set: bool = False,
 ) -> subprocess.CompletedProcess[str]:
   """Run one command in a shell whose $0 is bash, the shape the gate protects."""
   if state is None:
     with tempfile.TemporaryDirectory() as directory:
-      return run_in(command, Path(directory), cwd, line, calls, routed)
-  return run_in(command, state, cwd, line, calls, routed)
+      return run_in(command, Path(directory), cwd, line, calls, routed, read_set)
+  return run_in(command, state, cwd, line, calls, routed, read_set)
 
 
 def run_in(
@@ -193,6 +198,7 @@ def run_in(
   line: str | None = None,
   calls: Path | None = None,
   routed: bool = False,
+  read_set: bool = False,
 ) -> subprocess.CompletedProcess[str]:
   """Run one command against a state directory, with the gate sourced and trapped.
 
@@ -251,6 +257,7 @@ def run_in(
       **({"ARENA_PREVIEW_ROUTE": "1"} if routed else {}),
       ARENA_PREVIEW_TEST_DRIFT="1" if cwd else "0",
       **({"ARENA_PREVIEW_TEST_CALLS": str(calls)} if calls else {}),
+      **({"ARENA_PREVIEW_TEST_READ_SET": "1"} if read_set else {}),
     ),
   )
 
@@ -1080,3 +1087,31 @@ def test_violation_flag_blocks_the_agent_shell():
       assert "agent-work" not in agent.stdout
       assert "Read ARENA.md" in agent.stderr
       assert not store.state()["agent_interrupt_pending"]
+
+
+def test_the_read_set_gate_passes_the_workspace_root_bootstrap_line():
+  """The platform's workspace-root bootstrap outranks a due read-set checkpoint."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = preview_module.Store(root, create=True)
+    hold = socket.socket()
+    hold.bind(("127.0.0.1", 0))
+    hold.listen(1)
+    try:
+      store.set_meta("port", str(hold.getsockname()[1]))
+      passed = run(
+        "mkdir -p '/home/user'; printf bootstrap-ran",
+        state=root,
+        read_set=True,
+      )
+      assert passed.returncode == 0, passed.stderr
+      assert passed.stdout == "bootstrap-ran", passed.stdout
+      assert store.pending_read_set_note() is None
+      assert store.meta_value(preview_module.READ_SET_SLOT_META) is None
+      blocked = run("printf agent-work", state=root, read_set=True)
+      assert blocked.returncode == 130, blocked.stderr
+      assert "READ SET BLOCKED" in blocked.stderr, blocked.stderr
+      assert "agent-work" not in blocked.stdout
+      assert store.pending_read_set_note() is not None
+    finally:
+      hold.close()

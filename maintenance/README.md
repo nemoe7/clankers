@@ -184,7 +184,7 @@ It uses readable assets for exact page assertions, then shipped assets for page 
 | `shell-line` | every gated shell | the gate reads the command line once per shell, so a command costs no read |
 | `platform-shell` | the platform's probe or its own hosted process | pass, and mark the shell once |
 | `violation-flag` | a pending preview flag on an agent shell | `exit 130` with the full notice. A running poll prints it instead |
-| `read-set-note` | the first command in an agent shell | create a due hidden checkpoint and block work. Defer it for a poll command or an active poll |
+| `read-set-note` | the first command in an agent shell | create a due hidden checkpoint and block work. Defer it for a poll command, an active poll, or an unavailable server |
 | `task-reminder` | `git commit`, `git push` or `gh pr checks` | the task-list notice once per shell, then the line runs |
 | `main-moved` | `git commit` or `git push` | the drift check runs once per shell. It uses local refs at the commit line and a fresh `fetch` at the push line, then the line runs |
 | `route-marker` | a shell the gate started itself (`ARENA_PREVIEW_ROUTE=1`) | pass, so a detached run never matches its own family |

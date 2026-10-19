@@ -2121,6 +2121,16 @@ def format_clear_state(counts):
   return "Cleared " + ", ".join(parts) if parts else "Cleared"
 
 
+def preview_server_available(store):
+  """True while the recorded preview port accepts a local connect."""
+  port = store.meta_value("port")
+  if not port:
+    return False
+  with closing(socket.socket()) as probe:
+    probe.settimeout(1)
+    return probe.connect_ex(("127.0.0.1", int(port))) == 0
+
+
 def require_server(store):
   """Break a guarded call while the preview server is not up, so the agent starts it.
 
@@ -2134,10 +2144,8 @@ def require_server(store):
   port = store.meta_value("port")
   if not port:
     raise ValueError("preview server is not up. Start it with arena-preview serve")
-  with closing(socket.socket()) as probe:
-    probe.settimeout(1)
-    if probe.connect_ex(("127.0.0.1", int(port))) == 0:
-      return
+  if preview_server_available(store):
+    return
   raise ValueError(
     f"preview server is down; start it before polling: arena-preview serve --port {port}"
   )
@@ -7859,6 +7867,8 @@ def main():
       if fresh_state:
         return 0
       tick_store = Store(state_dir)
+      if not preview_server_available(tick_store):
+        return 0
       warning = read_set_tick(
         tick_store,
         args.line,
