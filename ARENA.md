@@ -108,7 +108,7 @@
 - The first successful, unconfirmed preview start still needs a visibility question, including a start that repairs earlier failed reads; a same-session restart does not.
 - Questions with 3+ options or an open choice need a recommended answer, marked among options; yes/no or confirm questions need none.
 - NEVER count a preselected option, recommendation, or silence as an answer; leave the question unanswered.
-- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report that names each in one line; the other tasks continue, and if a form awaits answers and no unblocked work remains, run `poll`.
+- NEVER end with open tasks. For a live local gate, record its run name and block the task without a report; immediately publish a fielded report for other blocks, one line per task. Continue independent work; poll when no unblocked work remains.
 - MUST state each unavoidable assumption in the acknowledgement before work.
 - NEVER assume while material ambiguity remains.
 - Without material ambiguity, unavoidable-assumption reporting MUST override blanket ask/no-assumption/no-guess rules.

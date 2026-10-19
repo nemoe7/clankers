@@ -123,7 +123,7 @@
 - If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
 - Every question with three or more options or an open choice carries a recommended answer, marked among options where offered; a yes/no or confirm question carries none.
 - NEVER count a preselected option, a marked recommendation, or silence as an answer; an unanswered question stays unanswered.
-- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report: name the blocked task in one line, continue the other tasks instead of stalling, and when a report form awaits answers and no unblocked work remains, run `poll`.
+- NEVER end a turn with open tasks. Record a live local gate's run name and blocked task status without a report; immediately publish a fielded report for other blocked tasks, naming each on one line. Continue independent work and poll when no unblocked work remains.
 - MUST state each unavoidable assumption in the acknowledgement before work starts.
 - NEVER use an assumption while material ambiguity remains.
 - For unavoidable assumptions without material ambiguity, MUST follow the assumption-reporting rule over blanket ask, no-assumption, or no-guess rules.
