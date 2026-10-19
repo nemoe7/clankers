@@ -10355,6 +10355,8 @@ def test_websocket_transport(tmp_path, monkeypatch):
       if opcode != 1:
         return opcode, data
       value = json.loads(data)
+      if value.get("type") == "change" and kind != "change":
+        continue
       if value.get("type") == "heartbeat":
         send(peer, {"type": "pong"})
       if (kind is None or value.get("type") == kind) and (
