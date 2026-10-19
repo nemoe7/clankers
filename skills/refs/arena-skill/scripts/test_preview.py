@@ -3617,9 +3617,19 @@ def test_short_flags_and_the_details_rename():
     assert "1111111" in acked
     report = Path(flag_dir) / "report.md"
     report.write_text("# Report\n\nBody text.\n", encoding="utf-8")
-    assert "short-report" in cli(
-      "publish", str(report), "-i", "short-report", "-t", "Short report"
-    )
+    with preview.ThreadingHTTPServer(
+      ("127.0.0.1", 0), preview.handler(store)
+    ) as server:
+      store.set_meta("port", str(server.server_port))
+      thread = threading.Thread(target=server.serve_forever, daemon=True)
+      thread.start()
+      try:
+        assert "short-report" in cli(
+          "publish", str(report), "-i", "short-report", "-t", "Short report"
+        )
+      finally:
+        server.shutdown()
+        thread.join()
 
 
 def test_task_list():
@@ -5667,42 +5677,52 @@ def test_report_unread_markers():
     marker_store.publish("form-2", "Form", marker_source)
     assert len(marker_store.state()["reports"]) == 2
     # The agent CLI can revise an unread report with no held answer or active view.
-    allowed = subprocess.run(
-      [
-        sys.executable,
-        str(Path(preview.__file__)),
-        "publish",
-        str(marker_source),
-        "--id",
-        "form-2",
-        "--title",
-        "Revised form",
-      ],
-      capture_output=True,
-      text=True,
-      check=False,
-      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": marker_dir},
-    )
-    assert allowed.returncode == 0, allowed.stderr
-    assert "Published form-2" in allowed.stdout
-    result = subprocess.run(
-      [
-        sys.executable,
-        str(Path(preview.__file__)),
-        "publish",
-        str(marker_source),
-        "--id",
-        "form",
-        "--title",
-        "Form",
-      ],
-      capture_output=True,
-      text=True,
-      check=False,
-      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": marker_dir},
-    )
-    assert result.returncode == 1
-    assert "unacknowledged answer" in result.stderr
+    with preview.ThreadingHTTPServer(
+      ("127.0.0.1", 0), preview.handler(marker_store)
+    ) as server:
+      marker_store.set_meta("port", str(server.server_port))
+      thread = threading.Thread(target=server.serve_forever, daemon=True)
+      thread.start()
+      try:
+        allowed = subprocess.run(
+          [
+            sys.executable,
+            str(Path(preview.__file__)),
+            "publish",
+            str(marker_source),
+            "--id",
+            "form-2",
+            "--title",
+            "Revised form",
+          ],
+          capture_output=True,
+          text=True,
+          check=False,
+          env={**os.environ, "ARENA_PREVIEW_STATE_DIR": marker_dir},
+        )
+        assert allowed.returncode == 0, allowed.stderr
+        assert "Published form-2" in allowed.stdout
+        result = subprocess.run(
+          [
+            sys.executable,
+            str(Path(preview.__file__)),
+            "publish",
+            str(marker_source),
+            "--id",
+            "form",
+            "--title",
+            "Form",
+          ],
+          capture_output=True,
+          text=True,
+          check=False,
+          env={**os.environ, "ARENA_PREVIEW_STATE_DIR": marker_dir},
+        )
+        assert result.returncode == 1
+        assert "unacknowledged answer" in result.stderr
+      finally:
+        server.shutdown()
+        thread.join()
     assert preview.Store(marker_dir).state()["reports"][0]["needs_answer"] is False
     with marker_store.connect() as db, db:
       db.execute(
@@ -9363,24 +9383,35 @@ def test_a_published_field_reads_in_the_singular(tmp_path):
   store.set_meta("port", guard_port())
   source = tmp_path / "one.md"
   source.write_text("# One\n\nPick one: {#pick}\n\n- ( ) yes\n", encoding="utf-8")
-  cli = subprocess.run(
-    [
-      sys.executable,
-      str(Path(preview.__file__)),
-      "publish",
-      "-i",
-      "one-report",
-      "-t",
-      "One",
-      str(source),
-    ],
-    capture_output=True,
-    text=True,
-    check=False,
-    env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
-  )
-  assert cli.returncode == 0, cli.stderr
-  assert cli.stdout.splitlines()[0] == "Published one-report, 1 field."
+  with preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store)) as server:
+    store.set_meta("port", str(server.server_port))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+      cli = subprocess.run(
+        [
+          sys.executable,
+          str(Path(preview.__file__)),
+          "publish",
+          "-i",
+          "one-report",
+          "-t",
+          "One",
+          str(source),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
+      )
+      assert cli.returncode == 0, cli.stderr
+      assert (
+        cli.stdout.splitlines()[0]
+        == "Published one-report, 1 field. Verification passed."
+      )
+    finally:
+      server.shutdown()
+      thread.join()
 
 
 def test_the_run_tail_reads_one_watch_frame():
@@ -9833,3 +9864,92 @@ def test_ack_task_cli_commits_both_records_or_neither(capsys):
     assert store.task_record("first-job")["type"] == "code"
     assert call(["second-note"], []) == 0
     assert store.task_record("first-job")["details"] == ["Do the work"]
+
+
+def test_publication_verification_checks_state_and_rendered_revision():
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.set_meta("port", guard_port())
+    revision = "2026-10-19T03:00:00.123456+00:00"
+    state = {
+      "reports": [{"id": "check-report", "updated_at": preview.clip_stamp(revision)}],
+      "token": "do-not-print",
+    }
+    rendered = {"html": "<p>Question</p>", "fields": 1, "revision": revision}
+    for first, second, valid in [
+      (state, rendered, True),
+      ({"reports": []}, rendered, False),
+      ({"reports": [{"id": "check-report", "updated_at": "old"}]}, rendered, False),
+      (state, {**rendered, "revision": "old"}, False),
+      (state, {**rendered, "fields": 0}, False),
+      (state, {**rendered, "fields": True}, False),
+      (state, {**rendered, "html": None}, False),
+      ([], rendered, False),
+      (state, [], False),
+    ]:
+      with patch("http.client.HTTPConnection") as factory:
+        client = factory.return_value
+        client.getresponse.return_value.status = 200
+        client.getresponse.return_value.read.side_effect = [
+          json.dumps(first).encode(),
+          json.dumps(second).encode(),
+        ]
+        if valid:
+          preview.verify_publication(store, "check-report", revision, 1)
+          assert [call.args[1] for call in client.request.call_args_list] == [
+            "/api/state",
+            "/api/reports/check-report/html",
+          ]
+        else:
+          with pytest.raises((ValueError, TypeError), match="verification"):
+            preview.verify_publication(store, "check-report", revision, 1)
+
+
+def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "report.md"
+    source.write_text("Choose? {#choice}\n- ( ) yes\n- ( ) no\n", "utf-8")
+    with preview.ThreadingHTTPServer(
+      ("127.0.0.1", 0), preview.handler(store)
+    ) as server:
+      store.set_meta("port", str(server.server_port))
+      thread = threading.Thread(target=server.serve_forever, daemon=True)
+      thread.start()
+
+      def publish(path):
+        with (
+          patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": directory}),
+          patch.object(
+            sys,
+            "argv",
+            [
+              str(Path(preview.__file__)),
+              "publish",
+              str(path),
+              "--id",
+              "verified-report",
+              "--title",
+              "Report",
+            ],
+          ),
+        ):
+          result = preview.main()
+        return result, capsys.readouterr()
+
+      try:
+        result, output = publish(Path(directory) / "missing.md")
+        assert result == 1 and "Published" not in output.out
+        assert store.state()["reports"] == []
+        with patch(
+          "preview.verify_publication",
+          side_effect=ValueError("Publication verification failed"),
+        ):
+          result, output = publish(source)
+        assert result == 1 and "Published" not in output.out
+        assert store.report("verified-report")["title"] == "Report"
+        result, output = publish(source)
+        assert result == 0 and "Verification passed" in output.out
+      finally:
+        server.shutdown()
+        thread.join()

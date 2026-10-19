@@ -8,6 +8,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena report publication: check the stored revision and rendered field count before the CLI reports success.
 - Arena acknowledgements: add task options to save one receipt and its linked task in one transaction. Keep standalone commands.
 - Arena report diffs: put edge whitespace outside strike and highlight spans. Keep the renderer unchanged.
 - Arena PR checks: reset the registration window on a new head. Continue root work during remote CI and retain local gate freezes.

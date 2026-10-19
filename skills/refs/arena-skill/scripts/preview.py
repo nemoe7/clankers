@@ -3413,6 +3413,43 @@ def parse_state_import(text):
   return value
 
 
+def verify_publication(store, report_id, revision, count):
+  from http.client import HTTPConnection, HTTPException
+
+  failure = "Publication verification failed. Check the preview before retrying."
+  try:
+    with closing(
+      HTTPConnection("127.0.0.1", int(store.meta_value("port")), timeout=15)
+    ) as client:
+      documents = []
+      for path in ("/api/state", f"/api/reports/{report_id}/html"):
+        client.request("GET", path)
+        response = client.getresponse()
+        if response.status != 200:
+          raise ValueError(f"Publication verification failed: HTTP {response.status}.")
+        documents.append(json.loads(response.read()))
+  except (OSError, HTTPException, UnicodeError, json.JSONDecodeError):
+    raise ValueError(failure) from None
+  state, rendered = documents
+  if not isinstance(state, dict) or not isinstance(state.get("reports"), list):
+    raise TypeError(failure)
+  matches = [
+    row
+    for row in state["reports"]
+    if isinstance(row, dict) and row.get("id") == report_id
+  ]
+  if (
+    len(matches) != 1
+    or matches[0].get("updated_at") != clip_stamp(revision)
+    or not isinstance(rendered, dict)
+    or rendered.get("revision") != revision
+    or type(rendered.get("fields")) is not int
+    or rendered["fields"] != count
+    or not isinstance(rendered.get("html"), str)
+  ):
+    raise ValueError(failure)
+
+
 def task_steps(details):
   """One step per line: a line break inside one argument becomes a break between steps."""
   steps = []
@@ -7358,8 +7395,10 @@ def main():
         )
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
+      revision = store.report(args.id)["updated_at"]
+      verify_publication(store, args.id, revision, count)
       plural = "" if count == 1 else "s"
-      print(f"Published {args.id}, {count} field{plural}.")
+      print(f"Published {args.id}, {count} field{plural}. Verification passed.")
       if not count and "{#" in Path(args.source).read_text("utf-8"):
         # A `{#id}` marker on its own parses as prose. The owner then sees no answer form.
         print(

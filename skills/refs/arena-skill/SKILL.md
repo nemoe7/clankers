@@ -101,7 +101,7 @@ When a task creates a commit, MUST add the landed commit's subject and short has
 
 ## Publish reports and forms
 
-Report carriage always goes through this skill: a short answer goes in the `ack` reply; a long answer or a question goes in a fielded report. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports; verify its `/api/state` entry and rendered `/api/reports/<id>/html` result.
+Report carriage always goes through this skill: a short answer goes in the `ack` reply; a long answer or a question goes in a fielded report. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports with `arena-preview publish`; require its stored-revision and rendered-report checks to pass before announcing publication.
 
 ```bash
 arena-preview publish <source.md> --id <id> --title <title>
