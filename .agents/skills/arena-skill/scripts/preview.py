@@ -1861,7 +1861,7 @@ class Store:
 				raise FileNotFoundError('Report not found')
 			if stale_only and report_id not in self.stale_report_ids(db):return False
 			if not dismissed_by_owner:self.guard_report_change(db,report_id,row,hold_view=False)
-			db.execute('DELETE FROM reports WHERE id = ?',(report_id,));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMOVED_META,now()))
+			db.execute('DELETE FROM reports WHERE id = ?',(report_id,));self.release_report_tasks(db,report_id);db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMOVED_META,now()))
 			if dismissed_by_owner:db.execute('INSERT INTO notes (id, text, at, quiet) VALUES (?, ?, ?, 1)',(new_id(),f"The owner dismissed the report {report_id} ({row['title']}).",now()))
 		if stale_only:return True
 	def clear_state(self):

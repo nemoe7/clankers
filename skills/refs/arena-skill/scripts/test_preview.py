@@ -331,6 +331,48 @@ def test_report_receipt_ids():
     )
 
 
+@pytest.mark.parametrize("mode", ["agent", "owner", "pending-stale", "rejected"])
+def test_unpublish_releases_only_linked_tasks(tmp_path, monkeypatch, mode):
+  store = preview.Store(tmp_path / "state", create=True)
+  source = tmp_path / "question.md"
+  source.write_text("Choose: {#choice}\n\n- ( ) Yes\n- ( ) No\n")
+  for report in ("question", "other"):
+    store.publish(report, report, source)
+    store.write_task(
+      "wait-" + report,
+      report,
+      ["Await the decision"],
+      task_type="code",
+      report_id=report,
+      blocked=True,
+    )
+  assert store.task_record("wait-question")["blocked"] is True
+  if mode == "rejected":
+
+    def refuse(*args, **kwargs):
+      raise ValueError("held")
+
+    monkeypatch.setattr(store, "guard_report_change", refuse)
+    with pytest.raises(ValueError, match="held"):
+      store.unpublish("question")
+  else:
+    result = store.unpublish(
+      "question",
+      dismissed_by_owner=mode == "owner",
+      stale_only=mode == "pending-stale",
+    )
+    if mode == "pending-stale":
+      assert result is False
+  released = mode in ("agent", "owner")
+  task = store.task_record("wait-question")
+  assert task["blocked"] is not released
+  assert task["status"] == "upcoming"
+  assert task["report_id"] == "question"
+  assert store.task_record("wait-other")["blocked"] is True
+  assert source.exists()
+  assert ("question" in {r["id"] for r in store.state()["reports"]}) is not released
+
+
 def test_report_unpublish():
   "Removing a report prunes the tab row only. Answers and the source file stay."
   with tempfile.TemporaryDirectory() as directory:

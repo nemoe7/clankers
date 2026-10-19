@@ -5704,6 +5704,7 @@ class Store:
         # The page holds the open report, so the owner's view never blocks this removal.
         self.guard_report_change(db, report_id, row, hold_view=False)
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+      self.release_report_tasks(db, report_id)
       # The state stamp reads this mark, so the save's own stamp trigger rewrites a file that
       # still carries the removed report.
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMOVED_META, now()))

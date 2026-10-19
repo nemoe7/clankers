@@ -14,6 +14,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview report removal: unblock only tasks linked to the removed report in the same transaction. Keep removal guards, answers, sources, task status, and history.
 - Preview poll: use a 1799-second deadline and return a no-new-messages end-turn notice. Keep the Bash timeout at 1800 seconds and retain early-return events.
 - Preview proxy guide: scope the 401 key-check step to the proxy agent-key check. Keep the inbox, retry, and second-401 steps.
 - Preview CLI reference: describe class and hint output without a fixed prefix. Keep streams, exit codes, and subcommand prefixes.
