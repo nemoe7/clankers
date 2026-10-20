@@ -27,7 +27,7 @@ flowchart TB
 
 ## Instruction budgets
 
-Latest measurements as of 2026-10-20. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and every arena-skill file, one row per file, except the proxies. Skill refs stay out.
+Latest measurements as of 2026-10-20. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and the arena-skill clause files, one row each, plus one row for all non-clause arena-skill files. Skill refs stay out.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ Latest measurements as of 2026-10-20. `maintenance/check.py --update` rebuilds t
 | [`gpt-plugins/skills/gpt-planning/SKILL.md`](gpt-plugins/skills/gpt-planning/SKILL.md) | `o200k_base` | 359 `tok` |
 | [`gpt-plugins/skills/gpt-question/SKILL.md`](gpt-plugins/skills/gpt-question/SKILL.md) | `o200k_base` | 162 `tok` |
 | [`gpt-plugins/skills/gpt-quirks/SKILL.md`](gpt-plugins/skills/gpt-quirks/SKILL.md) | `o200k_base` | 134 `tok` |
-| [`rules/ARENA.md`](rules/ARENA.md) | `UTF-8 file size` | 21,859 `B` |
+| [`rules/ARENA.md`](rules/ARENA.md) | `o200k_base` | 4,678 `tok` |
 | [`rules/CHATGPT-CUSTOM.txt`](rules/CHATGPT-CUSTOM.txt) | `Unicode chars` | 1,500 `chars` |
 | [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 1,499 `chars` |
 | [`rules/CLINE.md`](rules/CLINE.md) | `o200k_base` | 353 `tok` |
@@ -48,16 +48,8 @@ Latest measurements as of 2026-10-20. `maintenance/check.py --update` rebuilds t
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 298 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 284 `tok` |
 | [`skills/amending-violations/SKILL.md`](skills/amending-violations/SKILL.md) | `o200k_base` | 1,607 `tok` |
-| [`skills/arena-skill/assets/app.js`](skills/arena-skill/assets/app.js) | `UTF-8 file size` | 72,045 `B` |
-| [`skills/arena-skill/assets/index.html`](skills/arena-skill/assets/index.html) | `UTF-8 file size` | 14,031 `B` |
-| [`skills/arena-skill/assets/markdown-it.min.js`](skills/arena-skill/assets/markdown-it.min.js) | `UTF-8 file size` | 114,836 `B` |
-| [`skills/arena-skill/assets/message-markdown.js`](skills/arena-skill/assets/message-markdown.js) | `UTF-8 file size` | 2,690 `B` |
-| [`skills/arena-skill/assets/style.css`](skills/arena-skill/assets/style.css) | `UTF-8 file size` | 19,155 `B` |
-| [`skills/arena-skill/README.md`](skills/arena-skill/README.md) | `o200k_base` | 1,875 `tok` |
+| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 452,037 `B` |
 | [`skills/arena-skill/references/REFERENCE.md`](skills/arena-skill/references/REFERENCE.md) | `o200k_base` | 3,838 `tok` |
-| [`skills/arena-skill/scripts/arena-preview`](skills/arena-skill/scripts/arena-preview) | `UTF-8 file size` | 544 `B` |
-| [`skills/arena-skill/scripts/install.sh`](skills/arena-skill/scripts/install.sh) | `UTF-8 file size` | 8,522 `B` |
-| [`skills/arena-skill/scripts/preview.py`](skills/arena-skill/scripts/preview.py) | `UTF-8 file size` | 220,214 `B` |
 | [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,080 `tok` |
 | [`skills/squash/SKILL.md`](skills/squash/SKILL.md) | `o200k_base` | 1,377 `tok` |
 | [`skills/web-interface-guidelines/SKILL.md`](skills/web-interface-guidelines/SKILL.md) | `o200k_base` | 528 `tok` |

@@ -16,6 +16,7 @@ def test_budget_updates_handle_additions_removals_and_measurements(
     "EXPECTED_BUDGETS",
     {"Zed.md": "UTF-8 file size", "alpha.md": "UTF-8 file size"},
   )
+  monkeypatch.setattr(check, "EXPECTED_GROUPS", {})
   (root / "Zed.md").write_text("one", encoding="utf-8")
   (root / "alpha.md").write_text("two!", encoding="utf-8")
   check.README.write_text(
@@ -50,3 +51,40 @@ def test_budget_updates_handle_additions_removals_and_measurements(
   (root / "tok.md").write_text("hello world", encoding="utf-8")
   assert check.measure(root / "tok.md", "o200k_base") == 2
   assert check.format_unit("o200k_base") == "tok"
+
+
+def test_budget_group_row_sums_its_files(tmp_path: Path, monkeypatch):
+  root = tmp_path
+  monkeypatch.setattr(check, "ROOT", root)
+  monkeypatch.setattr(check, "README", root / "README.md")
+  monkeypatch.setattr(check, "EXPECTED_BUDGETS", {"rules.md": "UTF-8 file size"})
+  monkeypatch.setattr(
+    check,
+    "EXPECTED_GROUPS",
+    {"skills/arena-skill": ("UTF-8 file size", ("a.js", "b.css"))},
+  )
+  (root / "rules.md").write_text("call", encoding="utf-8")
+  (root / "a.js").write_text("four", encoding="utf-8")
+  (root / "b.css").write_text("sixsix", encoding="utf-8")
+  check.README.write_text(
+    "Latest measurements as of 2000-01-01.\n\n"
+    "| File | Measure | Current |\n| --- | --- | --- |\n",
+    encoding="utf-8",
+  )
+  assert check.update_readme_measurements()
+  text = check.README.read_text(encoding="utf-8")
+  # One row carries every non-clause file, so the table stays readable.
+  assert "a.js" not in text and "b.css" not in text
+  group = "| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 10 `B` |"
+  assert group in text
+  assert check.read_budget_table()["skills/arena-skill"] == ("UTF-8 file size", "10 B")
+  (root / "b.css").write_text("sixsix!", encoding="utf-8")
+  assert check.update_readme_measurements()
+  assert check.read_budget_table()["skills/arena-skill"] == ("UTF-8 file size", "11 B")
+  before = check.README.read_bytes()
+  (root / "a.js").unlink()
+  try:
+    check.update_readme_measurements()
+    raise AssertionError("A missing group file was accepted")
+  except RuntimeError:
+    assert check.README.read_bytes() == before

@@ -39,7 +39,7 @@ NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 EXPECTED_BUDGETS = {
   "userscripts/arena-prompt-fill.txt": "o200k_base",
   "rules/CORE.md": "o200k_base",
-  "rules/ARENA.md": "UTF-8 file size",
+  "rules/ARENA.md": "o200k_base",
   "rules/CHATGPT-CUSTOM.txt": "Unicode chars",
   "rules/CHATGPT-MORE.txt": "Unicode chars",
   "rules/CLINE.md": "o200k_base",
@@ -52,18 +52,7 @@ EXPECTED_BUDGETS = {
   "system-prompts/wenyan/NEMOGPT.md": "o200k_base",
   "skills/amending-violations/SKILL.md": "o200k_base",
   "skills/arena-skill/SKILL.md": "o200k_base",
-  "skills/arena-skill/README.md": "o200k_base",
   "skills/arena-skill/references/REFERENCE.md": "o200k_base",
-  # This table lists the arena suite except proxies. Minify budgets reject asset and script growth until a table update.
-  # This script ignores byte-identical `.agents/skills/` twins.
-  "skills/arena-skill/assets/app.js": "UTF-8 file size",
-  "skills/arena-skill/assets/markdown-it.min.js": "UTF-8 file size",
-  "skills/arena-skill/assets/message-markdown.js": "UTF-8 file size",
-  "skills/arena-skill/assets/index.html": "UTF-8 file size",
-  "skills/arena-skill/assets/style.css": "UTF-8 file size",
-  "skills/arena-skill/scripts/arena-preview": "UTF-8 file size",
-  "skills/arena-skill/scripts/install.sh": "UTF-8 file size",
-  "skills/arena-skill/scripts/preview.py": "UTF-8 file size",
   "skills/squash/SKILL.md": "o200k_base",
   "skills/web-interface-guidelines/SKILL.md": "o200k_base",
   "workflows/init-docs.md": "o200k_base",
@@ -73,6 +62,24 @@ EXPECTED_BUDGETS = {
   "gpt-plugins/skills/gpt-github/SKILL.md": "o200k_base",
   "gpt-plugins/skills/gpt-display/SKILL.md": "o200k_base",
   "gpt-plugins/skills/gpt-question/SKILL.md": "o200k_base",
+}
+
+# This table lists the arena suite except proxies. Minify budgets reject asset and script growth until a table update.
+# Non-clause arena-skill files share one row. This script ignores byte-identical `.agents/skills/` twins.
+EXPECTED_GROUPS = {
+  "skills/arena-skill": (
+    "UTF-8 file size",
+    (
+      "skills/arena-skill/assets/app.js",
+      "skills/arena-skill/assets/index.html",
+      "skills/arena-skill/assets/markdown-it.min.js",
+      "skills/arena-skill/assets/message-markdown.js",
+      "skills/arena-skill/assets/style.css",
+      "skills/arena-skill/scripts/arena-preview",
+      "skills/arena-skill/scripts/install.sh",
+      "skills/arena-skill/scripts/preview.py",
+    ),
+  ),
 }
 
 # Root `ARENA.md` is the copy `.github/workflows/distribute.yml` pushes to
@@ -434,6 +441,18 @@ def measure(path: Path, kind: str) -> int:
   return measurement(kind)[0](path, path.read_text(encoding="utf-8"))
 
 
+def budget_value(relative: str, kind: str) -> int:
+  """Measure one row, summing the files of a group row."""
+  parts = EXPECTED_GROUPS.get(relative, (kind, (relative,)))[1]
+  total = 0
+  for part in parts:
+    path = ROOT / part
+    if not path.is_file():
+      raise RuntimeError(f"README budget path missing: {part}")
+    total += measure(path, kind)
+  return total
+
+
 def format_unit(kind: str) -> str:
   return measurement(kind)[1]
 
@@ -450,13 +469,12 @@ def update_readme_measurements() -> bool:
     end += 1
 
   table = [header, "| --- | --- | --- |\n"]
-  for relative, kind in sorted(
-    EXPECTED_BUDGETS.items(), key=lambda item: item[0].casefold()
-  ):
-    path = ROOT / relative
-    if not path.is_file():
-      raise RuntimeError(f"README budget path missing: {relative}")
-    current = f"{measure(path, kind):,}"
+  rows = {
+    **EXPECTED_BUDGETS,
+    **{row: kind for row, (kind, _) in EXPECTED_GROUPS.items()},
+  }
+  for relative, kind in sorted(rows.items(), key=lambda item: item[0].casefold()):
+    current = f"{budget_value(relative, kind):,}"
     table.append(
       f"| [`{relative}`]({relative}) | `{kind}` | {current} `{format_unit(kind)}` |\n"
     )
@@ -897,15 +915,19 @@ def validate(errors: list[str]) -> tuple[int, int]:
       check_internal_links(path, errors)
 
   budgets = read_budget_table()
+  rows = {
+    **EXPECTED_BUDGETS,
+    **{row: kind for row, (kind, _) in EXPECTED_GROUPS.items()},
+  }
 
-  if set(budgets) != set(EXPECTED_BUDGETS):
+  if set(budgets) != set(rows):
     errors.append(
       "README budget table entries mismatch: "
       f"documented={sorted(budgets)} "
-      f"expected={sorted(EXPECTED_BUDGETS)}"
+      f"expected={sorted(rows)}"
     )
   else:
-    for relative, expected_kind in EXPECTED_BUDGETS.items():
+    for relative, expected_kind in rows.items():
       recorded_kind, recorded_value = budgets[relative]
 
       if recorded_kind != expected_kind:
@@ -916,14 +938,8 @@ def validate(errors: list[str]) -> tuple[int, int]:
         )
         continue
 
-      path = ROOT / relative
-
-      if not path.is_file():
-        errors.append(f"README budget path missing: {relative}")
-        continue
-
       try:
-        actual = measure(path, expected_kind)
+        actual = budget_value(relative, expected_kind)
       except RuntimeError as exc:
         errors.append(str(exc))
         continue

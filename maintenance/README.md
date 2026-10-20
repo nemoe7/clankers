@@ -146,7 +146,7 @@ python3 -m pip install -r requirements.txt
 npm ci
 ```
 
-`--update` rebuilds the budget table from `EXPECTED_BUDGETS` before checking, including added and retired skills. Test it with `python3 -m pytest maintenance/measurements/test_measurements.py`.
+`--update` rebuilds the budget table from `EXPECTED_BUDGETS` and `EXPECTED_GROUPS` before checking, including added and retired skills. Test it with `python3 -m pytest maintenance/measurements/test_measurements.py`.
 
 ## PR checks
 
