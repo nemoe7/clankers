@@ -1629,6 +1629,44 @@ def task_row(row):
   return shaped
 
 
+def attach_blockers(db, records):
+  """Attach each task's blockers, and order every task after the tasks it waits on."""
+  rows = db.execute(
+    "SELECT task_id, blocked_by FROM task_dependencies ORDER BY blocked_by"
+  ).fetchall()
+  edges = {}
+  for row in rows:
+    edges.setdefault(row[0], []).append(row[1])
+  for record in records:
+    blockers = edges.get(record["id"])
+    if blockers:
+      record["blocked_by"] = blockers
+  return order_after_blockers(records)
+
+
+def order_after_blockers(records):
+  """Place each task after the tasks it waits on, keeping the queue order everywhere else."""
+  known = {item["id"] for item in records}
+  waiting = {
+    item["id"]: [
+      blocker for blocker in item.get("blocked_by") or () if blocker in known
+    ]
+    for item in records
+  }
+  placed, done, pending = [], set(), list(records)
+  while pending:
+    ready = [item for item in pending if all(b in done for b in waiting[item["id"]])]
+    if not ready:
+      # A stored cycle cannot hang the listing.
+      placed.extend(pending)
+      break
+    for item in ready:
+      placed.append(item)
+      done.add(item["id"])
+      pending.remove(item)
+  return placed
+
+
 def link_task_answers(db, records):
   """Attach each task's linked answers, one entry per submission ID.
 
@@ -2033,8 +2071,13 @@ def current_task(tasks):
   A task that waits on a report sorts first in its group, so the head alone would hand the
   current seat to work the agent cannot start. Both the CLI listing and the page read this.
   """
+  statuses = {task["id"]: task.get("status") for task in tasks}
   for task in tasks:
-    if task.get("status") == "upcoming" and not task.get("blocked"):
+    if task.get("status") != "upcoming" or task.get("blocked"):
+      continue
+    if all(
+      statuses.get(blocker) == "finished" for blocker in task.get("blocked_by") or ()
+    ):
       return task
   return None
 
@@ -4023,6 +4066,10 @@ class Store:
           at TEXT NOT NULL, updated_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS task_dependencies (
+          task_id TEXT NOT NULL, blocked_by TEXT NOT NULL,
+          PRIMARY KEY (task_id, blocked_by)
+        );
         CREATE TABLE IF NOT EXISTS tasks (
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
@@ -4583,7 +4630,7 @@ class Store:
       rows = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}"
       ).fetchall()
-      records = [task_row(row) for row in rows]
+      records = attach_blockers(db, [task_row(row) for row in rows])
       if not records:
         return None
       link_task_answers(db, records)
@@ -4600,7 +4647,9 @@ class Store:
       rows = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}"
       ).fetchall()
-      records = link_task_answers(db, [task_row(row) for row in rows])
+      records = link_task_answers(
+        db, attach_blockers(db, [task_row(row) for row in rows])
+      )
     return link_task_runs(records, self.path.parent)
 
   def task_record(self, task_id):
@@ -4611,7 +4660,9 @@ class Store:
       ).fetchone()
     if row is None:
       return None
-    return link_task_runs([task_row(row)], self.path.parent)[0]
+    with closing(self.connect()) as db:
+      record = attach_blockers(db, [task_row(row)])[0]
+    return link_task_runs([record], self.path.parent)[0]
 
   def free_id(self):
     """A six-character ID no stored row holds, so a server mint never lands on a record.
@@ -4640,6 +4691,55 @@ class Store:
       yield own
     if autosave:
       self.autosave()
+
+  def task_blockers(self, task_id):
+    """The tasks this one waits on, sorted, so the store reads a stable order."""
+    with closing(self.connect()) as db:
+      rows = db.execute(
+        "SELECT blocked_by FROM task_dependencies WHERE task_id = ? ORDER BY blocked_by",
+        (task_id,),
+      ).fetchall()
+    return [row[0] for row in rows]
+
+  def all_task_blockers(self):
+    """Every dependency edge as a mapping of task to the tasks it waits on."""
+    edges = {}
+    with closing(self.connect()) as db:
+      rows = db.execute(
+        "SELECT task_id, blocked_by FROM task_dependencies ORDER BY blocked_by"
+      ).fetchall()
+    for row in rows:
+      edges.setdefault(row[0], []).append(row[1])
+    return edges
+
+  def check_dependency(self, task_id, blocker, edges):
+    """Refuse an edge that names no task, itself, or a task that already waits on this one."""
+    if blocker == task_id:
+      raise ValueError(f"{task_id} cannot wait on itself")
+    if not self.task_record(blocker):
+      raise ValueError(f"No task holds {blocker}; add it before another waits on it")
+    # Walk down from the blocker: a path back to this task closes the cycle.
+    pending = [blocker]
+    seen = set()
+    while pending:
+      node = pending.pop()
+      if node == task_id:
+        raise ValueError(
+          f"{blocker} already waits on {task_id}; that edge would close a cycle"
+        )
+      if node in seen:
+        continue
+      seen.add(node)
+      pending.extend(edges.get(node, []))
+
+  def write_dependencies(self, db, task_id, blocked_by):
+    """Replace one task's blockers inside the caller's transaction."""
+    db.execute("DELETE FROM task_dependencies WHERE task_id = ?", (task_id,))
+    for blocker in blocked_by:
+      db.execute(
+        "INSERT OR IGNORE INTO task_dependencies (task_id, blocked_by) VALUES (?, ?)",
+        (task_id, blocker),
+      )
 
   def refuse_session_ids(self, details):
     """Refuse a detail that cites a minted session ID, which no repository reader can resolve.
@@ -4672,6 +4772,7 @@ class Store:
     report_id=None,
     completed_at=None,
     task_type=None,
+    blocked_by=None,
     shared=None,
     append_details=False,
     restoring=False,
@@ -4730,6 +4831,12 @@ class Store:
         task_type = (stored.get("type") if stored else None) or TASK_MISC
       if report_id:
         identifier(report_id)
+      if blocked_by is not None:
+        blocked_by = [str(item) for item in blocked_by if str(item).strip()]
+        edges = self.all_task_blockers()
+        for blocker in blocked_by:
+          self.check_dependency(task_id, blocker, edges)
+        self.write_dependencies(db, task_id, blocked_by)
       if (
         report_wait and report_id and blocked and self.report_has_answers(db, report_id)
       ):
@@ -4773,6 +4880,9 @@ class Store:
         "report_id": report_id,
         "type": task_type,
       }
+      blockers = self.task_blockers(task_id)
+      if blockers:
+        record["blocked_by"] = blockers
       if order is not None:
         index = max(0, min(order - 1, len(siblings)))
       elif stored and stored["status"] == status:
@@ -8342,6 +8452,14 @@ def main():
     metavar="PREV-ID",
     help="Rename the task stored under this ID to the one given",
   )
+  task.add_argument(
+    "-b",
+    "--blocked-by",
+    dest="blocked_by",
+    action="append",
+    metavar="TASK-ID",
+    help="Task this one waits on, repeatable; a cycle is refused",
+  )
   task.add_argument("-s", "--status", choices=TASK_STATUSES, default=None)
   task.add_argument(
     "--task-type",
@@ -8700,6 +8818,7 @@ def main():
         and args.msg_id is None
         and args.amend is None
         and args.task_type is None
+        and args.blocked_by is None
       ):
         # A bare ID reads the stored row without writing. An ID that names nothing at
         # all reads as a task miss here, since this is the task command.
@@ -8733,6 +8852,7 @@ def main():
             args.blocked,
             args.report,
             task_type=args.task_type,
+            blocked_by=args.blocked_by,
             shared=shared,
             append_details=args.append_details,
           )
@@ -8747,6 +8867,7 @@ def main():
           args.blocked,
           args.report,
           task_type=args.task_type,
+          blocked_by=args.blocked_by,
           append_details=args.append_details,
         )
       print(format_task(record))

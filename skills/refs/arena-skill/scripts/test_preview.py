@@ -2904,6 +2904,47 @@ def test_task_refuses_a_note_id_as_its_name():
     assert "proper name" in cli.stdout + cli.stderr
 
 
+def test_task_dependencies_hold_the_cycle_and_the_order():
+  """A task waits on named tasks and sorts after them. A cycle-closing edge fails."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.write_task("first", "First", ["Step one"], task_type="misc")
+    store.write_task(
+      "second", "Second", ["Step one"], task_type="misc", blocked_by=["first"]
+    )
+    second = store.task_record("second")
+    assert second["blocked_by"] == ["first"]
+    # The waiter follows its blocker, whatever the stored positions say.
+    assert [item["id"] for item in store.list_tasks()] == ["first", "second"]
+    assert preview.current_task(store.list_tasks())["id"] == "first"
+    # An edge that closes a cycle names both tasks and lands nothing.
+    for blocker in ("second", "third"):
+      if blocker == "third":
+        store.write_task(
+          "third", "Third", ["Step one"], task_type="misc", blocked_by=["second"]
+        )
+      try:
+        store.write_task(
+          "first", "First", ["Step one"], task_type="misc", blocked_by=[blocker]
+        )
+        raise AssertionError(f"A cycle-closing edge landed: {blocker}")
+      except ValueError as error:
+        assert blocker in str(error) and "first" in str(error), error
+    # A task may not wait on itself, and a blocker that names no task fails.
+    for blocker, expected in (("first", "itself"), ("nowhere", "No task holds")):
+      try:
+        store.write_task("first", blocked_by=[blocker])
+        raise AssertionError(f"A bad blocker landed: {blocker}")
+      except ValueError as error:
+        assert expected in str(error), error
+    # Finishing the blocker frees the waiter for the current seat.
+    store.write_task("first", status="finished")
+    assert preview.current_task(store.list_tasks())["id"] == "second"
+    # An empty list clears the edge.
+    store.write_task("second", blocked_by=[])
+    assert "blocked_by" not in store.task_record("second")
+
+
 def test_task_detail_refuses_a_session_id():
   """A detail that cites a session ID names nothing a repository reader can resolve."""
   with tempfile.TemporaryDirectory() as directory:
@@ -2914,7 +2955,7 @@ def test_task_detail_refuses_a_session_id():
     for detail in (f"Fix {note_id}", "Fix 954ee49", "Copy from note 954ee49"):
       try:
         store.write_task("first-task", "First task", [detail], task_type="misc")
-        raise AssertionError(f"A session ID was accepted in a detail: {detail}")
+        raise AssertionError(f"A detail took a session ID: {detail}")
       except ValueError as error:
         assert "session-local" in str(error), error
     # A clean detail still lands, and a restore keeps the board it imports.
@@ -5124,7 +5165,9 @@ def test_route_cli_accepts_task_and_task_cli_rejects_manual_block(tmp_path):
     check=True,
     env=environment,
   ).stdout
-  assert "--blocked" not in help_text and "--unblocked" in help_text
+  # The manual mark is gone. The dependency flag names the task it waits on.
+  assert not re.search(r"--blocked(?!-)", help_text)
+  assert "--blocked-by" in help_text and "--unblocked" in help_text
 
 
 def test_route_cli_rejects_task_after_run_name(tmp_path):
