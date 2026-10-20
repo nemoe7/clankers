@@ -1,6 +1,6 @@
 # Rules specification
 
-Reference for rule structure, constraints, and installation. See [maintenance/README.md](../maintenance/README.md) for repository maintenance procedures. Do not deploy this file into an agent’s Rules folder.
+Reference for rule structure, constraints, and installation. See [maintenance/README.md](../maintenance/README.md) for repository maintenance procedures. Do not deploy this file into an agent's Rules folder.
 
 Commands and code-span paths are repository-root-relative unless stated otherwise.
 

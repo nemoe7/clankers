@@ -148,13 +148,17 @@ npm ci
 
 `--update` rebuilds the budget table from `EXPECTED_BUDGETS` before checking, including added and retired skills. Test it with `python3 -m pytest maintenance/measurements/test_measurements.py`.
 
-## Minified assets and scripts
+## PR checks
 
 The PR-check helper observes visible checks on the pinned head for 30 seconds, even after early success. No checks, a moved head, a GitHub read failure, or pending or failing checks at the deadline fail the wait. API reads time out after five seconds, and API time reduces polling pauses.
 
 It reads all context pages and selects the latest run for each check and workflow, or status context. It then runs the requested watch. Success is best effort: later checks can still appear.
 
+## Preview gate hooks
+
 The profile gate and EXIT hook have case labels in `skills/refs/arena-skill/scripts/install.sh`. `maintenance/workflows/test_preview_gate.py` compares those labels with the hook tables below.
+
+## Minified assets and scripts
 
 The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all three `scripts/` files. Edit readable `skills/refs/arena-skill/` sources, never generated copies. Markdown compression is separate.
 
