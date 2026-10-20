@@ -252,23 +252,77 @@ def test_distribute_triggers_and_inputs():
   assert triggers["push"]["paths"] == [
     "rules/ARENA.md",
     "skills/arena-skill/**",
+    "skills/nemo-ui/**",
     "github/workflows/gemini-release.yml",
     "github/workflows/gemini_release.py",
+    ".github/actions/distribute-sync/**",
     ".github/workflows/distribute.yml",
   ]
   assert triggers["schedule"] == [{"cron": "17 3 * * *"}]
   inputs = triggers["workflow_dispatch"]["inputs"]
-  assert set(inputs) == {"repos", "gemini_repos"}
+  assert set(inputs) == {"repos", "gemini_repos", "nemo_ui_repos"}
   assert all(value.get("default") == "" for value in inputs.values())
-  assert list(document["jobs"]) == ["distribute"]
+  # One job per target list, so the run page names each list on its own row.
+  assert list(document["jobs"]) == ["arena", "gemini", "nemo-ui"]
   for name in document["jobs"]:
     assert document["jobs"][name]["concurrency"]["cancel-in-progress"] is False
 
 
+def test_distribute_jobs_share_one_action_and_keep_their_own_lists():
+  jobs = load_workflow("distribute.yml")["jobs"]
+  assert [job["name"] for job in jobs.values()] == [
+    "Distribute Arena",
+    "Distribute Gemini",
+    "Distribute nemo-ui",
+  ]
+  groups = [job["concurrency"]["group"] for job in jobs.values()]
+  assert len(set(groups)) == 3, "each target list needs its own concurrency group"
+  for job in jobs.values():
+    sync = [
+      step
+      for step in job["steps"]
+      if step.get("uses") == "./.github/actions/distribute-sync"
+    ]
+    assert len(sync) == 1, "every job copies through the shared action"
+    assert "CLANKERS_DIST_PAT" in sync[0]["env"]
+
+  def copied(job: dict) -> dict:
+    step = next(
+      step
+      for step in job["steps"]
+      if step.get("uses") == "./.github/actions/distribute-sync"
+    )
+    return step["with"]
+
+  arena, gemini, nemo_ui = jobs.values()
+  # Each job holds its own list, so a dispatcher override stays inside one target group.
+  assert copied(arena)["repos-fallback"].split()[0] == "nemoe7/clankers"
+  assert set(copied(nemo_ui)["repos-fallback"].split()) == {
+    "nemoe7/request-tracker",
+    "nemoe7/daedalus",
+    "nemoe7/clankers",
+    "nemoe7/arena-cleanup",
+  }
+  assert copied(gemini)["repos-fallback"] == "nemoe7/daedalus nemoe7/request-tracker"
+  assert copied(arena)["skills"] == "arena-skill"
+  assert copied(arena)["rule-src"] == "rules/ARENA.md"
+  assert copied(arena)["legacy"] == (
+    "arena-live-steering arena-preview-reporting arena-preview-steering arena-proxy arena"
+  )
+  assert "skills" not in copied(gemini)
+  assert copied(gemini)["files"] == "gemini-release.yml gemini_release.py"
+  # The nemo-ui skill lives in this repository, so its job copies it and fails on a gap.
+  assert copied(nemo_ui)["skills"] == "nemo-ui"
+  assert "allow-missing" not in copied(nemo_ui)
+
+
 def test_distribute_keeps_the_owner_run_packages_home():
-  document = load_workflow("distribute.yml")
+  action = (
+    gate_workflows.ROOT / ".github" / "actions" / "distribute-sync" / "action.yml"
+  )
   script = "\n".join(
-    step.get("run", "") for step in document["jobs"]["distribute"]["steps"]
+    step.get("run", "")
+    for step in yaml.safe_load(action.read_text(encoding="utf-8"))["runs"]["steps"]
   )
   # The owner pages and the docker packages stay in this repository. Only files
   # a session loads at runtime ride to the target repositories.
