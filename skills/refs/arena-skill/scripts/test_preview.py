@@ -4424,6 +4424,24 @@ def test_shared_save_import():
     assert [task["id"] for task in restored.tasks()["upcoming"]] == ["saved-task"]
 
 
+def test_serve_rejects_nondefault_port():
+  with tempfile.TemporaryDirectory() as state_dir:
+    try:
+      result = subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), "serve", "--port", "8123"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": state_dir},
+        timeout=5,
+      )
+    except subprocess.TimeoutExpired as error:
+      pytest.fail(f"serve accepted port 8123: {error.stdout!r}")
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert f"serve: error: --port must be {preview.DEFAULT_PORT}" in result.stderr
+    assert not (Path(state_dir) / "state.sqlite3").exists()
+
+
 def test_serve_help():
   help_text = subprocess.run(
     [sys.executable, str(Path(preview.__file__)), "serve", "--help"],
@@ -4431,7 +4449,9 @@ def test_serve_help():
     text=True,
     check=True,
   ).stdout
-  assert "default: 8000" in help_text and "--port PORT" in help_text
+  assert preview.DEFAULT_PORT == 8000
+  assert f"default: {preview.DEFAULT_PORT}" in help_text and "--port PORT" in help_text
+  assert "only supported port" in help_text
 
 
 def test_restore_import():

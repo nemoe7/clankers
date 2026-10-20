@@ -7934,7 +7934,7 @@ def main():
     "--port",
     type=int,
     default=DEFAULT_PORT,
-    help=f"Port to bind (default: {DEFAULT_PORT})",
+    help=f"Port to bind (default: {DEFAULT_PORT}; only supported port)",
   )
   init = commands.add_parser("init", help="Create the state directory and its database")
   init.add_argument("--tz", help="An IANA zone for CLI stamps. The TZ env still wins")
@@ -8204,6 +8204,8 @@ def main():
     help="Empty every state table in place; the agent key record survives",
   )
   args = parser.parse_args()
+  if args.command == "serve" and args.port != DEFAULT_PORT:
+    serve.error(f"--port must be {DEFAULT_PORT}")
   # The grouped commands keep one dispatch name per leaf. This map is the only place
   # where a group and a verb become that name.
   verb = getattr(args, "verb", None)

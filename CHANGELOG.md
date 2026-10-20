@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-20
+
+### Changed
+
+- Preview serving: reject ports other than 8000 and identify 8000 as the only supported port.
+
 ## 2026-10-19
 
 ### Added
