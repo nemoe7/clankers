@@ -47,6 +47,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Squash every rotating reminder line to at most 88 characters in caveman register. A cap check holds the limit, and meanings, names, and commands stay.
 
+#### arena
+
+- Forbid spamming `run logs` while a run is live. One diagnosis read stays allowed, and the verdict comes from a later call.
+
 ### Fixed
 
 - Preview reports: refuse a republish when the report has any answer. Unpublish stays available after the owner reads the ack.

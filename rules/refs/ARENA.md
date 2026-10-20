@@ -248,6 +248,7 @@
 - Link each local gate to its task when starting the run; the live run owns the task's blocked state.
 - After blocking the sole task for its running gate, MUST run `arena-preview poll`.
 - NEVER call `get_process_output` to wait for a run.
+- NEVER spam `run logs` while a run is live; read it once for diagnosis and take the verdict from a later call.
 - NEVER run `arena-preview poll` as a gate wait unless the sole remaining task is blocked for that gate.
 - Keep the work moving and read the verdict on the next bash or `arena-preview` call, which prints it once as `run <name> done: exit N`, with one status line per call until then.
 - Read the verdict line before any push.
