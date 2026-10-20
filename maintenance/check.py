@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import yaml
 from markdown_it import MarkdownIt
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -145,8 +146,8 @@ KILO_PAIRS = ("plan.md", "code.md", "debug.md")
 # and `More about you`, each capped at 1,500 characters.
 CHATGPT_FIELDS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt")
 
-# gpt-tokenizer ships its ranks and measures offline.
-# It needs no cache seeding.
+# gpt-tokenizer ships its ranks and measures offline, and needs no cache seeding.
+# Node resolves it from the real root, fixed when a test points ROOT at a temporary tree.
 _NODE_CWD = Path(__file__).resolve().parent.parent
 _TOKEN_COUNT_SCRIPT = """
 const { encode } = require("gpt-tokenizer/encoding/o200k_base");
@@ -270,11 +271,8 @@ def check_paragraph_caps(errors: list[str]) -> None:
     errors.extend(paragraph_violations(doc, path.read_text(encoding="utf-8")))
 
 
-def parse_frontmatter(
-  text: str,
-) -> tuple[dict[str, str], list[str]]:
-  errors: list[str] = []
-
+def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
+  """Read a YAML frontmatter block. A nested mapping or list reads as empty text."""
   if not text.startswith("---\n"):
     return {}, ["missing YAML frontmatter"]
 
@@ -283,84 +281,27 @@ def parse_frontmatter(
   if end < 0:
     return {}, ["unterminated YAML frontmatter"]
 
-  values: dict[str, str] = {}
-  lines = text[4:end].splitlines()
-  index = 0
+  try:
+    loaded = yaml.safe_load(text[4:end])
+  except yaml.YAMLError as error:
+    return {}, [f"invalid YAML frontmatter: {error}"]
 
-  while index < len(lines):
-    line = lines[index]
+  if loaded is None:
+    return {}, []
 
-    if not line.strip():
-      index += 1
-      continue
+  if not isinstance(loaded, dict):
+    return {}, ["YAML frontmatter must be a mapping"]
 
-    # Nested YAML content belongs to the preceding top-level key.
-    if line.startswith((" ", "\t")):
-      index += 1
-      continue
-
-    if ":" not in line:
-      errors.append(f"invalid frontmatter line: {line}")
-      index += 1
-      continue
-
-    key, raw = line.split(":", 1)
-    key = key.strip()
-    raw = raw.strip()
-
-    if not key:
-      errors.append(f"invalid frontmatter line: {line}")
-      index += 1
-      continue
-
-    if raw in {">", "|"}:
-      parts: list[str] = []
-      index += 1
-
-      while index < len(lines) and (
-        lines[index].startswith((" ", "\t")) or not lines[index].strip()
-      ):
-        parts.append(lines[index].strip())
-        index += 1
-
-      values[key] = " ".join(part for part in parts if part)
-      continue
-
-    values[key] = raw.strip('"').strip("'")
-    index += 1
-
-  return values, errors
+  return {
+    str(key): "" if isinstance(value, (dict, list)) else str(value)
+    for key, value in loaded.items()
+  }, []
 
 
 def workflow_description(text: str) -> str:
   """Return a workflow file's frontmatter description, ignoring comments."""
-  if not text.startswith("---\n"):
-    return ""
-
-  end = text.find("\n---", 4)
-
-  if end < 0:
-    return ""
-
-  for line in text[4:end].splitlines():
-    stripped = line.strip()
-
-    if not stripped or stripped.startswith("#"):
-      continue
-
-    # Nested YAML content belongs to the preceding top-level key.
-    if line.startswith((" ", "\t")):
-      continue
-
-    if ":" not in stripped:
-      continue
-
-    key, raw = stripped.split(":", 1)
-
-    if key.strip() == "description":
-      return raw.strip().strip('"').strip("'")
-
-  return ""
+  values, _ = parse_frontmatter(text)
+  return values.get("description", "")
 
 
 def markdown_inline_text(token: Any) -> str:
@@ -474,32 +415,27 @@ def load_token_counts(paths: list[Path]) -> dict[str, int]:
   return _token_counts
 
 
+# Each README budget kind maps to its measurer and the unit the table prints.
+MEASUREMENTS = {
+  "Unicode chars": (lambda path, text: len(text), "chars"),
+  "UTF-8 file size": (lambda path, text: len(text.encode("utf-8")), "B"),
+  "o200k_base": (lambda path, text: load_token_counts([path])[str(path)], "tok"),
+}
+
+
+def measurement(kind: str) -> tuple[Callable[[Path, str], int], str]:
+  try:
+    return MEASUREMENTS[kind]
+  except KeyError:
+    raise ValueError(f"unsupported measurement: {kind}") from None
+
+
 def measure(path: Path, kind: str) -> int:
-  text = path.read_text(encoding="utf-8")
-
-  if kind == "Unicode chars":
-    return len(text)
-
-  if kind == "UTF-8 file size":
-    return len(text.encode("utf-8"))
-
-  if kind == "o200k_base":
-    return load_token_counts([path])[str(path)]
-
-  raise ValueError(f"unsupported measurement: {kind}")
+  return measurement(kind)[0](path, path.read_text(encoding="utf-8"))
 
 
 def format_unit(kind: str) -> str:
-  if kind == "Unicode chars":
-    return "chars"
-
-  if kind == "UTF-8 file size":
-    return "B"
-
-  if kind == "o200k_base":
-    return "tok"
-
-  raise ValueError(f"unsupported measurement: {kind}")
+  return measurement(kind)[1]
 
 
 def update_readme_measurements() -> bool:

@@ -2399,41 +2399,20 @@ def first_blocking_piece(line):
   """Return the first command that ends the inbox-only exemption. Return None only when the line contains an inbox
   call and inert prefixes. A redirect ends the exemption because it hides the reminder. Ignore debug traps that
   silence output."""
-  text = unquote_commands(line)
-  for separator in ("&&", "||", ";", "|", "\n"):
-    text = text.replace(separator, "\x00")
-  for piece in text.split("\x00"):
-    tokens = [token for token in piece.split() if token]
-    if not tokens:
+  for piece in command_pieces(line):
+    tokens, index = piece_tokens(piece)
+    if index >= len(tokens):
       continue
-    # Strip leading assignments like VAR=value and bash invocation.
-    idx = 0
-    while idx < len(tokens) and "=" in tokens[idx] and not tokens[idx].startswith("-"):
-      idx += 1
-    if idx >= len(tokens):
-      continue
-    # Bash itself and its flags are inert for the purpose of the full cmdline.
-    if tokens[idx] == "bash":
-      idx += 1
-      while idx < len(tokens) and tokens[idx].startswith("-"):
-        idx += 1
-        # -c takes a following arg that is the script. Skip it if present
-        # but keep checking remaining pieces via outer split.
-        if idx < len(tokens) and tokens[idx - 1] == "-c":
-          # Split the script by newline and stop here.
-          break
-      if idx >= len(tokens):
-        continue
-    head = tokens[idx].rsplit("/", 1)[-1]
+    head = tokens[index].rsplit("/", 1)[-1]
     if head in INERT_COMMANDS:
       continue
     if head in ("arena-preview", "preview.py"):
-      rest = tokens[idx + 1 :]
+      rest = tokens[index + 1 :]
       # A substitution runs work beside the read. Ignore a plain redirect for debug traps.
       if any(token.startswith("$(") or "`" in token for token in rest):
-        return piece.strip()
+        return piece
       continue
-    return piece.strip()
+    return piece
   return None
 
 
@@ -2449,20 +2428,28 @@ def command_pieces(line):
   return [piece.strip() for piece in text.split("\x00") if piece.strip()]
 
 
-def piece_head(piece):
-  """Name the command a piece runs, past assignments, shell keywords and a bash word."""
+def piece_tokens(piece, keywords=False):
+  """Split a piece into tokens and name its command word, past assignments and a bash
+  word. `keywords` also skips shell keywords, which `piece_head` reads as wrappers."""
   tokens = [token for token in piece.split() if token]
   index = 0
   while (
     index < len(tokens) and "=" in tokens[index] and not tokens[index].startswith("-")
   ):
     index += 1
-  while index < len(tokens) and tokens[index].strip("\"'") in SHELL_KEYWORDS:
-    index += 1
+  if keywords:
+    while index < len(tokens) and tokens[index].strip("\"'") in SHELL_KEYWORDS:
+      index += 1
   if index < len(tokens) and tokens[index] == "bash":
     index += 1
     while index < len(tokens) and tokens[index].startswith("-"):
       index += 1
+  return tokens, index
+
+
+def piece_head(piece):
+  """Name the command a piece runs, past assignments, shell keywords and a bash word."""
+  tokens, index = piece_tokens(piece, keywords=True)
   if index >= len(tokens):
     return ""
   return tokens[index].rsplit("/", 1)[-1].strip("\"'")
@@ -3259,11 +3246,6 @@ def long_run_name(line):
         if word == first and tokens[index + 2 + position] == second:
           return name
   return None
-
-
-def pr_check_line(line):
-  """True when a command piece runs a long run the gate detaches."""
-  return long_run_name(line) is not None
 
 
 def pr_checks_command(argv):

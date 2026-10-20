@@ -858,40 +858,33 @@ def egress_warning(line):
 	if not hosts:return None
 	names=', '.join(hosts);return f"arena-preview gate: {names} sits outside this sandbox's egress allowlist. The TLS handshake fails with SSL_ERROR_SYSCALL, which reads as a transient fault and never clears on a retry. Read it through the fetch_page tool instead."
 def first_blocking_piece(line):
-	text=unquote_commands(line)
-	for separator in('&&','||',';','|','\n'):text=text.replace(separator,'\x00')
-	for piece in text.split('\x00'):
-		tokens=[token for token in piece.split()if token]
-		if not tokens:continue
-		idx=0
-		while idx<len(tokens)and'='in tokens[idx]and not tokens[idx].startswith('-'):idx+=1
-		if idx>=len(tokens):continue
-		if tokens[idx]=='bash':
-			idx+=1
-			while idx<len(tokens)and tokens[idx].startswith('-'):
-				idx+=1
-				if idx<len(tokens)and tokens[idx-1]=='-c':break
-			if idx>=len(tokens):continue
-		head=tokens[idx].rsplit('/',1)[-1]
+	for piece in command_pieces(line):
+		tokens,index=piece_tokens(piece)
+		if index>=len(tokens):continue
+		head=tokens[index].rsplit('/',1)[-1]
 		if head in INERT_COMMANDS:continue
 		if head in('arena-preview','preview.py'):
-			rest=tokens[idx+1:]
-			if any(token.startswith('$(')or'`'in token for token in rest):return piece.strip()
+			rest=tokens[index+1:]
+			if any(token.startswith('$(')or'`'in token for token in rest):return piece
 			continue
-		return piece.strip()
+		return piece
 	return None
 SHELL_KEYWORDS='do','then','else','elif','if','for','until','while','time'
 def command_pieces(line):
 	text=unquote_commands(line)
 	for separator in('&&','||',';','|','\n'):text=text.replace(separator,'\x00')
 	return[piece.strip()for piece in text.split('\x00')if piece.strip()]
-def piece_head(piece):
+def piece_tokens(piece,keywords=False):
 	tokens=[token for token in piece.split()if token];index=0
 	while index<len(tokens)and'='in tokens[index]and not tokens[index].startswith('-'):index+=1
-	while index<len(tokens)and tokens[index].strip('"\'')in SHELL_KEYWORDS:index+=1
+	if keywords:
+		while index<len(tokens)and tokens[index].strip('"\'')in SHELL_KEYWORDS:index+=1
 	if index<len(tokens)and tokens[index]=='bash':
 		index+=1
 		while index<len(tokens)and tokens[index].startswith('-'):index+=1
+	return tokens,index
+def piece_head(piece):
+	tokens,index=piece_tokens(piece,keywords=True)
 	if index>=len(tokens):return''
 	return tokens[index].rsplit('/',1)[-1].strip('"\'')
 def idle_wait(line):
@@ -1169,7 +1162,6 @@ def long_run_name(line):
 			for(first,second,name)in PR_CHECK_NAMES:
 				if word==first and tokens[index+2+position]==second:return name
 	return None
-def pr_check_line(line):return long_run_name(line)is not None
 def pr_checks_command(argv):line=argv[-1]if len(argv)>2 and argv[0]in SHELL_BASENAMES else' '.join(argv);return long_run_name(line)=='pr-checks'
 def detached_seconds(started_at):
 	try:

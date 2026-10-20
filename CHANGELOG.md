@@ -13,6 +13,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Read-set reminders: read files only when current full text is absent from context. Wait 20 minutes after the first eligible command. Then keep 20-minute intervals.
 - Preview task lists: ask whether the current task remains active. Reject misplaced `--task` options.
 - Test guidance: prefer named constants for expected assertion values. Check generated indexes by structure, not sentence text.
+- Maintenance: read skill frontmatter with `yaml.safe_load` and run the prose linter in process. Share the comment scanners, the command-piece tokens and the measurement map.
+- Workflows: call `gate_pr.py --version-bumps` from CI and reuse the prepare action in four workflows.
 
 ## 2026-10-19
 

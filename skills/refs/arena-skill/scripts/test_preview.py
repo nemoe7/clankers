@@ -5566,32 +5566,32 @@ def test_gate_bans_timeout_on_poll():
 def test_a_long_run_line_detaches_the_wait():
   # A long run uses the background. The tick detaches it under a run name and writes status. The turn continues.
   # A line that only prints the words stays fine.
-  assert preview.pr_check_line("gh pr checks 7") is True
-  assert preview.pr_check_line("gh pr checks 7 --watch") is True
-  assert preview.pr_check_line("cd repo && gh pr checks 7") is True
-  assert preview.pr_check_line("ARENA=1 gh run watch 12345") is True
-  assert preview.pr_check_line("arena-preview run ci -- gh pr checks 7") is False
-  assert preview.pr_check_line("echo gh pr checks 7") is False
-  assert preview.pr_check_line("gh pr view 7") is False
-  assert preview.pr_check_line("gh run list") is False
-  assert preview.pr_check_line("gh -R nemoe7/clankers pr checks 7") is True
-  assert preview.pr_check_line("gh --repo nemoe7/clankers pr checks 7") is True
-  assert preview.pr_check_line("gh -R nemoe7/clankers run watch 7") is True
-  assert preview.pr_check_line("env gh pr checks 7") is True
-  assert preview.pr_check_line("command gh pr checks 7") is True
-  assert preview.pr_check_line("timeout 60 gh pr checks 7") is True
-  assert preview.pr_check_line("xargs -n1 gh pr checks") is True
-  assert preview.pr_check_line("result=$(gh pr checks 7)") is True
-  assert preview.pr_check_line("(gh pr checks 7)") is True
+  assert preview.long_run_name("gh pr checks 7") == "pr-checks"
+  assert preview.long_run_name("gh pr checks 7 --watch") == "pr-checks"
+  assert preview.long_run_name("cd repo && gh pr checks 7") == "pr-checks"
+  assert preview.long_run_name("ARENA=1 gh run watch 12345") == "run-watch"
+  assert preview.long_run_name("arena-preview run ci -- gh pr checks 7") is None
+  assert preview.long_run_name("echo gh pr checks 7") is None
+  assert preview.long_run_name("gh pr view 7") is None
+  assert preview.long_run_name("gh run list") is None
+  assert preview.long_run_name("gh -R nemoe7/clankers pr checks 7") is not None
+  assert preview.long_run_name("gh --repo nemoe7/clankers pr checks 7") is not None
+  assert preview.long_run_name("gh -R nemoe7/clankers run watch 7") is not None
+  assert preview.long_run_name("env gh pr checks 7") is not None
+  assert preview.long_run_name("command gh pr checks 7") is not None
+  assert preview.long_run_name("timeout 60 gh pr checks 7") is not None
+  assert preview.long_run_name("xargs -n1 gh pr checks") is not None
+  assert preview.long_run_name("result=$(gh pr checks 7)") is not None
+  assert preview.long_run_name("(gh pr checks 7)") is not None
   # A family word inside quotes is text, never a command, so a quoted reply stays fine,
   # and a quoted substitution keeps its own hole: the body reads as text.
-  assert preview.pr_check_line('echo "gh pr checks 7"') is False
-  assert preview.pr_check_line("echo 'gh pr checks 7'") is False
-  assert preview.pr_check_line("gh pr view 7 --json checks") is False
+  assert preview.long_run_name('echo "gh pr checks 7"') is None
+  assert preview.long_run_name("echo 'gh pr checks 7'") is None
+  assert preview.long_run_name("gh pr view 7 --json checks") is None
   # The test runs join the check waits, because a suite can outrun the call that starts it.
-  assert preview.pr_check_line("pytest -q") is True
-  assert preview.pr_check_line(".venv/bin/python -m pytest -q") is True
-  assert preview.pr_check_line("node --test maintenance/workflows/x.cjs") is True
+  assert preview.long_run_name("pytest -q") is not None
+  assert preview.long_run_name(".venv/bin/python -m pytest -q") is not None
+  assert preview.long_run_name("node --test maintenance/workflows/x.cjs") is not None
   assert preview.long_run_name("pytest -q") == "pytest"
   assert preview.long_run_name("python3 -m pytest -q") == "pytest"
   assert preview.long_run_name("node --test x.cjs") == "node-tests"
@@ -5622,7 +5622,7 @@ def test_a_long_run_line_detaches_the_wait():
   }
   for line, name in runners.items():
     assert preview.long_run_name(line) == name, line
-    assert preview.pr_check_line(line) is True, line
+    assert preview.long_run_name(line) is not None, line
   # A build command in the same family stays legal, as does a runner named as text.
   builds = (
     "npm install",
@@ -5644,11 +5644,11 @@ def test_a_long_run_line_detaches_the_wait():
     "grep -r 'go test' .",
   )
   for line in builds:
-    assert preview.pr_check_line(line) is False, line
-  assert preview.pr_check_line("echo pytest") is False
-  assert preview.pr_check_line("python -m pip install pytest") is False
-  assert preview.pr_check_line("grep -r pytest .") is False
-  assert preview.pr_check_line("node --version") is False
+    assert preview.long_run_name(line) is None, line
+  assert preview.long_run_name("echo pytest") is None
+  assert preview.long_run_name("python -m pip install pytest") is None
+  assert preview.long_run_name("grep -r pytest .") is None
+  assert preview.long_run_name("node --version") is None
   with tempfile.TemporaryDirectory() as checks_dir:
     checks_script = str(Path(preview.__file__))
 

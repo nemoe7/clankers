@@ -350,12 +350,20 @@ def _run_gate(script: Path, *arguments: str) -> tuple[bool, str]:
   return result.returncode == 0, (result.stdout + result.stderr).strip()
 
 
+def bump_range(revision_range: str) -> tuple[str, str] | None:
+  """Return the base and head of a bump range, or None when the base is missing."""
+  base, _, head = revision_range.partition("..")
+  if not base or not head or set(base) == {"0"}:
+    return None
+  return base, head
+
+
 def run_version_checks(revision_range: str) -> list[Failure]:
-  """Validate the versioned modules the way the pull request's Version Bumps job does.
+  """Validate the versioned modules the way the Version Bumps job does.
 
   The job validates both module gates, then requires a higher version for every changed
-  module. A module the base does not hold skips its bump, exactly as the job skips it. The
-  contract runs both halves so a local pass matches the remote verdict."""
+  module. A module the base does not hold skips its bump, and a missing base skips every
+  bump, so a local pass matches the remote verdict."""
   failures: list[Failure] = []
   for script, arguments in (
     (USERSCRIPT_GATE, ("--self-check",)),
@@ -365,7 +373,10 @@ def run_version_checks(revision_range: str) -> list[Failure]:
     passed, output = _run_gate(script, *arguments)
     if not passed:
       failures.append(Failure("versioned modules", output))
-  base, _, head = revision_range.partition("..")
+  bounds = bump_range(revision_range)
+  if bounds is None:
+    return failures
+  base, head = bounds
   changed = _git(
     "diff", "--name-only", f"{base}..{head}", "--", *VERSIONED_PATHS
   ).split()
@@ -436,9 +447,23 @@ def main(argv: list[str] | None = None) -> int:
     action="store_true",
     help="skip the ASD-STE lint of the PR body",
   )
+  parser.add_argument(
+    "--version-bumps",
+    dest="version_bumps",
+    help="run only the version bump checks for a BASE..HEAD range",
+  )
   arguments = parser.parse_args(argv)
+  if arguments.version_bumps:
+    failures = run_version_checks(arguments.version_bumps)
+    for failure in failures:
+      print(f"::error::{failure}")
+    if failures:
+      print(f"{len(failures)} version bump violation(s)")
+      return 1
+    print("Versioned modules passed")
+    return 0
   if not (arguments.revision_range or arguments.pr_title or arguments.body_file):
-    parser.error("give --range, --pr-title, --body-file, or several")
+    parser.error("give --range, --pr-title, --body-file, --version-bumps, or several")
   failures = check(
     arguments.revision_range,
     arguments.pr_title,

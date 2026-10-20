@@ -86,13 +86,10 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: git fetch --no-tags origin "$BASE_REF"
 
-      - name: Set Up Python
-        uses: actions/setup-python@v7
+      - name: Prepare The Runner
+        uses: ./.github/actions/prepare
         with:
-          # Keep the manifest validation on the interpreter the other workflows use.
-          python-version: "3.11"
-          # The built-in pip cache keys on requirements.txt, so no cache step runs.
-          cache: pip
+          pip-cache-key: artifacts-validate
 
       - name: Install Validation Dependencies
         run: python -m pip install -r requirements.txt
@@ -134,13 +131,10 @@ jobs:
       - name: Check Out Repository
         uses: actions/checkout@v7
 
-      - name: Set Up Python
-        uses: actions/setup-python@v7
+      - name: Prepare The Runner
+        uses: ./.github/actions/prepare
         with:
-          # Keep the manifest validation on the interpreter the other workflows use.
-          python-version: "3.11"
-          # The built-in pip cache keys on requirements.txt, so no cache step runs.
-          cache: pip
+          pip-cache-key: artifacts-package
 
       - name: Install Validation Dependencies
         run: python -m pip install -r requirements.txt
@@ -211,11 +205,10 @@ jobs:
     steps:
       - name: Check Out The Pushed Rules
         uses: actions/checkout@v7
-      - name: Set Up Python
-        uses: actions/setup-python@v7
+      - name: Prepare The Runner
+        uses: ./.github/actions/prepare
         with:
-          python-version: "3.11"
-          cache: pip
+          pip-cache-key: artifacts-publish
       - name: Install Test Dependencies
         run: python -m pip install pytest==9.1.1 pytest-xdist==3.6.1
       - name: Test Reconciliation Fixtures Without GitHub Credentials
@@ -249,12 +242,10 @@ jobs:
           # The release step uses GH_TOKEN, so the checkout keeps no credentials.
           persist-credentials: false
 
-      - name: Set Up Python
-        uses: actions/setup-python@v7
+      - name: Prepare The Runner
+        uses: ./.github/actions/prepare
         with:
-          # Keep the archive validation on the interpreter the other workflows use.
-          python-version: "3.11"
-          cache: pip
+          pip-cache-key: artifacts-release
 
       - name: Install Validation Dependencies
         run: python -m pip install -r requirements.txt

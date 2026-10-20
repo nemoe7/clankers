@@ -42,9 +42,15 @@ VENDORED_PARTS = (
 )
 
 
-def prose(path: Path) -> str:
-  """Collect Python comments and docstrings from one file."""
-  return python_prose(path.read_text(encoding="utf-8"))
+def python_comments(source: str) -> list[tuple[str, int, int]]:
+  """Collect Python comments with their source line spans."""
+  comments: list[tuple[str, int, int]] = []
+  for token in tokenize.generate_tokens(io.StringIO(source).readline):
+    if token.type == tokenize.COMMENT:
+      comments.append(
+        (token.string.lstrip("# ").strip(), token.start[0], token.start[0])
+      )
+  return comments
 
 
 def python_sections(source: str) -> list[str]:
@@ -64,27 +70,8 @@ def python_sections(source: str) -> list[str]:
         text = first.value.value.strip()
         if text:
           sections.append(text)
-  for token in tokenize.generate_tokens(io.StringIO(source).readline):
-    if token.type == tokenize.COMMENT:
-      text = token.string.lstrip("# ").strip()
-      if text:
-        sections.append(text)
+  sections.extend(text for text, _, _ in python_comments(source) if text)
   return sections
-
-
-def joined_comments(comments: list[str]) -> str:
-  """Join nonempty comment lines for callers that need one text value."""
-  return "\n".join(
-    line.strip()
-    for comment in comments
-    for line in comment.splitlines()
-    if line.strip()
-  )
-
-
-def python_prose(source: str) -> str:
-  """Collect Python comments and docstrings from source text."""
-  return joined_comments(python_sections(source))
 
 
 @lru_cache(maxsize=128)
@@ -114,82 +101,76 @@ def javascript_comments(
   return tuple(comments)
 
 
-def slash_sections(source: str, skip_metadata: bool = False) -> list[str]:
-  """Collect slash and block comments without string contents."""
-  comments: list[str] = []
-  in_metadata = False
+def clean_comment(text: str) -> str:
+  """Strip line decoration and outer whitespace from one comment block."""
+  return "\n".join(
+    line.strip().lstrip("*").strip() for line in text.splitlines()
+  ).strip()
+
+
+def slash_comments(source: str) -> list[tuple[str, int, int]]:
+  """Collect slash and block comments with their source line spans."""
+  comments: list[tuple[str, int, int]] = []
   state = "code"
   quote = ""
   buffer = ""
+  line = 1
+  start_line = 1
   index = 0
-
-  def add_comment(text: str) -> None:
-    nonlocal in_metadata
-    clean = "\n".join(
-      line.strip().lstrip("*").strip() for line in text.splitlines()
-    ).strip()
-    if skip_metadata and clean == USERSCRIPT_HEADER_START:
-      in_metadata = True
-      return
-    if skip_metadata and clean == USERSCRIPT_HEADER_END:
-      in_metadata = False
-      return
-    if clean and not in_metadata:
-      comments.append(clean)
 
   while index < len(source):
     char = source[index]
     next_char = source[index + 1] if index + 1 < len(source) else ""
+    consumed = 1
     if state == "string":
       if char == "\\":
-        index += 2
-        continue
-      if char == quote:
+        consumed = 2
+      elif char == quote:
         state = "code"
-      index += 1
-      continue
-    if state == "line-comment":
+    elif state == "line-comment":
       if char == "\n":
-        add_comment(buffer)
+        comments.append((clean_comment(buffer), start_line, line))
         buffer = ""
         state = "code"
       else:
         buffer += char
-      index += 1
-      continue
-    if state == "block-comment":
+    elif state == "block-comment":
       if char == "*" and next_char == "/":
-        add_comment(buffer)
+        comments.append((clean_comment(buffer), start_line, line))
         buffer = ""
         state = "code"
-        index += 2
-        continue
-      buffer += char
-      index += 1
-      continue
-    if char in "'\"`":
+        consumed = 2
+      else:
+        buffer += char
+    elif char in "'\"`":
       state = "string"
       quote = char
-      index += 1
-      continue
-    if char == "/" and next_char == "/":
+    elif char == "/" and next_char == "/":
       state = "line-comment"
-      index += 2
-      continue
-    if char == "/" and next_char == "*":
+      start_line = line
+      buffer = ""
+      consumed = 2
+    elif char == "/" and next_char == "*":
       state = "block-comment"
-      index += 2
-      continue
-    index += 1
+      start_line = line
+      buffer = ""
+      consumed = 2
+    line += source[index : index + consumed].count("\n")
+    index += consumed
+
   if state == "line-comment":
-    add_comment(buffer)
+    comments.append((clean_comment(buffer), start_line, line))
   return comments
 
 
-def hash_sections(source: str, suffix: str) -> list[str]:
-  """Collect hash and INI semicolon comments outside quoted strings."""
-  comments: list[str] = []
-  for line in source.splitlines():
+def hash_comments(
+  source: str, suffix: str, skip_shebang: bool = False
+) -> list[tuple[str, int, int]]:
+  """Collect hash and INI semicolon comments with their source line spans."""
+  comments: list[tuple[str, int, int]] = []
+  for number, line in enumerate(source.splitlines(), start=1):
+    if skip_shebang and line.startswith("#!"):
+      continue
     quote = ""
     escaped = False
     for index, char in enumerate(line):
@@ -211,48 +192,59 @@ def hash_sections(source: str, suffix: str) -> list[str]:
         suffix == ".ini" and char == ";" and (index == 0 or line[index - 1].isspace())
       )
       if starts_comment:
-        text = line[index + 1 :].strip()
-        if text:
-          comments.append(text)
+        comments.append((line[index + 1 :].strip(), number, number))
         break
   return comments
 
 
-def html_sections(source: str) -> list[str]:
-  """Collect HTML and XML comment blocks."""
-  comments: list[str] = []
-  start = 0
+def html_comments(source: str) -> list[tuple[str, int, int]]:
+  """Collect HTML and XML comment blocks with their source line spans."""
+  comments: list[tuple[str, int, int]] = []
+  cursor = 0
   while True:
-    start = source.find("<!--", start)
+    start = source.find("<!--", cursor)
     if start < 0:
       break
     end = source.find("-->", start + 4)
     if end < 0:
       break
-    text = source[start + 4 : end].strip()
-    if text:
-      comments.append(text)
-    start = end + 3
+    first = source.count("\n", 0, start) + 1
+    last = source.count("\n", 0, end) + 1
+    comments.append((source[start + 4 : end].strip(), first, last))
+    cursor = end + 3
   return comments
 
 
-def batch_sections(source: str) -> list[str]:
-  """Collect batch REM and double-colon comments."""
-  comments: list[str] = []
-  for line in source.splitlines():
+def batch_comments(source: str) -> list[tuple[str, int, int]]:
+  """Collect batch REM and double-colon comments with their source line spans."""
+  comments: list[tuple[str, int, int]] = []
+  for number, line in enumerate(source.splitlines(), start=1):
     stripped = line.lstrip()
     if stripped.startswith("@"):
       stripped = stripped[1:].lstrip()
     upper = stripped.upper()
     if upper == "REM" or upper.startswith("REM "):
-      text = stripped[3:].lstrip()
-      if text:
-        comments.append(text)
+      comments.append((stripped[3:].lstrip(), number, number))
     elif stripped.startswith("::"):
-      text = stripped[2:].strip()
-      if text:
-        comments.append(text)
+      comments.append((stripped[2:].strip(), number, number))
   return comments
+
+
+def span_comments(
+  path: Path, source: str, skip_shebang: bool = False
+) -> list[tuple[str, int, int]] | None:
+  """Return the comment spans for one code path, or None when no scanner covers it."""
+  if path.suffix in JAVASCRIPT_SUFFIXES:
+    return list(javascript_comments(source, path.name.endswith(USERSCRIPT_SUFFIX)))
+  if path.suffix in SLASH_SUFFIXES:
+    return slash_comments(source)
+  if path.suffix in HTML_SUFFIXES:
+    return html_comments(source)
+  if path.suffix in HASH_SUFFIXES or path.name in SPECIAL_CODE_NAMES:
+    return hash_comments(source, path.suffix, skip_shebang)
+  if path.suffix == ".bat":
+    return batch_comments(source)
+  return None
 
 
 def userscript_metadata_sections(source: str) -> list[str]:
@@ -281,200 +273,30 @@ def source_sections(path: Path, source: str) -> list[str]:
   """Collect ordinary comments and docstrings from one tracked code file."""
   if path.suffix == ".py":
     return python_sections(source)
-  if path.suffix in JAVASCRIPT_SUFFIXES:
-    return [
-      text
-      for text, _, _ in javascript_comments(
-        source, path.name.endswith(USERSCRIPT_SUFFIX)
-      )
-      if text
-    ]
-  if path.suffix in SLASH_SUFFIXES:
-    return slash_sections(source)
-  if path.suffix in HTML_SUFFIXES:
-    return html_sections(source)
-  if path.suffix in HASH_SUFFIXES or path.name in SPECIAL_CODE_NAMES:
-    return hash_sections(source, path.suffix)
-  if path.suffix == ".bat":
-    return batch_sections(source)
-  return []
+  spans = span_comments(path, source)
+  return [text for text, _, _ in spans if text] if spans is not None else []
 
 
-def source_prose(path: Path, source: str) -> str:
-  """Collect ordinary comments and docstrings as one text value."""
-  return joined_comments(source_sections(path, source))
-
-
-def userscript_prose(source: str) -> str:
-  """Collect non-metadata comments from one userscript source."""
-  return joined_comments(
-    [text for text, _, _ in javascript_comments(source, True) if text]
-  )
-
-
-def slash_comment_lines(source: str, skip_metadata: bool = False) -> set[int]:
-  """Collect physical lines that hold slash or block comments."""
-  lines: set[int] = set()
-  in_metadata = False
-  state = "code"
-  quote = ""
-  buffer = ""
-  line = 1
-  start_line = 1
-  index = 0
-
-  while index < len(source):
-    char = source[index]
-    next_char = source[index + 1] if index + 1 < len(source) else ""
-    if state == "string":
-      if char == "\\":
-        index += 2
-        continue
-      if char == quote:
-        state = "code"
-      if char == "\n":
-        line += 1
-      index += 1
-      continue
-    if state == "line-comment":
-      if char == "\n":
-        text = buffer.strip()
-        if skip_metadata and text == USERSCRIPT_HEADER_START:
-          in_metadata = True
-        elif skip_metadata and text == USERSCRIPT_HEADER_END:
-          in_metadata = False
-        elif not in_metadata:
-          lines.add(start_line)
-        buffer = ""
-        state = "code"
-        line += 1
-      else:
-        buffer += char
-      index += 1
-      continue
-    if state == "block-comment":
-      lines.add(line)
-      if char == "*" and next_char == "/":
-        state = "code"
-        index += 2
-        continue
-      if char == "\n":
-        line += 1
-      index += 1
-      continue
-    if char in "'\"`":
-      state = "string"
-      quote = char
-    elif char == "/" and next_char == "/":
-      state = "line-comment"
-      start_line = line
-      buffer = ""
-      index += 1
-    elif char == "/" and next_char == "*":
-      state = "block-comment"
-      lines.add(line)
-      index += 1
-    elif char == "\n":
-      line += 1
-    index += 1
-
-  if state == "line-comment":
-    text = buffer.strip()
-    if (
-      not (skip_metadata and text in {USERSCRIPT_HEADER_START, USERSCRIPT_HEADER_END})
-      and not in_metadata
-    ):
-      lines.add(start_line)
-  return lines
-
-
-def hash_comment_lines(source: str, suffix: str) -> set[int]:
-  """Collect physical lines that hold hash or INI comments."""
-  comments: set[int] = set()
-  for number, line in enumerate(source.splitlines(), start=1):
-    if line.startswith("#!"):
-      continue
-    quote = ""
-    escaped = False
-    for index, char in enumerate(line):
-      if quote:
-        if escaped:
-          escaped = False
-        elif char == "\\":
-          escaped = True
-        elif char == quote:
-          quote = ""
-        continue
-      if char in "'\"":
-        quote = char
-        continue
-      starts_hash = char == "#" and (
-        suffix == ".toml" or index == 0 or line[index - 1].isspace()
-      )
-      starts_ini = (
-        suffix == ".ini" and char == ";" and (index == 0 or line[index - 1].isspace())
-      )
-      if starts_hash or starts_ini:
-        comments.add(number)
-        break
-  return comments
-
-
-def html_comment_lines(source: str) -> set[int]:
-  """Collect physical lines that hold HTML or XML comments."""
-  lines: set[int] = set()
-  start = 0
-  while True:
-    start = source.find("<!--", start)
-    if start < 0:
-      return lines
-    end = source.find("-->", start + 4)
-    if end < 0:
-      return lines
-    first = source.count("\n", 0, start) + 1
-    last = source.count("\n", 0, end) + 1
-    lines.update(range(first, last + 1))
-    start = end + 3
-
-
-def batch_comment_lines(source: str) -> set[int]:
-  """Collect physical lines that hold batch comments."""
-  comments: set[int] = set()
-  for number, line in enumerate(source.splitlines(), start=1):
-    stripped = line.lstrip()
-    if stripped.startswith("@"):
-      stripped = stripped[1:].lstrip()
-    upper = stripped.upper()
-    if upper == "REM" or upper.startswith("REM ") or stripped.startswith("::"):
-      comments.add(number)
-  return comments
+def python_comment_lines(source: str) -> set[int]:
+  """Collect Python comment lines beside their spans, never a shebang."""
+  lines = source.splitlines()
+  return {
+    first
+    for _, first, _ in python_comments(source)
+    if not lines[first - 1].startswith("#!")
+  }
 
 
 def comment_lines(path: Path, source: str) -> set[int]:
   """Collect physical lines that hold ordinary code comments."""
   if path.suffix == ".py":
-    return {
-      token.start[0]
-      for token in tokenize.generate_tokens(io.StringIO(source).readline)
-      if token.type == tokenize.COMMENT and not token.string.startswith("#!")
-    }
-  if path.suffix in JAVASCRIPT_SUFFIXES:
-    return {
-      line
-      for _, first, last in javascript_comments(
-        source, path.name.endswith(USERSCRIPT_SUFFIX)
-      )
-      for line in range(first, last + 1)
-    }
-  if path.suffix in SLASH_SUFFIXES:
-    return slash_comment_lines(source)
-  if path.suffix in HTML_SUFFIXES:
-    return html_comment_lines(source)
-  if path.suffix in HASH_SUFFIXES or path.name in SPECIAL_CODE_NAMES:
-    return hash_comment_lines(source, path.suffix)
-  if path.suffix == ".bat":
-    return batch_comment_lines(source)
-  return set()
+    return python_comment_lines(source)
+  spans = span_comments(path, source, skip_shebang=True)
+  return (
+    {line for _, first, last in spans for line in range(first, last + 1)}
+    if spans is not None
+    else set()
+  )
 
 
 def is_vendored(path: Path) -> bool:

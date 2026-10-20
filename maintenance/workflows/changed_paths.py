@@ -14,26 +14,16 @@ from collections.abc import Mapping, Sequence
 from fnmatch import fnmatch
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
 EMPTY_BASE = "0" * 40
 ARTIFACTS = ".github/workflows/artifacts.yml"
 
-# The versioned modules a bump check guards, and the preview paths a test run follows.
-VERSION_PATHS = (
-  "userscripts/arena.user.js",
-  "userscripts/chatgpt.user.js",
-  "gpt-plugins/plugin.json",
-  "gpt-plugins/skills",
-)
-# The list carries the entries the inline step had, dead `github/workflows` entry
-# included, so this move changes no trigger.
+# The preview paths a test run follows.
 PREVIEW_PATHS = (
   "skills/refs/arena-skill",
   "skills/arena-skill",
   ".agents/skills/arena-skill",
   "maintenance/minify/minify.py",
   "maintenance/minify/test_minify.py",
-  "github/workflows",
   "pytest.ini",
   "package.json",
   "package-lock.json",
@@ -101,25 +91,6 @@ def changed_files(base: str, paths: Sequence[str], repo: str = ".") -> list[str]
   return [line for line in result.stdout.splitlines() if line]
 
 
-def step_version_bumps(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
-  """Report the base and the changed versioned modules for the bump enforcement."""
-  base = event_base(env, repo)
-  if base is None:
-    write_output(output, "base", "missing")
-    write_output(output, "changed", "")
-    print("Base commit is missing; version validation runs without the bump check.")
-    return 0
-  write_output(output, "base", base)
-  files = changed_files(base, VERSION_PATHS, repo)
-  if not files:
-    write_output(output, "changed", "")
-    print("No versioned modules changed.")
-    return 0
-  print("\n".join(["Affected files:", *files]))
-  write_output(output, "changed", "\n".join(files))
-  return 0
-
-
 def step_preview_tests(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
   """Report whether this change touches a preview path, so the tests may skip."""
   base = event_base(env, repo)
@@ -178,7 +149,6 @@ def step_artifacts(env: Mapping[str, str], output: Path, repo: str = ".") -> int
 
 
 STEPS = {
-  "version-bumps": step_version_bumps,
   "preview-tests": step_preview_tests,
   "artifacts": step_artifacts,
 }

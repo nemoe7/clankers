@@ -139,7 +139,7 @@ Vendored code stays outside the code target. Required userscript metadata stays,
 python3 maintenance/check.py --update
 ```
 
-`check.py` needs `markdown-it-py` from pip to parse the README budget table, and the npm package `gpt-tokenizer` to measure `o200k_base` tokens. Everything else is the Python standard library.
+`check.py` needs `markdown-it-py` from pip to parse the README budget table, `pyyaml` to read skill frontmatter, and the npm package `gpt-tokenizer` to measure `o200k_base` tokens. Everything else is the Python standard library.
 
 ```bash
 python3 -m pip install -r requirements.txt

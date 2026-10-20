@@ -1,9 +1,7 @@
 """Lint covered prose and tracked code comments. Run: python maintenance/lint_prose.py"""
 
 import importlib.util
-import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -52,11 +50,6 @@ def comment_block_violations(path: Path, source: str) -> list[str]:
   return violations
 
 
-def userscript_comment_block_violations(label: str, source: str) -> list[str]:
-  """Report non-metadata userscript comment blocks above the line cap."""
-  return comment_block_violations(Path(label), source)
-
-
 def markdown_targets() -> list[Path]:
   """Collect docs, CHANGELOG and every README outside the skip set."""
   found: list[Path] = []
@@ -72,31 +65,21 @@ BULLET_SENTENCE_CAP = 3
 
 
 def lint(label: str, text: str, adr: bool, strict: bool = False) -> int:
-  """Run the linter and optionally fail on advisory findings."""
+  """Run the linter once, failing on a hard finding, or on any finding in strict mode."""
   if adr and ADR_REFERENCE.search(text):
     print(f"--- {label}\nA comment or docstring refers to an ADR.")
     return 1
-  run = subprocess.run(
-    [sys.executable, str(LINTER), "--json"],
-    input=text,
-    capture_output=True,
-    text=True,
-    check=False,
-  )
-  if run.returncode not in {0, 1}:
-    print(f"--- {label}\n{run.stderr.strip()}")
-    return 1
-  report = json.loads(run.stdout)
-  findings = report["violations"]
-  if findings and (strict or run.returncode):
-    print(f"--- {label}")
-    for finding in findings:
-      print(
-        f"{finding['line']}:{finding['col']} {finding['level']} "
-        f"{finding['rule']}: {finding['message']}"
-      )
-    return 1
-  return 0
+  findings, _ = ste_linter().lint(text, filename=label)
+  hard = any(item["level"] == "advisory-free" for item in findings)
+  if not findings or not (strict or hard):
+    return 0
+  print(f"--- {label}")
+  for finding in findings:
+    print(
+      f"{finding['line']}:{finding['col']} {finding['level']} "
+      f"{finding['rule']}: {finding['message']}"
+    )
+  return 1
 
 
 def ste_linter():

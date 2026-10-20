@@ -59,18 +59,6 @@ def outputs(path: Path) -> str:
   return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
-def read_output(path: Path, name: str) -> str:
-  """Read one step output back, in either the single-line or the heredoc form."""
-  text = outputs(path)
-  marker = f"{name}<<EOF\n"
-  if marker in text:
-    return text.split(marker, 1)[1].split("\nEOF\n", 1)[0]
-  for line in text.splitlines():
-    if line.startswith(f"{name}="):
-      return line.split("=", 1)[1]
-  raise AssertionError(f"no {name} output in {text!r}")
-
-
 def test_event_base_reads_each_event_payload(tmp_path):
   repo = init_repo(tmp_path)
   base = base_of(repo)
@@ -100,43 +88,10 @@ def test_changed_files_limits_the_diff_to_the_paths(tmp_path):
   repo = init_repo(tmp_path)
   base = base_of(repo)
   commit_change(repo, "gpt-plugins/plugin.json")
-  assert changed_paths.changed_files(base, changed_paths.VERSION_PATHS, repo) == [
+  assert changed_paths.changed_files(base, ("gpt-plugins",), repo) == [
     "gpt-plugins/plugin.json"
   ]
   assert changed_paths.changed_files(base, ("docs",), repo) == []
-
-
-def test_version_bumps_step_writes_the_base_and_the_changed_list(tmp_path):
-  repo = init_repo(tmp_path)
-  base = base_of(repo)
-  commit_change(repo, "gpt-plugins/plugin.json")
-  out = tmp_path / "out.txt"
-  assert changed_paths.step_version_bumps({"PUSH_BEFORE": base}, out, str(repo)) == 0
-  assert read_output(out, "base") == base
-  assert read_output(out, "changed") == "gpt-plugins/plugin.json"
-
-
-def test_version_bumps_step_writes_a_multiline_changed_list(tmp_path):
-  repo = init_repo(tmp_path)
-  base = base_of(repo)
-  commit_change(repo, "gpt-plugins/plugin.json")
-  commit_change(repo, "userscripts/arena.user.js", "// touched\n")
-  out = tmp_path / "out.txt"
-  assert changed_paths.step_version_bumps({"PUSH_BEFORE": base}, out, str(repo)) == 0
-  assert read_output(out, "changed").splitlines() == [
-    "gpt-plugins/plugin.json",
-    "userscripts/arena.user.js",
-  ]
-  assert "changed<<EOF\n" in outputs(out)
-
-
-def test_version_bumps_step_names_a_missing_base(tmp_path, capsys):
-  repo = init_repo(tmp_path)
-  out = tmp_path / "out.txt"
-  assert changed_paths.step_version_bumps({"PUSH_BEFORE": ""}, out, str(repo)) == 0
-  text = outputs(out)
-  assert "base=missing\n" in text and "changed=\n" in text
-  assert "Base commit is missing" in capsys.readouterr().out
 
 
 def test_preview_tests_step_flags_a_preview_change(tmp_path):

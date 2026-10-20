@@ -49,11 +49,10 @@ jobs:
       - name: Lint The Workflows
         run: actionlint -color .github/workflows/*.yml
 
-      - name: Set Up Python
-        uses: actions/setup-python@v7
+      - name: Prepare The Runner
+        uses: ./.github/actions/prepare
         with:
-          python-version: "3.11"
-          cache: pip
+          pip-cache-key: workflow-security-lint
 
       - name: Install zizmor
         run: python -m pip install -r requirements.txt
@@ -70,11 +69,10 @@ jobs:
       - name: Check Out Repository
         uses: actions/checkout@v7
 
-      - name: Set Up Python
-        uses: actions/setup-python@v7
+      - name: Prepare The Runner
+        uses: ./.github/actions/prepare
         with:
-          python-version: "3.11"
-          cache: pip
+          pip-cache-key: workflow-security-audit
 
       - name: Install The Parser
         run: python -m pip install -r requirements.txt

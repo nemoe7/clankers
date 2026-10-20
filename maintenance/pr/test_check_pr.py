@@ -358,3 +358,20 @@ def test_the_contract_accepts_a_bumped_userscript(tmp_path: Path, monkeypatch):
 
   monkeypatch.setattr(gate_pr, "_git", fake_git)
   assert gate_pr.run_version_checks("base..HEAD") == []
+
+
+def test_the_bump_range_skips_a_missing_base():
+  assert gate_pr.bump_range("0" * 40 + "..abc") is None
+  assert gate_pr.bump_range("..abc") is None
+  assert gate_pr.bump_range("abc..") is None
+  assert gate_pr.bump_range("abc..def") == ("abc", "def")
+
+
+def test_the_version_bump_mode_reports_failures(monkeypatch, capsys):
+  monkeypatch.setattr(
+    gate_pr,
+    "run_version_checks",
+    lambda value: [gate_pr.Failure("version bumps", "stale")],
+  )
+  assert gate_pr.main(["--version-bumps", "base..HEAD"]) == 1
+  assert "version bump violation" in capsys.readouterr().out

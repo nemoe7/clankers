@@ -9,7 +9,7 @@ import extract_prose
 import lint_prose
 
 
-def test_userscript_prose_skips_metadata_and_keeps_code_comments():
+def test_userscript_sections_skip_metadata_and_keep_code_comments():
   source = """// ==UserScript==
 // @name Example
 // ==/UserScript==
@@ -19,9 +19,10 @@ const url = "https://example.test";
 // Write the state.
 """
 
-  assert (
-    extract_prose.userscript_prose(source) == "Prepare the state.\nWrite the state."
-  )
+  assert extract_prose.source_sections(Path("userscripts/example.user.js"), source) == [
+    "Prepare the state.",
+    "Write the state.",
+  ]
 
 
 def test_userscript_metadata_sections_collect_required_prose():
@@ -48,8 +49,8 @@ def test_userscript_comment_blocks_exempt_only_metadata():
 // Read the state.
 """
 
-  assert lint_prose.userscript_comment_block_violations(
-    "userscripts/example.user.js", source
+  assert lint_prose.comment_block_violations(
+    Path("userscripts/example.user.js"), source
   ) == ["userscripts/example.user.js:5: comment block has 3 lines; the cap is 2"]
 
 
@@ -74,7 +75,7 @@ def test_comment_blocks_exempt_required_directive_markers():
   assert lint_prose.comment_block_violations(Path("install.sh"), source) == []
 
 
-def test_source_prose_skips_strings_and_userscript_metadata():
+def test_source_sections_skip_strings_and_userscript_metadata():
   source = """// ==UserScript==
 // @name Example
 // ==/UserScript==
@@ -83,20 +84,21 @@ const url = "https://example.test";
 /* Read the state. */
 """
 
-  assert extract_prose.source_prose(Path("userscripts/example.user.js"), source) == (
-    "Set the URL.\nRead the state."
-  )
+  assert extract_prose.source_sections(Path("userscripts/example.user.js"), source) == [
+    "Set the URL.",
+    "Read the state.",
+  ]
 
 
-def test_source_prose_reads_hash_comments_outside_strings():
+def test_source_sections_read_hash_comments_outside_strings():
   source = """name: "#not-a-comment" # Read the name.
 # Set the name.
 """
 
-  assert (
-    extract_prose.source_prose(Path("example.yml"), source)
-    == "Read the name.\nSet the name."
-  )
+  assert extract_prose.source_sections(Path("example.yml"), source) == [
+    "Read the name.",
+    "Set the name.",
+  ]
 
 
 def test_lint_fails_advisory_findings_in_strict_mode():

@@ -11,6 +11,7 @@ import argparse
 from pathlib import Path
 
 import yaml
+from gate_workflows import triggers_of
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "artifacts.yml"
@@ -36,12 +37,6 @@ PUBLISH_IF = (
   "github.event_name == 'push' && github.ref == 'refs/heads/main'"
   " && needs.changes.outputs.rules == 'true'"
 )
-
-
-def triggers_of(document: dict) -> dict:
-  """Return the parsed `on` mapping. PyYAML reads an unquoted `on` key as True."""
-  triggers = document.get("on", document.get(True))
-  return triggers if isinstance(triggers, dict) else {}
 
 
 def step_runs(job: dict) -> str:
