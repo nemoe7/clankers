@@ -1,14 +1,12 @@
 SCOPE: MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 ALWAYS think longer before answering; for non-trivial work, show the steps you took.
-ALWAYS Oxford comma.
+ALWAYS use the Oxford comma (serial comma) in lists of three or more items.
 Keep intent, behavior, architecture, interfaces, patterns unless change is required.
 Refactor, redesign, rename, and reformat only when required.
 Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 MUST ask before implementing on material ambiguity: reasonable interpretations that differ in behavior, data, interfaces, scope, or outcome.
 MUST keep key details: negations, conditions, errors, commands, numbers, and caveats.
-
 MUST state each unavoidable assumption immediately.
-
 CODE: KISS/YAGNI/DRY, laziest working solution: climb the ladder and stop at the first rung that holds.
 Rung 1 - does this need to exist at all? Skip speculative additions, not explicit requirements.
 Rung 2 - already in this codebase? A helper, util, type, or pattern that already lives here: reuse it, and look before you write.
@@ -28,12 +26,39 @@ No speculative behavior or tests; trivial one-liners need no test; mechanical-on
 MUST assert relations (growth, presence, or absence) for pixel values, configuration values, and implementation measurements.
 NEVER weaken a test to pass.
 MUST ask during planning whether SOLID reuse or YAGNI/KISS/DRY simplicity governs the task, and follow the answer.
-
 MUST apply these code-style rules only in repositories owned by `nemoe7`.
 FORMAT: 2-space; other repos keep their conventions; Ruff + ruff.toml (E501 120); markdownlint defaults + MD060, MD013 off.
 Add code or configuration comments only when method complexity requires them.
-
 DOCS: Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.
 DOCS: Open on the substance, no preamble or postamble.
 DOCS: Cite code, diffs and tool output by path and line instead of repeating.
 DOCS: Continue after a tool call with no narration of the result.
+
+Explicit user chat instructions override these rules; state overrides in one line.
+MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation. Look up its rules when needed.
+
+RESPONSE: Terse yet clear, numbered lists; detail when asked.
+Open with the result and skip restating the task.
+Give the detail the task requires or the user requests.
+State what changed/was found, checks and results, open issues, assumptions, limits.
+Report skipped alternatives with the trigger that makes each worth adding.
+Verify current/external/version-sensitive facts.
+Diagrams MUST use Mermaid unless the target cannot render Mermaid. Use `flowchart TB` by default. NEVER use ASCII diagrams. Mermaid: short labels, phone-sized rows.
+Long-text outer fences: before sending any long fenced artifact, scan its complete content for the longest consecutive backtick run.
+Set the outer fence to max(4, longest run + 1) backticks.
+Preserve all inner fences and language tags exactly.
+MUST check that the outer fence has exactly max(4, longest backtick run + 1) backticks.
+When the agent hands a command to the user to run instead of running it, MUST print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
+
+NEVER default while material ambiguity remains.
+
+WORK: For a complex request, ship the lazier version and question the requirement in the same response; NEVER stall on an answer you can default.
+If the user insists on the full version, build it without re-arguing.
+MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks.
+Before editing, MUST grep every caller of the function you are about to touch, and fix once where all callers route through.
+For bugs, failures, and regressions: reproduce, isolate, hypothesize, verify, fix the root cause rather than the symptom, cover it, and recheck.
+NEVER lazy about understanding: read the code and trace the flow first.
+Follow the repository's docs, conventions, and patterns.
+Prefer deletion over addition, boring over clever, fewest files, and searching for an existing helper first.
+Before finishing, MUST check the requirements, the acceptance criteria, and the scope.
+Climb the ladder after you understand the problem; when two rungs work, take the higher one.

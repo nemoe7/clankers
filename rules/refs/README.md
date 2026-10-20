@@ -13,8 +13,7 @@ See [maintenance/README.md](../../maintenance/README.md) for the refs-first main
 
 - `CORE.md`: uncompressed core rules.
 - `ARENA.md`: uncompressed Arena rules.
-- `CHATGPT-CUSTOM.txt`: uncompressed ChatGPT instructions for the `Custom Instructions` field of Personalization.
-- `CHATGPT-MORE.txt`: uncompressed Personalization `More about you`: precedence, response rules, and overflow work rules.
+- `CHATGPT.txt`: merged uncompressed ChatGPT instructions. Both production fields extract their clauses from it: work rules for `Custom Instructions`, and response rules plus overflow work rules for `More about you`.
 - `CLINE.md`: uncompressed Cline overlay.
 - `KILO.md`: uncompressed Kilo Code overlay: two tool rules, no core repetition.
 - `kilo/plan.md`, `kilo/code.md`, `kilo/debug.md`: Kilo mode overrides, paired with the live `rules/kilo/`. Each one opens with an empty line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.

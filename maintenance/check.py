@@ -143,7 +143,12 @@ LINT_COUNT_CLAIMS = (
 # Rule refs baselines hold full wording. Live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
 SECTIONED_PAIRS = ("CORE.md", "ARENA.md", "CLINE.md", "KILO.md")
-PLAIN_PAIRS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt", "COMMIT-SPEC.txt")
+# Both ChatGPT fields extract from one merged baseline under `rules/refs/`.
+PLAIN_PAIRS = {
+  "CHATGPT-CUSTOM.txt": "CHATGPT.txt",
+  "CHATGPT-MORE.txt": "CHATGPT.txt",
+  "COMMIT-SPEC.txt": "COMMIT-SPEC.txt",
+}
 
 # Kilo mode overrides live under a directory on both sides, so the check pairs them by
 # name and compares them the plain way: live compresses wording, never adds rules.
@@ -152,6 +157,8 @@ KILO_PAIRS = ("plan.md", "code.md", "debug.md")
 # ChatGPT's Personalization offers two instruction fields, `Custom Instructions`
 # and `More about you`, each capped at 1,500 characters.
 CHATGPT_FIELDS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt")
+# The cap covers the production fields and the Wenyan experimentals.
+CHATGPT_CHAR_CAP = 1500
 
 # gpt-tokenizer ships its ranks and measures offline, and needs no cache seeding.
 # Node resolves it from the real root, fixed when a test points ROOT at a temporary tree.
@@ -751,8 +758,8 @@ def check_refs_parity(errors: list[str]) -> None:
         "compression may merge lines but never add rules"
       )
 
-  for name in PLAIN_PAIRS:
-    reference = REFS / name
+  for name, reference_name in PLAIN_PAIRS.items():
+    reference = REFS / reference_name
     live = RULES / name
 
     if not reference.is_file() or not live.is_file():
@@ -764,7 +771,7 @@ def check_refs_parity(errors: list[str]) -> None:
 
     if live_rules > ref_rules:
       errors.append(
-        f"rules/{name}: {live_rules} rule lines vs {ref_rules} in rules/refs/{name}; "
+        f"rules/{name}: {live_rules} rule lines vs {ref_rules} in rules/refs/{reference_name}; "
         "compression may merge lines but never add rules"
       )
 
@@ -962,14 +969,13 @@ def validate(errors: list[str]) -> tuple[int, int]:
           f"README budget stale for {relative}: recorded={recorded} actual={actual}"
         )
 
-  for field in CHATGPT_FIELDS:
-    chat = RULES / field
+  for chat in (RULES / field for field in CHATGPT_FIELDS):
+    if chat.is_file() and len(chat.read_text(encoding="utf-8")) > CHATGPT_CHAR_CAP:
+      errors.append(f"rules/{chat.name} exceeds 1,500 Unicode chars")
 
-    if chat.is_file():
-      characters = len(chat.read_text(encoding="utf-8"))
-
-      if characters > 1500:
-        errors.append(f"rules/{field} exceeds 1,500 Unicode chars")
+  for chat in sorted((RULES / "wenyan").glob("CHATGPT-*.txt")):
+    if len(chat.read_text(encoding="utf-8")) > CHATGPT_CHAR_CAP:
+      errors.append(f"rules/wenyan/{chat.name} exceeds 1,500 Unicode chars")
 
   check_lint_scope(errors)
   check_refs_parity(errors)

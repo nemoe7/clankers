@@ -11,6 +11,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Preview serving: reject ports other than 8000 and identify 8000 as the only supported port.
 - Bash-call tally: count up to the half-way mark, then down, in the reminder and the page header. Send the gate threshold in the state so the header blocks at the same count.
 - CORE: compress five live lines with no rule change. Restore the Ruff width line and the command-reporting line from the refs baseline.
+- ChatGPT sources: merge the two refs baselines into `rules/refs/CHATGPT.txt` and extract both fields from it. The Wenyan CUSTOM experimental drops to 1,468 characters to meet the 1,500 cap.
 - Task details: refuse one that cites a session-local note, answer, report or task ID.
 - Task dependencies: add a repeatable `--blocked-by`, refuse an edge that closes a cycle, and sort a waiter after its blockers.
 - Preview violation notices: identify user flags and report formatting defects, then print user-flagged notices to stdout.

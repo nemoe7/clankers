@@ -9,7 +9,7 @@ Test whether hybrid Wenyan can preserve the complete ChatGPT instruction meaning
 ## Sources
 
 - `rules/CHATGPT-CUSTOM.txt` and `rules/CHATGPT-MORE.txt` are the production character-count baselines.
-- `rules/refs/CHATGPT-CUSTOM.txt` and `rules/refs/CHATGPT-MORE.txt` are the complete semantic baselines.
+- `rules/refs/CHATGPT.txt` is the merged complete semantic baseline.
 
 ## Method
 
