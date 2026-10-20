@@ -6301,12 +6301,17 @@ class Store:
           "INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,)
         )
 
-  def guard_report_change(self, db, report_id, report, hold_view=True):
-    """Hold an agent change while an answer, acknowledgement, or fresh view is unread.
+  def guard_report_change(
+    self, db, report_id, report, hold_view=True, hold_answer=True
+  ):
+    """Hold an agent change over an answered report, unseen ack, or fresh view.
 
-    The view hold applies to an answered report only: a report nobody answered has nothing to
-    disturb, so a look at it never blocks a change. An unpublish passes `hold_view=False`: the
-    page keeps the open report on screen, so a removal never empties a reader's view.
+    An answer freezes the report: a change would rewrite the question the owner answered, so
+    a revision publishes under a new ID. An unpublish passes `hold_answer=False`, because
+    removing the tab row leaves the answer readable. The view hold applies to an answered
+    report only: a report nobody answered has nothing to disturb. An unpublish passes
+    `hold_view=False` too: the page keeps the open report on screen, so a removal never
+    empties a reader's view.
     """
     unread = db.execute(
       "SELECT 1 FROM submissions WHERE report_id = ? AND acknowledged_at IS NULL LIMIT 1",
@@ -6322,18 +6327,23 @@ class Store:
       raise ReportHeld(
         "The report waits for the owner: its answer acknowledgement is unseen."
       )
-    if not hold_view:
-      return
     answered = db.execute(
       "SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1", (report_id,)
     ).fetchone()
-    age = seconds_since(report["viewed_at"])
-    if (
-      answered is not None and age is not None and 0 <= age < REPORT_CHANGE_VIEW_SECONDS
-    ):
-      remaining = max(1, int(REPORT_CHANGE_VIEW_SECONDS - age))
+    if hold_view:
+      age = seconds_since(report["viewed_at"])
+      if (
+        answered is not None
+        and age is not None
+        and 0 <= age < REPORT_CHANGE_VIEW_SECONDS
+      ):
+        remaining = max(1, int(REPORT_CHANGE_VIEW_SECONDS - age))
+        raise ReportHeld(
+          f"The owner is reading this report: retry after {remaining} s without a view."
+        )
+    if hold_answer and answered is not None:
       raise ReportHeld(
-        f"The owner is reading this report: retry after {remaining} s without a view."
+        "The report has a submitted answer; publish the update under a new ID."
       )
 
   def publish(self, report_id, title, source):
@@ -6398,7 +6408,7 @@ class Store:
         return False
       if not dismissed_by_owner:
         # The page holds the open report, so the owner's view never blocks this removal.
-        self.guard_report_change(db, report_id, row, hold_view=False)
+        self.guard_report_change(db, report_id, row, hold_view=False, hold_answer=False)
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
       self.release_report_tasks(db, report_id)
       # The state stamp reads this mark, so the save's own stamp trigger rewrites a file that

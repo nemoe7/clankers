@@ -27,6 +27,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Install pages: fix the egress title and opening sentence, the preview heading case and a split line.
 - Arena quirks archive: separate a heading from the paragraph above it.
 
+### Fixed
+
+- Preview reports: refuse a republish when the report has any answer. Unpublish stays available after the owner reads the ack.
+
 ## 2026-10-19
 
 ### Added

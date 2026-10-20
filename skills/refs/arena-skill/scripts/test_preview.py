@@ -7990,7 +7990,11 @@ def test_report_changes_hold_unseen_answers_and_acknowledgements():
       except preview.ReportHeld as error:
         assert "acknowledgement" in str(error)
     store.mark_report_ack_seen("pick")
-    store.publish("pick", "Pick revised", source)
+    try:
+      store.publish("pick", "Pick revised", source)
+      raise AssertionError("An answered report allowed a republish")
+    except preview.ReportHeld as error:
+      assert "submitted answer" in str(error)
     store.unpublish("pick")
     assert store.state()["reports"] == []
 
@@ -8061,7 +8065,7 @@ def test_report_changes_ignore_a_fresh_view_of_an_unanswered_report():
 
 
 def test_report_view_active_false_clears_the_stamp():
-  """The page clears the stamp when it hides the report, so a background look holds nothing."""
+  """The page clears the stamp when it hides the report, so a background look leaves none."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "pick.md"
@@ -8073,9 +8077,7 @@ def test_report_view_active_false_clears_the_stamp():
     store.mark_report_viewed("pick")
     cleared = store.mark_report_viewed("pick", active=False)
     assert cleared["viewed_at"] is None
-    # Real time, because the cleared stamp is what skips the view hold: a patched clock would
-    # report an age even for a clear.
-    store.publish("pick", "Pick revised", source)
+    assert store.report("pick")["viewed_at"] is None
     store.unpublish("pick")
     assert store.state()["reports"] == []
 
