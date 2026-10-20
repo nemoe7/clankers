@@ -116,6 +116,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Squash every rotating reminder line to at most 88 characters in caveman register. A cap check holds the limit, and meanings, names, and commands stay.
 
+- Replace the 30-second PR-check success gate with a watcher. It waits at most 30 seconds for a first check, reports each new failure while live, and finishes at a terminal rollup.
+
+- Watcher: 30s to start, then watch. Live failure lines.
+
 #### arena
 
 - Forbid spamming `run logs` while a run is live. One diagnosis read stays allowed, and the verdict comes from a later call.

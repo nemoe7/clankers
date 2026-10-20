@@ -4886,18 +4886,21 @@ def test_run_records_the_exit_and_announces_it_once(capsys):
     assert preview.run_command(directory, "empty", ["--"]) == 2
 
 
-def test_a_failed_check_discovery_names_the_unstarted_watch(tmp_path, monkeypatch):
-  """A discovery refusal ends the run with a verdict that names the unstarted wait."""
-  reason = "no visible checks appeared on abc1234 within 30 seconds"
+def test_an_unstarted_check_watch_names_the_missing_checks(tmp_path, monkeypatch):
+  """An empty rollup ends the run with the explicit unstarted verdict."""
+  verdict = (
+    "PR CHECKS NOT STARTED: no visible checks appeared on abc1234 within 30 seconds."
+  )
   monkeypatch.setattr(preview, "pr_checks_command", lambda argv: True)
-  monkeypatch.setattr(preview, "pr_checks_discovery", lambda root: reason)
+  monkeypatch.setattr(
+    preview,
+    "pr_checks_watch",
+    lambda root, progress=None: ("not_started", [verdict]),
+    raising=False,
+  )
   assert preview.run_command(tmp_path, "pr-checks", ["--", "gh", "pr", "checks"]) == 1
   record = json.loads(
     (tmp_path / "runs" / "pr-checks.json").read_text(encoding="utf-8")
-  )
-  verdict = (
-    f"PR CHECKS NOT STARTED: {reason}. Run the same command again to see whether"
-    " the checks started."
   )
   assert record["verdict"] == verdict
   assert record["tail"] == [verdict]
@@ -4906,11 +4909,16 @@ def test_a_failed_check_discovery_names_the_unstarted_watch(tmp_path, monkeypatc
 def test_a_failed_check_watch_names_the_failing_steps(tmp_path, monkeypatch, capsys):
   """A failed watch appends the failing step of each failed check."""
   monkeypatch.setattr(preview, "pr_checks_command", lambda argv: True)
-  monkeypatch.setattr(preview, "pr_checks_discovery", lambda root: None)
+  monkeypatch.setattr(
+    preview,
+    "pr_checks_watch",
+    lambda root, progress=None: ("failure", ["PR CHECKS FAILED: Quality."]),
+    raising=False,
+  )
   monkeypatch.setattr(
     preview, "pr_failed_steps", lambda root=".": ["Quality / Update and Validate"]
   )
-  argv = ["--", sys.executable, "-c", "print('2 checks failed'); raise SystemExit(1)"]
+  argv = ["--", "gh", "pr", "checks", "116", "--watch"]
   assert preview.run_command(tmp_path, "pr-checks", argv) == 1
   out = capsys.readouterr().out
   assert "Failed: Quality / Update and Validate" in out
@@ -5561,6 +5569,25 @@ def test_a_detached_run_prints_one_status_line_per_call(capsys):
     preview.run_notices(detached_dir, show_running=True)
     later = capsys.readouterr()
     assert later.out == "" and later.err == ""
+
+
+def test_a_live_run_progress_line_prints_once_per_call(capsys):
+  """A live watcher progress line reaches later calls without ending the run."""
+  with tempfile.TemporaryDirectory() as detached_dir:
+    live_detached_placeholder(
+      detached_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
+    )
+    preview.write_run_progress(detached_dir, "pr-checks", "Failed so far: Quality")
+    preview.write_run_progress(detached_dir, "pr-checks", "Failed so far: Tests")
+
+    assert preview.run_notices(detached_dir) == 1
+    assert "run pr-checks progress: Failed so far: Quality" in capsys.readouterr().err
+    assert preview.run_notices(detached_dir) == 1
+    assert "run pr-checks progress: Failed so far: Tests" in capsys.readouterr().err
+    assert preview.run_notices(detached_dir) == 0
+    record = preview.routed_record(detached_dir, "pr-checks")
+    assert record["exit"] is None
+    assert record["progress_announced"] == 2
 
 
 def test_a_hook_prints_only_one_routed_run_notice(capsys):
@@ -9347,51 +9374,62 @@ def fake_gh(heads, counts, calls, required=3, states=("SUCCESS",)):
   return run
 
 
+def advancing_clock():
+  """A monotonic clock and sleep pair for watcher tests."""
+  now = [0.0]
+  sleeps = []
+
+  def sleep(seconds):
+    sleeps.append(seconds)
+    now[0] += seconds
+
+  return now, sleeps, sleep
+
+
 def test_the_pr_check_wait_finds_checks_before_it_watches(capsys):
-  """The bounded watch checks the pinned head for the full window before the CLI watch."""
+  """The native watch starts after the first check appears on the pinned head."""
   with tempfile.TemporaryDirectory() as directory:
     root = pr_check_root(directory)
     calls = []
-    sleeps = []
+    now, sleeps, sleep = advancing_clock()
     with (
       patch("preview.resolve_repo_root", return_value=str(root)),
       patch("preview.repo_slug", return_value="owner/repo"),
       patch(
         "preview.subprocess.run", side_effect=fake_gh(["abc1234"], [0, 0, 3], calls)
       ),
-      patch("preview.time.sleep", sleeps.append),
-      patch("preview.time.monotonic", return_value=0),
+      patch("preview.time.sleep", sleep),
+      patch("preview.time.monotonic", lambda: now[0]),
     ):
       code = preview.run_command(
         directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]
       )
     out = capsys.readouterr().out
     assert code == 0, out
-    assert "watched" in out, "the watch runs once a check exists"
     polls = preview.PR_CHECK_DISCOVERY_SECONDS // preview.PR_CHECK_DISCOVERY_STEP
     assert sleeps == [preview.PR_CHECK_DISCOVERY_STEP] * polls, sleeps
     reads = [call for call in calls if any("statusCheckRollup" in arg for arg in call)]
     assert len(reads) == polls + 1, reads
     assert all("sha=abc1234" in call for call in reads), reads
+    assert not [call for call in calls if call[0] != "gh"], "the native watch ran"
     assert "best effort" in out.lower(), out
 
 
 def test_pr_check_wait_does_not_stop_on_early_green():
   with tempfile.TemporaryDirectory() as directory:
     root = pr_check_root(directory)
-    calls, pauses = [], []
+    calls = []
+    now, pauses, sleep = advancing_clock()
     with (
       patch("preview.repo_slug", return_value="owner/repo"),
-      patch("preview.time.monotonic", return_value=0),
+      patch("preview.time.monotonic", lambda: now[0]),
       patch(
         "preview.subprocess.run",
         side_effect=fake_gh(["abc1234"], [1, 1, 3], calls, required=1),
       ),
     ):
-      assert (
-        preview.pr_checks_discovery(root, seconds=10, step=5, sleep=pauses.append)
-        is None
-      )
+      status, _lines = preview.pr_checks_watch(root, seconds=10, step=5, sleep=sleep)
+    assert status == "success"
     assert pauses == [5, 5]
 
 
@@ -9406,8 +9444,8 @@ def test_pr_check_wait_needs_no_required_check_settings():
         side_effect=fake_gh(["abc1234"], [1], calls, required=0),
       ),
     ):
-      result = preview.pr_checks_discovery(root, seconds=0)
-    assert result is None, result
+      status, _lines = preview.pr_checks_watch(root, seconds=0)
+    assert status == "success"
     assert not any("/rules/branches/" in str(call) for call in calls)
     assert not any("refUpdateRule" in str(call) for call in calls)
 
@@ -9483,45 +9521,81 @@ def test_pr_check_rollup_boundaries():
     assert any("pageInfo{hasNextPage endCursor}" in arg for arg in command)
 
 
-def test_pr_check_wait_uses_the_deadline_state():
-  for state, successful in [
-    ("PENDING", False),
-    ("EXPECTED", False),
-    ("FAILURE", False),
-    ("ERROR", False),
-    ("SUCCESS", True),
-  ]:
-    with tempfile.TemporaryDirectory() as directory:
-      root = pr_check_root(directory)
-      calls, pauses = [], []
-      with (
-        patch("preview.repo_slug", return_value="owner/repo"),
-        patch("preview.time.monotonic", return_value=0),
-        patch(
-          "preview.subprocess.run",
-          side_effect=fake_gh(["abc1234"], [1, 3], calls, states=("FAILURE", state)),
-        ),
-      ):
-        result = preview.pr_checks_discovery(
-          root, seconds=5, step=5, sleep=pauses.append
-        )
-      assert (result is None) == successful, (state, result)
-      assert pauses == [5]
+def test_pr_check_watch_reports_failures_and_keeps_watching():
+  """Each new failure emits progress while nonterminal checks keep the watch live."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = pr_check_root(directory)
+    now, pauses, sleep = advancing_clock()
+    progress = []
+
+    def node(name, state, at):
+      return {
+        "kind": "check",
+        "name": name,
+        "workflow": "CI",
+        "state": state,
+        "at": at,
+      }
+
+    quality_failed = node("Quality", "FAILURE", "2026-10-18T00:10:00Z")
+    tests_failed = node("Tests", "FAILURE", "2026-10-18T00:15:00Z")
+    docs_done = node("Docs", "SUCCESS", "2026-10-18T00:20:00Z")
+    snapshots = [
+      [],
+      [
+        node("Quality", "IN_PROGRESS", "2026-10-18T00:05:00Z"),
+        node("Tests", "QUEUED", "2026-10-18T00:05:00Z"),
+      ],
+      [quality_failed, node("Tests", "IN_PROGRESS", "2026-10-18T00:05:00Z")],
+      [quality_failed, tests_failed],
+      [
+        quality_failed,
+        tests_failed,
+        node("Docs", "QUEUED", "2026-10-18T00:20:00Z"),
+      ],
+      [quality_failed, tests_failed, docs_done],
+      [quality_failed, tests_failed, docs_done],
+    ]
+    with (
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch("preview.pr_head_sha", return_value="abc1234"),
+      patch("preview.pr_check_latest", side_effect=snapshots),
+      patch("preview.time.monotonic", lambda: now[0]),
+    ):
+      status, lines = preview.pr_checks_watch(
+        root, seconds=30, step=5, sleep=sleep, progress=progress.append
+      )
+
+  assert status == "failure"
+  assert progress == ["Failed so far: CI / Quality", "Failed so far: CI / Tests"]
+  assert lines[-1] == "PR CHECKS FAILED: CI / Quality, CI / Tests."
+  assert pauses == [5] * 6
 
 
 def test_pr_check_wait_counts_api_time_against_the_window():
   with tempfile.TemporaryDirectory() as directory:
     root = pr_check_root(directory)
-    pauses = []
+    now, pauses, sleep = advancing_clock()
+    node = {
+      "kind": "check",
+      "name": "Quality",
+      "workflow": "CI",
+      "state": "SUCCESS",
+      "at": "2026-10-18T00:00:00Z",
+    }
+
+    def latest(*_args):
+      now[0] += 6
+      return [node]
+
     with (
       patch("preview.repo_slug", return_value="owner/repo"),
-      patch("preview.time.monotonic", side_effect=[0, 6, 10]),
-      patch("preview.subprocess.run", side_effect=fake_gh(["abc1234"], [3], [])),
+      patch("preview.pr_head_sha", return_value="abc1234"),
+      patch("preview.pr_check_latest", side_effect=latest),
+      patch("preview.time.monotonic", lambda: now[0]),
     ):
-      assert (
-        preview.pr_checks_discovery(root, seconds=10, step=5, sleep=pauses.append)
-        is None
-      )
+      status, _lines = preview.pr_checks_watch(root, seconds=10, step=5, sleep=sleep)
+    assert status == "success"
     assert pauses == [4]
 
 
@@ -9535,29 +9609,30 @@ def test_pr_check_wait_rechecks_the_head_before_success():
         side_effect=fake_gh(["abc1234", "def5678"], [3, 0], []),
       ),
     ):
-      assert "no visible checks appeared on def5678" in preview.pr_checks_discovery(
-        root, seconds=0
-      )
+      status, lines = preview.pr_checks_watch(root, seconds=0)
+    assert status == "not_started"
+    assert "no visible checks appeared on def5678" in lines[0]
 
 
 def test_the_pr_check_wait_fails_when_no_check_appears(capsys):
-  """A discovery window that runs out fails the run, and the watch never starts."""
+  """A start window that runs out fails the run as not started."""
   with tempfile.TemporaryDirectory() as directory:
     root = pr_check_root(directory)
     calls = []
-    sleeps = []
+    now, sleeps, sleep = advancing_clock()
     with (
       patch("preview.resolve_repo_root", return_value=str(root)),
       patch("preview.repo_slug", return_value="owner/repo"),
       patch("preview.subprocess.run", side_effect=fake_gh(["abc1234"], [0], calls)),
-      patch("preview.time.sleep", sleeps.append),
-      patch("preview.time.monotonic", return_value=0),
+      patch("preview.time.sleep", sleep),
+      patch("preview.time.monotonic", lambda: now[0]),
     ):
       code = preview.run_command(
         directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]
       )
     out = capsys.readouterr().out
     assert code == 1, "a timeout is a failure, never a pass"
+    assert "PR CHECKS NOT STARTED" in out, out
     assert "no visible checks" in out, out
     polls = preview.PR_CHECK_DISCOVERY_SECONDS // preview.PR_CHECK_DISCOVERY_STEP
     assert sleeps == [preview.PR_CHECK_DISCOVERY_STEP] * polls, (
@@ -9567,11 +9642,11 @@ def test_the_pr_check_wait_fails_when_no_check_appears(capsys):
 
 
 def test_the_pr_check_wait_hands_off_to_a_moved_head(capsys):
-  """A new head receives a full registration window and its own verdict."""
+  """A new head receives a full start window and its own verdict."""
   with tempfile.TemporaryDirectory() as directory:
     root = pr_check_root(directory)
     calls = []
-    sleeps = []
+    now, sleeps, sleep = advancing_clock()
     with (
       patch("preview.resolve_repo_root", return_value=str(root)),
       patch("preview.repo_slug", return_value="owner/repo"),
@@ -9579,20 +9654,20 @@ def test_the_pr_check_wait_hands_off_to_a_moved_head(capsys):
         "preview.subprocess.run",
         side_effect=fake_gh(["abc1234", "def5678"], [0, 3], calls),
       ),
-      patch("preview.time.sleep", sleeps.append),
-      patch("preview.time.monotonic", return_value=0),
+      patch("preview.time.sleep", sleep),
+      patch("preview.time.monotonic", lambda: now[0]),
     ):
       code = preview.run_command(
         directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]
       )
     out = capsys.readouterr().out
     assert code == 0, out
-    assert "watched" in out, out
+    assert "best effort" in out.lower(), out
     assert sleeps == [preview.PR_CHECK_DISCOVERY_STEP] * 7
     reads = [call for call in calls if any("statusCheckRollup" in arg for arg in call)]
     assert sum("sha=abc1234" in call for call in reads) == 1
     assert sum("sha=def5678" in call for call in reads) == 7
-    assert len([call for call in calls if call[0] != "gh"]) == 1
+    assert not [call for call in calls if call[0] != "gh"]
 
 
 def test_the_pr_check_wait_fails_on_a_gh_fault(capsys):
@@ -9618,8 +9693,8 @@ def test_the_pr_check_wait_fails_on_a_gh_fault(capsys):
     assert "gh did not read" in out, out
 
 
-def test_a_routed_line_that_is_not_a_check_wait_skips_discovery(capsys):
-  """Discovery belongs to the pull-request check wait alone, so other runs stay untouched."""
+def test_a_routed_line_that_is_not_a_check_wait_skips_the_watcher(capsys):
+  """The pull-request watcher belongs to check waits alone, so other runs stay untouched."""
   with tempfile.TemporaryDirectory() as directory:
     root = pr_check_root(directory)
     calls = []

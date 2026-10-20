@@ -150,9 +150,11 @@ npm ci
 
 ## PR checks
 
-The PR-check helper observes visible checks on the pinned head for 30 seconds, even after early success. No checks, a moved head, a GitHub read failure, or pending or failing checks at the deadline fail the wait. API reads time out after five seconds, and API time reduces polling pauses.
+The PR-check watcher waits at most 30 seconds for a first visible check on the pinned head. An empty window fails as not started. It then follows the latest checks until every visible one is terminal. API reads time out after five seconds, and API time reduces polling pauses.
 
-It reads all context pages and selects the latest run for each check and workflow, or status context. It then runs the requested watch. Success is best effort: later checks can still appear.
+A terminal rollup counts only after the head has stood for 30 seconds. A late-registering check still joins the verdict. A moved head restarts both phases. A GitHub read failure fails as unavailable.
+
+It reads all context pages and selects the latest run for each check and workflow, or status context. Each new failure writes a progress line beside the run record, and later gate calls print one per call while the watch stays live. Success is best effort: later checks can still appear.
 
 ## Preview gate hooks
 
