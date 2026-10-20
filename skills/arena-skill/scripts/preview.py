@@ -920,7 +920,9 @@ def read_set_tick(store,line,moment=None,root=None):
 		if store.polling():return None
 		pending=store.schedule_read_set_note(moment=moment,root=root)
 	if pending is None or actions is not None and set(actions)<={'read','ack'}:return None
-	return f"READ SET BLOCKED: checkpoint {pending['id']} is pending. Run `arena-preview read`, read every listed path in full with the read tool, then `arena-preview ack {pending['id']} <markdown>`."
+	blocker=first_blocking_piece(line);blocker_hint=''
+	if blocker:blocker=shell_command_text(blocker);blocker_hint=f" Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part."
+	return f"READ SET BLOCKED: checkpoint {pending['id']} is pending. Run `arena-preview read`, read every listed path in full with the read tool, then `arena-preview ack {pending['id']} <markdown>`.{blocker_hint}"
 GATE_NOISE='tail','grep','head'
 RUN_NAME=re.compile('[A-Za-z0-9._-]{1,64}')
 RUN_TAIL_LINES=40
