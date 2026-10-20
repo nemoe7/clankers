@@ -2536,10 +2536,18 @@ def read_set_tick(store, line, moment=None, root=None):
     pending = store.schedule_read_set_note(moment=moment, root=root)
   if pending is None or (actions is not None and set(actions) <= {"read", "ack"}):
     return None
+  blocker = first_blocking_piece(line)
+  blocker_hint = ""
+  if blocker:
+    blocker = shell_command_text(blocker)
+    blocker_hint = (
+      f" Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part."
+    )
   return (
     f"READ SET BLOCKED: checkpoint {pending['id']} is pending. Run"
     " `arena-preview read`, read every listed path in full with the read tool, then"
     f" `arena-preview ack {pending['id']} <markdown>`."
+    f"{blocker_hint}"
   )
 
 
