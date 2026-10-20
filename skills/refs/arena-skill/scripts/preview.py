@@ -870,6 +870,17 @@ def pr_check_watch(result, root, stopped):
 # instead of waiting for the first check to appear.
 PR_CHECK_DISCOVERY_SECONDS = 30
 PR_CHECK_DISCOVERY_STEP = 5
+# Completed conclusions split into passes and failures. Every other state is still running.
+PR_CHECK_SUCCESS_STATES = ("SUCCESS", "SKIPPED", "NEUTRAL")
+PR_CHECK_FAILURE_STATES = (
+  "ACTION_REQUIRED",
+  "CANCELLED",
+  "ERROR",
+  "FAILURE",
+  "STALE",
+  "STARTUP_FAILURE",
+  "TIMED_OUT",
+)
 PR_STEP_LIMIT = 5
 PR_STEP_TIMEOUT = 10
 JOB_LINK_RE = re.compile(r"/actions/runs/\d+/job/(\d+)")
@@ -921,7 +932,7 @@ def gh_check_json(root, arguments):
     return None
 
 
-def pr_check_rollup(root, slug, sha):
+def pr_check_latest(root, slug, sha):
   """Read all pages and select the latest checks, as gh pr checks does."""
   owner, name = slug.split("/", 1)
   query = (
@@ -977,11 +988,25 @@ def pr_check_rollup(root, slug, sha):
       return None
     key = (node["kind"], node["name"], node["workflow"])
     if key not in latest or stamp > latest[key][0]:
-      latest[key] = stamp, node["state"]
-  states = {state for _, state in latest.values()}
-  if states & {"ERROR", "FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"}:
+      latest[key] = stamp, node
+  return [
+    node
+    for _stamp, node in sorted(
+      latest.values(),
+      key=lambda entry: (entry[1]["workflow"], entry[1]["name"], entry[1]["kind"]),
+    )
+  ]
+
+
+def pr_check_rollup(root, slug, sha):
+  """Collapse the latest checks into one state and count, or None on a fault."""
+  latest = pr_check_latest(root, slug, sha)
+  if latest is None:
+    return None
+  states = {node["state"] for node in latest}
+  if states & set(PR_CHECK_FAILURE_STATES):
     return "FAILURE", len(latest)
-  if not states or states - {"SUCCESS", "SKIPPED", "NEUTRAL"}:
+  if not states or states - set(PR_CHECK_SUCCESS_STATES):
     return "PENDING", len(latest)
   return "SUCCESS", len(latest)
 
@@ -1034,66 +1059,102 @@ def pr_failed_steps(root="."):
   return steps
 
 
-def pr_checks_discovery(
+def pr_check_label(node):
+  """Name one check for a verdict line, with its workflow when it has one."""
+  workflow = node["workflow"]
+  if workflow and workflow != node["name"]:
+    return f"{workflow} / {node['name']}"
+  return node["name"]
+
+
+def pr_checks_watch(
   root=".",
   seconds=PR_CHECK_DISCOVERY_SECONDS,
   step=PR_CHECK_DISCOVERY_STEP,
   sleep=None,
+  progress=None,
 ):
-  """Observe visible checks for the full window before the requested CLI watch.
+  """Watch the branch pull request's checks and return a status with verdict lines.
 
-  Reset the window on a new head. Fail on a read fault, empty rollup, or non-green deadline state.
-  Success is best effort: checks can still appear after this window.
+  The first phase waits at most `seconds` for a first visible check on the pinned head.
+  An empty window ends as not started. The watch then follows the latest checks until
+  every visible one is terminal, reporting each new failure through `progress` on the
+  way. A terminal rollup counts only once the pinned head has stood for `seconds`, so a
+  late-registering check still joins the verdict. A moved head resets both phases.
+  Success stays best effort: an unregistered check can still appear after the window.
   """
   pause = sleep or time.sleep
+
+  def unavailable(reason):
+    return "unavailable", [f"PR CHECKS UNAVAILABLE: {reason}."]
+
   branch = workspace_branch(root)
   slug = repo_slug(root)
   if not branch or not slug:
-    return "no branch pull request to watch"
-  pinned = pr_head_sha(root, branch, slug)
-  if pinned is None:
-    return "gh did not read the pull request head"
-  if not pinned:
-    return "no branch pull request to watch"
-  started = time.monotonic()
-  polls = (seconds + step - 1) // step + 1
-  poll = 0
+    return unavailable("no branch pull request to watch")
+  pinned = ""
+  started = 0.0
+  seen_any = False
+  reported = set()
+  lines = []
   while True:
-    if poll:
-      head = pr_head_sha(root, branch, slug)
-      if head is None:
-        return "gh did not read the pull request head"
-      if not head:
-        return "no branch pull request to watch"
-      if head != pinned:
-        pinned = head
-        started = time.monotonic()
-        poll = 0
-    rollup = pr_check_rollup(root, slug, pinned)
-    if rollup is None:
-      return "gh did not read the check rollup"
-    remaining = seconds - (time.monotonic() - started)
-    if remaining <= 0 or poll + 1 == polls:
-      head = pr_head_sha(root, branch, slug)
-      if head is None:
-        return "gh did not read the pull request head"
-      if not head:
-        return "no branch pull request to watch"
-      if head != pinned:
-        pinned = head
-        started = time.monotonic()
-        poll = 0
+    head = pr_head_sha(root, branch, slug)
+    if head is None:
+      return unavailable("gh did not read the pull request head")
+    if not head:
+      return unavailable("no branch pull request to watch")
+    if head != pinned:
+      pinned = head
+      started = time.monotonic()
+      seen_any = False
+      reported = set()
+      lines = []
+    latest = pr_check_latest(root, slug, pinned)
+    if latest is None:
+      return unavailable("gh did not read the check rollup")
+    elapsed = time.monotonic() - started
+    if latest:
+      seen_any = True
+    failed = [node for node in latest if node["state"] in PR_CHECK_FAILURE_STATES]
+    for node in failed:
+      identity = (node["kind"], node["workflow"], node["name"], node["at"])
+      if identity in reported:
         continue
-      state, count = rollup
-      if not count:
-        return f"no visible checks appeared on {pinned[:7]} within {seconds} seconds"
-      if state != "SUCCESS":
-        return (
-          f"visible checks are {state.lower()} on {pinned[:7]} after {seconds} seconds"
-        )
-      return None
-    pause(min(step, remaining))
-    poll += 1
+      reported.add(identity)
+      line = f"Failed so far: {pr_check_label(node)}"
+      lines.append(line)
+      if progress is not None:
+        progress(line)
+    if not seen_any:
+      if elapsed >= seconds:
+        return "not_started", [
+          (
+            "PR CHECKS NOT STARTED: no visible checks appeared on "
+            f"{pinned[:7]} within {seconds} seconds."
+          )
+        ]
+    elif elapsed >= seconds and all(
+      node["state"] in PR_CHECK_SUCCESS_STATES + PR_CHECK_FAILURE_STATES
+      for node in latest
+    ):
+      head = pr_head_sha(root, branch, slug)
+      if head is None:
+        return unavailable("gh did not read the pull request head")
+      if not head:
+        return unavailable("no branch pull request to watch")
+      if head == pinned:
+        if failed:
+          names = ", ".join(pr_check_label(node) for node in failed)
+          return "failure", [*lines, f"PR CHECKS FAILED: {names}."]
+        return "success", [
+          *lines,
+          "Best effort: all visible checks passed; later checks can still appear.",
+        ]
+      continue
+    if elapsed < seconds:
+      pause(min(step, seconds - elapsed))
+    else:
+      pause(step)
 
 
 # The record kinds whose IDs are session-local: minted here, unresolvable elsewhere.
@@ -2756,6 +2817,29 @@ def write_run_record(path, record):
     raise
 
 
+def run_progress_path(state_dir, name):
+  """The sidecar file a live run appends its progress lines to."""
+  return Path(state_dir) / "runs" / f"{name}.progress.json"
+
+
+def run_progress_lines(state_dir, name):
+  """The progress lines one live run recorded, or an empty list."""
+  try:
+    lines = json.loads(run_progress_path(state_dir, name).read_text(encoding="utf-8"))
+  except (OSError, ValueError):
+    return []
+  if not isinstance(lines, list):
+    return []
+  return [line for line in lines if isinstance(line, str)]
+
+
+def write_run_progress(state_dir, name, line):
+  """Append one progress line for a live run, beside its record."""
+  write_run_record(
+    run_progress_path(state_dir, name), [*run_progress_lines(state_dir, name), line]
+  )
+
+
 def process_start_identity(pid):
   """Return Linux's stable process-start tick for a live process, or None."""
   if isinstance(pid, bool) or not isinstance(pid, int) or pid < 1:
@@ -3048,27 +3132,24 @@ def run_command(state_dir, name, argv):
     )
     return 2
   started = time.monotonic()
-  # Observe the full window before watching. A discovery failure never starts the watch.
-  check_watch = pr_checks_command(argv)
-  discovery = pr_checks_discovery(resolve_repo_root()) if check_watch else None
-  if discovery:
+  # A check wait runs the native watcher instead of the requested gh watch: the watcher
+  # waits out an empty start window and follows started checks to a terminal rollup.
+  if pr_checks_command(argv):
+    root = resolve_repo_root()
+    status, watched = pr_checks_watch(
+      root,
+      progress=lambda line: write_run_progress(state_dir, name, line),
+    )
+    if status == "failure":
+      watched += [f"Failed: {step}" for step in pr_failed_steps(root)]
     completed = subprocess.CompletedProcess(
       argv,
-      1,
-      f"PR CHECKS NOT STARTED: {discovery}. Run the same command again to see whether"
-      " the checks started.\n",
+      0 if status == "success" else 1,
+      "\n".join(watched) + "\n",
       "",
     )
   else:
     completed = subprocess.run(argv, capture_output=True, text=True, check=False)
-    if check_watch and completed.returncode:
-      steps = pr_failed_steps(resolve_repo_root())
-      if steps:
-        completed.stdout += "\n" + "\n".join(f"Failed: {step}" for step in steps) + "\n"
-    if check_watch and completed.returncode == 0:
-      completed.stdout += (
-        "\nBest effort: all visible checks passed; later checks can still appear.\n"
-      )
   seconds = round(time.monotonic() - started, 1)
   output = (completed.stdout + completed.stderr).splitlines()
   tail = clean_run_tail(output[-RUN_TAIL_LINES:])
@@ -3199,6 +3280,20 @@ def run_notices(state_dir, show_running=False, out=None):
       flush=True,
     )
     record["announced"] = True
+    write_run_record(path, record)
+    return 1
+  for path, record in records:
+    if record.get("exit") is not None or not record.get("detached"):
+      continue
+    name = record.get("name") or path.stem
+    progress = run_progress_lines(state_dir, name)
+    announced = record.get("progress_announced")
+    if not isinstance(announced, int) or isinstance(announced, bool) or announced < 0:
+      announced = 0
+    if announced >= len(progress):
+      continue
+    print(f"run {name} progress: {progress[announced]}", file=sys.stderr, flush=True)
+    record["progress_announced"] = announced + 1
     write_run_record(path, record)
     return 1
   if not show_running:
@@ -3388,7 +3483,7 @@ def long_run_name(line):
 
 
 def pr_checks_command(argv):
-  """True when this argv waits on a pull request's checks, so the discovery runs first."""
+  """True when this argv waits on a pull request's checks, so the native watcher runs."""
   line = argv[-1] if len(argv) > 2 and argv[0] in SHELL_BASENAMES else " ".join(argv)
   return long_run_name(line) == "pr-checks"
 
@@ -3409,6 +3504,10 @@ def write_detached_placeholder(
 ):
   """Write the record a detached run carries while it runs, and return its path."""
   path = run_record_path(state_dir, name)
+  try:
+    run_progress_path(state_dir, name).unlink()
+  except OSError:
+    pass
   record = {
     "name": name,
     "argv": list(argv),
@@ -3665,6 +3764,8 @@ def run_log_report(state_dir, name):
     elapsed = detached_seconds(record.get("started_at"))
     age = f" {elapsed}s" if elapsed is not None else ""
     print(f"run {name} running{age}")
+    for line in run_progress_lines(state_dir, name):
+      print(line)
     print(WORKTREE_STEP)
     return 0
   print(f"run {name} done: exit {record['exit']} {record.get('seconds')}s")
