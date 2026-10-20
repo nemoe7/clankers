@@ -1,5 +1,5 @@
-# Distribute ARENA.md, the skills, and the Gemini release workflow. One job walks the union of the two target lists and leaves exactly one commit per target repository. The lists stay independent: the Arena files reach only the Arena targets, and the Gemini workflow reaches only the Gemini targets.
-# CLANKERS_DIST_PAT needs Contents read/write on every Arena target, plus Workflows write on the Gemini targets. Delivery is not activation: each session must start its own preview, and GitHub activates a copied workflow on the target default branch.
+# Distribute ARENA.md, the skills and the Gemini release workflow. Each job owns one target list, so the run page
+# names every list on its own row. CLANKERS_DIST_PAT needs Contents write on each target and Workflows write on the Gemini ones.
 name: Distribute
 on:
   push:
@@ -7,182 +7,87 @@ on:
     paths:
       - "rules/ARENA.md"
       - "skills/arena-skill/**"
+      - "skills/nemo-ui/**"
       - "github/workflows/gemini-release.yml"
       - "github/workflows/gemini_release.py"
+      - ".github/actions/distribute-sync/**"
       - ".github/workflows/distribute.yml"
   schedule:
     # Daily reconciliation: 03:17 UTC stays away from the top of the hour, when scheduled runs queue behind peak load.
-    # The schedule repairs missed, failed and partial synchronization in both target groups.
+    # The schedule repairs missed, failed and partial synchronization in every target group.
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       repos:
-        description: Space-separated owner/repo list for Arena; overrides REPOS_ARENA
+        description: Space-separated owner/repo list for the Arena list
         required: false
         default: ""
       gemini_repos:
-        description: Space-separated owner/repo list for the Gemini release workflow; overrides REPOS_GEMINI
+        description: Space-separated owner/repo list for the Gemini list
+        required: false
+        default: ""
+      nemo_ui_repos:
+        description: Space-separated owner/repo list for the nemo-ui list
         required: false
         default: ""
 permissions:
   contents: read
-env:
-  REPOS_ARENA: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki nemoe7/f360 nemoe7/request-tracker nemoe7/arena-cleanup"
-  REPOS_GEMINI: "nemoe7/daedalus nemoe7/request-tracker"
 jobs:
-  distribute:
-    name: Distribute
+  arena:
+    name: Distribute Arena
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
-      group: distribute
+      group: Distribute-Arena-${{ github.repository }}
       cancel-in-progress: false
-    env:
-      DEST: ARENA.md
-      SKILLS: "arena-skill"
-      SKILL_ROOT: skills
-      SKILL_DEST_ROOT: .agents/skills
-      LEGACY_SKILLS: "arena-live-steering arena-preview-reporting arena-preview-steering arena-proxy arena"
-      SRC_ROOT: github/workflows
-      DEST_ROOT: .github/workflows
-      FILES: "gemini-release.yml gemini_release.py"
     steps:
       - name: Check Out Source Repository
         uses: actions/checkout@v7
-      - name: Sync The Rules, The Skills and The Gemini Release Workflow
+      - name: Sync The Rules And The Arena Skills
+        uses: ./.github/actions/distribute-sync
         env:
           CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
-          ARENA_TARGETS: ${{ inputs.repos }}
-          GEMINI_TARGETS: ${{ inputs.gemini_repos }}
-        run: |
-          set -e
-          arena_list="${ARENA_TARGETS:-$REPOS_ARENA}"
-          gemini_list="${GEMINI_TARGETS:-$REPOS_GEMINI}"
-          [ -n "${arena_list}${gemini_list}" ] || { echo "::error::no target repos configured"; exit 1; }
-          src="$GITHUB_WORKSPACE/rules/ARENA.md"
-          [ -f "$src" ] || { echo "::error::rules/ARENA.md missing"; exit 1; }
-          for skill in $SKILLS; do
-            [ -f "$GITHUB_WORKSPACE/$SKILL_ROOT/$skill/SKILL.md" ] || {
-              echo "::error::$skill missing"; exit 1;
-            }
-          done
-          for f in $FILES; do
-            [ -f "$GITHUB_WORKSPACE/$SRC_ROOT/$f" ] || { echo "::error::$SRC_ROOT/$f missing"; exit 1; }
-          done
-
-          # Membership keeps the two target lists independent in one pass.
-          in_list() {
-            case " $1 " in *" $2 "*) return 0 ;; *) return 1 ;; esac
-          }
-
-          # One skill's shipped file list: tracked files, minus the pages that stay in this repository and minus the owner-run packages under arena-egress-proxy/ and arena-preview-proxy/.
-          # The docker files and the proxy code stay here beside the published images.
-          skill_files() {
-            local out
-            out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" | grep -vFx -e README.md -e INSTALL.md | grep -vE '^(arena-egress-proxy|arena-preview-proxy)/' || true)
-            printf '%s\n' "$out"
-          }
-
-          union=""
-          for repo in $arena_list $gemini_list; do
-            in_list "$union" "$repo" || union="$union $repo"
-          done
-
-          failed=""
-          # shellcheck disable=SC2016  # The helper expands the token when git calls it.
-          git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$CLANKERS_DIST_PAT"; }; f'
-          for repo in $union; do
-            (
-              set -e
-              work=$(mktemp -d)
-              trap 'rm -rf "$work"' EXIT
-              git clone "https://github.com/$repo.git" "$work"
-              arena_target=0
-              gemini_target=0
-              in_list "$arena_list" "$repo" && arena_target=1
-              in_list "$gemini_list" "$repo" && gemini_target=1
-              if [ "$arena_target" = 1 ]; then
-                mkdir -p "$work/$(dirname "$DEST")"
-                cp "$src" "$work/$DEST"
-                for legacy in $LEGACY_SKILLS; do
-                  # shellcheck disable=SC2115
-                  rm -rf "$work/$SKILL_DEST_ROOT/$legacy"
-                done
-                for skill in $SKILLS; do
-                  skill_src="$SKILL_ROOT/$skill"
-                  skill_dest="$SKILL_DEST_ROOT/$skill"
-                  files=$(skill_files "$skill")
-                  [ -n "$files" ] || { echo "::error::no tracked files for $skill"; exit 1; }
-                  # shellcheck disable=SC2115
-                  # The whole directory goes, so a page that this repository keeps leaves the target repo on the same run.
-                  rm -rf "$work/$skill_dest"
-                  for f in $files; do
-                    mkdir -p "$work/$skill_dest/$(dirname "$f")"
-                    cp "$GITHUB_WORKSPACE/$skill_src/$f" "$work/$skill_dest/$f"
-                  done
-                done
-              fi
-              if [ "$gemini_target" = 1 ]; then
-                mkdir -p "$work/$DEST_ROOT"
-                for f in $FILES; do
-                  cp "$GITHUB_WORKSPACE/$SRC_ROOT/$f" "$work/$DEST_ROOT/$f"
-                done
-              fi
-              cd "$work"
-              git config user.name "github-actions[bot]"
-              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              if [ "$arena_target" = 1 ]; then
-                git add "$DEST"
-                for skill in $SKILLS; do
-                  git add "$SKILL_DEST_ROOT/$skill"
-                done
-                for legacy in $LEGACY_SKILLS; do
-                  if [ -n "$(git ls-files "$SKILL_DEST_ROOT/$legacy")" ]; then
-                    git add -u -- "$SKILL_DEST_ROOT/$legacy"
-                  fi
-                done
-              fi
-              if [ "$gemini_target" = 1 ]; then
-                for f in $FILES; do
-                  git add "$DEST_ROOT/$f"
-                done
-              fi
-              git diff --cached --quiet || {
-                git commit -m "chore: clankers sync"
-                git push -u origin HEAD
-              }
-              if [ "$arena_target" = 1 ]; then
-                git show "HEAD:$DEST" | cmp -s - "$src" || {
-                  echo "::error::$repo: ARENA.md differs after sync"; exit 1;
-                }
-                for legacy in $LEGACY_SKILLS; do
-                  [ -z "$(git ls-tree -r --name-only HEAD -- "$SKILL_DEST_ROOT/$legacy")" ] || {
-                    echo "::error::$repo: retired skill $legacy remains"; exit 1;
-                  }
-                done
-                for skill in $SKILLS; do
-                  skill_src="$SKILL_ROOT/$skill"
-                  skill_dest="$SKILL_DEST_ROOT/$skill"
-                  files=$(skill_files "$skill")
-                  have=$(git ls-tree -r --name-only "HEAD:$skill_dest" | sort)
-                  # shellcheck disable=SC2086  # The word split lists one path per line.
-                  want=$(printf '%s\n' $files | sort)
-                  [ "$have" = "$want" ] || { echo "::error::$repo: $skill file-list mismatch"; exit 1; }
-                  for f in $files; do
-                    git show "HEAD:$skill_dest/$f" | cmp -s - "$GITHUB_WORKSPACE/$skill_src/$f" || {
-                      echo "::error::$repo: $skill/$f differs"; exit 1;
-                    }
-                  done
-                done
-              fi
-              if [ "$gemini_target" = 1 ]; then
-                for f in $FILES; do
-                  git show "HEAD:$DEST_ROOT/$f" | cmp -s - "$GITHUB_WORKSPACE/$SRC_ROOT/$f" || {
-                    echo "::error::$repo: $f differs after sync"; exit 1;
-                  }
-                done
-              fi
-              echo "$repo: verified"
-            ) || failed="$failed $repo"
-          done
-          [ -z "$failed" ] || { echo "::error::sync failed for:$failed"; exit 1; }
+        with:
+          repos: ${{ inputs.repos }}
+          repos-fallback: nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki nemoe7/f360 nemoe7/request-tracker nemoe7/arena-cleanup
+          rule-src: rules/ARENA.md
+          rule-dest: ARENA.md
+          skills: arena-skill
+          legacy: arena-live-steering arena-preview-reporting arena-preview-steering arena-proxy arena
+  gemini:
+    name: Distribute Gemini
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: Distribute-Gemini-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Check Out Source Repository
+        uses: actions/checkout@v7
+      - name: Sync The Gemini Release Workflow
+        uses: ./.github/actions/distribute-sync
+        env:
+          CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
+        with:
+          repos: ${{ inputs.gemini_repos }}
+          repos-fallback: nemoe7/daedalus nemoe7/request-tracker
+          files: gemini-release.yml gemini_release.py
+  nemo-ui:
+    name: Distribute nemo-ui
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: Distribute-nemo-ui-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Check Out Source Repository
+        uses: actions/checkout@v7
+      # The job copies the skill from this repository and fails when the directory is gone.
+      - name: Sync The nemo-ui Skill
+        uses: ./.github/actions/distribute-sync
+        env:
+          CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
+        with:
+          repos: ${{ inputs.nemo_ui_repos }}
+          repos-fallback: nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup
+          skills: nemo-ui
