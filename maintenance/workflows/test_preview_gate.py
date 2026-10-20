@@ -1050,7 +1050,10 @@ def test_violation_flag_blocks_the_agent_shell():
       agent = run("printf agent-work", state=root)
       assert agent.returncode == 130, agent.stderr
       assert "agent-work" not in agent.stdout
-      assert "Read ARENA.md" in agent.stderr
+      assert "The user flagged a violation." in agent.stdout
+      assert "This Bash call was blocked." in agent.stdout
+      assert "Read only read-set files whose current full text is absent from context" in agent.stdout
+      assert agent.stderr == ""
       assert not store.state()["agent_interrupt_pending"]
 
 

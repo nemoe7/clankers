@@ -3544,9 +3544,10 @@ def poll_repeat(store):
     recent = False
   if not recent:
     return None
-  store.request_interrupt("tasks")
+  store.request_interrupt("tasks", user_flagged=False)
   return (
-    "VIOLATION: repeat poll inside 45 seconds. Read the read set, then work the task."
+    "VIOLATION: repeat poll inside 45 seconds. Read only read-set files whose "
+    "current full text is absent from context, then work the task."
   )
 
 
@@ -5768,7 +5769,7 @@ class Store:
     age = seconds_since(self.meta_value(POLLING_META))
     return age is not None and 0 <= age < POLLING_FRESH_SECONDS
 
-  def request_interrupt(self, tab, report_id=None, armed=True):
+  def request_interrupt(self, tab, report_id=None, armed=True, user_flagged=True):
     if not armed:
       self.take_interrupt()
       return {"agent_interrupt_pending": False}
@@ -5779,22 +5780,30 @@ class Store:
       "downloads",
     }:
       raise ValueError("tab must name a preview tab")
-    header = "VIOLATION"
+    header = "The user flagged a violation." if user_flagged else "VIOLATION"
     if tab == "reports" and report_id is not None:
       try:
         self.report(report_id)
       except FileNotFoundError:
         pass
       else:
-        header = f"VIOLATION: report {report_id}"
+        header = (
+          f"The user flagged a violation: report {report_id} formatting is wrong."
+          if user_flagged
+          else f"VIOLATION: report {report_id}"
+        )
     elif tab == "tasks":
       task = current_task((self.tasks() or {}).get("upcoming", []))
       if task:
-        header = f"VIOLATION: task {task['id']}"
+        header = (
+          f"The user flagged a violation: task {task['id']}."
+          if user_flagged
+          else f"VIOLATION: task {task['id']}"
+        )
     notice = (
-      f"{header}\nThis Bash call was blocked. Read ARENA.md, root AGENTS.md, "
-      "every nested AGENTS.md, and arena-skill SKILL.md in full again, then fix "
-      "the violation before continuing."
+      f"{header}\nThis Bash call was blocked. Read only read-set files whose "
+      "current full text is absent from context, then fix the violation before "
+      "continuing."
     )
     self.set_meta(AGENT_INTERRUPT_META, notice)
     return {"agent_interrupt_pending": True}
@@ -7741,7 +7750,10 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
     mark("interrupt")
     notice = Store(state_dir, create=False).take_interrupt()
     if notice:
-      report(notice)
+      if notice.startswith("The user flagged a violation"):
+        print(notice, flush=True)
+      else:
+        report(notice)
       return finish(130)
   # case: read-set-note
   if not routed and "read-set" not in finished and state_file(state_dir).is_file():
