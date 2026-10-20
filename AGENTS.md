@@ -3,6 +3,7 @@
 ## Use
 
 - MUST apply these repository rules to every task and session here unless explicit user chat instructions override them.
+- A bare imperative is a hard rule. MUST, NEVER, and ALWAYS restate the hardest ones; prefer marks a soft rule.
 
 ## Arena-specific instructions
 
@@ -21,7 +22,7 @@
 - Amended clause: squash only the affected line.
 - Deleted clause: attempt one squash and keep whichever budget is lower.
 - Use a Conventional Commit subject, no body.
-- Stage only task-related files.
+- Stage only task-related files; leave unrelated and user-owned files unstaged.
 - Keep one CHANGELOG entry per date, extending it while the date holds.
 - Use dates as versions: a date heading reads `## YYYY-MM-DD`, with no bracket and no repeated date.
 - Group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain.
