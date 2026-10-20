@@ -732,8 +732,8 @@ def format_task_list(tasks,full=False):
 	if any(t.get('blocked')for t in shown):lines.append('* = blocked on a report answer or linked run')
 	head=None if full else current_task(shown)
 	for task in shown:
-		order=task.get('order');status=task.get('status')
-		if head is not None and task.get('id')==head.get('id'):status='current'
+		order=task.get('order');status=task.get('status');is_current=head is not None and task.get('id')==head.get('id')
+		if is_current:status='current'
 		id_=task.get('id');blocked=task.get('blocked');report_id=task.get('report_id');blocked_mark='*'if blocked else'';line=f"{order}{blocked_mark}  {status} {id_}"
 		if report_id:line+=f" | waits on {report_id}"
 		if task.get('runs'):line+=f" | runs {', '.join(task['runs'])}"
@@ -741,6 +741,7 @@ def format_task_list(tasks,full=False):
 		lines.append(line)
 		for detail in task.get('details',[]):lines.append(f"    {detail}")
 		for answer in task.get('answers',[]):lines.append(f"    answer {answer['id']}, at {answer['at']}");lines.append(f"    {answer['text']}")
+		if is_current:lines.append('    Is this still the task you are working on?')
 	return'\n'.join(lines)
 def format_task(record,full=False):
 	id_=record.get('id');order=record.get('order');status=record.get('status');report_id=record.get('report_id');blocked=record.get('blocked');title=record.get('title')or'';details=record.get('details')or[];cut=details if full else[detail[:ECHO_DETAIL]+('…'if len(detail)>ECHO_DETAIL else'')for detail in details];first=f"task {id_}, order {order}, status {status}";task_type=record.get('type')

@@ -3472,8 +3472,8 @@ def test_report_agent_seen_migration():
     assert migrated.state()["reports"][0]["agent_seen_at"] is None
 
 
-def test_bare_task_list_names_the_current_task():
-  # The bare list shows upcoming tasks. It names the first unblocked task current. The page gives that task its own div.
+def test_bare_task_list_names_and_asks_about_the_current_task():
+  # The bare list names and asks about the first unblocked task. The page gives it its own div.
   # `--full` still prints every task, finished included, so the order stays readable.
   with tempfile.TemporaryDirectory() as bare_dir:
     bare = preview.Store(bare_dir, create=True)
@@ -3485,6 +3485,7 @@ def test_bare_task_list_names_the_current_task():
     lines = preview.format_task_list(bare.list_tasks()).splitlines()
     assert lines[0] == "Tasks 2 upcoming"
     assert "current first" in lines[1]
+    assert sum(line.rstrip().endswith("?") for line in lines) == 1
     assert any("upcoming second" in line for line in lines)
     assert lines.count("    Step one") == len(bare.list_tasks()) - 1
     assert "done-one" not in "\n".join(lines)
@@ -3492,16 +3493,19 @@ def test_bare_task_list_names_the_current_task():
     assert full[0] == "Tasks 3"
     assert "done-one" in "\n".join(full)
     assert "current" not in "\n".join(full)
+    assert not any(line.rstrip().endswith("?") for line in full)
     bare.write_task("first", blocked=True)
     held = preview.format_task_list(bare.list_tasks()).splitlines()
     assert any("upcoming first" in line and "*" in line for line in held)
     assert any("current second" in line for line in held)
+    assert sum(line.rstrip().endswith("?") for line in held) == 1
     assert "* = blocked on a report answer or linked run" in held
     assert preview.current_task(bare.list_tasks())["id"] == "second"
     # With every upcoming task blocked, no task reads as current work.
     bare.write_task("second", blocked=True)
     waiting = preview.format_task_list(bare.list_tasks()).splitlines()
     assert "current" not in "\n".join(waiting)
+    assert not any(line.rstrip().endswith("?") for line in waiting)
     assert preview.current_task(bare.list_tasks()) is None
     bare.write_task("second", blocked=False)
     # An empty queue reads as empty rather than printing a lone header count of one.
