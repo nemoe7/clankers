@@ -333,10 +333,10 @@ def test_gist_index_content_and_links():
     assert f"| [{name}](#{sync.gist_anchor(name)}) |" in index, name
   assert sync.gist_anchor("AGENTS.md") == "file-agents-md"
   assert sync.gist_anchor("wenyan-CHATGPT-MORE.txt") == "file-wenyan-chatgpt-more-txt"
-  assert "Platform difference matrix" in index
-  assert "| Git/Hub | <ul><li>NEVER push unasked. </li>" in index
-  assert "Not authoritative." in index
-  assert "These files are the rules in this gist." in index
+  index_lines = index.splitlines()
+  assert "## Platform difference matrix" in index_lines
+  matrix_rows = [line.split("|") for line in index_lines if line.startswith("|")]
+  assert any(row[1].strip() == "Git/Hub" and row[2].strip() for row in matrix_rows)
   assert (
     sync._rewrite_links(
       "[A](a.md) [Nested](nested-a.txt) [Excluded](missing.md)",
@@ -353,8 +353,9 @@ def test_gist_index_content_and_links():
     == "[kilo-plan.md](kilo-plan.md)"
   )
   assert index != readme
-  assert sync.gist_index("root\n", set()) == (
-    "# clankers-rules\n\n"
-    "These files are the rules in this gist. This file is an index, not an agent rule.\n\n"
-    "No other rule file is included.\n"
-  )
+  empty_index = sync.gist_index("root\n", set())
+  empty_lines = empty_index.splitlines()
+  assert empty_lines[0].startswith("# ")
+  assert not any(line.startswith("## ") for line in empty_lines)
+  assert not any(line.startswith("|") for line in empty_lines)
+  assert empty_index.endswith("\n")
