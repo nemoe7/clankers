@@ -700,7 +700,7 @@ class RequestBody:
 			if len(self.buffer)>keep:write(self.buffer[:-keep]);self.buffer=self.buffer[-keep:]
 			if not self.fill():raise ValueError('Incomplete multipart body')
 @contextmanager
-def stream_note_attachments(content_type,stream,length):
+def stream_note_attachments(content_type,stream,length,staged=False):
 	from email import policy;from email.parser import BytesParser
 	if any(char in content_type for char in'\r\n'):raise ValueError('Invalid multipart boundary')
 	header=BytesParser(policy=policy.default).parsebytes(b'Content-Type: '+content_type.encode('ascii')+b'\r\n\r\n');boundary=header.get_boundary()
@@ -715,8 +715,8 @@ def stream_note_attachments(content_type,stream,length):
 				if len(part.get_all(key,[]))>1:raise ValueError('Duplicate attachment header')
 			encoding=str(part.get('Content-Transfer-Encoding','binary')).strip().lower()
 			if encoding not in{'binary','8bit'}:raise ValueError('Unsupported attachment transfer encoding')
-			name=part.get_param('name',header='content-disposition')
-			if part.defects or part.is_multipart()or part.get_content_disposition()!='form-data'or name not in{'id','text','file'}:raise ValueError('Unexpected note attachment field')
+			name=part.get_param('name',header='content-disposition');allowed={'id','file'}if staged else{'id','text','file'}
+			if part.defects or part.is_multipart()or part.get_content_disposition()!='form-data'or name not in allowed:raise ValueError('Unexpected note attachment field')
 			if name!='file'and(name in fields or part.get_filename()is not None):raise ValueError('Duplicate or invalid note attachment field')
 			if name=='file':
 				path=Path(staging)/str(len(files));stream=path.open('wb');body=FileBody(stream);body.path=path
@@ -731,6 +731,9 @@ def stream_note_attachments(content_type,stream,length):
 				while reader.fill():reader.buffer=b''
 				break
 			if ending!=b'\r\n':raise ValueError('Invalid multipart delimiter')
+		if staged:
+			if set(fields)!={'id'}or len(files)!=1:raise ValueError('Send one staged ID and one file')
+			yield(fields['id'],*files[0]);return
 		if set(fields)!={'id','text'}or not files:raise ValueError('Send one note ID, text and at least one file')
 		yield(fields['id'],fields['text'],files)
 def upload_row(row,directory):path=directory/UPLOAD_DIR/row['file'];record=dict(row)|{'path':str(path),'present':path.exists()};record.pop('seq',None);return record
@@ -1791,12 +1794,14 @@ class Store:
 		if path.parent!=Path('.'):path.parent.mkdir(parents=True,exist_ok=True)
 		path.write_text(state_ndjson(lines+self.userscript_history()),encoding='utf-8');return{'path':str(path),**counts}
 	def uploads(self):
-		with closing(self.connect())as db:rows=db.execute('SELECT * FROM uploads ORDER BY seq').fetchall()
+		with closing(self.connect())as db:rows=db.execute('SELECT * FROM uploads WHERE note_id IS NOT NULL ORDER BY seq').fetchall()
 		return[upload_row(row,self.path.parent)for row in rows]
-	def save_upload(self,name,content_type,data,upload_id=None,shared=None,note_id=None,position=None):
+	def save_upload(self,name,content_type,data,upload_id=None,shared=None,note_id=None,position=None,staged=False):
 		if not isinstance(data,(bytes,bytearray,FileBody)):raise TypeError('An upload is bytes')
 		if not data:raise ValueError('An upload must not be empty')
-		cleaned=upload_name(name);kind=upload_type(content_type);digest=body_digest(data);upload_id=identifier(upload_id)if upload_id is not None else self.free_id();note_id=identifier(note_id)if note_id is not None else upload_id
+		cleaned=upload_name(name);kind=upload_type(content_type);digest=body_digest(data);upload_id=identifier(upload_id)if upload_id is not None else self.free_id()
+		if note_id is not None:note_id=identifier(note_id)
+		elif not staged:note_id=upload_id
 		if position is not None and(not isinstance(position,int)or position<1):raise ValueError('Invalid attachment position')
 		directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True,mode=448)
 		with self.transaction(shared)as db:
@@ -1809,7 +1814,7 @@ class Store:
 				return upload_row(existing,self.path.parent)
 			duplicate_count=db.execute("SELECT COUNT(*) FROM uploads WHERE note_id = ? AND replace(name, ' ', '-') = ?",(note_id,cleaned.replace(' ','-'))).fetchone()[0];number=duplicate_count+1;timestamp=int(time.time());extension=Path(cleaned).suffix[:16].replace(' ','-');filename_stem=Path(cleaned).stem.replace(' ','-')
 			while True:
-				duplicate=f"-{number}"if number>1 else'';stem=f"{note_id[:6]}-{timestamp}{duplicate}-{filename_stem}";target=directory/f"{stem}{extension}"
+				duplicate=f"-{number}"if number>1 else'';stem=f"{(note_id or upload_id)[:6]}-{timestamp}{duplicate}-{filename_stem}";target=directory/f"{stem}{extension}"
 				if len(os.fsencode(target.name))>255:target=directory/f"{upload_id}{duplicate}{extension}"
 				collision=db.execute('SELECT 1 FROM uploads WHERE file = ?',(target.name,)).fetchone()
 				if not collision and not target.exists():break
@@ -1845,6 +1850,32 @@ class Store:
 		except Exception:
 			for path in created:path.unlink(missing_ok=True)
 			raise
+		self.autosave();return result
+	def stage_upload(self,name,content_type,data,upload_id):record=self.save_upload(name,content_type,data,upload_id=upload_id,staged=True);self.autosave();return record
+	def drop_staged(self,upload_id):
+		upload_id=identifier(upload_id)
+		with self.transaction()as db:
+			row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
+			if row is None:raise ValueError('No staged file is stored under this ID')
+			if row['note_id']is not None:raise ValueError('This file already belongs to a note')
+			db.execute('DELETE FROM uploads WHERE id = ?',(upload_id,))
+		(self.path.parent/UPLOAD_DIR/row['file']).unlink(missing_ok=True);self.autosave();return{'dropped':upload_id}
+	def note_with_staged(self,note_id,text,upload_ids):
+		identifier(note_id);owner_text(text)
+		if not isinstance(upload_ids,(list,tuple))or not upload_ids:raise ValueError('Attach at least one staged file to a note')
+		ids=[identifier(upload_id)for upload_id in upload_ids]
+		if len(set(ids))!=len(ids):raise ValueError('Each staged file may attach once')
+		with self.transaction(autosave=False)as db:
+			db.execute('BEGIN IMMEDIATE');existing=db.execute('SELECT text FROM notes WHERE id = ?',(note_id,)).fetchone()
+			if existing and existing['text']!=text:raise ValueError('This message ID already belongs to different text')
+			rows=[db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()for upload_id in ids]
+			if any(row is None for row in rows):raise ValueError('No staged file is stored under this ID')
+			if any(row['note_id']is not None for row in rows):
+				if existing and all(row['note_id']==note_id for row in rows):note=self.note(note_id,text,shared=db);return add_note_attachments(note,[upload_row(row,self.path.parent)for row in rows])
+				raise ValueError('A staged file already belongs to a different note')
+			if existing:raise ValueError('This message ID was already sent without a file')
+			for row in rows:db.execute('UPDATE uploads SET note_id = ? WHERE id = ?',(note_id,row['id']))
+			rows=[db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()for upload_id in ids];note=self.note(note_id,text,shared=db);result=add_note_attachments(note,[upload_row(row,self.path.parent)for row in rows])
 		self.autosave();return result
 	def fetch_jobs(self):
 		with closing(self.connect())as db:rows=db.execute('SELECT * FROM fetch_jobs ORDER BY seq DESC').fetchall()
@@ -2465,10 +2496,10 @@ def handler(store):
 			except FileNotFoundError as error:self.problem(404,error)
 			except(OSError,sqlite_api().Error,RuntimeError)as error:self.problem(503,error)
 		def do_POST(self):
-			path=urlsplit(self.path).path;autosave_post=path in{'/api/userscript-autosave','/api/userscript-autosave/compare'};report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);report_ack_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/ack-seen',path);report_view=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/view',path);message_replies_seen=re.fullmatch('/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny|drop)',path);note_upload=path=='/api/notes/with-file';agent_key_post=path=='/api/key';skip_poll_post=path=='/api/skip-poll';interrupt_post=path=='/api/agent-interrupt';task_order_post=path=='/api/tasks/order';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
-			if path not in{'/api/notes','/api/markdown','/api/fetch-jobs','/api/fetch-jobs/claim'}and not report_submit and not report_seen and not report_ack_seen and not report_view and not message_replies_seen and not report_unpublish and not note_upload and not fetch_post and not agent_key_post and not skip_poll_post and not interrupt_post and not task_order_post and not autosave_post:self.problem(404,'Not found');return
+			path=urlsplit(self.path).path;autosave_post=path in{'/api/userscript-autosave','/api/userscript-autosave/compare'};report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);report_ack_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/ack-seen',path);report_view=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/view',path);message_replies_seen=re.fullmatch('/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny|drop)',path);note_upload=path=='/api/notes/with-file';staged_upload=path=='/api/uploads';upload_drop=re.fullmatch('/api/uploads/([a-zA-Z0-9_-]{1,80})/drop',path);agent_key_post=path=='/api/key';skip_poll_post=path=='/api/skip-poll';interrupt_post=path=='/api/agent-interrupt';task_order_post=path=='/api/tasks/order';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
+			if path not in{'/api/notes','/api/markdown','/api/fetch-jobs','/api/fetch-jobs/claim'}and not report_submit and not report_seen and not report_ack_seen and not report_view and not message_replies_seen and not report_unpublish and not note_upload and not staged_upload and not upload_drop and not fetch_post and not agent_key_post and not skip_poll_post and not interrupt_post and not task_order_post and not autosave_post:self.problem(404,'Not found');return
 			content_type=self.headers.get('Content-Type','')
-			if note_upload:
+			if note_upload or staged_upload:
 				if not content_type.lower().startswith('multipart/form-data;'):self.problem(415,'Expected multipart/form-data');return
 			elif content_type!='application/json'and not fetch_result:self.problem(415,'Expected application/json');return
 			try:
@@ -2477,6 +2508,9 @@ def handler(store):
 				if fetch_result:
 					with closing(store.connect())as db:store.claimed_fetch(db,fetch_post.group(1),self.headers.get('X-Fetch-Claim',''))
 				if length<=0:subject='Upload'if note_upload else'Download'if fetch_result else'Request body';self.problem(413,f"{subject} has an invalid length");return
+				if staged_upload:
+					with stream_note_attachments(content_type,self.rfile,length,staged=True)as parsed:upload_id,name,kind,data=parsed;record=store.stage_upload(name,kind,data,upload_id)
+					self.reply(201,json.dumps(record,ensure_ascii=False));return
 				if note_upload:
 					with stream_note_attachments(content_type,self.rfile,length)as parsed:note=store.note_with_uploads(*parsed)
 					for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
@@ -2537,7 +2571,9 @@ def handler(store):
 					note=store.submit_report(report_submit.group(1),payload.get('id'),payload.get('answers'),payload.get('revision'))
 					for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
 					self.reply(201,json.dumps(note,ensure_ascii=False));return
-				note=store.note(payload.get('id'),payload.get('text'),quiet=bool(payload.get('quiet')))
+				if upload_drop:self.reply(200,json.dumps(store.drop_staged(upload_drop.group(1)),ensure_ascii=False));return
+				if payload.get('upload_ids')is not None:note=store.note_with_staged(payload.get('id'),payload.get('text'),payload.get('upload_ids'))
+				else:note=store.note(payload.get('id'),payload.get('text'),quiet=bool(payload.get('quiet')))
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
 				self.reply(201,json.dumps(note,ensure_ascii=False))
 			except(ReportChanged,FetchChanged,ReportHeld)as error:self.problem(409,error)

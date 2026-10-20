@@ -1940,7 +1940,7 @@ class RequestBody:
 
 
 @contextmanager
-def stream_note_attachments(content_type, stream, length):
+def stream_note_attachments(content_type, stream, length, staged=False):
   from email import policy
   from email.parser import BytesParser
 
@@ -1973,11 +1973,12 @@ def stream_note_attachments(content_type, stream, length):
       if encoding not in {"binary", "8bit"}:
         raise ValueError("Unsupported attachment transfer encoding")
       name = part.get_param("name", header="content-disposition")
+      allowed = {"id", "file"} if staged else {"id", "text", "file"}
       if (
         part.defects
         or part.is_multipart()
         or part.get_content_disposition() != "form-data"
-        or name not in {"id", "text", "file"}
+        or name not in allowed
       ):
         raise ValueError("Unexpected note attachment field")
       if name != "file" and (name in fields or part.get_filename() is not None):
@@ -2010,6 +2011,11 @@ def stream_note_attachments(content_type, stream, length):
         break
       if ending != b"\r\n":
         raise ValueError("Invalid multipart delimiter")
+    if staged:
+      if set(fields) != {"id"} or len(files) != 1:
+        raise ValueError("Send one staged ID and one file")
+      yield fields["id"], *files[0]
+      return
     if set(fields) != {"id", "text"} or not files:
       raise ValueError("Send one note ID, text and at least one file")
     yield fields["id"], fields["text"], files
@@ -5435,7 +5441,9 @@ class Store:
   def uploads(self):
     """Every upload, newest last, with `present` saying whether its bytes are still on disk."""
     with closing(self.connect()) as db:
-      rows = db.execute("SELECT * FROM uploads ORDER BY seq").fetchall()
+      rows = db.execute(
+        "SELECT * FROM uploads WHERE note_id IS NOT NULL ORDER BY seq"
+      ).fetchall()
     return [upload_row(row, self.path.parent) for row in rows]
 
   def save_upload(
@@ -5447,6 +5455,7 @@ class Store:
     shared=None,
     note_id=None,
     position=None,
+    staged=False,
   ):
     """Keep raw bytes beside SQLite, with a stable note link and distinct file record."""
     if not isinstance(data, (bytes, bytearray, FileBody)):
@@ -5457,7 +5466,10 @@ class Store:
     kind = upload_type(content_type)
     digest = body_digest(data)
     upload_id = identifier(upload_id) if upload_id is not None else self.free_id()
-    note_id = identifier(note_id) if note_id is not None else upload_id
+    if note_id is not None:
+      note_id = identifier(note_id)
+    elif not staged:
+      note_id = upload_id
     if position is not None and (not isinstance(position, int) or position < 1):
       raise ValueError("Invalid attachment position")
     directory = self.path.parent / UPLOAD_DIR
@@ -5495,7 +5507,7 @@ class Store:
       filename_stem = Path(cleaned).stem.replace(" ", "-")
       while True:
         duplicate = f"-{number}" if number > 1 else ""
-        stem = f"{note_id[:6]}-{timestamp}{duplicate}-{filename_stem}"
+        stem = f"{(note_id or upload_id)[:6]}-{timestamp}{duplicate}-{filename_stem}"
         target = directory / f"{stem}{extension}"
         if len(os.fsencode(target.name)) > 255:
           target = directory / f"{upload_id}{duplicate}{extension}"
@@ -5590,6 +5602,74 @@ class Store:
       for path in created:
         path.unlink(missing_ok=True)
       raise
+    self.autosave()
+    return result
+
+  def stage_upload(self, name, content_type, data, upload_id):
+    """Keep one file's bytes before its note exists. The later send binds it."""
+    record = self.save_upload(
+      name, content_type, data, upload_id=upload_id, staged=True
+    )
+    self.autosave()
+    return record
+
+  def drop_staged(self, upload_id):
+    """Remove one staged file and its bytes. Refuse a file a note already owns."""
+    upload_id = identifier(upload_id)
+    with self.transaction() as db:
+      row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
+      if row is None:
+        raise ValueError("No staged file is stored under this ID")
+      if row["note_id"] is not None:
+        raise ValueError("This file already belongs to a note")
+      db.execute("DELETE FROM uploads WHERE id = ?", (upload_id,))
+    (self.path.parent / UPLOAD_DIR / row["file"]).unlink(missing_ok=True)
+    self.autosave()
+    return {"dropped": upload_id}
+
+  def note_with_staged(self, note_id, text, upload_ids):
+    """Bind staged files and one note in one transaction. Identical retries are safe."""
+    identifier(note_id)
+    owner_text(text)
+    if not isinstance(upload_ids, (list, tuple)) or not upload_ids:
+      raise ValueError("Attach at least one staged file to a note")
+    ids = [identifier(upload_id) for upload_id in upload_ids]
+    if len(set(ids)) != len(ids):
+      raise ValueError("Each staged file may attach once")
+    with self.transaction(autosave=False) as db:
+      db.execute("BEGIN IMMEDIATE")
+      existing = db.execute(
+        "SELECT text FROM notes WHERE id = ?", (note_id,)
+      ).fetchone()
+      if existing and existing["text"] != text:
+        raise ValueError("This message ID already belongs to different text")
+      rows = [
+        db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
+        for upload_id in ids
+      ]
+      if any(row is None for row in rows):
+        raise ValueError("No staged file is stored under this ID")
+      if any(row["note_id"] is not None for row in rows):
+        if existing and all(row["note_id"] == note_id for row in rows):
+          note = self.note(note_id, text, shared=db)
+          return add_note_attachments(
+            note, [upload_row(row, self.path.parent) for row in rows]
+          )
+        raise ValueError("A staged file already belongs to a different note")
+      if existing:
+        raise ValueError("This message ID was already sent without a file")
+      for row in rows:
+        db.execute(
+          "UPDATE uploads SET note_id = ? WHERE id = ?", (note_id, row["id"])
+        )
+      rows = [
+        db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
+        for upload_id in ids
+      ]
+      note = self.note(note_id, text, shared=db)
+      result = add_note_attachments(
+        note, [upload_row(row, self.path.parent) for row in rows]
+      )
     self.autosave()
     return result
 
@@ -7543,6 +7623,10 @@ def handler(store):
         path,
       )
       note_upload = path == "/api/notes/with-file"
+      staged_upload = path == "/api/uploads"
+      upload_drop = re.fullmatch(
+        r"/api/uploads/([a-zA-Z0-9_-]{1,80})/drop", path
+      )
       agent_key_post = path == "/api/key"
       skip_poll_post = path == "/api/skip-poll"
       interrupt_post = path == "/api/agent-interrupt"
@@ -7563,6 +7647,8 @@ def handler(store):
         and not message_replies_seen
         and not report_unpublish
         and not note_upload
+        and not staged_upload
+        and not upload_drop
         and not fetch_post
         and not agent_key_post
         and not skip_poll_post
@@ -7574,7 +7660,7 @@ def handler(store):
         return
       # A composed note carries its files and text in one multipart request.
       content_type = self.headers.get("Content-Type", "")
-      if note_upload:
+      if note_upload or staged_upload:
         if not content_type.lower().startswith("multipart/form-data;"):
           self.problem(415, "Expected multipart/form-data")
           return
@@ -7598,6 +7684,14 @@ def handler(store):
             "Upload" if note_upload else "Download" if fetch_result else "Request body"
           )
           self.problem(413, f"{subject} has an invalid length")
+          return
+        if staged_upload:
+          with stream_note_attachments(
+            content_type, self.rfile, length, staged=True
+          ) as parsed:
+            upload_id, name, kind, data = parsed
+            record = store.stage_upload(name, kind, data, upload_id)
+          self.reply(201, json.dumps(record, ensure_ascii=False))
           return
         if note_upload:
           with stream_note_attachments(content_type, self.rfile, length) as parsed:
@@ -7774,9 +7868,19 @@ def handler(store):
             note[key] = clip_stamp(note[key])
           self.reply(201, json.dumps(note, ensure_ascii=False))
           return
-        note = store.note(
-          payload.get("id"), payload.get("text"), quiet=bool(payload.get("quiet"))
-        )
+        if upload_drop:
+          self.reply(
+            200, json.dumps(store.drop_staged(upload_drop.group(1)), ensure_ascii=False)
+          )
+          return
+        if payload.get("upload_ids") is not None:
+          note = store.note_with_staged(
+            payload.get("id"), payload.get("text"), payload.get("upload_ids")
+          )
+        else:
+          note = store.note(
+            payload.get("id"), payload.get("text"), quiet=bool(payload.get("quiet"))
+          )
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           note[key] = clip_stamp(note[key])
         self.reply(201, json.dumps(note, ensure_ascii=False))

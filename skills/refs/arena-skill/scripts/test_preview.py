@@ -1830,9 +1830,9 @@ def test_http_boundaries():
       # The save route is gone: autosave writes the file and the page copies to the clipboard.
       assert request("POST", "/api/save-state", "{}", auth)[0] == 404
       assert request("POST", "/api/save-state", "{}")[0] == 404
-      # The legacy upload surface left the skill: attachments ride the note route, and the
-      # store cases keep the bytes and a missing file.
-      assert request("POST", "/api/uploads?name=gone.bin", b"x", auth)[0] == 404
+      # A note still can bind its files in one send. The staged surface takes multipart only,
+      # and its other verbs stay unknown.
+      assert request("POST", "/api/uploads?name=gone.bin", b"x", auth)[0] == 415
       assert request("GET", "/api/uploads/gone")[0] == 404
 
       # The read stamp belongs to the report rather than to one browser's storage, so the browser
@@ -11750,3 +11750,111 @@ def test_websocket_transport(tmp_path, monkeypatch):
     server.shutdown()
     worker.join()
     server.server_close()
+
+
+def test_a_staged_upload_waits_for_its_note():
+  """A staged file stays out of state until a note binds it."""
+  with tempfile.TemporaryDirectory() as staged_dir:
+    store = preview.Store(staged_dir, create=True)
+    staged = store.stage_upload("plan.txt", "text/plain", b"abc", "stage01")
+    assert staged["id"] == "stage01" and staged["note_id"] is None
+    assert store.uploads() == [] and store.state()["uploads"] == []
+    note = store.note_with_staged("note-01", "One file", ["stage01"])
+    assert [item["name"] for item in note["attachments"]] == ["plan.txt"]
+    assert Path(note["attachment_path"]).read_bytes() == b"abc"
+    assert [item["id"] for item in store.uploads()] == ["stage01"]
+    again = store.note_with_staged("note-01", "One file", ["stage01"])
+    assert again["attachments"] == note["attachments"]
+    assert len(store.uploads()) == 1
+
+
+def test_a_staged_upload_drops_until_it_is_bound():
+  """A staged file drops once, and a bound file never drops."""
+  with tempfile.TemporaryDirectory() as drop_dir:
+    store = preview.Store(drop_dir, create=True)
+    staged = store.stage_upload("plan.txt", "text/plain", b"abc", "stage01")
+    path = Path(staged["path"])
+    assert store.drop_staged("stage01") == {"dropped": "stage01"}
+    assert not path.exists() and store.uploads() == []
+    try:
+      store.drop_staged("stage01")
+      raise AssertionError("A second drop must fail")
+    except ValueError:
+      pass
+    store.stage_upload("plan.txt", "text/plain", b"abc", "stage02")
+    store.note_with_staged("note-02", "One file", ["stage02"])
+    try:
+      store.drop_staged("stage02")
+      raise AssertionError("A bound file must not drop")
+    except ValueError:
+      pass
+
+
+def test_http_staged_upload_binds_and_drops():
+  """The staged endpoints keep the file out of state until the send binds it."""
+  global app
+  with tempfile.TemporaryDirectory() as staged_http_dir:
+    staged_http = preview.Store(staged_http_dir, create=True)
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(staged_http))
+    worker = threading.Thread(target=app.serve_forever, daemon=True)
+    worker.start()
+    try:
+      boundary = b"preview-stage-test"
+
+      def part(name, content, extra=b""):
+        return (
+          b"--"
+          + boundary
+          + b'\r\nContent-Disposition: form-data; name="'
+          + name
+          + b'"'
+          + extra
+          + b"\r\n\r\n"
+          + content
+          + b"\r\n"
+        )
+
+      closing = b"--" + boundary + b"--\r\n"
+      headers = {
+        "Content-Type": "multipart/form-data; boundary=preview-stage-test",
+      }
+      body = (
+        part(b"id", b"stage01")
+        + part(b"file", b"abc", b'; filename="a.txt"\r\nContent-Type: text/plain')
+        + closing
+      )
+      status, _, payload = request("POST", "/api/uploads", body, headers)
+      staged = json.loads(payload)
+      assert status == 201 and staged["id"] == "stage01" and staged["note_id"] is None
+      assert staged_http.state()["uploads"] == []
+      assert (
+        request("POST", "/api/uploads", b"{}", {"Content-Type": "application/json"})[0]
+        == 415
+      )
+      body = json.dumps(
+        {"id": "note-01", "text": "One file", "upload_ids": ["stage01"]}
+      ).encode()
+      status, _, payload = request(
+        "POST", "/api/notes", body, {"Content-Type": "application/json"}
+      )
+      note = json.loads(payload)
+      assert status == 201 and note["attachment_name"] == "a.txt"
+      assert [item["id"] for item in staged_http.uploads()] == ["stage01"]
+      second = (
+        part(b"id", b"stage02")
+        + part(b"file", b"xyz", b'; filename="b.txt"\r\nContent-Type: text/plain')
+        + closing
+      )
+      assert request("POST", "/api/uploads", second, headers)[0] == 201
+      status, _, payload = request(
+        "POST",
+        "/api/uploads/stage02/drop",
+        b"{}",
+        {"Content-Type": "application/json"},
+      )
+      assert status == 200 and json.loads(payload) == {"dropped": "stage02"}
+      assert [item["id"] for item in staged_http.state()["uploads"]] == ["stage01"]
+    finally:
+      app.shutdown()
+      app.server_close()
+      worker.join()
