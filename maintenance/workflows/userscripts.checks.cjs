@@ -290,7 +290,7 @@ function checkPromptFill(api) {
     [slugFromOwnerRepo("a/b/c"), null],
     // The repo name leads the fetched template. The rules file follows it when available.
     [prompt.split("\n")[0],
-      "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
+      "clankers read ARENA.md and AGENTS.md in full before your first edit only if their current full text is absent from context, and follow both."],
     [prompt.includes(promptFillText), true],
     [prompt.indexOf("here is ARENA.md"), -1],
     [prompt.indexOf("Pareto"), -1],
@@ -308,7 +308,7 @@ function checkPromptFill(api) {
     // One fill per repo per page: the observer sees no second write, even when the
     // editor hands the text back with different whitespace or the send clears it.
     [shouldWrite(prompt, "clankers", "clankers", "clankers"), false],
-    [shouldWrite("clankers read ARENA.md AGENTS.md in full before your first edit, and follow both.\n", "clankers", "clankers", "clankers"), false],
+    [shouldWrite("clankers read ARENA.md and AGENTS.md in full before your first edit only if their current full text is absent from context, and follow both.\n", "clankers", "clankers", "clankers"), false],
     [shouldWrite("", "clankers", "clankers", "clankers"), false],
     [shouldWrite("draft", "clankers", "clankers", "clankers"), false],
     [proxyHost("https://arena-proxy.example.ts.net/"), "https://arena-proxy.example.ts.net"],
@@ -2230,7 +2230,7 @@ function checkStateDownload(api, session, logging) {
     querySelector: function () { return null; },
     querySelectorAll: function (selector) {
       return selector.includes('aria-haspopup')
-        ? [{ textContent: "daedalus read ARENA.md AGENTS.md in full before your first edit" }]
+        ? [{ textContent: "daedalus read ARENA.md and AGENTS.md in full before your first edit only if their current full text is absent from context" }]
         : [];
     },
   };
@@ -2361,7 +2361,7 @@ function checkStateDownload(api, session, logging) {
   );
   // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish. The conversation header still opens with the repository name, and its first word is the repository.
   // The tab title is the reliable read, so it comes before the greppier header read.
-  var headerSpan = { textContent: "clankers read ARENA.md AGENTS.md in full before your first edit" };
+  var headerSpan = { textContent: "clankers read ARENA.md and AGENTS.md in full before your first edit only if their current full text is absent from context" };
   var headerDoc = {
     querySelector: function () { return null; },
     querySelectorAll: function (selector) {

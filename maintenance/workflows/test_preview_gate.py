@@ -1052,7 +1052,10 @@ def test_violation_flag_blocks_the_agent_shell():
       assert "agent-work" not in agent.stdout
       assert "The user flagged a violation." in agent.stdout
       assert "This Bash call was blocked." in agent.stdout
-      assert "Read only read-set files whose current full text is absent from context" in agent.stdout
+      assert (
+        "Read only read-set files whose current full text is absent from context"
+        in agent.stdout
+      )
       assert agent.stderr == ""
       assert not store.state()["agent_interrupt_pending"]
 
@@ -1075,9 +1078,15 @@ def test_the_read_set_gate_passes_the_workspace_root_bootstrap_line():
       assert passed.stdout == "bootstrap-ran", passed.stdout
       assert store.pending_read_set_note() is None
       assert store.meta_value(preview_module.READ_SET_SLOT_META) is None
+      first = run("printf first-work", state=root)
+      assert first.returncode == 0, first.stderr
+      assert first.stdout == "first-work"
+      assert store.pending_read_set_note() is None
+      store.set_meta(preview_module.READ_SET_LAST_META, "2000-01-01T00:00:00+00:00")
       blocked = run("printf agent-work", state=root)
       assert blocked.returncode == 130, blocked.stderr
       assert "READ SET BLOCKED" in blocked.stderr, blocked.stderr
+      assert "only if its current full text is absent from context" in blocked.stderr
       assert "Blocked by the part `printf agent-work`." in blocked.stderr, (
         blocked.stderr
       )

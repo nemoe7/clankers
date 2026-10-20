@@ -160,8 +160,9 @@ REMINDERS = (
   (
     "Context check: MUST read ARENA.md, root/nested AGENTS.md, and arena-skill "
     "SKILL.md fully before other tools if current full text is absent from context, "
-    "including session start and post-compaction/summary/context replacement; MUST "
-    "reread all after a rule violation or reread request."
+    "including session start and post-compaction/summary/context replacement; after "
+    "a rule violation or reread request, MUST read only files whose current full "
+    "text is absent from context."
   ),
   "`task-list` at turn start. Update it as work changes.",
   "Take the smallest open task next.",
@@ -2196,8 +2197,10 @@ POLLING_FRESH_SECONDS = 5.0
 # A poll this soon after the last one is spam. The second poll raises a violation.
 POLL_REPEAT_SECONDS = 45
 POLL_REPEAT_META = "poll_repeat"
-# The latest wall-clock slot that created the hidden, agent-blocking read-set note.
+# The wall-clock slot of the latest hidden, agent-blocking read-set checkpoint.
 READ_SET_SLOT_META = "read_set_slot"
+# The first eligible command or latest checkpoint starts the elapsed interval.
+READ_SET_LAST_META = "read_set_last_at"
 READ_SET_INTERVAL_MINUTES = 20
 # The owner's Skip poll press is a one-shot request: the waiting poll ends at once, and no
 # note lands in the message log for a later turn to misread.
@@ -2545,7 +2548,8 @@ def read_set_tick(store, line, moment=None, root=None):
     )
   return (
     f"READ SET BLOCKED: checkpoint {pending['id']} is pending. Run"
-    " `arena-preview read`, read every listed path in full with the read tool, then"
+    " `arena-preview read`, read each listed path in full with the read tool only if"
+    " its current full text is absent from context, then"
     f" `arena-preview ack {pending['id']} <markdown>`."
     f"{blocker_hint}"
   )
@@ -4281,7 +4285,10 @@ class Store:
     return message_row(row) if row else None
 
   def schedule_read_set_note(self, moment=None, root=None):
-    """Atomically create at most one checkpoint for the current 20-minute slot."""
+    """Atomically create a checkpoint after each elapsed 20-minute interval."""
+    moment = moment or datetime.now(DISPLAY_ZONE or timezone.utc)
+    if moment.tzinfo is None:
+      moment = moment.replace(tzinfo=timezone.utc)
     slot = read_set_slot(moment)
     paths = read_set_paths(root)
     with closing(self.connect()) as db, db:
@@ -4300,9 +4307,25 @@ class Store:
       if row:
         return message_row(row)
       recorded = db.execute(
-        "SELECT value FROM meta WHERE key = ?", (READ_SET_SLOT_META,)
+        "SELECT value FROM meta WHERE key = ?", (READ_SET_LAST_META,)
       ).fetchone()
-      if recorded and recorded["value"] == slot:
+      if recorded is None:
+        recorded = db.execute(
+          "SELECT value FROM meta WHERE key = ?", (READ_SET_SLOT_META,)
+        ).fetchone()
+      try:
+        previous = datetime.fromisoformat(recorded["value"]) if recorded else None
+      except ValueError:
+        previous = None
+      if previous is None:
+        db.execute(
+          "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+          (READ_SET_LAST_META, moment.isoformat()),
+        )
+        return None
+      if previous.tzinfo is None:
+        previous = previous.replace(tzinfo=timezone.utc)
+      if (moment - previous).total_seconds() < READ_SET_INTERVAL_MINUTES * 60:
         return None
       for _ in range(MINT_ATTEMPTS):
         note_id = new_id()
@@ -4317,8 +4340,9 @@ class Store:
         )
       listed = "\n".join(f"- `{path}`" for path in paths)
       text = (
-        f"Read-set checkpoint for local slot {slot}. Read every listed path in full"
-        " with the read tool, then acknowledge this note.\n"
+        "Read-set checkpoint after a 20-minute interval. Read each listed path in full"
+        " with the read tool only if its current full text is absent from context, then"
+        " acknowledge this note.\n"
         f"{listed}"
       )
       record = self.note(
@@ -4333,6 +4357,11 @@ class Store:
         "INSERT INTO meta(key, value) VALUES (?, ?)"
         " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         (READ_SET_SLOT_META, slot),
+      )
+      db.execute(
+        "INSERT INTO meta(key, value) VALUES (?, ?)"
+        " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (READ_SET_LAST_META, moment.isoformat()),
       )
     self.autosave()
     return record
@@ -8238,6 +8267,17 @@ def main():
     ("state", "clear"): "clear-state",
   }
   args.command = grouped_commands.get((args.command, verb), args.command)
+  if args.command == "route":
+    command_args = args.command_args
+    separator = command_args.index("--") if "--" in command_args else len(command_args)
+    if any(
+      argument == "--task" or argument.startswith("--task=")
+      for argument in command_args[:separator]
+    ):
+      parser.error(
+        "put --task before the run name. Use: "
+        "arena-preview run start --task <id> <name> -- <command>"
+      )
   if args.command == "unpublish" and args.stale:
     if args.report_id:
       parser.error("give a report ID or --stale, not both")
