@@ -142,7 +142,7 @@ jobs:
       - name: Check The Workflow Contract
         run: python maintenance/workflows/check_artifacts.py
 
-      - name: Build And Check Plugin Archives
+      - name: Build and Check Plugin Archives
         run: python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir .
 
       - name: Verify The Archive
@@ -335,7 +335,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      - name: Build And Push
+      - name: Build and Push
         if: matrix.changed == 'true'
         uses: docker/build-push-action@v6
         with:

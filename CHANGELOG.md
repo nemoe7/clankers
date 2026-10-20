@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Maintenance: share the release prompt rules and the prose linter report block.
 - Workflows: call the prepare action from the Version Bumps job.
 - Maintenance: remove the unused `--no-ste` and `--directory` options.
+- Workflows: lowercase the `and` in job and step names, and keep tool names in their real case.
 
 ## 2026-10-19
 

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   contract:
-    name: Commit And Body Contract
+    name: Commit and Body Contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -35,7 +35,7 @@ jobs:
       - name: Install Validation Dependencies
         run: python -m pip install -r requirements.txt
 
-      - name: Check The Commits, The Title And The Body
+      - name: Check The Commits, The Title and The Body
         env:
           # The values reach the script through the environment, never through the script text.
           PR_TITLE: ${{ github.event.pull_request.title }}

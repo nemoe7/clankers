@@ -280,7 +280,7 @@ def build_push_document(context: str, image: str) -> dict:
   document = copy.deepcopy(BASE)
   document["jobs"]["work"]["steps"] = [
     {
-      "name": "Build And Push",
+      "name": "Build and Push",
       "uses": "docker/build-push-action@v6",
       "with": {
         "context": context,
@@ -310,7 +310,7 @@ def build_matrix_document() -> dict:
   document = copy.deepcopy(BASE)
   document["jobs"]["work"]["steps"] = [
     {
-      "name": "Build And Push",
+      "name": "Build and Push",
       "uses": "docker/build-push-action@v6",
       "with": {
         "context": "skills/arena-skill/${{ matrix.directory }}",

@@ -49,7 +49,7 @@ jobs:
     steps:
       - name: Check Out Source Repository
         uses: actions/checkout@v7
-      - name: Sync The Rules, The Skills And The Gemini Release Workflow
+      - name: Sync The Rules, The Skills and The Gemini Release Workflow
         env:
           CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
           ARENA_TARGETS: ${{ inputs.repos }}

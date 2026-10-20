@@ -41,20 +41,20 @@ jobs:
       - name: Install Maintenance Dependencies
         run: python -m pip install -r requirements.txt
 
-      - name: Install Build Dependencies And Check Generated Copies
+      - name: Install Build Dependencies and Check Generated Copies
         run: |
           npm ci
           python maintenance/minify/minify.py
 
-      - name: Update And Validate Repository
+      - name: Update and Validate Repository
         run: python maintenance/check.py --update
 
-      - name: Lint And Format-Check Python
+      - name: Lint and Format-Check Python
         run: |
           ruff check .
           ruff format --diff .
 
-      - name: Check Budget Tests And Shipped Script Syntax
+      - name: Check Budget Tests and Shipped Script Syntax
         run: |
           python -m pytest -q maintenance/measurements/test_measurements.py
           node --check skills/arena-skill/assets/app.js

@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   lint:
-    name: actionlint And zizmor
+    name: actionlint and zizmor
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
