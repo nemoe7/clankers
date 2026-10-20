@@ -8,40 +8,109 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
-- Preview serving: reject ports other than 8000 and identify 8000 as the only supported port.
-- Bash-call tally: the reminder counts up to the half-way mark, then names the calls left before the block. The page header counts down, and the state carries the gate threshold so it blocks at the same count.
-- CORE: compress five live lines with no rule change. Restore the Ruff width line and the command-reporting line from the refs baseline.
-- ChatGPT sources: merge the two refs baselines into `rules/refs/CHATGPT.txt` and extract both fields from it. The Wenyan CUSTOM experimental drops to 1,468 characters to meet the 1,500 cap.
-- Task details: refuse one that cites a session-local note, answer, report or task ID.
-- Task dependencies: add a repeatable `--blocked-by`, refuse an edge that closes a cycle, and sort a waiter after its blockers.
-- Preview violation notices: identify user flags and report formatting defects, then print user-flagged notices to stdout.
-- Preview flags: ask for a violation kind, a read-set clause file and a cited reason. Print the kind and reason in the gate notice.
-- Read-set reminders: read files only when current full text is absent from context. Wait 20 minutes after the first eligible command. Then keep 20-minute intervals.
-- Preview task lists: ask whether the current task remains active. Reject misplaced `--task` options.
-- Preview runs: a blocked run-log read names the next open task and prints its worktree start command.
-- Preview task flags: drop the `--task` prefix, so `--id`, `--title`, `--type` and `--detail` carry the same options.
-- Preview checks: a watch that finds no started checks tells the agent to run the command again.
-- Preview runs: a failed CI watch names each failed check with its failing step.
-- Preview uploads: a dropped file uploads at once, a canceled chip drops its bytes, and the send binds the uploaded IDs.
-- Preview refresh: a poll that arrives during a state read joins it, so no caller renders the state that read replaces.
-- Skills: add nemo-ui, with a typed sheet and an annotated example pair per clause. It also carries a design-document template and a measure helper for values and ruler gaps.
-- Distribute: split the workflow into one job per target list. The run page names Distribute Arena, Distribute Gemini and Distribute nemo-ui on their own rows. Each job copies through one shared action.
-- Test guidance: prefer named constants for expected assertion values. Check generated indexes by structure, not sentence text.
-- Instruction budgets: measure ARENA.md in tokens, give the non-clause arena-skill files one byte row, and drop the README row.
-- Maintenance: read skill frontmatter with `yaml.safe_load` and run the prose linter in process. Share the comment scanners, the command-piece tokens and the measurement map.
-- Workflows: call `gate_pr.py --version-bumps` from CI and reuse the prepare action in four workflows.
-- Maintenance: share the release prompt rules and the prose linter report block.
-- Workflows: call the prepare action from the Version Bumps job.
-- Maintenance: remove the unused `--no-ste` and `--directory` options.
-- Workflows: lowercase the `and` in job and step names, and keep tool names in their real case.
-- Maintenance README: give the PR-check and preview-hook paragraphs their own headings, and use a straight apostrophe in the rules README.
-- Userscripts README: match the six prompt rules to one list form.
-- House rules: state the hard-rule convention, and restore the unstaged half of the staging rule.
-- House rules: keep one Arena clause, drop the duplicate precedence test, and document the overlay model.
-- Maintenance README: point the four rule-file citations at the AGENTS.md guidelines.
-- Install pages: fix the egress title and opening sentence, the preview heading case and a split line.
-- Arena quirks archive: separate a heading from the paragraph above it.
-- Chromium recipe: name the package's `bin/` archives and the extracted `lib` path.
+#### preview
+
+- Reject ports other than 8000 and identify 8000 as the only supported port.
+
+- The reminder counts up to the half-way mark, then names the calls left before the block. The page header counts down, and the state carries the gate threshold so it blocks at the same count.
+
+#### rules
+
+- Compress five live CORE lines with no rule change. Restore the Ruff width line and the command-reporting line from the refs baseline.
+
+- Merge the two refs baselines into `rules/refs/CHATGPT.txt` and extract both fields from it. The Wenyan CUSTOM experimental drops to 1,468 characters to meet the 1,500 cap.
+
+#### preview
+
+- Refuse a task detail that cites a session-local note, answer, report or task ID.
+
+- Add a repeatable `--blocked-by`, refuse an edge that closes a cycle, and sort a waiter after its blockers.
+
+- Identify user flags and report formatting defects, then print user-flagged notices to stdout.
+
+- Ask for a violation kind, a read-set clause file and a cited reason. Print the kind and reason in the gate notice.
+
+- Read files only when current full text is absent from context. Wait 20 minutes after the first eligible command. Then keep 20-minute intervals.
+
+- Ask whether the current task remains active. Reject misplaced `--task` options.
+
+- A blocked run-log read names the next open task and prints its worktree start command.
+
+- Drop the `--task` prefix, so `--id`, `--title`, `--type` and `--detail` carry the same options.
+
+- A watch that finds no started checks tells the agent to run the command again.
+
+- A failed CI watch names each failed check with its failing step.
+
+- A dropped file uploads at once, a canceled chip drops its bytes, and the send binds the uploaded IDs.
+
+- A poll that arrives during a state read joins it, so no caller renders the state that read replaces.
+
+#### skills
+
+- Add nemo-ui, with a typed sheet and an annotated example pair per clause. It also carries a design-document template and a measure helper for values and ruler gaps.
+
+#### workflows
+
+- Split the workflow into one job per target list. The run page names Distribute Arena, Distribute Gemini and Distribute nemo-ui on their own rows. Each job copies through one shared action.
+
+#### rules
+
+- Prefer named constants for expected assertion values. Check generated indexes by structure, not sentence text.
+
+#### maintenance
+
+- Measure ARENA.md in tokens, give the non-clause arena-skill files one byte row, and drop the README row.
+
+- Read skill frontmatter with `yaml.safe_load` and run the prose linter in process. Share the comment scanners, the command-piece tokens and the measurement map.
+
+#### workflows
+
+- Call `gate_pr.py --version-bumps` from CI and reuse the prepare action in four workflows.
+
+#### maintenance
+
+- Share the release prompt rules and the prose linter report block.
+
+#### workflows
+
+- Call the prepare action from the Version Bumps job.
+
+#### maintenance
+
+- Remove the unused `--no-ste` and `--directory` options.
+
+#### workflows
+
+- Lowercase the `and` in job and step names, and keep tool names in their real case.
+
+#### maintenance
+
+- Give the PR-check and preview-hook paragraphs their own headings, and use a straight apostrophe in the rules README.
+
+#### userscripts
+
+- Match the six prompt rules to one list form.
+
+#### house
+
+- State the hard-rule convention, and restore the unstaged half of the staging rule.
+
+- Keep one Arena clause, drop the duplicate precedence test, and document the overlay model.
+
+#### maintenance
+
+- Point the four rule-file citations at the AGENTS.md guidelines.
+
+#### docs
+
+- Fix the egress title and opening sentence, the preview heading case and a split line.
+
+- Separate a heading from the paragraph above it.
+
+#### arena
+
+- Name the package's `bin/` archives and the extracted `lib` path.
 
 #### preview
 
@@ -53,247 +122,429 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
-- Preview reports: refuse a republish when the report has any answer. Unpublish stays available after the owner reads the ack.
+#### preview
+
+- Refuse a republish when the report has any answer. Unpublish stays available after the owner reads the ack.
+
+#### house
+
+- Restore type-then-domain grouping for entries since 2026-10-16. Wording stays apart from four subject edits.
 
 ## 2026-10-19
 
 ### Added
 
-- Preview read-set checkpoints: schedule a hidden blocking note at each local 00, 20, and 40 minute slot. Keep polls and the owner view quiet, and defer a due note during polling.
-- Arena autosave: add candidate, comparison, and completion receipts. Retain two saved states with completion receipts per scope and reject invalid flat history on import.
+#### preview
+
+- Schedule a hidden blocking note at each local 00, 20, and 40 minute slot. Keep polls and the owner view quiet, and defer a due note during polling.
+
+#### userscripts
+
+- Add candidate, comparison, and completion receipts. Retain two saved states with completion receipts per scope and reject invalid flat history on import.
 
 ### Changed
 
-- Arena rules: on a context-check reminder, read only the read-set files absent from context. The Setup clause drops the unconditional read.
-- Preview import: `state import` always replaces the live notes, answers, reports and tasks. `--merge` leaves the CLI, and the receipt always names the replacement.
-- Preview violation flag: `serve` signals the process group recorded at hook start, so a running Bash call ends at once. The next call still reads the block.
-- Preview polls: raise a violation for a repeat poll inside 45 seconds. The next call blocks and rereads the read set.
-- Preview CLI: group the agent commands under `note`, `run`, `task`, `report` and `state`. Remove the old flat names.
-- Preview Bash gate: run every pre-Bash rule in one `pre` call, in the installed order. Replace the individual tick commands, and keep the 0, 2 and 130 answers.
-- Preview task handoff: keep the CONTINUE line on stdout. Name the task in capitals and print the worktree start command.
-- Preview autosave: on a compare mismatch whose server save continues from the saved receipt, show an ahead notice. Its Overwrite button runs force save. Keep the earlier notice for an unrelated save pair.
-- Preview tasks: show only a task title in code blue while its linked gate is live. Use the same native list dot for draggable and finished tasks. Keep report waits muted and the rest of the row unchanged.
-- Preview routed runs: link live gates to tasks, add `route --task`, and remove manual `task --blocked`. Derive blocking until completion or orphan reconciliation, and guard destructive task changes.
-- Arena fielded reports: keep each question beside no more than one short paragraph or three bullets of relevant context on one vertical screen. Do not collect questions at a long report's end.
-- Preview WebSockets: carry JSON actions and state replies on one same-origin connection. Send SQLite change notices across processes. Keep binary HTTP, reconnect, heartbeat, and polling fallback, with `?transport=poll` to select polling.
-- Preview tasks: allow a later gate block after a linked report receives an answer. Keep the report link and clear its first wait when an answer arrives.
-- Preview userscript logs: record the code, HTTP status, failure kind, compare result, and a bounded detail string. Keep the console format.
-- Preview autosave: compare the stored and server save stamps. Write the server state only on a match. Force save skips the compare.
-- Preview autosave refusals: log the saved and server stamp pairs with the note and task counts.
-- Arena proxy reads: require a direct fetch of the actual source URL first. Use the proxy only when that call cannot return the needed data.
-- Preview client tests: sync both distributed copies. Check source and compact CSS with the same assertions.
-- Preview page token: remove generation, page and state fields, headers, and token-only retries. Retain download claims and proxy keys.
-- Arena userscript popups: use natural prose. Keep conditions, dynamic values, ranges, and actions.
-- Preview violation flag: block Bash and print the notice. Wake a running poll with the same text.
-- Arena report publication: check the stored revision and rendered field count before the CLI reports success.
-- Arena acknowledgements: add task options to save one receipt and its linked task in one transaction. Keep standalone commands.
-- Arena acknowledgements: read a reply note after the quoted parent lines and never quote owner messages in an ack.
-- Arena report diffs: put edge whitespace outside strike and highlight spans. Keep the renderer unchanged.
-- Arena PR checks: reset the registration window on a new head. Continue root work during remote CI and retain local gate freezes.
-- Arena report-removal guide: release linked task blocks on an answer or unpublishing. Do not treat removal as approval.
-- Arena gate wait: record a live local run and its blocked task without a report. Keep fielded reports for other blocks.
-- Preview task drag: remove the end-drop card. Keep an accented insertion line, list-background end drops, cancellation, and failed-write recovery.
-- Arena startup: set initial and resumed start sequences. Keep the 10-4 text, read the initial set first, and remove the extra full skill-reference read.
-- Arena read set: require the read tool, never Bash, for full-file reads.
-- Preview proxy guide: bound JSON reads to 20 records and 16,000 characters. Add field discovery, continuation reads, binary metadata, and model-page completion.
-- Preview hook tables: move the section to the maintenance README and use the approved cell wording. Retarget the existing case-label check.
+#### arena
 
-### Fixed
+- On a context-check reminder, read only the read-set files absent from context. The Setup clause drops the unconditional read.
 
-- Preview check waits: name a discovery refusal as `PR CHECKS NOT STARTED`, so the agent knows the watch never began.
-- Preview read-set gate: defer a due checkpoint while the preview server is unavailable. Keep ordinary blocking plus read, ack, and poll when it serves, and enforce the deferred slot once it returns.
-- Preview autosave: preserve the candidate stamp through confirmation when a task exists. Let later automatic saves skip unchanged state by digest after the saved pair matches.
-- Preview autosave: renumber task orders in the canonical core. Keep digests and compare snapshots stable across a second pass.
-- Preview report removal: unblock only tasks linked to the removed report in the same transaction. Keep removal guards, answers, sources, task status, and history.
-- Preview poll: use a 1799-second deadline and return a no-new-messages end-turn notice. Keep the Bash timeout at 1800 seconds and retain early-return events.
-- Preview proxy guide: scope the 401 key-check step to the proxy agent-key check. Keep the inbox, retry, and second-401 steps.
-- Preview CLI reference: describe class and hint output without a fixed prefix. Keep streams, exit codes, and subcommand prefixes.
+#### preview
+
+- `state import` always replaces the live notes, answers, reports and tasks. `--merge` leaves the CLI, and the receipt always names the replacement.
+
+- `serve` signals the process group recorded at hook start, so a running Bash call ends at once. The next call still reads the block.
+
+- Raise a violation for a repeat poll inside 45 seconds. The next call blocks and rereads the read set.
+
+- Group the agent commands under `note`, `run`, `task`, `report` and `state`. Remove the old flat names.
+
+- Run every pre-Bash rule in one `pre` call, in the installed order. Replace the individual tick commands, and keep the 0, 2 and 130 answers.
+
+- Keep the CONTINUE line on stdout. Name the task in capitals and print the worktree start command.
+
+#### userscripts
+
+- On a compare mismatch whose server save continues from the saved receipt, show an ahead notice. Its Overwrite button runs force save. Keep the earlier notice for an unrelated save pair.
+
+#### preview
+
+- Show only a task title in code blue while its linked gate is live. Use the same native list dot for draggable and finished tasks. Keep report waits muted and the rest of the row unchanged.
+
+- Link live gates to tasks, add `route --task`, and remove manual `task --blocked`. Derive blocking until completion or orphan reconciliation, and guard destructive task changes.
+
+#### arena
+
+- Keep each question beside no more than one short paragraph or three bullets of relevant context on one vertical screen. Do not collect questions at a long report's end.
+
+#### preview
+
+- Carry JSON actions and state replies on one same-origin connection. Send SQLite change notices across processes. Keep binary HTTP, reconnect, heartbeat, and polling fallback, with `?transport=poll` to select polling.
+
+- Allow a later gate block after a linked report receives an answer. Keep the report link and clear its first wait when an answer arrives.
+
+#### userscripts
+
+- Record the code, HTTP status, failure kind, compare result, and a bounded detail string. Keep the console format.
+
+- Compare the stored and server save stamps. Write the server state only on a match. Force save skips the compare.
+
+- Log the saved and server stamp pairs with the note and task counts.
+
+#### arena
+
+- Require a direct fetch of the actual source URL first. Use the proxy only when that call cannot return the needed data.
+
+#### preview
+
+- Sync both distributed copies. Check source and compact CSS with the same assertions.
+
+- Remove generation, page and state fields, headers, and token-only retries. Retain download claims and proxy keys.
+
+#### userscripts
+
+- Use natural prose for userscript popups. Keep conditions, dynamic values, ranges, and actions.
+
+#### preview
+
+- Block Bash and print the notice. Wake a running poll with the same text.
+
+#### arena
+
+- Check the stored revision and rendered field count before the CLI reports success.
+
+- Add task options to save one receipt and its linked task in one transaction. Keep standalone commands.
+
+- Read a reply note after the quoted parent lines and never quote owner messages in an ack.
+
+- Put edge whitespace outside strike and highlight spans. Keep the renderer unchanged.
+
+- Reset the registration window on a new head. Continue root work during remote CI and retain local gate freezes.
+
+- Release linked task blocks on an answer or unpublishing. Do not treat removal as approval.
+
+- Record a live local run and its blocked task without a report. Keep fielded reports for other blocks.
+
+#### preview
+
+- Remove the end-drop card. Keep an accented insertion line, list-background end drops, cancellation, and failed-write recovery.
+
+#### arena
+
+- Set initial and resumed start sequences. Keep the 10-4 text, read the initial set first, and remove the extra full skill-reference read.
+
+- Require the read tool, never Bash, for full-file reads.
+
+#### preview
+
+- Bound JSON reads to 20 records and 16,000 characters. Add field discovery, continuation reads, binary metadata, and model-page completion.
+
+- Move the section to the maintenance README and use the approved cell wording. Retarget the existing case-label check.
 
 ### Removed
 
-- Maintenance: remove nine unreferenced prose wrappers, one routed-run constant, and userscript test helpers and fixtures.
+#### maintenance
+
+- Remove nine unreferenced prose wrappers, one routed-run constant, and userscript test helpers and fixtures.
+
+### Fixed
+
+#### preview
+
+- Name a discovery refusal as `PR CHECKS NOT STARTED`, so the agent knows the watch never began.
+
+- Defer a due checkpoint while the preview server is unavailable. Keep ordinary blocking plus read, ack, and poll when it serves, and enforce the deferred slot once it returns.
+
+#### userscripts
+
+- Preserve the candidate stamp through confirmation when a task exists. Let later automatic saves skip unchanged state by digest after the saved pair matches.
+
+- Renumber task orders in the canonical core. Keep digests and compare snapshots stable across a second pass.
+
+#### preview
+
+- Unblock only tasks linked to the removed report in the same transaction. Keep removal guards, answers, sources, task status, and history.
+
+- Use a 1799-second deadline and return a no-new-messages end-turn notice. Keep the Bash timeout at 1800 seconds and retain early-return events.
+
+- Scope the 401 key-check step to the proxy agent-key check. Keep the inbox, retry, and second-401 steps.
+
+- Describe class and hint output without a fixed prefix. Keep streams, exit codes, and subcommand prefixes.
 
 ## 2026-10-18
 
 ### Added
 
-- Preview tasks: include complete attachment paths when linking notes. Keep ordinary step limits, storage caps, and atomic writes.
+#### preview
+
+- Include complete attachment paths when linking notes. Keep ordinary step limits, storage caps, and atomic writes.
 
 ### Changed
 
-- Preview recovery guide: remove repeated restart, state, and port text. Keep the restore procedure and operating safeguards.
+#### preview
 
-- Preview transfer guide: use the direct opening and remove size explanations. Keep encoding, decoder, and staging rules.
+- Remove repeated restart, state, and port text. Keep the restore procedure and operating safeguards.
 
-- Preview task guide: remove the export sentence. Keep task operations and runtime behavior unchanged.
+- Use the direct opening and remove size explanations. Keep encoding, decoder, and staging rules.
 
-- Preview task guide: remove the reminder-output suffix. Keep task tracking and runtime behavior unchanged.
+- Remove the export sentence. Keep task operations and runtime behavior unchanged.
 
-- Preview comments: state page visibility and message-table layout directly. Keep behavior and CSS values.
+- Remove the reminder-output suffix. Keep task tracking and runtime behavior unchanged.
 
-- Proxy data replies: bound JSON pages and record sets, add field selection and stable next reads, and return binary metadata before chunks. Keep model context, keys, HTTP statuses, caps, and expiry.
+- State page visibility and message-table layout directly. Keep behavior and CSS values.
 
-- Preview CLI: remove the literal program prefix from poll, root-parser, and wrapper messages. Keep usage, subcommand prefixes, messages, and exit codes.
+#### proxy
 
-- Preview task docs: state the 120-character CLI step limit. Keep storage and CLI limits unchanged.
+- Bound JSON pages and record sets, add field selection and stable next reads, and return binary metadata before chunks. Keep model context, keys, HTTP statuses, caps, and expiry.
 
-- Preview import help: remove the unsupported force-flag suffix. Keep import behavior unchanged.
+#### preview
 
-- Preview task help: remove false empty-detail clearing guidance. Keep task validation unchanged.
+- Remove the literal program prefix from poll, root-parser, and wrapper messages. Keep usage, subcommand prefixes, messages, and exit codes.
 
-- Arena guide: remove the duplicate key warning. Keep the explicit key ban.
+- State the 120-character CLI step limit. Keep storage and CLI limits unchanged.
 
-- Arena context: require the saved context to state that a full read-set reread is mandatory after replacement and before other tool calls.
+- Remove the unsupported force-flag suffix. Keep import behavior unchanged.
 
-- Preview context reminder: state the mandatory read and tool order after compaction. Keep full-text, session-start, violation, and reread-request conditions.
+- Remove false empty-detail clearing guidance. Keep task validation unchanged.
 
-- Arena guide: remove direct-client and master-key details, a default explanation, and rating text. Move gate-test wiring to maintenance docs.
+#### arena
 
-- Preview docs and test comments: remove redundant text and a historical aside. Use a direct verb.
+- Remove the duplicate key warning. Keep the explicit key ban.
 
-- Preview acknowledgements: accept inline Markdown only. Reject stdin input and remove file-based guidance. Keep stored receipts and the shell-quoting warning.
+- Require the saved context to state that a full read-set reread is mandatory after replacement and before other tool calls.
 
-- Preview inbox: quote parent text in linked replies. Keep nested quotes, attachment details, and pending receipt targets.
+#### preview
 
-- Preview tasks: preserve browser task order on agent updates. Print one notice on the next Bash hook.
+- State the mandatory read and tool order after compaction. Keep full-text, session-start, violation, and reread-request conditions.
 
-- CORE, Arena, Kilo Plan, and ChatGPT rules: state assumptions, stop at material ambiguity, and retain reporting priority.
+#### arena
 
-- CORE, Arena, and ChatGPT rules: name the code-style scope. Keep other repository conventions. Require explicit file approval for read-only and repository-protected files.
+- Remove direct-client and master-key details, a default explanation, and rating text. Move gate-test wiring to maintenance docs.
 
-- CORE, Arena, and ChatGPT rules: use positive comment and measurement clauses. Keep scope and relation examples.
+#### preview
 
-- Arena gate rules: prohibit sleep and use a blocked-task poll when only the task with a running gate remains.
+- Remove redundant text and a historical aside from docs and test comments. Use a direct verb.
 
-- House, CORE, Arena, and monitoring rules: keep one Use clause and move existing clauses into domain sections.
+- Accept inline Markdown only. Reject stdin input and remove file-based guidance. Keep stored receipts and the shell-quoting warning.
 
-- Maintenance: pin the TOML parser under markdownlint-cli2. Keep other dependency pins unchanged.
+- Quote parent text in linked replies. Keep nested quotes, attachment details, and pending receipt targets.
 
-- CORE, Arena, and ChatGPT rules: retain required clauses, preferences, and testing exceptions.
+- Preserve browser task order on agent updates. Print one notice on the next Bash hook.
 
-- CORE rules: keep portable Ruff defaults in the rule file. Keep all settings unchanged.
+#### rules
 
-- Kilo rules: name the approved plan file and project gates. Remove repeated working-directory text.
+- State assumptions, stop at material ambiguity, and retain reporting priority.
+
+- Name the code-style scope. Keep other repository conventions. Require explicit file approval for read-only and repository-protected files.
+
+- Use positive comment and measurement clauses. Keep scope and relation examples.
+
+#### arena
+
+- Prohibit sleep and use a blocked-task poll when only the task with a running gate remains.
+
+#### rules
+
+- Keep one Use clause and move existing clauses into domain sections.
+
+#### maintenance
+
+- Pin the TOML parser under markdownlint-cli2. Keep other dependency pins unchanged.
+
+#### rules
+
+- Retain required clauses, preferences, and testing exceptions.
+
+- Keep portable Ruff defaults in the rule file. Keep all settings unchanged.
+
+- Name the approved plan file and project gates. Remove repeated working-directory text.
 
 ### Fixed
 
-- Preview backup docs: state that NDJSON, clipboard copy, and restore include report Markdown.
+#### preview
 
-- Platform matrix: state the contributing-rule-gap condition. Keep all rule files unchanged.
+- State that NDJSON, clipboard copy, and restore include report Markdown.
 
-- Userscript test comment: remove the false header-first sentence. Keep the title-first explanation and assertions.
+#### docs
 
-- Preview import test comment: remove the false Seen-state sentence. Keep assertions unchanged.
+- State the contributing-rule-gap condition. Keep all rule files unchanged.
 
-- Preview installer comment: describe the inline acknowledgement warning.
+#### userscripts
 
-- Preview violation flag: print the target first and the blocked Bash call on the second line. Require the full read-set reread before the fix. Keep cancellation and one-shot consumption.
+- Remove the false header-first sentence. Keep the title-first explanation and assertions.
 
-- Preview CI checks: use the latest check and workflow run, or status context. Read all pages. Do not let an old failed run block a later successful run.
+#### preview
 
-- Preview CI wait: observe visible checks for the full 30-second window without required-check settings. Fail on an empty, pending, or failing rollup at the deadline. Mark a successful watch as best effort.
+- Remove the false Seen-state sentence. Keep assertions unchanged.
 
-- Preview inbox: resolve report, answer, and task references when quoting parent text. Keep pending receipt targets.
+- Describe the inline acknowledgement warning.
 
-- Rules README: state the unconditional Arena PR merge ban.
+- Print the target first and the blocked Bash call on the second line. Require the full read-set reread before the fix. Keep cancellation and one-shot consumption.
 
-- Preview messages: reveal old messages before reply and reference jumps. Use scroll animation for New reply. Keep reduced motion, focus, highlights, and viewed receipts.
+- Use the latest check and workflow run, or status context. Read all pages. Do not let an old failed run block a later successful run.
+
+- Observe visible checks for the full 30-second window without required-check settings. Fail on an empty, pending, or failing rollup at the deadline. Mark a successful watch as best effort.
+
+- Resolve report, answer, and task references when quoting parent text. Keep pending receipt targets.
+
+#### rules
+
+- State the unconditional Arena PR merge ban.
+
+#### preview
+
+- Reveal old messages before reply and reference jumps. Use scroll animation for New reply. Keep reduced motion, focus, highlights, and viewed receipts.
 
 ## 2026-10-17
 
 ### Added
 
-- NEMOGPT: attach source links to the claims they support.
+#### system-prompts
 
-- Preview: add a header action for a full read-set reread and a report or task correction. Keep one pending flag and stop the next Bash call once.
+- Attach source links to the claims they support.
 
-- Arena rules: add a Constitution pointer to the read-set duties in Use.
+#### preview
 
-- Maintenance: cover both CI branch triggers and register the root guide's markdownlint count.
+- Add a header action for a full read-set reread and a report or task correction. Keep one pending flag and stop the next Bash call once.
 
-- Preview tasks: use the visible bullet as the drag handle and keep task titles selectable.
+#### arena
+
+- Add a Constitution pointer to the read-set duties in Use.
+
+#### maintenance
+
+- Cover both CI branch triggers and register the root guide's markdownlint count.
+
+#### preview
+
+- Use the visible bullet as the drag handle and keep task titles selectable.
 
 ### Changed
 
-- Preview: slow top and bottom scroll-fade growth. Keep maximum depth and reduced-motion behavior.
+#### preview
 
-- CORE and Arena rules: align changelog and tool-continuation verbs. Keep the format exception.
+- Slow top and bottom scroll-fade growth. Keep maximum depth and reduced-motion behavior.
 
-- House rules: align amendment reports and size targets. Remove the glossary alias.
+#### rules
 
-- CORE rules: group Setup, Verification, and Style. Keep their repository scope.
+- Align changelog and tool-continuation verbs. Keep the format exception.
 
-- ChatGPT fields: name the user-chat override and check the outer-fence formula.
+#### house
 
-- Cline rules: remove tool catalogs. Keep command, file-write, failure, and timeout limits.
+- Align amendment reports and size targets. Remove the glossary alias.
 
-- Arena reminder: name context-reread triggers, including compaction, summary, and rule violations.
+#### rules
 
-- Arena suite: require a full read-set reread after a rule violation. Keep routine-slip receipts and separate report duties.
+- Group Setup, Verification, and Style. Keep their repository scope.
 
-- Arena rules: forbid claims of context-limit or turn-budget restrictions.
+- Name the user-chat override and check the outer-fence formula.
 
-- Preview: use one flagless Markdown acknowledgement input. Read redirected text with `ack <id> -`. Retain stored receipts.
+- Remove tool catalogs. Keep command, file-write, failure, and timeout limits.
 
-- Maintenance: sort README budget paths alphabetically and link them to their repository files.
+#### arena
 
-- Arena rules: move the Chromium setup procedure to the skill reference.
+- Name context-reread triggers, including compaction, summary, and rule violations.
 
-- Preview: let a second header reread press cancel the pending request. Keep consumed requests in force.
+- Require a full read-set reread after a rule violation. Keep routine-slip receipts and separate report duties.
 
-- Arena rules: move the PR update procedure to the skill reference.
+- Forbid claims of context-limit or turn-budget restrictions.
 
-- Preview: use Lucide control icons except the Markdown mark, with a separate loader during a header reread write.
+#### preview
 
-- Rule sources: rename the generic core files to CORE.md. Keep installed AGENTS.md names.
+- Use one flagless Markdown acknowledgement input. Read redirected text with `ack <id> -`. Retain stored receipts.
 
-- Preview: mark a report read when its body opens, without a scroll or dwell. Keep the view heartbeat and answer fallback. Retry a failed read on a later check.
+#### maintenance
 
-- Preview: remove the CLI prefix from routine reminder lines on stderr.
+- Sort README budget paths alphabetically and link them to their repository files.
 
-- Arena rules: state that preselected options, recommendations, and silence are not answers.
+#### arena
 
-- Rule layout: split the approval exemption and testing guidance into atomic bullets.
+- Move the Chromium setup procedure to the skill reference.
 
-- Root guide: group Arena-only instructions in a dedicated section.
+#### preview
 
-- Rules docs: state that Cline and Kilo load project AGENTS.md and configured overlays.
+- Let a second header reread press cancel the pending request. Keep consumed requests in force.
 
-- Rule structure: move Glossary below Constitution and rebase/push rules to Git.
+#### arena
+
+- Move the PR update procedure to the skill reference.
+
+#### preview
+
+- Use Lucide control icons except the Markdown mark, with a separate loader during a header reread write.
+
+#### rules
+
+- Rename the generic core files to CORE.md. Keep installed AGENTS.md names.
+
+#### preview
+
+- Mark a report read when its body opens, without a scroll or dwell. Keep the view heartbeat and answer fallback. Retry a failed read on a later check.
+
+- Remove the CLI prefix from routine reminder lines on stderr.
+
+#### arena
+
+- State that preselected options, recommendations, and silence are not answers.
+
+#### rules
+
+- Split the approval exemption and testing guidance into atomic bullets.
+
+#### house
+
+- Group Arena-only instructions in a dedicated section.
+
+#### rules
+
+- State that Cline and Kilo load project AGENTS.md and configured overlays.
+
+- Move Glossary below Constitution and rebase/push rules to Git.
 
 ### Fixed
 
-- Preview composer: keep Ctrl+Shift+V as native text paste. Retain ordinary long-text and image attachment behavior.
+#### preview
 
-- Arena gate: consume a header reread request only in an agent shell. Keep hosted processes, platform probes, and routed runs active.
+- Keep Ctrl+Shift+V as native text paste. Retain ordinary long-text and image attachment behavior.
 
-- Preview tasks: add a bottom drop target and save its appended order. Restore the saved order after a refused write.
+- Consume a header reread request only in an agent shell. Keep hosted processes, platform probes, and routed runs active.
 
-- Preview: cancel a prior copy timer before it can clear newer button feedback.
+- Add a bottom drop target and save its appended order. Restore the saved order after a refused write.
+
+- Cancel a prior copy timer before it can clear newer button feedback.
 
 ## 2026-10-16
 
 ### Added
 
-- Preview: sort the task queue by dragging a row. Preview the landing seat and render the drawn order at once, keeping unlisted tasks in place. Restore the stored rows on a failed write.
+#### preview
 
-- Preview: add native tab, highlight, scroll-edge, and details transitions. Use smooth top/bottom jumps unless reduced motion is active.
+- Sort the task queue by dragging a row. Preview the landing seat and render the drawn order at once, keeping unlisted tasks in place. Restore the stored rows on a failed write.
 
-- Arena gate: veto recognized PR-state writes before DEBUG bypasses. Keep reads, comments, metadata edits, and permitted pushes.
+- Add native tab, highlight, scroll-edge, and details transitions. Use smooth top/bottom jumps unless reduced motion is active.
 
-- Preview: add guarded stale-report removal under `report unpublish --stale`. Retain answers, sources, and existing commands.
+- Veto recognized PR-state writes before DEBUG bypasses. Keep reads, comments, metadata edits, and permitted pushes.
 
-- Arena archive: record workspace totals and uncertain snapshot coverage.
+- Add guarded stale-report removal under `report unpublish --stale`. Retain answers, sources, and existing commands.
 
-- Preview: briefly highlight the answer reached through New reply. Keep focus, scrolling, and read receipts unchanged.
+#### docs
 
-- Arena preview: add safe inline Markdown highlights to report and message text, with theme highlight colors.
+- Record workspace totals and uncertain snapshot coverage.
 
-- Userscripts: hide ChatGPT header Upgrade and Share controls, sidebar Upgrade, and Upgrade to Plus. Add saved switches for all managed hiding targets.
+#### preview
 
-- Preview: add a skill inventory with full YAML descriptions, paths, and installed or repository labels.
+- Briefly highlight the answer reached through New reply. Keep focus, scrolling, and read receipts unchanged.
 
-- Arena gate: block a push whose branch does not contain origin/main. Refresh the remote main tip first, and keep the checkpoint open on a fetch fault.
+- Add safe inline Markdown highlights to report and message text, with theme highlight colors.
+
+#### userscripts
+
+- Hide ChatGPT header Upgrade and Share controls, sidebar Upgrade, and Upgrade to Plus. Add saved switches for all managed hiding targets.
+
+#### preview
+
+- Add a skill inventory with full YAML descriptions, paths, and installed or repository labels.
+
+- Block a push whose branch does not contain origin/main. Refresh the remote main tip first, and keep the checkpoint open on a fetch fault.
 
 #### system-prompts
 
@@ -305,15 +556,23 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
-- Arena gate: narrow the idle-wait block to a line that names both a `sleep` and an `arena-preview` call. A sleep on its own runs.
+#### preview
 
-- Preview: remove fixed URL-download and file-upload byte limits. Keep approval, URL checks, source rules, claims, nonempty bodies, and timeouts.
+- Narrow the idle-wait block to a line that names both a `sleep` and an `arena-preview` call. A sleep on its own runs.
 
-- Userscripts: shorten overwrite prompts with context labels. Keep stamp directions, file targets, and save guards unchanged.
+- Remove fixed URL-download and file-upload byte limits. Keep approval, URL checks, source rules, claims, nonempty bodies, and timeouts.
 
-- Rules and skills: use Line, Diff, and Reason amendment tables, with highlights, strikethrough, and separate exact final clauses.
+#### userscripts
 
-- Preview: require explicit types for normal new tasks. Add Ops and Misc choices, type definitions, and light/dark badge colors. Preserve stored types and use Misc for missing legacy types.
+- Shorten overwrite prompts with context labels. Keep stamp directions, file targets, and save guards unchanged.
+
+#### rules
+
+- Use Line, Diff, and Reason amendment tables, with highlights, strikethrough, and separate exact final clauses.
+
+#### preview
+
+- Require explicit types for normal new tasks. Add Ops and Misc choices, type definitions, and light/dark badge colors. Preserve stored types and use Misc for missing legacy types.
 
 #### system-prompts
 
@@ -355,21 +614,31 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
-- Arena reference: fix attachment-limit and agent-unpublish view rules.
+#### arena
 
-- Preview: keep reply focus during receipt and poll renders. Reuse visible history rows without replacing the list.
+- Fix attachment-limit and agent-unpublish view rules.
 
-- Preview: show preview-ID rename commands for task and report conflicts. Keep repository-facing names unchanged.
+#### preview
 
-- Preview: keep normal code text color inside Markdown highlights.
+- Keep reply focus during receipt and poll renders. Reuse visible history rows without replacing the list.
 
-- Preview: make only jump-arrow icons white on dark-theme hover. Keep the resting button surface and light-theme contrast.
+- Show preview-ID rename commands for task and report conflicts. Keep repository-facing names unchanged.
 
-- Arena suite: check fresh remote branch tips at commit and push checkpoints. Handle shallow history, absorbed changes, and failed reads without moving working files.
+- Keep normal code text color inside Markdown highlights.
 
-- GitHub workflows: retry temporary Gemini capacity errors within a request deadline, with capped waits and API timeouts.
+- Make only jump-arrow icons white on dark-theme hover. Keep the resting button surface and light-theme contrast.
 
-- Preview: reject new blocked task links to reports without answer fields. Keep existing tasks and informational links.
+#### arena
+
+- Check fresh remote branch tips at commit and push checkpoints. Handle shallow history, absorbed changes, and failed reads without moving working files.
+
+#### workflows
+
+- Retry temporary Gemini capacity errors within a request deadline, with capped waits and API timeouts.
+
+#### preview
+
+- Reject new blocked task links to reports without answer fields. Keep existing tasks and informational links.
 
 #### userscripts
 
