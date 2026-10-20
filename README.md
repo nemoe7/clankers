@@ -54,7 +54,7 @@ Latest measurements as of 2026-10-20. `maintenance/check.py --update` rebuilds t
 | [`skills/arena-skill/assets/message-markdown.js`](skills/arena-skill/assets/message-markdown.js) | `UTF-8 file size` | 2,690 `B` |
 | [`skills/arena-skill/assets/style.css`](skills/arena-skill/assets/style.css) | `UTF-8 file size` | 18,466 `B` |
 | [`skills/arena-skill/README.md`](skills/arena-skill/README.md) | `o200k_base` | 1,875 `tok` |
-| [`skills/arena-skill/references/REFERENCE.md`](skills/arena-skill/references/REFERENCE.md) | `o200k_base` | 3,839 `tok` |
+| [`skills/arena-skill/references/REFERENCE.md`](skills/arena-skill/references/REFERENCE.md) | `o200k_base` | 3,838 `tok` |
 | [`skills/arena-skill/scripts/arena-preview`](skills/arena-skill/scripts/arena-preview) | `UTF-8 file size` | 544 `B` |
 | [`skills/arena-skill/scripts/install.sh`](skills/arena-skill/scripts/install.sh) | `UTF-8 file size` | 8,522 `B` |
 | [`skills/arena-skill/scripts/preview.py`](skills/arena-skill/scripts/preview.py) | `UTF-8 file size` | 217,398 `B` |

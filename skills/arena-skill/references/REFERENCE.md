@@ -54,9 +54,9 @@ When an acknowledgement refers to a report or task, use `ack` and put its exact 
 
 ## Chromium
 
-- Install `@sparticuz/chromium` from npm for Chromium work.
-- Extract `al2023.tar.br` with the package's exported `inflate`.
-- Call `setupLambdaEnvironment("/tmp/al2023/lib")` for library and font paths.
+- Install `@sparticuz/chromium` from npm.
+- Inflate `bin/al2023.tar.br` with the package's `inflate`. Fonts come from `bin/fonts.tar.br`.
+- Call `setupLambdaEnvironment` on the extracted `lib`.
 - Launch the package's extracted binary.
 - NEVER use a Playwright-managed browser.
 

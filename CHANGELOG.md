@@ -26,6 +26,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Maintenance README: point the four rule-file citations at the AGENTS.md guidelines.
 - Install pages: fix the egress title and opening sentence, the preview heading case and a split line.
 - Arena quirks archive: separate a heading from the paragraph above it.
+- Chromium recipe: name the package's `bin/` archives and the extracted `lib` path.
 
 ### Fixed
 
