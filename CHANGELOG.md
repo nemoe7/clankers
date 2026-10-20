@@ -9,7 +9,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Changed
 
 - Preview serving: reject ports other than 8000 and identify 8000 as the only supported port.
-- Bash-call tally: count up to the half-way mark, then down, in the reminder and the page header. Send the gate threshold in the state so the header blocks at the same count.
+- Bash-call tally: the reminder counts up to the half-way mark, then names the calls left before the block. The page header counts down, and the state carries the gate threshold so it blocks at the same count.
 - CORE: compress five live lines with no rule change. Restore the Ruff width line and the command-reporting line from the refs baseline.
 - ChatGPT sources: merge the two refs baselines into `rules/refs/CHATGPT.txt` and extract both fields from it. The Wenyan CUSTOM experimental drops to 1,468 characters to meet the 1,500 cap.
 - Task details: refuse one that cites a session-local note, answer, report or task ID.

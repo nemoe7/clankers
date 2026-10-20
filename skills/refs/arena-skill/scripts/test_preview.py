@@ -4744,15 +4744,21 @@ def test_missing_inbox_error_instructs():
 
 
 def test_unacknowledged_call_trap():
-  """Calls one through five count. Call six shows the block and inbox calls stay open."""
+  """Calls one through three count. Calls four and five name the calls left. Call six blocks."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.note("trap-note", "Pending work")
     assert preview.GATE_THRESHOLD == 6
-    # The tally counts up to the half-way mark, then down to the block.
-    for calls, shown in ((1, 1), (2, 2), (3, 3), (4, 2), (5, 1)):
+    # The tally counts up to the half-way mark, then names the calls left before the block.
+    for calls, head in (
+      (1, "calls 1"),
+      (2, "calls 2"),
+      (3, "calls 3"),
+      (4, "bash blocked in 2"),
+      (5, "bash blocked in 1"),
+    ):
       store.set_meta(preview.POLLS_SINCE_MESSAGE, str(calls))
-      assert store.reminder().startswith(f"calls {shown} unacked 1 note | ")
+      assert store.reminder().startswith(f"{head} unacked 1 note | ")
     store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
     assert store.reminder().startswith("blocked unacked 1 note | ")
     result = subprocess.run(

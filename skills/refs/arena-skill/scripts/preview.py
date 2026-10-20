@@ -6459,9 +6459,16 @@ class Store:
     # The label keeps the pending tally apart from the call count, so a reader never takes
     # "8. 1 note" for eight notes.
     unacked = [f"unacked {', '.join(counts)}"] if counts else []
-    # The tally counts up to the half-way mark, then down, so the last calls read as urgency.
-    shown = polls if polls <= GATE_THRESHOLD // 2 else GATE_THRESHOLD - polls
-    head = ["blocked"] if blocked else [f"calls {shown}"] if polls and counts else []
+    # The tally counts up to the half-way mark, then names the calls left before the block.
+    if blocked:
+      head = ["blocked"]
+    elif polls and counts:
+      if polls > GATE_THRESHOLD // 2:
+        head = [f"bash blocked in {GATE_THRESHOLD - polls}"]
+      else:
+        head = [f"calls {polls}"]
+    else:
+      head = []
     tail = reminder_tail(cursor, remaining, len(stale)) if routine else ""
     parts = [" ".join([*head, *unacked]).strip()]
     if order_notice:
