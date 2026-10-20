@@ -10270,20 +10270,31 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
     try:
       assert request("POST", "/api/agent-interrupt", "{}")[0] == 415
       instruction = (
-        "This Bash call was blocked. Read ARENA.md, root AGENTS.md, every nested "
-        "AGENTS.md, and arena-skill SKILL.md in full again, then fix the violation "
-        "before continuing."
+        "This Bash call was blocked. Read only read-set files whose current full "
+        "text is absent from context, then fix the violation before continuing."
       )
       for payload, expected in [
-        ({"tab": "notes", "report_id": "open-report"}, "VIOLATION"),
-        ({"tab": "downloads", "report_id": "open-report"}, "VIOLATION"),
+        (
+          {"tab": "notes", "report_id": "open-report"},
+          "The user flagged a violation.",
+        ),
+        (
+          {"tab": "downloads", "report_id": "open-report"},
+          "The user flagged a violation.",
+        ),
         (
           {"tab": "reports", "report_id": "open-report"},
-          "VIOLATION: report open-report",
+          "The user flagged a violation: report open-report formatting is wrong.",
         ),
-        ({"tab": "reports", "report_id": "missing-report"}, "VIOLATION"),
-        ({"tab": "reports"}, "VIOLATION"),
-        ({"tab": "tasks", "report_id": "open-report"}, "VIOLATION: task current-work"),
+        (
+          {"tab": "reports", "report_id": "missing-report"},
+          "The user flagged a violation.",
+        ),
+        ({"tab": "reports"}, "The user flagged a violation."),
+        (
+          {"tab": "tasks", "report_id": "open-report"},
+          "The user flagged a violation: task current-work.",
+        ),
       ]:
         status, _, body = request(
           "POST", "/api/agent-interrupt", json.dumps(payload), headers
@@ -10310,15 +10321,23 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
           ),
         ):
           assert preview.main() == 130
-          message = capsys.readouterr().err
-          assert message.splitlines() == [expected, instruction]
+          message = capsys.readouterr()
+          assert message.out.splitlines() == [
+            expected,
+            instruction,
+            '_arena_preview_done="read-set interrupt"',
+          ]
+          assert message.err == ""
           assert preview.main() == 0
           assert capsys.readouterr().err == ""
         assert not store.state()["agent_interrupt_pending"]
         assert store.state()["notes"] == []
       store.write_task("current-work", status="finished")
       store.request_interrupt("tasks")
-      assert store.take_interrupt().splitlines() == ["VIOLATION", instruction]
+      assert store.take_interrupt().splitlines() == [
+        "The user flagged a violation.",
+        instruction,
+      ]
       assert store.take_interrupt() is None
       assert (
         request("POST", "/api/agent-interrupt", '{"tab":"invalid"}', headers)[0] == 400
@@ -10776,6 +10795,44 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
         thread.join()
 
 
+def test_user_flagged_report_violation_names_formatting_and_uses_stdout(capsys):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "report.md"
+    source.write_text("# Report\n", encoding="utf-8")
+    store.publish("flagged-report", "Flagged report", source)
+    store.request_interrupt("reports", report_id="flagged-report")
+
+    result = preview.pre_command(
+      directory, "git status", "git status", directory, shell="bash"
+    )
+
+    output = capsys.readouterr()
+    assert result == 130
+    assert "The user flagged a violation" in output.out
+    assert "report flagged-report formatting is wrong" in output.out
+    assert "This Bash call was blocked." in output.out
+    assert output.err == ""
+
+
+def test_repeat_poll_notice_keeps_system_wording_and_stderr(capsys, monkeypatch):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    moment = iter((1000, 1001))
+    monkeypatch.setattr(preview, "poll_clock", lambda: next(moment))
+    assert preview.poll_repeat(store) is None
+    assert preview.poll_repeat(store).startswith("VIOLATION:")
+
+    result = preview.pre_command(
+      directory, "printf x", "printf x", directory, shell="bash"
+    )
+
+    output = capsys.readouterr()
+    assert result == 130
+    assert output.err.startswith("VIOLATION\nThis Bash call was blocked")
+    assert "The user flagged a violation" not in output.out
+
+
 def test_preview_violation_wakes_poll_and_does_not_wait(capsys):
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
@@ -10789,8 +10846,8 @@ def test_preview_violation_wakes_poll_and_does_not_wait(capsys):
     ):
       assert preview.poll_inbox(store, sleeper=flag_during_wait) == 0
     output = capsys.readouterr().out
-    assert "VIOLATION" in output
-    assert "This Bash call was blocked. Read ARENA.md" in output
+    assert "The user flagged a violation." in output
+    assert "This Bash call was blocked. Read only read-set files whose current full text is absent from context" in output
     assert not store.state()["agent_interrupt_pending"]
     assert not store.polling()
 
