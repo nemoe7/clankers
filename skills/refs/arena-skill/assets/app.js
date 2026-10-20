@@ -918,12 +918,13 @@ function renderState() {
   // The header carries the same tally the gate keeps, so the owner sees the call count
   // the stderr banner names without leaving the page.
   const calls = state.calls_since_message || 0;
-  // The tally names the calls since the owner's first unread message and says Blocked once
-  // the count reaches ten.
+  // The tally counts up to the half-way mark, then down, and says Blocked once the count
+  // reaches ten.
+  const shown = calls <= 5 ? calls : 10 - calls;
   callTally = calls
     ? calls >= 10
       ? ' · Blocked'
-      : ` · ${calls} call${calls === 1 ? '' : 's'}`
+      : ` · ${shown} call${shown === 1 ? '' : 's'}`
     : '';
   pollSince = state.polling ? stampMs(state.polling_since) : null;
   agentSeenAt = stampMs(state.agent_seen_at);

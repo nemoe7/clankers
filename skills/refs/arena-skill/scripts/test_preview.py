@@ -4652,9 +4652,10 @@ def test_unacknowledged_call_trap():
     store = preview.Store(directory, create=True)
     store.note("trap-note", "Pending work")
     assert preview.GATE_THRESHOLD == 6
-    for calls in range(1, preview.GATE_THRESHOLD):
+    # The tally counts up to the half-way mark, then down to the block.
+    for calls, shown in ((1, 1), (2, 2), (3, 3), (4, 2), (5, 1)):
       store.set_meta(preview.POLLS_SINCE_MESSAGE, str(calls))
-      assert store.reminder().startswith(f"calls {calls} unacked 1 note | ")
+      assert store.reminder().startswith(f"calls {shown} unacked 1 note | ")
     store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
     assert store.reminder().startswith("blocked unacked 1 note | ")
     result = subprocess.run(
