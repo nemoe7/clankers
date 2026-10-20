@@ -1551,8 +1551,14 @@ class Store:
 		if db is not None:yield db;return
 		with closing(self.connect())as own,own:yield own
 		if autosave:self.autosave()
+	def refuse_session_ids(self,details):
+		tokens={token:found for(token,found)in session_id_tokens(self).items()if NOTE_ID.fullmatch(token)or HEX7_RE.fullmatch(token)}
+		for detail in details:
+			for(token,(kind,ident))in tokens.items():
+				if re.search(f"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])",detail):named=ident if token==ident else f"{token} of {ident}";raise ValueError(f"That detail cites the session-local {kind} {named}. A repository reader cannot resolve that ID. Describe the work instead")
 	def write_task(self,task_id,title=None,details=None,status=None,order=None,blocked=None,report_id=None,completed_at=None,task_type=None,shared=None,append_details=False,restoring=False):
 		details=[str(item)for item in details if str(item).strip()]if details else None
+		if details and not restoring:self.refuse_session_ids(details)
 		if append_details and not details:raise ValueError('Appending requires at least one task detail')
 		check_task(task_id,title,details)
 		if status is not None and status not in TASK_STATUSES:raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")

@@ -2904,6 +2904,64 @@ def test_task_refuses_a_note_id_as_its_name():
     assert "proper name" in cli.stdout + cli.stderr
 
 
+def test_task_detail_refuses_a_session_id():
+  """A detail that cites a session ID names nothing a repository reader can resolve."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.set_meta("port", guard_port())
+    note_id = "954ee49-9ac144955adcda4bcbd227497"
+    store.note(note_id, "Look at this")
+    for detail in (f"Fix {note_id}", "Fix 954ee49", "Copy from note 954ee49"):
+      try:
+        store.write_task("first-task", "First task", [detail], task_type="misc")
+        raise AssertionError(f"A session ID was accepted in a detail: {detail}")
+      except ValueError as error:
+        assert "session-local" in str(error), error
+    # A clean detail still lands, and a restore keeps the board it imports.
+    task = store.write_task(
+      "first-task", "First task", ["Fix the widget"], task_type="misc"
+    )
+    assert task["details"] == ["Fix the widget"]
+    restored = store.write_task(
+      "second-task", "Second task", ["Fix 954ee49"], task_type="misc", restoring=True
+    )
+    assert restored["details"] == ["Fix 954ee49"]
+    # A written ID stays a plain word, so a detail may still describe a wait on it.
+    source = Path(directory) / "pick.md"
+    source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
+    store.publish("pick", "Pick one", source)
+    named = store.write_task(
+      "named-task", "Named task", ["wait for the pick"], task_type="misc"
+    )
+    assert named["details"] == ["wait for the pick"]
+    # An update that keeps the stored details runs the check on nothing.
+    assert store.write_task("first-task", status="finished")["details"] == [
+      "Fix the widget"
+    ]
+    # The CLI prints the same refusal for the agent to read.
+    cli = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "task",
+        "set",
+        "third-task",
+        "Third task",
+        "--task-type",
+        "misc",
+        "--task-detail",
+        "See 954ee49",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      cwd=directory,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": directory},
+    )
+    assert cli.returncode != 0, cli.stdout
+    assert "session-local" in cli.stdout + cli.stderr
+
+
 def test_agent_line_drops_the_harness_wrapper():
   """A detached replay runs the agent's line, so the harness's working directory holds."""
   wrapped = "/bin/bash -l -c cd /home/user/repo && .venv/bin/python -m pytest -q"

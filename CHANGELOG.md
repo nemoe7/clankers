@@ -10,6 +10,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Preview serving: reject ports other than 8000 and identify 8000 as the only supported port.
 - Bash-call tally: count up to the half-way mark, then down, in the reminder and the page header.
+- Task details: refuse one that cites a session-local note, answer, report or task ID.
 - Preview violation notices: identify user flags and report formatting defects, then print user-flagged notices to stdout.
 - Preview flags: ask for a violation kind, a read-set clause file and a cited reason. Print the kind and reason in the gate notice.
 - Read-set reminders: read files only when current full text is absent from context. Wait 20 minutes after the first eligible command. Then keep 20-minute intervals.

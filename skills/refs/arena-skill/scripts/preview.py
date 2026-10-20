@@ -4641,6 +4641,26 @@ class Store:
     if autosave:
       self.autosave()
 
+  def refuse_session_ids(self, details):
+    """Refuse a detail that cites a minted session ID, which no repository reader can resolve.
+
+    A written ID such as a task name stays a plain word, so a detail may still describe
+    a wait on it. Only the opaque hex form triggers the refusal.
+    """
+    tokens = {
+      token: found
+      for token, found in session_id_tokens(self).items()
+      if NOTE_ID.fullmatch(token) or HEX7_RE.fullmatch(token)
+    }
+    for detail in details:
+      for token, (kind, ident) in tokens.items():
+        if re.search(rf"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])", detail):
+          named = ident if token == ident else f"{token} of {ident}"
+          raise ValueError(
+            f"That detail cites the session-local {kind} {named}. A repository reader"
+            " cannot resolve that ID. Describe the work instead"
+          )
+
   def write_task(
     self,
     task_id,
@@ -4659,6 +4679,9 @@ class Store:
     """Insert or update a task and return it. Keep omitted title and detail values. Use a supplied transaction so
     imports remain atomic."""
     details = [str(item) for item in details if str(item).strip()] if details else None
+    # Check only the details this call supplies, so a stored board still updates and finishes.
+    if details and not restoring:
+      self.refuse_session_ids(details)
     if append_details and not details:
       raise ValueError("Appending requires at least one task detail")
     check_task(task_id, title, details)
