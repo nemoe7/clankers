@@ -21,6 +21,8 @@ The installer uses only the Python standard library.
 
 Check the active files in your installed agent version: filenames alone do not enable loading. If the core stops loading, fix the installation or restore the core explicitly. NEVER lose it silently.
 
+These files are overlays: CORE.md reaches the agent context automatically, and each overlay adds its rules beside it.
+
 - ARENA.md compresses the core for standalone deployment.
 - Cline and Kilo load the project AGENTS.md and their configured overlays into the agent context.
 

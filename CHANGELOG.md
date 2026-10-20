@@ -21,7 +21,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Workflows: lowercase the `and` in job and step names, and keep tool names in their real case.
 - Maintenance README: give the PR-check and preview-hook paragraphs their own headings, and use a straight apostrophe in the rules README.
 - Userscripts README: match the six prompt rules to one list form.
-- House rules: state the hard-rule convention, and restore the unstaged half of the staging rule.
+- House rules: state the hard-rule convention, restore the unstaged half of the staging rule, keep one Arena clause, drop the duplicate precedence test, and document the overlay model.
 
 ## 2026-10-19
 
