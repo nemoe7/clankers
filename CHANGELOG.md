@@ -22,6 +22,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Preview task flags: drop the `--task` prefix, so `--id`, `--title`, `--type` and `--detail` carry the same options.
 - Preview checks: a watch that finds no started checks tells the agent to run the command again.
 - Preview runs: a failed CI watch names each failed check with its failing step.
+- Preview uploads: a dropped file uploads at once, a canceled chip drops its bytes, and the send binds the uploaded IDs.
+- Preview refresh: a poll that arrives during a state read joins it, so no caller renders the state that read replaces.
 - Test guidance: prefer named constants for expected assertion values. Check generated indexes by structure, not sentence text.
 - Instruction budgets: measure ARENA.md in tokens, give the non-clause arena-skill files one byte row, and drop the README row.
 - Maintenance: read skill frontmatter with `yaml.safe_load` and run the prose linter in process. Share the comment scanners, the command-piece tokens and the measurement map.

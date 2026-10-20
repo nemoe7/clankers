@@ -149,8 +149,11 @@ test('preview client', async (t) => {
   let replySeenError = false;
   const unpublished = [];
   const uploadCalls = [];
-  let loseUploadResponse = false;
-  let dropUploadOnce = false;
+  const stagedDropCalls = [];
+  let uploadFails = 0;
+  let uploadGate = null;
+  let loseNoteResponseOnce = false;
+  const abortError = () => Object.assign(new Error('Aborted'), { name: 'AbortError' });
   class FormDataStub {
     constructor(form = null) {
       this.fields = new Map();
@@ -238,6 +241,7 @@ test('preview client', async (t) => {
     setInterval: callback => { intervals.push(callback); return 1; },
     clearInterval: () => {},
     fetch: t.mock.fn(async (url, options) => {
+      if (options?.signal?.aborted) throw abortError();
       if (pendingWrites.has(url)) await pendingWrites.get(url);
       if (failedWrites.has(url)) return response({ error: 'Write failed' }, false);
       if (url === '/api/state') {
@@ -312,7 +316,45 @@ test('preview client', async (t) => {
         writeHeadersSeen.push(options.headers || {});
         const note = JSON.parse(options.body);
         sent.push(note);
+        // A send with upload IDs binds the staged rows the eager uploads already stored.
+        if (Array.isArray(note.upload_ids)) {
+          const rows = (state.uploads || []).filter(item => note.upload_ids.includes(item.id));
+          for (const row of rows) row.note_id = note.id;
+          const saved = { id: note.id, text: note.text, attachment_name: rows[0]?.name || null,
+            attachment_path: rows[0]?.path || null, attachments: rows,
+            at: '2026-09-21T00:00:00+00:00', acknowledged_at: null };
+          if (!state.notes.some(item => item.id === note.id)) state.notes = [...state.notes, saved];
+          if (loseNoteResponseOnce) {
+            loseNoteResponseOnce = false;
+            throw Object.assign(new Error('Failed to fetch'), { name: 'TypeError' });
+          }
+          return response(saved);
+        }
         return sendHandler(note);
+      }
+      if (url === '/api/uploads') {
+        // One eager upload: the client names the row before the bytes leave the browser.
+        const id = options.body.get('id');
+        const file = options.body.getAll('file')[0];
+        uploadCalls.push({ id, file, headers: options.headers || {} });
+        if (uploadGate) await uploadGate;
+        if (options?.signal?.aborted) throw abortError();
+        if (uploadFails > 0) {
+          uploadFails -= 1;
+          return { ok: false, status: 503, text: async () => JSON.stringify({ error: 'Upload dropped' }) };
+        }
+        const record = { id, note_id: null, name: file.name, type: file.type, size: file.size,
+          sha256: 'c'.repeat(64), file: id, path: `uploads/${id}`, present: true,
+          at: '2026-09-21T00:00:00+00:00' };
+        state.uploads = [...(state.uploads || []), record];
+        return response(record);
+      }
+      if (/^\/api\/uploads\/[^/]+\/drop$/.test(url)) {
+        // A chip drops its row by the client-chosen ID, before or after the bytes land.
+        const id = decodeURIComponent(url.split('/')[3]);
+        stagedDropCalls.push(id);
+        state.uploads = (state.uploads || []).filter(item => item.note_id !== null || item.id !== id);
+        return response({ dropped: id });
       }
       if (url.startsWith('/api/reports/') && url.endsWith('/submit')) {
         const submission = JSON.parse(options.body);
@@ -325,36 +367,6 @@ test('preview client', async (t) => {
           latest_answer_id: submission.id, latest_answer_at: at, latest_answer_acknowledged_at: null
         });
         return response({ ...submission, at });
-      }
-      if (url === '/api/notes/with-file') {
-        const id = options.body.get('id');
-        const text = options.body.get('text');
-        const files = options.body.getAll('file');
-        uploadCalls.push({ id, text, files, headers: options.headers || {},
-          contentType: (options.headers || {})['Content-Type'] });
-        let saved = state.notes.find(note => note.id === id);
-        if (!saved) {
-          const records = files.map((file, index) => {
-            const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
-            const stored = `${id}${files.length > 1 ? `-${index + 1}` : ''}${ext}`;
-            return { id: index ? `${id}-file-${index}` : id, note_id: id, name: file.name,
-              type: file.type, size: file.size, sha256: 'c'.repeat(64),
-              file: stored, path: `uploads/${stored}`, present: true,
-              at: '2026-09-21T00:00:00+00:00' };
-          });
-          saved = { id, text, attachment_name: files[0].name, attachment_path: records[0].path,
-            attachments: records, at: '2026-09-21T00:00:00+00:00', acknowledged_at: null };
-          state.notes = [...state.notes, saved];
-          state.uploads = [...(state.uploads || []), ...records];
-        }
-        if (loseUploadResponse) { loseUploadResponse = false; throw new Error('response lost after commit'); }
-        if (dropUploadOnce) {
-          dropUploadOnce = false;
-          const drop = new Error('Failed to fetch');
-          drop.name = 'TypeError';
-          throw drop;
-        }
-        return response(saved);
       }
       if (url === '/api/fetch-jobs') {
         const payload = JSON.parse(options.body);
@@ -575,6 +587,8 @@ test('preview client', async (t) => {
   let notesBeforeFile;
   let uploadsBeforeFile;
   let sendsBeforeFile;
+  let uploadsBeforeNote;
+  let releaseUpload;
   let attached;
   let receipt;
   let waitFor;
@@ -3102,8 +3116,8 @@ test('preview client', async (t) => {
   });
 
   await t.test("Multiple files stage as removable filename chips beside \"Your message\"", async () => {
-    // Files stage as removable filename chips beside "Your message", with no saved-files list.
-    // The note receipt and backend state keep every original name.
+    // Files stage as removable filename chips beside "Your message", and each chip starts its own
+    // upload before the send. The note receipt and backend state keep every original name.
     picker = get('#upload-file');
     chips = () => get('#staged-files').children.map(chip => chip.children[0].textContent.replace(/ · .*$/, ''));
     chipText = () => get('#staged-files').children[0].children[0].textContent;
@@ -3112,31 +3126,43 @@ test('preview client', async (t) => {
     picker.files = [{ name: 'empty.bin', size: 0, type: '' }];
     picker.events.change();
     assert.equal(get('#send-status').textContent, 'empty.bin is empty.');
+    assert.equal(uploadCalls.length, 0, 'an empty file never uploads');
     picker.files = [{ name: 'big.bin', size: 50_000_001, type: 'application/octet-stream' }];
     picker.events.change();
     assert.equal(get('#send-status').textContent, 'Staged 1 file. Send message to save them together.');
     assert.deepEqual(chips(), ['big.bin'], 'a large file has no ceiling');
+    assert.match(chipText(), /^big\.bin · uploading…$/, 'the chip renders before the bytes land');
+    await tick();
+    assert.equal(chipText(), 'big.bin · 50.00 MB', 'the chip reports the finished upload');
+    assert.equal(uploadCalls.length, 1, 'the drop starts the upload at once');
     get('#staged-files').children[0].children[1].events.click();
+    await tick();
+    assert.equal(stagedDropCalls.length, 1, 'the chip drops the uploaded row');
     tooMany = Array.from({ length: 6 }, (_, n) => ({ name: `file-${n}.bin`, size: 1, type: '' }));
     picker.files = tooMany;
     picker.events.change();
+    await tick();
     assert.equal(get('#send-status').textContent, 'Staged 6 files. Send message to save them together.');
     assert.equal(get('#staged-files').children.length, 6, 'no count cap stages six files');
-    assert.equal(uploadCalls.length, 0, 'choosing files does not upload them yet');
+    assert.equal(uploadCalls.length, 7, 'each of the six files uploads on its own');
     while (get('#staged-files').children.length) {
       get('#staged-files').children[0].children[1].events.click();
     }
+    await tick();
     assert.equal(get('#staged-files').hidden, true, 'clearing the six keeps the exact chips below');
+    assert.equal(uploadCalls.length, 7, 'removing a chip never uploads anything');
+    assert.equal(stagedDropCalls.length, 7, 'every chip drops its own row');
     first = { name: 'report card.pdf', size: 12, type: 'application/pdf', lastModified: 7 };
     second = { name: 'photo.png', size: 2, type: 'image/png', lastModified: 8 };
     thirdFile = { name: 'notes.txt', size: 9, type: 'text/plain', lastModified: 9 };
     picker.files = [first, second];
     picker.events.change();
     assert.deepEqual(chips(), ['report card.pdf', 'photo.png']);
+    await tick();
     assert.equal(chipText(), 'report card.pdf · 12 B', 'the chip carries the size of the file');
     assert.equal(get('#staged-files').hidden, false);
     assert.equal(get('#staged-files').children[0].children[1].getAttribute('aria-label'), 'Remove report card.pdf');
-    assert.equal(uploadCalls.length, 0, 'choosing files does not upload them yet');
+    assert.equal(uploadCalls.length, 9, 'both picked files upload at once');
     dragging = event({ dataTransfer: { types: ['Files'], files: [thirdFile] } });
     get('#compose').events.dragover(dragging);
     assert.equal(dragging.prevented, true);
@@ -3145,16 +3171,23 @@ test('preview client', async (t) => {
     get('#compose').events.drop(dropping);
     assert.equal(dropping.prevented, true);
     assert.equal(get('#compose').dataset.dragging, undefined);
+    await tick();
     assert.deepEqual(chips(), ['report card.pdf', 'photo.png', 'notes.txt']);
+    assert.equal(uploadCalls.length, 10, 'the drop uploads its file too');
   });
 
   await t.test("Remove the middle file and reselect it: replacement keeps both chip order and its own remo", async () => {
     // Remove the middle file and reselect it: replacement keeps both chip order and its own remove.
     get('#staged-files').children[1].children[1].events.click();
     assert.deepEqual(chips(), ['report card.pdf', 'notes.txt']);
+    await tick();
+    assert.equal(stagedDropCalls.at(-1), uploadCalls.filter(call => call.file.name === 'photo.png').at(-1).id,
+      'the chip drops its own upload row');
     picker.files = [second];
     picker.events.change();
+    await tick();
     assert.deepEqual(chips(), ['report card.pdf', 'notes.txt', 'photo.png']);
+    assert.equal(uploadCalls.length, 11, 'the reselect uploads a fresh row');
     badDrop = event({ dataTransfer: { types: ['Files'], files: [{ name: 'empty-drop.bin', size: 0, type: '' }] } });
     get('#compose').events.drop(badDrop);
     assert.deepEqual(chips(), ['report card.pdf', 'notes.txt', 'photo.png'], 'an invalid drop keeps staged files');
@@ -3162,39 +3195,30 @@ test('preview client', async (t) => {
 
   });
 
-  await t.test("One multipart call writes the note and all three files", async () => {
-    // One multipart call writes the note and all three files. A lost response keeps them in memory.
-    // manual retry reuses the same note ID and the backend returns the one saved message.
+  await t.test("The send binds the three staged uploads and posts no bytes", async () => {
+    // The send names the files the server already holds, so no bytes cross the wire twice and the
+    // receipt keeps every original name.
     notesBeforeFile = state.notes.length;
     uploadsBeforeFile = (state.uploads || []).length;
     sendsBeforeFile = sent.length;
+    uploadsBeforeNote = uploadCalls.length;
     get('#note').value = 'Please review all attachments';
-    loseUploadResponse = true;
-    await get('#form').events.submit(event({}));
-    assert.equal(uploadCalls.length, 1);
-    assert.deepEqual(uploadCalls[0].files, [first, thirdFile, second]);
-    assert.equal(uploadCalls[0].text, 'Please review all attachments');
-    assert.equal(uploadCalls[0].contentType, undefined, 'the browser supplies the multipart boundary');
-    assert.equal(Object.hasOwn(uploadCalls[0].headers, 'X-Preview-Token'), false);
-    assert.equal(sent.length, sendsBeforeFile, 'no separate upload notification note is posted');
-    assert.equal(get('#staged-files').hidden, false, 'an unconfirmed response keeps every staged file');
-    assert.match(get('#send-status').textContent, /^Save not confirmed:/);
-    assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:pending')).attachments.map(item => item.name),
-      ['report card.pdf', 'notes.txt', 'photo.png']);
     await get('#form').events.submit(event({}));
     await tick();
     await refresh();
-    assert.equal(uploadCalls.length, 2);
-    assert.equal(uploadCalls[0].id, uploadCalls[1].id, 'unchanged retries reuse the note ID');
-    assert.equal(state.notes.length, notesBeforeFile + 1);
-    assert.equal(state.uploads.length, uploadsBeforeFile + 3);
-    assert.equal(sent.length, sendsBeforeFile);
+    assert.equal(uploadCalls.length, uploadsBeforeNote, 'the send uploads no bytes again');
+    assert.equal(sent.length, sendsBeforeFile + 1);
+    const bound = ['report card.pdf', 'notes.txt', 'photo.png']
+      .map(name => uploadCalls.filter(call => call.file.name === name).at(-1).id);
+    assert.deepEqual(sent.at(-1).upload_ids, bound, 'the send binds the staged upload IDs in order');
+    assert.equal(Object.hasOwn(sent.at(-1), 'attachments'), false, 'the send carries no file bytes');
     assert.equal(get('#note').value, '');
     assert.equal(get('#staged-files').hidden, true);
-    assert.deepEqual(state.uploads.slice(-3).map(item => item.file), [
-      `${uploadCalls[0].id}-1.pdf`, `${uploadCalls[0].id}-2.txt`, `${uploadCalls[0].id}-3.png`
-    ]);
-    attached = get('#history').children.find(item => item.children[2].children[0].dataset.full === uploadCalls[0].id);
+    assert.equal(state.notes.length, notesBeforeFile + 1);
+    assert.equal(state.uploads.length, uploadsBeforeFile, 'the send adds no rows');
+    assert.equal(state.uploads.filter(item => item.note_id === sent.at(-1).id).length, 3,
+      'the three staged rows bind to the note');
+    attached = get('#history').children.find(item => item.children[2].children[0].dataset.full === sent.at(-1).id);
     assert.ok(attached);
     receipt = attached.children[2];
     assert.equal(part(receipt, 'receipt-file').textContent, ' · report card.pdf · notes.txt · photo.png');
@@ -3203,18 +3227,17 @@ test('preview client', async (t) => {
 
   });
 
-  await t.test("An upload the network drops retries once under the same note ID", async () => {
+  await t.test("A lost note response replays under the same ID and keeps its uploads", async () => {
     picker.files = [{ name: 'retry.bin', size: 2048, type: 'application/octet-stream' }];
     picker.events.change();
-    const calls = uploadCalls.length;
-    const notes = state.notes.length;
-    dropUploadOnce = true;
-    await get('#form').events.submit(event({}));
     await tick();
-    assert.equal(uploadCalls.length, calls + 2, 'exactly one replay follows the drop');
-    assert.equal(uploadCalls.at(-1).id, uploadCalls.at(-2).id, 'the replay keeps the note ID');
-    assert.deepEqual(uploadCalls.at(-1).files.map(file => file.name), ['retry.bin']);
-    assert.equal(get('#send-status').textContent, '', 'a confirmed upload leaves no routine success footer');
+    const staged = uploadCalls.at(-1).id;
+    const notes = state.notes.length;
+    loseNoteResponseOnce = true;
+    await get('#form').events.submit(event({}));
+    assert.equal(sent.at(-1).id, sent.at(-2).id, 'the replay keeps the note ID');
+    assert.deepEqual(sent.at(-1).upload_ids, [staged], 'the replay keeps the same upload');
+    assert.equal(get('#send-status').textContent, '', 'a confirmed send leaves no routine success footer');
     assert.equal(state.notes.length, notes + 1, 'the replay writes no second note');
     assert.equal(get('#staged-files').hidden, true, 'a saved note clears its chips');
   });
@@ -3223,12 +3246,48 @@ test('preview client', async (t) => {
     // One file without text still writes a note and uses the original single-file basename.
     picker.files = [{ name: 'single.bin', size: 1, type: '' }];
     picker.events.change();
+    await tick();
     await get('#form').events.submit(event({}));
-    assert.equal(uploadCalls.at(-1).text, 'File: single.bin');
-    assert.equal(uploadCalls.at(-1).files.length, 1);
-    assert.equal(sent.length, sendsBeforeFile);
+    assert.equal(sent.at(-1).text, 'File: single.bin');
+    assert.equal(sent.at(-1).upload_ids.length, 1);
     assert.equal(get('#staged-files').hidden, true);
 
+  });
+
+  await t.test("A chip cancels its running upload and drops its row when its cross is pressed", async () => {
+    // The client names the row before the bytes leave, so a cancel can still drop a row that
+    // the server wrote after the response was lost.
+    const before = stagedDropCalls.length;
+    uploadGate = new Promise(resolve => { releaseUpload = resolve; });
+    picker.files = [{ name: 'slow.bin', size: 3, type: 'application/octet-stream' }];
+    try {
+      picker.events.change();
+      const id = uploadCalls.at(-1).id;
+      assert.match(chipText(), /uploading…/, 'the chip shows the running upload');
+      get('#staged-files').children[0].children[1].events.click();
+      assert.equal(get('#staged-files').hidden, true, 'the chip leaves at once');
+      releaseUpload();
+      await tick();
+      await tick();
+      assert.deepEqual(stagedDropCalls.slice(before), [id], 'the cancel drops the client-named row');
+      assert.equal(state.uploads.some(item => item.id === id), false, 'no bytes stay behind');
+    } finally {
+      uploadGate = null;
+    }
+  });
+
+  await t.test("A failed chip says so and the send retries it once", async () => {
+    const before = uploadCalls.length;
+    uploadFails = 1;
+    picker.files = [{ name: 'flaky.bin', size: 4, type: 'application/octet-stream' }];
+    picker.events.change();
+    await tick();
+    assert.equal(chipText(), 'flaky.bin · upload failed', 'the chip reports the failed upload');
+    get('#note').value = 'Retry this one';
+    await get('#form').events.submit(event({}));
+    assert.equal(uploadCalls.length, before + 2, 'the send retries the failed upload once');
+    assert.equal(sent.at(-1).upload_ids.length, 1);
+    assert.equal(get('#staged-files').hidden, true, 'the send clears the chip');
   });
 
   await t.test("Clipboard images stage with epoch filenames, preserve bytes and use the normal send", async () => {
@@ -3257,7 +3316,8 @@ test('preview client', async (t) => {
       assert.equal(mixed.prevented, undefined, 'mixed text still uses native paste');
       assert.deepEqual(chips(), [`${stamp}.png`, `${stamp}-2.png`, `${stamp}.jpg`, `${stamp}-3.png`]);
       assert.equal(get('#note').value, 'Review this image');
-      assert.equal(uploadCalls.length, before, 'pasting only stages files');
+      await tick();
+      assert.equal(uploadCalls.length, before + 4, 'every pasted file uploads as it arrives');
       get('#send').disabled = true;
       paste(pasteEvent([image]));
       get('#send').disabled = false;
@@ -3270,8 +3330,8 @@ test('preview client', async (t) => {
       get('#staged-files').children[4].children[1].events.click();
       assert.equal(chips().length, 4, 'the large paste removes cleanly');
       await get('#form').events.submit(event({}));
-      assert.equal(uploadCalls.length, before + 1);
-      const files = uploadCalls.at(-1).files;
+      assert.equal(uploadCalls.length, before + 5, 'the send uploads nothing');
+      const files = sent.at(-1).upload_ids.map(id => uploadCalls.find(call => call.id === id).file);
       assert.deepEqual(files.map(file => file.name), [`${stamp}.png`, `${stamp}-2.png`, `${stamp}.jpg`, `${stamp}-3.png`]);
       assert.equal(files[0].type, 'image/png');
       assert.equal(files[0].lastModified, stamp);
@@ -4227,6 +4287,28 @@ test('preview client', async (t) => {
     }
   });
 
+
+  await t.test('A second refresh joins the state read already in flight', async () => {
+    // A caller that polls while a read runs joins that read, so it never renders the state the
+    // read is about to replace.
+    let releaseState = () => {};
+    stateResponseWait = new Promise(resolve => { releaseState = resolve; });
+    try {
+      const first = refresh();
+      const second = refresh();
+      let settled = false;
+      second.then(() => { settled = true; });
+      await tick();
+      assert.equal(settled, false, 'a second refresh waits for the same state read');
+      stateResponseWait = null;
+      releaseState();
+      await Promise.all([first, second]);
+      assert.equal(settled, true, 'both callers finish after the read');
+    } finally {
+      stateResponseWait = null;
+      releaseState();
+    }
+  });
 
   await t.test('Highlights use safe Markdown tokens and leave code and destinations literal', () => {
     const render = context.renderMessageMarkdown;

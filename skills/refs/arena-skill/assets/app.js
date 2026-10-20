@@ -10,7 +10,7 @@ const PASTE_LINE_LIMIT = 15;
 const PASTE_CHAR_LIMIT = 1500;
 const BINARY_TIMEOUT = 600_000;
 let pending = null;
-let stateBusy = false;
+let stateBusy = null;
 let stateAgain = false;
 let reportRequest = 0;
 let listSignature = '';
@@ -254,8 +254,8 @@ note.addEventListener('input', () => {
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
 
-// File bytes stay in this browser tab, not in localStorage. Every staged file has its own removal
-// control beside "Your message". Picker, drop and paste stage files before one atomic send.
+// File bytes stay in this browser tab. A staged file starts its upload at the drop, so the chip
+// carries its own state and the send binds the bytes the server already holds.
 let stagedFiles = [];
 const picker = $('#upload-file');
 const compose = $('#compose');
@@ -267,23 +267,68 @@ function pendingFiles() {
   if (Array.isArray(pending.attachments)) return pending.attachments;
   return pending.attachment ? [pending.attachment] : [];
 }
+function chipState(entry) {
+  if (entry.status === 'uploading') return 'uploading…';
+  if (entry.status === 'failed') return 'upload failed';
+  return bytes(entry.file.size);
+}
+async function uploadStaged(entry) {
+  // The client names the upload, so a removal can drop a row whose response never arrived.
+  entry.status = 'uploading';
+  entry.error = '';
+  entry.controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const body = new FormData();
+  body.append('id', entry.id);
+  body.append('file', entry.file, entry.file.name);
+  const timer = setTimeout(() => entry.controller?.abort(), BINARY_TIMEOUT);
+  try {
+    const response = await fetch('/api/uploads', {
+      method: 'POST', body, cache: 'no-store', signal: entry.controller?.signal
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    entry.status = 'ready';
+  } catch (error) {
+    entry.status = entry.aborted ? 'dropped' : 'failed';
+    entry.error = error && error.message ? error.message : 'Upload failed';
+  } finally {
+    clearTimeout(timer);
+    entry.controller = null;
+    if (stagedFiles.includes(entry)) renderStagedFiles();
+  }
+}
+async function dropStaged(entry) {
+  entry.aborted = true;
+  entry.controller?.abort();
+  try { await entry.request; } catch { /* The request reports its own state. */ }
+  try {
+    await fetch(`/api/uploads/${encodeURIComponent(entry.id)}/drop`, {
+      method: 'POST', cache: 'no-store', headers: writeHeaders('application/json'), body: '{}'
+    });
+  } catch { /* No row landed, or a note already owns the bytes. */ }
+}
 function renderStagedFiles() {
   const holder = $('#staged-files');
-  holder.replaceChildren(...stagedFiles.map((file, index) => {
+  holder.replaceChildren(...stagedFiles.map(entry => {
     const chip = document.createElement('span');
     chip.className = 'staged-chip';
     const name = document.createElement('span');
     name.className = 'staged-chip-name';
-    name.textContent = `${file.name} · ${bytes(file.size)}`;
-    name.title = `${file.name} · ${file.size.toLocaleString()} bytes`;
+    name.textContent = `${entry.file.name} · ${chipState(entry)}`;
+    name.title = entry.error
+      ? `${entry.file.name} · ${entry.error}`
+      : `${entry.file.name} · ${entry.file.size.toLocaleString()} bytes`;
     const remove = document.createElement('button');
     remove.type = 'button';
     setIcon(remove, 'x', 12);
-    label(remove, `Remove ${file.name}`);
+    label(remove, `Remove ${entry.file.name}`);
     remove.addEventListener('click', () => {
       if (send.disabled) return;
-      stagedFiles.splice(index, 1);
+      // A click may reach an element from an earlier render, so the array decides the position.
+      const position = stagedFiles.indexOf(entry);
+      if (position < 0) return;
+      const [dropped] = stagedFiles.splice(position, 1);
       picker.value = '';
+      void dropStaged(dropped);
       renderStagedFiles();
       status.textContent = stagedFiles.length
         ? `${stagedFiles.length} file${stagedFiles.length === 1 ? '' : 's'} staged.`
@@ -305,9 +350,16 @@ function stageFiles(files) {
     if (!file.name || file.name.length > 200) { status.textContent = 'Use filenames of 1–200 characters.'; return; }
     if (!file.size) { status.textContent = `${file.name} is empty.`; return; }
   }
-  stagedFiles.push(...files);
+  const entries = [];
+  for (const file of files) {
+    let id = newId();
+    while (stagedFiles.some(entry => entry.id === id) || entries.some(entry => entry.id === id)) id = newId();
+    entries.push({ file, id, status: 'uploading', error: '', aborted: false, controller: null, request: null });
+  }
+  stagedFiles.push(...entries);
   picker.value = '';
   renderStagedFiles();
+  for (const entry of entries) entry.request = uploadStaged(entry);
   status.textContent = `Staged ${stagedFiles.length} file${stagedFiles.length === 1 ? '' : 's'}. Send message to save them together.`;
 }
 $('#attach-file').addEventListener('click', () => picker.click());
@@ -332,7 +384,7 @@ compose.addEventListener('paste', event => {
     event.preventDefault();
     const stamp = Date.now();
     const base = `${lines}-pasted-lines-${stamp}`;
-    const names = new Set(stagedFiles.map(file => file.name));
+    const names = new Set(stagedFiles.map(entry => entry.file.name));
     let name = `${base}.txt`;
     for (let index = 2; names.has(name); index++) name = `${base}-${index}.txt`;
     stageFiles([new File([text], name, { type: 'text/plain', lastModified: stamp })]);
@@ -340,7 +392,7 @@ compose.addEventListener('paste', event => {
   }
   if (!text) event.preventDefault();
   const stamp = Date.now();
-  const names = new Set(stagedFiles.map(file => file.name));
+  const names = new Set(stagedFiles.map(entry => entry.file.name));
   stageFiles(images.map(file => {
     const extension = file.type === 'image/jpeg' ? 'jpg' : file.type.slice(6).split('+')[0].replace(/[^a-z0-9]/gi, '') || 'img';
     let name = `${stamp}.${extension}`;
@@ -1006,8 +1058,17 @@ function renderState() {
   checkReportRead();
 }
 async function refreshState() {
-  if (stateBusy) return;
-  stateBusy = true;
+  // A caller that arrives during a read joins it, so a fresh state always precedes its render.
+  if (stateBusy) return stateBusy;
+  const running = readState();
+  stateBusy = running;
+  try {
+    return await running;
+  } finally {
+    if (stateBusy === running) stateBusy = null;
+  }
+}
+async function readState() {
   let queueReady = false;
   pollCommits = [];
   try {
@@ -1019,7 +1080,7 @@ async function refreshState() {
     queueReady = true;
   } catch (error) { pollSince = null; setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
   finally {
-    stateBusy = false;
+    stateBusy = null;
     pollCommits = null;
     if (stateAgain) { stateAgain = false; socketRefresh(); }
     if (queueReady && (lastState?.fetch_jobs || []).some(item => item.approval === 'approved'
@@ -1034,9 +1095,9 @@ $('#form').addEventListener('submit', async event => {
   if (send.disabled || (!note.value.trim() && !stagedFiles.length)) return;
   const draft = note.value;
   const submittedVersion = draftVersion;
-  const names = stagedFiles.map(file => file.name);
+  const names = stagedFiles.map(entry => entry.file.name);
   const text = draft.trim() ? draft : names.length === 1 ? `File: ${names[0]}` : `Files: ${names.join(', ')}`;
-  const attachments = stagedFiles.map(attachmentInfo);
+  const attachments = stagedFiles.map(entry => attachmentInfo(entry.file));
   const former = pendingFiles();
   if (pending && pending.text === text && former.length &&
       JSON.stringify(former) !== JSON.stringify(attachments)) {
@@ -1062,31 +1123,29 @@ $('#form').addEventListener('submit', async event => {
     save('draft', '');
     writeMode();
     sending.html = renderMessageMarkdown(text);
+    // A send waits for the eager uploads, then gives a failed one one more try.
+    if (stagedFiles.some(entry => entry.status === 'uploading')) {
+      status.textContent = 'Waiting for files to finish uploading…';
+      await Promise.all(stagedFiles.map(entry => entry.request));
+    }
+    const broken = stagedFiles.filter(entry => entry.status === 'failed');
+    if (broken.length) {
+      status.textContent = `Retrying ${broken.map(entry => entry.file.name).join(', ')}…`;
+      await Promise.all(broken.map(entry => uploadStaged(entry)));
+    }
+    if (stagedFiles.some(entry => entry.status !== 'ready')) {
+      throw new Error('A file did not upload. Check the connection and send again');
+    }
     const result = await optimisticWrite(apply, async () => {
-      let response;
-      if (stagedFiles.length) {
-        const body = new FormData();
-        body.append('id', pending.id);
-        body.append('text', text);
-        for (const file of stagedFiles) body.append('file', file, file.name);
-        // The same note ID, text and file set twice is safe: the server answers with the first
-        // record, so one retry after a dropped connection cannot duplicate the note.
-        const postFiles = () => request('/api/notes/with-file', {
-          method: 'POST', body,
-          timeoutMs: BINARY_TIMEOUT, retryOnFailure: false
-        });
-        try { response = await postFiles(); }
-        catch (error) {
-          // A dropped connection arrives as a TypeError, with no status to read. The same note ID,
-          // text and file set replay safely, so one retry covers a blip that lost the body.
-          if (!error || error.name !== 'TypeError') throw error;
-          status.textContent = 'The upload dropped once; retrying the same message ID…';
-          response = await postFiles();
-        }
-      } else response = await request('/api/notes', {
-        method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify(pending)
-      });
-      return response.json();
+      // The note binds the uploads the server holds, so no bytes cross the wire twice. The same
+      // note ID, text and upload set twice is safe: the server answers with the first record.
+      const payload = {
+        id: pending.id, text,
+        ...(stagedFiles.length ? { upload_ids: stagedFiles.map(entry => entry.id) } : {})
+      };
+      return (await request('/api/notes', {
+        method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify(payload)
+      })).json();
     });
     note.placeholder = clipPlaceholder(result.text);
     status.textContent = '';
@@ -1100,10 +1159,7 @@ $('#form').addEventListener('submit', async event => {
       save('draft', draft);
       writeMode();
     }
-    const total = stagedFiles.reduce((sum, file) => sum + file.size, 0);
-    const hint = stagedFiles.length > 1 && error && error.name === 'TypeError'
-      ? ` The combined upload is ${bytes(total)}; if it fails again, send fewer files per message.` : '';
-    status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept; retry unchanged files and text with the same message ID.${hint}`;
+    status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept; retry unchanged files and text with the same message ID.`;
   }
   finally {
     send.disabled = picker.disabled = $('#attach-file').disabled = false;
