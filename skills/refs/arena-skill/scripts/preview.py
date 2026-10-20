@@ -2007,8 +2007,8 @@ def current_task(tasks):
 def format_task_list(tasks, full=False):
   """The working queue by default. `full` prints every task, finished included.
 
-  The first unblocked upcoming task reads `current`, the same one the page gives a div of its own, so what the
-  agent can start next is visible without reading down a list."""
+  The first unblocked upcoming task reads `current`, and its entry asks whether it
+  remains active. The page gives that task a div of its own."""
   shown = tasks if full else [t for t in tasks if t.get("status") == "upcoming"]
   lines = [f"Tasks {len(shown)}" if full else f"Tasks {len(shown)} upcoming"]
   if any(t.get("blocked") for t in shown):
@@ -2017,7 +2017,8 @@ def format_task_list(tasks, full=False):
   for task in shown:
     order = task.get("order")
     status = task.get("status")
-    if head is not None and task.get("id") == head.get("id"):
+    is_current = head is not None and task.get("id") == head.get("id")
+    if is_current:
       status = "current"
     id_ = task.get("id")
     blocked = task.get("blocked")
@@ -2036,6 +2037,8 @@ def format_task_list(tasks, full=False):
     for answer in task.get("answers", []):
       lines.append(f"    answer {answer['id']}, at {answer['at']}")
       lines.append(f"    {answer['text']}")
+    if is_current:
+      lines.append("    Is this still the task you are working on?")
   return "\n".join(lines)
 
 

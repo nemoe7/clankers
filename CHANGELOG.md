@@ -10,6 +10,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Preview serving: reject ports other than 8000 and identify 8000 as the only supported port.
 - Preview violation notices: identify user flags and report formatting defects, then print user-flagged notices to stdout.
+- Read-set reminders: read files only when current full text is absent from context. Wait 20 minutes after the first eligible command. Then keep 20-minute intervals.
+- Preview task lists: ask whether the current task remains active. Reject misplaced `--task` options.
+- Test guidance: prefer named constants for expected assertion values. Check generated indexes by structure, not sentence text.
 
 ## 2026-10-19
 
