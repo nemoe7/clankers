@@ -1,6 +1,6 @@
-# Arena Proxy Install
+# Arena egress proxy install
 
-This page carries the install detail that the agent does not need to use the endpoint.
+This page carries the install detail. The agent does not need it to use the endpoint.
 
 ## Container
 
@@ -34,7 +34,7 @@ docker run --rm -p 8787:8787 \
 
 - The backend is one Python package with no dependencies beyond the standard library, about 30 KB of source. It idles at a few megabytes of memory.
 - Environment variables: `ARENA_PROXY_HOST`, `ARENA_PROXY_PORT`, `ARENA_PROXY_STATE_DIR`, `ARENA_PROXY_FETCH_CAP`, `ARENA_PROXY_STAGE_CAP`, and `ARENA_PROXY_MASTER_KEY`, plus the GitHub and model groups.
-- Prune the state directory if staged bytes accumulate. The server drops entries older than one hour on its own requests.
+- Prune the state directory if staged bytes accumulate. The server drops entries older than one hour when it handles requests.
 - On a small host, cap the process (`--memory 128m`) and keep one replica.
 
 ## Exposure

@@ -24,6 +24,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - House rules: state the hard-rule convention, and restore the unstaged half of the staging rule.
 - House rules: keep one Arena clause, drop the duplicate precedence test, and document the overlay model.
 - Maintenance README: point the four rule-file citations at the AGENTS.md guidelines.
+- Install pages: fix the egress title and opening sentence, the preview heading case and a split line.
+- Arena quirks archive: separate a heading from the paragraph above it.
 
 ## 2026-10-19
 

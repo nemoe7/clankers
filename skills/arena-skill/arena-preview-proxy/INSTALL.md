@@ -12,7 +12,7 @@ The repository holds the source. `server.js` is the proxy, and `assets/` holds t
 - `PORT` defaults to 8080, and the server binds `127.0.0.1` only: the Tailscale sidecar is the single way in.
 - `/healthz` answers `ok`, for the container health check.
 
-## Compose and Serve
+## Compose and serve
 
 [`docker-compose.yml`](docker-compose.yml) runs the image behind a Tailscale sidecar. [`tailscale-serve.json`](tailscale-serve.json) carries the Serve route and keeps Funnel off.
 
@@ -26,8 +26,7 @@ The repository holds the source. `server.js` is the proxy, and `assets/` holds t
 - The first request carries the preview: `https://arena-preview.<tailnet>.ts.net/?url=https%3A%2F%2Fsbx-xxxx.arena.site%2F`.
 - The proxy answers with the preview itself, in-page. The preview's later `/api/...` calls carry no parameter, so the proxy takes their target from the Referer of the viewer page that made them.
 - The proxy injects a manifest link and a worker registration into the preview HTML, so Android Chrome offers to install the page. The installed app reopens the same preview.
-- Chrome offers that install when the worker controls the viewer root and the manifest carries a 192px and a 512px PNG icon.
- The package ships both beside the scalable icon, and the worker registers on the root scope.
+- Chrome offers that install when the worker controls the viewer root and the manifest carries a 192px and a 512px PNG icon. The package ships both beside the scalable icon, and the worker registers on the root scope.
 - When the request names no preview, the viewer root answers its own page: the manifest link, the worker registration and a URL box. A rejected URL answers the same page with the reason, so the page never loses its manifest.
 - The chooser lists the last 10 previews opened from its URL box, its list or a share, newest first. Each entry opens its preview in one tap, its ✎ button edits the label the row shows, and its × button deletes it. A label replaces the host text and never changes the destination URL. The list lives in the browser's storage, so the server still keeps no memory, and a plain link adds no entry. The list clears at 02:00, 08:00, 14:00 and 20:00 PHT, and a boundary that passes with the app shut clears it on the next open.
 - The proxy accepts only HTTPS roots on `sbx-*.arena.site`: no other host, no credentials, no port, no subpath. Write methods reach the selected preview only, and the proxy never forges the browser's `Origin`.

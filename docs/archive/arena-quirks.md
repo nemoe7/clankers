@@ -177,6 +177,7 @@ Rule: request public URLs only, name the signature when the URL holds one, and e
 Consequence: the sandbox-to-PC direction has no working file route from a preview page. The text of a small file still crosses, through the clipboard, and the owner pastes it on the PC.
 
 Rule: hand a file to the PC as text through the clipboard. NEVER report a download as delivered, because the preview page cannot see the PC's disk.
+
 ## Chromium for E2E tests
 
 The sandbox blocks the normal Chromium installation paths: the Playwright browser CDN, Google CDNs and `apt`. Observation date unrecorded.
