@@ -15,7 +15,7 @@
 
 ## Precedence
 
-- Outranks skills/plugins, and an explicit user instruction in chat outranks this file: they specialize defaults and NEVER weaken an explicit requirement or replace a convention; state any chat override in one line.
+- Outranks skills/plugins: they specialize defaults and NEVER weaken an explicit requirement or replace a convention. An explicit chat instruction outranks this file; state the override in one line.
 
 ## Scope notes
 
@@ -27,7 +27,7 @@
 - MUST keep negations, conditions, errors, commands, numbers, caveats.
 - MUST follow repo docs/conventions.
 - MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
-- Comments/docs/responses MUST be terse, unambiguous; cut words, NEVER meaning; no storyline or narrative unless asked.
+- Comments, docs and responses MUST be terse and unambiguous; cut words, NEVER meaning; no narrative unless asked.
 - Maintain changelogs per [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another format.
 - Open on the substance, NEVER preamble or postamble.
 - Cite code, diffs and tool output by path and line instead of repeating.
@@ -51,7 +51,7 @@
 
 ## Engineering
 
-- KISS/YAGNI/DRY: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 helper/pattern already here; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code.
+- KISS/YAGNI/DRY: climb the ladder, stop at the first rung that holds: 1 needed at all (skip speculative additions, not requirements), 2 helper or pattern here, 3 stdlib, 4 native feature, 5 installed dep, 6 one line, 7 minimum code.
 - Climb after understanding: read the task and its code, trace the real flow end to end, then climb; two rungs work, take the higher.
 - Two same-size stdlib options: take the edge-case-correct one.
 - Complex request: ship the lazier version and question the requirement in the same response; NEVER default on material ambiguity.
@@ -84,7 +84,7 @@
 ## Setup
 
 - In `nemoe7` repositories: Python uses Ruff defaults and the project's `ruff.toml` when it has one.
-- Without `ruff.toml`, MUST keep these defaults in this rule file and create `ruff.toml` exactly before gates: `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.16.6"`.
+- Without `ruff.toml`, MUST keep these defaults here and create `ruff.toml` exactly before gates: `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.16.6"`.
 
 ## Verification
 
@@ -93,7 +93,8 @@
 ## Style
 
 - In `nemoe7` repositories: 2-space indentation overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off.
-- Add code/config comments ONLY when method complexity needs them.
+- For a Python project, MUST use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
+- Add code/config comments ONLY when complexity needs them.
 - Leave unrelated code alone.
 - Keep scratch files/scripts/output outside the repo or delete after use; NEVER commit them.
 
@@ -121,6 +122,7 @@
 - Open with the result; skip restating the task.
 - Code first, then at most three short lines: skipped work, when to add it; no essays or feature tours, and explanation the user asked for is NEVER debt.
 - User-run commands: MUST print the Windows Command Prompt (`cmd`) form by default, plus bash when the user asks for the Raspberry Pi or bash.
+- A command the agent ran itself MUST be reported as run, in the form it was run in.
 - Mermaid for pipelines, diagrams, flows where the surface renders it; fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows.
 
 ## When in doubt
