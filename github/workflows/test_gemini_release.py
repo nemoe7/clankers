@@ -22,6 +22,7 @@ def fails(call, message):
     raise AssertionError(f"Expected error: {message}")
 
 
+@patch.dict(os.environ, {"GITHUB_RUN_ATTEMPT": "1"})
 def test_release_pipeline():
   original = Path.cwd()
   with tempfile.TemporaryDirectory() as directory:

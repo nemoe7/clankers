@@ -909,7 +909,8 @@ def test_pr_state_veto_keeps_reads_comments_and_metadata_edits():
     for command in commands:
       result = run(
         "gh() { printf metadata-reached; }; git() { printf metadata-reached; }; "
-        + command
+        + command,
+        cwd="/tmp",
       )
       assert result.returncode == 0, (command, result.stderr)
       assert "metadata-reached" in result.stdout, command
