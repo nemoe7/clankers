@@ -4897,6 +4897,52 @@ def test_a_failed_check_discovery_names_the_unstarted_watch(tmp_path, monkeypatc
   assert record["tail"] == [verdict]
 
 
+def test_a_failed_check_watch_names_the_failing_steps(tmp_path, monkeypatch, capsys):
+  """A failed watch appends the failing step of each failed check."""
+  monkeypatch.setattr(preview, "pr_checks_command", lambda argv: True)
+  monkeypatch.setattr(preview, "pr_checks_discovery", lambda root: None)
+  monkeypatch.setattr(
+    preview, "pr_failed_steps", lambda root=".": ["Quality / Update and Validate"]
+  )
+  argv = ["--", sys.executable, "-c", "print('2 checks failed'); raise SystemExit(1)"]
+  assert preview.run_command(tmp_path, "pr-checks", argv) == 1
+  out = capsys.readouterr().out
+  assert "Failed: Quality / Update and Validate" in out
+  record = json.loads(
+    (tmp_path / "runs" / "pr-checks.json").read_text(encoding="utf-8")
+  )
+  assert record["verdict"] == "Failed: Quality / Update and Validate"
+
+
+def test_failed_steps_map_checks_to_job_steps(monkeypatch):
+  """The step helper reads failed checks, then each job's failing steps."""
+  monkeypatch.setattr(preview, "repo_slug", lambda root=".": "o/r")
+  monkeypatch.setattr(preview, "workspace_branch", lambda root=".": "b")
+  monkeypatch.setattr(preview, "pr_head_sha", lambda root, branch, slug: "abc1234")
+  seen = []
+
+  def fake(root, path, projection):
+    seen.append(path)
+    if path.endswith("check-runs?per_page=100"):
+      return [
+        "Quality\thttps://github.com/o/r/actions/runs/9/job/42",
+        "Tests\thttps://github.com/o/r/actions/runs/9/job/43",
+      ]
+    if path.endswith("/jobs/42"):
+      return ["Update and Validate"]
+    return [""]
+
+  monkeypatch.setattr(preview, "gh_api_lines", fake)
+  assert preview.pr_failed_steps(".") == ["Quality / Update and Validate"]
+  assert seen == [
+    "repos/o/r/commits/abc1234/check-runs?per_page=100",
+    "repos/o/r/actions/jobs/42",
+    "repos/o/r/actions/jobs/43",
+  ]
+  monkeypatch.setattr(preview, "gh_api_lines", lambda root, path, projection: None)
+  assert preview.pr_failed_steps(".") == []
+
+
 def test_a_logs_call_reads_the_routed_run_status_and_output():
   """A routed run reads back through the logs command, live and finished."""
   with tempfile.TemporaryDirectory() as log_dir:

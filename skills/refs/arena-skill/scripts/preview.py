@@ -874,6 +874,9 @@ def pr_check_watch(result, root, stopped):
 # instead of waiting for the first check to appear.
 PR_CHECK_DISCOVERY_SECONDS = 30
 PR_CHECK_DISCOVERY_STEP = 5
+PR_STEP_LIMIT = 5
+PR_STEP_TIMEOUT = 10
+JOB_LINK_RE = re.compile(r"/actions/runs/\d+/job/(\d+)")
 
 
 def pr_head_sha(root, branch, slug):
@@ -985,6 +988,54 @@ def pr_check_rollup(root, slug, sha):
   if not states or states - {"SUCCESS", "SKIPPED", "NEUTRAL"}:
     return "PENDING", len(latest)
   return "SUCCESS", len(latest)
+
+
+def gh_api_lines(root, path, projection):
+  """Read one API path as plain lines, or None on a command or timeout fault."""
+  try:
+    result = subprocess.run(
+      ["gh", "api", path, "--jq", projection],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+      timeout=PR_STEP_TIMEOUT,
+    )
+  except (OSError, subprocess.TimeoutExpired):
+    return None
+  if result.returncode:
+    return None
+  return result.stdout.splitlines()
+
+
+def pr_failed_steps(root="."):
+  """Name the failing step of each failed check, best effort and bounded."""
+  slug = repo_slug(root)
+  branch = workspace_branch(root)
+  if not slug or not branch:
+    return []
+  sha = pr_head_sha(root, branch, slug)
+  if not sha:
+    return []
+  rows = gh_api_lines(
+    root,
+    f"repos/{slug}/commits/{sha}/check-runs?per_page=100",
+    '.check_runs[] | select(.conclusion=="failure") | [.name, .details_url] | @tsv',
+  )
+  steps = []
+  for row in (rows or [])[:PR_STEP_LIMIT]:
+    name, _, url = row.partition("\t")
+    match = JOB_LINK_RE.search(url)
+    if not name or not match:
+      continue
+    detail = gh_api_lines(
+      root,
+      f"repos/{slug}/actions/jobs/{match.group(1)}",
+      '[.steps[] | select(.conclusion=="failure") | .name] | join(", ")',
+    )
+    if detail and detail[0].strip():
+      steps.append(f"{name} / {detail[0].strip()}")
+  return steps
 
 
 def pr_checks_discovery(
@@ -3008,6 +3059,10 @@ def run_command(state_dir, name, argv):
     )
   else:
     completed = subprocess.run(argv, capture_output=True, text=True, check=False)
+    if check_watch and completed.returncode:
+      steps = pr_failed_steps(resolve_repo_root())
+      if steps:
+        completed.stdout += "\n" + "\n".join(f"Failed: {step}" for step in steps) + "\n"
     if check_watch and completed.returncode == 0:
       completed.stdout += (
         "\nBest effort: all visible checks passed; later checks can still appear.\n"

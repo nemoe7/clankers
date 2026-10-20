@@ -325,6 +325,9 @@ def pr_check_watch(result,root,stopped):
 		stopped.wait(PR_CHECK_POLL_SECONDS)
 PR_CHECK_DISCOVERY_SECONDS=30
 PR_CHECK_DISCOVERY_STEP=5
+PR_STEP_LIMIT=5
+PR_STEP_TIMEOUT=10
+JOB_LINK_RE=re.compile('/actions/runs/\\d+/job/(\\d+)')
 def pr_head_sha(root,branch,slug):
 	try:listed=subprocess.run(['gh','pr','list','--head',branch,'--json','headRefOid','--jq','.[0].headRefOid'],cwd=root,capture_output=True,text=True,check=False,timeout=PR_CHECK_DISCOVERY_STEP)
 	except(OSError,subprocess.TimeoutExpired):return None
@@ -352,6 +355,23 @@ def pr_check_rollup(root,slug,sha):
 	if states&{'ERROR','FAILURE','CANCELLED','TIMED_OUT','ACTION_REQUIRED'}:return'FAILURE',len(latest)
 	if not states or states-{'SUCCESS','SKIPPED','NEUTRAL'}:return'PENDING',len(latest)
 	return'SUCCESS',len(latest)
+def gh_api_lines(root,path,projection):
+	try:result=subprocess.run(['gh','api',path,'--jq',projection],cwd=root,capture_output=True,text=True,check=False,timeout=PR_STEP_TIMEOUT)
+	except(OSError,subprocess.TimeoutExpired):return None
+	if result.returncode:return None
+	return result.stdout.splitlines()
+def pr_failed_steps(root='.'):
+	slug=repo_slug(root);branch=workspace_branch(root)
+	if not slug or not branch:return[]
+	sha=pr_head_sha(root,branch,slug)
+	if not sha:return[]
+	rows=gh_api_lines(root,f"repos/{slug}/commits/{sha}/check-runs?per_page=100",'.check_runs[] | select(.conclusion=="failure") | [.name, .details_url] | @tsv');steps=[]
+	for row in(rows or[])[:PR_STEP_LIMIT]:
+		name,_,url=row.partition('\t');match=JOB_LINK_RE.search(url)
+		if not name or not match:continue
+		detail=gh_api_lines(root,f"repos/{slug}/actions/jobs/{match.group(1)}",'[.steps[] | select(.conclusion=="failure") | .name] | join(", ")')
+		if detail and detail[0].strip():steps.append(f"{name} / {detail[0].strip()}")
+	return steps
 def pr_checks_discovery(root='.',seconds=PR_CHECK_DISCOVERY_SECONDS,step=PR_CHECK_DISCOVERY_STEP,sleep=None):
 	pause=sleep or time.sleep;branch=workspace_branch(root);slug=repo_slug(root)
 	if not branch or not slug:return'no branch pull request to watch'
@@ -1079,6 +1099,9 @@ def run_command(state_dir,name,argv):
 	if discovery:completed=subprocess.CompletedProcess(argv,1,f"PR CHECKS NOT STARTED: {discovery}. Run the same command again to see whether the checks started.\n",'')
 	else:
 		completed=subprocess.run(argv,capture_output=True,text=True,check=False)
+		if check_watch and completed.returncode:
+			steps=pr_failed_steps(resolve_repo_root())
+			if steps:completed.stdout+='\n'+'\n'.join(f"Failed: {step}"for step in steps)+'\n'
 		if check_watch and completed.returncode==0:completed.stdout+='\nBest effort: all visible checks passed; later checks can still appear.\n'
 	seconds=round(time.monotonic()-started,1);output=(completed.stdout+completed.stderr).splitlines();tail=clean_run_tail(output[-RUN_TAIL_LINES:]);verdict=tail[-1]if tail else'(no output)';path=run_record_path(state_dir,name);existing=json_record(path)or{};record={**existing,'name':name,'argv':argv,'exit':completed.returncode,'seconds':seconds,'finished_at':now(),'verdict':verdict,'tail':tail,'announced':False};write_run_record(path,record)
 	for line in tail:print(line,flush=True)
