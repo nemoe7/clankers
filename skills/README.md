@@ -6,6 +6,7 @@ Each reusable AI skill is a self-contained directory with a `SKILL.md` entry poi
 | --- | --- |
 | [amending-violations](amending-violations/SKILL.md) | Write an amendment to the NEMOGPT system prompt when an instruction in it causes undesirable behavior, with the system-prompt guidelines and the output table |
 | [arena-skill](arena-skill/SKILL.md) | Steer an Arena agent through the shared preview inbox, publish rendered reports, and read privileged data outside the sandbox through the owner-run proxy backend |
+| [nemo-ui](nemo-ui/SKILL.md) | Build and revise web pages in a settled house style, from the typed sheet and the annotated examples to the measured result |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
 

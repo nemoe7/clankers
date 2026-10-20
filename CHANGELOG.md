@@ -24,6 +24,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Preview runs: a failed CI watch names each failed check with its failing step.
 - Preview uploads: a dropped file uploads at once, a canceled chip drops its bytes, and the send binds the uploaded IDs.
 - Preview refresh: a poll that arrives during a state read joins it, so no caller renders the state that read replaces.
+- Skills: add nemo-ui, with a typed sheet and an annotated example pair per clause. It also carries a design-document template and a measure helper for values and ruler gaps.
 - Distribute: split the workflow into one job per target list. The run page names Distribute Arena, Distribute Gemini and Distribute nemo-ui on their own rows. Each job copies through one shared action.
 - Test guidance: prefer named constants for expected assertion values. Check generated indexes by structure, not sentence text.
 - Instruction budgets: measure ARENA.md in tokens, give the non-clause arena-skill files one byte row, and drop the README row.
