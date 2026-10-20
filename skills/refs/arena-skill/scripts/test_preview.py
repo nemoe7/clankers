@@ -6061,23 +6061,28 @@ def test_reminder_rotation():
     rotate_store.set_meta("port", guard_port())
     rotate_script = str(Path(preview.__file__))
     assert len(preview.REMINDERS) == len(set(preview.REMINDERS))
-    assert "Ask questions ASAP in reports." in preview.REMINDERS
+    assert all(
+      len(preview.fill_reminder(entry, 1)) <= preview.REMINDER_CHAR_CAP
+      for entry in preview.REMINDERS
+    )
+    assert "Questions: ASAP, in reports." in preview.REMINDERS
     assert "`ask_user` on GH_TOKEN failure." in preview.REMINDERS
     assert "Unpublish stale reports." in preview.REMINDERS
-    assert "End the turn with `poll`." in preview.REMINDERS
-    assert "Publish your reports." in preview.REMINDERS
-    assert "Never end a turn with unblocked tasks." in preview.REMINDERS
+    assert "End turn with `poll`." in preview.REMINDERS
+    assert "Publish reports." in preview.REMINDERS
+    assert "Never end turn with unblocked tasks." in preview.REMINDERS
     assert (
-      "Check the PR's CI before ending a pushed turn; read the run's verdict on a later"
-      " call, never a loop in the call." in preview.REMINDERS
+      "Before pushed-turn end: check PR CI; read verdict on a later call, never loop."
+      in preview.REMINDERS
     )
-    assert "`task-list` at turn start. Update it as work changes." in preview.REMINDERS
+    assert "`task list` first; update as work changes." in preview.REMINDERS
     assert "Grep-verify each edit." in preview.REMINDERS
     assert (
-      "Rebase `origin/main` before pushing; empty checks mean it moved."
+      "Before push: rebase `origin/main`; empty checks mean it moved."
       in preview.REMINDERS
     )
     assert preview.TASK_REMINDER in preview.REMINDERS
+    assert "NEVER spam `run logs`." in preview.REMINDERS
     # One open task keeps every entry visible for the rotation checks.
     rotate_store.write_task("rotate-task", "Open work", ["Step one"], task_type="misc")
 

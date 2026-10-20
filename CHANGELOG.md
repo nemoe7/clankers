@@ -43,6 +43,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Arena quirks archive: separate a heading from the paragraph above it.
 - Chromium recipe: name the package's `bin/` archives and the extracted `lib` path.
 
+#### preview
+
+- Squash every rotating reminder line to at most 88 characters in caveman register. A cap check holds the limit, and meanings, names, and commands stay.
+
 ### Fixed
 
 - Preview reports: refuse a republish when the report has any answer. Unpublish stays available after the owner reads the ack.
