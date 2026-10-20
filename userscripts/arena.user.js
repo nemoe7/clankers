@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.54
+// @name         Arena.ai | NemoUtils | v1.10.55
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.54
+// @version      1.10.55
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -484,7 +484,7 @@
   runFeature("prompt-fill", "Composer — fill", function () {
 
     var COMPOSER_SELECTOR = 'div.tiptap.ProseMirror[contenteditable="true"]';
-    var TEMPLATE_RE = /^(\S+) read (?:AGENTS\.md ARENA\.md|ARENA\.md AGENTS\.md)/;
+    var TEMPLATE_RE = /^(\S+) read (?:AGENTS\.md ARENA\.md|ARENA\.md AGENTS\.md|ARENA\.md and AGENTS\.md)/;
 
     var PROXY_HOST_KEY = "clankers-arena-proxy-host";
     var PROXY_MASTER_KEY = "clankers-arena-proxy-master";
@@ -615,7 +615,7 @@
 
     function promptForSlug(slug, promptFill, arenaMd) {
       if (typeof promptFill !== "string" || !promptFill.trim()) return null;
-      var base = slug + " read ARENA.md and AGENTS.md in full before your first edit only if their current full text is absent from context, and follow both." +
+      var base = slug + " read ARENA.md AGENTS.md in full before your first edit, and follow both." +
         "\n\n" + promptFill.trim();
       if (arenaMd) {
         return base + "\n\nhere is ARENA.md:\n" + arenaMd;

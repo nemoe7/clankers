@@ -41,11 +41,11 @@
 
 - The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
 - An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
-- At session start, read read-set files whose current full text is absent from context, then make `10-4: ARENA.md loaded` the first action after those reads; find nested AGENTS.md files and read only those whose current full text is absent from context, run the installer, start the preview, then ask the visibility question.
+- At session start, read the read set, then make `10-4: ARENA.md loaded` the first action after that read; find and read nested AGENTS.md files, run the installer, start the preview, then ask the visibility question.
 - On a resumed or next turn, check whether the preview runs, restart it if needed, read read-set files whose current full text is absent from context, find nested AGENTS.md files and read missing or changed instructions, then continue an open task or poll if none.
 - Load the named skill for Arena work: `arena-skill` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
 - Use "read set" to mean ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md, and nothing else.
-- MUST use the read tool, NEVER Bash, to read only read-set files whose current full text is absent from context.
+- MUST use the read tool, NEVER Bash, to read every required read-set file in full.
 - After compaction, summary, or context replacement within a turn, read every read-set file whose current full text is absent from context end-to-end before other tool calls. For a resumed or next turn, use the resumed start sequence.
 - On a context-check reminder, MUST read every read-set file whose current full text is absent from context before continuing work.
 - NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a read-set file.

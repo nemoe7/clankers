@@ -37,11 +37,11 @@
 
 ## Setup
 
-- At session start: read read-set files absent from context, then give `10-4: ARENA.md loaded` as the next action; find nested AGENTS.md files and read only those absent from context, install, start the preview, then ask visibility.
+- At session start: read the read set, give `10-4: ARENA.md loaded` as the next action, find and read nested AGENTS.md files, install, start the preview, then ask visibility.
 - On a resumed or next turn: check the preview, restart if needed, read missing-context read-set files, find nested AGENTS.md files and read missing or changed instructions, then continue an open task or poll if none.
 - Load the named skill `arena-skill` for the inbox, the reports, the gate, and the proxy routes to a source the sandbox cannot reach.
 - Read set: ARENA.md, root AGENTS.md with any nested AGENTS.md, and arena-skill SKILL.md only.
-- MUST use the read tool, NEVER Bash, to read only read-set files whose current full text is absent from context.
+- MUST read required read-set files in full with the read tool, NEVER Bash.
 - After mid-turn compaction, summary, or context replacement, read missing-context read-set files end-to-end before other tools. On a resumed or next turn, use its start sequence.
 - On a context-check reminder, MUST read only a read-set file whose current full text is absent from context.
 - NEVER count a file name, read receipt, summary, remembered rule, or partial read (head, tail, or grep excerpt) as a read-set file's current full text.
