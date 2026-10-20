@@ -1,23 +1,23 @@
-SCOPE: 唯行所求及实现、验证所必需者；改动求最小且成一体，验毕即止。
-ALWAYS think longer；非 trivial 者示其步骤。
-守 intent/behavior/architecture/interfaces/patterns；非必要不 refactor/redesign/rename/reformat。
+SCOPE: 只行所求+实现/验证必需；最小一致改动；验毕即止。
+ALWAYS 多想；非 trivial 者示步骤。
+守 intent/behav/arch/interfaces/patterns；非必要不 refactor/redesign/rename/reformat。
 Tests：每新行为与修复皆加；仅 mechanical/trivial 可免。
-material ambiguity：合理异解可改 behavior/data/interfaces/scope/outcome 者，MUST 先问后行。
-MUST 保留 negations/conditions/errors/commands/numbers/caveats。
+material ambiguity（合理异解可改 behavior/data/interfaces/scope/outcome）：MUST 先问后行。
+MUST 留 negations/conditions/errors/commands/numbers/caveats。
 MUST 即陈每项 unavoidable assumption。
-CODE: KISS/YAGNI/DRY；取最懒可行者。无需求不增，明示需求不省；已有则复用；stdlib/native/installed dep可用则用；一行可成则一行；否则取最少代码。
-NEVER simplify away validation, data-loss handling, security, accessibility。
-未经用户明确批准所涉文件，NEVER 改 read-only 或 repo instructions 保护之 files。
+CODE: KISS/YAGNI/DRY，取最懒可行。无需求不增，明示需求不省；已有>stdlib>native>installed dep；一行可成则一行；否则最少代码。
+NEVER 省 validation/data-loss 处理/security/accessibility。
+无用户明确批准，NEVER 改 read-only/受 repo 规则保护的 files。
 Guard clauses, early returns。究根因，重证轻猜。
 NEVER invent API/requirement, hide failure, or claim unrun check。
-Test apt：prefer red→最小 green→不改行为 refactor→recheck。测 public interfaces/integration boundaries；复用项目 frameworks/fixtures/helpers/conventions。无 speculative/trivial测试；mechanical 验证相称。NEVER weaken test。Prose：既有 lint/结构验证；NEVER prose-wording tests；executable interface/protocol contracts 可 exact-text tests。
+Test apt：prefer red→最小 green→不改行为 refactor→recheck。测 public interfaces/integration；复用项目 frameworks/fixtures/helpers/conventions；无 speculative/trivial 测试；mechanical 验证相称；NEVER weaken test。Prose：用既有 lint/结构验证；NEVER prose-wording tests；executable interface/protocol contracts 可 exact-text。
 Planning 时问：SOLID 或 YAGNI/KISS/DRY 孰主，从其答。
-MUST 唯于 nemoe7 所有 repos 行此 code-style rules。
-FORMAT（限 nemoe7 repos；他 repo 从其惯例）: 2-space；Ruff + 项目 `ruff.toml`（E501 120）；markdownlint defaults + MD060，MD013 off。
-Comments: code/config，唯 method 复杂所需时加。
-DOCS: 非用户所求，无 storyline/narrative。
+MUST 仅在 nemoe7 repos 行此 code-style rules。
+FORMAT（nemoe7 only；他 repo 依惯例）：2-space；Ruff+项目 `ruff.toml`（E501 120）；markdownlint 默认+MD060，MD013 off。
+Comments（code/config）只在 method 复杂时加。
+DOCS: 非所求，无 storyline/narrative。
 DOCS: 开门见山，不铺垫，不收尾。
 DOCS: 代码、差异、文件内容与工具输出只引路径与行号，不复述。
-DOCS: 工具调用成功后直接继续，不复述结果。
+DOCS: 工具成功后即续，不复述结果。
 ALWAYS Oxford comma。
-Tests：像素/配置值及实现度量，MUST assert relations（growth/presence/absence）。
+像素/配置值/实现度量 MUST assert relations（growth/presence/absence）。

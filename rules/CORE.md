@@ -6,7 +6,7 @@
 
 ## Constitution
 
-- MUST do only requested work plus what implementing/verifying strictly needs; smallest coherent change; stop when verified.
+- MUST do only requested work plus what implementing and verifying strictly need; smallest coherent change; stop when verified.
 - MUST check the harness shell before commands; use its syntax.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - MUST keep behavior, architecture, interfaces, intent, conventions unless required.
@@ -15,7 +15,8 @@
 
 ## Precedence
 
-- Outranks skills/plugins: they specialize defaults and NEVER weaken an explicit requirement or replace a convention. An explicit chat instruction outranks this file; state the override in one line.
+- These rules outrank skills/plugins: they specialize defaults, NEVER weaken explicit requirements or replace project conventions.
+- Explicit user chat instructions outrank this file; state the override in one line, then follow it.
 
 ## Scope notes
 
@@ -43,7 +44,8 @@
 - MUST report every unrelated finding; fix only blocking ones.
 - Material ambiguity = readings that could change behavior/data/interfaces/scope/outcome: MUST ask before implementing.
 - Ask every question with the question tool; NEVER ask in plain text.
-- Questions with 3+ options or an open choice carry a recommended answer (yes/no or confirm: none) — the one you would take on silence — stated as a recommendation and marked among the options where the surface offers them; neutral lists return your work to the user.
+- Questions with 3+ options or an open choice carry a recommended answer: the one you would take if the user never replied. Yes/no and confirm questions carry none.
+  - State it as a recommendation, not a neutral list; where the surface offers options, mark it in the option text.
 
 - MUST state each unavoidable assumption immediately.
 - NEVER assume while material ambiguity remains.
@@ -51,15 +53,15 @@
 
 ## Engineering
 
-- KISS/YAGNI/DRY: climb the ladder, stop at the first rung that holds: 1 needed at all (skip speculative additions, not requirements), 2 helper or pattern here, 3 stdlib, 4 native feature, 5 installed dep, 6 one line, 7 minimum code.
-- Climb after understanding: read the task and its code, trace the real flow end to end, then climb; two rungs work, take the higher.
+- KISS/YAGNI/DRY ladder; stop at first rung that holds: 1 needed at all (skip speculative additions, not requirements), 2 helper/util/type/pattern already here: reuse, look before writing, 3 stdlib, 4 native feature (date input over picker library, CSS over JS, DB constraint over app code), 5 installed dep (NEVER add one for a few lines), 6 one line, 7 minimum code.
+- Climb only after understanding: read task and code, trace the real flow end to end; if two rungs work, take the higher.
 - Two same-size stdlib options: take the edge-case-correct one.
 - Complex request: ship the lazier version and question the requirement in the same response; NEVER default on material ambiguity.
 - Guard clauses, early returns.
 - Cohesive modules, low coupling, small interfaces, local data/behavior.
-- Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
-- SOLID: one reason to change per unit; extend at an existing seam rather than modify; substitutable subtypes; small interfaces; depend on the abstraction the code already varies on.
-- SOLID and YAGNI/KISS/DRY collide by design: during planning, ask which governs this task — SOLID reuse or simplicity — and follow the answer.
+- Ground choices in requirements, code, tests, docs, observations; NEVER invent APIs, constraints, requirements.
+- SOLID: one reason to change per unit; extend at existing seams rather than modify; substitutable subtypes; small interfaces; depend on the abstraction code already varies on.
+- SOLID and YAGNI/KISS/DRY collide by design: in planning, MUST ask whether SOLID reuse/extensibility or simplicity governs; follow the answer.
 - Prefer deletion over addition, boring over clever, fewest files, search for a helper first.
 - NEVER lazy about understanding: read code, trace flow; skipping comprehension ships confident wrong fixes.
 - Fix bugs where all callers route through: one shared guard beats one per caller.
@@ -69,12 +71,12 @@
 
 ## Testing
 
-- New behavior, fixes, refactors: when a test fits, prefer failing test first, smallest passing change, refactor without behavior change, recheck.
+- New behavior, fixes, refactors: where a test fits, failing test first, smallest passing change, refactor behavior-neutral, recheck.
 - Prose-only: use existing linters and structural validators; NEVER add prose-wording tests.
 - Keep exact-text tests for executable interface/protocol contracts.
 - Test public interfaces and integration boundaries.
 - Reuse the project's frameworks/fixtures/helpers/conventions.
-- MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): an assert-based demo or small test file; no frameworks, fixtures, or per-function suites beyond it.
+- MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): assert-based demo or small test file; no frameworks, fixtures, per-function suites beyond it.
 - Mechanical edits get proportional checks.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
@@ -83,17 +85,17 @@
 
 ## Setup
 
-- In `nemoe7` repositories: Python uses Ruff defaults and the project's `ruff.toml` when it has one.
+- `nemoe7` repos only: Python uses Ruff defaults and the project's `ruff.toml` when present.
 - Without `ruff.toml`, MUST keep these defaults here and create `ruff.toml` exactly before gates: `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.16.6"`.
 
 ## Verification
 
-- In `nemoe7` repositories: MUST run these gates before every commit: `ruff check` and `ruff format`, with no CLI rule overrides.
+- `nemoe7` repos only: before every commit MUST run `ruff check` and `ruff format`, no CLI rule overrides.
 
 ## Style
 
 - In `nemoe7` repositories: 2-space indentation overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off.
-- For a Python project, MUST use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
+- Python: MUST use Ruff default selection plus `E501` at 120 chars; keep formatter width 88.
 - Add code/config comments ONLY when complexity needs them.
 - Leave unrelated code alone.
 - Keep scratch files/scripts/output outside the repo or delete after use; NEVER commit them.
@@ -103,25 +105,25 @@
 - MUST stage only task-related files, leaving unrelated/user-owned unstaged.
 - Respect the user's global gitignore (`core.excludesFile`).
 - Review the diff after each edit.
-- MUST commit on a branch other than `main`: one logical change per commit with all its files, checks green, independently revertible.
+- MUST NOT commit on `main`: one logical change per commit, all its files, checks green, independently revertible.
 - Project's commit-message convention first.
-- When it states none, one Conventional Commit per change: `<type>[optional scope]: <description>`, imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` before the colon marks breaking.
+- If none stated: one Conventional Commit per change, `<type>[optional scope]: <description>`, imperative, specific, lowercase after colon, no period, <=72 chars, no body; `!` before colon = breaking.
 - Types: `feat fix refactor perf style docs test build chore`; prefer history's types.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push unless asked.
 
 ## Boundaries
 
-- NEVER edit read-only or repo-instruction-protected files unless user explicitly approves those files.
+- NEVER edit read-only or instruction-protected files without explicit user approval of those files.
 
 ## Responses
 
-- Report changes/findings, checks/results, files/decisions, open issues, assumptions, and limitations; no unnecessary prose; detail when asked.
+- Report changes, findings, checks, results, files, decisions, open issues, assumptions, limitations; no unnecessary prose; detail when asked.
 - ALWAYS use the Oxford comma.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
-- Code first, then at most three short lines: skipped work, when to add it; no essays or feature tours, and explanation the user asked for is NEVER debt.
-- User-run commands: MUST print the Windows Command Prompt (`cmd`) form by default, plus bash when the user asks for the Raspberry Pi or bash.
+- Code first, then ≤3 short lines: skipped work, when to add it; no essays/feature tours; requested explanation is NEVER debt.
+- Commands for the user to run: MUST print Windows Command Prompt (`cmd`) form by default; bash form on Raspberry Pi/bash request.
 - A command the agent ran itself MUST be reported as run, in the form it was run in.
 - Mermaid for pipelines, diagrams, flows where the surface renders it; fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows.
 
