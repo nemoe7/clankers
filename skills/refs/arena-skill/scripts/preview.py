@@ -92,6 +92,31 @@ UPLOAD_DIR = "uploads"
 FETCH_DIR = "downloads"
 
 
+def read_set_files(root=None):
+  """Return the clause files an Arena session reads in this repository.
+
+  ARENA.md comes first, then every AGENTS.md under the root, then the arena-skill entry point.
+  A repository without them yields the empty list, so the flag form simply offers none.
+  """
+  base = Path(root or Path.cwd()).resolve()
+  cached = READ_SET_CACHE.get(base)
+  if cached is not None:
+    return list(cached)
+  files = []
+  if (base / "ARENA.md").is_file():
+    files.append("ARENA.md")
+  for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+    dirnames[:] = sorted(name for name in dirnames if name not in WORKSPACE_SKIP)
+    if "AGENTS.md" in filenames:
+      files.append((Path(dirpath) / "AGENTS.md").relative_to(base).as_posix())
+  for name in (".agents/skills/arena-skill/SKILL.md", "skills/arena-skill/SKILL.md"):
+    if (base / name).is_file():
+      files.append(name)
+      break
+  READ_SET_CACHE[base] = tuple(files)
+  return list(files)
+
+
 def workspace_usage(root=None):
   """Bytes and files under root, skipping snapshot-excluded directories."""
   root = Path(root or Path.cwd())
@@ -196,6 +221,16 @@ AGENT_KEY_EXPIRY_SECONDS = 1200
 AGENT_KEY_EXPIRY_META = "agent_key_expired_at"
 AGENT_SEEN_META = "agent_seen_at"
 AGENT_INTERRUPT_META = "agent_interrupt"
+AGENT_INTERRUPT_FLAG_META = "agent_interrupt_flag"
+# The flag modal offers these kinds per tab. The server refuses a kind outside its tab's tuple.
+VIOLATION_KINDS = {
+  "notes": ("bash-violation", "process-violation"),
+  "downloads": ("bash-violation", "process-violation"),
+  "reports": ("format-violation", "unnecessary-report"),
+  "tasks": ("current-task-violation", "empty-task-list"),
+}
+# One repository's read-set list stays fixed during one process, so the server scans it once.
+READ_SET_CACHE = {}
 CALL_GROUP_META = "call_group"
 AGENT_CALL_ENDED_META = "agent_call_ended_at"
 # A poll that returns with nothing to read ends the turn. The header reads this mark, so the
@@ -4522,6 +4557,8 @@ class Store:
         # The page paints its Skip poll button from this stamp until a poll consumes it.
         "skip_poll": clip_stamp(meta.get(SKIP_POLL_META)),
         "agent_interrupt_pending": bool(meta.get(AGENT_INTERRUPT_META)),
+        # The flag modal lists this repository's clause files. The server owns the list.
+        "read_set": read_set_files(self.repository_root()),
         # The message log header names the bash calls since the owner's last message.
         "calls_since_message": meta_number(db, POLLS_SINCE_MESSAGE),
         # The Downloads tab shows the key the userscript holds.
@@ -5749,6 +5786,10 @@ class Store:
       for position, row in enumerate(rows, 1):
         db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, row[0]))
 
+  def repository_root(self):
+    """The repository that holds the state directory, whose read-set files feed the flag form."""
+    return self.path.parent.parent
+
   def meta_value(self, key):
     """Read one meta value, or None when it is absent."""
     with closing(self.connect()) as db:
@@ -5783,7 +5824,16 @@ class Store:
     age = seconds_since(self.meta_value(POLLING_META))
     return age is not None and 0 <= age < POLLING_FRESH_SECONDS
 
-  def request_interrupt(self, tab, report_id=None, armed=True, user_flagged=True):
+  def request_interrupt(
+    self,
+    tab,
+    report_id=None,
+    armed=True,
+    user_flagged=True,
+    reason=None,
+    clause_file=None,
+    note=None,
+  ):
     if not armed:
       self.take_interrupt()
       return {"agent_interrupt_pending": False}
@@ -5794,6 +5844,50 @@ class Store:
       "downloads",
     }:
       raise ValueError("tab must name a preview tab")
+    if reason is not None and reason not in VIOLATION_KINDS[tab]:
+      raise ValueError("reason must name a violation kind for this tab")
+    if clause_file not in (None, "") and clause_file not in read_set_files(
+      self.repository_root()
+    ):
+      raise ValueError("clause_file must name a read-set file")
+    if note is not None and not isinstance(note, str):
+      raise ValueError("note must be text")
+    cited = " ".join((note or "").split())
+    if len(cited) > 300:
+      raise ValueError("note must contain at most 300 characters")
+    if reason is not None:
+      # The approved notice text omits the clause file. The page sends it with the flag.
+      heading = f"User flagged violation: {reason}."
+      if cited:
+        heading += f" Cited: {cited}"
+      evidence = []
+      if tab == "reports" and report_id is not None:
+        evidence.append(f"Report: {report_id}")
+      elif tab == "tasks":
+        task = current_task((self.tasks() or {}).get("upcoming", []))
+        if reason == "current-task-violation" and task:
+          evidence.append(
+            f"Current task: {task['id']}. Is this what you are working on?"
+          )
+        else:
+          evidence.append("The task list is empty. Maybe a task should have spawned.")
+      notice = "\n".join(
+        [
+          heading,
+          *evidence,
+          "This bash call is blocked but not necessarily violating.",
+          "Think about which clause was violated.",
+          "Read read-set files if absent from context.",
+          "Fix the violation before continuing.",
+        ]
+      )
+      self.set_meta(
+        AGENT_INTERRUPT_FLAG_META,
+        json.dumps({"kind": reason, "clause_file": clause_file or "", "note": cited}),
+      )
+      self.set_meta(AGENT_INTERRUPT_META, notice)
+      return {"agent_interrupt_pending": True}
+    self.clear_meta(AGENT_INTERRUPT_FLAG_META)
     header = "The user flagged a violation." if user_flagged else "VIOLATION"
     if tab == "reports" and report_id is not None:
       try:
@@ -5828,7 +5922,10 @@ class Store:
       row = db.execute(
         "SELECT value FROM meta WHERE key = ?", (AGENT_INTERRUPT_META,)
       ).fetchone()
-      db.execute("DELETE FROM meta WHERE key = ?", (AGENT_INTERRUPT_META,))
+      db.execute(
+        "DELETE FROM meta WHERE key IN (?, ?)",
+        (AGENT_INTERRUPT_META, AGENT_INTERRUPT_FLAG_META),
+      )
       return row["value"] if row else None
 
   def request_skip_poll(self, armed=True):
@@ -5856,6 +5953,11 @@ class Store:
     """Record one meta value, replacing any previous one."""
     with closing(self.connect()) as db, db:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, str(value)))
+
+  def clear_meta(self, key):
+    """Drop one meta value, leaving the rest alone."""
+    with closing(self.connect()) as db, db:
+      db.execute("DELETE FROM meta WHERE key = ?", (key,))
 
   def touch_agent(self):
     """Stamp the agent's own call: the liveness signal the preview header reads.
@@ -7342,7 +7444,12 @@ def handler(store):
             200,
             json.dumps(
               store.request_interrupt(
-                payload.get("tab"), payload.get("report_id"), armed
+                payload.get("tab"),
+                payload.get("report_id"),
+                armed,
+                reason=payload.get("reason"),
+                clause_file=payload.get("clause_file"),
+                note=payload.get("note"),
               ),
               ensure_ascii=False,
             ),
@@ -7774,7 +7881,7 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
     mark("interrupt")
     notice = Store(state_dir, create=False).take_interrupt()
     if notice:
-      if notice.startswith("The user flagged a violation"):
+      if notice.startswith(("The user flagged a violation", "User flagged violation")):
         print(notice, flush=True)
       else:
         report(notice)

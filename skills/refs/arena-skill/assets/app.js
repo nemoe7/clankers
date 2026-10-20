@@ -2568,31 +2568,141 @@ function paintInterrupt(pending) {
   button.setAttribute('aria-pressed', pending ? 'true' : 'false');
   button.dataset.state = pending || button.dataset.error ? 'bad' : '';
   label(button, button.dataset.error || (pending
-    ? 'Read-set check is pending. Click to cancel.'
-    : 'Ask the agent to read files missing from context'));
+    ? `Flagged${button.dataset.kind ? `: ${button.dataset.kind}` : ''}. Click to cancel.`
+    : 'Flag a violation'));
 }
-$('#agent-interrupt').addEventListener('click', async () => {
+// One dialog serves every modal: a config builds its fields, and a submit that throws keeps the
+// form open with the message inline, so a bad field never costs the owner the rest of the form.
+const modal = $('#modal');
+const modalForm = $('#modal-form');
+let modalSubmit = null;
+let modalBusy = false;
+function modalField(field) {
+  const wrapper = document.createElement('label');
+  wrapper.className = 'field';
+  const caption = document.createElement('span');
+  caption.textContent = field.label;
+  wrapper.append(caption);
+  if (field.type === 'select') {
+    const select = document.createElement('select');
+    select.name = field.name;
+    for (const [value, text] of field.options) select.add(new Option(text, value));
+    if (field.value) select.value = field.value;
+    wrapper.append(select);
+  } else {
+    const input = document.createElement(field.type === 'textarea' ? 'textarea' : 'input');
+    if (field.type !== 'textarea') input.type = 'text';
+    input.name = field.name;
+    input.value = field.value || '';
+    if (field.placeholder) input.placeholder = field.placeholder;
+    if (field.maxLength) input.maxLength = field.maxLength;
+    wrapper.append(input);
+  }
+  return wrapper;
+}
+// The promise resolves with the submit handler's result, or null on Esc and Cancel.
+function openModal(config) {
+  return new Promise(resolve => {
+    const nodes = config.fields.map(modalField);
+    $('#modal-title').textContent = config.title;
+    $('#modal-fields').replaceChildren(...nodes);
+    $('#modal-error').hidden = true;
+    $('#modal-confirm').textContent = config.confirm || 'Submit';
+    modalSubmit = async event => {
+      event.preventDefault();
+      if (modalBusy) return;
+      const values = Object.fromEntries(new FormData(modalForm).entries());
+      modalBusy = true;
+      try {
+        const result = await config.submit(values);
+        // Resolve before closing: the close listener answers null, and a promise settles once.
+        resolve(result);
+        modal.close();
+      } catch (error) {
+        $('#modal-error').textContent = error.message;
+        $('#modal-error').hidden = false;
+      } finally {
+        modalBusy = false;
+      }
+    };
+    modal.showModal();
+    nodes[0]?.querySelector('select, input, textarea')?.focus();
+    modal.addEventListener('close', () => resolve(null), { once: true });
+  });
+}
+modalForm.addEventListener('submit', event => modalSubmit?.(event));
+$('#modal-cancel').addEventListener('click', () => modal.close());
+// The kinds follow the active page. Only the repository's read-set files can be named.
+const VIOLATION_KINDS = {
+  notes: [['bash-violation', 'Bash violation'], ['process-violation', 'Process violation']],
+  downloads: [['bash-violation', 'Bash violation'], ['process-violation', 'Process violation']],
+  reports: [['format-violation', 'Format violation'], ['unnecessary-report', 'Unnecessary report']],
+  tasks: [['current-task-violation', 'Current task violation'], ['empty-task-list', 'Empty task list']],
+};
+async function postInterrupt(payload) {
   const button = $('#agent-interrupt');
-  if (button.disabled) return;
-  const armed = button.getAttribute('aria-pressed') !== 'true';
-  delete button.dataset.error;
   button.disabled = true;
   button.setAttribute('aria-busy', 'true');
   paintInterrupt(getState()?.agent_interrupt_pending);
-  const tab = tabs.find(item => item.getAttribute('aria-selected') === 'true').id.replace('-tab', '');
   try {
-    await optimisticWrite(() => {}, async () => (await request('/api/agent-interrupt', {
-      method: 'POST', headers: writeHeaders('application/json'),
-      body: JSON.stringify({ armed, tab, report_id: tab === 'reports' ? $('#report-select').value || null : null })
+    return await optimisticWrite(() => {}, async () => (await request('/api/agent-interrupt', {
+      method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify(payload)
     })).json(), (state, result) => { state.agent_interrupt_pending = result.agent_interrupt_pending; });
-  } catch (error) {
-    button.dataset.error = `Request failed: ${error.message}. Click to retry.`;
-    paintInterrupt(getState()?.agent_interrupt_pending);
   } finally {
     button.disabled = false;
     button.setAttribute('aria-busy', 'false');
     paintInterrupt(getState()?.agent_interrupt_pending);
   }
+}
+$('#agent-interrupt').addEventListener('click', async () => {
+  const button = $('#agent-interrupt');
+  if (button.disabled) return;
+  const tab = tabs.find(item => item.getAttribute('aria-selected') === 'true').id.replace('-tab', '');
+  delete button.dataset.error;
+  // A second click disarms without a form. The modal opens only on the arming click.
+  if (button.getAttribute('aria-pressed') === 'true') {
+    delete button.dataset.kind;
+    try {
+      await postInterrupt({ armed: false, tab });
+    } catch (error) {
+      button.dataset.error = `Request failed: ${error.message}. Click to retry.`;
+      paintInterrupt(getState()?.agent_interrupt_pending);
+    }
+    return;
+  }
+  const kinds = VIOLATION_KINDS[tab];
+  const reportId = tab === 'reports' ? $('#report-select').value || null : null;
+  await openModal({
+    title: 'Flag a violation',
+    confirm: 'Send flag',
+    fields: [
+      { name: 'reason', label: 'Violation kind', type: 'select', options: kinds },
+      {
+        name: 'clause_file',
+        label: 'Clause file (optional)',
+        type: 'select',
+        options: [['', 'No clause file'], ...(getState()?.read_set || []).map(path => [path, path])],
+      },
+      {
+        name: 'note',
+        label: 'Cited reason (optional)',
+        type: 'textarea',
+        maxLength: 300,
+        placeholder: 'Which clause, and what happened?',
+      },
+    ],
+    submit: async values => {
+      button.dataset.kind = kinds.find(([kind]) => kind === values.reason)[1];
+      await postInterrupt({
+        armed: true,
+        tab,
+        report_id: reportId,
+        reason: values.reason,
+        clause_file: values.clause_file || null,
+        note: values.note.trim() || null,
+      });
+    },
+  });
 });
 // Skip poll toggles a one-shot flag that ends the agent's wait without leaving a note for a later turn.
 // A second press cancels the skip, so an early press cannot force the wait to end.

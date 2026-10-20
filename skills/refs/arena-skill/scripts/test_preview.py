@@ -722,9 +722,8 @@ def test_http_boundaries():
       "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:"
       not in css
     )
-    caret = re.search(r"\.select-caret\{([^}]+)\}", css)
-    select = re.search(r"\.select-wrap select\{([^}]+)\}", css)
-    assert caret and select
+    select = re.search(r"select\{([^}]+)\}", css)
+    assert select
 
     def css_px(rule, name):
       value = re.search(
@@ -747,10 +746,10 @@ def test_http_boundaries():
       return sides
 
     assert re.search(r"(?:^|;)appearance:none(?:;|$)", select[1])
-    assert "pointer-events:none" in caret[1]
-    assert css_px(caret[1], "width") > 0
-    caret_space = sum(css_px(caret[1], name) for name in ("right", "width"))
-    assert css_px(select[1], "padding-right") > caret_space
+    # Every select draws the same CSS chevron, so no markup needs a caret element.
+    assert select[1].count("linear-gradient(") == 2
+    assert "var(--muted)" in select[1]
+    assert css_padding(select[1])[1] >= 24
     # The page and client script have no report-receipt flash.
     # Keep the report acknowledgement element.
     page = (preview.ASSETS / "index.html").read_text()
@@ -1351,8 +1350,8 @@ def test_http_boundaries():
         "the search box shares the form controls' border and radius"
       )
       assert "#log-filter" not in page and ".filter-wrap" not in page
-      assert caret[0] in compact(page), (
-        "the report select keeps its drawn caret, and it needs no blocked data image"
+      assert re.search(r"select\{[^}]*linear-gradient\(", compact(page)), (
+        "the report select draws its caret in CSS, not a blocked data image"
       )
       assert "data:image/svg+xml" not in page, "the preview CSP blocks data images"
       # The collapse button is gone, its closed state with it, and the strip can no longer push
@@ -10469,6 +10468,107 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
         assert status == 400
         assert store.state()["agent_interrupt_pending"]
         store.take_interrupt()
+    finally:
+      app.shutdown()
+      app.server_close()
+
+
+def test_flag_carries_kind_clause_file_and_cited_reason():
+  """A flag names a page-aware kind, a read-set clause file and the owner's cited reason."""
+  global app
+  with tempfile.TemporaryDirectory() as directory:
+    (Path(directory) / "ARENA.md").write_text("# Rules\n", encoding="utf-8")
+    (Path(directory) / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
+    nested = Path(directory) / "pkg"
+    nested.mkdir()
+    (nested / "AGENTS.md").write_text("# Package agents\n", encoding="utf-8")
+    store = preview.Store(Path(directory) / "state", create=True)
+    source = Path(directory) / "report.md"
+    source.write_text("# Open report\n", encoding="utf-8")
+    store.publish("open-report", "Open report", source)
+    store.write_task("current-work", "Current work", ["Verify it"], task_type="code")
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    threading.Thread(target=app.serve_forever, daemon=True).start()
+    headers = {"Content-Type": "application/json"}
+    try:
+      read_set = ["ARENA.md", "AGENTS.md", "pkg/AGENTS.md"]
+      assert preview.read_set_files(store.repository_root()) == read_set
+      assert store.state()["read_set"] == read_set
+      closing = [
+        "This bash call is blocked but not necessarily violating.",
+        "Think about which clause was violated.",
+        "Read read-set files if absent from context.",
+        "Fix the violation before continuing.",
+      ]
+      status, _, body = request(
+        "POST",
+        "/api/agent-interrupt",
+        json.dumps(
+          {
+            "tab": "reports",
+            "report_id": "open-report",
+            "reason": "format-violation",
+            "clause_file": "AGENTS.md",
+            "note": "  Heading\nlevels  ",
+          }
+        ),
+        headers,
+      )
+      assert status == 200, body
+      assert json.loads(body)["agent_interrupt_pending"]
+      assert json.loads(store.meta_value(preview.AGENT_INTERRUPT_FLAG_META)) == {
+        "kind": "format-violation",
+        "clause_file": "AGENTS.md",
+        "note": "Heading levels",
+      }
+      assert store.take_interrupt().splitlines() == [
+        "User flagged violation: format-violation. Cited: Heading levels",
+        "Report: open-report",
+        *closing,
+      ]
+      assert store.meta_value(preview.AGENT_INTERRUPT_FLAG_META) is None
+      for payload, lines in [
+        (
+          {"tab": "notes", "reason": "bash-violation"},
+          ["User flagged violation: bash-violation.", *closing],
+        ),
+        (
+          {"tab": "tasks", "reason": "current-task-violation"},
+          [
+            "User flagged violation: current-task-violation.",
+            "Current task: current-work. Is this what you are working on?",
+            *closing,
+          ],
+        ),
+        (
+          {"tab": "tasks", "reason": "empty-task-list"},
+          [
+            "User flagged violation: empty-task-list.",
+            "The task list is empty. Maybe a task should have spawned.",
+            *closing,
+          ],
+        ),
+      ]:
+        status, _, body = request(
+          "POST", "/api/agent-interrupt", json.dumps(payload), headers
+        )
+        assert status == 200, body
+        assert store.take_interrupt().splitlines() == lines
+      for payload, field in [
+        ({"tab": "notes", "reason": "not-a-kind"}, "reason"),
+        ({"tab": "reports", "reason": "bash-violation"}, "reason"),
+        (
+          {"tab": "notes", "reason": "bash-violation", "clause_file": "docs/STYLE.md"},
+          "clause_file",
+        ),
+        ({"tab": "notes", "reason": "bash-violation", "note": "x" * 301}, "note"),
+      ]:
+        status, _, body = request(
+          "POST", "/api/agent-interrupt", json.dumps(payload), headers
+        )
+        assert status == 400, body
+        assert field in json.loads(body)["error"]
+        assert not store.state()["agent_interrupt_pending"]
     finally:
       app.shutdown()
       app.server_close()

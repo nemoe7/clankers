@@ -66,7 +66,10 @@ test('preview client', async (t) => {
       if (this.id === 'report' && panel) panel.scrollTop = 0;
     }
     get innerHTML() { return this.inner; }
-    querySelector(selector) { return this.children.find(child => child.tagName === selector) || null; }
+    querySelector(selector) {
+      const tags = selector.split(',').map(tag => tag.trim());
+      return this.children.find(child => tags.includes(child.tagName)) || null;
+    }
     querySelectorAll(selector) { return this.fields && selector === '.question[data-field]' ? this.fields : []; }
     contains(node) { return this === node || this.children.some(child => child instanceof Element && child.contains(node)); }
     get lastElementChild() { return this.children.at(-1); }
@@ -78,6 +81,8 @@ test('preview client', async (t) => {
     remove() { this.removed = true; }
     requestSubmit() { this.submissions = (this.submissions || 0) + 1; }
     click() { this.clicks = (this.clicks || 0) + 1; }
+    showModal() { this.open = true; }
+    close() { this.open = false; this.events.close?.(); }
   }
   const elements = new Map();
   const documentEvents = {};
@@ -110,6 +115,8 @@ test('preview client', async (t) => {
   get('#tasks-panel').hidden = true;
   get('#downloads-panel').hidden = true;
   get('#upload-file').files = [];
+  // The dialog form owns the field container, so its FormData sees the controls.
+  get('#modal-form').append(get('#modal-fields'));
   get('#note').placeholder = 'What should happen next?';
   get('#send').textContent = 'Send';
   get('#send').dataset.busyLabel = 'Sending...';
@@ -145,10 +152,28 @@ test('preview client', async (t) => {
   let loseUploadResponse = false;
   let dropUploadOnce = false;
   class FormDataStub {
-    constructor() { this.fields = new Map(); }
+    constructor(form = null) {
+      this.fields = new Map();
+      // A form names its controls, so the modal's fields report exactly what a browser sends.
+      const visit = node => {
+        if (!node || typeof node !== 'object') return;
+        if (node.name) {
+          const value = node.tagName === 'select'
+            ? node.value || node.options?.[0]?.value || ''
+            : node.value;
+          this.append(node.name, value);
+        }
+        for (const child of node.children || []) visit(child);
+      };
+      visit(form);
+    }
     append(name, value) { this.fields.set(name, [...(this.fields.get(name) || []), value]); }
     get(name) { return (this.fields.get(name) || [])[0]; }
     getAll(name) { return this.fields.get(name) || []; }
+    entries() {
+      const pairs = [...this.fields].map(([name, values]) => [name, values.at(-1)]);
+      return pairs[Symbol.iterator]();
+    }
   }
   const queuedCalls = [];
   const dropped = [];
@@ -189,7 +214,14 @@ test('preview client', async (t) => {
       };
       elements.forEach(node => visit(node));
       return [...matches];
-    }, createElement: tag => Object.assign(new Element(), { tagName: tag }), createElementNS: (namespace, tag) => Object.assign(new Element(), { tagName: tag, namespace }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback, capture) => { (capture === true ? documentCaptureEvents : documentEvents)[name] = callback; }, execCommand: () => execCommandResult },
+    }, createElement: tag => {
+      const element = Object.assign(new Element(), { tagName: tag });
+      if (tag === 'select') {
+        element.options = [];
+        element.add = option => { element.options.push(option); element.children.push(option); };
+      }
+      return element;
+    }, createElementNS: (namespace, tag) => Object.assign(new Element(), { tagName: tag, namespace }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback, capture) => { (capture === true ? documentCaptureEvents : documentEvents)[name] = callback; }, execCommand: () => execCommandResult },
     navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
     crypto: { randomUUID: () => `${String(++counter).padStart(6, '0')}-0000-4000-8000-000000000000` },
@@ -198,6 +230,8 @@ test('preview client', async (t) => {
     Blob,
     File,
     FormData: FormDataStub,
+    // The modal builds its options with the browser's Option constructor.
+    Option: class { constructor(text, value) { this.text = text; this.value = value; } },
     URL,
     setTimeout,
     clearTimeout,
@@ -4257,87 +4291,108 @@ test('preview client', async (t) => {
   });
 
 
-  await t.test('The header interrupt carries context without a note or a dialog', async () => {
+  await t.test('The header interrupt asks for a kind, clause file and reason', async () => {
     const keptState = state;
     const notesBefore = sent.length;
     const draft = get('#note').value;
-    state = { ...state, reports: [{ id: 'context-report', title: 'Context',
-      updated_at: new Date().toISOString(), seen_at: new Date().toISOString() }],
+    state = { ...state, read_set: ['AGENTS.md', 'ARENA.md'],
+      reports: [{ id: 'context-report', title: 'Context',
+        updated_at: new Date().toISOString(), seen_at: new Date().toISOString() }],
       tasks: { finished: [], upcoming: [{ id: 'current-work', title: 'Current work',
         status: 'upcoming', order: 1, details: [] }] }, agent_interrupt_pending: false };
+    const modal = get('#modal');
+    const fields = () => get('#modal-fields').children;
+    const control = index => fields()[index].children[1];
+    const values = index => control(index).options.map(option => option.value);
     try {
       get('#notes-tab').events.click();
       await refresh(); await tick();
       const button = get('#agent-interrupt');
-      assert.equal(typeof button.events.click, 'function');
       assert.equal(button.getAttribute('aria-pressed'), 'false');
-      let release;
-      pendingWrites.set('/api/agent-interrupt', new Promise(resolve => { release = resolve; }));
-      const pending = button.events.click();
-      assert.equal(button.disabled, true);
-      assert.equal(button.getAttribute('aria-busy'), 'true');
-      const busyNode = button.children.at(-1);
-      const busyIcon = busyNode?.getAttribute('class');
-      await refresh();
-      assert.equal(button.children.at(-1), busyNode, 'a poll does not restart the loader');
-      await button.events.click();
-      release();
-      pendingWrites.delete('/api/agent-interrupt');
-      await pending;
-      assert.equal(interruptCalls.length, 1, 'a repeated busy press sends no second request');
-      assert.equal(busyIcon, 'lucide lucide-loader-circle', 'a pending write uses the Lucide loader, not the flag');
-      assert.equal(button.children.at(-1)?.getAttribute('class'), 'lucide lucide-flag', 'the flag returns after the write');
-      assert.equal(interruptCalls.at(-1).tab, 'notes');
+      const arming = button.events.click();
+      assert.equal(modal.open, true, 'the flag press opens the dialog');
+      assert.equal(get('#modal-title').textContent, 'Flag a violation');
+      assert.deepEqual(values(0), ['bash-violation', 'process-violation'],
+        'the kinds follow the messages tab');
+      assert.deepEqual(values(1), ['', 'AGENTS.md', 'ARENA.md'],
+        'the clause files come from the state read-set');
+      assert.equal(control(1).options[0].text, 'No clause file');
+      assert.equal(control(2).maxLength, 300);
+      assert.equal(control(0).focused, true, 'the kind takes focus on open');
+      assert.equal(button.disabled, false, 'an open dialog leaves the flag free');
+      control(1).value = 'AGENTS.md';
+      control(2).value = '  Heading levels  ';
+      await get('#modal-form').events.submit(event({}));
+      await arming;
+      assert.equal(modal.open, false, 'a sent flag closes the dialog');
+      assert.deepEqual(interruptCalls.at(-1), {
+        armed: true, tab: 'notes', report_id: null, reason: 'bash-violation',
+        clause_file: 'AGENTS.md', note: 'Heading levels',
+      });
+      assert.equal(interruptCalls.length, 1);
       assert.equal(button.getAttribute('aria-pressed'), 'true');
-      assert.equal(button.getAttribute('aria-busy'), 'false');
-      assert.equal(button.dataset.state, 'bad', 'the server-reported pending flag is red');
-      assert.equal(button.disabled, false);
-      assert.equal(interruptCalls.at(-1).armed, true, 'the request explicitly arms the flag');
+      assert.match(button.title, /Flagged: Bash violation/);
+      failedWrites.add('/api/agent-interrupt');
       await button.events.click();
-      assert.equal(interruptCalls.at(-1).armed, false, 'a second press explicitly disarms the flag');
+      assert.equal(button.getAttribute('aria-pressed'), 'true', 'a refused disarm keeps the pending flag');
+      assert.match(button.title, /Request failed/);
+      failedWrites.delete('/api/agent-interrupt');
+      await button.events.click();
+      assert.equal(interruptCalls.at(-1).armed, false, 'a second press disarms');
+      assert.equal(modal.open, false, 'a disarm opens no dialog');
       assert.equal(button.getAttribute('aria-pressed'), 'false');
-      assert.equal(state.agent_interrupt_pending, false);
+      failedWrites.add('/api/agent-interrupt');
+      const refused = button.events.click();
+      await get('#modal-form').events.submit(event({}));
+      assert.equal(modal.open, true, 'a rejected flag keeps the dialog open');
+      assert.equal(get('#modal-error').hidden, false);
+      assert.match(get('#modal-error').textContent, /Write failed/);
+      failedWrites.delete('/api/agent-interrupt');
+      control(2).value = '';
+      await get('#modal-form').events.submit(event({}));
+      await refused;
+      assert.equal(modal.open, false, 'a retried flag closes the dialog');
+      assert.equal(button.getAttribute('aria-pressed'), 'true');
       await button.events.click();
-      assert.equal(button.getAttribute('aria-pressed'), 'true', 'a cleared flag can be armed again');
-      state.agent_interrupt_pending = false;
-      await refresh();
-      assert.equal(button.getAttribute('aria-pressed'), 'false', 'the hook consumption clears the button');
-      assert.equal(button.dataset.state, '');
       get('#reports-tab').events.click();
       await tick(); await tick();
       const selected = get('#report-select').value;
       const reportStatus = get('#report-status').textContent;
-      await button.events.click();
+      const armingReport = button.events.click();
+      assert.deepEqual(values(0), ['format-violation', 'unnecessary-report'],
+        'the kinds follow the reports tab');
+      await get('#modal-form').events.submit(event({}));
+      await armingReport;
       assert.equal(interruptCalls.at(-1).tab, 'reports');
       assert.equal(interruptCalls.at(-1).report_id, selected);
+      assert.equal(interruptCalls.at(-1).clause_file, null);
       assert.equal(get('#report-select').value, selected);
       assert.equal(get('#report-status').textContent, reportStatus, 'the action has no report status line');
-      state.agent_interrupt_pending = false;
-      await refresh();
+      await button.events.click();
+      get('#downloads-tab').events.click();
+      await tick();
+      const beforeCancel = interruptCalls.length;
+      const armingDownloads = button.events.click();
+      assert.deepEqual(values(0), ['bash-violation', 'process-violation'],
+        'Downloads shows the message kinds');
+      get('#modal-cancel').events.click();
+      await armingDownloads;
+      assert.equal(modal.open, false, 'cancel closes the dialog');
+      assert.equal(interruptCalls.length, beforeCancel, 'a cancel sends nothing');
       get('#tasks-tab').events.click();
-      await button.events.click();
+      await tick();
+      const armingTasks = button.events.click();
+      assert.deepEqual(values(0), ['current-task-violation', 'empty-task-list'],
+        'the kinds follow the tasks tab');
+      await get('#modal-form').events.submit(event({}));
+      await armingTasks;
       assert.equal(interruptCalls.at(-1).tab, 'tasks');
-      assert.equal(interruptCalls.at(-1).armed, true);
-      failedWrites.add('/api/agent-interrupt');
-      await button.events.click();
-      assert.equal(button.getAttribute('aria-pressed'), 'true', 'a refused disarm retains the pending flag');
-      failedWrites.delete('/api/agent-interrupt');
-      await button.events.click();
-      assert.equal(button.getAttribute('aria-pressed'), 'false', 'a refused disarm can be retried');
+      assert.equal(interruptCalls.at(-1).reason, 'current-task-violation');
       assert.equal(sent.length, notesBefore, 'the action writes no note');
       assert.equal(get('#note').value, draft, 'the action keeps the composer draft');
-      state.agent_interrupt_pending = false;
-      await refresh();
-      failedWrites.add('/api/agent-interrupt');
-      await button.events.click();
-      assert.equal(button.disabled, false, 'a failed request can be retried');
-      assert.equal(button.children.at(-1).getAttribute('class'), 'lucide lucide-flag', 'a failed write restores the flag');
-      assert.equal(button.getAttribute('aria-busy'), 'false');
-      assert.equal(button.getAttribute('aria-pressed'), 'false');
-      assert.match(button.title, /Write failed/);
     } finally {
-      pendingWrites.delete('/api/agent-interrupt');
       failedWrites.delete('/api/agent-interrupt');
+      modal.close();
       state = keptState;
       await refresh();
     }

@@ -41,6 +41,17 @@ WORKSPACE_SKIP={'.arena','.cache','.git','.local','.mypy_cache','.next','.nox','
 FETCH_LEASE=timedelta(minutes=5)
 UPLOAD_DIR='uploads'
 FETCH_DIR='downloads'
+def read_set_files(root=None):
+	base=Path(root or Path.cwd()).resolve();cached=READ_SET_CACHE.get(base)
+	if cached is not None:return list(cached)
+	files=[]
+	if(base/'ARENA.md').is_file():files.append('ARENA.md')
+	for(dirpath,dirnames,filenames)in os.walk(base,followlinks=False):
+		dirnames[:]=sorted(name for name in dirnames if name not in WORKSPACE_SKIP)
+		if'AGENTS.md'in filenames:files.append((Path(dirpath)/'AGENTS.md').relative_to(base).as_posix())
+	for name in('.agents/skills/arena-skill/SKILL.md','skills/arena-skill/SKILL.md'):
+		if(base/name).is_file():files.append(name);break
+	READ_SET_CACHE[base]=tuple(files);return list(files)
 def workspace_usage(root=None):
 	root=Path(root or Path.cwd());total=0;count=0
 	for(dirpath,dirnames,filenames)in os.walk(root,followlinks=False):
@@ -78,6 +89,9 @@ AGENT_KEY_EXPIRY_SECONDS=1200
 AGENT_KEY_EXPIRY_META='agent_key_expired_at'
 AGENT_SEEN_META='agent_seen_at'
 AGENT_INTERRUPT_META='agent_interrupt'
+AGENT_INTERRUPT_FLAG_META='agent_interrupt_flag'
+VIOLATION_KINDS={'notes':('bash-violation','process-violation'),'downloads':('bash-violation','process-violation'),'reports':('format-violation','unnecessary-report'),'tasks':('current-task-violation','empty-task-list')}
+READ_SET_CACHE={}
 CALL_GROUP_META='call_group'
 AGENT_CALL_ENDED_META='agent_call_ended_at'
 TURN_ENDED_META='turn_ended_at'
@@ -1511,7 +1525,7 @@ class Store:
 			if tasks is not None:
 				for item in tasks['finished']+tasks['upcoming']:item['updated_at']=clip_stamp(item['updated_at'])
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
-			polling=self.polling();return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':polling and bool(live_runs(self.path.parent)),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_META)),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META))}
+			polling=self.polling();return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':polling and bool(live_runs(self.path.parent)),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_META)),'read_set':read_set_files(self.repository_root()),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META))}
 	def tasks(self):
 		with closing(self.connect())as db:
 			rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall();records=[task_row(row)for row in rows]
@@ -1889,6 +1903,7 @@ class Store:
 		for status in TASK_STATUSES:
 			rows=db.execute('SELECT id FROM tasks WHERE status = ? ORDER BY position, id',(status,)).fetchall()
 			for(position,row)in enumerate(rows,1):db.execute('UPDATE tasks SET position = ? WHERE id = ?',(position,row[0]))
+	def repository_root(self):return self.path.parent.parent
 	def meta_value(self,key):
 		with closing(self.connect())as db:row=db.execute('SELECT value FROM meta WHERE key = ?',(key,)).fetchone();return row[0]if row else None
 	def stamp_polling(self):
@@ -1898,10 +1913,25 @@ class Store:
 	def clear_polling(self):
 		with closing(self.connect())as db,db:db.execute('DELETE FROM meta WHERE key IN (?, ?)',(POLLING_META,POLL_SINCE_META))
 	def polling(self):age=seconds_since(self.meta_value(POLLING_META));return age is not None and 0<=age<POLLING_FRESH_SECONDS
-	def request_interrupt(self,tab,report_id=None,armed=True,user_flagged=True):
+	def request_interrupt(self,tab,report_id=None,armed=True,user_flagged=True,reason=None,clause_file=None,note=None):
 		if not armed:self.take_interrupt();return{'agent_interrupt_pending':False}
 		if not isinstance(tab,str)or tab not in{'notes','reports','tasks','downloads'}:raise ValueError('tab must name a preview tab')
-		header='The user flagged a violation.'if user_flagged else'VIOLATION'
+		if reason is not None and reason not in VIOLATION_KINDS[tab]:raise ValueError('reason must name a violation kind for this tab')
+		if clause_file not in(None,'')and clause_file not in read_set_files(self.repository_root()):raise ValueError('clause_file must name a read-set file')
+		if note is not None and not isinstance(note,str):raise ValueError('note must be text')
+		cited=' '.join((note or'').split())
+		if len(cited)>300:raise ValueError('note must contain at most 300 characters')
+		if reason is not None:
+			heading=f"User flagged violation: {reason}."
+			if cited:heading+=f" Cited: {cited}"
+			evidence=[]
+			if tab=='reports'and report_id is not None:evidence.append(f"Report: {report_id}")
+			elif tab=='tasks':
+				task=current_task((self.tasks()or{}).get('upcoming',[]))
+				if reason=='current-task-violation'and task:evidence.append(f"Current task: {task['id']}. Is this what you are working on?")
+				else:evidence.append('The task list is empty. Maybe a task should have spawned.')
+			notice='\n'.join([heading,*evidence,'This bash call is blocked but not necessarily violating.','Think about which clause was violated.','Read read-set files if absent from context.','Fix the violation before continuing.']);self.set_meta(AGENT_INTERRUPT_FLAG_META,json.dumps({'kind':reason,'clause_file':clause_file or'','note':cited}));self.set_meta(AGENT_INTERRUPT_META,notice);return{'agent_interrupt_pending':True}
+		self.clear_meta(AGENT_INTERRUPT_FLAG_META);header='The user flagged a violation.'if user_flagged else'VIOLATION'
 		if tab=='reports'and report_id is not None:
 			try:self.report(report_id)
 			except FileNotFoundError:pass
@@ -1911,7 +1941,7 @@ class Store:
 			if task:header=f"The user flagged a violation: task {task['id']}."if user_flagged else f"VIOLATION: task {task['id']}"
 		notice=f"{header}\nThis Bash call was blocked. Read only read-set files whose current full text is absent from context, then fix the violation before continuing.";self.set_meta(AGENT_INTERRUPT_META,notice);return{'agent_interrupt_pending':True}
 	def take_interrupt(self):
-		with closing(self.connect())as db,db:db.execute('BEGIN IMMEDIATE');row=db.execute('SELECT value FROM meta WHERE key = ?',(AGENT_INTERRUPT_META,)).fetchone();db.execute('DELETE FROM meta WHERE key = ?',(AGENT_INTERRUPT_META,));return row['value']if row else None
+		with closing(self.connect())as db,db:db.execute('BEGIN IMMEDIATE');row=db.execute('SELECT value FROM meta WHERE key = ?',(AGENT_INTERRUPT_META,)).fetchone();db.execute('DELETE FROM meta WHERE key IN (?, ?)',(AGENT_INTERRUPT_META,AGENT_INTERRUPT_FLAG_META));return row['value']if row else None
 	def request_skip_poll(self,armed=True):
 		if not armed:self.take_skip_poll();return{'skip_poll':None}
 		self.set_meta(SKIP_POLL_META,now());return{'skip_poll':clip_stamp(self.meta_value(SKIP_POLL_META))}
@@ -1923,6 +1953,8 @@ class Store:
 		return clip_stamp(stamp)
 	def set_meta(self,key,value):
 		with closing(self.connect())as db,db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(key,str(value)))
+	def clear_meta(self,key):
+		with closing(self.connect())as db,db:db.execute('DELETE FROM meta WHERE key = ?',(key,))
 	def touch_agent(self):self.set_meta(AGENT_SEEN_META,now());self.clear_turn_ended()
 	def mark_turn_ended(self):self.set_meta(TURN_ENDED_META,now())
 	def clear_turn_ended(self):
@@ -2389,7 +2421,7 @@ def handler(store):
 				if interrupt_post:
 					armed=payload.get('armed',True)
 					if not isinstance(armed,bool):raise ValueError('armed must be true or false')
-					self.reply(200,json.dumps(store.request_interrupt(payload.get('tab'),payload.get('report_id'),armed),ensure_ascii=False));return
+					self.reply(200,json.dumps(store.request_interrupt(payload.get('tab'),payload.get('report_id'),armed,reason=payload.get('reason'),clause_file=payload.get('clause_file'),note=payload.get('note')),ensure_ascii=False));return
 				if skip_poll_post:
 					armed=payload.get('skip',True)
 					if not isinstance(armed,bool):raise ValueError('skip must be true or false')
@@ -2528,7 +2560,7 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 	if not routed and'interrupt'not in finished and state_file(state_dir).is_file():
 		mark('interrupt');notice=Store(state_dir,create=False).take_interrupt()
 		if notice:
-			if notice.startswith('The user flagged a violation'):print(notice,flush=True)
+			if notice.startswith(('The user flagged a violation','User flagged violation')):print(notice,flush=True)
 			else:report(notice)
 			return finish(130)
 	if not routed and'read-set'not in finished and state_file(state_dir).is_file():
