@@ -79,12 +79,12 @@ The message then carries a six-step checklist:
 
 Six rules follow the checklist:
 
-- red first for new executable behavior. Prose uses existing lint and structural checks, with exact-text tests only for executable interface or protocol contracts.
-- a root-cause fix for a bug, with no repeated failed approach
-- stated assumptions
-- no claim of an unrun check
-- screenshots and corrections through the steering channel, with each image read directly
-- a closing report of the change, the checks and the open items
+- Red first for new executable behavior. Prose uses existing lint and structural checks, with exact-text tests only for executable interface or protocol contracts.
+- A root-cause fix for a bug, with no repeated failed approach.
+- Stated assumptions.
+- No claim of an unrun check.
+- Screenshots and corrections through the steering channel, with each image read directly.
+- A closing report of the change, the checks and the open items.
 
 ## Arena auto-send wake up
 

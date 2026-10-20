@@ -20,6 +20,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Maintenance: remove the unused `--no-ste` and `--directory` options.
 - Workflows: lowercase the `and` in job and step names, and keep tool names in their real case.
 - Maintenance README: give the PR-check and preview-hook paragraphs their own headings, and use a straight apostrophe in the rules README.
+- Userscripts README: match the six prompt rules to one list form.
 
 ## 2026-10-19
 
