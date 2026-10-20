@@ -3000,7 +3000,11 @@ def run_command(state_dir, name, argv):
   discovery = pr_checks_discovery(resolve_repo_root()) if check_watch else None
   if discovery:
     completed = subprocess.CompletedProcess(
-      argv, 1, f"PR CHECKS NOT STARTED: {discovery}\n", ""
+      argv,
+      1,
+      f"PR CHECKS NOT STARTED: {discovery}. Run the same command again to see whether"
+      " the checks started.\n",
+      "",
     )
   else:
     completed = subprocess.run(argv, capture_output=True, text=True, check=False)
@@ -8391,10 +8395,10 @@ def main():
   )
   ack.add_argument("ids", nargs="*")
   ack.add_argument("markdown", help="Literal inline Markdown answer")
-  ack.add_argument("--task-id")
-  ack.add_argument("--task-title")
-  ack.add_argument("--task-type", choices=TASK_TYPES)
-  ack.add_argument("--task-detail", action="append")
+  ack.add_argument("--id", dest="task_id")
+  ack.add_argument("--title", dest="task_title")
+  ack.add_argument("--type", dest="task_type", choices=TASK_TYPES)
+  ack.add_argument("--detail", dest="task_detail", action="append")
   report_group = commands.add_parser(
     "report", help="Publish, withdraw and inspect reports"
   )
@@ -8435,7 +8439,7 @@ def main():
     "set",
     help=(
       "Write or update a task; -s status, -o order, -d details, -A append,"
-      " -m message, -r report, -u unblocked, -a amend, --task-type type"
+      " -m message, -r report, -u unblocked, -a amend, --type type"
     ),
   )
   task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
@@ -8444,7 +8448,6 @@ def main():
   task.add_argument(
     "-d",
     "--details",
-    "--task-details",
     dest="task_details",
     action="append",
     help="One step per line, 120 characters or fewer, repeatable",
@@ -8491,7 +8494,7 @@ def main():
   )
   task.add_argument("-s", "--status", choices=TASK_STATUSES, default=None)
   task.add_argument(
-    "--task-type",
+    "--type",
     dest="task_type",
     choices=TASK_TYPES,
     default=None,

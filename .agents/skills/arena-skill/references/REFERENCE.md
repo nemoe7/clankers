@@ -19,7 +19,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `worktree start [--gate <gate-name>] [--allow <glob>] <name> <destination>` | Create a detached task worktree outside the root, beside a named root gate when one runs |
 | `worktree collect <name>` | Print the allowed detached-worktree patch after a green root gate |
 | `ack <markdown>` | Omit IDs only when exactly one non-quiet note or report answer is pending. Supply one Markdown text. With multiple pending items, supply the ID |
-| `ack <id> <markdown>` | Answer one delivered ID with a rendered reply; single-quote inline text. Add `--task-id`, `--task-title`, `--task-type`, and repeatable `--task-detail` to create its linked task atomically |
+| `ack <id> <markdown>` | Answer one delivered ID with a rendered reply; single-quote inline text. Add `--id`, `--title`, `--type`, and repeatable `--detail` to create its linked task atomically |
 | `task list [-f]` | List upcoming task IDs, order, status, report links, set type marks and each linked report answer with its stamp and text. With -f, include finished tasks. Use task ID for details |
 | `task show ID` | Print one stored task: its title, status, order, primary type when set, report link, blocked mark and every detail |
 | `task set ID TITLE [DETAIL ...]` | Add or update a task; every task carries at least one detail, and reject a write that leaves none; one task holds one job, so several jobs mean several tasks rather than one task with many details; `--msg-id` is optional and only a note-born or report-born task carries it; `--unblocked` clears a report wait. |
@@ -104,9 +104,9 @@ Choose the primary deliverable type: `report` for findings or assessments, `code
 | Flag | Use |
 | --- | --- |
 | `--status upcoming` or `--status finished` | Set status; new tasks start upcoming |
-| `--task-type report\|code\|docs\|ops\|misc` | Required for normal new tasks; omit on updates to keep the stored type. Restore missing legacy types as `misc` |
+| `--type report\|code\|docs\|ops\|misc` | Required for normal new tasks; omit on updates to keep the stored type. Restore missing legacy types as `misc` |
 | `--order N` | Set 1-based position in the task's status group |
-| Repeatable `--task-details` | Set the detail lines; the arguments replace the stored details |
+| Repeatable `--details` | Set the detail lines; the arguments replace the stored details |
 | `--msg-id <full-message-id>` | Link the note or report answer a task came from; optional, and only a note-born or report-born task carries it; still call `ack` |
 | `--report <report-id>` | Link a blocked task to the report it waits on; an answer to that report clears the blocked mark |
 | `--amend <previous-task-id>` | Rename a task without losing its details or order |

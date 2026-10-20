@@ -2891,7 +2891,7 @@ def test_task_refuses_a_note_id_as_its_name():
         "set",
         "954ee49-9ac144955adcda4bcbd227497",
         "Named after the note",
-        "--task-details",
+        "--details",
         "Step one",
       ],
       capture_output=True,
@@ -2988,9 +2988,9 @@ def test_task_detail_refuses_a_session_id():
         "set",
         "third-task",
         "Third task",
-        "--task-type",
+        "--type",
         "misc",
-        "--task-detail",
+        "--detail",
         "See 954ee49",
       ],
       capture_output=True,
@@ -3126,7 +3126,7 @@ def test_bare_task_reads_the_stored_row():
       "Step one",
       "-d",
       "Step two",
-      "--task-type",
+      "--type",
       "misc",
     )
     assert written.returncode == 0, written.stderr
@@ -3687,7 +3687,7 @@ def test_a_short_id_prefix_names_one_record():
 
 
 def test_short_flags_and_the_details_rename():
-  # `--details` drops the redundant `--task-` head. `--task-details` stays an alias for stored calls and docs.
+  # `--details` drops the redundant `--task-` head. `--details` stays an alias for stored calls and docs.
   # Every flag has a short form to reduce routine call cost.
   script = str(Path(preview.__file__))
   with tempfile.TemporaryDirectory() as flag_dir:
@@ -3704,10 +3704,8 @@ def test_short_flags_and_the_details_rename():
         env=env,
       ).stdout
 
-    for flag in ("--details", "--task-details", "-d"):
-      out = cli(
-        "task", "set", "flag-task", "Flags", flag, "one\ntwo", "--task-type", "misc"
-      )
+    for flag in ("--details", "--details", "-d"):
+      out = cli("task", "set", "flag-task", "Flags", flag, "one\ntwo", "--type", "misc")
       assert "one" in out and "two" in out, flag
     manual_block = subprocess.run(
       [sys.executable, script, "task", "set", "flag-task", "--blocked"],
@@ -3718,7 +3716,7 @@ def test_short_flags_and_the_details_rename():
     )
     assert manual_block.returncode == 2 and "--blocked" in manual_block.stderr
     assert "blocked" not in cli(
-      "task", "set", "flag-task", "Flags", "-u", "--task-type", "misc"
+      "task", "set", "flag-task", "Flags", "-u", "--type", "misc"
     )
     out = cli(
       "task",
@@ -3729,7 +3727,7 @@ def test_short_flags_and_the_details_rename():
       "finished",
       "-o",
       "1",
-      "--task-type",
+      "--type",
       "misc",
     )
     assert "status finished" in out and "order 1" in out
@@ -4635,7 +4633,7 @@ def test_restore_import():
         "Answer it",
         "--msg-id",
         "plain",
-        "--task-type",
+        "--type",
         "misc",
       ],
       capture_output=True,
@@ -4656,7 +4654,7 @@ def test_restore_import():
         "orphan",
         "No message",
         "Answer it",
-        "--task-type",
+        "--type",
         "misc",
         "--msg-id",
         "0f0f0f0f-0000-4000-8000-000000000000",
@@ -4891,8 +4889,12 @@ def test_a_failed_check_discovery_names_the_unstarted_watch(tmp_path, monkeypatc
   record = json.loads(
     (tmp_path / "runs" / "pr-checks.json").read_text(encoding="utf-8")
   )
-  assert record["verdict"] == f"PR CHECKS NOT STARTED: {reason}"
-  assert record["tail"] == [f"PR CHECKS NOT STARTED: {reason}"]
+  verdict = (
+    f"PR CHECKS NOT STARTED: {reason}. Run the same command again to see whether"
+    " the checks started."
+  )
+  assert record["verdict"] == verdict
+  assert record["tail"] == [verdict]
 
 
 def test_a_logs_call_reads_the_routed_run_status_and_output():
@@ -5923,7 +5925,7 @@ def test_dispatch_reminder():
           "reminder-task",
           "Track work",
           "Step one",
-          "--task-type",
+          "--type",
           "misc",
         ],
         1,
@@ -8255,9 +8257,7 @@ def test_tick_warning_reads_the_quoting_shape():
   assert preview.tick_warning("arena-preview ack abc 'see `read` now'") is None
   assert preview.tick_warning("arena-preview ack abc - < reply.md") is None
   assert preview.tick_warning('echo `date` && arena-preview ack abc "plain"') is None
-  assert (
-    preview.tick_warning("arena-preview task x title --task-details 'a `tick`'") is None
-  )
+  assert preview.tick_warning("arena-preview task x title --details 'a `tick`'") is None
   assert preview.tick_warning("") is None and preview.tick_warning(None) is None
 
 
@@ -8297,9 +8297,9 @@ def test_task_detail_steps():
         "set",
         "steps",
         "Steps",
-        "--task-details",
+        "--details",
         "read it\n\n fix it \ncheck it",
-        "--task-type",
+        "--type",
         "misc",
       ],
       capture_output=True,
@@ -8316,7 +8316,7 @@ def test_task_detail_steps():
         "set",
         "wall",
         "Wall",
-        "--task-details",
+        "--details",
         "y" * 400,
       ],
       capture_output=True,
@@ -8345,9 +8345,7 @@ def test_task_details_append_keeps_replacement_and_limits():
       )
 
     assert (
-      cli(
-        "task", "set", "append-task", "Append", "one", "--task-type", "misc"
-      ).returncode
+      cli("task", "set", "append-task", "Append", "one", "--type", "misc").returncode
       == 0
     )
     result = cli("task", "set", "append-task", "--append", "--details", "two\nthree")
@@ -8891,7 +8889,10 @@ def test_cli_argument_errors_omit_usage(args):
   )
   assert cli.returncode == 2
   assert not cli.stdout
-  prefix = "arena-preview serve: error: " if args[:1] == ["serve"] else "error: "
+  prefix = {
+    "serve": "arena-preview serve: error: ",
+    "task": "arena-preview task set: error: ",
+  }.get(args[0] if args else "", "error: ")
   assert cli.stderr.startswith(prefix), cli.stderr
   assert "arena-preview: " not in cli.stderr
   assert "error:" in cli.stderr and "preview.py" not in cli.stderr
@@ -8962,7 +8963,7 @@ def test_cli_help_keeps_usage():
   ).stdout
   flat_task = " ".join(task_help.split())
   assert "-A, --append" in flat_task
-  assert "--task-type" in flat_task
+  assert "--type" in flat_task
 
 
 def test_reference_commands_table_lists_every_agent_facing_command():
@@ -9146,7 +9147,7 @@ def test_task_type_cli_flag_and_print():
         env=env,
       )
 
-    made = cli("typed-task", "Typed", "Step", "--task-type", "docs")
+    made = cli("typed-task", "Typed", "Step", "--type", "docs")
     assert made.returncode == 0, made.stderr
 
     missing = cli("missing-type", "Missing a type", "Step")
@@ -9158,7 +9159,7 @@ def test_task_type_cli_flag_and_print():
     assert "type docs" in again.stdout, "a call without the flag keeps the type"
     bare = cli("typed-task")
     assert "type docs" in bare.stdout
-    unknown = cli("other-task", "Other", "Step", "--task-type", "mixed")
+    unknown = cli("other-task", "Other", "Step", "--type", "mixed")
     assert unknown.returncode != 0
 
 
@@ -10835,7 +10836,7 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
       "Use uploads",
       "--details",
       "Keep this step",
-      "--task-type",
+      "--type",
       "code",
       "--msg-id",
       note["id"],
@@ -10858,7 +10859,7 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
       "set",
       "boundary-work",
       "Boundary",
-      "--task-type",
+      "--type",
       "code",
       "--details",
       "x" * preview.TASK_STEP_MAX,
@@ -10872,7 +10873,7 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
       "set",
       "ordinary-work",
       "Ordinary",
-      "--task-type",
+      "--type",
       "code",
       "--details",
       "Attachment: " + "x" * preview.TASK_STEP_MAX,
@@ -10917,7 +10918,7 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
           "set",
           "oversized-work",
           "Oversized",
-          "--task-type",
+          "--type",
           "code",
           "--details",
           "Keep this step",
@@ -11012,13 +11013,13 @@ def test_ack_task_cli_commits_both_records_or_neither(capsys):
     store.note("first-note", "First request")
     store.note("second-note", "Second request")
     options = [
-      "--task-id",
+      "--id",
       "first-job",
-      "--task-title",
+      "--title",
       "First job",
-      "--task-type",
+      "--type",
       "code",
-      "--task-detail",
+      "--detail",
       "Do the work",
     ]
 
