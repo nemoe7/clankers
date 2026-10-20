@@ -3555,6 +3555,34 @@ def route_command(state_dir, name, argv, task_id=None):
   return 0
 
 
+def next_open_task(state_dir, gate_name):
+  """Return the first upcoming task the gate does not own, or None."""
+  try:
+    store = Store(state_dir)
+  except FileNotFoundError:
+    return None
+  held = str(routed_record(state_dir, gate_name).get("task") or "")
+  for task in store.list_tasks():
+    if task.get("status") != "upcoming" or task.get("id") == held:
+      continue
+    if gate_name in (task.get("runs") or []):
+      continue
+    return task
+  return None
+
+
+def next_task_hint(state_dir, gate_name):
+  """Name the next open task and its worktree start command, when one exists."""
+  task = next_open_task(state_dir, gate_name)
+  if task is None:
+    return ""
+  return (
+    f' Next open task: {task["id"]} "{task.get("title") or ""}". Start it in a'
+    f" worktree: `arena-preview worktree start --gate {gate_name} --allow"
+    f" '<task path glob>' {task['id']} <destination outside the repo root>`."
+  )
+
+
 def run_log_report(state_dir, name):
   """Print one routed run's recorded status and its output tail.
 
@@ -3566,9 +3594,8 @@ def run_log_report(state_dir, name):
     stamp = str(record.get("started_at") or "")
     if run_read_stamp(state_dir, name) == stamp:
       print(
-        f"WAIT BLOCKED: run {name} has no verdict yet. Take the next queued task, or"
-        " read it on a later call. The verdict keeps, and `arena-preview poll` waits"
-        " when the queue is empty.",
+        f"WAIT BLOCKED: run {name} has no verdict yet.{next_task_hint(state_dir, name)}"
+        " The verdict keeps, and `arena-preview poll` waits when the queue is empty.",
         file=sys.stderr,
         flush=True,
       )

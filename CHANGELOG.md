@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Preview flags: ask for a violation kind, a read-set clause file and a cited reason. Print the kind and reason in the gate notice.
 - Read-set reminders: read files only when current full text is absent from context. Wait 20 minutes after the first eligible command. Then keep 20-minute intervals.
 - Preview task lists: ask whether the current task remains active. Reject misplaced `--task` options.
+- Preview runs: a blocked run-log read names the next open task and prints its worktree start command.
 - Test guidance: prefer named constants for expected assertion values. Check generated indexes by structure, not sentence text.
 - Instruction budgets: measure ARENA.md in tokens, give the non-clause arena-skill files one byte row, and drop the README row.
 - Maintenance: read skill frontmatter with `yaml.safe_load` and run the prose linter in process. Share the comment scanners, the command-piece tokens and the measurement map.

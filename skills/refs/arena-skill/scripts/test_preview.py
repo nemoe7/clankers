@@ -9747,6 +9747,57 @@ def test_a_second_read_of_a_running_run_is_blocked(tmp_path, capsys):
   assert "run gate-one running" in capsys.readouterr().out
 
 
+def test_a_blocked_read_names_the_next_task_and_its_worktree(tmp_path, capsys):
+  """The blocked read says which task comes next and how to start its worktree."""
+  store = preview.Store(tmp_path, create=True)
+  store.write_task(
+    "held-run",
+    "Run under the gate",
+    ["Runs under the gate."],
+    status="upcoming",
+    order=1,
+    task_type="code",
+  )
+  store.write_task(
+    "next-task",
+    "Next file task",
+    ["Waits beside the gate."],
+    status="upcoming",
+    order=2,
+    task_type="code",
+  )
+  store.write_task(
+    "done-task",
+    "Finished task",
+    ["Landed."],
+    status="finished",
+    order=3,
+    task_type="code",
+  )
+  runs = tmp_path / "runs"
+  runs.mkdir()
+  pid = os.getpid()
+  record = {
+    "name": "gate-one",
+    "detached": True,
+    "exit": None,
+    "started_at": None,
+    "tail": [],
+    "pid": pid,
+    "pid_started_at": preview.process_start_identity(pid),
+    "task": "held-run",
+  }
+  (runs / "gate-one.json").write_text(json.dumps(record), encoding="utf-8")
+  assert preview.run_log_report(tmp_path, "gate-one") == 0
+  capsys.readouterr()
+  assert preview.run_log_report(tmp_path, "gate-one") == 130
+  err = capsys.readouterr().err
+  assert "Next open task: next-task" in err
+  assert "worktree start --gate gate-one" in err
+  assert "done-task" not in err
+  assert "held-run" not in err
+
+
 def test_init_tz_flag_stores_the_display_zone(tmp_path):
   store = preview.Store(tmp_path, create=True)
   store.set_meta(preview.TIMEZONE_META, "Asia/Manila")

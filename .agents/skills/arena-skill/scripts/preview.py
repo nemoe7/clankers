@@ -1263,11 +1263,24 @@ def route_command(state_dir,name,argv,task_id=None):
 	except FileNotFoundError:pass
 	if not detach_run(state_dir,name,argv,task_id=task_id):print(f"arena-preview run start: the start of `{name}` failed.",flush=True);return 1
 	print(f"routed {name}: background run. Verdict on later call. {WORKTREE_STEP}",file=sys.stderr,flush=True);return 0
+def next_open_task(state_dir,gate_name):
+	try:store=Store(state_dir)
+	except FileNotFoundError:return None
+	held=str(routed_record(state_dir,gate_name).get('task')or'')
+	for task in store.list_tasks():
+		if task.get('status')!='upcoming'or task.get('id')==held:continue
+		if gate_name in(task.get('runs')or[]):continue
+		return task
+	return None
+def next_task_hint(state_dir,gate_name):
+	task=next_open_task(state_dir,gate_name)
+	if task is None:return''
+	return f" Next open task: {task['id']} \"{task.get('title')or''}\". Start it in a worktree: `arena-preview worktree start --gate {gate_name} --allow '<task path glob>' {task['id']} <destination outside the repo root>`."
 def run_log_report(state_dir,name):
 	record=routed_record(state_dir,name)
 	if record.get('exit')is None:
 		stamp=str(record.get('started_at')or'')
-		if run_read_stamp(state_dir,name)==stamp:print(f"WAIT BLOCKED: run {name} has no verdict yet. Take the next queued task, or read it on a later call. The verdict keeps, and `arena-preview poll` waits when the queue is empty.",file=sys.stderr,flush=True);return 130
+		if run_read_stamp(state_dir,name)==stamp:print(f"WAIT BLOCKED: run {name} has no verdict yet.{next_task_hint(state_dir,name)} The verdict keeps, and `arena-preview poll` waits when the queue is empty.",file=sys.stderr,flush=True);return 130
 		mark_run_read(state_dir,name,record);elapsed=detached_seconds(record.get('started_at'));age=f" {elapsed}s"if elapsed is not None else'';print(f"run {name} running{age}");print(WORKTREE_STEP);return 0
 	print(f"run {name} done: exit {record['exit']} {record.get('seconds')}s")
 	for line in clean_run_tail(record.get('tail')or[]):print(line)
