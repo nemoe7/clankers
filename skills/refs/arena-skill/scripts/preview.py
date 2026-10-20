@@ -5659,9 +5659,7 @@ class Store:
       if existing:
         raise ValueError("This message ID was already sent without a file")
       for row in rows:
-        db.execute(
-          "UPDATE uploads SET note_id = ? WHERE id = ?", (note_id, row["id"])
-        )
+        db.execute("UPDATE uploads SET note_id = ? WHERE id = ?", (note_id, row["id"]))
       rows = [
         db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
         for upload_id in ids
@@ -7624,9 +7622,7 @@ def handler(store):
       )
       note_upload = path == "/api/notes/with-file"
       staged_upload = path == "/api/uploads"
-      upload_drop = re.fullmatch(
-        r"/api/uploads/([a-zA-Z0-9_-]{1,80})/drop", path
-      )
+      upload_drop = re.fullmatch(r"/api/uploads/([a-zA-Z0-9_-]{1,80})/drop", path)
       agent_key_post = path == "/api/key"
       skip_poll_post = path == "/api/skip-poll"
       interrupt_post = path == "/api/agent-interrupt"
