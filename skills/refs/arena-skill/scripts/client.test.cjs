@@ -1782,19 +1782,22 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
-    // The header counts up to the half-way mark, then down, and says Blocked at ten.
+    // The header counts up to the half-way mark, then down, and blocks at the gate's own
+    // threshold.
+    state.gate_threshold = 6;
+    state.calls_since_message = 3;
+    await refresh(); await tick();
+    assert.equal(get('#connection-text').textContent, '3 messages saved · 3 calls');
+    state.calls_since_message = 4;
+    await refresh(); await tick();
+    assert.equal(get('#connection-text').textContent, '3 messages saved · 2 calls');
     state.calls_since_message = 5;
     await refresh(); await tick();
-    assert.equal(get('#connection-text').textContent, '3 messages saved · 5 calls');
+    assert.equal(get('#connection-text').textContent, '3 messages saved · 1 call');
     state.calls_since_message = 6;
     await refresh(); await tick();
-    assert.equal(get('#connection-text').textContent, '3 messages saved · 4 calls');
-    state.calls_since_message = 9;
-    await refresh(); await tick();
-    assert.equal(get('#connection-text').textContent, '3 messages saved · 1 call');
-    state.calls_since_message = 10;
-    await refresh(); await tick();
     assert.equal(get('#connection-text').textContent, '3 messages saved · Blocked');
+    state.gate_threshold = undefined;
     state.calls_since_message = 1;
     await refresh(); await tick();
     assert.equal(get('#connection-text').textContent, '3 messages saved · 1 call');

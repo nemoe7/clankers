@@ -4618,6 +4618,8 @@ class Store:
         # The hook stamps this after every bash call. The long call text holds only while
         # the last seen stamp is newer, so a finished call never reads as running.
         "agent_call_ended_at": clip_stamp(meta.get(AGENT_CALL_ENDED_META)),
+        # The page counts down to the same block the gate applies.
+        "gate_threshold": GATE_THRESHOLD,
       }
 
   def tasks(self):

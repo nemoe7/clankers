@@ -918,11 +918,12 @@ function renderState() {
   // The header carries the same tally the gate keeps, so the owner sees the call count
   // the stderr banner names without leaving the page.
   const calls = state.calls_since_message || 0;
-  // The tally counts up to the half-way mark, then down, and says Blocked once the count
-  // reaches ten.
-  const shown = calls <= 5 ? calls : 10 - calls;
+  // The tally counts up to the half-way mark, then down, and says Blocked at the same
+  // count the gate blocks at.
+  const threshold = state.gate_threshold || 10;
+  const shown = calls <= Math.floor(threshold / 2) ? calls : threshold - calls;
   callTally = calls
-    ? calls >= 10
+    ? calls >= threshold
       ? ' · Blocked'
       : ` · ${shown} call${shown === 1 ? '' : 's'}`
     : '';
