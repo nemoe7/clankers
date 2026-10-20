@@ -19,7 +19,7 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
-- On a rule violation, MUST read every read-set file in full again before continuing.
+- On a rule violation, MUST read only read-set files whose current full text is absent from context before continuing.
 - For a corrected routine slip with no impact, give one short receipt line.
 - Suggest an amendment only when an identified rule gap contributed.
 - Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
@@ -41,11 +41,11 @@
 
 - The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
 - An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
-- At session start, read the read set, then make `10-4: ARENA.md loaded` the first action after that read; find and read nested AGENTS.md files, run the installer, start the preview, then ask the visibility question.
+- At session start, read read-set files whose current full text is absent from context, then make `10-4: ARENA.md loaded` the first action after those reads; find nested AGENTS.md files and read only those whose current full text is absent from context, run the installer, start the preview, then ask the visibility question.
 - On a resumed or next turn, check whether the preview runs, restart it if needed, read read-set files whose current full text is absent from context, find nested AGENTS.md files and read missing or changed instructions, then continue an open task or poll if none.
 - Load the named skill for Arena work: `arena-skill` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
 - Use "read set" to mean ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md, and nothing else.
-- MUST use the read tool, NEVER Bash, to read every required read-set file in full.
+- MUST use the read tool, NEVER Bash, to read only read-set files whose current full text is absent from context.
 - After compaction, summary, or context replacement within a turn, read every read-set file whose current full text is absent from context end-to-end before other tool calls. For a resumed or next turn, use the resumed start sequence.
 - On a context-check reminder, MUST read every read-set file whose current full text is absent from context before continuing work.
 - NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a read-set file.
@@ -169,6 +169,7 @@
 - NEVER guess, use an arbitrary fallback, or hide a failure.
 - Revise disproven assumptions.
 - Test: when a test is appropriate, prefer red first, then the smallest green change, behavior-preserving refactor, recheck. For prose-only edits, use existing linters and structural validators; NEVER add tests that assert prose wording. Keep exact-text tests for executable interface or protocol contracts.
+- Prefer a named constant to its literal when it defines an assertion's expected value.
 - Test public interfaces and integration boundaries.
 - Use the project's existing frameworks, fixtures, helpers, and conventions.
 - NEVER weaken or drop a test to pass.

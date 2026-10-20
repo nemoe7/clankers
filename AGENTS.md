@@ -6,7 +6,6 @@
 
 ## Arena-specific instructions
 
-- In Arena, MUST also read and follow [ARENA.md](ARENA.md) as an additional ruleset in that same first read, before your first edit.
 - ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
 - Arena sandbox only: install the Python dependencies into a venv, since system `pip` refuses under PEP 668, and run `npm ci` once. [maintenance/README.md](maintenance/README.md) has the general procedure, the token-measurement note and the steering history. Steering uses `skills/arena-skill` and its local preview inbox for messages and reports; no automatic fallback is authorized.
 - Only Arena agents MUST publish a proposal through the `arena-skill` skill in an ignored workspace file; its approval question is a fielded report field, and blind approval approves nothing.

@@ -19,7 +19,7 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a rule collision or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file or the preview skill, installed copies included; suggest amendments only, unless their home repo explicitly waives protection.
-- On a rule violation, MUST read the full read set again before continuing.
+- On a rule violation, MUST read only read-set files whose current full text is absent from context before continuing.
 - Give one short receipt for a corrected routine no-impact slip.
 - Suggest amendments only for an identified contributing rule gap.
 - Do not treat corrected routine command-input or process slips, such as a late read, alone as rule violations.
@@ -37,11 +37,11 @@
 
 ## Setup
 
-- At session start: read the read set, give `10-4: ARENA.md loaded` as the next action, find and read nested AGENTS.md files, install, start the preview, then ask visibility.
+- At session start: read read-set files absent from context, then give `10-4: ARENA.md loaded` as the next action; find nested AGENTS.md files and read only those absent from context, install, start the preview, then ask visibility.
 - On a resumed or next turn: check the preview, restart if needed, read missing-context read-set files, find nested AGENTS.md files and read missing or changed instructions, then continue an open task or poll if none.
 - Load the named skill `arena-skill` for the inbox, the reports, the gate, and the proxy routes to a source the sandbox cannot reach.
 - Read set: ARENA.md, root AGENTS.md with any nested AGENTS.md, and arena-skill SKILL.md only.
-- MUST read required read-set files in full with the read tool, NEVER Bash.
+- MUST use the read tool, NEVER Bash, to read only read-set files whose current full text is absent from context.
 - After mid-turn compaction, summary, or context replacement, read missing-context read-set files end-to-end before other tools. On a resumed or next turn, use its start sequence.
 - On a context-check reminder, MUST read only a read-set file whose current full text is absent from context.
 - NEVER count a file name, read receipt, summary, remembered rule, or partial read (head, tail, or grep excerpt) as a read-set file's current full text.
@@ -137,6 +137,7 @@
 - Confirm a duplicated, garbled, or disowned message in one line before acting, keeping its edit reversible until then; use the preview inbox as the source of truth for steering instructions and acknowledgement receipts, verifying pending/completed work there rather than from Arena chat output; treat a repeat as a resend: answer what is pending, restate finished work in one line, NEVER redo or widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck; grep every caller first, keep hypotheses falsifiable, one variable at a time, NEVER guess, use a fallback, or hide a failure, and revise disproven assumptions.
 - Test: prefer red first when one fits, then the smallest green change, a behavior-preserving refactor, recheck; cover public interfaces and integration boundaries, reuse the project's frameworks, fixtures, helpers, conventions, and NEVER weaken or drop a test to pass. Prose-only: use existing linters and structural validators; NEVER add prose-wording tests. Keep exact-text tests for executable interface/protocol contracts.
+- Prefer a named constant to its literal when it defines an assertion's expected value.
 - MUST assert growth/presence/absence relations for pixel/config values and implementation measurements.
 - MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): an assert-based demo or small test file, nothing more — no frameworks, fixtures, or per-function suites. Mechanical changes get proportional checks.
 - Grep-verify each file edit landed before building on it.

@@ -9,7 +9,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Changed
 
 - Preview serving: reject ports other than 8000 and identify 8000 as the only supported port.
-- Preview violation notices: identify user flags and report formatting defects; print user-flagged notices to stdout.
+- Preview violation notices: identify user flags and report formatting defects, then print user-flagged notices to stdout.
 
 ## 2026-10-19
 
