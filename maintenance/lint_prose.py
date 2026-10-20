@@ -64,21 +64,28 @@ def markdown_targets() -> list[Path]:
 BULLET_SENTENCE_CAP = 3
 
 
-def lint(label: str, text: str, adr: bool, strict: bool = False) -> int:
-  """Run the linter once, failing on a hard finding, or on any finding in strict mode."""
-  if adr and ADR_REFERENCE.search(text):
-    print(f"--- {label}\nA comment or docstring refers to an ADR.")
-    return 1
-  findings, _ = ste_linter().lint(text, filename=label)
-  hard = any(item["level"] == "advisory-free" for item in findings)
-  if not findings or not (strict or hard):
-    return 0
+def report(label: str, findings: list[dict], note: str | None = None) -> None:
+  """Print one labelled finding list."""
   print(f"--- {label}")
+  if note:
+    print(note)
   for finding in findings:
     print(
       f"{finding['line']}:{finding['col']} {finding['level']} "
       f"{finding['rule']}: {finding['message']}"
     )
+
+
+def lint(label: str, text: str, adr: bool, strict: bool = False) -> int:
+  """Run the linter once, failing on a hard finding, or on any finding in strict mode."""
+  if adr and ADR_REFERENCE.search(text):
+    report(label, [], "A comment or docstring refers to an ADR.")
+    return 1
+  findings, _ = ste_linter().lint(text, filename=label)
+  hard = any(item["level"] == "advisory-free" for item in findings)
+  if not findings or not (strict or hard):
+    return 0
+  report(label, findings)
   return 1
 
 
@@ -100,29 +107,21 @@ def strict_lint(label: str, sections: list[str], adr: bool) -> int:
   module = ste_linter()
   for number, text in enumerate(sections, start=1):
     if adr and ADR_REFERENCE.search(text):
-      print(f"--- {label} section {number}\nA comment or docstring refers to an ADR.")
+      report(
+        f"{label} section {number}", [], "A comment or docstring refers to an ADR."
+      )
       failures += 1
       continue
     findings, _ = module.lint(text, filename=label)
     findings = [item for item in findings if item["rule"] != "synonym-rotation"]
     if not findings:
       continue
-    print(f"--- {label} section {number}")
-    for finding in findings:
-      print(
-        f"{finding['line']}:{finding['col']} {finding['level']} "
-        f"{finding['rule']}: {finding['message']}"
-      )
+    report(f"{label} section {number}", findings)
     failures += 1
   findings, _ = module.lint("\n\n".join(sections), filename=label)
   rotations = [item for item in findings if item["rule"] == "synonym-rotation"]
   if rotations:
-    print(f"--- {label} file-wide synonyms")
-    for finding in rotations:
-      print(
-        f"{finding['line']}:{finding['col']} {finding['level']} "
-        f"{finding['rule']}: {finding['message']}"
-      )
+    report(f"{label} file-wide synonyms", rotations)
     failures += 1
   return failures
 
