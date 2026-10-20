@@ -20,6 +20,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Merge the two refs baselines into `rules/refs/CHATGPT.txt` and extract both fields from it. The Wenyan CUSTOM experimental drops to 1,468 characters to meet the 1,500 cap.
 
+- Compress the live ARENA, CORE, CLINE, Kilo mode, COMMIT-SPEC, and ChatGPT clause copies against their refs baselines, and the Wenyan fields with them. Leave KILO unchanged: every candidate measured equal or costlier. Keep every claim, negation, condition, path, and caveat.
+
+- Restore the refs wording for the Precedence clauses, the SOLID and test clauses, the report clauses, and the ambiguous-request clause.
+
 #### preview
 
 - Refuse a task detail that cites a session-local note, answer, report or task ID.
