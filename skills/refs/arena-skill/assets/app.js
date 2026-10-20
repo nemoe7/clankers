@@ -2568,8 +2568,8 @@ function paintInterrupt(pending) {
   button.setAttribute('aria-pressed', pending ? 'true' : 'false');
   button.dataset.state = pending || button.dataset.error ? 'bad' : '';
   label(button, button.dataset.error || (pending
-    ? 'Read-set reread is pending. Click to cancel.'
-    : 'Ask the agent to read the full read set again before continuing'));
+    ? 'Read-set check is pending. Click to cancel.'
+    : 'Ask the agent to read files missing from context'));
 }
 $('#agent-interrupt').addEventListener('click', async () => {
   const button = $('#agent-interrupt');

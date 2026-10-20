@@ -4431,6 +4431,7 @@ def test_serve_rejects_nondefault_port():
         [sys.executable, str(Path(preview.__file__)), "serve", "--port", "8123"],
         capture_output=True,
         text=True,
+        check=False,
         env={**os.environ, "ARENA_PREVIEW_STATE_DIR": state_dir},
         timeout=5,
       )
@@ -5062,6 +5063,37 @@ def test_route_cli_accepts_task_and_task_cli_rejects_manual_block(tmp_path):
     env=environment,
   ).stdout
   assert "--blocked" not in help_text and "--unblocked" in help_text
+
+
+def test_route_cli_rejects_task_after_run_name(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  store.write_task("linked", "Linked", ["Run the gate"], task_type="code")
+  environment = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)}
+
+  for misplaced in (["--task", "linked"], ["--task=linked"]):
+    rejected = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "run",
+        "start",
+        "checks",
+        *misplaced,
+        "--",
+        "true",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=environment,
+    )
+
+    assert rejected.returncode == 2
+    assert (
+      "Use: arena-preview run start --task <id> <name> -- <command>" in rejected.stderr
+    )
+    assert not (tmp_path / "runs" / "checks.json").exists()
 
 
 def test_route_starts_the_run_detached(tmp_path, monkeypatch):
@@ -6414,7 +6446,10 @@ def test_repeat_polls_raise_a_violation(monkeypatch):
     monkeypatch.setattr(preview, "poll_clock", lambda: moment[0])
     assert preview.poll_repeat(store) is None
     refusal = preview.poll_repeat(store)
-    assert refusal.startswith("VIOLATION: repeat poll inside 45 seconds.")
+    assert refusal == (
+      "VIOLATION: repeat poll inside 45 seconds. Read only read-set files whose "
+      "current full text is absent from context, then work the task."
+    )
     notice = store.take_interrupt()
     assert notice.startswith("VIOLATION")
     assert "This Bash call was blocked" in notice
@@ -6442,7 +6477,10 @@ def test_a_repeat_poll_command_exits_2_with_the_violation():
       env=env,
     )
     assert result.returncode == 2, result.stderr
-    assert result.stdout.startswith("VIOLATION: repeat poll inside 45 seconds.")
+    assert result.stdout == (
+      "VIOLATION: repeat poll inside 45 seconds. Read only read-set files whose "
+      "current full text is absent from context, then work the task.\n"
+    )
     assert store.take_interrupt().startswith("VIOLATION")
 
 
@@ -7213,6 +7251,37 @@ def test_quiet_note_never_wakes_the_poll():
     assert seen["owner-note"] is not None and seen["key-note"] is not None
 
 
+def test_read_set_schedule_delays_first_checkpoint_and_keeps_intervals():
+  with tempfile.TemporaryDirectory() as directory:
+    root, state = read_set_cli_root(directory)
+    store = preview.Store(state)
+    started = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
+
+    assert store.schedule_read_set_note(moment=started, root=root) is None
+    assert store.pending_read_set_note() is None
+    assert (
+      store.schedule_read_set_note(
+        moment=started + timedelta(minutes=20) - timedelta(seconds=1), root=root
+      )
+      is None
+    )
+    first = store.schedule_read_set_note(
+      moment=started + timedelta(minutes=20), root=root
+    )
+    assert first is not None
+    store.acknowledge([first["id"]], "Read in full")
+    assert (
+      store.schedule_read_set_note(
+        moment=started + timedelta(minutes=40) - timedelta(seconds=1), root=root
+      )
+      is None
+    )
+    second = store.schedule_read_set_note(
+      moment=started + timedelta(minutes=40), root=root
+    )
+    assert second is not None and second["id"] != first["id"]
+
+
 def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
   capsys, monkeypatch
 ):
@@ -7230,13 +7299,23 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     skill.parent.mkdir(parents=True)
     skill.write_text("skill\n", encoding="utf-8")
     store = preview.Store(root / "state", create=True)
-    at_zero = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
+    started = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
+    assert preview.read_set_tick(store, "git status", moment=started, root=root) is None
+    at_zero = started + timedelta(minutes=20)
 
     warning = preview.read_set_tick(store, "git status", moment=at_zero, root=root)
     assert warning and "READ SET BLOCKED" in warning
     pending = store.read()["pending"]
     assert len(pending) == 1
     checkpoint = pending[0]
+    assert checkpoint["text"].startswith(
+      "Read-set checkpoint after a 20-minute interval. Read each listed path in full "
+      "with the read tool only if its current full text is absent from context, then "
+      "acknowledge this note.\n"
+    )
+    assert (
+      warning and "read each listed path in full with the read tool only if" in warning
+    )
     assert checkpoint["quiet"] == 1 and checkpoint["blocking"] == 1
     assert [str(path) for path in preview.read_set_paths(root)] == [
       str(root / "ARENA.md"),
@@ -7309,14 +7388,14 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     store.acknowledge([checkpoint["id"]], "Read in full")
     assert preview.read_set_tick(store, "git status", moment=at_zero, root=root) is None
     assert store.read()["pending"] == []
-    at_twenty = at_zero.replace(minute=20)
+    at_twenty = at_zero + timedelta(minutes=20)
     assert (
       preview.read_set_tick(store, "arena-preview read", moment=at_twenty, root=root)
       is None
     )
     next_pending = store.read()["pending"]
     assert len(next_pending) == 1 and next_pending[0]["id"] != checkpoint["id"]
-    at_forty = at_zero.replace(minute=40)
+    at_forty = at_zero + timedelta(minutes=40)
     assert preview.read_set_tick(store, "git status", moment=at_forty, root=root)
     assert len(store.read()["pending"]) == 1, "one pending checkpoint never duplicates"
 
@@ -7360,7 +7439,11 @@ def test_read_set_schedule_defers_for_polling_and_migrates_note_classes():
       item["blocking"] and item["quiet"] for item in store.read()["pending"]
     )
     store.clear_polling()
-    assert preview.read_set_tick(store, "git status", moment=at_forty, root=root)
+    assert (
+      preview.read_set_tick(store, "git status", moment=at_forty, root=root) is None
+    )
+    due = at_forty + timedelta(minutes=20)
+    assert preview.read_set_tick(store, "git status", moment=due, root=root)
 
     database = sqlite3.connect(store.path)
     database.execute("ALTER TABLE notes DROP COLUMN blocking")
@@ -7422,7 +7505,7 @@ def dead_port(store):
   return port
 
 
-def test_read_set_tick_cli_defers_a_due_slot_while_the_server_is_down():
+def test_read_set_tick_cli_does_not_start_the_delay_while_server_is_down():
   with tempfile.TemporaryDirectory() as directory:
     root, state = read_set_cli_root(directory)
     dead_port(preview.Store(state))
@@ -7438,7 +7521,9 @@ def test_read_set_tick_cli_keeps_a_pending_checkpoint_while_the_server_is_down()
   with tempfile.TemporaryDirectory() as directory:
     root, state = read_set_cli_root(directory)
     store = preview.Store(state)
-    moment = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
+    started = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
+    assert store.schedule_read_set_note(moment=started, root=root) is None
+    moment = started + timedelta(minutes=20)
     checkpoint = store.schedule_read_set_note(moment=moment, root=root)
     slot = store.meta_value(preview.READ_SET_SLOT_META)
     dead_port(store)
@@ -7453,7 +7538,12 @@ def test_read_set_tick_cli_keeps_a_pending_checkpoint_while_the_server_is_down()
 def test_read_set_tick_cli_restores_blocking_with_the_server():
   with tempfile.TemporaryDirectory() as directory:
     root, state = read_set_cli_root(directory)
-    preview.Store(state).set_meta("port", guard_port())
+    store = preview.Store(state)
+    store.set_meta("port", guard_port())
+    store.set_meta(
+      preview.READ_SET_LAST_META,
+      (datetime.now(timezone.utc) - timedelta(minutes=21)).isoformat(),
+    )
     blocked = read_set_cli(state, root, "git status")
     assert blocked.returncode == 130
     assert "READ SET BLOCKED" in blocked.stderr
@@ -7466,7 +7556,12 @@ def test_read_set_tick_cli_restores_blocking_with_the_server():
 def test_read_set_tick_cli_acknowledgement_holds_the_slot():
   with tempfile.TemporaryDirectory() as directory:
     root, state = read_set_cli_root(directory)
-    preview.Store(state).set_meta("port", guard_port())
+    store = preview.Store(state)
+    store.set_meta("port", guard_port())
+    store.set_meta(
+      preview.READ_SET_LAST_META,
+      (datetime.now(timezone.utc) - timedelta(minutes=21)).isoformat(),
+    )
     blocked = read_set_cli(state, root, "git status")
     assert blocked.returncode == 130
     store = preview.Store(state)
@@ -10847,7 +10942,10 @@ def test_preview_violation_wakes_poll_and_does_not_wait(capsys):
       assert preview.poll_inbox(store, sleeper=flag_during_wait) == 0
     output = capsys.readouterr().out
     assert "The user flagged a violation." in output
-    assert "This Bash call was blocked. Read only read-set files whose current full text is absent from context" in output
+    assert (
+      "This Bash call was blocked. Read only read-set files whose current full text is absent from context"
+      in output
+    )
     assert not store.state()["agent_interrupt_pending"]
     assert not store.polling()
 

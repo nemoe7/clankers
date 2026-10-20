@@ -615,7 +615,7 @@
 
     function promptForSlug(slug, promptFill, arenaMd) {
       if (typeof promptFill !== "string" || !promptFill.trim()) return null;
-      var base = slug + " read ARENA.md AGENTS.md in full before your first edit, and follow both." +
+      var base = slug + " read ARENA.md and AGENTS.md in full before your first edit only if their current full text is absent from context, and follow both." +
         "\n\n" + promptFill.trim();
       if (arenaMd) {
         return base + "\n\nhere is ARENA.md:\n" + arenaMd;

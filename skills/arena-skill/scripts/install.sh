@@ -160,10 +160,17 @@ _arena_preview_gate() {
   # The reply names the steps this shell finished, so a later line skips them.
   case "\${_arena_preview_pre_running:-}" in 1) return 0 ;; esac
   _arena_preview_pre_running=1
-  local _arena_preview_reply _arena_preview_status
+  local _arena_preview_reply _arena_preview_status _arena_preview_output_line
   _arena_preview_reply="\$("$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" pre --shell "\${0##*/}" --line "\$_arena_preview_line" --command "\$BASH_COMMAND" --repo "$REPO_ROOT" --done "\${_arena_preview_done:-}")"
   _arena_preview_status=\$?
-  eval "\$_arena_preview_reply"
+  if [ -n "\$_arena_preview_reply" ]; then
+    while IFS= read -r _arena_preview_output_line; do
+      case "\$_arena_preview_output_line" in
+        _arena_preview_done=*) eval "\$_arena_preview_output_line" ;;
+        *) printf '%s\\n' "\$_arena_preview_output_line" ;;
+      esac
+    done <<< "\$_arena_preview_reply"
+  fi
   _arena_preview_pre_running=
   case \$_arena_preview_status in
     2) exit 0 ;;
