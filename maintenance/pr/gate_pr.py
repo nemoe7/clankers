@@ -443,11 +443,6 @@ def main(argv: list[str] | None = None) -> int:
   parser.add_argument("--pr-title", help="PR title to validate as a commit subject")
   parser.add_argument("--body-file", help="file holding the complete PR body")
   parser.add_argument(
-    "--no-ste",
-    action="store_true",
-    help="skip the ASD-STE lint of the PR body",
-  )
-  parser.add_argument(
     "--version-bumps",
     dest="version_bumps",
     help="run only the version bump checks for a BASE..HEAD range",
@@ -468,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments.revision_range,
     arguments.pr_title,
     arguments.body_file,
-    not arguments.no_ste,
+    True,
   )
   for failure in failures:
     print(f"::error::{failure}")

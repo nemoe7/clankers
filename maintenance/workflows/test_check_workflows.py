@@ -184,7 +184,7 @@ def test_trigger_lists_and_strings_parse():
 
 
 def test_main_exit_codes(capsys):
-  assert gate_workflows.main([]) == 0
+  assert gate_workflows.main() == 0
   assert "Workflow set passed" in capsys.readouterr().out
 
 

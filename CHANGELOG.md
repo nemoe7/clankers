@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Workflows: call `gate_pr.py --version-bumps` from CI and reuse the prepare action in four workflows.
 - Maintenance: share the release prompt rules and the prose linter report block.
 - Workflows: call the prepare action from the Version Bumps job.
+- Maintenance: remove the unused `--no-ste` and `--directory` options.
 
 ## 2026-10-19
 

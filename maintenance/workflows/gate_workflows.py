@@ -7,7 +7,6 @@ privileged trigger for untrusted code, and credentials that stay inside their jo
 
 from __future__ import annotations
 
-import argparse
 import re
 from pathlib import Path
 
@@ -209,11 +208,8 @@ def audit_paths(directory: Path = WORKFLOW_DIR) -> list[str]:
   return findings
 
 
-def main(argv: list[str] | None = None) -> int:
-  parser = argparse.ArgumentParser(description=__doc__)
-  parser.add_argument("--directory", default=str(WORKFLOW_DIR))
-  arguments = parser.parse_args(argv)
-  findings = audit_paths(Path(arguments.directory))
+def main() -> int:
+  findings = audit_paths()
   for finding in findings:
     print(f"::error::{finding}")
   if findings:
