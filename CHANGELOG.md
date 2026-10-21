@@ -65,6 +65,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Keep Reports option nodes and selection during unchanged state updates. Change labels only when needed and retain held-report labels. Keep polling and autosave unchanged.
+
 - Limit the bare-path reminder to script commands. Keep source reads and path checks allowed.
 
 - Keep queued heartbeat events out of WebSocket test waits for control frames. Preserve all close-code and pong checks.

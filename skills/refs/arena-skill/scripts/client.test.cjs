@@ -2124,6 +2124,58 @@ test('preview client', async (t) => {
     assert.equal(pip.hidden, true, 'with no reports there is nothing unread');
   });
 
+  await t.test('Reports keep unchanged options and selection across state refreshes', async () => {
+    get('#notes-tab').events.click();
+    const previous = state.reports;
+    const select = get('#report-select');
+    const stamp = new Date().toISOString();
+    state.reports = [
+      { id: 'stable-a', title: 'First stable row', updated_at: stamp, seen_at: stamp },
+      { id: 'stable-b', title: 'Second stable row', updated_at: stamp, seen_at: stamp }
+    ];
+    await refresh();
+    const options = [...select.children];
+    const selected = select.value;
+    const replacements = select.replacements;
+    let value = selected, valueWrites = 0, labelWrites = 0;
+    Object.defineProperty(select, 'value', {
+      configurable: true, get: () => value,
+      set: next => { valueWrites++; value = next; }
+    });
+    const text = Object.getOwnPropertyDescriptor(Element.prototype, 'textContent');
+    for (const option of options) Object.defineProperty(option, 'textContent', {
+      configurable: true,
+      get() { return text.get.call(this); },
+      set(next) { labelWrites++; text.set.call(this, next); }
+    });
+    try {
+      await refresh();
+      assert.equal(labelWrites, 0);
+      assert.equal(valueWrites, 0);
+      state.reports[0].seen_at = new Date(Date.now() + 1000).toISOString();
+      await refresh();
+      assert.deepEqual(select.children, options);
+      assert.equal(select.replacements, replacements);
+      assert.equal(labelWrites, 0);
+      assert.equal(valueWrites, 0);
+      state.reports[0].title += ' changed';
+      await refresh();
+      assert.equal(select.children[0], options[0]);
+      assert.ok(labelWrites > 0);
+      assert.ok(options[0].textContent.includes(state.reports[0].title));
+      state.reports.reverse();
+      await refresh();
+      assert.deepEqual(select.children.map(option => option.value), state.reports.map(report => report.id));
+      assert.ok(select.replacements > replacements);
+      assert.equal(select.value, selected);
+    } finally {
+      delete select.value;
+      select.value = value;
+      state.reports = previous;
+      await refresh();
+    }
+  });
+
   await t.test("An edited report keeps its star but drops the pip", async () => {
     // Check edits while Reports is hidden. Opening now stamps the loaded body immediately.
     get('#notes-tab').events.click();

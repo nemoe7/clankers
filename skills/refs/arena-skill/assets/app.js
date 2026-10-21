@@ -1015,29 +1015,35 @@ function renderState() {
       && reportView.id === shown && reportView.at > 0
       ? { id: shown, title: reportTitles.get(shown) || shown }
       : null;
-    select.replaceChildren();
-    state.reports.forEach((report, position) => {
-      reportTitles.set(report.id, report.title);
-      const option = document.createElement('option');
-      option.value = report.id;
-      option.textContent = reportLabel(report, position);
-      select.append(option);
-    });
-    if (heldReport && !state.reports.some(report => report.id === heldReport.id)) {
-      const option = document.createElement('option');
-      option.value = heldReport.id;
-      option.textContent = `${heldReport.title} · unpublished`;
-      select.append(option);
+    for (const report of state.reports) reportTitles.set(report.id, report.title);
+    const ids = state.reports.map(report => report.id);
+    if (heldReport) ids.push(heldReport.id);
+    if (!ids.length) ids.push('');
+    const options = Array.from(select.children);
+    if (options.length !== ids.length || options.some((option, index) => option.value !== ids[index])) {
+      select.replaceChildren();
+      state.reports.forEach((report, position) => {
+        const option = document.createElement('option');
+        option.value = report.id;
+        option.textContent = reportLabel(report, position);
+        select.append(option);
+      });
+      if (heldReport && !state.reports.some(report => report.id === heldReport.id)) {
+        const option = document.createElement('option');
+        option.value = heldReport.id;
+        option.textContent = `${heldReport.title} · unpublished`;
+        select.append(option);
+      }
+      if (!state.reports.length && !heldReport) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No reports published yet';
+        select.append(option);
+        select.value = '';
+      } else if (state.reports.some(report => report.id === selected)) select.value = selected;
+      else if (heldReport && heldReport.id === selected) select.value = selected;
+      else select.value = state.reports.find(report => report.needs_answer)?.id || state.reports[0]?.id || '';
     }
-    if (!state.reports.length && !heldReport) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = 'No reports published yet';
-      select.append(option);
-      select.value = '';
-    } else if (state.reports.some(report => report.id === selected)) select.value = selected;
-    else if (heldReport && heldReport.id === selected) select.value = selected;
-    else select.value = state.reports.find(report => report.needs_answer)?.id || state.reports[0]?.id || '';
     const selectedReport = state.reports.find(report => report.id === select.value);
     if (!$('#reports-panel').hidden && !pendingDelete &&
         ($('#report').dataset.reportId !== select.value ||
@@ -1050,7 +1056,9 @@ function renderState() {
   // receipt tracks the selected report's latest answer.
   for (const option of $('#report-select').children) {
     const position = state.reports.findIndex(report => report.id === option.value);
-    if (position >= 0) option.textContent = reportLabel(state.reports[position], position);
+    const label = position >= 0 ? reportLabel(state.reports[position], position)
+      : heldReport && option.value === heldReport.id ? `${heldReport.title} · unpublished` : null;
+    if (label !== null && option.textContent !== label) option.textContent = label;
   }
   updateReportPip(state.reports);
   updateReportNavigation();
