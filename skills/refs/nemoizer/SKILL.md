@@ -21,12 +21,7 @@ run the linter before you hand work over.
 | `pick` | select |
 | `kind` | type |
 
-Each row matches the stem, so `picked`, `picking`, and `picks` all rotate to <!-- nemoizer: ignore -->
-`select`. Add a row here and a pattern in `scripts/nemoize.py`: one table, one
-source. <!-- nemoizer: ignore -->
-
-A word that shares the stem but stands on its own, like `pickle`, carries a <!-- nemoizer: ignore -->
-marker instead of a narrower pattern. <!-- nemoizer: ignore -->
+Read references/rules.md for lint IDs and their meanings.
 
 ## Linter
 
@@ -38,7 +33,7 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 ```
 
 - Every text file is read, including comments and Markdown prose.
-- Each finding prints `path:line: word -> use`, and the exit code is 1.
+- Print each finding as `path:line: ID word -> use`, and exit 1 when findings exist.
 - Vendored and generated trees are skipped, and `--ignore` adds a directory or
   file.
 - `check.py` runs the linter with the ignore list, so a new avoided word fails the
@@ -54,36 +49,26 @@ python3 skills/nemoizer/scripts/nemoize.py --format .
 ```
 
 Each change prints as a pair: `path:line: -` and the old line, then `path:line: +`
-and the new one. A row replaces its word as plain text, in lower, capital and upper
-case. One stem word takes its own plain word: `picker` becomes `selector`, and <!-- nemoizer: ignore -->
-`pickers` becomes `selectors`. <!-- nemoizer: ignore -->
+and the new one.
 
-- Ignore markers and the table's own rows are never rewritten.
+- Do not rewrite exclusion markers or the rotation table, and apply only unsuppressed rotations.
 - Pass a license file or a generated tree to `--ignore`; the tool reads every other
   text file.
 
 ## Ignore markers
 
-A line that carries `nemoizer: ignore` is skipped. A marker in the first three
-lines skips the whole file. The marker takes any comment syntax, because the
-scan reads text, not syntax:
-
-```python
-value = "kind"  # nemoizer: ignore
-```
-
-```markdown
-<!-- nemoizer: ignore -->
-```
-
-Every marker is reviewable, and none is silent:
+- Use `nonemo: <id>` to suppress only the named rule on that line.
+- For file scope, place `nonemo: <id>` in the first three lines with no avoided word before the marker.
+- Use any comment syntax for `nonemo: <id>`; the scanner reads text, not syntax.
+- Apply an exclusion only to a known matching rule ID.
+- Print every nonemo marker with its path, line, rule ID, scope, and text when `nemoizer collect` or `--ignores` is used.
 
 ```bash
+python skills/nemoizer/scripts/nemoizer collect .
 python3 skills/nemoizer/scripts/nemoize.py --ignores .
 ```
 
-That prints `path:line: text` for each marker, so a suppression never escapes
-review. Delete a marker when the line no longer needs it.
+Delete a marker when the line no longer needs it.
 
 ## Adding a row
 

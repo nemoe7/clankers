@@ -1,4 +1,6 @@
-# nemoizer: ignore — this file keeps the avoided words as fixtures.
+# nonemo: N001
+# nonemo: N002
+# nonemo: N003
 """The nemoizer linter reads every text file, honors markers, and lists them."""
 
 import subprocess
@@ -29,9 +31,9 @@ def test_a_rotation_matches_the_stem_and_prose():
     (root / "code.py").write_text("kind = 'plain'\n", encoding="utf-8")
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "note.md:1: picked -> select" in result.stdout
-    assert "note.md:1: transmit -> send" in result.stdout
-    assert "code.py:1: kind -> type" in result.stdout
+    assert "note.md:1: N002 picked -> select" in result.stdout
+    assert "note.md:1: N001 transmit -> send" in result.stdout
+    assert "code.py:1: N003 kind -> type" in result.stdout
 
 
 def test_a_line_marker_skips_that_line_and_a_head_marker_skips_the_file():
@@ -40,15 +42,16 @@ def test_a_line_marker_skips_that_line_and_a_head_marker_skips_the_file():
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     (root / "marked.py").write_text(
-      "value = 'kind'  # nemoizer: ignore\npicked = 1\n", encoding="utf-8"
+      "value = 'kind'  # nonemo: N003\npicked = 1\n", encoding="utf-8"
     )
     (root / "whole.md").write_text(
-      "<!-- nemoizer: ignore -->\nkind and picked stay\n", encoding="utf-8"
+      "<!-- nonemo: N003 -->\nkind and picked stay\n", encoding="utf-8"
     )
     result = run(cwd=directory)
     assert "marked.py:1:" not in result.stdout
-    assert "marked.py:2: picked -> select" in result.stdout
-    assert "whole.md" not in result.stdout
+    assert "marked.py:2: N002 picked -> select" in result.stdout
+    assert "whole.md:2: N002 picked -> select" in result.stdout
+    assert "whole.md:2: N003" not in result.stdout
     listing = run("--ignores", cwd=directory)
     assert listing.returncode == 0
     assert "marked.py:1:" in listing.stdout
@@ -88,20 +91,20 @@ def test_a_picker_is_a_rotation_and_a_marked_pickle_is_not():
     ui = root / "ui.js"
     ui.write_text(
       "const picker = 1\nconst var_pick = 2\nconst repick = 3\n"
-      "const jar = pickle  # nemoizer: ignore\n",
+      "const jar = pickle  # nonemo: N002\n",
       encoding="utf-8",
     )
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "ui.js:1: picker -> select" in result.stdout
-    assert "ui.js:2: pick -> select" in result.stdout
+    assert "ui.js:1: N002 picker -> select" in result.stdout
+    assert "ui.js:2: N002 pick -> select" in result.stdout
     assert "ui.js:3" not in result.stdout
     assert "ui.js:4" not in result.stdout
     formatted = run("--format", cwd=directory)
     assert formatted.returncode == 0, formatted.stderr
     assert ui.read_text(encoding="utf-8") == (
       "const selector = 1\nconst var_select = 2\nconst repick = 3\n"
-      "const jar = pickle  # nemoizer: ignore\n"
+      "const jar = pickle  # nonemo: N002\n"
     )
 
 
@@ -127,13 +130,13 @@ def test_the_format_mode_honors_the_marker():
     root = Path(directory)
     note = root / "note.md"
     note.write_text(
-      "kind stays  <!-- nemoizer: ignore -->\npicked one\nkind moves\n",
+      "kind stays  <!-- nonemo: N003 -->\npicked one\nkind moves\n",
       encoding="utf-8",
     )
     result = run("--format", cwd=directory)
     assert result.returncode == 0, result.stderr
     assert note.read_text(encoding="utf-8") == (
-      "kind stays  <!-- nemoizer: ignore -->\nselected one\ntype moves\n"
+      "kind stays  <!-- nonemo: N003 -->\nselected one\ntype moves\n"
     )
 
 
@@ -144,13 +147,79 @@ def test_the_format_mode_replaces_the_word_inside_a_longer_one():
     root = Path(directory)
     note = root / "note.md"
     note.write_text(
-      "the kind of jar\nKIND stays upper\nthe jar is pickle  # nemoizer: ignore\n",
+      "the kind of jar\nKIND stays upper\nthe jar is pickle  # nonemo: N002\n",
       encoding="utf-8",
     )
     result = run("--format", cwd=directory)
     assert result.returncode == 0, result.stderr
     assert note.read_text(encoding="utf-8") == (
-      "the type of jar\nTYPE stays upper\nthe jar is pickle  # nemoizer: ignore\n"
+      "the type of jar\nTYPE stays upper\nthe jar is pickle  # nonemo: N002\n"
+    )
+
+
+def test_rule_ids_suppress_only_the_named_rotation():
+  import tempfile
+
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    note = root / "note.md"
+    note.write_text(
+      "kind and picked  # nonemo: N003\ntransmit # nonemo: N999\n", encoding="utf-8"
+    )
+    result = run(cwd=directory)
+    assert result.returncode == 1
+    assert "note.md:1: N002 picked -> select" in result.stdout
+    assert "note.md:1: N003" not in result.stdout
+    assert "note.md:2: N001 transmit -> send" in result.stdout
+    result = run("--format", cwd=directory)
+    assert result.returncode == 0
+    assert (
+      note.read_text() == "kind and selected  # nonemo: N003\nsend # nonemo: N999\n"
+    )
+
+
+def test_collect_keeps_all_markers_including_suppressed_files():
+  import tempfile
+
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    note = root / "note.md"
+    note.write_text(
+      "# nonemo: N001\n# nonemo: N002\n# nonemo: N003\nkind # nonemo: N003 # nonemo: N999\n",
+      encoding="utf-8",
+    )
+    result = subprocess.run(
+      [sys.executable, str(SCRIPT.with_name("nemoizer")), "collect", "."],
+      cwd=directory,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    expected_markers = note.read_text().count("nonemo:")
+    assert len(result.stdout.splitlines()) == expected_markers
+    assert "note.md:1: N001 file:" in result.stdout
+    assert "note.md:4: N003 line:" in result.stdout
+    assert "note.md:4: N999 unknown:" in result.stdout
+    legacy = run("--ignores", cwd=directory)
+    assert legacy.returncode == 0 and legacy.stdout == result.stdout
+
+
+def test_multiple_rule_exclusions_preserve_the_marker_text():
+  import tempfile
+
+  with tempfile.TemporaryDirectory() as directory:
+    note = Path(directory) / "note.md"
+    content = "picked kind # nonemo: N002 # nonemo: N003\nkind # nonemo: kind\n"
+    note.write_text(content, encoding="utf-8")
+    result = run(cwd=directory)
+    assert "note.md:1:" not in result.stdout
+    assert "note.md:2: N003 kind -> type" in result.stdout
+    formatted = run("--format", cwd=directory)
+    assert formatted.returncode == 0
+    assert (
+      note.read_text()
+      == "picked kind # nonemo: N002 # nonemo: N003\ntype # nonemo: kind\n"
     )
 
 

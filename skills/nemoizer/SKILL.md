@@ -13,19 +13,16 @@ description: >
 | `pick` | select |
 | `kind` | type |
 
-Each row matches the stem, so `picked`, `picking`, and `picks` rotate to <!-- nemoizer: ignore -->
-`select`. Add a row here and a pattern in `scripts/nemoize.py`. <!-- nemoizer: ignore -->
-
-A word that shares the stem but stands on its own, like `pickle`, carries a <!-- nemoizer: ignore -->
-marker instead of a narrower pattern. <!-- nemoizer: ignore -->
+Read references/rules.md for lint IDs and meanings.
 
 ```bash
 python3 skills/nemoizer/scripts/nemoize.py .
 python3 skills/nemoizer/scripts/nemoize.py --ignore vendor .
 python3 skills/nemoizer/scripts/nemoize.py --ignores .
+python skills/nemoizer/scripts/nemoizer collect .
 ```
 
-A finding prints `path:line: word -> use` and exits 1. Vendored and generated
+Print each finding as `path:line: ID word -> use`; exit 1 when findings exist. Vendored and generated
 trees are skipped, and `--ignore` adds a directory or file.
 
 `--format` rewrites the tree and prints each changed line as it was and as it
@@ -35,12 +32,13 @@ becomes:
 python3 skills/nemoizer/scripts/nemoize.py --format .
 ```
 
-A row replaces its word as plain text, in lower, capital and upper case. One stem
-word takes its own plain word: `picker` becomes `selector`. <!-- nemoizer: ignore -->
+Do not rewrite exclusion markers or the rotation table; apply only unsuppressed rotations.
 
-A line that carries `nemoizer: ignore` is skipped. A marker in the first three
-lines skips the whole file. `--ignores` prints every marker as `path:line: text`,
-so a suppression never escapes review.
+- Use `nonemo: <id>` to suppress only that rule on the line.
+- For file scope, place `nonemo: <id>` in the first three lines with no avoided word before the marker.
+- Use any comment syntax for `nonemo: <id>`; scanning reads text, not syntax.
+- Apply an exclusion only to a known matching rule ID.
+- With `nemoizer collect` or `--ignores`, print every nonemo marker: path, line, rule ID, scope, and text.
 
 The rotation has landed, so `check.py` runs the linter and a new avoided word fails
 the gate.

@@ -1,14 +1,7 @@
-# nemoizer: ignore — this file carries the table's words.
-"""Flag the avoided words, rewrite them, and list every nemoizer ignore marker.
-
-The linter reads every text file, comments and prose included. One rotation per
-row: the avoided pattern on the left, the plain word on the right. The linter
-skips a line that carries `nemoizer: ignore` and still lists it for review. A
-marker in the first three lines skips the whole file.
-
-`--format` applies the rotations in place and prints each changed line before and
-after. Each row replaces its word as plain text, in lower, capital and upper case.
-"""
+# nonemo: N001
+# nonemo: N002
+# nonemo: N003
+"""Flag rotations, rewrite text, and list every exclusion marker."""
 
 import argparse
 import re
@@ -23,7 +16,8 @@ ROTATIONS = (
   ("transmit", r"(?<![A-Za-z0-9])transmit\w*(?![A-Za-z0-9])", "send"),
   ("kind", r"(?<![A-Za-z0-9])kinds?(?![A-Za-z0-9])", "type"),
 )
-MARKER = "nemoizer: ignore"
+RULE_IDS = {"transmit": "N001", "pick": "N002", "kind": "N003"}
+MARKER = re.compile(r"\bnonemo:[ \t]*(.*?)(?=-->|\*/|;|\s|$|\bnonemo:)")
 # The rotation table names the avoided words, so its own rows never flag.
 TABLE_ROW = re.compile(r"^\|\s*`[^`]+`\s*\|")
 SKIP_DIRS = {
@@ -82,12 +76,33 @@ def walk(targets, ignores):
         yield candidate
 
 
-def head_marker(line):
-  """A marker on a line that carries no rotation skips the whole file."""
-  before = line.split(MARKER, 1)[0]
-  return MARKER in line and not any(
+def head_marker(line, position=None):
+  """Identify a header marker with no avoided word before it on the line."""
+  marker = MARKER.search(line)
+  if marker is None:
+    return False
+  before = line[: marker.start() if position is None else position]
+  return not any(
     re.search(pattern, before, flags=re.IGNORECASE) for _, pattern, _ in ROTATIONS
   )
+
+
+def exclusions(path, lines):
+  """Collect every marker and the known rule IDs it suppresses."""
+  file_ids, line_ids, marks = set(), [], []
+  for number, line in enumerate(lines, 1):
+    suppressed = set()
+    for marker in MARKER.finditer(line):
+      code = marker[1]
+      scope = "unknown"
+      if code in RULE_IDS.values():
+        suppressed.add(code)
+        scope = "file" if number <= 3 and head_marker(line, marker.start()) else "line"
+        if scope == "file":
+          file_ids.add(code)
+      marks.append(f"{path}:{number}: {code or '<missing>'} {scope}: {line.strip()}")
+    line_ids.append(suppressed)
+  return file_ids, line_ids, marks
 
 
 def plain(word, name, use):
@@ -102,9 +117,11 @@ def plain(word, name, use):
   return form
 
 
-def rotate(line):
+def rotate(line, suppressed=frozenset()):
   """Swap each matched word for its plain word, and take the exception words first."""
   for name, pattern, use in ROTATIONS:
+    if RULE_IDS[name] in suppressed:
+      continue
     line = re.sub(
       pattern,
       lambda match, name=name, use=use: plain(match.group(0), name, use),
@@ -115,29 +132,26 @@ def rotate(line):
 
 
 def scan(targets, ignores):
-  """Return (findings, ignore_lines) as `path:line: text` strings."""
+  """Return findings and all exclusion markers with locations and rule IDs."""
   findings, marks = [], []
   for path in walk(targets, ignores):
     text = text_file(path)
     if text is None:
       continue
     lines = text.splitlines()
-    if any(head_marker(line) for line in lines[:3]):
-      marks.extend(
-        f"{path}:{number}: {line.strip()}"
-        for number, line in enumerate(lines[:3], 1)
-        if head_marker(line)
-      )
-      continue
+    file_ids, line_ids, found = exclusions(path, lines)
+    marks.extend(found)
     for number, line in enumerate(lines, 1):
-      if MARKER in line:
-        marks.append(f"{path}:{number}: {line.strip()}")
-        continue
       if TABLE_ROW.match(line.strip()):
         continue
-      for _, pattern, use in ROTATIONS:
-        for word in sorted(set(re.findall(pattern, line, flags=re.IGNORECASE))):
-          findings.append(f"{path}:{number}: {word} -> {use} (nemoizer: ignore)")
+      suppressed = file_ids | line_ids[number - 1]
+      visible = MARKER.sub(lambda match: " " * len(match[0]), line)
+      for name, pattern, use in ROTATIONS:
+        code = RULE_IDS[name]
+        if code in suppressed:
+          continue
+        for word in sorted(set(re.findall(pattern, visible, flags=re.IGNORECASE))):
+          findings.append(f"{path}:{number}: {code} {word} -> {use}")
   return findings, marks
 
 
@@ -150,14 +164,19 @@ def format_paths(targets, ignores, out=None):
     if text is None:
       continue
     lines = text.split("\n")
-    if any(head_marker(line) for line in lines[:3]):
-      continue
+    file_ids, line_ids, _ = exclusions(path, lines)
     rewritten, touched = [], False
     for number, line in enumerate(lines, 1):
-      if MARKER in line or TABLE_ROW.match(line.strip()):
+      if TABLE_ROW.match(line.strip()):
         rewritten.append(line)
         continue
-      rotated = rotate(line)
+      suppressed = file_ids | line_ids[number - 1]
+      parts, start = [], 0
+      for marker in MARKER.finditer(line):
+        parts.extend((rotate(line[start : marker.start()], suppressed), marker[0]))
+        start = marker.end()
+      parts.append(rotate(line[start:], suppressed))
+      rotated = "".join(parts)
       if rotated != line:
         print(f"{path}:{number}: -{line}", file=out)
         print(f"{path}:{number}: +{rotated}", file=out)
@@ -169,7 +188,7 @@ def format_paths(targets, ignores, out=None):
   return changed
 
 
-def main():
+def main(argv=None):
   parser = argparse.ArgumentParser(description="Flag nemoizer rotations.")
   parser.add_argument("targets", nargs="*", default=["."])
   parser.add_argument(
@@ -179,12 +198,12 @@ def main():
     help="skip a directory or file, relative to the target",
   )
   parser.add_argument(
-    "--ignores", action="store_true", help="list every ignore marker instead"
+    "--ignores", action="store_true", help="list every nonemo marker instead"
   )
   parser.add_argument(
     "--format", action="store_true", help="apply the rotations in place"
   )
-  arguments = parser.parse_args()
+  arguments = parser.parse_args(argv)
   targets = arguments.targets or ["."]
   if arguments.format:
     changed = format_paths(targets, arguments.ignore)

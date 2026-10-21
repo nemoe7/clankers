@@ -73,6 +73,8 @@ def test_comment_blocks_exempt_required_directive_markers():
 """
 
   assert lint_prose.comment_block_violations(Path("install.sh"), source) == []
+  exclusions = "# nonemo: N001\n# nonemo: N002\n# nonemo: N003\n"
+  assert lint_prose.comment_block_violations(Path("rules.py"), exclusions) == []
 
 
 def test_source_sections_skip_strings_and_userscript_metadata():

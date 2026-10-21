@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.56
+// @name         Arena.ai | NemoUtils | v1.10.57
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.56
+// @version      1.10.57
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2555,7 +2555,7 @@
         records = text.split(/\r?\n/).filter(function (line) { return line.trim(); }).map(function (line) { return JSON.parse(line); });
       }
       return records.filter(function (record) {
-        var recordType = record.type === undefined ? record.kind : record.type;  // nemoizer: ignore
+        var recordType = record.type === undefined ? record.kind : record.type;  // nonemo: N003
         return recordType !== "userscript-autosave";
       });
     }

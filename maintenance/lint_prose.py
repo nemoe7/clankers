@@ -13,7 +13,7 @@ ADR_REFERENCE = re.compile(r"\bADR[- ]?\d|docs/adr")
 COMMENT_BLOCK_CAP = 2
 DIRECTIVE_MARKER = re.compile(
   r"^\s*(?:#|//)\s*(?:arena-preview-[\w-]+|case:\s*[\w-]+|shellcheck\s+disable=\S+|"
-  r"noqa(?::.*)?|type:\s*ignore(?:\[.*\])?|pragma:\s*no cover|region|endregion)\s*$",
+  r"nonemo:\s*[A-Za-z0-9_-]+|noqa(?::.*)?|type:\s*ignore(?:\[.*\])?|pragma:\s*no cover|region|endregion)\s*$",
   re.IGNORECASE,
 )
 _STE_LINTER = None
