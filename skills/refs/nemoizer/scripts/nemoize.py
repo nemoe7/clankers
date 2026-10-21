@@ -17,6 +17,8 @@ ROTATIONS = (
   (r"\bkind\b", "type"),
 )
 MARKER = "nemoizer: ignore"
+# The rotation table names the avoided words, so its own rows never flag.
+TABLE_ROW = re.compile(r"^\|\s*`[^`]+`\s*\|")
 SKIP_DIRS = {
   ".git",
   ".venv",
@@ -26,7 +28,12 @@ SKIP_DIRS = {
   "node_modules",
   "out",
 }
-SKIP_PATHS = ("skills/refs", ".agents/skills")
+SKIP_PATHS = (
+  "skills/refs",
+  "skills/arena-skill",
+  ".agents/skills",
+  "arena-state",
+)
 
 
 def text_file(path):
@@ -93,6 +100,8 @@ def scan(targets, ignores):
     for number, line in enumerate(lines, 1):
       if MARKER in line:
         marks.append(f"{path}:{number}: {line.strip()}")
+        continue
+      if TABLE_ROW.match(line.strip()):
         continue
       for pattern, use in ROTATIONS:
         for word in sorted(set(re.findall(pattern, line, flags=re.I))):

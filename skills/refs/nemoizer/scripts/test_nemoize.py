@@ -65,3 +65,15 @@ def test_an_ignored_path_is_skipped():
     result = run("--ignore", "vendor", cwd=directory)
     assert result.returncode == 0, result.stdout
     assert "third.py" not in result.stdout
+
+
+def test_the_rotation_table_never_flags_itself():
+  import tempfile
+
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    (root / "SKILL.md").write_text(
+      "| Avoid | Use |\n| --- | --- |\n| `kind` | type |\n", encoding="utf-8"
+    )
+    result = run(cwd=directory)
+    assert result.returncode == 0, result.stdout
