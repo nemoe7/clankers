@@ -3,9 +3,6 @@ name: nemoizer
 description: >
   Replace AI-flavored synonyms with the plain word, using one rotation table and
   a bundled linter that reads every text file, comments and prose included.
-license: Repository LICENSE.md; adapted table parsing under MIT (LICENSE.asd-ste100)
-metadata:
-  upstream: https://github.com/nemoe7/clankers/blob/4a2898df56ca0ca3d5e44a47706654c412ff42c0/.agents/skills/asd-ste100/scripts/ste-lint.py
 ---
 
 # Nemoizer

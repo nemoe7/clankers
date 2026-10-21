@@ -244,8 +244,8 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
   probe = run("prose", "--context", "instruction", str(source), cwd=tmp_path)
   assert probe.returncode == 0, probe.stderr
 
-  helper = SCRIPT.with_name("prose_limits.py")
-  spec = importlib.util.spec_from_file_location("prose_limits", helper)
+  helper = SCRIPT
+  spec = importlib.util.spec_from_file_location("nemoizer_limits", helper)
   limits = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(limits)
   instruction_cap = limits.SENTENCE_CAPS["instruction"]
@@ -287,12 +287,25 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
   assert relaxed.returncode == 2
   source.write_text("```\n" + sentence + "\n```\n")
   assert not inspect("instruction")["findings"]
+  source.write_text("~~~\n" + sentence + "\n~~~\n")
+  assert not inspect("instruction")["findings"]
+  source.write_text("`" + sentence + "`\n")
+  assert not inspect("instruction")["findings"]
+  cell = " ".join("term" for _ in range(instruction_cap // 2 + 1))
+  source.write_text(f"| Left | Right |\n| --- | --- |\n| {cell} | {cell} |\n")
+  assert not inspect("instruction")["findings"]
+  source.write_text(f"| Left | Right |\n| --- | --- |\n| {sentence} | Short |\n")
+  assert inspect("instruction")["findings"]
+  import csv
+
+  source.write_text("term" * (csv.field_size_limit() + 1) + " | term\n")
+  assert not inspect("instruction")["findings"]
   import shutil
 
   portable = tmp_path / "portable"
-  shutil.copytree(
-    SCRIPT.parent.parent, portable, ignore=shutil.ignore_patterns("__pycache__")
-  )
+  (portable / "scripts").mkdir(parents=True)
+  for entry in (SCRIPT, SCRIPT.with_name("nemoizer")):
+    shutil.copy2(entry, portable / "scripts" / entry.name)
   source.write_text("Run.\n")
   shipped = subprocess.run(
     [

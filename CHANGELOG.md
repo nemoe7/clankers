@@ -21,7 +21,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nemoizer
 
-- Add opt-in Nemoizer sentence and paragraph counts with explicit sentence context. Share counters with prose checks and preserve standalone STE lint.
+- Add opt-in Nemoizer sentence and paragraph counts with explicit sentence context.
 
 - Add stable lint IDs, rule-specific nonemo exclusions, and the exclusion collector. Keep stem rotations, case handling, and the existing header condition.
 
@@ -60,6 +60,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Fixed
 
 #### nemoizer
+
+- Use native Nemoizer prose counters. Remove copied STE code and its sidecars. Restore independent STE and repository paragraph checks.
 
 - Skip invalid UTF-8 files before formatting. Preserve their original bytes and continue formatting valid UTF-8 text.
 

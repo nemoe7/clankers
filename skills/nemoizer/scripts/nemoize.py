@@ -18,6 +18,8 @@ ROTATIONS = (
   ("kind", r"(?<![A-Za-z0-9])kinds?(?![A-Za-z0-9])", "type"),
 )
 RULE_IDS = {"transmit": "N001", "pick": "N002", "kind": "N003"}
+SENTENCE_CAPS = {"instruction": 20, "description": 25}
+PARAGRAPH_CAP = 6
 PROSE_RULE_IDS = {"sentence": "N004", "paragraph": "N005"}
 KNOWN_RULE_IDS = {*RULE_IDS.values(), *PROSE_RULE_IDS.values()}
 MARKER = re.compile(r"\bnonemo:[ \t]*(.*?)(?=-->|\*/|;|\s|$|\bnonemo:)")
@@ -191,22 +193,106 @@ def format_paths(targets, ignores, out=None):
   return changed
 
 
+def prose_counts(text):
+  """Measure prose outside code fences and within table cells."""
+  lines = text.splitlines()
+  sentences, paragraphs, block = [], [], []
+  fence, width, divider_pending = None, 0, False
+
+  def lengths(value):
+    value = re.sub(r"(`+)(.*?)\1", "", value)
+    return [
+      len(part.split()) for part in re.split(r"[.!?](?:\s+|$)", value) if part.strip()
+    ]
+
+  def cells(value):
+    if "|" not in value:
+      return []
+    row, part, escaped = [], [], False
+    for character in value:
+      if escaped:
+        part.append(character)
+        escaped = False
+      elif character == "\\":
+        escaped = True
+      elif character == "|":
+        row.append("".join(part))
+        part.clear()
+      else:
+        part.append(character)
+    if escaped:
+      part.append("\\")
+    row.append("".join(part))
+    if row and not row[0].strip():
+      row.pop(0)
+    if row and not row[-1].strip():
+      row.pop()
+    return [cell.strip() for cell in row] if len(row) > 1 else []
+
+  def flush():
+    if block and not re.match(r"(?:[#>*+|-]|\d+[.)]\s)", block[0][1].lstrip()):
+      paragraphs.append(
+        (block[0][0], len(lengths(" ".join(value for _, value in block))))
+      )
+    block.clear()
+
+  for index, line in enumerate(lines):
+    number = index + 1
+    marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+    if marker:
+      flush()
+      if fence is None:
+        fence = marker[1]
+      elif (
+        marker[1][0] == fence[0]
+        and len(marker[1]) >= len(fence)
+        and not line[marker.end() :].strip()
+      ):
+        fence = None
+      width, divider_pending = 0, False
+      continue
+    if fence is not None:
+      continue
+    if not line.strip():
+      flush()
+      width, divider_pending = 0, False
+      continue
+    if divider_pending:
+      divider_pending = False
+      continue
+    row = cells(line)
+    following = cells(lines[index + 1]) if index + 1 < len(lines) else []
+    header = (
+      row
+      and len(row) == len(following)
+      and all(re.fullmatch(r":?-{3,}:?", cell) for cell in following)
+    )
+    if header:
+      flush()
+      width, divider_pending = len(row), True
+    elif not width or len(row) != width:
+      width = 0
+    if width:
+      segments = row
+    else:
+      block.append((number, line))
+      segments = [line]
+    for segment in segments:
+      sentences.extend((number, 1, count) for count in lengths(segment))
+  flush()
+  return sentences, paragraphs
+
+
 def prose_review(path, text, context, paragraph_cap):
   """Return unsuppressed measurable candidates for one explicit text scope."""
-  from prose_limits import (
-    SENTENCE_CAPS,
-    prose_paragraphs,
-    sentence_count,
-    sentence_measurements,
-  )
-
   lines = text.splitlines()
   file_ids, line_ids, _ = exclusions(path, lines)
   findings = []
+  sentences, paragraphs = prose_counts(text)
   cap = SENTENCE_CAPS.get(context)
   code = PROSE_RULE_IDS["sentence"]
   if cap is not None and code not in file_ids:
-    for number, column, count in sentence_measurements(text):
+    for number, column, count in sentences:
       if count > cap and code not in line_ids[number - 1]:
         findings.append(
           {
@@ -221,8 +307,7 @@ def prose_review(path, text, context, paragraph_cap):
         )
   code = PROSE_RULE_IDS["paragraph"]
   if code not in file_ids:
-    for number, paragraph in prose_paragraphs(text):
-      count = sentence_count(paragraph)
+    for number, count in paragraphs:
       if count > paragraph_cap and code not in line_ids[number - 1]:
         findings.append(
           {
@@ -239,8 +324,6 @@ def prose_review(path, text, context, paragraph_cap):
 
 
 def prose_main(argv=None):
-  from prose_limits import PARAGRAPH_CAP, SENTENCE_CAPS
-
   parser = argparse.ArgumentParser(description="Review explicitly scoped prose counts.")
   parser.add_argument("targets", nargs="+")
   parser.add_argument(

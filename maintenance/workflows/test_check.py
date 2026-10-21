@@ -118,7 +118,7 @@ def test_portable_workflows_directory_is_optional(tmp_path, monkeypatch):
   assert "workflows/README.md is missing" in errors
 
 
-def test_shared_ste_counter_keeps_the_tool_standalone(tmp_path):
+def test_ste_linter_keeps_the_tool_standalone(tmp_path):
   source = check.ROOT / check.STE_LINT
   standalone = tmp_path / "standalone"
   shutil.copytree(
@@ -132,5 +132,3 @@ def test_shared_ste_counter_keeps_the_tool_standalone(tmp_path):
     cwd=tmp_path,
   )
   assert result.returncode == 0, result.stderr
-  authority = check.ROOT / "skills/refs/nemoizer/scripts/prose_limits.py"
-  assert (standalone / authority.name).read_bytes() == authority.read_bytes()
