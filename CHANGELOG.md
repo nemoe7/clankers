@@ -39,7 +39,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### tests
 
-- Check CLI command, route, note, task, and head data instead of status prose. Check ordered page results instead of fixed output row counts.
+- Check CLI command, route, note, task, and head data instead of status prose. Check ordered page results instead of fixed output row counts. Retain control notices and failure guards when checking ordered recovery commands, diagnostic paths and IDs, and named limits.
 
 #### nemoizer
 

@@ -503,7 +503,9 @@ def test_a_branch_behind_main_hears_the_replay_line():
     result = run("git commit --allow-empty -m three", cwd=str(repo))
     assert result.returncode == 0, result.stderr
     assert "origin/main carries 1 commit(s) this branch lacks" in result.stderr
-    assert "Replay your commits over main" in result.stderr
+    assert result.stderr.index("git fetch origin") < result.stderr.index(
+      "git rebase origin/main"
+    )
     # A replayed branch: origin/main is no longer ahead, and the line stays away.
     subprocess.run(
       ["git", "update-ref", "refs/remotes/origin/main", "HEAD"],
@@ -513,7 +515,7 @@ def test_a_branch_behind_main_hears_the_replay_line():
     )
     result = run("git commit --allow-empty -m four", cwd=str(repo))
     assert result.returncode == 0, result.stderr
-    assert "Replay your commits over main" not in result.stderr
+    assert "git rebase origin/main" not in result.stderr
 
 
 def test_a_task_worktree_blocks_git_actions_and_a_gate():
@@ -628,7 +630,7 @@ def test_a_lone_grafted_tip_keeps_the_drift_line_quiet():
     result = run("git commit --allow-empty -m three", cwd=str(repo))
     assert result.returncode == 0, result.stderr
     assert "origin/main carries" not in result.stderr, result.stderr
-    assert "Replay your commits over main" not in result.stderr, result.stderr
+    assert "git rebase origin/main" not in result.stderr, result.stderr
 
 
 def test_a_grafted_tip_with_visible_history_hears_the_replay_line():
@@ -640,7 +642,9 @@ def test_a_grafted_tip_with_visible_history_hears_the_replay_line():
     assert "origin/main carries 2 commit(s) this branch lacks" in result.stderr, (
       result.stderr
     )
-    assert "Replay your commits over main" in result.stderr
+    assert result.stderr.index("git fetch origin") < result.stderr.index(
+      "git rebase origin/main"
+    )
 
 
 def test_a_missing_shim_runs_the_installer():

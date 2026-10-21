@@ -3404,7 +3404,7 @@ def test_image_data_uri_refuses_a_non_image():
       check=False,
     )
     assert cli.returncode == 1, cli.stdout
-    assert not cli.stdout and "not a supported image" in cli.stderr
+    assert not cli.stdout and str(other) in cli.stderr
 
 
 def test_image_data_uri_refuses_a_file_over_the_cap():
@@ -5498,7 +5498,7 @@ def test_worktree_gate_flow():
       text=True,
       check=False,
     )
-    assert orphaned.returncode == 1 and "did not pass" in orphaned.stderr
+    assert orphaned.returncode == 1 and "task-a" in orphaned.stderr
     run = json.loads(run_path.read_text(encoding="utf-8"))
     assert run["exit"] == 1 and "without recording" in run["verdict"]
     run.update({"exit": 0, "seconds": 1, "verdict": "passed"})
@@ -6449,10 +6449,7 @@ def test_require_server_names_the_restart_command():
     try:
       preview.require_server(store)
     except ValueError as error:
-      assert str(error) == (
-        "preview server is down; start it before polling: "
-        f"arena-preview serve --port {port}"
-      )
+      assert f"arena-preview serve --port {port}" in str(error)
     else:
       raise AssertionError("a dead server passed the poll guard")
     live = socket.socket()
@@ -6467,7 +6464,7 @@ def test_require_server_names_the_restart_command():
     try:
       preview.require_server(store)
     except ValueError as error:
-      assert str(error) == "preview server is not up. Start it with arena-preview serve"
+      assert "arena-preview serve" in str(error)
     else:
       raise AssertionError("a state with no served port passed the guard")
 
@@ -6492,7 +6489,7 @@ def test_state_commands_break_while_the_server_is_not_up():
       env=env,
     )
     assert cli.returncode == 1, cli.stdout
-    assert "server is not up" in cli.stderr
+    assert "arena-preview serve" in cli.stderr
 
 
 def test_poll_finishes_before_the_tool_timeout(monkeypatch, capsys):
@@ -8547,14 +8544,14 @@ def test_task_detail_steps():
         "wall",
         "Wall",
         "--details",
-        "y" * 400,
+        "y" * (preview.TASK_STEP_MAX + 1),
       ],
       capture_output=True,
       text=True,
       check=False,
       env=env,
     )
-    assert wall.returncode != 0 and "one step per line" in wall.stderr
+    assert wall.returncode != 0 and str(preview.TASK_STEP_MAX) in wall.stderr
     assert "wall" not in {item["id"] for item in preview.Store(tasks_dir).list_tasks()}
 
 
@@ -9865,7 +9862,8 @@ def test_the_pr_check_wait_fails_on_a_gh_fault(capsys):
       )
     out = capsys.readouterr().out
     assert code == 1, out
-    assert "gh did not read" in out, out
+    assert "gh" in out, out
+    assert len(calls) == 1 and calls[0][0] == "gh", calls
 
 
 def test_a_routed_line_that_is_not_a_check_wait_skips_the_watcher(capsys):
@@ -11287,7 +11285,7 @@ def test_preview_order_survives_agent_updates_and_notifies_the_next_hook():
     assert [task["id"] for task in store.list_tasks()] == ordered
     store.write_task("new", "New task", ["A step"], task_type="code")
     assert [task["id"] for task in store.list_tasks()][:-1] == ordered
-    assert "Task order changed in the preview" not in store.reminder(routine=False)
+    assert preview.TASK_ORDER_NOTICE not in store.reminder(routine=False)
     live_detached_placeholder(directory, "order-check", ["bash", "-c", "true"])
     command = [sys.executable, str(Path(preview.__file__)), "--reminder"]
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": directory}
@@ -11299,18 +11297,18 @@ def test_preview_order_survives_agent_updates_and_notifies_the_next_hook():
       env=env,
     )
     assert listing.returncode == 0, listing.stderr
-    assert "Task order changed in the preview" not in listing.stdout + listing.stderr
+    assert preview.TASK_ORDER_NOTICE not in listing.stdout + listing.stderr
     first = subprocess.run(
       command, capture_output=True, text=True, check=False, env=env
     )
     assert first.returncode == 0, first.stderr
-    assert "Task order changed in the preview" in first.stderr
+    assert preview.TASK_ORDER_NOTICE in first.stderr
     assert first.stdout == ""
     second = subprocess.run(
       command, capture_output=True, text=True, check=False, env=env
     )
     assert second.returncode == 0, second.stderr
-    assert "Task order changed in the preview" not in second.stderr + second.stdout
+    assert preview.TASK_ORDER_NOTICE not in second.stderr + second.stdout
     rejected = subprocess.run(
       [
         sys.executable,
