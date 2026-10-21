@@ -109,3 +109,10 @@ Delete a marker when the line no longer needs it.
 - Use a list for three or more steps or conditions while preserving their order and grouping.
 - Define an uncommon technical term when needed, and use that term consistently.
 - Prefer simple tenses unless a compound form carries confidence or current relevance that must survive.
+
+## Test assertions
+
+- Assert test behavior and relations instead of prose wording.
+- Prefer named constants to literals when they define expected contract values.
+- Assert pixel, configuration, and implementation measurements through growth, presence, or absence relations.
+- Keep exact expected text only for executable, protocol, or verbatim-data contracts.

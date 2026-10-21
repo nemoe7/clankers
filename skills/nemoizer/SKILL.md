@@ -74,3 +74,10 @@ the gate.
 - List three or more steps or conditions, preserving their order and grouping.
 - Define uncommon technical terms when needed, and use them consistently.
 - Prefer simple tenses unless compound forms carry confidence or current relevance that must survive.
+
+## Test assertions
+
+- Assert behavior/relations, not prose wording.
+- Prefer named constants for expected contract values.
+- Assert pixel/config/implementation measurements through growth/presence/absence.
+- Keep exact expected text only for executable/protocol/verbatim-data contracts.
