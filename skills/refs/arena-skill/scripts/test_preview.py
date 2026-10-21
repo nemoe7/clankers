@@ -32,6 +32,7 @@ for _marker in ("ARENA_PREVIEW_ROUTE", "ARENA_PREVIEW_SHELL_HOOK"):
 
 _GUARD_LISTENER = None
 _GUARD_PORT = None
+CHECKPOINT_INTERVAL = timedelta(minutes=15)
 
 
 def guard_port():
@@ -7573,33 +7574,43 @@ def test_quiet_note_never_wakes_the_poll():
     assert seen["owner-note"] is not None and seen["key-note"] is not None
 
 
+def test_read_set_slots_follow_quarter_hours():
+  for zone in (timezone.utc, timezone(timedelta(hours=8))):
+    started = datetime(2026, 10, 19, 10, tzinfo=zone)
+    for minute in (0, 15, 30, 45, 60):
+      boundary = started + timedelta(minutes=minute)
+      assert preview.read_set_slot(boundary) == boundary.isoformat()
+      within = boundary + CHECKPOINT_INTERVAL - timedelta(microseconds=1)
+      assert preview.read_set_slot(within) == boundary.isoformat()
+
+
 def test_read_set_schedule_delays_first_checkpoint_and_keeps_intervals():
   with tempfile.TemporaryDirectory() as directory:
     root, state = read_set_cli_root(directory)
     store = preview.Store(state)
-    started = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
+    started = datetime(2026, 10, 19, 10, 7, 13, tzinfo=timezone.utc)
 
     assert store.schedule_read_set_note(moment=started, root=root) is None
     assert store.pending_read_set_note() is None
     assert (
       store.schedule_read_set_note(
-        moment=started + timedelta(minutes=20) - timedelta(seconds=1), root=root
+        moment=started + CHECKPOINT_INTERVAL - timedelta(seconds=1), root=root
       )
       is None
     )
     first = store.schedule_read_set_note(
-      moment=started + timedelta(minutes=20), root=root
+      moment=started + CHECKPOINT_INTERVAL, root=root
     )
     assert first is not None
     store.acknowledge([first["id"]], "Read in full")
     assert (
       store.schedule_read_set_note(
-        moment=started + timedelta(minutes=40) - timedelta(seconds=1), root=root
+        moment=started + CHECKPOINT_INTERVAL * 2 - timedelta(seconds=1), root=root
       )
       is None
     )
     second = store.schedule_read_set_note(
-      moment=started + timedelta(minutes=40), root=root
+      moment=started + CHECKPOINT_INTERVAL * 2, root=root
     )
     assert second is not None and second["id"] != first["id"]
 
@@ -7623,14 +7634,14 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     store = preview.Store(root / "state", create=True)
     started = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
     assert preview.read_set_tick(store, "git status", moment=started, root=root) is None
-    at_zero = started + timedelta(minutes=20)
+    at_zero = started + CHECKPOINT_INTERVAL
 
     assert preview.read_set_tick(store, "git status", moment=at_zero, root=root) is None
     pending = store.read()["pending"]
     assert len(pending) == 1
     checkpoint = pending[0]
     assert checkpoint["text"].startswith(
-      "Read-set checkpoint after a 20-minute interval. Read each listed path in full "
+      "Read-set checkpoint after a 15-minute interval. Read each listed path in full "
       "with the read tool only if its current full text is absent from context, then "
       "acknowledge this note.\n"
     )
@@ -7712,16 +7723,16 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     store.acknowledge([checkpoint["id"]], "Read in full")
     assert preview.read_set_tick(store, "git status", moment=at_zero, root=root) is None
     assert store.read()["pending"] == []
-    at_twenty = at_zero + timedelta(minutes=20)
+    at_next = at_zero + CHECKPOINT_INTERVAL
     assert (
-      preview.read_set_tick(store, "arena-preview read", moment=at_twenty, root=root)
+      preview.read_set_tick(store, "arena-preview read", moment=at_next, root=root)
       is None
     )
     next_pending = store.read()["pending"]
     assert len(next_pending) == 1 and next_pending[0]["id"] != checkpoint["id"]
-    at_forty = at_zero + timedelta(minutes=40)
+    at_later = at_zero + CHECKPOINT_INTERVAL * 2
     assert (
-      preview.read_set_tick(store, "git status", moment=at_forty, root=root) is None
+      preview.read_set_tick(store, "git status", moment=at_later, root=root) is None
     )
     assert len(store.read()["pending"]) == 1, "one pending checkpoint never duplicates"
 
@@ -7740,16 +7751,16 @@ def test_read_set_schedule_defers_for_polling_and_migrates_note_classes():
     ordinary = store.note("ordinary", "Owner work")
     quiet = store.note("quiet", "Key rotated", quiet=True)
     assert ordinary["blocking"] == 1 and quiet["blocking"] == 0
-    at_forty = datetime(2026, 10, 19, 10, 47, tzinfo=timezone.utc)
-    assert preview.read_set_slot(at_forty).endswith("10:40:00+00:00")
+    at_later = datetime(2026, 10, 19, 10, 47, tzinfo=timezone.utc)
+    assert preview.read_set_slot(at_later).endswith("10:45:00+00:00")
     assert (
       preview.read_set_tick(
-        store, "timeout 1 arena-preview poll", moment=at_forty, root=root
+        store, "timeout 1 arena-preview poll", moment=at_later, root=root
       )
       is None
     )
     assert (
-      preview.read_set_tick(store, "arena-preview poll", moment=at_forty, root=root)
+      preview.read_set_tick(store, "arena-preview poll", moment=at_later, root=root)
       is None
     )
     assert {item["id"] for item in store.read()["pending"]} == {
@@ -7757,18 +7768,18 @@ def test_read_set_schedule_defers_for_polling_and_migrates_note_classes():
       quiet["id"],
     }
     store.start_poll()
-    assert store.schedule_read_set_note(moment=at_forty, root=root) is None
+    assert store.schedule_read_set_note(moment=at_later, root=root) is None
     assert (
-      preview.read_set_tick(store, "git status", moment=at_forty, root=root) is None
+      preview.read_set_tick(store, "git status", moment=at_later, root=root) is None
     )
     assert not any(
       item["blocking"] and item["quiet"] for item in store.read()["pending"]
     )
     store.clear_polling()
     assert (
-      preview.read_set_tick(store, "git status", moment=at_forty, root=root) is None
+      preview.read_set_tick(store, "git status", moment=at_later, root=root) is None
     )
-    due = at_forty + timedelta(minutes=20)
+    due = at_later + CHECKPOINT_INTERVAL
     assert preview.read_set_tick(store, "git status", moment=due, root=root) is None
 
     database = sqlite3.connect(store.path)
@@ -7849,7 +7860,7 @@ def test_read_set_tick_cli_keeps_a_pending_checkpoint_while_the_server_is_down()
     store = preview.Store(state)
     started = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
     assert store.schedule_read_set_note(moment=started, root=root) is None
-    moment = started + timedelta(minutes=20)
+    moment = started + CHECKPOINT_INTERVAL
     checkpoint = store.schedule_read_set_note(moment=moment, root=root)
     slot = store.meta_value(preview.READ_SET_SLOT_META)
     dead_port(store)

@@ -2447,14 +2447,14 @@ POLL_IMMEDIATE_META = "poll_immediate"
 READ_SET_SLOT_META = "read_set_slot"
 # The first eligible command or latest checkpoint starts the elapsed interval.
 READ_SET_LAST_META = "read_set_last_at"
-READ_SET_INTERVAL_MINUTES = 20
+READ_SET_INTERVAL_MINUTES = 15
 # The owner's Skip poll press is a one-shot request: the waiting poll ends at once, and no
 # note lands in the message log for a later turn to misread.
 SKIP_POLL_META = "skip_poll_at"
 
 
 def read_set_slot(moment=None):
-  """The current 00, 20, or 40 wall-clock slot, including its UTC offset."""
+  """The current 00, 15, 30, or 45 wall-clock slot, including its UTC offset."""
   moment = moment or datetime.now(DISPLAY_ZONE or timezone.utc)
   if moment.tzinfo is None:
     moment = moment.replace(tzinfo=timezone.utc)
@@ -4764,7 +4764,7 @@ class Store:
     return message_row(row) if row else None
 
   def schedule_read_set_note(self, moment=None, root=None):
-    """Atomically create a checkpoint after each elapsed 20-minute interval."""
+    """Atomically create a checkpoint after each elapsed interval."""
     moment = moment or datetime.now(DISPLAY_ZONE or timezone.utc)
     if moment.tzinfo is None:
       moment = moment.replace(tzinfo=timezone.utc)
@@ -4819,7 +4819,8 @@ class Store:
         )
       listed = "\n".join(f"- `{path}`" for path in paths)
       text = (
-        "Read-set checkpoint after a 20-minute interval. Read each listed path in full"
+        f"Read-set checkpoint after a {READ_SET_INTERVAL_MINUTES}-minute interval."
+        " Read each listed path in full"
         " with the read tool only if its current full text is absent from context, then"
         " acknowledge this note.\n"
         f"{listed}"

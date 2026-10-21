@@ -883,7 +883,7 @@ POLL_IMMEDIATE_SECONDS=1.
 POLL_IMMEDIATE_META='poll_immediate'
 READ_SET_SLOT_META='read_set_slot'
 READ_SET_LAST_META='read_set_last_at'
-READ_SET_INTERVAL_MINUTES=20
+READ_SET_INTERVAL_MINUTES=15
 SKIP_POLL_META='skip_poll_at'
 def read_set_slot(moment=None):
 	moment=moment or datetime.now(DISPLAY_ZONE or timezone.utc)
@@ -1671,7 +1671,7 @@ class Store:
 				note_id=new_id()
 				if not any(db.execute(f"SELECT 1 FROM {table} WHERE id = ?",(note_id,)).fetchone()for table in('notes','submissions','uploads','reports','tasks')):break
 			else:raise RuntimeError('The state holds no free six-character ID for a read-set note')
-			listed='\n'.join(f"- `{path}`"for path in paths);text=f"Read-set checkpoint after a 20-minute interval. Read each listed path in full with the read tool only if its current full text is absent from context, then acknowledge this note.\n{listed}";record=self.note(note_id,text,shared=db,autosave=False,quiet=True,blocking=True);db.execute('INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',(READ_SET_SLOT_META,slot));db.execute('INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',(READ_SET_LAST_META,moment.isoformat()))
+			listed='\n'.join(f"- `{path}`"for path in paths);text=f"Read-set checkpoint after a {READ_SET_INTERVAL_MINUTES}-minute interval. Read each listed path in full with the read tool only if its current full text is absent from context, then acknowledge this note.\n{listed}";record=self.note(note_id,text,shared=db,autosave=False,quiet=True,blocking=True);db.execute('INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',(READ_SET_SLOT_META,slot));db.execute('INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',(READ_SET_LAST_META,moment.isoformat()))
 		self.autosave();return record
 	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_type=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,shared=None,autosave=True,replies=None,ack_edited_seen_count=None):
 		identifier(submission_id);identifier(report_id);submission_text(text);receipt=restore_receipt(acknowledged_at,ack_type,ack_text,ack_edited_at);more=restore_replies(replies,receipt[0]);seen_reply_count=restore_reply_seen_count(ack_edited_seen_count,more)
