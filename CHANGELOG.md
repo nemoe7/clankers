@@ -69,6 +69,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Replace fixed maintenance status text with fixture failures, workflow paths, artifact flags, and complete error annotations.
+
 - Derive grouped measurement totals from fixture bytes. Check UTF-8 counting, growth, and unchanged writes without fixed size snapshots.
 
 #### nemoizer

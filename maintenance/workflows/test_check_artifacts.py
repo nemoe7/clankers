@@ -33,7 +33,9 @@ def test_the_repository_workflow_passes():
 
 def test_the_command_reports_the_workflow(capsys):
   assert check_artifacts.main([]) == 0
-  assert "as required" in capsys.readouterr().out
+  output = capsys.readouterr()
+  assert str(check_artifacts.WORKFLOW) in output.out
+  assert not output.err
 
 
 def test_a_push_that_leaves_main_fails():
@@ -104,4 +106,11 @@ def test_main_fails_on_a_drifted_copy(tmp_path, capsys):
   path = tmp_path / "artifacts.yml"
   path.write_text(yaml.safe_dump(document), encoding="utf-8")
   assert check_artifacts.main(["--workflow", str(path)]) == 1
-  assert "::error::push must target main alone" in capsys.readouterr().out
+  expected = findings(document)
+  assert expected
+  annotations = [
+    line.removeprefix("::error::")
+    for line in capsys.readouterr().out.splitlines()
+    if line.startswith("::error::")
+  ]
+  assert annotations == expected

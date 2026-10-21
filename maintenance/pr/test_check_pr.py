@@ -368,10 +368,13 @@ def test_the_bump_range_skips_a_missing_base():
 
 
 def test_the_version_bump_mode_reports_failures(monkeypatch, capsys):
+  failure = gate_pr.Failure("version bumps", "stale")
   monkeypatch.setattr(
     gate_pr,
     "run_version_checks",
-    lambda value: [gate_pr.Failure("version bumps", "stale")],
+    lambda value: [failure],
   )
   assert gate_pr.main(["--version-bumps", "base..HEAD"]) == 1
-  assert "version bump violation" in capsys.readouterr().out
+  output = capsys.readouterr()
+  assert f"::error::{failure}" in output.out
+  assert not output.err

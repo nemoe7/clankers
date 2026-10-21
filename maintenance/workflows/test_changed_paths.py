@@ -153,7 +153,13 @@ def test_artifacts_step_runs_both_checks_on_a_missing_base(tmp_path, capsys):
   text = outputs(out)
   assert "package=true\n" in text and "rules=true\n" in text
   assert "egress=false\n" in text and "preview=false\n" in text
-  assert "run the package and rules checks" in capsys.readouterr().out
+  groups, notice = changed_paths.artifact_groups(
+    {"PUSH_BEFORE": changed_paths.EMPTY_BASE}, str(repo)
+  )
+  assert notice and notice in capsys.readouterr().out
+  assert groups == {
+    name: name in {"package", "rules"} for name in changed_paths.ARTIFACT_ORDER
+  }
 
 
 def test_main_runs_a_step_from_the_environment(tmp_path, monkeypatch):
