@@ -1133,3 +1133,91 @@ def test_the_read_set_gate_passes_a_wrapper_mkdir():
       assert note["id"] in blocked.stderr, blocked.stderr
     finally:
       hold.close()
+
+
+def test_read_set_input_gate_matches_inputs_not_tool_text() -> None:
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    (root / "ARENA.md").write_text("fixture\n", encoding="utf-8")
+    (root / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
+    nested = root / "nested rules"
+    nested.mkdir()
+    (nested / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
+    skill = root / ".agents/skills/arena-skill"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("fixture\n", encoding="utf-8")
+    (root / "arena-link").symlink_to(root / "ARENA.md")
+    with patch("os.getcwd", return_value=str(root)):
+      for line in (
+        "grep -n MUST ARENA.md",
+        "grep -e MUST -- AGENTS.md",
+        "grep -f ARENA.md source.py",
+        "grep -r MUST .",
+        "head -n 3 ARENA.md",
+        "tail -c 30 -- AGENTS.md",
+        "head <ARENA.md",
+        "cat ARENA.md | head -3",
+        "cat <AGENTS.md | grep MUST",
+        "cat ARENA.md | cat | tail -3",
+        "cat ARENA.md | sed -n 1p | head",
+        'echo "$(head ARENA.md)"',
+        'echo "`tail AGENTS.md`"',
+        "head arena-link",
+        "tail 'nested rules/AGENTS.md'",
+        "head .agents/skills/arena-skill/SKILL.md",
+        "cd 'nested rules' && head ../ARENA.md",
+        "env LANG=C command /usr/bin/head ARENA.md",
+        "bash -c 'head ARENA.md'",
+        "/bin/bash -l -c head ARENA.md",
+        f"tail {shlex.quote(str(root / 'AGENTS.md'))}",
+      ):
+        warning = preview_module.read_set_input_warning(line, root)
+        assert warning and warning.startswith("READ-SET BLOCKED:"), line
+      for line in (
+        "grep ARENA.md source.py",
+        "grep -e ARENA.md source.py",
+        "grep -r MUST .agents/skills/arena-skill/scripts",
+        "head source.py",
+        "cat ARENA.md; head source.py",
+        "printf '%s' 'grep MUST ARENA.md'",
+        "printf '%s' '$(head ARENA.md)'",
+        "printf '%s' '|' head ARENA.md",
+        "head source.py >ARENA.md",
+        "python3 -c 'head = 1; tail = 2; path = \"ARENA.md\"'",
+        "python3 -I - <<'PY'\nhead ARENA.md\ntail AGENTS.md\nPY",
+        "[ -e 'ARENA.md' ] && [ ! -d 'ARENA.md' ]; printf 'OK\\n'",
+      ):
+        assert preview_module.read_set_input_warning(line, root) is None, line
+
+
+def test_read_set_input_pre_hook_blocks_before_routing() -> None:
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    protected = root / "ARENA.md"
+    protected.write_text("fixture\n", encoding="utf-8")
+    line = f"/bin/bash -l -c head {shlex.quote(str(protected))}"
+    result = subprocess.run(
+      [
+        sys.executable,
+        str(ROOT / "skills/refs/arena-skill/scripts/preview.py"),
+        "pre",
+        "--shell",
+        "bash",
+        "--repo",
+        str(root),
+        "--line",
+        line,
+        "--command",
+        "head " + shlex.quote(str(protected)),
+      ],
+      env=clean_env(
+        ARENA_PREVIEW_STATE_DIR=str(root / "state"),
+        ARENA_PREVIEW_NO_BOOTSTRAP="1",
+      ),
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert result.returncode == 130, result
+    assert "READ-SET BLOCKED:" in result.stderr
+    assert "read_file" in result.stderr

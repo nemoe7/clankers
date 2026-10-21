@@ -2757,6 +2757,141 @@ def read_set_actions(line):
   return tuple(actions)
 
 
+def read_set_input_warning(line, root=None, cwd=None):
+  """Reject partial readers of known read-set inputs, not words in tool bodies."""
+  kept = []
+  delimiters = []
+  for row in agent_line(line).splitlines():
+    if delimiters:
+      marker, tabs = delimiters[0]
+      if (row.lstrip("\t") if tabs else row) == marker:
+        delimiters.pop(0)
+      continue
+    kept.append(row)
+    for tabs, single, double, bare in re.findall(
+      r"<<(-?)\s*(?:'([^']+)'|\"([^\"]+)\"|([A-Za-z_]\w*))", row
+    ):
+      delimiters.append((single or double or bare, bool(tabs)))
+  text = "\n".join(kept)
+  if not re.search(r"\b(?:grep|head|tail)\b", text):
+    return None
+  lexer = shlex.shlex(text, posix=False, punctuation_chars=";&|()<>\n")
+  lexer.whitespace = " \t\r"
+  lexer.whitespace_split = True
+  try:
+    tokens = list(lexer)
+  except ValueError:
+    return None
+  base = Path(root or resolve_repo_root()).resolve()
+  here = Path(cwd or Path.cwd())
+  for token in tokens:
+    if token.startswith("'"):
+      continue
+    for substitution, backtick in re.findall(
+      r"(?<!\\)\$\(([^()]*)\)|(?<!\\)`([^`]*)`", token
+    ):
+      warning = read_set_input_warning(substitution or backtick, base, here)
+      if warning:
+        return warning
+  protected = None
+  incoming = set()
+  piece = []
+
+  def paths(words, recursive=False):
+    nonlocal protected
+    if protected is None:
+      protected = {
+        path.resolve(): path.relative_to(base).as_posix()
+        for path in read_set_paths(base)
+      }
+    found = set()
+    for word in words:
+      candidate = (here / Path(word).expanduser()).resolve()
+      found.update(
+        path
+        for path in protected
+        if path == candidate or (recursive and candidate in path.parents)
+      )
+    return found
+
+  for token in [*tokens, ";"]:
+    if token not in (";", "&&", "||", "|", "|&", "&", "(", ")", "\n"):
+      piece.append(token)
+      continue
+    try:
+      words = ["".join(shlex.split(word)) for word in piece]
+    except ValueError:
+      return None
+    piece = []
+    while words and ("=" in words[0] or words[0] in SHELL_KEYWORDS):
+      words.pop(0)
+    while words and words[0].rsplit("/", 1)[-1] in PR_CHECK_WRAPPERS:
+      wrapper = words.pop(0).rsplit("/", 1)[-1]
+      if wrapper == "command" and any(word in ("-v", "-V") for word in words[:1]):
+        words = []
+        break
+      while words and (
+        words[0].startswith("-") or "=" in words[0] or words[0].isdigit()
+      ):
+        words.pop(0)
+    head = words.pop(0).rsplit("/", 1)[-1] if words else ""
+    sources = incoming
+    if head == "cd" and words:
+      here = (here / Path(words[-1]).expanduser()).resolve()
+    elif head in SHELL_BASENAMES:
+      for index, word in enumerate(words[:-1]):
+        if word.startswith("-") and "c" in word:
+          warning = read_set_input_warning(words[index + 1], base, here)
+          if warning:
+            return warning
+          break
+    elif head in ("cat", "grep", "head", "tail"):
+      files = []
+      pattern = head != "grep"
+      recursive = False
+      flags = True
+      index = 0
+      while index < len(words):
+        word = words[index]
+        index += 1
+        if word in ("<", ">", ">>", "<<", "<<-", "<<<", "<&", ">&"):
+          if word == "<":
+            files.extend(words[index : index + 1])
+          index += 1
+        elif flags and word == "--":
+          flags = False
+        elif flags and word.startswith("-"):
+          if head == "grep":
+            recursive |= word in ("--recursive", "--dereference-recursive") or (
+              not word.startswith("--") and any(flag in word[1:] for flag in "rR")
+            )
+            if word in ("-e", "--regexp", "-f", "--file"):
+              if word in ("-f", "--file"):
+                files.extend(words[index : index + 1])
+              pattern = True
+              index += 1
+            elif word.startswith(("-e", "--regexp=", "-f", "--file=")):
+              if word.startswith("-f"):
+                files.append(word[2:])
+              elif word.startswith("--file="):
+                files.append(word.split("=", 1)[1])
+              pattern = True
+          elif word in ("-n", "-c", "--lines", "--bytes"):
+            index += 1
+        elif not pattern:
+          pattern = True
+        else:
+          files.append(word)
+      sources = paths(files, recursive) | incoming
+      if head in GATE_NOISE and sources:
+        name = protected[min(sources)]
+        return (
+          f"READ-SET BLOCKED: `{head}` reads {name}. Use read_file for the full file."
+        )
+    incoming = sources if token in ("|", "|&") else set()
+  return None
+
+
 def read_set_tick(store, line, moment=None, root=None):
   """Mint a due read-set checkpoint and let the call pass.
 
@@ -8497,6 +8632,11 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
     warning = main_drift_warning(Path.cwd())
     if warning:
       report(warning)
+  # case: read-set-input
+  warning = read_set_input_warning(line, root)
+  if warning:
+    report(warning)
+    return finish(130)
   # case: route-marker
   if routed:
     return finish(0)
