@@ -147,7 +147,7 @@ Write an option group's custom slot inside the group, as `- ( ) custom: ___`. Th
 Give each group its own prompt, so every answer maps to its question:
 
 ```
-Pick the release channel: {#release-channel}
+Select the release channel: {#release-channel}
 
 - ( ) stable
 - ( ) beta

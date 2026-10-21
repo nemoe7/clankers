@@ -37,6 +37,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### nemoizer
+
+- Use Select in arena guides. Add scoped N003 exclusions for report and proxy record keys. Keep contracts and license bytes unchanged.
+
 #### skills
 
 - Shorten CLI help, wrapper errors, and installer messages. Keep commands, flags, paths, validation, and exit codes.
