@@ -28,7 +28,7 @@ Write AGENTS.md against four failure modes.
 1. One rule per line. Imperative mood. No essays.
 2. Make every rule testable. "Run `ruff check` before every commit" survives summarization. "Write clean code" does not.
 3. Use exact commands, paths, and numbers. A rule a script can check is a rule an agent can obey.
-4. Pick one verb per action and keep it for the whole file. Do not rotate two words for the same action across sections.
+4. Select one verb per action and keep it for the whole file. Do not rotate two words for the same action across sections.
 5. Use MUST, NEVER, and ALWAYS for hard rules. Use "prefer" for soft ones. Do not mix "should" and "MUST" at random.
 6. No contradictions between sections. If two rules can collide, state which one wins.
 7. Keep negated rules positive where possible: "Commit only staged files" reads better than "NEVER commit unstaged files". Keep NEVER for irreversible or dangerous acts.

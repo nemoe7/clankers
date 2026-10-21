@@ -19,7 +19,7 @@ Read by task: bootstrapping an empty repo — Core Rules through Bootstrap, then
 ## 1. Core Rules
 
 - The repository is the primary source of truth.
-- The client chooses what gets built: propose, let them pick, confirm before creating beyond the baseline.
+- The client chooses what gets built: propose, let them select, confirm before creating beyond the baseline.
 - Create documentation only for baseline or user-selected documents, or to reconcile an authoritative document.
 - Preserve valid documentation. Link to the authoritative location instead of duplicating it.
 - Organize by reader need on the Diátaxis map: tutorials, how-to guides, reference, explanation.
@@ -315,7 +315,7 @@ Views MUST represent verified architecture, never imagined architecture. Never d
 
 Offered as a bundle for public or contributor-accepting repos; private repos take only what fits.
 
-- `LICENSE`: detect the current license. If none, ask which — never pick one for the client.
+- `LICENSE`: detect the current license. If none, ask which — never select one for the client.
 - `CODE_OF_CONDUCT.md`: use the canonical Contributor Covenant text from its published source; never reproduce it from memory.
 - `CONTRIBUTING.md`: setup, workflow, and PR expectations, verified against the repo. Never copy a template nobody follows.
 - `SECURITY.md`: vulnerability reporting, supported versions, disclosure process, established contacts only. Technical security architecture lives in the SDD or reference, never here. Never invent contacts or procedures.

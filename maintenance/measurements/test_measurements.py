@@ -31,10 +31,10 @@ def test_budget_updates_handle_additions_removals_and_measurements(
   expected = sorted(check.EXPECTED_BUDGETS, key=str.casefold)
   assert list(check.read_budget_table()) == expected
   for relative in expected:
-    kind = check.EXPECTED_BUDGETS[relative]
+    type = check.EXPECTED_BUDGETS[relative]
     size = len((root / relative).read_bytes())
-    assert f"| [`{relative}`]({relative}) | `{kind}` | {size} `B` |" in text
-    assert check.read_budget_table()[relative] == (kind, f"{size} B")
+    assert f"| [`{relative}`]({relative}) | `{type}` | {size} `B` |" in text
+    assert check.read_budget_table()[relative] == (type, f"{size} B")
   assert text.endswith("Keep this paragraph.\n")
   assert not check.update_readme_measurements()
   del check.EXPECTED_BUDGETS["Zed.md"]

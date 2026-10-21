@@ -151,7 +151,7 @@ On `/agent/*`, ON reads the repository name from the GitHub link in the session 
 
 While the agent works, the title reads the newest row of the last message root. It finds the body after a message header and keeps the previous lookup as a fallback.
 
-The row kind picks the mark, and an action row's status label names its emoji, such as `Arena | clankers 🖥️`. A running row answers with its shimmer, and a buttonless row read takes its `body-sm` span, with a fetch URL's anchor text dropped.
+The row type selects the mark, and an action row's status label names its emoji, such as `Arena | clankers 🖥️`. A running row answers with its shimmer, and a buttonless row read takes its `body-sm` span, with a fetch URL's anchor text dropped.
 
 | Mark | Source |
 | --- | --- |

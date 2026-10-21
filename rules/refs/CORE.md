@@ -57,7 +57,7 @@
 - Rung 1 — Does this need to exist at all? Skip speculative additions, not explicit requirements (YAGNI).
 - Rung 2 — Already in this codebase? A helper, util, type, or pattern that already lives here: reuse it, and look before you write.
 - Rung 3 — Stdlib does it? Use it.
-- Rung 4 — Native platform feature covers it? A date input over a picker library, CSS over JS, a database constraint over application code.
+- Rung 4 — Native platform feature covers it? A date input over a selector library, CSS over JS, a database constraint over application code.
 - Rung 5 — Already-installed dependency solves it? Use it, and NEVER add a new one for what a few lines can do.
 - Rung 6 — Can it be one line? One line.
 - Rung 7 — Only then, the minimum code that works.

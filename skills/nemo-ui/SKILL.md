@@ -36,7 +36,7 @@ Apply this skill to a page, a component, or an interface change. The sheet holds
 
 10. The pending row appears before the reply. A failure retries once with the same ID, so the list holds one row.
 
-11. One `docs/design.md` per repository records that repository's settled calls. A pick updates it in the same change.
+11. One `docs/design.md` per repository records that repository's settled calls. A select updates it in the same change.
 
 12. Read padding, margin, gap, and size per element from the rendered page, compare each with the sheet, and check 1280 and 360.
 

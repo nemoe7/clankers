@@ -854,7 +854,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 }
 {
   const { test } = require("node:test");
-  // The tab title reads the last message root: the newest row's kind carries the mark, a user
+  // The tab title reads the last message root: the newest row's type carries the mark, a user
   // root carries none, and every row mark ends with the stop control.
   test("tab title row mark", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
@@ -1053,7 +1053,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(page.title, "Arena | clankers \u2753", `The question row raises the mark: ${page.title}`);
     const titleLines = logged.filter(([line]) => line.startsWith("[NemoUtils][title]"));
     assert.ok(titleLines.length > 0, "the title path logs a line");
-    assert.ok(titleLines.some(([line, data]) => line === "[NemoUtils][title][info] changed" && data.kind === "action"));
+    assert.ok(titleLines.some(([line, data]) => line === "[NemoUtils][title][info] changed" && data.type === "action"));
     assert.ok(titleLines.every(([, data]) => !("speech" in data) && !("repo" in data)));
     assert.doesNotMatch(JSON.stringify(titleLines), /Bash sleep|npm test|Generating questions|clankers/);
     const count = titleLines.length;
@@ -1062,7 +1062,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     titleMenus.get("Page — tab title (ON)")();
     assert.equal(page.title, "", "disabling the feature restores the original title");
     assert.equal(logged.filter(([line]) => line === "[NemoUtils][title][info] restored").length, 1);
-    console.log("ok tab title row mark: last root, row kind, turn bound");
+    console.log("ok tab title row mark: last root, row type, turn bound");
   });
 }
 

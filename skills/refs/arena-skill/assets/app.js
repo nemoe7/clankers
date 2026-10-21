@@ -257,7 +257,7 @@ note.addEventListener('input', () => {
 // File bytes stay in this browser tab. A staged file starts its upload at the drop, so the chip
 // carries its own state and the send binds the bytes the server already holds.
 let stagedFiles = [];
-const picker = $('#upload-file');
+const selector = $('#upload-file');
 const compose = $('#compose');
 const attachmentInfo = file => ({
   name: file.name, size: file.size, type: file.type, lastModified: file.lastModified || null
@@ -327,7 +327,7 @@ function renderStagedFiles() {
       const position = stagedFiles.indexOf(entry);
       if (position < 0) return;
       const [dropped] = stagedFiles.splice(position, 1);
-      picker.value = '';
+      selector.value = '';
       void dropStaged(dropped);
       renderStagedFiles();
       status.textContent = stagedFiles.length
@@ -341,7 +341,7 @@ function renderStagedFiles() {
 }
 function clearStagedFiles() {
   stagedFiles = [];
-  picker.value = '';
+  selector.value = '';
   renderStagedFiles();
 }
 function stageFiles(files) {
@@ -357,13 +357,13 @@ function stageFiles(files) {
     entries.push({ file, id, status: 'uploading', error: '', aborted: false, controller: null, request: null });
   }
   stagedFiles.push(...entries);
-  picker.value = '';
+  selector.value = '';
   renderStagedFiles();
   for (const entry of entries) entry.request = uploadStaged(entry);
   status.textContent = `Staged ${stagedFiles.length} file${stagedFiles.length === 1 ? '' : 's'}. Send message to save them together.`;
 }
-$('#attach-file').addEventListener('click', () => picker.click());
-picker.addEventListener('change', () => stageFiles(Array.from(picker.files || [])));
+$('#attach-file').addEventListener('click', () => selector.click());
+selector.addEventListener('change', () => stageFiles(Array.from(selector.files || [])));
 let pasteAsText = false;
 compose.addEventListener('keydown', event => {
   pasteAsText = event.key.toLowerCase() === 'v' && event.ctrlKey && event.shiftKey;
@@ -755,17 +755,17 @@ function showHistory(notes) {
       receiptId, separator, receiptDot, receiptState,
       ...(names.length ? [receiptFile] : []), ...(item.task_id ? [receiptTask] : [])
     );
-    // Both acknowledgement kinds use server HTML when available, or a text paragraph with .message p pre-wrap.
-    // Append later answers below earlier ones. Each block retains its kind and timestamp title.
+    // Both acknowledgement types use server HTML when available, or a text paragraph with .message p pre-wrap.
+    // Append later answers below earlier ones. Each block retains its type and timestamp title.
     const answer = node.children[1];
     if (item.ack_text) {
-      answer.className = item.ack_kind === 'reply' ? 'answer reply message-text' : 'answer reply';
+      answer.className = item.ack_type === 'reply' ? 'answer reply message-text' : 'answer reply';
       answer.hidden = false;
       const blocks = (item.replies || []).map(reply => {
         const block = document.createElement('div');
         block.className = 'reply-block';
         block.title = `Replied again ${time(reply.at)}`;
-        if (reply.kind === 'reply' && reply.html !== undefined) {
+        if (reply.type === 'reply' && reply.html !== undefined) {
           block.innerHTML = linkReferences(reply.html, references);
         }
         else {
@@ -1108,7 +1108,7 @@ $('#form').addEventListener('submit', async event => {
     pending = { id: newId(), text, ...(attachments.length ? { attachments } : {}) };
   }
   save('pending', JSON.stringify(pending));
-  send.disabled = picker.disabled = $('#attach-file').disabled = true;
+  send.disabled = selector.disabled = $('#attach-file').disabled = true;
   send.textContent = send.dataset.busyLabel;
   status.textContent = attachments.length ? `Sending ${attachments.length} file${attachments.length === 1 ? '' : 's'} with message…` : '';
   const sending = { id: pending.id, text, at: new Date().toISOString(), pending: true };
@@ -1162,7 +1162,7 @@ $('#form').addEventListener('submit', async event => {
     status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept; retry unchanged files and text with the same message ID.`;
   }
   finally {
-    send.disabled = picker.disabled = $('#attach-file').disabled = false;
+    send.disabled = selector.disabled = $('#attach-file').disabled = false;
     send.textContent = sendIdleLabel;
   }
 });
@@ -2626,7 +2626,7 @@ function paintInterrupt(pending) {
   button.setAttribute('aria-pressed', pending ? 'true' : 'false');
   button.dataset.state = pending || button.dataset.error ? 'bad' : '';
   label(button, button.dataset.error || (pending
-    ? `Flagged${button.dataset.kind ? `: ${button.dataset.kind}` : ''}. Click to cancel.`
+    ? `Flagged${button.dataset.type ? `: ${button.dataset.type}` : ''}. Click to cancel.`
     : 'Flag a violation'));
 }
 // One dialog serves every modal: a config builds its fields, and a submit that throws keeps the
@@ -2690,12 +2690,24 @@ function openModal(config) {
 }
 modalForm.addEventListener('submit', event => modalSubmit?.(event));
 $('#modal-cancel').addEventListener('click', () => modal.close());
-// The kinds follow the active page. Only the repository's read-set files can be named.
-const VIOLATION_KINDS = {
-  notes: [['bash-violation', 'Bash violation'], ['process-violation', 'Process violation']],
+// The types follow the active page. Only the repository's read-set files can be named.
+const VIOLATION_TYPES = {
+  notes: [
+    ['bash-violation', 'Bash violation'],
+    ['process-violation', 'Process violation'],
+    ['missing-details', 'Missing details'],
+    ['out-of-scope', 'Out of scope'],
+    ['task-not-created', 'Task not created'],
+  ],
   downloads: [['bash-violation', 'Bash violation'], ['process-violation', 'Process violation']],
   reports: [['format-violation', 'Format violation'], ['unnecessary-report', 'Unnecessary report']],
-  tasks: [['current-task-violation', 'Current task violation'], ['empty-task-list', 'Empty task list']],
+  tasks: [
+    ['current-task-violation', 'Current task violation'],
+    ['empty-task-list', 'Empty task list'],
+    ['missing-details', 'Missing details'],
+    ['out-of-scope', 'Out of scope'],
+    ['task-not-created', 'Task not created'],
+  ],
 };
 async function postInterrupt(payload) {
   const button = $('#agent-interrupt');
@@ -2719,7 +2731,7 @@ $('#agent-interrupt').addEventListener('click', async () => {
   delete button.dataset.error;
   // A second click disarms without a form. The modal opens only on the arming click.
   if (button.getAttribute('aria-pressed') === 'true') {
-    delete button.dataset.kind;
+    delete button.dataset.type;
     try {
       await postInterrupt({ armed: false, tab });
     } catch (error) {
@@ -2728,13 +2740,13 @@ $('#agent-interrupt').addEventListener('click', async () => {
     }
     return;
   }
-  const kinds = VIOLATION_KINDS[tab];
+  const types = VIOLATION_TYPES[tab];
   const reportId = tab === 'reports' ? $('#report-select').value || null : null;
   await openModal({
     title: 'Flag a violation',
     confirm: 'Send flag',
     fields: [
-      { name: 'reason', label: 'Violation kind', type: 'select', options: kinds },
+      { name: 'reason', label: 'Violation type', type: 'select', options: types },
       {
         name: 'clause_file',
         label: 'Clause file (optional)',
@@ -2750,7 +2762,7 @@ $('#agent-interrupt').addEventListener('click', async () => {
       },
     ],
     submit: async values => {
-      button.dataset.kind = kinds.find(([kind]) => kind === values.reason)[1];
+      button.dataset.type = types.find(([type]) => type === values.reason)[1];
       await postInterrupt({
         armed: true,
         tab,
