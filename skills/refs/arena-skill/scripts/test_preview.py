@@ -11888,7 +11888,16 @@ def test_websocket_transport(tmp_path, monkeypatch):
   monkeypatch.setattr(preview, "WS_TICK_SECONDS", 0.02, raising=False)
   monkeypatch.setattr(preview, "WS_HEARTBEAT_SECONDS", 0.1, raising=False)
   store = preview.Store(tmp_path / "state", create=True)
-  server = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+  frame_handler = preview.handler(store)
+  send_frame = frame_handler.ws_send
+
+  def send_with_heartbeat(handler, opcode, data):
+    if opcode in (8, 10):
+      send_frame(handler, 1, b'{"type":"heartbeat"}')
+    send_frame(handler, opcode, data)
+
+  monkeypatch.setattr(frame_handler, "ws_send", send_with_heartbeat)
+  server = preview.ThreadingHTTPServer(("127.0.0.1", 0), frame_handler)
   worker = threading.Thread(target=server.serve_forever, daemon=True)
   worker.start()
   peers = []
@@ -11935,7 +11944,7 @@ def test_websocket_transport(tmp_path, monkeypatch):
       + bytes(value ^ (mask[i % 4] if masked else 0) for i, value in enumerate(data))
     )
 
-  def receive(peer, stream, type=None, request_id=None):
+  def receive(peer, stream, type=None, request_id=None, control=False):
     for _ in range(30):
       head = stream.read(2)
       assert len(head) == 2
@@ -11948,6 +11957,8 @@ def test_websocket_transport(tmp_path, monkeypatch):
         return opcode, data
       value = json.loads(data)
       if value.get("type") == "change" and type != "change":
+        continue
+      if control:
         continue
       if value.get("type") == "heartbeat":
         send(peer, {"type": "pong"})
@@ -11995,11 +12006,11 @@ def test_websocket_transport(tmp_path, monkeypatch):
     ).encode()
     send(peer, fragmented[:8], final=False)
     send(peer, b"ping", opcode=9)
-    assert receive(peer, stream) == (10, b"ping")
+    assert receive(peer, stream, control=True) == (10, b"ping")
     send(peer, fragmented[8:], opcode=0)
     assert receive(peer, stream, "response", "fragment")["status"] == 200
     send(peer, b"{}", masked=False)
-    opcode, data = receive(peer, stream)
+    opcode, data = receive(peer, stream, control=True)
     assert opcode == 8 and int.from_bytes(data[:2], "big") == 1002
     stream.close()
     peer.close()
@@ -12007,7 +12018,7 @@ def test_websocket_transport(tmp_path, monkeypatch):
     assert status == 101
     receive(peer, stream, "change")
     send(peer, b"\xff")
-    opcode, data = receive(peer, stream)
+    opcode, data = receive(peer, stream, control=True)
     assert opcode == 8 and int.from_bytes(data[:2], "big") == 1007
     stream.close()
     for payload, opcode, expected in [
@@ -12019,7 +12030,7 @@ def test_websocket_transport(tmp_path, monkeypatch):
       assert status == 101
       receive(peer, stream, "change")
       send(peer, payload, opcode=opcode)
-      code, data = receive(peer, stream)
+      code, data = receive(peer, stream, control=True)
       assert code == 8 and int.from_bytes(data[:2], "big") == expected
       stream.close()
       peer.close()
@@ -12029,7 +12040,7 @@ def test_websocket_transport(tmp_path, monkeypatch):
     peer.sendall(
       b"\x81\xff" + (preview.WS_MAX_MESSAGE + 1).to_bytes(8, "big") + b"mask"
     )
-    code, data = receive(peer, stream)
+    code, data = receive(peer, stream, control=True)
     assert code == 8 and int.from_bytes(data[:2], "big") == 1009
     stream.close()
   finally:
