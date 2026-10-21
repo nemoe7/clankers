@@ -12,6 +12,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Treat `mkdir` as inert for the read-set gate, so the harness's workspace-root `mkdir -p` prefix no longer blocks the inbox call that clears a checkpoint.
 
+### Fixed
+
+#### preview
+
+- Derive the workspace path in the wrapper test from the checkout, so the suite passes where `/home/user` does not exist.
+
 ## 2026-10-20
 
 ### Changed

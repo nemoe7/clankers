@@ -1097,7 +1097,7 @@ def test_the_read_set_gate_passes_the_workspace_root_bootstrap_line():
 
 
 def test_the_read_set_gate_passes_a_wrapper_mkdir():
-  """The harness rebuilds a missing workspace root before the call. That mkdir is inert."""
+  """The harness prefixes a mkdir of the workspace root. That mkdir is inert."""
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     store = preview_module.Store(root, create=True)
@@ -1108,12 +1108,12 @@ def test_the_read_set_gate_passes_a_wrapper_mkdir():
       store.set_meta("port", str(hold.getsockname()[1]))
       store.set_meta(preview_module.READ_SET_LAST_META, "2000-01-01T00:00:00+00:00")
       inbox = run(
-        "mkdir -p '/home/user/clankers' && arena-preview read",
+        f"mkdir -p '{ROOT}' && arena-preview read",
         state=root,
       )
       assert inbox.returncode == 0, inbox.stderr
       blocked = run(
-        "mkdir -p '/home/user/clankers' && printf agent-work",
+        f"mkdir -p '{ROOT}' && printf agent-work",
         state=root,
       )
       assert blocked.returncode == 130, blocked.stderr
