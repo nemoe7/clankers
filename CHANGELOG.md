@@ -85,6 +85,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### workflows
+
+- Amend only single-parent sync tips with matching bot author, committer, and exact subject. Use depth two and an exact remote lease.
+
+- Preserve append fallback when force is rejected without a remote change. Stop on concurrent updates, command failures, or a wrong remote head.
+
 #### maintenance
 
 - Replace fixed maintenance status text with fixture failures, workflow paths, artifact flags, and complete error annotations.

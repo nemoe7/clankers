@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import os
+import subprocess
 
 import gate_workflows
 import yaml
@@ -328,7 +330,7 @@ def test_distribute_jobs_share_one_action_and_keep_their_own_lists():
   }
 
 
-def test_distribute_keeps_the_owner_run_packages_home():
+def test_distribute_keeps_the_owner_run_packages_home(tmp_path):
   action = (
     gate_workflows.ROOT / ".github" / "actions" / "distribute-sync" / "action.yml"
   )
@@ -338,8 +340,38 @@ def test_distribute_keeps_the_owner_run_packages_home():
   )
   # The owner pages and the docker packages stay in this repository. Only files
   # a session loads at runtime ride to the target repositories.
-  assert "grep -vFx -e README.md -e INSTALL.md" in script
-  assert "grep -vE '^(arena-egress-proxy|arena-preview-proxy)/'" in script
+  start = script.index("skill_files() {")
+  helper = script[start : script.index("\nfor skill ", start)]
+  runtime = {"SKILL.md", "scripts/runtime.py", "references/rules.md"}
+  excluded = {
+    "README.md",
+    "INSTALL.md",
+    "arena-egress-proxy/server.py",
+    "arena-preview-proxy/server.py",
+  }
+  for name in runtime | excluded:
+    path = tmp_path / "skills/example" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("fixture\n")
+  subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+  subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+  env = os.environ | {"GITHUB_WORKSPACE": str(tmp_path), "SKILL_ROOT": "skills"}
+  command = (
+    "set -euo pipefail\n"
+    + helper
+    + "\nfiles=$(skill_files example)\nprintf '%s\\n' \"$files\"\n"
+  )
+  result = subprocess.run(
+    ["bash", "-c", command], env=env, capture_output=True, text=True, check=False
+  )
+  assert result.returncode == 0, result.stderr
+  assert set(result.stdout.splitlines()) == runtime
+  env["GITHUB_WORKSPACE"] = str(tmp_path / "missing")
+  failed = subprocess.run(
+    ["bash", "-c", command], env=env, capture_output=True, text=True, check=False
+  )
+  assert failed.returncode != 0
+  assert not failed.stdout
 
 
 def build_push_document(context: str, image: str) -> dict:
