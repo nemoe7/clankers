@@ -1423,12 +1423,13 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(panel(), null, "a healthy cycle clears the earlier fetch failure");
 
     const writes = [];
+    const writeAttempts = [];
     let fileText = healthy.text;
     let finishClose;
     let failWrite = false;
     let closeWait = new Promise(resolve => { finishClose = resolve; });
     const handle = { name: "o.r.ndjson", getFile: async () => ({ text: async () => fileText }), createWritable: async () => ({
-      write: async text => { if (failWrite) throw new Error("write failed"); writes.push(text); },
+      write: async text => { writeAttempts.push(text); if (failWrite) throw new Error("write failed"); writes.push(text); },
       close: async () => { await closeWait; fileText = writes.at(-1); },
     }) };
     let availableHandle = handle;
@@ -1473,6 +1474,47 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     await respond("GET", "/api/userscript-autosave", 200, synced);
     assert.equal(writes.length, 1, "an in-sync cycle with the same stamp writes nothing");
     assert.equal(panel(), null);
+    for (const field of ["type", "kind"]) { // nonemo: N003
+      const validText = [...changedCore, { [field]: "userscript-autosave" }].map(JSON.stringify).join("\n") + "\n";
+      fileText = validText;
+      const beforeWrites = writes.slice();
+      const beforeReceipt = structuredClone(saved.get(receiptKey));
+      const unchangedAttempts = writeAttempts.slice();
+      tick();
+      await respond("GET", "/api/userscript-autosave", 200, synced);
+      assert.deepEqual(writeAttempts, unchangedAttempts);
+      assert.deepEqual(writes, beforeWrites);
+      assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
+
+      const next = { ...synced, core: healthy.core, digest: healthy.digest, text: healthy.text, stamp: "next" };
+      failWrite = true;
+      tick();
+      await respond("GET", "/api/userscript-autosave", 200, next);
+      assert.ok(writeAttempts.length > unchangedAttempts.length);
+      assert.deepEqual(writes, beforeWrites);
+      assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
+      assert.equal(saved.get(pendingKey), null);
+      failWrite = false;
+
+      fileText = "{invalid";
+      const blockedAttempts = writeAttempts.slice();
+      tick();
+      await respond("GET", "/api/userscript-autosave", 200, next);
+      assert.deepEqual(writeAttempts, blockedAttempts);
+      assert.deepEqual(writes, beforeWrites);
+      assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
+      assert.ok(panel());
+
+      fileText = validText;
+      const ahead = { ...synced, lastsave: "ahead", beforelastsave: synced.lastsave };
+      tick();
+      await respond("GET", "/api/userscript-autosave", 200, ahead);
+      assert.deepEqual(writeAttempts, blockedAttempts);
+      assert.deepEqual(writes, beforeWrites);
+      assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
+      assert.ok(panel());
+    }
+    fileText = changed.text;
 
     const stale = { ...changed, save_id: "stale", stamp: "t9", lastsave: "t9", beforelastsave: "t2" };
     tick();

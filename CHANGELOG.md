@@ -49,6 +49,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Remove portable workflows and the Web Interface Guidelines skill. Keep GitHub workflows and validation for existing portable workflow directories.
 
+#### userscripts
+
+- Remove the legacy state-record field fallback. Keep JSON checks and save guards. Add no migration.
+
 ### Fixed
 
 #### nemoizer
