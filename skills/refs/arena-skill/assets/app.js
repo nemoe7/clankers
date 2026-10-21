@@ -2699,7 +2699,7 @@ function openModal(config) {
 }
 modalForm.addEventListener('submit', event => modalSubmit?.(event));
 $('#modal-cancel').addEventListener('click', () => modal.close());
-// The types follow the active page. Only the repository's read-set files can be named.
+// The types follow the active page. Only the repository's bible files can be named.
 const VIOLATION_TYPES = {
   notes: [
     ['bash-violation', 'Bash violation'],

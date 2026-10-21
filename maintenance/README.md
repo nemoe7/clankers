@@ -192,7 +192,7 @@ It uses readable assets for exact page assertions, then shipped assets for page 
 | `read-set-note` | the first command in an agent shell | create a due hidden checkpoint as a quiet note. The call passes, and the call-count gate blocks later. Defer it for a poll command, an active poll, or an unavailable server |
 | `task-reminder` | `git commit`, `git push` or `gh pr checks` | the task-list notice once per shell, then the line runs |
 | `main-moved` | `git commit` or `git push` | the drift check runs once per shell. It uses local refs at the commit line and a fresh `fetch` at the push line, then the line runs |
-| `read-set-input` | `grep`, `head` or `tail` reads a known read-set input, directly or through a pipe | `exit 130`. File-tool bodies and path checks pass |
+| `read-set-input` | `grep`, `head` or `tail` reads a known bible input, directly or through a pipe | `exit 130`. File-tool bodies and path checks pass |
 | `route-marker` | a shell the gate started itself (`ARENA_PREVIEW_ROUTE=1`) | pass, so a detached run never matches its own family |
 | `idle-wait` | a line that names both a `sleep` and an `arena-preview` call, or a `sleep` beside a `.log` read | `exit 130` before the sleep, so the turn takes queued work. A sleep on its own runs |
 | `long-run` | `gh pr checks`, `gh run watch`, or a test runner head (`pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test` and the rest) | the call ends clean and the run continues, or `exit 130` when the start fails. Any run of 10 seconds or more is a long run too, and MUST use `route` |

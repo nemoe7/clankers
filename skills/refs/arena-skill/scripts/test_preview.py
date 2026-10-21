@@ -5752,7 +5752,7 @@ def test_first_blocking_piece_names_the_part_that_blocks():
 
 
 def test_mkdir_is_inert_for_the_read_set():
-  """A mkdir prefix carries no work, so the read-set rule judges the command beside it.
+  """A mkdir prefix carries no work, so the bible rule judges the command beside it.
 
   The harness rebuilds a missing workspace root with `mkdir -p` before the agent's call.
   Git tracks files, not directories, so the directory cannot reach a commit. A write
@@ -6716,7 +6716,7 @@ def test_repeat_polls_raise_a_violation(monkeypatch):
     assert preview.poll_repeat(store) is None
     refusal = preview.poll_repeat(store)
     assert refusal == (
-      "VIOLATION: repeat poll inside 45 seconds. Read only read-set files whose "
+      "VIOLATION: repeat poll inside 45 seconds. Read only bible files whose "
       "current full text is absent from context, then work the task."
     )
     note = store.pending_violation_note()
@@ -6753,7 +6753,7 @@ def test_a_repeat_poll_command_exits_2_with_the_violation():
     )
     assert result.returncode == 2, result.stderr
     assert result.stdout == (
-      "VIOLATION: repeat poll inside 45 seconds. Read only read-set files whose "
+      "VIOLATION: repeat poll inside 45 seconds. Read only bible files whose "
       "current full text is absent from context, then work the task.\n"
     )
     note = store.pending_violation_note()
@@ -7644,7 +7644,7 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     assert len(pending) == 1
     checkpoint = pending[0]
     assert checkpoint["text"].startswith(
-      "Read-set checkpoint after a 15-minute interval. Read each listed path in full "
+      "Bible checkpoint after a 15-minute interval. Read each listed path in full "
       "with the read tool only if its current full text is absent from context, then "
       "acknowledge this note.\n"
     )
@@ -7800,7 +7800,7 @@ def test_read_set_schedule_defers_for_polling_and_migrates_note_classes():
 
 
 def read_set_cli_root(directory):
-  """Build a read-set root and its empty state directory."""
+  """Build a bible root and its empty state directory."""
   root = Path(directory)
   for path in (
     root / "ARENA.md",
@@ -7815,7 +7815,7 @@ def read_set_cli_root(directory):
 
 
 def read_set_cli(state, root, line):
-  """Run one read-set tick under its own state, as the installed gate does."""
+  """Run one bible tick under its own state, as the installed gate does."""
   return subprocess.run(
     [
       sys.executable,
@@ -10918,7 +10918,7 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
         "The task list is empty. Maybe a task should have spawned.",
         "The call-count gate blocks after 6 unacknowledged calls.",
         "Think about which clause was violated.",
-        "Read read-set files if absent from context.",
+        "Read bible files if absent from context.",
         "Fix the violation, then ack with `file:ln: clause`.",
       ]
       assert store.meta_value(preview.AGENT_INTERRUPT_META) is None
@@ -10958,7 +10958,7 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
 
 
 def test_flag_carries_type_clause_file_and_cited_reason():
-  """A flag names a page-aware type, a read-set clause file and the owner's cited reason."""
+  """A flag names a page-aware type, a bible clause file and the owner's cited reason."""
   global app
   with tempfile.TemporaryDirectory() as directory:
     (Path(directory) / "ARENA.md").write_text("# Rules\n", encoding="utf-8")
@@ -10981,7 +10981,7 @@ def test_flag_carries_type_clause_file_and_cited_reason():
       closing = [
         "The call-count gate blocks after 6 unacknowledged calls.",
         "Think about which clause was violated.",
-        "Read read-set files if absent from context.",
+        "Read bible files if absent from context.",
         "Fix the violation, then ack with `file:ln: clause`.",
       ]
 
@@ -11522,7 +11522,7 @@ def test_user_flagged_report_violation_mints_a_quiet_note(capsys):
       "The user flagged a violation: report flagged-report formatting is wrong.",
       "The call-count gate blocks after 6 unacknowledged calls.",
       "Think about which clause was violated.",
-      "Read read-set files if absent from context.",
+      "Read bible files if absent from context.",
       "Fix the violation, then ack with `file:ln: clause`.",
     ]
 

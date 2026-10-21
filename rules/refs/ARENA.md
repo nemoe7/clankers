@@ -19,12 +19,12 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
-- On a rule violation, MUST read only read-set files whose current full text is absent from context before continuing.
+- On a rule violation, MUST read only bible files whose current full text is absent from context before continuing.
 - For a corrected routine slip with no impact, give one short receipt line.
 - Suggest an amendment only when an identified rule gap contributed.
 - Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
 - NEVER block open or queued tasks while a rule-violation report waits for an answer; only a task linked to a report through `--report` waits on that report.
-- At every stated read point, follow the read-set definition and duties in the Setup section.
+- At every stated read point, follow the bible definition and duties in the Setup section.
 
 ## Precedence
 
@@ -41,20 +41,20 @@
 
 - The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
 - An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
-- At session start, read the read set, then make `10-4: ARENA.md loaded` the first action after that read; find and read nested AGENTS.md files, run the installer, start the preview, then ask the visibility question.
-- On a resumed or next turn, check whether the preview runs, restart it if needed, read read-set files whose current full text is absent from context, find nested AGENTS.md files and read missing or changed instructions, then continue an open task or poll if none.
+- At session start, read the bible, then make `10-4: ARENA.md loaded` the first action after that read; find and read nested AGENTS.md files, run the installer, start the preview, then ask the visibility question.
+- On a resumed or next turn, check whether the preview runs, restart it if needed, read bible files whose current full text is absent from context, find nested AGENTS.md files and read missing or changed instructions, then continue an open task or poll if none.
 - Load the named skill for Arena work: `arena-skill` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
-- Use "read set" to mean ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md, and nothing else.
-- MUST use the read tool, NEVER Bash, to read every required read-set file in full.
-- After compaction, summary, or context replacement within a turn, read every read-set file whose current full text is absent from context end-to-end before other tool calls. For a resumed or next turn, use the resumed start sequence.
-- On a context-check reminder, MUST read every read-set file whose current full text is absent from context before continuing work.
-- NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a read-set file.
-- MUST batch required read-set reads into one call, splitting only where the harness output cap cuts the text.
+- Use "bible" to mean ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md, and nothing else.
+- MUST use the read tool, NEVER Bash, to read every required bible file in full.
+- After compaction, summary, or context replacement within a turn, read every bible file whose current full text is absent from context end-to-end before other tool calls. For a resumed or next turn, use the resumed start sequence.
+- On a context-check reminder, MUST read every bible file whose current full text is absent from context before continuing work.
+- NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a bible file.
+- MUST batch required bible reads into one call, splitting only where the harness output cap cuts the text.
 - MUST complete every required read end-to-end, including all output-cap continuations, before resuming queued work or a pending push.
 - `references/REFERENCE.md` is supplementary: read or grep the part a question needs, and no end-to-end read is required; the gate and read cadence mechanics live there. A template copy kept for installation is supplementary too.
 - For each new user chat message, MUST state once in the first assistant reply whether reasoning is enabled, with the literal line `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line. Tool results, steering notes, context compaction or summary, and agent continuation do not start a new turn.
-- After any change to a read-set file, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear.
-- In saved context, state the applicable start sequence and the duty to read missing-context read-set files in full before queued work; no verbatim ARENA.md copy is required.
+- After any change to a bible file, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear.
+- In saved context, state the applicable start sequence and the duty to read missing-context bible files in full before queued work; no verbatim ARENA.md copy is required.
 - Before the first non-setup tool call, complete the initial start sequence and wait for the visibility answer, then use `arena-preview poll` as the first inbox call.
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
 

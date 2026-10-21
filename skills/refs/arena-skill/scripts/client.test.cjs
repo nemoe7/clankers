@@ -4464,7 +4464,7 @@ test('preview client', async (t) => {
         ['bash-violation', 'process-violation', 'missing-details', 'out-of-scope', 'task-not-created'],
         'the types follow the messages tab');
       assert.deepEqual(values(1), ['', 'AGENTS.md', 'ARENA.md'],
-        'the clause files come from the state read-set');
+        'the clause files come from the state bible');
       assert.equal(control(1).options[0].text, 'No clause file');
       assert.equal(control(2).maxLength, 300);
       assert.equal(control(0).focused, true, 'the type takes focus on open');

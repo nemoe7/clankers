@@ -19,12 +19,12 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a rule collision or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file or `arena-skill`, installed copies included; suggest amendments only, unless home repo waives protection.
-- On a rule violation, MUST read only read-set files whose current full text is absent from context before continuing.
+- On a rule violation, MUST read only bible files whose current full text is absent from context before continuing.
 - Give one short receipt for a corrected routine no-impact slip.
 - Suggest amendments only for an identified contributing rule gap.
 - Corrected routine command-input/process slips (e.g. late read) alone are not rule violations.
 - NEVER block open/queued tasks on a waiting rule-violation report; only `--report`-linked tasks wait.
-- At stated read points, follow Setup read-set definition/duties.
+- At stated read points, follow Setup bible definition/duties.
 
 ## Precedence
 
@@ -37,20 +37,20 @@
 
 ## Setup
 
-- Session start: read read set; next action `10-4: ARENA.md loaded`; find/read nested AGENTS.md; install; start preview; ask visibility.
-- Resumed/next turn: check preview (restart if needed); read missing-context read-set files; find nested AGENTS.md, read missing/changed; continue open task or poll.
+- Session start: read bible; next action `10-4: ARENA.md loaded`; find/read nested AGENTS.md; install; start preview; ask visibility.
+- Resumed/next turn: check preview (restart if needed); read missing-context bible files; find nested AGENTS.md, read missing/changed; continue open task or poll.
 - Load `arena-skill` for inbox, reports, gate, proxy routes to sandbox-unreachable sources.
-- Read set: ARENA.md, root AGENTS.md with any nested AGENTS.md, and arena-skill SKILL.md only.
-- MUST read required read-set files fully via read tool, NEVER Bash.
-- After mid-turn compaction/summary/context replacement, read missing-context read-set files end-to-end before other tools; resumed/next turns use their start sequence.
-- On context-check reminders, MUST read every missing-context read-set file before continuing.
+- Bible: ARENA.md, root AGENTS.md with any nested AGENTS.md, and arena-skill SKILL.md only.
+- MUST read required bible files fully via read tool, NEVER Bash.
+- After mid-turn compaction/summary/context replacement, read missing-context bible files end-to-end before other tools; resumed/next turns use their start sequence.
+- On context-check reminders, MUST read every missing-context bible file before continuing.
 - NEVER count filename, receipt, summary, remembered rule, or partial read (head/tail/grep) as current full text.
-- MUST batch required read-set reads in one call; split only at harness output caps.
+- MUST batch required bible reads in one call; split only at harness output caps.
 - MUST finish required reads end-to-end (all continuations) before queued work/pending push.
 - `references/REFERENCE.md` is supplementary: read/grep only needed parts; no end-to-end read; gate/read-cadence mechanics live there. Installation template copies are supplementary too.
 - Each new user chat message's first reply MUST state `Reasoning: on` or `Reasoning: off` once, after any owed 10-4 line. Tool results, steering notes, compaction/summary, continuations start no new turn.
-- In saved context, state the start sequence and full missing-context read-set reads before queued work; no verbatim ARENA.md copy required.
-- After read-set changes (incl. rebase/`main` update), MUST read full diff from last-read version before next work; unavailable/unclear → read full file.
+- In saved context, state the start sequence and full missing-context bible reads before queued work; no verbatim ARENA.md copy required.
+- After bible changes (incl. rebase/`main` update), MUST read full diff from last-read version before next work; unavailable/unclear → read full file.
 - Before non-setup tools: finish initial setup, await visibility answer, then first inbox call = `arena-preview poll`.
 - First reply opens `10-4: ARENA.md loaded`; found later → next reply opens `10-4: ARENA.md loaded late (turn N)`.
 - Name the started preview; claim visibility only after user confirmation.

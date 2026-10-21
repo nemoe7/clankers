@@ -235,7 +235,7 @@ def test_the_reference_table_holds_every_gate_case() -> None:
 
 
 def test_read_set_tick_precedes_inert_line_exemptions():
-  """The merged gate reads the read set before any inert line returns."""
+  """The merged gate reads the bible before any inert line returns."""
   source = Path(preview_module.__file__).read_text(encoding="utf-8")
   tick = "# case: read-set-note"
   assert source.index("# case: shell-shape") < source.index(tick)
@@ -1069,7 +1069,7 @@ def test_violation_flag_passes_until_the_threshold():
 
 
 def test_the_read_set_gate_passes_the_workspace_root_bootstrap_line():
-  """The platform's workspace-root bootstrap outranks a due read-set checkpoint."""
+  """The platform's workspace-root bootstrap outranks a due bible checkpoint."""
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     store = preview_module.Store(root, create=True)
@@ -1184,7 +1184,7 @@ def test_read_set_input_gate_matches_inputs_not_tool_text() -> None:
         f"tail {shlex.quote(str(root / 'AGENTS.md'))}",
       ):
         warning = preview_module.read_set_input_warning(line, root)
-        assert warning and warning.startswith("READ-SET BLOCKED:"), line
+        assert warning and warning.startswith("BIBLE BLOCKED:"), line
       for line in (
         "grep ARENA.md source.py",
         "grep -e ARENA.md source.py",
@@ -1231,5 +1231,5 @@ def test_read_set_input_pre_hook_blocks_before_routing() -> None:
       check=False,
     )
     assert result.returncode == 130, result
-    assert "READ-SET BLOCKED:" in result.stderr
+    assert "BIBLE BLOCKED:" in result.stderr
     assert "read_file" in result.stderr

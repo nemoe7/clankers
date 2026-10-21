@@ -77,7 +77,7 @@ arena-preview ack <id> '<Markdown>'
 
 If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.
 
-- On a rule violation, MUST read only read-set files whose current full text is absent from context before continuing.
+- On a rule violation, MUST read only bible files whose current full text is absent from context before continuing.
 
 ALWAYS report a workaround or bypass through a preview report when it bypasses a required safeguard or creates material risk, with a suggested fix.
 

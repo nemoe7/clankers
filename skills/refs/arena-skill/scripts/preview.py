@@ -183,7 +183,7 @@ def reminder_tail(cursor, remaining, stale=0):
 
 REMINDER_CHAR_CAP = 88
 REMINDERS = (
-  "Read-set absent? MUST read ARENA.md, all AGENTS.md, arena-skill SKILL.md fully first.",
+  "Bible absent? MUST read ARENA.md, all AGENTS.md, arena-skill SKILL.md fully first.",
   "`task list` first; update as work changes.",
   "Smallest open task next.",
   "Always push.",
@@ -237,7 +237,7 @@ VIOLATION_TYPES = {
     "task-not-created",
   ),
 }
-# One repository's read-set list stays fixed during one process, so the server scans it once.
+# One repository's bible list stays fixed during one process, so the server scans it once.
 READ_SET_CACHE = {}
 CALL_GROUP_META = "call_group"
 CALL_STARTED_META = "call_started_at"
@@ -1374,13 +1374,13 @@ CLAUSE_ACK = re.compile(r"([\w./-]+\.md):([0-9]+):\s*\S")
 def clause_ack_error(text, root=None):
   """The refusal when an ack of a violation note names no clause, else the empty string.
 
-  A clause reads `file:ln: clause`, where the file is one of the read-set files.
+  A clause reads `file:ln: clause`, where the file is one of the bible files.
   The line number alone does not name a clause, so it does not clear the note.
   """
   base = Path(root or Path.cwd())
   files = read_set_files(base)
   if not files:
-    # A store outside a repository has no read set of its own, so the session's applies.
+    # A store outside a repository has no bible of its own, so the session's applies.
     base = Path.cwd()
     files = read_set_files(base)
   paths = {Path(path).name: base / path for path in files}
@@ -1392,7 +1392,7 @@ def clause_ack_error(text, root=None):
       return ""
   return (
     "An ack of a violation note must name the clause as `file:ln: clause`, for"
-    " example `ARENA.md:41: MUST read the read-set files`. The note stays pending."
+    " example `ARENA.md:41: MUST read the bible files`. The note stays pending."
   )
 
 
@@ -2441,7 +2441,7 @@ POLL_REPEAT_META = "poll_repeat"
 # A poll that returns inside this window counts as immediate, so the next one can be spam.
 POLL_IMMEDIATE_SECONDS = 1.0
 POLL_IMMEDIATE_META = "poll_immediate"
-# The wall-clock slot of the latest hidden, agent-blocking read-set checkpoint.
+# The wall-clock slot of the latest hidden, agent-blocking bible checkpoint.
 READ_SET_SLOT_META = "read_set_slot"
 # The first eligible command or latest checkpoint starts the elapsed interval.
 READ_SET_LAST_META = "read_set_last_at"
@@ -2461,7 +2461,7 @@ def read_set_slot(moment=None):
 
 
 def read_set_paths(root=None):
-  """Existing files in the required read set, in stable reading order."""
+  """Existing files in the required bible, in stable reading order."""
   root = Path(root or resolve_repo_root()).resolve()
   agents = []
   for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
@@ -2760,7 +2760,7 @@ def read_set_actions(line):
 
 
 def read_set_input_warning(line, root=None, cwd=None):
-  """Reject partial readers of known read-set inputs, not words in tool bodies."""
+  """Reject partial readers of known bible inputs, not words in tool bodies."""
   kept = []
   delimiters = []
   for row in agent_line(line).splitlines():
@@ -2887,15 +2887,13 @@ def read_set_input_warning(line, root=None, cwd=None):
       sources = paths(files, recursive) | incoming
       if head in GATE_NOISE and sources:
         name = protected[min(sources)]
-        return (
-          f"READ-SET BLOCKED: `{head}` reads {name}. Use read_file for the full file."
-        )
+        return f"BIBLE BLOCKED: `{head}` reads {name}. Use read_file for the full file."
     incoming = sources if token in ("|", "|&") else set()
   return None
 
 
 def read_set_tick(store, line, moment=None, root=None):
-  """Mint a due read-set checkpoint and let the call pass.
+  """Mint a due bible checkpoint and let the call pass.
 
   The quiet note feeds the call-count gate, so the block lands at the threshold
   and the agent still reads the note in `read`.
@@ -3959,7 +3957,7 @@ def poll_repeat(store):
   """Flag a repeated poll as a violation, or return None to run the poll.
 
   A poll inside the repeat window after an earlier poll is spam. It raises the
-  violation the next Bash call reads, so the turn rereads the read set.
+  violation the next Bash call reads, so the turn rereads the bible.
   """
   moment = poll_clock()
   previous = store.meta_value(POLL_REPEAT_META)
@@ -3973,7 +3971,7 @@ def poll_repeat(store):
     return None
   store.request_interrupt("tasks", user_flagged=False)
   return (
-    "VIOLATION: repeat poll inside 45 seconds. Read only read-set files whose "
+    "VIOLATION: repeat poll inside 45 seconds. Read only bible files whose "
     "current full text is absent from context, then work the task."
   )
 
@@ -4481,7 +4479,7 @@ class Store:
         db.execute("ALTER TABLE notes ADD COLUMN quiet INTEGER NOT NULL DEFAULT 0")
       if "blocking" not in columns:
         db.execute("ALTER TABLE notes ADD COLUMN blocking INTEGER NOT NULL DEFAULT 1")
-        # Every pre-feature quiet row is informational. Hidden read-set checkpoints
+        # Every pre-feature quiet row is informational. Hidden bible checkpoints
         # are the first quiet rows that can block, so no legacy row belongs to that class.
         db.execute("UPDATE notes SET blocking = CASE WHEN quiet = 1 THEN 0 ELSE 1 END")
       if "type" not in columns:
@@ -4728,7 +4726,7 @@ class Store:
       )
 
   def pending_read_set_note(self):
-    """Return the one outstanding hidden read-set checkpoint, if any.
+    """Return the one outstanding hidden bible checkpoint, if any.
 
     A flagged violation is also quiet and blocking, so this check skips its ID.
     """
@@ -4751,7 +4749,7 @@ class Store:
   def pending_violation_note(self):
     """Return the one outstanding violation note, if any.
 
-    A read-set checkpoint carries no type, so this query never returns one.
+    A bible checkpoint carries no type, so this query never returns one.
     """
     with closing(self.connect()) as db:
       row = db.execute(
@@ -4812,12 +4810,10 @@ class Store:
         ):
           break
       else:
-        raise RuntimeError(
-          "The state holds no free six-character ID for a read-set note"
-        )
+        raise RuntimeError("The state holds no free six-character ID for a bible note")
       listed = "\n".join(f"- `{path}`" for path in paths)
       text = (
-        f"Read-set checkpoint after a {READ_SET_INTERVAL_MINUTES}-minute interval."
+        f"Bible checkpoint after a {READ_SET_INTERVAL_MINUTES}-minute interval."
         " Read each listed path in full"
         " with the read tool only if its current full text is absent from context, then"
         " acknowledge this note.\n"
@@ -6423,7 +6419,7 @@ class Store:
         db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, row[0]))
 
   def repository_root(self):
-    """The repository that holds the state directory, whose read-set files feed the flag form."""
+    """The repository that holds the state directory, whose bible files feed the flag form."""
     return self.path.parent.parent
 
   def meta_value(self, key):
@@ -6491,7 +6487,7 @@ class Store:
     if clause_file not in (None, "") and clause_file not in read_set_files(
       self.repository_root()
     ):
-      raise ValueError("clause_file must name a read-set file")
+      raise ValueError("clause_file must name a bible file")
     if note is not None and not isinstance(note, str):
       raise ValueError("note must be text")
     cited = " ".join((note or "").split())
@@ -6542,7 +6538,7 @@ class Store:
         *evidence,
         "The call-count gate blocks after 6 unacknowledged calls.",
         "Think about which clause was violated.",
-        "Read read-set files if absent from context.",
+        "Read bible files if absent from context.",
         "Fix the violation, then ack with `file:ln: clause`.",
       ]
     )
@@ -8907,7 +8903,7 @@ def main():
     default="",
     help="Command reached by DEBUG trap",
   )
-  pre.add_argument("--repo", default=".", help="Read-set repository")
+  pre.add_argument("--repo", default=".", help="Bible repository")
   pre.add_argument("--shell", default="", help="Shell name")
   pre.add_argument(
     "--done", default="", help="This shell's completed steps, space-separated"

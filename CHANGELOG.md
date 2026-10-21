@@ -69,6 +69,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Rename the Arena read set to bible. Keep its files, reading conditions, API keys, gate phase names, and timer metadata unchanged.
+
 - Use a 15-minute elapsed context-check interval and 00/15/30/45 slot labels. Keep the startup delay and note guards.
 
 - Reduce the text in poll, report, and PR-check status messages. Keep fields, timeout instructions, streams, and exit codes.
