@@ -49,6 +49,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### skills
 
+- Split documentation sentences and paragraphs. Keep commands, conditions, metadata, and security warnings.
+
 - Shorten CLI help, errors, reminders, and installer messages. Keep commands, flags, paths, validation, streams, and exit codes.
 
 - Use descriptive placeholders for all unfilled design-example fields. Keep filled values and real-record evidence rules unchanged.
