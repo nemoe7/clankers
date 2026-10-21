@@ -15,6 +15,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### skills
 
+- Add the full UI workflow, licensed local catalogs, native CLI tools, browser evidence, declared flows, and authorized live edits. Extend design records and retain existing product authority and measurement commands.
+
 - Record UI skill source links, repository commits, and website retrieval dates.
 
 - Add minimal purpose READMEs for first-party skills. Keep the existing arena README.

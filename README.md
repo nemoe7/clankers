@@ -50,7 +50,7 @@ Latest measurements as of 2026-10-21. `maintenance/check.py --update` rebuilds t
 | [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 473,363 `B` |
 | [`skills/arena-skill/references/REFERENCE.md`](skills/arena-skill/references/REFERENCE.md) | `o200k_base` | 3,832 `tok` |
 | [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,078 `tok` |
-| [`skills/nemo-ui-ux/SKILL.md`](skills/nemo-ui-ux/SKILL.md) | `o200k_base` | 834 `tok` |
+| [`skills/nemo-ui-ux/SKILL.md`](skills/nemo-ui-ux/SKILL.md) | `o200k_base` | 1,505 `tok` |
 | [`skills/nemoizer/SKILL.md`](skills/nemoizer/SKILL.md) | `o200k_base` | 918 `tok` |
 | [`skills/squash/SKILL.md`](skills/squash/SKILL.md) | `o200k_base` | 1,377 `tok` |
 | [`system-prompts/NEMOGPT.md`](system-prompts/NEMOGPT.md) | `o200k_base` | 3,375 `tok` |

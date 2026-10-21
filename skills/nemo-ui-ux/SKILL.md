@@ -6,6 +6,42 @@ license: MIT
 
 # nemo-ui-ux
 
+## Shared workflow
+
+- Classify tasks as build, refine, audit, critique, harden, extract, or live inspection before choosing tools.
+- Preserve existing product design systems unless the user authorizes redesign.
+- Apply bundled house clauses, sheet, and work order only if no product design system exists or the user selects the house profile.
+- Record the audience, primary task, factual content, constraints, and acceptance checks before building a new interface.
+- Choose a visual direction from the brief without inventing claims, assets, or proof.
+- Search the local rule catalog for the task outcome and detected stack, and verify each recommendation against the project.
+- Identify fallback search results and missing evidence; never present them as exact matches.
+- Propose design systems without replacing existing tokens or design records before approval.
+- Record each asset's source, license, attribution, and local path before use.
+- Preserve applicable upstream licenses and notices when adapting text, code, or data.
+- Run source checks with stable finding IDs, locations, severity, and evidence before browser verification.
+- Inspect rendered pages at project widths plus 1280 and 360 px with available browser tools.
+- Test the changed task flow, including keyboard operation, focus movement, validation, loading, failure, retry, and recovery where applicable.
+- Check supported themes, reduced motion, long content, and empty, sparse, dense, error, and offline states where applicable.
+- Keep viewport screenshots, computed measurements, browser errors, and flow results with the verification report.
+- Separate automated findings, visual judgments, synthesized input, and real-device evidence in every audit.
+- Name checks that did not run, missing dependencies, and unsupported browser or device coverage without claiming a pass.
+- Report audit and critique findings without file changes unless repair is requested.
+- Keep live inspection read-only until the user authorizes a specific edit, and retain its before-and-after evidence.
+- Extract reusable tokens and component patterns without a competing source of truth.
+- Repair only the requested scope, then rerun affected source, browser, and task-flow checks.
+- Keep credentials and private page content out of external searches, asset requests, and shared artifacts.
+- Use existing design records as design authority, or docs/design.md if none exist.
+- Update the authoritative design record with settled design decisions in the same change.
+- Evaluate changed flows against the ten usability heuristics; cite observed behavior per finding.
+- Check alignment, hierarchy, color roles, typography, and useful imagery against the task and active design system.
+- Create interaction patterns only when existing patterns cannot meet the documented user need.
+- Map accessibility findings to applicable WCAG criteria with the test method, evidence, and verification status.
+- Label automated task-flow checks separately from real-participant usability sessions.
+- Mark implementation readiness and link behavior, states, assets, and component sources in each handoff.
+- Fork components only when existing variants cannot meet the task and the exception is recorded.
+
+## House profile
+
 Apply this skill to a page, a component, or an interface change. The sheet holds the values, and the design document records the calls a repository already made.
 
 ## When to use
@@ -36,7 +72,7 @@ Apply this skill to a page, a component, or an interface change. The sheet holds
 
 10. The pending row appears before the reply. A failure retries once with the same ID, so the list holds one row.
 
-11. One `docs/design.md` per repository records that repository's settled calls. A select updates it in the same change.
+11. Record settled calls in the authoritative design record.
 
 12. Read padding, margin, gap, and size per element from the rendered page, compare each with the sheet, and check 1280 and 360.
 
@@ -44,11 +80,11 @@ Apply this skill to a page, a component, or an interface change. The sheet holds
 
 ## Order of work
 
-1. Read `docs/design.md`, or create it from `references/design-document.md`.
+1. Read the authoritative design record, or create docs/design.md from references/design-document.md if none exists.
 2. Copy the declarations the page needs from `references/style.css`, and keep the role names.
 3. Read `references/examples.md` when the change touches a clause.
-4. Change the page, measure it at both widths, and fix what the check names.
-5. Update `docs/design.md` in the same change.
+4. Make only authorized page changes, then measure both widths and fix every value the check names.
+5. Update the authoritative design record with settled design decisions in the same change.
 
 ## Measuring
 
@@ -68,3 +104,8 @@ python scripts/measure.py ruler --from 120,340 --to 264,340
 - `references/examples.md`: one correct and incorrect pair per clause.
 - `references/measure.md`: the report shape, the snippet, and the ruler.
 - `scripts/measure.py`: the check and the ruler.
+
+- `scripts/uiux.py`: briefs, catalog search, system proposals, design records, assets, source checks, extraction, and evidence-based task modes.
+- `scripts/browser.cjs`: optional Playwright captures, declared flows, and authorized transient live edits.
+- `data/vendor/`: licensed catalog data and source hashes.
+- `references/tools.md`: command contracts, report fields, and coverage limits.

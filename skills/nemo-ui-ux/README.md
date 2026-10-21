@@ -1,17 +1,17 @@
 # Nemo UI/UX
 
-Build and review web pages against the house style. It provides a token sheet, design-record template, examples, and numeric measurement tools.
+Build, refine, and review web interfaces. Tools cover briefs, local catalogs, design records, assets, source checks, rendered evidence, and task flows. Existing product systems take precedence over the optional house profile.
 
 ## Setup
 
-Load [SKILL.md](SKILL.md) in an agent that supports skills. See [Skills](../README.md) for installation layout. The bundled tools need Python 3 and no extra packages.
+Load [SKILL.md](SKILL.md) in an agent that supports skills. See [Skills](../README.md) for installation layout. Local tools need Python 3.10+ and its standard library. Browser tools also need Node, the floating `playwright` package, and an available browser.
 
-The project supplies its page, running application, and browser. This skill does not install a browser or capture pages.
+The project supplies its page, running application, and browser. Tools capture pages but install no package or browser.
 
 ## Working flow
 
 1. Read the project's design record, or start from [the template](references/design-document.md).
-2. Use the roles and values in [style.css](references/style.css), with [examples](references/examples.md) for the relevant components and states.
+2. Preserve the product system, or select the house [sheet](references/style.css) and [examples](references/examples.md).
 3. Change the page and inspect the rendered states at 1280 and 360 pixels.
 4. Collect computed values with [the browser snippet](references/measure.md), check them, and retain the reports and screenshots.
 5. Update the project design record with settled decisions and evidence.
@@ -50,9 +50,39 @@ A report has this shape:
 }
 ```
 
+## Full workflow tools
+
+From the repository root in Windows cmd:
+
+```cmd
+set UI=skills\nemo-ui-ux\scripts\uiux.py
+python %UI% doctor
+python %UI% brief --task "Review the request form" --output brief.json
+python %UI% search "dashboard accessibility" --dataset ux-guidelines
+python %UI% system --brief brief.json --output system-proposal.json
+python %UI% teach --record docs/design.md
+python %UI% lint --project path\to\product
+python %UI% inspect --url https://example.com --artifacts evidence --output inspect.json
+python %UI% flow --url https://example.com --flow flow.json
+python %UI% audit --project path\to\product --url https://example.com
+python %UI% polish --project path\to\product --evidence inspect.json
+```
+
+```mermaid
+flowchart TB
+  B[Brief and authority] --> S[Search and proposal]
+  S --> C[Source checks]
+  C --> R[Rendered states and flows]
+  R --> D[Review and design record]
+```
+
+[Tool contracts](references/tools.md) describe assets, live edits, eight review modes, inputs, exit codes, and missing coverage. Review modes supply evidence and task-specific checks. Visual judgment and repairs remain agent work. Search uses licensed local CSV data with source hashes, not external page content.
+
+Read-only tools keep product files unchanged. Record creation, asset fetches, and transient live edits need their explicit command flags. Existing output files and design records are not overwritten.
+
 ## Limits
 
-Only `measure.py` is currently bundled. It reads supplied values and checks supported pixel properties against scales and named sizes. It does not start a browser or check report completeness.
+`measure.py` checks supplied pixel values. `uiux.py` adds local tools and optional browser evidence. Source checks cover selected HTML and CSS patterns. Script markup remains unverified until rendered.
 
 Missing elements and non-pixel values do not become complete coverage checks. A passing report does not prove accessibility, usability, behavior, or visual quality. Those need rendered and interaction review.
 
@@ -70,7 +100,7 @@ This README is human documentation and is not part of the installed skill payloa
 | [Vercel Web Interface Guidelines](https://github.com/vercel-labs/web-interface-guidelines/tree/434b7f91364665f2f733b310ec54809bf8f37937) | `434b7f9` | MIT |
 | [Impeccable](https://github.com/pbakaus/impeccable/tree/dad8dbb3aac21ad1fa236c110315ef4abece23e8) | `dad8dbb` | Apache 2.0 |
 
-### Websites — retrieved 2026-10-21
+### Websites — fetched 2026-10-21
 
 - [Jakob Nielsen: 10 Usability Heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/)
 - [NN/g: Good Visual Design, Explained](https://www.nngroup.com/articles/good-visual-design/)
