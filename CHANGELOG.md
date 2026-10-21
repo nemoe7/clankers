@@ -15,6 +15,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### skills
 
+- Record UI skill source links, repository commits, and website retrieval dates.
+
 - Add minimal purpose READMEs for first-party skills. Keep the existing arena README.
 
 #### nemoizer
