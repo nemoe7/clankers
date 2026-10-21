@@ -1,6 +1,6 @@
 # AI GitHub workflows
 
-Reusable GitHub Actions sources, with no instruction budget. This directory does not activate Actions. The portable Markdown workflows remain in [workflows](../../workflows/README.md).
+Reusable GitHub Actions sources, with no instruction budget. This directory does not activate Actions.
 
 ## Gemini release proposal and draft
 

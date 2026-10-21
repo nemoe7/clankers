@@ -9,7 +9,6 @@ Each reusable AI skill is a self-contained directory with a `SKILL.md` entry poi
 | [nemo-ui](nemo-ui/SKILL.md) | Build and revise web pages in a settled house style, from the typed sheet and the annotated examples to the measured result |
 | [nemoizer](nemoizer/SKILL.md) | Replace AI-flavored synonyms with the plain word, from one rotation table and a bundled linter with reviewable ignore markers |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
-| [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
 
 ## Format
 
@@ -28,12 +27,6 @@ Every skill must follow the [Agent Skills specification](https://agentskills.io/
 ## Upstream sources
 
 Adapted skills record `metadata.upstream`. Update from that source, then reapply local `Precedence`: explicit user requirements and project conventions outrank skill preferences.
-
-| Skill | Upstream |
-| --- | --- |
-| [web-interface-guidelines](web-interface-guidelines/SKILL.md) | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) |
-
-This repository maintains the other, first-party skills. `web-interface-guidelines` fetches current rules at review time, without vendoring or an update pass, and includes the upstream MIT license.
 
 ## Install
 
@@ -67,7 +60,6 @@ After setup, ask the agent to name an installed `SKILL.md` and its conditional r
 | Skill | When needed |
 | --- | --- |
 | [arena-skill](arena-skill/SKILL.md) | Arena sessions needing mid-turn messages or rendered reports, and reads of a source the sandbox cannot reach |
-| [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Reviews of an existing UI against the upstream guidelines |
 | [squash](squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |
 
 Skills stand alone, independent of the rule files in [rules/](../rules/).

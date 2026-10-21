@@ -35,6 +35,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Treat `mkdir` as inert for the read-set gate, so the harness's workspace-root `mkdir -p` prefix no longer blocks the inbox call that clears a checkpoint.
 
+### Removed
+
+#### skills
+
+- Remove portable workflows and the Web Interface Guidelines skill. Keep GitHub workflows and validation for existing portable workflow directories.
+
 ### Fixed
 
 #### preview

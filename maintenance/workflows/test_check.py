@@ -103,3 +103,16 @@ def test_core_source_installs_to_agents(tmp_path):
     base / "Documents" / "Cline" / "Rules" / "CLINE.md"
   ).read_bytes() == overlay.read_bytes()
   assert not (base / ".agents" / core.name).exists()
+
+
+def test_portable_workflows_directory_is_optional(tmp_path, monkeypatch):
+  directory = tmp_path / "workflows"
+  monkeypatch.setattr(check, "WORKFLOWS", directory)
+  errors = []
+  _, workflows = check.validate(errors)
+  assert workflows == 0
+  assert not any("workflows/README.md" in error for error in errors)
+  directory.mkdir()
+  errors = []
+  check.validate(errors)
+  assert "workflows/README.md is missing" in errors

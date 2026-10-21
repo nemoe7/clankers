@@ -56,8 +56,6 @@ EXPECTED_BUDGETS = {
   "skills/nemo-ui/SKILL.md": "o200k_base",
   "skills/nemoizer/SKILL.md": "o200k_base",
   "skills/squash/SKILL.md": "o200k_base",
-  "skills/web-interface-guidelines/SKILL.md": "o200k_base",
-  "workflows/init-docs.md": "o200k_base",
   "gpt-plugins/skills/gpt-quirks/SKILL.md": "o200k_base",
   "gpt-plugins/skills/gpt-handoff/SKILL.md": "o200k_base",
   "gpt-plugins/skills/gpt-planning/SKILL.md": "o200k_base",
@@ -119,7 +117,6 @@ STE_DOCS = (
   "maintenance/README.md",
   "skills/README.md",
   "README.md",
-  "workflows/README.md",
   ".agents/skills/README.md",
   "docs/archive/arena-quirks.md",
   "rules/README.md",
@@ -877,16 +874,18 @@ def validate(errors: list[str]) -> tuple[int, int]:
     if len(text.splitlines()) > 500:
       errors.append(f"{path.relative_to(ROOT)}: SKILL.md exceeds 500 lines")
 
+  workflows_present = WORKFLOWS.exists()
   workflows = sorted(
     path
-    for path in WORKFLOWS.iterdir()
+    for path in (WORKFLOWS.iterdir() if workflows_present else ())
     if path.suffix == ".md" and path.name != "README.md"
   )
 
   workflows_readme_path = WORKFLOWS / "README.md"
 
   if not workflows_readme_path.is_file():
-    errors.append("workflows/README.md is missing")
+    if workflows_present:
+      errors.append("workflows/README.md is missing")
   else:
     workflows_readme = workflows_readme_path.read_text(encoding="utf-8")
 

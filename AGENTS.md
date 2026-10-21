@@ -54,7 +54,6 @@ Read these first:
 - [rules/README.md](rules/README.md) — rule structure, installation, maintenance
 - [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md) — the standard for writing an AGENTS.md; audit rule files against it
 - [skills/README.md](skills/README.md) — skill format, upstream sources, install notes
-- [workflows/README.md](workflows/README.md) — workflow format, portability, usage
 - [maintenance/README.md](maintenance/README.md) — validation and measurement tooling
 
 ## Repository type
@@ -138,11 +137,6 @@ Read these first:
 - Record `metadata.upstream` for adapted skills.
 - The file stays under 500 lines.
 - A skill holds only what an agent needs to use it. NEVER add a design decision, background, rationale or history; those go to [CHANGELOG.md](CHANGELOG.md) or [docs/archive/arena-quirks.md](docs/archive/arena-quirks.md).
-
-## Workflows
-
-- Workflows in `workflows/` are portable across coding-agent platforms: the workflow body depends on no platform-specific tool, name, or mechanism.
-- Each workflow is a self-contained Markdown file with a `description` frontmatter field.
 
 ## Automations
 
