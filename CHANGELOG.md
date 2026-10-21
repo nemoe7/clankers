@@ -37,6 +37,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### tests
+
+- Check CLI command, route, note, task, and head data instead of status prose. Check ordered page results instead of fixed output row counts.
+
 #### nemoizer
 
 - Use Select in arena guides. Add scoped N003 exclusions for report and proxy record keys. Keep contracts and license bytes unchanged.

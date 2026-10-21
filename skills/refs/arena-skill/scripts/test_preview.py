@@ -8724,7 +8724,7 @@ def test_note_list_pages(tmp_path):
   assert last.stderr.strip() == "Page 3 is past the last page (2)."
   default = run()
   assert default.returncode == 0
-  assert len(default.stdout.splitlines()) == 4
+  assert default.stdout.splitlines()[1:] == ["history-2", "history-1", "history-0"]
   for flags in [("--page", "0"), ("--page-size", "0"), ("--page-size", "101")]:
     assert run(*flags).returncode != 0
   assert store.state()["notes"] == before
@@ -8733,12 +8733,18 @@ def test_note_list_pages(tmp_path):
   empty = run()
   assert empty.returncode == 0
   assert empty.stdout.splitlines() == ["Notes page 1/1 (0 total; newest first)"]
-  for index in range(21):
+  page_size = 20
+  for index in range(page_size + 1):
     store.note(f"page-{index}", "Stored note")
   default = run()
   assert default.returncode == 0
-  assert default.stdout.splitlines()[0] == "Notes page 1/2 (21 total; newest first)"
-  assert len(default.stdout.splitlines()) == 21
+  assert (
+    default.stdout.splitlines()[0]
+    == f"Notes page 1/2 ({page_size + 1} total; newest first)"
+  )
+  assert default.stdout.splitlines()[1:] == [
+    f"page-{index}" for index in reversed(range(1, page_size + 1))
+  ]
 
 
 def test_note_reread_prints_every_match():
@@ -8779,7 +8785,7 @@ def test_note_reread_prints_every_match():
     assert "first stored note" not in one.stdout
     gone = run("note", "show", "ffff999")
     assert gone.returncode == 1
-    assert "No note matches" in gone.stderr
+    assert "ffff999" in gone.stderr
 
 
 def test_poll_breaks_on_finished_run(capsys):
@@ -9128,7 +9134,7 @@ def test_cli_argument_errors_omit_usage(args):
   assert "error:" in cli.stderr and "preview.py" not in cli.stderr
   assert "usage:" not in cli.stderr.casefold()
   if not args:
-    assert "run arena-preview --help for the command list" in cli.stderr
+    assert "arena-preview --help" in cli.stderr
   if args and args[-1].startswith("not-"):
     assert args[-1] in cli.stderr
 
@@ -9802,7 +9808,7 @@ def test_the_pr_check_wait_fails_when_no_check_appears(capsys):
     out = capsys.readouterr().out
     assert code == 1, "a timeout is a failure, never a pass"
     assert "PR CHECKS NOT STARTED" in out, out
-    assert "no visible checks" in out, out
+    assert "abc1234" in out, out
     polls = preview.PR_CHECK_DISCOVERY_SECONDS // preview.PR_CHECK_DISCOVERY_STEP
     assert sleeps == [preview.PR_CHECK_DISCOVERY_STEP] * polls, (
       "the window polls to its end"
@@ -10094,7 +10100,7 @@ def test_a_blocked_read_names_the_next_task_and_its_worktree(tmp_path, capsys):
   capsys.readouterr()
   assert preview.run_log_report(tmp_path, "gate-one") == 130
   err = capsys.readouterr().err
-  assert "Next open task: next-task" in err
+  assert "next-task" in err
   assert "worktree start --gate gate-one" in err
   assert "done-task" not in err
   assert "held-run" not in err

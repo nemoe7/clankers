@@ -439,26 +439,26 @@ def test_a_full_path_hears_the_bare_command_line(tmp_path):
   spelled.chmod(0o755)
   result = run(f'"{spelled}" read')
   assert result.returncode == 0, result.stderr
-  assert "arena-preview works" in result.stderr, result.stderr
-  assert result.stderr.count("arena-preview works") == 1
+  assert "arena-preview" in result.stderr, result.stderr
+  assert result.stderr.count("arena-preview") == 1
   plain = run("arena-preview read")
   assert plain.returncode == 0, plain.stderr
-  assert "arena-preview works" not in plain.stderr
+  assert "arena-preview" not in plain.stderr
   literal = run(f': "{spelled} read"')
   assert literal.returncode == 0, literal.stderr
-  assert "arena-preview works" not in literal.stderr
+  assert "arena-preview" not in literal.stderr
 
 
 def test_an_unreachable_read_hears_the_proxy_line():
   # Code-scanning alerts and workflow run logs need the proxy, so the hook says so.
   result = run("gh api repos/o/r/code-scanning/alerts")
-  assert "carries the routes" in result.stderr, result.stderr
+  assert "proxy" in result.stderr, result.stderr
   # One line a shell, not one a call.
-  assert result.stderr.count("carries the routes") == 1
+  assert result.stderr.count("proxy") == 1
   logs = run("gh run view 7 --log")
-  assert "carries the routes" in logs.stderr, logs.stderr
+  assert "proxy" in logs.stderr, logs.stderr
   plain = run("echo plain")
-  assert "carries the routes" not in plain.stderr
+  assert "proxy" not in plain.stderr
 
 
 def git_repo(root: Path) -> Path:
