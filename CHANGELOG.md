@@ -21,6 +21,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nemoizer
 
+- Add opt-in Nemoizer sentence and paragraph counts with explicit sentence context. Share counters with prose checks and preserve standalone STE lint.
+
 - Add stable lint IDs, rule-specific nonemo exclusions, and the exclusion collector. Keep stem rotations, case handling, and the existing header condition.
 
 - Add the approved prose-review clauses. Keep the three word rotations and scanner behavior unchanged.

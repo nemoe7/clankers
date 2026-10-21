@@ -17,6 +17,8 @@ Advisory findings (passive voice, compound tenses) never fail the run.
 """
 import json
 import re
+import runpy
+from pathlib import Path
 import sys
 
 # ponytail: regex heuristics, not a parser. No noun-cluster rule — needs POS
@@ -60,7 +62,6 @@ SYNONYM_GROUPS = [
     ("change", "modify", "alter"),
 ]
 
-MAX_WORDS = 25  # descriptions cap; instructions cap is 20 but undetectable without context
 
 CODE_FENCE = re.compile(r"^(```|~~~)")
 INLINE_CODE = re.compile(r"`[^`]*`")
@@ -68,7 +69,6 @@ LIST_ITEM_START = re.compile(
     r"^(?P<indent> {0,3})(?P<marker>[-*+]|[0-9]+[.)])(?P<gap> +)(?P<body>.*)$"
 )
 CONJUNCTION_END = re.compile(r"\b(?:and|or)\s*$", re.I)
-TABLE_SEPARATOR_CELL = re.compile(r"^:?-{3,}:?$")
 
 
 def _word_re(base):
@@ -87,64 +87,12 @@ def _is_list_continuation(line, content_indent):
     return _leading_spaces(line) >= content_indent
 
 
-def _split_table_row(line):
-    """Return trimmed table cells and their zero-based source columns.
-
-    A pipe must separate at least two cells. Escaped pipes stay in their cell.
-    This deliberately implements only the ordinary Markdown table shape; it is
-    enough to distinguish a table from prose that happens to contain a pipe.
-    """
-    left = len(line) - len(line.lstrip())
-    right = len(line.rstrip())
-    content = line[left:right]
-    if "|" not in content:
-        return None
-    if content.startswith("|"):
-        content = content[1:]
-        left += 1
-    if content.endswith("|"):
-        content = content[:-1]
-    raw_cells = re.split(r"(?<!\\)\|", content)
-    if len(raw_cells) < 2:
-        return None
-
-    cells = []
-    column = left
-    for raw_cell in raw_cells:
-        leading = len(raw_cell) - len(raw_cell.lstrip())
-        cells.append((raw_cell.strip(), column + leading))
-        column += len(raw_cell) + 1
-    return cells
-
-
-def _markdown_table_cells(lines):
-    """Map ordinary Markdown table rows to their prose cells.
-
-    The separator row anchors detection, so pipe-containing prose is not
-    treated as a table. Both leading-pipe and no-leading-pipe table styles are
-    accepted when their header and body use the same number of cells.
-    """
-    table_cells = {}
-    index = 1
-    while index < len(lines):
-        separator = _split_table_row(lines[index])
-        header = _split_table_row(lines[index - 1])
-        if (not separator or not header or len(separator) != len(header)
-                or not all(TABLE_SEPARATOR_CELL.fullmatch(cell)
-                           for cell, _ in separator)):
-            index += 1
-            continue
-
-        table_cells[index - 1] = header
-        table_cells[index] = []
-        index += 1
-        while index < len(lines):
-            row = _split_table_row(lines[index])
-            if not row or len(row) != len(separator):
-                break
-            table_cells[index] = row
-            index += 1
-    return table_cells
+_PROSE_LIMITS = runpy.run_path(str(Path(__file__).with_name("prose_limits.py")))
+_split_table_row = _PROSE_LIMITS["_split_table_row"]
+_markdown_table_cells = _PROSE_LIMITS["_markdown_table_cells"]
+sentence_lengths = _PROSE_LIMITS["sentence_lengths"]
+MAX_WORDS = _PROSE_LIMITS["SENTENCE_CAPS"]["description"]
+TABLE_SEPARATOR_CELL = _PROSE_LIMITS["TABLE_SEPARATOR_CELL"]
 
 
 def _dangling_conjunction_findings(text, filename):
@@ -261,8 +209,7 @@ def lint(text, filename="<stdin>"):
                         seen_synonyms[(gi, base)] = (
                             lineno, source_column + m.start() + 1, m.group(0)
                         )
-            for sent in re.split(r"(?<=[.!?])\s+", line):
-                n = len(sent.split())
+            for n in sentence_lengths(line):
                 if n > MAX_WORDS:
                     findings.append({"file": filename, "line": lineno,
                                      "col": source_column + 1,

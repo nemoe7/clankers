@@ -31,3 +31,18 @@ value = "kind"  # nonemo: N003
 ```markdown
 <!-- nonemo: N002 -->
 ```
+
+## Prose measurements
+
+| ID | Measurement | Cap |
+| --- | --- | --- |
+| `N004` | Words per line-level sentence | Instruction: 20; description: 25; unknown: not checked |
+| `N005` | Sentences per covered paragraph | General: 6; stricter project override, such as 4 |
+
+`nemoizer prose --context instruction --paragraph-cap 4 <paths>` returns JSON findings and per-file coverage. Paths are required; the sentence context is instruction, description, or unknown.
+
+Findings carry rule, path, line, column, count, cap, and review status. Over-cap counts are review candidates, not meaning judgments; this command does not rewrite text or change the default rotation scan.
+
+Sentence counting retains STE inline-code, fence, and Markdown table-cell handling. Paragraph counting retains the repository extractor's scope and exclusions; it is not a complete Markdown parser.
+
+Existing exclusions apply at the reported line, or at file scope. Unknown IDs remain visible in the collector without suppressing a known rule; an unreadable or non-text file is marked not checked.

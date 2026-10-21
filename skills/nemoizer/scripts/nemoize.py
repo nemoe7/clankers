@@ -4,6 +4,7 @@
 """Flag rotations, rewrite text, and list every exclusion marker."""
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -17,6 +18,8 @@ ROTATIONS = (
   ("kind", r"(?<![A-Za-z0-9])kinds?(?![A-Za-z0-9])", "type"),
 )
 RULE_IDS = {"transmit": "N001", "pick": "N002", "kind": "N003"}
+PROSE_RULE_IDS = {"sentence": "N004", "paragraph": "N005"}
+KNOWN_RULE_IDS = {*RULE_IDS.values(), *PROSE_RULE_IDS.values()}
 MARKER = re.compile(r"\bnonemo:[ \t]*(.*?)(?=-->|\*/|;|\s|$|\bnonemo:)")
 # The rotation table names the avoided words, so its own rows never flag.
 TABLE_ROW = re.compile(r"^\|\s*`[^`]+`\s*\|")
@@ -95,7 +98,7 @@ def exclusions(path, lines):
     for marker in MARKER.finditer(line):
       code = marker[1]
       scope = "unknown"
-      if code in RULE_IDS.values():
+      if code in KNOWN_RULE_IDS:
         suppressed.add(code)
         scope = "file" if number <= 3 and head_marker(line, marker.start()) else "line"
         if scope == "file":
@@ -188,7 +191,93 @@ def format_paths(targets, ignores, out=None):
   return changed
 
 
+def prose_review(path, text, context, paragraph_cap):
+  """Return unsuppressed measurable candidates for one explicit text scope."""
+  from prose_limits import (
+    SENTENCE_CAPS,
+    prose_paragraphs,
+    sentence_count,
+    sentence_measurements,
+  )
+
+  lines = text.splitlines()
+  file_ids, line_ids, _ = exclusions(path, lines)
+  findings = []
+  cap = SENTENCE_CAPS.get(context)
+  code = PROSE_RULE_IDS["sentence"]
+  if cap is not None and code not in file_ids:
+    for number, column, count in sentence_measurements(text):
+      if count > cap and code not in line_ids[number - 1]:
+        findings.append(
+          {
+            "rule": code,
+            "path": str(path),
+            "line": number,
+            "column": column,
+            "count": count,
+            "cap": cap,
+            "status": "review",
+          }
+        )
+  code = PROSE_RULE_IDS["paragraph"]
+  if code not in file_ids:
+    for number, paragraph in prose_paragraphs(text):
+      count = sentence_count(paragraph)
+      if count > paragraph_cap and code not in line_ids[number - 1]:
+        findings.append(
+          {
+            "rule": code,
+            "path": str(path),
+            "line": number,
+            "column": 1,
+            "count": count,
+            "cap": paragraph_cap,
+            "status": "review",
+          }
+        )
+  return findings
+
+
+def prose_main(argv=None):
+  from prose_limits import PARAGRAPH_CAP, SENTENCE_CAPS
+
+  parser = argparse.ArgumentParser(description="Review explicitly scoped prose counts.")
+  parser.add_argument("targets", nargs="+")
+  parser.add_argument(
+    "--context", choices=[*SENTENCE_CAPS, "unknown"], default="unknown"
+  )
+  parser.add_argument("--paragraph-cap", type=int, default=PARAGRAPH_CAP)
+  arguments = parser.parse_args(argv)
+  if not 0 < arguments.paragraph_cap <= PARAGRAPH_CAP:
+    parser.error(f"--paragraph-cap must be between 1 and {PARAGRAPH_CAP}")
+  for target in arguments.targets:
+    if not Path(target).exists():
+      parser.error(f"target does not exist: {target}")
+  findings, coverage = [], []
+  for path in walk(arguments.targets, []):
+    text = text_file(path)
+    coverage.append(
+      {
+        "path": str(path),
+        "context": arguments.context,
+        "sentences": "checked"
+        if text is not None and arguments.context in SENTENCE_CAPS
+        else "not_checked",
+        "paragraphs": "checked" if text is not None else "not_checked",
+      }
+    )
+    if text is not None:
+      findings.extend(
+        prose_review(path, text, arguments.context, arguments.paragraph_cap)
+      )
+  print(json.dumps({"findings": findings, "coverage": coverage}))
+  return int(bool(findings))
+
+
 def main(argv=None):
+  argv = list(sys.argv[1:] if argv is None else argv)
+  if argv[:1] == ["prose"]:
+    return prose_main(argv[1:])
   parser = argparse.ArgumentParser(description="Flag nemoizer rotations.")
   parser.add_argument("targets", nargs="*", default=["."])
   parser.add_argument(

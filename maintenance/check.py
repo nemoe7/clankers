@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import runpy
 import subprocess
 import sys
 import time
@@ -130,9 +131,6 @@ PROSE_LINT = "maintenance/lint_prose.py"
 
 # One paragraph carries at most this many sentences. A longer one splits.
 PARAGRAPH_SENTENCE_CAP = 4
-CODE_SPAN_RE = re.compile(r"`[^`]*`")
-SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?:\s+|$)")
-LIST_OR_BLOCK_RE = re.compile(r"^(?:[-*+>|#]|\d+[.)] )")
 
 LINT_COUNT_CLAIMS = (
   (RULES / "README.md", r"(\d+) files in all"),
@@ -217,47 +215,14 @@ def check_prose(errors: list[str]) -> None:
     errors.append(f"Prose lint failed:\n{output}")
 
 
-def sentence_count(text: str) -> int:
-  """Count the sentences in one prose paragraph."""
-  cleaned = CODE_SPAN_RE.sub("code", text)
-  return len([part for part in SENTENCE_END_RE.split(cleaned) if part.strip()])
-
-
-def prose_paragraphs(text: str) -> list[tuple[int, str]]:
-  """Return each prose paragraph with the line number that opens it."""
-  blocks: list[tuple[int, str]] = []
-  lines: list[str] = []
-  start = 0
-  fenced = False
-
-  for number, line in enumerate(text.splitlines(), start=1):
-    if line.lstrip().startswith("```"):
-      fenced = not fenced
-      continue
-
-    if fenced:
-      continue
-
-    if not line.strip():
-      if lines:
-        blocks.append((start, " ".join(lines)))
-        lines = []
-      continue
-
-    if not lines:
-      start = number
-    lines.append(line.strip())
-
-  if lines:
-    blocks.append((start, " ".join(lines)))
-
-  prose = []
-  for number, block in blocks:
-    if LIST_OR_BLOCK_RE.match(block):
-      continue
-    prose.append((number, block))
-
-  return prose
+_PROSE_LIMITS = runpy.run_path(
+  str(ROOT / "skills/refs/nemoizer/scripts/prose_limits.py")
+)
+sentence_count = _PROSE_LIMITS["sentence_count"]
+prose_paragraphs = _PROSE_LIMITS["prose_paragraphs"]
+CODE_SPAN_RE = _PROSE_LIMITS["CODE_SPAN_RE"]
+SENTENCE_END_RE = _PROSE_LIMITS["SENTENCE_END_RE"]
+LIST_OR_BLOCK_RE = _PROSE_LIMITS["LIST_OR_BLOCK_RE"]
 
 
 def paragraph_violations(name: str, text: str) -> list[str]:

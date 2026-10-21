@@ -233,3 +233,80 @@ def test_format_preserves_invalid_utf8_and_still_formats_valid_text(tmp_path):
   assert result.returncode == 0, result.stderr
   assert invalid.read_bytes() == original
   assert valid.read_text(encoding="utf-8") == "caf\u00e9 type\n"
+
+
+def test_prose_context_counts_and_rule_exclusions(tmp_path):
+  import importlib.util
+  import json
+
+  source = tmp_path / "example.md"
+  source.write_text("Run.\n")
+  probe = run("prose", "--context", "instruction", str(source), cwd=tmp_path)
+  assert probe.returncode == 0, probe.stderr
+
+  helper = SCRIPT.with_name("prose_limits.py")
+  spec = importlib.util.spec_from_file_location("prose_limits", helper)
+  limits = importlib.util.module_from_spec(spec)
+  spec.loader.exec_module(limits)
+  instruction_cap = limits.SENTENCE_CAPS["instruction"]
+  description_cap = limits.SENTENCE_CAPS["description"]
+  assert instruction_cap < description_cap
+  source = tmp_path / "example.md"
+  sentence = " ".join("term" for _ in range(instruction_cap + 1)) + "."
+  source.write_text(sentence + "\n")
+
+  def inspect(context, *extra):
+    result = run("prose", "--context", context, *extra, str(source), cwd=tmp_path)
+    assert result.returncode in (0, 1), result.stderr
+    return json.loads(result.stdout)
+
+  instruction = inspect("instruction")
+  description = inspect("description")
+  assert instruction["findings"]
+  assert not description["findings"]
+  finding = instruction["findings"][0]
+  assert finding["count"] > finding["cap"] == instruction_cap
+  assert finding["path"] == str(source)
+  assert finding["line"] == source.read_text().splitlines().index(sentence) + 1
+  assert inspect("unknown")["coverage"][0]["sentences"] == "not_checked"
+  code = finding["rule"]
+  source.write_text(f"<!-- nonemo: {code} -->\n{sentence}\n")
+  assert not inspect("instruction")["findings"]
+  listing = run("--ignores", str(source), cwd=tmp_path)
+  assert listing.returncode == 0 and code in listing.stdout
+
+  cap = limits.PARAGRAPH_CAP
+  source.write_text(" ".join("Short." for _ in range(cap + 1)) + "\n")
+  paragraphs = inspect("description")["findings"]
+  assert paragraphs and paragraphs[0]["count"] > paragraphs[0]["cap"] == cap
+  source.write_text(" ".join("Short." for _ in range(cap)) + "\n")
+  assert not inspect("description")["findings"]
+  stricter = cap - 1
+  assert inspect("description", "--paragraph-cap", str(stricter))["findings"]
+  relaxed = run("prose", "--paragraph-cap", str(cap + 1), str(source), cwd=tmp_path)
+  assert relaxed.returncode == 2
+  source.write_text("```\n" + sentence + "\n```\n")
+  assert not inspect("instruction")["findings"]
+  import shutil
+
+  portable = tmp_path / "portable"
+  shutil.copytree(
+    SCRIPT.parent.parent, portable, ignore=shutil.ignore_patterns("__pycache__")
+  )
+  source.write_text("Run.\n")
+  shipped = subprocess.run(
+    [
+      sys.executable,
+      str(portable / "scripts/nemoizer"),
+      "prose",
+      "--context",
+      "instruction",
+      str(source),
+    ],
+    capture_output=True,
+    text=True,
+    check=False,
+    cwd=tmp_path,
+  )
+  assert shipped.returncode == 0, shipped.stderr
+  assert not json.loads(shipped.stdout)["findings"]
