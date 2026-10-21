@@ -8865,19 +8865,19 @@ def main():
     "-r",
     "--reminder",
     action="store_true",
-    help="Print the unacked-count reminder line and exit",
+    help="Print unacked-count reminder; exit",
   )
   commands = parser.add_subparsers(dest="command", required=False)
-  serve = commands.add_parser("serve", help="Serve the preview page; -p names the port")
+  serve = commands.add_parser("serve", help="Serve preview page; -p names port")
   serve.add_argument(
     "-p",
     "--port",
     type=int,
     default=DEFAULT_PORT,
-    help=f"Port to bind (default: {DEFAULT_PORT}; only supported port)",
+    help=f"Port (default: {DEFAULT_PORT}; only supported port)",
   )
-  init = commands.add_parser("init", help="Create the state directory and its database")
-  init.add_argument("--tz", help="An IANA zone for CLI stamps. The TZ env still wins")
+  init = commands.add_parser("init", help="Create state directory and database")
+  init.add_argument("--tz", help="CLI stamp IANA zone; TZ env wins")
   commands.add_parser("read", help="Print every pending note, answer and upload")
   commands.add_parser(
     "skills",
@@ -8887,7 +8887,7 @@ def main():
   note_verbs = note_group.add_subparsers(dest="verb", required=True)
   note_list = note_verbs.add_parser(
     "list",
-    help="List stored note IDs by page, newest first, including acknowledged notes",
+    help="Stored note IDs by page, newest first; acknowledged included",
   )
   note_list.add_argument("--page", type=int, default=1, help="Page number (default: 1)")
   note_list.add_argument(
@@ -8895,120 +8895,106 @@ def main():
   )
   note_reread = note_verbs.add_parser(
     "show",
-    help="Reread a stored note by its short or full ID",
+    help="Reread stored note by short or full ID",
   )
-  note_reread.add_argument("id", help="Six or all characters of a note ID")
+  note_reread.add_argument("id", help="Six or all note ID characters")
   image_uri = commands.add_parser(
     "image-data-uri",
-    help="Print Markdown text that carries one local image as a data URI",
+    help="Print Markdown: one local image as data URI",
   )
   image_uri.add_argument(
     "path", type=Path, help="One local PNG, JPEG, GIF or WebP file up to 2 MiB"
   )
   commands.add_parser("key", help="Print the recorded agent key, host and use line")
   pre = commands.add_parser(
-    "pre", help="Run every pre-Bash gate rule in order, and name the steps it ran"
+    "pre", help="Run all pre-Bash gates in order; list completed steps"
   )
-  pre.add_argument(
-    "--line", default="", help="The shell command line, as the hook read it"
-  )
+  pre.add_argument("--line", default="", help="Shell command line from hook")
   pre.add_argument(
     "--command",
     dest="command_text",
     default="",
-    help="The command the DEBUG trap reached",
+    help="Command reached by DEBUG trap",
   )
-  pre.add_argument("--repo", default=".", help="The repository the read set needs")
-  pre.add_argument("--shell", default="", help="The shell's own name")
+  pre.add_argument("--repo", default=".", help="Read-set repository")
+  pre.add_argument("--shell", default="", help="Shell name")
   pre.add_argument(
-    "--done", default="", help="The steps this shell already ran, space separated"
+    "--done", default="", help="This shell's completed steps, space-separated"
   )
-  run_group = commands.add_parser(
-    "run", help="Start a long command and read its result"
-  )
+  run_group = commands.add_parser("run", help="Start long command; read result")
   run_verbs = run_group.add_subparsers(dest="verb", required=True)
   route = run_verbs.add_parser(
     "start",
-    help=(
-      "Start a command detached, keep its output tail, and show the exit on a later"
-      " call"
-    ),
+    help=("Detach command, keep output tail; show exit on later call"),
   )
   route.add_argument(
     "--task",
     dest="task_id",
     metavar="TASK-ID",
-    help="Link this run to an upcoming task instead of the current task",
+    help="Link run to upcoming task, not current task",
   )
-  route.add_argument("name", help="A short name for the run, for example gates")
-  route.add_argument(
-    "command_args", nargs=argparse.REMAINDER, help="The command, after --"
-  )
+  route.add_argument("name", help="Short run name; example: gates")
+  route.add_argument("command_args", nargs=argparse.REMAINDER, help="Command after --")
   # The child side of `route`. The gate and the CLI both spawn it, so one place runs
   # the command and writes the finished record.
   route_run = commands.add_parser(
     "route-run",
-    help="Run one command here and record its exit for a later call",
+    help="Run command here; record exit for later call",
   )
-  route_run.add_argument("name", help="The run name the caller already recorded")
+  route_run.add_argument("name", help="Run name already recorded by caller")
   route_run.add_argument(
-    "command_args", nargs=argparse.REMAINDER, help="The command, after --"
+    "command_args", nargs=argparse.REMAINDER, help="Command after --"
   )
   logs = run_verbs.add_parser(
-    "logs", help="Print a routed run's status and its recorded output tail"
+    "logs", help="Print routed run status and recorded output tail"
   )
-  logs.add_argument("name", help="The run name to read")
+  logs.add_argument("name", help="Run name to read")
   worktree = commands.add_parser(
-    "worktree", help="Create or collect a detached task worktree beside a root gate"
+    "worktree", help="Create or collect detached task worktree beside root gate"
   )
   worktree_action = worktree.add_subparsers(dest="worktree_action", required=True)
   worktree_start = worktree_action.add_parser(
-    "start", help="Create a detached worktree beside a root gate, or without one"
+    "start", help="Create detached worktree beside root gate, or without one"
   )
-  worktree_start.add_argument("name", help="A short worktree name")
+  worktree_start.add_argument("name", help="Short worktree name")
+  worktree_start.add_argument("destination", type=Path, help="New path outside root")
   worktree_start.add_argument(
-    "destination", type=Path, help="A new path outside the root"
-  )
-  worktree_start.add_argument(
-    "--gate", default=None, help="The running root gate name (optional)"
+    "--gate", default=None, help="Running root gate name; optional"
   )
   worktree_start.add_argument(
-    "--allow", action="append", default=[], help="A path glob task work may change"
+    "--allow", action="append", default=[], help="Glob of paths task may change"
   )
   worktree_collect = worktree_action.add_parser(
-    "collect", help="Print the allowed detached-worktree patch after a green root gate"
+    "collect", help="Print allowed detached-worktree patch after root gate passes"
   )
-  worktree_collect.add_argument("name", help="The worktree name to collect")
+  worktree_collect.add_argument("name", help="Worktree name to collect")
   rename = commands.add_parser(
     "rename",
-    help="Move a note, answer, report or task to a new ID",
+    help="Move note, answer, report, or task to new ID",
   )
-  rename.add_argument("old_id", help="The stored ID, or a prefix that names one record")
-  rename.add_argument("new_id", help="The ID to move the record to")
+  rename.add_argument("old_id", help="Stored ID or unique record prefix")
+  rename.add_argument("new_id", help="Destination record ID")
   gate = commands.add_parser(
     "gate",
-    help="Read the inbox gate; -p blocks on any unacked note, -l names the blocked line",
+    help="Inbox gate; -p blocks on any unacked note; -l names blocked line",
   )
   gate.add_argument(
     "-p",
     "--push",
     action="store_true",
-    help="Block while any note or answer awaits an ack, whatever the call count",
+    help="Block on any unacked note or answer, regardless of call count",
   )
   gate.add_argument(
     "-l",
     "--line",
     default="",
-    help="The command line, as the hook read it; a blocked call then names the commands to drop",
+    help="Command line from hook; blocked calls name commands to drop",
   )
-  commands.add_parser(
-    "poll", help="Block until the owner answers or a gate run finishes"
-  )
+  commands.add_parser("poll", help="Wait for owner answer or gate completion")
   download = commands.add_parser(
     "download-request",
     help=(
-      "Request an HTTPS browser download, pending a preview Approve click;"
-      " -a allows the proxy fallback"
+      "Request HTTPS browser download; preview Approve click required; -a allows proxy fallback"
     ),
   )
   download.add_argument("url", help="One HTTPS URL without embedded credentials")
@@ -9016,7 +9002,7 @@ def main():
     "-a",
     "--allow-proxy",
     action="store_true",
-    help="Let the owner opt in to AllOrigins and CodeTabs fallback for this request",
+    help="Owner may opt in to AllOrigins and CodeTabs fallback for this request",
   )
   ack = commands.add_parser(
     "ack",
@@ -9032,14 +9018,12 @@ def main():
     "report", help="Publish, withdraw and inspect reports"
   )
   report_verbs = report_group.add_subparsers(dest="verb", required=True)
-  publish = report_verbs.add_parser(
-    "publish", help="Publish a report; -i names the ID, -t the title"
-  )
+  publish = report_verbs.add_parser("publish", help="Publish report; -i ID, -t title")
   publish.add_argument("source", type=Path)
   publish.add_argument("-i", "--id", required=True)
   publish.add_argument("-t", "--title", required=True)
   unpublish = report_verbs.add_parser(
-    "unpublish", help="Withdraw a report by ID, or every stale report with --stale"
+    "unpublish", help="Withdraw report by ID, or all stale reports with --stale"
   )
   unpublish.add_argument("report_id", nargs="?")
   unpublish.add_argument(
@@ -9056,9 +9040,7 @@ def main():
   report_state.add_argument("report_id", nargs="?")
   task_group = commands.add_parser("task", help="Read and update tasks")
   task_verbs = task_group.add_subparsers(dest="verb", required=True)
-  task_list = task_verbs.add_parser(
-    "list", help="List the tasks; -f includes the finished ones"
-  )
+  task_list = task_verbs.add_parser("list", help="List tasks; -f includes finished")
   task_list.add_argument(
     "-f", "--full", action="store_true", help="print every task, finished included"
   )
@@ -9067,7 +9049,7 @@ def main():
   task = task_verbs.add_parser(
     "set",
     help=(
-      "Write or update a task; -s status, -o order, -d details, -A append,"
+      "Write/update task; -s status, -o order, -d details, -A append,"
       " -m message, -r report, -u unblocked, -a amend, --type type"
     ),
   )
@@ -9079,7 +9061,7 @@ def main():
     "--details",
     dest="task_details",
     action="append",
-    help="One step per line, 120 characters or fewer, repeatable",
+    help="One step per line; max 120 characters; repeatable",
   )
   task.add_argument(
     "-A",
@@ -9094,24 +9076,24 @@ def main():
     dest="blocked",
     action="store_false",
     default=None,
-    help="Clear a report wait or legacy blocked mark",
+    help="Clear report wait or legacy blocked mark",
   )
   task.add_argument(
     "-m",
     "--msg-id",
-    help="Message this task answers; marks that message as having a task",
+    help="Message task answers; mark it as having a task",
   )
   task.add_argument(
     "-r",
     "--report",
     metavar="REPORT-ID",
-    help="Report this task waits on; its answer clears the blocked mark",
+    help="Awaited report; answer clears blocked mark",
   )
   task.add_argument(
     "-a",
     "--amend",
     metavar="PREV-ID",
-    help="Rename the task stored under this ID to the one given",
+    help="Rename task under this ID to given ID",
   )
   task.add_argument(
     "-b",
@@ -9119,7 +9101,7 @@ def main():
     dest="blocked_by",
     action="append",
     metavar="TASK-ID",
-    help="Task this one waits on, repeatable; a cycle is refused",
+    help="Dependency task; repeatable; cycles refused",
   )
   task.add_argument("-s", "--status", choices=TASK_STATUSES, default=None)
   task.add_argument(
@@ -9127,28 +9109,28 @@ def main():
     dest="task_type",
     choices=TASK_TYPES,
     default=None,
-    help="Primary deliverable type; an omitted flag keeps a stored type",
+    help="Primary deliverable type; omitted flag keeps stored type",
   )
   task.add_argument(
     "-o",
     "--order",
     type=int,
     default=None,
-    help="1-based place in its div, not the end",
+    help="1-based place within div, not end",
   )
-  task_remove = task_verbs.add_parser("remove", help="Delete a task by its ID")
+  task_remove = task_verbs.add_parser("remove", help="Delete task by ID")
   task_remove.add_argument("task_id")
-  state_group = commands.add_parser("state", help="Import or clear the stored state")
+  state_group = commands.add_parser("state", help="Import or clear stored state")
   state_verbs = state_group.add_subparsers(dest="verb", required=True)
   state_import = state_verbs.add_parser(
     "import",
-    help="Import an NDJSON backup; replaces the live state",
+    help="Import NDJSON backup; replace live state",
   )
   state_import.add_argument("source", nargs="?", type=Path)
   state_import.add_argument("-r", "--replace-tasks", action="store_true")
   state_verbs.add_parser(
     "clear",
-    help="Empty every state table in place; the agent key record survives",
+    help="Empty all state tables in place; keep agent key record",
   )
   args = parser.parse_args()
   if args.command == "serve" and args.port != DEFAULT_PORT:

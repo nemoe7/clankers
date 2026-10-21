@@ -9127,10 +9127,7 @@ def test_cli_wrapper_errors_have_no_program_prefix():
   with tempfile.TemporaryDirectory() as directory:
     wrapper = Path(directory) / "arena-preview"
     wrapper.write_text(source, encoding="utf-8")
-    for initialize, expected in [
-      (False, "run from a Git repository"),
-      (True, "missing"),
-    ]:
+    for initialize in (False, True):
       if initialize:
         subprocess.run(["git", "init", "-q", directory], check=True)
       result = subprocess.run(
@@ -9142,7 +9139,22 @@ def test_cli_wrapper_errors_have_no_program_prefix():
         env={**os.environ, "HOME": directory},
       )
       assert result.returncode == 2
-      assert expected in result.stderr
+      if initialize:
+        expected_python = (
+          Path(directory) / ".agents" / ".arena-preview-venv" / "bin" / "python"
+        )
+        expected_installer = (
+          Path(directory)
+          / ".agents"
+          / "skills"
+          / "arena-skill"
+          / "scripts"
+          / "install.sh"
+        )
+        assert str(expected_python) in result.stderr
+        assert str(expected_installer) in result.stderr
+      else:
+        assert "Git" in result.stderr
       assert "arena-preview: " not in result.stderr
       assert result.stdout == ""
 

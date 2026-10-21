@@ -39,6 +39,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### skills
 
+- Shorten CLI help, wrapper errors, and installer messages. Keep commands, flags, paths, validation, and exit codes.
+
 - Use descriptive placeholders for all unfilled design-example fields. Keep filled values and real-record evidence rules unchanged.
 
 - Expand the Nemo UI/UX, Nemoizer, and Squash READMEs with setup, examples, available tools, and limits. Keep UI source credits and exclude the pages from distribution.
