@@ -52,7 +52,7 @@ Use `textarea` for longer or open-ended answers; use `input` for a short expecte
 
 ### Other input types
 
-Use `date-picker`, `slider`, `segmented-control`, or another supported control when its data type fits. Give their choice groups the same custom option and input.
+Use `date-selector`, `slider`, `segmented-control`, or another supported control when its data type fits. Give their choice groups the same custom option and input.
 
 For several independent values, group related controls in one `form` and submit answers together.
 
@@ -212,16 +212,16 @@ Use this pattern when one form carries questions with different selection counts
 
 ```jsx
 {@body
-const [pick, setPick] = DIL.useState("");
-const [pickCustom, setPickCustom] = DIL.useState("");
+const [select, setPick] = DIL.useState("");
+const [selectCustom, setPickCustom] = DIL.useState("");
 const [pair, setPair] = DIL.useState([]);
 const [pairCustom, setPairCustom] = DIL.useState("");
 const [any, setAny] = DIL.useState([]);
 const [anyCustom, setAnyCustom] = DIL.useState("");
-const pickOptions = ["Speed", "Cost"];
+const selectOptions = ["Speed", "Cost"];
 const pairOptions = ["Retry", "Alert"];
 const anyOptions = ["Logs", "Metrics"];
-const pickCustomChosen = pick === "Custom answer";
+const selectCustomChosen = select === "Custom answer";
 const pairCustomChosen = pair.includes("Custom answer");
 const anyCustomChosen = any.includes("Custom answer");
 const toggle = (list, setList) => (option, checked) => {
@@ -233,17 +233,17 @@ const toggle = (list, setList) => (option, checked) => {
 };
 const togglePair = toggle(pair, setPair);
 const toggleAny = toggle(any, setAny);
-const pickValid = Boolean(pick) && (!pickCustomChosen || Boolean(pickCustom.trim()));
+const selectValid = Boolean(select) && (!selectCustomChosen || Boolean(selectCustom.trim()));
 const pairValid = pair.length === 2 && (!pairCustomChosen || Boolean(pairCustom.trim()));
 const anyValid = any.length >= 1 && (!anyCustomChosen || Boolean(anyCustom.trim()));
-const canSubmit = pickValid && pairValid && anyValid;
+const canSubmit = selectValid && pairValid && anyValid;
 }
 <form
   gap={3}
   onSubmit={() => GenUI.issueNewTurn([
     "Question 1, exactly one: Which goal leads?",
-    `Selected option: ${pick || "(none)"}`,
-    ...(pickCustomChosen ? [`Custom answer: ${pickCustom.trim()}`] : []),
+    `Selected option: ${select || "(none)"}`,
+    ...(selectCustomChosen ? [`Custom answer: ${selectCustom.trim()}`] : []),
     "Question 2, exactly two: Which safeguards run?",
     "Selected options:",
     ...pair.map(option => `- ${option}`),
@@ -255,18 +255,18 @@ const canSubmit = pickValid && pairValid && anyValid;
   ].join("\n"))}
 >
   <radio-group
-    value={pick}
+    value={select}
     onChange={setPick}
     label="Choose exactly one"
   >
-    {#each pickOptions as option}
+    {#each selectOptions as option}
       <radio value={option}>{option}</radio>
     {/each}
     <radio value="Custom answer">Custom answer</radio>
   </radio-group>
-  {#if pickCustomChosen}
+  {#if selectCustomChosen}
     <textarea
-      value={pickCustom}
+      value={selectCustom}
       onChange={setPickCustom}
       placeholder="Custom answer"
       rows={2}

@@ -45,7 +45,7 @@
     "auto-wake": ["clicked", "filled"],
     fill: ["inserted", "rebuilt", "no-repo", "no-composer", "no-template", "filled"],
     trim: ["removed"],
-    state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-picker", "requested", "picker-closed", "reset-accept"],
+    state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-selector", "requested", "selector-closed", "reset-accept"],
     wake: ["refused", "unavailable"],
     title: ["changed", "restored", "conditions"],
   };
@@ -53,7 +53,7 @@
     feature: ["auto-wake", "prompt-fill", "open-steering", "preview-sandbox", "auto-scroll", "transcript-trim", "transcript-alerts", "hide-composer", "state-download", "keep-awake", "tab-title"],
     group: ["note", "task"],
     verdict: ["older", "same", "forward"],
-    kind: ["none", "chat", "reasoning", "poll", "play", "action", "error", "unchanged", "stale", "download"],
+    type: ["none", "chat", "reasoning", "poll", "play", "action", "error", "unchanged", "stale", "download"],
     route: ["link", "manager", "stamped"],
     emoji: ["", "💬", "💭", "🖥️", "📖", "✏️", "🔍", "💤", "📜", "❓", "⚙️", "⏳", "🛡️"],
     level: LOG_LEVELS,
@@ -533,12 +533,12 @@
       return base + "/api/key";
     }
 
-    function keyNote(kind, key, atIso, host) {
+    function keyNote(type, key, atIso, host) {
       return (
         "Arena proxy " +
         host +
         " key " +
-        kind +
+        type +
         " at " +
         atIso +
         ". New key: " +
@@ -548,10 +548,10 @@
       );
     }
 
-    function noteKey(key, host, kind) {
+    function noteKey(key, host, type) {
       if (GM_getValue(NOTED_KEY, "") === key) return;
       GM_setValue(NOTED_KEY, key);
-      postKeyNote(keyNote(kind, key, new Date().toISOString(), host));
+      postKeyNote(keyNote(type, key, new Date().toISOString(), host));
     }
 
     function keyChanged(held, incoming) {
@@ -2107,7 +2107,7 @@
     if (!stamp) {
       logEvent("state", "no-stamp", null, "debug");
       return {
-        kind: "error",
+        type: "error",
         message: "The state carries no stamp; the next save names it.",
       };
     }
@@ -2131,14 +2131,14 @@
     }
     if (!force && memory.stamp && memory.stamp === stamp) {
       return {
-        kind: "unchanged",
+        type: "unchanged",
         name: name,
         message: "State unchanged since the last write: " + name,
       };
     }
     if (!force && memory.stamp && String(stamp) < memory.stamp) {
       return {
-        kind: "stale",
+        type: "stale",
         name: name,
         message:
           "Stale preview state (" + stamp + " is older than " + memory.stamp + "); nothing written.",
@@ -2147,12 +2147,12 @@
     if (held.length) {
       var phrase = held.join(" and ") + (held.length > 1 ? " stamps" : " stamp");
       return {
-        kind: "stale",
+        type: "stale",
         name: name,
         message: "Rolled-back preview state (" + phrase + " went backward); nothing written.",
       };
     }
-    return { kind: "download", name: name, message: "Wrote " + name };
+    return { type: "download", name: name, message: "Wrote " + name };
   }
 
   function handleMatchesScope(handle, repo, branch) {
@@ -2170,7 +2170,7 @@
   }
 
   function overwriteAsk(moved, plan, hasHandle, force) {
-    return !force && Boolean(moved) && hasHandle && plan.kind === "download";
+    return !force && Boolean(moved) && hasHandle && plan.type === "download";
   }
 
   function overwriteLine(name, context) {
@@ -2243,14 +2243,14 @@
   }
 
   function stateDelivery(plan, hasHandle, hasPicker) {
-    if (plan.kind !== "download") return plan.kind;
+    if (plan.type !== "download") return plan.type;
     if (hasHandle) return "write";
-    return hasPicker ? "pick" : "download";
+    return hasPicker ? "select" : "download";
   }
 
   function stateAction(route, manual) {
-    if (!manual) return route === "pick" || route === "download" ? "block" : route;
-    return route === "pick" ? "hint" : route;
+    if (!manual) return route === "select" || route === "download" ? "block" : route;
+    return route === "select" ? "hint" : route;
   }
 
   function getLine(status, base) {
@@ -2275,7 +2275,7 @@
   var STATE_LINES = {
     hint: "no file selected; launching dialog",
     history: "history does not match",
-    pickerClosed: "no file selected;",
+    selecterClosed: "no file selected;",
     noPreview: "no preview detected",
     noBranch: "The session branch is missing. State save is blocked.",
   };
@@ -2482,8 +2482,8 @@
       GM_setValue(stampKey(storeKey), JSON.stringify(stateMemory(stamp, stamps)));
     }
     var stateBusy = false;
-    var picked = null;
-    var pickedKey = null;
+    var selected = null;
+    var selectedKey = null;
 
     function previewBase(doc) {
       var frames = doc.querySelectorAll("iframe[title]");
@@ -2554,16 +2554,19 @@
       } catch (err) {
         records = text.split(/\r?\n/).filter(function (line) { return line.trim(); }).map(function (line) { return JSON.parse(line); });
       }
-      return records.filter(function (record) { return record.kind !== "userscript-autosave"; });
+      return records.filter(function (record) {
+        var recordType = record.type === undefined ? record.kind : record.type;  // nemoizer: ignore
+        return recordType !== "userscript-autosave";
+      });
     }
 
     function pagePicker() {
       var page = typeof unsafeWindow !== "undefined" ? unsafeWindow : null;
       if (!page && typeof window !== "undefined") page = window;
-      var picker = page && page.showSaveFilePicker;
-      if (typeof picker !== "function") return null;
+      var selector = page && page.showSaveFilePicker;
+      if (typeof selector !== "function") return null;
       return function (options) {
-        return picker.call(page, options);
+        return selector.call(page, options);
       };
     }
 
@@ -2832,7 +2835,7 @@
         }
         var rememberedBase = GM_getValue(baseKey(lastScope || storeKey), "");
         var rememberedBranch = GM_getValue(branchKey(lastScope || storeKey), "");
-        var handle = pickedKey === storeKey && picked ? picked : await stateHandle(fileKey(storeKey));
+        var handle = selectedKey === storeKey && selected ? selected : await stateHandle(fileKey(storeKey));
         if (handle && !handleMatchesScope(handle, scope.repo, scope.branch)) {
           stateError("The selected file, " + handle.name + ", does not match this repository and branch. Choose " + stateFileName(scope.repo, scope.branch, "", null) + ".",
             "Choose file", chooseStateFile, "wrong-file");
@@ -2863,7 +2866,7 @@
           return;
         }
         if (!force && inSync && body.digest === (baseline && baseline.digest)) return;
-        var plan = { kind: "download", name: stateFileName(scope.repo, scope.branch, body.stamp, body.counts) };
+        var plan = { type: "download", name: stateFileName(scope.repo, scope.branch, body.stamp, body.counts) };
         var moved = saveMoved(scope.branch, rememberedBase, base, lastScope, rememberedBranch);
         var asks = overwriteAsk(moved, plan, Boolean(handle), force);
         var accepted = asks && resetWindowAccepts(new Date(), resetWindowOn(), scope.branch, rememberedBase, base, rememberedBranch);
@@ -2875,14 +2878,14 @@
           });
           return;
         }
-        picked = handle || null;
-        pickedKey = handle ? storeKey : null;
+        selected = handle || null;
+        selectedKey = handle ? storeKey : null;
         var name = writtenName(handle, plan.name);
         if (handle) {
           try { await writeToHandle(handle, body.text); }
           catch (err) {
-            picked = null;
-            pickedKey = null;
+            selected = null;
+            selectedKey = null;
             stateError(writeFailLine(err), "Choose file", chooseStateFile, "write");
             return;
           }
@@ -2907,12 +2910,12 @@
     }
 
     function chooseStateFile() {
-      var pick = pagePicker();
-      if (!pick) {
+      var select = pagePicker();
+      if (!select) {
         stateError("This browser cannot write directly to a selected file. Force save can request a timestamped download.", null, null, "file-api");
         return;
       }
-      pick({
+      select({
         suggestedName: (function () {
           var scope = stateScope(document);
           return stateFileName(scope.repo, scope.branch, "", null);
@@ -2928,8 +2931,8 @@
           var scope = stateScope(document);
           var storeKey = stateScopeKey(scope.repo, scope.branch);
           return saveStateHandle(handle, fileKey(storeKey)).then(function () {
-            picked = handle;
-            pickedKey = storeKey;
+            selected = handle;
+            selectedKey = storeKey;
             GM_setValue(stampKey(storeKey), "");
             GM_setValue(STATE_HINT_KEY, false);
             removeStatePanel();
@@ -2937,7 +2940,7 @@
           });
         })
         .catch(function () {
-          logEvent("state", "picker-closed", null, "debug");
+          logEvent("state", "selector-closed", null, "debug");
         });
     }
 
@@ -3294,12 +3297,12 @@
         titleRowKind = "none";
         return null;
       }
-      var kind = rowKind(row);
-      if (kind === "chat") {
+      var type = rowKind(row);
+      if (type === "chat") {
         titleRowKind = "chat";
         return AGENT_EMOJI;
       }
-      if (kind === "reasoning") {
+      if (type === "reasoning") {
         titleRowKind = "reasoning";
         return REASONING_EMOJI;
       }
@@ -3443,7 +3446,7 @@
       var desired = desiredTitle(doc);
       if (desired) {
         if (doc.title === desired) return false;
-        logEvent("title", "changed", { kind: titleRowKind || "none", emoji: titleEmoji, repo: repoForTitle(doc) });
+        logEvent("title", "changed", { type: titleRowKind || "none", emoji: titleEmoji, repo: repoForTitle(doc) });
         logEvent("title", "conditions", titleConditions, "debug");
         appliedTitle = desired;
         doc.title = desired;

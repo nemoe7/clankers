@@ -103,7 +103,7 @@ def test_edited_ack_stamp():
     assert row["ack_text"] == "First answer", "the first answer is not replaced"
     assert row["ack_edited_at"] == "2026-09-22T12:01:00"
     assert row["replies"] == [
-      {"kind": "reply", "text": "Second answer", "at": "2026-09-22T12:01:00"}
+      {"type": "reply", "text": "Second answer", "at": "2026-09-22T12:01:00"}
     ]
     answer = edited.submissions()[0]
     assert answer["ack_edited_at"] == row["ack_edited_at"]
@@ -112,7 +112,7 @@ def test_edited_ack_stamp():
       edited.acknowledge(ids, "Second answer")
     row = edited.state()["notes"][0]
     assert row["ack_edited_at"] == "2026-09-22T12:02:00"
-    assert [reply["kind"] for reply in row["replies"]] == ["reply", "reply"]
+    assert [reply["type"] for reply in row["replies"]] == ["reply", "reply"]
     assert preview.Store(edit_dir).state()["notes"][0]["replies"] == row["replies"]
     with_html = preview.Store(edit_dir).state()["notes"][0]
     assert "html" not in with_html["replies"][0], (
@@ -141,22 +141,22 @@ def test_edited_ack_stamp():
     )
     receipt = {
       "acknowledged_at": "2026-09-22T12:00:00",
-      "ack_kind": "reply",
+      "ack_type": "reply",
       "ack_text": "First",
     }
     for flaw, replies in (
       ("no receipt", None),
-      ("not a list", {"kind": "reply", "text": "x", "at": "2026-09-22T12:01:00"}),
-      ("no kind", [{"text": "x", "at": "2026-09-22T12:01:00"}]),
-      ("bad stamp", [{"kind": "reply", "text": "x", "at": "yesterday"}]),
-      ("empty text", [{"kind": "note", "text": " ", "at": "2026-09-22T12:01:00"}]),
+      ("not a list", {"type": "reply", "text": "x", "at": "2026-09-22T12:01:00"}),
+      ("no type", [{"text": "x", "at": "2026-09-22T12:01:00"}]),
+      ("bad stamp", [{"type": "reply", "text": "x", "at": "yesterday"}]),
+      ("empty text", [{"type": "note", "text": " ", "at": "2026-09-22T12:01:00"}]),
     ):
       try:
         if flaw == "no receipt":
           restored.note(
             "invalid-replies",
             "Question",
-            replies=[{"kind": "reply", "text": "x", "at": "2026-09-22T12:01:00"}],
+            replies=[{"type": "reply", "text": "x", "at": "2026-09-22T12:01:00"}],
           )
         else:
           restored.note("invalid-replies", "Question", replies=replies, **receipt)
@@ -385,34 +385,34 @@ def test_report_unpublish():
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.set_meta("port", guard_port())
-    source = Path(directory) / "pick.md"
+    source = Path(directory) / "select.md"
     source.write_text(
-      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+      "# Select\n\nChoice? {#select}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
-    store.publish("pick", "Pick one", source)
-    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.publish("select", "Select one", source)
+    store.submission("answer-1", "select", "REPORT select: one")
     # The owner can dismiss an unseen report even while its answer remains unacknowledged.
-    store.unpublish("pick", dismissed_by_owner=True)
+    store.unpublish("select", dismissed_by_owner=True)
     assert store.state()["reports"] == []
     try:
-      store.report("pick")
+      store.report("select")
       raise AssertionError("A deleted report still read back")
     except FileNotFoundError:
       pass
     try:
-      store.unpublish("pick")
+      store.unpublish("select")
       raise AssertionError("Deleting the same report twice was accepted")
     except FileNotFoundError:
       pass
-    assert store.submissions()[0]["report_id"] == "pick", "sent answers are history"
+    assert store.submissions()[0]["report_id"] == "select", "sent answers are history"
     assert source.exists(), "the .md source stays for republishing"
     try:
-      store.publish("pick", "Pick again", source)
+      store.publish("select", "Select again", source)
       raise AssertionError("Republishing over sent answers was accepted")
     except ValueError:
       pass
     # The agent CLI can unpublish an unseen report and writes no dismissal note.
-    store.publish("plain", "Pick one", source)
+    store.publish("plain", "Select one", source)
     allowed = subprocess.run(
       [sys.executable, str(Path(preview.__file__)), "report", "unpublish", "plain"],
       capture_output=True,
@@ -425,7 +425,7 @@ def test_report_unpublish():
     assert store.state()["reports"] == []
     assert len(store.state()["notes"]) == 1, "the CLI unpublish writes no note"
     # An unacknowledged answer still holds the agent CLI path.
-    store.publish("blocked", "Pick one", source)
+    store.publish("blocked", "Select one", source)
     store.submission("answer-2", "blocked", "REPORT blocked: one")
     held = subprocess.run(
       [sys.executable, str(Path(preview.__file__)), "report", "unpublish", "blocked"],
@@ -447,7 +447,7 @@ def test_stale_report_reminder():
     store = preview.Store(root, create=True)
     for index in range(9):
       source = root / f"form{index}.md"
-      source.write_text(f"Pick one: {{#f{index}}}\n\n- ( ) a\n- ( ) b\n", "utf-8")
+      source.write_text(f"Select one: {{#f{index}}}\n\n- ( ) a\n- ( ) b\n", "utf-8")
       store.publish(f"form{index}", f"Form {index}", source)
     plain = root / "plain.md"
     plain.write_text("Information only, with no question to answer.\n", "utf-8")
@@ -481,7 +481,7 @@ def test_stale_reports_command_lists_ids_and_reasons():
     plain.write_text("Information only, with no question to answer.\n", "utf-8")
     store.publish("plain", "Plain", plain)
     answered = root / "answered.md"
-    answered.write_text("Pick one: {#answered}\n\n- ( ) a\n- ( ) b\n", "utf-8")
+    answered.write_text("Select one: {#answered}\n\n- ( ) a\n- ( ) b\n", "utf-8")
     store.publish("answered", "Answered", answered)
     store.submission("answered-reply", "answered", "REPORT answered: a")
     store.acknowledge(["answered-reply"], "Received")
@@ -884,7 +884,7 @@ def test_http_boundaries():
       for control in controls:
         assert labels[control]["title"].strip()
         assert labels[control]["title"] == labels[control]["aria-label"]
-      # A note owns staged file chips and a native multi-file picker. Backend records remain,
+      # A note owns staged file chips and a native multi-file selector. Backend records remain,
       # but no saved-files list crowds the composer. Downloads alone keeps the remaining tab.
       assert 'id="downloads-tab" aria-controls="downloads-panel"' in page
       assert (
@@ -991,9 +991,9 @@ def test_http_boundaries():
       row = store.state()["notes"][0]
       assert row["acknowledged_at"] == stamp
       assert (
-        row["ack_kind"] == "reply" and row["ack_text"] == "Fixed in `preview.py`."
+        row["ack_type"] == "reply" and row["ack_text"] == "Fixed in `preview.py`."
       ), "a second ack appends; the first answer stays"
-      assert [(reply["kind"], reply["text"]) for reply in row["replies"]] == [
+      assert [(reply["type"], reply["text"]) for reply in row["replies"]] == [
         ("reply", "and rechecked")
       ]
       assert preview.Store(root).read()["pending"] == []
@@ -1011,7 +1011,7 @@ def test_http_boundaries():
       assert "<code>preview.py</code>" in served_note["ack_html"]
       assert served_note["replies"] == [
         {
-          "kind": "reply",
+          "type": "reply",
           "text": "and rechecked",
           "at": served_note["ack_edited_at"],
           "html": "<p>and rechecked</p>\n",
@@ -1138,7 +1138,7 @@ def test_http_boundaries():
         assert request("POST", "/api/notes", body, auth)[0] == 503
       fielded = root / "fielded.md"
       fielded.write_text(
-        "# Sign-off\n\nPick the areas:\n\n- [ ] ui\n- [x] api\n- [ ] Other: ___\n\n"
+        "# Sign-off\n\nSelect the areas:\n\n- [ ] ui\n- [x] api\n- [ ] Other: ___\n\n"
         "Severity:\n\n"
         "- ( ) low\n- (x) high\n\nName: ___\n\nNotes {#notes}\n\n___\n\n"
         "```text\n- [ ] not a field\n```\n",
@@ -1167,7 +1167,7 @@ def test_http_boundaries():
       ]
       assert questions[2]["prompt"] == "Name" and questions[3]["id"] == "notes"
       assert len({question["id"] for question in questions}) == 4
-      assert sum(1 for kind, _ in blocks if kind == "field") == 4
+      assert sum(1 for type, _ in blocks if type == "field") == 4
       status, _, served = request("GET", "/api/reports/fields/html")
       served = json.loads(served)
       assert status == 200 and served["fields"] == 4
@@ -1479,7 +1479,7 @@ def test_http_boundaries():
         {
           "id": "report-sub-1",
           "revision": store.report("fields")["updated_at"],
-          "answers": {"pick-the-areas": ["ui"], "severity": "high", "name": "ada"},
+          "answers": {"select-the-areas": ["ui"], "severity": "high", "name": "ada"},
         }
       )
       assert (
@@ -1535,7 +1535,7 @@ def test_http_boundaries():
       for bad in (
         {"id": "s1", "answers": {"name": "x", "nope": "unknown"}},
         {"id": "s1", "answers": {"severity": "extreme"}},
-        {"id": "s1", "answers": {"pick-the-areas": ["ui", "core"]}},
+        {"id": "s1", "answers": {"select-the-areas": ["ui", "core"]}},
         {"id": "s1", "answers": "nope"},
       ):
         assert (
@@ -1555,7 +1555,7 @@ def test_http_boundaries():
           "answers": {
             "name": "it broke",
             "severity": "high",
-            "pick-the-areas": ["ui"],
+            "select-the-areas": ["ui"],
           },
         }
       )
@@ -1566,13 +1566,13 @@ def test_http_boundaries():
         if row["text"].startswith("REPORT fields")
       ]
       assert len(pending) == len(sent) + 1
-      assert pending[-1]["kind"] == "report"
+      assert pending[-1]["type"] == "report"
       answered = pending[-1]["text"]
       assert (
         "Fielded:" in answered
         and "Name (name): it broke" in answered
         and "Severity (severity): high" in answered
-        and "Pick the areas (pick-the-areas): ui" in answered
+        and "Select the areas (select-the-areas): ui" in answered
         and "Notes (notes): (skipped)" in answered
       )
       assert request("POST", "/api/reports/fields/submit", submission, auth)[0] == 201
@@ -1641,7 +1641,7 @@ def test_http_boundaries():
         pass
       broken = root / "broken.md"
       broken.write_text(
-        "# Broken\n\nPick one:\n\n- ( ) " + "x" * 201 + "\n", encoding="utf-8"
+        "# Broken\n\nSelect one:\n\n- ( ) " + "x" * 201 + "\n", encoding="utf-8"
       )
       try:
         store.publish("broken", "Broken report", broken)
@@ -1734,7 +1734,7 @@ def test_http_boundaries():
         "REPORT first First:\n  a: yes",
         "2026-09-21T09:02:00",
         acknowledged_at="2026-09-21T09:06:00",
-        ack_kind="note",
+        ack_type="note",
         ack_text="read it",
         seen_at="2026-09-21T09:03:00",
         task_id="saved-task",
@@ -1749,7 +1749,7 @@ def test_http_boundaries():
               "text": "from the browser",
               "at": "2026-09-21T09:00:00",
               "acknowledged_at": "2026-09-21T09:05:00",
-              "ack_kind": "reply",
+              "ack_type": "reply",
               "ack_text": "answered",
               "seen_at": "2026-09-21T09:01:00",
               "task_id": "saved-task",
@@ -1801,7 +1801,7 @@ def test_http_boundaries():
       assert answer_line["task_id"] == "saved-task"
       # A note line keeps its task marker too, so the marker the receipt shows survives a restore.
       assert lines_by_id["saved-note"]["task_id"] == "saved-task"
-      # One file, one reader for both kinds: `import-state` restores the note and the answer, and
+      # One file, one reader for both types: `import-state` restores the note and the answer, and
       # the answer keeps its receipt, its read stamp and its task marker.
       round_trip = Path(directory) / "round-trip"
       preview.Store(round_trip, create=True).set_meta("port", guard_port())
@@ -2837,10 +2837,10 @@ def test_notes_carry_no_seq():
     ], "the order follows the timestamps"
     pending = store.read()["pending"]
     assert pending and all("seq" not in item for item in pending)
-    source = Path(seq_dir) / "pick.md"
-    source.write_text("# Pick\n\nChoice? {#pick}\n- (x) one\n", encoding="utf-8")
-    store.publish("pick", "Pick one", source)
-    store.submission("seq-answer", "pick", "REPORT pick: one")
+    source = Path(seq_dir) / "select.md"
+    source.write_text("# Select\n\nChoice? {#select}\n- (x) one\n", encoding="utf-8")
+    store.publish("select", "Select one", source)
+    store.submission("seq-answer", "select", "REPORT select: one")
     answer = store.submissions()[0]
     assert "seq" not in answer, "an answer record carries its stamp, not a number"
 
@@ -2968,13 +2968,15 @@ def test_task_detail_refuses_a_session_id():
     )
     assert restored["details"] == ["Fix 954ee49"]
     # A written ID stays a plain word, so a detail may still describe a wait on it.
-    source = Path(directory) / "pick.md"
-    source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
-    store.publish("pick", "Pick one", source)
-    named = store.write_task(
-      "named-task", "Named task", ["wait for the pick"], task_type="misc"
+    source = Path(directory) / "select.md"
+    source.write_text(
+      "Select one: {#select}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8"
     )
-    assert named["details"] == ["wait for the pick"]
+    store.publish("select", "Select one", source)
+    named = store.write_task(
+      "named-task", "Named task", ["wait for the select"], task_type="misc"
+    )
+    assert named["details"] == ["wait for the select"]
     # An update that keeps the stored details runs the check on nothing.
     assert store.write_task("first-task", status="finished")["details"] == [
       "Fix the widget"
@@ -3251,10 +3253,10 @@ def test_clear_state():
     store.note("clear-note", "Pending work")
     store.acknowledge(["clear-note"], "Receipt")
     store.write_task("clear-task", "Track it", ["Step one"], task_type="misc")
-    source = clear_root / "pick.md"
-    source.write_text("# Pick\n\nChoice? {#pick}\n- (x) one\n", encoding="utf-8")
-    store.publish("pick", "Pick one", source)
-    store.submission("clear-answer", "pick", "REPORT pick: one")
+    source = clear_root / "select.md"
+    source.write_text("# Select\n\nChoice? {#select}\n- (x) one\n", encoding="utf-8")
+    store.publish("select", "Select one", source)
+    store.submission("clear-answer", "select", "REPORT select: one")
     store.set_agent_key("clear-key-0123456789abcdef", "https://example.com")
     store.set_meta("probe", "1")
     counts = store.clear_state()
@@ -3622,14 +3624,14 @@ def test_task_list_prints_a_linked_report_answer():
       "First upcoming",
       ["Step one"],
       task_type="misc",
-      report_id="pick",
+      report_id="select",
     )
-    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.submission("answer-1", "select", "REPORT select: one")
     listed = preview.format_task_list(store.list_tasks()).splitlines()
     assert any(line.startswith("    answer answer-1, at ") for line in listed), listed
-    assert "    REPORT pick: one" in listed, listed
+    assert "    REPORT select: one" in listed, listed
     # The row labels the report link and the type, so neither reads as the title.
-    assert any(" | waits on pick | type misc" in line for line in listed), listed
+    assert any(" | waits on select | type misc" in line for line in listed), listed
     # A task with no linked answer keeps the older list shape.
     store.write_task("second", "Second upcoming", ["Step two"], task_type="misc")
     lines = preview.format_task_list(store.list_tasks()).splitlines()
@@ -3639,7 +3641,7 @@ def test_task_list_prints_a_linked_report_answer():
 
 def test_a_short_id_prefix_names_one_record():
   # A short prefix stands in for the full ID, and the cited form is the first six characters.
-  # An ID prefix can match two records. The error lists each record and kind. The caller must use a full ID.
+  # An ID prefix can match two records. The error lists each record and type. The caller must use a full ID.
   with tempfile.TemporaryDirectory() as short_dir:
     short = preview.Store(short_dir, create=True)
     short.set_meta("port", guard_port())
@@ -4067,27 +4069,29 @@ def test_task_report_link_unblocks_on_answer():
   # A blocked task names the report it waits on. The owner's answer clears the mark.
   with tempfile.TemporaryDirectory() as link_dir:
     link_store = preview.Store(link_dir, create=True)
-    source = Path(link_dir) / "pick.md"
-    source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
-    link_store.publish("pick", "Pick one", source)
+    source = Path(link_dir) / "select.md"
+    source.write_text(
+      "Select one: {#select}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8"
+    )
+    link_store.publish("select", "Select one", source)
     linked = link_store.write_task(
       "ship",
       "Ship the change",
-      ["wait for the pick"],
+      ["wait for the select"],
       blocked=True,
-      report_id="pick",
+      report_id="select",
       task_type="misc",
     )
-    assert linked["blocked"] is True and linked["report_id"] == "pick"
-    assert link_store.list_tasks()[0]["report_id"] == "pick"
+    assert linked["blocked"] is True and linked["report_id"] == "select"
+    assert link_store.list_tasks()[0]["report_id"] == "select"
     # The mark holds through an unrelated update while the report stays unanswered.
-    held = link_store.write_task("ship", details=["wait for the pick still"])
-    assert held["blocked"] is True and held["report_id"] == "pick"
+    held = link_store.write_task("ship", details=["wait for the select still"])
+    assert held["blocked"] is True and held["report_id"] == "select"
     link_store.write_task(
       "other", "Other wait", ["Step one"], blocked=True, task_type="misc"
     )
-    revision = link_store.report("pick")["updated_at"]
-    link_store.submit_report("pick", "answer-1", {"pick": "yes"}, revision)
+    revision = link_store.report("select")["updated_at"]
+    link_store.submit_report("select", "answer-1", {"select": "yes"}, revision)
     tasks = {item["id"]: item for item in link_store.list_tasks()}
     assert tasks["ship"]["blocked"] is False
     assert tasks["other"]["blocked"] is True
@@ -4097,18 +4101,19 @@ def test_task_report_link_unblocks_on_answer():
       "Late link",
       ["Step one"],
       blocked=True,
-      report_id="pick",
+      report_id="select",
       task_type="misc",
     )
     assert late["blocked"] is False
     gate = link_store.write_task("ship", blocked=True)
-    assert gate["blocked"] is True and gate["report_id"] == "pick"
+    assert gate["blocked"] is True and gate["report_id"] == "select"
     updated = link_store.write_task("ship", details=["Wait for the running gate"])
-    assert updated["blocked"] is True and updated["report_id"] == "pick"
+    assert updated["blocked"] is True and updated["report_id"] == "select"
     assert link_store.write_task("ship", blocked=False)["blocked"] is False
     assert link_store.write_task("late", blocked=True)["blocked"] is True
     assert (
-      link_store.write_task("late", blocked=True, report_id="pick")["blocked"] is False
+      link_store.write_task("late", blocked=True, report_id="select")["blocked"]
+      is False
     )
 
 
@@ -4116,16 +4121,18 @@ def test_report_linked_task_sorts_ahead_in_its_status():
   # A report link has priority only while its task waits for an answer.
   with tempfile.TemporaryDirectory() as sort_dir:
     sort_store = preview.Store(sort_dir, create=True)
-    source = Path(sort_dir) / "pick.md"
-    source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
-    sort_store.publish("pick", "Pick one", source)
+    source = Path(sort_dir) / "select.md"
+    source.write_text(
+      "Select one: {#select}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8"
+    )
+    sort_store.publish("select", "Select one", source)
     sort_store.write_task("plain", "Plain", ["Step one"], order=1, task_type="misc")
     sort_store.write_task(
       "linked",
       "Linked",
       ["Step one"],
       order=2,
-      report_id="pick",
+      report_id="select",
       blocked=True,
       task_type="misc",
     )
@@ -4134,22 +4141,24 @@ def test_report_linked_task_sorts_ahead_in_its_status():
     ]
     assert upcoming == ["linked", "plain"], "the report link outranks position"
     assert sort_store.tasks()["upcoming"][0]["id"] == "linked"
-    revision = sort_store.report("pick")["updated_at"]
-    sort_store.submit_report("pick", "answer-1", {"pick": "yes"}, revision)
+    revision = sort_store.report("select")["updated_at"]
+    sort_store.submit_report("select", "answer-1", {"select": "yes"}, revision)
     assert [item["id"] for item in sort_store.tasks()["upcoming"]] == [
       "plain",
       "linked",
     ]
-    assert sort_store.tasks()["upcoming"][1]["report_id"] == "pick"
+    assert sort_store.tasks()["upcoming"][1]["report_id"] == "select"
 
 
 def test_task_report_flag_waits_for_an_answer_by_default():
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.set_meta("port", guard_port())
-    source = Path(directory) / "pick.md"
-    source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
-    store.publish("pick", "Pick one", source)
+    source = Path(directory) / "select.md"
+    source.write_text(
+      "Select one: {#select}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8"
+    )
+    store.publish("select", "Select one", source)
     store.write_task("waiting", "Waiting", ["Keep this detail"], task_type="misc")
 
     def link(*args):
@@ -4161,7 +4170,7 @@ def test_task_report_flag_waits_for_an_answer_by_default():
           "set",
           "waiting",
           "--report",
-          "pick",
+          "select",
           *args,
         ],
         capture_output=True,
@@ -4180,8 +4189,8 @@ def test_task_report_flag_waits_for_an_answer_by_default():
     assert store.task_record("waiting")["blocked"] is False
     assert link().returncode == 0
     assert store.task_record("waiting")["blocked"] is True
-    revision = store.report("pick")["updated_at"]
-    store.submit_report("pick", "answer-1", {"pick": "yes"}, revision)
+    revision = store.report("select")["updated_at"]
+    store.submit_report("select", "answer-1", {"select": "yes"}, revision)
     assert store.task_record("waiting")["blocked"] is False
     assert link().returncode == 0
     assert store.task_record("waiting")["blocked"] is False
@@ -4218,20 +4227,27 @@ def test_task_report_link_survives_save_and_import():
   # A save file carries the link, so a restore keeps the task waiting on the same report.
   with tempfile.TemporaryDirectory() as save_dir:
     save_store = preview.Store(save_dir, create=True)
-    source = Path(save_dir) / "pick.md"
-    source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
-    save_store.publish("pick", "Pick one", source)
+    source = Path(save_dir) / "select.md"
+    source.write_text(
+      "Select one: {#select}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8"
+    )
+    save_store.publish("select", "Select one", source)
     save_store.write_task(
-      "ship", "Ship it", ["Step one"], blocked=True, report_id="pick", task_type="misc"
+      "ship",
+      "Ship it",
+      ["Step one"],
+      blocked=True,
+      report_id="select",
+      task_type="misc",
     )
     save_store.save_state({"notes": [], "tasks": save_store.tasks()})
     lines = [json.loads(line) for line in save_store.save_path.read_text().splitlines()]
     saved = next(line for line in lines if line.get("id") == "ship")
-    assert saved["report_id"] == "pick"
+    assert saved["report_id"] == "select"
     restored = preview.Store(Path(save_dir) / "restored", create=True)
     assert restored.import_state(save_store.save_path.read_text())["tasks"] == 1
-    restored.report("pick")
-    assert restored.list_tasks()[0]["report_id"] == "pick"
+    restored.report("select")
+    assert restored.list_tasks()[0]["report_id"] == "select"
 
 
 def test_task_amend():
@@ -4411,7 +4427,7 @@ def test_shared_save_import():
           "text": "from the browser",
           "at": "2026-09-21T09:00:00",
           "acknowledged_at": "2026-09-21T09:05:00",
-          "ack_kind": "reply",
+          "ack_type": "reply",
           "ack_text": "answered",
           "seen_at": "2026-09-21T09:01:00",
         }
@@ -4435,7 +4451,7 @@ def test_shared_save_import():
           "text": "REPORT first First:\n  a: yes",
           "at": "2026-09-21T09:02:00",
           "acknowledged_at": "2026-09-21T09:06:00",
-          "ack_kind": "note",
+          "ack_type": "note",
           "ack_text": "read it",
           "seen_at": "2026-09-21T09:03:00",
         }
@@ -4570,7 +4586,7 @@ def test_restore_import():
           "text": "answered before the wipe",
           "at": "2026-09-20T22:00:47",
           "acknowledged_at": "2026-09-20T22:05:11.982172+00:00",
-          "ack_kind": "reply",
+          "ack_type": "reply",
           "ack_text": "Fixed in `preview.py`.",
           "seen_at": "2026-09-20T22:00:52",
           "task_id": "carried-task",
@@ -4583,7 +4599,7 @@ def test_restore_import():
           "text": "never answered",
           "at": "2026-09-20T22:01:00",
           "acknowledged_at": None,
-          "ack_kind": None,
+          "ack_type": None,
           "ack_text": None,
           "seen_at": None,
         }
@@ -4595,7 +4611,7 @@ def test_restore_import():
           "text": "read but not answered",
           "at": "2026-09-20T22:01:10",
           "acknowledged_at": None,
-          "ack_kind": None,
+          "ack_type": None,
           "ack_text": None,
           "seen_at": "2026-09-20T22:01:30",
         }
@@ -4613,7 +4629,7 @@ def test_restore_import():
     assert "notes 3" in imported
     rows = {row["id"]: row for row in preview.Store(restore).state()["notes"]}
     assert rows["carried"]["acknowledged_at"] == "2026-09-20T22:05:11.982172+00:00"[:19]
-    assert rows["carried"]["ack_kind"] == "reply"
+    assert rows["carried"]["ack_type"] == "reply"
     assert rows["carried"]["ack_text"] == "Fixed in `preview.py`."
     assert rows["carried"]["at"] == "2026-09-20T22:00:47"
     # A message that became a task comes back marked, so a restore keeps the link.
@@ -4668,13 +4684,13 @@ def test_restore_import():
     assert "orphan" not in {item["id"] for item in preview.Store(restore).list_tasks()}
     # A line carrying no receipt stays unacknowledged, and nothing infers an answer for it.
     assert rows["plain"]["acknowledged_at"] is None
-    assert rows["plain"]["ack_kind"] is None
+    assert rows["plain"]["ack_type"] is None
     assert rows["plain"]["ack_text"] is None
     assert rows["plain"]["seen_at"] is None
     assert rows["carried"]["seen_at"] == "2026-09-20T22:00:52"
     assert rows["read"]["seen_at"] == "2026-09-20T22:01:30"
     assert rows["read"]["acknowledged_at"] is None
-    assert rows["read"]["ack_kind"] is None
+    assert rows["read"]["ack_type"] is None
     assert rows["read"]["ack_text"] is None
     partial = restore / "partial.jsonl"
     partial.write_text(
@@ -4683,7 +4699,7 @@ def test_restore_import():
           "id": "half",
           "text": "half a receipt",
           "acknowledged_at": "2026-09-20T22:05:11+00:00",
-          "ack_kind": None,
+          "ack_type": None,
           "ack_text": None,
         }
       )
@@ -4704,7 +4720,7 @@ def test_restore_import():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(restore)},
     )
     assert refused.returncode == 1
-    assert "stamp, kind and text" in refused.stderr
+    assert "stamp, type and text" in refused.stderr
     assert "half" not in {row["id"] for row in preview.Store(restore).state()["notes"]}
     assert {row["id"] for row in preview.Store(restore).state()["notes"]} == {
       "carried",
@@ -7271,7 +7287,7 @@ def test_unified_import_atomicity():
         "id": "already-here",
         "text": "Existing message",
         "acknowledged_at": receipt_at,
-        "ack_kind": "note",
+        "ack_type": "note",
         "ack_text": "Stale answer",
       },
       {
@@ -7279,7 +7295,7 @@ def test_unified_import_atomicity():
         "report_id": "form",
         "text": "Report answer",
         "acknowledged_at": receipt_at,
-        "ack_kind": "reply",
+        "ack_type": "reply",
         "ack_text": "Received",
       },
     ]
@@ -7296,7 +7312,7 @@ def test_unified_import_atomicity():
         "report_id": "form",
         "text": "",
         "acknowledged_at": receipt_at,
-        "ack_kind": "reply",
+        "ack_type": "reply",
         "ack_text": "Invalid answer",
       },
     ]
@@ -8136,25 +8152,25 @@ def test_report_sources_ride_in_the_saved_state():
   """A save file carries each report's markdown, so a restore rebuilds the report page."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    source = Path(directory) / "pick.md"
+    source = Path(directory) / "select.md"
     source.write_text(
-      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+      "# Select\n\nChoice? {#select}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
-    store.publish("pick", "Pick one", source)
+    store.publish("select", "Select one", source)
     with patch.object(preview, "now", return_value="2026-10-13T03:12:00+00:00"):
-      store.mark_report_seen("pick")
+      store.mark_report_seen("select")
     with patch.object(preview, "now", return_value="2026-10-13T03:13:00+00:00"):
-      store.mark_report_ack_seen("pick")
+      store.mark_report_ack_seen("select")
     with store.connect() as db, db:
       db.execute(
         "UPDATE reports SET agent_seen_at = ?, viewed_at = ? WHERE id = ?",
-        ("2026-10-13T03:14:00+00:00", "2026-10-13T03:15:00+00:00", "pick"),
+        ("2026-10-13T03:14:00+00:00", "2026-10-13T03:15:00+00:00", "select"),
       )
     store.save_state({"notes": store.state()["notes"], "tasks": store.tasks()})
     lines = [json.loads(line) for line in store.save_path.read_text().splitlines()]
-    saved = next(line for line in lines if line.get("id") == "pick")
-    assert saved["title"] == "Pick one"
-    assert "Choice? {#pick}" in saved["markdown"]
+    saved = next(line for line in lines if line.get("id") == "select")
+    assert saved["title"] == "Select one"
+    assert "Choice? {#select}" in saved["markdown"]
     assert saved["published_at"]
     assert saved["seen_at"] == "2026-10-13T03:12:00+00:00"
     assert all(
@@ -8167,9 +8183,9 @@ def test_report_sources_ride_in_the_saved_state():
     restored = preview.Store(restored_dir, create=True)
     result = restored.import_state(store.save_path.read_text())
     assert result["reports"] == 1
-    report = restored.report("pick")
-    assert report["title"] == "Pick one"
-    assert "Choice? {#pick}" in report["markdown"]
+    report = restored.report("select")
+    assert report["title"] == "Select one"
+    assert "Choice? {#select}" in report["markdown"]
     assert report["published_at"]
     assert report["seen_at"] == "2026-10-13T03:12:00+00:00"
     assert report["ever_seen"] == 1
@@ -8181,23 +8197,23 @@ def test_removed_report_leaves_nothing_in_the_save():
   "A removed report leaves no report or answer lines in a state save. The database keeps the answer as inbox history."
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    source = Path(directory) / "pick.md"
+    source = Path(directory) / "select.md"
     source.write_text(
-      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+      "# Select\n\nChoice? {#select}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
-    store.publish("pick", "Pick one", source)
-    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.publish("select", "Select one", source)
+    store.submission("answer-1", "select", "REPORT select: one")
     before = [json.loads(line) for line in store.save_path.read_text().splitlines()]
     assert [line["id"] for line in before if line.get("report_id")] == ["answer-1"]
     with store.connect() as db, db:
       db.execute(
-        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "select")
       )
-    store.unpublish("pick", dismissed_by_owner=True)
+    store.unpublish("select", dismissed_by_owner=True)
     lines = [json.loads(line) for line in store.save_path.read_text().splitlines()]
     assert [line["id"] for line in lines if line.get("report_id")] == []
-    assert all(line.get("id") != "pick" for line in lines)
-    assert store.submissions()[0]["report_id"] == "pick", "sent answers stay history"
+    assert all(line.get("id") != "select" for line in lines)
+    assert store.submissions()[0]["report_id"] == "select", "sent answers stay history"
 
 
 def test_unpublish_moves_the_state_stamp():
@@ -8209,17 +8225,17 @@ def test_unpublish_moves_the_state_stamp():
   """
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    source = Path(directory) / "pick.md"
+    source = Path(directory) / "select.md"
     source.write_text(
-      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+      "# Select\n\nChoice? {#select}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
-    store.publish("pick", "Pick one", source)
+    store.publish("select", "Select one", source)
     before = store.newest_stamp()
     with store.connect() as db, db:
       db.execute(
-        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "select")
       )
-    store.unpublish("pick")
+    store.unpublish("select")
     after = store.newest_stamp()
     assert after and after > before, "the removal left the state stamp still"
 
@@ -8228,18 +8244,18 @@ def test_report_changes_hold_unseen_answers_and_acknowledgements():
   """Agent changes wait for an unacknowledged answer or acknowledgement."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    source = Path(directory) / "pick.md"
+    source = Path(directory) / "select.md"
     source.write_text(
-      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+      "# Select\n\nChoice? {#select}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
-    store.publish("pick", "Pick one", source)
+    store.publish("select", "Select one", source)
     source.write_text(
-      "# Revised\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+      "# Revised\n\nChoice? {#select}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
-    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.submission("answer-1", "select", "REPORT select: one")
     for change in (
-      lambda: store.publish("pick", "Pick revised", source),
-      lambda: store.unpublish("pick"),
+      lambda: store.publish("select", "Select revised", source),
+      lambda: store.unpublish("select"),
     ):
       try:
         change()
@@ -8248,21 +8264,21 @@ def test_report_changes_hold_unseen_answers_and_acknowledgements():
         assert "unacknowledged answer" in str(error)
     store.acknowledge(["answer-1"], "Received")
     for change in (
-      lambda: store.publish("pick", "Pick revised", source),
-      lambda: store.unpublish("pick"),
+      lambda: store.publish("select", "Select revised", source),
+      lambda: store.unpublish("select"),
     ):
       try:
         change()
         raise AssertionError("An unseen acknowledgement allowed an agent report change")
       except preview.ReportHeld as error:
         assert "acknowledgement" in str(error)
-    store.mark_report_ack_seen("pick")
+    store.mark_report_ack_seen("select")
     try:
-      store.publish("pick", "Pick revised", source)
+      store.publish("select", "Select revised", source)
       raise AssertionError("An answered report allowed a republish")
     except preview.ReportHeld as error:
       assert "submitted answer" in str(error)
-    store.unpublish("pick")
+    store.unpublish("select")
     assert store.state()["reports"] == []
 
 
@@ -8270,21 +8286,21 @@ def test_report_changes_hold_a_fresh_view_of_an_answered_report():
   """Agent changes wait while the owner has a fresh view of a report with an answer."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    source = Path(directory) / "pick.md"
-    source.write_text("# Pick\n", encoding="utf-8")
-    store.publish("pick", "Pick", source)
-    store.submission("answer-1", "pick", "REPORT pick: one")
+    source = Path(directory) / "select.md"
+    source.write_text("# Select\n", encoding="utf-8")
+    store.publish("select", "Select", source)
+    store.submission("answer-1", "select", "REPORT select: one")
     store.acknowledge(["answer-1"], "Received")
-    store.mark_report_ack_seen("pick")
-    store.mark_report_viewed("pick")
+    store.mark_report_ack_seen("select")
+    store.mark_report_viewed("select")
     with patch.object(preview, "seconds_since", return_value=0):
       try:
-        store.publish("pick", "Pick revised", source)
+        store.publish("select", "Select revised", source)
         raise AssertionError("A fresh view allowed a republish")
       except preview.ReportHeld as error:
         assert "reading" in str(error)
       # The page holds the open report, so the same fresh view never blocks an unpublish.
-      store.unpublish("pick")
+      store.unpublish("select")
     assert store.state()["reports"] == []
 
 
@@ -8292,27 +8308,27 @@ def test_agent_unpublish_passes_the_view_hold():
   """An unpublished report leaves at once while the owner reads, and the answer holds stand."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    source = Path(directory) / "pick.md"
-    source.write_text("# Pick\n", encoding="utf-8")
-    store.publish("pick", "Pick", source)
-    store.submission("answer-1", "pick", "REPORT pick: one")
-    store.mark_report_viewed("pick")
+    source = Path(directory) / "select.md"
+    source.write_text("# Select\n", encoding="utf-8")
+    store.publish("select", "Select", source)
+    store.submission("answer-1", "select", "REPORT select: one")
+    store.mark_report_viewed("select")
     with patch.object(preview, "seconds_since", return_value=0):
       # An unacknowledged answer still holds the removal.
       try:
-        store.unpublish("pick")
+        store.unpublish("select")
         raise AssertionError("An unacknowledged answer allowed the removal")
       except preview.ReportHeld as error:
         assert "unacknowledged" in str(error)
       store.acknowledge(["answer-1"], "Received")
       try:
-        store.unpublish("pick")
+        store.unpublish("select")
         raise AssertionError("An unseen acknowledgement allowed the removal")
       except preview.ReportHeld as error:
         assert "acknowledgement" in str(error)
-      store.mark_report_ack_seen("pick")
+      store.mark_report_ack_seen("select")
       # The holder has nothing left but the view, and the removal passes it.
-      store.unpublish("pick")
+      store.unpublish("select")
     assert store.state()["reports"] == []
     assert source.exists()
 
@@ -8321,13 +8337,13 @@ def test_report_changes_ignore_a_fresh_view_of_an_unanswered_report():
   """A report nobody answered has nothing to disturb, so a view never holds a change."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    source = Path(directory) / "pick.md"
-    source.write_text("# Pick\n", encoding="utf-8")
-    store.publish("pick", "Pick", source)
-    store.mark_report_viewed("pick")
+    source = Path(directory) / "select.md"
+    source.write_text("# Select\n", encoding="utf-8")
+    store.publish("select", "Select", source)
+    store.mark_report_viewed("select")
     with patch.object(preview, "seconds_since", return_value=0):
-      store.publish("pick", "Pick revised", source)
-      store.unpublish("pick")
+      store.publish("select", "Select revised", source)
+      store.unpublish("select")
     assert store.state()["reports"] == []
 
 
@@ -8335,17 +8351,17 @@ def test_report_view_active_false_clears_the_stamp():
   """The page clears the stamp when it hides the report, so a background look leaves none."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    source = Path(directory) / "pick.md"
-    source.write_text("# Pick\n", encoding="utf-8")
-    store.publish("pick", "Pick", source)
-    store.submission("answer-1", "pick", "REPORT pick: one")
+    source = Path(directory) / "select.md"
+    source.write_text("# Select\n", encoding="utf-8")
+    store.publish("select", "Select", source)
+    store.submission("answer-1", "select", "REPORT select: one")
     store.acknowledge(["answer-1"], "Received")
-    store.mark_report_ack_seen("pick")
-    store.mark_report_viewed("pick")
-    cleared = store.mark_report_viewed("pick", active=False)
+    store.mark_report_ack_seen("select")
+    store.mark_report_viewed("select")
+    cleared = store.mark_report_viewed("select", active=False)
     assert cleared["viewed_at"] is None
-    assert store.report("pick")["viewed_at"] is None
-    store.unpublish("pick")
+    assert store.report("select")["viewed_at"] is None
+    store.unpublish("select")
     assert store.state()["reports"] == []
 
 
@@ -8357,15 +8373,15 @@ def test_unpublish_route_allows_owner_to_remove_unseen_report():
     app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
     threading.Thread(target=app.serve_forever, daemon=True).start()
     headers = {"Content-Type": "application/json"}
-    source = Path(directory) / "pick.md"
+    source = Path(directory) / "select.md"
     source.write_text(
-      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+      "# Select\n\nChoice? {#select}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
-    store.publish("pick", "Pick one", source)
-    store.submission("answer-1", "pick", "REPORT pick: one")
-    status, _, body = request("POST", "/api/reports/pick/unpublish", "{}", headers)
+    store.publish("select", "Select one", source)
+    store.submission("answer-1", "select", "REPORT select: one")
+    status, _, body = request("POST", "/api/reports/select/unpublish", "{}", headers)
     assert status == 200
-    assert json.loads(body) == {"unpublished": "pick"}
+    assert json.loads(body) == {"unpublished": "select"}
     assert store.state()["reports"] == []
 
 
@@ -8399,7 +8415,7 @@ def test_ack_accepts_inline_markdown_and_rejects_stdin():
     )
     assert result.stdout.startswith("ok inline")
     note = store.state()["notes"][0]
-    assert note["ack_kind"] == "reply" and note["ack_text"] == text
+    assert note["ack_type"] == "reply" and note["ack_text"] == text
     assert note["replies"] == []
 
 
@@ -8566,7 +8582,7 @@ def test_download_header_name_is_safe():
 def test_option_labels_join_wrapped_lines():
   """A wrapped option label joins into one option, indented or not, and a blank line ends it."""
   wrapped = (
-    "Pick one {#pick}\n\n"
+    "Select one {#select}\n\n"
     "- (x) head tree: `ref: ${{ github.event.pull_request.head.sha || github.sha }}`. A pull\n"
     "  request can then clear its own check, and three workflow tests need the new literal.\n"
     "- ( ) undented wrap\n"
@@ -8586,8 +8602,8 @@ def test_option_labels_join_wrapped_lines():
     "plain",
   ]
   assert questions[0]["default"] == [questions[0]["options"][0]]
-  assert [text.strip() for kind, text in blocks if kind == "markdown"] == [
-    "Pick one",
+  assert [text.strip() for type, text in blocks if type == "markdown"] == [
+    "Select one",
     "Trailing prose stays a paragraph.",
   ]
 
@@ -8688,7 +8704,7 @@ def test_note_reread_prints_every_match():
       "beef001-2222222222222222222222222",
       "second stored note",
       acknowledged_at="2026-09-22T12:00:00",
-      ack_kind="note",
+      ack_type="note",
       ack_text="done",
     )
 
@@ -8907,11 +8923,11 @@ def test_rename_repoints_a_note_and_its_uploads():
       "photo.png", "image/png", b"pixels", note_id="aaaaaaa-1111111111111111111111111"
     )
 
-    kind = store.rename_entity(
+    type = store.rename_entity(
       "aaaaaaa-1111111111111111111111111", "bbbbbbb-2222222222222222222222222"
     )
 
-    assert kind == "note"
+    assert type == "note"
     with closing(store.connect()) as db:
       assert (
         db.execute(
@@ -8936,9 +8952,9 @@ def test_rename_repoints_a_task_from_the_records_that_name_it():
     store.write_task("old-name", "A title", ["One step"], task_type="misc")
     store.mark_task("aaaaaaa-1111111111111111111111111", "old-name")
 
-    kind = store.rename_entity("old-name", "new-name")
+    type = store.rename_entity("old-name", "new-name")
 
-    assert kind == "task"
+    assert type == "task"
     with closing(store.connect()) as db:
       assert (
         db.execute("SELECT count(*) FROM notes WHERE task_id = 'new-name'").fetchone()[
@@ -9336,12 +9352,12 @@ def test_tasks_carry_their_linked_answers():
     store.set_meta("port", guard_port())
     source = Path(directory) / "linked.md"
     source.write_text(
-      "# Linked\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+      "# Linked\n\nChoice? {#select}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
-    store.publish("linked", "Linked pick", source)
+    store.publish("linked", "Linked select", source)
     store.write_task(
       "linked-task",
-      "Track the pick",
+      "Track the select",
       ["Read the answer"],
       report_id="linked",
       task_type="misc",
@@ -9420,7 +9436,7 @@ def fake_gh(heads, counts, calls, required=3, states=("SUCCESS",)):
         output = "\n".join(
           json.dumps(
             {
-              "kind": "check",
+              "type": "check",
               "name": f"check-{i}",
               "workflow": "CI",
               "state": state,
@@ -9532,7 +9548,7 @@ def test_pr_check_wait_needs_no_required_check_settings():
 
 def test_pr_check_rollup_uses_latest_check_and_status_runs():
   old = {
-    "kind": "check",
+    "type": "check",
     "name": "Contract",
     "workflow": "PR Check",
     "state": "FAILURE",
@@ -9546,12 +9562,12 @@ def test_pr_check_rollup_uses_latest_check_and_status_runs():
     ([new, {**old, "workflow": "Other"}], ("FAILURE", 2)),
     (
       [
-        {**old, "kind": "status", "workflow": ""},
-        {**new, "kind": "status", "workflow": ""},
+        {**old, "type": "status", "workflow": ""},
+        {**new, "type": "status", "workflow": ""},
       ],
       ("SUCCESS", 1),
     ),
-    ([old, {**new, "kind": "status", "workflow": ""}], ("FAILURE", 2)),
+    ([old, {**new, "type": "status", "workflow": ""}], ("FAILURE", 2)),
     ([{**old, "at": "2026-10-18T10:00:00+02:00"}, new], ("SUCCESS", 1)),
   ]:
     with patch("preview.gh_check_json", return_value=nodes):
@@ -9568,7 +9584,7 @@ def test_pr_check_rollup_boundaries():
     with patch("preview.subprocess.run", return_value=result):
       assert preview.pr_check_rollup(".", "owner/repo", "sha") is None
   node = {
-    "kind": "check",
+    "type": "check",
     "name": "test",
     "workflow": "CI",
     "state": "SUCCESS",
@@ -9610,7 +9626,7 @@ def test_pr_check_watch_reports_failures_and_keeps_watching():
 
     def node(name, state, at):
       return {
-        "kind": "check",
+        "type": "check",
         "name": name,
         "workflow": "CI",
         "state": state,
@@ -9657,7 +9673,7 @@ def test_pr_check_wait_counts_api_time_against_the_window():
     root = pr_check_root(directory)
     now, pauses, sleep = advancing_clock()
     node = {
-      "kind": "check",
+      "type": "check",
       "name": "Quality",
       "workflow": "CI",
       "state": "SUCCESS",
@@ -10056,7 +10072,9 @@ def test_cli_stamps_print_in_the_display_zone_while_storage_stays_utc(monkeypatc
 
 def test_report_state_cli_reads_publication_and_answers(tmp_path):
   src = tmp_path / "one.md"
-  src.write_text("# one\n\nPick: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
+  src.write_text(
+    "# one\n\nSelect: {#select}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8"
+  )
   store = preview.Store(tmp_path / "state", create=True)
   store.publish("one", "First report", src)
   text = preview.format_report_state(store.report_state())
@@ -10236,8 +10254,8 @@ def test_skills_lists_full_yaml_descriptions_and_prefers_installed_names(capsys)
     repository = next(
       line for line in output.out.splitlines() if "skills/repo-only/SKILL.md" in line
     )
-    assert "installed" in installed.lower(), "the source kind stays beside its path"
-    assert "repository" in repository.lower(), "the source kind stays beside its path"
+    assert "installed" in installed.lower(), "the source type stays beside its path"
+    assert "repository" in repository.lower(), "the source type stays beside its path"
     assert "Installed full description, with a colon: preserve it." in output.out
     assert "skills/repo-only/SKILL.md" in output.out
     assert "First line: keep it all." in output.out
@@ -10300,7 +10318,7 @@ def test_blocked_tasks_reject_known_reports_without_answer_fields(tmp_path):
   assert manual["blocked"] and manual["report_id"] is None
   questions = tmp_path / "questions.md"
   questions.write_text(
-    "# Question\n\nChoose: {#pick}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8"
+    "# Question\n\nChoose: {#select}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8"
   )
   store.publish("question-report", "Question", questions)
   fielded = store.write_task(
@@ -10445,7 +10463,7 @@ def test_report_unpublish_stale_keeps_guards_answers_and_sources(tmp_path, capsy
   plain = tmp_path / "plain.md"
   plain.write_text("# Information\n", encoding="utf-8")
   form = tmp_path / "form.md"
-  form.write_text("Choose: {#pick}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8")
+  form.write_text("Choose: {#select}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8")
   store.publish("plain", "Information", plain)
   for report in ["ready", "held", "pending", "unread"]:
     store.publish(report, "Question", form)
@@ -10493,7 +10511,7 @@ def test_report_unpublish_stale_rechecks_changed_publication(tmp_path):
   plain = tmp_path / "plain.md"
   plain.write_text("# Information\n", encoding="utf-8")
   form = tmp_path / "form.md"
-  form.write_text("Choose: {#pick}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8")
+  form.write_text("Choose: {#select}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8")
   store.publish("changed", "Information", plain)
   original = preview.Store.stale_reports
 
@@ -10641,7 +10659,7 @@ def test_a_published_field_reads_in_the_singular(tmp_path):
   store = preview.Store(tmp_path, create=True)
   store.set_meta("port", guard_port())
   source = tmp_path / "one.md"
-  source.write_text("# One\n\nPick one: {#pick}\n\n- ( ) yes\n", encoding="utf-8")
+  source.write_text("# One\n\nSelect one: {#select}\n\n- ( ) yes\n", encoding="utf-8")
   with preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store)) as server:
     store.set_meta("port", str(server.server_port))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -10844,8 +10862,8 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
       app.server_close()
 
 
-def test_flag_carries_kind_clause_file_and_cited_reason():
-  """A flag names a page-aware kind, a read-set clause file and the owner's cited reason."""
+def test_flag_carries_type_clause_file_and_cited_reason():
+  """A flag names a page-aware type, a read-set clause file and the owner's cited reason."""
   global app
   with tempfile.TemporaryDirectory() as directory:
     (Path(directory) / "ARENA.md").write_text("# Rules\n", encoding="utf-8")
@@ -10893,8 +10911,8 @@ def test_flag_carries_kind_clause_file_and_cited_reason():
       assert status == 200, body
       assert json.loads(body)["agent_interrupt_pending"]
       flag = json.loads(store.meta_value(preview.AGENT_INTERRUPT_FLAG_META))
-      assert {name: flag[name] for name in ("kind", "clause_file", "note")} == {
-        "kind": "format-violation",
+      assert {name: flag[name] for name in ("type", "clause_file", "note")} == {
+        "type": "format-violation",
         "clause_file": "AGENTS.md",
         "note": "Heading levels",
       }
@@ -10937,7 +10955,7 @@ def test_flag_carries_kind_clause_file_and_cited_reason():
         assert store.pending_violation_note()["text"].splitlines() == lines
         clear_flag()
       for payload, field in [
-        ({"tab": "notes", "reason": "not-a-kind"}, "reason"),
+        ({"tab": "notes", "reason": "not-a-type"}, "reason"),
         ({"tab": "reports", "reason": "bash-violation"}, "reason"),
         (
           {"tab": "notes", "reason": "bash-violation", "clause_file": "docs/STYLE.md"},
@@ -10977,7 +10995,7 @@ def test_ack_has_one_flagless_markdown_input(capsys):
       assert preview.main() == 0
     note = store.state()["notes"][0]
     answer = store.submissions()[0]
-    assert note["ack_kind"] == answer["ack_kind"] == "reply"
+    assert note["ack_type"] == answer["ack_type"] == "reply"
     assert note["ack_text"] == answer["ack_text"] == text
     assert store.read()["pending"] == []
     stamp = "2026-10-17T00:00:00"
@@ -10985,14 +11003,14 @@ def test_ack_has_one_flagless_markdown_input(capsys):
       "legacy-note",
       "Old question",
       acknowledged_at=stamp,
-      ack_kind="note",
+      ack_type="note",
       ack_text="**Keep plain**",
-      replies=[{"kind": "note", "text": "`Old plain reply`", "at": stamp}],
+      replies=[{"type": "note", "text": "`Old plain reply`", "at": stamp}],
     )
     store.acknowledge(["legacy-note"], text)
     legacy = next(row for row in store.state()["notes"] if row["id"] == "legacy-note")
-    assert legacy["ack_kind"] == "note" and legacy["ack_text"] == "**Keep plain**"
-    assert [row["kind"] for row in legacy["replies"]] == ["note", "reply"]
+    assert legacy["ack_type"] == "note" and legacy["ack_text"] == "**Keep plain**"
+    assert [row["type"] for row in legacy["replies"]] == ["note", "reply"]
     server = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -11412,7 +11430,7 @@ def test_new_violation_types_cover_both_tabs():
     (Path(directory) / "ARENA.md").write_text("# Rules\n", encoding="utf-8")
     for tab in ("notes", "tasks"):
       for reason in ("missing-details", "out-of-scope", "task-not-created"):
-        assert reason in preview.VIOLATION_KINDS[tab]
+        assert reason in preview.VIOLATION_TYPES[tab]
     store.write_task("current-work", "Current work", ["Verify it"], task_type="code")
     for reason in ("missing-details", "out-of-scope", "task-not-created"):
       store.request_interrupt("tasks", reason=reason)
@@ -11426,6 +11444,19 @@ def test_new_violation_types_cover_both_tabs():
       note = store.pending_violation_note()
       assert note["text"].splitlines()[0] == f"User flagged violation: {reason}."
       store.acknowledge([note["id"]], "ARENA.md:1: Rules")
+
+
+def test_the_page_offers_every_type_the_server_accepts():
+  """The flag modal reads app.js, so each tab's list matches the server list."""
+  source = (
+    Path(preview.__file__).resolve().parent.parent / "assets" / "app.js"
+  ).read_text(encoding="utf-8")
+  block = source[source.index("const VIOLATION_TYPES = {") :]
+  block = block[: block.index("\n};")]
+  parts = re.split(r"\n  (\w+): ", block)
+  offered = dict(zip(parts[1::2], parts[2::2]))
+  for tab, types in preview.VIOLATION_TYPES.items():
+    assert re.findall(r"\['([a-z-]+)'", offered[tab]) == list(types), tab
 
 
 def test_repeat_poll_notice_keeps_system_wording_and_stderr(capsys, monkeypatch):
@@ -11515,7 +11546,7 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
           {**first, "save_id": 42},
           {**first, "scope": {"repo": "other", "branch": ""}},
           {**first, "stamp": "bad timestamp"},
-          {**first, "core": first["history"] + [{"kind": "userscript-autosave"}]},
+          {**first, "core": first["history"] + [{"type": "userscript-autosave"}]},
         ):
           assert (
             request("POST", "/api/userscript-autosave", json.dumps(invalid), auth)[0]
@@ -11689,7 +11720,7 @@ def test_userscript_autosave_confirms_only_closed_file_receipts():
         records = [
           json.loads(line) for line in current["text"].splitlines() if line.strip()
         ]
-        histories = [row for row in records if row.get("kind") == "userscript-autosave"]
+        histories = [row for row in records if row.get("type") == "userscript-autosave"]
         assert len(histories) == 2
         baseline_text = json.loads(request("GET", "/api/copy-state")[2])["text"]
         for field, value in (("digest", "0" * 64), ("history", []), ("save_id", 42)):
@@ -11863,7 +11894,7 @@ def test_websocket_transport(tmp_path, monkeypatch):
       + bytes(value ^ (mask[i % 4] if masked else 0) for i, value in enumerate(data))
     )
 
-  def receive(peer, stream, kind=None, request_id=None):
+  def receive(peer, stream, type=None, request_id=None):
     for _ in range(30):
       head = stream.read(2)
       assert len(head) == 2
@@ -11875,11 +11906,11 @@ def test_websocket_transport(tmp_path, monkeypatch):
       if opcode != 1:
         return opcode, data
       value = json.loads(data)
-      if value.get("type") == "change" and kind != "change":
+      if value.get("type") == "change" and type != "change":
         continue
       if value.get("type") == "heartbeat":
         send(peer, {"type": "pong"})
-      if (kind is None or value.get("type") == kind) and (
+      if (type is None or value.get("type") == type) and (
         request_id is None or value.get("id") == request_id
       ):
         return value

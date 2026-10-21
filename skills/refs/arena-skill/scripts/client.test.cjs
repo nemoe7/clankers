@@ -256,7 +256,7 @@ test('preview client', async (t) => {
       if (url === '/api/copy-state') {
         // The route serves the save-file text and its counts. The harness projects the same keys.
         if (state.copyStateFails) return response({ error: 'no route' }, false);
-        const noteKeys = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
+        const noteKeys = ['id', 'text', 'at', 'acknowledged_at', 'ack_type', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
         const taskKeys = ['id', 'title', 'details', 'status', 'order', 'blocked', 'type'];
         const project = (record, keys) => {
           const line = {};
@@ -540,7 +540,7 @@ test('preview client', async (t) => {
   let uiBox;
   let apiBox;
   let boxes;
-  let picks;
+  let selects;
   let shipBox;
   let otherBox;
   let otherOption;
@@ -575,7 +575,7 @@ test('preview client', async (t) => {
   let copiedBefore;
   let firstId;
   let selectBefore;
-  let picker;
+  let selector;
   let chips;
   let tooMany;
   let first;
@@ -1233,7 +1233,7 @@ test('preview client', async (t) => {
         { type: 'unspecified', id: 'answered-task', title: 'Answered work', details: ['read it'], status: 'upcoming',
           order: 2, updated_at: new Date().toISOString(),
           answers: [
-            { id: 'answer-abc123', report_id: 'answer-source', at: '2026-10-15T05:44:00.000Z', text: 'Choice? {#pick}\n- (x) yes' },
+            { id: 'answer-abc123', report_id: 'answer-source', at: '2026-10-15T05:44:00.000Z', text: 'Choice? {#select}\n- (x) yes' },
             { id: 'answer-def456', report_id: 'unpublished-source', at: '2026-10-15T06:00:00.000Z', text: 'Approved: ship it' },
             { id: 'answer-long01', at: '2026-10-15T06:04:00.000Z',
               text: 'Decision recorded for the record: the receipt line keeps every word of the answer text, past the step cap that manual details obey.' },
@@ -1384,7 +1384,7 @@ test('preview client', async (t) => {
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
     state.reportSources = [{ id: 'r1', title: 'Fielded', markdown: '# Fielded\n\nA question.\n', published_at: '2026-09-22T10:00:00' }];
     state.submissions = [{ id: 'ans-1', report_id: 'r1', text: 'REPORT r1: one', at: '2026-09-22T10:00:00',
-      acknowledged_at: null, ack_kind: null, ack_text: null, ack_edited_at: null, replies: null, ack_edited_seen_count: 0, seen_at: null, task_id: null }];
+      acknowledged_at: null, ack_type: null, ack_text: null, ack_edited_at: null, replies: null, ack_edited_seen_count: 0, seen_at: null, task_id: null }];
     copied.length = 0;
     const statusBeforeCopy = get('#send-status').textContent;
     get('#copy-state').events.click();
@@ -1399,7 +1399,7 @@ test('preview client', async (t) => {
       for (const key of keys) line[key] = record[key] ?? null;
       return line;
     };
-    noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
+    noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_type', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
     taskKeysHere = ['id', 'title', 'details', 'status', 'order', 'blocked', 'type'];
     assert.deepEqual(lines, [
       ...cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
@@ -1617,7 +1617,7 @@ test('preview client', async (t) => {
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Said');
     assert.match(get('#last-check').textContent, /^Last read\/ack: (just now|\d+ (mins?|hours?) ago)$/);
     assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
-    state.notes[0].ack_kind = 'reply';
+    state.notes[0].ack_type = 'reply';
     state.notes[0].ack_text = '**done**';
     state.notes[0].ack_html = '<p><strong>done</strong></p>';
     await refresh();
@@ -1680,7 +1680,7 @@ test('preview client', async (t) => {
     assert.equal(answer.innerHTML, '<p><strong>done</strong></p>');
     assert.match(answer.className, /answer reply message-text/);
     assert.equal(answer.hidden, false);
-    state.notes[0].ack_kind = 'note';
+    state.notes[0].ack_type = 'note';
     state.notes[0].ack_text = 'rechecked';
     delete state.notes[0].ack_html;
     await refresh();
@@ -1845,10 +1845,10 @@ test('preview client', async (t) => {
     uiBox = { value: 'ui', checked: false, dataset: {} };
     apiBox = { value: 'api', checked: true, dataset: {} };
     boxes = [uiBox, apiBox];
-    picks = new Element();
-    picks.dataset = { field: 'areas', type: 'checkbox' };
-    picks.querySelector = () => null;
-    picks.querySelectorAll = selector => (selector === 'input:checked' ? boxes.filter(box => box.checked) : boxes);
+    selects = new Element();
+    selects.dataset = { field: 'areas', type: 'checkbox' };
+    selects.querySelector = () => null;
+    selects.querySelectorAll = selector => (selector === 'input:checked' ? boxes.filter(box => box.checked) : boxes);
     shipBox = { value: 'Ship it', checked: false, dataset: {} };
     otherBox = { value: 'Other: ___', checked: false, dataset: { label: 'Other' } };
     otherOption = {
@@ -1861,7 +1861,7 @@ test('preview client', async (t) => {
     verdict.dataset = { field: 'verdict', type: 'choice' };
     verdict.querySelector = selector => (selector === '[data-custom="Other"]' ? otherText : null);
     verdict.querySelectorAll = selector => (selector === 'input:checked' ? choices.filter(box => box.checked) : choices);
-    get('#report').fields = [text, picks, verdict];
+    get('#report').fields = [text, selects, verdict];
     get('#report-select').value = 'r1';
     get('#reports-tab').events.click();
     await tick();
@@ -2408,7 +2408,7 @@ test('preview client', async (t) => {
       { id: 'n1', text: 'alpha', at: logStamp, acknowledged_at: null },
       { id: 'n2', text: 'beta', at: logStamp, seen_at: logStamp, acknowledged_at: null },
       { id: 'n3', text: 'gamma', at: logStamp, seen_at: logStamp, acknowledged_at: logStamp,
-        ack_kind: 'note', ack_text: 'delta' }
+        ack_type: 'note', ack_text: 'delta' }
     ];
     await tick();
     await refresh();
@@ -2488,7 +2488,7 @@ test('preview client', async (t) => {
     // The reply block rides on the row, so a query that matches only its words marks them there.
     state.notes = [
       { id: 'n1', text: 'plain', at: logStamp, acknowledged_at: logStamp,
-        ack_kind: 'note', ack_text: 'landed the delta fix' }
+        ack_type: 'note', ack_text: 'landed the delta fix' }
     ];
     await refresh();
     await tick();
@@ -3118,17 +3118,17 @@ test('preview client', async (t) => {
   await t.test("Multiple files stage as removable filename chips beside \"Your message\"", async () => {
     // Files stage as removable filename chips beside "Your message", and each chip starts its own
     // upload before the send. The note receipt and backend state keep every original name.
-    picker = get('#upload-file');
+    selector = get('#upload-file');
     chips = () => get('#staged-files').children.map(chip => chip.children[0].textContent.replace(/ · .*$/, ''));
     chipText = () => get('#staged-files').children[0].children[0].textContent;
     get('#attach-file').events.click();
-    assert.equal(picker.clicks, 1, 'the attach button opens the native multi-file picker');
-    picker.files = [{ name: 'empty.bin', size: 0, type: '' }];
-    picker.events.change();
+    assert.equal(selector.clicks, 1, 'the attach button opens the native multi-file selector');
+    selector.files = [{ name: 'empty.bin', size: 0, type: '' }];
+    selector.events.change();
     assert.equal(get('#send-status').textContent, 'empty.bin is empty.');
     assert.equal(uploadCalls.length, 0, 'an empty file never uploads');
-    picker.files = [{ name: 'big.bin', size: 50_000_001, type: 'application/octet-stream' }];
-    picker.events.change();
+    selector.files = [{ name: 'big.bin', size: 50_000_001, type: 'application/octet-stream' }];
+    selector.events.change();
     assert.equal(get('#send-status').textContent, 'Staged 1 file. Send message to save them together.');
     assert.deepEqual(chips(), ['big.bin'], 'a large file has no ceiling');
     assert.match(chipText(), /^big\.bin · uploading…$/, 'the chip renders before the bytes land');
@@ -3139,8 +3139,8 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(stagedDropCalls.length, 1, 'the chip drops the uploaded row');
     tooMany = Array.from({ length: 6 }, (_, n) => ({ name: `file-${n}.bin`, size: 1, type: '' }));
-    picker.files = tooMany;
-    picker.events.change();
+    selector.files = tooMany;
+    selector.events.change();
     await tick();
     assert.equal(get('#send-status').textContent, 'Staged 6 files. Send message to save them together.');
     assert.equal(get('#staged-files').children.length, 6, 'no count cap stages six files');
@@ -3155,14 +3155,14 @@ test('preview client', async (t) => {
     first = { name: 'report card.pdf', size: 12, type: 'application/pdf', lastModified: 7 };
     second = { name: 'photo.png', size: 2, type: 'image/png', lastModified: 8 };
     thirdFile = { name: 'notes.txt', size: 9, type: 'text/plain', lastModified: 9 };
-    picker.files = [first, second];
-    picker.events.change();
+    selector.files = [first, second];
+    selector.events.change();
     assert.deepEqual(chips(), ['report card.pdf', 'photo.png']);
     await tick();
     assert.equal(chipText(), 'report card.pdf · 12 B', 'the chip carries the size of the file');
     assert.equal(get('#staged-files').hidden, false);
     assert.equal(get('#staged-files').children[0].children[1].getAttribute('aria-label'), 'Remove report card.pdf');
-    assert.equal(uploadCalls.length, 9, 'both picked files upload at once');
+    assert.equal(uploadCalls.length, 9, 'both selected files upload at once');
     dragging = event({ dataTransfer: { types: ['Files'], files: [thirdFile] } });
     get('#compose').events.dragover(dragging);
     assert.equal(dragging.prevented, true);
@@ -3183,8 +3183,8 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(stagedDropCalls.at(-1), uploadCalls.filter(call => call.file.name === 'photo.png').at(-1).id,
       'the chip drops its own upload row');
-    picker.files = [second];
-    picker.events.change();
+    selector.files = [second];
+    selector.events.change();
     await tick();
     assert.deepEqual(chips(), ['report card.pdf', 'notes.txt', 'photo.png']);
     assert.equal(uploadCalls.length, 11, 'the reselect uploads a fresh row');
@@ -3228,8 +3228,8 @@ test('preview client', async (t) => {
   });
 
   await t.test("A lost note response replays under the same ID and keeps its uploads", async () => {
-    picker.files = [{ name: 'retry.bin', size: 2048, type: 'application/octet-stream' }];
-    picker.events.change();
+    selector.files = [{ name: 'retry.bin', size: 2048, type: 'application/octet-stream' }];
+    selector.events.change();
     await tick();
     const staged = uploadCalls.at(-1).id;
     const notes = state.notes.length;
@@ -3244,8 +3244,8 @@ test('preview client', async (t) => {
 
   await t.test("One file without text still writes a note and uses the original single-file basename", async () => {
     // One file without text still writes a note and uses the original single-file basename.
-    picker.files = [{ name: 'single.bin', size: 1, type: '' }];
-    picker.events.change();
+    selector.files = [{ name: 'single.bin', size: 1, type: '' }];
+    selector.events.change();
     await tick();
     await get('#form').events.submit(event({}));
     assert.equal(sent.at(-1).text, 'File: single.bin');
@@ -3259,9 +3259,9 @@ test('preview client', async (t) => {
     // the server wrote after the response was lost.
     const before = stagedDropCalls.length;
     uploadGate = new Promise(resolve => { releaseUpload = resolve; });
-    picker.files = [{ name: 'slow.bin', size: 3, type: 'application/octet-stream' }];
+    selector.files = [{ name: 'slow.bin', size: 3, type: 'application/octet-stream' }];
     try {
-      picker.events.change();
+      selector.events.change();
       const id = uploadCalls.at(-1).id;
       assert.match(chipText(), /uploading…/, 'the chip shows the running upload');
       get('#staged-files').children[0].children[1].events.click();
@@ -3279,8 +3279,8 @@ test('preview client', async (t) => {
   await t.test("A failed chip says so and the send retries it once", async () => {
     const before = uploadCalls.length;
     uploadFails = 1;
-    picker.files = [{ name: 'flaky.bin', size: 4, type: 'application/octet-stream' }];
-    picker.events.change();
+    selector.files = [{ name: 'flaky.bin', size: 4, type: 'application/octet-stream' }];
+    selector.events.change();
     await tick();
     assert.equal(chipText(), 'flaky.bin · upload failed', 'the chip reports the failed upload');
     get('#note').value = 'Retry this one';
@@ -3607,13 +3607,13 @@ test('preview client', async (t) => {
     await refresh();
 
     state.notes = [
-      {id: 'edited-old', text: 'Older question', at: '2026-09-22T00:00:00', acknowledged_at: '2026-09-22T00:01:00', ack_kind: 'reply', ack_text: 'First answer', ack_edited_at: null},
+      {id: 'edited-old', text: 'Older question', at: '2026-09-22T00:00:00', acknowledged_at: '2026-09-22T00:01:00', ack_type: 'reply', ack_text: 'First answer', ack_edited_at: null},
       {id: 'newer-note', text: 'Newer question', at: '2026-09-22T00:02:00'}
     ];
     await refresh();
     assert.equal(get('#log-edited').hidden, true);
     // A re-ack appends a block: the first answer stays, the new one lands under it with its stamp.
-    state.notes[0].replies = [{kind: 'reply', text: 'Second answer', at: '2026-09-22T00:03:00', html: '<p>Second answer</p>'}];
+    state.notes[0].replies = [{type: 'reply', text: 'Second answer', at: '2026-09-22T00:03:00', html: '<p>Second answer</p>'}];
     state.notes[0].ack_edited_at = '2026-09-22T00:03:00';
     await refresh();
     editedNode = get('#history').children[0];
@@ -3637,7 +3637,7 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(get('#log-edited').hidden, true, 'an unchanged poll does not notify again');
     assert.deepEqual(replySeenCalls, [{url: '/api/messages/edited-old/replies/seen', count: 1}], 'viewed reply count is written to the server');
-    state.notes[0].replies.push({kind: 'note', text: 'Third block, same second'});
+    state.notes[0].replies.push({type: 'note', text: 'Third block, same second'});
     state.notes[0].replies[1].at = '2026-09-22T00:03:00';
     await refresh();
     assert.equal(get('#log-edited').hidden, false, 'same-second replies still notify');
@@ -3687,9 +3687,9 @@ test('preview client', async (t) => {
     let pendingWrite = null;
     try {
       state.notes = [{ id: 'optimistic-reply', text: 'Question', at: '2026-10-13T03:00:00',
-        acknowledged_at: '2026-10-13T03:01:00', ack_kind: 'reply', ack_text: 'First answer',
+        acknowledged_at: '2026-10-13T03:01:00', ack_type: 'reply', ack_text: 'First answer',
         ack_edited_at: '2026-10-13T03:02:00', ack_edited_seen_count: 0,
-        replies: [{ kind: 'reply', text: 'Second answer', at: '2026-10-13T03:02:00' }] }];
+        replies: [{ type: 'reply', text: 'Second answer', at: '2026-10-13T03:02:00' }] }];
       await refresh();
       replySeenWait = new Promise(resolve => { release = resolve; });
       const destination = get('#history').children[0].children[1];
@@ -3705,7 +3705,7 @@ test('preview client', async (t) => {
       assert.equal(get('#log-edited').hidden, true, 'a pending write survives a refresh');
       assert.equal(destination.dataset.highlight, 'true', 'a poll preserves the destination highlight');
       assert.equal(get('#history').replacements, historyReplacements, 'a poll must not detach the focused answer');
-      state.notes[0].replies.push({ kind: 'reply', text: 'Newer answer', at: '2026-10-13T03:03:00' });
+      state.notes[0].replies.push({ type: 'reply', text: 'Newer answer', at: '2026-10-13T03:03:00' });
       state.notes[0].ack_edited_at = '2026-10-13T03:03:00';
       await refresh();
       assert.equal(get('#log-edited').hidden, false, 'a newer reply stays unread');
@@ -3748,9 +3748,9 @@ test('preview client', async (t) => {
     state = {
       notes: [
         { id: 'edited-scroll', text: 'Earlier question', at: '2026-10-13T03:00:00',
-          acknowledged_at: '2026-10-13T03:01:00', ack_kind: 'reply', ack_text: 'First answer',
+          acknowledged_at: '2026-10-13T03:01:00', ack_type: 'reply', ack_text: 'First answer',
           ack_edited_at: '2026-10-13T03:02:00', ack_edited_seen_count: 0,
-          replies: [{ kind: 'reply', text: 'Second answer', at: '2026-10-13T03:02:00' }] },
+          replies: [{ type: 'reply', text: 'Second answer', at: '2026-10-13T03:02:00' }] },
         { id: 'newer-scroll', text: 'Later question', at: '2026-10-13T03:03:00' }
       ],
       reports: [], tasks: { upcoming: [], finished: [] }, fetch_jobs: [], last_check: null
@@ -3794,9 +3794,9 @@ test('preview client', async (t) => {
         const id = `old-jump-${reduce}`;
         state = {
           notes: [{ id, text: 'Old question', at: '2026-10-13T03:00:00',
-            acknowledged_at: '2026-10-13T03:01:00', ack_kind: 'reply', ack_text: 'First answer',
+            acknowledged_at: '2026-10-13T03:01:00', ack_type: 'reply', ack_text: 'First answer',
             ack_edited_at: '2026-10-13T03:02:00', ack_edited_seen_count: 0,
-            replies: [{ kind: 'reply', text: 'Later answer', at: '2026-10-13T03:02:00' }] }],
+            replies: [{ type: 'reply', text: 'Later answer', at: '2026-10-13T03:02:00' }] }],
           reports: [], tasks: { upcoming: [], finished: [] }, fetch_jobs: [], last_check: null
         };
         get('#log-search').value = '';
@@ -3809,7 +3809,7 @@ test('preview client', async (t) => {
           assert.equal(options.behavior, reduce ? 'auto' : 'smooth', 'mounted New reply honors motion settings');
         };
         await get('#log-edited').events.click();
-        state.notes[0].replies.push({kind: 'reply', text: 'Newest answer', at: '2026-10-13T03:03:00'});
+        state.notes[0].replies.push({type: 'reply', text: 'Newest answer', at: '2026-10-13T03:03:00'});
         state.notes.push(...Array.from({length: reduce ? 1000 : 500}, (_, index) => ({
           id: `later-${reduce}-${index}`, text: 'Later question', at: '2026-10-13T03:03:00'
         })));
@@ -3849,7 +3849,7 @@ test('preview client', async (t) => {
     state = {
       notes: [
         { id: 'question', text: 'Question', at: '2026-09-22T12:00:00',
-          acknowledged_at: '2026-09-22T12:01:00', ack_kind: 'reply', ack_text: 'See references',
+          acknowledged_at: '2026-09-22T12:01:00', ack_type: 'reply', ack_text: 'See references',
           ack_html: '<p>See <code>report-ref</code>, <code>message-ref</code>, <code>task-ref</code>, <code>missing-ref</code>, <code>duplicate-ref</code>.</p><pre><code>task-ref\n</code></pre>' },
         { id: 'message-ref', text: 'Linked message', at: '2026-09-22T12:02:00' }
       ],
@@ -4065,7 +4065,7 @@ test('preview client', async (t) => {
   await t.test("The age timer repaints a receipt stamp that render minted earlier", async () => {
     const priorNotes = state.notes;
     state.notes = [{ id: 'age-note', text: 'age note',
-      at: new Date(Date.now() - 4 * 60000).toISOString(), acknowledged_at: null, ack_kind: null,
+      at: new Date(Date.now() - 4 * 60000).toISOString(), acknowledged_at: null, ack_type: null,
       ack_text: null, ack_edited_at: null, replies: [], ack_edited_seen_count: 0, seen_at: null,
       task_id: null }];
     await refresh();
@@ -4237,7 +4237,7 @@ test('preview client', async (t) => {
       state.reports[0].updated_at = reportRevision;
       state.reports[0].latest_answer_acknowledged_at = null;
       reportFields = 3;
-      get('#report').fields = [text, picks, verdict];
+      get('#report').fields = [text, selects, verdict];
       await refresh();
       get('#report-select').value = 'pending-ack';
       get('#reports-tab').events.click();
@@ -4381,7 +4381,7 @@ test('preview client', async (t) => {
   });
 
 
-  await t.test('The header interrupt asks for a kind, clause file and reason', async () => {
+  await t.test('The header interrupt asks for a type, clause file and reason', async () => {
     const keptState = state;
     const notesBefore = sent.length;
     const draft = get('#note').value;
@@ -4402,13 +4402,14 @@ test('preview client', async (t) => {
       const arming = button.events.click();
       assert.equal(modal.open, true, 'the flag press opens the dialog');
       assert.equal(get('#modal-title').textContent, 'Flag a violation');
-      assert.deepEqual(values(0), ['bash-violation', 'process-violation'],
-        'the kinds follow the messages tab');
+      assert.deepEqual(values(0),
+        ['bash-violation', 'process-violation', 'missing-details', 'out-of-scope', 'task-not-created'],
+        'the types follow the messages tab');
       assert.deepEqual(values(1), ['', 'AGENTS.md', 'ARENA.md'],
         'the clause files come from the state read-set');
       assert.equal(control(1).options[0].text, 'No clause file');
       assert.equal(control(2).maxLength, 300);
-      assert.equal(control(0).focused, true, 'the kind takes focus on open');
+      assert.equal(control(0).focused, true, 'the type takes focus on open');
       assert.equal(button.disabled, false, 'an open dialog leaves the flag free');
       control(1).value = 'AGENTS.md';
       control(2).value = '  Heading levels  ';
@@ -4450,7 +4451,7 @@ test('preview client', async (t) => {
       const reportStatus = get('#report-status').textContent;
       const armingReport = button.events.click();
       assert.deepEqual(values(0), ['format-violation', 'unnecessary-report'],
-        'the kinds follow the reports tab');
+        'the types follow the reports tab');
       await get('#modal-form').events.submit(event({}));
       await armingReport;
       assert.equal(interruptCalls.at(-1).tab, 'reports');
@@ -4464,7 +4465,7 @@ test('preview client', async (t) => {
       const beforeCancel = interruptCalls.length;
       const armingDownloads = button.events.click();
       assert.deepEqual(values(0), ['bash-violation', 'process-violation'],
-        'Downloads shows the message kinds');
+        'Downloads shows the message types');
       get('#modal-cancel').events.click();
       await armingDownloads;
       assert.equal(modal.open, false, 'cancel closes the dialog');
@@ -4472,8 +4473,10 @@ test('preview client', async (t) => {
       get('#tasks-tab').events.click();
       await tick();
       const armingTasks = button.events.click();
-      assert.deepEqual(values(0), ['current-task-violation', 'empty-task-list'],
-        'the kinds follow the tasks tab');
+      assert.deepEqual(values(0),
+        ['current-task-violation', 'empty-task-list', 'missing-details', 'out-of-scope',
+          'task-not-created'],
+        'the types follow the tasks tab');
       await get('#modal-form').events.submit(event({}));
       await armingTasks;
       assert.equal(interruptCalls.at(-1).tab, 'tasks');

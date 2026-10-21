@@ -1,3 +1,4 @@
+# nemoizer: ignore — this file keeps the avoided words as fixtures.
 """The nemoizer linter reads every text file, honors markers, and lists them."""
 
 import subprocess
@@ -77,3 +78,77 @@ def test_the_rotation_table_never_flags_itself():
     )
     result = run(cwd=directory)
     assert result.returncode == 0, result.stdout
+
+
+def test_a_picker_is_a_rotation_and_a_marked_pickle_is_not():
+  import tempfile
+
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    ui = root / "ui.js"
+    ui.write_text(
+      "const picker = 1\nconst var_pick = 2\nconst repick = 3\n"
+      "const jar = pickle  # nemoizer: ignore\n",
+      encoding="utf-8",
+    )
+    result = run(cwd=directory)
+    assert result.returncode == 1
+    assert "ui.js:1: picker -> select" in result.stdout
+    assert "ui.js:2: pick -> select" in result.stdout
+    assert "ui.js:3" not in result.stdout
+    assert "ui.js:4" not in result.stdout
+    formatted = run("--format", cwd=directory)
+    assert formatted.returncode == 0, formatted.stderr
+    assert ui.read_text(encoding="utf-8") == (
+      "const selector = 1\nconst var_select = 2\nconst repick = 3\n"
+      "const jar = pickle  # nemoizer: ignore\n"
+    )
+
+
+def test_the_format_mode_rewrites_every_form_and_keeps_case():
+  import tempfile
+
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    note = root / "note.py"
+    note.write_text("kind = 1\nKIND = 2\nkinds = 3\n", encoding="utf-8")
+    result = run("--format", cwd=directory)
+    assert result.returncode == 0, result.stderr
+    assert note.read_text(encoding="utf-8") == "type = 1\nTYPE = 2\ntypes = 3\n"
+    assert "note.py:1: -kind = 1" in result.stdout
+    assert "note.py:1: +type = 1" in result.stdout
+    assert run(cwd=directory).returncode == 0
+
+
+def test_the_format_mode_honors_the_marker():
+  import tempfile
+
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    note = root / "note.md"
+    note.write_text(
+      "kind stays  <!-- nemoizer: ignore -->\npicked one\nkind moves\n",
+      encoding="utf-8",
+    )
+    result = run("--format", cwd=directory)
+    assert result.returncode == 0, result.stderr
+    assert note.read_text(encoding="utf-8") == (
+      "kind stays  <!-- nemoizer: ignore -->\nselected one\ntype moves\n"
+    )
+
+
+def test_the_format_mode_replaces_the_word_inside_a_longer_one():
+  import tempfile
+
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    note = root / "note.md"
+    note.write_text(
+      "the kind of jar\nKIND stays upper\nthe jar is pickle  # nemoizer: ignore\n",
+      encoding="utf-8",
+    )
+    result = run("--format", cwd=directory)
+    assert result.returncode == 0, result.stderr
+    assert note.read_text(encoding="utf-8") == (
+      "the type of jar\nTYPE stays upper\nthe jar is pickle  # nemoizer: ignore\n"
+    )

@@ -79,7 +79,7 @@ Distilled from the system prompts of the top agent models on Arena Leaderboards 
    reversible-first. One pole alone collapses to an extreme.
 4. Ban failure modes by exact string. List the phrases the model may not write, the framings it may
    not use, the moves it may not make. Named strings work where adjectives fail.
-5. Cap the ban lists. Pick the failures you actually see. A long ban list teaches the model to
+5. Cap the ban lists. Select the failures you actually see. A long ban list teaches the model to
    sound like the ban list.
 
 ### 5. Examples

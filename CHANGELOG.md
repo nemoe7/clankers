@@ -22,7 +22,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Block a notice only at the call threshold. A read-set checkpoint and a page flag both mint a quiet note the agent reads and acknowledges, and the six-call tally runs from the note.
 
-- Stop a running Bash call for a page flag only on a `bash-violation` kind and only after 3 seconds. Every other flag waits for the threshold.
+- Stop a running Bash call for a page flag only on a `bash-violation` type and only after 3 seconds. Every other flag waits for the threshold.
 
 - Refuse an acknowledgement of a violation note that does not name the violated clause as `file:ln: clause`. The note stays pending.
 
@@ -64,7 +64,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Identify user flags and report formatting defects, then print user-flagged notices to stdout.
 
-- Ask for a violation kind, a read-set clause file and a cited reason. Print the kind and reason in the gate notice.
+- Ask for a violation type, a read-set clause file and a cited reason. Print the type and reason in the gate notice.
 
 - Read files only when current full text is absent from context. Wait 20 minutes after the first eligible command. Then keep 20-minute intervals.
 
@@ -224,7 +224,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- Record the code, HTTP status, failure kind, compare result, and a bounded detail string. Keep the console format.
+- Record the code, HTTP status, failure type, compare result, and a bounded detail string. Keep the console format.
 
 - Compare the stored and server save stamps. Write the server state only on a match. Force save skips the compare.
 
@@ -1262,7 +1262,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The composer page renders no session bar, so the prompt fill read no repository and wrote nothing. The composer's repository chip now answers, and a second chip in the same owner/repo form stays ambiguous, so the tab title decides.
 - Arena reads the waiting line by its text span alone, never by its words. Arena rotates and empties that text, so a blank frame between two rotations now keeps the hourglass instead of losing the mark.
 - The tab title read a chat body that kept growing to raise the balloon, so a re-render could pass for new words. The read now starts at the last message root and takes its newest row.
-- The newest row's kind picks the mark: a `prose` body raises 💬, a `not-prose` reasoning block raises 💭, and a user root raises none. An action row keeps its label emoji, and every mark ends with the stop control.
+- The newest row's type selects the mark: a `prose` body raises 💬, a `not-prose` reasoning block raises 💭, and a user root raises none. An action row keeps its label emoji, and every mark ends with the stop control.
 - The fetch and lone-search rows carry no button, so the label read found nothing and the mark fell to the plain title. The read now takes the row's `body-sm` span and drops a fetch URL's anchor text.
 
 ## 2026-10-10
@@ -1284,7 +1284,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The preview frame sandbox gains `allow-popups`, `allow-popups-to-escape-sandbox` and `allow-downloads`, so preview links open a new tab and downloads run. The new Steering toggle ships on and re-applies the flags when Arena rebuilds the frame.
-- The tab title log names the row kind and the emoji-choice gates. The prompt fill log traces the composer write. The two lines diagnose a held question mark and a fill that does not land.
+- The tab title log names the row type and the emoji-choice gates. The prompt fill log traces the composer write. The two lines diagnose a held question mark and a fill that does not land.
 
 #### preview
 
@@ -1329,7 +1329,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The poll-hold test bounds its loop at two turns, so the suite no longer pays 39 s for 1800 idle turns.
 - `arena-preview task-list` prints the upcoming tasks only and names the head of the queue `current`. `--full` prints every task, finished included.
 - The task flags drop the redundant `--task-` head: `--details` is the name, and `--task-details` stays an alias. Every flag also takes a short form.
-- Every command that takes an ID also takes a 7-character prefix. A prefix that names two records fails as a named conflict and lists each match with its kind.
+- Every command that takes an ID also takes a 7-character prefix. A prefix that names two records fails as a named conflict and lists each match with its type.
 - The CLI output is terse. A read prints a 7-character ID per note, with no blank line between notes. The reminder drops its two shouting sentences and keeps the rotating tip.
 - The run verdict and the CONTINUE line print to one stream, not both. Nine measured commands drop from 673 tokens to 479.
 - The DEBUG trap blocks a `git commit` whose staged lines cite a session-local ID.
@@ -1384,7 +1384,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - A `gh pr checks` line hears the gate once a shell while origin/main leads the branch. Main moved, so no checks report until the branch rebases over it.
 - A preview call with no `arena-preview` shim on PATH runs the skill installer first, so a restored sandbox heals in one command. `ARENA_PREVIEW_NO_BOOTSTRAP` skips the bootstrap. The CI suite sets the guard, because it spawns preview.py directly.
 - `arena-preview note` prints a saved note again by its short or full ID. A short ID that matches several notes prints every match.
-- The `poll` call scans the newest stamp across every record kind, reads and acks included. When every record sits older than one full poll span, the wait ends with a hold line naming a possible rollback. An ack that answers a message past the same span carries the hold too.
+- The `poll` call scans the newest stamp across every record type, reads and acks included. When every record sits older than one full poll span, the wait ends with a hold line naming a possible rollback. An ack that answers a message past the same span carries the hold too.
 
 #### userscripts
 
@@ -1510,7 +1510,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - An option label that wraps onto the next line joins into one option, indented or not. A blank line, a fence, a heading, a list marker, a text-field marker or an anchor ends the group.
-- A submission the agent acked stars its report in the report picker and lights the Reports tab pip. The mark clears on open, and an ack already in view clears at once. The open stamp moves on every call, so a later ack holds a mark of its own.
+- A submission the agent acked stars its report in the report selector and lights the Reports tab pip. The mark clears on open, and an ack already in view clears at once. The open stamp moves on every call, so a later ack holds a mark of its own.
 
 ### Changed
 
@@ -1596,7 +1596,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### skills
 
 - The worker now registers on the viewer root, so the manifest's start URL sits inside its scope. The manifest also carries 192 and 512 PNG icons and a stable `id`. Chrome then offers the install.
-- The installed proxy app opens on the home page. Its start URL once carried the preview origin, so reopening the app landed on a dead sandbox address. The URL box and the share sheet pick the preview from there.
+- The installed proxy app opens on the home page. Its start URL once carried the preview origin, so reopening the app landed on a dead sandbox address. The URL box and the share sheet select the preview from there.
 
 #### house
 
@@ -1643,7 +1643,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- The no-file hint reads `no file selected; launching dialog`, and that path alerts with the card. Its blocked line is gone, a closed picker reads `no file selected;`, and a stale state reads `history does not match`.
+- The no-file hint reads `no file selected; launching dialog`, and that path alerts with the card. Its blocked line is gone, a closed selector reads `no file selected;`, and a stale state reads `history does not match`.
 - A refused copy read now reads `GET <status> <copy-state url>`, and the missing frame line reads `no preview detected`. The write-failure line keeps its words, and no other line is cut.
 - The fill lines read `no repo detected`, `no composer detected for <repo>` and `filled composer for <repo>`. The unchanged title line is gone, and a title change still writes its line.
 - Both bundles log under the `[NemoUtils]` tag, and the state lines carry short stamp hashes now. The userscripts README lists the new write, quiet tick and force save lines in place of the long stamps and the route words.
@@ -1683,9 +1683,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- The script reuses a remembered file only when its name belongs to the current repository and branch. It refuses a handle outside that scope, and the owner picks the file again.
-- With no file set, the automatic save writes nothing. A manual save press keeps the download only where the browser cannot offer a picker.
-- A save that waited on the network never opens the picker, which needs the press itself. It points to the choose entry instead, and the write-failure path does the same.
+- The script reuses a remembered file only when its name belongs to the current repository and branch. It refuses a handle outside that scope, and the owner selects the file again.
+- With no file set, the automatic save writes nothing. A manual save press keeps the download only where the browser cannot offer a selector.
+- A save that waited on the network never opens the selector, which needs the press itself. It points to the choose entry instead, and the write-failure path does the same.
 
 ## 2026-10-06
 
@@ -1742,7 +1742,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- The message toolbar carries a save button that picks one file and writes the state into it. The click is the gesture the picker needs, and the name carries the repo, the branch, the stamp and the record counts.
+- The message toolbar carries a save button that selects one file and writes the state into it. The click is the gesture the selector needs, and the name carries the repo, the branch, the stamp and the record counts.
 - The state stamp takes the newest change the state carries, receipts included, so a download follows every change. The poll heartbeat stays out.
 - A note or a report answer clears an armed Skip poll flag, so the wait delivers it. An item that arrived before the press still outranks the skip.
 - The composer stages a pasted text file when the paste holds more than 25 lines, counted in lines rather than characters.
@@ -1795,13 +1795,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The fill memory survived a route away from the composer, so a return to `/agent` after a session route wrote nothing. The memory now leaves with the route, and the same repo fills its new chat.
 - The auto save kept one memory and one file per browser, so two tabs of two sessions wrote one file. The script now scopes the memory, the chosen file and the handle cache by repo and branch.
 - The hourglass needs the spinner canvas and the text block beside it. An action row carries the same canvas as its icon, so a bare canvas no longer reads as a waiting line.
-- A pick needs a click for the browser gesture. The automatic path writes the stamped download, so the state lands.
+- A select needs a click for the browser gesture. The automatic path writes the stamped download, so the state lands.
 - Every state-file notice is a console line under the `[clankers]` tag, and no popup interrupts the preview.
 - The save line names the file the write reached, from the chosen handle. The repo name falls back to the tab title when the bar is gone.
 - The page keeps the reCAPTCHA node after the widget closes, so the shield stuck. The mark now needs a rendered node, not a present one.
 - Radix keeps the closed dialog in the page, so the shield stuck. The mark now needs an open dialog ancestor.
-- The picker ran in the userscript sandbox, which refuses the call with a TypeError. The call now runs on the page window.
-- The state download logs each silent path. A missing frame, a bad copy-state status, the plan, the missing handle, a closed picker and the stamped download each print a line.
+- The selector ran in the userscript sandbox, which refuses the call with a TypeError. The call now runs on the page window.
+- The state download logs each silent path. A missing frame, a bad copy-state status, the plan, the missing handle, a closed selector and the stamped download each print a line.
 - The prompt fill rewrote the composer on every DOM mutation when the editor changed the text, which made the page unresponsive. It writes once per repo per page now.
 
 #### skills
@@ -2469,7 +2469,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The assumption and lazy-default clauses gain NEVER guards against material ambiguity in refs and live. The root `AGENTS.md` copy matches.
 - A ✕ button in the `Reports` toolbar and `unpublish <id>` remove a stale report, and the tab asks for a second click. Sent answers and the source file survive, so a new ID republishes.
 - `ARENA.md` and refs gain the CI poll rule. After a push, poll PR checks at once, then 10s, 20s, 30s, and every 30s to a conclusion. The Git/Hub Arena cell gains "Backoff polls for PR checks."
-- A second `ack` on the same ID adds a reply block under the first answer. The block keeps its own kind and stamp, so the earlier answer stays. The database, save file, shift-click copy and restore all carry the blocks, and the log shows "Replied again" with a "New reply" pip.
+- A second `ack` on the same ID adds a reply block under the first answer. The block keeps its own type and stamp, so the earlier answer stays. The database, save file, shift-click copy and restore all carry the blocks, and the log shows "Replied again" with a "New reply" pip.
 
 #### gpt-plugins
 
@@ -2520,7 +2520,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - "Failure to ack immediately earns a negative rating." joins the ack cadence paragraph in all three `SKILL.md` copies.
 - The clause "NEVER contain rationale, narrative, or facts that drive a clause" lands in root `AGENTS.md` first. The measured rules files do not change.
-- The owner's picks drop rationale tails, two history parentheticals and one slogan from refs `ARENA.md`, with the live mirrors in step. The refs backoff line becomes a plain bullet, and the merge bullet reads: ALWAYS merge rebase. The snapshot-cap derivation leaves both `SKILL.md` and `REFERENCE.md` copies while the size and "cap is not measured" caveat stay.
+- The owner's selects drop rationale tails, two history parentheticals and one slogan from refs `ARENA.md`, with the live mirrors in step. The refs backoff line becomes a plain bullet, and the merge bullet reads: ALWAYS merge rebase. The snapshot-cap derivation leaves both `SKILL.md` and `REFERENCE.md` copies while the size and "cap is not measured" caveat stay.
 - The hook's call count resets only on a fresh backlog's first item. A message on an unacked pile leaves the count running.
 - The unpublish button joins the 44px rule. The report select draws the log filter's chevron instead of the native arrow.
 - The agent-request line reads "agent requests need approval below".
@@ -2727,7 +2727,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Preserve the first receipt time and stamp changed answers with `ack_edited_at`, while identical retries and first answers stay unedited. Show a local-time Edited label, a Notes dot and a New edit jump link without moving messages, and keep viewed-edit state browser-local across reloads. Save and import carry the edit stamps, with regressions covering changes, retries, restores, filtering and same-second edits.
 - Match report questions and report blockquotes to the reply border color `rgb(199, 194, 188)`, with widths and spacing unchanged. A scan finds no other unmatched left border.
 - Require a labeled custom-response field with every option set in both preview skills. Refs carry full wording and the live and installed copies carry the compressed clause.
-- Omit zero counts, the total, and the read and ack sentence. Print only nonzero kinds as requested, followed by Manage the task list. Empty, message-only, form-only and mixed-upload cases pass without Seen changes.
+- Omit zero counts, the total, and the read and ack sentence. Print only nonzero types as requested, followed by Manage the task list. Empty, message-only, form-only and mixed-upload cases pass without Seen changes.
 - Keep the report star and tab dot until the owner submits the form, even after reading, and let optional blanks count. Server state preserves markers across devices, and republishing requires a fresh answer. Plain reports stay read-only, and invalid legacy fields remain visible as errors without breaking the state endpoint.
 - Two reviewed passes reduce nine maintained README and docs files by 14.6%, with code spans, numeric values and link targets intact. No third-party prose changes, and historical observations stay with their retractions.
 - Preauthorize `markdown-it-py` installation for the reporting skill in a workspace venv, with no separate approval. Keep skill-only packages out of application manifests and generated `requirements.txt` unless the application independently needs them. Ref, live and installed instructions agree.
@@ -2823,7 +2823,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Once a note saves, `#send-status` reads Saved 3:14:17 AM · awaiting acknowledgement, which describes the agent's obligations rather than what the user just did. It now reads Saved 3:14:17 AM · Message sent, matching the receipt's Sent, and the retried-send branch keeps its wording. The Reports panel still says awaiting acknowledgement after an answer goes out, which no request asked about and which stays as it was.
 - Two owner complaints about the same page. The selected tab kept `border-color` `var(--accent)` even under focus, so tabs rest on a new `--tab-border` and `nav button:focus-visible` restores `var(--focus)` at a winning specificity. In the Reports panel the rule under the toolbar hugged the form, so it now has 12px above and `margin-top: 24px` on `#report-form` below.
 - Seen now means the agent read the message, while `read` stamps a new `seen_at` column on every unacknowledged note it returns. `/api/state` carries the column, and the browser reads Sent until `seen_at` lands, Seen after, and Said once an acknowledgement lands. The browser's own poll deliberately stamps nothing, or every note would read Seen whether an agent looked or not.
-- The receipt's state word was `Delivered` while a message waited and `Seen` once acknowledged. It now reads `Sent` while no ack exists, `Seen` for a plain-line acknowledgement and `Said` for a rendered reply. One expression over `acknowledged_at` and `ack_kind` picks the word, so the log separates an agent that read a note from one that answered it.
+- The receipt's state word was `Delivered` while a message waited and `Seen` once acknowledged. It now reads `Sent` while no ack exists, `Seen` for a plain-line acknowledgement and `Said` for a rendered reply. One expression over `acknowledged_at` and `ack_type` selects the word, so the log separates an agent that read a note from one that answered it.
 - The previous entry printed the entire ID in every receipt, and a bug report arrived within the hour. The receipt is back to `item.id.slice(0, 7)` and the whole ID moves into that element's `title`, so a full ID is one hover away. `boundedId()` comes out entirely, and the harness now drives a real UUID through the log to pin the truncated text and the tooltip.
 - The Copy button works in the real preview, the first browser evidence on it, and the owner asked for an icon. The word is now `⧉` at rest, `✓` on success and `✗` when both clipboard paths fail, with the words in `aria-label` and `title`. The button is a 26px square like the other icon buttons, and a code block's right padding drops from 62px to 40px.
 - A hand-quoted citation came out at eight characters, so the receipt renders the first seven, a hyphen and the remainder through `boundedId()`. The rule's boundary shows in the render, the whole ID is there to copy, and short IDs come back unbroken.
@@ -2903,7 +2903,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - `serve` probes `markdown-it-py` and exits with the install command plus a venv reminder instead of serving raw text. `read`, `ack` and `publish` need no renderer.
 - A prior banner-and-disable design came and went at request. A renderer that breaks after boot still falls back to raw text with no re-check while the server runs.
 - `ack` requires an answer. `--reply <markdown>` renders as a log message, `--note <text>` prints one line under the receipt, and a bare `ack <ids>` fails.
-- Notes store `ack_kind`/`ack_text`, `/api/state` serves `ack_html`, and a repeat keeps its first timestamp. Report answers leave the log for a `submissions` table. `read` merges them as `kind: report`, `ack` accepts either table's IDs, and `/api/state` serves notes only.
+- Notes store `ack_type`/`ack_text`, `/api/state` serves `ack_html`, and a repeat keeps its first timestamp. Report answers leave the log for a `submissions` table. `read` merges them as `type: report`, `ack` accepts either table's IDs, and `/api/state` serves notes only.
 - The Reports tab shows a `✓ Sent` receipt. Questions go to fielded reports, and every shell block ends with a read.
 - The client stores `{answers, at}` under `answers:<report id>` and pre-fills that report. It shows `✓ Sent <time>` beside Send answers, and `.report h1` margins tighten to 8/12.
 - The JSON path leaves — `publish-form`, the `forms` table, form routes, the Forms tab, the `FORM` note header and the 2–20-option floor. A questionnaire is now a fielded report whose answers arrive as `REPORT` notes.

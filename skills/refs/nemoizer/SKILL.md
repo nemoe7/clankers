@@ -21,9 +21,12 @@ run the linter before you hand work over.
 | `pick` | select |
 | `kind` | type |
 
-Each row matches the stem, so `picked`, `picking`, and `picks` all rotate to
+Each row matches the stem, so `picked`, `picking`, and `picks` all rotate to <!-- nemoizer: ignore -->
 `select`. Add a row here and a pattern in `scripts/nemoize.py`: one table, one
-source.
+source. <!-- nemoizer: ignore -->
+
+A word that shares the stem but stands on its own, like `pickle`, carries a <!-- nemoizer: ignore -->
+marker instead of a narrower pattern. <!-- nemoizer: ignore -->
 
 ## Linter
 
@@ -38,8 +41,26 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 - Each finding prints `path:line: word -> use`, and the exit code is 1.
 - Vendored and generated trees are skipped, and `--ignore` adds a directory or
   file.
-- The tool is advisory until the round-1 rotation lands, so it is not wired into
-  `check.py` yet.
+- `check.py` runs the linter with the ignore list, so a new avoided word fails the
+  gate.
+
+## Writing the rotation
+
+`--format` rewrites the tree in place and prints every changed line twice, as it
+was and as it becomes:
+
+```bash
+python3 skills/nemoizer/scripts/nemoize.py --format .
+```
+
+Each change prints as a pair: `path:line: -` and the old line, then `path:line: +`
+and the new one. A row replaces its word as plain text, in lower, capital and upper
+case. One stem word takes its own plain word: `picker` becomes `selector`, and <!-- nemoizer: ignore -->
+`pickers` becomes `selectors`. <!-- nemoizer: ignore -->
+
+- Ignore markers and the table's own rows are never rewritten.
+- Pass a license file or a generated tree to `--ignore`; the tool reads every other
+  text file.
 
 ## Ignore markers
 
@@ -67,5 +88,7 @@ review. Delete a marker when the line no longer needs it.
 ## Adding a row
 
 1. Add the row to the table above.
-2. Add one pattern and its plain word to `ROTATIONS` in `scripts/nemoize.py`.
+2. Add one pattern, its name, and its plain word to `ROTATIONS` in
+   `scripts/nemoize.py`; add a stem word that takes its own plain word to
+   `EXCEPTIONS`.
 3. Run `python3 -m pytest skills/nemoizer/scripts/test_nemoize.py`.

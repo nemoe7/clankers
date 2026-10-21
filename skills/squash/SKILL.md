@@ -26,7 +26,7 @@ Squashing is editorial, not lossy: it removes words, never content.
 
 ## Criterion
 
-Pick the unit first, measure it before and after, and keep every pass that lowers it. Use whatever unit measures the real limit:
+Select the unit first, measure it before and after, and keep every pass that lowers it. Use whatever unit measures the real limit:
 
 | Unit | Use when | How to count |
 | --- | --- | --- |
@@ -53,7 +53,7 @@ Text often satisfies several limits at once, such as a character cap on a field 
 
 Units do not move together: contractions and symbols can cut characters while adding tokens, and fewer words can leave bytes unchanged. Measure every governing unit after each pass. Keep a pass only when no budget regresses, and let whichever unit is still over drive the next pass. Report all of them.
 
-When budgets conflict, so satisfying one pushes another over, stop and report the conflict with both counts rather than picking a winner.
+When budgets conflict, so satisfying one pushes another over, stop and report the conflict with both counts rather than selecting a winner.
 
 ## What must survive
 

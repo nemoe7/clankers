@@ -556,7 +556,7 @@ def test_release_pipeline():
     "request timed out after 180s" in call.args[0] and "stepping down" in call.args[0]
     for call in timeout_log.call_args_list
   )
-  # A 429 cools that rung with the reported wait plus the safety margin, so the next pick starts lower.
+  # A 429 cools that rung with the reported wait plus the safety margin, so the next select starts lower.
   # A model that answered cools for a minute. A fully cooling ladder waits for the earliest rung to come back.
   with (
     patch.object(

@@ -1279,7 +1279,7 @@ function checkTabTitle(api, logging) {
   function questionCard(label) {
     return {
       getAttribute: function (name) {
-        return name === "aria-label" ? label || "Pick one" : null;
+        return name === "aria-label" ? label || "Select one" : null;
       },
     };
   }
@@ -1421,7 +1421,7 @@ function checkTabTitle(api, logging) {
     [rowKind(directReasoning), "reasoning"],
     [rowKind(directAction), "action"],
     [rowKind(null), "none"],
-    // The row kind carries the mark: the chat body takes the balloon, the reasoning block
+    // The row type carries the mark: the chat body takes the balloon, the reasoning block
     // takes the thinking mark, and the action rows keep their label words.
     [expireHold(), null],
     [desiredTitle(chatPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
@@ -1472,15 +1472,15 @@ function checkTabTitle(api, logging) {
     [expireHold(), null],
     [summaryCard(summaryRow()), true],
     [desiredTitle(summaryPage), TITLE_PREFIX + "clankers" + vtag],
-    // The emoji picker and structured logs identify the row kind.
+    // The emoji selector and structured logs identify the row type.
     [emojiForRow(directChat), AGENT_EMOJI],
     [emojiForRow(directReasoning), REASONING_EMOJI],
     [emojiForRow(directPoll), "\uD83D\uDCA4"],
     [emojiForRow(null), null],
-    [chatLogLine.data.kind, "chat"],
-    [reasoningLogLine.data.kind, "reasoning"],
-    [bashLogLine.data.kind, "action"],
-    [pollLogLine.data.kind, "poll"],
+    [chatLogLine.data.type, "chat"],
+    [reasoningLogLine.data.type, "reasoning"],
+    [bashLogLine.data.type, "action"],
+    [pollLogLine.data.type, "poll"],
     // The hold bridges the gaps inside a turn and dies with the stop control.
     [expireHold(), null],
     [desiredTitle(chatPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
@@ -1570,14 +1570,14 @@ function checkTabTitle(api, logging) {
     [syncTitle(quietPage), true],
     [quietPage.title, TITLE_PREFIX + "clankers" + vtag],
     [bashLogLine.text, "[NemoUtils][title][info] changed"],
-    [bashLogLine.data.kind, "action"],
+    [bashLogLine.data.type, "action"],
     [bashLogLine.data.emoji, BASH_EMOJI],
     [bashLogLine.data.repo, undefined],
     [chatLogLine.text, "[NemoUtils][title][info] changed"],
-    [chatLogLine.data.kind, "chat"],
+    [chatLogLine.data.type, "chat"],
     [chatLogLine.data.emoji, AGENT_EMOJI],
     [questionsLogLine.text, "[NemoUtils][title][info] changed"],
-    [questionsLogLine.data.kind, "action"],
+    [questionsLogLine.data.type, "action"],
     [questionsLogLine.data.emoji, QUESTION_EMOJI],
     [VERSION, "1.10.27"],
   ];
@@ -2050,23 +2050,23 @@ function checkStateDownload(api, session, logging) {
   );
   assert.equal(stateFileName(repo, branch, null, counts), "clankers-main-n12-t4.ndjson");
   // Only a stamp that differs from the last write fills the file.
-  assert.equal(stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "").kind, "download");
+  assert.equal(stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "").type, "download");
   assert.equal(
-    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-05T20:00:00").kind,
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-05T20:00:00").type,
     "download",
   );
   var repeated = stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33");
-  assert.equal(repeated.kind, "unchanged");
+  assert.equal(repeated.type, "unchanged");
   assert.equal(repeated.name, "clankers-main-20261006T061233-n12-t4.ndjson");
   assert.match(repeated.message, /unchanged since the last write/);
   // A stamp that goes backward is a wiped or replaced preview, so nothing overwrites the
   // owner's file with an older state.
   var stale = stateDownload(repo, branch, "2026-10-05T20:00:00", counts, "2026-10-06T06:12:33");
-  assert.equal(stale.kind, "stale");
+  assert.equal(stale.type, "stale");
   assert.match(stale.message, /Stale preview state/);
   // A payload with no stamp says so instead of writing an undated file.
   var unstamped = stateDownload(repo, branch, null, counts, "");
-  assert.equal(unstamped.kind, "error");
+  assert.equal(unstamped.type, "error");
   assert.match(unstamped.message, /carries no stamp/);
   // The approved pair: the newest note stamp and the newest task stamp.
   // A rollback leaves older records while a new note moves the state stamp. The pair rejects that write. The owner keeps the newer state.
@@ -2093,16 +2093,16 @@ function checkStateDownload(api, session, logging) {
     memory,
     { note: "2026-10-06T06:12:33", task: "2026-10-05T18:00:00" },
   );
-  assert.equal(rolledBackTask.kind, "stale");
+  assert.equal(rolledBackTask.type, "stale");
   assert.match(rolledBackTask.message, /task stamp went backward/);
   // A forced save takes the state whatever the memory says: the same stamp, an older
   // stamp and a rolled-back pair all write, and the write moves the reference.
   assert.equal(
-    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33", null, true).kind,
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33", null, true).type,
     "download",
   );
   assert.equal(
-    stateDownload(repo, branch, "2026-10-05T20:00:00", counts, "2026-10-06T06:12:33", null, true).kind,
+    stateDownload(repo, branch, "2026-10-05T20:00:00", counts, "2026-10-06T06:12:33", null, true).type,
     "download",
   );
   assert.equal(
@@ -2114,7 +2114,7 @@ function checkStateDownload(api, session, logging) {
       memory,
       { note: "2026-10-06T06:12:33", task: "2026-10-05T18:00:00" },
       true,
-    ).kind,
+    ).type,
     "download",
   );
   var rolledBackNote = stateDownload(
@@ -2125,7 +2125,7 @@ function checkStateDownload(api, session, logging) {
     memory,
     { note: "2026-10-05T18:00:00", task: "2026-10-06T06:00:00" },
   );
-  assert.equal(rolledBackNote.kind, "stale");
+  assert.equal(rolledBackNote.type, "stale");
   assert.match(rolledBackNote.message, /note stamp went backward/);
   // Both stamps of the pair move forward: the write lands.
   var pairForward = stateDownload(
@@ -2136,7 +2136,7 @@ function checkStateDownload(api, session, logging) {
     memory,
     { note: "2026-10-06T06:12:33", task: "2026-10-06T06:00:00" },
   );
-  assert.equal(pairForward.kind, "download");
+  assert.equal(pairForward.type, "download");
   var deletion = stateDownload(
     repo,
     branch,
@@ -2149,10 +2149,10 @@ function checkStateDownload(api, session, logging) {
     },
     { note: "2026-10-05T20:00:00", task: "2026-10-05T19:00:00" },
   );
-  assert.equal(deletion.kind, "unchanged");
+  assert.equal(deletion.type, "unchanged");
   // A payload without the pair, or a memory saved before the pair existed, keeps the old rule.
   assert.equal(
-    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, memory).kind,
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, memory).type,
     "download",
   );
   assert.equal(
@@ -2163,14 +2163,14 @@ function checkStateDownload(api, session, logging) {
       counts,
       "2026-10-05T20:00:00",
       { note: "2026-10-06T06:12:33", task: "2026-10-05T19:00:00" },
-    ).kind,
+    ).type,
     "download",
   );
-  // One route per state: the chosen file, the one-time pick, or the stamped download on a
-  // browser without the file picker.
+  // One route per state: the chosen file, the one-time select, or the stamped download on a
+  // browser without the file selector.
   var fresh = stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "");
   assert.equal(stateDelivery(fresh, true, true), "write");
-  assert.equal(stateDelivery(fresh, false, true), "pick");
+  assert.equal(stateDelivery(fresh, false, true), "select");
   assert.equal(stateDelivery(fresh, false, false), "download");
   assert.equal(stateDelivery(repeated, true, true), "unchanged");
   assert.equal(stateDelivery(stale, true, true), "stale");
@@ -2204,7 +2204,7 @@ function checkStateDownload(api, session, logging) {
     "clankers-arena-01a0fd4f-clankers-20261006T083357.ndjson",
   );
   // An ongoing session renders the repository as a bare chip without its owner, so a slash-less slug-like span in the
-  // bar still names the repository for the picker and the fill, instead of falling through to a header session token.
+  // bar still names the repository for the selector and the fill, instead of falling through to a header session token.
   var bareBar = {
     querySelectorAll: function (selector) {
       if (selector === "span.truncate") return [{ textContent: "daedalus" }];
@@ -2243,7 +2243,7 @@ function checkStateDownload(api, session, logging) {
     return [{ textContent: "not a repo read ARENA.md" }];
   };
   assert.equal(readSlug(promptDoc), "previous");
-  // A new chat on /agent has no session bar, so the composer's own picker row carries the
+  // A new chat on /agent has no session bar, so the composer's own selector row carries the
   // repository chip ahead of the branch chip, and the fill reads it there.
   var composerDoc = {
     querySelector: function () { return null; },
@@ -2341,7 +2341,7 @@ function checkStateDownload(api, session, logging) {
     JSON.stringify(stateScope({ querySelector: function () { return null; } })),
     JSON.stringify({ repo: "", branch: "" }),
   );
-  // The picker call runs on the page window. A realm without one yields no picker rather
+  // The selector call runs on the page window. A realm without one yields no selector rather
   // than a throw, which is what keeps the download route alive.
   assert.equal(pagePicker(), null);
   // The chosen file keeps its own name, so the save line names the file the write reached.
@@ -2386,8 +2386,8 @@ function checkStateDownload(api, session, logging) {
   headerSpan.textContent = "clankers read ARENA.md";
   assert.equal(stateRepo(headerOnlyDoc), "saved");
   session.value = null;
-  assert.equal(stateAction("pick", false), "block");
-  assert.equal(stateAction("pick", true), "hint");
+  assert.equal(stateAction("select", false), "block");
+  assert.equal(stateAction("select", true), "hint");
   assert.equal(stateAction("download", false), "block");
   assert.equal(stateAction("download", true), "download");
   assert.equal(stateAction("write", true), "write");
@@ -2417,10 +2417,10 @@ function checkStateDownload(api, session, logging) {
   assert.doesNotMatch(errorLines[0], /localhost|api\/copy-state/);
   assert.match(getLine(200, "http://localhost:8000"), /GET 200.*http:\/\/localhost:8000/);
   // The owner's line texts: the no-file hint names the dialog it opens, a
-  // stale state reads as a history mismatch, and a closed picker reads as a plain no-file line.
+  // stale state reads as a history mismatch, and a closed selector reads as a plain no-file line.
   assert.equal(STATE_LINES.hint, "no file selected; launching dialog");
   assert.equal(STATE_LINES.history, "history does not match");
-  assert.equal(STATE_LINES.pickerClosed, "no file selected;");
+  assert.equal(STATE_LINES.selecterClosed, "no file selected;");
   // The refused copy reads as a `GET` too, and the missing frame reads plainly.
   assert.equal(STATE_LINES.noPreview, "no preview detected");
   assert.match(copyLine(500, "http://localhost:8000"), /GET 500.*http:\/\/localhost:8000\/api\/copy-state/);
@@ -2505,11 +2505,11 @@ function checkStateDownload(api, session, logging) {
     "A new branch still moves the save",
   );
 
-  assert.equal(overwriteAsk(true, { kind: "download" }, true, false), true);
-  assert.equal(overwriteAsk(true, { kind: "download" }, true, true), false, "A forced save writes");
-  assert.equal(overwriteAsk(false, { kind: "download" }, true, false), false);
-  assert.equal(overwriteAsk(true, { kind: "unchanged" }, true, false), false, "Nothing to write");
-  assert.equal(overwriteAsk(true, { kind: "download" }, false, false), false, "No file to protect");
+  assert.equal(overwriteAsk(true, { type: "download" }, true, false), true);
+  assert.equal(overwriteAsk(true, { type: "download" }, true, true), false, "A forced save writes");
+  assert.equal(overwriteAsk(false, { type: "download" }, true, false), false);
+  assert.equal(overwriteAsk(true, { type: "unchanged" }, true, false), false, "Nothing to write");
+  assert.equal(overwriteAsk(true, { type: "download" }, false, false), false, "No file to protect");
 
   // The reset window accepts a URL-only move within 150 seconds either side of the four PHT
   // boundaries. A branch move, a missing branch and an outside-window clock still ask.

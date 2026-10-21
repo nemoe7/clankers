@@ -53,7 +53,7 @@
 
 ## Engineering
 
-- KISS/YAGNI/DRY ladder; stop at first rung that holds: 1 needed at all (skip speculative additions, not requirements), 2 helper/util/type/pattern already here: reuse, look before writing, 3 stdlib, 4 native feature (date input over picker library, CSS over JS, DB constraint over app code), 5 installed dep (NEVER add one for a few lines), 6 one line, 7 minimum code.
+- KISS/YAGNI/DRY ladder; stop at first rung that holds: 1 needed at all (skip speculative additions, not requirements), 2 helper/util/type/pattern already here: reuse, look before writing, 3 stdlib, 4 native feature (date input over selector library, CSS over JS, DB constraint over app code), 5 installed dep (NEVER add one for a few lines), 6 one line, 7 minimum code.
 - Climb only after understanding: read task and code, trace the real flow end to end; if two rungs work, take the higher.
 - Two same-size stdlib options: take the edge-case-correct one.
 - Complex request: ship the lazier version and question the requirement in the same response; NEVER default on material ambiguity.

@@ -76,7 +76,7 @@ def test_the_viewer_root_serves_an_installable_page():
     deadline = time.time() + 15
     while time.time() < deadline:
       try:
-        status, kind, body = get(port, "/healthz")
+        status, type, body = get(port, "/healthz")
         if status == 200:
           break
       except OSError:
@@ -85,9 +85,9 @@ def test_the_viewer_root_serves_an_installable_page():
       raise AssertionError(f"The proxy never answered: {server.stdout.read()}")
 
     # The root carries a real page: HTML, the manifest link in it, and the URL form.
-    status, kind, body = get(port, "/")
+    status, type, body = get(port, "/")
     assert status == 200, status
-    assert "text/html" in kind, kind
+    assert "text/html" in type, type
     assert MANIFEST in body, "the main page must carry the manifest link"
     assert REGISTER in body, "the main page must carry the worker registration"
     assert 'name="url"' in body, "the main page must offer the preview URL box"
@@ -95,17 +95,17 @@ def test_the_viewer_root_serves_an_installable_page():
     assert RECENT in body and 'id="recent"' in body, (
       "the main page must hold the recent list"
     )
-    status, kind, _ = get(port, "/pwa/recent.js")
-    assert status == 200 and "javascript" in kind, (status, kind)
+    status, type, _ = get(port, "/pwa/recent.js")
+    assert status == 200 and "javascript" in type, (status, type)
     # A rejected URL still answers the page, so the DOM never loses the manifest.
-    status, kind, body = get(port, "/?url=https%3A%2F%2Fexample.com%2F")
+    status, type, body = get(port, "/?url=https%3A%2F%2Fexample.com%2F")
     assert status == 400, status
-    assert "text/html" in kind, kind
+    assert "text/html" in type, type
     assert MANIFEST in body, "a rejected URL must keep the manifest link"
     assert RECENT in body, "a rejected URL must keep the recent list"
     # A page under the proxy that is not the root keeps its short plain-text refusal.
-    status, kind, _ = get(port, "/somewhere?url=https%3A%2F%2Fexample.com%2F")
-    assert status == 400 and "text/plain" in kind, (status, kind)
+    status, type, _ = get(port, "/somewhere?url=https%3A%2F%2Fexample.com%2F")
+    assert status == 400 and "text/plain" in type, (status, type)
     # The health check keeps its bare text answer.
     assert get(port, "/healthz") == (200, "text/plain; charset=utf-8", "ok")
   finally:
@@ -176,14 +176,14 @@ def test_the_root_always_opens_the_chooser():
       raise AssertionError(f"The proxy never answered: {server.stdout.read()}")
 
     # A plain open lands on the chooser.
-    status, kind, body = get(port, "/")
-    assert status == 200 and "text/html" in kind, (status, kind)
+    status, type, body = get(port, "/")
+    assert status == 200 and "text/html" in type, (status, type)
     assert 'name="url"' in body, "the root must open the chooser"
     assert MANIFEST in body, "the chooser keeps the manifest link"
     # Even a request that still carries the old target cookie lands on the chooser.
     cookie = f"arena_preview_target={sign_origin('https://sbx-demo.arena.site')}"
-    status, kind, body = get(port, "/", cookie=cookie)
-    assert status == 200 and "text/html" in kind, (status, kind)
+    status, type, body = get(port, "/", cookie=cookie)
+    assert status == 200 and "text/html" in type, (status, type)
     assert 'name="url"' in body, "a carried target must not skip the chooser"
   finally:
     server.terminate()
@@ -211,7 +211,7 @@ def test_the_installed_app_opens_the_proxy_home():
 
   The manifest's start URL carried the preview origin, so opening the app without a shared link
   reopened a sandbox whose address was dead. Every open lands on the home page, and the URL box
-  or the share sheet picks the preview from there.
+  or the share sheet selects the preview from there.
   """
   port = free_port()
   server = subprocess.Popen(
@@ -236,8 +236,8 @@ def test_the_installed_app_opens_the_proxy_home():
     else:
       raise AssertionError(f"The proxy never answered: {server.stdout.read()}")
 
-    status, kind, body = get(port, "/pwa/manifest.webmanifest")
-    assert status == 200 and "manifest" in kind, (status, kind)
+    status, type, body = get(port, "/pwa/manifest.webmanifest")
+    assert status == 200 and "manifest" in type, (status, type)
     assert json.loads(body)["start_url"] == "/", (
       "a fresh install starts on the home page"
     )
@@ -389,8 +389,8 @@ def test_a_share_rides_through_the_chooser_into_the_recent_list():
     assert status == 302, status
     assert location == "/?shared=https%3A%2F%2Fsbx-text.arena.site%2F", location
     # The landing request keeps the chooser: `shared` names no proxy target.
-    status, kind, body = get(port, location)
-    assert status == 200 and "text/html" in kind, (status, kind)
+    status, type, body = get(port, location)
+    assert status == 200 and "text/html" in type, (status, type)
     assert 'name="url"' in body, "the shared landing opens the chooser"
     assert RECENT in body, "the shared landing carries the recent list"
     # A rejected share still answers with its plain-text refusal.

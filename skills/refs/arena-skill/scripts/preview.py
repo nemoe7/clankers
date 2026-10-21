@@ -218,8 +218,8 @@ AGENT_KEY_EXPIRY_META = "agent_key_expired_at"
 AGENT_SEEN_META = "agent_seen_at"
 AGENT_INTERRUPT_META = "agent_interrupt"
 AGENT_INTERRUPT_FLAG_META = "agent_interrupt_flag"
-# The flag modal offers these kinds per tab. The server refuses a kind outside its tab's tuple.
-VIOLATION_KINDS = {
+# The flag modal offers these types per tab. The server refuses a type outside its tab's tuple.
+VIOLATION_TYPES = {
   "notes": (
     "bash-violation",
     "process-violation",
@@ -299,7 +299,7 @@ def local_stamp(value):
 def workspace_branch(root=None):
   """The checked-out branch of a git checkout, or an empty string.
 
-  A state file name carries the branch beside the repository, so the pick control asks
+  A state file name carries the branch beside the repository, so the select control asks
   the checkout the preview serves rather than the browser.
   """
   try:
@@ -963,9 +963,9 @@ def pr_check_latest(root, slug, sha):
   projection = (
     ".data.repository.object.statusCheckRollup.contexts.nodes[]? | "
     'if .__typename == "CheckRun" then '
-    '{kind:"check",name,workflow:(.checkSuite.workflowRun.workflow.name // ""),'
+    '{type:"check",name,workflow:(.checkSuite.workflowRun.workflow.name // ""),'
     'state:(if .status == "COMPLETED" then .conclusion else .status end),at:.startedAt} '
-    'else {kind:"status",name:.context,workflow:"",state,at:.createdAt} end | @json'
+    'else {type:"status",name:.context,workflow:"",state,at:.createdAt} end | @json'
   )
   data = gh_check_json(
     root,
@@ -991,10 +991,10 @@ def pr_check_latest(root, slug, sha):
   for node in data:
     if not isinstance(node, dict) or not all(
       isinstance(node.get(field), str)
-      for field in ("kind", "name", "workflow", "state", "at")
+      for field in ("type", "name", "workflow", "state", "at")
     ):
       return None
-    if node["kind"] not in ("check", "status") or not node["name"]:
+    if node["type"] not in ("check", "status") or not node["name"]:
       return None
     try:
       stamp = datetime.fromisoformat(node["at"].replace("Z", "+00:00"))
@@ -1002,14 +1002,14 @@ def pr_check_latest(root, slug, sha):
       return None
     if stamp.tzinfo is None:
       return None
-    key = (node["kind"], node["name"], node["workflow"])
+    key = (node["type"], node["name"], node["workflow"])
     if key not in latest or stamp > latest[key][0]:
       latest[key] = stamp, node
   return [
     node
     for _stamp, node in sorted(
       latest.values(),
-      key=lambda entry: (entry[1]["workflow"], entry[1]["name"], entry[1]["kind"]),
+      key=lambda entry: (entry[1]["workflow"], entry[1]["name"], entry[1]["type"]),
     )
   ]
 
@@ -1133,7 +1133,7 @@ def pr_checks_watch(
       seen_any = True
     failed = [node for node in latest if node["state"] in PR_CHECK_FAILURE_STATES]
     for node in failed:
-      identity = (node["kind"], node["workflow"], node["name"], node["at"])
+      identity = (node["type"], node["workflow"], node["name"], node["at"])
       if identity in reported:
         continue
       reported.add(identity)
@@ -1173,7 +1173,7 @@ def pr_checks_watch(
       pause(step)
 
 
-# The record kinds whose IDs are session-local: minted here, unresolvable elsewhere.
+# The record types whose IDs are session-local: minted here, unresolvable elsewhere.
 SESSION_ID_TABLES = (
   ("notes", "note"),
   ("submissions", "answer"),
@@ -1267,8 +1267,8 @@ def staged_session_id_hits(store, root="."):
 
     for token, pattern in patterns.items():
       if pattern.search(line):
-        kind, ident = tokens[token]
-        hits.append((path, number, token, kind, ident))
+        type, ident = tokens[token]
+        hits.append((path, number, token, type, ident))
 
   return hits
 
@@ -1285,12 +1285,12 @@ def commit_id_report(hits):
     )
   ]
 
-  for path, number, token, kind, ident in hits:
+  for path, number, token, type, ident in hits:
     named = ident if token == ident else f"{token} of {ident}"
-    lines.append(f"  {path}:{number}: {kind} {named}")
+    lines.append(f"  {path}:{number}: {type} {named}")
 
   lines.append("Strip the citation, then commit again.")
-  renames = {ident for _, _, _, kind, ident in hits if kind in {"task", "report"}}
+  renames = {ident for _, _, _, type, ident in hits if type in {"task", "report"}}
   if renames:
     lines.append(
       "If this is a name collision, rename the preview record, not repository content:"
@@ -1405,30 +1405,30 @@ def when(value):
   return str(value)
 
 
-def restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at=None):
+def restore_receipt(acknowledged_at, ack_type, ack_text, ack_edited_at=None):
   """Check a restored receipt. Require all receipt fields or none. Reject a partial receipt so a note never
   returns as answered."""
-  carried = (acknowledged_at, ack_kind, ack_text)
+  carried = (acknowledged_at, ack_type, ack_text)
   if all(value is None for value in carried):
     if ack_edited_at is not None:
       raise ValueError("An edited receipt needs an acknowledgement")
     return (None, None, None, None)
   if any(value is None for value in carried):
     raise ValueError(
-      "A restored receipt carries its stamp, kind and text, or none of them"
+      "A restored receipt carries its stamp, type and text, or none of them"
     )
-  if ack_kind not in {"note", "reply"}:
+  if ack_type not in {"note", "reply"}:
     raise ValueError("Every acknowledgement is a note or a reply, with its text")
   return (
     when(acknowledged_at),
-    ack_kind,
+    ack_type,
     note_text(ack_text),
     when(ack_edited_at) if ack_edited_at is not None else None,
   )
 
 
 def restore_replies(replies, acknowledged):
-  """Check replies from later acknowledgements. Require kind, text, and a stamp for each reply. Reject replies
+  """Check replies from later acknowledgements. Require type, text, and a stamp for each reply. Reject replies
   on an unanswered record. Store the list as JSON text."""
   if not replies:
     return None
@@ -1438,13 +1438,13 @@ def restore_replies(replies, acknowledged):
     raise TypeError("Appended replies are a list")
   checked = []
   for item in replies:
-    if not isinstance(item, dict) or item.get("kind") not in {"note", "reply"}:
+    if not isinstance(item, dict) or item.get("type") not in {"note", "reply"}:
       raise ValueError(
         "Every appended reply is a note or a reply, with its text and stamp"
       )
     checked.append(
       {
-        "kind": item["kind"],
+        "type": item["type"],
         "text": note_text(item.get("text")),
         "at": when(item.get("at")),
       }
@@ -1578,11 +1578,11 @@ def parse_fields(markdown):
       chunk.append(line)
       position += 1
       continue
-    kind = (
+    type = (
       "choice" if CHOICE.match(line) else "checkbox" if CHECKBOX.match(line) else None
     )
-    blank = None if kind else BLANK.match(line)
-    if not kind and not blank:
+    blank = None if type else BLANK.match(line)
+    if not type and not blank:
       chunk.append(line)
       if line.strip():
         prompt, anchor = prompt_text(ANCHOR.sub("", line)), None
@@ -1593,8 +1593,8 @@ def parse_fields(markdown):
       position += 1
       continue
     index += 1
-    if kind:
-      pattern = CHOICE if kind == "choice" else CHECKBOX
+    if type:
+      pattern = CHOICE if type == "choice" else CHECKBOX
       options, default = [], []
       while position < len(lines):
         item = pattern.match(lines[position])
@@ -1614,7 +1614,7 @@ def parse_fields(markdown):
         raise ValueError(
           f"Field '{prompt or index}' repeats an option; make each unique"
         )
-      question = {"type": kind, "options": options, "default": default}
+      question = {"type": type, "options": options, "default": default}
     else:
       label = (blank.group(1) or "").strip()
       question = {"type": "text", "default": []}
@@ -1702,7 +1702,7 @@ TASK_ORDER = (
   "status DESC, CASE WHEN status = 'finished' THEN completed_at END DESC,"
   " CASE WHEN status = 'finished' THEN id END DESC, (blocked = 0 OR report_id IS NULL), position, id"
 )
-# Each kind has its own table and ID columns. No foreign keys or cascades change these rows.
+# Each type has its own table and ID columns. No foreign keys or cascades change these rows.
 # A rename repoints them by hand.
 RENAME_TARGETS = {
   "note": ("notes", (("uploads", "note_id"),)),
@@ -1724,7 +1724,7 @@ NOTE_LINE_KEYS = (
   "text",
   "at",
   "acknowledged_at",
-  "ack_kind",
+  "ack_type",
   "ack_text",
   "ack_edited_at",
   "replies",
@@ -1748,7 +1748,7 @@ SUBMISSION_LINE_KEYS = (
   "text",
   "at",
   "acknowledged_at",
-  "ack_kind",
+  "ack_type",
   "ack_text",
   "ack_edited_at",
   "replies",
@@ -2170,13 +2170,13 @@ def attachment_line(record):
 
 def format_pending_record(item):
   """Format one pending record without its reply thread."""
-  kind = item.get("kind") or "note"
-  display_kind = "answer" if kind == "report" else kind
+  type = item.get("type") or "note"
+  display_type = "answer" if type == "report" else type
   # A short ID names the record, and a short ID acks it, so the full ID costs nothing here.
   # The ticks hold the citation together across any renderer between this line and its reader.
   header = "`" + str(item.get("id", ""))[:6] + "`"
-  if display_kind != "note":
-    header += f" {display_kind}"
+  if display_type != "note":
+    header += f" {display_type}"
   if item.get("quiet") and not item.get("blocking"):
     header += " quiet (no ack required)"
   if item.get("report_id"):
@@ -3984,7 +3984,7 @@ AUTOSAVE_RECEIPTS = "userscript-autosave-receipts"
 def autosave_core_and_stamp(records):
   if not isinstance(records, list) or not all(isinstance(row, dict) for row in records):
     raise TypeError("Autosave core must be an array of records")
-  if any(row.get("kind") == "userscript-autosave" for row in records):
+  if any(row.get("type") == "userscript-autosave" for row in records):
     raise ValueError("Autosave core cannot contain history")
   with tempfile.TemporaryDirectory() as directory:
     checked = Store(directory, create=True)
@@ -4021,7 +4021,7 @@ def autosave_scope_key(scope):
 
 def autosave_record(record):
   if (
-    record.get("kind") != "userscript-autosave"
+    record.get("type") != "userscript-autosave"
     or type(record.get("version")) is not int
     or record["version"] != 1
   ):
@@ -4029,7 +4029,7 @@ def autosave_record(record):
   if not isinstance(record.get("save_id"), str):
     raise TypeError("Autosave save ID must be a UUID string")
   if set(record) - {
-    "kind",
+    "type",
     "version",
     "save_id",
     "scope",
@@ -4193,8 +4193,8 @@ def render_report_block(markdown):
 def render_report(markdown):
   blocks, questions = parse_fields(markdown)
   parts = []
-  for kind, item in blocks:
-    if kind == "markdown":
+  for type, item in blocks:
+    if type == "markdown":
       if item.strip():
         parts.append(render_report_block(item))
     else:
@@ -4270,7 +4270,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS notes (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,
-          ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,
+          ack_type TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,
           ack_edited_seen_count INTEGER NOT NULL DEFAULT 0,
           quiet INTEGER NOT NULL DEFAULT 0,
           blocking INTEGER NOT NULL DEFAULT 1,
@@ -4286,7 +4286,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS submissions (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,
-          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,
+          acknowledged_at TEXT, ack_type TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,
           ack_edited_seen_count INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS uploads (
@@ -4325,7 +4325,7 @@ class Store:
       """)
       columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
       for column in (
-        "ack_kind",
+        "ack_type",
         "ack_text",
         "ack_edited_at",
         "seen_at",
@@ -4442,7 +4442,7 @@ class Store:
       self.path.chmod(0o600)
 
   def id_matches(self, token):
-    """Every record whose ID equals the token or starts with it, across all four kinds.
+    """Every record whose ID equals the token or starts with it, across all four types.
 
     The token arrives bare or wrapped in the ticks `read` prints, and both reach one record.
     """
@@ -4466,7 +4466,7 @@ class Store:
     """One full ID for a full ID or a prefix.
 
     A prefix that names two records is a named conflict, and the error lists every match
-    with its kind and title, so the caller can see which full ID to give instead.
+    with its type and title, so the caller can see which full ID to give instead.
     """
     token = bare_id(token)
     matches = self.id_matches(token)
@@ -4478,9 +4478,9 @@ class Store:
     if not matches:
       raise ValueError(f"No note, answer, report or task holds the ID {token}")
     listed = "; ".join(
-      f"{kind} {record['id']}"
+      f"{type} {record['id']}"
       f" {(record.get('title') or record.get('text') or '')[:40]!r}"
-      for kind, record in matches
+      for type, record in matches
     )
     raise ValueError(
       f"{token} matches {len(matches)} records: {listed}. Give the full ID of one"
@@ -4530,7 +4530,7 @@ class Store:
     text,
     at=None,
     acknowledged_at=None,
-    ack_kind=None,
+    ack_type=None,
     ack_text=None,
     seen_at=None,
     task_id=None,
@@ -4547,7 +4547,7 @@ class Store:
     existing IDs unchanged so imports stay idempotent."""
     identifier(note_id)
     owner_text(text)
-    receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
+    receipt = restore_receipt(acknowledged_at, ack_type, ack_text, ack_edited_at)
     more = restore_replies(replies, receipt[0])
     seen_reply_count = restore_reply_seen_count(ack_edited_seen_count, more)
     seen = when(seen_at) if seen_at is not None else None
@@ -4562,7 +4562,7 @@ class Store:
         return message_row(existing)
       db.execute(
         "INSERT INTO notes"
-        " (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id,"
+        " (id, text, at, acknowledged_at, ack_type, ack_text, ack_edited_at, seen_at, task_id,"
         " replies, ack_edited_seen_count, quiet, blocking, type)"
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
@@ -4711,7 +4711,7 @@ class Store:
     text,
     at=None,
     acknowledged_at=None,
-    ack_kind=None,
+    ack_type=None,
     ack_text=None,
     seen_at=None,
     task_id=None,
@@ -4726,7 +4726,7 @@ class Store:
     identifier(submission_id)
     identifier(report_id)
     submission_text(text)
-    receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
+    receipt = restore_receipt(acknowledged_at, ack_type, ack_text, ack_edited_at)
     more = restore_replies(replies, receipt[0])
     seen_reply_count = restore_reply_seen_count(ack_edited_seen_count, more)
     with self.transaction(shared, autosave=autosave) as db:
@@ -4742,7 +4742,7 @@ class Store:
         return message_row(existing)
       db.execute(
         "INSERT INTO submissions"
-        " (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at,"
+        " (id, report_id, text, at, acknowledged_at, ack_type, ack_text, ack_edited_at, seen_at,"
         " task_id, replies, ack_edited_seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
           submission_id,
@@ -5026,11 +5026,11 @@ class Store:
       if NOTE_ID.fullmatch(token) or HEX7_RE.fullmatch(token)
     }
     for detail in details:
-      for token, (kind, ident) in tokens.items():
+      for token, (type, ident) in tokens.items():
         if re.search(rf"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])", detail):
           named = ident if token == ident else f"{token} of {ident}"
           raise ValueError(
-            f"That detail cites the session-local {kind} {named}. A repository reader"
+            f"That detail cites the session-local {type} {named}. A repository reader"
             " cannot resolve that ID. Describe the work instead"
           )
 
@@ -5299,10 +5299,10 @@ class Store:
     if len(exact) != 1:
       raise ValueError(f"No note, answer, report or task holds the ID {prev_id}")
 
-    kind = exact[0][0]
-    table, dependents = RENAME_TARGETS[kind]
+    type = exact[0][0]
+    table, dependents = RENAME_TARGETS[type]
 
-    if kind == "task":
+    if type == "task":
       guard_task_runs(self.path.parent, prev_id, "rename task")
       check_task(new_id, None, None)
 
@@ -5321,7 +5321,7 @@ class Store:
           f"UPDATE {other} SET {column} = ? WHERE {column} = ?", (new_id, prev_id)
         )
 
-    return kind
+    return type
 
   def amend_task(self, prev_id, task_id):
     """Move a stored task to a new ID and keep the rest, so a typo costs no removal."""
@@ -5419,7 +5419,7 @@ class Store:
         scope_receipts[save_id] = digest
         history = self.userscript_history(db)
         record = {
-          "kind": "userscript-autosave",
+          "type": "userscript-autosave",
           "version": 1,
           "save_id": save_id,
           "scope": scope,
@@ -5480,7 +5480,7 @@ class Store:
     before = saved["stamp"]
 
     def identity(row):
-      kind = (
+      type = (
         "report"
         if "markdown" in row
         else "task"
@@ -5489,7 +5489,7 @@ class Store:
         if "report_id" in row
         else "note"
       )
-      return kind, row["id"]
+      return type, row["id"]
 
     missing = len(
       {identity(row) for row in core} - {identity(row) for row in candidate}
@@ -5642,7 +5642,7 @@ class Store:
     if not data:
       raise ValueError("An upload must not be empty")
     cleaned = upload_name(name)
-    kind = upload_type(content_type)
+    type = upload_type(content_type)
     digest = body_digest(data)
     upload_id = identifier(upload_id) if upload_id is not None else self.free_id()
     if note_id is not None:
@@ -5666,7 +5666,7 @@ class Store:
           existing["type"],
           existing["size"],
           existing["sha256"],
-        ) != (note_id, cleaned, kind, len(data), digest):
+        ) != (note_id, cleaned, type, len(data), digest):
           raise ValueError("This note ID already belongs to a different file")
         target = directory / existing["file"]
         if (
@@ -5701,7 +5701,7 @@ class Store:
       db.execute(
         "INSERT INTO uploads (id, note_id, name, type, size, sha256, file, at)"
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (upload_id, note_id, cleaned, kind, len(data), digest, target.name, now()),
+        (upload_id, note_id, cleaned, type, len(data), digest, target.name, now()),
       )
       row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
     return upload_row(row, self.path.parent)
@@ -5743,8 +5743,8 @@ class Store:
         if rows:
           if len(rows) != len(prepared) or any(
             (row["name"], row["type"], row["size"], row["sha256"])
-            != (name, kind, len(data), body_digest(data))
-            for row, (name, kind, data) in zip(rows, prepared)
+            != (name, type, len(data), body_digest(data))
+            for row, (name, type, data) in zip(rows, prepared)
           ):
             raise ValueError("This note ID already belongs to different files")
           # A restore can keep SQLite records but lose bytes. Repeating exactly the same request
@@ -5763,10 +5763,10 @@ class Store:
           if existing:
             raise ValueError("This note ID was already sent without a file")
           records = []
-          for index, (name, kind, data) in enumerate(prepared, 1):
+          for index, (name, type, data) in enumerate(prepared, 1):
             record = self.save_upload(
               name,
-              kind,
+              type,
               data,
               upload_id=note_id if index == 1 else new_id(),
               note_id=note_id,
@@ -6066,9 +6066,9 @@ class Store:
     history = [
       autosave_record(row)
       for row in records
-      if row.get("kind") == "userscript-autosave"
+      if row.get("type") == "userscript-autosave"
     ]
-    records = [row for row in records if row.get("kind") != "userscript-autosave"]
+    records = [row for row in records if row.get("type") != "userscript-autosave"]
     groups = {}
     imported_receipts = {}
     for row in history:
@@ -6121,7 +6121,7 @@ class Store:
           key: record.get(key)
           for key in (
             "acknowledged_at",
-            "ack_kind",
+            "ack_type",
             "ack_text",
             "ack_edited_at",
             "seen_at",
@@ -6328,8 +6328,8 @@ class Store:
       "downloads",
     }:
       raise ValueError("tab must name a preview tab")
-    if reason is not None and reason not in VIOLATION_KINDS[tab]:
-      raise ValueError("reason must name a violation kind for this tab")
+    if reason is not None and reason not in VIOLATION_TYPES[tab]:
+      raise ValueError("reason must name a violation type for this tab")
     if clause_file not in (None, "") and clause_file not in read_set_files(
       self.repository_root()
     ):
@@ -6390,18 +6390,18 @@ class Store:
     )
     return self.flag_violation_note(notice, reason, clause_file, cited)
 
-  def flag_violation_note(self, notice, kind, clause_file, cited):
+  def flag_violation_note(self, notice, type, clause_file, cited):
     """Queue the quiet note and point the page flag at it.
 
     Every flagged note carries the flag meta, so the page banner and the disarm
     path find it and `pending_read_set_note` can tell it from a checkpoint.
     """
-    record = self.queue_violation_note(notice, kind or "self-raised")
+    record = self.queue_violation_note(notice, type or "self-raised")
     self.set_meta(
       AGENT_INTERRUPT_FLAG_META,
       json.dumps(
         {
-          "kind": kind or "",
+          "type": type or "",
           "clause_file": clause_file or "",
           "note": cited,
           "id": record["id"],
@@ -6450,7 +6450,7 @@ class Store:
       if note_id:
         # Disarming answers the flagged note, so a stale flag never blocks later calls.
         db.execute(
-          "UPDATE notes SET acknowledged_at = ?, ack_kind = ?, ack_text = ?"
+          "UPDATE notes SET acknowledged_at = ?, ack_type = ?, ack_text = ?"
           " WHERE id = ? AND acknowledged_at IS NULL",
           (now(), "reply", "Disarmed on the page.", note_id),
         )
@@ -6629,7 +6629,7 @@ class Store:
       return out
 
   def reminder(self, advance=False, routine=True):
-    """Count pending kinds without marking any message seen. Any count asks for an ack.
+    """Count pending types without marking any message seen. Any count asks for an ack.
 
     The tail rotates through REMINDERS only with routine guidance.
     `advance` counts one hook poll, and that
@@ -6681,8 +6681,8 @@ class Store:
           "INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLS_SINCE_MESSAGE, str(polls))
         )
     counts = [
-      f"{count} {kind}{'s' if count != 1 else ''}"
-      for count, kind in ((notes, "note"), (reports, "answer"), (uploads, "upload"))
+      f"{count} {type}{'s' if count != 1 else ''}"
+      for count, type in ((notes, "note"), (reports, "answer"), (uploads, "upload"))
       if count
     ]
     # The label keeps the pending tally apart from the call count, so a reader never takes
@@ -6733,14 +6733,14 @@ class Store:
     )
     with self.transaction(autosave=False) as db:
       pending = [
-        message_row(row) | {"kind": "note"}
+        message_row(row) | {"type": "note"}
         for row in db.execute(
           "SELECT * FROM notes WHERE acknowledged_at IS NULL"
           f"{quiet_filter} ORDER BY at, seq"
         )
       ]
       pending += [
-        message_row(row) | {"kind": "report"}
+        message_row(row) | {"type": "report"}
         for row in db.execute(
           "SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq"
         )
@@ -6765,7 +6765,7 @@ class Store:
       for record in notes.values():
         add_note_attachments(record, attachments.get(record["id"], []))
       for item in pending:
-        if item["kind"] == "note":
+        if item["type"] == "note":
           add_note_attachments(item, attachments.get(item["id"], []))
           thread = reply_thread(item, notes)
           if thread:
@@ -6919,13 +6919,13 @@ class Store:
             continue
           if row["acknowledged_at"] is None:
             db.execute(
-              f"UPDATE {table} SET acknowledged_at = ?, ack_kind = ?, ack_text = ?,"
+              f"UPDATE {table} SET acknowledged_at = ?, ack_type = ?, ack_text = ?,"
               " seen_at = COALESCE(seen_at, ?) WHERE id = ?",
               (stamp, "reply", text, stamp, record_id),
             )
           else:
             more = replies_list(row["replies"]) + [
-              {"kind": "reply", "text": text, "at": stamp}
+              {"type": "reply", "text": text, "at": stamp}
             ]
             db.execute(
               f"UPDATE {table} SET replies = ?, ack_edited_at = ? WHERE id = ?",
@@ -7254,7 +7254,7 @@ class Store:
           )
         ):
           raise ValueError(
-            f"{field_id}: pick options only: " + ", ".join(field["options"])
+            f"{field_id}: select options only: " + ", ".join(field["options"])
           )
         rendered = ", ".join(value) if value else "(skipped)"
       lines.append(f"  {field['prompt']} ({field_id}): {rendered}")
@@ -7749,10 +7749,10 @@ def handler(store):
               # A `<br>` would add a second break beside each source newline.
               if "text" in item:
                 item["html"] = render(item["text"])
-              if item.get("ack_kind") == "reply" and item.get("ack_text"):
+              if item.get("ack_type") == "reply" and item.get("ack_text"):
                 item["ack_html"] = render(item["ack_text"].replace("\\n", "\n"))
               for reply in item.get("replies") or []:
-                if reply["kind"] == "reply":
+                if reply["type"] == "reply":
                   reply["html"] = render(reply["text"].replace("\\n", "\n"))
           except RuntimeError as error:
             state["rendering_error"] = str(error)
@@ -7813,9 +7813,9 @@ def handler(store):
           return
         match = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/(html|source)", path)
         if match:
-          report_id, kind = match.groups()
+          report_id, type = match.groups()
           report = store.report(report_id)
-          if kind == "html":
+          if type == "html":
             try:
               body, questions = render_report(report["markdown"])
             except ValueError as error:
@@ -7934,8 +7934,8 @@ def handler(store):
           with stream_note_attachments(
             content_type, self.rfile, length, staged=True
           ) as parsed:
-            upload_id, name, kind, data = parsed
-            record = store.stage_upload(name, kind, data, upload_id)
+            upload_id, name, type, data = parsed
+            record = store.stage_upload(name, type, data, upload_id)
           self.reply(201, json.dumps(record, ensure_ascii=False))
           return
         if note_upload:
@@ -8157,12 +8157,12 @@ def print_skills():
     raise RuntimeError("PyYAML is required; rerun the preview installer") from error
   root = Path(resolve_repo_root())
   skills = {}
-  for kind, directory in (
+  for type, directory in (
     ("installed", root / ".agents" / "skills"),
     ("repository", root / "skills"),
   ):
     for path in sorted(directory.glob("*/SKILL.md")):
-      if kind == "repository" and path.parent.name == "refs":
+      if type == "repository" and path.parent.name == "refs":
         continue
       lines = path.read_text(encoding="utf-8-sig").splitlines()
       try:
@@ -8178,9 +8178,9 @@ def print_skills():
       except (ValueError, StopIteration, yaml.YAMLError) as error:
         raise ValueError(f"Invalid skill metadata in {path}: {error}") from error
       name = metadata["name"]
-      skills.setdefault(name.casefold(), (name, kind, path, metadata["description"]))
-  for name, kind, path, description in skills.values():
-    print(f"{name} [{kind}] {path}\n{description}\n")
+      skills.setdefault(name.casefold(), (name, type, path, metadata["description"]))
+  for name, type, path, description in skills.values():
+    print(f"{name} [{type}] {path}\n{description}\n")
 
 
 def resolve_state_dir():
@@ -8612,7 +8612,7 @@ def watch_call_group(store, stop=None, interval=1.0, signal_group=os.killpg):
     if flag and flag != seen:
       seen = flag
       try:
-        reason = json.loads(flag).get("kind", "")
+        reason = json.loads(flag).get("type", "")
       except ValueError:
         reason = ""
       age = seconds_since(store.meta_value(CALL_STARTED_META))
@@ -9054,11 +9054,11 @@ def main():
         print(error, file=sys.stderr)
         return 1
       try:
-        kind = Store(state_dir).rename_entity(old_id, args.new_id)
+        type = Store(state_dir).rename_entity(old_id, args.new_id)
       except ValueError as error:
         print(error, file=sys.stderr)
         return 1
-      print(f"ok {kind} {old_id} -> {args.new_id}")
+      print(f"ok {type} {old_id} -> {args.new_id}")
       return 0
     if args.command == "gate":
       return gate_verdict(state_dir, args.push, args.line)

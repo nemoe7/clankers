@@ -288,7 +288,7 @@ def baseline(rows, target):
   return "", ""
 
 
-EVIDENCE_KINDS = ("commits-and-diffs", "commits")
+EVIDENCE_TYPES = ("commits-and-diffs", "commits")
 EVIDENCE_POLICY = HERE / "gemini-release-evidence.json"
 
 
@@ -357,8 +357,8 @@ def scoped_paths(paths, policy, sha):
   return selected
 
 
-def history(target, base, evidence=EVIDENCE_KINDS[0], policy=None):
-  if evidence not in EVIDENCE_KINDS:
+def history(target, base, evidence=EVIDENCE_TYPES[0], policy=None):
+  if evidence not in EVIDENCE_TYPES:
     raise RuntimeError("Invalid evidence input")
   revision = f"{base}..{target}" if base else target
   commits = git("rev-list", "--reverse", "--topo-order", revision).splitlines()
@@ -569,12 +569,12 @@ def gemini_call(model, action, payload, timeout=API_TIMEOUT_SECONDS):
     raise RuntimeError(redact(message)) from None
   except (urllib.error.URLError, TimeoutError) as exc:
     detail = str(getattr(exc, "reason", exc)) or type(exc).__name__
-    kind = (
+    failure = (
       f"request timed out after {timeout:g}s"
       if "timed out" in detail.lower()
       else "transport error"
     )
-    raise RuntimeError(redact(f"Gemini {action} failed: {kind}: {detail}")) from None
+    raise RuntimeError(redact(f"Gemini {action} failed: {failure}: {detail}")) from None
 
 
 def response_text(data):
@@ -1062,7 +1062,7 @@ def propose(repo, branch):
   if previous:
     next_version(version_base, "patch")
   policy = load_evidence_policy()
-  units = history(target, base, os.getenv("EVIDENCE") or EVIDENCE_KINDS[0], policy)
+  units = history(target, base, os.getenv("EVIDENCE") or EVIDENCE_TYPES[0], policy)
   if not units:
     raise RuntimeError("No commits since the published baseline")
   link = (

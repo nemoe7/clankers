@@ -388,7 +388,7 @@ def read_budget_table() -> dict[str, tuple[str, str]]:
     if len(row) != 3:
       continue
 
-    relative, kind, current = row
+    relative, type, current = row
 
     relative = relative.strip()
 
@@ -396,7 +396,7 @@ def read_budget_table() -> dict[str, tuple[str, str]]:
       relative = relative[1:-1]
 
     result[relative] = (
-      kind.strip(),
+      type.strip(),
       current.strip(),
     )
 
@@ -430,7 +430,7 @@ def load_token_counts(paths: list[Path]) -> dict[str, int]:
   return _token_counts
 
 
-# Each README budget kind maps to its measurer and the unit the table prints.
+# Each README budget type maps to its measurer and the unit the table prints.
 MEASUREMENTS = {
   "Unicode chars": (lambda path, text: len(text), "chars"),
   "UTF-8 file size": (lambda path, text: len(text.encode("utf-8")), "B"),
@@ -438,31 +438,31 @@ MEASUREMENTS = {
 }
 
 
-def measurement(kind: str) -> tuple[Callable[[Path, str], int], str]:
+def measurement(type: str) -> tuple[Callable[[Path, str], int], str]:
   try:
-    return MEASUREMENTS[kind]
+    return MEASUREMENTS[type]
   except KeyError:
-    raise ValueError(f"unsupported measurement: {kind}") from None
+    raise ValueError(f"unsupported measurement: {type}") from None
 
 
-def measure(path: Path, kind: str) -> int:
-  return measurement(kind)[0](path, path.read_text(encoding="utf-8"))
+def measure(path: Path, type: str) -> int:
+  return measurement(type)[0](path, path.read_text(encoding="utf-8"))
 
 
-def budget_value(relative: str, kind: str) -> int:
+def budget_value(relative: str, type: str) -> int:
   """Measure one row, summing the files of a group row."""
-  parts = EXPECTED_GROUPS.get(relative, (kind, (relative,)))[1]
+  parts = EXPECTED_GROUPS.get(relative, (type, (relative,)))[1]
   total = 0
   for part in parts:
     path = ROOT / part
     if not path.is_file():
       raise RuntimeError(f"README budget path missing: {part}")
-    total += measure(path, kind)
+    total += measure(path, type)
   return total
 
 
-def format_unit(kind: str) -> str:
-  return measurement(kind)[1]
+def format_unit(type: str) -> str:
+  return measurement(type)[1]
 
 
 def update_readme_measurements() -> bool:
@@ -479,12 +479,12 @@ def update_readme_measurements() -> bool:
   table = [header, "| --- | --- | --- |\n"]
   rows = {
     **EXPECTED_BUDGETS,
-    **{row: kind for row, (kind, _) in EXPECTED_GROUPS.items()},
+    **{row: type for row, (type, _) in EXPECTED_GROUPS.items()},
   }
-  for relative, kind in sorted(rows.items(), key=lambda item: item[0].casefold()):
-    current = f"{budget_value(relative, kind):,}"
+  for relative, type in sorted(rows.items(), key=lambda item: item[0].casefold()):
+    current = f"{budget_value(relative, type):,}"
     table.append(
-      f"| [`{relative}`]({relative}) | `{kind}` | {current} `{format_unit(kind)}` |\n"
+      f"| [`{relative}`]({relative}) | `{type}` | {current} `{format_unit(type)}` |\n"
     )
 
   updated = "".join(lines[:start] + table + lines[end:])
@@ -925,7 +925,7 @@ def validate(errors: list[str]) -> tuple[int, int]:
   budgets = read_budget_table()
   rows = {
     **EXPECTED_BUDGETS,
-    **{row: kind for row, (kind, _) in EXPECTED_GROUPS.items()},
+    **{row: type for row, (type, _) in EXPECTED_GROUPS.items()},
   }
 
   if set(budgets) != set(rows):
@@ -935,19 +935,19 @@ def validate(errors: list[str]) -> tuple[int, int]:
       f"expected={sorted(rows)}"
     )
   else:
-    for relative, expected_kind in rows.items():
-      recorded_kind, recorded_value = budgets[relative]
+    for relative, expected_type in rows.items():
+      recorded_type, recorded_value = budgets[relative]
 
-      if recorded_kind != expected_kind:
+      if recorded_type != expected_type:
         errors.append(
-          f"README budget kind mismatch for {relative}: "
-          f"recorded={recorded_kind!r} "
-          f"expected={expected_kind!r}"
+          f"README budget type mismatch for {relative}: "
+          f"recorded={recorded_type!r} "
+          f"expected={expected_type!r}"
         )
         continue
 
       try:
-        actual = budget_value(relative, expected_kind)
+        actual = budget_value(relative, expected_type)
       except RuntimeError as exc:
         errors.append(str(exc))
         continue

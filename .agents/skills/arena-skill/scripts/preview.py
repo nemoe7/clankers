@@ -91,7 +91,7 @@ AGENT_KEY_EXPIRY_META='agent_key_expired_at'
 AGENT_SEEN_META='agent_seen_at'
 AGENT_INTERRUPT_META='agent_interrupt'
 AGENT_INTERRUPT_FLAG_META='agent_interrupt_flag'
-VIOLATION_KINDS={'notes':('bash-violation','process-violation','missing-details','out-of-scope','task-not-created'),'downloads':('bash-violation','process-violation'),'reports':('format-violation','unnecessary-report'),'tasks':('current-task-violation','empty-task-list','missing-details','out-of-scope','task-not-created')}
+VIOLATION_TYPES={'notes':('bash-violation','process-violation','missing-details','out-of-scope','task-not-created'),'downloads':('bash-violation','process-violation'),'reports':('format-violation','unnecessary-report'),'tasks':('current-task-violation','empty-task-list','missing-details','out-of-scope','task-not-created')}
 READ_SET_CACHE={}
 CALL_GROUP_META='call_group'
 CALL_STARTED_META='call_started_at'
@@ -346,18 +346,18 @@ def gh_check_json(root,arguments):
 		return[json.loads(line)for line in result.stdout.splitlines()if line.strip()]
 	except(OSError,subprocess.TimeoutExpired,ValueError):return None
 def pr_check_latest(root,slug,sha):
-	owner,name=slug.split('/',1);query='query($owner:String!,$name:String!,$sha:String!,$endCursor:String){repository(owner:$owner,name:$name){object(expression:$sha){... on Commit{statusCheckRollup{contexts(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{__typename ... on CheckRun{name status conclusion startedAt checkSuite{workflowRun{workflow{name}}}} ... on StatusContext{context state createdAt}}}}}}}}';projection='.data.repository.object.statusCheckRollup.contexts.nodes[]? | if .__typename == "CheckRun" then {kind:"check",name,workflow:(.checkSuite.workflowRun.workflow.name // ""),state:(if .status == "COMPLETED" then .conclusion else .status end),at:.startedAt} else {kind:"status",name:.context,workflow:"",state,at:.createdAt} end | @json';data=gh_check_json(root,['api','graphql','--paginate','-f',f"query={query}",'-f',f"owner={owner}",'-f',f"name={name}",'-f',f"sha={sha}",'--jq',projection])
+	owner,name=slug.split('/',1);query='query($owner:String!,$name:String!,$sha:String!,$endCursor:String){repository(owner:$owner,name:$name){object(expression:$sha){... on Commit{statusCheckRollup{contexts(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{__typename ... on CheckRun{name status conclusion startedAt checkSuite{workflowRun{workflow{name}}}} ... on StatusContext{context state createdAt}}}}}}}}';projection='.data.repository.object.statusCheckRollup.contexts.nodes[]? | if .__typename == "CheckRun" then {type:"check",name,workflow:(.checkSuite.workflowRun.workflow.name // ""),state:(if .status == "COMPLETED" then .conclusion else .status end),at:.startedAt} else {type:"status",name:.context,workflow:"",state,at:.createdAt} end | @json';data=gh_check_json(root,['api','graphql','--paginate','-f',f"query={query}",'-f',f"owner={owner}",'-f',f"name={name}",'-f',f"sha={sha}",'--jq',projection])
 	if not isinstance(data,list):return None
 	latest={}
 	for node in data:
-		if not isinstance(node,dict)or not all(isinstance(node.get(field),str)for field in('kind','name','workflow','state','at')):return None
-		if node['kind']not in('check','status')or not node['name']:return None
+		if not isinstance(node,dict)or not all(isinstance(node.get(field),str)for field in('type','name','workflow','state','at')):return None
+		if node['type']not in('check','status')or not node['name']:return None
 		try:stamp=datetime.fromisoformat(node['at'].replace('Z','+00:00'))
 		except ValueError:return None
 		if stamp.tzinfo is None:return None
-		key=node['kind'],node['name'],node['workflow']
+		key=node['type'],node['name'],node['workflow']
 		if key not in latest or stamp>latest[key][0]:latest[key]=stamp,node
-	return[node for(_stamp,node)in sorted(latest.values(),key=lambda entry:(entry[1]['workflow'],entry[1]['name'],entry[1]['kind']))]
+	return[node for(_stamp,node)in sorted(latest.values(),key=lambda entry:(entry[1]['workflow'],entry[1]['name'],entry[1]['type']))]
 def pr_check_rollup(root,slug,sha):
 	latest=pr_check_latest(root,slug,sha)
 	if latest is None:return None
@@ -403,7 +403,7 @@ def pr_checks_watch(root='.',seconds=PR_CHECK_DISCOVERY_SECONDS,step=PR_CHECK_DI
 		if latest:seen_any=True
 		failed=[node for node in latest if node['state']in PR_CHECK_FAILURE_STATES]
 		for node in failed:
-			identity=node['kind'],node['workflow'],node['name'],node['at']
+			identity=node['type'],node['workflow'],node['name'],node['at']
 			if identity in reported:continue
 			reported.add(identity);line=f"Failed so far: {pr_check_label(node)}";lines.append(line)
 			if progress is not None:progress(line)
@@ -449,13 +449,13 @@ def staged_session_id_hits(store,root='.'):
 		if not line.startswith('+')or line.startswith('+++'):continue
 		number+=1
 		for(token,pattern)in patterns.items():
-			if pattern.search(line):kind,ident=tokens[token];hits.append((path,number,token,kind,ident))
+			if pattern.search(line):type,ident=tokens[token];hits.append((path,number,token,type,ident))
 	return hits
 def commit_id_report(hits):
 	if not hits:return None
 	lines=['COMMIT BLOCKED: the staged change cites a session-local ID. That ID exists only in this session, so a reader of the repository cannot resolve it.']
-	for(path,number,token,kind,ident)in hits:named=ident if token==ident else f"{token} of {ident}";lines.append(f"  {path}:{number}: {kind} {named}")
-	lines.append('Strip the citation, then commit again.');renames={ident for(_,_,_,kind,ident)in hits if kind in{'task','report'}}
+	for(path,number,token,type,ident)in hits:named=ident if token==ident else f"{token} of {ident}";lines.append(f"  {path}:{number}: {type} {named}")
+	lines.append('Strip the citation, then commit again.');renames={ident for(_,_,_,type,ident)in hits if type in{'task','report'}}
 	if renames:lines.append('If this is a name collision, rename the preview record, not repository content:');lines.extend(f"  arena-preview rename {shlex.quote(ident)} NEW-ID"for ident in sorted(renames));lines.append('Replace NEW-ID with an unused preview ID.')
 	return'\n'.join(lines)
 def new_id():return uuid.uuid4().hex[:6]
@@ -496,22 +496,22 @@ def when(value):
 	try:datetime.fromisoformat(str(value))
 	except ValueError as error:raise ValueError(f"Not a timestamp: {value!r}")from error
 	return str(value)
-def restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at=None):
-	carried=acknowledged_at,ack_kind,ack_text
+def restore_receipt(acknowledged_at,ack_type,ack_text,ack_edited_at=None):
+	carried=acknowledged_at,ack_type,ack_text
 	if all(value is None for value in carried):
 		if ack_edited_at is not None:raise ValueError('An edited receipt needs an acknowledgement')
 		return None,None,None,None
-	if any(value is None for value in carried):raise ValueError('A restored receipt carries its stamp, kind and text, or none of them')
-	if ack_kind not in{'note','reply'}:raise ValueError('Every acknowledgement is a note or a reply, with its text')
-	return when(acknowledged_at),ack_kind,note_text(ack_text),when(ack_edited_at)if ack_edited_at is not None else None
+	if any(value is None for value in carried):raise ValueError('A restored receipt carries its stamp, type and text, or none of them')
+	if ack_type not in{'note','reply'}:raise ValueError('Every acknowledgement is a note or a reply, with its text')
+	return when(acknowledged_at),ack_type,note_text(ack_text),when(ack_edited_at)if ack_edited_at is not None else None
 def restore_replies(replies,acknowledged):
 	if not replies:return None
 	if not acknowledged:raise ValueError('Appended replies need an acknowledgement')
 	if not isinstance(replies,list):raise TypeError('Appended replies are a list')
 	checked=[]
 	for item in replies:
-		if not isinstance(item,dict)or item.get('kind')not in{'note','reply'}:raise ValueError('Every appended reply is a note or a reply, with its text and stamp')
-		checked.append({'kind':item['kind'],'text':note_text(item.get('text')),'at':when(item.get('at'))})
+		if not isinstance(item,dict)or item.get('type')not in{'note','reply'}:raise ValueError('Every appended reply is a note or a reply, with its text and stamp')
+		checked.append({'type':item['type'],'text':note_text(item.get('text')),'at':when(item.get('at'))})
 	return json.dumps(checked,ensure_ascii=False)
 def replies_list(value):return json.loads(value)if value else[]
 def message_row(row):
@@ -566,16 +566,16 @@ def parse_fields(markdown):
 			position+=1;continue
 		opening=FENCE.match(line)
 		if opening:fence=opening.group(1);chunk.append(line);position+=1;continue
-		kind='choice'if CHOICE.match(line)else'checkbox'if CHECKBOX.match(line)else None;blank=None if kind else BLANK.match(line)
-		if not kind and not blank:
+		type='choice'if CHOICE.match(line)else'checkbox'if CHECKBOX.match(line)else None;blank=None if type else BLANK.match(line)
+		if not type and not blank:
 			chunk.append(line)
 			if line.strip():
 				prompt,anchor=prompt_text(ANCHOR.sub('',line)),None;found=ANCHOR.search(line)
 				if found:anchor=found.group(1);chunk[-1]=ANCHOR.sub('',line)
 			position+=1;continue
 		index+=1
-		if kind:
-			pattern=CHOICE if kind=='choice'else CHECKBOX;options,default=[],[]
+		if type:
+			pattern=CHOICE if type=='choice'else CHECKBOX;options,default=[],[]
 			while position<len(lines):
 				item=pattern.match(lines[position])
 				if not item:break
@@ -587,7 +587,7 @@ def parse_fields(markdown):
 					if preselected:default[-1]=options[-1]
 					position+=1
 			if len(set(options))!=len(options):raise ValueError(f"Field '{prompt or index}' repeats an option; make each unique")
-			question={'type':kind,'options':options,'default':default}
+			question={'type':type,'options':options,'default':default}
 		else:
 			label=(blank.group(1)or'').strip();question={'type':'text','default':[]}
 			if label:
@@ -628,9 +628,9 @@ RENAME_TARGETS={'note':('notes',(('uploads','note_id'),)),'answer':('submissions
 RENAME_TABLES='notes','submissions','reports','tasks'
 CLI_DESCRIPTION="Notes, reports, tasks and the preview server for Arena steering. The installed hook calls `pre`, `gate` and `route-run`; the rest are the agent's."
 SAVED_STATE='saved-state.ndjson'
-NOTE_LINE_KEYS='id','text','at','acknowledged_at','ack_kind','ack_text','ack_edited_at','replies','ack_edited_seen_count','seen_at','task_id'
+NOTE_LINE_KEYS='id','text','at','acknowledged_at','ack_type','ack_text','ack_edited_at','replies','ack_edited_seen_count','seen_at','task_id'
 TASK_LINE_KEYS='id','title','details','status','completed_at','order','report_id','type'
-SUBMISSION_LINE_KEYS='id','report_id','text','at','acknowledged_at','ack_kind','ack_text','ack_edited_at','replies','ack_edited_seen_count','seen_at','task_id'
+SUBMISSION_LINE_KEYS='id','report_id','text','at','acknowledged_at','ack_type','ack_text','ack_edited_at','replies','ack_edited_seen_count','seen_at','task_id'
 REPORT_LINE_KEYS='id','title','markdown','published_at','seen_at'
 def task_row(row):
 	shaped={'id':row[0],'title':row[1],'details':json.loads(row[2]),'status':row[3],'order':row[4],'updated_at':row[5],'completed_at':row[6]if len(row)>6 else None,'blocked':bool(row[7])if len(row)>7 else False}
@@ -782,8 +782,8 @@ def attachment_line(record):
 	if not record.get('present'):return line+' (missing)'
 	size=record.get('size');return line+(f" ({format_size(size)})"if isinstance(size,int)else'')
 def format_pending_record(item):
-	kind=item.get('kind')or'note';display_kind='answer'if kind=='report'else kind;header='`'+str(item.get('id',''))[:6]+'`'
-	if display_kind!='note':header+=f" {display_kind}"
+	type=item.get('type')or'note';display_type='answer'if type=='report'else type;header='`'+str(item.get('id',''))[:6]+'`'
+	if display_type!='note':header+=f" {display_type}"
 	if item.get('quiet')and not item.get('blocking'):header+=' quiet (no ack required)'
 	if item.get('report_id'):header+=f" report {item['report_id']}"
 	lines=[header];text=item.get('text')or''
@@ -1406,7 +1406,7 @@ AUTOSAVE_HISTORY='userscript-autosave-history'
 AUTOSAVE_RECEIPTS='userscript-autosave-receipts'
 def autosave_core_and_stamp(records):
 	if not isinstance(records,list)or not all(isinstance(row,dict)for row in records):raise TypeError('Autosave core must be an array of records')
-	if any(row.get('kind')=='userscript-autosave'for row in records):raise ValueError('Autosave core cannot contain history')
+	if any(row.get('type')=='userscript-autosave'for row in records):raise ValueError('Autosave core cannot contain history')
 	with tempfile.TemporaryDirectory()as directory:
 		checked=Store(directory,create=True)
 		if records:checked.import_state(json.dumps(records))
@@ -1423,9 +1423,9 @@ def autosave_scope_key(scope):
 	if not all(isinstance(value,str)for value in scope.values())or not scope['repo']:raise ValueError('Invalid autosave scope')
 	return json.dumps(scope,sort_keys=True)
 def autosave_record(record):
-	if record.get('kind')!='userscript-autosave'or type(record.get('version'))is not int or record['version']!=1:raise ValueError('Unsupported autosave history version')
+	if record.get('type')!='userscript-autosave'or type(record.get('version'))is not int or record['version']!=1:raise ValueError('Unsupported autosave history version')
 	if not isinstance(record.get('save_id'),str):raise TypeError('Autosave save ID must be a UUID string')
-	if set(record)-{'kind','version','save_id','scope','digest','core','stamp','confirmed_at','receipts'}:raise ValueError('Unsupported autosave history fields')
+	if set(record)-{'type','version','save_id','scope','digest','core','stamp','confirmed_at','receipts'}:raise ValueError('Unsupported autosave history fields')
 	uuid.UUID(record['save_id']);autosave_scope_key(record['scope']);core=autosave_core(record['core'])
 	if autosave_digest(core)!=record.get('digest'):raise ValueError('Autosave history digest does not match')
 	if record.get('stamp')is not None and import_stamp(record['stamp'])is None:raise ValueError('Autosave history stamp is invalid')
@@ -1477,8 +1477,8 @@ def put_back(rendered,held,slug):return re.sub(f"preview{slug}(\\d+)x",lambda ma
 def render_report_block(markdown):tagged,held=hold_out(markdown,'(?:\\s*(?:</?(?:ul|ol|li)>)\\s*){2,}',lambda match:match.group(0).strip().lower(),'listtag');out=put_back(render(tagged),held,'listtag');out=re.sub('<p>(<(?:ul|ol)>)','\\1',out);out=re.sub('(</(?:ul|ol)>)</p>','\\1',out);return out
 def render_report(markdown):
 	blocks,questions=parse_fields(markdown);parts=[]
-	for(kind,item)in blocks:
-		if kind=='markdown':
+	for(type,item)in blocks:
+		if type=='markdown':
 			if item.strip():parts.append(render_report_block(item))
 		else:parts.append(field_html(item))
 	return''.join(parts),questions
@@ -1502,8 +1502,8 @@ class Store:
 		if not create and not existed:raise FileNotFoundError(f"Inbox missing: {self.path}. The sandbox may have been reset, so follow the restore routine: run scripts/install.sh from the repository root, start `arena-preview serve --port 8000` with the start_process tool, then `arena-preview read`.")
 		if create and not existed:directory.mkdir(parents=True,exist_ok=True,mode=448)
 		with closing(self.connect())as db,db:
-			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0,\n          quiet INTEGER NOT NULL DEFAULT 0,\n          blocking INTEGER NOT NULL DEFAULT 1,\n          type TEXT NOT NULL DEFAULT ''\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,\n          seq INTEGER, seen_at TEXT,\n          ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT,\n          ack_seen_at TEXT, viewed_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          approval TEXT NOT NULL DEFAULT 'approved'\n            CHECK (approval IN ('pending', 'approved', 'denied')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS task_dependencies (\n          task_id TEXT NOT NULL, blocked_by TEXT NOT NULL,\n          PRIMARY KEY (task_id, blocked_by)\n        );\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL,\n          completed_at TEXT,\n          blocked INTEGER NOT NULL DEFAULT 0,\n          type TEXT NOT NULL DEFAULT 'misc'\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
-			for column in('ack_kind','ack_text','ack_edited_at','seen_at','task_id','replies'):
+			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_type TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0,\n          quiet INTEGER NOT NULL DEFAULT 0,\n          blocking INTEGER NOT NULL DEFAULT 1,\n          type TEXT NOT NULL DEFAULT ''\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,\n          seq INTEGER, seen_at TEXT,\n          ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT,\n          ack_seen_at TEXT, viewed_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_type TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          approval TEXT NOT NULL DEFAULT 'approved'\n            CHECK (approval IN ('pending', 'approved', 'denied')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS task_dependencies (\n          task_id TEXT NOT NULL, blocked_by TEXT NOT NULL,\n          PRIMARY KEY (task_id, blocked_by)\n        );\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL,\n          completed_at TEXT,\n          blocked INTEGER NOT NULL DEFAULT 0,\n          type TEXT NOT NULL DEFAULT 'misc'\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
+			for column in('ack_type','ack_text','ack_edited_at','seen_at','task_id','replies'):
 				if column not in columns:db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
 			if'ack_edited_seen_count'not in columns:db.execute('ALTER TABLE notes ADD COLUMN ack_edited_seen_count INTEGER NOT NULL DEFAULT 0')
 			if'quiet'not in columns:db.execute('ALTER TABLE notes ADD COLUMN quiet INTEGER NOT NULL DEFAULT 0')
@@ -1548,7 +1548,7 @@ class Store:
 		if len(exact)==1:return token
 		if len(matches)==1:return matches[0][1]['id']
 		if not matches:raise ValueError(f"No note, answer, report or task holds the ID {token}")
-		listed='; '.join(f"{kind} {record['id']} {(record.get('title')or record.get('text')or'')[:40]!r}"for(kind,record)in matches);raise ValueError(f"{token} matches {len(matches)} records: {listed}. Give the full ID of one")
+		listed='; '.join(f"{type} {record['id']} {(record.get('title')or record.get('text')or'')[:40]!r}"for(type,record)in matches);raise ValueError(f"{token} matches {len(matches)} records: {listed}. Give the full ID of one")
 	def list_note_ids(self,page,page_size):
 		if page<1 or not 1<=page_size<=100:raise ValueError('Page must be at least 1; page size must be 1 to 100')
 		with closing(self.connect())as db:
@@ -1558,15 +1558,15 @@ class Store:
 	def notes_matching(self,token):
 		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM notes WHERE id = ? OR id LIKE ? ORDER BY at DESC',(token,f"{token}%")).fetchall()]
 	def connect(self):db=sqlite_api().connect(self.path,timeout=5);db.row_factory=sqlite_api().Row;return db
-	def note(self,note_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,autosave=True,shared=None,replies=None,ack_edited_seen_count=None,quiet=False,blocking=None,type=''):
-		identifier(note_id);owner_text(text);receipt=restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at);more=restore_replies(replies,receipt[0]);seen_reply_count=restore_reply_seen_count(ack_edited_seen_count,more);seen=when(seen_at)if seen_at is not None else None;blocking=not quiet if blocking is None else bool(blocking)
+	def note(self,note_id,text,at=None,acknowledged_at=None,ack_type=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,autosave=True,shared=None,replies=None,ack_edited_seen_count=None,quiet=False,blocking=None,type=''):
+		identifier(note_id);owner_text(text);receipt=restore_receipt(acknowledged_at,ack_type,ack_text,ack_edited_at);more=restore_replies(replies,receipt[0]);seen_reply_count=restore_reply_seen_count(ack_edited_seen_count,more);seen=when(seen_at)if seen_at is not None else None;blocking=not quiet if blocking is None else bool(blocking)
 		with self.transaction(shared,autosave=autosave)as db:
 			if shared is None:db.execute('BEGIN IMMEDIATE')
 			existing=db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone()
 			if existing:
 				if existing['text']!=text:raise ValueError('This message ID already belongs to different text')
 				return message_row(existing)
-			db.execute('INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id, replies, ack_edited_seen_count, quiet, blocking, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(note_id,text,at or now(),*receipt,seen,task_id,more,seen_reply_count,1 if quiet else 0,1 if blocking else 0,type))
+			db.execute('INSERT INTO notes (id, text, at, acknowledged_at, ack_type, ack_text, ack_edited_at, seen_at, task_id, replies, ack_edited_seen_count, quiet, blocking, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(note_id,text,at or now(),*receipt,seen,task_id,more,seen_reply_count,1 if quiet else 0,1 if blocking else 0,type))
 			if not quiet or blocking:reset_poll_count(db)
 			clear_skip_poll(db);return message_row(db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone())
 	def pending_read_set_note(self):
@@ -1601,15 +1601,15 @@ class Store:
 			else:raise RuntimeError('The state holds no free six-character ID for a read-set note')
 			listed='\n'.join(f"- `{path}`"for path in paths);text=f"Read-set checkpoint after a 20-minute interval. Read each listed path in full with the read tool only if its current full text is absent from context, then acknowledge this note.\n{listed}";record=self.note(note_id,text,shared=db,autosave=False,quiet=True,blocking=True);db.execute('INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',(READ_SET_SLOT_META,slot));db.execute('INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',(READ_SET_LAST_META,moment.isoformat()))
 		self.autosave();return record
-	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,shared=None,autosave=True,replies=None,ack_edited_seen_count=None):
-		identifier(submission_id);identifier(report_id);submission_text(text);receipt=restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at);more=restore_replies(replies,receipt[0]);seen_reply_count=restore_reply_seen_count(ack_edited_seen_count,more)
+	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_type=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,shared=None,autosave=True,replies=None,ack_edited_seen_count=None):
+		identifier(submission_id);identifier(report_id);submission_text(text);receipt=restore_receipt(acknowledged_at,ack_type,ack_text,ack_edited_at);more=restore_replies(replies,receipt[0]);seen_reply_count=restore_reply_seen_count(ack_edited_seen_count,more)
 		with self.transaction(shared,autosave=autosave)as db:
 			if shared is None:db.execute('BEGIN IMMEDIATE')
 			existing=db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone()
 			if existing:
 				if existing['text']!=text:raise ValueError('This message ID already belongs to different text')
 				self.release_report_tasks(db,report_id);return message_row(existing)
-			db.execute('INSERT INTO submissions (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id, replies, ack_edited_seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(submission_id,report_id,text,at or now(),*receipt,when(seen_at)if seen_at is not None else None,task_id,more,seen_reply_count));self.release_report_tasks(db,report_id);reset_poll_count(db);clear_skip_poll(db);return message_row(db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone())
+			db.execute('INSERT INTO submissions (id, report_id, text, at, acknowledged_at, ack_type, ack_text, ack_edited_at, seen_at, task_id, replies, ack_edited_seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(submission_id,report_id,text,at or now(),*receipt,when(seen_at)if seen_at is not None else None,task_id,more,seen_reply_count));self.release_report_tasks(db,report_id);reset_poll_count(db);clear_skip_poll(db);return message_row(db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone())
 	def submissions(self):
 		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM submissions ORDER BY at, seq')]
 	def report_sources(self):
@@ -1685,8 +1685,8 @@ class Store:
 	def refuse_session_ids(self,details):
 		tokens={token:found for(token,found)in session_id_tokens(self).items()if NOTE_ID.fullmatch(token)or HEX7_RE.fullmatch(token)}
 		for detail in details:
-			for(token,(kind,ident))in tokens.items():
-				if re.search(f"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])",detail):named=ident if token==ident else f"{token} of {ident}";raise ValueError(f"That detail cites the session-local {kind} {named}. A repository reader cannot resolve that ID. Describe the work instead")
+			for(token,(type,ident))in tokens.items():
+				if re.search(f"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])",detail):named=ident if token==ident else f"{token} of {ident}";raise ValueError(f"That detail cites the session-local {type} {named}. A repository reader cannot resolve that ID. Describe the work instead")
 	def write_task(self,task_id,title=None,details=None,status=None,order=None,blocked=None,report_id=None,completed_at=None,task_type=None,blocked_by=None,shared=None,append_details=False,restoring=False):
 		details=[str(item)for item in details if str(item).strip()]if details else None
 		if details and not restoring:self.refuse_session_ids(details)
@@ -1765,15 +1765,15 @@ class Store:
 	def rename_entity(self,prev_id,new_id):
 		identifier(new_id);exact=[item for item in self.id_matches(prev_id)if item[1]['id']==prev_id]
 		if len(exact)!=1:raise ValueError(f"No note, answer, report or task holds the ID {prev_id}")
-		kind=exact[0][0];table,dependents=RENAME_TARGETS[kind]
-		if kind=='task':guard_task_runs(self.path.parent,prev_id,'rename task');check_task(new_id,None,None)
+		type=exact[0][0];table,dependents=RENAME_TARGETS[type]
+		if type=='task':guard_task_runs(self.path.parent,prev_id,'rename task');check_task(new_id,None,None)
 		with self.transaction()as db:
 			for other in RENAME_TABLES:
 				if db.execute(f"SELECT 1 FROM {other} WHERE id = ?",(new_id,)).fetchone():raise ValueError(f"{new_id} already names a row in {other}")
 			db.execute(f"UPDATE {table} SET id = ? WHERE id = ?",(new_id,prev_id))
 			if table=='tasks':db.execute('UPDATE tasks SET updated_at = ? WHERE id = ?',(now(),new_id))
 			for(other,column)in dependents:db.execute(f"UPDATE {other} SET {column} = ? WHERE {column} = ?",(new_id,prev_id))
-		return kind
+		return type
 	def amend_task(self,prev_id,task_id):
 		check_task(task_id,None,None);stamp=now()
 		with self.transaction()as db:
@@ -1800,7 +1800,7 @@ class Store:
 			if save_id in scope_receipts:
 				if scope_receipts[save_id]!=digest:raise ValueError('Autosave save ID already confirms another state')
 			else:
-				scope_receipts[save_id]=digest;history=self.userscript_history(db);record={'kind':'userscript-autosave','version':1,'save_id':save_id,'scope':scope,'digest':digest,'core':core,'stamp':stamp,'confirmed_at':now()};previous=[item for item in history if item['scope']==scope];kept=previous[-1:]+[record]
+				scope_receipts[save_id]=digest;history=self.userscript_history(db);record={'type':'userscript-autosave','version':1,'save_id':save_id,'scope':scope,'digest':digest,'core':core,'stamp':stamp,'confirmed_at':now()};previous=[item for item in history if item['scope']==scope];kept=previous[-1:]+[record]
 				for item in kept:item['receipts']=scope_receipts.copy()
 				history=[item for item in history if item['scope']!=scope]+kept;db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(AUTOSAVE_HISTORY,json.dumps(history)));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(AUTOSAVE_RECEIPTS,json.dumps(receipts)))
 		return{'confirmed':True,'save_id':save_id,'digest':digest}
@@ -1813,7 +1813,7 @@ class Store:
 		saved=rows[-1];supplied=baseline.get('core')
 		if supplied is not None and autosave_core(supplied)!=autosave_core(saved['core']):return{**result,'result':'unknown-baseline'}
 		core=autosave_core(saved['core']);before=saved['stamp']
-		def identity(row):kind='report'if'markdown'in row else'task'if'title'in row else'answer'if'report_id'in row else'note';return kind,row['id']
+		def identity(row):type='report'if'markdown'in row else'task'if'title'in row else'answer'if'report_id'in row else'note';return type,row['id']
 		missing=len({identity(row)for row in core}-{identity(row)for row in candidate});status='equal'if candidate_stamp==before else'candidate-missing-records'if missing else'different';return{**result,'result':status,'baseline_stamp':before,'counts':{'baseline':len(core),'candidate':len(candidate),'missing':missing}}
 	def autosave(self):
 		try:self.save_state({'notes':self.state()['notes'],'tasks':self.tasks()})
@@ -1854,7 +1854,7 @@ class Store:
 	def save_upload(self,name,content_type,data,upload_id=None,shared=None,note_id=None,position=None,staged=False):
 		if not isinstance(data,(bytes,bytearray,FileBody)):raise TypeError('An upload is bytes')
 		if not data:raise ValueError('An upload must not be empty')
-		cleaned=upload_name(name);kind=upload_type(content_type);digest=body_digest(data);upload_id=identifier(upload_id)if upload_id is not None else self.free_id()
+		cleaned=upload_name(name);type=upload_type(content_type);digest=body_digest(data);upload_id=identifier(upload_id)if upload_id is not None else self.free_id()
 		if note_id is not None:note_id=identifier(note_id)
 		elif not staged:note_id=upload_id
 		if position is not None and(not isinstance(position,int)or position<1):raise ValueError('Invalid attachment position')
@@ -1863,7 +1863,7 @@ class Store:
 			if shared is None:db.execute('BEGIN IMMEDIATE')
 			existing=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 			if existing:
-				if(existing['note_id'],existing['name'],existing['type'],existing['size'],existing['sha256'])!=(note_id,cleaned,kind,len(data),digest):raise ValueError('This note ID already belongs to a different file')
+				if(existing['note_id'],existing['name'],existing['type'],existing['size'],existing['sha256'])!=(note_id,cleaned,type,len(data),digest):raise ValueError('This note ID already belongs to a different file')
 				target=directory/existing['file']
 				if not target.is_file()or hashlib.sha256(target.read_bytes()).hexdigest()!=digest:save_body(target,data);target.chmod(384)
 				return upload_row(existing,self.path.parent)
@@ -1874,7 +1874,7 @@ class Store:
 				collision=db.execute('SELECT 1 FROM uploads WHERE file = ?',(target.name,)).fetchone()
 				if not collision and not target.exists():break
 				number+=1
-			save_body(target,data);target.chmod(384);db.execute('INSERT INTO uploads (id, note_id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',(upload_id,note_id,cleaned,kind,len(data),digest,target.name,now()));row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
+			save_body(target,data);target.chmod(384);db.execute('INSERT INTO uploads (id, note_id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',(upload_id,note_id,cleaned,type,len(data),digest,target.name,now()));row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 		return upload_row(row,self.path.parent)
 	def note_with_uploads(self,note_id,text,files):
 		identifier(note_id);owner_text(text)
@@ -1892,7 +1892,7 @@ class Store:
 				db.execute('BEGIN IMMEDIATE');existing=db.execute('SELECT text FROM notes WHERE id = ?',(note_id,)).fetchone();rows=db.execute('SELECT * FROM uploads WHERE note_id = ? ORDER BY seq',(note_id,)).fetchall()
 				if existing and existing['text']!=text:raise ValueError('This message ID already belongs to different text')
 				if rows:
-					if len(rows)!=len(prepared)or any((row['name'],row['type'],row['size'],row['sha256'])!=(name,kind,len(data),body_digest(data))for(row,(name,kind,data))in zip(rows,prepared)):raise ValueError('This note ID already belongs to different files')
+					if len(rows)!=len(prepared)or any((row['name'],row['type'],row['size'],row['sha256'])!=(name,type,len(data),body_digest(data))for(row,(name,type,data))in zip(rows,prepared)):raise ValueError('This note ID already belongs to different files')
 					for(row,(_,_,data))in zip(rows,prepared):
 						target=self.path.parent/UPLOAD_DIR/row['file']
 						if not target.is_file()or hashlib.sha256(target.read_bytes()).hexdigest()!=row['sha256']:target.parent.mkdir(parents=True,exist_ok=True,mode=448);save_body(target,data);target.chmod(384)
@@ -1900,7 +1900,7 @@ class Store:
 				else:
 					if existing:raise ValueError('This note ID was already sent without a file')
 					records=[]
-					for(index,(name,kind,data))in enumerate(prepared,1):record=self.save_upload(name,kind,data,upload_id=note_id if index==1 else new_id(),note_id=note_id,position=index if len(prepared)>1 else None,shared=db);records.append(record);created.append(Path(record['path']))
+					for(index,(name,type,data))in enumerate(prepared,1):record=self.save_upload(name,type,data,upload_id=note_id if index==1 else new_id(),note_id=note_id,position=index if len(prepared)>1 else None,shared=db);records.append(record);created.append(Path(record['path']))
 				note=self.note(note_id,text,shared=db);result=add_note_attachments(note,records)
 		except Exception:
 			for path in created:path.unlink(missing_ok=True)
@@ -2006,7 +2006,7 @@ class Store:
 			raise
 		self.autosave();return fetch_row(result,self.path.parent)
 	def import_state(self,text,replace_tasks=False):
-		records=parse_state_import(text);history=[autosave_record(row)for row in records if row.get('kind')=='userscript-autosave'];records=[row for row in records if row.get('kind')!='userscript-autosave'];groups={};imported_receipts={}
+		records=parse_state_import(text);history=[autosave_record(row)for row in records if row.get('type')=='userscript-autosave'];records=[row for row in records if row.get('type')!='userscript-autosave'];groups={};imported_receipts={}
 		for row in history:
 			key=autosave_scope_key(row['scope']);groups.setdefault(key,[]).append(row);receipts=imported_receipts.setdefault(key,{})
 			for(save_id,digest)in{**row.get('receipts',{}),row['save_id']:row['digest']}.items():
@@ -2024,7 +2024,7 @@ class Store:
 			self.import_reports(reports,shared=db);self.import_tasks(tasks,replace_tasks,autosave=False,shared=db)
 			for record in messages:
 				if'text'not in record or'title'in record:raise ValueError('Each record must be a note, task or report answer')
-				options={key:record.get(key)for key in('acknowledged_at','ack_kind','ack_text','ack_edited_at','seen_at','task_id','replies','ack_edited_seen_count')};args=[record['id']];writer=self.note
+				options={key:record.get(key)for key in('acknowledged_at','ack_type','ack_text','ack_edited_at','seen_at','task_id','replies','ack_edited_seen_count')};args=[record['id']];writer=self.note
 				if'report_id'in record:writer=self.submission;args.append(record['report_id'])
 				writer(*args,record['text'],record.get('at'),shared=db,autosave=False,**options)
 		receipt={'notes':sum('report_id'not in r for r in messages),'answers':sum('report_id'in r for r in messages),'reports':len(reports),'tasks':len(tasks)};return receipt
@@ -2086,7 +2086,7 @@ class Store:
 	def request_interrupt(self,tab,report_id=None,armed=True,user_flagged=True,reason=None,clause_file=None,note=None):
 		if not armed:self.clear_meta(AGENT_INTERRUPT_FLAG_META);self.take_interrupt();return{'agent_interrupt_pending':False}
 		if not isinstance(tab,str)or tab not in{'notes','reports','tasks','downloads'}:raise ValueError('tab must name a preview tab')
-		if reason is not None and reason not in VIOLATION_KINDS[tab]:raise ValueError('reason must name a violation kind for this tab')
+		if reason is not None and reason not in VIOLATION_TYPES[tab]:raise ValueError('reason must name a violation type for this tab')
 		if clause_file not in(None,'')and clause_file not in read_set_files(self.repository_root()):raise ValueError('clause_file must name a read-set file')
 		if note is not None and not isinstance(note,str):raise ValueError('note must be text')
 		cited=' '.join((note or'').split())
@@ -2111,7 +2111,7 @@ class Store:
 				if task:heading=f"The user flagged a violation: task {task['id']}."if user_flagged else f"VIOLATION: task {task['id']}"
 				else:evidence.append('The task list is empty. Maybe a task should have spawned.')
 		notice='\n'.join([heading,*evidence,'The call-count gate blocks after 6 unacknowledged calls.','Think about which clause was violated.','Read read-set files if absent from context.','Fix the violation, then ack with `file:ln: clause`.']);return self.flag_violation_note(notice,reason,clause_file,cited)
-	def flag_violation_note(self,notice,kind,clause_file,cited):record=self.queue_violation_note(notice,kind or'self-raised');self.set_meta(AGENT_INTERRUPT_FLAG_META,json.dumps({'kind':kind or'','clause_file':clause_file or'','note':cited,'id':record['id']}));return{'agent_interrupt_pending':True}
+	def flag_violation_note(self,notice,type,clause_file,cited):record=self.queue_violation_note(notice,type or'self-raised');self.set_meta(AGENT_INTERRUPT_FLAG_META,json.dumps({'type':type or'','clause_file':clause_file or'','note':cited,'id':record['id']}));return{'agent_interrupt_pending':True}
 	def queue_violation_note(self,text,type):
 		pending=self.pending_violation_note()
 		if pending is not None:return pending
@@ -2126,7 +2126,7 @@ class Store:
 			db.execute('BEGIN IMMEDIATE');row=db.execute('SELECT value FROM meta WHERE key = ?',(AGENT_INTERRUPT_META,)).fetchone();flag=db.execute('SELECT value FROM meta WHERE key = ?',(AGENT_INTERRUPT_FLAG_META,)).fetchone();db.execute('DELETE FROM meta WHERE key IN (?, ?)',(AGENT_INTERRUPT_META,AGENT_INTERRUPT_FLAG_META))
 			try:note_id=json.loads(flag['value']).get('id','')if flag else''
 			except ValueError:note_id=''
-			if note_id:db.execute('UPDATE notes SET acknowledged_at = ?, ack_kind = ?, ack_text = ? WHERE id = ? AND acknowledged_at IS NULL',(now(),'reply','Disarmed on the page.',note_id))
+			if note_id:db.execute('UPDATE notes SET acknowledged_at = ?, ack_type = ?, ack_text = ? WHERE id = ? AND acknowledged_at IS NULL',(now(),'reply','Disarmed on the page.',note_id))
 			return row['value']if row else None
 	def request_skip_poll(self,armed=True):
 		if not armed:self.take_skip_poll();return{'skip_poll':None}
@@ -2189,7 +2189,7 @@ class Store:
 			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL AND blocking = 1').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0];remaining=db.execute("SELECT count(*) FROM tasks WHERE status <> 'finished'").fetchone()[0];published=db.execute('SELECT count(*) FROM reports WHERE published_at IS NOT NULL').fetchone()[0];stale=self.stale_report_ids(db)if published>=STALE_REPORT_THRESHOLD else[];cursor=meta_number(db,REMINDER_CURSOR);polls=0 if advance and not notes+reports+uploads else meta_number(db,POLLS_SINCE_MESSAGE)+(1 if advance else 0);blocked=bool(gate_pending_count(db))and polls>=GATE_THRESHOLD
 			if routine:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMINDER_CURSOR,str(cursor+1)))
 			if advance:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(POLLS_SINCE_MESSAGE,str(polls)))
-		counts=[f"{count} {kind}{'s'if count!=1 else''}"for(count,kind)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[]
+		counts=[f"{count} {type}{'s'if count!=1 else''}"for(count,type)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[]
 		if blocked:head=['blocked']
 		elif polls and counts:
 			if polls>GATE_THRESHOLD//2:head=[f"bash blocked in {GATE_THRESHOLD-polls}"]
@@ -2207,7 +2207,7 @@ class Store:
 	def read(self,include_quiet=True):
 		quiet_filter=' AND (quiet = 0 OR blocking = 1 OR seen_at IS NULL)'if include_quiet else' AND quiet = 0'
 		with self.transaction(autosave=False)as db:
-			pending=[message_row(row)|{'kind':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq')];notes={}
+			pending=[message_row(row)|{'type':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'type':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq')];notes={}
 			for table in('notes','submissions'):
 				for row in db.execute(f"SELECT * FROM {table} ORDER BY at, seq"):record=message_row(row);notes[record['id']]=record
 			for row in db.execute('SELECT id, markdown FROM reports'):notes[row['id']]={'id':row['id'],'text':row['markdown']}
@@ -2216,7 +2216,7 @@ class Store:
 			for row in db.execute('SELECT * FROM uploads ORDER BY seq'):record=upload_row(row,self.path.parent);attachments.setdefault(record['note_id'],[]).append(record)
 			for record in notes.values():add_note_attachments(record,attachments.get(record['id'],[]))
 			for item in pending:
-				if item['kind']=='note':
+				if item['type']=='note':
 					add_note_attachments(item,attachments.get(item['id'],[]));thread=reply_thread(item,notes)
 					if thread:item['thread']=thread
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):item[key]=clip_stamp(item[key])
@@ -2278,8 +2278,8 @@ class Store:
 				for table in('notes','submissions'):
 					row=db.execute(f"SELECT acknowledged_at, replies FROM {table} WHERE id = ?",(record_id,)).fetchone()
 					if row is None:continue
-					if row['acknowledged_at']is None:db.execute(f"UPDATE {table} SET acknowledged_at = ?, ack_kind = ?, ack_text = ?, seen_at = COALESCE(seen_at, ?) WHERE id = ?",(stamp,'reply',text,stamp,record_id))
-					else:more=replies_list(row['replies'])+[{'kind':'reply','text':text,'at':stamp}];db.execute(f"UPDATE {table} SET replies = ?, ack_edited_at = ? WHERE id = ?",(json.dumps(more,ensure_ascii=False),stamp,record_id))
+					if row['acknowledged_at']is None:db.execute(f"UPDATE {table} SET acknowledged_at = ?, ack_type = ?, ack_text = ?, seen_at = COALESCE(seen_at, ?) WHERE id = ?",(stamp,'reply',text,stamp,record_id))
+					else:more=replies_list(row['replies'])+[{'type':'reply','text':text,'at':stamp}];db.execute(f"UPDATE {table} SET replies = ?, ack_edited_at = ? WHERE id = ?",(json.dumps(more,ensure_ascii=False),stamp,record_id))
 					if table=='submissions':db.execute('UPDATE reports SET agent_seen_at = ? WHERE id = (SELECT report_id FROM submissions WHERE id = ?)',(stamp,record_id))
 					break
 				else:raise ValueError(f"Unknown note: {record_id}; no receipts written")
@@ -2395,7 +2395,7 @@ class Store:
 				if value not in field['options']and not custom_answer(field,value):raise ValueError(f"{field_id}: choose one of "+', '.join(field['options']))
 				rendered=value
 			else:
-				if not isinstance(value,list)or len({item for item in value if isinstance(item,str)})!=len(value)or any(item not in field['options']and not custom_answer(field,item)for item in value):raise ValueError(f"{field_id}: pick options only: "+', '.join(field['options']))
+				if not isinstance(value,list)or len({item for item in value if isinstance(item,str)})!=len(value)or any(item not in field['options']and not custom_answer(field,item)for item in value):raise ValueError(f"{field_id}: select options only: "+', '.join(field['options']))
 				rendered=', '.join(value)if value else'(skipped)'
 			lines.append(f"  {field['prompt']} ({field_id}): {rendered}")
 		return self.submission(note_id,report_id,'\n'.join(lines),shared=shared)
@@ -2559,9 +2559,9 @@ def handler(store):
 					try:
 						for item in state['notes']+[ack for report in state['reports']for ack in report['acknowledgements']]:
 							if'text'in item:item['html']=render(item['text'])
-							if item.get('ack_kind')=='reply'and item.get('ack_text'):item['ack_html']=render(item['ack_text'].replace('\\n','\n'))
+							if item.get('ack_type')=='reply'and item.get('ack_text'):item['ack_html']=render(item['ack_text'].replace('\\n','\n'))
 							for reply in item.get('replies')or[]:
-								if reply['kind']=='reply':reply['html']=render(reply['text'].replace('\\n','\n'))
+								if reply['type']=='reply':reply['html']=render(reply['text'].replace('\\n','\n'))
 					except RuntimeError as error:state['rendering_error']=str(error)
 					self.reply(200,json.dumps(state,ensure_ascii=False));return
 				if path=='/api/submissions':live={report['id']for report in store.state()['reports']};self.reply(200,json.dumps([saved_answer_line(record)for record in store.submissions()if record['report_id']in live],ensure_ascii=False),'application/json; charset=utf-8');return
@@ -2569,8 +2569,8 @@ def handler(store):
 				if path=='/api/report-sources':self.reply(200,json.dumps([saved_report_line(record)for record in store.report_sources()],ensure_ascii=False),'application/json; charset=utf-8');return
 				match=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/(html|source)',path)
 				if match:
-					report_id,kind=match.groups();report=store.report(report_id)
-					if kind=='html':
+					report_id,type=match.groups();report=store.report(report_id)
+					if type=='html':
 						try:body,questions=render_report(report['markdown'])
 						except ValueError as error:self.problem(500,f"This report cannot be rendered: {error}");return
 						self.reply(200,json.dumps({'html':body,'fields':len(questions),'revision':report['updated_at'],'published':report['published_at']or report['updated_at'],'edited':report['updated_at']},ensure_ascii=False));return
@@ -2592,7 +2592,7 @@ def handler(store):
 					with closing(store.connect())as db:store.claimed_fetch(db,fetch_post.group(1),self.headers.get('X-Fetch-Claim',''))
 				if length<=0:subject='Upload'if note_upload else'Download'if fetch_result else'Request body';self.problem(413,f"{subject} has an invalid length");return
 				if staged_upload:
-					with stream_note_attachments(content_type,self.rfile,length,staged=True)as parsed:upload_id,name,kind,data=parsed;record=store.stage_upload(name,kind,data,upload_id)
+					with stream_note_attachments(content_type,self.rfile,length,staged=True)as parsed:upload_id,name,type,data=parsed;record=store.stage_upload(name,type,data,upload_id)
 					self.reply(201,json.dumps(record,ensure_ascii=False));return
 				if note_upload:
 					with stream_note_attachments(content_type,self.rfile,length)as parsed:note=store.note_with_uploads(*parsed)
@@ -2672,17 +2672,17 @@ def print_skills():
 	try:import yaml
 	except ImportError as error:raise RuntimeError('PyYAML is required; rerun the preview installer')from error
 	root=Path(resolve_repo_root());skills={}
-	for(kind,directory)in(('installed',root/'.agents'/'skills'),('repository',root/'skills')):
+	for(type,directory)in(('installed',root/'.agents'/'skills'),('repository',root/'skills')):
 		for path in sorted(directory.glob('*/SKILL.md')):
-			if kind=='repository'and path.parent.name=='refs':continue
+			if type=='repository'and path.parent.name=='refs':continue
 			lines=path.read_text(encoding='utf-8-sig').splitlines()
 			try:
 				if not lines or lines[0].strip()!='---':raise ValueError('missing YAML frontmatter')
 				end=next(i for i in range(1,len(lines))if lines[i].strip()=='---');metadata=yaml.safe_load('\n'.join(lines[1:end]))
 				if not isinstance(metadata,dict)or not all(isinstance(metadata.get(key),str)and metadata[key].strip()for key in('name','description')):raise ValueError('name and description must be nonempty text')
 			except(ValueError,StopIteration,yaml.YAMLError)as error:raise ValueError(f"Invalid skill metadata in {path}: {error}")from error
-			name=metadata['name'];skills.setdefault(name.casefold(),(name,kind,path,metadata['description']))
-	for(name,kind,path,description)in skills.values():print(f"{name} [{kind}] {path}\n{description}\n")
+			name=metadata['name'];skills.setdefault(name.casefold(),(name,type,path,metadata['description']))
+	for(name,type,path,description)in skills.values():print(f"{name} [{type}] {path}\n{description}\n")
 def resolve_state_dir():
 	configured=os.environ.get('ARENA_PREVIEW_STATE_DIR')
 	if configured:return configured
@@ -2817,7 +2817,7 @@ def watch_call_group(store,stop=None,interval=1.,signal_group=os.killpg):
 		flag=store.meta_value(AGENT_INTERRUPT_FLAG_META)
 		if flag and flag!=seen:
 			seen=flag
-			try:reason=json.loads(flag).get('kind','')
+			try:reason=json.loads(flag).get('type','')
 			except ValueError:reason=''
 			age=seconds_since(store.meta_value(CALL_STARTED_META))
 			if reason==CALL_STOP_TYPE and age is not None and age>CALL_STOP_SECONDS:
@@ -2872,9 +2872,9 @@ def main():
 			try:old_id=Store(state_dir).resolve_id(args.old_id)
 			except FileNotFoundError:print(f"No note, answer, report or task holds the ID {args.old_id}",file=sys.stderr);return 1
 			except ValueError as error:print(error,file=sys.stderr);return 1
-			try:kind=Store(state_dir).rename_entity(old_id,args.new_id)
+			try:type=Store(state_dir).rename_entity(old_id,args.new_id)
 			except ValueError as error:print(error,file=sys.stderr);return 1
-			print(f"ok {kind} {old_id} -> {args.new_id}");return 0
+			print(f"ok {type} {old_id} -> {args.new_id}");return 0
 		if args.command=='gate':return gate_verdict(state_dir,args.push,args.line)
 		store=Store(state_dir,create=args.command in{'serve','init','import-state'});global DISPLAY_ZONE;DISPLAY_ZONE=resolve_display_zone(store)
 		if args.command!='poll':clear_poll_repeat(store)
