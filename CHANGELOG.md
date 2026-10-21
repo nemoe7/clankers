@@ -13,6 +13,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Show `PR checks...` during a poll with an active PR-check run.
 - Block `grep`, `head`, and `tail` on read-set inputs. Keep file-tool readers and path checks.
 
+#### skills
+
+- Add minimal purpose READMEs for first-party skills. Keep the existing arena README.
+
 #### nemoizer
 
 - Add the approved prose-review clauses. Keep the three word rotations and scanner behavior unchanged.
