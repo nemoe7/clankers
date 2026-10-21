@@ -18,6 +18,24 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Derive the workspace path in the wrapper test from the checkout, so the suite passes where `/home/user` does not exist.
 
+#### gate
+
+- Block a notice only at the call threshold. A read-set checkpoint and a page flag both mint a quiet note the agent reads and acknowledges, and the six-call tally runs from the note.
+
+- Stop a running Bash call for a page flag only on a `bash-violation` kind and only after 3 seconds. Every other flag waits for the threshold.
+
+- Refuse an acknowledgement of a violation note that does not name the violated clause as `file:ln: clause`. The note stays pending.
+
+- Count a repeated poll as a violation only after a poll that returned at once. A poll that waited for a run or for steering does not arm the next one.
+
+- Name the pending note IDs in the call-count block message.
+
+- Point the page flag at every flagged note, including a report flag and a
+  self-raised notice, so the banner reads that note and a disarm answers it.
+
+- Accept `missing-details`, `out-of-scope`, and `task-not-created` on the notes and
+  the tasks tab, with the same evidence line as `current-task-violation`.
+
 ## 2026-10-20
 
 ### Changed
