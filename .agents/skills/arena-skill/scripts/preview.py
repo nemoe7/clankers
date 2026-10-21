@@ -879,7 +879,7 @@ def read_set_paths(root=None):
 		dirnames[:]=sorted(name for name in dirnames if name not in WORKSPACE_SKIP)
 		if'AGENTS.md'in filenames:agents.append(Path(dirpath)/'AGENTS.md')
 	skill=root/'.agents'/'skills'/'arena-skill'/'SKILL.md';return[path for path in[root/'ARENA.md',*sorted(agents),skill]if path.is_file()]
-INERT_COMMANDS='cd','export','set','unset','true',':','source','.','trap','shopt','umask'
+INERT_COMMANDS='cd','mkdir','export','set','unset','true',':','source','.','trap','shopt','umask'
 def unquote_commands(line):
 	kept=[];quote='';index=0;text=str(line or'').replace('\r','\n')
 	while index<len(text):
