@@ -39,6 +39,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### skills
 
+- Use descriptive placeholders for all unfilled design-example fields. Keep filled values and real-record evidence rules unchanged.
+
 - Expand the Nemo UI/UX, Nemoizer, and Squash READMEs with setup, examples, available tools, and limits. Keep UI source credits and exclude the pages from distribution.
 
 - Add Nemoizer test-review rules for behavior, relations, named constants, and required exact-text contracts.
