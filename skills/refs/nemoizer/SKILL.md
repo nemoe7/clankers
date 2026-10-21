@@ -92,3 +92,35 @@ review. Delete a marker when the line no longer needs it.
    `scripts/nemoize.py`; add a stem word that takes its own plain word to
    `EXCEPTIONS`.
 3. Run `python3 -m pytest skills/nemoizer/scripts/test_nemoize.py`.
+
+## Prose review
+
+- Replace wordy action phrases with plain verbs only when actor, timing, and meaning stay unchanged.
+- Remove stock openers and closers from prose only when they add no claim or required action.
+- State the supported claim directly unless both sides of a contrast carry distinct facts.
+- Preserve facts, negations, conditions, numbers, names, commands, citations, and confidence in every prose rewrite.
+- Remove a closer only when it repeats earlier content and adds no fact, consequence, or required action.
+- Replace an aphorism or claim of importance with its supported concrete claim.
+- Remove an objection only when it answers no real claim and carries no independent information.
+- Keep each list item that adds a distinct fact, and merge only redundant items.
+- Vary repeated sentence openings only when repetition is unintended and every claim survives.
+- Replace prose dashes unless the requested writing sample uses them, preserving each clause relation.
+- Remove a redundant qualifier only when the remaining wording preserves confidence, scope, and every safety or legal condition.
+- Remove unsupported claims of importance or future success while preserving concrete facts and stated plans.
+- Name a relationship only when the source states it, otherwise retain its uncertainty.
+- Keep an attached explanatory phrase only when the source supports its claim.
+- Replace an unsupported quality claim with a supported measurement, or remove only the unsupported claim.
+- Name the source and its claim when available, otherwise remove only unsupported appeals to authority.
+- Use is, are, or has only when it preserves the relation expressed by a longer verb phrase.
+- Remove bold labels only when the labels add no information or necessary structure.
+- Match the requested quotation style without changing quoted content.
+- State a missing source fact without inventing a plausible replacement or hiding a relevant knowledge limit.
+- Remove a sentence that repeats its heading only when it adds no information.
+- Remove redundant document narration while retaining useful source credits, action-changing caveats, and change history.
+- Lead a contextual reply with its decision while retaining required evidence and reasoning that can change that decision.
+- Limit instructions to 20 words and descriptions to 25 unless a longer form is necessary to preserve meaning.
+- Rewrite noun clusters longer than three words when the rewrite preserves the technical term and its meaning.
+- Keep one topic per paragraph within six sentences or the stricter project limit.
+- Use a list for three or more steps or conditions while preserving their order and grouping.
+- Define an uncommon technical term when needed, and use that term consistently.
+- Prefer simple tenses unless a compound form carries confidence or current relevance that must survive.

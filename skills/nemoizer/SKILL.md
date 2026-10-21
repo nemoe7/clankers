@@ -44,3 +44,35 @@ so a suppression never escapes review.
 
 The rotation has landed, so `check.py` runs the linter and a new avoided word fails
 the gate.
+
+## Prose review
+
+- Replace wordy action phrases with plain verbs only when actor, timing, and meaning stay unchanged.
+- Remove stock prose openers and closers only if they add no claim or required action.
+- State supported claims directly unless both contrast sides carry distinct facts.
+- Preserve facts, negations, conditions, numbers, names, commands, citations, and confidence in every prose rewrite.
+- Remove a closer only when it repeats earlier content and adds no fact, consequence, or required action.
+- Replace aphorisms or importance claims with their supported concrete claims.
+- Remove objections only if they answer no real claim and carry no independent information.
+- Keep list items that add distinct facts, and merge only redundant items.
+- Vary repeated sentence openings only when repetition is unintended and every claim survives.
+- Replace prose dashes unless the requested writing sample uses them, preserving each clause relation.
+- Remove redundant qualifiers only if confidence, scope, and every safety or legal condition survive.
+- Remove unsupported importance or future-success claims, retaining concrete facts and stated plans.
+- Name relationships only when the source states them, otherwise retain their uncertainty.
+- Keep an attached explanatory phrase only when the source supports its claim.
+- Replace unsupported quality claims with supported measurements, or remove only unsupported claims.
+- Name the source and its claim when available, otherwise remove only unsupported appeals to authority.
+- Use is, are, or has only if it preserves the longer verb phrase's relation.
+- Remove bold labels only if they add no information or necessary structure.
+- Match requested quotation style without changing quoted content.
+- State missing source facts without inventing plausible replacements or hiding relevant knowledge limits.
+- Remove sentences that repeat their headings only if they add no information.
+- Remove redundant document narration while retaining useful source credits, action-changing caveats, and change history.
+- Lead contextual replies with their decisions, retaining required evidence and reasoning that can change those decisions.
+- Limit instructions to 20 words and descriptions to 25 unless preserving meaning requires more.
+- Rewrite noun clusters over three words when the technical term and its meaning survive.
+- Keep one topic per paragraph within six sentences or the stricter project limit.
+- List three or more steps or conditions, preserving their order and grouping.
+- Define uncommon technical terms when needed, and use them consistently.
+- Prefer simple tenses unless compound forms carry confidence or current relevance that must survive.

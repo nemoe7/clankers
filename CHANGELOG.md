@@ -13,6 +13,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Show `PR checks...` during a poll with an active PR-check run.
 - Block `grep`, `head`, and `tail` on read-set inputs. Keep file-tool readers and path checks.
 
+#### nemoizer
+
+- Add the approved prose-review clauses. Keep the three word rotations and scanner behavior unchanged.
+
 #### workflows
 
 - Add a nemoizer distribution job with its own target override. Copy the skill to the nemo-ui targets and `nemoe7/wiki`.

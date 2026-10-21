@@ -54,6 +54,7 @@ EXPECTED_BUDGETS = {
   "skills/arena-skill/SKILL.md": "o200k_base",
   "skills/arena-skill/references/REFERENCE.md": "o200k_base",
   "skills/nemo-ui/SKILL.md": "o200k_base",
+  "skills/nemoizer/SKILL.md": "o200k_base",
   "skills/squash/SKILL.md": "o200k_base",
   "skills/web-interface-guidelines/SKILL.md": "o200k_base",
   "workflows/init-docs.md": "o200k_base",
