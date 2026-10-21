@@ -64,7 +64,7 @@ def test_budget_group_row_sums_its_files(tmp_path: Path, monkeypatch):
     {"skills/arena-skill": ("UTF-8 file size", ("a.js", "b.css"))},
   )
   (root / "rules.md").write_text("call", encoding="utf-8")
-  (root / "a.js").write_text("four", encoding="utf-8")
+  (root / "a.js").write_text("fóur", encoding="utf-8")
   (root / "b.css").write_text("sixsix", encoding="utf-8")
   check.README.write_text(
     "Latest measurements as of 2000-01-01.\n\n"
@@ -75,12 +75,20 @@ def test_budget_group_row_sums_its_files(tmp_path: Path, monkeypatch):
   text = check.README.read_text(encoding="utf-8")
   # One row carries every non-clause file, so the table stays readable.
   assert "a.js" not in text and "b.css" not in text
-  group = "| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 10 `B` |"
-  assert group in text
-  assert check.read_budget_table()["skills/arena-skill"] == ("UTF-8 file size", "10 B")
-  (root / "b.css").write_text("sixsix!", encoding="utf-8")
+  group, (unit, members) = next(iter(check.EXPECTED_GROUPS.items()))
+  size = sum((root / member).stat().st_size for member in members)
+  assert size > sum(
+    len((root / member).read_text(encoding="utf-8")) for member in members
+  )
+  assert f"| [`{group}`]({group}) | `{unit}` | {size:,} `B` |" in text
+  assert check.read_budget_table()[group] == (unit, f"{size:,} B")
+  assert not check.update_readme_measurements()
+  with (root / "b.css").open("a", encoding="utf-8") as file:
+    file.write("!")
   assert check.update_readme_measurements()
-  assert check.read_budget_table()["skills/arena-skill"] == ("UTF-8 file size", "11 B")
+  grown = sum((root / member).stat().st_size for member in members)
+  assert grown > size
+  assert check.read_budget_table()[group] == (unit, f"{grown:,} B")
   before = check.README.read_bytes()
   (root / "a.js").unlink()
   try:
