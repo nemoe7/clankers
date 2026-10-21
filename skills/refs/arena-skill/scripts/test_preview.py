@@ -35,6 +35,84 @@ _GUARD_PORT = None
 CHECKPOINT_INTERVAL = timedelta(minutes=15)
 
 
+def test_questionnaire_transport_keeps_grades_in_server_memory(
+  tmp_path, monkeypatch, capsys
+):
+  import questionnaire
+
+  global app
+  store = preview.Store(tmp_path, create=True)
+  headers = {"Content-Type": "application/json"}
+  payload = json.dumps(questionnaire.template())
+  expected = [
+    {"id": row["id"], "correct": index == 1, "confidence": row["confidence"]}
+    for index, row in enumerate(questionnaire.loads(payload))
+  ]
+
+  def grade(text):
+    questionnaire.loads(text)
+    return expected
+
+  monkeypatch.setattr(questionnaire, "grade", grade)
+  app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+  store.set_meta("port", str(app.server_port))
+  threading.Thread(target=app.serve_forever, daemon=True).start()
+  try:
+    status, _, body = request("GET", "/api/questionnaire")
+    assert status == 200
+    assert json.loads(body) == {"results": None}
+    for _ in range(2):
+      status, _, body = request("POST", "/api/questionnaire/request", "{}", headers)
+      assert status == 200
+      assert json.loads(body) == {"ok": True}
+    pending = store.read()["pending"]
+    assert len(pending) == 1
+    assert pending[0]["quiet"] and pending[0]["blocking"]
+    snapshot = store.save_path.read_bytes()
+    for body in ("[]", payload.replace('"confidence": 0', '"confidence": 2')):
+      status, _, _ = request("POST", "/api/questionnaire", body, headers)
+      assert status == 400
+    status, _, body = request("POST", "/api/questionnaire", payload, headers)
+    assert status == 200 and json.loads(body) == {"ok": True}
+    assert store.save_path.read_bytes() == snapshot
+    status, _, body = request("GET", "/api/questionnaire")
+    assert status == 200 and json.loads(body) == {"results": expected}
+    for path in ("/api/state", "/api/copy-state"):
+      status, _, body = request("GET", path)
+      assert status == 200 and '"correct"' not in body
+    assert '"correct"' not in store.save_path.read_text()
+    script = str(Path(preview.__file__))
+    monkeypatch.setenv("ARENA_PREVIEW_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", [script, "questionnaire"])
+    assert preview.main() == 0
+    printed = capsys.readouterr().out
+    assert all(
+      question["id"] in printed for question in questionnaire.SPEC["questions"]
+    )
+    assert all(digest not in printed for digest in questionnaire.HASHES.values())
+    monkeypatch.setattr(sys, "argv", [script, "questionnaire", payload])
+    assert preview.main() == 0
+    receipt = capsys.readouterr().out
+    assert '"correct"' not in receipt and not any(
+      row["id"] in receipt for row in expected
+    )
+  finally:
+    app.shutdown()
+    app.server_close()
+  fresh_handler = preview.handler(store)
+  app = preview.ThreadingHTTPServer(("127.0.0.1", 0), fresh_handler)
+  threading.Thread(target=app.serve_forever, daemon=True).start()
+  try:
+    status, _, body = request("GET", "/api/questionnaire")
+    assert status == 200 and json.loads(body) == {"results": None}
+    status, _, body = request("POST", "/api/questionnaire/request", "{}", headers)
+    assert status == 200
+    assert len(store.read()["pending"]) == len(pending)
+  finally:
+    app.shutdown()
+    app.server_close()
+
+
 def test_only_latest_report_submission_requires_ack(tmp_path):
   store = preview.Store(tmp_path, create=True)
   store.set_meta("port", guard_port())

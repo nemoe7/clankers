@@ -195,6 +195,8 @@ test('preview client', async (t) => {
   let reducedMotion = false;
   const pointerListeners = [];
   const pendingWrites = new Map();
+  let questionnaireResults = null;
+  const questionnaireRequests = [];
   const interruptCalls = [];
   const failedWrites = new Set();
   const context = {
@@ -244,6 +246,11 @@ test('preview client', async (t) => {
       if (options?.signal?.aborted) throw abortError();
       if (pendingWrites.has(url)) await pendingWrites.get(url);
       if (failedWrites.has(url)) return response({ error: 'Write failed' }, false);
+      if (url === '/api/questionnaire') return response({ results: questionnaireResults });
+      if (url === '/api/questionnaire/request') {
+        questionnaireRequests.push(options);
+        return response({ ok: true });
+      }
       if (url === '/api/state') {
         // A gateway in front of a dead server answers with its own page, not the app's JSON.
         if (stateGatewayBody !== null) return { ok: false, status: 502, statusText: 'Bad Gateway', json: async () => ({}), text: async () => stateGatewayBody };
@@ -4547,6 +4554,42 @@ test('preview client', async (t) => {
       state = keptState;
       await refresh();
     }
+  });
+
+  await t.test('Questionnaire results keep correctness separate from confidence', async () => {
+    const open = get('#questionnaire-open');
+    await open.events.click();
+    assert.equal(get('#modal').open, true);
+    assert.equal(get('#modal-confirm').hidden, true);
+    assert.ok(questionnaireRequests.length);
+    const requestCount = questionnaireRequests.length;
+    const update = intervals.filter(callback => callback.name === 'refreshQuestionnaire').at(-1);
+    await update();
+    assert.equal(questionnaireRequests.length, requestCount);
+    questionnaireResults = [
+      { id: 'H8P3C', correct: false, confidence: 1 },
+      { id: 'D9V4N', correct: true, confidence: 0.5 },
+      { id: 'G2W6M', correct: false, confidence: 0 },
+    ];
+    await update();
+    const content = get('#modal-fields').children[0];
+    const rows = content.children.find(node => node.tagName === 'table').children.at(-1).children;
+    assert.deepEqual(rows.map(row => row.children[0].dataset.correct), ['false', 'true', 'false']);
+    assert.deepEqual(rows.map(row => row.children[1].children[0].value), [1, 0.5, 0]);
+    assert.deepEqual(rows.map(row => row.children[0].children.at(-1).textContent), questionnaireResults.map(row => row.id));
+    get('#modal-cancel').events.click();
+    assert.equal(get('#modal').open, false);
+    failedWrites.add('/api/questionnaire');
+    await open.events.click();
+    assert.equal(get('#modal-error').hidden, false);
+    failedWrites.delete('/api/questionnaire');
+    await update();
+    assert.equal(get('#modal-error').hidden, true);
+    get('#modal-cancel').events.click();
+    const reads = context.fetch.mock.calls.length;
+    await update();
+    assert.equal(context.fetch.mock.calls.length, reads);
+    questionnaireResults = null;
   });
 
   await t.test('WebSockets route JSON, retain binary HTTP, queue changes, and reject lost replies', async () => {

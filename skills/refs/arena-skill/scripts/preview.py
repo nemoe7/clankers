@@ -4245,6 +4245,39 @@ def autosave_record(record):
   return {**record, "core": core}
 
 
+def questionnaire_command(state_dir, answers):
+  import questionnaire
+
+  if answers is None:
+    print(questionnaire.INSTRUCTIONS)
+    print(json.dumps(questionnaire.SPEC, indent=2, ensure_ascii=False))
+    print(json.dumps(questionnaire.template(), indent=2))
+    return 0
+  from http.client import HTTPConnection, HTTPException
+
+  store = Store(state_dir)
+  require_server(store)
+  try:
+    with closing(
+      HTTPConnection("127.0.0.1", int(store.meta_value("port")), timeout=15)
+    ) as client:
+      client.request(
+        "POST",
+        "/api/questionnaire",
+        answers.encode("utf-8"),
+        {"Content-Type": "application/json"},
+      )
+      response = client.getresponse()
+      body = response.read()
+      if response.status != 200:
+        error = json.loads(body).get("error", "Request rejected")
+        raise ValueError(f"Questionnaire submission: HTTP {response.status}: {error}")
+  except HTTPException as error:
+    raise ValueError(f"Questionnaire submission failed: {error}") from None
+  print("Questionnaire received.")
+  return 0
+
+
 def verify_publication(store, report_id, revision, count):
   from http.client import HTTPConnection, HTTPException
 
@@ -7668,6 +7701,9 @@ def render(markdown, breaks=False):
 def handler(store):
   from http.server import BaseHTTPRequestHandler
 
+  questionnaire_state = {"results": None, "requested": False}
+  questionnaire_lock = threading.Lock()
+
   class Handler(BaseHTTPRequestHandler):
     def setup(self):
       super().setup()
@@ -7940,6 +7976,11 @@ def handler(store):
           )
           self.reply(200, page, "text/html; charset=utf-8")
           return
+        if path == "/api/questionnaire":
+          with questionnaire_lock:
+            body = json.dumps({"results": questionnaire_state["results"]})
+          self.reply(200, body)
+          return
         if path == "/api/userscript-autosave":
           self.reply(200, json.dumps(store.userscript_snapshot(), ensure_ascii=False))
           return
@@ -8088,6 +8129,8 @@ def handler(store):
           "/api/markdown",
           "/api/fetch-jobs",
           "/api/fetch-jobs/claim",
+          "/api/questionnaire",
+          "/api/questionnaire/request",
         }
         and not report_submit
         and not report_seen
@@ -8176,9 +8219,41 @@ def handler(store):
         if len(data) != length:
           self.problem(400, "Incomplete request body; retry the upload or request")
           return
+        if path == "/api/questionnaire":
+          import questionnaire
+
+          results = questionnaire.grade(data.decode("utf-8"))
+          with questionnaire_lock:
+            questionnaire_state["results"] = results
+          self.reply(200, json.dumps({"ok": True}))
+          return
         payload = json.loads(data)
         if not isinstance(payload, dict):
           self.problem(400, "Expected a JSON object")
+          return
+        if path == "/api/questionnaire/request":
+          if payload:
+            raise ValueError("Questionnaire request requires an empty object")
+          with questionnaire_lock:
+            if (
+              questionnaire_state["results"] is None
+              and not questionnaire_state["requested"]
+            ):
+              with closing(store.connect()) as db:
+                pending = db.execute(
+                  "SELECT id FROM notes WHERE type = ? AND acknowledged_at IS NULL LIMIT 1",
+                  ("questionnaire",),
+                ).fetchone()
+              if pending is None:
+                store.note(
+                  uuid.uuid4().hex[:6],
+                  "Acknowledge this note, then follow the arena-skill questionnaire procedure.",
+                  quiet=True,
+                  blocking=True,
+                  type="questionnaire",
+                )
+              questionnaire_state["requested"] = True
+          self.reply(200, json.dumps({"ok": True}))
           return
         if autosave_post:
           result = (
@@ -8914,6 +8989,10 @@ def main():
   )
   init = commands.add_parser("init", help="Create state directory and database")
   init.add_argument("--tz", help="CLI stamp IANA zone; TZ env wins")
+  questionnaire_parser = commands.add_parser(
+    "questionnaire", help="Show questions and schema, or submit ordered JSON"
+  )
+  questionnaire_parser.add_argument("answers", nargs="?", help="Ordered answer JSON")
   commands.add_parser("read", help="Print every pending note, answer and upload")
   commands.add_parser(
     "skills",
@@ -9239,6 +9318,8 @@ def main():
         done=args.done,
         shell=args.shell,
       )
+    if args.command == "questionnaire":
+      return questionnaire_command(state_dir, args.answers)
     if args.command == "skills":
       print_skills()
       return 0

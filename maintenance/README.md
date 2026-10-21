@@ -162,7 +162,7 @@ The profile gate and EXIT hook have case labels in `skills/refs/arena-skill/scri
 
 ## Minified assets and scripts
 
-The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all three `scripts/` files. Edit readable `skills/refs/arena-skill/` sources, never generated copies. Markdown compression is separate.
+The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all four `scripts/` files. Edit readable `skills/refs/arena-skill/` sources, never generated copies. Markdown compression is separate.
 
 A dispatch workflow writes the `.agents/skills/arena-skill/` copy in each target repository. `.github/workflows/distribute.yml` carries it, so markdown drift there ends at the next dispatch. Compact Python gives less useful traceback line numbers.
 

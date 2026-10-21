@@ -19,7 +19,7 @@ TARGETS = (
 )
 BIN = ROOT / "node_modules/.bin"
 PYTHON_MINIFIER_VERSION = "3.3.0"
-PYTHON_SCRIPTS = ("scripts/preview.py",)
+PYTHON_SCRIPTS = ("scripts/preview.py", "scripts/questionnaire.py")
 COPIED_ASSETS = (
   "assets/markdown-it.min.js",
   "assets/markdown-it.LICENSE",

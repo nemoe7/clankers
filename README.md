@@ -47,8 +47,8 @@ Latest measurements as of 2026-10-21. `maintenance/check.py --update` rebuilds t
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 284 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 279 `tok` |
 | [`skills/amending-violations/SKILL.md`](skills/amending-violations/SKILL.md) | `o200k_base` | 1,607 `tok` |
-| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 474,291 `B` |
-| [`skills/arena-skill/references/REFERENCE.md`](skills/arena-skill/references/REFERENCE.md) | `o200k_base` | 3,869 `tok` |
+| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 487,073 `B` |
+| [`skills/arena-skill/references/REFERENCE.md`](skills/arena-skill/references/REFERENCE.md) | `o200k_base` | 3,915 `tok` |
 | [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,089 `tok` |
 | [`skills/nemo-ui-ux/SKILL.md`](skills/nemo-ui-ux/SKILL.md) | `o200k_base` | 1,505 `tok` |
 | [`skills/nemoizer/SKILL.md`](skills/nemoizer/SKILL.md) | `o200k_base` | 954 `tok` |

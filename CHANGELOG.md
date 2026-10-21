@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Add a questionnaire command and connection-dot results dialog. Keep independent correctness and confidence, hidden answer requests, hash-only keys, neutral receipts, and session-only results outside saved state.
+
 - Add opt-in sequential gates with `run start --after`. Bind each dependency to its run instance and cancel waiting successors when that dependency fails or disappears.
 
 - Show `PR checks...` during a poll with an active PR-check run.

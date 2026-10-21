@@ -2670,14 +2670,17 @@ function modalField(field) {
 // The promise resolves with the submit handler's result, or null on Esc and Cancel.
 function openModal(config) {
   return new Promise(resolve => {
-    const nodes = config.fields.map(modalField);
+    const nodes = config.content ? [config.content] : config.fields.map(modalField);
     $('#modal-title').textContent = config.title;
     $('#modal-fields').replaceChildren(...nodes);
     $('#modal-error').hidden = true;
     $('#modal-confirm').textContent = config.confirm || 'Submit';
+    $('#modal-confirm').hidden = !!config.readOnly;
+    modal.dataset.readOnly = String(!!config.readOnly);
+    $('#modal-cancel').textContent = config.readOnly ? 'Close' : 'Cancel';
     modalSubmit = async event => {
       event.preventDefault();
-      if (modalBusy) return;
+      if (modalBusy || config.readOnly) return;
       const values = Object.fromEntries(new FormData(modalForm).entries());
       modalBusy = true;
       try {
@@ -2699,7 +2702,95 @@ function openModal(config) {
 }
 modalForm.addEventListener('submit', event => modalSubmit?.(event));
 $('#modal-cancel').addEventListener('click', () => modal.close());
-// The types follow the active page. Only the repository's bible files can be named.
+
+const QUESTIONNAIRE_REFRESH_MS = 2000;
+let questionnaireView = null;
+let questionnaireBusy = false;
+let questionnaireRequested = false;
+function questionnaireIsOpen(view) {
+  return modal.open && $('#modal-fields').children[0] === view;
+}
+function renderQuestionnaire(view, results) {
+  const note = document.createElement('p');
+  note.className = 'muted';
+  note.textContent = 'Results stay in this server session. A restart clears them.';
+  const table = document.createElement('table');
+  table.className = 'questionnaire-results';
+  const header = document.createElement('thead');
+  const headings = document.createElement('tr');
+  for (const name of ['Correctness', 'Reported confidence']) {
+    const cell = document.createElement('th');
+    cell.scope = 'col';
+    cell.textContent = name;
+    headings.append(cell);
+  }
+  header.append(headings);
+  const body = document.createElement('tbody');
+  for (const result of results) {
+    const row = document.createElement('tr');
+    const id = document.createElement('th');
+    id.scope = 'row';
+    id.dataset.correct = String(result.correct);
+    const code = document.createElement('code');
+    code.textContent = result.id;
+    id.append(icon(result.correct ? 'check' : 'x', 16), code);
+    id.setAttribute('aria-label', `${result.id}: ${result.correct ? 'correct' : 'incorrect'}`);
+    const confidence = document.createElement('td');
+    confidence.className = 'questionnaire-confidence';
+    const bar = document.createElement('progress');
+    bar.max = 1;
+    bar.value = result.confidence;
+    const upper = result.confidence > 0.5;
+    const fraction = upper ? (result.confidence - 0.5) * 2 : result.confidence * 2;
+    bar.style.color = `color-mix(in srgb, var(--questionnaire-${upper ? 'warning' : 'danger'}) ${100 - fraction * 100}%, var(--questionnaire-${upper ? 'success' : 'warning'}))`;
+    const value = document.createElement('span');
+    value.textContent = `${(result.confidence * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+    bar.setAttribute('aria-label', `Reported confidence for ${result.id}`);
+    bar.setAttribute('aria-valuetext', value.textContent);
+    confidence.append(bar, value);
+    row.append(id, confidence);
+    body.append(row);
+  }
+  table.append(header, body);
+  view.replaceChildren(note, table);
+}
+async function refreshQuestionnaire() {
+  const view = questionnaireView;
+  if (!questionnaireIsOpen(view) || questionnaireBusy) return;
+  questionnaireBusy = true;
+  try {
+    const { results } = await (await request('/api/questionnaire')).json();
+    if (!questionnaireIsOpen(view)) return;
+    if (results === null) {
+      view.textContent = 'No submission yet. Requesting an answer from the agent…';
+      if (!questionnaireRequested) {
+        await request('/api/questionnaire/request', {
+          method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+        });
+        questionnaireRequested = true;
+      }
+      if (questionnaireIsOpen(view)) view.textContent = 'No submission yet. A request was sent to the agent.';
+    } else renderQuestionnaire(view, results);
+    if (questionnaireIsOpen(view)) $('#modal-error').hidden = true;
+  } catch (error) {
+    if (questionnaireIsOpen(view)) {
+      $('#modal-error').textContent = `Questionnaire load failed: ${error.message}. Retrying while this view stays open.`;
+      $('#modal-error').hidden = false;
+    }
+  } finally { questionnaireBusy = false; }
+}
+$('#questionnaire-open').addEventListener('click', async () => {
+  if (modal.open) return;
+  questionnaireView = document.createElement('section');
+  questionnaireView.textContent = 'Loading questionnaire…';
+  questionnaireRequested = false;
+  void openModal({ title: 'Questionnaire', content: questionnaireView, readOnly: true });
+  $('#modal-cancel').focus();
+  await refreshQuestionnaire();
+});
+setInterval(refreshQuestionnaire, QUESTIONNAIRE_REFRESH_MS);
+
+// The types follow the active page. Only paths in the repository's bible can be named.
 const VIOLATION_TYPES = {
   notes: [
     ['bash-violation', 'Bash violation'],
