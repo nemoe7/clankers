@@ -8575,6 +8575,58 @@ def state_file(state_dir):
   return Path(state_dir) / "state.sqlite3"
 
 
+def bare_script_invocation(line):
+  """Identify script commands, not source paths in arguments."""
+  lexer = shlex.shlex(agent_line(line), posix=False, punctuation_chars=";&|\n")
+  lexer.whitespace = " \t\r"
+  lexer.whitespace_split = True
+  try:
+    tokens = list(lexer)
+  except ValueError:
+    return False
+  piece = []
+  for token in [*tokens, ";"]:
+    if token not in (";", "&&", "||", "|", "|&", "&", "\n"):
+      piece.append(token)
+      continue
+    try:
+      words = ["".join(shlex.split(word)) for word in piece]
+    except ValueError:
+      return False
+    piece = []
+    while words and (
+      re.fullmatch(r"[A-Za-z_]\w*=.*", words[0]) or words[0] in SHELL_KEYWORDS
+    ):
+      words.pop(0)
+    while words and words[0].rsplit("/", 1)[-1] in PR_CHECK_WRAPPERS:
+      wrapper = words.pop(0).rsplit("/", 1)[-1]
+      if (
+        wrapper == "command" and words and re.fullmatch(r"-[pVv]*[Vv][pVv]*", words[0])
+      ):
+        words = []
+        break
+      while words and (
+        words[0].startswith("-") or "=" in words[0] or words[0].isdigit()
+      ):
+        words.pop(0)
+    if not words:
+      continue
+    head = words[0].rsplit("/", 1)[-1]
+    if head in SHELL_BASENAMES:
+      for index, word in enumerate(words[1:-1], 1):
+        if word.startswith("-") and "c" in word:
+          if bare_script_invocation(words[index + 1]):
+            return True
+          break
+    if head.startswith("python") or head in SHELL_BASENAMES:
+      words.pop(0)
+      while words and words[0].startswith("-") and words[0] not in ("-c", "-m"):
+        words.pop(0)
+    if words and words[0].endswith(("/scripts/arena-preview", "/scripts/preview.py")):
+      return True
+  return False
+
+
 def pre_command(state_dir, line, command, root, done="", shell=""):
   """Run every pre-Bash rule in order and report the steps this shell finished.
 
@@ -8672,9 +8724,7 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
   if status == PR_CHECK_REFUSED:
     return finish(130)
   # case: bare-path
-  if "bare" not in finished and (
-    "/scripts/arena-preview" in line or "/scripts/preview.py" in line
-  ):
+  if "bare" not in finished and bare_script_invocation(line):
     mark("bare")
     report(
       "Call it bare: arena-preview works from any directory, so drop the full path."

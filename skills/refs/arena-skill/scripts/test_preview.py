@@ -12157,3 +12157,33 @@ def test_http_staged_upload_binds_and_drops():
       app.shutdown()
       app.server_close()
       worker.join()
+
+
+def test_bare_path_reminder_distinguishes_invocations_from_arguments(tmp_path, capsys):
+  state = tmp_path / "state"
+  preview.Store(state, create=True)
+  source = "/workspace/skills/arena-skill/scripts/preview.py"
+  wrapper = "/workspace/skills/arena-skill/scripts/arena-preview"
+  cases = (
+    (f"sed -n '1,20p' {source}", False),
+    (f"rg -n Store {source}", False),
+    (f"test -f '{source}'", False),
+    (f"command -v {wrapper}", False),
+    (f"printf '%s' '{source} read'", False),
+    (f'''python3 -c "print('{source}')"''', False),
+    (f"{wrapper} read", True),
+    (f"'{wrapper}' read", True),
+    (f"python3 '{source}' read", True),
+    (f"env SAMPLE=1 python3 -u {source} read", True),
+    (f"bash -c 'python3 {source} read'", True),
+    (f"printf ready; {wrapper} read", True),
+    ("'/workspace with spaces/scripts/arena-preview' read", True),
+  )
+  for command, expected in cases:
+    result = preview.pre_command(
+      state, command, command, tmp_path, done="read-set", shell="bash"
+    )
+    output = capsys.readouterr()
+    assert result == 0, command
+    assert ("bare" in output.out) == expected, command
+    assert bool(output.err) == expected, command

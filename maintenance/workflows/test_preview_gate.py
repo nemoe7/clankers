@@ -432,16 +432,21 @@ def test_push_in_a_quiet_chain_still_meets_the_push_gate():
   assert result.returncode == 130, result.stderr
 
 
-def test_a_full_path_hears_the_bare_command_line():
-  # The command sits on PATH in every shell the installer touched, so a call that
-  # spells the path is told once, and the bare form is what reaches the log.
-  spelled = f"{ROOT}/.agents/skills/arena-skill/scripts/arena-preview"
-  result = run(f': "{spelled} read"')
+def test_a_full_path_hears_the_bare_command_line(tmp_path):
+  spelled = tmp_path / "scripts" / "arena-preview"
+  spelled.parent.mkdir()
+  spelled.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+  spelled.chmod(0o755)
+  result = run(f'"{spelled}" read')
+  assert result.returncode == 0, result.stderr
   assert "arena-preview works" in result.stderr, result.stderr
-  # One line a shell, not one a call.
   assert result.stderr.count("arena-preview works") == 1
-  plain = run(': "arena-preview read"')
+  plain = run("arena-preview read")
+  assert plain.returncode == 0, plain.stderr
   assert "arena-preview works" not in plain.stderr
+  literal = run(f': "{spelled} read"')
+  assert literal.returncode == 0, literal.stderr
+  assert "arena-preview works" not in literal.stderr
 
 
 def test_an_unreachable_read_hears_the_proxy_line():
