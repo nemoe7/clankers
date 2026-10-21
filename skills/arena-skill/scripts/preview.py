@@ -91,10 +91,13 @@ AGENT_KEY_EXPIRY_META='agent_key_expired_at'
 AGENT_SEEN_META='agent_seen_at'
 AGENT_INTERRUPT_META='agent_interrupt'
 AGENT_INTERRUPT_FLAG_META='agent_interrupt_flag'
-VIOLATION_KINDS={'notes':('bash-violation','process-violation'),'downloads':('bash-violation','process-violation'),'reports':('format-violation','unnecessary-report'),'tasks':('current-task-violation','empty-task-list')}
+VIOLATION_KINDS={'notes':('bash-violation','process-violation','missing-details','out-of-scope','task-not-created'),'downloads':('bash-violation','process-violation'),'reports':('format-violation','unnecessary-report'),'tasks':('current-task-violation','empty-task-list','missing-details','out-of-scope','task-not-created')}
 READ_SET_CACHE={}
 CALL_GROUP_META='call_group'
+CALL_STARTED_META='call_started_at'
 AGENT_CALL_ENDED_META='agent_call_ended_at'
+CALL_STOP_TYPE='bash-violation'
+CALL_STOP_SECONDS=3
 TURN_ENDED_META='turn_ended_at'
 REMOVED_META='state_removed_at'
 REPORT_CHANGE_VIEW_SECONDS=60
@@ -479,6 +482,16 @@ def owner_text(text):
 def note_text(text):
 	if not isinstance(text,str)or not text.strip():raise ValueError('Enter a nonblank note')
 	return text
+CLAUSE_ACK=re.compile('([\\w./-]+\\.md):([0-9]+):\\s*\\S')
+def clause_ack_error(text,root=None):
+	base=Path(root or Path.cwd());files=read_set_files(base)
+	if not files:base=Path.cwd();files=read_set_files(base)
+	paths={Path(path).name:base/path for path in files}
+	for match in CLAUSE_ACK.finditer(text or''):
+		path=paths.get(Path(match.group(1)).name)
+		if path is None or not path.is_file():continue
+		if int(match.group(2))<=len(path.read_text(encoding='utf-8').splitlines()):return''
+	return'An ack of a violation note must name the clause as `file:ln: clause`, for example `ARENA.md:41: MUST read the read-set files`. The note stays pending.'
 def when(value):
 	try:datetime.fromisoformat(str(value))
 	except ValueError as error:raise ValueError(f"Not a timestamp: {value!r}")from error
@@ -865,6 +878,8 @@ POLL_SINCE_META='polling_since'
 POLLING_FRESH_SECONDS=5.
 POLL_REPEAT_SECONDS=45
 POLL_REPEAT_META='poll_repeat'
+POLL_IMMEDIATE_SECONDS=1.
+POLL_IMMEDIATE_META='poll_immediate'
 READ_SET_SLOT_META='read_set_slot'
 READ_SET_LAST_META='read_set_last_at'
 READ_SET_INTERVAL_MINUTES=20
@@ -980,15 +995,8 @@ def read_set_actions(line):
 	return tuple(actions)
 def read_set_tick(store,line,moment=None,root=None):
 	actions=read_set_actions(line)
-	if actions and set(actions)=={'poll'}or poll_timeout_line(line):return None
-	pending=store.pending_read_set_note()
-	if pending is None:
-		if store.polling():return None
-		pending=store.schedule_read_set_note(moment=moment,root=root)
-	if pending is None or actions is not None and set(actions)<={'read','ack'}:return None
-	blocker=first_blocking_piece(line);blocker_hint=''
-	if blocker:blocker=shell_command_text(blocker);blocker_hint=f" Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part."
-	return f"READ SET BLOCKED: checkpoint {pending['id']} is pending. Run `arena-preview read`, read each listed path in full with the read tool only if its current full text is absent from context, then `arena-preview ack {pending['id']} <markdown>`.{blocker_hint}"
+	if actions and set(actions)=={'poll'}or poll_timeout_line(line):return
+	if store.pending_read_set_note()is None and not store.polling():store.schedule_read_set_note(moment=moment,root=root)
 GATE_NOISE='tail','grep','head'
 RUN_NAME=re.compile('[A-Za-z0-9._-]{1,64}')
 RUN_TAIL_LINES=40
@@ -1352,16 +1360,21 @@ def poll_repeat(store):
 	moment=poll_clock();previous=store.meta_value(POLL_REPEAT_META);store.set_meta(POLL_REPEAT_META,moment)
 	try:recent=previous is not None and 0<=moment-int(previous)<=POLL_REPEAT_SECONDS
 	except ValueError:recent=False
-	if not recent:return None
+	if not recent or store.meta_value(POLL_IMMEDIATE_META)!='1':return None
 	store.request_interrupt('tasks',user_flagged=False);return'VIOLATION: repeat poll inside 45 seconds. Read only read-set files whose current full text is absent from context, then work the task.'
+def poll_once(store,sleeper=None):
+	started=time.monotonic();status=poll_inbox(store,sleeper=sleeper)
+	if time.monotonic()-started>=POLL_IMMEDIATE_SECONDS:store.clear_meta(POLL_IMMEDIATE_META)
+	else:store.set_meta(POLL_IMMEDIATE_META,'1')
+	return status
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
 	deadline=time.monotonic()+POLL_WAIT_SECONDS;listing={'checked_at':None,'pending':[]};print(f"poll waits up to {POLL_WAIT_SECONDS} s. Set the bash tool timeout to 1800 s.",file=sys.stderr,flush=True);store.start_poll();failures=[];stop_checks=threading.Event();threading.Thread(target=pr_check_watch,args=(failures,resolve_repo_root(),stop_checks),daemon=True).start()
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			if time.monotonic()>=deadline:break
-			notice=store.take_interrupt()
-			if notice:print(notice,flush=True);return 0
+			violation=store.pending_violation_note()
+			if violation:print(f"{violation['text']}\nRun `arena-preview read`, then ack `{violation['id']}`.",flush=True);return 0
 			listing=store.read(include_quiet=False)
 			if listing['pending']:full=store.read();print(format_read(full),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);return 0
 			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
@@ -1489,12 +1502,13 @@ class Store:
 		if not create and not existed:raise FileNotFoundError(f"Inbox missing: {self.path}. The sandbox may have been reset, so follow the restore routine: run scripts/install.sh from the repository root, start `arena-preview serve --port 8000` with the start_process tool, then `arena-preview read`.")
 		if create and not existed:directory.mkdir(parents=True,exist_ok=True,mode=448)
 		with closing(self.connect())as db,db:
-			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0,\n          quiet INTEGER NOT NULL DEFAULT 0,\n          blocking INTEGER NOT NULL DEFAULT 1\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,\n          seq INTEGER, seen_at TEXT,\n          ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT,\n          ack_seen_at TEXT, viewed_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          approval TEXT NOT NULL DEFAULT 'approved'\n            CHECK (approval IN ('pending', 'approved', 'denied')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS task_dependencies (\n          task_id TEXT NOT NULL, blocked_by TEXT NOT NULL,\n          PRIMARY KEY (task_id, blocked_by)\n        );\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL,\n          completed_at TEXT,\n          blocked INTEGER NOT NULL DEFAULT 0,\n          type TEXT NOT NULL DEFAULT 'misc'\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
+			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0,\n          quiet INTEGER NOT NULL DEFAULT 0,\n          blocking INTEGER NOT NULL DEFAULT 1,\n          type TEXT NOT NULL DEFAULT ''\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,\n          seq INTEGER, seen_at TEXT,\n          ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT,\n          ack_seen_at TEXT, viewed_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          approval TEXT NOT NULL DEFAULT 'approved'\n            CHECK (approval IN ('pending', 'approved', 'denied')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS task_dependencies (\n          task_id TEXT NOT NULL, blocked_by TEXT NOT NULL,\n          PRIMARY KEY (task_id, blocked_by)\n        );\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL,\n          completed_at TEXT,\n          blocked INTEGER NOT NULL DEFAULT 0,\n          type TEXT NOT NULL DEFAULT 'misc'\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
 			for column in('ack_kind','ack_text','ack_edited_at','seen_at','task_id','replies'):
 				if column not in columns:db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
 			if'ack_edited_seen_count'not in columns:db.execute('ALTER TABLE notes ADD COLUMN ack_edited_seen_count INTEGER NOT NULL DEFAULT 0')
 			if'quiet'not in columns:db.execute('ALTER TABLE notes ADD COLUMN quiet INTEGER NOT NULL DEFAULT 0')
 			if'blocking'not in columns:db.execute('ALTER TABLE notes ADD COLUMN blocking INTEGER NOT NULL DEFAULT 1');db.execute('UPDATE notes SET blocking = CASE WHEN quiet = 1 THEN 0 ELSE 1 END')
+			if'type'not in columns:db.execute("ALTER TABLE notes ADD COLUMN type TEXT NOT NULL DEFAULT ''")
 			if'origin'in columns:db.execute('ALTER TABLE notes DROP COLUMN origin');columns.discard('origin')
 			if'seen_at'not in columns:db.execute('UPDATE notes SET seen_at = acknowledged_at WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL')
 			columns={row['name']for row in db.execute('PRAGMA table_info(tasks)')}
@@ -1544,7 +1558,7 @@ class Store:
 	def notes_matching(self,token):
 		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM notes WHERE id = ? OR id LIKE ? ORDER BY at DESC',(token,f"{token}%")).fetchall()]
 	def connect(self):db=sqlite_api().connect(self.path,timeout=5);db.row_factory=sqlite_api().Row;return db
-	def note(self,note_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,autosave=True,shared=None,replies=None,ack_edited_seen_count=None,quiet=False,blocking=None):
+	def note(self,note_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,autosave=True,shared=None,replies=None,ack_edited_seen_count=None,quiet=False,blocking=None,type=''):
 		identifier(note_id);owner_text(text);receipt=restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at);more=restore_replies(replies,receipt[0]);seen_reply_count=restore_reply_seen_count(ack_edited_seen_count,more);seen=when(seen_at)if seen_at is not None else None;blocking=not quiet if blocking is None else bool(blocking)
 		with self.transaction(shared,autosave=autosave)as db:
 			if shared is None:db.execute('BEGIN IMMEDIATE')
@@ -1552,11 +1566,18 @@ class Store:
 			if existing:
 				if existing['text']!=text:raise ValueError('This message ID already belongs to different text')
 				return message_row(existing)
-			db.execute('INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id, replies, ack_edited_seen_count, quiet, blocking) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(note_id,text,at or now(),*receipt,seen,task_id,more,seen_reply_count,1 if quiet else 0,1 if blocking else 0))
-			if not quiet:reset_poll_count(db)
+			db.execute('INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id, replies, ack_edited_seen_count, quiet, blocking, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(note_id,text,at or now(),*receipt,seen,task_id,more,seen_reply_count,1 if quiet else 0,1 if blocking else 0,type))
+			if not quiet or blocking:reset_poll_count(db)
 			clear_skip_poll(db);return message_row(db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone())
 	def pending_read_set_note(self):
-		with closing(self.connect())as db:row=db.execute('SELECT * FROM notes WHERE quiet = 1 AND blocking = 1 AND acknowledged_at IS NULL ORDER BY at, seq LIMIT 1').fetchone()
+		with closing(self.connect())as db:
+			flag=db.execute('SELECT value FROM meta WHERE key = ?',(AGENT_INTERRUPT_FLAG_META,)).fetchone()
+			try:flag_id=json.loads(flag['value']).get('id','')if flag else''
+			except ValueError:flag_id=''
+			row=db.execute('SELECT * FROM notes WHERE quiet = 1 AND blocking = 1 AND acknowledged_at IS NULL AND id <> ? ORDER BY at, seq LIMIT 1',(flag_id,)).fetchone()
+		return message_row(row)if row else None
+	def pending_violation_note(self):
+		with closing(self.connect())as db:row=db.execute("SELECT * FROM notes WHERE type <> '' AND acknowledged_at IS NULL ORDER BY at, seq LIMIT 1").fetchone()
 		return message_row(row)if row else None
 	def schedule_read_set_note(self,moment=None,root=None):
 		moment=moment or datetime.now(DISPLAY_ZONE or timezone.utc)
@@ -1614,7 +1635,7 @@ class Store:
 			if tasks is not None:
 				for item in tasks['finished']+tasks['upcoming']:item['updated_at']=clip_stamp(item['updated_at'])
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
-			polling=self.polling();return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':polling and bool(live_runs(self.path.parent)),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_META)),'read_set':read_set_files(self.repository_root()),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META)),'gate_threshold':GATE_THRESHOLD}
+			polling=self.polling();return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':polling and bool(live_runs(self.path.parent)),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_FLAG_META)),'read_set':read_set_files(self.repository_root()),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META)),'gate_threshold':GATE_THRESHOLD}
 	def tasks(self):
 		with closing(self.connect())as db:
 			rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall();records=attach_blockers(db,[task_row(row)for row in rows])
@@ -2063,34 +2084,50 @@ class Store:
 		with closing(self.connect())as db,db:db.execute('DELETE FROM meta WHERE key IN (?, ?)',(POLLING_META,POLL_SINCE_META))
 	def polling(self):age=seconds_since(self.meta_value(POLLING_META));return age is not None and 0<=age<POLLING_FRESH_SECONDS
 	def request_interrupt(self,tab,report_id=None,armed=True,user_flagged=True,reason=None,clause_file=None,note=None):
-		if not armed:self.take_interrupt();return{'agent_interrupt_pending':False}
+		if not armed:self.clear_meta(AGENT_INTERRUPT_FLAG_META);self.take_interrupt();return{'agent_interrupt_pending':False}
 		if not isinstance(tab,str)or tab not in{'notes','reports','tasks','downloads'}:raise ValueError('tab must name a preview tab')
 		if reason is not None and reason not in VIOLATION_KINDS[tab]:raise ValueError('reason must name a violation kind for this tab')
 		if clause_file not in(None,'')and clause_file not in read_set_files(self.repository_root()):raise ValueError('clause_file must name a read-set file')
 		if note is not None and not isinstance(note,str):raise ValueError('note must be text')
 		cited=' '.join((note or'').split())
 		if len(cited)>300:raise ValueError('note must contain at most 300 characters')
+		evidence=[]
 		if reason is not None:
 			heading=f"User flagged violation: {reason}."
 			if cited:heading+=f" Cited: {cited}"
-			evidence=[]
 			if tab=='reports'and report_id is not None:evidence.append(f"Report: {report_id}")
 			elif tab=='tasks':
 				task=current_task((self.tasks()or{}).get('upcoming',[]))
-				if reason=='current-task-violation'and task:evidence.append(f"Current task: {task['id']}. Is this what you are working on?")
+				if task and reason!='empty-task-list':evidence.append(f"Current task: {task['id']}. Is this what you are working on?")
 				else:evidence.append('The task list is empty. Maybe a task should have spawned.')
-			notice='\n'.join([heading,*evidence,'This bash call is blocked but not necessarily violating.','Think about which clause was violated.','Read read-set files if absent from context.','Fix the violation before continuing.']);self.set_meta(AGENT_INTERRUPT_FLAG_META,json.dumps({'kind':reason,'clause_file':clause_file or'','note':cited}));self.set_meta(AGENT_INTERRUPT_META,notice);return{'agent_interrupt_pending':True}
-		self.clear_meta(AGENT_INTERRUPT_FLAG_META);header='The user flagged a violation.'if user_flagged else'VIOLATION'
-		if tab=='reports'and report_id is not None:
-			try:self.report(report_id)
-			except FileNotFoundError:pass
-			else:header=f"The user flagged a violation: report {report_id} formatting is wrong."if user_flagged else f"VIOLATION: report {report_id}"
-		elif tab=='tasks':
-			task=current_task((self.tasks()or{}).get('upcoming',[]))
-			if task:header=f"The user flagged a violation: task {task['id']}."if user_flagged else f"VIOLATION: task {task['id']}"
-		notice=f"{header}\nThis Bash call was blocked. Read only read-set files whose current full text is absent from context, then fix the violation before continuing.";self.set_meta(AGENT_INTERRUPT_META,notice);return{'agent_interrupt_pending':True}
+		else:
+			heading='The user flagged a violation.'if user_flagged else'VIOLATION'
+			if tab=='reports'and report_id is not None:
+				try:self.report(report_id)
+				except FileNotFoundError:pass
+				else:heading=f"The user flagged a violation: report {report_id} formatting is wrong."if user_flagged else f"VIOLATION: report {report_id}"
+			elif tab=='tasks':
+				task=current_task((self.tasks()or{}).get('upcoming',[]))
+				if task:heading=f"The user flagged a violation: task {task['id']}."if user_flagged else f"VIOLATION: task {task['id']}"
+				else:evidence.append('The task list is empty. Maybe a task should have spawned.')
+		notice='\n'.join([heading,*evidence,'The call-count gate blocks after 6 unacknowledged calls.','Think about which clause was violated.','Read read-set files if absent from context.','Fix the violation, then ack with `file:ln: clause`.']);return self.flag_violation_note(notice,reason,clause_file,cited)
+	def flag_violation_note(self,notice,kind,clause_file,cited):record=self.queue_violation_note(notice,kind or'self-raised');self.set_meta(AGENT_INTERRUPT_FLAG_META,json.dumps({'kind':kind or'','clause_file':clause_file or'','note':cited,'id':record['id']}));return{'agent_interrupt_pending':True}
+	def queue_violation_note(self,text,type):
+		pending=self.pending_violation_note()
+		if pending is not None:return pending
+		with closing(self.connect())as db:
+			for _ in range(MINT_ATTEMPTS):
+				note_id=new_id()
+				if not db.execute('SELECT 1 FROM notes WHERE id = ?',(note_id,)).fetchone():break
+			else:raise RuntimeError('The state holds no free six-character ID for a violation note')
+		return self.note(note_id,text,quiet=True,blocking=True,type=type)
 	def take_interrupt(self):
-		with closing(self.connect())as db,db:db.execute('BEGIN IMMEDIATE');row=db.execute('SELECT value FROM meta WHERE key = ?',(AGENT_INTERRUPT_META,)).fetchone();db.execute('DELETE FROM meta WHERE key IN (?, ?)',(AGENT_INTERRUPT_META,AGENT_INTERRUPT_FLAG_META));return row['value']if row else None
+		with closing(self.connect())as db,db:
+			db.execute('BEGIN IMMEDIATE');row=db.execute('SELECT value FROM meta WHERE key = ?',(AGENT_INTERRUPT_META,)).fetchone();flag=db.execute('SELECT value FROM meta WHERE key = ?',(AGENT_INTERRUPT_FLAG_META,)).fetchone();db.execute('DELETE FROM meta WHERE key IN (?, ?)',(AGENT_INTERRUPT_META,AGENT_INTERRUPT_FLAG_META))
+			try:note_id=json.loads(flag['value']).get('id','')if flag else''
+			except ValueError:note_id=''
+			if note_id:db.execute('UPDATE notes SET acknowledged_at = ?, ack_kind = ?, ack_text = ? WHERE id = ? AND acknowledged_at IS NULL',(now(),'reply','Disarmed on the page.',note_id))
+			return row['value']if row else None
 	def request_skip_poll(self,armed=True):
 		if not armed:self.take_skip_poll();return{'skip_poll':None}
 		self.set_meta(SKIP_POLL_META,now());return{'skip_poll':clip_stamp(self.meta_value(SKIP_POLL_META))}
@@ -2231,8 +2268,13 @@ class Store:
 	def acknowledge(self,ids,text,shared=None):
 		text=note_text(text);stamp=now()
 		with self.transaction(shared)as db:
+			for record_id in ids:identifier(record_id)
 			for record_id in ids:
-				identifier(record_id)
+				row=db.execute('SELECT type FROM notes WHERE id = ?',(record_id,)).fetchone()
+				if row is not None and row['type']:
+					error=clause_ack_error(text,self.repository_root())
+					if error:raise ValueError(error)
+			for record_id in ids:
 				for table in('notes','submissions'):
 					row=db.execute(f"SELECT acknowledged_at, replies FROM {table} WHERE id = ?",(record_id,)).fetchone()
 					if row is None:continue
@@ -2241,6 +2283,7 @@ class Store:
 					if table=='submissions':db.execute('UPDATE reports SET agent_seen_at = ? WHERE id = (SELECT report_id FROM submissions WHERE id = ?)',(stamp,record_id))
 					break
 				else:raise ValueError(f"Unknown note: {record_id}; no receipts written")
+			if not db.execute("SELECT 1 FROM notes WHERE type <> '' AND acknowledged_at IS NULL").fetchone():db.execute('DELETE FROM meta WHERE key = ?',(AGENT_INTERRUPT_FLAG_META,))
 			db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(stamp,))
 			if not gate_pending_count(db):db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
 	def guard_report_change(self,db,report_id,report,hold_view=True,hold_answer=True):
@@ -2690,7 +2733,11 @@ def gate_verdict(state_dir,push,line,out=None):
 	if not allowed:
 		if blocked_calls is not None:print(f"BASH BLOCKED AFTER {blocked_calls} CALLS.",file=out,flush=True)
 		if push:print('PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox. Read the inbox, ack every item, push again.',file=out,flush=True)
-		print('READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every note: `arena-preview ack <id> <markdown>`.',file=out,flush=True);hint=gate_line_hint(line)
+		print('READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every note: `arena-preview ack <id> <markdown>`.',file=out,flush=True)
+		try:waiting=[item['id']for item in gate_store.read()['pending']]
+		except Exception:waiting=[]
+		if waiting:print('Pending: '+', '.join(waiting),file=out,flush=True)
+		hint=gate_line_hint(line)
 		if hint:print(hint,file=out,flush=True)
 		blocker=first_blocking_piece(line)
 		if blocker:blocker=shell_command_text(blocker);print(f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",file=out,flush=True)
@@ -2706,7 +2753,9 @@ def platform_line(line):return any(pattern in line for pattern in PLATFORM_LINES
 def state_file(state_dir):return Path(state_dir)/'state.sqlite3'
 def pre_command(state_dir,line,command,root,done='',shell=''):
 	initial=done.split();steps=list(initial);finished=set(steps);routed=os.environ.get('ARENA_PREVIEW_ROUTE')=='1'
-	if not routed and state_file(state_dir).is_file():Store(state_dir,create=False).set_meta(CALL_GROUP_META,os.getpgid(0))
+	if not routed and state_file(state_dir).is_file():
+		group_store=Store(state_dir,create=False);group=str(os.getpgid(0))
+		if group_store.meta_value(CALL_GROUP_META)!=group:group_store.set_meta(CALL_GROUP_META,group);group_store.set_meta(CALL_STARTED_META,now())
 	def report(warning):print(warning,file=sys.stderr,flush=True)
 	def mark(step):
 		if step not in finished:finished.add(step);steps.append(step)
@@ -2717,17 +2766,9 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 	if warning:report(warning);return finish(130)
 	if shell and shell not in GATED_SHELLS:return finish(0)
 	if platform_line(line):return finish(0)
-	if not routed and'interrupt'not in finished and state_file(state_dir).is_file():
-		mark('interrupt');notice=Store(state_dir,create=False).take_interrupt()
-		if notice:
-			if notice.startswith(('The user flagged a violation','User flagged violation')):print(notice,flush=True)
-			else:report(notice)
-			return finish(130)
 	if not routed and'read-set'not in finished and state_file(state_dir).is_file():
 		mark('read-set');tick_store=Store(state_dir)
-		if preview_server_available(tick_store):
-			warning=read_set_tick(tick_store,line,moment=datetime.now(resolve_display_zone(tick_store)),root=root)
-			if warning:report(warning);return finish(130)
+		if preview_server_available(tick_store):read_set_tick(tick_store,line,moment=datetime.now(resolve_display_zone(tick_store)),root=root)
 	if'remind'not in finished and any(word in command for word in('git commit','git push','gh pr checks')):mark('remind');report('Finished a task? Update the task list: arena-preview task <id> --status finished.')
 	if'git commit'in command and'main-local'not in finished:
 		mark('main-local');warning=main_drift_warning(Path.cwd(),fresh=False)
@@ -2773,15 +2814,19 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 def watch_call_group(store,stop=None,interval=1.,signal_group=os.killpg):
 	seen=None
 	while stop is None or not stop.is_set():
-		notice=store.meta_value(AGENT_INTERRUPT_META)
-		if notice and notice!=seen:
-			seen=notice
-			try:group=int(store.meta_value(CALL_GROUP_META)or 0)
-			except(TypeError,ValueError):group=0
-			if group>1:
-				try:signal_group(group,signal.SIGINT)
-				except(ProcessLookupError,PermissionError):pass
-				store.set_meta(CALL_GROUP_META,'')
+		flag=store.meta_value(AGENT_INTERRUPT_FLAG_META)
+		if flag and flag!=seen:
+			seen=flag
+			try:reason=json.loads(flag).get('kind','')
+			except ValueError:reason=''
+			age=seconds_since(store.meta_value(CALL_STARTED_META))
+			if reason==CALL_STOP_TYPE and age is not None and age>CALL_STOP_SECONDS:
+				try:group=int(store.meta_value(CALL_GROUP_META)or 0)
+				except(TypeError,ValueError):group=0
+				if group>1:
+					try:signal_group(group,signal.SIGINT)
+					except(ProcessLookupError,PermissionError):pass
+					store.set_meta(CALL_GROUP_META,'')
 		if stop is None:time.sleep(interval)
 		elif stop.wait(interval):return
 class PreviewArgumentParser(argparse.ArgumentParser):
@@ -2859,7 +2904,7 @@ def main():
 		elif args.command=='poll':
 			require_server(store);store.notice_expired_key();refusal=poll_repeat(store)
 			if refusal:print(refusal,flush=True);return 2
-			return poll_inbox(store)
+			return poll_once(store)
 		elif args.command=='download-request':print(format_fetch_job(store.enqueue_fetch(args.url,args.allow_proxy,pending=True)))
 		elif args.command=='ack':
 			if args.markdown=='-':raise ValueError('Pass literal inline Markdown; acknowledgement stdin is not supported')

@@ -4802,7 +4802,8 @@ def test_bash_gate():
     assert (
       blocked.stdout.strip() == "BASH BLOCKED AFTER 6 CALLS.\n"
       "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every"
-      " note: `arena-preview ack <id> <markdown>`."
+      " note: `arena-preview ack <id> <markdown>`.\n"
+      "Pending: gate-note"
     )
     gate_store.acknowledge(["gate-note"], "Cleared")
     assert gate_store.gate()
@@ -6649,27 +6650,34 @@ def test_poll_blocked_tasks():
 
 
 def test_repeat_polls_raise_a_violation(monkeypatch):
-  """A poll inside the repeat window raises the violation the next call reads."""
+  """A poll inside the repeat window raises the quiet violation note the next read shows."""
   with tempfile.TemporaryDirectory() as spam_dir:
     store = preview.Store(spam_dir, create=True)
     moment = [1000]
     monkeypatch.setattr(preview, "poll_clock", lambda: moment[0])
+    # Only a poll that returned at once arms the repeat window.
+    store.set_meta(preview.POLL_IMMEDIATE_META, "1")
     assert preview.poll_repeat(store) is None
     refusal = preview.poll_repeat(store)
     assert refusal == (
       "VIOLATION: repeat poll inside 45 seconds. Read only read-set files whose "
       "current full text is absent from context, then work the task."
     )
-    notice = store.take_interrupt()
-    assert notice.startswith("VIOLATION")
-    assert "This Bash call was blocked" in notice
+    note = store.pending_violation_note()
+    assert note["type"] == "self-raised"
+    assert note["quiet"] and note["blocking"]
+    assert note["text"].startswith("VIOLATION")
+    assert "The call-count gate blocks after 6 unacknowledged calls." in note["text"]
+    assert store.meta_value(preview.AGENT_INTERRUPT_META) is None
+    # A poll that waited for a run does not arm the next one.
+    preview.clear_poll_repeat(store)
+    store.clear_meta(preview.POLL_IMMEDIATE_META)
+    assert preview.poll_repeat(store) is None
+    assert preview.poll_repeat(store) is None
     # The served window lets the next poll run.
     moment[0] += 46
+    store.set_meta(preview.POLL_IMMEDIATE_META, "1")
     assert preview.poll_repeat(store) is None
-    # A real command between two quick polls clears the stamp.
-    preview.clear_poll_repeat(store)
-    assert preview.poll_repeat(store) is None
-    assert preview.poll_repeat(store) is not None
 
 
 def test_a_repeat_poll_command_exits_2_with_the_violation():
@@ -6678,6 +6686,7 @@ def test_a_repeat_poll_command_exits_2_with_the_violation():
     store = preview.Store(spam_dir, create=True)
     store.set_meta("port", guard_port())
     store.set_meta(preview.POLL_REPEAT_META, int(time.time()))
+    store.set_meta(preview.POLL_IMMEDIATE_META, "1")
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": spam_dir}
     result = subprocess.run(
       [sys.executable, str(Path(preview.__file__)), "poll"],
@@ -6691,7 +6700,10 @@ def test_a_repeat_poll_command_exits_2_with_the_violation():
       "VIOLATION: repeat poll inside 45 seconds. Read only read-set files whose "
       "current full text is absent from context, then work the task.\n"
     )
-    assert store.take_interrupt().startswith("VIOLATION")
+    note = store.pending_violation_note()
+    assert note["type"] == "self-raised"
+    assert note["text"].startswith("VIOLATION")
+    assert store.meta_value(preview.AGENT_INTERRUPT_META) is None
 
 
 def test_the_gate_records_the_call_group():
@@ -6741,6 +6753,8 @@ def test_a_violation_flag_signals_the_recorded_group():
     try:
       assert child.stdout.readline() == b"ready\n"
       store.set_meta(preview.CALL_GROUP_META, child.pid)
+      started = datetime.now(timezone.utc) - timedelta(seconds=10)
+      store.set_meta(preview.CALL_STARTED_META, started.isoformat())
       watcher = threading.Thread(
         target=preview.watch_call_group,
         args=(store,),
@@ -6748,7 +6762,7 @@ def test_a_violation_flag_signals_the_recorded_group():
         daemon=True,
       )
       watcher.start()
-      store.request_interrupt("tasks")
+      store.request_interrupt("notes", reason="bash-violation")
       assert child.wait(timeout=10) == 42
     finally:
       stop.set()
@@ -6756,6 +6770,49 @@ def test_a_violation_flag_signals_the_recorded_group():
         watcher.join(timeout=5)
       if child.poll() is None:
         child.kill()
+
+
+def test_a_short_or_other_flag_does_not_signal_the_group():
+  """The stop needs a bash violation and three seconds, so any other flag waits."""
+  code = (
+    "import signal, sys, time\n"
+    "signal.signal(signal.SIGINT, lambda *args: sys.exit(42))\n"
+    "print('ready', flush=True)\n"
+    "time.sleep(60)\n"
+  )
+  for reason, age in (("bash-violation", 1), ("format-violation", 10)):
+    with tempfile.TemporaryDirectory() as watch_dir:
+      store = preview.Store(watch_dir, create=True)
+      child = subprocess.Popen(
+        [sys.executable, "-c", code],
+        start_new_session=True,
+        stdout=subprocess.PIPE,
+      )
+      stop = threading.Event()
+      watcher = None
+      try:
+        assert child.stdout.readline() == b"ready\n"
+        store.set_meta(preview.CALL_GROUP_META, child.pid)
+        started = datetime.now(timezone.utc) - timedelta(seconds=age)
+        store.set_meta(preview.CALL_STARTED_META, started.isoformat())
+        watcher = threading.Thread(
+          target=preview.watch_call_group,
+          args=(store,),
+          kwargs={"stop": stop, "interval": 0.05},
+          daemon=True,
+        )
+        watcher.start()
+        tab = "notes" if reason == "bash-violation" else "reports"
+        store.request_interrupt(tab, reason=reason)
+        time.sleep(0.4)
+        assert child.poll() is None, (reason, age)
+        assert store.meta_value(preview.CALL_GROUP_META) == str(child.pid)
+      finally:
+        stop.set()
+        if watcher is not None:
+          watcher.join(timeout=5)
+        if child.poll() is None:
+          child.kill()
 
 
 def test_poll_retry_disclaimer():
@@ -7513,8 +7570,7 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     assert preview.read_set_tick(store, "git status", moment=started, root=root) is None
     at_zero = started + timedelta(minutes=20)
 
-    warning = preview.read_set_tick(store, "git status", moment=at_zero, root=root)
-    assert warning and "READ SET BLOCKED" in warning
+    assert preview.read_set_tick(store, "git status", moment=at_zero, root=root) is None
     pending = store.read()["pending"]
     assert len(pending) == 1
     checkpoint = pending[0]
@@ -7522,9 +7578,6 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
       "Read-set checkpoint after a 20-minute interval. Read each listed path in full "
       "with the read tool only if its current full text is absent from context, then "
       "acknowledge this note.\n"
-    )
-    assert (
-      warning and "read each listed path in full with the read tool only if" in warning
     )
     assert checkpoint["quiet"] == 1 and checkpoint["blocking"] == 1
     assert [str(path) for path in preview.read_set_paths(root)] == [
@@ -7539,11 +7592,17 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     assert store.reminder().startswith("unacked 1 note | ")
     store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
     assert not store.gate()
-    assert preview.read_set_tick(
-      store, "arena-preview read && git status", moment=at_zero, root=root
+    assert (
+      preview.read_set_tick(
+        store, "arena-preview read && git status", moment=at_zero, root=root
+      )
+      is None
     )
-    assert preview.read_set_tick(
-      store, "arena-preview poll && git status", moment=at_zero, root=root
+    assert (
+      preview.read_set_tick(
+        store, "arena-preview poll && git status", moment=at_zero, root=root
+      )
+      is None
     )
     assert (
       preview.read_set_tick(
@@ -7606,7 +7665,9 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     next_pending = store.read()["pending"]
     assert len(next_pending) == 1 and next_pending[0]["id"] != checkpoint["id"]
     at_forty = at_zero + timedelta(minutes=40)
-    assert preview.read_set_tick(store, "git status", moment=at_forty, root=root)
+    assert (
+      preview.read_set_tick(store, "git status", moment=at_forty, root=root) is None
+    )
     assert len(store.read()["pending"]) == 1, "one pending checkpoint never duplicates"
 
 
@@ -7653,7 +7714,7 @@ def test_read_set_schedule_defers_for_polling_and_migrates_note_classes():
       preview.read_set_tick(store, "git status", moment=at_forty, root=root) is None
     )
     due = at_forty + timedelta(minutes=20)
-    assert preview.read_set_tick(store, "git status", moment=due, root=root)
+    assert preview.read_set_tick(store, "git status", moment=due, root=root) is None
 
     database = sqlite3.connect(store.path)
     database.execute("ALTER TABLE notes DROP COLUMN blocking")
@@ -7745,7 +7806,7 @@ def test_read_set_tick_cli_keeps_a_pending_checkpoint_while_the_server_is_down()
     assert after.meta_value(preview.READ_SET_SLOT_META) == slot
 
 
-def test_read_set_tick_cli_restores_blocking_with_the_server():
+def test_read_set_tick_cli_mints_a_note_with_the_server():
   with tempfile.TemporaryDirectory() as directory:
     root, state = read_set_cli_root(directory)
     store = preview.Store(state)
@@ -7754,9 +7815,9 @@ def test_read_set_tick_cli_restores_blocking_with_the_server():
       preview.READ_SET_LAST_META,
       (datetime.now(timezone.utc) - timedelta(minutes=21)).isoformat(),
     )
-    blocked = read_set_cli(state, root, "git status")
-    assert blocked.returncode == 130
-    assert "READ SET BLOCKED" in blocked.stderr
+    minted = read_set_cli(state, root, "git status")
+    assert minted.returncode == 0, minted.stderr
+    assert minted.stderr == ""
     for line in ("arena-preview read", "arena-preview ack", "arena-preview poll"):
       allowed = read_set_cli(state, root, line)
       assert allowed.returncode == 0, (line, allowed.stderr)
@@ -7772,8 +7833,8 @@ def test_read_set_tick_cli_acknowledgement_holds_the_slot():
       preview.READ_SET_LAST_META,
       (datetime.now(timezone.utc) - timedelta(minutes=21)).isoformat(),
     )
-    blocked = read_set_cli(state, root, "git status")
-    assert blocked.returncode == 130
+    minted = read_set_cli(state, root, "git status")
+    assert minted.returncode == 0, minted.stderr
     store = preview.Store(state)
     checkpoint_id = store.pending_read_set_note()["id"]
     ack = subprocess.run(
@@ -10674,10 +10735,6 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
     headers = {"Content-Type": "application/json"}
     try:
       assert request("POST", "/api/agent-interrupt", "{}")[0] == 415
-      instruction = (
-        "This Bash call was blocked. Read only read-set files whose current full "
-        "text is absent from context, then fix the violation before continuing."
-      )
       for payload, expected in [
         (
           {"tab": "notes", "report_id": "open-report"},
@@ -10707,6 +10764,9 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
         assert status == 200, body
         assert json.loads(body)["agent_interrupt_pending"]
         assert store.state()["agent_interrupt_pending"]
+        note = store.pending_violation_note()
+        assert note["quiet"] == 1 and note["blocking"] == 1
+        assert note["text"].splitlines()[0] == expected
         capsys.readouterr()
         with (
           patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(store.path.parent)}),
@@ -10725,25 +10785,31 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
             ],
           ),
         ):
-          assert preview.main() == 130
-          message = capsys.readouterr()
-          assert message.out.splitlines() == [
-            expected,
-            instruction,
-            '_arena_preview_done="read-set interrupt"',
-          ]
-          assert message.err == ""
+          # The notice no longer blocks the next call: the call-count gate does.
           assert preview.main() == 0
-          assert capsys.readouterr().err == ""
+          message = capsys.readouterr()
+          assert message.err == ""
+          assert message.out.splitlines() == ['_arena_preview_done="read-set gate"']
+        # The store refuses a clause-less ack, so the note stays pending.
+        with pytest.raises(ValueError):
+          store.acknowledge([note["id"]], "Done")
+        assert store.pending_violation_note()["id"] == note["id"]
+        store.acknowledge([note["id"]], "ARENA.md:1: rules")
         assert not store.state()["agent_interrupt_pending"]
-        assert store.state()["notes"] == []
+        assert store.read()["pending"] == []
       store.write_task("current-work", status="finished")
       store.request_interrupt("tasks")
-      assert store.take_interrupt().splitlines() == [
+      note = store.pending_violation_note()
+      assert note["text"].splitlines() == [
         "The user flagged a violation.",
-        instruction,
+        "The task list is empty. Maybe a task should have spawned.",
+        "The call-count gate blocks after 6 unacknowledged calls.",
+        "Think about which clause was violated.",
+        "Read read-set files if absent from context.",
+        "Fix the violation, then ack with `file:ln: clause`.",
       ]
-      assert store.take_interrupt() is None
+      assert store.meta_value(preview.AGENT_INTERRUPT_META) is None
+      store.acknowledge([note["id"]], "ARENA.md:1: rules")
       assert (
         request("POST", "/api/agent-interrupt", '{"tab":"invalid"}', headers)[0] == 400
       )
@@ -10800,11 +10866,16 @@ def test_flag_carries_kind_clause_file_and_cited_reason():
       assert preview.read_set_files(store.repository_root()) == read_set
       assert store.state()["read_set"] == read_set
       closing = [
-        "This bash call is blocked but not necessarily violating.",
+        "The call-count gate blocks after 6 unacknowledged calls.",
         "Think about which clause was violated.",
         "Read read-set files if absent from context.",
-        "Fix the violation before continuing.",
+        "Fix the violation, then ack with `file:ln: clause`.",
       ]
+
+      def clear_flag():
+        """Ack the pending violation note, which clears the page flag with it."""
+        store.acknowledge([store.pending_violation_note()["id"]], "ARENA.md:1: rules")
+
       status, _, body = request(
         "POST",
         "/api/agent-interrupt",
@@ -10821,16 +10892,21 @@ def test_flag_carries_kind_clause_file_and_cited_reason():
       )
       assert status == 200, body
       assert json.loads(body)["agent_interrupt_pending"]
-      assert json.loads(store.meta_value(preview.AGENT_INTERRUPT_FLAG_META)) == {
+      flag = json.loads(store.meta_value(preview.AGENT_INTERRUPT_FLAG_META))
+      assert {name: flag[name] for name in ("kind", "clause_file", "note")} == {
         "kind": "format-violation",
         "clause_file": "AGENTS.md",
         "note": "Heading levels",
       }
-      assert store.take_interrupt().splitlines() == [
+      note = store.pending_violation_note()
+      assert flag["id"] == note["id"]
+      assert note["type"] == "format-violation"
+      assert note["text"].splitlines() == [
         "User flagged violation: format-violation. Cited: Heading levels",
         "Report: open-report",
         *closing,
       ]
+      clear_flag()
       assert store.meta_value(preview.AGENT_INTERRUPT_FLAG_META) is None
       for payload, lines in [
         (
@@ -10858,7 +10934,8 @@ def test_flag_carries_kind_clause_file_and_cited_reason():
           "POST", "/api/agent-interrupt", json.dumps(payload), headers
         )
         assert status == 200, body
-        assert store.take_interrupt().splitlines() == lines
+        assert store.pending_violation_note()["text"].splitlines() == lines
+        clear_flag()
       for payload, field in [
         ({"tab": "notes", "reason": "not-a-kind"}, "reason"),
         ({"tab": "reports", "reason": "bash-violation"}, "reason"),
@@ -11301,7 +11378,7 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
         thread.join()
 
 
-def test_user_flagged_report_violation_names_formatting_and_uses_stdout(capsys):
+def test_user_flagged_report_violation_mints_a_quiet_note(capsys):
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "report.md"
@@ -11314,11 +11391,41 @@ def test_user_flagged_report_violation_names_formatting_and_uses_stdout(capsys):
     )
 
     output = capsys.readouterr()
-    assert result == 130
-    assert "The user flagged a violation" in output.out
-    assert "report flagged-report formatting is wrong" in output.out
-    assert "This Bash call was blocked." in output.out
+    assert result == 0
     assert output.err == ""
+    assert output.out.startswith('_arena_preview_done="')
+    note = store.pending_violation_note()
+    assert note["quiet"] == 1 and note["blocking"] == 1
+    assert note["text"].splitlines() == [
+      "The user flagged a violation: report flagged-report formatting is wrong.",
+      "The call-count gate blocks after 6 unacknowledged calls.",
+      "Think about which clause was violated.",
+      "Read read-set files if absent from context.",
+      "Fix the violation, then ack with `file:ln: clause`.",
+    ]
+
+
+def test_new_violation_types_cover_both_tabs():
+  """The three new types land on both tabs, with the shared evidence line."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory) / "state", create=True)
+    (Path(directory) / "ARENA.md").write_text("# Rules\n", encoding="utf-8")
+    for tab in ("notes", "tasks"):
+      for reason in ("missing-details", "out-of-scope", "task-not-created"):
+        assert reason in preview.VIOLATION_KINDS[tab]
+    store.write_task("current-work", "Current work", ["Verify it"], task_type="code")
+    for reason in ("missing-details", "out-of-scope", "task-not-created"):
+      store.request_interrupt("tasks", reason=reason)
+      note = store.pending_violation_note()
+      assert note["text"].splitlines()[:2] == [
+        f"User flagged violation: {reason}.",
+        "Current task: current-work. Is this what you are working on?",
+      ]
+      store.acknowledge([note["id"]], "ARENA.md:1: Rules")
+      store.request_interrupt("notes", reason=reason)
+      note = store.pending_violation_note()
+      assert note["text"].splitlines()[0] == f"User flagged violation: {reason}."
+      store.acknowledge([note["id"]], "ARENA.md:1: Rules")
 
 
 def test_repeat_poll_notice_keeps_system_wording_and_stderr(capsys, monkeypatch):
@@ -11326,6 +11433,8 @@ def test_repeat_poll_notice_keeps_system_wording_and_stderr(capsys, monkeypatch)
     store = preview.Store(directory, create=True)
     moment = iter((1000, 1001))
     monkeypatch.setattr(preview, "poll_clock", lambda: next(moment))
+    # Only a poll that returned at once arms the repeat window.
+    store.set_meta(preview.POLL_IMMEDIATE_META, "1")
     assert preview.poll_repeat(store) is None
     assert preview.poll_repeat(store).startswith("VIOLATION:")
 
@@ -11334,9 +11443,14 @@ def test_repeat_poll_notice_keeps_system_wording_and_stderr(capsys, monkeypatch)
     )
 
     output = capsys.readouterr()
-    assert result == 130
-    assert output.err.startswith("VIOLATION\nThis Bash call was blocked")
-    assert "The user flagged a violation" not in output.out
+    # The notice no longer blocks the call. The call-count gate blocks later.
+    assert result == 0
+    assert output.err == ""
+    assert output.out.startswith('_arena_preview_done="')
+    note = store.pending_violation_note()
+    assert note["text"].startswith("VIOLATION\n")
+    assert "This Bash call was blocked" not in note["text"]
+    assert "The call-count gate blocks after 6 unacknowledged calls." in note["text"]
 
 
 def test_preview_violation_wakes_poll_and_does_not_wait(capsys):
@@ -11353,11 +11467,8 @@ def test_preview_violation_wakes_poll_and_does_not_wait(capsys):
       assert preview.poll_inbox(store, sleeper=flag_during_wait) == 0
     output = capsys.readouterr().out
     assert "The user flagged a violation." in output
-    assert (
-      "This Bash call was blocked. Read only read-set files whose current full text is absent from context"
-      in output
-    )
-    assert not store.state()["agent_interrupt_pending"]
+    assert "Run `arena-preview read`, then ack" in output
+    assert store.pending_violation_note() is not None
     assert not store.polling()
 
 

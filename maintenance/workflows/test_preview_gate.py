@@ -238,7 +238,7 @@ def test_read_set_tick_precedes_inert_line_exemptions():
   """The merged gate reads the read set before any inert line returns."""
   source = Path(preview_module.__file__).read_text(encoding="utf-8")
   tick = "# case: read-set-note"
-  assert source.index("# case: violation-flag") < source.index(tick)
+  assert source.index("# case: shell-shape") < source.index(tick)
   assert source.index(tick) < source.index("# case: inert-line")
   assert "read_set_tick(" in source
 
@@ -1008,24 +1008,18 @@ def test_pr_state_classifier_keeps_payloads_separate_from_shell_code():
       assert bool(preview_module.pr_state_warning(command)) == blocked, command
 
 
-def test_header_flag_blocks_bash():
-  for command, line in [
-    ("printf reached", "arena-preview read"),
-    ("true", "true"),
-  ]:
-    with tempfile.TemporaryDirectory() as directory:
-      root = Path(directory)
-      store = preview_module.Store(root, create=True)
-      notice = "Header reread request"
-      store.set_meta("agent_interrupt", notice)
-      result = run(command, state=root, line=line)
-      assert result.returncode == 130, result.stderr
-      assert "reached" not in result.stdout
-      assert notice in result.stderr
-      assert store.meta_value("agent_interrupt") is None
+def test_a_stale_interrupt_meta_does_not_block():
+  """Only the call-count gate blocks, so a leftover interrupt row has no effect."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = preview_module.Store(root, create=True)
+    store.set_meta("agent_interrupt", "Header reread request")
+    result = run("printf reached", state=root, line="true")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "reached"
 
 
-def test_violation_flag_blocks_the_agent_shell():
+def test_violation_flag_passes_until_the_threshold():
   for line, routed in (
     ("bash -l /tmp/arena-workspace/procs/preview/run.cmd", False),
     ("ss -ltn", False),
@@ -1037,7 +1031,7 @@ def test_violation_flag_blocks_the_agent_shell():
     with tempfile.TemporaryDirectory() as directory:
       root = Path(directory)
       store = preview_module.Store(root, create=True)
-      store.request_interrupt("notes")
+      store.request_interrupt("notes", reason="bash-violation")
       calls = root / "calls"
       hosted = run(
         "printf platform-active", state=root, line=line, calls=calls, routed=routed
@@ -1047,17 +1041,19 @@ def test_violation_flag_blocks_the_agent_shell():
       assert store.state()["agent_interrupt_pending"], line
       log = calls.read_text() if calls.exists() else ""
       assert log.count("pre --shell") == 1, (line, log)
+      note = store.pending_violation_note()
+      assert note["quiet"] == 1 and note["blocking"] == 1
+      assert "User flagged violation: bash-violation." in note["text"]
       agent = run("printf agent-work", state=root)
-      assert agent.returncode == 130, agent.stderr
-      assert "agent-work" not in agent.stdout
-      assert "The user flagged a violation." in agent.stdout
-      assert "This Bash call was blocked." in agent.stdout
-      assert (
-        "Read only read-set files whose current full text is absent from context"
-        in agent.stdout
+      assert agent.returncode == 0, agent.stderr
+      assert agent.stdout == "agent-work"
+      store.set_meta(
+        preview_module.POLLS_SINCE_MESSAGE, str(preview_module.GATE_THRESHOLD)
       )
-      assert agent.stderr == ""
-      assert not store.state()["agent_interrupt_pending"]
+      blocked = run("printf late-work", state=root)
+      assert blocked.returncode == 130, blocked.stderr
+      assert "late-work" not in blocked.stdout
+      assert note["id"] in blocked.stderr, blocked.stderr
 
 
 def test_the_read_set_gate_passes_the_workspace_root_bootstrap_line():
@@ -1083,15 +1079,20 @@ def test_the_read_set_gate_passes_the_workspace_root_bootstrap_line():
       assert first.stdout == "first-work"
       assert store.pending_read_set_note() is None
       store.set_meta(preview_module.READ_SET_LAST_META, "2000-01-01T00:00:00+00:00")
-      blocked = run("printf agent-work", state=root)
-      assert blocked.returncode == 130, blocked.stderr
-      assert "READ SET BLOCKED" in blocked.stderr, blocked.stderr
-      assert "only if its current full text is absent from context" in blocked.stderr
-      assert "Blocked by the part `printf agent-work`." in blocked.stderr, (
-        blocked.stderr
+      minted = run("printf agent-work", state=root)
+      assert minted.returncode == 0, minted.stderr
+      assert minted.stdout == "agent-work"
+      note = store.pending_read_set_note()
+      assert note is not None
+      assert note["quiet"] == 1 and note["blocking"] == 1
+      store.set_meta(
+        preview_module.POLLS_SINCE_MESSAGE, str(preview_module.GATE_THRESHOLD)
       )
-      assert "agent-work" not in blocked.stdout
-      assert store.pending_read_set_note() is not None
+      blocked = run("printf late-work", state=root)
+      assert blocked.returncode == 130, blocked.stderr
+      assert "late-work" not in blocked.stdout
+      assert "BASH BLOCKED AFTER" in blocked.stderr, blocked.stderr
+      assert note["id"] in blocked.stderr, blocked.stderr
     finally:
       hold.close()
 
@@ -1112,14 +1113,23 @@ def test_the_read_set_gate_passes_a_wrapper_mkdir():
         state=root,
       )
       assert inbox.returncode == 0, inbox.stderr
-      blocked = run(
+      note = store.pending_read_set_note()
+      assert note is not None
+      allowed = run(
         f"mkdir -p '{ROOT}' && printf agent-work",
         state=root,
       )
-      assert blocked.returncode == 130, blocked.stderr
-      assert "Blocked by the part `printf agent-work`." in blocked.stderr, (
-        blocked.stderr
+      assert allowed.returncode == 0, allowed.stderr
+      assert allowed.stdout == "agent-work"
+      store.set_meta(
+        preview_module.POLLS_SINCE_MESSAGE, str(preview_module.GATE_THRESHOLD)
       )
-      assert "agent-work" not in blocked.stdout
+      blocked = run(
+        f"mkdir -p '{ROOT}' && printf late-work",
+        state=root,
+      )
+      assert blocked.returncode == 130, blocked.stderr
+      assert "late-work" not in blocked.stdout
+      assert note["id"] in blocked.stderr, blocked.stderr
     finally:
       hold.close()

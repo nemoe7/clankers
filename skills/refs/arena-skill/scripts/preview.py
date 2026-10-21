@@ -220,15 +220,31 @@ AGENT_INTERRUPT_META = "agent_interrupt"
 AGENT_INTERRUPT_FLAG_META = "agent_interrupt_flag"
 # The flag modal offers these kinds per tab. The server refuses a kind outside its tab's tuple.
 VIOLATION_KINDS = {
-  "notes": ("bash-violation", "process-violation"),
+  "notes": (
+    "bash-violation",
+    "process-violation",
+    "missing-details",
+    "out-of-scope",
+    "task-not-created",
+  ),
   "downloads": ("bash-violation", "process-violation"),
   "reports": ("format-violation", "unnecessary-report"),
-  "tasks": ("current-task-violation", "empty-task-list"),
+  "tasks": (
+    "current-task-violation",
+    "empty-task-list",
+    "missing-details",
+    "out-of-scope",
+    "task-not-created",
+  ),
 }
 # One repository's read-set list stays fixed during one process, so the server scans it once.
 READ_SET_CACHE = {}
 CALL_GROUP_META = "call_group"
+CALL_STARTED_META = "call_started_at"
 AGENT_CALL_ENDED_META = "agent_call_ended_at"
+# A flagged call dies only when it holds this type and has already run this long.
+CALL_STOP_TYPE = "bash-violation"
+CALL_STOP_SECONDS = 3
 # A poll that returns with nothing to read ends the turn. The header reads this mark, so the
 # silence after a turn never reads as a running bash call. The agent's next call clears it.
 TURN_ENDED_META = "turn_ended_at"
@@ -1352,6 +1368,34 @@ def note_text(text):
   return text
 
 
+CLAUSE_ACK = re.compile(r"([\w./-]+\.md):([0-9]+):\s*\S")
+
+
+def clause_ack_error(text, root=None):
+  """The refusal when an ack of a violation note names no clause, else the empty string.
+
+  A clause reads `file:ln: clause`, where the file is one of the read-set files.
+  The line number alone does not name a clause, so it does not clear the note.
+  """
+  base = Path(root or Path.cwd())
+  files = read_set_files(base)
+  if not files:
+    # A store outside a repository has no read set of its own, so the session's applies.
+    base = Path.cwd()
+    files = read_set_files(base)
+  paths = {Path(path).name: base / path for path in files}
+  for match in CLAUSE_ACK.finditer(text or ""):
+    path = paths.get(Path(match.group(1)).name)
+    if path is None or not path.is_file():
+      continue
+    if int(match.group(2)) <= len(path.read_text(encoding="utf-8").splitlines()):
+      return ""
+  return (
+    "An ack of a violation note must name the clause as `file:ln: clause`, for"
+    " example `ARENA.md:41: MUST read the read-set files`. The note stays pending."
+  )
+
+
 def when(value):
   """Return a timestamp a restore carried exactly as it arrived, once it parses."""
   try:
@@ -2392,6 +2436,9 @@ POLLING_FRESH_SECONDS = 5.0
 # A poll this soon after the last one is spam. The second poll raises a violation.
 POLL_REPEAT_SECONDS = 45
 POLL_REPEAT_META = "poll_repeat"
+# A poll that returns inside this window counts as immediate, so the next one can be spam.
+POLL_IMMEDIATE_SECONDS = 1.0
+POLL_IMMEDIATE_META = "poll_immediate"
 # The wall-clock slot of the latest hidden, agent-blocking read-set checkpoint.
 READ_SET_SLOT_META = "read_set_slot"
 # The first eligible command or latest checkpoint starts the elapsed interval.
@@ -2711,31 +2758,16 @@ def read_set_actions(line):
 
 
 def read_set_tick(store, line, moment=None, root=None):
-  """Create a due checkpoint and block work until the agent acknowledges it."""
+  """Mint a due read-set checkpoint and let the call pass.
+
+  The quiet note feeds the call-count gate, so the block lands at the threshold
+  and the agent still reads the note in `read`.
+  """
   actions = read_set_actions(line)
   if (actions and set(actions) == {"poll"}) or poll_timeout_line(line):
-    return None
-  pending = store.pending_read_set_note()
-  if pending is None:
-    if store.polling():
-      return None
-    pending = store.schedule_read_set_note(moment=moment, root=root)
-  if pending is None or (actions is not None and set(actions) <= {"read", "ack"}):
-    return None
-  blocker = first_blocking_piece(line)
-  blocker_hint = ""
-  if blocker:
-    blocker = shell_command_text(blocker)
-    blocker_hint = (
-      f" Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part."
-    )
-  return (
-    f"READ SET BLOCKED: checkpoint {pending['id']} is pending. Run"
-    " `arena-preview read`, read each listed path in full with the read tool only if"
-    " its current full text is absent from context, then"
-    f" `arena-preview ack {pending['id']} <markdown>`."
-    f"{blocker_hint}"
-  )
+    return
+  if store.pending_read_set_note() is None and not store.polling():
+    store.schedule_read_set_note(moment=moment, root=root)
 
 
 # Commands around an inbox call end its quiet-line exemption and appear in the block hint.
@@ -3799,13 +3831,25 @@ def poll_repeat(store):
     recent = previous is not None and 0 <= moment - int(previous) <= POLL_REPEAT_SECONDS
   except ValueError:
     recent = False
-  if not recent:
+  # A poll that waited for a run or for steering is not spam, so it never arms the next one.
+  if not recent or store.meta_value(POLL_IMMEDIATE_META) != "1":
     return None
   store.request_interrupt("tasks", user_flagged=False)
   return (
     "VIOLATION: repeat poll inside 45 seconds. Read only read-set files whose "
     "current full text is absent from context, then work the task."
   )
+
+
+def poll_once(store, sleeper=None):
+  """Run one poll and record whether it returned at once, which the repeat check reads."""
+  started = time.monotonic()
+  status = poll_inbox(store, sleeper=sleeper)
+  if time.monotonic() - started >= POLL_IMMEDIATE_SECONDS:
+    store.clear_meta(POLL_IMMEDIATE_META)
+  else:
+    store.set_meta(POLL_IMMEDIATE_META, "1")
+  return status
 
 
 def poll_inbox(store, sleeper=None):
@@ -3832,9 +3876,13 @@ def poll_inbox(store, sleeper=None):
     for index in range(POLL_MAX_LOOPS):
       if time.monotonic() >= deadline:
         break
-      notice = store.take_interrupt()
-      if notice:
-        print(notice, flush=True)
+      violation = store.pending_violation_note()
+      if violation:
+        print(
+          f"{violation['text']}\nRun `arena-preview read`, then ack"
+          f" `{violation['id']}`.",
+          flush=True,
+        )
         return 0
       listing = store.read(include_quiet=False)
       if listing["pending"]:
@@ -4225,7 +4273,8 @@ class Store:
           ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,
           ack_edited_seen_count INTEGER NOT NULL DEFAULT 0,
           quiet INTEGER NOT NULL DEFAULT 0,
-          blocking INTEGER NOT NULL DEFAULT 1
+          blocking INTEGER NOT NULL DEFAULT 1,
+          type TEXT NOT NULL DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
@@ -4298,6 +4347,10 @@ class Store:
         # Every pre-feature quiet row is informational. Hidden read-set checkpoints
         # are the first quiet rows that can block, so no legacy row belongs to that class.
         db.execute("UPDATE notes SET blocking = CASE WHEN quiet = 1 THEN 0 ELSE 1 END")
+      if "type" not in columns:
+        # A plain note carries no type. A violation note names its type, so the ack
+        # check and the call stop can tell the two apart.
+        db.execute("ALTER TABLE notes ADD COLUMN type TEXT NOT NULL DEFAULT ''")
       if "origin" in columns:
         # The author tag is gone from the note schema. Drop a column a restore might
         # still carry so SELECT * never resurfaces it on the state surface.
@@ -4488,6 +4541,7 @@ class Store:
     ack_edited_seen_count=None,
     quiet=False,
     blocking=None,
+    type="",
   ):
     """Store a message with its supplied receipt and read state. Never replace a restored receipt stamp. Leave
     existing IDs unchanged so imports stay idempotent."""
@@ -4509,8 +4563,8 @@ class Store:
       db.execute(
         "INSERT INTO notes"
         " (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id,"
-        " replies, ack_edited_seen_count, quiet, blocking)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " replies, ack_edited_seen_count, quiet, blocking, type)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
           note_id,
           text,
@@ -4522,9 +4576,12 @@ class Store:
           seen_reply_count,
           1 if quiet else 0,
           1 if blocking else 0,
+          type,
         ),
       )
-      if not quiet:
+      if not quiet or blocking:
+        # A note that can block the next calls restarts the tally, so the threshold
+        # runs from the note. A quiet note that cannot block leaves the tally alone.
         reset_poll_count(db)
       clear_skip_poll(db)
       return message_row(
@@ -4532,11 +4589,35 @@ class Store:
       )
 
   def pending_read_set_note(self):
-    """Return the one outstanding hidden read-set checkpoint, if any."""
+    """Return the one outstanding hidden read-set checkpoint, if any.
+
+    A flagged violation is also quiet and blocking, so this check skips its ID.
+    """
+    with closing(self.connect()) as db:
+      flag = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (AGENT_INTERRUPT_FLAG_META,)
+      ).fetchone()
+      try:
+        flag_id = json.loads(flag["value"]).get("id", "") if flag else ""
+      except ValueError:
+        flag_id = ""
+      row = db.execute(
+        "SELECT * FROM notes"
+        " WHERE quiet = 1 AND blocking = 1 AND acknowledged_at IS NULL AND id <> ?"
+        " ORDER BY at, seq LIMIT 1",
+        (flag_id,),
+      ).fetchone()
+    return message_row(row) if row else None
+
+  def pending_violation_note(self):
+    """Return the one outstanding violation note, if any.
+
+    A read-set checkpoint carries no type, so this query never returns one.
+    """
     with closing(self.connect()) as db:
       row = db.execute(
         "SELECT * FROM notes"
-        " WHERE quiet = 1 AND blocking = 1 AND acknowledged_at IS NULL"
+        " WHERE type <> '' AND acknowledged_at IS NULL"
         " ORDER BY at, seq LIMIT 1"
       ).fetchone()
     return message_row(row) if row else None
@@ -4793,7 +4874,7 @@ class Store:
         "polling_since": (clip_stamp(meta.get(POLL_SINCE_META)) if polling else None),
         # The page paints its Skip poll button from this stamp until a poll consumes it.
         "skip_poll": clip_stamp(meta.get(SKIP_POLL_META)),
-        "agent_interrupt_pending": bool(meta.get(AGENT_INTERRUPT_META)),
+        "agent_interrupt_pending": bool(meta.get(AGENT_INTERRUPT_FLAG_META)),
         # The flag modal lists this repository's clause files. The server owns the list.
         "read_set": read_set_files(self.repository_root()),
         # The message log header names the bash calls since the owner's last message.
@@ -6231,7 +6312,13 @@ class Store:
     clause_file=None,
     note=None,
   ):
+    """Queue a quiet violation note for the agent, and the page flag that mirrors it.
+
+    The note blocks through the call-count gate only, so the next calls pass until
+    the threshold. The page reads the flag meta until the agent acknowledges the note.
+    """
     if not armed:
+      self.clear_meta(AGENT_INTERRUPT_FLAG_META)
       self.take_interrupt()
       return {"agent_interrupt_pending": False}
     if not isinstance(tab, str) or tab not in {
@@ -6252,66 +6339,96 @@ class Store:
     cited = " ".join((note or "").split())
     if len(cited) > 300:
       raise ValueError("note must contain at most 300 characters")
+    evidence = []
     if reason is not None:
       # The approved notice text omits the clause file. The page sends it with the flag.
       heading = f"User flagged violation: {reason}."
       if cited:
         heading += f" Cited: {cited}"
-      evidence = []
       if tab == "reports" and report_id is not None:
         evidence.append(f"Report: {report_id}")
       elif tab == "tasks":
         task = current_task((self.tasks() or {}).get("upcoming", []))
-        if reason == "current-task-violation" and task:
+        if task and reason != "empty-task-list":
           evidence.append(
             f"Current task: {task['id']}. Is this what you are working on?"
           )
         else:
           evidence.append("The task list is empty. Maybe a task should have spawned.")
-      notice = "\n".join(
-        [
-          heading,
-          *evidence,
-          "This bash call is blocked but not necessarily violating.",
-          "Think about which clause was violated.",
-          "Read read-set files if absent from context.",
-          "Fix the violation before continuing.",
-        ]
-      )
-      self.set_meta(
-        AGENT_INTERRUPT_FLAG_META,
-        json.dumps({"kind": reason, "clause_file": clause_file or "", "note": cited}),
-      )
-      self.set_meta(AGENT_INTERRUPT_META, notice)
-      return {"agent_interrupt_pending": True}
-    self.clear_meta(AGENT_INTERRUPT_FLAG_META)
-    header = "The user flagged a violation." if user_flagged else "VIOLATION"
-    if tab == "reports" and report_id is not None:
-      try:
-        self.report(report_id)
-      except FileNotFoundError:
-        pass
-      else:
-        header = (
-          f"The user flagged a violation: report {report_id} formatting is wrong."
-          if user_flagged
-          else f"VIOLATION: report {report_id}"
-        )
-    elif tab == "tasks":
-      task = current_task((self.tasks() or {}).get("upcoming", []))
-      if task:
-        header = (
-          f"The user flagged a violation: task {task['id']}."
-          if user_flagged
-          else f"VIOLATION: task {task['id']}"
-        )
-    notice = (
-      f"{header}\nThis Bash call was blocked. Read only read-set files whose "
-      "current full text is absent from context, then fix the violation before "
-      "continuing."
+    else:
+      heading = "The user flagged a violation." if user_flagged else "VIOLATION"
+      if tab == "reports" and report_id is not None:
+        try:
+          self.report(report_id)
+        except FileNotFoundError:
+          pass
+        else:
+          heading = (
+            f"The user flagged a violation: report {report_id} formatting is wrong."
+            if user_flagged
+            else f"VIOLATION: report {report_id}"
+          )
+      elif tab == "tasks":
+        task = current_task((self.tasks() or {}).get("upcoming", []))
+        if task:
+          heading = (
+            f"The user flagged a violation: task {task['id']}."
+            if user_flagged
+            else f"VIOLATION: task {task['id']}"
+          )
+        else:
+          evidence.append("The task list is empty. Maybe a task should have spawned.")
+    notice = "\n".join(
+      [
+        heading,
+        *evidence,
+        "The call-count gate blocks after 6 unacknowledged calls.",
+        "Think about which clause was violated.",
+        "Read read-set files if absent from context.",
+        "Fix the violation, then ack with `file:ln: clause`.",
+      ]
     )
-    self.set_meta(AGENT_INTERRUPT_META, notice)
+    return self.flag_violation_note(notice, reason, clause_file, cited)
+
+  def flag_violation_note(self, notice, kind, clause_file, cited):
+    """Queue the quiet note and point the page flag at it.
+
+    Every flagged note carries the flag meta, so the page banner and the disarm
+    path find it and `pending_read_set_note` can tell it from a checkpoint.
+    """
+    record = self.queue_violation_note(notice, kind or "self-raised")
+    self.set_meta(
+      AGENT_INTERRUPT_FLAG_META,
+      json.dumps(
+        {
+          "kind": kind or "",
+          "clause_file": clause_file or "",
+          "note": cited,
+          "id": record["id"],
+        }
+      ),
+    )
     return {"agent_interrupt_pending": True}
+
+  def queue_violation_note(self, text, type):
+    """Store one quiet blocking violation note and reuse the pending one.
+
+    A pending note already asks for an ack, so a second flag never adds a second
+    question. The clause file rides the flag meta, which the page reads.
+    """
+    pending = self.pending_violation_note()
+    if pending is not None:
+      return pending
+    with closing(self.connect()) as db:
+      for _ in range(MINT_ATTEMPTS):
+        note_id = new_id()
+        if not db.execute("SELECT 1 FROM notes WHERE id = ?", (note_id,)).fetchone():
+          break
+      else:
+        raise RuntimeError(
+          "The state holds no free six-character ID for a violation note"
+        )
+    return self.note(note_id, text, quiet=True, blocking=True, type=type)
 
   def take_interrupt(self):
     with closing(self.connect()) as db, db:
@@ -6319,10 +6436,24 @@ class Store:
       row = db.execute(
         "SELECT value FROM meta WHERE key = ?", (AGENT_INTERRUPT_META,)
       ).fetchone()
+      flag = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (AGENT_INTERRUPT_FLAG_META,)
+      ).fetchone()
       db.execute(
         "DELETE FROM meta WHERE key IN (?, ?)",
         (AGENT_INTERRUPT_META, AGENT_INTERRUPT_FLAG_META),
       )
+      try:
+        note_id = json.loads(flag["value"]).get("id", "") if flag else ""
+      except ValueError:
+        note_id = ""
+      if note_id:
+        # Disarming answers the flagged note, so a stale flag never blocks later calls.
+        db.execute(
+          "UPDATE notes SET acknowledged_at = ?, ack_kind = ?, ack_text = ?"
+          " WHERE id = ? AND acknowledged_at IS NULL",
+          (now(), "reply", "Disarmed on the page.", note_id),
+        )
       return row["value"] if row else None
 
   def request_skip_poll(self, armed=True):
@@ -6772,6 +6903,14 @@ class Store:
     with self.transaction(shared) as db:
       for record_id in ids:
         identifier(record_id)
+      # One refusal keeps every listed item pending, so a mixed call writes nothing.
+      for record_id in ids:
+        row = db.execute("SELECT type FROM notes WHERE id = ?", (record_id,)).fetchone()
+        if row is not None and row["type"]:
+          error = clause_ack_error(text, self.repository_root())
+          if error:
+            raise ValueError(error)
+      for record_id in ids:
         for table in ("notes", "submissions"):
           row = db.execute(
             f"SELECT acknowledged_at, replies FROM {table} WHERE id = ?", (record_id,)
@@ -6801,6 +6940,11 @@ class Store:
           break
         else:
           raise ValueError(f"Unknown note: {record_id}; no receipts written")
+      if not db.execute(
+        "SELECT 1 FROM notes WHERE type <> '' AND acknowledged_at IS NULL"
+      ).fetchone():
+        # The page banner reads the flag meta, so the last violation ack clears it.
+        db.execute("DELETE FROM meta WHERE key = ?", (AGENT_INTERRUPT_FLAG_META,))
       # The header labels one stamp as the last read or ack, so an ack writes it too.
       db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (stamp,))
       # An emptied inbox resets the tally now, not at the next hook poll.
@@ -8199,6 +8343,13 @@ def gate_verdict(state_dir, push, line, out=None):
       file=out,
       flush=True,
     )
+    try:
+      waiting = [item["id"] for item in gate_store.read()["pending"]]
+    except Exception:
+      waiting = []
+    if waiting:
+      # Name the items, so the blocked call points straight at the note to answer.
+      print("Pending: " + ", ".join(waiting), file=out, flush=True)
     hint = gate_line_hint(line)
     if hint:
       print(hint, file=out, flush=True)
@@ -8277,7 +8428,12 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
   # The hook start records the Bash call's process group, so serve can signal it
   # when a violation flag lands while the call runs. A routed run keeps its own.
   if not routed and state_file(state_dir).is_file():
-    Store(state_dir, create=False).set_meta(CALL_GROUP_META, os.getpgid(0))
+    group_store = Store(state_dir, create=False)
+    group = str(os.getpgid(0))
+    if group_store.meta_value(CALL_GROUP_META) != group:
+      # A new call group starts the clock the flagged-call stop reads.
+      group_store.set_meta(CALL_GROUP_META, group)
+      group_store.set_meta(CALL_STARTED_META, now())
 
   def report(warning):
     print(warning, file=sys.stderr, flush=True)
@@ -8304,30 +8460,18 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
   # case: platform-shell
   if platform_line(line):
     return finish(0)
-  # case: violation-flag
-  if not routed and "interrupt" not in finished and state_file(state_dir).is_file():
-    mark("interrupt")
-    notice = Store(state_dir, create=False).take_interrupt()
-    if notice:
-      if notice.startswith(("The user flagged a violation", "User flagged violation")):
-        print(notice, flush=True)
-      else:
-        report(notice)
-      return finish(130)
   # case: read-set-note
   if not routed and "read-set" not in finished and state_file(state_dir).is_file():
     mark("read-set")
     tick_store = Store(state_dir)
     if preview_server_available(tick_store):
-      warning = read_set_tick(
+      # The tick mints a quiet note and lets the call pass. The call-count gate blocks.
+      read_set_tick(
         tick_store,
         line,
         moment=datetime.now(resolve_display_zone(tick_store)),
         root=root,
       )
-      if warning:
-        report(warning)
-        return finish(130)
   # case: task-reminder
   if "remind" not in finished and any(
     word in command for word in ("git commit", "git push", "gh pr checks")
@@ -8457,23 +8601,33 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
 
 
 def watch_call_group(store, stop=None, interval=1.0, signal_group=os.killpg):
-  """Signal the recorded Bash call group once per violation flag."""
+  """Signal the recorded Bash call group once per qualifying violation flag.
+
+  A flag stops the running call only for its own type and only after the call has
+  run three seconds. Every other flag waits for the call-count gate.
+  """
   seen = None
   while stop is None or not stop.is_set():
-    notice = store.meta_value(AGENT_INTERRUPT_META)
-    if notice and notice != seen:
-      seen = notice
+    flag = store.meta_value(AGENT_INTERRUPT_FLAG_META)
+    if flag and flag != seen:
+      seen = flag
       try:
-        group = int(store.meta_value(CALL_GROUP_META) or 0)
-      except (TypeError, ValueError):
-        group = 0
-      if group > 1:
+        reason = json.loads(flag).get("kind", "")
+      except ValueError:
+        reason = ""
+      age = seconds_since(store.meta_value(CALL_STARTED_META))
+      if reason == CALL_STOP_TYPE and age is not None and age > CALL_STOP_SECONDS:
         try:
-          signal_group(group, signal.SIGINT)
-        except (ProcessLookupError, PermissionError):
-          pass
-        # One flag signals one call. A stale group must never fire again.
-        store.set_meta(CALL_GROUP_META, "")
+          group = int(store.meta_value(CALL_GROUP_META) or 0)
+        except (TypeError, ValueError):
+          group = 0
+        if group > 1:
+          try:
+            signal_group(group, signal.SIGINT)
+          except (ProcessLookupError, PermissionError):
+            pass
+          # One flag signals one call. A stale group must never fire again.
+          store.set_meta(CALL_GROUP_META, "")
     if stop is None:
       time.sleep(interval)
     elif stop.wait(interval):
@@ -8992,7 +9146,7 @@ def main():
       if refusal:
         print(refusal, flush=True)
         return 2
-      return poll_inbox(store)
+      return poll_once(store)
     elif args.command == "download-request":
       # The agent path is pending. The browser form keeps its existing immediate queue path.
       print(
