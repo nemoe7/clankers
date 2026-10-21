@@ -109,7 +109,7 @@ arena-preview report publish <source.md> --id <id> --title <title>
 
 Republish the same ID after each source update; if answers exist, use a new ID. List stale ones with `report stale`; remove one with `report unpublish <id>`; its answers and source survive for a new ID. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Write an option set's custom slot inside the group, as `- ( ) custom: ___`.
 
-`read` lists report submissions as `type: report`. Acknowledge each submission ID separately, including newer answers to an already answered form. Publishing a report never acknowledges a submission.
+`read` lists report submissions as `type: report`. Acknowledge only the latest submission for each report when it is unacknowledged; retain earlier acknowledgements. Publishing a report never acknowledges a submission.
 
 ## Files and downloads
 

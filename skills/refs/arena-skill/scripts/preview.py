@@ -49,6 +49,10 @@ def __getattr__(name):
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
+PENDING_SUBMISSIONS = (
+  "acknowledged_at IS NULL"
+  " AND seq IN (SELECT MAX(seq) FROM submissions GROUP BY report_id)"
+)
 REPLY_REFERENCE = re.compile(r"^RE:\s*([a-zA-Z0-9_-]{1,80})(?:\s|$)", re.IGNORECASE)
 MAX_REPORT = 2_000_000
 WS_TICK_SECONDS = 0.25
@@ -344,7 +348,7 @@ def gate_pending_count(db):
   """The unacknowledged items that hold a non-inbox Bash call."""
   return db.execute(
     "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1)"
-    " + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)"
+    f" + (SELECT count(*) FROM submissions WHERE {PENDING_SUBMISSIONS})"
   ).fetchone()[0]
 
 
@@ -6726,14 +6730,14 @@ class Store:
         continue
       pending = db.execute(
         "SELECT count(*) FROM submissions"
-        " WHERE report_id = ? AND acknowledged_at IS NULL",
+        f" WHERE report_id = ? AND {PENDING_SUBMISSIONS}",
         (row["id"],),
       ).fetchone()[0]
       answered = db.execute(
         "SELECT count(*) FROM submissions WHERE report_id = ?", (row["id"],)
       ).fetchone()[0]
       if answered and not pending:
-        stale.append({"id": row["id"], "reason": "all submissions acknowledged"})
+        stale.append({"id": row["id"], "reason": "latest submission acknowledged"})
     return stale
 
   def stale_report_ids(self, db):
@@ -6807,7 +6811,7 @@ class Store:
         - uploads
       )
       reports = db.execute(
-        "SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL"
+        f"SELECT count(*) FROM submissions WHERE {PENDING_SUBMISSIONS}"
       ).fetchone()[0]
       # Unfinished tasks feed the rotation's task-count line.
       remaining = db.execute(
@@ -6896,7 +6900,7 @@ class Store:
       pending += [
         message_row(row) | {"type": "report"}
         for row in db.execute(
-          "SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq"
+          f"SELECT * FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at, seq"
         )
       ]
       notes = {}
@@ -7037,7 +7041,7 @@ class Store:
     with self.connect() as db:
       rows = db.execute(
         "SELECT id, at FROM notes WHERE acknowledged_at IS NULL AND blocking = 1"
-        " UNION ALL SELECT id, at FROM submissions WHERE acknowledged_at IS NULL"
+        f" UNION ALL SELECT id, at FROM submissions WHERE {PENDING_SUBMISSIONS}"
         " ORDER BY at"
       ).fetchall()
     if not rows:
@@ -7120,7 +7124,7 @@ class Store:
     empties a reader's view.
     """
     unread = db.execute(
-      "SELECT 1 FROM submissions WHERE report_id = ? AND acknowledged_at IS NULL LIMIT 1",
+      f"SELECT 1 FROM submissions WHERE report_id = ? AND {PENDING_SUBMISSIONS} LIMIT 1",
       (report_id,),
     ).fetchone()
     if unread is not None:

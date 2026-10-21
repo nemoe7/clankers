@@ -35,6 +35,48 @@ _GUARD_PORT = None
 CHECKPOINT_INTERVAL = timedelta(minutes=15)
 
 
+def test_only_latest_report_submission_requires_ack(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  form = tmp_path / "form.md"
+  form.write_text("Choice: {#choice}\n\n- ( ) Yes\n- ( ) No\n")
+  for report_id in ("first-form", "other-form"):
+    store.publish(report_id, report_id, form)
+  store.submission("kept-receipt", "first-form", "REPORT first-form: first")
+  store.acknowledge(["kept-receipt"], "Kept reply")
+  store.submission("older-answer", "first-form", "REPORT first-form: second")
+  store.submission("latest-answer", "first-form", "REPORT first-form: third")
+  store.submission("other-answer", "other-form", "REPORT other-form: first")
+  pending_ids = {row["id"] for row in store.read()["pending"]}
+  assert pending_ids == {"latest-answer", "other-answer"}
+  with store.connect() as db:
+    assert preview.gate_pending_count(db) == len(pending_ids)
+  with pytest.raises(ValueError):
+    store.pending_ack()
+  store.acknowledge(["other-answer"], "Other reply")
+  assert store.pending_ack() == "latest-answer"
+  store.acknowledge(["latest-answer"], "Latest reply")
+  assert not store.read()["pending"]
+  with store.connect() as db:
+    assert not preview.gate_pending_count(db)
+  records = {row["id"]: row for row in store.submissions()}
+  assert records["older-answer"]["acknowledged_at"] is None
+  assert records["kept-receipt"]["ack_text"] == "Kept reply"
+  assert records["latest-answer"]["ack_text"] == "Latest reply"
+  state = store.state()
+  first = next(row for row in state["reports"] if row["id"] == "first-form")
+  assert {row["id"] for row in first["acknowledgements"]} == {
+    "kept-receipt",
+    "latest-answer",
+  }
+  assert "first-form" in {row["id"] for row in store.stale_reports()}
+  store.mark_report_ack_seen("first-form")
+  store.unpublish("first-form")
+  assert set(records) == {row["id"] for row in store.submissions()}
+  store.submission("newer-answer", "other-form", "REPORT other-form: second")
+  assert store.pending_ack() == "newer-answer"
+
+
 def guard_port():
   """Return a listening test port, held for the process, that passes the server guard."""
   global _GUARD_LISTENER, _GUARD_PORT
@@ -495,11 +537,11 @@ def test_stale_reports_command_lists_ids_and_reasons():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(root)},
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [
-      "Stale reports 2",
-      "plain\tno fields",
-      "answered\tall submissions acknowledged",
-    ]
+    lines = result.stdout.splitlines()
+    assert lines[0] == f"Stale reports {len(before)}"
+    rows = [line.partition("\t") for line in lines[1:]]
+    assert {row[0] for row in rows} == {report["id"] for report in before}
+    assert all(separator and reason for _, separator, reason in rows)
     assert store.state()["reports"] == before
 
 
@@ -1566,7 +1608,11 @@ def test_http_boundaries():
         for row in store.read()["pending"]
         if row["text"].startswith("REPORT fields")
       ]
-      assert len(pending) == len(sent) + 1
+      submitted_id = json.loads(submission)["id"]
+      assert {row["id"] for row in pending} == {submitted_id}
+      assert {row["id"] for row in store.submissions()} == {
+        row["id"] for row in sent
+      } | {submitted_id}
       assert pending[-1]["type"] == "report"
       answered = pending[-1]["text"]
       assert (
