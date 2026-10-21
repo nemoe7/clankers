@@ -49,7 +49,10 @@ def text_file(path):
     return None
   if b"\0" in raw[:1024]:
     return None
-  return raw.decode("utf-8", errors="ignore")
+  try:
+    return raw.decode("utf-8")
+  except UnicodeDecodeError:
+    return None
 
 
 def skipped(path, root, ignores):

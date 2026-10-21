@@ -152,3 +152,15 @@ def test_the_format_mode_replaces_the_word_inside_a_longer_one():
     assert note.read_text(encoding="utf-8") == (
       "the type of jar\nTYPE stays upper\nthe jar is pickle  # nemoizer: ignore\n"
     )
+
+
+def test_format_preserves_invalid_utf8_and_still_formats_valid_text(tmp_path):
+  invalid = tmp_path / "invalid.txt"
+  original = b"\xffkind\n"
+  invalid.write_bytes(original)
+  valid = tmp_path / "valid.txt"
+  valid.write_text("caf\u00e9 kind\n", encoding="utf-8")
+  result = run("--format", ".", cwd=tmp_path)
+  assert result.returncode == 0, result.stderr
+  assert invalid.read_bytes() == original
+  assert valid.read_text(encoding="utf-8") == "caf\u00e9 type\n"

@@ -47,6 +47,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### nemoizer
+
+- Skip invalid UTF-8 files before formatting. Preserve their original bytes and continue formatting valid UTF-8 text.
+
 #### preview
 
 - Limit the bare-path reminder to script commands. Keep source reads and path checks allowed.
