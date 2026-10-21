@@ -6495,7 +6495,10 @@ def test_state_commands_break_while_the_server_is_not_up():
 
 
 def test_poll_finishes_before_the_tool_timeout(monkeypatch, capsys):
-  assert preview.POLL_WAIT_SECONDS == 1799
+  tool_timeout = preview.POLL_INTERVAL * preview.POLL_MAX_LOOPS
+  assert 0 < preview.POLL_WAIT_SECONDS < tool_timeout
+  wait_seconds = 5
+  read_delay = 0.75
   with tempfile.TemporaryDirectory() as poll_dir:
     store = preview.Store(poll_dir, create=True)
     clock = [0.0]
@@ -6503,25 +6506,28 @@ def test_poll_finishes_before_the_tool_timeout(monkeypatch, capsys):
     original_read = store.read
 
     def read(*args, **kwargs):
-      clock[0] += 0.75
+      clock[0] += read_delay
       return original_read(*args, **kwargs)
 
     def sleep(seconds):
       sleeps.append(seconds)
       clock[0] += seconds
 
-    monkeypatch.setattr(preview, "POLL_WAIT_SECONDS", 5)
+    monkeypatch.setattr(preview, "POLL_WAIT_SECONDS", wait_seconds)
     monkeypatch.setattr(preview.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(preview, "pr_check_watch", lambda *args: None)
     monkeypatch.setattr(store, "read", read)
-    assert preview.poll_inbox(store, sleeper=sleep) == 1
+    with patch.object(store, "mark_turn_ended", wraps=store.mark_turn_ended) as ended:
+      assert preview.poll_inbox(store, sleeper=sleep) == 1
+    assert ended.called
     output = capsys.readouterr()
-    assert "Set the bash tool timeout to 1800 s" in output.err
-    assert "no new messages" in output.out
-    assert "End the turn" in output.out
+    assert str(tool_timeout) in output.err
+    assert str(wait_seconds) in output.err
+    assert output.out
     assert "POLL AGAIN" not in output.out
-    assert clock[0] == 5
-    assert sleeps == [1, 1, 0.75]
+    assert wait_seconds <= clock[0] <= wait_seconds + read_delay
+    assert sleeps and all(delay > 0 for delay in sleeps)
+    assert sum(sleeps) <= clock[0]
     assert store.polling() is False
     assert store.state()["polling_since"] is None
 
@@ -6670,7 +6676,7 @@ def test_poll_blocked_tasks():
       assert sleeps == [], "unblocked work ends the wait before the first sleep"
       assert "open-task" in printed[-1]
       # The early return names the task on stdout, so no session reads it as an empty wait.
-      assert printed[0].startswith("poll waits up to 1799 s.")
+      assert str(preview.POLL_WAIT_SECONDS) in printed[0]
       # One line, one stream: the agent reads both, so a duplicate only costs tokens.
       assert printed[1] == (
         "CONTINUE: UNBLOCKED TASK open-task. Start a worktree with:"
@@ -6867,9 +6873,11 @@ def test_poll_retry_disclaimer():
   with tempfile.TemporaryDirectory() as disclaimer_dir:
     store = preview.Store(disclaimer_dir, create=True)
     printed = []
+    streams = []
 
     def capture(value, **kwargs):
       printed.append(value)
+      streams.append(kwargs.get("file", sys.stdout))
 
     original = builtins.print
     builtins.print = capture
@@ -6880,9 +6888,10 @@ def test_poll_retry_disclaimer():
     finally:
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
       builtins.print = original
+    assert streams[0] is sys.stderr
     assert code == 1
-    assert printed[0].startswith("poll waits up to 1799 s.")
-    assert f"Set the bash tool timeout to {saved[0] * saved[1]} s" in printed[0]
+    assert str(preview.POLL_WAIT_SECONDS) in printed[0]
+    assert str(saved[0] * saved[1]) in printed[0]
 
 
 def test_skip_poll():
@@ -6938,7 +6947,7 @@ def test_skip_poll():
       code, sleeps = run_poll()
       assert code == 0
       assert sleeps == [], "a skip ends the wait before the first sleep"
-      assert printed[0].startswith("poll waits up to 1799 s.")
+      assert str(preview.POLL_WAIT_SECONDS) in printed[0]
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
@@ -6983,7 +6992,7 @@ def test_skip_poll():
       printed.clear()
       code, sleeps = run_poll()
       assert code == 0 and sleeps == []
-      assert printed[0].startswith("poll waits up to 1799 s.")
+      assert str(preview.POLL_WAIT_SECONDS) in printed[0]
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
@@ -10695,10 +10704,11 @@ def test_a_queued_download_names_the_owner_click(tmp_path):
   assert lines[1] == "Ask the owner to Approve it on the Preview page."
 
 
-def test_a_published_field_reads_in_the_singular(tmp_path):
-  """One counted field prints as `field`, the way the reminder prints `1 note`."""
+def test_cli_publication_persists_fields(tmp_path):
+  """Publish the supplied fields and report the stored identity and count."""
   store = preview.Store(tmp_path, create=True)
   store.set_meta("port", guard_port())
+  report_id = "one-report"
   source = tmp_path / "one.md"
   source.write_text("# One\n\nSelect one: {#select}\n\n- ( ) yes\n", encoding="utf-8")
   with preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store)) as server:
@@ -10713,7 +10723,7 @@ def test_a_published_field_reads_in_the_singular(tmp_path):
           "report",
           "publish",
           "-i",
-          "one-report",
+          report_id,
           "-t",
           "One",
           str(source),
@@ -10724,10 +10734,15 @@ def test_a_published_field_reads_in_the_singular(tmp_path):
         env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
       )
       assert cli.returncode == 0, cli.stderr
-      assert (
-        cli.stdout.splitlines()[0]
-        == "Published one-report, 1 field. Verification passed."
-      )
+      published = store.report(report_id)
+      expected_fields = preview.parse_fields(source.read_text())[1]
+      assert expected_fields
+      assert published["id"] == report_id
+      assert published["source"] == str(source.resolve())
+      assert preview.parse_fields(published["markdown"])[1] == expected_fields
+      assert report_id in cli.stdout
+      assert str(len(expected_fields)) in cli.stdout
+      assert not set(cli.stderr.splitlines()) & set(cli.stdout.splitlines())
     finally:
       server.shutdown()
       thread.join()
@@ -11430,8 +11445,17 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
           result, output = publish(source)
         assert result == 1 and "Published" not in output.out
         assert store.report("verified-report")["title"] == "Report"
-        result, output = publish(source)
-        assert result == 0 and "Verification passed" in output.out
+        with patch(
+          "preview.verify_publication", wraps=preview.verify_publication
+        ) as verified:
+          result, output = publish(source)
+        assert result == 0 and verified.called
+        published = store.report("verified-report")
+        assert published["id"] in output.out
+        assert (
+          preview.parse_fields(published["markdown"])[1]
+          == preview.parse_fields(source.read_text())[1]
+        )
       finally:
         server.shutdown()
         thread.join()

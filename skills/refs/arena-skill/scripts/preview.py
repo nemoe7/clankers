@@ -1164,7 +1164,7 @@ def pr_checks_watch(
           return "failure", [*lines, f"PR CHECKS FAILED: {names}."]
         return "success", [
           *lines,
-          "Best effort: all visible checks passed; later checks can still appear.",
+          "Best effort: all visible checks passed; later checks may appear.",
         ]
       continue
     if elapsed < seconds:
@@ -3998,7 +3998,7 @@ def poll_inbox(store, sleeper=None):
   listing = {"checked_at": None, "pending": []}
   # A full wait ends for messages, tasks, or failed branch checks. A heartbeat lights the page dot.
   print(
-    f"poll waits up to {POLL_WAIT_SECONDS} s. Set the bash tool timeout to 1800 s.",
+    f"poll max {POLL_WAIT_SECONDS} s; bash timeout 1800 s.",
     file=sys.stderr,
     flush=True,
   )
@@ -4087,7 +4087,7 @@ def poll_inbox(store, sleeper=None):
     store.clear_polling()
   # The wait ran its whole span with nothing to read: the turn ends here.
   store.mark_turn_ended()
-  print("Poll returned with no new messages. End the turn.", flush=True)
+  print("No new messages. End turn.", flush=True)
   return 1
 
 
@@ -9421,7 +9421,7 @@ def main():
       revision = store.report(args.id)["updated_at"]
       verify_publication(store, args.id, revision, count)
       plural = "" if count == 1 else "s"
-      print(f"Published {args.id}, {count} field{plural}. Verification passed.")
+      print(f"Published {args.id}, {count} field{plural}. Verified.")
       if not count and "{#" in Path(args.source).read_text("utf-8"):
         # A `{#id}` marker on its own parses as prose. The owner then sees no answer form.
         print(
@@ -9440,14 +9440,14 @@ def main():
           held = True
           continue
         if removed:
-          print(f"Unpublished {report_id}. Answers and source file remain.")
+          print(f"Unpublished {report_id}. Answers, source kept.")
         else:
           print(f"Skipped {report_id}: no longer stale or published.")
       return 1 if held else 0
     elif args.command == "unpublish":
       report_id = store.resolve_id(args.report_id)
       store.unpublish(report_id)
-      print(f"Unpublished {report_id}. Answers and source file remain.")
+      print(f"Unpublished {report_id}. Answers, source kept.")
     elif args.command == "stale-reports":
       reports = store.stale_reports()
       print(f"Stale reports {len(reports)}")

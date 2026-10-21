@@ -37,6 +37,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Reduce the text in poll, report, and PR-check status messages. Keep fields, timeout instructions, streams, and exit codes.
+
 - Show `Running gates...` during a poll with active local gates. Keep the timer and ordinary polling label.
 
 - Treat `mkdir` as inert for the read-set gate, so the harness's workspace-root `mkdir -p` prefix no longer blocks the inbox call that clears a checkpoint.
