@@ -4899,6 +4899,7 @@ class Store:
         " Read each listed path in full"
         " with the read tool only if its current full text is absent from context, then"
         " acknowledge this note.\n"
+        "Answer the questionnaire only if any required bible text was absent from context before this check.\n"
         f"{listed}"
       )
       record = self.note(

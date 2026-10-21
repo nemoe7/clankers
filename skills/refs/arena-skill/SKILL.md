@@ -19,6 +19,14 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 4. When a call needs the recorded agent key, after a 401 or an owner question, run `arena-preview key`; it prints the key, the host and the stamp. The call breaks with the restart line while the preview server is not up.
 5. Try `fetch_page` on the actual source URL first; use [proxy routes](#proxy-access) through `fetch_page` only if that call cannot return the needed data.
 
+6. After required reads, preview setup, and inbox acknowledgements at initial activation or after context replacement, read references/questionnaire.json and submit fresh answers with arena-preview questionnaire '<json>'.
+
+## Questionnaire
+
+When answering, use existing knowledge only; do not research answers, open other files, run code, ask another system, reuse earlier responses, or inspect the answer key.
+
+Omit questionnaire answers and answer-key details from summaries and handoffs.
+
 ## Setup
 
 1. Find this skill's actual path; installed and source paths differ. Report missing installed files; do not install or repair them without authorization.

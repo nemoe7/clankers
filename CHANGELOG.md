@@ -43,6 +43,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### arena
+
+- Run a fresh questionnaire after initial setup, compaction, summary, or context replacement. Keep knowledge-only answers, handoff guards, and conditional checkpoint prompts.
+
 #### tests
 
 - Check CLI command, route, note, task, and head data instead of status prose. Check ordered page results instead of fixed output row counts. Retain control notices and failure guards when checking ordered recovery commands, diagnostic paths and IDs, and named limits.
