@@ -60,9 +60,11 @@ It does not execute or rewrite tests. Findings need manual review: exact executa
 
 ## Results and limits
 
+P004 (pick/select) is advisory. Checks report it without failure. Explicit formatting can still rewrite it.
+
 | Mode | Result |
 | --- | --- |
-| Scan | Text findings, with exit 1 for findings, 2 for required-parser errors, and 0 otherwise |
+| Scan | Text findings: exit 1 for non-advisory findings, 2 for required-parser errors, and 0 otherwise |
 | Format | Changed lines, with exit 0 on completion |
 | Collect | Every marker, with exit 0 on completion |
 | Prose | JSON candidates and coverage, with exit 1 for candidates, 2 for parser errors, and 0 otherwise |

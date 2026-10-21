@@ -33,7 +33,7 @@ def test_a_rotation_matches_the_stem_and_prose():
     (root / "code.py").write_text("kind = 'plain'\n", encoding="utf-8")
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "note.md:1: P001 picked -> select" in result.stdout
+    assert "note.md:1: P004 picked -> select" in result.stdout
     assert "note.md:1: P001 transmit -> send" in result.stdout
     assert "code.py:1: P001 kind -> type" in result.stdout
 
@@ -51,8 +51,8 @@ def test_a_line_marker_skips_that_line_and_a_head_marker_skips_the_file():
     )
     result = run(cwd=directory)
     assert "marked.py:1:" not in result.stdout
-    assert "marked.py:2: P001 picked -> select" in result.stdout
-    assert "whole.md:2: P001 picked -> select" in result.stdout
+    assert "marked.py:2: P004 picked -> select" in result.stdout
+    assert "whole.md:2: P004 picked -> select" in result.stdout
     assert "whole.md:2: P001 kind -> type" not in result.stdout
     listing = run("--ignores", cwd=directory)
     assert listing.returncode == 0
@@ -97,9 +97,9 @@ def test_a_picker_is_a_rotation_and_a_marked_pickle_is_not():
       encoding="utf-8",
     )
     result = run(cwd=directory)
-    assert result.returncode == 1
-    assert "ui.js:1: P001 picker -> select" in result.stdout
-    assert "ui.js:2: P001 pick -> select" in result.stdout
+    assert result.returncode == 0
+    assert "ui.js:1: P004 picker -> select" in result.stdout
+    assert "ui.js:2: P004 pick -> select" in result.stdout
     assert "ui.js:3" not in result.stdout
     assert "ui.js:4" not in result.stdout
     formatted = run("--format", cwd=directory)
@@ -170,7 +170,7 @@ def test_rule_ids_suppress_only_the_named_rotation():
     )
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "note.md:1: P001 picked -> select" in result.stdout
+    assert "note.md:1: P004 picked -> select" in result.stdout
     assert "note.md:1: P001 kind -> type" not in result.stdout
     assert "note.md:2: P001 transmit -> send" in result.stdout
     result = run("--format", cwd=directory)
@@ -533,13 +533,13 @@ def test_generated_pytest_cache_is_not_scanned(tmp_path):
   (cache / "nodeids").write_text("picked fixture\n", encoding="utf-8")
   (tmp_path / "prose.md").write_text("picked wording\n", encoding="utf-8")
   result = run(cwd=tmp_path)
-  assert result.returncode == 1
-  assert "prose.md:1: P001" in result.stdout  # nonemo: T001
+  assert result.returncode == 0
+  assert "prose.md:1: P004" in result.stdout  # nonemo: T001
   assert ".pytest_cache" not in result.stdout
 
 
 def test_prose_and_test_ids_have_separate_domains():
-  assert set(nemoize.RULE_IDS.values()) == {"P001"}
+  assert set(nemoize.RULE_IDS.values()) == {"P001", "P004"}
   assert nemoize.PROSE_RULE_IDS == {"sentence": "P002", "paragraph": "P003"}
   assert nemoize.TEST_RULE_IDS == {"output_text": "T001", "measurement": "T002"}
 
@@ -577,7 +577,7 @@ def test_rotation_group_and_word_specific_legacy_markers(tmp_path):
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert "note.md:1:" not in result.stdout
-  assert "note.md:2: P001 picked -> select" in result.stdout
+  assert "note.md:2: P004 picked -> select" in result.stdout
   assert "note.md:2: P001 transmit -> send" in result.stdout
   assert "kind -> type" not in result.stdout
 
@@ -765,3 +765,22 @@ def test_wrapped_prose_counts_the_complete_sentence(tmp_path):
     lines[first - 1] += " nonemo: P002"
     source.write_text("\n".join(lines) + "\n")
     assert run(str(source), cwd=tmp_path).returncode == 0
+
+
+def test_soft_rotation_is_advisory_in_checks_and_explicit_in_format(tmp_path):
+  source = tmp_path / "note.md"
+  original = "Pick one.\n"
+  source.write_text(original)
+  result = run(str(source), cwd=tmp_path)
+  assert result.returncode == 0, result.stderr
+  assert "P004 Pick -> select" in result.stdout
+  assert "advisory" in result.stdout
+  assert source.read_text() == original
+  formatted = run("--format", str(source), cwd=tmp_path)
+  assert formatted.returncode == 0
+  assert source.read_text() == "Select one.\n"
+  source.write_text("Pick this kind.\n")
+  assert run(str(source), cwd=tmp_path).returncode == 1
+  for code in ("P004", "N002", "P001"):
+    source.write_text(f"Pick one. <!-- nonemo: {code} -->\n")
+    assert not run(str(source), cwd=tmp_path).stdout.strip()

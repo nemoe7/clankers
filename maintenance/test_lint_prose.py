@@ -9,6 +9,16 @@ import extract_prose
 import lint_prose
 
 
+def test_repository_soft_rotation_does_not_fail(tmp_path, capsys):
+  source = tmp_path / "note.md"
+  source.write_text("Pick one.\n")
+  assert lint_prose.nemoizer_main([str(source)]) == 0
+  output = capsys.readouterr().out
+  assert "P004" in output and "advisory" in output
+  source.write_text("Pick this kind.\n")  # nonemo: P001
+  assert lint_prose.nemoizer_main([str(source)]) == 1
+
+
 def test_userscript_sections_skip_metadata_and_keep_code_comments():
   source = """// ==UserScript==
 // @name Example

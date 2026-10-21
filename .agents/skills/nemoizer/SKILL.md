@@ -23,7 +23,7 @@ python3 skills/nemoizer/scripts/nemoize.py --ignores .
 python skills/nemoizer/scripts/nemoizer collect .
 ```
 
-Print each finding as `path:line: ID word -> use`; exit 1 when findings exist. Vendored and generated
+Print each finding as `path:line: ID word -> use`; exit 1 only for non-advisory findings. Mark P004 findings as advisory. Vendored and generated
 trees are skipped, and `--ignore` adds a directory or file.
 
 `--format` rewrites the tree and prints each changed line as it was and as it
@@ -41,8 +41,6 @@ Do not rewrite exclusion markers or the rotation table; apply only unsuppressed 
 - Apply an exclusion only to a known matching rule ID.
 - With `nemoizer collect` or `--ignores`, print every nonemo marker: path, line, rule ID, scope, and text.
 
-The rotation has landed, so `check.py` runs the linter and a new avoided word fails
-the gate.
 
 Run rotations and sentence/paragraph-length checks by default.
 Limit sentences to 20 words for unclassified prose, 25 for explicit description scope.

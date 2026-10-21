@@ -3,7 +3,8 @@
 
 | ID | Avoid | Use |
 | --- | --- | --- |
-| `P001` | `transmit`, `pick`, `kind` | send, select, type |
+| `P001` | `transmit`, `kind` | send, type |
+| `P004` | `pick` | select (advisory) |
 
 ## Rotations
 

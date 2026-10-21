@@ -26,7 +26,8 @@ ROTATIONS = (
   ("kind", r"(?<![A-Za-z0-9])kinds?(?![A-Za-z0-9])", "type"),
 )
 LEGACY_ROTATIONS = {"transmit": "N001", "pick": "N002", "kind": "N003"}
-RULE_IDS = dict.fromkeys(LEGACY_ROTATIONS, "P001")
+RULE_IDS = {"transmit": "P001", "pick": "P004", "kind": "P001"}
+ADVISORY_RULE_IDS = {"P004"}
 SENTENCE_CAPS = {"instruction": 20, "description": 25}
 PARAGRAPH_CAP = 4
 PROSE_RULE_IDS = {"sentence": "P002", "paragraph": "P003"}
@@ -132,6 +133,7 @@ def suppressed(code, ids, name=None):
   """Keep legacy rotation exclusions word-specific."""
   return (
     code in ids
+    or (code in ADVISORY_RULE_IDS and "P001" in ids)
     or (name is not None and LEGACY_ROTATIONS[name] in ids)
     or any(old in ids and canonical == code for old, canonical in LEGACY_RULES.items())
   )
@@ -152,7 +154,11 @@ def plain(word, name, use):
 def rotate(line, suppressed=frozenset()):
   """Swap each matched word for its plain word, and take the exception words first."""
   for name, pattern, use in ROTATIONS:
-    if RULE_IDS[name] in suppressed or LEGACY_ROTATIONS[name] in suppressed:
+    if (
+      RULE_IDS[name] in suppressed
+      or LEGACY_ROTATIONS[name] in suppressed
+      or "P001" in suppressed
+    ):
       continue
     line = re.sub(
       pattern,
@@ -183,8 +189,13 @@ def scan(targets, ignores):
         if suppressed(code, excluded, name):
           continue
         for word in sorted(set(re.findall(pattern, visible, flags=re.IGNORECASE))):
-          findings.append(f"{path}:{number}: {code} {word} -> {use}")
+          suffix = " (advisory)" if code in ADVISORY_RULE_IDS else ""
+          findings.append(f"{path}:{number}: {code} {word} -> {use}{suffix}")
   return findings, marks
+
+
+def is_advisory(finding):
+  return finding.rsplit(": ", 1)[-1].split()[0] in ADVISORY_RULE_IDS
 
 
 def format_paths(targets, ignores, out=None):
@@ -853,7 +864,7 @@ def main(argv=None):
   if errors:
     print("\n".join(errors), file=sys.stderr)
     return 2
-  return 1 if findings else 0
+  return int(any(not is_advisory(finding) for finding in findings))
 
 
 if __name__ == "__main__":

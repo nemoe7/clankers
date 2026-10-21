@@ -43,6 +43,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nemoizer
 
+- Move pick/select to advisory ID P004. Keep explicit formatting, exclusions, and non-advisory failures. Remove the repository-specific skill clause.
+
 - Run prose and test domains by default with separate P001–P003 and T001–T002 IDs. Keep legacy markers and raw word rotations.
 
 - Bundle shared comment and docstring extraction. Keep parser failures visible, test discovery static, and required exact-text contracts excluded by rule.

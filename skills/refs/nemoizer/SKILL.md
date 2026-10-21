@@ -34,11 +34,9 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 ```
 
 - Every text file is read, including comments and Markdown prose.
-- Print each finding as `path:line: ID word -> use`, and exit 1 when findings exist.
+- Print each finding as `path:line: ID word -> use`, and exit 1 only for non-advisory findings. Mark P004 findings as advisory.
 - Vendored and generated trees are skipped, and `--ignore` adds a directory or
   file.
-- `check.py` runs the linter with the ignore list, so a new avoided word fails the
-  gate.
 
 - Run word rotations, sentence-length checks, and paragraph-length checks by default.
 - Use 20 words per sentence for unclassified prose and 25 for an explicit description scope.

@@ -234,7 +234,7 @@ def nemoizer_main(argv: list[str]) -> int:
   if errors:
     print("\n".join(errors), file=sys.stderr)
     return 2
-  return int(bool(findings))
+  return int(any(not module.is_advisory(finding) for finding in findings))
 
 
 def main() -> int:
