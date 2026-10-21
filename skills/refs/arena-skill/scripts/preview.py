@@ -1756,7 +1756,7 @@ SUBMISSION_LINE_KEYS = (
   "seen_at",
   "task_id",
 )
-REPORT_LINE_KEYS = ("id", "title", "markdown", "published_at", "seen_at")
+REPORT_LINE_KEYS = ("id", "title", "markdown", "published_at", "seen_at", "source")
 
 
 def task_row(row):
@@ -2199,6 +2199,10 @@ def format_pending_item(item):
     return format_pending_record(item)
   context = ""
   for parent in item.get("thread") or []:
+    if parent.get("type") == "report":
+      source = parent.get("source") or f"/api/reports/{parent['id']}/source"
+      context = f"RE: {parent['id']}\nSource: {source}"
+      continue
     body = REPLY_REFERENCE.sub("", parent.get("text") or "", count=1).lstrip("\r\n")
     body = format_pending_record(parent | {"text": body}).partition("\n")[2]
     if context:
@@ -4530,6 +4534,8 @@ class Store:
           " WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL"
         )
       columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
+      if "source" not in columns:
+        db.execute("ALTER TABLE reports ADD COLUMN source TEXT")
       if "seq" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN seq INTEGER")
         db.execute("UPDATE reports SET seq = rowid WHERE seq IS NULL")
@@ -4913,7 +4919,7 @@ class Store:
       return [
         dict(row)
         for row in db.execute(
-          "SELECT id, title, markdown, published_at, seen_at FROM reports ORDER BY seq, id"
+          "SELECT id, title, markdown, published_at, seen_at, source FROM reports ORDER BY seq, id"
         )
       ]
 
@@ -6313,18 +6319,30 @@ class Store:
         raise ValueError("A saved seen stamp is text")
       if seen_at is not None:
         when(seen_at)
+      source = record.get("source")
+      if source is not None and not isinstance(source, str):
+        raise ValueError("A saved report source path is text")
       prepared.append(
-        (report_id, title, markdown, published_at, seen_at, seen_at is not None)
+        (report_id, title, markdown, published_at, seen_at, seen_at is not None, source)
       )
     with self.transaction(shared) as db:
-      for report_id, title, markdown, published_at, seen_at, ever_seen in prepared:
+      for (
+        report_id,
+        title,
+        markdown,
+        published_at,
+        seen_at,
+        ever_seen,
+        source,
+      ) in prepared:
         highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
         db.execute(
           """INSERT INTO reports
-             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET title = excluded.title,
                markdown = excluded.markdown, updated_at = excluded.updated_at,
+               source = COALESCE(excluded.source, reports.source),
                published_at = COALESCE(reports.published_at, excluded.published_at),
                seen_at = COALESCE(reports.seen_at, excluded.seen_at),
                ever_seen = MAX(reports.ever_seen, excluded.ever_seen)""",
@@ -6337,6 +6355,7 @@ class Store:
             highest + 1,
             seen_at,
             ever_seen,
+            source,
           ),
         )
     return len(prepared)
@@ -6890,8 +6909,8 @@ class Store:
         for row in db.execute(f"SELECT * FROM {table} ORDER BY at, seq"):
           record = message_row(row)
           notes[record["id"]] = record
-      for row in db.execute("SELECT id, markdown FROM reports"):
-        notes[row["id"]] = {"id": row["id"], "text": row["markdown"]}
+      for row in db.execute("SELECT id, source FROM reports"):
+        notes[row["id"]] = dict(row) | {"type": "report", "text": ""}
       for row in db.execute(f"SELECT {TASK_COLUMNS} FROM tasks"):
         task = task_row(row)
         notes[task["id"]] = {
@@ -7173,12 +7192,13 @@ class Store:
       self.refuse_shared_id(db, "reports", "tasks", report_id)
       highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
       db.execute(
-        """INSERT INTO reports (id, title, markdown, updated_at, published_at, seq)
-           VALUES (?, ?, ?, ?, ?, ?)
+        """INSERT INTO reports (id, title, markdown, updated_at, published_at, seq, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET title = excluded.title,
              markdown = excluded.markdown, updated_at = excluded.updated_at,
+             source = excluded.source,
              seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL""",
-        (report_id, title, text, now(), now(), highest + 1),
+        (report_id, title, text, now(), now(), highest + 1, str(source.resolve())),
       )
     return len(fields)
 

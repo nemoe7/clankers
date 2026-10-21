@@ -631,7 +631,7 @@ SAVED_STATE='saved-state.ndjson'
 NOTE_LINE_KEYS='id','text','at','acknowledged_at','ack_type','ack_text','ack_edited_at','replies','ack_edited_seen_count','seen_at','task_id'
 TASK_LINE_KEYS='id','title','details','status','completed_at','order','report_id','type'
 SUBMISSION_LINE_KEYS='id','report_id','text','at','acknowledged_at','ack_type','ack_text','ack_edited_at','replies','ack_edited_seen_count','seen_at','task_id'
-REPORT_LINE_KEYS='id','title','markdown','published_at','seen_at'
+REPORT_LINE_KEYS='id','title','markdown','published_at','seen_at','source'
 def task_row(row):
 	shaped={'id':row[0],'title':row[1],'details':json.loads(row[2]),'status':row[3],'order':row[4],'updated_at':row[5],'completed_at':row[6]if len(row)>6 else None,'blocked':bool(row[7])if len(row)>7 else False}
 	if len(row)>8 and row[8]:shaped['report_id']=row[8]
@@ -795,6 +795,7 @@ def format_pending_item(item):
 	if not reply_reference(item.get('text')):return format_pending_record(item)
 	context=''
 	for parent in item.get('thread')or[]:
+		if parent.get('type')=='report':source=parent.get('source')or f"/api/reports/{parent['id']}/source";context=f"RE: {parent['id']}\nSource: {source}";continue
 		body=REPLY_REFERENCE.sub('',parent.get('text')or'',count=1).lstrip('\r\n');body=format_pending_record(parent|{'text':body}).partition('\n')[2]
 		if context:body=context+'\n\n'+body
 		context='\n'.join('> '+line for line in body.split('\n'))
@@ -1595,6 +1596,7 @@ class Store:
 			columns={row['name']for row in db.execute('PRAGMA table_info(reports)')}
 			if'seen_at'not in columns:db.execute('ALTER TABLE reports ADD COLUMN seen_at TEXT');db.execute('UPDATE submissions SET seen_at = acknowledged_at WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL')
 			columns={row['name']for row in db.execute('PRAGMA table_info(reports)')}
+			if'source'not in columns:db.execute('ALTER TABLE reports ADD COLUMN source TEXT')
 			if'seq'not in columns:db.execute('ALTER TABLE reports ADD COLUMN seq INTEGER');db.execute('UPDATE reports SET seq = rowid WHERE seq IS NULL')
 			if'ever_seen'not in columns:db.execute('ALTER TABLE reports ADD COLUMN ever_seen INTEGER NOT NULL DEFAULT 0');db.execute('UPDATE reports SET ever_seen = 1 WHERE seen_at IS NOT NULL')
 			if'agent_seen_at'not in columns:db.execute('ALTER TABLE reports ADD COLUMN agent_seen_at TEXT')
@@ -1683,7 +1685,7 @@ class Store:
 	def submissions(self):
 		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM submissions ORDER BY at, seq')]
 	def report_sources(self):
-		with closing(self.connect())as db:return[dict(row)for row in db.execute('SELECT id, title, markdown, published_at, seen_at FROM reports ORDER BY seq, id')]
+		with closing(self.connect())as db:return[dict(row)for row in db.execute('SELECT id, title, markdown, published_at, seen_at, source FROM reports ORDER BY seq, id')]
 	def state(self):
 		tasks=self.tasks()
 		with closing(self.connect())as db:
@@ -2113,9 +2115,11 @@ class Store:
 			seen_at=record.get('seen_at')
 			if seen_at is not None and not isinstance(seen_at,str):raise ValueError('A saved seen stamp is text')
 			if seen_at is not None:when(seen_at)
-			prepared.append((report_id,title,markdown,published_at,seen_at,seen_at is not None))
+			source=record.get('source')
+			if source is not None and not isinstance(source,str):raise ValueError('A saved report source path is text')
+			prepared.append((report_id,title,markdown,published_at,seen_at,seen_at is not None,source))
 		with self.transaction(shared)as db:
-			for(report_id,title,markdown,published_at,seen_at,ever_seen)in prepared:highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports\n             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen)\n             VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n             ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n               markdown = excluded.markdown, updated_at = excluded.updated_at,\n               published_at = COALESCE(reports.published_at, excluded.published_at),\n               seen_at = COALESCE(reports.seen_at, excluded.seen_at),\n               ever_seen = MAX(reports.ever_seen, excluded.ever_seen)',(report_id,title,markdown,now(),published_at,highest+1,seen_at,ever_seen))
+			for(report_id,title,markdown,published_at,seen_at,ever_seen,source)in prepared:highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports\n             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source)\n             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n             ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n               markdown = excluded.markdown, updated_at = excluded.updated_at,\n               source = COALESCE(excluded.source, reports.source),\n               published_at = COALESCE(reports.published_at, excluded.published_at),\n               seen_at = COALESCE(reports.seen_at, excluded.seen_at),\n               ever_seen = MAX(reports.ever_seen, excluded.ever_seen)',(report_id,title,markdown,now(),published_at,highest+1,seen_at,ever_seen,source))
 		return len(prepared)
 	def import_tasks(self,records,replace=False,autosave=True,shared=None):
 		if not isinstance(records,list):raise TypeError('Import a list of task objects')
@@ -2280,7 +2284,7 @@ class Store:
 			pending=[message_row(row)|{'type':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'type':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq')];notes={}
 			for table in('notes','submissions'):
 				for row in db.execute(f"SELECT * FROM {table} ORDER BY at, seq"):record=message_row(row);notes[record['id']]=record
-			for row in db.execute('SELECT id, markdown FROM reports'):notes[row['id']]={'id':row['id'],'text':row['markdown']}
+			for row in db.execute('SELECT id, source FROM reports'):notes[row['id']]=dict(row)|{'type':'report','text':''}
 			for row in db.execute(f"SELECT {TASK_COLUMNS} FROM tasks"):task=task_row(row);notes[task['id']]={'id':task['id'],'text':'\n'.join([task['title'],*task['details']])}
 			attachments={}
 			for row in db.execute('SELECT * FROM uploads ORDER BY seq'):record=upload_row(row,self.path.parent);attachments.setdefault(record['note_id'],[]).append(record)
@@ -2380,7 +2384,7 @@ class Store:
 			else:
 				answered=db.execute('SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1',(report_id,)).fetchone()
 				if answered is not None:raise ValueError(f"Report {report_id} has submitted answers; publish the update under a new ID")
-			self.refuse_shared_id(db,'reports','tasks',report_id);highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports (id, title, markdown, updated_at, published_at, seq)\n           VALUES (?, ?, ?, ?, ?, ?)\n           ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n             markdown = excluded.markdown, updated_at = excluded.updated_at,\n             seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL',(report_id,title,text,now(),now(),highest+1))
+			self.refuse_shared_id(db,'reports','tasks',report_id);highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports (id, title, markdown, updated_at, published_at, seq, source)\n           VALUES (?, ?, ?, ?, ?, ?, ?)\n           ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n             markdown = excluded.markdown, updated_at = excluded.updated_at,\n             source = excluded.source,\n             seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL',(report_id,title,text,now(),now(),highest+1,str(source.resolve())))
 		return len(fields)
 	def unpublish(self,report_id,dismissed_by_owner=False,*,stale_only=False):
 		identifier(report_id)

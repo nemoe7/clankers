@@ -2015,8 +2015,38 @@ def test_read_attaches_published_report_parent():
     reply = listing["pending"][0]
     assert [item["id"] for item in reply.get("thread", [])] == ["guide-report"]
     assert preview.format_pending_item(reply) == (
-      "`reply`\n> # Guide\n> \n> Keep the draft.\n> \n\nproposal"
+      f"`reply`\nRE: guide-report\nSource: {source}\n\nproposal"
     )
+    assert "Keep the draft." not in json.dumps(reply)
+    saved = next(
+      record
+      for record in map(json.loads, store.save_path.read_text().splitlines())
+      if record.get("id") == "guide-report"
+    )
+    restored = preview.Store(Path(thread_dir) / "restored", create=True)
+    restored.import_reports([saved])
+    restored.note("again", "RE: guide-report\nfollow up")
+    assert f"Source: {source}" in preview.format_read(restored.read())
+
+
+def test_report_reply_without_saved_path_names_stored_source():
+  with tempfile.TemporaryDirectory() as thread_dir:
+    store = preview.Store(thread_dir, create=True)
+    store.import_reports(
+      [{"id": "legacy-report", "title": "Legacy", "markdown": "Do not quote this."}]
+    )
+    with store.connect() as db, db:
+      db.execute("ALTER TABLE reports DROP COLUMN source")
+    store = preview.Store(thread_dir)
+    assert store.report("legacy-report")["source"] is None
+    with pytest.raises(ValueError, match="source path is text"):
+      store.import_reports(
+        [{"id": "invalid-source", "title": "Invalid", "markdown": "text", "source": []}]
+      )
+    store.note("reply", "RE: legacy-report\nfollow up")
+    rendered = preview.format_read(store.read())
+    assert "RE: legacy-report\nSource: /api/reports/legacy-report/source" in rendered
+    assert "Do not quote this." not in rendered
 
 
 def test_read_attaches_answer_and_task_parents():

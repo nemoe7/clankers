@@ -29,6 +29,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Name the report ID and source path in reply context instead of quoting the report. Keep the path in saved state.
+
 - Derive the workspace path in the wrapper test from the checkout, so the suite passes where `/home/user` does not exist.
 
 #### gate
