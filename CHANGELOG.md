@@ -37,8 +37,6 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Expand the Nemo UI/UX, Nemoizer, and Squash READMEs with setup, examples, available tools, and limits. Keep UI source credits and exclude the pages from distribution.
 
-#### skills
-
 - Add Nemoizer test-review rules for behavior, relations, named constants, and required exact-text contracts.
 
 - Rename nemo-ui to nemo-ui-ux across skill sources, distribution, measurements, and checks. Remove the old installed directory during distribution.
@@ -54,6 +52,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Removed
 
 #### skills
+
+- Remove duplicate client test harnesses from live and installed payloads. Keep canonical source tests and CI.
 
 - Remove portable workflows and the Web Interface Guidelines skill. Keep GitHub workflows and validation for existing portable workflow directories.
 
