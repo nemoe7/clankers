@@ -134,10 +134,21 @@ def fixture(tmp_path, scenario):
   return remote, seed, before, parent
 
 
-def run_action(tmp_path, remote, seed, scenario):
+def run_action(tmp_path, remote, seed, scenario, *, validate_only=False, payload=None):
   workspace = tmp_path / "source"
   workspace.mkdir()
   (workspace / "rule.md").write_text("old\n" if scenario == "unchanged" else "new\n")
+  if payload:
+    for skill in payload.get("SKILLS", "").split():
+      folder = workspace / "skills" / skill
+      folder.mkdir(parents=True)
+      (folder / "SKILL.md").write_text(skill + "\n")
+    for name in payload.get("FILES", "").split():
+      path = workspace / "github/workflows" / name
+      path.parent.mkdir(parents=True, exist_ok=True)
+      path.write_text(name + "\n")
+    git(workspace, "init", "--quiet", "--initial-branch=main")
+    git(workspace, "add", "-A")
   home = tmp_path / "home"
   home.mkdir()
   binaries = tmp_path / "bin"
@@ -164,7 +175,9 @@ def run_action(tmp_path, remote, seed, scenario):
     "RACE_MARK": str(tmp_path / "race.mark"),
     "SEED": str(seed),
     "GITHUB_WORKSPACE": str(workspace),
-    "CLANKERS_DIST_PAT": "unused-test-token",
+    "CLANKERS_DIST_PAT": "" if validate_only else "unused-test-token",
+    "VALIDATE_ONLY": "true" if validate_only else "false",
+    "GITHUB_ACTION_PATH": str(ACTION.parent),
     "REPOS": "example/target",
     "REPOS_FALLBACK": "",
     "RULE_SRC": "" if scenario == "clone_failure" else "rule.md",
@@ -177,6 +190,7 @@ def run_action(tmp_path, remote, seed, scenario):
     "SRC_ROOT": "github/workflows",
     "DEST_ROOT": ".github/workflows",
   }
+  env.update(payload or {})
   for name in (
     "GIT_AUTHOR_NAME",
     "GIT_AUTHOR_EMAIL",
@@ -248,6 +262,40 @@ def test_distribution_preserves_history_and_reports_only_remote_success(
     assert not force
   if scenario == "protected":
     assert not any(arg.startswith("--force") for arg in pushes[-1])
+
+
+def test_matching_domain_payloads_share_one_push(tmp_path):
+  remote, seed, before, _ = fixture(tmp_path, "bot")
+  payload = {
+    "SKILLS": "arena-skill nemo-ui-ux nemoizer",
+    "FILES": "gemini-release.yml gemini_release.py",
+  }
+  result, pushes = run_action(tmp_path, remote, seed, "bot", payload=payload)
+  assert result.returncode == 0, result.stderr
+  assert len(pushes) == 1
+  after = git(remote, "rev-parse", "refs/heads/main")
+  assert after != before
+  source = tmp_path / "source"
+  for skill in payload["SKILLS"].split():
+    assert (
+      git(remote, "show", f"{after}:.agents/skills/{skill}/SKILL.md")
+      == (source / "skills" / skill / "SKILL.md").read_text().strip()
+    )
+  for name in payload["FILES"].split():
+    assert (
+      git(remote, "show", f"{after}:.github/workflows/{name}")
+      == (source / "github/workflows" / name).read_text().strip()
+    )
+  assert git(remote, "show", f"{after}:owner.txt") == OWNER_DATA
+
+
+def test_distribution_domain_validation_is_read_only(tmp_path):
+  remote, seed, before, _ = fixture(tmp_path, "bot")
+  result, pushes = run_action(tmp_path, remote, seed, "bot", validate_only=True)
+  assert result.returncode == 0, result.stderr
+  assert not pushes
+  assert git(remote, "rev-parse", "refs/heads/main") == before
+  assert not (tmp_path / "home/gitconfig").exists()
 
 
 @pytest.mark.parametrize(

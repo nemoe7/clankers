@@ -26,6 +26,91 @@ def findings(document: dict, name: str = "example.yml") -> list[str]:
   return gate_workflows.audit_document(name, copy.deepcopy(document))
 
 
+def distribution_planner():
+  import importlib.util
+
+  path = gate_workflows.ROOT / ".github/actions/distribute-sync/plan.py"
+  spec = importlib.util.spec_from_file_location("distribution_plan", path)
+  planner = importlib.util.module_from_spec(spec)
+  spec.loader.exec_module(planner)
+  return planner
+
+
+def test_distribution_plan_groups_domains_and_keeps_one_writer(monkeypatch):
+  from pathlib import Path
+  from types import SimpleNamespace
+
+  import pytest
+
+  planner = distribution_planner()
+  path = Path(planner.__file__)
+  overrides = {
+    "arena": "example/shared example/arena",
+    "gemini": "example/shared example/gemini",
+    "nemo-ui-ux": "example/shared example/ui",
+    "nemoizer": "example/shared example/text",
+  }
+  plan = planner.build_plan(overrides)
+  assert {row["domain"] for row in plan["domains"]} == set(overrides)
+  expected = {repo for repos in overrides.values() for repo in repos.split()}
+  assert {row["repos"] for row in plan["targets"]} == expected
+  assert len(plan["targets"]) == len(expected)
+  shared = next(row for row in plan["targets"] if row["repos"] == "example/shared")
+  assert set(shared["domains"]) == set(overrides)
+  assert shared["rule_src"] == "rules/ARENA.md"
+  assert set(shared["skills"].split()) == {"arena-skill", "nemo-ui-ux", "nemoizer"}
+  assert set(shared["files"].split()) == {"gemini-release.yml", "gemini_release.py"}
+  for domain, repos in overrides.items():
+    for target in plan["targets"]:
+      assert (domain in target["domains"]) == (target["repos"] in repos.split())
+  calls = []
+
+  def run(arguments, *, env, check):
+    calls.append((arguments, env))
+    return SimpleNamespace(returncode=1 if env["REPOS"] == "example/shared" else 0)
+
+  monkeypatch.setattr(planner.subprocess, "run", run)
+  assert planner.push_targets(plan["targets"], path.with_name("sync.sh"), {}) != 0
+  assert [env["REPOS"] for _, env in calls] == [row["repos"] for row in plan["targets"]]
+  assert len(calls) == len(expected)
+  folded = planner.build_plan(dict.fromkeys(overrides, "Example/Shared example/shared"))
+  assert len(folded["targets"]) < len(plan["targets"])
+  assert len(folded["targets"]) == len(
+    {row["repos"].casefold() for row in folded["targets"]}
+  )
+  for value in (" ", "\t", "../unmapped/path", None):
+    with pytest.raises((ValueError, TypeError)):
+      planner.build_plan({"arena": value})
+  first = plan["targets"][0]
+  for targets in ([], [first, {}], [first, first | {"repos": first["repos"].upper()}]):
+    calls.clear()
+    with pytest.raises((ValueError, TypeError)):
+      planner.push_targets(targets, path.with_name("sync.sh"), {})
+    assert not calls
+
+
+def test_distribution_has_domain_rows_and_one_push_job():
+  from pathlib import Path
+
+  path = Path(__file__).resolve().parents[2] / ".github/workflows/distribute.yml"
+  document = yaml.safe_load(path.read_text())
+  jobs = document["jobs"]
+  assert jobs["domains"]["strategy"]["fail-fast"] is False
+  assert "needs.plan.outputs.matrix" in jobs["domains"]["strategy"]["matrix"]
+  assert jobs["domains"]["needs"] == "plan"
+  assert set(jobs["push"]["needs"]) == {"plan", "domains"}
+  assert document["concurrency"]["cancel-in-progress"] is False
+  checks = [
+    step
+    for step in jobs["domains"]["steps"]
+    if step.get("uses") == "./.github/actions/distribute-sync"
+  ]
+  assert checks and checks[0]["with"]["validate-only"] is True
+  pushes = [step for step in jobs["push"]["steps"] if "--push" in step.get("run", "")]
+  assert len(pushes) == len(checks)
+  assert "TARGETS_JSON" in pushes[0]["env"]
+
+
 def test_base_document_passes():
   assert findings(BASE) == []
 
@@ -267,77 +352,65 @@ def test_distribute_triggers_and_inputs():
   inputs = triggers["workflow_dispatch"]["inputs"]
   assert set(inputs) == {"repos", "gemini_repos", "nemo_ui_ux_repos", "nemoizer_repos"}
   assert all(value.get("default") == "" for value in inputs.values())
-  # One job per target list, so the run page names each list on its own row.
-  assert list(document["jobs"]) == ["arena", "gemini", "nemo-ui-ux", "nemoizer"]
-  for name in document["jobs"]:
-    assert document["jobs"][name]["concurrency"]["cancel-in-progress"] is False
+  assert document["concurrency"]["cancel-in-progress"] is False
+  assert "${{ github.repository }}" in document["concurrency"]["group"]
 
 
 def test_distribute_jobs_share_one_action_and_keep_their_own_lists():
   jobs = load_workflow("distribute.yml")["jobs"]
-  assert [job["name"] for job in jobs.values()] == [
-    "Distribute Arena",
-    "Distribute Gemini",
-    "Distribute nemo-ui-ux",
-    "Distribute nemoizer",
-  ]
-  groups = [job["concurrency"]["group"] for job in jobs.values()]
-  assert len(set(groups)) == len(jobs), (
-    "each target list needs its own concurrency group"
-  )
-  for job in jobs.values():
-    sync = [
-      step
-      for step in job["steps"]
-      if step.get("uses") == "./.github/actions/distribute-sync"
-    ]
-    assert len(sync) == 1, "every job copies through the shared action"
-    assert "CLANKERS_DIST_PAT" in sync[0]["env"]
-
-  def copied(job: dict) -> dict:
-    step = next(
-      step
-      for step in job["steps"]
-      if step.get("uses") == "./.github/actions/distribute-sync"
-    )
-    return step["with"]
-
-  arena, gemini, nemo_ui_ux, nemoizer = jobs.values()
-  # Each job holds its own list, so a dispatcher override stays inside one target group.
-  assert copied(arena)["repos-fallback"].split()[0] == "nemoe7/clankers"
-  assert set(copied(nemo_ui_ux)["repos-fallback"].split()) == {
+  planner = distribution_planner()
+  profiles = {row["domain"]: row for row in planner.build_plan()["domains"]}
+  arena, gemini, nemo_ui_ux, nemoizer = (profiles[name] for name in planner.INPUTS)
+  assert arena["repos"].split()[0] == "nemoe7/clankers"
+  assert set(nemo_ui_ux["repos"].split()) == {
     "nemoe7/request-tracker",
     "nemoe7/daedalus",
     "nemoe7/clankers",
     "nemoe7/arena-cleanup",
   }
-  assert copied(gemini)["repos-fallback"] == "nemoe7/daedalus nemoe7/request-tracker"
-  assert copied(arena)["skills"] == "arena-skill"
-  assert copied(arena)["rule-src"] == "rules/ARENA.md"
-  assert copied(arena)["legacy"] == (
+  assert gemini["repos"] == "nemoe7/daedalus nemoe7/request-tracker"
+  assert arena["skills"] == "arena-skill"
+  assert arena["rule_src"] == "rules/ARENA.md"
+  assert arena["rule_dest"] == "ARENA.md"
+  assert arena["legacy"] == (
     "arena-live-steering arena-preview-reporting arena-preview-steering arena-proxy arena"
   )
-  assert "skills" not in copied(gemini)
-  assert copied(gemini)["files"] == "gemini-release.yml gemini_release.py"
-  # The nemo-ui-ux skill lives in this repository, so its job copies it and fails on a gap.
-  assert copied(nemo_ui_ux)["skills"] == "nemo-ui-ux"
-  assert copied(nemo_ui_ux)["legacy"] == "nemo-ui"
-  assert "allow-missing" not in copied(nemo_ui_ux)
-  assert copied(nemoizer) == {
-    "repos": "${{ inputs.nemoizer_repos }}",
-    "repos-fallback": copied(nemo_ui_ux)["repos-fallback"] + " nemoe7/wiki",
-    "skills": "nemoizer",
+  assert not gemini["skills"]
+  assert gemini["files"] == "gemini-release.yml gemini_release.py"
+  assert nemo_ui_ux["skills"] == "nemo-ui-ux"
+  assert nemo_ui_ux["legacy"] == "nemo-ui"
+  assert "allow-missing" not in nemo_ui_ux
+  assert nemoizer["repos"] == nemo_ui_ux["repos"] + " nemoe7/wiki"
+  assert nemoizer["skills"] == "nemoizer"
+  assert not any(
+    nemoizer[field] for field in ("rule_src", "rule_dest", "legacy", "files")
+  )
+  manual = {
+    "arena": "repos",
+    "gemini": "gemini_repos",
+    "nemo-ui-ux": "nemo_ui_ux_repos",
+    "nemoizer": "nemoizer_repos",
   }
+  steps = [step for job in jobs.values() for step in job["steps"]]
+  plan_step = next(step for step in steps if step.get("id") == "plan")
+  assert plan_step["env"] == {
+    planner.INPUTS[domain]: "${{ inputs." + name + " }}"
+    for domain, name in manual.items()
+  }
+  writer = next(step for step in steps if "--push" in step.get("run", ""))
+  assert writer["env"]["CLANKERS_DIST_PAT"] == "${{ secrets.CLANKERS_DIST_PAT }}"
+  assert all(
+    "CLANKERS_DIST_PAT" not in step.get("env", {})
+    for step in steps
+    if step is not writer
+  )
 
 
 def test_distribute_keeps_the_owner_run_packages_home(tmp_path):
   action = (
     gate_workflows.ROOT / ".github" / "actions" / "distribute-sync" / "action.yml"
   )
-  script = "\n".join(
-    step.get("run", "")
-    for step in yaml.safe_load(action.read_text(encoding="utf-8"))["runs"]["steps"]
-  )
+  script = action.with_name("sync.sh").read_text(encoding="utf-8")
   # The owner pages and the docker packages stay in this repository. Only files
   # a session loads at runtime ride to the target repositories.
   start = script.index("skill_files() {")

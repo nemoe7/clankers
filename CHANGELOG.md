@@ -33,6 +33,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### workflows
 
+- Show a read-only matrix row for each distribution domain. Group matching payloads by target in one push job, without intermediate commits or artifacts.
+
 - Add a nemoizer distribution job with its own target override. Copy the skill to the nemo-ui targets and `nemoe7/wiki`.
 
 ### Changed

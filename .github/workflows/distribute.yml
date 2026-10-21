@@ -1,5 +1,5 @@
-# Distribute ARENA.md, the skills and the Gemini release workflow. Each job owns one target list, so the run page
-# names every list on its own row. CLANKERS_DIST_PAT needs Contents write on each target and Workflows write on the Gemini ones.
+# Keep domain rows visible. One push job applies each target's matching domains in one checkout.
+# CLANKERS_DIST_PAT needs Contents write on each target and Workflows write on the Gemini ones.
 name: Distribute
 on:
   push:
@@ -37,81 +37,60 @@ on:
         default: ""
 permissions:
   contents: read
+concurrency:
+  group: Distribute-${{ github.repository }}
+  cancel-in-progress: false
 jobs:
-  arena:
-    name: Distribute Arena
+  plan:
+    name: Plan Distribution
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    concurrency:
-      group: Distribute-Arena-${{ github.repository }}
-      cancel-in-progress: false
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      targets: ${{ steps.plan.outputs.targets }}
     steps:
       - name: Check Out Source Repository
         uses: actions/checkout@v7
-      - name: Sync The Rules And The Arena Skills
-        uses: ./.github/actions/distribute-sync
+      - name: Group The Domain Targets
+        id: plan
         env:
-          CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
-        with:
-          repos: ${{ inputs.repos }}
-          repos-fallback: nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki nemoe7/f360 nemoe7/request-tracker nemoe7/arena-cleanup
-          rule-src: rules/ARENA.md
-          rule-dest: ARENA.md
-          skills: arena-skill
-          legacy: arena-live-steering arena-preview-reporting arena-preview-steering arena-proxy arena
-  gemini:
-    name: Distribute Gemini
+          ARENA_REPOS: ${{ inputs.repos }}
+          GEMINI_REPOS: ${{ inputs.gemini_repos }}
+          NEMO_UI_UX_REPOS: ${{ inputs.nemo_ui_ux_repos }}
+          NEMOIZER_REPOS: ${{ inputs.nemoizer_repos }}
+        run: python3 .github/actions/distribute-sync/plan.py
+  domains:
+    name: Distribute ${{ matrix.domain }}
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    concurrency:
-      group: Distribute-Gemini-${{ github.repository }}
-      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Check Out Source Repository
         uses: actions/checkout@v7
-      - name: Sync The Gemini Release Workflow
+      - name: Check The Domain Payload
         uses: ./.github/actions/distribute-sync
-        env:
-          CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
         with:
-          repos: ${{ inputs.gemini_repos }}
-          repos-fallback: nemoe7/daedalus nemoe7/request-tracker
-          files: gemini-release.yml gemini_release.py
-  nemo-ui-ux:
-    name: Distribute nemo-ui-ux
+          validate-only: true
+          repos: ${{ matrix.repos }}
+          repos-fallback: ${{ matrix.repos }}
+          rule-src: ${{ matrix.rule_src }}
+          rule-dest: ${{ matrix.rule_dest }}
+          skills: ${{ matrix.skills }}
+          legacy: ${{ matrix.legacy }}
+          files: ${{ matrix.files }}
+  push:
+    name: Push And Verify Targets
+    needs: [plan, domains]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    concurrency:
-      group: Distribute-nemo-ui-ux-${{ github.repository }}
-      cancel-in-progress: false
     steps:
       - name: Check Out Source Repository
         uses: actions/checkout@v7
-      # The job copies the skill from this repository and fails when the directory is gone.
-      - name: Sync The nemo-ui-ux Skill
-        uses: ./.github/actions/distribute-sync
+      - name: Push Each Target Once
         env:
           CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
-        with:
-          repos: ${{ inputs.nemo_ui_ux_repos }}
-          repos-fallback: nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup
-          skills: nemo-ui-ux
-          legacy: nemo-ui
-  nemoizer:
-    name: Distribute nemoizer
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    concurrency:
-      group: Distribute-nemoizer-${{ github.repository }}
-      cancel-in-progress: false
-    steps:
-      - name: Check Out Source Repository
-        uses: actions/checkout@v7
-      - name: Sync The nemoizer Skill
-        uses: ./.github/actions/distribute-sync
-        env:
-          CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
-        with:
-          repos: ${{ inputs.nemoizer_repos }}
-          repos-fallback: nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup nemoe7/wiki
-          skills: nemoizer
+          TARGETS_JSON: ${{ needs.plan.outputs.targets }}
+        run: python3 .github/actions/distribute-sync/plan.py --push
