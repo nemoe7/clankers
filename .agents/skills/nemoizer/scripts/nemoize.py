@@ -30,6 +30,7 @@ MARKER = re.compile(r"\bnonemo:[ \t]*(.*?)(?=-->|\*/|;|\s|$|\bnonemo:)")
 # The rotation table names the avoided words, so its own rows never flag.
 TABLE_ROW = re.compile(r"^\|\s*`[^`]+`\s*\|")
 SKIP_DIRS = {
+  ".pytest_cache",
   ".git",
   ".venv",
   "__pycache__",
@@ -64,7 +65,7 @@ def skipped(path, root, ignores):
     relative = path.resolve().relative_to(root.resolve())
   except ValueError:
     relative = path
-  text = str(relative)
+  text = relative.as_posix()
   if any(part in SKIP_DIRS for part in Path(text).parts):
     return True
   if any(text == item or text.startswith(item + "/") for item in SKIP_PATHS):

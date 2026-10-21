@@ -5,7 +5,9 @@
 
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+
+import nemoize
 
 SCRIPT = Path(__file__).with_name("nemoize.py")
 
@@ -505,3 +507,26 @@ cls.assertEqual(panel.clientWidth, 320.5)
     assert syntax["errors"][0]["type"] == "SyntaxError"
     assert syntax["errors"][0]["line"] > 0
     assert not marker.exists()
+
+
+def test_ignore_prefixes_accept_windows_paths():
+  class WindowsPath(PureWindowsPath):
+    def resolve(self):
+      return self
+
+  root = WindowsPath("C:/repo")
+  assert nemoize.skipped(root / "vendor" / "file.txt", root, ["vendor"])
+  assert nemoize.skipped(root / ".agents" / "skills" / "tool" / "SKILL.md", root, [])
+  assert nemoize.skipped(root / "node_modules" / "lib" / "file.js", root, [])
+  assert not nemoize.skipped(root / "app" / "code.py", root, ["vendor"])
+
+
+def test_generated_pytest_cache_is_not_scanned(tmp_path):
+  cache = tmp_path / ".pytest_cache" / "v" / "cache"
+  cache.mkdir(parents=True)
+  (cache / "nodeids").write_text("picked fixture\n", encoding="utf-8")
+  (tmp_path / "prose.md").write_text("picked wording\n", encoding="utf-8")
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1
+  assert "prose.md:1: N002" in result.stdout
+  assert ".pytest_cache" not in result.stdout

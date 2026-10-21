@@ -6,8 +6,10 @@ import os
 import shutil
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import check
+import pytest
 
 FIVE_SENTENCES = "One. Two. Three. Four. Five."
 FOUR_SENTENCES = "One. Two. Three. Four."
@@ -132,3 +134,64 @@ def test_ste_linter_keeps_the_tool_standalone(tmp_path):
     cwd=tmp_path,
   )
   assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("status", (0, 1, 2))
+def test_rotation_gate_preserves_scanner_findings_and_errors(monkeypatch, status):
+  calls = []
+
+  def scan(command, **kwargs):
+    calls.append((command, kwargs))
+    return subprocess.CompletedProcess(command, status, "finding-data", "parser-data")
+
+  monkeypatch.setattr(check.subprocess, "run", scan)
+  errors = ["earlier-data"]
+  check.check_nemoizer(errors)
+  command, kwargs = calls[0]
+  assert command[:2] == [
+    sys.executable,
+    str(check.ROOT / "skills/refs/nemoizer/scripts/nemoize.py"),
+  ]
+  assert command[-1] == "."
+  assert "review-tests" not in command and "prose" not in command
+  for path in (
+    "skills/amending-violations/LICENSE.txt",
+    "skills/refs/amending-violations/LICENSE.txt",
+    "skills/arena-skill/assets/markdown-it.LICENSE",
+    "skills/refs/arena-skill/assets/markdown-it.LICENSE",
+    "skills/nemo-ui-ux/data/vendor",
+    "skills/refs/nemo-ui-ux/data/vendor",
+  ):
+    assert any(
+      command[index : index + 2] == ["--ignore", path]
+      for index in range(len(command) - 1)
+    )
+  assert kwargs == {
+    "cwd": check.ROOT,
+    "capture_output": True,
+    "text": True,
+    "check": False,
+  }
+  assert errors[0] == "earlier-data"
+  if status:
+    assert len(errors) == 2
+    assert "finding-data" in errors[-1] and "parser-data" in errors[-1]
+  else:
+    assert errors == ["earlier-data"]
+
+
+def test_main_enforces_rotation_findings(monkeypatch, capsys):
+  monkeypatch.setattr(
+    check, "parse_args", lambda: SimpleNamespace(update=False, ste=False)
+  )
+  monkeypatch.setattr(check, "validate", lambda errors: (0, 0))
+  for name in ("check_ste", "check_prose", "check_paragraph_caps"):
+    monkeypatch.setattr(check, name, lambda errors: None)
+  monkeypatch.setattr(
+    check,
+    "check_nemoizer",
+    lambda errors: errors.append("rotation-data"),
+    raising=False,
+  )
+  assert check.main() == 1
+  assert "rotation-data" in capsys.readouterr().out

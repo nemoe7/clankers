@@ -127,6 +127,19 @@ STE_DOCS = (
 STE_LINT = ".agents/skills/asd-ste100/scripts/ste-lint.py"
 # The prose lint covers the code comments and the documents outside the STE list.
 PROSE_LINT = "maintenance/lint_prose.py"
+NEMOIZER = "skills/refs/nemoizer/scripts/nemoize.py"
+NEMOIZER_IGNORES = (
+  "skills/amending-violations/LICENSE.txt",
+  "skills/refs/amending-violations/LICENSE.txt",
+  "skills/squash/LICENSE.txt",
+  "skills/refs/squash/LICENSE.txt",
+  "skills/arena-skill/assets/lucide.LICENSE",
+  "skills/refs/arena-skill/assets/lucide.LICENSE",
+  "skills/arena-skill/assets/markdown-it.LICENSE",
+  "skills/refs/arena-skill/assets/markdown-it.LICENSE",
+  "skills/nemo-ui-ux/data/vendor",
+  "skills/refs/nemo-ui-ux/data/vendor",
+)
 
 # One paragraph carries at most this many sentences. A longer one splits.
 PARAGRAPH_SENTENCE_CAP = 4
@@ -215,6 +228,19 @@ def check_prose(errors: list[str]) -> None:
   if result.returncode:
     output = (result.stdout + result.stderr).strip()
     errors.append(f"Prose lint failed:\n{output}")
+
+
+def check_nemoizer(errors: list[str]) -> None:
+  """Run rotations without changing licenses, vendor data, or review defaults."""
+  command = [sys.executable, str(ROOT / NEMOIZER)]
+  for path in NEMOIZER_IGNORES:
+    command.extend(("--ignore", path))
+  result = subprocess.run(
+    [*command, "."], cwd=ROOT, capture_output=True, text=True, check=False
+  )
+  if result.returncode:
+    output = (result.stdout + result.stderr).strip()
+    errors.append(f"Nemoizer rotations failed:\n{output}")
 
 
 def sentence_count(text: str) -> int:
@@ -1031,6 +1057,7 @@ def main() -> int:
     return 0
   skills, workflows = run_check("repository", errors, lambda: validate(errors))
   run_check("STE lint", errors, lambda: check_ste(errors))
+  run_check("Nemoizer rotations", errors, lambda: check_nemoizer(errors))
   run_check("prose lint", errors, lambda: check_prose(errors))
   run_check("paragraph caps", errors, lambda: check_paragraph_caps(errors))
   span = time.perf_counter() - started

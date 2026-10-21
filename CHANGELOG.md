@@ -43,6 +43,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nemoizer
 
+- Run N001–N003 rotations in repository checks and include Nemoizer tests in root pytest. Keep license and vendor exclusions and opt-in review defaults. Match path exclusions across platforms.
+
 - Use Select in arena guides. Add scoped N003 exclusions for report and proxy record keys. Keep contracts and license bytes unchanged.
 
 #### skills
