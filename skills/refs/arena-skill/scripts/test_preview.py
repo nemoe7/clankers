@@ -3220,7 +3220,7 @@ def test_bare_task_reads_the_stored_row():
       "answer-direct"
     )
     assert "answer-unrelated" not in full_read.stdout
-    assert "Unrelated answer must stay out" not in full_read.stdout
+    assert "Unrelated answer must stay out" not in full_read.stdout  # nonemo: T001
     assert stored_content() == before_read
     written_again = cli("task", "set", "read-task", "--append", "-d", "Another step")
     assert written_again.returncode == 0, written_again.stderr
@@ -3231,7 +3231,7 @@ def test_bare_task_reads_the_stored_row():
     assert long_detail in listed.stdout
     # The listing matches the page: both linked answers show, the unrelated one stays out.
     assert report_text in listed.stdout and direct_text in listed.stdout
-    assert "Unrelated answer must stay out" not in listed.stdout
+    assert "Unrelated answer must stay out" not in listed.stdout  # nonemo: T001
     store.write_task("read-task", status="finished")
     finished = cli("task", "show", "read-task")
     assert finished.returncode == 0, finished.stderr
@@ -4751,7 +4751,7 @@ def test_restore_import():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(restore)},
     )
     assert refused.returncode == 1
-    assert "stamp, type and text" in refused.stderr
+    assert "stamp, type and text" in refused.stderr  # nonemo: T001
     assert "half" not in {row["id"] for row in preview.Store(restore).state()["notes"]}
     assert {row["id"] for row in preview.Store(restore).state()["notes"]} == {
       "carried",
@@ -4924,7 +4924,7 @@ def test_run_records_the_exit_and_announces_it_once(capsys):
     )
     assert code == 3
     out = capsys.readouterr().out
-    assert "ok" in out and "run check done: exit 3" in out
+    assert "ok" in out and "run check done: exit 3" in out  # nonemo: T001
     preview.run_notices(directory)
     notice = capsys.readouterr().out
     assert "run check done: exit 3" in notice and notice.rstrip().endswith("ok")
@@ -5612,7 +5612,7 @@ def test_a_detached_run_prints_one_status_line_per_call(capsys):
     preview.run_command(detached_dir, "pr-checks", ["--", "true"])
     preview.run_notices(detached_dir, show_running=True)
     done = capsys.readouterr()
-    assert "run pr-checks done: exit 0" in done.out, done.out
+    assert "run pr-checks done: exit 0" in done.out, done.out  # nonemo: T001
     assert done.err == ""
     preview.run_notices(detached_dir, show_running=True)
     later = capsys.readouterr()
@@ -5629,9 +5629,15 @@ def test_a_live_run_progress_line_prints_once_per_call(capsys):
     preview.write_run_progress(detached_dir, "pr-checks", "Failed so far: Tests")
 
     assert preview.run_notices(detached_dir) == 1
-    assert "run pr-checks progress: Failed so far: Quality" in capsys.readouterr().err
+    assert (
+      "run pr-checks progress: Failed so far: Quality"  # nonemo: T001
+      in capsys.readouterr().err
+    )
     assert preview.run_notices(detached_dir) == 1
-    assert "run pr-checks progress: Failed so far: Tests" in capsys.readouterr().err
+    assert (
+      "run pr-checks progress: Failed so far: Tests"  # nonemo: T001
+      in capsys.readouterr().err
+    )
     assert preview.run_notices(detached_dir) == 0
     record = preview.routed_record(detached_dir, "pr-checks")
     assert record["exit"] is None
@@ -5680,7 +5686,7 @@ def test_the_reminder_carries_the_running_status_line():
       check=False,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": heartbeat_dir},
     )
-    assert "run pr-checks running" not in gate.stderr, gate.stderr
+    assert "run pr-checks running" not in gate.stderr, gate.stderr  # nonemo: T001
 
 
 def test_reminder_prioritizes_an_inbox_item_over_a_live_run():
@@ -5721,7 +5727,7 @@ def test_reminder_reports_a_finished_run_without_a_second_line(capsys):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip().startswith("run pr-checks done: exit 0"), result.stdout
-    assert len(result.stdout.splitlines()) == 1, result.stdout
+    assert len(result.stdout.splitlines()) == 1, result.stdout  # nonemo: T002
     assert result.stderr == ""
 
 
@@ -5958,7 +5964,7 @@ def test_route_names_the_worktree_step(capsys):
     assert preview.route_command(directory, "gates", ["make", "check"]) == 0
   captured = capsys.readouterr()
   assert "routed gates:" in captured.err
-  assert "arena-preview worktree start" in captured.err
+  assert "arena-preview worktree start" in captured.err  # nonemo: T001
 
 
 def test_gate_blocks_a_cd_line_past_the_threshold():
@@ -6275,7 +6281,7 @@ def test_ack_task_reminder():
       check=True,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": ack_dir},
     )
-    assert "-m ack-work" in result.stdout
+    assert "-m ack-work" in result.stdout  # nonemo: T001
 
 
 def test_report_unread_markers():
@@ -6489,7 +6495,7 @@ def test_state_commands_break_while_the_server_is_not_up():
       env=env,
     )
     assert cli.returncode == 1, cli.stdout
-    assert "arena-preview serve" in cli.stderr
+    assert "arena-preview serve" in cli.stderr  # nonemo: T001
 
 
 def test_poll_finishes_before_the_tool_timeout(monkeypatch, capsys):
@@ -6640,7 +6646,7 @@ def test_poll_requires_a_closing_poll_after_a_run_verdict(capsys):
     capsys.readouterr()
     assert preview.poll_inbox(store) == 0
     output = capsys.readouterr().out
-    assert "run check done: exit 0" in output
+    assert "run check done: exit 0" in output  # nonemo: T001
     assert "DO NOT END TURN. POLL AGAIN." in output
     # The gate verdict breaks the poll, so the closing poll is not spam.
     assert store.meta_value(preview.POLL_REPEAT_META) == "0"
@@ -7401,7 +7407,7 @@ def test_import_state_has_no_force_option():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": directory},
     )
     assert result.returncode == 2
-    assert "unrecognized arguments: --force" in result.stderr
+    assert "unrecognized arguments: --force" in result.stderr  # nonemo: T001
 
 
 def test_a_newer_snapshot_replaces_the_live_state():
@@ -8772,14 +8778,14 @@ def test_note_reread_prints_every_match():
 
     both = run("note", "show", "beef001")
     assert both.returncode == 0
-    assert "first stored note" in both.stdout
-    assert "second stored note" in both.stdout
+    assert "first stored note" in both.stdout  # nonemo: T001
+    assert "second stored note" in both.stdout  # nonemo: T001
     assert "acked 2026-09-22T12:00:00" in both.stdout
     assert "unacked" in both.stdout
     one = run("note", "show", "beef001-2222222222222222222222222")
     assert one.returncode == 0
-    assert "second stored note" in one.stdout
-    assert "first stored note" not in one.stdout
+    assert "second stored note" in one.stdout  # nonemo: T001
+    assert "first stored note" not in one.stdout  # nonemo: T001
     gone = run("note", "show", "ffff999")
     assert gone.returncode == 1
     assert "ffff999" in gone.stderr
@@ -8801,7 +8807,7 @@ def test_poll_breaks_on_finished_run(capsys):
     assert preview.poll_inbox(store, sleeper=sleeper) == 0
     assert len(sleeps) == 1
     out = capsys.readouterr().out
-    assert "run gate done: exit 0" in out
+    assert "run gate done: exit 0" in out  # nonemo: T001
     assert out.rstrip().endswith("DO NOT END TURN. POLL AGAIN.")
     assert preview.run_notices(directory) == 0
 
@@ -9131,7 +9137,7 @@ def test_cli_argument_errors_omit_usage(args):
   assert "error:" in cli.stderr and "preview.py" not in cli.stderr
   assert "usage:" not in cli.stderr.casefold()
   if not args:
-    assert "arena-preview --help" in cli.stderr
+    assert "arena-preview --help" in cli.stderr  # nonemo: T001
   if args and args[-1].startswith("not-"):
     assert args[-1] in cli.stderr
 
@@ -9883,8 +9889,11 @@ def test_a_routed_line_that_is_not_a_check_wait_skips_the_watcher(capsys):
       )
     out = capsys.readouterr().out
     assert plain == 0 and run_watch == 0, out
-    assert "run gates done: exit 0" in out, "the plain line ran at once"
-    assert "run run-watch done: exit 0" in out, "a run watch needs no discovery"
+    assert "run gates done: exit 0" in out, "the plain line ran at once"  # nonemo: T001
+    assert (
+      "run run-watch done: exit 0"  # nonemo: T001
+      in out
+    ), "a run watch needs no discovery"
     assert not [call for call in calls if call[0] == "gh"], (
       "no discovery read ran for either line"
     )
@@ -9918,7 +9927,7 @@ def test_logs_repeats_the_worktree_step_while_a_run_is_still_going(tmp_path, cap
   (runs / "gate-one.json").write_text(json.dumps(record), encoding="utf-8")
   assert preview.run_log_report(tmp_path, "gate-one") == 0
   out = capsys.readouterr().out
-  assert "run gate-one running" in out
+  assert "run gate-one running" in out  # nonemo: T001
   assert preview.WORKTREE_STEP in out, (
     "a live run repeats the worktree step on every logs call"
   )
@@ -10037,20 +10046,20 @@ def test_a_second_read_of_a_running_run_is_blocked(tmp_path, capsys):
   }
   (runs / "gate-one.json").write_text(json.dumps(record), encoding="utf-8")
   assert preview.run_log_report(tmp_path, "gate-one") == 0
-  assert "run gate-one running" in capsys.readouterr().out
+  assert "run gate-one running" in capsys.readouterr().out  # nonemo: T001
   assert preview.run_log_report(tmp_path, "gate-one") == 130
   assert "WAIT BLOCKED" in capsys.readouterr().err
   record["exit"] = 0
   record["seconds"] = 3
   (runs / "gate-one.json").write_text(json.dumps(record), encoding="utf-8")
   assert preview.run_log_report(tmp_path, "gate-one") == 0
-  assert "run gate-one done: exit 0" in capsys.readouterr().out
+  assert "run gate-one done: exit 0" in capsys.readouterr().out  # nonemo: T001
   # A fresh run under the same name carries another stamp, so its first read stands.
   record["exit"] = None
   record["started_at"] = "2026-10-16T15:00:00+00:00"
   (runs / "gate-one.json").write_text(json.dumps(record), encoding="utf-8")
   assert preview.run_log_report(tmp_path, "gate-one") == 0
-  assert "run gate-one running" in capsys.readouterr().out
+  assert "run gate-one running" in capsys.readouterr().out  # nonemo: T001
 
 
 def test_a_blocked_read_names_the_next_task_and_its_worktree(tmp_path, capsys):
@@ -10099,7 +10108,7 @@ def test_a_blocked_read_names_the_next_task_and_its_worktree(tmp_path, capsys):
   assert preview.run_log_report(tmp_path, "gate-one") == 130
   err = capsys.readouterr().err
   assert "next-task" in err
-  assert "worktree start --gate gate-one" in err
+  assert "worktree start --gate gate-one" in err  # nonemo: T001
   assert "done-task" not in err
   assert "held-run" not in err
 
@@ -10333,12 +10342,15 @@ def test_skills_lists_full_yaml_descriptions_and_prefers_installed_names(capsys)
     )
     assert "installed" in installed.lower(), "the source type stays beside its path"
     assert "repository" in repository.lower(), "the source type stays beside its path"
-    assert "Installed full description, with a colon: preserve it." in output.out
+    assert (
+      "Installed full description, with a colon: preserve it."  # nonemo: T001
+      in output.out
+    )
     assert "skills/repo-only/SKILL.md" in output.out
-    assert "First line: keep it all." in output.out
-    assert "Second line: keep this too." in output.out
-    assert "Unicode 雙語: # metadata stays intact." in output.out
-    assert "Duplicate repository entry" not in output.out
+    assert "First line: keep it all." in output.out  # nonemo: T001
+    assert "Second line: keep this too." in output.out  # nonemo: T001
+    assert "Unicode 雙語: # metadata stays intact." in output.out  # nonemo: T001
+    assert "Duplicate repository entry" not in output.out  # nonemo: T001
     assert "Template entry" not in output.out
     assert "DO-NOT-PRINT-THE-SKILL-BODY" not in output.out
 
@@ -10703,7 +10715,7 @@ def test_the_import_receipt_names_the_fate(tmp_path):
     env=env,
   )
   assert rejected.returncode == 2
-  assert "unrecognized arguments: --merge" in rejected.stderr
+  assert "unrecognized arguments: --merge" in rejected.stderr  # nonemo: T001
 
 
 def test_a_queued_download_names_the_owner_click(tmp_path):
@@ -11589,8 +11601,8 @@ def test_preview_violation_wakes_poll_and_does_not_wait(capsys):
     ):
       assert preview.poll_inbox(store, sleeper=flag_during_wait) == 0
     output = capsys.readouterr().out
-    assert "The user flagged a violation." in output
-    assert "Run `arena-preview read`, then ack" in output
+    assert "The user flagged a violation." in output  # nonemo: T001
+    assert "Run `arena-preview read`, then ack" in output  # nonemo: T001
     assert store.pending_violation_note() is not None
     assert not store.polling()
 

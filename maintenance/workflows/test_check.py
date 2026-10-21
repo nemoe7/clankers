@@ -150,8 +150,9 @@ def test_rotation_gate_preserves_scanner_findings_and_errors(monkeypatch, status
   command, kwargs = calls[0]
   assert command[:2] == [
     sys.executable,
-    str(check.ROOT / "skills/refs/nemoizer/scripts/nemoize.py"),
+    str(check.ROOT / check.PROSE_LINT),
   ]
+  assert command[2] == "--nemoizer"
   assert command[-1] == "."
   assert "review-tests" not in command and "prose" not in command
   for path in (

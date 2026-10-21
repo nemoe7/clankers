@@ -4,7 +4,7 @@ Find and replace AI-flavored synonyms with plain words from one rotation table. 
 
 ## Setup
 
-The tools need Python 3 and no extra packages. Use the repository paths below, or install the agent payload as described in [Skills](../README.md).
+The tools need Python 3.10 or later, with no extra Python packages. JavaScript checks need Node.js and Acorn. Use the repository paths below, or install the agent payload as described in [Skills](../README.md).
 
 [SKILL.md](SKILL.md) holds the agent instructions. [Rule reference](references/rules.md) holds the rotations, concrete lint IDs, exclusion syntax, and prose limits.
 
@@ -36,11 +36,15 @@ The command prints each changed line before and after the rewrite. Rule-specific
 python skills\nemoizer\scripts\nemoizer prose --context instruction --paragraph-cap 4 path\to\draft.md
 ```
 
-Sentence context is explicit: instruction, description, or unknown. Instruction and description caps are 20 and 25 words. Unknown skips sentence checks but still checks paragraphs.
+Code prose comes from comments and Python docstrings, not ordinary string literals. Escaped docstring line breaks use the physical string span for source locations.
 
-The paragraph cap is six sentences. A project can set a stricter cap from one through six. The example uses four.
+Default scans include sentence and paragraph checks. Instruction and unclassified prose use 20 words per sentence. An explicit description scope uses 25.
 
-Output is JSON with review candidates and per-file coverage. Native counters omit code spans and fences, treat ordinary pipe-table cells separately, and exclude headings, lists, quotes, and tables from paragraph counts.
+The paragraph cap is four sentences. A project can set a stricter cap from one through four.
+
+Output is JSON with review candidates and per-file coverage.
+
+Native counters omit code spans and fences. They count ordinary pipe-table cells separately. Paragraph counts exclude headings, lists, quotes, and tables. Sentence counts join wrapped lines in ordinary prose blocks.
 
 ## Test assertion review
 
@@ -48,22 +52,26 @@ Output is JSON with review candidates and per-file coverage. Native counters omi
 python skills\nemoizer\scripts\nemoizer review-tests path\to\tests
 ```
 
-Opt-in review reports selected prose-output and fixed-measurement assertion shapes. It uses Python syntax trees and an existing Acorn parser for JavaScript. Unavailable or unsupported parsing is marked not checked.
+Default scans review selected output-text and fixed-measurement assertion shapes in discovered tests and recognized helpers. The checker uses Python syntax trees and an existing Acorn parser for JavaScript. The checker marks unavailable or unsupported parsing as not checked.
 
-It does not execute, rewrite, or enforce tests. Findings need manual review: exact executable, protocol, and verbatim-data expectations can be valid.
+Discovery uses pytest.ini, test names, and test declarations, without treating every imported production file as a test. `--test-helper` includes another helper.
+
+It does not execute or rewrite tests. Findings need manual review: exact executable, protocol, and verbatim-data expectations can be valid.
 
 ## Results and limits
 
 | Mode | Result |
 | --- | --- |
-| Scan | Text findings, with exit 1 when findings exist and 0 otherwise |
+| Scan | Text findings, with exit 1 for findings, 2 for required-parser errors, and 0 otherwise |
 | Format | Changed lines, with exit 0 on completion |
 | Collect | Every marker, with exit 0 on completion |
-| Prose | JSON candidates and coverage, with exit 1 for candidates and 0 otherwise |
+| Prose | JSON candidates and coverage, with exit 1 for candidates, 2 for parser errors, and 0 otherwise |
 | Review tests | JSON candidates, coverage, and errors, with exit 1 for candidates, 2 for parser errors, and 0 otherwise |
 
 Invalid command arguments return exit 2. Prose mode requires existing target paths. Directory scans omit configured dependency, build, and session-state paths.
 
-Tools skip binary and invalid UTF-8 files. The prose parser covers ordinary Markdown shapes, not all Markdown syntax, and does not infer instruction context or prove clarity, accuracy, or meaning preservation.
+Word rotations skip binary and invalid UTF-8 files. Static test discovery can miss dynamic helpers. Coverage limits remain visible.
+
+The prose parser covers ordinary Markdown shapes, not all Markdown syntax. It does not infer instruction context or prove clarity, accuracy, or meaning preservation.
 
 Manual review still covers unsupported claims, redundant prose, test behavior, and required protocol or verbatim-data contracts. This README is human documentation and is not part of the installed skill payload.

@@ -6,6 +6,7 @@ description: >
   prose included. Use when naming a variable, field, parameter, key, or prose
   term, when a draft sounds machine-written, or when asked to run or extend the
   rotation table.
+compatibility: Python 3.10+, with Node.js and Acorn for JavaScript checks.
 ---
 
 # Nemoizer
@@ -38,6 +39,9 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
   file.
 - `check.py` runs the linter with the ignore list, so a new avoided word fails the
   gate.
+
+- Run word rotations, sentence-length checks, and paragraph-length checks by default.
+- Use 20 words per sentence for unclassified prose and 25 for an explicit description scope.
 
 ## Writing the rotation
 
@@ -105,7 +109,7 @@ Delete a marker when the line no longer needs it.
 - Lead a contextual reply with its decision while retaining required evidence and reasoning that can change that decision.
 - Limit instructions to 20 words and descriptions to 25 unless a longer form is necessary to preserve meaning.
 - Rewrite noun clusters longer than three words when the rewrite preserves the technical term and its meaning.
-- Keep one topic per paragraph within six sentences or the stricter project limit.
+- Keep one topic per paragraph within four sentences or the stricter project limit.
 - Use a list for three or more steps or conditions while preserving their order and grouping.
 - Define an uncommon technical term when needed, and use that term consistently.
 - Prefer simple tenses unless a compound form carries confidence or current relevance that must survive.

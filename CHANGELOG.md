@@ -43,6 +43,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nemoizer
 
+- Run prose and test domains by default with separate P001–P003 and T001–T002 IDs. Keep legacy markers and raw word rotations.
+
+- Bundle shared comment and docstring extraction. Keep parser failures visible, test discovery static, and required exact-text contracts excluded by rule.
+
+- Limit repository length checks to human documentation at 25 words and four sentences. Keep reusable defaults strict and leave agent clauses unchanged.
+
 - Run N001–N003 rotations in repository checks and include Nemoizer tests in root pytest. Keep license and vendor exclusions and opt-in review defaults. Match path exclusions across platforms.
 
 - Use Select in arena guides. Add scoped N003 exclusions for report and proxy record keys. Keep contracts and license bytes unchanged.
@@ -3618,7 +3624,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - ChatGPT's mermaid clause tightens to `Mermaid ONLY when structure/flow beats prose, NEVER for lists or decoration`, keeping shape constraints, plus the squashed commit list and unrun-check ban.
 - The squashed commit list becomes unmissable after practice ignored it: `rules/ARENA.md` opens its Git section with it bold as a standalone paragraph. `rules/AGENTS.md` leads its Git list with a MUST bullet. Both state that committing without printing it is a violation, not an oversight.
 - An unlisted commit requires printing the fixed timeline before the next one. Compression guidance runs to exhaustion: README step 1 repeats passes until one yields nothing, matching the `squash` skill's loop.
-- Staging now respects the user's global gitignore (`core.excludesFile`), `AGENT_HANDOFF.md` is never committed overriding the skill's requirement, and a minimal root `AGENTS.md` points to README and changelog.
+- Staging now respects the user's global gitignore (`core.excludesFile`). `AGENT_HANDOFF.md` is never committed, overriding the skill's requirement. A minimal root `AGENTS.md` points to README and changelog.
 - The clauses rose `rules/AGENTS.md` over budget with compression declined (+41).
 - AGENTS.md makes committing mandatory (atomic, Conventional, off `main`) by folding the push/PR allowance into the commit clause. It removes the only-when-required permission, scoped to AGENTS.md only. It squashes with the `squash` skill (`belonging to it` → `in it`, `characters` → `chars`).
 

@@ -284,7 +284,7 @@ def test_the_gate_refuses_to_replay_a_mixed_line():
     result = run("true; npm test", state=Path(directory))
     assert result.returncode == 130, result.stderr
     assert "RUN BLOCKED" in result.stderr, result.stderr
-    assert "arena-preview run start" in result.stderr, result.stderr
+    assert "arena-preview run start" in result.stderr, result.stderr  # nonemo: T001
     assert not (Path(directory) / "runs").exists()
 
 
@@ -296,7 +296,7 @@ def test_the_gate_reaches_the_tick_for_a_named_runner():
   ):
     detach = run("npm test", state=Path(detach_dir))
     assert detach.returncode == 0, detach.stderr
-    assert "RUN DETACHED: `npm-tests`" in detach.stderr, detach.stderr
+    assert "RUN DETACHED: `npm-tests`" in detach.stderr, detach.stderr  # nonemo: T001
     record = json.loads(
       (Path(detach_dir) / "runs" / "npm-tests.json").read_text(encoding="utf-8")
     )
@@ -838,7 +838,10 @@ def test_remote_drift_refreshes_shallow_refs_without_replaying_absorbed_work():
 
     git(checkout, "remote", "set-url", "origin", str(root / "missing.git"))
     result = run("git push --dry-run origin work", cwd=str(checkout))
-    assert "Remote branch check unavailable" in result.stderr, result.stderr
+    assert (
+      "Remote branch check unavailable"  # nonemo: T001
+      in result.stderr
+    ), result.stderr
     assert "behind origin/main" not in result.stderr, result.stderr
     assert git(checkout, "rev-parse", "HEAD") == head
 

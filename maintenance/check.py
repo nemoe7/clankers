@@ -129,6 +129,9 @@ STE_LINT = ".agents/skills/asd-ste100/scripts/ste-lint.py"
 PROSE_LINT = "maintenance/lint_prose.py"
 NEMOIZER = "skills/refs/nemoizer/scripts/nemoize.py"
 NEMOIZER_IGNORES = (
+  "LICENSE.md",
+  "skills/arena-skill/assets/markdown-it.min.js",
+  "skills/refs/arena-skill/assets/markdown-it.min.js",
   "skills/amending-violations/LICENSE.txt",
   "skills/refs/amending-violations/LICENSE.txt",
   "skills/squash/LICENSE.txt",
@@ -231,8 +234,8 @@ def check_prose(errors: list[str]) -> None:
 
 
 def check_nemoizer(errors: list[str]) -> None:
-  """Run rotations without changing licenses, vendor data, or review defaults."""
-  command = [sys.executable, str(ROOT / NEMOIZER)]
+  """Check Nemoizer domains with repository prose scope and license exclusions."""
+  command = [sys.executable, str(ROOT / PROSE_LINT), "--nemoizer"]
   for path in NEMOIZER_IGNORES:
     command.extend(("--ignore", path))
   result = subprocess.run(
@@ -240,7 +243,7 @@ def check_nemoizer(errors: list[str]) -> None:
   )
   if result.returncode:
     output = (result.stdout + result.stderr).strip()
-    errors.append(f"Nemoizer rotations failed:\n{output}")
+    errors.append(f"Nemoizer domains failed:\n{output}")
 
 
 def sentence_count(text: str) -> int:
@@ -1057,7 +1060,7 @@ def main() -> int:
     return 0
   skills, workflows = run_check("repository", errors, lambda: validate(errors))
   run_check("STE lint", errors, lambda: check_ste(errors))
-  run_check("Nemoizer rotations", errors, lambda: check_nemoizer(errors))
+  run_check("Nemoizer domains", errors, lambda: check_nemoizer(errors))
   run_check("prose lint", errors, lambda: check_prose(errors))
   run_check("paragraph caps", errors, lambda: check_paragraph_caps(errors))
   span = time.perf_counter() - started

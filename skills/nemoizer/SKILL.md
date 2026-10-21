@@ -3,6 +3,7 @@ name: nemoizer
 description: >
   Replace AI-flavored synonyms with the plain word, using one rotation table and
   a bundled linter that reads every text file, comments and prose included.
+compatibility: Python 3.10+, with Node.js and Acorn for JavaScript checks.
 ---
 
 # Nemoizer
@@ -43,6 +44,9 @@ Do not rewrite exclusion markers or the rotation table; apply only unsuppressed 
 The rotation has landed, so `check.py` runs the linter and a new avoided word fails
 the gate.
 
+Run rotations and sentence/paragraph-length checks by default.
+Limit sentences to 20 words for unclassified prose, 25 for explicit description scope.
+
 ## Prose review
 
 - Replace wordy action phrases with plain verbs only when actor, timing, and meaning stay unchanged.
@@ -70,7 +74,7 @@ the gate.
 - Lead contextual replies with their decisions, retaining required evidence and reasoning that can change those decisions.
 - Limit instructions to 20 words and descriptions to 25 unless preserving meaning requires more.
 - Rewrite noun clusters over three words when the technical term and its meaning survive.
-- Keep one topic per paragraph within six sentences or the stricter project limit.
+- Keep one topic per paragraph within four sentences or the stricter project limit.
 - List three or more steps or conditions, preserving their order and grouping.
 - Define uncommon technical terms when needed, and use them consistently.
 - Prefer simple tenses unless compound forms carry confidence or current relevance that must survive.

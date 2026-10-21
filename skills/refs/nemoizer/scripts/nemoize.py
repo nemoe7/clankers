@@ -1,16 +1,21 @@
 # nonemo: N001
 # nonemo: N002
 # nonemo: N003
-"""Flag rotations, rewrite text, and list every exclusion marker."""
+"""Check prose and test candidates, rotate words, and collect exclusions."""
 
 import argparse
 import ast
+import configparser
+import fnmatch
 import json
 import re
 import shutil
 import subprocess
 import sys
+import tokenize
 from pathlib import Path
+
+from prose import COMMENT_SUFFIXES, SPECIAL_CODE_NAMES, prose_spans
 
 # (name, avoided pattern, plain word).
 # A stem word that takes its own plain word.
@@ -20,12 +25,20 @@ ROTATIONS = (
   ("transmit", r"(?<![A-Za-z0-9])transmit\w*(?![A-Za-z0-9])", "send"),
   ("kind", r"(?<![A-Za-z0-9])kinds?(?![A-Za-z0-9])", "type"),
 )
-RULE_IDS = {"transmit": "N001", "pick": "N002", "kind": "N003"}
+LEGACY_ROTATIONS = {"transmit": "N001", "pick": "N002", "kind": "N003"}
+RULE_IDS = dict.fromkeys(LEGACY_ROTATIONS, "P001")
 SENTENCE_CAPS = {"instruction": 20, "description": 25}
-PARAGRAPH_CAP = 6
-PROSE_RULE_IDS = {"sentence": "N004", "paragraph": "N005"}
-TEST_RULE_IDS = {"output_text": "N006", "measurement": "N007"}
-KNOWN_RULE_IDS = {*RULE_IDS.values(), *PROSE_RULE_IDS.values(), *TEST_RULE_IDS.values()}
+PARAGRAPH_CAP = 4
+PROSE_RULE_IDS = {"sentence": "P002", "paragraph": "P003"}
+TEST_RULE_IDS = {"output_text": "T001", "measurement": "T002"}
+LEGACY_RULES = {"N004": "P002", "N005": "P003", "N006": "T001", "N007": "T002"}
+KNOWN_RULE_IDS = {
+  *RULE_IDS.values(),
+  *PROSE_RULE_IDS.values(),
+  *TEST_RULE_IDS.values(),
+  *LEGACY_ROTATIONS.values(),
+  *LEGACY_RULES,
+}
 MARKER = re.compile(r"\bnonemo:[ \t]*(.*?)(?=-->|\*/|;|\s|$|\bnonemo:)")
 # The rotation table names the avoided words, so its own rows never flag.
 TABLE_ROW = re.compile(r"^\|\s*`[^`]+`\s*\|")
@@ -115,6 +128,15 @@ def exclusions(path, lines):
   return file_ids, line_ids, marks
 
 
+def suppressed(code, ids, name=None):
+  """Keep legacy rotation exclusions word-specific."""
+  return (
+    code in ids
+    or (name is not None and LEGACY_ROTATIONS[name] in ids)
+    or any(old in ids and canonical == code for old, canonical in LEGACY_RULES.items())
+  )
+
+
 def plain(word, name, use):
   """Give the matched word its plain word, and keep the old word's case."""
   form = EXCEPTIONS.get(word.lower()) or re.sub(
@@ -130,7 +152,7 @@ def plain(word, name, use):
 def rotate(line, suppressed=frozenset()):
   """Swap each matched word for its plain word, and take the exception words first."""
   for name, pattern, use in ROTATIONS:
-    if RULE_IDS[name] in suppressed:
+    if RULE_IDS[name] in suppressed or LEGACY_ROTATIONS[name] in suppressed:
       continue
     line = re.sub(
       pattern,
@@ -154,11 +176,11 @@ def scan(targets, ignores):
     for number, line in enumerate(lines, 1):
       if TABLE_ROW.match(line.strip()):
         continue
-      suppressed = file_ids | line_ids[number - 1]
+      excluded = file_ids | line_ids[number - 1]
       visible = MARKER.sub(lambda match: " " * len(match[0]), line)
       for name, pattern, use in ROTATIONS:
         code = RULE_IDS[name]
-        if code in suppressed:
+        if suppressed(code, excluded, name):
           continue
         for word in sorted(set(re.findall(pattern, visible, flags=re.IGNORECASE))):
           findings.append(f"{path}:{number}: {code} {word} -> {use}")
@@ -204,11 +226,12 @@ def prose_counts(text):
   sentences, paragraphs, block = [], [], []
   fence, width, divider_pending = None, 0, False
 
+  def parts(value):
+    value = re.sub(r"(`+)(.*?)\1", lambda match: " " * len(match[0]), value)
+    return re.finditer(r"(.*?)(?:[.!?](?:\s+|$)|$)", value, re.DOTALL)
+
   def lengths(value):
-    value = re.sub(r"(`+)(.*?)\1", "", value)
-    return [
-      len(part.split()) for part in re.split(r"[.!?](?:\s+|$)", value) if part.strip()
-    ]
+    return [len(match[1].split()) for match in parts(value) if match[1].strip()]
 
   def cells(value):
     if "|" not in value:
@@ -235,10 +258,25 @@ def prose_counts(text):
     return [cell.strip() for cell in row] if len(row) > 1 else []
 
   def flush():
-    if block and not re.match(r"(?:[#>*+|-]|\d+[.)]\s)", block[0][1].lstrip()):
-      paragraphs.append(
-        (block[0][0], len(lengths(" ".join(value for _, value in block))))
-      )
+    if not block:
+      return
+    if re.match(r"(?:[#>*+|-]|\d+[.)]\s)", block[0][1].lstrip()):
+      for number, value in block:
+        sentences.extend((number, 1, count) for count in lengths(value))
+    else:
+      offsets, offset, count = [], 0, 0
+      for number, value in block:
+        offsets.append((offset, number))
+        offset += len(value) + 1
+      for match in parts(" ".join(value for _, value in block)):
+        value = match[1]
+        if not value.strip():
+          continue
+        start = match.start(1) + len(value) - len(value.lstrip())
+        number = next(number for offset, number in reversed(offsets) if offset <= start)
+        sentences.append((number, 1, len(value.split())))
+        count += 1
+      paragraphs.append((block[0][0], count))
     block.clear()
 
   for index, line in enumerate(lines):
@@ -282,8 +320,9 @@ def prose_counts(text):
     else:
       block.append((number, line))
       segments = [line]
-    for segment in segments:
-      sentences.extend((number, 1, count) for count in lengths(segment))
+    if width:
+      for segment in segments:
+        sentences.extend((number, 1, count) for count in lengths(segment))
   flush()
   return sentences, paragraphs
 
@@ -294,11 +333,11 @@ def prose_review(path, text, context, paragraph_cap):
   file_ids, line_ids, _ = exclusions(path, lines)
   findings = []
   sentences, paragraphs = prose_counts(text)
-  cap = SENTENCE_CAPS.get(context)
+  cap = SENTENCE_CAPS.get(context, SENTENCE_CAPS["instruction"])
   code = PROSE_RULE_IDS["sentence"]
-  if cap is not None and code not in file_ids:
+  if not suppressed(code, file_ids):
     for number, column, count in sentences:
-      if count > cap and code not in line_ids[number - 1]:
+      if count > cap and not suppressed(code, line_ids[number - 1]):
         findings.append(
           {
             "rule": code,
@@ -311,9 +350,9 @@ def prose_review(path, text, context, paragraph_cap):
           }
         )
   code = PROSE_RULE_IDS["paragraph"]
-  if code not in file_ids:
+  if not suppressed(code, file_ids):
     for number, count in paragraphs:
-      if count > paragraph_cap and code not in line_ids[number - 1]:
+      if count > paragraph_cap and not suppressed(code, line_ids[number - 1]):
         findings.append(
           {
             "rule": code,
@@ -325,6 +364,31 @@ def prose_review(path, text, context, paragraph_cap):
             "status": "review",
           }
         )
+  return findings
+
+
+def source_prose(path, text, context, paragraph_cap):
+  """Check extracted code prose while retaining physical source locations."""
+  if path.suffix in COMMENT_SUFFIXES or path.name in SPECIAL_CODE_NAMES:
+    spans = prose_spans(path, text)
+  elif path.suffix in {".json", ".csv", ".lock"}:
+    spans = []
+  else:
+    spans = [(text, 1, len(text.splitlines()))]
+  lines = text.splitlines()
+  file_ids, line_ids, _ = exclusions(path, lines)
+  findings = []
+  for value, first, last in spans:
+    for row in prose_review(
+      path, MARKER.sub(lambda match: " " * len(match[0]), value), context, paragraph_cap
+    ):
+      if len(value.splitlines()) > last - first + 1:
+        row["line"] = first
+      else:
+        row["line"] += first - 1
+      ids = file_ids | line_ids[row["line"] - 1]
+      if not suppressed(row["rule"], ids):
+        findings.append(row)
   return findings
 
 
@@ -341,7 +405,7 @@ def prose_main(argv=None):
   for target in arguments.targets:
     if not Path(target).exists():
       parser.error(f"target does not exist: {target}")
-  findings, coverage = [], []
+  findings, coverage, errors = [], [], []
   for path in walk(arguments.targets, []):
     text = text_file(path)
     coverage.append(
@@ -349,16 +413,32 @@ def prose_main(argv=None):
         "path": str(path),
         "context": arguments.context,
         "sentences": "checked"
-        if text is not None and arguments.context in SENTENCE_CAPS
+        if text is not None and arguments.context in {*SENTENCE_CAPS, "unknown"}
         else "not_checked",
         "paragraphs": "checked" if text is not None else "not_checked",
       }
     )
     if text is not None:
-      findings.extend(
-        prose_review(path, text, arguments.context, arguments.paragraph_cap)
-      )
+      try:
+        findings.extend(
+          source_prose(path, text, arguments.context, arguments.paragraph_cap)
+        )
+      except (
+        SyntaxError,
+        tokenize.TokenError,
+        OSError,
+        ValueError,
+        subprocess.SubprocessError,
+        RuntimeError,
+      ) as error:
+        coverage[-1].update(
+          sentences="not_checked", paragraphs="not_checked", reason="parse_error"
+        )
+        errors.append(f"{path}: {type(error).__name__}: {error}")
   print(json.dumps({"findings": findings, "coverage": coverage}))
+  if errors:
+    print("\n".join(errors), file=sys.stderr)
+    return 2
   return int(bool(findings))
 
 
@@ -405,6 +485,7 @@ function shape(node) {
   return '<expression>';
 }
 const pairs = [];
+let testScope = false;
 const lines = text.split("\n");
 function pair(left, right, node, operator) {
   for (const [actual, expected] of [[left,right],[right,left]]) {
@@ -417,8 +498,12 @@ function pair(left, right, node, operator) {
 }
 function visit(node) {
   if (!node || typeof node !== 'object') return;
+  if (node.type === 'ImportDeclaration' && node.source.value === 'node:test') testScope = true;
   if (node.type === 'CallExpression') {
     const name = shape(node.callee);
+    if (name === 'require' && node.arguments[0]?.value === 'node:test') testScope = true;
+    if (['test','it','describe','suite'].includes(name) && node.arguments.some(arg =>
+      ['FunctionExpression','ArrowFunctionExpression'].includes(arg.type))) testScope = true;
     if (['assert.equal','assert.strictEqual','assert.deepEqual',
       'assert.deepStrictEqual','assert.notEqual','assert.notStrictEqual'].includes(name)) {
       pair(node.arguments[0], node.arguments[1], node, 'equality');
@@ -435,7 +520,7 @@ function visit(node) {
   }
 }
 visit(tree);
-console.log(JSON.stringify({pairs}));
+console.log(JSON.stringify({pairs, test_scope:testScope}));
 """
 
 
@@ -535,17 +620,26 @@ def category(pair):
   return None
 
 
-def review_tests_main(argv=None):
-  parser = argparse.ArgumentParser(
-    description="Review explicitly scoped test assertions."
+def javascript_pairs(text):
+  """Parse JavaScript assertions and test declarations through the bundled resolver."""
+  if not shutil.which("node"):
+    return {"reason": "parser_unavailable"}
+  result = subprocess.run(
+    ["node", "-e", JS_REVIEW, str(Path(__file__).resolve().parent)],
+    input=text,
+    capture_output=True,
+    text=True,
+    timeout=NODE_TIMEOUT,
+    check=False,
   )
-  parser.add_argument("targets", nargs="+")
-  args = parser.parse_args(argv)
-  for target in args.targets:
-    if not Path(target).exists():
-      parser.error(f"target does not exist: {target}")
+  if result.returncode:
+    raise RuntimeError("parser_process_failed")
+  return json.loads(result.stdout)
+
+
+def review_tests(targets):
   findings, coverage, errors, visited = [], [], [], set()
-  for path in walk(args.targets, []):
+  for path in walk(targets, []):
     if path.resolve() in visited:
       continue
     visited.add(path.resolve())
@@ -560,20 +654,7 @@ def review_tests_main(argv=None):
         parsed = python_pairs(text)
         row["parser"] = "python_ast"
       elif path.suffix.lower() in {".js", ".cjs", ".mjs"}:
-        if not shutil.which("node"):
-          row["reason"] = "parser_unavailable"
-          continue
-        result = subprocess.run(
-          ["node", "-e", JS_REVIEW, str(Path(__file__).resolve().parent)],
-          input=text,
-          capture_output=True,
-          text=True,
-          timeout=NODE_TIMEOUT,
-          check=False,
-        )
-        if result.returncode:
-          raise RuntimeError("parser_process_failed")
-        parsed = json.loads(result.stdout)
+        parsed = javascript_pairs(text)
         row["parser"] = "acorn"
       else:
         row["reason"] = "unsupported_language"
@@ -609,7 +690,7 @@ def review_tests_main(argv=None):
       if role is None:
         continue
       code = TEST_RULE_IDS[role]
-      if code in file_ids or code in line_ids[pair["line"] - 1]:
+      if suppressed(code, file_ids | line_ids[pair["line"] - 1]):
         continue
       findings.append(
         {
@@ -622,8 +703,70 @@ def review_tests_main(argv=None):
           "status": "review",
         }
       )
-  print(json.dumps({"findings": findings, "coverage": coverage, "errors": errors}))
-  return 2 if errors else int(bool(findings))
+  return {"findings": findings, "coverage": coverage, "errors": errors}
+
+
+def review_tests_main(argv=None):
+  parser = argparse.ArgumentParser(
+    description="Review explicitly scoped test assertions."
+  )
+  parser.add_argument("targets", nargs="+")
+  args = parser.parse_args(argv)
+  for target in args.targets:
+    if not Path(target).exists():
+      parser.error(f"target does not exist: {target}")
+  result = review_tests(args.targets)
+  print(json.dumps(result))
+  return 2 if result["errors"] else int(bool(result["findings"]))
+
+
+def is_test_file(path, text, helpers):
+  """Recognize test paths and declarations without running supplied code."""
+  if path.resolve() in helpers:
+    return True
+  suffix = path.suffix.lower()
+  if suffix not in {".py", ".js", ".cjs", ".mjs"}:
+    return False
+  if any(
+    fnmatch.fnmatchcase(path.name, pattern)
+    for pattern in (
+      "test_*.py",
+      "*_test.py",
+      "test_*.js",
+      "test_*.cjs",
+      "test_*.mjs",
+      "*.test.*",
+      "*.spec.*",
+      "*.checks.cjs",
+      "conftest.py",
+    )
+  ) or any(part in {"test", "tests"} for part in path.parts[:-1]):
+    return True
+  if suffix == ".py":
+    for parent in path.resolve().parents:
+      config = parent / "pytest.ini"
+      if not config.is_file():
+        continue
+      settings = configparser.ConfigParser(interpolation=None)
+      settings.read(config, encoding="utf-8")
+      patterns = settings.get("pytest", "python_files", fallback="test_*.py").split()
+      roots = settings.get("pytest", "testpaths", fallback=".").split()
+      if any(fnmatch.fnmatchcase(path.name, pattern) for pattern in patterns) and any(
+        path.resolve().is_relative_to((parent / root).resolve()) for root in roots
+      ):
+        return True
+      break
+    return any(
+      isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+      and node.name.startswith("test_")
+      or isinstance(node, ast.ClassDef)
+      and any(ast.unparse(base).endswith("TestCase") for base in node.bases)
+      for node in ast.walk(ast.parse(text))
+    )
+  parsed = javascript_pairs(text)
+  if "reason" in parsed or "error" in parsed:
+    raise ValueError(parsed.get("reason") or parsed["error"])
+  return parsed["test_scope"]
 
 
 def main(argv=None):
@@ -632,7 +775,7 @@ def main(argv=None):
     return prose_main(argv[1:])
   if argv[:1] == ["review-tests"]:
     return review_tests_main(argv[1:])
-  parser = argparse.ArgumentParser(description="Flag nemoizer rotations.")
+  parser = argparse.ArgumentParser(description="Check Nemoizer prose and test domains.")
   parser.add_argument("targets", nargs="*", default=["."])
   parser.add_argument(
     "--ignore",
@@ -646,7 +789,17 @@ def main(argv=None):
   parser.add_argument(
     "--format", action="store_true", help="apply the rotations in place"
   )
+  parser.add_argument(
+    "--context", choices=[*SENTENCE_CAPS, "unknown"], default="unknown"
+  )
+  parser.add_argument("--paragraph-cap", type=int, default=PARAGRAPH_CAP)
+  parser.add_argument("--test-helper", action="append", type=Path, default=[])
   arguments = parser.parse_args(argv)
+  if not 0 < arguments.paragraph_cap <= PARAGRAPH_CAP:
+    parser.error(f"--paragraph-cap must be between 1 and {PARAGRAPH_CAP}")
+  for helper in arguments.test_helper:
+    if not helper.is_file():
+      parser.error(f"test helper does not exist: {helper}")
   targets = arguments.targets or ["."]
   if arguments.format:
     changed = format_paths(targets, arguments.ignore)
@@ -656,7 +809,50 @@ def main(argv=None):
   if arguments.ignores:
     print("\n".join(marks))
     return 0
+  errors, tests = [], []
+  helpers = {path.resolve() for path in arguments.test_helper}
+  for path in walk([*targets, *arguments.test_helper], arguments.ignore):
+    text = text_file(path)
+    try:
+      if is_test_file(path, text or "", helpers):
+        tests.append(str(path))
+      if text is None:
+        continue
+      rows = source_prose(path, text, arguments.context, arguments.paragraph_cap)
+    except (
+      SyntaxError,
+      tokenize.TokenError,
+      OSError,
+      ValueError,
+      configparser.Error,
+      subprocess.SubprocessError,
+      RuntimeError,
+      RecursionError,
+    ) as error:
+      errors.append(f"{path}: {type(error).__name__}: {error}")
+      continue
+    findings.extend(
+      f"{row['path']}:{row['line']}: {row['rule']} {row['count']} -> {row['cap']}"
+      for row in rows
+    )
+  result = review_tests(tests)
+  findings.extend(
+    f"{row['path']}:{row['line']}: {row['rule']} {row['evidence']}"
+    for row in result["findings"]
+  )
+  for row in result["coverage"]:
+    if row["status"] != "checked":
+      errors.append(f"{row['path']}: tests not checked: {row['reason']}")
+  errors.extend(f"{row['path']}: {row['type']}" for row in result["errors"])
+  if tests:
+    print(
+      "Test scope: static paths and declarations. Dynamic helpers may be unresolved.",
+      file=sys.stderr,
+    )
   print("\n".join(findings))
+  if errors:
+    print("\n".join(errors), file=sys.stderr)
+    return 2
   return 1 if findings else 0
 
 

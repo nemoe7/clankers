@@ -33,9 +33,9 @@ def test_a_rotation_matches_the_stem_and_prose():
     (root / "code.py").write_text("kind = 'plain'\n", encoding="utf-8")
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "note.md:1: N002 picked -> select" in result.stdout
-    assert "note.md:1: N001 transmit -> send" in result.stdout
-    assert "code.py:1: N003 kind -> type" in result.stdout
+    assert "note.md:1: P001 picked -> select" in result.stdout
+    assert "note.md:1: P001 transmit -> send" in result.stdout
+    assert "code.py:1: P001 kind -> type" in result.stdout
 
 
 def test_a_line_marker_skips_that_line_and_a_head_marker_skips_the_file():
@@ -51,9 +51,9 @@ def test_a_line_marker_skips_that_line_and_a_head_marker_skips_the_file():
     )
     result = run(cwd=directory)
     assert "marked.py:1:" not in result.stdout
-    assert "marked.py:2: N002 picked -> select" in result.stdout
-    assert "whole.md:2: N002 picked -> select" in result.stdout
-    assert "whole.md:2: N003" not in result.stdout
+    assert "marked.py:2: P001 picked -> select" in result.stdout
+    assert "whole.md:2: P001 picked -> select" in result.stdout
+    assert "whole.md:2: P001 kind -> type" not in result.stdout
     listing = run("--ignores", cwd=directory)
     assert listing.returncode == 0
     assert "marked.py:1:" in listing.stdout
@@ -93,20 +93,20 @@ def test_a_picker_is_a_rotation_and_a_marked_pickle_is_not():
     ui = root / "ui.js"
     ui.write_text(
       "const picker = 1\nconst var_pick = 2\nconst repick = 3\n"
-      "const jar = pickle  # nonemo: N002\n",
+      "const jar = pickle  // nonemo: N002\n",
       encoding="utf-8",
     )
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "ui.js:1: N002 picker -> select" in result.stdout
-    assert "ui.js:2: N002 pick -> select" in result.stdout
+    assert "ui.js:1: P001 picker -> select" in result.stdout
+    assert "ui.js:2: P001 pick -> select" in result.stdout
     assert "ui.js:3" not in result.stdout
     assert "ui.js:4" not in result.stdout
     formatted = run("--format", cwd=directory)
     assert formatted.returncode == 0, formatted.stderr
     assert ui.read_text(encoding="utf-8") == (
       "const selector = 1\nconst var_select = 2\nconst repick = 3\n"
-      "const jar = pickle  # nonemo: N002\n"
+      "const jar = pickle  // nonemo: N002\n"
     )
 
 
@@ -170,9 +170,9 @@ def test_rule_ids_suppress_only_the_named_rotation():
     )
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "note.md:1: N002 picked -> select" in result.stdout
-    assert "note.md:1: N003" not in result.stdout
-    assert "note.md:2: N001 transmit -> send" in result.stdout
+    assert "note.md:1: P001 picked -> select" in result.stdout
+    assert "note.md:1: P001 kind -> type" not in result.stdout
+    assert "note.md:2: P001 transmit -> send" in result.stdout
     result = run("--format", cwd=directory)
     assert result.returncode == 0
     assert (
@@ -200,9 +200,9 @@ def test_collect_keeps_all_markers_including_suppressed_files():
     assert result.returncode == 0, result.stderr
     expected_markers = note.read_text().count("nonemo:")
     assert len(result.stdout.splitlines()) == expected_markers
-    assert "note.md:1: N001 file:" in result.stdout
-    assert "note.md:4: N003 line:" in result.stdout
-    assert "note.md:4: N999 unknown:" in result.stdout
+    assert "note.md:1: N001 file:" in result.stdout  # nonemo: T001
+    assert "note.md:4: N003 line:" in result.stdout  # nonemo: T001
+    assert "note.md:4: N999 unknown:" in result.stdout  # nonemo: T001
     legacy = run("--ignores", cwd=directory)
     assert legacy.returncode == 0 and legacy.stdout == result.stdout
 
@@ -216,7 +216,7 @@ def test_multiple_rule_exclusions_preserve_the_marker_text():
     note.write_text(content, encoding="utf-8")
     result = run(cwd=directory)
     assert "note.md:1:" not in result.stdout
-    assert "note.md:2: N003 kind -> type" in result.stdout
+    assert "note.md:2: P001 kind -> type" in result.stdout
     formatted = run("--format", cwd=directory)
     assert formatted.returncode == 0
     assert (
@@ -270,7 +270,8 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
   assert finding["count"] > finding["cap"] == instruction_cap
   assert finding["path"] == str(source)
   assert finding["line"] == source.read_text().splitlines().index(sentence) + 1
-  assert inspect("unknown")["coverage"][0]["sentences"] == "not_checked"
+  assert inspect("unknown")["coverage"][0]["sentences"] == "checked"
+  assert inspect("unknown")["findings"]
   code = finding["rule"]
   source.write_text(f"<!-- nonemo: {code} -->\n{sentence}\n")
   assert not inspect("instruction")["findings"]
@@ -306,7 +307,12 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
 
   portable = tmp_path / "portable"
   (portable / "scripts").mkdir(parents=True)
-  for entry in (SCRIPT, SCRIPT.with_name("nemoizer")):
+  for entry in (
+    SCRIPT,
+    SCRIPT.with_name("nemoizer"),
+    SCRIPT.with_name("prose.py"),
+    SCRIPT.with_name("javascript-comments.cjs"),
+  ):
     shutil.copy2(entry, portable / "scripts" / entry.name)
   source.write_text("Run.\n")
   shipped = subprocess.run(
@@ -327,7 +333,7 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
   assert not json.loads(shipped.stdout)["findings"]
 
 
-def test_opt_in_assertion_review_keeps_contracts_and_reports_coverage(tmp_path):
+def test_explicit_assertion_review_keeps_contracts_and_reports_coverage(tmp_path):
   import json
 
   source = tmp_path / "test_example.py"
@@ -465,7 +471,7 @@ cls.assertEqual(panel.clientWidth, 320.5)
 
   portable = tmp_path / "portable"
   portable.mkdir()
-  for filename in ("nemoizer", "nemoize.py"):
+  for filename in ("nemoizer", "nemoize.py", "prose.py", "javascript-comments.cjs"):
     shutil.copy2(SCRIPT.with_name(filename), portable / filename)
   shipped = subprocess.run(
     [sys.executable, str(portable / "nemoizer"), "review-tests", str(source)],
@@ -528,5 +534,234 @@ def test_generated_pytest_cache_is_not_scanned(tmp_path):
   (tmp_path / "prose.md").write_text("picked wording\n", encoding="utf-8")
   result = run(cwd=tmp_path)
   assert result.returncode == 1
-  assert "prose.md:1: N002" in result.stdout
+  assert "prose.md:1: P001" in result.stdout  # nonemo: T001
   assert ".pytest_cache" not in result.stdout
+
+
+def test_prose_and_test_ids_have_separate_domains():
+  assert set(nemoize.RULE_IDS.values()) == {"P001"}
+  assert nemoize.PROSE_RULE_IDS == {"sentence": "P002", "paragraph": "P003"}
+  assert nemoize.TEST_RULE_IDS == {"output_text": "T001", "measurement": "T002"}
+
+
+def test_default_scan_checks_sentence_and_paragraph_caps(tmp_path):
+  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  source = tmp_path / "note.md"
+  source.write_text(sentence + "\n\n" + "Short. " * (nemoize.PARAGRAPH_CAP + 1))
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stderr
+  assert "note.md:1: P002" in result.stdout  # nonemo: T001
+  assert "note.md:3: P003" in result.stdout  # nonemo: T001
+  description = run("--context", "description", cwd=tmp_path)
+  assert description.returncode == 1, description.stderr
+  assert "P002" not in description.stdout and "P003" in description.stdout
+
+
+def test_default_prose_checks_extract_python_comments_not_literals(tmp_path):
+  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  source = tmp_path / "example.py"
+  source.write_text(f'value = "{sentence}"\n')
+  assert run(cwd=tmp_path).returncode == 0
+  source.write_text(f'value = "{sentence}"\n# {sentence}\n')
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stderr
+  assert "example.py:2: P002" in result.stdout  # nonemo: T001
+  assert "example.py:1:" not in result.stdout
+
+
+def test_rotation_group_and_word_specific_legacy_markers(tmp_path):
+  source = tmp_path / "note.md"
+  source.write_text(
+    "kind picked transmit # nonemo: P001\nkind picked transmit # nonemo: N003\n"
+  )
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stderr
+  assert "note.md:1:" not in result.stdout
+  assert "note.md:2: P001 picked -> select" in result.stdout
+  assert "note.md:2: P001 transmit -> send" in result.stdout
+  assert "kind -> type" not in result.stdout
+
+
+def test_default_prose_scan_reports_parse_errors(tmp_path):
+  source = tmp_path / "broken.py"
+  source.write_text("def unfinished(\n")
+  result = run(cwd=tmp_path)
+  assert result.returncode == 2
+  assert str(source) in result.stderr or source.name in result.stderr
+
+
+def test_default_test_scope_excludes_imported_production_files(tmp_path):
+  (tmp_path / "app.py").write_text('assert result.stdout == "Saved the report."\n')
+  (tmp_path / "test_status.py").write_text(
+    'import app\nassert result.stdout == "Saved the report."\n'
+  )
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stderr
+  assert "test_status.py:2: T001" in result.stdout  # nonemo: T001
+  assert "app.py:1: T001" not in result.stdout  # nonemo: T001
+
+
+def test_default_test_scope_uses_configured_patterns_and_explicit_helpers(tmp_path):
+  (tmp_path / "pytest.ini").write_text(
+    "[pytest]\ntestpaths = specs\npython_files = scenario_*.py\n"
+  )
+  specs = tmp_path / "specs"
+  specs.mkdir()
+  (specs / "scenario_status.py").write_text(
+    'assert result.stdout == "Saved the report."\n'
+  )
+  helper = tmp_path / "helper.py"
+  helper.write_text('assert result.stdout == "Saved the report."\n')
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stderr
+  assert "scenario_status.py:1: T001" in result.stdout  # nonemo: T001
+  assert "helper.py:1: T001" not in result.stdout  # nonemo: T001
+  explicit = run("--test-helper", str(helper), cwd=tmp_path)
+  assert explicit.returncode == 1, explicit.stderr
+  assert "helper.py:1: T001" in explicit.stdout  # nonemo: T001
+
+
+def test_default_javascript_test_scope_uses_declarations_not_string_examples(tmp_path):
+  app = tmp_path / "app.js"
+  app.write_text(
+    'const example = "from \'node:test\'"; assert.equal(result.stdout, "Saved the report.");\n'
+  )
+  assert run(cwd=tmp_path).returncode == 0
+  suite = tmp_path / "suite.js"
+  suite.write_text(
+    'const { test } = require("node:test"); '
+    'test("status", () => { assert.equal(result.stdout, "Saved the report."); });\n'
+  )
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stderr
+  assert "suite.js:1: T001" in result.stdout  # nonemo: T001
+  assert "app.js:1: T001" not in result.stdout  # nonemo: T001
+
+
+def test_explicit_prose_mode_uses_shared_source_extraction(tmp_path):
+  import json
+
+  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  source = tmp_path / "example.py"
+  source.write_text(f'value = "{sentence}"\n')
+  result = run("prose", str(source), cwd=tmp_path)
+  assert result.returncode == 0, result.stderr
+  source.write_text(f'value = "{sentence}"\n# {sentence}\n')
+  result = run("prose", str(source), cwd=tmp_path)
+  assert result.returncode == 1, result.stderr
+  assert {row["line"] for row in json.loads(result.stdout)["findings"]} == {2}
+
+
+def test_unreadable_detected_test_is_not_silently_checked(tmp_path):
+  source = tmp_path / "test_bytes.py"
+  content = b"\xff"
+  source.write_bytes(content)
+  result = run(cwd=tmp_path)
+  assert result.returncode == 2
+  assert str(source) in result.stderr or source.name in result.stderr
+  assert "unreadable_or_non_text" in result.stderr
+  assert source.read_bytes() == content
+
+
+def test_block_comment_prose_keeps_its_source_line_and_exclusion(tmp_path):
+  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  source = tmp_path / "example.js"
+  prefix = "\n" * 4
+  source.write_text(prefix + "/*\n * " + sentence + "\n */\n")
+  first = source.read_text().splitlines().index(" * " + sentence) + 1
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stderr
+  assert f"example.js:{first}: P002" in result.stdout
+  source.write_text(
+    prefix + "/*\n * " + sentence + " nonemo: P002\n * " + sentence + "\n */\n"
+  )
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stderr
+  assert f"example.js:{first}: P002" not in result.stdout
+  assert f"example.js:{first + 1}: P002" in result.stdout
+
+
+def test_escaped_docstring_newline_uses_a_physical_source_line(tmp_path):
+  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  source = tmp_path / "example.py"
+  for prefix in ("Short.\\n", "\\n", "\\nShort.\\n"):
+    source.write_text('"""' + prefix + sentence + '"""\n')
+    result = run(cwd=tmp_path)
+    assert result.returncode == 1, result.stderr
+    assert "example.py:1: P002" in result.stdout  # nonemo: T001
+
+
+def test_source_extractors_skip_module_and_yaml_data_literals(tmp_path):
+  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  for filename, code in (
+    ("example.mjs", 'const value = "' + sentence + '";\n'),
+    ("example.yaml", 'value: "' + sentence + '"\n'),
+  ):
+    source = tmp_path / filename
+    source.write_text(code)
+    result = run(str(source), cwd=tmp_path)
+    assert result.returncode == 0, (filename, result.stdout, result.stderr)
+
+
+def test_explicit_prose_reports_parser_runtime_failures(tmp_path, monkeypatch, capsys):
+  import json
+
+  source = tmp_path / "example.py"
+  source.write_text('"""Short."""\n')
+  for error in (RuntimeError, RecursionError):
+
+    def fail(*arguments, error=error):
+      raise error("parser failed")
+
+    monkeypatch.setattr(nemoize, "source_prose", fail)
+    assert nemoize.prose_main([str(source)]) == 2
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["findings"] == []
+    assert result["coverage"][0]["sentences"] == "not_checked"
+    assert result["coverage"][0]["paragraphs"] == "not_checked"
+    assert result["coverage"][0]["reason"] == "parse_error"
+    assert error.__name__ in captured.err
+
+
+def test_markdown_trailing_newline_keeps_source_lines_and_local_exclusions(tmp_path):
+  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  source = tmp_path / "note.md"
+  lines = [
+    "# Note",
+    "",
+    "Short.",
+    "",
+    sentence,
+    "",
+    sentence + " <!-- nonemo: P002 -->",
+  ]
+  source.write_text("\n".join(lines) + "\n")
+  result = run(cwd=tmp_path)
+  first = lines.index(sentence) + 1
+  second = len(lines)
+  assert result.returncode == 1, result.stderr
+  assert f"note.md:{first}: P002" in result.stdout
+  assert f"note.md:{second}: P002" not in result.stdout
+
+
+def test_wrapped_prose_counts_the_complete_sentence(tmp_path):
+  cap = nemoize.SENTENCE_CAPS["instruction"]
+  for filename, prefix in (("note.md", ""), ("note.py", "# ")):
+    source = tmp_path / filename
+    first = 5
+    for count in (cap, cap + 1):
+      words = ["term"] * count
+      middle = len(words) // 2
+      lines = [""] * (first - 1) + [
+        prefix + " ".join(words[:middle]),
+        prefix + " ".join(words[middle:]) + ".",
+      ]
+      source.write_text("\n".join(lines) + "\n")
+      result = run(str(source), cwd=tmp_path)
+      assert result.returncode == int(count > cap), result.stderr
+      if count > cap:
+        assert f"{source}:{first}: P002" in result.stdout
+    lines[first - 1] += " nonemo: P002"
+    source.write_text("\n".join(lines) + "\n")
+    assert run(str(source), cwd=tmp_path).returncode == 0

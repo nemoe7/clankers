@@ -18,6 +18,7 @@ SUBJECT = "chore: clankers sync"
 BOT_NAME = "github-actions[bot]"
 BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
 OWNER_DATA = "Retain unrelated target data."
+ERROR_ANNOTATION = "::error::"
 WRAPPER = r"""
 import json
 import os
@@ -213,7 +214,7 @@ def test_distribution_preserves_history_and_reports_only_remote_success(
   assert git(remote, "show", f"{after}:owner.txt") == OWNER_DATA
   if scenario in {"race", "push_failure", "clone_failure", "false_success"}:
     assert result.returncode != 0, result.stdout + result.stderr
-    assert "verified" not in result.stdout
+    assert ERROR_ANNOTATION in result.stdout
     assert after == (git(seed, "rev-parse", "HEAD") if scenario == "race" else before)
   else:
     assert result.returncode == 0, result.stdout + result.stderr

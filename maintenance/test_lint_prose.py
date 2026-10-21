@@ -75,6 +75,15 @@ def test_comment_blocks_exempt_required_directive_markers():
   assert lint_prose.comment_block_violations(Path("install.sh"), source) == []
   exclusions = "# nonemo: N001\n# nonemo: N002\n# nonemo: N003\n"
   assert lint_prose.comment_block_violations(Path("rules.py"), exclusions) == []
+  for suffix, prefix, marker in ((".py", "value", "#"), (".js", "const value", "//")):
+    inline = "\n".join(
+      f"{prefix}{index} = 1; {marker} nonemo: T001" for index in range(3)
+    )
+    assert lint_prose.comment_block_violations(Path("rules" + suffix), inline) == []
+  quoted = "\n".join(
+    f'const value{index} = "// nonemo: T001"; // Read the value.' for index in range(3)
+  )
+  assert lint_prose.comment_block_violations(Path("rules.js"), quoted)
 
 
 def test_source_sections_skip_strings_and_userscript_metadata():
@@ -235,3 +244,39 @@ def test_css_and_jsonc_keep_their_comment_scanner():
     ("example.jsonc", '{"name": "value", /* Read the state. */ "enabled": true}'),
   ):
     assert extract_prose.source_sections(Path(name), source) == ["Read the state."]
+
+
+def test_repository_scope_exempts_agent_sources_including_metadata():
+  source = "---\nname: example\ndescription: Keep the invocation clause unchanged.\n---\n\nKeep the body unchanged.\n"
+  for name in (
+    "skills/example/SKILL.md",
+    "AGENTS.md",
+    "ARENA.md",
+    "rules/CORE.md",
+    "system-prompts/test.md",
+    "automations/test.md",
+    "workflows/test.md",
+    "skills/example/references/rules.md",
+    "rules/refs/GUIDELINES.md",
+    "example.py",
+  ):
+    context, scoped = lint_prose.nemoizer_scope(Path(name), source)
+    assert context == "unknown"
+    assert not scoped
+
+
+def test_repository_scope_classifies_only_human_documentation():
+  source = "The tool checks the saved state."
+  for name in (
+    "README.md",
+    "skills/example/README.md",
+    "INSTALL.md",
+    "CHANGELOG.md",
+    "docs/history.md",
+  ):
+    context, scoped = lint_prose.nemoizer_scope(Path(name), source)
+    assert context == "description"
+    assert scoped == source
+  context, scoped = lint_prose.nemoizer_scope(Path("unknown.txt"), source)
+  assert context == "unknown"
+  assert not scoped
