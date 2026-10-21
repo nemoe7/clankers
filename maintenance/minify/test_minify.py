@@ -146,7 +146,7 @@ def test_preview_path():
     ]
 
     # A commit, push or checks command reminds once per shell. Any other command stays quiet.
-    reminder = "Finished a task? Update the task list: arena-preview task <id> --status finished."
+    reminder = "arena-preview task <id> --status finished"
     event_result = subprocess.run(
       [
         "bash",

@@ -865,9 +865,9 @@ def preview_server_available(store):
 	with closing(socket.socket())as probe:probe.settimeout(1);return probe.connect_ex(('127.0.0.1',int(port)))==0
 def require_server(store):
 	port=store.meta_value('port')
-	if not port:raise ValueError('preview server is not up. Start it with arena-preview serve')
+	if not port:raise ValueError('Preview down. Run arena-preview serve.')
 	if preview_server_available(store):return
-	raise ValueError(f"preview server is down; start it before polling: arena-preview serve --port {port}")
+	raise ValueError(f"Preview down. Before polling: arena-preview serve --port {port}")
 def print_read(store):
 	listing=store.read();print(format_read(listing),flush=True)
 	if listing['pending']:store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']])
@@ -2744,7 +2744,7 @@ def resolve_repo_root():
 	return str(Path.cwd())
 def print_skills():
 	try:import yaml
-	except ImportError as error:raise RuntimeError('PyYAML is required; rerun the preview installer')from error
+	except ImportError as error:raise RuntimeError('PyYAML required. Rerun preview installer.')from error
 	root=Path(resolve_repo_root());skills={}
 	for(type,directory)in(('installed',root/'.agents'/'skills'),('repository',root/'skills')):
 		for path in sorted(directory.glob('*/SKILL.md')):
@@ -2870,7 +2870,7 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 	if not routed and'read-set'not in finished and state_file(state_dir).is_file():
 		mark('read-set');tick_store=Store(state_dir)
 		if preview_server_available(tick_store):read_set_tick(tick_store,line,moment=datetime.now(resolve_display_zone(tick_store)),root=root)
-	if'remind'not in finished and any(word in command for word in('git commit','git push','gh pr checks')):mark('remind');report('Finished a task? Update the task list: arena-preview task <id> --status finished.')
+	if'remind'not in finished and any(word in command for word in('git commit','git push','gh pr checks')):mark('remind');report('Task done? Run arena-preview task <id> --status finished.')
 	if'git commit'in command and'main-local'not in finished:
 		mark('main-local');warning=main_drift_warning(Path.cwd(),fresh=False)
 		if warning:report(warning)
@@ -2885,8 +2885,8 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 	status=pr_check_wait(state_dir,line,command)
 	if status==PR_CHECK_RUNS:return finish(2)
 	if status==PR_CHECK_REFUSED:return finish(130)
-	if'bare'not in finished and bare_script_invocation(line):mark('bare');report('Call it bare: arena-preview works from any directory, so drop the full path.')
-	if'proxy'not in finished and any(word in line for word in('code-scanning','code_scanning','gh run view','gh run download','actions/runs')):mark('proxy');report('Read that through the proxy: the arena skill carries the routes for code-scanning alerts and run logs.')
+	if'bare'not in finished and bare_script_invocation(line):mark('bare');report('Use bare arena-preview from any directory. Drop full path.')
+	if'proxy'not in finished and any(word in line for word in('code-scanning','code_scanning','gh run view','gh run download','actions/runs')):mark('proxy');report('Use proxy: code-scanning alerts, run logs. Routes: arena skill.')
 	if'arena-preview ack'in command or'preview.py ack'in command:
 		warning=tick_warning(command)
 		if warning:report(warning)
@@ -2951,7 +2951,7 @@ def main():
 			store=Store(state_dir,create=False);require_server(store);reminder=store.reminder(advance=True);store.set_meta(AGENT_CALL_ENDED_META,now())
 			if'unacked 'in reminder or TASK_ORDER_NOTICE in reminder or not run_notices(state_dir,show_running=True):print(reminder,file=sys.stderr,flush=True)
 			return 0
-		if not args.command:parser.error('a command is required; run arena-preview --help for the command list')
+		if not args.command:parser.error('Command required. Run arena-preview --help.')
 		if args.command=='pre':return pre_command(state_dir,args.line,args.command_text,args.repo,done=args.done,shell=args.shell)
 		if args.command=='skills':print_skills();return 0
 		if args.command=='image-data-uri':
