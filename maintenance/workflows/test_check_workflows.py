@@ -252,7 +252,7 @@ def test_distribute_triggers_and_inputs():
   assert triggers["push"]["paths"] == [
     "rules/ARENA.md",
     "skills/arena-skill/**",
-    "skills/nemo-ui/**",
+    "skills/nemo-ui-ux/**",
     "skills/nemoizer/**",
     "github/workflows/gemini-release.yml",
     "github/workflows/gemini_release.py",
@@ -261,10 +261,10 @@ def test_distribute_triggers_and_inputs():
   ]
   assert triggers["schedule"] == [{"cron": "17 3 * * *"}]
   inputs = triggers["workflow_dispatch"]["inputs"]
-  assert set(inputs) == {"repos", "gemini_repos", "nemo_ui_repos", "nemoizer_repos"}
+  assert set(inputs) == {"repos", "gemini_repos", "nemo_ui_ux_repos", "nemoizer_repos"}
   assert all(value.get("default") == "" for value in inputs.values())
   # One job per target list, so the run page names each list on its own row.
-  assert list(document["jobs"]) == ["arena", "gemini", "nemo-ui", "nemoizer"]
+  assert list(document["jobs"]) == ["arena", "gemini", "nemo-ui-ux", "nemoizer"]
   for name in document["jobs"]:
     assert document["jobs"][name]["concurrency"]["cancel-in-progress"] is False
 
@@ -274,7 +274,7 @@ def test_distribute_jobs_share_one_action_and_keep_their_own_lists():
   assert [job["name"] for job in jobs.values()] == [
     "Distribute Arena",
     "Distribute Gemini",
-    "Distribute nemo-ui",
+    "Distribute nemo-ui-ux",
     "Distribute nemoizer",
   ]
   groups = [job["concurrency"]["group"] for job in jobs.values()]
@@ -298,10 +298,10 @@ def test_distribute_jobs_share_one_action_and_keep_their_own_lists():
     )
     return step["with"]
 
-  arena, gemini, nemo_ui, nemoizer = jobs.values()
+  arena, gemini, nemo_ui_ux, nemoizer = jobs.values()
   # Each job holds its own list, so a dispatcher override stays inside one target group.
   assert copied(arena)["repos-fallback"].split()[0] == "nemoe7/clankers"
-  assert set(copied(nemo_ui)["repos-fallback"].split()) == {
+  assert set(copied(nemo_ui_ux)["repos-fallback"].split()) == {
     "nemoe7/request-tracker",
     "nemoe7/daedalus",
     "nemoe7/clankers",
@@ -315,12 +315,13 @@ def test_distribute_jobs_share_one_action_and_keep_their_own_lists():
   )
   assert "skills" not in copied(gemini)
   assert copied(gemini)["files"] == "gemini-release.yml gemini_release.py"
-  # The nemo-ui skill lives in this repository, so its job copies it and fails on a gap.
-  assert copied(nemo_ui)["skills"] == "nemo-ui"
-  assert "allow-missing" not in copied(nemo_ui)
+  # The nemo-ui-ux skill lives in this repository, so its job copies it and fails on a gap.
+  assert copied(nemo_ui_ux)["skills"] == "nemo-ui-ux"
+  assert copied(nemo_ui_ux)["legacy"] == "nemo-ui"
+  assert "allow-missing" not in copied(nemo_ui_ux)
   assert copied(nemoizer) == {
     "repos": "${{ inputs.nemoizer_repos }}",
-    "repos-fallback": copied(nemo_ui)["repos-fallback"] + " nemoe7/wiki",
+    "repos-fallback": copied(nemo_ui_ux)["repos-fallback"] + " nemoe7/wiki",
     "skills": "nemoizer",
   }
 

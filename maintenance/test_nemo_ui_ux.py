@@ -1,4 +1,4 @@
-"""Tests for the nemo-ui measure helper."""
+"""Tests for the nemo-ui-ux measure helper."""
 
 from __future__ import annotations
 
@@ -6,7 +6,11 @@ import importlib.util
 from pathlib import Path
 
 MEASURE = (
-  Path(__file__).resolve().parents[1] / "skills" / "nemo-ui" / "scripts" / "measure.py"
+  Path(__file__).resolve().parents[1]
+  / "skills"
+  / "nemo-ui-ux"
+  / "scripts"
+  / "measure.py"
 )
 
 SHEET = {

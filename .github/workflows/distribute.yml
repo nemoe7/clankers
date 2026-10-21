@@ -7,7 +7,7 @@ on:
     paths:
       - "rules/ARENA.md"
       - "skills/arena-skill/**"
-      - "skills/nemo-ui/**"
+      - "skills/nemo-ui-ux/**"
       - "skills/nemoizer/**"
       - "github/workflows/gemini-release.yml"
       - "github/workflows/gemini_release.py"
@@ -27,8 +27,8 @@ on:
         description: Space-separated owner/repo list for the Gemini list
         required: false
         default: ""
-      nemo_ui_repos:
-        description: Space-separated owner/repo list for the nemo-ui list
+      nemo_ui_ux_repos:
+        description: Space-separated owner/repo list for the nemo-ui-ux list
         required: false
         default: ""
       nemoizer_repos:
@@ -77,25 +77,26 @@ jobs:
           repos: ${{ inputs.gemini_repos }}
           repos-fallback: nemoe7/daedalus nemoe7/request-tracker
           files: gemini-release.yml gemini_release.py
-  nemo-ui:
-    name: Distribute nemo-ui
+  nemo-ui-ux:
+    name: Distribute nemo-ui-ux
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
-      group: Distribute-nemo-ui-${{ github.repository }}
+      group: Distribute-nemo-ui-ux-${{ github.repository }}
       cancel-in-progress: false
     steps:
       - name: Check Out Source Repository
         uses: actions/checkout@v7
       # The job copies the skill from this repository and fails when the directory is gone.
-      - name: Sync The nemo-ui Skill
+      - name: Sync The nemo-ui-ux Skill
         uses: ./.github/actions/distribute-sync
         env:
           CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
         with:
-          repos: ${{ inputs.nemo_ui_repos }}
+          repos: ${{ inputs.nemo_ui_ux_repos }}
           repos-fallback: nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup
-          skills: nemo-ui
+          skills: nemo-ui-ux
+          legacy: nemo-ui
   nemoizer:
     name: Distribute nemoizer
     runs-on: ubuntu-latest

@@ -29,6 +29,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### skills
+
+- Rename nemo-ui to nemo-ui-ux across skill sources, distribution, measurements, and checks. Remove the old installed directory during distribution.
+
 #### preview
 
 - Show `Running gates...` during a poll with active local gates. Keep the timer and ordinary polling label.
