@@ -4860,6 +4860,7 @@ class Store:
           item["updated_at"] = clip_stamp(item["updated_at"])
         tasks["updated_at"] = clip_stamp(tasks["updated_at"])
       polling = self.polling()
+      runs = live_runs(self.path.parent) if polling else []
       return {
         "notes": notes,
         "reports": reports,
@@ -4869,7 +4870,11 @@ class Store:
         "workspace": workspace_usage(),
         "last_check": clip_stamp(meta.get("last_check")),
         "polling": polling,
-        "waiting_for_gates": polling and bool(live_runs(self.path.parent)),
+        "waiting_for_gates": bool(runs),
+        "checking_pr": any(
+          pr_checks_command(routed_record(self.path.parent, name).get("argv", []))
+          for name in runs
+        ),
         # The wait start rides the heartbeat, so a stale stamp never shows.
         "polling_since": (clip_stamp(meta.get(POLL_SINCE_META)) if polling else None),
         # The page paints its Skip poll button from this stamp until a poll consumes it.

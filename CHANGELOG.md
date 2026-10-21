@@ -8,6 +8,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+#### preview
+
+- Show `PR checks...` during a poll with an active PR-check run.
+
 #### workflows
 
 - Add a nemoizer distribution job with its own target override. Copy the skill to the nemo-ui targets and `nemoe7/wiki`.
@@ -15,6 +19,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Changed
 
 #### preview
+
+- Show `Running gates...` during a poll with active local gates. Keep the timer and ordinary polling label.
 
 - Treat `mkdir` as inert for the read-set gate, so the harness's workspace-root `mkdir -p` prefix no longer blocks the inbox call that clears a checkpoint.
 

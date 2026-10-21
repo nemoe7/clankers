@@ -1738,7 +1738,13 @@ test('preview client', async (t) => {
     assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s$/);
     state.waiting_for_gates = true;
     await refresh();
-    assert.match(get('#connection-text').textContent, /^Waiting for gates\.\.\. /);
+    assert.match(get('#connection-text').textContent, /^Running gates\.\.\. /);
+    state.checking_pr = true;
+    await refresh();
+    assert.match(get('#connection-text').textContent, /^PR checks\.\.\. /);
+    state.checking_pr = false;
+    await refresh();
+    assert.match(get('#connection-text').textContent, /^Running gates\.\.\. /);
     state.waiting_for_gates = false;
     await refresh();
     assert.match(get('#connection-text').textContent, /^Polling… /);

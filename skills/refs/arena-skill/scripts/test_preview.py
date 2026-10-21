@@ -9177,17 +9177,28 @@ def test_reference_commands_table_lists_every_agent_facing_command():
   assert not missing, f"CLI commands missing from the table: {missing}"
 
 
-def test_poll_label_reports_live_routed_waits(monkeypatch):
+def test_poll_label_reports_live_routed_waits():
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    monkeypatch.setattr(preview, "live_runs", lambda path: ["gate"])
+    live_detached_placeholder(directory, "pr-checks", ["python", "-m", "pytest"])
     assert store.state()["waiting_for_gates"] is False
+    assert store.state()["checking_pr"] is False
     store.start_poll()
     assert store.state()["waiting_for_gates"] is True
-    monkeypatch.setattr(preview, "live_runs", lambda path: [])
+    assert store.state()["checking_pr"] is False
+    live_detached_placeholder(directory, "ci", ["bash", "-c", "gh pr checks 7 --watch"])
+    assert store.state()["checking_pr"] is True
+    preview.run_command(directory, "ci", ["true"])
+    assert store.state()["waiting_for_gates"] is True
+    assert store.state()["checking_pr"] is False
+    preview.run_command(directory, "pr-checks", ["true"])
     assert store.state()["waiting_for_gates"] is False
+    assert store.state()["checking_pr"] is False
+    live_detached_placeholder(directory, "ci", ["gh", "pr", "checks", "7", "--watch"])
+    assert store.state()["checking_pr"] is True
     store.clear_polling()
     assert store.state()["waiting_for_gates"] is False
+    assert store.state()["checking_pr"] is False
 
 
 def test_publish_embeds_a_local_image_at_publication():

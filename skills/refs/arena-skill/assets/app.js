@@ -202,7 +202,8 @@ function connectionText() {
   // The tally ends every shape of the line: a poll, a finished call and the quiet line are all
   // read while the count climbs.
   if (pollSince !== null) {
-    const label = getState()?.waiting_for_gates ? 'Waiting for gates...' : 'Polling…';
+    const label = getState()?.checking_pr ? 'PR checks...'
+      : getState()?.waiting_for_gates ? 'Running gates...' : 'Polling…';
     return `${label} ${duration(Date.now() - pollSince)}${tail}${callTally}`;
   }
   if (callEndStamp !== null) return `Bash ${time(callEndStamp)}${tail}${callTally}`;
