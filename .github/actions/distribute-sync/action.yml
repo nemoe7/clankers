@@ -90,6 +90,22 @@ runs:
           fi
         done
 
+        push_target() {
+          git push --quiet "$@" 2> >(awk '
+            /^remote: GitHub found [0-9]+ vulnerabilit(y|ies) on .* default branch .* To find out more, visit:[[:space:]]*$/ {
+              if (notice != "") print notice
+              notice = $0
+              next
+            }
+            notice != "" && /^remote:[[:space:]]+https:\/\/github.com\/[^[:space:]]+\/security\/dependabot[[:space:]]*$/ {
+              notice = ""
+              next
+            }
+            { if (notice != "") { print notice; notice = "" }; print }
+            END { if (notice != "") print notice }
+          ' >&2)
+        }
+
         failed=""
         # shellcheck disable=SC2016  # The helper expands the token when git calls it.
         git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$CLANKERS_DIST_PAT"; }; f'
@@ -140,18 +156,18 @@ runs:
               parents=$(git show -s --format=%P HEAD)
               if [ "$identity" = "$wanted" ] && [[ -n "$parents" && "$parents" != *" "* ]]; then
                 git commit --quiet --amend --no-edit --reset-author
-                if ! git push --quiet "--force-with-lease=$ref:$captured" origin "HEAD:$ref"; then
+                if ! push_target "--force-with-lease=$ref:$captured" origin "HEAD:$ref"; then
                   remote=$(git ls-remote --exit-code origin "$ref")
                   [ "${remote%%$'\t'*}" = "$captured" ] || {
                     echo "::error::$repo: remote changed; sync stopped"; exit 1;
                   }
                   git reset --soft "$captured"
                   git commit --quiet -m "$subject"
-                  git push --quiet origin "HEAD:$ref"
+                  push_target origin "HEAD:$ref"
                 fi
               else
                 git commit --quiet -m "$subject"
-                git push --quiet origin "HEAD:$ref"
+                push_target origin "HEAD:$ref"
               fi
             fi
             expected=$(git rev-parse HEAD)

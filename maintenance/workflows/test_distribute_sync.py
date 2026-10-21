@@ -19,6 +19,12 @@ BOT_NAME = "github-actions[bot]"
 BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
 OWNER_DATA = "Retain unrelated target data."
 ERROR_ANNOTATION = "::error::"
+NOTICE_HEAD = (
+  "remote: GitHub found 3 vulnerabilities on example/target's default branch"
+  " (1 high, 1 moderate, 1 low). To find out more, visit:"
+)
+NOTICE_LINK = "remote:      https://github.com/example/target/security/dependabot"
+PUSH_DIAGNOSTIC = "remote: retained push diagnostic"
 WRAPPER = r"""
 import json
 import os
@@ -31,6 +37,13 @@ mode = os.environ['SYNC_MODE']
 if args[0] == 'clone' and mode == 'clone_failure':
   sys.exit(7)
 if args[0] == 'push':
+  if mode.startswith('advisory'):
+    if mode != 'advisory_orphan':
+      print(os.environ['PUSH_NOTICE_HEAD'], file=sys.stderr)
+    print(os.environ['PUSH_NOTICE_LINK'], file=sys.stderr)
+    print(os.environ['PUSH_DIAGNOSTIC'], file=sys.stderr)
+    if mode == 'advisory_failure':
+      sys.exit(7)
   with open(os.environ['PUSH_LOG'], 'a') as log:
     log.write(json.dumps(args) + '\n')
   force = any(arg.startswith('--force') for arg in args)
@@ -144,6 +157,9 @@ def run_action(tmp_path, remote, seed, scenario):
     "PATH": str(binaries) + os.pathsep + os.environ["PATH"],
     "REAL_GIT": GIT,
     "SYNC_MODE": scenario,
+    "PUSH_NOTICE_HEAD": NOTICE_HEAD,
+    "PUSH_NOTICE_LINK": NOTICE_LINK,
+    "PUSH_DIAGNOSTIC": PUSH_DIAGNOSTIC,
     "PUSH_LOG": str(tmp_path / "pushes.jsonl"),
     "RACE_MARK": str(tmp_path / "race.mark"),
     "SEED": str(seed),
@@ -232,3 +248,17 @@ def test_distribution_preserves_history_and_reports_only_remote_success(
     assert not force
   if scenario == "protected":
     assert not any(arg.startswith("--force") for arg in pushes[-1])
+
+
+@pytest.mark.parametrize(
+  "scenario", ["advisory", "advisory_failure", "advisory_orphan"]
+)
+def test_remote_notice_filter_keeps_errors_and_exit_status(tmp_path, scenario):
+  remote, seed, before, _ = fixture(tmp_path, "bot")
+  result, _ = run_action(tmp_path, remote, seed, scenario)
+  assert NOTICE_HEAD not in result.stderr
+  assert (NOTICE_LINK in result.stderr) == (scenario == "advisory_orphan")
+  assert PUSH_DIAGNOSTIC in result.stderr
+  assert bool(result.returncode) == (scenario == "advisory_failure")
+  after = git(remote, "rev-parse", "refs/heads/main")
+  assert (after == before) == (scenario == "advisory_failure")

@@ -97,6 +97,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### workflows
 
+- Suppress the paired GitHub vulnerability notice in push output. Keep other diagnostics, output streams, and failure status.
+
 - Amend only single-parent sync tips with matching bot author, committer, and exact subject. Use depth two and an exact remote lease.
 
 - Preserve append fallback when force is rejected without a remote change. Stop on concurrent updates, command failures, or a wrong remote head.
