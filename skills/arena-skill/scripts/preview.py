@@ -492,7 +492,7 @@ def clause_ack_error(text,root=None):
 		path=paths.get(Path(match.group(1)).name)
 		if path is None or not path.is_file():continue
 		if int(match.group(2))<=len(path.read_text(encoding='utf-8').splitlines()):return''
-	return'An ack of a violation note must name the clause as `file:ln: clause`, for example `ARENA.md:41: MUST read the bible files`. The note stays pending.'
+	return'An ack of a violation note must name the clause as `file:ln: clause`, for example `ARENA.md:41: MUST read the bible`. The note stays pending.'
 def when(value):
 	try:datetime.fromisoformat(str(value))
 	except ValueError as error:raise ValueError(f"Not a timestamp: {value!r}")from error
@@ -1433,7 +1433,7 @@ def poll_repeat(store):
 	try:recent=previous is not None and 0<=moment-int(previous)<=POLL_REPEAT_SECONDS
 	except ValueError:recent=False
 	if not recent or store.meta_value(POLL_IMMEDIATE_META)!='1':return None
-	store.request_interrupt('tasks',user_flagged=False);return'VIOLATION: repeat poll inside 45 seconds. Read only bible files whose current full text is absent from context, then work the task.'
+	store.request_interrupt('tasks',user_flagged=False);return'VIOLATION: repeat poll inside 45 seconds. Read only paths in the bible whose current full text is absent from context, then work the task.'
 def poll_once(store,sleeper=None):
 	started=time.monotonic();status=poll_inbox(store,sleeper=sleeper)
 	if time.monotonic()-started>=POLL_IMMEDIATE_SECONDS:store.clear_meta(POLL_IMMEDIATE_META)
@@ -2162,7 +2162,7 @@ class Store:
 		if not armed:self.clear_meta(AGENT_INTERRUPT_FLAG_META);self.take_interrupt();return{'agent_interrupt_pending':False}
 		if not isinstance(tab,str)or tab not in{'notes','reports','tasks','downloads'}:raise ValueError('tab must name a preview tab')
 		if reason is not None and reason not in VIOLATION_TYPES[tab]:raise ValueError('reason must name a violation type for this tab')
-		if clause_file not in(None,'')and clause_file not in read_set_files(self.repository_root()):raise ValueError('clause_file must name a bible file')
+		if clause_file not in(None,'')and clause_file not in read_set_files(self.repository_root()):raise ValueError('clause_file must name a path in the bible')
 		if note is not None and not isinstance(note,str):raise ValueError('note must be text')
 		cited=' '.join((note or'').split())
 		if len(cited)>300:raise ValueError('note must contain at most 300 characters')
@@ -2185,7 +2185,7 @@ class Store:
 				task=current_task((self.tasks()or{}).get('upcoming',[]))
 				if task:heading=f"The user flagged a violation: task {task['id']}."if user_flagged else f"VIOLATION: task {task['id']}"
 				else:evidence.append('The task list is empty. Maybe a task should have spawned.')
-		notice='\n'.join([heading,*evidence,'The call-count gate blocks after 6 unacknowledged calls.','Think about which clause was violated.','Read bible files if absent from context.','Fix the violation, then ack with `file:ln: clause`.']);return self.flag_violation_note(notice,reason,clause_file,cited)
+		notice='\n'.join([heading,*evidence,'The call-count gate blocks after 6 unacknowledged calls.','Think about which clause was violated.','Read the bible if absent from context.','Fix the violation, then ack with `file:ln: clause`.']);return self.flag_violation_note(notice,reason,clause_file,cited)
 	def flag_violation_note(self,notice,type,clause_file,cited):record=self.queue_violation_note(notice,type or'self-raised');self.set_meta(AGENT_INTERRUPT_FLAG_META,json.dumps({'type':type or'','clause_file':clause_file or'','note':cited,'id':record['id']}));return{'agent_interrupt_pending':True}
 	def queue_violation_note(self,text,type):
 		pending=self.pending_violation_note()

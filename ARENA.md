@@ -19,7 +19,7 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a rule collision or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file or `arena-skill`, installed copies included; suggest amendments only, unless home repo waives protection.
-- On a rule violation, MUST read only bible files whose current full text is absent from context before continuing.
+- On a rule violation, MUST read only paths in the bible whose current full text is absent from context before continuing.
 - Give one short receipt for a corrected routine no-impact slip.
 - Suggest amendments only for an identified contributing rule gap.
 - Corrected routine command-input/process slips (e.g. late read) alone are not rule violations.
@@ -38,12 +38,12 @@
 ## Setup
 
 - Session start: read bible; next action `10-4: ARENA.md loaded`; find/read nested AGENTS.md; install; start preview; ask visibility.
-- Resumed/next turn: check preview (restart if needed); read missing-context bible files; find nested AGENTS.md, read missing/changed; continue open task or poll.
+- Resumed/next turn: check preview (restart if needed); read missing-context paths in the bible; find nested AGENTS.md, read missing/changed; continue open task or poll.
 - Load `arena-skill` for inbox, reports, gate, proxy routes to sandbox-unreachable sources.
 - Bible: ARENA.md, root AGENTS.md with any nested AGENTS.md, and arena-skill SKILL.md only.
-- MUST read required bible files fully via read tool, NEVER Bash.
-- After mid-turn compaction/summary/context replacement, read missing-context bible files end-to-end before other tools; resumed/next turns use their start sequence.
-- On context-check reminders, MUST read every missing-context bible file before continuing.
+- MUST read required paths in the bible fully via read tool, NEVER Bash.
+- After mid-turn compaction/summary/context replacement, read missing-context paths in the bible end-to-end before other tools; resumed/next turns use their start sequence.
+- On context-check reminders, MUST read every missing-context path in the bible before continuing.
 - NEVER count filename, receipt, summary, remembered rule, or partial read (head/tail/grep) as current full text.
 - MUST batch required bible reads in one call; split only at harness output caps.
 - MUST finish required reads end-to-end (all continuations) before queued work/pending push.

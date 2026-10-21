@@ -73,7 +73,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Require acknowledgement only for each report's latest answer. Keep answer history, earlier acknowledgements, and report removal guards.
 
-- Rename the Arena read set to bible. Keep its files, reading conditions, API keys, gate phase names, and timer metadata unchanged.
+- Name the Arena reading set "bible" or "the bible". Keep required paths, reading conditions, API keys, gate phase names, and timer metadata unchanged.
 
 - Use a 15-minute elapsed context-check interval and 00/15/30/45 slot labels. Keep the startup delay and note guards.
 

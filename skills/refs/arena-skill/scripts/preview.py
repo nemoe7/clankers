@@ -1378,7 +1378,7 @@ CLAUSE_ACK = re.compile(r"([\w./-]+\.md):([0-9]+):\s*\S")
 def clause_ack_error(text, root=None):
   """The refusal when an ack of a violation note names no clause, else the empty string.
 
-  A clause reads `file:ln: clause`, where the file is one of the bible files.
+  A clause reads `file:ln: clause`, where the bible lists the file.
   The line number alone does not name a clause, so it does not clear the note.
   """
   base = Path(root or Path.cwd())
@@ -1396,7 +1396,7 @@ def clause_ack_error(text, root=None):
       return ""
   return (
     "An ack of a violation note must name the clause as `file:ln: clause`, for"
-    " example `ARENA.md:41: MUST read the bible files`. The note stays pending."
+    " example `ARENA.md:41: MUST read the bible`. The note stays pending."
   )
 
 
@@ -3975,7 +3975,7 @@ def poll_repeat(store):
     return None
   store.request_interrupt("tasks", user_flagged=False)
   return (
-    "VIOLATION: repeat poll inside 45 seconds. Read only bible files whose "
+    "VIOLATION: repeat poll inside 45 seconds. Read only paths in the bible whose "
     "current full text is absent from context, then work the task."
   )
 
@@ -6423,7 +6423,7 @@ class Store:
         db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, row[0]))
 
   def repository_root(self):
-    """The repository that holds the state directory, whose bible files feed the flag form."""
+    """The repository that holds the state directory and the bible for the flag form."""
     return self.path.parent.parent
 
   def meta_value(self, key):
@@ -6491,7 +6491,7 @@ class Store:
     if clause_file not in (None, "") and clause_file not in read_set_files(
       self.repository_root()
     ):
-      raise ValueError("clause_file must name a bible file")
+      raise ValueError("clause_file must name a path in the bible")
     if note is not None and not isinstance(note, str):
       raise ValueError("note must be text")
     cited = " ".join((note or "").split())
@@ -6542,7 +6542,7 @@ class Store:
         *evidence,
         "The call-count gate blocks after 6 unacknowledged calls.",
         "Think about which clause was violated.",
-        "Read bible files if absent from context.",
+        "Read the bible if absent from context.",
         "Fix the violation, then ack with `file:ln: clause`.",
       ]
     )

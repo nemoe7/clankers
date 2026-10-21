@@ -6762,7 +6762,7 @@ def test_repeat_polls_raise_a_violation(monkeypatch):
     assert preview.poll_repeat(store) is None
     refusal = preview.poll_repeat(store)
     assert refusal == (
-      "VIOLATION: repeat poll inside 45 seconds. Read only bible files whose "
+      "VIOLATION: repeat poll inside 45 seconds. Read only paths in the bible whose "
       "current full text is absent from context, then work the task."
     )
     note = store.pending_violation_note()
@@ -6799,7 +6799,7 @@ def test_a_repeat_poll_command_exits_2_with_the_violation():
     )
     assert result.returncode == 2, result.stderr
     assert result.stdout == (
-      "VIOLATION: repeat poll inside 45 seconds. Read only bible files whose "
+      "VIOLATION: repeat poll inside 45 seconds. Read only paths in the bible whose "
       "current full text is absent from context, then work the task.\n"
     )
     note = store.pending_violation_note()
@@ -10964,7 +10964,7 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
         "The task list is empty. Maybe a task should have spawned.",
         "The call-count gate blocks after 6 unacknowledged calls.",
         "Think about which clause was violated.",
-        "Read bible files if absent from context.",
+        "Read the bible if absent from context.",
         "Fix the violation, then ack with `file:ln: clause`.",
       ]
       assert store.meta_value(preview.AGENT_INTERRUPT_META) is None
@@ -11027,7 +11027,7 @@ def test_flag_carries_type_clause_file_and_cited_reason():
       closing = [
         "The call-count gate blocks after 6 unacknowledged calls.",
         "Think about which clause was violated.",
-        "Read bible files if absent from context.",
+        "Read the bible if absent from context.",
         "Fix the violation, then ack with `file:ln: clause`.",
       ]
 
@@ -11568,7 +11568,7 @@ def test_user_flagged_report_violation_mints_a_quiet_note(capsys):
       "The user flagged a violation: report flagged-report formatting is wrong.",
       "The call-count gate blocks after 6 unacknowledged calls.",
       "Think about which clause was violated.",
-      "Read bible files if absent from context.",
+      "Read the bible if absent from context.",
       "Fix the violation, then ack with `file:ln: clause`.",
     ]
 
