@@ -1,9 +1,9 @@
 """Flag the avoided words and list every nemoizer ignore marker.
 
 The linter reads every text file, comments and prose included. One rotation per
-row: the avoided pattern on the left, the plain word on the right. A line that
-carries `nemoizer: ignore` is skipped and still listed for review, and a marker
-in the first three lines skips the whole file.
+row: the avoided pattern on the left, the plain word on the right. The linter
+skips a line that carries `nemoizer: ignore` and still lists it for review. A
+marker in the first three lines skips the whole file.
 """
 
 import argparse
@@ -87,7 +87,7 @@ def scan(targets, ignores):
       """A marker on a line that carries no rotation skips the whole file."""
       before = line.split(MARKER, 1)[0]
       return MARKER in line and not any(
-        re.search(pattern, before, flags=re.I) for pattern, _ in ROTATIONS
+        re.search(pattern, before, flags=re.IGNORECASE) for pattern, _ in ROTATIONS
       )
 
     if any(head_marker(line) for line in lines[:3]):
@@ -104,7 +104,7 @@ def scan(targets, ignores):
       if TABLE_ROW.match(line.strip()):
         continue
       for pattern, use in ROTATIONS:
-        for word in sorted(set(re.findall(pattern, line, flags=re.I))):
+        for word in sorted(set(re.findall(pattern, line, flags=re.IGNORECASE))):
           findings.append(f"{path}:{number}: {word} -> {use} (nemoizer: ignore)")
   return findings, marks
 
