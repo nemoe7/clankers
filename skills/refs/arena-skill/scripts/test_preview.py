@@ -5357,6 +5357,100 @@ def test_route_cli_rejects_task_after_run_name(tmp_path):
     assert not (tmp_path / "runs" / "checks.json").exists()
 
 
+@pytest.mark.parametrize("head_exit", [0, 7])
+def test_chained_runs_wait_and_cancel_on_head_failure(tmp_path, monkeypatch, head_exit):
+  store = preview.Store(tmp_path, create=True)
+  store.write_task("linked", "Linked", ["Run the chain"], task_type="code")
+  monkeypatch.setenv(preview.DETACH_DRY_RUN, "1")
+  names = ("head", "middle", "tail")
+  events = tmp_path / "events"
+  events.write_text("")
+  commands = {}
+  for index, name in enumerate(names):
+    code = (
+      f"from pathlib import Path; p=Path({str(events)!r}); "
+      f"assert p.read_text().splitlines() == {list(names[:index])!r}; "
+      f"p.write_text(p.read_text()+{name!r}+'\\n'); "
+      f"raise SystemExit({head_exit if name == 'head' else 0})"
+    )
+    commands[name] = [sys.executable, "-c", code]
+    options = {"after": names[index - 1]} if index else {}
+    assert preview.detach_run(
+      tmp_path, name, commands[name], task_id="linked", **options
+    )
+  assert store.task_record("linked")["blocked"] is True
+  waited = []
+
+  def advance(_seconds):
+    waiting = next(
+      name for name in names if preview.routed_record(tmp_path, name)["exit"] is None
+    )
+    assert waiting != "tail"
+    waited.append(waiting)
+    preview.run_command(tmp_path, waiting, commands[waiting])
+
+  monkeypatch.setattr(preview.time, "sleep", advance)
+  result = preview.run_command(tmp_path, "tail", commands["tail"])
+  assert waited
+  assert bool(result) == bool(head_exit)
+  assert events.read_text().splitlines() == (
+    list(names) if not head_exit else [names[0]]
+  )
+  assert store.task_record("linked")["blocked"] is False
+  assert all(
+    preview.routed_record(tmp_path, name)["exit"] is not None for name in names
+  )
+
+
+def test_chained_run_cli_and_parent_validation(tmp_path, monkeypatch):
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  monkeypatch.setenv(preview.DETACH_DRY_RUN, "1")
+  assert preview.detach_run(tmp_path, "head", ["true"])
+  assert preview.run_command(tmp_path, "head", ["true"]) == 0
+  environment = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)}
+  result = subprocess.run(
+    [
+      sys.executable,
+      str(Path(preview.__file__)),
+      "run",
+      "start",
+      "--after",
+      "head",
+      "cli-child",
+      "--",
+      "true",
+    ],
+    capture_output=True,
+    text=True,
+    check=False,
+    env=environment,
+  )
+  assert result.returncode == 0, result.stderr
+  record = preview.json_record(preview.run_record_path(tmp_path, "cli-child"))
+  assert record["after"]["name"] == "head"
+  for parent in ("missing", "../head", "self"):
+    with pytest.raises(ValueError):
+      preview.detach_run(tmp_path, "self", ["true"], after=parent)
+  assert not preview.run_record_path(tmp_path, "self").exists()
+  assert preview.detach_run(tmp_path, "bound", ["true"], after="head")
+  preview.write_detached_placeholder(tmp_path, "head", ["true"])
+  assert preview.run_command(tmp_path, "head", ["true"]) == 0
+  executed = tmp_path / "executed"
+  assert preview.run_command(
+    tmp_path, "bound", [sys.executable, "-c", f"open({str(executed)!r}, 'w').close()"]
+  )
+  assert not executed.exists()
+  assert preview.detach_run(tmp_path, "vanished", ["true"], after="head")
+  preview.run_record_path(tmp_path, "head").unlink()
+  assert preview.run_command(
+    tmp_path,
+    "vanished",
+    [sys.executable, "-c", f"open({str(executed)!r}, 'w').close()"],
+  )
+  assert not executed.exists()
+
+
 def test_route_starts_the_run_detached(tmp_path, monkeypatch):
   # The starter shell returns before the command. Its child completes the run record.
   # The state directory travels through the environment for the child's own resolution.

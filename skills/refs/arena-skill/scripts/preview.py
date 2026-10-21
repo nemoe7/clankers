@@ -3280,6 +3280,32 @@ def collect_worktree(state_dir, name, cwd=None):
   return patch
 
 
+RUN_CHAIN_POLL_SECONDS = 0.1
+
+
+def run_chain_error(state_dir, record):
+  """Wait for the previous run and return an error if it fails."""
+  dependency = record.get("after")
+  if dependency is None:
+    return None
+  if not isinstance(dependency, dict) or not isinstance(dependency.get("name"), str):
+    return "CANCELLED: invalid gate dependency."
+  while True:
+    try:
+      parent = routed_record(state_dir, dependency["name"])
+    except ValueError as error:
+      return f"CANCELLED: {error}"
+    if parent.get("run_id") != dependency.get("run_id"):
+      return f"CANCELLED: gate {dependency['name']} has another run instance."
+    if parent.get("exit") is not None:
+      if parent["exit"] != 0:
+        return (
+          f"CANCELLED: gate {dependency['name']} failed with exit {parent['exit']}."
+        )
+      return None
+    time.sleep(RUN_CHAIN_POLL_SECONDS)
+
+
 def run_command(state_dir, name, argv):
   """Run one command in this process, then record its exit for a later call.
 
@@ -3306,7 +3332,12 @@ def run_command(state_dir, name, argv):
   started = time.monotonic()
   # A check wait runs the native watcher instead of the requested gh watch: the watcher
   # waits out an empty start window and follows started checks to a terminal rollup.
-  if pr_checks_command(argv):
+  dependency_error = run_chain_error(
+    state_dir, json_record(run_record_path(state_dir, name)) or {}
+  )
+  if dependency_error:
+    completed = subprocess.CompletedProcess(argv, 1, dependency_error + "\n", "")
+  elif pr_checks_command(argv):
     root = resolve_repo_root()
     status, watched = pr_checks_watch(
       root,
@@ -3330,6 +3361,7 @@ def run_command(state_dir, name, argv):
   existing = json_record(path) or {}
   record = {
     **existing,
+    "run_id": existing.get("run_id") or uuid.uuid4().hex,
     "name": name,
     "argv": argv,
     "exit": completed.returncode,
@@ -3672,7 +3704,7 @@ def detached_seconds(started_at):
 
 
 def write_detached_placeholder(
-  state_dir, name, argv, pid=None, pid_started_at=None, task_id=None
+  state_dir, name, argv, pid=None, pid_started_at=None, task_id=None, after=None
 ):
   """Write the record a detached run carries while it runs, and return its path."""
   path = run_record_path(state_dir, name)
@@ -3681,6 +3713,7 @@ def write_detached_placeholder(
   except OSError:
     pass
   record = {
+    "run_id": uuid.uuid4().hex,
     "name": name,
     "argv": list(argv),
     "exit": None,
@@ -3692,6 +3725,8 @@ def write_detached_placeholder(
     "detached": True,
     "announced": False,
   }
+  if after is not None:
+    record["after"] = after
   if task_id:
     record["task_id"] = task_id
   if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0:
@@ -3787,7 +3822,7 @@ def run_task_id(state_dir, selected=None):
   return record.get("id") if record else None
 
 
-def detach_run(state_dir, name, argv, task_id=None):
+def detach_run(state_dir, name, argv, task_id=None, after=None):
   """Start one command detached under `name`, and say whether the spawn left.
 
   A detached child outlives the shell call that started it, so the run keeps going
@@ -3803,14 +3838,24 @@ def detach_run(state_dir, name, argv, task_id=None):
     standing = reconcile_routed_record(path, standing)
     if standing.get("exit") is None:
       return True
+  dependency = None
+  if after is not None:
+    if after == name:
+      raise ValueError("A gate cannot wait for itself")
+    parent = routed_record(state_dir, after)
+    if parent.get("exit") is None and not parent.get("detached"):
+      raise ValueError(f"Gate {after} has no running or finished record")
+    dependency = {"name": after, "run_id": parent.get("run_id")}
   task_id = run_task_id(state_dir, task_id)
   if os.environ.get(DETACH_DRY_RUN):
     pid = os.getpid()
     write_detached_placeholder(
-      state_dir, name, argv, pid, process_start_identity(pid), task_id
+      state_dir, name, argv, pid, process_start_identity(pid), task_id, dependency
     )
     return True
-  path = write_detached_placeholder(state_dir, name, argv, task_id=task_id)
+  path = write_detached_placeholder(
+    state_dir, name, argv, task_id=task_id, after=dependency
+  )
   # A plain `bash -c` reads no login profile, so a child never meets the gate that started it.
   # The marker covers a shell that sources the gate anyway, and BASH_ENV leaves with it.
   child_env = {
@@ -3849,7 +3894,7 @@ def detach_run(state_dir, name, argv, task_id=None):
   return True
 
 
-def route_command(state_dir, name, argv, task_id=None):
+def route_command(state_dir, name, argv, task_id=None, after=None):
   """Start a command detached under `name`, and return at once.
 
   This is the helper the trap uses for a long run it detects, and the call a line names
@@ -3876,7 +3921,7 @@ def route_command(state_dir, name, argv, task_id=None):
     clear_poll_repeat(Store(state_dir, create=False))
   except FileNotFoundError:
     pass
-  if not detach_run(state_dir, name, argv, task_id=task_id):
+  if not detach_run(state_dir, name, argv, task_id=task_id, after=after):
     print(f"arena-preview run start: the start of `{name}` failed.", flush=True)
     return 1
   print(
@@ -8924,6 +8969,7 @@ def main():
     metavar="TASK-ID",
     help="Link run to upcoming task, not current task",
   )
+  route.add_argument("--after", metavar="GATE", help="Run only after this gate passes")
   route.add_argument("name", help="Short run name; example: gates")
   route.add_argument("command_args", nargs=argparse.REMAINDER, help="Command after --")
   # The child side of `route`. The gate and the CLI both spawn it, so one place runs
@@ -9150,11 +9196,12 @@ def main():
     command_args = args.command_args
     separator = command_args.index("--") if "--" in command_args else len(command_args)
     if any(
-      argument == "--task" or argument.startswith("--task=")
+      argument == option or argument.startswith(option + "=")
       for argument in command_args[:separator]
+      for option in ("--task", "--after")
     ):
       parser.error(
-        "put --task before the run name. Use: "
+        "put --task and --after before the run name. Use: "
         "arena-preview run start --task <id> <name> -- <command>"
       )
   if args.command == "unpublish" and args.stale:
@@ -9217,7 +9264,7 @@ def main():
         print(warning, file=sys.stderr)
         return 1
       return route_command(
-        state_dir, args.name, args.command_args, task_id=args.task_id
+        state_dir, args.name, args.command_args, task_id=args.task_id, after=args.after
       )
     if args.command == "route-run":
       warning = worktree_warning(state_dir, "gate")

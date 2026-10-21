@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Add opt-in sequential gates with `run start --after`. Bind each dependency to its run instance and cancel waiting successors when that dependency fails or disappears.
+
 - Show `PR checks...` during a poll with an active PR-check run.
 - Block `grep`, `head`, and `tail` on read-set inputs. Keep file-tool readers and path checks.
 
