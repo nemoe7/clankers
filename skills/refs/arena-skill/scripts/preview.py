@@ -2427,6 +2427,7 @@ def read_set_paths(root=None):
 
 INERT_COMMANDS = (
   "cd",
+  "mkdir",
   "export",
   "set",
   "unset",

@@ -5697,6 +5697,25 @@ def test_first_blocking_piece_names_the_part_that_blocks():
   assert preview.first_blocking_piece("arena-preview read && npm test") == "npm test"
 
 
+def test_mkdir_is_inert_for_the_read_set():
+  """A mkdir prefix carries no work, so the read-set rule judges the command beside it.
+
+  The harness rebuilds a missing workspace root with `mkdir -p` before the agent's call.
+  Git tracks files, not directories, so the directory cannot reach a commit. A write
+  into it stays checked.
+  """
+  assert "mkdir" in preview.INERT_COMMANDS
+  root = "/home/user/clankers"
+  assert preview.read_set_actions(f"mkdir -p '{root}' && arena-preview read") == (
+    "read",
+  )
+  assert (
+    preview.first_blocking_piece(f"mkdir -p '{root}' && rm -rf /tmp/x")
+    == "rm -rf /tmp/x"
+  )
+  assert preview.read_set_actions(f"mkdir -p '{root}' && npm test") is None
+
+
 def test_quiet_inbox_line_allows_cd_and_blocks_tail_head_grep():
   # A cd prefix is fine on the writer's line, on the way to a read or a poll. The banned
   # readers end the quiet-line exemption, so their call blocks instead of riding along.

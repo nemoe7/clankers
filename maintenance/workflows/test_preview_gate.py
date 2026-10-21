@@ -1094,3 +1094,32 @@ def test_the_read_set_gate_passes_the_workspace_root_bootstrap_line():
       assert store.pending_read_set_note() is not None
     finally:
       hold.close()
+
+
+def test_the_read_set_gate_passes_a_wrapper_mkdir():
+  """The harness rebuilds a missing workspace root before the call. That mkdir is inert."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = preview_module.Store(root, create=True)
+    hold = socket.socket()
+    hold.bind(("127.0.0.1", 0))
+    hold.listen(1)
+    try:
+      store.set_meta("port", str(hold.getsockname()[1]))
+      store.set_meta(preview_module.READ_SET_LAST_META, "2000-01-01T00:00:00+00:00")
+      inbox = run(
+        "mkdir -p '/home/user/clankers' && arena-preview read",
+        state=root,
+      )
+      assert inbox.returncode == 0, inbox.stderr
+      blocked = run(
+        "mkdir -p '/home/user/clankers' && printf agent-work",
+        state=root,
+      )
+      assert blocked.returncode == 130, blocked.stderr
+      assert "Blocked by the part `printf agent-work`." in blocked.stderr, (
+        blocked.stderr
+      )
+      assert "agent-work" not in blocked.stdout
+    finally:
+      hold.close()
