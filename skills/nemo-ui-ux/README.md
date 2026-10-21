@@ -1,6 +1,62 @@
 # Nemo UI/UX
 
-Build and review web pages against the house style and measurable UI checks.
+Build and review web pages against the house style. It provides a token sheet, design-record template, examples, and numeric measurement tools.
+
+## Setup
+
+Load [SKILL.md](SKILL.md) in an agent that supports skills. See [Skills](../README.md) for installation layout. The bundled tools need Python 3 and no extra packages.
+
+The project supplies its page, running application, and browser. This skill does not install a browser or capture pages.
+
+## Working flow
+
+1. Read the project's design record, or start from [the template](references/design-document.md).
+2. Use the roles and values in [style.css](references/style.css), with [examples](references/examples.md) for the relevant components and states.
+3. Change the page and inspect the rendered states at 1280 and 360 pixels.
+4. Collect computed values with [the browser snippet](references/measure.md), check them, and retain the reports and screenshots.
+5. Update the project design record with settled decisions and evidence.
+
+The skill holds the complete house constraints. The record and screenshots describe the consuming project, not this skill's source files.
+
+## Available tools
+
+From the repository root in Windows cmd:
+
+```cmd
+python skills\nemo-ui-ux\scripts\measure.py check report.json
+python skills\nemo-ui-ux\scripts\measure.py ruler --from 120,340 --to 264,340
+```
+
+`check` reads one JSON report of computed CSS values. `ruler` measures horizontal, vertical, and straight-line distances between two page coordinates.
+
+`check` uses sheet rules. `ruler` uses only the scale. Exit status is 0 for a pass and 1 for findings.
+
+Defaults: the bundled sheet and an 8-pixel scale.
+
+Global options precede the command:
+
+```cmd
+python skills\nemo-ui-ux\scripts\measure.py --scale 4 --sheet path\to\style.css check report.json
+```
+
+A report has this shape:
+
+```json
+{
+  "width": 1280,
+  "elements": [
+    {"selector": ".row", "values": {"height": "40px", "gap": "16px"}}
+  ]
+}
+```
+
+## Limits
+
+Only `measure.py` is currently bundled. It reads supplied values and checks supported pixel properties against scales and named sizes. It does not start a browser or check report completeness.
+
+Missing elements and non-pixel values do not become complete coverage checks. A passing report does not prove accessibility, usability, behavior, or visual quality. Those need rendered and interaction review.
+
+This README is human documentation and is not part of the installed skill payload. The source credits follow.
 
 ## Sources
 

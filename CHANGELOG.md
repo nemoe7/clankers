@@ -35,6 +35,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### skills
 
+- Expand the Nemo UI/UX, Nemoizer, and Squash READMEs with setup, examples, available tools, and limits. Keep UI source credits and exclude the pages from distribution.
+
+#### skills
+
 - Add Nemoizer test-review rules for behavior, relations, named constants, and required exact-text contracts.
 
 - Rename nemo-ui to nemo-ui-ux across skill sources, distribution, measurements, and checks. Remove the old installed directory during distribution.
