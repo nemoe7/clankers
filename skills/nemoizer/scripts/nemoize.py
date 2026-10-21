@@ -4,8 +4,11 @@
 """Flag rotations, rewrite text, and list every exclusion marker."""
 
 import argparse
+import ast
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -21,7 +24,8 @@ RULE_IDS = {"transmit": "N001", "pick": "N002", "kind": "N003"}
 SENTENCE_CAPS = {"instruction": 20, "description": 25}
 PARAGRAPH_CAP = 6
 PROSE_RULE_IDS = {"sentence": "N004", "paragraph": "N005"}
-KNOWN_RULE_IDS = {*RULE_IDS.values(), *PROSE_RULE_IDS.values()}
+TEST_RULE_IDS = {"output_text": "N006", "measurement": "N007"}
+KNOWN_RULE_IDS = {*RULE_IDS.values(), *PROSE_RULE_IDS.values(), *TEST_RULE_IDS.values()}
 MARKER = re.compile(r"\bnonemo:[ \t]*(.*?)(?=-->|\*/|;|\s|$|\bnonemo:)")
 # The rotation table names the avoided words, so its own rows never flag.
 TABLE_ROW = re.compile(r"^\|\s*`[^`]+`\s*\|")
@@ -357,10 +361,276 @@ def prose_main(argv=None):
   return int(bool(findings))
 
 
+MEASUREMENTS = {
+  "width",
+  "clientwidth",
+  "clientheight",
+  "offsetwidth",
+  "offsetheight",
+  "scrollwidth",
+  "scrollheight",
+  "bytelength",
+  "byte_length",
+  "height",
+  "timeout",
+  "duration",
+  "elapsed",
+  "token_count",
+  "byte_count",
+  "size_bytes",
+  "poll_wait_seconds",
+  "timeout_seconds",
+}
+CHANNELS = {"stdout", "stderr", "output", "out", "err"}
+ASSERT_METHODS = {"assertEqual", "assertNotEqual", "assertIn", "assertNotIn"}
+NODE_TIMEOUT = 10
+JS_REVIEW = r"""
+let acorn;
+try { acorn = require(require.resolve('acorn', {paths:[process.argv[1]]})); }
+catch { console.log(JSON.stringify({reason:'parser_unavailable'})); process.exit(0); }
+const text = require('node:fs').readFileSync(0, 'utf8');
+let tree;
+try {
+  try { tree = acorn.parse(text, {ecmaVersion:'latest', sourceType:'module', locations:true}); }
+  catch { tree = acorn.parse(text, {ecmaVersion:'latest', sourceType:'script', locations:true}); }
+} catch (error) {
+  console.log(JSON.stringify({error:'SyntaxError', line:error.loc.line, column:error.loc.column + 1}));
+  process.exit(0);
+}
+function shape(node) {
+  if (node?.type === 'Identifier') return node.name;
+  if (node?.type === 'MemberExpression' && !node.computed) return `${shape(node.object)}.${node.property.name}`;
+  if (node?.type === 'CallExpression') return `${shape(node.callee)}(${node.arguments.map(shape).join(',')})`;
+  return '<expression>';
+}
+const pairs = [];
+const lines = text.split("\n");
+function pair(left, right, node, operator) {
+  for (const [actual, expected] of [[left,right],[right,left]]) {
+    if (expected?.type === 'Literal' && ['string','number'].includes(typeof expected.value)) {
+      const column = Array.from(lines[node.loc.start.line - 1].slice(0, node.loc.start.column)).length + 1;
+      pairs.push({actual:shape(actual), value:expected.value, operator,
+        line:node.loc.start.line, column});
+    }
+  }
+}
+function visit(node) {
+  if (!node || typeof node !== 'object') return;
+  if (node.type === 'CallExpression') {
+    const name = shape(node.callee);
+    if (['assert.equal','assert.strictEqual','assert.deepEqual',
+      'assert.deepStrictEqual','assert.notEqual','assert.notStrictEqual'].includes(name)) {
+      pair(node.arguments[0], node.arguments[1], node, 'equality');
+    } else if (name === 'assert' || name === 'assert.ok') {
+      const expression = node.arguments[0];
+      if (expression?.type === 'BinaryExpression' && ['==','===','!=','!=='].includes(expression.operator)) {
+        pair(expression.left, expression.right, node, 'equality');
+      }
+    }
+  }
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) value.forEach(visit);
+    else if (value && typeof value === 'object') visit(value);
+  }
+}
+visit(tree);
+console.log(JSON.stringify({pairs}));
+"""
+
+
+def shape(node):
+  if isinstance(node, ast.Name):
+    return node.id
+  if isinstance(node, ast.Attribute):
+    return f"{shape(node.value)}.{node.attr}"
+  if isinstance(node, ast.Call):
+    return f"{shape(node.func)}({','.join(map(shape, node.args))})"
+  return "<expression>"
+
+
+def python_pairs(text):
+  pairs = []
+  lines = text.splitlines()
+
+  def pair(left, right, node, operator):
+    for actual, expected in ((left, right), (right, left)):
+      if isinstance(expected, ast.Constant) and type(expected.value) in (
+        str,
+        int,
+        float,
+      ):
+        pairs.append(
+          {
+            "actual": shape(actual),
+            "value": expected.value,
+            "operator": operator,
+            "line": node.lineno,
+            "column": len(
+              lines[node.lineno - 1].encode("utf-8")[: node.col_offset].decode("utf-8")
+            )
+            + 1,
+          }
+        )
+
+  for node in ast.walk(ast.parse(text)):
+    if isinstance(node, ast.Assert):
+      for expression in ast.walk(node.test):
+        if isinstance(expression, ast.Compare):
+          left = expression.left
+          for operator, right in zip(expression.ops, expression.comparators):
+            if isinstance(operator, (ast.Eq, ast.NotEq, ast.In, ast.NotIn)):
+              pair(
+                left,
+                right,
+                expression,
+                "equality"
+                if isinstance(operator, (ast.Eq, ast.NotEq))
+                else "membership",
+              )
+            left = right
+    if (
+      isinstance(node, ast.Call)
+      and isinstance(node.func, ast.Attribute)
+      and shape(node.func.value) in ("self", "cls")
+      and node.func.attr in ASSERT_METHODS
+      and len(node.args) >= 2
+    ):
+      pair(
+        node.args[0],
+        node.args[1],
+        node,
+        "membership" if node.func.attr in {"assertIn", "assertNotIn"} else "equality",
+      )
+  return {"pairs": pairs}
+
+
+def output_channel(name):
+  return name.split(".")[-1] in CHANNELS
+
+
+def category(pair):
+  value, actual = pair["value"], pair["actual"]
+  if (
+    isinstance(value, str)
+    and output_channel(actual)
+    and len(re.findall(r"[A-Za-z]+", value)) >= 3
+    and not value.isupper()
+    and re.search(r"\s", value)
+    and not re.search(r"[<>{}=\\/\n]", value)
+  ):
+    return "output_text"
+  if (
+    type(value) in (int, float)
+    and value > 0
+    and pair["operator"] == "equality"
+    and (
+      actual.split(".")[-1].lower() in MEASUREMENTS
+      or actual.startswith("px(")
+      or actual.startswith("len(")
+      and any(word in CHANNELS for word in re.findall(r"\w+", actual))
+    )
+  ):
+    return "measurement"
+  return None
+
+
+def review_tests_main(argv=None):
+  parser = argparse.ArgumentParser(
+    description="Review explicitly scoped test assertions."
+  )
+  parser.add_argument("targets", nargs="+")
+  args = parser.parse_args(argv)
+  for target in args.targets:
+    if not Path(target).exists():
+      parser.error(f"target does not exist: {target}")
+  findings, coverage, errors, visited = [], [], [], set()
+  for path in walk(args.targets, []):
+    if path.resolve() in visited:
+      continue
+    visited.add(path.resolve())
+    row = {"path": str(path), "status": "not_checked"}
+    coverage.append(row)
+    text = text_file(path)
+    if text is None:
+      row["reason"] = "unreadable_or_non_text"
+      continue
+    try:
+      if path.suffix.lower() == ".py":
+        parsed = python_pairs(text)
+        row["parser"] = "python_ast"
+      elif path.suffix.lower() in {".js", ".cjs", ".mjs"}:
+        if not shutil.which("node"):
+          row["reason"] = "parser_unavailable"
+          continue
+        result = subprocess.run(
+          ["node", "-e", JS_REVIEW, str(Path(__file__).resolve().parent)],
+          input=text,
+          capture_output=True,
+          text=True,
+          timeout=NODE_TIMEOUT,
+          check=False,
+        )
+        if result.returncode:
+          raise RuntimeError("parser_process_failed")
+        parsed = json.loads(result.stdout)
+        row["parser"] = "acorn"
+      else:
+        row["reason"] = "unsupported_language"
+        continue
+    except SyntaxError as error:
+      parsed = {"error": "SyntaxError", "line": error.lineno, "column": error.offset}
+    except (
+      OSError,
+      subprocess.TimeoutExpired,
+      ValueError,
+      RuntimeError,
+      RecursionError,
+    ) as error:
+      parsed = {"error": type(error).__name__}
+    if "reason" in parsed:
+      row["reason"] = parsed["reason"]
+      continue
+    if "error" in parsed:
+      row["reason"] = "parse_error"
+      errors.append(
+        {
+          "path": str(path),
+          "type": parsed["error"],
+          "line": parsed.get("line"),
+          "column": parsed.get("column"),
+        }
+      )
+      continue
+    row["status"] = "checked"
+    file_ids, line_ids, _ = exclusions(path, text.splitlines())
+    for pair in parsed["pairs"]:
+      role = category(pair)
+      if role is None:
+        continue
+      code = TEST_RULE_IDS[role]
+      if code in file_ids or code in line_ids[pair["line"] - 1]:
+        continue
+      findings.append(
+        {
+          "rule": code,
+          "category": role,
+          "path": str(path),
+          "line": pair["line"],
+          "column": pair["column"],
+          "evidence": f"{pair['actual']} {pair['operator']} <literal>",
+          "status": "review",
+        }
+      )
+  print(json.dumps({"findings": findings, "coverage": coverage, "errors": errors}))
+  return 2 if errors else int(bool(findings))
+
+
 def main(argv=None):
   argv = list(sys.argv[1:] if argv is None else argv)
   if argv[:1] == ["prose"]:
     return prose_main(argv[1:])
+  if argv[:1] == ["review-tests"]:
+    return review_tests_main(argv[1:])
   parser = argparse.ArgumentParser(description="Flag nemoizer rotations.")
   parser.add_argument("targets", nargs="*", default=["."])
   parser.add_argument(

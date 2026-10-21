@@ -323,3 +323,185 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
   )
   assert shipped.returncode == 0, shipped.stderr
   assert not json.loads(shipped.stdout)["findings"]
+
+
+def test_opt_in_assertion_review_keeps_contracts_and_reports_coverage(tmp_path):
+  import json
+
+  source = tmp_path / "test_example.py"
+  original = """
+assert result.stdout == "Saved the report successfully."
+assert panel.width == 320
+assert panel.width >= config.MIN_WIDTH
+assert panel.width == config.MIN_WIDTH
+assert len(writes) == 1
+assert recovered == "User text stays exact."
+assert result.stdout == "POLL AGAIN"
+assert result.stdout == expected
+assert panel.width == 0
+assert lint("The state was saved.")
+assert valid, "This explanation is not an expectation."
+self.assertEqual(result.stderr, "The report was saved.")
+self.assertIn("The report was saved.", result.stdout)
+cls.assertEqual(panel.clientWidth, 320.5)
+"""
+  source.write_text(original)
+
+  def inspect(*paths, cwd=tmp_path):
+    result = run("review-tests", *map(str, paths), cwd=cwd)
+    assert result.returncode in (0, 1, 2), result.stderr
+    return result, json.loads(result.stdout)
+
+  probe = run("review-tests", str(source), cwd=tmp_path)
+  assert probe.returncode == 1, probe.stderr
+  result, data = inspect(source)
+  assert result.returncode == 1
+  assert {row["category"] for row in data["findings"]} == {"output_text", "measurement"}
+  expected_lines = {
+    original.splitlines().index(line) + 1
+    for line in original.splitlines()
+    if line.startswith(
+      (
+        'assert result.stdout == "Saved',
+        "assert panel.width == 320",
+        "self.assertEqual",
+        "self.assertIn",
+        "cls.assertEqual",
+      )
+    )
+  }
+  assert {row["line"] for row in data["findings"]} == expected_lines
+  assert all(
+    row["path"] == str(source) and row["status"] == "review" for row in data["findings"]
+  )
+  assert source.read_text() == original
+  measurement = next(
+    row["rule"] for row in data["findings"] if row["category"] == "measurement"
+  )
+  source.write_text(f"# nonemo: {measurement}\n# nonemo: N999\n" + original)
+  _, suppressed = inspect(source)
+  assert suppressed["findings"]
+  assert all(row["rule"] != measurement for row in suppressed["findings"])
+  listing = run("--ignores", str(source), cwd=tmp_path)
+  assert listing.returncode == 0
+  assert (
+    measurement in listing.stdout
+    and "N999" in listing.stdout
+    and "unknown" in listing.stdout
+  )
+
+  js = tmp_path / "test_example.cjs"
+  js.write_text(
+    'const 𐐀 = 0; assert.equal(result.stdout, "Saved the report successfully.");\n'
+    "assert.equal(panel.width, 320);\n"
+    'assert.equal(recovered, "User text stays exact.");\n',
+    encoding="utf-8",
+  )
+  _, javascript = inspect(js, cwd=SCRIPT.parents[3])
+  coverage = javascript["coverage"][0]
+  if coverage["status"] == "checked":
+    position = next(
+      row for row in javascript["findings"] if row["category"] == "output_text"
+    )
+    assert (
+      position["column"] == js.read_text(encoding="utf-8").index("assert.equal") + 1
+    )
+  if coverage["status"] == "checked":
+    assert {row["category"] for row in javascript["findings"]} == {
+      "output_text",
+      "measurement",
+    }
+  else:
+    assert (
+      coverage["status"] == "not_checked" and coverage["reason"] == "parser_unavailable"
+    )
+  source.write_text("assert (\n")
+  failed, malformed = inspect(source)
+  assert failed.returncode == 2
+  assert malformed["errors"][0]["path"] == str(source)
+  assert malformed["errors"][0]["type"] == "SyntaxError"
+  assert malformed["errors"][0]["line"] > 0
+  other = tmp_path / "fixture.txt"
+  other.write_text(original)
+  _, unsupported = inspect(other)
+  assert unsupported["coverage"][0]["status"] == "not_checked"
+  assert not unsupported["findings"]
+
+  unicode_line = "λ = 0; assert panel.width == 320\n"
+  source.write_text(unicode_line, encoding="utf-8")
+  _, unicode_data = inspect(source)
+  _, repeated = inspect(source, source)
+  assert repeated["findings"] == unicode_data["findings"]
+  assert len(repeated["coverage"]) == len({row["path"] for row in repeated["coverage"]})
+  position = next(
+    row for row in unicode_data["findings"] if row["category"] == "measurement"
+  )
+  assert position["column"] == unicode_line.index("panel.width") + 1
+
+  invalid_bytes = tmp_path / "invalid.py"
+  invalid_bytes.write_bytes(b"\xff")
+  skipped, unreadable = inspect(invalid_bytes)
+  assert skipped.returncode == 0
+  assert unreadable["coverage"][0]["reason"] == "unreadable_or_non_text"
+  assert invalid_bytes.read_bytes() == b"\xff"
+
+  import os
+  import shutil
+
+  missing_parser = subprocess.run(
+    [sys.executable, str(SCRIPT), "review-tests", str(js)],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    env={**os.environ, "PATH": ""},
+    check=False,
+  )
+  assert missing_parser.returncode == 0, missing_parser.stderr
+  assert (
+    json.loads(missing_parser.stdout)["coverage"][0]["reason"] == "parser_unavailable"
+  )
+
+  portable = tmp_path / "portable"
+  portable.mkdir()
+  for filename in ("nemoizer", "nemoize.py"):
+    shutil.copy2(SCRIPT.with_name(filename), portable / filename)
+  shipped = subprocess.run(
+    [sys.executable, str(portable / "nemoizer"), "review-tests", str(source)],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert shipped.returncode == 1, shipped.stderr
+  assert any(
+    row["category"] == "measurement" for row in json.loads(shipped.stdout)["findings"]
+  )
+  absent = run("review-tests", str(tmp_path / "missing.py"), cwd=tmp_path)
+  assert absent.returncode == 2
+  assert not absent.stdout
+
+  project = tmp_path / "other-project"
+  dependency = project / "node_modules" / "acorn"
+  dependency.mkdir(parents=True)
+  marker = project / "executed"
+  (dependency / "index.js").write_text(
+    "require('node:fs').writeFileSync(" + json.dumps(str(marker)) + ", 'executed');\n"
+    "module.exports = {parse(){return {type:'Program', body:[]};}};\n",
+    encoding="utf-8",
+  )
+  target = project / "test_sample.cjs"
+  target_text = "assert.equal(panel.width, 320);\n"
+  target.write_text(target_text, encoding="utf-8")
+  _, isolated = inspect(target, cwd=project)
+  assert not marker.exists(), "A target project supplied executable parser code"
+  assert target.read_text(encoding="utf-8") == target_text
+  if isolated["coverage"][0]["status"] == "checked":
+    assert any(row["category"] == "measurement" for row in isolated["findings"])
+
+    target.write_text("assert.equal(\n", encoding="utf-8")
+    failed_js, syntax = inspect(target, cwd=project)
+    assert failed_js.returncode == 2
+    assert syntax["errors"][0]["path"] == str(target)
+    assert syntax["errors"][0]["type"] == "SyntaxError"
+    assert syntax["errors"][0]["line"] > 0
+    assert not marker.exists()

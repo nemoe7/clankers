@@ -46,3 +46,22 @@ Findings carry rule, path, line, column, count, cap, and review status. Over-cap
 Native counters exclude inline code and fenced code, and count ordinary pipe-table cells separately. Paragraph counts cover prose blocks outside tables, headings, lists, and quotes; this is not a complete Markdown parser.
 
 Existing exclusions apply at the reported line, or at file scope. Unknown IDs remain visible in the collector without suppressing a known rule; an unreadable or non-text file is marked not checked.
+
+## Test assertion review
+
+| ID | Candidate |
+| --- | --- |
+| `N006` | Direct prose-literal comparison or membership check against a named output channel |
+| `N007` | Literal equality-style assertion against a known measurement name |
+
+`nemoizer review-tests <paths>` is opt-in. It reports review candidates, per-file parser coverage, and parser errors without executing or rewriting tests.
+
+The Python parser covers bare assertions and selected `self` or `cls` assertion methods. JavaScript uses an existing Acorn parser for selected Node `assert` calls. An unavailable parser is marked not checked without an installation.
+
+Parser resolution starts at the linter directory, not at a target path or the current working directory.
+
+Known output names include stdout, stderr, output, out, and err. Measurement names include geometry, timeout, duration, token count, and byte count fields. Configured expectations and growth comparisons are not flagged.
+
+Assertion diagnostic messages and quoted fixture inputs are not expected-output checks. A reported literal can still be required executable, protocol, or verbatim data. These patterns do not prove a semantic violation.
+
+Existing rule-specific exclusions and the collector apply. Exit status is 1 for candidates, 2 for parser errors or invalid arguments, and 0 otherwise. Not-checked coverage is not proof of a complete review.

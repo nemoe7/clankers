@@ -42,6 +42,16 @@ The paragraph cap is six sentences. A project can set a stricter cap from one th
 
 Output is JSON with review candidates and per-file coverage. Native counters omit code spans and fences, treat ordinary pipe-table cells separately, and exclude headings, lists, quotes, and tables from paragraph counts.
 
+## Test assertion review
+
+```cmd
+python skills\nemoizer\scripts\nemoizer review-tests path\to\tests
+```
+
+Opt-in review reports selected prose-output and fixed-measurement assertion shapes. It uses Python syntax trees and an existing Acorn parser for JavaScript. Unavailable or unsupported parsing is marked not checked.
+
+It does not execute, rewrite, or enforce tests. Findings need manual review: exact executable, protocol, and verbatim-data expectations can be valid.
+
 ## Results and limits
 
 | Mode | Result |
@@ -50,6 +60,7 @@ Output is JSON with review candidates and per-file coverage. Native counters omi
 | Format | Changed lines, with exit 0 on completion |
 | Collect | Every marker, with exit 0 on completion |
 | Prose | JSON candidates and coverage, with exit 1 for candidates and 0 otherwise |
+| Review tests | JSON candidates, coverage, and errors, with exit 1 for candidates, 2 for parser errors, and 0 otherwise |
 
 Invalid command arguments return exit 2. Prose mode requires existing target paths. Directory scans omit configured dependency, build, and session-state paths.
 

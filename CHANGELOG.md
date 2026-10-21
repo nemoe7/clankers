@@ -21,6 +21,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nemoizer
 
+- Add opt-in test-assertion review with syntax trees, rule-specific exclusions, and explicit parser coverage. Keep normal scans unchanged and execute no tests.
+
 - Add opt-in Nemoizer sentence and paragraph counts with explicit sentence context.
 
 - Add stable lint IDs, rule-specific nonemo exclusions, and the exclusion collector. Keep stem rotations, case handling, and the existing header condition.
