@@ -8,6 +8,7 @@ on:
       - "rules/ARENA.md"
       - "skills/arena-skill/**"
       - "skills/nemo-ui/**"
+      - "skills/nemoizer/**"
       - "github/workflows/gemini-release.yml"
       - "github/workflows/gemini_release.py"
       - ".github/actions/distribute-sync/**"
@@ -28,6 +29,10 @@ on:
         default: ""
       nemo_ui_repos:
         description: Space-separated owner/repo list for the nemo-ui list
+        required: false
+        default: ""
+      nemoizer_repos:
+        description: Space-separated owner/repo list for the nemoizer list
         required: false
         default: ""
 permissions:
@@ -91,3 +96,21 @@ jobs:
           repos: ${{ inputs.nemo_ui_repos }}
           repos-fallback: nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup
           skills: nemo-ui
+  nemoizer:
+    name: Distribute nemoizer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: Distribute-nemoizer-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Check Out Source Repository
+        uses: actions/checkout@v7
+      - name: Sync The nemoizer Skill
+        uses: ./.github/actions/distribute-sync
+        env:
+          CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
+        with:
+          repos: ${{ inputs.nemoizer_repos }}
+          repos-fallback: nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup nemoe7/wiki
+          skills: nemoizer

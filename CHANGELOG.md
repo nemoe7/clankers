@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-21
 
+### Added
+
+#### workflows
+
+- Add a nemoizer distribution job with its own target override. Copy the skill to the nemo-ui targets and `nemoe7/wiki`.
+
 ### Changed
 
 #### preview
