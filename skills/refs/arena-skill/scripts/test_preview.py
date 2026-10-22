@@ -1782,14 +1782,16 @@ def test_http_boundaries():
         r"padding-left:0;list-style-position:inside",
         page,
       ), "message text lists sit flush"
-      # The narrow-screen and touch rules keep Send at the right. The busy label sets its width.
+      # The narrow-screen and touch rules keep Send at the right.
       assert re.findall(r"#send\{(margin-left:[^}]*)\}", page) == [
         "margin-left:auto;",
         "margin-left:auto;",
       ]
-      # Staging a file must not move the plus and MD buttons: the heading row never wraps, so
-      # the chips wrap inside the label span and the tight row keeps its right-hand seat.
-      assert ".composer-heading{flex-wrap:nowrap;" in page
+      expand = re.search(r'<button\b[^>]*id="composer-expand"[^>]*>', page)
+      assert expand is not None
+      assert re.search(r'aria-label="[^"]+"', expand.group())
+      assert 'aria-controls="note draft-preview"' in expand.group()
+      assert 'aria-expanded="false"' in expand.group()
       assert "resize:none" in page and "resize:vertical" not in page
       assert (
         "#notes-panel,#reports-panel,#tasks-panel,#downloads-panel{overflow-y:auto"

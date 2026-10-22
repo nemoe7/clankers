@@ -2,7 +2,8 @@
 const $ = selector => document.querySelector(selector);
 const note = $('#note');
 const send = $('#send');
-const sendIdleLabel = send.textContent;
+const compose = $('#compose');
+const expandComposer = $('#composer-expand');
 const status = $('#send-status');
 const key = 'arena-preview-v1';
 // Text above either paste limit becomes one attachment.
@@ -87,6 +88,9 @@ function stored(name) {
 // One table holds each shape a control can swap in, so a control redraws from the same source as its static twin in index.html.
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ICONS = {
+  'minimize-2': [['path', { d: 'm14 10 7-7' }], ['path', { d: 'M20 10h-6V4' }], ['path', { d: 'm3 21 7-7' }], ['path', { d: 'M4 14h6v6' }]],
+  'maximize-2': [['path', { d: 'M15 3h6v6' }], ['path', { d: 'm21 3-7 7' }], ['path', { d: 'm3 21 7-7' }], ['path', { d: 'M9 21H3v-6' }]],
+  'arrow-up': [['path', { d: 'm5 12 7-7 7 7' }], ['path', { d: 'M12 19V5' }]],
   sun: [['circle', { cx: '12', cy: '12', r: '4' }], ['path', { d: 'M12 2v2' }],
     ['path', { d: 'M12 20v2' }], ['path', { d: 'm4.93 4.93 1.41 1.41' }],
     ['path', { d: 'm17.66 17.66 1.41 1.41' }], ['path', { d: 'M2 12h2' }],
@@ -238,13 +242,40 @@ const STATE_WORDS = { sent: 'Sent', seen: 'Seen', said: 'Said' };
 // The copy button restores the whole log. A narrowed copy would restore a partial log as complete.
 let logQuery = '';
 
-function grow() {
-  // The textarea grows with a draft and shrinks after a send.
-  // Add 2px for the border so it avoids its own scrollbar. An empty field keeps the stylesheet min-height.
-  if (!note.value) { note.style.height = ''; return; }
-  note.style.height = 'auto';
-  note.style.height = `${note.scrollHeight + 2}px`;
+function paintSend(busy) {
+  setIcon(send, busy ? 'loader-circle' : 'arrow-up', 16);
+  label(send, busy ? 'Sending message' : 'Send message');
+  send.setAttribute('aria-busy', String(busy));
 }
+function paintExpansion() {
+  const expanded = Boolean(compose.dataset.expanded);
+  expandComposer.setAttribute('aria-expanded', String(expanded));
+  label(expandComposer, expanded ? 'Collapse composer' : 'Expand composer');
+  setIcon(expandComposer, expanded ? 'minimize-2' : 'maximize-2', 16);
+}
+function grow() {
+  const wasMultiline = Boolean(compose.dataset.multiline);
+  delete compose.dataset.multiline;
+  if (!note.value) delete compose.dataset.expanded;
+  note.style.height = 'auto';
+  note.style.overflowY = note.value ? 'auto' : 'hidden';
+  const css = window.getComputedStyle(note);
+  const single = parseFloat(css.lineHeight) + parseFloat(css.paddingTop) + parseFloat(css.paddingBottom);
+  const multiline = note.value && (wasMultiline || note.hidden || note.value.includes('\n') || note.scrollHeight > Math.ceil(single));
+  if (multiline) compose.dataset.multiline = 'true';
+  const border = parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth);
+  note.style.height = !note.value || compose.dataset.expanded ? '' : `${note.scrollHeight + border}px`;
+  expandComposer.hidden = !multiline && !compose.dataset.expanded;
+  paintExpansion();
+}
+expandComposer.addEventListener('click', () => {
+  if (compose.dataset.expanded) delete compose.dataset.expanded;
+  else compose.dataset.expanded = 'true';
+  grow();
+  (note.hidden ? $('#draft-preview') : note).focus();
+});
+window.addEventListener('resize', grow);
+paintSend(false);
 note.value = stored('draft') || '';
 grow();
 try { pending = JSON.parse(stored('pending') || 'null'); }
@@ -259,7 +290,6 @@ note.addEventListener('input', () => {
 // carries its own state and the send binds the bytes the server already holds.
 let stagedFiles = [];
 const selector = $('#upload-file');
-const compose = $('#compose');
 const attachmentInfo = file => ({
   name: file.name, size: file.size, type: file.type, lastModified: file.lastModified || null
 });
@@ -331,14 +361,15 @@ function renderStagedFiles() {
       selector.value = '';
       void dropStaged(dropped);
       renderStagedFiles();
-      status.textContent = stagedFiles.length
-        ? `${stagedFiles.length} file${stagedFiles.length === 1 ? '' : 's'} staged.`
-        : 'Attachments removed. Draft kept.';
+      status.textContent = '';
     });
     chip.append(name, remove);
     return chip;
   }));
   holder.hidden = !stagedFiles.length;
+  if (stagedFiles.length) compose.dataset.attachments = 'true';
+  else delete compose.dataset.attachments;
+  grow();
 }
 function clearStagedFiles() {
   stagedFiles = [];
@@ -361,7 +392,7 @@ function stageFiles(files) {
   selector.value = '';
   renderStagedFiles();
   for (const entry of entries) entry.request = uploadStaged(entry);
-  status.textContent = `Staged ${stagedFiles.length} file${stagedFiles.length === 1 ? '' : 's'}. Send message to save them together.`;
+  status.textContent = '';
 }
 $('#attach-file').addEventListener('click', () => selector.click());
 selector.addEventListener('change', () => stageFiles(Array.from(selector.files || [])));
@@ -1118,8 +1149,8 @@ $('#form').addEventListener('submit', async event => {
   }
   save('pending', JSON.stringify(pending));
   send.disabled = selector.disabled = $('#attach-file').disabled = true;
-  send.textContent = send.dataset.busyLabel;
-  status.textContent = attachments.length ? `Sending ${attachments.length} file${attachments.length === 1 ? '' : 's'} with message…` : '';
+  paintSend(true);
+  status.textContent = '';
   const sending = { id: pending.id, text, at: new Date().toISOString(), pending: true };
   const apply = (state, result) => {
     const record = result ? { html: sending.html, ...result } : sending;
@@ -1134,12 +1165,10 @@ $('#form').addEventListener('submit', async event => {
     sending.html = renderMessageMarkdown(text);
     // A send waits for the eager uploads, then gives a failed one one more try.
     if (stagedFiles.some(entry => entry.status === 'uploading')) {
-      status.textContent = 'Waiting for files to finish uploading…';
       await Promise.all(stagedFiles.map(entry => entry.request));
     }
     const broken = stagedFiles.filter(entry => entry.status === 'failed');
     if (broken.length) {
-      status.textContent = `Retrying ${broken.map(entry => entry.file.name).join(', ')}…`;
       await Promise.all(broken.map(entry => uploadStaged(entry)));
     }
     if (stagedFiles.some(entry => entry.status !== 'ready')) {
@@ -1172,7 +1201,7 @@ $('#form').addEventListener('submit', async event => {
   }
   finally {
     send.disabled = selector.disabled = $('#attach-file').disabled = false;
-    send.textContent = sendIdleLabel;
+    paintSend(false);
   }
 });
 // A touch keyboard offers no Shift key, so there the Return key writes the newline and the Send
@@ -1207,6 +1236,7 @@ $('#preview-note').addEventListener('click', async () => {
   note.hidden = true;
   const panel = $('#draft-preview');
   panel.hidden = false;
+  grow();
   panel.textContent = 'Rendering draft…';
   setPreviewIcon($('#preview-note'));
   $('#preview-note').setAttribute('aria-pressed', 'true');
@@ -1393,7 +1423,7 @@ async function copyFrom(button, text, what, glyph = 'copy', failure = null) {
   }, 1500));
 }
 function growSlot(area) {
-  // The same 2px of border the composer adds. See grow().
+  // Include the border so the field does not need a scrollbar.
   area.style.height = 'auto';
   area.style.height = `${area.scrollHeight + 2}px`;
 }
@@ -2150,6 +2180,7 @@ function showTab(tab) {
     item.tabIndex = selected ? 0 : -1;
     $('#' + item.getAttribute('aria-controls')).hidden = !selected;
   }
+  if (tab === tabs[0]) grow();
   updateReportTop();
   if (tab === tabs[1]) {
     // Record the tab visit before the poll recomputes its pip so the marker clears during this visit.

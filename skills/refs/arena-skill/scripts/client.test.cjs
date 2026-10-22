@@ -202,6 +202,7 @@ test('preview client', async (t) => {
   const failedWrites = new Set();
   const context = {
     window: {
+      getComputedStyle: () => ({lineHeight: '24px', paddingTop: '4px', paddingBottom: '4px', borderTopWidth: '0px', borderBottomWidth: '0px'}),
       addEventListener: (name, callback) => { windowEvents[name] = callback; },
       matchMedia: query => ({
         // A live getter: the client reads the query once and the pointer may change later.
@@ -665,6 +666,67 @@ test('preview client', async (t) => {
     assert.equal(body.dataset.composer, undefined, 'the composer has no closed state');
     assert.equal(get('#composer-toggle').events.click, undefined, 'no composer handler');
     assert.equal(storage.get('arena-preview-v1:composer'), undefined, 'nothing is saved for it');
+  });
+
+  await t.test('Composer expansion retains text and selection and restores its compact state', async () => {
+    const field = get('#note');
+    const control = get('#composer-expand');
+    const composer = get('#compose');
+    field.value = 'first\nsecond';
+    field.setSelectionRange(2, 7);
+    context.grow();
+    assert.equal(typeof control.events.click, 'function', 'multiline drafts have an expansion control');
+    assert.equal(control.children[0]?.getAttribute('class'), 'lucide lucide-maximize-2', 'the expansion action has its glyph before the first click');
+    control.events.click();
+    assert.equal(composer.dataset.expanded, 'true');
+    assert.equal(control.getAttribute('aria-expanded'), 'true');
+    assert.equal(field.value, 'first\nsecond');
+    assert.equal(field.selectionStart, 2);
+    assert.equal(field.selectionEnd, 7);
+    control.events.click();
+    assert.equal(composer.dataset.expanded, undefined);
+    assert.equal(control.getAttribute('aria-expanded'), 'false');
+    field.value = '';
+    context.grow();
+    assert.equal(control.hidden, true, 'an empty compact field has no expansion control');
+  });
+
+  await t.test('Multiline layout remains until the draft is empty', async () => {
+    const field = get('#note');
+    const composer = get('#compose');
+    try {
+      const css = context.window.getComputedStyle(field);
+      field.scrollHeight = parseFloat(css.lineHeight) + parseFloat(css.paddingTop) + parseFloat(css.paddingBottom);
+      field.value = 'first\nsecond';
+      context.grow();
+      field.value = 'first';
+      context.grow();
+      assert.equal(composer.dataset.multiline, 'true', 'deleting one line keeps the open layout');
+      field.value = '';
+      context.grow();
+      assert.equal(composer.dataset.multiline, undefined, 'an empty draft returns to compact layout');
+    } finally {
+      field.value = '';
+      context.grow();
+    }
+  });
+
+  await t.test('A multiline placeholder stays compact without a scrollbar', async () => {
+    const field = get('#note');
+    const placeholder = field.placeholder;
+    try {
+      field.placeholder = 'first\nsecond\nthird';
+      field.value = '';
+      context.grow();
+      assert.equal(field.style.overflowY, 'hidden', 'a placeholder cannot enable draft scrolling');
+      field.value = 'a draft';
+      context.grow();
+      assert.equal(field.style.overflowY, 'auto', 'drafts retain overflow scrolling');
+    } finally {
+      field.value = '';
+      field.placeholder = placeholder;
+      context.grow();
+    }
   });
 
   await t.test("An empty field keeps the stylesheet's min-height; a placeholder no longer holds the box op", async () => {
@@ -3204,7 +3266,7 @@ test('preview client', async (t) => {
     assert.equal(uploadCalls.length, 0, 'an empty file never uploads');
     selector.files = [{ name: 'big.bin', size: 50_000_001, type: 'application/octet-stream' }];
     selector.events.change();
-    assert.equal(get('#send-status').textContent, 'Staged 1 file. Send message to save them together.');
+    assert.equal(get('#send-status').textContent, '', 'chips replace routine staging captions');
     assert.deepEqual(chips(), ['big.bin'], 'a large file has no ceiling');
     assert.match(chipText(), /^big\.bin · uploading…$/, 'the chip renders before the bytes land');
     await tick();
@@ -3217,7 +3279,7 @@ test('preview client', async (t) => {
     selector.files = tooMany;
     selector.events.change();
     await tick();
-    assert.equal(get('#send-status').textContent, 'Staged 6 files. Send message to save them together.');
+    assert.equal(get('#send-status').textContent, '', 'chips replace routine staging captions');
     assert.equal(get('#staged-files').children.length, 6, 'no count cap stages six files');
     assert.equal(uploadCalls.length, 7, 'each of the six files uploads on its own');
     while (get('#staged-files').children.length) {
@@ -4243,7 +4305,8 @@ test('preview client', async (t) => {
       writing = get('#form').events.submit(event({}));
       assert.equal(get('#note').value, '', 'submission clears before the pending message renders');
       assert.equal(get('#send').disabled, true, 'Send stays locked during a save');
-      assert.equal(get('#send').textContent, get('#send').dataset.busyLabel, 'the pending label names the active save');
+      assert.equal(get('#send').getAttribute('aria-busy'), 'true', 'the spinner names the active save');
+      assert.equal(get('#send').children[0].getAttribute('class'), 'lucide lucide-loader-circle');
       assert.ok(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')));
       await refresh();
       assert.ok(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')));

@@ -70,6 +70,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Keep one-line drafts compact on desktop and phones. Retain the multiline layout until empty, and add expansion. Keep panel and button corners, files, Markdown preview, and save errors.
+
 - Keep linked reports active until all their tasks finish. Use a 30-minute edit or view interval for unlinked reports. Add saved CLI pins.
 
 - Keep report acknowledgement-view stamps in saved state and restore. Retain old-backup support and omit transient agent and active-view stamps.

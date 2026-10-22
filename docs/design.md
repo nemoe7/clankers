@@ -92,3 +92,15 @@ Accepted: retain the shared dialog and product themes. Add separate correctness 
 2026-10-21: client, server, generated-runtime, and browser checks passed. Review added a colored outline at zero confidence and expanded the Close target.
 
 2026-10-22: add relative last-answer time and Answer again. Hide the heading and session notice, and retain the dialog name.
+
+## Message composer
+
+Empty and one-line drafts use one row on desktop and phones. Multiline drafts grow within the view and expose an expand control at the top right. The multiline layout stays until the draft is empty.
+
+Expansion retains the draft and selection. The panel and Send keep their existing corner shapes. Empty fields hide overflow from multiline placeholders.
+
+Attach and Markdown preview stay left, without button backgrounds. Send or its busy icon stays right.
+
+Removable file chips sit above the text. Markdown preview, key status, errors, storage checks, and keyboard controls remain available.
+
+The composer uses existing product colors and local Lucide icons under `assets/lucide.LICENSE`. The `arrow-up`, `maximize-2`, and `minimize-2` paths in `assets/app.js` come from the [Lucide catalog](https://github.com/lucide-icons/lucide/tree/main/icons).

@@ -86,28 +86,40 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 .log-card > .row:first-child { margin-block: 0; row-gap: 2px; }
 .card.compose { flex: 0 0 auto; padding: 8px 18px; }
 .compose .row { margin: 6px 0; }
-/* The heading row never wraps: staging a file wraps the chips inside the label span, so the
-   plus and MD buttons keep their right-hand seat instead of dropping a line. */
-.composer-heading { flex-wrap: nowrap; gap: 8px; }
-.composer-label { display: inline-flex; align-items: center; gap: 7px; min-width: 0; flex-wrap: wrap; }
-.composer-label label { margin: 0; white-space: nowrap; }
+.notes-layout { position: relative; }
+.notes-layout:has(#compose[data-multiline], #compose[data-attachments]) .log-card { min-height: 0; }
+#form { min-height: 0; }
+.composer-shell { position: relative; display: grid; grid-template-columns: 30px 30px minmax(0, 1fr) 30px; grid-template-areas: "attach preview input send"; gap: 8px; align-items: center; }
+.card.compose:focus-within { border-color: var(--focus); }
+#note, #draft-preview { grid-area: input; min-width: 0; }
+#note { min-height: 0; max-height: min(240px, 35dvh); overflow-y: auto; padding: 4px; border: 0; background: transparent; outline: none; }
+#attach-file { grid-area: attach; }
+#preview-note { grid-area: preview; }
+#send { grid-area: send; }
+#staged-files { grid-area: files; }
+#composer-expand { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; padding: 0; }
+#compose[data-multiline] .composer-shell { grid-template-areas: "input input input input" "attach preview . send"; }
+#compose[data-attachments] .composer-shell { grid-template-areas: "files files files files" "input input input input" "attach preview . send"; }
+#compose[data-multiline] #note, #compose[data-expanded] #note { padding: 12px 48px 8px 12px; }
+#compose[data-expanded] { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; max-height: none; }
+#compose[data-expanded] #form { flex: 1; display: flex; flex-direction: column; }
+#compose[data-expanded] .composer-shell { flex: 1; min-height: 0; grid-template-areas: "files files files files" "input input input input" "attach preview . send"; grid-template-rows: auto minmax(0, 1fr) auto; }
+#compose[data-expanded] #note, #compose[data-expanded] #draft-preview { height: 100%; max-height: none; overflow-y: auto; }
 #staged-files { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; max-width: 100%; }
 .staged-chip { display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 2px 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--bubble); }
 .staged-chip-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .staged-chip button { min-height: 0; padding: 0 3px; border: 0; background: transparent; }
 #attach-file { min-height: 0; width: 30px; height: 30px; padding: 0; flex: none; }
+#attach-file, #preview-note { background: transparent; border-color: transparent; }
+#attach-file:focus-visible, #preview-note:focus-visible { border-color: var(--focus); }
 #compose[data-dragging] { outline: 2px dashed var(--accent); outline-offset: -4px; }
-#preview-note { display: inline-flex; align-items: center; gap: 5px; min-height: 0; padding: 6px 10px; font-size: 13px; }
+#preview-note { display: inline-flex; align-items: center; justify-content: center; min-height: 0; width: 30px; height: 30px; padding: 0; }
 .row.tight { gap: 8px; margin: 0; flex: 0 0 auto; flex-wrap: nowrap; }
 /* The log's toolbar keeps one line on every width: a wrap would drop the search box under the
    skip button and read as a row of its own. */
 .stack { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-/* The footer status stack starts from zero width, so a long staged-files line wraps inside
-   its own column and the Send note button stays on the same line. */
 .compose .row > .stack { flex: 1 1 0; }
-#send { flex: none; white-space: nowrap; }
-/* The hidden label sets the width before a save. */
-#send::before { content: attr(data-busy-label); display: block; height: 0; visibility: hidden; }
+#send { width: 30px; height: 30px; min-height: 0; padding: 0; }
 .stack h2, .stack p { margin: 0; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-width: 0; }
 label { display: block; font-size: 14px; font-weight: 650; margin-bottom: 8px; }
@@ -403,7 +415,7 @@ mark code { color: var(--text); }
 @property --edge-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --edge-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @media (prefers-reduced-motion: no-preference) {
-  #agent-interrupt[aria-busy="true"] svg { animation: reread-spin 1s linear infinite; }
+  #agent-interrupt[aria-busy="true"] svg, #send[aria-busy="true"] svg { animation: reread-spin 1s linear infinite; }
   @keyframes reread-spin { to { transform: rotate(360deg); } }
   [role="tabpanel"] { animation: panel-enter var(--motion-duration) ease-out; }
   @keyframes panel-enter { from { opacity: 0; } to { opacity: 1; } }

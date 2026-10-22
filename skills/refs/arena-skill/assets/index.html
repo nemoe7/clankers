@@ -46,18 +46,21 @@
         </section>
         <section class="card compose" id="compose" aria-label="Send a message">
           <form id="form">
-            <div class="row composer-heading">
-              <span class="composer-label"><label for="note">Your message</label><span id="staged-files" role="status" hidden></span></span>
-              <span class="row tight"><input id="upload-file" type="file" multiple aria-label="Choose files to attach" hidden><button id="attach-file" class="icon-button" type="button" aria-label="Choose files to attach" title="Choose files to attach"><svg class="lucide lucide-paperclip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"></path></svg></button><button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview" aria-label="Preview Markdown" title="Preview Markdown"><svg class="markdown-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z" fill="currentColor" stroke="none"></path></svg></button></span>
+            <div class="composer-shell">
+              <div id="staged-files" role="status" hidden></div>
+              <input id="upload-file" type="file" multiple aria-label="Choose files to attach" hidden>
+              <button id="attach-file" class="icon-button" type="button" aria-label="Choose files to attach" title="Choose files to attach"><svg class="lucide lucide-paperclip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"></path></svg></button>
+              <textarea id="note" name="note" rows="1" aria-label="Your message" placeholder="What should happen next?"></textarea>
+              <div id="draft-preview" class="report draft-preview" tabindex="0" role="region" aria-label="Markdown draft preview, not sent" hidden></div>
+              <button id="composer-expand" class="icon-button" type="button" aria-label="Expand composer" title="Expand composer" aria-expanded="false" aria-controls="note draft-preview" hidden></button>
+              <button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview" aria-label="Preview Markdown" title="Preview Markdown"><svg class="markdown-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z" fill="currentColor" stroke="none"></path></svg></button>
+              <button id="send" class="icon-button" type="submit" aria-label="Send message" title="Send message" aria-busy="false"></button>
             </div>
-            <textarea id="note" name="note" rows="3" placeholder="What should happen next?"></textarea>
-            <div id="draft-preview" class="report draft-preview" tabindex="0" role="region" aria-label="Markdown draft preview, not sent" hidden></div>
             <div class="row">
               <div class="stack">
                 <small><span id="send-hint">Enter sends · Shift+Enter: new line · </span><span id="agent-key" class="key-line" role="status">No key recorded.</span></small>
                 <p id="send-status" role="status" aria-live="polite"></p>
               </div>
-              <button id="send" type="submit" aria-live="polite" data-busy-label="Sending...">Send</button>
             </div>
           </form>
         </section>
