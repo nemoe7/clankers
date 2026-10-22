@@ -17,6 +17,8 @@ ROLE_FRAGMENT_LENGTH = 5
 INSTRUCTIONS = (
   "When answering, use existing knowledge only; do not research answers, open other files, "
   "run code, ask another system, reuse earlier responses, or inspect the answer key.\n"
+  "Supply your best complete answer for a question and set a lower confidence from 0 to 1 "
+  "when uncertain; use unknown with confidence 0 only when the whole question is unknown.\n"
   "Omit questionnaire answers and answer-key details from summaries and handoffs."
 )
 
@@ -26,7 +28,9 @@ def template():
     {
       "id": question["id"],
       "answer": {
-        name: dict(SPEC["quantity"]["unknown"]) if field == "quantity" else None
+        name: dict(SPEC["quantity"]["unknown"])
+        if field == "quantity"
+        else SPEC["unknown_value"]
         for name, field in question["answer_fields"].items()
       },
       "confidence": 0,
@@ -83,24 +87,37 @@ def loads(text):
     answer = row["answer"]
     if not isinstance(answer, dict) or set(answer) != set(question["answer_fields"]):
       raise ValueError(f"{question['id']}.answer fields do not match the schema")
-    clean, known = {}, False
+    clean, known_count = {}, 0
     for name, field in question["answer_fields"].items():
       value = answer[name]
       if field == "quantity":
         value = quantity(value, f"{question['id']}.{name}")
-        known |= value["operator"] != "unknown"
+        known_count += int(value["operator"] != "unknown")
       else:
-        if value is not None and not isinstance(value, str):
-          raise ValueError(f"{question['id']}.{name} must be a string or null")
-        known |= value is not None
-        value = value.casefold() if isinstance(value, str) else value
+        if value is None:
+          raise ValueError(f"{question['id']}.{name} must not be null; use 'unknown'")
+        if not isinstance(value, str) or not value.strip():
+          raise ValueError(
+            f"{question['id']}.{name} must be a non-empty string or 'unknown'"
+          )
+        value = value.casefold()
+        known_count += int(value != "unknown")
       clean[name] = value
+    if known_count not in (0, len(question["answer_fields"])):
+      raise ValueError(
+        f"{question['id']}.answer must fill every field or set all fields to unknown"
+      )
+    known = known_count > 0
     confidence = row["confidence"]
     if type(confidence) not in (int, float) or not 0 <= confidence <= 1:
       raise ValueError(f"{question['id']}.confidence must be a number from 0 to 1")
     if not known and confidence != 0:
       raise ValueError(
         f"{question['id']}.confidence must be zero when all values are unknown"
+      )
+    if known and confidence <= 0:
+      raise ValueError(
+        f"{question['id']}.confidence must be greater than zero when an answer is supplied"
       )
     normalized.append(
       {"id": question["id"], "answer": clean, "confidence": confidence, "known": known}

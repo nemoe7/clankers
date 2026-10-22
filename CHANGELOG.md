@@ -30,6 +30,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### house
 
+- Require complete best-effort questionnaire answers with lower confidence when uncertain, and reject `null` or partial-unknown answer fields.
+
 - Require complete, self-contained task details and `-A` or `--append` updates so compaction and workspace resets lose no progress.
 
 - Rerun the skill installer and restart the active preview server after skill source changes.
