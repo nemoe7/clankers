@@ -326,6 +326,7 @@ mark code { color: var(--text); }
 }
 
 #send-status { margin: 0; }
+#send-status:empty { display: none; }
 .draft-preview { min-height: 112px; max-height: 240px; overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
 .draft-preview p { white-space: pre-wrap; }
 

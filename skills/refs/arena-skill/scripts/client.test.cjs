@@ -703,11 +703,18 @@ test('preview client', async (t) => {
   await t.test('Multiline layout remains until the draft is empty', async () => {
     const field = get('#note');
     const composer = get('#compose');
+    const history = get('#history');
     try {
       const css = context.window.getComputedStyle(field);
       field.scrollHeight = parseFloat(css.lineHeight) + parseFloat(css.paddingTop) + parseFloat(css.paddingBottom);
+      history.scrollHeight = 800;
+      history.clientHeight = 200;
+      history.scrollTop = 100;
+      history.events.scroll();
       field.value = 'first\nsecond';
+      field.scrollHeight = 64;
       context.grow();
+      assert.ok(history.scrollTop > 100, 'growing the composer moves the message log up to keep its bottom in view');
       field.value = 'first';
       context.grow();
       assert.equal(composer.dataset.multiline, 'true', 'deleting one line keeps the open layout');
@@ -715,6 +722,9 @@ test('preview client', async (t) => {
       context.grow();
       assert.equal(composer.dataset.multiline, undefined, 'an empty draft returns to compact layout');
     } finally {
+      history.scrollHeight = 0;
+      history.clientHeight = 0;
+      history.scrollTop = 0;
       field.value = '';
       context.grow();
     }
