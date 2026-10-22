@@ -4,7 +4,7 @@ Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
 | Bundle | Features |
 | --- | --- |
-| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Auto-send wake up, Transcript auto-scroll, Transcript trim, Preview state download, Tab title, Keep awake |
+| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Auto-send wake up, Keep working, Transcript auto-scroll, Transcript trim, Preview state download, Tab title, Keep awake |
 | [chatgpt.user.js](chatgpt.user.js) | Hide elements, Auto Think |
 
 ## Install
@@ -22,7 +22,7 @@ The baseline is `refs/arena-prompt-fill.txt`. The served `arena-prompt-fill.txt`
 
 ## Feature switches
 
-Eleven switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
+Twelve switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
 
 Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. One module's entries stay together. The modules sit in one order:
 
@@ -95,6 +95,8 @@ The feature checks the draft and controls again before the click. A hidden compo
 The same switch fills an empty composer when the latest message root contains a matching generation-error banner. Banner visibility does not matter. Other drafts stay unchanged. Each root ID permits one automatic fill in the current page runtime, including after a DOM remount.
 
 Auto-wake logs `filled` after an error-recovery insert and `clicked` after the Send button click. These events contain no message text and do not prove server acceptance.
+
+`Composer — keep working` defaults to On. It checks whether the latest message root ends on a non-spinner, non-`prose` row while `Keep working` is visible. It then clicks `Keep working`, waits for an enabled empty composer, enters `wake up`, and logs `clicked` and `filled` once per root.
 
 ## Arena transcript trim
 

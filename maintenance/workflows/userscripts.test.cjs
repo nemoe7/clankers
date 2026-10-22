@@ -20,9 +20,10 @@ const chatgptTargets = {
 
 const bundles = {
   arena: {
-    features: { "auto-wake": 1, "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "transcript-alerts": 1, "tab-title": 1, "state-download": 0, "keep-awake": 0 },
+    features: { "auto-wake": 1, "keep-working": 1, "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "transcript-alerts": 1, "tab-title": 1, "state-download": 0, "keep-awake": 0 },
     labels: {
       "auto-wake": "Composer — auto-send wake up",
+      "keep-working": "Composer — keep working",
       "prompt-fill": "Composer — fill",
       "open-steering": "Steering — open",
       "preview-sandbox": "Steering — new tabs and downloads",
@@ -170,6 +171,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Composer — fill (ON)",
       "Composer — hide (ON)",
       "Composer — auto-send wake up (ON)",
+      "Composer — keep working (ON)",
       "Proxy — host",
       "Proxy — master key",
       "Proxy — post key now",
@@ -335,7 +337,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.ok(toggle, "Missing the transcript trim toggle");
     assert.ok(reads(toggle.label, false), "Transcript trim ships OFF");
     // The plan menu is the one that names rows. The switch menu reads ": ON/OFF".
-    const findCount = () => [...counted.menus.values()].find((item) => item.label.includes("keep"));
+    const findCount = () => [...counted.menus.values()].find((item) => item.label.includes(countMenu));
     const findNow = () =>
       [...counted.menus.values()].find((item) => item.label === "Transcript — trim now");
     // The manual entries answer the switch whatever it reads: a trim now runs with the auto
@@ -358,6 +360,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Composer — fill (ON)",
         "Composer — hide (ON)",
         "Composer — auto-send wake up (ON)",
+        "Composer — keep working (ON)",
         "Proxy — host",
         "Proxy — master key",
         "Proxy — post key now",
@@ -1134,18 +1137,51 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const { test } = require("node:test");
   test("auto wake sends an exact visible draft once after a cancellable delay", () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
-    const saved = new Map(Object.keys(bundles.arena.features).filter(key => key !== "auto-wake").map(key => [key, false]));
+    const saved = new Map(Object.keys(bundles.arena.features).filter(key => key !== "auto-wake" && key !== "keep-working").map(key => [key, false]));
     const timers = new Map();
     const menus = new Map();
     const listeners = new Map();
     const observers = [];
+    const logged = [];
     let next = 0;
     let clicks = 0;
     let captcha = false;
     let present = true;
     let alerts = [];
     let roots = [];
-    const messageRoot = (id, hasError) => ({ id, querySelector() { return hasError ? errorBanner : null; } });
+    let keepWorkingVisible = false;
+    let keepWorkingClicks = 0;
+    const spinnerRow = {
+      tagName: "DIV",
+      className: "flex w-fit items-center justify-start gap-1.5",
+      outerHTML: '<div class="flex w-fit items-center justify-start gap-1.5"><div class="flex size-4 shrink-0 items-center justify-center"><div class="size-4"><canvas width="16" height="16" style="vertical-align: top; width: 16px; height: 16px;"></canvas></div></div></div>',
+    };
+    const proseRow = {
+      tagName: "DIV",
+      className: "prose",
+      outerHTML: '<div class="prose"><p>Done.</p></div>',
+    };
+    const actionRow = {
+      tagName: "DIV",
+      className: "flex flex-col",
+      outerHTML: '<div class="flex flex-col"><button aria-label="Collapse">Ran command</button></div>',
+    };
+    const keepWorkingButton = {
+      disabled: false,
+      hidden: false,
+      textContent: "Keep working",
+      getAttribute() { return null; },
+      getClientRects() { return this.hidden ? [] : [{}]; },
+      click() { keepWorkingClicks += 1; },
+    };
+    const messageRoot = (id, hasError, rows = []) => ({
+      id,
+      children: rows,
+      querySelector(selector) {
+        if (selector === ":scope > div > div.px-3.pb-3 > div.flex.flex-col.gap-2") return null;
+        return hasError ? errorBanner : null;
+      },
+    });
     const errorBanner = { hidden: false, getClientRects() { return this.hidden ? [] : [{}]; } };
     const button = {
       disabled: false, hidden: false, ariaDisabled: null,
@@ -1174,13 +1210,17 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       for (const timer of pending) timer.callback();
     };
     const context = {
-      console: { log() {}, warn() {}, error() {} }, URL,
+      console: { log(...args) { logged.push(args); }, warn(...args) { logged.push(args); }, error(...args) { logged.push(args); } }, URL,
       location: { href: "https://arena.ai/agent/session", pathname: "/agent/session" },
       document: {
         documentElement: {},
         createRange() { return { selectNodeContents() {} }; },
         execCommand(command, ui, text) { assert.equal(command, "insertText"); editor.innerText = text; return true; },
-        querySelector(selector) { return present && selector.includes("tiptap") ? editor : null; },
+        querySelector(selector) {
+          if (selector.includes("tiptap")) return present ? editor : null;
+          if (selector.includes("button:nth-child(3)")) return keepWorkingVisible ? keepWorkingButton : null;
+          return null;
+        },
         querySelectorAll(selector) {
           if (selector === "[data-agent-transcript-message]") return roots;
           if (selector.includes("border-red-500")) return alerts;
@@ -1308,6 +1348,35 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     roots = [messageRoot("newest-root", true)];
     fire(); flush();
     assert.equal(clicks, 4, "a new latest root permits one recovery");
+    present = false;
+    editor.innerText = "";
+    keepWorkingVisible = true;
+    roots = [messageRoot("spinner-root", false, [actionRow, spinnerRow])];
+    fire(); flush();
+    assert.equal(keepWorkingClicks, 0, "Keep working stays idle while the last row is the 16x16 canvas spinner");
+    roots = [messageRoot("prose-root", false, [actionRow, proseRow])];
+    fire(); flush();
+    assert.equal(keepWorkingClicks, 0, "Keep working stays idle when the last row has the prose class");
+    roots = [messageRoot("stopped-root", false, [proseRow, actionRow])];
+    const toggleKeepWorking = () => [...menus.values()].find(item => item.label.startsWith("Composer — keep working")).callback();
+    toggleKeepWorking();
+    assert.equal(saved.get("keep-working"), false);
+    fire();
+    assert.equal(keepWorkingClicks, 0, "Keep working toggle Off disables the click");
+    toggleKeepWorking();
+    assert.equal(saved.get("keep-working"), true);
+    assert.equal(keepWorkingClicks, 1, "Keep working clicks once when the last row is neither spinner nor prose");
+    assert.ok(logged.some(([line]) => line === "[NemoUtils][keep-working][info] clicked"));
+    assert.equal(editor.innerText, "", "waits for the composer before typing wake up");
+    fire();
+    assert.equal(keepWorkingClicks, 1, "does not click Keep working repeatedly for the same root");
+    keepWorkingVisible = false;
+    present = true;
+    fire();
+    assert.equal(editor.innerText, "wake up", "types wake up once the composer mounts");
+    assert.ok(logged.some(([line]) => line === "[NemoUtils][keep-working][info] filled"));
+    flush();
+    assert.equal(clicks, 5, "sends wake up after Keep working opens the composer");
   });
 }
 

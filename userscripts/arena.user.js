@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.62
+// @name         Arena.ai | NemoUtils | v1.10.63
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.62
+// @version      1.10.63
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -43,6 +43,7 @@
     pause: ["change"],
     feature: ["change"],
     "auto-wake": ["clicked", "filled"],
+    "keep-working": ["clicked", "filled"],
     fill: ["inserted", "rebuilt", "no-repo", "no-composer", "no-template", "filled"],
     trim: ["removed"],
     state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-selector", "requested", "selector-closed", "reset-accept"],
@@ -50,7 +51,7 @@
     title: ["changed", "restored", "conditions"],
   };
   var LOG_VALUES = {
-    feature: ["auto-wake", "prompt-fill", "open-steering", "preview-sandbox", "auto-scroll", "transcript-trim", "transcript-alerts", "hide-composer", "state-download", "keep-awake", "tab-title"],
+    feature: ["auto-wake", "keep-working", "prompt-fill", "open-steering", "preview-sandbox", "auto-scroll", "transcript-trim", "transcript-alerts", "hide-composer", "state-download", "keep-awake", "tab-title"],
     group: ["note", "task"],
     verdict: ["older", "same", "forward"],
     type: ["none", "chat", "reasoning", "poll", "play", "action", "error", "unchanged", "stale", "download"],
@@ -1981,8 +1982,128 @@
     };
   });
 
+  var KEEP_WORKING_SELECTOR =
+    "div.divide-border-faint.border-border-faint.bg-surface-primary.mx-3.mb-3.divide-y.overflow-hidden.rounded-md.border > button:nth-child(3)";
+  var SPINNER_ROW_HTML =
+    '<div class="flex w-fit items-center justify-start gap-1.5"><div class="flex size-4 shrink-0 items-center justify-center"><div class="size-4"><canvas width="16" height="16" style="vertical-align: top; width: 16px; height: 16px;"></canvas></div></div></div>';
+
+  function hasClassToken(node, name) {
+    var raw =
+      node && typeof node.className === "string"
+        ? node.className
+        : node && typeof node.getAttribute === "function"
+          ? String(node.getAttribute("class") || "")
+          : "";
+    return (" " + raw + " ").indexOf(" " + name + " ") !== -1;
+  }
+
+  function firstElementOf(node) {
+    if (!node) return null;
+    if (node.firstElementChild) return node.firstElementChild;
+    return node.children && node.children.length ? node.children[0] : null;
+  }
+
+  function childSteps(node, steps) {
+    var current = node;
+    for (var i = 0; i < steps; i += 1) {
+      if (!current) return null;
+      current = firstElementOf(current);
+    }
+    return current;
+  }
+
+  function messageRowContainer(root) {
+    var node =
+      root && typeof root.querySelector === "function"
+        ? root.querySelector(":scope > div > div.px-3.pb-3 > div.flex.flex-col.gap-2")
+        : null;
+    node = node || childSteps(root, 3);
+    if (
+      node &&
+      hasClassToken(node, "flex") &&
+      hasClassToken(node, "flex-col") &&
+      hasClassToken(node, "gap-2")
+    ) {
+      return node;
+    }
+    return root && root.children && root.children.length ? root : null;
+  }
+
+  function lastMessageRow(root) {
+    var container = messageRowContainer(root);
+    var kids = container && container.children ? container.children : [];
+    for (var i = kids.length - 1; i >= 0; i -= 1) {
+      var tag = kids[i] && kids[i].tagName ? String(kids[i].tagName).toUpperCase() : "DIV";
+      if (tag === "DIV") return kids[i];
+    }
+    return null;
+  }
+
+  function isSpinnerRow(row) {
+    if (!row) return false;
+    if (String(row.outerHTML || "").trim() === SPINNER_ROW_HTML) return true;
+    if (
+      !hasClassToken(row, "flex") ||
+      !hasClassToken(row, "w-fit") ||
+      !hasClassToken(row, "items-center") ||
+      !hasClassToken(row, "justify-start") ||
+      !hasClassToken(row, "gap-1.5")
+    ) {
+      return false;
+    }
+    var outer = firstElementOf(row);
+    if (
+      !outer ||
+      !hasClassToken(outer, "flex") ||
+      !hasClassToken(outer, "size-4") ||
+      !hasClassToken(outer, "shrink-0") ||
+      !hasClassToken(outer, "items-center") ||
+      !hasClassToken(outer, "justify-center")
+    ) {
+      return false;
+    }
+    var inner = firstElementOf(outer);
+    if (!inner || !hasClassToken(inner, "size-4")) return false;
+    var canvas = firstElementOf(inner);
+    if (!canvas || String(canvas.tagName || "").toUpperCase() !== "CANVAS") return false;
+    var w = typeof canvas.getAttribute === "function" ? canvas.getAttribute("width") : null;
+    var h = typeof canvas.getAttribute === "function" ? canvas.getAttribute("height") : null;
+    w = w !== null && w !== undefined ? w : canvas.width;
+    h = h !== null && h !== undefined ? h : canvas.height;
+    var style = String(
+      (typeof canvas.getAttribute === "function" && canvas.getAttribute("style")) ||
+        (canvas.style && canvas.style.cssText) ||
+        "",
+    );
+    return (
+      String(w || "") === "16" &&
+      String(h || "") === "16" &&
+      (style === "" ||
+        (style.indexOf("vertical-align: top") !== -1 &&
+          style.indexOf("width: 16px") !== -1 &&
+          style.indexOf("height: 16px") !== -1))
+    );
+  }
+
+  function keepWorkingButton(doc) {
+    if (!doc || typeof doc.querySelector !== "function") return null;
+    var button = doc.querySelector(KEEP_WORKING_SELECTOR);
+    if (
+      !button ||
+      button.disabled ||
+      (typeof button.getAttribute === "function" && button.getAttribute("aria-disabled") === "true") ||
+      !renderedNode(button)
+    ) {
+      return null;
+    }
+    var label = String(button.textContent || button.innerText || "").replace(/\s+/g, " ").trim();
+    if (label !== "Keep working") return null;
+    return button;
+  }
+
   var autoWakeSentFor = null;
   var autoWakeRoots = new Set();
+  var autoWakeNotify = null;
   runFeature("auto-wake", "Composer — auto-send wake up", function () {
     if (typeof document === "undefined") return function () {};
     var timer = null;
@@ -2007,6 +2128,7 @@
         if (!message || !message.id || autoWakeRoots.has(message.id) ||
             !message.querySelector(GENERATION_ALERT_SELECTOR)) return null;
         autoWakeRoots.add(message.id);
+        autoWakeSentFor = null;
         setComposerText(editor, "wake up");
         if (String(editor.innerText || "") === "wake up") logEvent("auto-wake", "filled");
       }
@@ -2039,6 +2161,7 @@
 
     function compositionStart() { composing = true; cancel(); }
     function compositionEnd() { composing = false; sync(); }
+    autoWakeNotify = sync;
     var observer = new MutationObserver(sync);
     observer.observe(document.documentElement, {
       subtree: true, childList: true, characterData: true, attributes: true,
@@ -2051,8 +2174,83 @@
     sync();
     return function () {
       cancel();
+      if (autoWakeNotify === sync) autoWakeNotify = null;
       observer.disconnect();
       window.removeEventListener("input", sync, true);
+      window.removeEventListener("compositionstart", compositionStart, true);
+      window.removeEventListener("compositionend", compositionEnd, true);
+      window.removeEventListener("popstate", sync);
+    };
+  });
+
+  var keepWorkingRoots = new Set();
+  var keepWorkingWaitingComposer = false;
+  runFeature("keep-working", "Composer — keep working", function () {
+    if (typeof document === "undefined") return function () {};
+    var composing = false;
+
+    function sync(event) {
+      if (event && event.isComposing) composing = true;
+      if (
+        (!isComposerUrl(location.href) && !isSessionUrl(location.href)) ||
+        composing ||
+        captchaSignal(document)
+      ) {
+        return;
+      }
+      var message = lastMessageRoot(document);
+      var rootKey =
+        message &&
+        (message.id ||
+          (typeof message.getAttribute === "function" &&
+            message.getAttribute("data-chat-message-id")) ||
+          message);
+      var lastRow = lastMessageRow(message);
+      var keepWorking = keepWorkingButton(document);
+      if (
+        message &&
+        rootKey &&
+        !keepWorkingRoots.has(rootKey) &&
+        lastRow &&
+        !isSpinnerRow(lastRow) &&
+        !hasClassToken(lastRow, "prose") &&
+        keepWorking
+      ) {
+        keepWorkingRoots.add(rootKey);
+        keepWorkingWaitingComposer = true;
+        keepWorking.click();
+        logEvent("keep-working", "clicked");
+      }
+      if (!keepWorkingWaitingComposer) return;
+      var editor = document.querySelector('div.tiptap.ProseMirror[contenteditable="true"]');
+      if (!editor || !renderedNode(editor) || editor.getAttribute("aria-disabled") === "true") {
+        return;
+      }
+      keepWorkingWaitingComposer = false;
+      if (editor.textContent === "") {
+        autoWakeSentFor = null;
+        setComposerText(editor, "wake up");
+        if (String(editor.innerText || "") === "wake up") {
+          logEvent("keep-working", "filled");
+          if (typeof autoWakeNotify === "function") autoWakeNotify();
+        }
+      }
+    }
+
+    function compositionStart() { composing = true; }
+    function compositionEnd() { composing = false; sync(); }
+    var observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, {
+      subtree: true, childList: true, characterData: true, attributes: true,
+      attributeFilter: ["disabled", "aria-disabled", "aria-label", "role", "hidden", "style", "class"],
+    });
+    window.addEventListener("compositionstart", compositionStart, true);
+    window.addEventListener("compositionend", compositionEnd, true);
+    window.addEventListener("popstate", sync);
+    sync();
+    return function () {
+      keepWorkingWaitingComposer = false;
+      observer.disconnect();
       window.removeEventListener("compositionstart", compositionStart, true);
       window.removeEventListener("compositionend", compositionEnd, true);
       window.removeEventListener("popstate", sync);

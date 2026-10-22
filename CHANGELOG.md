@@ -12,6 +12,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Add optional overlap and stacking-depth checks to browser inspection, with sampled hit-test order and ancestor stacking properties.
 
+#### userscripts
+
+- Add `Composer — keep working` to click Keep working, wait for the composer, and enter wake up after non-spinner, non-prose stops. Log `clicked` and `filled`, and keep prose completions and active spinner rows idle.
+
 #### preview
 
 - Add report submission maps and templates with typed selections. Keep raw custom text, answer history, and saved formats.
