@@ -1,4 +1,4 @@
-name: PR Check
+name: PR Contract
 
 on:
   pull_request:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   contract:
-    name: Commit and Body Contract
+    name: Check Commits and PR Contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -27,7 +27,7 @@ jobs:
           # The range check reads each commit of the pull request.
           fetch-depth: 0
 
-      - name: Prepare The Runner
+      - name: Prep Runner
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: pr-check
@@ -35,7 +35,7 @@ jobs:
       - name: Install Validation Dependencies
         run: uv pip install --system -r requirements.txt
 
-      - name: Check The Commits, The Title and The Body
+      - name: Check Commits, PR Title, and PR Body
         env:
           # The values reach the script through the environment, never through the script text.
           PR_TITLE: ${{ github.event.pull_request.title }}
