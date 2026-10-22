@@ -335,6 +335,7 @@ mark code { color: var(--text); }
 .question textarea.answer-text { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
 .options { display: flex; flex-direction: column; gap: 4px; }
 .option { display: flex; align-items: baseline; gap: 8px; font-weight: 400; margin: 0; }
+.option > span { flex: 1; min-width: 0; }
 .option textarea { flex: 1; width: auto; min-width: 0; min-height: 0; padding: 4px 8px; }
 #report-submit { margin-top: 16px; }
 #report-form { min-width: 0; margin-top: 12px; }

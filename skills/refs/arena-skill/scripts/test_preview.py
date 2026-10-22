@@ -2046,7 +2046,8 @@ def test_http_boundaries():
       markup = preview.field_html(verdict)
       assert 'data-label="Other"' in markup and 'data-custom="Other"' in markup
       assert (
-        "> Ship it</label>" in markup and 'placeholder="Something else..."' in markup
+        "> <span>Ship it</span></label>" in markup
+        and 'placeholder="Something else..."' in markup
       )
       assert " Other: " not in markup and "<textarea" in markup
       assert 'aria-label="Other"' in markup
@@ -13145,11 +13146,11 @@ def test_recommended_options_prefix_ui_and_print_on_publish(
   _blocks, questions = preview.parse_fields(report.read_text("utf-8"))
   assert len(questions) == 2
   choice_html = preview.field_html(questions[0])
-  assert 'value="Beta" checked> * Beta</label>' in choice_html
-  assert 'value="Alpha"> Alpha</label>' in choice_html
+  assert 'value="Beta" checked> <span>* Beta</span></label>' in choice_html
+  assert 'value="Alpha"> <span>Alpha</span></label>' in choice_html
   checkbox_html = preview.field_html(questions[1])
-  assert 'value="Logs" checked> * Logs</label>' in checkbox_html
-  assert 'value="Metrics"> Metrics</label>' in checkbox_html
+  assert 'value="Logs" checked> <span>* Logs</span></label>' in checkbox_html
+  assert 'value="Metrics"> <span>Metrics</span></label>' in checkbox_html
 
   preview.Store(state, create=True)
   monkeypatch.setattr(preview, "resolve_state_dir", lambda: state)
@@ -13367,6 +13368,121 @@ def test_html_tag_navigation_parses_landmarks_forms_and_ranges(
   assert "more tags omitted" in text_out
 
 
+def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
+  tmp_path, monkeypatch, capsys
+):
+  repo = tmp_path / "repo"
+  repo.mkdir()
+  (repo / ".git").mkdir()
+  src = repo / "src"
+  src.mkdir()
+
+  mod = src / "widget.mjs"
+  mod.write_text(
+    'import { helper } from "./helper.mjs";\n'
+    "export const DEFAULT_LIMIT = 25;\n"
+    "export class Widget extends BaseWidget {\n"
+    "  constructor(name, options = {}) {\n"
+    "    super(name);\n"
+    "  }\n"
+    "  async load(url) {\n"
+    "    function normalize(raw) {\n"
+    "      return String(raw).trim();\n"
+    "    }\n"
+    "    return normalize(url);\n"
+    "  }\n"
+    "  [Symbol.iterator]() {\n"
+    "    return [][Symbol.iterator]();\n"
+    "  }\n"
+    "}\n"
+    "export const formatLabel = async (prefix, item = 'x') => `${prefix}:${item}`;\n"
+    "export default function renderWidget(target) {\n"
+    "  return target;\n"
+    "}\n",
+    encoding="utf-8",
+  )
+
+  cjs = src / "legacy.cjs"
+  cjs.write_text(
+    "const VERSION = 1;\n"
+    "function buildLegacy(flag) {\n"
+    "  return flag ? VERSION : 0;\n"
+    "}\n"
+    "module.exports = { VERSION, buildLegacy };\n",
+    encoding="utf-8",
+  )
+
+  monkeypatch.chdir(repo)
+  result = preview.outline_file(mod, repo_root=repo)
+  assert result["language"] == "javascript"
+  assert result["path"] == "src/widget.mjs"
+  assert result["omitted"] == 0
+  by_qual = {entry["qualified_name"]: entry for entry in result["entries"]}
+
+  assert "DEFAULT_LIMIT" in by_qual
+  assert by_qual["DEFAULT_LIMIT"]["type"] == "binding"
+  assert by_qual["DEFAULT_LIMIT"]["line"] == 2
+
+  assert "Widget" in by_qual
+  assert by_qual["Widget"]["type"] == "class"
+  assert by_qual["Widget"]["line"] == 3
+  assert by_qual["Widget"]["end_line"] == 16
+  assert "extends BaseWidget" in by_qual["Widget"]["signature"]
+
+  assert "Widget.constructor" in by_qual
+  assert by_qual["Widget.constructor"]["type"] == "method"
+  assert by_qual["Widget.constructor"]["line"] == 4
+  assert by_qual["Widget.constructor"]["end_line"] == 6
+
+  assert "Widget.load" in by_qual
+  assert by_qual["Widget.load"]["type"] == "async_method"
+  assert by_qual["Widget.load"]["line"] == 7
+  assert by_qual["Widget.load"]["end_line"] == 12
+
+  assert "Widget.load.normalize" in by_qual
+  assert by_qual["Widget.load.normalize"]["type"] == "function"
+  assert by_qual["Widget.load.normalize"]["line"] == 8
+  assert by_qual["Widget.load.normalize"]["end_line"] == 10
+
+  assert "Widget.[Symbol.iterator]" in by_qual
+  assert by_qual["Widget.[Symbol.iterator]"]["type"] == "method"
+
+  assert "formatLabel" in by_qual
+  assert by_qual["formatLabel"]["type"] == "async_function"
+  assert by_qual["formatLabel"]["line"] == 17
+
+  assert "renderWidget" in by_qual
+  assert by_qual["renderWidget"]["type"] == "function"
+  assert by_qual["renderWidget"]["line"] == 18
+  assert by_qual["renderWidget"]["end_line"] == 20
+
+  cjs_result = preview.outline_file(cjs, repo_root=repo)
+  cjs_names = {entry["qualified_name"]: entry for entry in cjs_result["entries"]}
+  assert "VERSION" in cjs_names
+  assert "buildLegacy" in cjs_names
+
+  broken = src / "broken.js"
+  broken.write_text("function broken( {\n  return 1;\n}\n", encoding="utf-8")
+  with pytest.raises(ValueError, match=r"src/broken\.js:\d+:.*JavaScript syntax error"):
+    preview.outline_file(broken, repo_root=repo)
+
+  empty_parsers = tmp_path / "empty-parsers"
+  empty_parsers.mkdir()
+  with pytest.raises(ValueError, match="JavaScript outline unavailable"):
+    preview.outline_file(mod, repo_root=repo, parser_dir=empty_parsers)
+
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    ["arena-preview", "outline", "src/widget.mjs", "--max-entries", "3"],
+  )
+  assert preview.main() == 0
+  text_out = capsys.readouterr().out
+  assert "src/widget.mjs (javascript, 3/" in text_out
+  assert "symbols," in text_out
+  assert "more symbols omitted" in text_out
+
+
 def test_questionnaire_rejects_null_partial_and_zero_confidence_known_answers():
   import questionnaire
 
@@ -13520,7 +13636,7 @@ def test_gate_exempts_mkdir_publish_tasks_and_help(tmp_path):
 
 def test_field_html_renders_inline_markdown_in_option_labels():
   _blocks, questions = preview.parse_fields(
-    "Pick an action: {#action}\n"
+    "Select an action: {#action}\n"
     "- (x) Run `arena-preview read` first\n"
     "- ( ) Check `<input>` and `<code>` tags\n"
     "- ( ) Something else: ...\n"
@@ -13529,13 +13645,15 @@ def test_field_html_renders_inline_markdown_in_option_labels():
   rendered = preview.field_html(questions[0])
   assert (
     'value="Run `arena-preview read` first" checked> '
-    "* Run <code>arena-preview read</code> first</label>"
+    "<span>* Run <code>arena-preview read</code> first</span></label>"
   ) in rendered
   assert (
     'value="Check `&lt;input&gt;` and `&lt;code&gt;` tags"> '
-    "Check <code>&lt;input&gt;</code> and <code>&lt;code&gt;</code> tags</label>"
+    "<span>Check <code>&lt;input&gt;</code> and <code>&lt;code&gt;</code> tags</span></label>"
   ) in rendered
   assert 'data-custom="Something else..."' in rendered
+  style_css = (preview.ASSETS / "style.css").read_text(encoding="utf-8")
+  assert ".option > span" in style_css
 
 
 def test_userscript_snapshot_scopes_export_and_import_refreshes_stale_digests(

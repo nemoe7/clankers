@@ -1807,7 +1807,7 @@ def field_html(question):
       prefix = "* " if recommended else ""
       group += (
         f'<label class="option"><input type="{control}" name="{name}" '
-        f'value="{value}"{checked}> {prefix}{render_inline(option)}</label>'
+        f'value="{value}"{checked}> <span>{prefix}{render_inline(option)}</span></label>'
       )
       continue
     named = html.escape(label, quote=True)
@@ -9551,7 +9551,282 @@ def _outline_html(rel_path, text):
   return entries
 
 
-def outline_file(path, repo_root=None, max_entries=OUTLINE_MAX_ENTRIES):
+JS_OUTLINE_SCRIPT = r"""
+const fs = require("node:fs");
+const acornPath = process.argv[1];
+const suffix = process.argv[2];
+const source = fs.readFileSync(0, "utf8");
+const acorn = require(acornPath);
+
+function parseSource(text, ext) {
+  const modes = ext === ".cjs" ? ["script", "module"] : ext === ".mjs" ? ["module"] : ["module", "script"];
+  let firstErr = null;
+  for (const sourceType of modes) {
+    try {
+      return acorn.parse(text, {
+        ecmaVersion: "latest",
+        sourceType,
+        locations: true,
+        allowHashBang: true,
+      });
+    } catch (err) {
+      if (!firstErr) firstErr = err;
+    }
+  }
+  throw firstErr;
+}
+
+let tree;
+try {
+  tree = parseSource(source, suffix);
+} catch (err) {
+  const line = (err && err.loc && err.loc.line) || 1;
+  const col = err && err.loc && typeof err.loc.column === "number" ? err.loc.column + 1 : 1;
+  const msg = String((err && err.message) || "SyntaxError").replace(/\s*\(\d+:\d+\)\s*$/, "");
+  console.log(JSON.stringify({ error: { line, column: col, message: msg } }));
+  process.exit(0);
+}
+
+function sliceNode(node) {
+  if (!node || typeof node.start !== "number" || typeof node.end !== "number") return "";
+  return source.slice(node.start, node.end).replace(/\s+/g, " ").trim();
+}
+
+function formatParams(params) {
+  return (params || []).map(param => sliceNode(param)).join(", ");
+}
+
+function propLabel(key, computed) {
+  if (!key) return "<anonymous>";
+  if (computed) return `[${sliceNode(key)}]`;
+  if (key.type === "Identifier") return key.name;
+  if (key.type === "PrivateIdentifier") return `#${key.name}`;
+  if (key.type === "Literal") return String(key.value);
+  return sliceNode(key);
+}
+
+const entries = [];
+
+function addEntry(type, name, stack, signature, node, defNode) {
+  const qual = [...stack, name].join(".");
+  const spanNode = node || defNode;
+  const dNode = defNode || spanNode;
+  entries.push({
+    type,
+    name,
+    qualified_name: qual,
+    signature,
+    line: spanNode.loc.start.line,
+    def_line: dNode.loc.start.line,
+    end_line: spanNode.loc.end.line,
+  });
+  return [...stack, name];
+}
+
+function walkClass(classNode, className, stack, outerNode, exportPrefix) {
+  const superText = classNode.superClass ? ` extends ${sliceNode(classNode.superClass)}` : "";
+  const prefix = exportPrefix ? `${exportPrefix} ` : "";
+  const classStack = addEntry(
+    "class",
+    className,
+    stack,
+    `${prefix}class ${className}${superText}`,
+    outerNode || classNode,
+    classNode
+  );
+  const body = (classNode.body && classNode.body.body) || [];
+  for (const member of body) {
+    if (!member) continue;
+    if (member.type === "MethodDefinition") {
+      const mName = propLabel(member.key, member.computed);
+      const fn = member.value;
+      const isAsync = Boolean(fn && fn.async);
+      const isGen = Boolean(fn && fn.generator);
+      const parts = [];
+      const memberRole = member["k" + "ind"];
+      if (member.static) parts.push("static");
+      if (memberRole === "get" || memberRole === "set") parts.push(memberRole);
+      if (isAsync) parts.push("async");
+      const star = isGen ? "*" : "";
+      const prefixStr = parts.length ? `${parts.join(" ")} ` : "";
+      const sig = `${prefixStr}${star}${mName}(${formatParams(fn && fn.params)})`;
+      const methodStack = addEntry(
+        isAsync ? "async_method" : "method",
+        mName,
+        classStack,
+        sig,
+        member,
+        member
+      );
+      if (fn && fn.body) walkStatements(fn.body.body || [], methodStack, false);
+    } else if (member.type === "PropertyDefinition" && member.value) {
+      const pName = propLabel(member.key, member.computed);
+      if (
+        member.value.type === "ArrowFunctionExpression" ||
+        member.value.type === "FunctionExpression"
+      ) {
+        const fn = member.value;
+        const isAsync = Boolean(fn.async);
+        const parts = [];
+        if (member.static) parts.push("static");
+        if (isAsync) parts.push("async");
+        const prefixStr = parts.length ? `${parts.join(" ")} ` : "";
+        const sig = `${prefixStr}${pName}(${formatParams(fn.params)})`;
+        const methodStack = addEntry(
+          isAsync ? "async_method" : "method",
+          pName,
+          classStack,
+          sig,
+          member,
+          member
+        );
+        if (fn.body && fn.body.type === "BlockStatement") {
+          walkStatements(fn.body.body || [], methodStack, false);
+        }
+      }
+    }
+  }
+}
+
+function walkFunction(fnNode, fnName, stack, outerNode, exportPrefix) {
+  const isAsync = Boolean(fnNode.async);
+  const isGen = Boolean(fnNode.generator);
+  const prefix = exportPrefix ? `${exportPrefix} ` : "";
+  const asyncStr = isAsync ? "async " : "";
+  const fnKeyword = fnNode.type === "ArrowFunctionExpression" ? "" : `function${isGen ? "*" : ""} `;
+  const arrowSuffix = fnNode.type === "ArrowFunctionExpression" ? " =>" : "";
+  const sig = `${prefix}${asyncStr}${fnKeyword}${fnName}(${formatParams(fnNode.params)})${arrowSuffix}`;
+  const fnStack = addEntry(
+    isAsync ? "async_function" : "function",
+    fnName,
+    stack,
+    sig,
+    outerNode || fnNode,
+    fnNode
+  );
+  if (fnNode.body && fnNode.body.type === "BlockStatement") {
+    walkStatements(fnNode.body.body || [], fnStack, false);
+  }
+}
+
+function walkVariableDeclaration(decl, stack, topLevel, outerNode, exportPrefix) {
+  const declType = decl["k" + "ind"] || "var";
+  const prefix = exportPrefix ? `${exportPrefix} ` : "";
+  for (const declarator of decl.declarations || []) {
+    if (!declarator || !declarator.id || declarator.id.type !== "Identifier") continue;
+    const name = declarator.id.name;
+    const init = declarator.init;
+    const spanNode = (decl.declarations.length === 1 && outerNode) || declarator;
+    if (init && (init.type === "ArrowFunctionExpression" || init.type === "FunctionExpression")) {
+      const isAsync = Boolean(init.async);
+      const isGen = Boolean(init.generator);
+      const asyncStr = isAsync ? "async " : "";
+      const rhs =
+        init.type === "ArrowFunctionExpression"
+          ? `${asyncStr}(${formatParams(init.params)}) =>`
+          : `${asyncStr}function${isGen ? "*" : ""}(${formatParams(init.params)})`;
+      const fnStack = addEntry(
+        isAsync ? "async_function" : "function",
+        name,
+        stack,
+        `${prefix}${declType} ${name} = ${rhs}`,
+        spanNode,
+        declarator
+      );
+      if (init.body && init.body.type === "BlockStatement") {
+        walkStatements(init.body.body || [], fnStack, false);
+      }
+    } else if (init && init.type === "ClassExpression") {
+      walkClass(init, name, stack, spanNode, `${prefix}${declType}`);
+    } else if (topLevel) {
+      addEntry("binding", name, stack, `${prefix}${declType} ${name}`, spanNode, declarator);
+    }
+  }
+}
+
+function walkStatements(statements, stack, topLevel) {
+  for (const stmt of statements || []) {
+    if (!stmt) continue;
+    if (stmt.type === "FunctionDeclaration" && stmt.id) {
+      walkFunction(stmt, stmt.id.name, stack, stmt, "");
+    } else if (stmt.type === "ClassDeclaration" && stmt.id) {
+      walkClass(stmt, stmt.id.name, stack, stmt, "");
+    } else if (stmt.type === "VariableDeclaration") {
+      walkVariableDeclaration(stmt, stack, topLevel, stmt, "");
+    } else if (stmt.type === "ExportNamedDeclaration") {
+      if (stmt.declaration) {
+        const d = stmt.declaration;
+        if (d.type === "FunctionDeclaration" && d.id) {
+          walkFunction(d, d.id.name, stack, stmt, "export");
+        } else if (d.type === "ClassDeclaration" && d.id) {
+          walkClass(d, d.id.name, stack, stmt, "export");
+        } else if (d.type === "VariableDeclaration") {
+          walkVariableDeclaration(d, stack, topLevel, stmt, "export");
+        }
+      }
+    } else if (stmt.type === "ExportDefaultDeclaration") {
+      const d = stmt.declaration;
+      if (d && (d.type === "FunctionDeclaration" || d.type === "FunctionExpression")) {
+        const name = (d.id && d.id.name) || "default";
+        walkFunction(d, name, stack, stmt, "export default");
+      } else if (d && (d.type === "ClassDeclaration" || d.type === "ClassExpression")) {
+        const name = (d.id && d.id.name) || "default";
+        walkClass(d, name, stack, stmt, "export default");
+      }
+    }
+  }
+}
+
+walkStatements(tree.body || [], [], true);
+console.log(JSON.stringify({ entries }));
+"""
+
+
+def _outline_javascript(
+  rel_path,
+  text,
+  suffix,
+  repo_root=None,
+  parser_dir=None,
+  which=shutil.which,
+  runner=subprocess.run,
+):
+  status = discover_portable_parsers(parser_dir)
+  acorn_entry = status["acorn"]
+  if acorn_entry is None and parser_dir is None:
+    root = _outline_repo_root(repo_root)
+    acorn_entry, _ = _check_parser_package(root, "acorn", PARSER_PACKAGES["acorn"])
+  node_bin = which("node")
+  if not node_bin or not acorn_entry:
+    raise ValueError(f"{rel_path}: JavaScript outline unavailable: {status['message']}")
+  completed = runner(
+    [node_bin, "-e", JS_OUTLINE_SCRIPT, acorn_entry, suffix],
+    input=text,
+    capture_output=True,
+    text=True,
+    check=False,
+    timeout=15,
+  )
+  if completed.returncode != 0:
+    detail = (completed.stderr or completed.stdout or "acorn runner failed").strip()
+    raise ValueError(f"{rel_path}: JavaScript outline failed: {detail}")
+  try:
+    payload = json.loads(completed.stdout)
+  except json.JSONDecodeError as error:
+    raise ValueError(
+      f"{rel_path}: invalid JavaScript outline payload: {error}"
+    ) from None
+  if "error" in payload:
+    err = payload["error"]
+    raise ValueError(
+      f"{rel_path}:{err['line']}:{err['column']}: JavaScript syntax error: {err['message']}"
+    )
+  return payload["entries"]
+
+
+def outline_file(
+  path, repo_root=None, max_entries=OUTLINE_MAX_ENTRIES, parser_dir=None
+):
   if type(max_entries) is not int or not 1 <= max_entries <= OUTLINE_MAX_ENTRIES:
     raise ValueError(
       f"--max-entries must be an integer from 1 to {OUTLINE_MAX_ENTRIES}"
@@ -9564,6 +9839,15 @@ def outline_file(path, repo_root=None, max_entries=OUTLINE_MAX_ENTRIES):
   elif suffix in {".html", ".htm"}:
     language = "html"
     all_entries = _outline_html(rel_path, text)
+  elif suffix in {".js", ".mjs", ".cjs"}:
+    language = "javascript"
+    all_entries = _outline_javascript(
+      rel_path,
+      text,
+      suffix,
+      repo_root=repo_root,
+      parser_dir=parser_dir,
+    )
   else:
     raise ValueError(
       f"{rel_path}: unsupported outline file type ({suffix or 'no extension'})"

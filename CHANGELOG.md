@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Parse local JavaScript files in `arena-preview outline` with local Acorn. Emit functions, classes, methods, and top-level bindings with line ranges and missing-parser fallbacks.
+
 - Install pinned `acorn` and `css-tree` packages into ignored tool storage during preview setup. Reuse valid installs and keep setup usable when `npm` fails.
 
 - Add `arena-preview outline` to parse local Python and HTML files with `ast` and `html.parser`. Emit symbols or landmark tags with line ranges, and enforce repository path and size limits.
@@ -100,7 +102,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Accept preview URL changes on the same branch regardless of the reset-window clock when previous saves match. Keep mismatch reporting and confirmation.
 
-- Wait a random 0-5 second delay before clicking Keep working, and enter wake up only after Keep working appeared and was clicked.
+- Wait a random 0-5 second delay before clicking Keep working. Enter wake up only after the userscript clicks Keep working.
 
 - Rewrite prompt fill as one engineering brief. Include initial questionnaire questions and require a fresh CLI view after context replacement.
 
