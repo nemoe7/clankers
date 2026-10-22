@@ -103,9 +103,9 @@ ALWAYS report a reproducible skill defect or unresolved skill failure through a 
 - For a task that waits on a report, add `--report <report-id>`; an answer or unpublishing the report clears its blocked mark, and while blocked the task sorts first in its group.
 - Treat report removal as a queue-state change, never as approval for work that needs approval.
 
-- Write task details as actual work text; NEVER use report section headers or aliases as task details.
+- Write task details as complete, self-contained actual work text across scope, progress, verification, and commits with -A or --append so nothing is lost to compaction or workspace resets; NEVER use report section headers or aliases as task details.
 
-When a task creates a commit, MUST add the landed commit's subject and short hash to its task details.
+When a task creates a commit, MUST append the landed commit's subject and short hash to its task details with -A or --append.
 
 ## Publish reports and forms
 

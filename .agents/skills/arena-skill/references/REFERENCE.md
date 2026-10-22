@@ -109,6 +109,7 @@ Choose the primary deliverable type: `report` for findings or assessments, `code
 | `--type report\|code\|docs\|ops\|misc` | Required for normal new tasks; omit on updates to keep the stored type. Restore missing legacy types as `misc` |
 | `--order N` | Set 1-based position in the task's status group |
 | Repeatable `--details` | Set the detail lines; the arguments replace the stored details |
+| `-A`, `--append` | Append the detail lines to the stored details without replacing them |
 | `--msg-id <full-message-id>` | Link the note or report answer a task came from; optional, and only a note-born or report-born task carries it; still call `ack` |
 | `--report <report-id>` | Link a blocked task to the report it waits on; an answer to that report clears the blocked mark |
 | `--amend <previous-task-id>` | Rename a task without losing its details or order |

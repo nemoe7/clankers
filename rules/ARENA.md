@@ -92,7 +92,7 @@
 - Mermaid: ALWAYS in documentation, NEVER anywhere else.
 - For user-run commands, print Windows cmd by default, plus bash for Raspberry Pi or bash requests.
 - Task completion alone needs no report.
-- MUST update task status and retain required verification and landed commit details in its record.
+- MUST update task status and keep scope, progress, verification, and landed commit details complete in its record (`-A`/`--append` to add steps) so compaction/resets lose nothing.
 - NEVER waive requested reports or assessment/question/blocked-task reports.
 
 ## Scope
