@@ -42,6 +42,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Rewrite prompt fill as one engineering brief. Include initial questionnaire questions and require a fresh CLI view after context replacement.
 
+- Shorten state save panels. Show only changed stamp comparisons, and offer Force save on state mismatch and missing branch. Show Forcing save at once.
+
 ### Removed
 
 #### userscripts

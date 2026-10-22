@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.60
+// @name         Arena.ai | NemoUtils | v1.10.61
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.60
+// @version      1.10.61
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2163,6 +2163,17 @@
     return name === scope || name.indexOf(scope + "-") === 0;
   }
 
+  function handleMismatchScope(handle, repo, branch) {
+    if (!handle || !handle.name) return repo;
+    var name = String(handle.name);
+    if (name.slice(-7) === ".ndjson") name = name.slice(0, -7);
+    var repoScope = stateScopeKey(repo, "");
+    var branchScope = stateScopeKey(repo, branch);
+    if (name === branchScope || name.indexOf(branchScope + "-") === 0) return "";
+    if (name === repoScope || name.indexOf(repoScope + "-") === 0) return branch;
+    return repo;
+  }
+
   function saveMoved(branch, remembered, base, rememberedScope, rememberedBranch) {
     return !(branch || rememberedScope) ||
       (Boolean(remembered) && remembered !== base) ||
@@ -2174,29 +2185,20 @@
   }
 
   function overwriteLine(name, context) {
-    var question = "Overwrite " + name + "?";
-    if (!context) return "URL or branch changed. " + question;
-    var reasons = [];
-    if (!(context.branch || context.lastScope)) {
-      reasons.push("Branch/scope: unknown");
-    }
-    if (context.rememberedBase && context.rememberedBase !== context.base) {
-      reasons.push("URL: " + context.rememberedBase + " -> " + context.base);
-    }
-    if (context.branch && context.rememberedBranch && context.branch !== context.rememberedBranch) {
-      reasons.push("Branch: " + context.rememberedBranch + " -> " + context.branch);
-    }
-    var before = stateRemembered(context.memory);
-    var after = stateMemory(context.stamp, context.stamps);
+    var before = stateRemembered(context && context.memory);
+    var after = stateMemory(context && context.stamp, context && context.stamps);
     function compare(was, now) {
       if (!was || !now) return "unknown";
       return now < was ? "older" : now === was ? "same" : "forward";
     }
-    return (reasons.join(". ") || "Cause: unknown") +
-      ". Timestamp comparisons: overall " + compare(before.stamp, after.stamp) +
-      ", notes " + compare(before.note, after.note) +
-      ", and tasks " + compare(before.task, after.task) +
-      ". Timestamps do not prove that the file contents match. " + question;
+    var rows = [
+      ["State", compare(before.stamp, after.stamp)],
+      ["Notes", compare(before.note, after.note)],
+      ["Tasks", compare(before.task, after.task)],
+    ].filter(function (row) { return row[1] !== "same"; });
+    return rows.length
+      ? rows.map(function (row) { return row[0] + ": " + row[1]; }).join(" \u00b7 ")
+      : "No stamp change.";
   }
 
   var RESET_WINDOW_MS = 150 * 1000;
@@ -2254,7 +2256,7 @@
   }
 
   function getLine(status, base) {
-    return "Could not read the preview state (GET " + status + ") at " + base;
+    return "GET " + status;
   }
 
   function writeFailLine(err) {
@@ -2269,7 +2271,7 @@
   }
 
   var STATE_LINES = {
-    noBranch: "The session branch is missing. State save is blocked.",
+    noBranch: "Missing branch.",
   };
 
   function writtenName(handle, fallback) {
@@ -2422,6 +2424,7 @@
       panelNeeded: panelNeeded,
       writtenName: writtenName,
       handleMatchesScope: handleMatchesScope,
+      handleMismatchScope: handleMismatchScope,
       saveMoved: saveMoved,
       overwriteAsk: overwriteAsk,
       overwriteLine: overwriteLine,
@@ -2521,7 +2524,7 @@
       var body = answer.body;
       if ((answer.status !== 200 && answer.status !== 201) || !body ||
           body.confirmed !== true || body.save_id !== receipt.save_id || body.digest !== receipt.digest) {
-        stateError("The file is saved. Confirmation failed (" + answer.status + "), so the next cycle retries it without writing the file again.",
+        stateError("Failed to confirm. File saved.",
           null, null, "save-receipt", answer.status, undefined,
           (answer.status === 200 || answer.status === 201 ? "body" : "status" + (answer.failure ? ":" + answer.failure : "")));
         return;
@@ -2534,7 +2537,7 @@
       rememberState(pending.scope, storeKey, pending.base, pending.branch, pending.stamp, pending.stamps);
       clearErrorPanel();
       logEvent("state", "saved", { repo: pending.scope.repo, filename: pending.name });
-      if (pending.force) statePanel("Saved " + pending.name + " using Force save.", null, null, true);
+      if (pending.force) statePanel("Forced save of " + pending.name + ".", null, null, true);
     }
 
     function fileCore(text) {
@@ -2704,7 +2707,7 @@
       logEvent("state", "file-needed", null, "warn");
       if (panelNeeded(manual, shown)) {
         statePanel(
-          "No save file is selected. Choose a file to enable state saves.",
+          "No file selected.",
           "Choose file",
           chooseStateFile
         );
@@ -2746,7 +2749,7 @@
       if (route === "link") {
         logEvent("state", "download", { route: "link", filename: name });
         linkDownload(url, name);
-        statePanel("The userscript requested a browser download. Completion is unconfirmed, so the saved baseline has not changed.", null, null, true);
+        statePanel("Browser download requested. Completion unconfirmed.", null, null, true);
         setTimeout(function () {
           URL.revokeObjectURL(url);
         }, 1000);
@@ -2781,12 +2784,6 @@
         (known.beforelastsave || null) === (body.beforelastsave || null);
     }
 
-    function serverAhead(known, body) {
-      // The server save chain continues from the saved receipt, so the server saved later.
-      return Boolean(known) && (body.beforelastsave || null) === (known.lastsave || null) &&
-        (body.lastsave || null) !== (known.lastsave || null);
-    }
-
     function saveStampPair(known) {
       return (known && known.lastsave || "none") + "/" + (known && known.beforelastsave || "none");
     }
@@ -2801,6 +2798,7 @@
       var base = previewBase(document);
       if (!base || stateBusy) return;
       stateBusy = true;
+      if (force) statePanel("Forcing save...");
       try {
         var scope = stateScope(document);
         var lastScope = GM_getValue(lastScopeKey(scope.repo), "");
@@ -2819,15 +2817,16 @@
           return;
         }
         clearErrorPanel();
+        if (force) statePanel("Forcing save...");
         if (!scope.branch && !lastScope && !force) {
-          stateError(STATE_LINES.noBranch, null, null, "missing-branch");
+          stateError(STATE_LINES.noBranch, "Force save", function () { fetchStateFile(true, true); }, "missing-branch");
           return;
         }
         var rememberedBase = GM_getValue(baseKey(lastScope || storeKey), "");
         var rememberedBranch = GM_getValue(branchKey(lastScope || storeKey), "");
         var handle = selectedKey === storeKey && selected ? selected : await stateHandle(fileKey(storeKey));
         if (handle && !handleMatchesScope(handle, scope.repo, scope.branch)) {
-          stateError("The selected file, " + handle.name + ", does not match this repository and branch. Choose " + stateFileName(scope.repo, scope.branch, "", null) + ".",
+          stateError(handle.name + " does not match this " + handleMismatchScope(handle, scope.repo, scope.branch) + ".",
             "Choose file", chooseStateFile, "wrong-file");
           return;
         }
@@ -2845,14 +2844,9 @@
         }
         var inSync = sameSaves(baseline, body);
         if (!force && !inSync && !(initialFile && !baseline)) {
-          if (serverAhead(baseline, body)) {
-            stateError("State mismatch. Overall state is ahead.", "Overwrite",
-              function () { fetchStateFile(true, true); }, "autosave-compare",
-              undefined, undefined, sameSaveDetail(baseline, body));
-          } else {
-            stateError("The saved and current states differ. Nothing was written. Review both states before using Force save.",
-              null, null, "autosave-compare", undefined, undefined, sameSaveDetail(baseline, body));
-          }
+          stateError("State mismatch.", "Force save",
+            function () { fetchStateFile(true, true); }, "autosave-compare",
+            undefined, undefined, sameSaveDetail(baseline, body));
           return;
         }
         if (!force && inSync && body.digest === (baseline && baseline.digest)) return;
@@ -2893,7 +2887,7 @@
         GM_setValue(pendingKey(storeKey), pending);
         await confirmPending(base, storeKey, pending);
       } catch (err) {
-        stateError("State save failed (" + (err.name || "unknown") + "). The saved baseline has not changed.", null, null, "autosave", undefined, undefined, String(err.message || "").slice(0, 160));
+        stateError(String(err.name || "unknown"), null, null, "autosave", undefined, undefined, String(err.message || "").slice(0, 160));
       } finally {
         stateBusy = false;
       }
@@ -2902,7 +2896,9 @@
     function chooseStateFile() {
       var select = pagePicker();
       if (!select) {
-        stateError("This browser cannot write directly to a selected file. Force save can request a timestamped download.", null, null, "file-api");
+        stateError("Direct write unavailable.", "Download", function () {
+          fetchStateFile(true, true);
+        }, "file-api");
         return;
       }
       select({

@@ -1445,10 +1445,16 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     iframe.src = "https://new-preview.example/";
     tick();
     await respond("GET", "/api/userscript-autosave", 200, changed);
-    assert.ok(panel(), "a URL move with a known file asks before writing");
-    assert.match(panel().children[0].textContent, /https:\/\/preview\.example.*https:\/\/new-preview\.example/);
+    assert.ok(panel(), "a moved or different state asks before writing");
+    assert.match(panel().children[0].textContent, /State:/);
+    assert.doesNotMatch(panel().children[0].textContent, /https?:\/\//);
     assert.deepEqual(writes, []);
+    const overwritePanel = panel();
     panel().children[1].children.find(button => button.textContent === "Overwrite").listeners.click();
+    assert.ok(panel(), "Force save shows progress before the GET returns");
+    assert.notEqual(panel(), overwritePanel);
+    assert.equal(panel().getAttribute("data-action"), String(false));
+    assert.equal(panel().children[0].textContent, "Forcing save...");
     await respond("GET", "/api/userscript-autosave", 200, changed);
     assert.equal(writes.length, 1, "the accepted move writes the server state");
     assert.equal(requests.at(-1).url.endsWith("/userscript-autosave"), true, "no compare request");
@@ -1520,11 +1526,12 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     tick();
     await respond("GET", "/api/userscript-autosave", 200, stale);
     assert.ok(panel(), "a pair mismatch blocks the automatic save");
-    assert.equal(panel().children[0].textContent, "State mismatch. Overall state is ahead.");
+    assert.equal(panel().children[0].textContent, "State mismatch.");
     assert.equal(writes.length, 1);
     const refusal = logs.map(args => args[1]).filter(data => data && data.code === "autosave-compare").at(-1);
     assert.equal(refusal.detail, "saved t2/t1 server t9/t2 n0 t0", "the refusal names both stamp pairs");
-    panel().children[1].children.find(button => button.textContent === "Overwrite").listeners.click();
+    panel().children[1].children.find(button => button.textContent === "Force save").listeners.click();
+    assert.equal(panel().children[0].textContent, "Forcing save...", "the click shows progress at once");
     await respond("GET", "/api/userscript-autosave", 200, stale);
     assert.equal(writes.length, 2, "the overwrite button runs force save");
     await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: stale.save_id, digest: stale.digest });
@@ -1540,10 +1547,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     tick();
     await respond("GET", "/api/userscript-autosave", 200, diverged);
     assert.ok(panel(), "an unrelated save pair still blocks the automatic save");
-    assert.match(panel().children[0].textContent, /differ/);
+    assert.match(panel().children[0].textContent, /^State mismatch\.$/);
     assert.equal(
-      panel().children[1].children.some(button => button.textContent === "Overwrite"), false,
-      "an unrelated pair offers no overwrite");
+      panel().children[1].children.some(button => button.textContent === "Force save"), true,
+      "a mismatch offers Force save as an explicit action");
     assert.equal(writes.length, 2);
 
     failWrite = true;
