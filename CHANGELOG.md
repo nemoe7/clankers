@@ -16,6 +16,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### house
+
+- Check later dependency versions for advisory fixes. Report only advisories with an available fix.
+
 #### workflows
 
 - Add `nemoe7/template` to Arena and Nemoizer distribution. Keep one push per target.

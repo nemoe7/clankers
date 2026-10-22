@@ -16,6 +16,7 @@
 
 - Run `python3 maintenance/check.py` after changing skills, rules, workflows, or README budgets.
 - NEVER claim a check you did not run.
+- For each dependency advisory, check whether a later dependency version fixes it; report it only when a fix is available, and otherwise ignore it.
 - Compression removes words, NEVER rules.
 - New clause: squash only that new line.
 - Amended clause: squash only the affected line.
