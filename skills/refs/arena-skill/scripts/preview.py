@@ -150,6 +150,10 @@ CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
 BLANK = re.compile(r"^(?:(.*?)[\s:])?_{3,}\s*$")
 ANCHOR = re.compile(r"\s*\{#([a-zA-Z0-9_-]{1,80})\}\s*$")
+COMMENT_ANCHOR = re.compile(
+  r"<!--\s*(?:id\s*[:=]\s*|#)([a-zA-Z0-9_-]{1,80})\s*-->", re.IGNORECASE
+)
+MD_COMMENT_OR_CODE = re.compile(r"(`+)[\s\S]*?(?<!`)\1(?!`)|<!--[\s\S]*?-->")
 # A wrapped option label may run past its marker line. A block start ends the option instead.
 BLOCK_START = re.compile(
   r"^ {0,3}(?:"
@@ -1681,16 +1685,75 @@ def formatted_selection(field, item, mapping):
   raise ValueError(f"{field['id']}: invalid selection or blank custom answer")
 
 
+def strip_md_comments(text):
+  """Remove HTML comments outside inline code spans."""
+  return MD_COMMENT_OR_CODE.sub(
+    lambda match: match.group(0) if match.group(1) else "", text
+  )
+
+
+def find_comment_anchor(text):
+  """Extract a `<!-- id: ... -->` or `<!-- #... -->` anchor outside inline code spans."""
+  found = None
+  for match in MD_COMMENT_OR_CODE.finditer(text):
+    if match.group(1):
+      continue
+    anchor_match = COMMENT_ANCHOR.fullmatch(match.group(0).strip())
+    if anchor_match:
+      found = anchor_match.group(1)
+  return found
+
+
+def strip_fenced_md_comments(markdown, keep_anchors=False):
+  """Remove HTML comments outside fenced code blocks and inline code spans."""
+  lines = markdown.splitlines(keepends=True)
+  out, chunk, fence = [], [], None
+
+  def flush():
+    if not chunk:
+      return
+    segment = "".join(chunk)
+    out.append(
+      MD_COMMENT_OR_CODE.sub(
+        lambda match: (
+          match.group(0)
+          if match.group(1)
+          or (keep_anchors and COMMENT_ANCHOR.fullmatch(match.group(0).strip()))
+          else ""
+        ),
+        segment,
+      )
+    )
+    chunk.clear()
+
+  for line in lines:
+    if fence is not None:
+      out.append(line)
+      if line.strip().startswith(fence):
+        fence = None
+      continue
+    opening = FENCE.match(line)
+    if opening:
+      flush()
+      fence = opening.group(1)
+      out.append(line)
+      continue
+    chunk.append(line)
+  flush()
+  return "".join(out)
+
+
 def option_continuation(line):
   """True when a line wraps the option above it instead of starting a new block."""
-  if not line.strip() or BLOCK_START.match(line):
+  cleaned = strip_md_comments(line)
+  if not cleaned.strip() or BLOCK_START.match(cleaned):
     return False
-  return not BLANK.match(line) and not ANCHOR.match(line)
+  return not BLANK.match(cleaned) and not ANCHOR.match(cleaned)
 
 
 def parse_fields(markdown):
   """Split Markdown into prose blocks and answer fields written as list markers."""
-  lines = markdown.splitlines()
+  lines = strip_fenced_md_comments(markdown, keep_anchors=True).splitlines()
   blocks, chunk, questions, used = [], [], [], set()
   fence, prompt, anchor, index, position = None, "", None, 0, 0
   while position < len(lines):
@@ -1707,18 +1770,29 @@ def parse_fields(markdown):
       chunk.append(line)
       position += 1
       continue
+    comment_anchor = find_comment_anchor(line)
+    cleaned = strip_md_comments(line)
+    if not cleaned.strip() and line.strip():
+      if comment_anchor:
+        anchor = comment_anchor
+      position += 1
+      continue
     type = (
-      "choice" if CHOICE.match(line) else "checkbox" if CHECKBOX.match(line) else None
+      "choice"
+      if CHOICE.match(cleaned)
+      else "checkbox"
+      if CHECKBOX.match(cleaned)
+      else None
     )
-    blank = None if type else BLANK.match(line)
+    blank = None if type else BLANK.match(cleaned)
     if not type and not blank:
-      chunk.append(line)
-      if line.strip():
-        prompt, anchor = prompt_text(ANCHOR.sub("", line)), None
-        found = ANCHOR.search(line)
-        if found:
-          anchor = found.group(1)
-          chunk[-1] = ANCHOR.sub("", line)
+      chunk.append(cleaned)
+      if cleaned.strip():
+        prompt = prompt_text(ANCHOR.sub("", cleaned))
+        found = ANCHOR.search(cleaned)
+        anchor = found.group(1) if found else comment_anchor
+        if found or comment_anchor:
+          chunk[-1] = ANCHOR.sub("", cleaned).rstrip()
       position += 1
       continue
     index += 1
@@ -1726,7 +1800,7 @@ def parse_fields(markdown):
       pattern = CHOICE if type == "choice" else CHECKBOX
       options, default = [], []
       while position < len(lines):
-        item = pattern.match(lines[position])
+        item = pattern.match(strip_md_comments(lines[position]))
         if not item:
           break
         preselected = item.group(1).lower() == "x"
@@ -1735,7 +1809,7 @@ def parse_fields(markdown):
           default.append(item.group(2))
         position += 1
         while position < len(lines) and option_continuation(lines[position]):
-          options[-1] = f"{options[-1]} {lines[position].strip()}"
+          options[-1] = f"{options[-1]} {strip_md_comments(lines[position]).strip()}"
           if preselected:
             default[-1] = options[-1]
           position += 1
@@ -1748,10 +1822,9 @@ def parse_fields(markdown):
       label = (blank.group(1) or "").strip()
       question = {"type": "text", "default": []}
       if label:
-        prompt, anchor = prompt_text(ANCHOR.sub("", label)), None
+        prompt = prompt_text(ANCHOR.sub("", label))
         found = ANCHOR.search(label)
-        if found:
-          anchor = found.group(1)
+        anchor = found.group(1) if found else comment_anchor
       position += 1
     question["prompt"] = prompt or f"Field {index}"
     question["id"] = (
@@ -1775,6 +1848,7 @@ def parse_fields(markdown):
 
 
 def render_inline(markdown):
+  markdown = strip_md_comments(markdown)
   try:
     from markdown_it import MarkdownIt
   except ImportError:
@@ -4647,6 +4721,7 @@ def render_report_block(markdown):
   attribute, or any other tag, keeps escaping like every other HTML."""
   # A maximal run of list tags and optional whitespace is one holdout.
   # Keep it inline in table cells. Surrounding spaces let Markdown end adjacent paragraphs.
+  markdown = strip_fenced_md_comments(markdown)
   tagged, held = hold_out(
     markdown,
     r"(?:\s*(?:</?(?:ul|ol|li)>)\s*){2,}",
@@ -9794,8 +9869,16 @@ def _outline_javascript(
   status = discover_portable_parsers(parser_dir)
   acorn_entry = status["acorn"]
   if acorn_entry is None and parser_dir is None:
-    root = _outline_repo_root(repo_root)
-    acorn_entry, _ = _check_parser_package(root, "acorn", PARSER_PACKAGES["acorn"])
+    for candidate in (
+      _outline_repo_root(repo_root),
+      Path.cwd().resolve(),
+      *Path(__file__).resolve().parents,
+    ):
+      acorn_entry, _ = _check_parser_package(
+        candidate, "acorn", PARSER_PACKAGES["acorn"]
+      )
+      if acorn_entry is not None:
+        break
   node_bin = which("node")
   if not node_bin or not acorn_entry:
     raise ValueError(f"{rel_path}: JavaScript outline unavailable: {status['message']}")
@@ -10099,6 +10182,54 @@ def bare_script_invocation(line):
   return False
 
 
+def sleep_command(line):
+  """True when a command invokes sleep."""
+  lexer = shlex.shlex(agent_line(line or ""), posix=False, punctuation_chars=";&|\n")
+  lexer.whitespace = " \t\r"
+  lexer.whitespace_split = True
+  try:
+    tokens = list(lexer)
+  except ValueError:
+    return False
+  piece = []
+  for token in [*tokens, ";"]:
+    if token not in (";", "&&", "||", "|", "|&", "&", "\n"):
+      piece.append(token)
+      continue
+    try:
+      words = ["".join(shlex.split(word)) for word in piece]
+    except ValueError:
+      return False
+    piece = []
+    while words and (
+      re.fullmatch(r"[A-Za-z_]\w*=.*", words[0]) or words[0] in SHELL_KEYWORDS
+    ):
+      words.pop(0)
+    while words and words[0].rsplit("/", 1)[-1] in PR_CHECK_WRAPPERS:
+      wrapper = words.pop(0).rsplit("/", 1)[-1]
+      if (
+        wrapper == "command" and words and re.fullmatch(r"-[pVv]*[Vv][pVv]*", words[0])
+      ):
+        words = []
+        break
+      while words and (
+        words[0].startswith("-") or "=" in words[0] or words[0].isdigit()
+      ):
+        words.pop(0)
+    if not words:
+      continue
+    head = words[0].rsplit("/", 1)[-1]
+    if head in SHELL_BASENAMES:
+      for index, word in enumerate(words[1:-1], 1):
+        if word.startswith("-") and "c" in word:
+          if sleep_command(words[index + 1]):
+            return True
+          break
+    if head == "sleep":
+      return True
+  return False
+
+
 def pre_command(state_dir, line, command, root, done="", shell=""):
   """Run every pre-Bash rule in order and report the steps this shell finished.
 
@@ -10109,15 +10240,16 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
   steps = list(initial)
   finished = set(steps)
   routed = os.environ.get("ARENA_PREVIEW_ROUTE") == "1"
-  # The hook start records the Bash call's process group, so serve can signal it
-  # when a violation flag lands while the call runs. A routed run keeps its own.
+  # Record the process group only for sleep calls so violation flags never break other commands.
   if not routed and state_file(state_dir).is_file():
     group_store = Store(state_dir, create=False)
-    group = str(os.getpgid(0))
-    if group_store.meta_value(CALL_GROUP_META) != group:
-      # A new call group starts the clock the flagged-call stop reads.
-      group_store.set_meta(CALL_GROUP_META, group)
-      group_store.set_meta(CALL_STARTED_META, now())
+    if sleep_command(command):
+      group = str(os.getpgid(0))
+      if group_store.meta_value(CALL_GROUP_META) != group:
+        group_store.set_meta(CALL_GROUP_META, group)
+        group_store.set_meta(CALL_STARTED_META, now())
+    elif group_store.meta_value(CALL_GROUP_META):
+      group_store.set_meta(CALL_GROUP_META, "")
 
   def report(warning):
     print(warning, file=sys.stderr, flush=True)

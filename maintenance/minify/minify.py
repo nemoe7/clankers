@@ -24,6 +24,7 @@ COPIED_ASSETS = (
   "assets/markdown-it.min.js",
   "assets/markdown-it.LICENSE",
   "assets/lucide.LICENSE",
+  "assets/sortable.LICENSE",
 )
 
 # One job per npm build: the file name, the pinned minifier, and the flags that produce the build.

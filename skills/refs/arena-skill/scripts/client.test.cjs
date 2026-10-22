@@ -971,6 +971,13 @@ test('preview client', async (t) => {
         }));
       };
       assert.deepEqual(rows().map(row => row.title), ['first', 'second', 'third']);
+      assert.equal(typeof context.Sortable, 'function', 'Sortable is exposed on globalThis');
+      assert.equal(context.Sortable.version, '1.15.7');
+      assert.equal(get('#tasks-current-body').sortable?.option('handle'), '.task-drag-handle');
+      assert.equal(get('#tasks-upcoming-body').sortable?.option('handle'), '.task-drag-handle');
+      assert.equal(get('#tasks-upcoming-body').sortable?.option('group'), 'tasks-queue');
+      assert.deepEqual([...get('#tasks-current-body').sortable.toArray()], ['first']);
+      assert.deepEqual([...get('#tasks-upcoming-body').sortable.toArray()], ['second', 'third']);
       assert.notEqual(rows()[0].draggable, true, 'the task row leaves text selection to the browser');
       assert.notEqual(taskTitle(rows()[0]).draggable, true, 'the title is not a drag target');
       assert.equal(dragHandle(rows()[0]).draggable, true, 'the bullet handle starts the drag');
@@ -4903,6 +4910,52 @@ test('preview client', async (t) => {
     await tick(); await tick();
     assert.ok(intervals.filter(callback => callback.name === 'refreshState').length > 1,
       'the original polling path starts again after disconnect');
+  });
+
+  await t.test('offline mermaid rendering enforces strict config, safe svg, fallback, and copy source', async () => {
+    assert.equal(context.mermaid.config.securityLevel, 'strict');
+    assert.equal(context.mermaid.config.startOnLoad, false);
+    assert.equal(context.mermaid.config.htmlLabels, false);
+    assert.equal(context.mermaid.config.suppressErrorRendering, true);
+    const locked = context.mermaid.initialize({
+      securityLevel: 'loose',
+      startOnLoad: true,
+      htmlLabels: true,
+    });
+    assert.equal(locked.securityLevel, 'strict');
+    assert.equal(locked.startOnLoad, false);
+    assert.equal(locked.htmlLabels, false);
+
+    const flowSource = 'flowchart TD\n  A[Start] --> B{Check}\n  B -->|Yes| C[Done]';
+    const copyBtn = `<button type="button" class="copy-code" data-code="${flowSource.replace(/\n/g, '&#10;')}"></button>`;
+    const blockHtml = `<div class="code-block">${copyBtn}<pre><code class="language-mermaid">${flowSource}</code></pre></div>`;
+    const renderedFlow = await context.renderMermaidBlocks(blockHtml);
+    assert.match(renderedFlow, /data-mermaid-state="rendered"/);
+    assert.match(renderedFlow, /<svg class="mermaid-svg"[^>]*data-diagram-type="flowchart"/);
+    assert.match(renderedFlow, /data-node-id="A"/);
+    assert.match(renderedFlow, /class="copy-code"/);
+    assert.match(renderedFlow, /<pre><code class="language-mermaid">/);
+
+    const seqHtml = '<div class="code-block"><button class="copy-code" data-code="sequenceDiagram"></button><pre><code class="language-mermaid">sequenceDiagram\n  Alice-&gt;&gt;Bob: Hello</code></pre></div>';
+    const renderedSeq = await context.renderMermaidBlocks(seqHtml);
+    assert.match(renderedSeq, /data-mermaid-state="rendered"/);
+    assert.match(renderedSeq, /data-diagram-type="sequenceDiagram"/);
+
+    const stateHtml = '<div class="code-block"><pre><code class="language-mermaid">stateDiagram-v2\n  [*] --&gt; Active : boot</code></pre></div>';
+    const renderedState = await context.renderMermaidBlocks(stateHtml);
+    assert.match(renderedState, /data-mermaid-state="rendered"/);
+    assert.match(renderedState, /data-diagram-type="stateDiagram"/);
+
+    const invalidHtml = '<div class="code-block"><button class="copy-code" data-code="notValidMermaid"></button><pre><code class="language-mermaid">notValidMermaid\n  ???</code></pre></div>';
+    const fallback = await context.renderMermaidBlocks(invalidHtml);
+    assert.match(fallback, /data-mermaid-state="fallback"/);
+    assert.doesNotMatch(fallback, /<svg\b/);
+    assert.match(fallback, /<pre><code class="language-mermaid">notValidMermaid/);
+
+    assert.equal(context.sanitizeMermaidSvg('<svg><script>alert(1)</script></svg>'), null);
+    assert.equal(context.sanitizeMermaidSvg('<svg><foreignObject><div>x</div></foreignObject></svg>'), null);
+    assert.equal(context.sanitizeMermaidSvg('<svg onload="alert(1)"><rect/></svg>'), null);
+    assert.equal(context.sanitizeMermaidSvg('<svg><a href="https://example.com"><text>x</text></a></svg>'), null);
   });
 
 });

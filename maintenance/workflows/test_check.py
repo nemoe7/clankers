@@ -168,6 +168,8 @@ def test_rotation_gate_preserves_scanner_findings_and_errors(monkeypatch, status
     "skills/refs/amending-violations/LICENSE.txt",
     "skills/arena-skill/assets/markdown-it.LICENSE",
     "skills/refs/arena-skill/assets/markdown-it.LICENSE",
+    "skills/arena-skill/assets/sortable.LICENSE",
+    "skills/refs/arena-skill/assets/sortable.LICENSE",
     "skills/nuu/data/vendor",
     "skills/refs/nuu/data/vendor",
   ):

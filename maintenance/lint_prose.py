@@ -202,6 +202,7 @@ def nemoizer_main(argv: list[str]) -> int:
         continue
       findings.extend(
         f"{row['path']}:{row['line']}: {row['rule']} {row['count']} -> {row['cap']}"
+        + (" (advisory)" if row["rule"] in module.ADVISORY_RULE_IDS else "")
         for row in module.source_prose(path, scoped, context, module.PARAGRAPH_CAP)
       )
     except (

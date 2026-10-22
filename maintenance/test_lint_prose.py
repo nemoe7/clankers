@@ -14,8 +14,8 @@ def test_repository_soft_rotation_does_not_fail(tmp_path, capsys):
   source.write_text("Pick one.\n")
   assert lint_prose.nemoizer_main([str(source)]) == 0
   output = capsys.readouterr().out
-  assert "P004" in output and "advisory" in output
-  source.write_text("Pick this kind.\n")  # nonemo: P001
+  assert "NMO002" in output and "advisory" in output
+  source.write_text("Pick this kind.\n")  # nonemo: NMO001
   assert lint_prose.nemoizer_main([str(source)]) == 1
 
 
@@ -83,15 +83,16 @@ def test_comment_blocks_exempt_required_directive_markers():
 """
 
   assert lint_prose.comment_block_violations(Path("install.sh"), source) == []
-  exclusions = "# nonemo: N001\n# nonemo: N002\n# nonemo: N003\n"
+  exclusions = "# nonemo: NMO001\n# nonemo: NMO002\n# nonemo: NMO001\n"
   assert lint_prose.comment_block_violations(Path("rules.py"), exclusions) == []
   for suffix, prefix, marker in ((".py", "value", "#"), (".js", "const value", "//")):
     inline = "\n".join(
-      f"{prefix}{index} = 1; {marker} nonemo: T001" for index in range(3)
+      f"{prefix}{index} = 1; {marker} nonemo: NMT001" for index in range(3)
     )
     assert lint_prose.comment_block_violations(Path("rules" + suffix), inline) == []
   quoted = "\n".join(
-    f'const value{index} = "// nonemo: T001"; // Read the value.' for index in range(3)
+    f'const value{index} = "// nonemo: NMT001"; // Read the value.'
+    for index in range(3)
   )
   assert lint_prose.comment_block_violations(Path("rules.js"), quoted)
 

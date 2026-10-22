@@ -68,6 +68,8 @@ CHOICE=re.compile('^\\s*[-*]\\s+\\(([ xX]?)\\)\\s+(\\S.*?)\\s*$')
 CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
 BLANK=re.compile('^(?:(.*?)[\\s:])?_{3,}\\s*$')
 ANCHOR=re.compile('\\s*\\{#([a-zA-Z0-9_-]{1,80})\\}\\s*$')
+COMMENT_ANCHOR=re.compile('<!--\\s*(?:id\\s*[:=]\\s*|#)([a-zA-Z0-9_-]{1,80})\\s*-->',re.IGNORECASE)
+MD_COMMENT_OR_CODE=re.compile('(`+)[\\s\\S]*?(?<!`)\\1(?!`)|<!--[\\s\\S]*?-->')
 BLOCK_START=re.compile('^ {0,3}(?:#{1,6}(?:\\s|$)|>|[-*+](?:\\s|$)|\\d+[.)](?:\\s|$)|(?:[-*_]\\s*){3,}$|`{3,}|~{3,})')
 TASK_REMINDER='{remaining} tasks left.'
 def fill_reminder(tail,remaining):
@@ -608,11 +610,34 @@ def formatted_selection(field,item,mapping):
 		if mapping is None:return('custom',item['label']),f"{item['label']}: {text}"
 		wrapper=mapping.get('custom_answer');return('custom',item['label']),expand_submission_template(wrapper,{'custom':text})if wrapper is not None else text
 	raise ValueError(f"{field['id']}: invalid selection or blank custom answer")
+def strip_md_comments(text):return MD_COMMENT_OR_CODE.sub(lambda match:match.group(0)if match.group(1)else'',text)
+def find_comment_anchor(text):
+	found=None
+	for match in MD_COMMENT_OR_CODE.finditer(text):
+		if match.group(1):continue
+		anchor_match=COMMENT_ANCHOR.fullmatch(match.group(0).strip())
+		if anchor_match:found=anchor_match.group(1)
+	return found
+def strip_fenced_md_comments(markdown,keep_anchors=False):
+	lines=markdown.splitlines(keepends=True);out,chunk,fence=[],[],None
+	def flush():
+		if not chunk:return
+		segment=''.join(chunk);out.append(MD_COMMENT_OR_CODE.sub(lambda match:match.group(0)if match.group(1)or keep_anchors and COMMENT_ANCHOR.fullmatch(match.group(0).strip())else'',segment));chunk.clear()
+	for line in lines:
+		if fence is not None:
+			out.append(line)
+			if line.strip().startswith(fence):fence=None
+			continue
+		opening=FENCE.match(line)
+		if opening:flush();fence=opening.group(1);out.append(line);continue
+		chunk.append(line)
+	flush();return''.join(out)
 def option_continuation(line):
-	if not line.strip()or BLOCK_START.match(line):return False
-	return not BLANK.match(line)and not ANCHOR.match(line)
+	cleaned=strip_md_comments(line)
+	if not cleaned.strip()or BLOCK_START.match(cleaned):return False
+	return not BLANK.match(cleaned)and not ANCHOR.match(cleaned)
 def parse_fields(markdown):
-	lines=markdown.splitlines();blocks,chunk,questions,used=[],[],[],set();fence,prompt,anchor,index,position=None,'',None,0,0
+	lines=strip_fenced_md_comments(markdown,keep_anchors=True).splitlines();blocks,chunk,questions,used=[],[],[],set();fence,prompt,anchor,index,position=None,'',None,0,0
 	while position<len(lines):
 		line=lines[position]
 		if fence is not None:
@@ -621,33 +646,35 @@ def parse_fields(markdown):
 			position+=1;continue
 		opening=FENCE.match(line)
 		if opening:fence=opening.group(1);chunk.append(line);position+=1;continue
-		type='choice'if CHOICE.match(line)else'checkbox'if CHECKBOX.match(line)else None;blank=None if type else BLANK.match(line)
+		comment_anchor=find_comment_anchor(line);cleaned=strip_md_comments(line)
+		if not cleaned.strip()and line.strip():
+			if comment_anchor:anchor=comment_anchor
+			position+=1;continue
+		type='choice'if CHOICE.match(cleaned)else'checkbox'if CHECKBOX.match(cleaned)else None;blank=None if type else BLANK.match(cleaned)
 		if not type and not blank:
-			chunk.append(line)
-			if line.strip():
-				prompt,anchor=prompt_text(ANCHOR.sub('',line)),None;found=ANCHOR.search(line)
-				if found:anchor=found.group(1);chunk[-1]=ANCHOR.sub('',line)
+			chunk.append(cleaned)
+			if cleaned.strip():
+				prompt=prompt_text(ANCHOR.sub('',cleaned));found=ANCHOR.search(cleaned);anchor=found.group(1)if found else comment_anchor
+				if found or comment_anchor:chunk[-1]=ANCHOR.sub('',cleaned).rstrip()
 			position+=1;continue
 		index+=1
 		if type:
 			pattern=CHOICE if type=='choice'else CHECKBOX;options,default=[],[]
 			while position<len(lines):
-				item=pattern.match(lines[position])
+				item=pattern.match(strip_md_comments(lines[position]))
 				if not item:break
 				preselected=item.group(1).lower()=='x';options.append(item.group(2))
 				if preselected:default.append(item.group(2))
 				position+=1
 				while position<len(lines)and option_continuation(lines[position]):
-					options[-1]=f"{options[-1]} {lines[position].strip()}"
+					options[-1]=f"{options[-1]} {strip_md_comments(lines[position]).strip()}"
 					if preselected:default[-1]=options[-1]
 					position+=1
 			if len(set(options))!=len(options):raise ValueError(f"Field '{prompt or index}' repeats an option; make each unique")
 			question={'type':type,'options':options,'default':default}
 		else:
 			label=(blank.group(1)or'').strip();question={'type':'text','default':[]}
-			if label:
-				prompt,anchor=prompt_text(ANCHOR.sub('',label)),None;found=ANCHOR.search(label)
-				if found:anchor=found.group(1)
+			if label:prompt=prompt_text(ANCHOR.sub('',label));found=ANCHOR.search(label);anchor=found.group(1)if found else comment_anchor
 			position+=1
 		question['prompt']=prompt or f"Field {index}";question['id']=anchor if anchor and anchor not in used else slug(question['prompt'],used);used.add(question['id']);anchor=None;blocks.append(('markdown','\n'.join(chunk)));blocks.append(('field',question));chunk=[];questions.append(question)
 	blocks.append(('markdown','\n'.join(chunk)))
@@ -657,6 +684,7 @@ def parse_fields(markdown):
 			if question['type']!='text'and not any(custom_label(option)is not None for option in question['options']):question['options'].append('Something else...: ___')
 	return blocks,questions
 def render_inline(markdown):
+	markdown=strip_md_comments(markdown)
 	try:from markdown_it import MarkdownIt
 	except ImportError:return html.escape(markdown)
 	parser=MarkdownIt('commonmark',{'html':False}).enable(['strikethrough']);highlight_markdown(parser);parser.add_render_rule('link_open',open_link);return parser.renderInline(markdown)
@@ -1682,7 +1710,7 @@ def hold_out(markdown,pattern,build,slug):
 		held.append(built);return f" preview{slug}{len(held)-1}x "
 	return re.sub(pattern,hold,markdown),held
 def put_back(rendered,held,slug):return re.sub(f"preview{slug}(\\d+)x",lambda match:held[int(match.group(1))],rendered)
-def render_report_block(markdown):tagged,held=hold_out(markdown,'(?:\\s*(?:</?(?:ul|ol|li)>)\\s*){2,}',lambda match:match.group(0).strip().lower(),'listtag');out=put_back(render(tagged),held,'listtag');out=re.sub('<p>(<(?:ul|ol)>)','\\1',out);out=re.sub('(</(?:ul|ol)>)</p>','\\1',out);return out
+def render_report_block(markdown):markdown=strip_fenced_md_comments(markdown);tagged,held=hold_out(markdown,'(?:\\s*(?:</?(?:ul|ol|li)>)\\s*){2,}',lambda match:match.group(0).strip().lower(),'listtag');out=put_back(render(tagged),held,'listtag');out=re.sub('<p>(<(?:ul|ol)>)','\\1',out);out=re.sub('(</(?:ul|ol)>)</p>','\\1',out);return out
 def render_report(markdown):
 	blocks,questions=parse_fields(markdown);parts=[]
 	for(type,item)in blocks:
@@ -3174,7 +3202,10 @@ def _outline_html(rel_path,text):
 JS_OUTLINE_SCRIPT='\nconst fs = require("node:fs");\nconst acornPath = process.argv[1];\nconst suffix = process.argv[2];\nconst source = fs.readFileSync(0, "utf8");\nconst acorn = require(acornPath);\n\nfunction parseSource(text, ext) {\n  const modes = ext === ".cjs" ? ["script", "module"] : ext === ".mjs" ? ["module"] : ["module", "script"];\n  let firstErr = null;\n  for (const sourceType of modes) {\n    try {\n      return acorn.parse(text, {\n        ecmaVersion: "latest",\n        sourceType,\n        locations: true,\n        allowHashBang: true,\n      });\n    } catch (err) {\n      if (!firstErr) firstErr = err;\n    }\n  }\n  throw firstErr;\n}\n\nlet tree;\ntry {\n  tree = parseSource(source, suffix);\n} catch (err) {\n  const line = (err && err.loc && err.loc.line) || 1;\n  const col = err && err.loc && typeof err.loc.column === "number" ? err.loc.column + 1 : 1;\n  const msg = String((err && err.message) || "SyntaxError").replace(/\\s*\\(\\d+:\\d+\\)\\s*$/, "");\n  console.log(JSON.stringify({ error: { line, column: col, message: msg } }));\n  process.exit(0);\n}\n\nfunction sliceNode(node) {\n  if (!node || typeof node.start !== "number" || typeof node.end !== "number") return "";\n  return source.slice(node.start, node.end).replace(/\\s+/g, " ").trim();\n}\n\nfunction formatParams(params) {\n  return (params || []).map(param => sliceNode(param)).join(", ");\n}\n\nfunction propLabel(key, computed) {\n  if (!key) return "<anonymous>";\n  if (computed) return `[${sliceNode(key)}]`;\n  if (key.type === "Identifier") return key.name;\n  if (key.type === "PrivateIdentifier") return `#${key.name}`;\n  if (key.type === "Literal") return String(key.value);\n  return sliceNode(key);\n}\n\nconst entries = [];\n\nfunction addEntry(type, name, stack, signature, node, defNode) {\n  const qual = [...stack, name].join(".");\n  const spanNode = node || defNode;\n  const dNode = defNode || spanNode;\n  entries.push({\n    type,\n    name,\n    qualified_name: qual,\n    signature,\n    line: spanNode.loc.start.line,\n    def_line: dNode.loc.start.line,\n    end_line: spanNode.loc.end.line,\n  });\n  return [...stack, name];\n}\n\nfunction walkClass(classNode, className, stack, outerNode, exportPrefix) {\n  const superText = classNode.superClass ? ` extends ${sliceNode(classNode.superClass)}` : "";\n  const prefix = exportPrefix ? `${exportPrefix} ` : "";\n  const classStack = addEntry(\n    "class",\n    className,\n    stack,\n    `${prefix}class ${className}${superText}`,\n    outerNode || classNode,\n    classNode\n  );\n  const body = (classNode.body && classNode.body.body) || [];\n  for (const member of body) {\n    if (!member) continue;\n    if (member.type === "MethodDefinition") {\n      const mName = propLabel(member.key, member.computed);\n      const fn = member.value;\n      const isAsync = Boolean(fn && fn.async);\n      const isGen = Boolean(fn && fn.generator);\n      const parts = [];\n      const memberRole = member["k" + "ind"];\n      if (member.static) parts.push("static");\n      if (memberRole === "get" || memberRole === "set") parts.push(memberRole);\n      if (isAsync) parts.push("async");\n      const star = isGen ? "*" : "";\n      const prefixStr = parts.length ? `${parts.join(" ")} ` : "";\n      const sig = `${prefixStr}${star}${mName}(${formatParams(fn && fn.params)})`;\n      const methodStack = addEntry(\n        isAsync ? "async_method" : "method",\n        mName,\n        classStack,\n        sig,\n        member,\n        member\n      );\n      if (fn && fn.body) walkStatements(fn.body.body || [], methodStack, false);\n    } else if (member.type === "PropertyDefinition" && member.value) {\n      const pName = propLabel(member.key, member.computed);\n      if (\n        member.value.type === "ArrowFunctionExpression" ||\n        member.value.type === "FunctionExpression"\n      ) {\n        const fn = member.value;\n        const isAsync = Boolean(fn.async);\n        const parts = [];\n        if (member.static) parts.push("static");\n        if (isAsync) parts.push("async");\n        const prefixStr = parts.length ? `${parts.join(" ")} ` : "";\n        const sig = `${prefixStr}${pName}(${formatParams(fn.params)})`;\n        const methodStack = addEntry(\n          isAsync ? "async_method" : "method",\n          pName,\n          classStack,\n          sig,\n          member,\n          member\n        );\n        if (fn.body && fn.body.type === "BlockStatement") {\n          walkStatements(fn.body.body || [], methodStack, false);\n        }\n      }\n    }\n  }\n}\n\nfunction walkFunction(fnNode, fnName, stack, outerNode, exportPrefix) {\n  const isAsync = Boolean(fnNode.async);\n  const isGen = Boolean(fnNode.generator);\n  const prefix = exportPrefix ? `${exportPrefix} ` : "";\n  const asyncStr = isAsync ? "async " : "";\n  const fnKeyword = fnNode.type === "ArrowFunctionExpression" ? "" : `function${isGen ? "*" : ""} `;\n  const arrowSuffix = fnNode.type === "ArrowFunctionExpression" ? " =>" : "";\n  const sig = `${prefix}${asyncStr}${fnKeyword}${fnName}(${formatParams(fnNode.params)})${arrowSuffix}`;\n  const fnStack = addEntry(\n    isAsync ? "async_function" : "function",\n    fnName,\n    stack,\n    sig,\n    outerNode || fnNode,\n    fnNode\n  );\n  if (fnNode.body && fnNode.body.type === "BlockStatement") {\n    walkStatements(fnNode.body.body || [], fnStack, false);\n  }\n}\n\nfunction walkVariableDeclaration(decl, stack, topLevel, outerNode, exportPrefix) {\n  const declType = decl["k" + "ind"] || "var";\n  const prefix = exportPrefix ? `${exportPrefix} ` : "";\n  for (const declarator of decl.declarations || []) {\n    if (!declarator || !declarator.id || declarator.id.type !== "Identifier") continue;\n    const name = declarator.id.name;\n    const init = declarator.init;\n    const spanNode = (decl.declarations.length === 1 && outerNode) || declarator;\n    if (init && (init.type === "ArrowFunctionExpression" || init.type === "FunctionExpression")) {\n      const isAsync = Boolean(init.async);\n      const isGen = Boolean(init.generator);\n      const asyncStr = isAsync ? "async " : "";\n      const rhs =\n        init.type === "ArrowFunctionExpression"\n          ? `${asyncStr}(${formatParams(init.params)}) =>`\n          : `${asyncStr}function${isGen ? "*" : ""}(${formatParams(init.params)})`;\n      const fnStack = addEntry(\n        isAsync ? "async_function" : "function",\n        name,\n        stack,\n        `${prefix}${declType} ${name} = ${rhs}`,\n        spanNode,\n        declarator\n      );\n      if (init.body && init.body.type === "BlockStatement") {\n        walkStatements(init.body.body || [], fnStack, false);\n      }\n    } else if (init && init.type === "ClassExpression") {\n      walkClass(init, name, stack, spanNode, `${prefix}${declType}`);\n    } else if (topLevel) {\n      addEntry("binding", name, stack, `${prefix}${declType} ${name}`, spanNode, declarator);\n    }\n  }\n}\n\nfunction walkStatements(statements, stack, topLevel) {\n  for (const stmt of statements || []) {\n    if (!stmt) continue;\n    if (stmt.type === "FunctionDeclaration" && stmt.id) {\n      walkFunction(stmt, stmt.id.name, stack, stmt, "");\n    } else if (stmt.type === "ClassDeclaration" && stmt.id) {\n      walkClass(stmt, stmt.id.name, stack, stmt, "");\n    } else if (stmt.type === "VariableDeclaration") {\n      walkVariableDeclaration(stmt, stack, topLevel, stmt, "");\n    } else if (stmt.type === "ExportNamedDeclaration") {\n      if (stmt.declaration) {\n        const d = stmt.declaration;\n        if (d.type === "FunctionDeclaration" && d.id) {\n          walkFunction(d, d.id.name, stack, stmt, "export");\n        } else if (d.type === "ClassDeclaration" && d.id) {\n          walkClass(d, d.id.name, stack, stmt, "export");\n        } else if (d.type === "VariableDeclaration") {\n          walkVariableDeclaration(d, stack, topLevel, stmt, "export");\n        }\n      }\n    } else if (stmt.type === "ExportDefaultDeclaration") {\n      const d = stmt.declaration;\n      if (d && (d.type === "FunctionDeclaration" || d.type === "FunctionExpression")) {\n        const name = (d.id && d.id.name) || "default";\n        walkFunction(d, name, stack, stmt, "export default");\n      } else if (d && (d.type === "ClassDeclaration" || d.type === "ClassExpression")) {\n        const name = (d.id && d.id.name) || "default";\n        walkClass(d, name, stack, stmt, "export default");\n      }\n    }\n  }\n}\n\nwalkStatements(tree.body || [], [], true);\nconsole.log(JSON.stringify({ entries }));\n'
 def _outline_javascript(rel_path,text,suffix,repo_root=None,parser_dir=None,which=shutil.which,runner=subprocess.run):
 	status=discover_portable_parsers(parser_dir);acorn_entry=status['acorn']
-	if acorn_entry is None and parser_dir is None:root=_outline_repo_root(repo_root);acorn_entry,_=_check_parser_package(root,'acorn',PARSER_PACKAGES['acorn'])
+	if acorn_entry is None and parser_dir is None:
+		for candidate in(_outline_repo_root(repo_root),Path.cwd().resolve(),*Path(__file__).resolve().parents):
+			acorn_entry,_=_check_parser_package(candidate,'acorn',PARSER_PACKAGES['acorn'])
+			if acorn_entry is not None:break
 	node_bin=which('node')
 	if not node_bin or not acorn_entry:raise ValueError(f"{rel_path}: JavaScript outline unavailable: {status['message']}")
 	completed=runner([node_bin,'-e',JS_OUTLINE_SCRIPT,acorn_entry,suffix],input=text,capture_output=True,text=True,check=False,timeout=15)
@@ -3266,11 +3297,38 @@ def bare_script_invocation(line):
 			while words and words[0].startswith('-')and words[0]not in('-c','-m'):words.pop(0)
 		if words and words[0].endswith(('/scripts/arena-preview','/scripts/preview.py')):return True
 	return False
+def sleep_command(line):
+	lexer=shlex.shlex(agent_line(line or''),posix=False,punctuation_chars=';&|\n');lexer.whitespace=' \t\r';lexer.whitespace_split=True
+	try:tokens=list(lexer)
+	except ValueError:return False
+	piece=[]
+	for token in[*tokens,';']:
+		if token not in(';','&&','||','|','|&','&','\n'):piece.append(token);continue
+		try:words=[''.join(shlex.split(word))for word in piece]
+		except ValueError:return False
+		piece=[]
+		while words and(re.fullmatch('[A-Za-z_]\\w*=.*',words[0])or words[0]in SHELL_KEYWORDS):words.pop(0)
+		while words and words[0].rsplit('/',1)[-1]in PR_CHECK_WRAPPERS:
+			wrapper=words.pop(0).rsplit('/',1)[-1]
+			if wrapper=='command'and words and re.fullmatch('-[pVv]*[Vv][pVv]*',words[0]):words=[];break
+			while words and(words[0].startswith('-')or'='in words[0]or words[0].isdigit()):words.pop(0)
+		if not words:continue
+		head=words[0].rsplit('/',1)[-1]
+		if head in SHELL_BASENAMES:
+			for(index,word)in enumerate(words[1:-1],1):
+				if word.startswith('-')and'c'in word:
+					if sleep_command(words[index+1]):return True
+					break
+		if head=='sleep':return True
+	return False
 def pre_command(state_dir,line,command,root,done='',shell=''):
 	initial=done.split();steps=list(initial);finished=set(steps);routed=os.environ.get('ARENA_PREVIEW_ROUTE')=='1'
 	if not routed and state_file(state_dir).is_file():
-		group_store=Store(state_dir,create=False);group=str(os.getpgid(0))
-		if group_store.meta_value(CALL_GROUP_META)!=group:group_store.set_meta(CALL_GROUP_META,group);group_store.set_meta(CALL_STARTED_META,now())
+		group_store=Store(state_dir,create=False)
+		if sleep_command(command):
+			group=str(os.getpgid(0))
+			if group_store.meta_value(CALL_GROUP_META)!=group:group_store.set_meta(CALL_GROUP_META,group);group_store.set_meta(CALL_STARTED_META,now())
+		elif group_store.meta_value(CALL_GROUP_META):group_store.set_meta(CALL_GROUP_META,'')
 	def report(warning):print(warning,file=sys.stderr,flush=True)
 	def mark(step):
 		if step not in finished:finished.add(step);steps.append(step)

@@ -142,6 +142,8 @@ NEMOIZER_IGNORES = (
   "skills/refs/arena-skill/assets/lucide.LICENSE",
   "skills/arena-skill/assets/markdown-it.LICENSE",
   "skills/refs/arena-skill/assets/markdown-it.LICENSE",
+  "skills/arena-skill/assets/sortable.LICENSE",
+  "skills/refs/arena-skill/assets/sortable.LICENSE",
   "skills/nuu/data/vendor",
   "skills/refs/nuu/data/vendor",
 )

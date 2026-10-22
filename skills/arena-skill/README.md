@@ -49,7 +49,7 @@ A stale revision returns HTTP 409. The revision check and answer write use one t
 
 Routine inbox reads show quiet notes once. Note-ID lookups and reply-thread context still include them.
 
-Report answers live in a separate `submissions` table and appear as `kind: report` in CLI reads. <!-- nonemo: N003 -->
+Report answers live in a separate `submissions` table and appear as `kind: report` in CLI reads. <!-- nonemo: NMO001 -->
 Every resend creates a new submission. An answered report ID refuses republishing.
 The UI shows whether the agent answered the latest submission, not just an earlier one.
 

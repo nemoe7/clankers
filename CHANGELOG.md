@@ -62,6 +62,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nemoizer
 
+- Renumber rule IDs by group (`NMO`, `NMP`, `STE`, `NMT`, and reserved `HMN`). Remove legacy aliases, enforce `STE001` prose semicolons, and extract `.cmd` batch comments.
+
+- Add advisory `NMO002` `repository` rotation, `NMO003` serial-comma checks, `STE003` passive-voice checks, `STE004` phrasal-verb checks, `STE005` ellipsis checks, and forced-triad prose review rules.
+
 - Add contextual advice on article removal. Keep complete, natural wording and unchanged meaning. Retain linter behavior.
 
 #### preview

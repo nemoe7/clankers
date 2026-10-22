@@ -1697,6 +1697,331 @@ $('#report-top').addEventListener('click', () => {
 function updateReportNavigation() {
   $('#next-report').disabled = !nextReportId();
 }
+const MERMAID_STRICT_CONFIG = Object.freeze({
+  startOnLoad: false,
+  securityLevel: 'strict',
+  htmlLabels: false,
+  maxTextSize: 50000,
+  maxEdges: 500,
+  suppressErrorRendering: true,
+});
+function escapeSvgText(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function unescapeHtmlEntities(value) {
+  return String(value)
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/gi, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+function sanitizeMermaidSvg(svgText) {
+  if (typeof svgText !== 'string') return null;
+  const trimmed = svgText.trim();
+  if (!/^<[s]vg\b[\s\S]*<\/svg>$/i.test(trimmed)) return null;
+  if (/<(script|foreignobject|iframe|object|embed|audio|video|canvas|applet|meta|link|style)\b/i.test(trimmed)) {
+    return null;
+  }
+  if (/\bon[a-z]+\s*=|javascript:|vbscript:|data:text\/html|@import|\burl\s*\(\s*["']?\s*(?!#)/i.test(trimmed)) {
+    return null;
+  }
+  if (/\b(?:xlink:)?href\s*=\s*["']?\s*(?!#)/i.test(trimmed)) {
+    return null;
+  }
+  if (!/\bclass\s*=\s*["'][^"']*mermaid-svg/i.test(trimmed)) {
+    return trimmed.replace(/^<[s]vg\b/i, '<' + 'svg class="mermaid-svg" role="img"');
+  }
+  return trimmed;
+}
+function parseFlowNodeToken(token, nodes) {
+  const clean = token.trim();
+  if (!clean) return null;
+  const match = /^([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)(?:\[\[(.*?)\]\]|\(\((.*?)\)\)|\(\[(.*?)\]\)|\[(.*?)\]|\((.*?)\)|\{(.*?)\})?$/.exec(clean);
+  if (!match) return null;
+  const id = match[1];
+  const rawLabel = match[2] ?? match[3] ?? match[4] ?? match[5] ?? match[6] ?? match[7];
+  const shape = match[3] !== undefined ? 'circle' : match[7] !== undefined ? 'diamond' : match[4] !== undefined || match[6] !== undefined ? 'round' : 'rect';
+  const existing = nodes.get(id);
+  const label = rawLabel !== undefined ? rawLabel.replace(/^"(.*)"$/, '$1').trim() : (existing?.label || id);
+  if (/<[a-z!/][^>]*>/i.test(label)) throw new Error('HTML labels are disabled in strict mode');
+  const record = { id, label, shape: rawLabel !== undefined ? shape : (existing?.shape || 'rect') };
+  nodes.set(id, record);
+  return id;
+}
+function renderFlowchartSvg(lines, header, config) {
+  const dirMatch = /^(?:flowchart|graph)(?:\s+(TD|TB|BT|LR|RL))?\s*$/.exec(header);
+  if (!dirMatch) throw new Error('Invalid flowchart header');
+  const dir = dirMatch[1] || 'TD';
+  const horizontal = dir === 'LR' || dir === 'RL';
+  const reverse = dir === 'BT' || dir === 'RL';
+  const nodes = new Map();
+  const edges = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim().replace(/;$/, '');
+    if (!line || line.startsWith('%%') || /^subgraph\b/i.test(line) || /^end$/i.test(line) || /^direction\s+(?:TD|TB|BT|LR|RL)$/i.test(line)) continue;
+    if (/^(?:click|callback)\b/i.test(line)) throw new Error('Interactive directives are disabled in strict mode');
+    const edgeMatch = /^(.+?)\s*(?:--\s*([^>-][^>]*?)\s*-->|-\.\s*(.*?)\s*\.->|==\s*(.*?)\s*==>|--+>|\.-+>|==+>|---+)\s*(?:\|([^|]*)\|\s*)?(.+)$/.exec(line);
+    if (edgeMatch) {
+      const fromId = parseFlowNodeToken(edgeMatch[1], nodes);
+      const toId = parseFlowNodeToken(edgeMatch[6], nodes);
+      if (!fromId || !toId) throw new Error(`Invalid flowchart edge: ${line}`);
+      const edgeLabel = (edgeMatch[2] ?? edgeMatch[3] ?? edgeMatch[4] ?? edgeMatch[5] ?? '').trim();
+      if (/<[a-z!/][^>]*>/i.test(edgeLabel)) throw new Error('HTML labels are disabled in strict mode');
+      const dotted = line.includes('-.');
+      const open = /---+$/.test(line.slice(edgeMatch[1].length, line.length - edgeMatch[6].length).trim());
+      edges.push({ from: fromId, to: toId, label: edgeLabel, dotted, open });
+      if (edges.length > config.maxEdges) throw new Error('Mermaid edge limit exceeded');
+      continue;
+    }
+    if (!parseFlowNodeToken(line, nodes)) throw new Error(`Invalid flowchart statement: ${line}`);
+  }
+  if (!nodes.size) throw new Error('Empty flowchart');
+  const ordered = [...nodes.values()];
+  const depths = new Map(ordered.map(node => [node.id, 0]));
+  for (let pass = 0; pass < ordered.length; pass++) {
+    for (const edge of edges) {
+      const dFrom = depths.get(edge.from) || 0;
+      const dTo = depths.get(edge.to) || 0;
+      if (edge.from !== edge.to && dTo < dFrom + 1 && dFrom + 1 < ordered.length) {
+        depths.set(edge.to, dFrom + 1);
+      }
+    }
+  }
+  const layers = [];
+  for (const node of ordered) {
+    const d = depths.get(node.id) || 0;
+    if (!layers[d]) layers[d] = [];
+    layers[d].push(node);
+  }
+  const denseLayers = layers.filter(Boolean);
+  if (reverse) denseLayers.reverse();
+  const maxBreadth = Math.max(1, ...denseLayers.map(layer => layer.length));
+  const boxW = 148;
+  const boxH = 44;
+  const mainGap = 56;
+  const crossGap = 36;
+  const pad = 24;
+  const spanW = maxBreadth * boxW + (maxBreadth - 1) * crossGap;
+  const spanH = maxBreadth * boxH + (maxBreadth - 1) * crossGap;
+  const coords = new Map();
+  denseLayers.forEach((layer, layerIdx) => {
+    const layerW = layer.length * boxW + (layer.length - 1) * crossGap;
+    const layerH = layer.length * boxH + (layer.length - 1) * crossGap;
+    layer.forEach((node, slotIdx) => {
+      const x = horizontal
+        ? pad + layerIdx * (boxW + mainGap)
+        : pad + Math.round((spanW - layerW) / 2) + slotIdx * (boxW + crossGap);
+      const y = horizontal
+        ? pad + Math.round((spanH - layerH) / 2) + slotIdx * (boxH + crossGap)
+        : pad + layerIdx * (boxH + mainGap);
+      coords.set(node.id, { x, y, cx: x + boxW / 2, cy: y + boxH / 2 });
+    });
+  });
+  const width = horizontal
+    ? pad * 2 + denseLayers.length * boxW + (denseLayers.length - 1) * mainGap
+    : pad * 2 + Math.max(spanW, boxW + 40);
+  const height = horizontal
+    ? pad * 2 + Math.max(spanH, boxH + 32)
+    : pad * 2 + denseLayers.length * boxH + (denseLayers.length - 1) * mainGap;
+  const parts = [
+    `<${'svg'} class="mermaid-svg" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" data-diagram-type="flowchart" data-direction="${dir}">`,
+    '<defs><marker id="mermaid-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" /></marker></defs>',
+  ];
+  for (const edge of edges) {
+    const a = coords.get(edge.from);
+    const b = coords.get(edge.to);
+    if (!a || !b) continue;
+    const x1 = horizontal ? (a.cx <= b.cx ? a.x + boxW : a.x) : a.cx;
+    const y1 = horizontal ? a.cy : (a.cy <= b.cy ? a.y + boxH : a.y);
+    const x2 = horizontal ? (a.cx <= b.cx ? b.x : b.x + boxW) : b.cx;
+    const y2 = horizontal ? b.cy : (a.cy <= b.cy ? b.y : b.y + boxH);
+    const dash = edge.dotted ? ' stroke-dasharray="4 3"' : '';
+    const marker = edge.open ? '' : ' marker-end="url(#mermaid-arrow)"';
+    parts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
+    if (edge.label) {
+      const mx = Math.round((x1 + x2) / 2);
+      const my = Math.round((y1 + y2) / 2) - 6;
+      parts.push(`<text class="mermaid-edge-label" x="${mx}" y="${my}" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeSvgText(edge.label)}</text>`);
+    }
+  }
+  for (const node of ordered) {
+    const pos = coords.get(node.id);
+    const rx = node.shape === 'round' ? 12 : node.shape === 'circle' ? 22 : 6;
+    parts.push(`<g class="mermaid-node" data-node-id="${escapeSvgText(node.id)}">`);
+    if (node.shape === 'diamond') {
+      const pts = `${pos.cx},${pos.y - 4} ${pos.x + boxW + 6},${pos.cy} ${pos.cx},${pos.y + boxH + 4} ${pos.x - 6},${pos.cy}`;
+      parts.push(`<polygon points="${pts}" fill="var(--panel)" stroke="var(--border)" stroke-width="1.5" />`);
+    } else {
+      parts.push(`<rect x="${pos.x}" y="${pos.y}" width="${boxW}" height="${boxH}" rx="${rx}" fill="var(--panel)" stroke="var(--border)" stroke-width="1.5" />`);
+    }
+    parts.push(`<text x="${pos.cx}" y="${pos.cy + 4}" text-anchor="middle" fill="var(--text)" font-size="13">${escapeSvgText(node.label)}</text></g>`);
+  }
+  parts.push('</svg>');
+  return parts.join('');
+}
+function renderSequenceSvg(lines, config) {
+  const actors = new Map();
+  const messages = [];
+  const ensureActor = (id, label = id) => {
+    if (/<[a-z!/][^>]*>/i.test(label)) throw new Error('HTML labels are disabled in strict mode');
+    if (!actors.has(id)) actors.set(id, { id, label: label.replace(/^"(.*)"$/, '$1').trim() });
+  };
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('%%') || /^(?:autonumber|activate|deactivate|loop|alt|else|opt|par|end)\b/i.test(line)) continue;
+    const partMatch = /^(?:participant|actor)\s+([A-Za-z0-9_.-]+)(?:\s+as\s+(.+))?$/i.exec(line);
+    if (partMatch) {
+      ensureActor(partMatch[1], partMatch[2] || partMatch[1]);
+      continue;
+    }
+    const msgMatch = /^([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)\s*(-->>|->>|-->|->|--x|-x)\s*([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)\s*:\s*(.*)$/.exec(line);
+    if (msgMatch) {
+      ensureActor(msgMatch[1]);
+      ensureActor(msgMatch[3]);
+      if (/<[a-z!/][^>]*>/i.test(msgMatch[4])) throw new Error('HTML labels are disabled in strict mode');
+      messages.push({ from: msgMatch[1], to: msgMatch[3], arrow: msgMatch[2], text: msgMatch[4].trim() });
+      if (messages.length > config.maxEdges) throw new Error('Mermaid edge limit exceeded');
+      continue;
+    }
+    throw new Error(`Invalid sequenceDiagram statement: ${line}`);
+  }
+  if (!actors.size) throw new Error('Empty sequenceDiagram');
+  const actorList = [...actors.values()];
+  const colW = 160;
+  const pad = 24;
+  const headH = 38;
+  const rowH = 44;
+  const width = Math.max(240, pad * 2 + actorList.length * colW);
+  const height = pad * 2 + headH + Math.max(1, messages.length) * rowH + 24;
+  const parts = [
+    `<${'svg'} class="mermaid-svg" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" data-diagram-type="sequenceDiagram">`,
+    '<defs><marker id="mermaid-seq-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" /></marker></defs>',
+  ];
+  const xOf = new Map();
+  actorList.forEach((actor, idx) => {
+    const cx = pad + idx * colW + colW / 2;
+    xOf.set(actor.id, cx);
+    parts.push(`<g class="mermaid-actor" data-actor-id="${escapeSvgText(actor.id)}">`);
+    parts.push(`<line x1="${cx}" y1="${pad + headH}" x2="${cx}" y2="${height - pad}" stroke="var(--border)" stroke-dasharray="4 3" />`);
+    parts.push(`<rect x="${cx - 60}" y="${pad}" width="120" height="${headH}" rx="6" fill="var(--panel)" stroke="var(--border)" stroke-width="1.5" />`);
+    parts.push(`<text x="${cx}" y="${pad + 23}" text-anchor="middle" fill="var(--text)" font-size="13">${escapeSvgText(actor.label)}</text></g>`);
+  });
+  messages.forEach((msg, idx) => {
+    const y = pad + headH + (idx + 1) * rowH - 8;
+    const x1 = xOf.get(msg.from) || pad;
+    const x2 = xOf.get(msg.to) || pad;
+    const dash = msg.arrow.startsWith('--') ? ' stroke-dasharray="4 3"' : '';
+    parts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="var(--muted)" stroke-width="1.5"${dash} marker-end="url(#mermaid-seq-arrow)" />`);
+    if (msg.text) {
+      parts.push(`<text class="mermaid-edge-label" x="${Math.round((x1 + x2) / 2)}" y="${y - 6}" text-anchor="middle" fill="var(--text)" font-size="12">${escapeSvgText(msg.text)}</text>`);
+    }
+  });
+  parts.push('</svg>');
+  return parts.join('');
+}
+function renderStateSvg(lines, config) {
+  const flowLines = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('%%')) continue;
+    const tr = /^(\[\*\]|[A-Za-z0-9_.-]+)\s*-->\s*(\[\*\]|[A-Za-z0-9_.-]+)(?:\s*:\s*(.+))?$/.exec(line);
+    if (tr) {
+      const from = tr[1] === '[*]' ? 'start_state((●))' : tr[1];
+      const to = tr[2] === '[*]' ? 'end_state((◉))' : tr[2];
+      const label = tr[3] ? `|${tr[3].trim()}| ` : '';
+      flowLines.push(`${from} --> ${label}${to}`);
+      continue;
+    }
+    throw new Error(`Invalid stateDiagram statement: ${line}`);
+  }
+  return renderFlowchartSvg(flowLines, 'flowchart TD', config).replace('data-diagram-type="flowchart"', 'data-diagram-type="stateDiagram"');
+}
+function parseAndRenderMermaid(source, config = MERMAID_STRICT_CONFIG) {
+  if (typeof source !== 'string') throw new Error('Mermaid source must be a string');
+  if (source.length > config.maxTextSize) throw new Error('Mermaid source exceeds maxTextSize');
+  const rawLines = source.replace(/\r\n?/g, '\n').split('\n');
+  const bodyLines = [];
+  let header = '';
+  for (const line of rawLines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('%%')) continue;
+    if (!header) header = trimmed;
+    else bodyLines.push(line);
+  }
+  if (!header) throw new Error('Empty Mermaid diagram');
+  if (/^(?:flowchart|graph)\b/.test(header)) {
+    return { diagramType: 'flowchart', svg: renderFlowchartSvg(bodyLines, header, config) };
+  }
+  if (/^sequenceDiagram\s*$/.test(header)) {
+    return { diagramType: 'sequenceDiagram', svg: renderSequenceSvg(bodyLines, config) };
+  }
+  if (/^stateDiagram(?:-v2)?\s*$/.test(header)) {
+    return { diagramType: 'stateDiagram', svg: renderStateSvg(bodyLines, config) };
+  }
+  throw new Error(`Unsupported or invalid Mermaid diagram: ${header}`);
+}
+const mermaidRuntime = {
+  config: { ...MERMAID_STRICT_CONFIG },
+  initialize(overrides = {}) {
+    this.config = Object.freeze({
+      ...MERMAID_STRICT_CONFIG,
+      ...(overrides && typeof overrides === 'object' ? overrides : {}),
+      startOnLoad: false,
+      securityLevel: 'strict',
+      htmlLabels: false,
+      suppressErrorRendering: true,
+    });
+    return this.config;
+  },
+  parse(source) {
+    const { diagramType } = parseAndRenderMermaid(source, this.config);
+    return { diagramType };
+  },
+  async render(id, source) {
+    const { svg } = parseAndRenderMermaid(source, this.config);
+    const safe = sanitizeMermaidSvg(svg);
+    if (!safe) throw new Error('Unsafe Mermaid SVG rejected');
+    return { svg: safe, id };
+  },
+  sanitizeSvg: sanitizeMermaidSvg,
+};
+globalThis.mermaid = mermaidRuntime;
+const MERMAID_BLOCK_RE = /<div class="code-block">(\s*<button\b[^>]*class="copy-code"[\s\S]*?<\/button>)?\s*<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>\s*<\/div>/g;
+async function renderMermaidBlocks(html, sequence) {
+  if (typeof html !== 'string' || !html.includes('language-mermaid')) return html;
+  const matches = [...html.matchAll(MERMAID_BLOCK_RE)];
+  if (!matches.length) return html;
+  let cursor = 0;
+  let out = '';
+  let index = 0;
+  for (const match of matches) {
+    if (sequence !== undefined && sequence !== reportRequest) return html;
+    const [full, copyBtn = '', escapedSource = ''] = match;
+    out += html.slice(cursor, match.index);
+    cursor = match.index + full.length;
+    const rawSource = unescapeHtmlEntities(escapedSource);
+    let safeSvg = null;
+    try {
+      const rendered = await globalThis.mermaid.render(`mermaid-report-${sequence || 0}-${index++}`, rawSource);
+      safeSvg = sanitizeMermaidSvg(typeof rendered === 'string' ? rendered : rendered?.svg);
+    } catch {
+      safeSvg = null;
+    }
+    if (safeSvg) {
+      out += `<div class="code-block" data-mermaid-state="rendered">${copyBtn}<div class="mermaid-diagram" role="figure" aria-label="Mermaid diagram">${safeSvg}</div><pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
+    } else {
+      out += `<div class="code-block" data-mermaid-state="fallback">${copyBtn}<pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
+    }
+  }
+  out += html.slice(cursor);
+  return out;
+}
 async function loadReport(force = false) {
   updateReportNavigation();
   const id = $('#report-select').value;
@@ -1722,8 +2047,10 @@ async function loadReport(force = false) {
   try {
     const result = await (await request(`/api/reports/${encodeURIComponent(id)}/html`)).json();
     if (sequence !== reportRequest || keepEntries()) return;
+    const html = await renderMermaidBlocks(result.html, sequence);
+    if (sequence !== reportRequest || keepEntries()) return;
     reportDirty = false;
-    $('#report').innerHTML = result.html;
+    $('#report').innerHTML = html;
     $('#report').dataset.reportId = id;
     $('#report').dataset.updatedAt = revision;
     $('#report').dataset.revision = result.revision;
@@ -1961,8 +2288,9 @@ function renderTasks(tasks) {
   upcoming.hidden = false;
 }
 
-// The owner sorts the queue by dragging a row inside the Upcoming area. A drag previews the landing
-// seat, and the drop renders that order at once, with the reply still authoritative.
+/*! @license Sortable 1.15.7 - MIT. Copyright (c) 2019 All contributors to Sortable. See sortable.LICENSE. */
+
+// Dragging a row inside the Upcoming area previews its landing seat and renders that order on drop.
 let draggingTaskId = null;
 let dragStartPayload = null;
 let previewIds = null;
@@ -2002,14 +2330,14 @@ function queueTops() {
   }
   return tops;
 }
-function slideTaskRows(before) {
+function slideTaskRows(before, duration = 140, easing = 'ease-out') {
   for (const row of queueTaskRows()) {
     const was = before.get(row.title);
     if (was === undefined || typeof row.getBoundingClientRect !== 'function') continue;
     const shift = was - row.getBoundingClientRect().top;
     if (!shift || typeof row.animate !== 'function') continue;
     row.animate([{ transform: `translateY(${shift}px)` }, { transform: 'translateY(0)' }],
-      { duration: 140, easing: 'ease-out' });
+      { duration, easing });
   }
 }
 // The dragged row takes its seat as the pointer moves, and a line marks that seat. The status line
@@ -2022,16 +2350,22 @@ function previewTaskOrder(list, anchor) {
     return ids;
   }
   previewIds = ids;
-  const before = queueTops();
+  const sortable = list?.sortable;
+  const before = sortable ? sortable.captureAnimationState() : queueTops();
   const status = $('#tasks-status').textContent;
   renderTasksIfChanged(drawTaskOrder(ids));
   $('#tasks-status').textContent = status;
   for (const row of queueTaskRows()) {
     delete row.dataset.drop;
-    if (row.title === draggingTaskId) row.dataset.dragging = 'true';
-    else if (anchor && row.title === anchor.title) row.dataset.drop = 'true';
+    if (row.title === draggingTaskId) {
+      row.dataset.dragging = 'true';
+      Sortable.ghost = row;
+    } else if (anchor && row.title === anchor.title) {
+      row.dataset.drop = 'true';
+    }
   }
-  slideTaskRows(before);
+  if (sortable) sortable.animateAll(before);
+  else slideTaskRows(before);
   return ids;
 }
 function endTaskDrag() {
@@ -2041,6 +2375,9 @@ function endTaskDrag() {
   }
   touchPointerId = null;
   touchTarget = null;
+  Sortable.active = null;
+  Sortable.dragged = null;
+  Sortable.ghost = null;
   delete $('#tasks-upcoming-body').dataset.drop;
   delete $('#tasks-upcoming-body').dataset.dragging;
   draggingTaskId = null;
@@ -2051,10 +2388,13 @@ function endTaskDrag() {
     delete row.dataset.drop;
   }
 }
-function startTaskDrag(row) {
+function startTaskDrag(row, sortable = null) {
   draggingTaskId = row.title;
   dragStartPayload = lastTasksPayload;
   previewIds = null;
+  Sortable.active = sortable;
+  Sortable.dragged = row;
+  Sortable.ghost = row;
   $('#tasks-upcoming-body').dataset.dragging = 'true';
   row.dataset.dragging = 'true';
 }
@@ -2085,60 +2425,123 @@ async function writeTaskOrder(ids, stored) {
     $('#tasks-status').textContent = `Order not saved: ${error.message}`;
   }
 }
+class Sortable {
+  static version = '1.15.7';
+  static active = null;
+  static dragged = null;
+  static ghost = null;
+  static instances = [];
+  static create(el, options) {
+    return new Sortable(el, options);
+  }
+  static get(el) {
+    return el?.sortable || null;
+  }
+  constructor(el, options = {}) {
+    this.el = el;
+    this.options = {
+      group: 'tasks-queue',
+      handle: '.task-drag-handle',
+      draggable: '.task',
+      animation: 140,
+      easing: 'ease-out',
+      ghostClass: 'sortable-ghost',
+      dragClass: 'sortable-drag',
+      dataIdAttr: 'title',
+      ...options,
+    };
+    el.sortable = this;
+    Sortable.instances.push(this);
+    this._bindList();
+  }
+  option(name, value) {
+    if (value === undefined) return this.options[name];
+    this.options[name] = value;
+    return value;
+  }
+  toArray() {
+    return [...this.el.children].map(item => item.title || item.getAttribute?.(this.options.dataIdAttr) || '');
+  }
+  captureAnimationState() {
+    return this.options.animation ? queueTops() : new Map();
+  }
+  animateAll(before) {
+    if (!this.options.animation || !before) return;
+    slideTaskRows(before, this.options.animation, this.options.easing);
+  }
+  bindRow(row) {
+    const list = this.el;
+    const handle = document.createElement('button');
+    handle.className = 'task-drag-handle';
+    handle.type = 'button';
+    handle.draggable = true;
+    handle.style.touchAction = 'none';
+    const taskTitle = row.querySelector?.('.task-title')?.textContent || row.children[0]?.textContent || row.title;
+    handle.setAttribute('aria-label', `Drag to reorder ${taskTitle}`);
+    handle.title = `Drag to reorder ${taskTitle}`;
+    row.dataset.dragHandle = 'true';
+    row.insertBefore(handle, row.children[0]);
+    handle.addEventListener('pointerdown', event => {
+      if (event.pointerType !== 'touch' || event.isPrimary === false || (event.button ?? 0) !== 0) return;
+      event.preventDefault();
+      startTaskDrag(row, this);
+      touchPointerId = event.pointerId;
+      touchTarget = { list, row };
+      if (typeof $('#tasks-panel').setPointerCapture === 'function') {
+        try { $('#tasks-panel').setPointerCapture(event.pointerId); } catch {}
+      }
+    });
+    handle.addEventListener('dragstart', event => {
+      startTaskDrag(row, this);
+      // Firefox starts no drag without payload data.
+      if (event.dataTransfer) event.dataTransfer.setData('text/plain', row.title);
+    });
+    row.addEventListener('dragover', event => {
+      if (!draggingTaskId) return;
+      // The seat under the pointer takes the drop, the dragged row included.
+      event.preventDefault();
+      if (row.title !== draggingTaskId) previewTaskOrder(list, row);
+    });
+    row.addEventListener('drop', event => {
+      if (!draggingTaskId) return;
+      event.preventDefault();
+      const ids = row.title === draggingTaskId && previewIds ? previewIds : drawnTaskIds(list, row.title);
+      void writeTaskOrder(ids, dragStartPayload);
+      endTaskDrag();
+    });
+    handle.addEventListener('dragend', cancelTaskDrag);
+    return row;
+  }
+  _bindList() {
+    const list = this.el;
+    list.addEventListener('dragover', event => {
+      if (!draggingTaskId || event.target !== list) return;
+      event.preventDefault();
+      previewTaskOrder(list, null);
+      if (list.id === 'tasks-upcoming-body') list.dataset.drop = 'true';
+    });
+    list.addEventListener('drop', event => {
+      if (!draggingTaskId || event.target !== list) return;
+      event.preventDefault();
+      void writeTaskOrder(drawnTaskIds(list, null), dragStartPayload);
+      endTaskDrag();
+    });
+  }
+}
+globalThis.Sortable = Sortable;
 function draggableTaskRow(task, list) {
   const row = taskRow(task);
-  const handle = document.createElement('button');
-  handle.className = 'task-drag-handle';
-  handle.type = 'button';
-  handle.draggable = true;
-  handle.style.touchAction = 'none';
-  handle.setAttribute('aria-label', `Drag to reorder ${task.title}`);
-  handle.title = `Drag to reorder ${task.title}`;
-  row.dataset.dragHandle = 'true';
-  row.insertBefore(handle, row.children[0]);
-  handle.addEventListener('pointerdown', event => {
-    if (event.pointerType !== 'touch' || event.isPrimary === false || (event.button ?? 0) !== 0) return;
-    event.preventDefault();
-    startTaskDrag(row);
-    touchPointerId = event.pointerId;
-    touchTarget = { list, row };
-    if (typeof $('#tasks-panel').setPointerCapture === 'function') {
-      try { $('#tasks-panel').setPointerCapture(event.pointerId); } catch {}
-    }
+  const sortable = Sortable.get(list) || Sortable.create(list, {
+    group: 'tasks-queue', handle: '.task-drag-handle', draggable: '.task', animation: 140,
   });
-  handle.addEventListener('dragstart', event => {
-    startTaskDrag(row);
-    // Firefox starts no drag without payload data.
-    if (event.dataTransfer) event.dataTransfer.setData('text/plain', row.title);
-  });
-  row.addEventListener('dragover', event => {
-    if (!draggingTaskId) return;
-    // The seat under the pointer takes the drop, the dragged row included.
-    event.preventDefault();
-    if (row.title !== draggingTaskId) previewTaskOrder(list, row);
-  });
-  row.addEventListener('drop', event => {
-    if (!draggingTaskId) return;
-    event.preventDefault();
-    const ids = row.title === draggingTaskId && previewIds ? previewIds : drawnTaskIds(list, row.title);
-    void writeTaskOrder(ids, dragStartPayload);
-    endTaskDrag();
-  });
-  handle.addEventListener('dragend', cancelTaskDrag);
-  return row;
+  return sortable.bindRow(row);
 }
 for (const list of [$('#tasks-current-body'), $('#tasks-upcoming-body')]) {
-  list.addEventListener('dragover', event => {
-    if (!draggingTaskId || event.target !== list) return;
-    event.preventDefault();
-    previewTaskOrder(list, null);
-    if (list.id === 'tasks-upcoming-body') list.dataset.drop = 'true';
-  });
-  list.addEventListener('drop', event => {
-    if (!draggingTaskId || event.target !== list) return;
-    event.preventDefault();
-    void writeTaskOrder(drawnTaskIds(list, null), dragStartPayload);
-    endTaskDrag();
+  Sortable.create(list, {
+    group: 'tasks-queue',
+    handle: '.task-drag-handle',
+    draggable: '.task',
+    animation: 140,
   });
 }
 window.addEventListener('pointermove', event => {
