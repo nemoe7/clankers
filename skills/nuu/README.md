@@ -1,5 +1,7 @@
 # Nemo UI/UX
 
+The abbreviation is **nuu** (say **new**).
+
 Build, refine, and review web interfaces. Tools cover briefs, local catalogs, design records, assets, source checks, rendered evidence, and task flows. Existing product systems take precedence over the optional house profile.
 
 ## Setup
@@ -23,8 +25,8 @@ The skill holds the complete house constraints. The record and screenshots descr
 From the repository root in Windows cmd:
 
 ```cmd
-python skills\nemo-ui-ux\scripts\measure.py check report.json
-python skills\nemo-ui-ux\scripts\measure.py ruler --from 120,340 --to 264,340
+python skills\nuu\scripts\measure.py check report.json
+python skills\nuu\scripts\measure.py ruler --from 120,340 --to 264,340
 ```
 
 `check` reads one JSON report of computed CSS values. `ruler` measures horizontal, vertical, and straight-line distances between two page coordinates.
@@ -36,7 +38,7 @@ Defaults: the bundled sheet and an 8-pixel scale.
 Global options precede the command:
 
 ```cmd
-python skills\nemo-ui-ux\scripts\measure.py --scale 4 --sheet path\to\style.css check report.json
+python skills\nuu\scripts\measure.py --scale 4 --sheet path\to\style.css check report.json
 ```
 
 A report has this shape:
@@ -55,7 +57,7 @@ A report has this shape:
 From the repository root in Windows cmd:
 
 ```cmd
-set UI=skills\nemo-ui-ux\scripts\uiux.py
+set UI=skills\nuu\scripts\uiux.py
 python %UI% doctor
 python %UI% brief --task "Review the request form" --output brief.json
 python %UI% search "dashboard accessibility" --dataset ux-guidelines

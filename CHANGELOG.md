@@ -48,6 +48,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Set custom-answer input hints to "Something else...". Keep the existing whitespace rules.
 
+#### nuu
+
+- Rename the skill directories and metadata to nuu. Keep the full Nemo UI/UX name and existing command names.
+
 #### userscripts
 
 - Rewrite prompt fill as one engineering brief. Include initial questionnaire questions and require a fresh CLI view after context replacement.

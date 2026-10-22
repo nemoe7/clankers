@@ -124,7 +124,7 @@ MODULE_TESTS = {
   ),
   "Nemoizer": ("skills/refs/nemoizer/scripts/test_nemoize.py",),
   "UI/UX": (
-    "skills/refs/nemo-ui-ux/scripts/test_uiux.py",
+    "skills/refs/nuu/scripts/test_uiux.py",
     "maintenance/test_nemo_ui_ux.py",
   ),
   "Userscripts": (),
@@ -168,7 +168,7 @@ ARENA_RUNTIME_PATHS = tuple(
 MODULE_PATHS = {
   "Preview": ARENA_RUNTIME_PATHS,
   "Nemoizer": ("skills/*nemoizer/*", ".agents/skills/nemoizer/*"),
-  "UI/UX": ("skills/*nemo-ui-ux/*", ".agents/skills/nemo-ui-ux/*"),
+  "UI/UX": ("skills/*nuu/*", ".agents/skills/nuu/*"),
   "Userscripts": ("userscripts/*", "maintenance/workflows/userscripts*"),
   "GPT Plugins": (
     "gpt-plugins/*",

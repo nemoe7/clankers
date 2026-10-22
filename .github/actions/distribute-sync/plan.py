@@ -25,8 +25,8 @@ PROFILES = (
   {
     "domain": "nemo-ui-ux",
     "repos": "nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup",
-    "skills": "nemo-ui-ux",
-    "legacy": "nemo-ui",
+    "skills": "nuu",
+    "legacy": "nemo-ui nemo-ui-ux",
   },
   {
     "domain": "nemoizer",

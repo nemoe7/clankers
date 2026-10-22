@@ -58,7 +58,8 @@ def test_distribution_plan_groups_domains_and_keeps_one_writer(monkeypatch):
   shared = next(row for row in plan["targets"] if row["repos"] == "example/shared")
   assert set(shared["domains"]) == set(overrides)
   assert shared["rule_src"] == "rules/ARENA.md"
-  assert set(shared["skills"].split()) == {"arena-skill", "nemo-ui-ux", "nemoizer"}
+  assert set(shared["skills"].split()) == {"arena-skill", "nuu", "nemoizer"}
+  assert {"nemo-ui", "nemo-ui-ux"} <= set(shared["legacy"].split())
   assert set(shared["files"].split()) == {"gemini-release.yml", "gemini_release.py"}
   for domain, repos in overrides.items():
     for target in plan["targets"]:
@@ -341,7 +342,7 @@ def test_distribute_triggers_and_inputs():
   assert triggers["push"]["paths"] == [
     "rules/ARENA.md",
     "skills/arena-skill/**",
-    "skills/nemo-ui-ux/**",
+    "skills/nuu/**",
     "skills/nemoizer/**",
     "github/workflows/gemini-release.yml",
     "github/workflows/gemini_release.py",

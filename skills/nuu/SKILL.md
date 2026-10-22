@@ -1,23 +1,23 @@
 ---
-name: nemo-ui-ux
+name: nuu
 description: Build and revise web pages in a settled house style. Use when a task adds or changes a page, dialog, table, form, theme, empty or error state, or any UI that needs icons, colour roles, light and dark schemes, type, spacing, breakpoints, motion, states, optimistic writes, a design document, or measured values at 1280 and 360 px.
 license: MIT
 ---
 
-# nemo-ui-ux
+# Nemo UI/UX (nuu)
 
 ## Shared workflow
 
-- Classify the task as build, refine, audit, critique, harden, extract, or live inspection before choosing tools.
-- Preserve an existing product design system unless the user authorizes its redesign.
-- Apply the bundled house clauses, sheet, and work order only when no product design system exists or the user selects the house profile.
+- Classify tasks as build, refine, audit, critique, harden, extract, or live inspection before choosing tools.
+- Preserve existing product design systems unless the user authorizes redesign.
+- Apply bundled house clauses, sheet, and work order only if no product design system exists or the user selects the house profile.
 - Record the audience, primary task, factual content, constraints, and acceptance checks before building a new interface.
 - Choose a visual direction from the brief without inventing claims, assets, or proof.
 - Search the local rule catalog for the task outcome and detected stack, and verify each recommendation against the project.
-- Identify fallback search results and missing evidence instead of presenting them as exact matches.
-- Generate design-system proposals without replacing existing tokens or design records until the change is approved.
-- Record each asset's source, license, attribution, and local path before using it.
-- Preserve applicable upstream licenses and notices when adapting source text, code, or data.
+- Identify fallback search results and missing evidence; never present them as exact matches.
+- Propose design systems without replacing existing tokens or design records before approval.
+- Record each asset's source, license, attribution, and local path before use.
+- Preserve applicable upstream licenses and notices when adapting text, code, or data.
 - Run source checks with stable finding IDs, locations, severity, and evidence before browser verification.
 - Inspect rendered pages at project widths plus 1280 and 360 px with available browser tools.
 - Test the changed task flow, including keyboard operation, focus movement, validation, loading, failure, retry, and recovery where applicable.
@@ -25,31 +25,30 @@ license: MIT
 - Keep viewport screenshots, computed measurements, browser errors, and flow results with the verification report.
 - Separate automated findings, visual judgments, synthesized input, and real-device evidence in every audit.
 - Name checks that did not run, missing dependencies, and unsupported browser or device coverage without claiming a pass.
-- Report audit and critique findings without changing files unless repair is requested.
+- Report audit and critique findings without file changes unless repair is requested.
 - Keep live inspection read-only until the user authorizes a specific edit, and retain its before-and-after evidence.
-- Extract reusable tokens and component patterns without introducing a competing source of truth.
+- Extract reusable tokens and component patterns without a competing source of truth.
 - Repair only the requested scope, then rerun affected source, browser, and task-flow checks.
 - Keep credentials and private page content out of external searches, asset requests, and shared artifacts.
-- Use existing design records, or docs/design.md when none exist, as the design authority.
-- Update the authoritative design record in the same change as a settled design decision.
-- Evaluate changed flows against the ten usability heuristics, citing observed behavior for each finding.
+- Use existing design records as design authority, or docs/design.md if none exist.
+- Update the authoritative design record with settled design decisions in the same change.
+- Evaluate changed flows against the ten usability heuristics; cite observed behavior per finding.
 - Check alignment, hierarchy, color roles, typography, and useful imagery against the task and active design system.
-- Create a new interaction pattern only when existing patterns cannot meet the documented user need.
+- Create interaction patterns only when existing patterns cannot meet the documented user need.
 - Map accessibility findings to applicable WCAG criteria with the test method, evidence, and verification status.
-- Label automated task-flow checks separately from usability sessions with real participants.
+- Label automated task-flow checks separately from real-participant usability sessions.
 - Mark implementation readiness and link behavior, states, assets, and component sources in each handoff.
-- Create component forks only when existing variants cannot meet the task and the exception is recorded.
+- Fork components only when existing variants cannot meet the task and the exception is recorded.
 
 ## House profile
 
-Apply this skill to a page, a component, or an interface change. The sheet is the reference for values, and the design document records the calls that a repository already made.
+Apply this skill to a page, a component, or an interface change. The sheet holds the values, and the design document records the calls a repository already made.
 
 ## When to use
 
 - A task adds or changes a page, dialog, table, form, theme, or state.
 - A review asks whether the interface matches the house style.
-- A new pattern needs a decision that later pages must repeat.
-- A page exists and the task changes one of these clauses.
+- A new pattern needs a decision that later pages repeat.
 
 ## Clauses
 
@@ -82,29 +81,27 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 ## Order of work
 
 1. Read the authoritative design record, or create docs/design.md from references/design-document.md if none exists.
-2. Copy the declarations the page needs from `references/style.css`. Keep the role names, and change only the values that the repository settles.
-3. Read `references/examples.md` when the change touches a clause, so the correct and incorrect forms are both in view.
+2. Copy the declarations the page needs from `references/style.css`, and keep the role names.
+3. Read `references/examples.md` when the change touches a clause.
 4. Make only authorized page changes, then measure both widths and fix every value the check names.
-5. Update the authoritative design record in the same change as a settled design decision.
+5. Update the authoritative design record with settled design decisions in the same change.
 
 ## Measuring
 
-`scripts/measure.py check` reads a JSON report of computed values and names every value that leaves the sheet. A value passes when it sits on the scale, when a type property takes a size from the ramp, or when the sheet names that size for that property, such as the 10 px radius.
+`scripts/measure.py check` names every computed value that leaves the sheet. A value passes when it sits on the scale, when a type property takes a ramp size, or when the sheet names that size for that property.
 
-`scripts/measure.py ruler` reads a gap between two guides on the page, the way a screen ruler does, and answers whether each axis sits on the scale.
+`scripts/measure.py ruler` reads a gap between two guides and says whether each axis sits on the scale.
 
 ```bash
 python scripts/measure.py check report.json
 python scripts/measure.py ruler --from 120,340 --to 264,340
 ```
 
-`references/measure.md` holds the browser snippet that writes the report, and the list of what to keep.
-
 ## Files
 
 - `references/style.css`: the sheet as code. Roles, type, space, states, and motion.
 - `references/design-document.md`: the eleven sections of `docs/design.md`, with a filled example.
-- `references/examples.md`: one correct and incorrect pair per clause, drawn from the sheet.
+- `references/examples.md`: one correct and incorrect pair per clause.
 - `references/measure.md`: the report shape, the snippet, and the ruler.
 - `scripts/measure.py`: the check and the ruler.
 

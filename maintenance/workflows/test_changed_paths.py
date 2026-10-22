@@ -228,7 +228,7 @@ def test_unknown_tests_fail_before_scheduling(tmp_path):
 def test_renames_select_both_source_modules(tmp_path):
   repo = init_repo(tmp_path)
   old = "skills/refs/nemoizer/scripts/example.py"
-  new = "skills/refs/nemo-ui-ux/scripts/example.py"
+  new = "skills/refs/nuu/scripts/example.py"
   commit_change(repo, old)
   base = base_of(repo)
   target = repo / new

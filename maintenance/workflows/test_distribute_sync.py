@@ -266,8 +266,22 @@ def test_distribution_preserves_history_and_reports_only_remote_success(
 
 def test_matching_domain_payloads_share_one_push(tmp_path):
   remote, seed, before, _ = fixture(tmp_path, "bot")
+  retired = seed / ".agents/skills/nemo-ui-ux/SKILL.md"
+  retired.parent.mkdir(parents=True)
+  retired.write_text("Retired skill\n")
+  commit(
+    seed,
+    "feat: add a retired skill",
+    GIT_AUTHOR_NAME="Person",
+    GIT_AUTHOR_EMAIL="person@example.test",
+    GIT_COMMITTER_NAME="Person",
+    GIT_COMMITTER_EMAIL="person@example.test",
+  )
+  git(seed, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+  before = git(remote, "rev-parse", "refs/heads/main")
   payload = {
-    "SKILLS": "arena-skill nemo-ui-ux nemoizer",
+    "SKILLS": "arena-skill nuu nemoizer",
+    "LEGACY": "nemo-ui-ux",
     "FILES": "gemini-release.yml gemini_release.py",
   }
   result, pushes = run_action(tmp_path, remote, seed, "bot", payload=payload)
@@ -275,6 +289,9 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
   assert len(pushes) == 1
   after = git(remote, "rev-parse", "refs/heads/main")
   assert after != before
+  assert not git(
+    remote, "ls-tree", "-r", "--name-only", after, ".agents/skills/nemo-ui-ux"
+  )
   source = tmp_path / "source"
   for skill in payload["SKILLS"].split():
     assert (

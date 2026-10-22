@@ -6,7 +6,7 @@ Each reusable AI skill is a self-contained directory with a `SKILL.md` entry poi
 | --- | --- |
 | [amending-violations](amending-violations/SKILL.md) | Amend the NEMOGPT system prompt when one of its instructions causes undesirable behavior. Use the system-prompt guidelines and output table. |
 | [arena-skill](arena-skill/SKILL.md) | Steer Arena agents through the shared preview inbox. Publish rendered reports and read privileged data beyond the sandbox through the owner-run proxy backend. |
-| [nemo-ui-ux](nemo-ui-ux/SKILL.md) | Build and revise web pages in a settled house style, from the typed sheet and the annotated examples to the measured result |
+| [nuu](nuu/SKILL.md) | Build and revise web pages in a settled house style, from the typed sheet and the annotated examples to the measured result |
 | [nemoizer](nemoizer/SKILL.md) | Replace AI-flavored synonyms with the plain word, from one rotation table and a bundled linter with reviewable ignore markers |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 

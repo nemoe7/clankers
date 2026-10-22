@@ -53,7 +53,7 @@ EXPECTED_BUDGETS = {
   "skills/amending-violations/SKILL.md": "o200k_base",
   "skills/arena-skill/SKILL.md": "o200k_base",
   "skills/arena-skill/references/REFERENCE.md": "o200k_base",
-  "skills/nemo-ui-ux/SKILL.md": "o200k_base",
+  "skills/nuu/SKILL.md": "o200k_base",
   "skills/nemoizer/SKILL.md": "o200k_base",
   "skills/squash/SKILL.md": "o200k_base",
   "gpt-plugins/skills/gpt-quirks/SKILL.md": "o200k_base",
@@ -142,8 +142,8 @@ NEMOIZER_IGNORES = (
   "skills/refs/arena-skill/assets/lucide.LICENSE",
   "skills/arena-skill/assets/markdown-it.LICENSE",
   "skills/refs/arena-skill/assets/markdown-it.LICENSE",
-  "skills/nemo-ui-ux/data/vendor",
-  "skills/refs/nemo-ui-ux/data/vendor",
+  "skills/nuu/data/vendor",
+  "skills/refs/nuu/data/vendor",
 )
 
 # One paragraph carries at most this many sentences. A longer one splits.
