@@ -2771,6 +2771,49 @@ def read_set_actions(line):
   return tuple(actions)
 
 
+def inbox_pipeline_warning(line):
+  lexer = shlex.shlex(agent_line(line), posix=False, punctuation_chars=";&|()\n")
+  lexer.whitespace = " \t\r"
+  lexer.whitespace_split = True
+  try:
+    tokens = list(lexer)
+  except ValueError:
+    return None
+  piece = []
+  for token in [*tokens, ";"]:
+    if token not in (";", "&&", "||", "|", "|&", "&", "(", ")", "\n"):
+      piece.append(token)
+      continue
+    try:
+      words = ["".join(shlex.split(word)) for word in piece]
+    except ValueError:
+      return None
+    piece = []
+    while words and ("=" in words[0] or words[0] in SHELL_KEYWORDS):
+      words.pop(0)
+    while words and words[0].rsplit("/", 1)[-1] in PR_CHECK_WRAPPERS:
+      words.pop(0)
+      while words and (
+        words[0].startswith("-") or "=" in words[0] or words[0].isdigit()
+      ):
+        words.pop(0)
+    head = words.pop(0).rsplit("/", 1)[-1] if words else ""
+    if head in SHELL_BASENAMES:
+      for index, word in enumerate(words[:-1]):
+        if word.startswith("-") and "c" in word:
+          warning = inbox_pipeline_warning(words[index + 1])
+          if warning:
+            return warning
+          break
+    if (
+      head in ("arena-preview", "preview.py")
+      and words[:1] in (["read"], ["poll"])
+      and token in ("|", "|&")
+    ):
+      return "INBOX BLOCKED: read and poll need full output. Run without a pipe."
+  return None
+
+
 def read_set_input_warning(line, root=None, cwd=None):
   """Reject partial readers of known bible inputs, not words in tool bodies."""
   kept = []
@@ -8897,7 +8940,7 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
     if warning:
       report(warning)
   # case: read-set-input
-  warning = read_set_input_warning(line, root)
+  warning = inbox_pipeline_warning(line) or read_set_input_warning(line, root)
   if warning:
     report(warning)
     return finish(130)

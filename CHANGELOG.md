@@ -54,6 +54,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Block output pipelines from inbox read and poll commands before execution. Keep bare calls and unrelated pipelines.
+
 - Restore connection-dot spacing. Keep the expanded touch target outside layout flow, with visible keyboard focus.
 
 - Deliver the full pending inbox from polls that find a violation. Mark delivered items Seen without acknowledging them.

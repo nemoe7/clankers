@@ -1202,6 +1202,32 @@ def test_read_set_input_gate_matches_inputs_not_tool_text() -> None:
         assert preview_module.read_set_input_warning(line, root) is None, line
 
 
+def test_inbox_filters_are_blocked_before_execution() -> None:
+  refused = 130
+  for action in ("read", "poll"):
+    for pipeline in ("tail -1", "grep pending", "head -3", "sed -n 1p", "awk 'NR < 3'"):
+      result = run(f"arena-preview {action} | {pipeline}")
+      assert result.returncode == refused, (action, pipeline, result)
+  for line in (
+    "env LANG=C command arena-preview read | head -1",
+    "bash -c 'arena-preview poll | sed -n 1p'",
+    "arena-preview read |& tail -1",
+    "arena-preview read | cat | head -1",
+  ):
+    result = run(line)
+    assert result.returncode == refused, (line, result)
+  for line in (
+    "arena-preview read",
+    "arena-preview poll",
+    "printf x | tail -1",
+    "arena-preview read; printf x | tail -1",
+    "printf '%s' 'arena-preview read | head -1'",
+    "arena-preview ack abc 'read | head -1'",
+  ):
+    result = run(line)
+    assert result.returncode != refused, (line, result)
+
+
 def test_read_set_input_pre_hook_blocks_before_routing() -> None:
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
