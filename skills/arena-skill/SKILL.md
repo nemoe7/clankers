@@ -25,6 +25,8 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
 Answer from existing knowledge only: NEVER research answers, open other files, run code, ask another system, reuse earlier responses, or inspect the answer key.
 
+Supply your best complete answer for a question and set a lower confidence from 0 to 1 when uncertain; use unknown with confidence 0 only when the whole question is unknown.
+
 Omit questionnaire answers and answer-key details from summaries and handoffs.
 
 ## Setup

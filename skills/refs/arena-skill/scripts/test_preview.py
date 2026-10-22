@@ -13352,3 +13352,48 @@ def test_html_tag_navigation_parses_landmarks_forms_and_ranges(
   assert "ui/index.html (html, 4/" in text_out
   assert "tags," in text_out
   assert "more tags omitted" in text_out
+
+
+def test_questionnaire_rejects_null_partial_and_zero_confidence_known_answers():
+  import questionnaire
+
+  blank = questionnaire.template()
+  assert blank[0]["answer"] == {
+    "command_name": "unknown",
+    "concurrency_option": "unknown",
+  }
+  parsed_blank = questionnaire.loads(json.dumps(blank))
+  assert all(not row["known"] and row["confidence"] == 0 for row in parsed_blank)
+
+  with_null = questionnaire.template()
+  with_null[0]["answer"]["command_name"] = None
+  with pytest.raises(ValueError, match="must not be null"):
+    questionnaire.loads(json.dumps(with_null))
+
+  partial = questionnaire.template()
+  partial[1]["answer"]["organization"] = "OpenAI"
+  partial[1]["confidence"] = 0.5
+  with pytest.raises(ValueError, match="fill every field or set all fields to unknown"):
+    questionnaire.loads(json.dumps(partial))
+
+  zero_conf = questionnaire.template()
+  zero_conf[0]["answer"] = {
+    "command_name": "repack",
+    "concurrency_option": "concurrently",
+  }
+  zero_conf[0]["confidence"] = 0
+  with pytest.raises(ValueError, match="greater than zero"):
+    questionnaire.loads(json.dumps(zero_conf))
+
+  lower_conf = questionnaire.template()
+  lower_conf[1]["answer"] = {
+    "full_name": "Thibault Sottiaux",
+    "organization": "OpenAI",
+    "role": "Codex engineering lead",
+  }
+  lower_conf[1]["confidence"] = 0.4
+  graded = questionnaire.grade(json.dumps(lower_conf))
+  assert graded[0] == {"id": "H8P3C", "correct": None, "confidence": 0}
+  assert graded[1]["id"] == "D9V4N"
+  assert graded[1]["confidence"] == 0.4
+  assert isinstance(graded[1]["correct"], bool)

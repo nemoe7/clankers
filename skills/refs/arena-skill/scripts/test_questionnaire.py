@@ -23,6 +23,8 @@ def test_questionnaire_schema_and_hashes(monkeypatch):
     "power_capacity_mw": {"operator": "lt", "value": 12},
     "nvidia_gpu_count": {"operator": "eq", "value": 34},
   }
+  for row in examples:
+    row["confidence"] = 0.5
 
   def digest(answer, fragment=""):
     canonical = json.dumps(
@@ -80,10 +82,9 @@ def test_questionnaire_schema_and_hashes(monkeypatch):
   partial = copy.deepcopy(empty)
   partial[0]["answer"]["command_name"] = "Known part"
   partial[0]["confidence"] = 0.5
-  assert (
-    questionnaire.loads(json.dumps(partial))[0]["answer"]["concurrency_option"] is None
-  )
-  partial_graded = questionnaire.grade(json.dumps(partial))
-  assert partial_graded[0]["correct"] is False
-  assert partial_graded[1]["correct"] is None
-  assert partial_graded[2]["correct"] is None
+  with pytest.raises(ValueError, match="fill every field or set all fields to unknown"):
+    questionnaire.loads(json.dumps(partial))
+  null_field = copy.deepcopy(empty)
+  null_field[0]["answer"]["command_name"] = None
+  with pytest.raises(ValueError, match="must not be null"):
+    questionnaire.loads(json.dumps(null_field))
