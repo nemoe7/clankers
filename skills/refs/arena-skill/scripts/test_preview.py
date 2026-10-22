@@ -1822,10 +1822,8 @@ def test_http_boundaries():
         marker = f'id="{identity}"'
         assert marker in page and marker not in composer.group(1)
       assert "resize:none" in page and "resize:vertical" not in page
-      assert (
-        "#notes-panel,#reports-panel,#tasks-panel,#downloads-panel{overflow-y:auto"
-        in page
-      )
+      assert "#notes-panel{overflow:hidden" in page
+      assert "#reports-panel,#tasks-panel,#downloads-panel{overflow-y:auto" in page
       assert 'id="tasks-tab" aria-controls="tasks-panel"' in page
       assert '<ul id="tasks-current-body" class="task-list"></ul>' in page
       assert '<ul id="tasks-finished-body" class="task-list"></ul>' in page
@@ -1854,7 +1852,7 @@ def test_http_boundaries():
       # The log header wraps into four short lines on a narrow width, and the 12px wrap gap read
       # as dead space. The lines sit close now.
       assert ".log-card>.row:first-child{margin-block:0;row-gap:2px" in page
-      assert ".log-card{flex:1 1 auto;min-height:min(500px,60dvh)" in page
+      assert ".log-card{flex:1 1 auto;min-height:0" in page
       assert "h1{letter-spacing:-.035em;margin:4px 0" in page
       assert "h2{margin:0 0 8px" in page
       assert re.search(r"\.report p[^{}]*\{margin:8px 0", page)

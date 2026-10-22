@@ -64,6 +64,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Keep `#notes-panel` non-scrollable with `.log-card` `min-height: 0` so only the message history list shows a scrollbar.
+
 - Keep the mobile composer in view on initial load, above the virtual keyboard, and stationary across state updates. Scroll the message log up when the composer grows.
 
 - Prefix recommended report options with `* ` in rendered forms and print `you recommended:` lines during report publication. Keep raw option values unchanged.
