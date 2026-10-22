@@ -15,11 +15,11 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
 1. Run `<skill>/scripts/install.sh` from the repository root at session start and after this skill’s source files change, before the next CLI call or preview-server start.
 2. Start the preview as Setup step 3 describes.
-3. Read the inbox with `arena-preview read`, and answer with `arena-preview ack`.
+3. After the initial visibility response, read references/questionnaire.json and submit fresh answers with arena-preview questionnaire '<json>'. Use arena-preview poll as the first inbox call and answer with arena-preview ack.
 4. When a call needs the recorded agent key, after a 401 or an owner question, run `arena-preview key`; it prints the key, the host and the stamp. The call breaks with the restart line while the preview server is not up.
 5. Try `fetch_page` on the actual source URL first; use [proxy routes](#proxy-access) through `fetch_page` only if that call cannot return the needed data.
 
-6. After required reads, preview setup, and inbox acknowledgements at initial activation or after context replacement, read references/questionnaire.json and submit fresh answers with arena-preview questionnaire '<json>'.
+6. After context replacement, finish required reads and pending inbox acknowledgements, then read references/questionnaire.json and submit fresh answers with arena-preview questionnaire '<json>' before queued work.
 
 ## Questionnaire
 

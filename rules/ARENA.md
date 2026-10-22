@@ -47,7 +47,7 @@
 - NEVER count filename, receipt, summary, remembered rule, or partial read (head/tail/grep) as current full text.
 - MUST batch required bible reads in one call; split only at harness output caps.
 - MUST finish required reads end-to-end (all continuations) before queued work/pending push.
-- Run the arena-skill questionnaire after initial setup and after compaction, summary, or context replacement, before queued work.
+- Run arena-skill questionnaire immediately after initial visibility response, before first inbox poll, and after compaction/summary/context replacement, before queued work.
 - `references/REFERENCE.md` is supplementary: read/grep only needed parts; no end-to-end read; gate/read-cadence mechanics live there. Installation template copies are supplementary too.
 - Each new user chat message's first reply MUST state `Reasoning: on` or `Reasoning: off` once, after any owed 10-4 line. Tool results, steering notes, compaction/summary, continuations start no new turn.
 - In saved context, state the start sequence and full missing-context bible reads before queued work; no verbatim ARENA.md copy required.

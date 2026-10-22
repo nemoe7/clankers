@@ -36,6 +36,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Submit the initial questionnaire after the visibility response and before the first inbox wait. Keep the context-replacement trigger.
+
 - Show relative questionnaire answer time, and add Answer again. Hide the heading and session notice. Keep the dialog name, hidden requests, and session-only results.
 
 #### gpt-question
