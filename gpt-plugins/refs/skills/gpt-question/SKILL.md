@@ -1,6 +1,6 @@
 ---
 name: gpt-question
-description: Use when user input is needed to resolve a material ambiguity, choose an approach, collect related values, or confirm a necessary decision. Present a supported interactive GenUI form with useful preset controls and a custom-answer option inside every choice group.
+description: Use for every question GPT asks the user. Present a supported interactive GenUI form with useful preset controls and a custom-answer option inside every choice group.
 ---
 
 # GPT Question

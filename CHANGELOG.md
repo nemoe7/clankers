@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-22
 
+### Changed
+
+#### gpt-question
+
+- Extend the description to all questions from GPT to the user. Retain interactive forms and custom answers.
+
 ### Fixed
 
 #### preview
