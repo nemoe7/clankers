@@ -656,13 +656,17 @@ def parse_fields(markdown):
 		for question in questions:
 			if question['type']!='text'and not any(custom_label(option)is not None for option in question['options']):question['options'].append('Something else...: ___')
 	return blocks,questions
+def render_inline(markdown):
+	try:from markdown_it import MarkdownIt
+	except ImportError:return html.escape(markdown)
+	parser=MarkdownIt('commonmark',{'html':False}).enable(['strikethrough']);highlight_markdown(parser);parser.add_render_rule('link_open',open_link);return parser.renderInline(markdown)
 def field_html(question):
 	prompt=html.escape(question['prompt'],quote=True);name=html.escape(question['id'],quote=True);body=f'<div class="question" data-field="{name}"';body+=f' data-type="{question["type"]}">';body+=f'<small class="question-id">Question ID: <code>{name}</code></small>'
 	if question['type']=='text':return f'{body}<textarea class="answer-text" rows="2" placeholder="Answer" aria-label="{prompt}"></textarea></div>'
 	control='radio'if question['type']=='choice'else'checkbox';group=f'<div class="options" role="group" aria-label="{prompt}">'
 	for option in question['options']:
 		value=html.escape(option,quote=True);recommended=option in question['default'];checked=' checked'if recommended else'';label=custom_label(option)
-		if label is None:display=f"* {option}"if recommended else option;group+=f'<label class="option"><input type="{control}" name="{name}" value="{value}"{checked}> {html.escape(display)}</label>';continue
+		if label is None:prefix='* 'if recommended else'';group+=f'<label class="option"><input type="{control}" name="{name}" value="{value}"{checked}> {prefix}{render_inline(option)}</label>';continue
 		named=html.escape(label,quote=True);group+=f'<label class="option"><input type="{control}" name="{name}" value="{value}"{checked} data-label="{named}" aria-label="{named}"><textarea class="custom-text" rows="1" data-custom="{named}" placeholder="Something else..." aria-label="{named}, your own answer"></textarea></label>'
 	return f"{body}{group}</div></div>"
 TASK_STATUSES='upcoming','finished'
@@ -958,14 +962,16 @@ def read_set_paths(root=None):
 		dirnames[:]=sorted(name for name in dirnames if name not in WORKSPACE_SKIP)
 		if'AGENTS.md'in filenames:agents.append(Path(dirpath)/'AGENTS.md')
 	skill=root/'.agents'/'skills'/'arena-skill'/'SKILL.md';return[path for path in[root/'ARENA.md',*sorted(agents),skill]if path.is_file()]
-INERT_COMMANDS='cd','mkdir','export','set','unset','true',':','source','.','trap','shopt','umask'
+INERT_COMMANDS='cd','mkdir','[','test','export','set','unset','true',':','source','.','trap','shopt','umask'
 def unquote_commands(line):
 	kept=[];quote='';index=0;text=str(line or'').replace('\r','\n')
 	while index<len(text):
 		char=text[index]
 		if quote:
 			if char=='\\'and quote=='"':index+=2;continue
-			if quote=='"'and(text.startswith('$(',index)or char=='`'):kept.append(' $(')
+			if quote=='"':
+				if text.startswith('$(',index):kept.append(' $(')
+				elif char=='`':kept.append(' `')
 			if char==quote:quote=''
 			index+=1;continue
 		if char in("'",'"'):quote=char;index+=1;continue
@@ -1008,13 +1014,18 @@ def egress_warning(line):
 	if not hosts:return None
 	names=', '.join(hosts);return f"arena-preview gate: {names} sits outside this sandbox's egress allowlist. The TLS handshake fails with SSL_ERROR_SYSCALL, which reads as a transient fault and never clears on a retry. Read it through the fetch_page tool instead."
 def first_blocking_piece(line):
-	for piece in command_pieces(line):
+	for piece in command_pieces(agent_line(line)):
 		tokens,index=piece_tokens(piece)
 		if index>=len(tokens):continue
-		head=tokens[index].rsplit('/',1)[-1]
+		head=tokens[index].rsplit('/',1)[-1].strip('"\'')
 		if head in INERT_COMMANDS:continue
+		if head.startswith('python')and index+1<len(tokens)and tokens[index+1].rsplit('/',1)[-1].strip('"\'')in('arena-preview','preview.py'):index+=1;head=tokens[index].rsplit('/',1)[-1].strip('"\'')
+		rest=tokens[index+1:]
 		if head in('arena-preview','preview.py'):
-			rest=tokens[index+1:]
+			if any(token.startswith('$(')for token in rest):return piece
+			if rest[:1]not in(['task'],['report'])and any('`'in token for token in rest):return piece
+			continue
+		if'--help'in rest or'-h'in rest:
 			if any(token.startswith('$(')or'`'in token for token in rest):return piece
 			continue
 		return piece
@@ -1029,7 +1040,7 @@ def piece_tokens(piece,keywords=False):
 	while index<len(tokens)and'='in tokens[index]and not tokens[index].startswith('-'):index+=1
 	if keywords:
 		while index<len(tokens)and tokens[index].strip('"\'')in SHELL_KEYWORDS:index+=1
-	if index<len(tokens)and tokens[index]=='bash':
+	if index<len(tokens)and tokens[index].rsplit('/',1)[-1].strip('"\'')in SHELL_BASENAMES:
 		index+=1
 		while index<len(tokens)and tokens[index].startswith('-'):index+=1
 	return tokens,index
@@ -1415,7 +1426,8 @@ def long_run_name(line):
 				index+=1
 		if index>=len(tokens):continue
 		head=tokens[index].lstrip('({"\'').rsplit('/',1)[-1]
-		if head in INERT_COMMANDS or head=='bash':continue
+		if head in INERT_COMMANDS or head in SHELL_BASENAMES:continue
+		if any(flag in tokens[index+1:]for flag in('--help','-h','--version','-V')):continue
 		if head in LONG_RUN_HEADS:return LONG_RUN_HEADS[head]
 		runner=long_run_words(tokens,index,head)
 		if runner:return runner
@@ -1604,17 +1616,22 @@ def autosave_record(record):
 	if record.get('type')!='userscript-autosave'or type(record.get('version'))is not int or record['version']!=1:raise ValueError('Unsupported autosave history version')
 	if not isinstance(record.get('save_id'),str):raise TypeError('Autosave save ID must be a UUID string')
 	if set(record)-{'type','version','save_id','scope','digest','core','stamp','confirmed_at','receipts'}:raise ValueError('Unsupported autosave history fields')
-	uuid.UUID(record['save_id']);autosave_scope_key(record['scope']);core=autosave_core(record['core'])
-	if autosave_digest(core)!=record.get('digest'):raise ValueError('Autosave history digest does not match')
+	uuid.UUID(record['save_id']);autosave_scope_key(record['scope']);core=autosave_core(record['core']);digest=autosave_digest(core);raw_digest=record.get('digest')
+	if raw_digest not in(digest,autosave_digest(record['core'])):raise ValueError('Autosave history digest does not match')
 	if record.get('stamp')is not None and import_stamp(record['stamp'])is None:raise ValueError('Autosave history stamp is invalid')
 	if import_stamp(record.get('confirmed_at'))is None:raise ValueError('Autosave history needs a confirmation time')
 	receipts=record.get('receipts',{})
 	if not isinstance(receipts,dict):raise TypeError('Autosave receipts must be an object')
-	for(save_id,digest)in receipts.items():
+	for(save_id,item_digest)in receipts.items():
 		uuid.UUID(save_id)
-		if not isinstance(digest,str)or not re.fullmatch('[0-9a-f]{64}',digest):raise ValueError('Invalid autosave receipt digest')
-	if record['save_id']in receipts and receipts[record['save_id']]!=record['digest']:raise ValueError('Autosave receipt conflicts with its saved state')
-	return{**record,'core':core}
+		if not isinstance(item_digest,str)or not re.fullmatch('[0-9a-f]{64}',item_digest):raise ValueError('Invalid autosave receipt digest')
+	receipts=dict(receipts)
+	if record['save_id']in receipts:
+		if receipts[record['save_id']]not in(raw_digest,digest):raise ValueError('Autosave receipt conflicts with its saved state')
+		receipts[record['save_id']]=digest
+	out={**record,'core':core,'digest':digest}
+	if'receipts'in record:out['receipts']=receipts
+	return out
 def questionnaire_command(state_dir,answers):
 	import questionnaire
 	if answers is None:print(questionnaire.INSTRUCTIONS);print(json.dumps(questionnaire.SPEC,indent=2,ensure_ascii=False));print(json.dumps(questionnaire.template(),indent=2));return 0
@@ -1987,7 +2004,7 @@ class Store:
 	def userscript_history(self,shared=None):
 		with self.transaction(shared,autosave=False)as db:row=db.execute('SELECT value FROM meta WHERE key = ?',(AUTOSAVE_HISTORY,)).fetchone();return json.loads(row[0])if row else[]
 	def userscript_scope(self):root=self.path.parent.parent;return{'repo':root.name,'branch':workspace_branch(root)or''}
-	def userscript_snapshot(self):core,counts=self.state_lines(self.state()['notes'],self.tasks()or{});core,stamp=autosave_core_and_stamp(core);scope=self.userscript_scope();history=self.userscript_history();stamps=self.newest_stamps();rows=[row for row in history if row['scope']==scope and row.get('stamp')];return{'save_id':str(uuid.uuid4()),'scope':scope,'core':core,'digest':autosave_digest(core),'history':rows,'lastsave':rows[-1]['stamp']if rows else None,'beforelastsave':rows[-2]['stamp']if len(rows)>1 else None,'text':state_ndjson(core+history),'counts':counts,'stamp':stamp,'stamps':stamps}
+	def userscript_snapshot(self):core,counts=self.state_lines(self.state()['notes'],self.tasks()or{});core,stamp=autosave_core_and_stamp(core);scope=self.userscript_scope();history=self.userscript_history();stamps=self.newest_stamps();rows=[row for row in history if row['scope']==scope and row.get('stamp')];return{'save_id':str(uuid.uuid4()),'scope':scope,'core':core,'digest':autosave_digest(core),'history':rows,'lastsave':rows[-1]['stamp']if rows else None,'beforelastsave':rows[-2]['stamp']if len(rows)>1 else None,'text':state_ndjson(core+rows),'counts':counts,'stamp':stamp,'stamps':stamps}
 	def confirm_userscript_save(self,payload):
 		save_id,scope=payload.get('save_id'),payload.get('scope')
 		if not isinstance(save_id,str):raise TypeError('Autosave save ID must be a UUID string')
@@ -2208,7 +2225,10 @@ class Store:
 			raise
 		self.autosave();return fetch_row(result,self.path.parent)
 	def import_state(self,text,replace_tasks=False):
-		records=parse_state_import(text);history=[autosave_record(row)for row in records if row.get('type')=='userscript-autosave'];records=[row for row in records if row.get('type')!='userscript-autosave'];groups={};imported_receipts={}
+		records=parse_state_import(text);raw_history=[row for row in records if row.get('type')=='userscript-autosave'];history=[autosave_record(row)for row in raw_history];refreshed={raw_row['save_id']:(raw_row['digest'],row['digest'])for(raw_row,row)in zip(raw_history,history)if raw_row.get('digest')!=row['digest']}
+		for row in history:
+			if'receipts'in row:row['receipts']={save_id:refreshed[save_id][1]if save_id in refreshed and digest==refreshed[save_id][0]else digest for(save_id,digest)in row['receipts'].items()}
+		records=[row for row in records if row.get('type')!='userscript-autosave'];groups={};imported_receipts={}
 		for row in history:
 			key=autosave_scope_key(row['scope']);groups.setdefault(key,[]).append(row);receipts=imported_receipts.setdefault(key,{})
 			for(save_id,digest)in{**row.get('receipts',{}),row['save_id']:row['digest']}.items():
@@ -3285,7 +3305,7 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 		if commit_store is not None:
 			found=commit_id_report(staged_session_id_hits(commit_store,str(Path.cwd())))
 			if found:report(found);return finish(130)
-	if any(word in command for word in('preview','profile','bashrc','arena-state','git commit'))or command.startswith(('gh','sleep','true',':','test','git status','git diff','git add'))or any(word in command for word in('arena-workspace','ss -ltn','netstat -ltn')):return finish(0)
+	if any(word in command for word in('preview','profile','bashrc','arena-state','git commit','--help'))or command.startswith(('mkdir','[','gh','sleep','true',':','test','git status','git diff','git add'))or any(word in command for word in('arena-workspace','ss -ltn','netstat -ltn')):return finish(0)
 	if'git push'in command:
 		warning=worktree_warning(state_dir,'push')
 		if warning:report(warning);return finish(130)

@@ -13480,3 +13480,114 @@ def test_portable_parser_installer_handles_fresh_reuse_missing_npm_and_failure(
   assert reused["status"] == "reused"
   assert reused["available"]
   assert len(calls) == 2
+
+
+def test_gate_exempts_mkdir_publish_tasks_and_help(tmp_path):
+  state = tmp_path / "state"
+  store = preview.Store(state, create=True)
+  store.note("gate-note", "Pending work")
+  store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
+
+  for line, command in (
+    (
+      "/bin/bash -l -c mkdir -p '/home/user/clankers'",
+      "mkdir -p '/home/user/clankers'",
+    ),
+    ("mkdir -p custom/dir", "mkdir -p custom/dir"),
+    (
+      "/bin/bash -l -c [ -e '/home/user/clankers/ARENA.md' ]",
+      "[ -e '/home/user/clankers/ARENA.md' ]",
+    ),
+    (
+      "/bin/bash -l -c cd /home/user/clankers && arena-preview report publish r.md -i r -t 'Title'",
+      "cd /home/user/clankers",
+    ),
+    (
+      '/bin/bash -l -c cd /home/user/clankers && arena-preview task set t1 "Fix `foo`"',
+      "cd /home/user/clankers",
+    ),
+    ("/bin/bash -l -c arena-preview --help", "arena-preview --help"),
+    ("/bin/bash -l -c pytest --help", "pytest --help"),
+    ("/bin/bash -l -c ruff --help", "ruff --help"),
+  ):
+    assert preview.first_blocking_piece(line) is None, line
+    assert preview.long_run_name(line) is None, line
+    assert (
+      preview.pre_command(state, line, command, tmp_path, done="read-set", shell="bash")
+      == 0
+    ), (line, command)
+
+
+def test_field_html_renders_inline_markdown_in_option_labels():
+  _blocks, questions = preview.parse_fields(
+    "Pick an action: {#action}\n"
+    "- (x) Run `arena-preview read` first\n"
+    "- ( ) Check `<input>` and `<code>` tags\n"
+    "- ( ) Something else: ...\n"
+  )
+  assert len(questions) == 1
+  rendered = preview.field_html(questions[0])
+  assert (
+    'value="Run `arena-preview read` first" checked> '
+    "* Run <code>arena-preview read</code> first</label>"
+  ) in rendered
+  assert (
+    'value="Check `&lt;input&gt;` and `&lt;code&gt;` tags"> '
+    "Check <code>&lt;input&gt;</code> and <code>&lt;code&gt;</code> tags</label>"
+  ) in rendered
+  assert 'data-custom="Something else..."' in rendered
+
+
+def test_userscript_snapshot_scopes_export_and_import_refreshes_stale_digests(
+  tmp_path, monkeypatch
+):
+  state = tmp_path / "state"
+  store = preview.Store(state, create=True)
+  store.note("n1", "First note")
+  store.write_task("t1", "First task", ["Step one"], task_type="code")
+
+  monkeypatch.setattr(
+    store,
+    "userscript_scope",
+    lambda: {"repo": "clankers", "branch": "arena/old-branch"},
+  )
+  old_snap = store.userscript_snapshot()
+  assert store.confirm_userscript_save(old_snap)["confirmed"]
+
+  monkeypatch.setattr(
+    store,
+    "userscript_scope",
+    lambda: {"repo": "clankers", "branch": "arena/active-branch"},
+  )
+  active_snap = store.userscript_snapshot()
+  assert store.confirm_userscript_save(active_snap)["confirmed"]
+  exported = store.userscript_snapshot()
+  exported_rows = [
+    json.loads(line)
+    for line in exported["text"].splitlines()
+    if line.strip() and json.loads(line).get("type") == "userscript-autosave"
+  ]
+  assert len(exported_rows) == 1
+  assert exported_rows[0]["scope"] == {
+    "repo": "clankers",
+    "branch": "arena/active-branch",
+  }
+
+  legacy_core = [dict(item) for item in old_snap["core"]]
+  for item in legacy_core:
+    if item.get("id") == "t1":
+      item["details"] = "Step one"
+  legacy_digest = preview.autosave_digest(legacy_core)
+  assert legacy_digest != preview.autosave_digest(preview.autosave_core(legacy_core))
+  legacy_record = {
+    **exported_rows[0],
+    "core": legacy_core,
+    "digest": legacy_digest,
+    "receipts": {exported_rows[0]["save_id"]: legacy_digest},
+  }
+  payload = "\n".join(json.dumps(row) for row in [*exported["core"], legacy_record])
+  receipt = store.import_state(payload, replace_tasks=True)
+  assert receipt["notes"] == 1
+  restored = store.userscript_history()
+  assert len(restored) == 1
+  assert restored[0]["digest"] == preview.autosave_digest(restored[0]["core"])

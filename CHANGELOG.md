@@ -120,6 +120,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Exempt `mkdir`, `[`, `report publish`, `task`, and `--help` commands from the Bash gate. Keep work commands blocked past the call threshold.
+
+- Render inline Markdown in report form option labels. Keep raw option values and recommended prefixes unchanged.
+
+- Scope `userscript_snapshot` exports to the active repository and branch, and refresh legacy `userscript-autosave` digests during state import.
+
 - Preserve report source paths during autosave canonicalization so userscript save confirmations and comparisons match when reports exist. Keep active-state source restoration unchanged.
 
 - Equalize header button gaps on coarse-pointer screens. Keep desktop header spacing unchanged.

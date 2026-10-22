@@ -1774,6 +1774,17 @@ def parse_fields(markdown):
   return blocks, questions
 
 
+def render_inline(markdown):
+  try:
+    from markdown_it import MarkdownIt
+  except ImportError:
+    return html.escape(markdown)
+  parser = MarkdownIt("commonmark", {"html": False}).enable(["strikethrough"])
+  highlight_markdown(parser)
+  parser.add_render_rule("link_open", open_link)
+  return parser.renderInline(markdown)
+
+
 def field_html(question):
   prompt = html.escape(question["prompt"], quote=True)
   name = html.escape(question["id"], quote=True)
@@ -1793,10 +1804,10 @@ def field_html(question):
     checked = " checked" if recommended else ""
     label = custom_label(option)
     if label is None:
-      display = f"* {option}" if recommended else option
+      prefix = "* " if recommended else ""
       group += (
         f'<label class="option"><input type="{control}" name="{name}" '
-        f'value="{value}"{checked}> {html.escape(display)}</label>'
+        f'value="{value}"{checked}> {prefix}{render_inline(option)}</label>'
       )
       continue
     named = html.escape(label, quote=True)
@@ -2640,6 +2651,8 @@ def read_set_paths(root=None):
 INERT_COMMANDS = (
   "cd",
   "mkdir",
+  "[",
+  "test",
   "export",
   "set",
   "unset",
@@ -2670,8 +2683,11 @@ def unquote_commands(line):
         index += 2
         continue
       # Only double quotes substitute: backticks and $() inside single quotes stay text.
-      if quote == '"' and (text.startswith("$(", index) or char == "`"):
-        kept.append(" $(")
+      if quote == '"':
+        if text.startswith("$(", index):
+          kept.append(" $(")
+        elif char == "`":
+          kept.append(" `")
       if char == quote:
         quote = ""
       index += 1
@@ -2804,16 +2820,30 @@ def first_blocking_piece(line):
   """Return the first command that ends the inbox-only exemption. Return None only when the line contains an inbox
   call and inert prefixes. A redirect ends the exemption because it hides the reminder. Ignore debug traps that
   silence output."""
-  for piece in command_pieces(line):
+  for piece in command_pieces(agent_line(line)):
     tokens, index = piece_tokens(piece)
     if index >= len(tokens):
       continue
-    head = tokens[index].rsplit("/", 1)[-1]
+    head = tokens[index].rsplit("/", 1)[-1].strip("\"'")
     if head in INERT_COMMANDS:
       continue
+    if (
+      head.startswith("python")
+      and index + 1 < len(tokens)
+      and tokens[index + 1].rsplit("/", 1)[-1].strip("\"'")
+      in ("arena-preview", "preview.py")
+    ):
+      index += 1
+      head = tokens[index].rsplit("/", 1)[-1].strip("\"'")
+    rest = tokens[index + 1 :]
     if head in ("arena-preview", "preview.py"):
-      rest = tokens[index + 1 :]
       # A substitution runs work beside the read. Ignore a plain redirect for debug traps.
+      if any(token.startswith("$(") for token in rest):
+        return piece
+      if rest[:1] not in (["task"], ["report"]) and any("`" in token for token in rest):
+        return piece
+      continue
+    if "--help" in rest or "-h" in rest:
       if any(token.startswith("$(") or "`" in token for token in rest):
         return piece
       continue
@@ -2845,7 +2875,10 @@ def piece_tokens(piece, keywords=False):
   if keywords:
     while index < len(tokens) and tokens[index].strip("\"'") in SHELL_KEYWORDS:
       index += 1
-  if index < len(tokens) and tokens[index] == "bash":
+  if (
+    index < len(tokens)
+    and tokens[index].rsplit("/", 1)[-1].strip("\"'") in SHELL_BASENAMES
+  ):
     index += 1
     while index < len(tokens) and tokens[index].startswith("-"):
       index += 1
@@ -3865,7 +3898,9 @@ def long_run_name(line):
     if index >= len(tokens):
       continue
     head = tokens[index].lstrip("({\"'").rsplit("/", 1)[-1]
-    if head in INERT_COMMANDS or head == "bash":
+    if head in INERT_COMMANDS or head in SHELL_BASENAMES:
+      continue
+    if any(flag in tokens[index + 1 :] for flag in ("--help", "-h", "--version", "-V")):
       continue
     if head in LONG_RUN_HEADS:
       return LONG_RUN_HEADS[head]
@@ -4424,7 +4459,9 @@ def autosave_record(record):
   uuid.UUID(record["save_id"])
   autosave_scope_key(record["scope"])
   core = autosave_core(record["core"])
-  if autosave_digest(core) != record.get("digest"):
+  digest = autosave_digest(core)
+  raw_digest = record.get("digest")
+  if raw_digest not in (digest, autosave_digest(record["core"])):
     raise ValueError("Autosave history digest does not match")
   if record.get("stamp") is not None and import_stamp(record["stamp"]) is None:
     raise ValueError("Autosave history stamp is invalid")
@@ -4433,13 +4470,21 @@ def autosave_record(record):
   receipts = record.get("receipts", {})
   if not isinstance(receipts, dict):
     raise TypeError("Autosave receipts must be an object")
-  for save_id, digest in receipts.items():
+  for save_id, item_digest in receipts.items():
     uuid.UUID(save_id)
-    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+    if not isinstance(item_digest, str) or not re.fullmatch(
+      r"[0-9a-f]{64}", item_digest
+    ):
       raise ValueError("Invalid autosave receipt digest")
-  if record["save_id"] in receipts and receipts[record["save_id"]] != record["digest"]:
-    raise ValueError("Autosave receipt conflicts with its saved state")
-  return {**record, "core": core}
+  receipts = dict(receipts)
+  if record["save_id"] in receipts:
+    if receipts[record["save_id"]] not in (raw_digest, digest):
+      raise ValueError("Autosave receipt conflicts with its saved state")
+    receipts[record["save_id"]] = digest
+  out = {**record, "core": core, "digest": digest}
+  if "receipts" in record:
+    out["receipts"] = receipts
+  return out
 
 
 def questionnaire_command(state_dir, answers):
@@ -5854,7 +5899,7 @@ class Store:
       "history": rows,
       "lastsave": rows[-1]["stamp"] if rows else None,
       "beforelastsave": rows[-2]["stamp"] if len(rows) > 1 else None,
-      "text": state_ndjson(core + history),
+      "text": state_ndjson(core + rows),
       "counts": counts,
       "stamp": stamp,
       "stamps": stamps,
@@ -6534,11 +6579,23 @@ class Store:
   def import_state(self, text, replace_tasks=False):
     "Import a backup. Replace every live entry."
     records = parse_state_import(text)
-    history = [
-      autosave_record(row)
-      for row in records
-      if row.get("type") == "userscript-autosave"
-    ]
+    raw_history = [row for row in records if row.get("type") == "userscript-autosave"]
+    history = [autosave_record(row) for row in raw_history]
+    refreshed = {
+      raw_row["save_id"]: (raw_row["digest"], row["digest"])
+      for raw_row, row in zip(raw_history, history)
+      if raw_row.get("digest") != row["digest"]
+    }
+    for row in history:
+      if "receipts" in row:
+        row["receipts"] = {
+          save_id: (
+            refreshed[save_id][1]
+            if save_id in refreshed and digest == refreshed[save_id][0]
+            else digest
+          )
+          for save_id, digest in row["receipts"].items()
+        }
     records = [row for row in records if row.get("type") != "userscript-autosave"]
     groups = {}
     imported_receipts = {}
@@ -9911,10 +9968,22 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
         "bashrc",
         "arena-state",
         "git commit",
+        "--help",
       )
     )
     or command.startswith(
-      ("gh", "sleep", "true", ":", "test", "git status", "git diff", "git add")
+      (
+        "mkdir",
+        "[",
+        "gh",
+        "sleep",
+        "true",
+        ":",
+        "test",
+        "git status",
+        "git diff",
+        "git add",
+      )
     )
     or any(word in command for word in ("arena-workspace", "ss -ltn", "netstat -ltn"))
   ):
