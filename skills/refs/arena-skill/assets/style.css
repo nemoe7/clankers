@@ -456,6 +456,6 @@ mark code { color: var(--text); }
 .questionnaire-confidence progress::-moz-progress-bar { background: currentColor; }
 .questionnaire-confidence span { display: inline-block; min-width: 4ch; margin-left: 8px; text-align: right; }
 
-#modal[data-read-only="true"] #modal-cancel { min-height: 44px; touch-action: manipulation; }
-#modal[data-read-only="true"] #modal-cancel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#modal[data-read-only="true"] button { min-height: 44px; touch-action: manipulation; }
+#modal[data-read-only="true"] button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #questionnaire-open { touch-action: manipulation; }

@@ -196,6 +196,7 @@ test('preview client', async (t) => {
   const pointerListeners = [];
   const pendingWrites = new Map();
   let questionnaireResults = null;
+  let questionnaireAnsweredAt = null;
   const questionnaireRequests = [];
   const interruptCalls = [];
   const failedWrites = new Set();
@@ -246,7 +247,7 @@ test('preview client', async (t) => {
       if (options?.signal?.aborted) throw abortError();
       if (pendingWrites.has(url)) await pendingWrites.get(url);
       if (failedWrites.has(url)) return response({ error: 'Write failed' }, false);
-      if (url === '/api/questionnaire') return response({ results: questionnaireResults });
+      if (url === '/api/questionnaire') return response({ results: questionnaireResults, answered_at: questionnaireAnsweredAt });
       if (url === '/api/questionnaire/request') {
         questionnaireRequests.push(options);
         return response({ ok: true });
@@ -4561,11 +4562,14 @@ test('preview client', async (t) => {
     await open.events.click();
     assert.equal(get('#modal').open, true);
     assert.equal(get('#modal-confirm').hidden, true);
+    assert.equal(get('#modal-title').hidden, true);
+    assert.ok(get('#modal-title').textContent);
     assert.ok(questionnaireRequests.length);
     const requestCount = questionnaireRequests.length;
     const update = intervals.filter(callback => callback.name === 'refreshQuestionnaire').at(-1);
     await update();
     assert.equal(questionnaireRequests.length, requestCount);
+    questionnaireAnsweredAt = new Date(Date.now() - 61000).toISOString();
     questionnaireResults = [
       { id: 'H8P3C', correct: false, confidence: 1 },
       { id: 'D9V4N', correct: true, confidence: 0.5 },
@@ -4577,6 +4581,32 @@ test('preview client', async (t) => {
     assert.deepEqual(rows.map(row => row.children[0].dataset.correct), ['false', 'true', 'false']);
     assert.deepEqual(rows.map(row => row.children[1].children[0].value), [1, 0.5, 0]);
     assert.deepEqual(rows.map(row => row.children[0].children.at(-1).textContent), questionnaireResults.map(row => row.id));
+    assert.equal(content.children.some(node => node.tagName === 'p'), false);
+    const footer = content.children.find(node => node.className === 'row');
+    const time = footer.children.find(node => node.tagName === 'time');
+    assert.equal(time.dateTime, questionnaireAnsweredAt);
+    assert.equal(time.textContent, context.time(questionnaireAnsweredAt));
+    const again = footer.children.find(node => node.tagName === 'button');
+    assert.equal(again.disabled, false);
+    await again.events.click();
+    assert.equal(questionnaireRequests.length, requestCount + 1);
+    assert.equal(again.disabled, true);
+    await update();
+    assert.equal(questionnaireRequests.length, requestCount + 1);
+    assert.equal(footer.children.find(node => node.tagName === 'button'), again);
+    questionnaireAnsweredAt = new Date().toISOString();
+    await update();
+    const retry = content.lastElementChild.children.find(node => node.tagName === 'button');
+    failedWrites.add('/api/questionnaire/request');
+    await retry.events.click();
+    assert.equal(retry.disabled, false);
+    assert.equal(get('#modal-error').hidden, false);
+    await update();
+    assert.equal(get('#modal-error').hidden, false);
+    failedWrites.delete('/api/questionnaire/request');
+    await retry.events.click();
+    assert.equal(questionnaireRequests.length, requestCount + 2);
+    assert.equal(get('#modal-error').hidden, true);
     get('#modal-cancel').events.click();
     assert.equal(get('#modal').open, false);
     failedWrites.add('/api/questionnaire');
@@ -4590,6 +4620,7 @@ test('preview client', async (t) => {
     await update();
     assert.equal(context.fetch.mock.calls.length, reads);
     questionnaireResults = null;
+    questionnaireAnsweredAt = null;
   });
 
   await t.test('WebSockets route JSON, retain binary HTTP, queue changes, and reject lost replies', async () => {

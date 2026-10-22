@@ -16,6 +16,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### preview
+
+- Show relative questionnaire answer time, and add Answer again. Hide the heading and session notice. Keep the dialog name, hidden requests, and session-only results.
+
 #### gpt-question
 
 - Extend the description to all questions from GPT to the user. Retain interactive forms and custom answers.

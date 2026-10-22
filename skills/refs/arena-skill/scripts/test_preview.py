@@ -60,7 +60,7 @@ def test_questionnaire_transport_keeps_grades_in_server_memory(
   try:
     status, _, body = request("GET", "/api/questionnaire")
     assert status == 200
-    assert json.loads(body) == {"results": None}
+    assert json.loads(body) == {"results": None, "answered_at": None}
     for _ in range(2):
       status, _, body = request("POST", "/api/questionnaire/request", "{}", headers)
       assert status == 200
@@ -76,10 +76,28 @@ def test_questionnaire_transport_keeps_grades_in_server_memory(
     assert status == 200 and json.loads(body) == {"ok": True}
     assert store.save_path.read_bytes() == snapshot
     status, _, body = request("GET", "/api/questionnaire")
-    assert status == 200 and json.loads(body) == {"results": expected}
+    assert status == 200
+    received = json.loads(body)
+    assert received["results"] == expected
+    answered_at = received["answered_at"]
+    assert datetime.fromisoformat(answered_at).tzinfo is not None
+    store.acknowledge([pending[0]["id"]], "Questionnaire complete.")
+    prior_notes = store.state()["notes"]
+    for _ in range(2):
+      status, _, _ = request("POST", "/api/questionnaire/request", "{}", headers)
+      assert status == 200
+    again = store.read()["pending"]
+    assert len(again) == 1 and again[0]["id"] != pending[0]["id"]
+    assert again[0]["quiet"] and again[0]["blocking"]
+    assert [
+      row for row in store.state()["notes"] if row["id"] != again[0]["id"]
+    ] == prior_notes
+    status, _, body = request("GET", "/api/questionnaire")
+    assert status == 200 and json.loads(body) == received
     for path in ("/api/state", "/api/copy-state"):
       status, _, body = request("GET", path)
       assert status == 200 and '"correct"' not in body
+      assert '"answered_at"' not in body
     assert '"correct"' not in store.save_path.read_text()
     script = str(Path(preview.__file__))
     monkeypatch.setenv("ARENA_PREVIEW_STATE_DIR", str(tmp_path))
@@ -104,7 +122,8 @@ def test_questionnaire_transport_keeps_grades_in_server_memory(
   threading.Thread(target=app.serve_forever, daemon=True).start()
   try:
     status, _, body = request("GET", "/api/questionnaire")
-    assert status == 200 and json.loads(body) == {"results": None}
+    assert status == 200
+    assert json.loads(body) == {"results": None, "answered_at": None}
     status, _, body = request("POST", "/api/questionnaire/request", "{}", headers)
     assert status == 200
     assert len(store.read()["pending"]) == len(pending)

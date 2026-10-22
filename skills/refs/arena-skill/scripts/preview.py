@@ -7772,7 +7772,7 @@ def render(markdown, breaks=False):
 def handler(store):
   from http.server import BaseHTTPRequestHandler
 
-  questionnaire_state = {"results": None, "requested": False}
+  questionnaire_state = {"results": None, "answered_at": None, "requested": False}
   questionnaire_lock = threading.Lock()
 
   class Handler(BaseHTTPRequestHandler):
@@ -8049,7 +8049,12 @@ def handler(store):
           return
         if path == "/api/questionnaire":
           with questionnaire_lock:
-            body = json.dumps({"results": questionnaire_state["results"]})
+            body = json.dumps(
+              {
+                "results": questionnaire_state["results"],
+                "answered_at": questionnaire_state["answered_at"],
+              }
+            )
           self.reply(200, body)
           return
         if path == "/api/userscript-autosave":
@@ -8297,6 +8302,8 @@ def handler(store):
           results = questionnaire.grade(data.decode("utf-8"))
           with questionnaire_lock:
             questionnaire_state["results"] = results
+            questionnaire_state["answered_at"] = now()
+            questionnaire_state["requested"] = False
           self.reply(200, json.dumps({"ok": True}))
           return
         payload = json.loads(data)
@@ -8307,10 +8314,7 @@ def handler(store):
           if payload:
             raise ValueError("Questionnaire request requires an empty object")
           with questionnaire_lock:
-            if (
-              questionnaire_state["results"] is None
-              and not questionnaire_state["requested"]
-            ):
+            if not questionnaire_state["requested"]:
               with closing(store.connect()) as db:
                 pending = db.execute(
                   "SELECT id FROM notes WHERE type = ? AND acknowledged_at IS NULL LIMIT 1",

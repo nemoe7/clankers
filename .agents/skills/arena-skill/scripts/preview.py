@@ -2605,7 +2605,7 @@ def render(markdown,breaks=False):
 	except ImportError as error:raise RuntimeError("Markdown rendering needs markdown-it-py. Install it in the preview's venv and restart the server with that venv's Python; steering still works.")from error
 	parser=MarkdownIt('commonmark',{'html':False,'breaks':breaks}).enable(['table','strikethrough']);highlight_markdown(parser);parser.add_render_rule('link_open',open_link);parser.add_render_rule('image',render_image);tagged,images=hold_out(markdown,SIZED_IMAGE,lambda match:sized_image(match,validateLink),'image');rendered=drop_paragraph_breaks(parser.render(unescape_fences(tagged)));return add_copy_buttons(put_back(rendered,images,'image'))
 def handler(store):
-	from http.server import BaseHTTPRequestHandler;questionnaire_state={'results':None,'requested':False};questionnaire_lock=threading.Lock()
+	from http.server import BaseHTTPRequestHandler;questionnaire_state={'results':None,'answered_at':None,'requested':False};questionnaire_lock=threading.Lock()
 	class Handler(BaseHTTPRequestHandler):
 		def setup(self):super().setup();self.connection.settimeout(15)
 		def reply(self,status,body,content_type='application/json; charset=utf-8',filename=None):
@@ -2692,7 +2692,7 @@ def handler(store):
 				if path=='/api/ws':self.websocket();return
 				if path=='/':page=(ASSETS/'index.html').read_text(encoding='utf-8');page=page.replace('__STYLE__',(ASSETS/'style.css').read_text(encoding='utf-8'));page=page.replace('__MARKDOWN_SCRIPT__',(ASSETS/'markdown-it.min.js').read_text(encoding='utf-8'));page=page.replace('__SCRIPT__',(ASSETS/'message-markdown.js').read_text(encoding='utf-8')+'\n'+(ASSETS/'app.js').read_text(encoding='utf-8'));self.reply(200,page,'text/html; charset=utf-8');return
 				if path=='/api/questionnaire':
-					with questionnaire_lock:body=json.dumps({'results':questionnaire_state['results']})
+					with questionnaire_lock:body=json.dumps({'results':questionnaire_state['results'],'answered_at':questionnaire_state['answered_at']})
 					self.reply(200,body);return
 				if path=='/api/userscript-autosave':self.reply(200,json.dumps(store.userscript_snapshot(),ensure_ascii=False));return
 				if path=='/api/state':
@@ -2753,14 +2753,14 @@ def handler(store):
 				if len(data)!=length:self.problem(400,'Incomplete request body; retry the upload or request');return
 				if path=='/api/questionnaire':
 					import questionnaire;results=questionnaire.grade(data.decode('utf-8'))
-					with questionnaire_lock:questionnaire_state['results']=results
+					with questionnaire_lock:questionnaire_state['results']=results;questionnaire_state['answered_at']=now();questionnaire_state['requested']=False
 					self.reply(200,json.dumps({'ok':True}));return
 				payload=json.loads(data)
 				if not isinstance(payload,dict):self.problem(400,'Expected a JSON object');return
 				if path=='/api/questionnaire/request':
 					if payload:raise ValueError('Questionnaire request requires an empty object')
 					with questionnaire_lock:
-						if questionnaire_state['results']is None and not questionnaire_state['requested']:
+						if not questionnaire_state['requested']:
 							with closing(store.connect())as db:pending=db.execute('SELECT id FROM notes WHERE type = ? AND acknowledged_at IS NULL LIMIT 1',('questionnaire',)).fetchone()
 							if pending is None:store.note(uuid.uuid4().hex[:6],'Acknowledge this note, then follow the arena-skill questionnaire procedure.',quiet=True,blocking=True,type='questionnaire')
 							questionnaire_state['requested']=True
