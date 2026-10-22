@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.61
+// @name         Arena.ai | NemoUtils | v1.10.62
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.61
+// @version      1.10.62
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2535,7 +2535,7 @@
       });
       GM_setValue(pendingKey(storeKey), null);
       rememberState(pending.scope, storeKey, pending.base, pending.branch, pending.stamp, pending.stamps);
-      clearErrorPanel();
+      removeStatePanel(true);
       logEvent("state", "saved", { repo: pending.scope.repo, filename: pending.name });
       if (pending.force) statePanel("Forced save of " + pending.name + ".", null, null, true);
     }
@@ -2680,7 +2680,7 @@
         }
         var close = document.createElement("button");
         close.type = "button";
-        close.textContent = "Dismiss";
+        close.textContent = actionLabel === "Choose file" ? "Cancel" : "Dismiss";
         close.style.cssText =
           "cursor:pointer;border:1px solid #56504a;border-radius:6px;padding:5px 10px;" +
           "background:transparent;color:inherit;font:inherit";
@@ -2818,20 +2818,20 @@
         }
         clearErrorPanel();
         if (force) statePanel("Forcing save...");
-        if (!scope.branch && !lastScope && !force) {
-          stateError(STATE_LINES.noBranch, "Force save", function () { fetchStateFile(true, true); }, "missing-branch");
-          return;
-        }
         var rememberedBase = GM_getValue(baseKey(lastScope || storeKey), "");
         var rememberedBranch = GM_getValue(branchKey(lastScope || storeKey), "");
         var handle = selectedKey === storeKey && selected ? selected : await stateHandle(fileKey(storeKey));
+        if (!scope.branch && !lastScope && !force && !handle) {
+          stateError(STATE_LINES.noBranch, "Force save", function () { fetchStateFile(true, true); }, "missing-branch");
+          return;
+        }
         if (handle && !handleMatchesScope(handle, scope.repo, scope.branch)) {
           stateError(handle.name + " does not match this " + handleMismatchScope(handle, scope.repo, scope.branch) + ".",
             "Choose file", chooseStateFile, "wrong-file");
           return;
         }
-        if (!handle && !force) {
-          hintStateFile(manual);
+        if (!handle && (!force || (!scope.branch && !lastScope && Boolean(pagePicker())))) {
+          hintStateFile(manual || Boolean(force));
           return;
         }
         var baseline = GM_getValue(receiptKey(storeKey), null);
@@ -2852,7 +2852,7 @@
         if (!force && inSync && body.digest === (baseline && baseline.digest)) return;
         var plan = { type: "download", name: stateFileName(scope.repo, scope.branch, body.stamp, body.counts) };
         var moved = saveMoved(scope.branch, rememberedBase, base, lastScope, rememberedBranch);
-        var asks = overwriteAsk(moved, plan, Boolean(handle), force);
+        var asks = overwriteAsk(moved, plan, Boolean(handle) && !initialFile, force);
         var accepted = asks && resetWindowAccepts(new Date(), resetWindowOn(), scope.branch, rememberedBase, base, rememberedBranch);
         if (asks && !accepted) {
           askOverwrite(handle, storeKey, manual, {
@@ -2921,7 +2921,6 @@
             selectedKey = storeKey;
             GM_setValue(stampKey(storeKey), "");
             GM_setValue(STATE_HINT_KEY, false);
-            removeStatePanel();
             fetchStateFile(true);
           });
         })

@@ -1580,6 +1580,60 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     await settle();
     await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: "manager-complete", digest: stale.digest });
     assert.equal(saved.get(receiptKey).save_id, "manager-complete");
+
+    // Force save on a fresh unlisted repository offers Choose file / Cancel instead of a download.
+    saved.delete("clankers-arena-state-scope-o.r");
+    saved.delete(receiptKey);
+    saved.delete(pendingKey);
+    saved.set("clankers-arena-state-hinted", true);
+    availableHandle = null;
+    const downloadsBeforeUnlisted = linkClicks.length;
+    context.GM_download = undefined;
+    let pickerPromise;
+    context.showSaveFilePicker = () => pickerPromise;
+    tick();
+    await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-1", lastsave: null, beforelastsave: null });
+    assert.ok(panel(), "an unlisted repo without a branch warns before saving");
+    assert.equal(panel().children[0].textContent, "Missing branch.");
+    panel().children[1].children.find(button => button.textContent === "Force save").listeners.click();
+    await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-1", lastsave: null, beforelastsave: null });
+    assert.equal(linkClicks.length, downloadsBeforeUnlisted, "Force save does not fall back to browser download when the file picker is available");
+    assert.ok(panel(), "Force save prompts for a file on a fresh unlisted repo");
+    assert.equal(panel().children[0].textContent, "No file selected.");
+    assert.deepEqual(panel().children[1].children.map(button => button.textContent), ["Choose file", "Cancel"]);
+
+    tick();
+    await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-2", lastsave: null, beforelastsave: null });
+    assert.equal(panel().children[0].textContent, "Missing branch.");
+    pickerPromise = Promise.reject(Object.assign(new Error("cancelled"), { name: "AbortError" }));
+    menus.get("State — choose the file")();
+    await settle();
+    assert.ok(panel(), "cancelling Choose file keeps the missing-branch warning");
+    assert.equal(panel().children[0].textContent, "Missing branch.");
+
+    fileText = "";
+    availableHandle = handle;
+    context.indexedDB = { open() {
+      const opening = { result: { transaction: () => ({ objectStore: () => ({
+        get() {
+          const reading = { result: availableHandle };
+          queueMicrotask(() => reading.onsuccess());
+          return reading;
+        },
+        put() {},
+      }) }) } };
+      queueMicrotask(() => opening.onsuccess());
+      return opening;
+    } };
+    pickerPromise = Promise.resolve(handle);
+    menus.get("State — choose the file")();
+    await settle();
+    await settle();
+    await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-saved", lastsave: null, beforelastsave: null });
+    await settle();
+    await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: "unlisted-saved", digest: healthy.digest });
+    assert.equal(panel(), null, "a completed Choose file save clears the missing-branch warning");
+    assert.equal(saved.get("clankers-arena-state-scope-o.r"), "o.r");
   });
 }
 

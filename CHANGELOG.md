@@ -76,6 +76,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### userscripts
+
+- Offer Choose file and Cancel on Force save for a fresh unlisted repository instead of starting a download. Clear the missing-branch warning only after a completed Choose file save.
+
 #### nuu
 
 - Include Evidence and handoff in generated design records. Keep existing design records unchanged.
