@@ -193,6 +193,14 @@ def test_only_latest_report_submission_requires_ack(tmp_path):
     "kept-receipt",
     "latest-answer",
   }
+  store.write_task(
+    "finished-form",
+    "Done",
+    ["Work"],
+    status="finished",
+    report_id="first-form",
+    task_type="code",
+  )
   assert "first-form" in {row["id"] for row in store.stale_reports()}
   store.mark_report_ack_seen("first-form")
   store.unpublish("first-form")
@@ -606,9 +614,68 @@ def test_report_unpublish():
     assert [report["id"] for report in store.state()["reports"]] == ["blocked"]
 
 
+def test_stale_report_task_completion_idle_and_pins(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  source = tmp_path / "report.md"
+  source.write_text("Information\n", encoding="utf-8")
+  store.publish("solo", "Solo", source)
+  assert store.stale_reports() == [], "a fresh unlinked report stays active"
+  idle = timedelta(minutes=30)
+  past = (datetime.now(timezone.utc) - idle - timedelta(seconds=1)).isoformat()
+  with store.connect() as db, db:
+    db.execute("UPDATE reports SET updated_at = ?", (past,))
+  assert {row["id"] for row in store.stale_reports()} == {"solo"}
+  store.mark_report_viewed("solo")
+  store.mark_report_viewed("solo", active=False)
+  assert store.stale_reports() == [], "closing a user view keeps the idle interval"
+  with store.connect() as db, db:
+    db.execute("UPDATE reports SET viewed_at = ?, last_viewed_at = ?", (past, past))
+  store.write_task("first", "First", ["Work"], report_id="solo", task_type="code")
+  store.write_task("second", "Second", ["Work"], report_id="solo", task_type="code")
+  store.write_task("first", status="finished")
+  assert store.stale_reports() == [], "all linked tasks must finish"
+  store.write_task("second", status="finished")
+  assert {row["id"] for row in store.stale_reports()} == {"solo"}
+  before_pin = store.report("solo")["updated_at"]
+  with (
+    patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(tmp_path)}),
+    patch.object(sys, "argv", ["preview.py", "report", "pin", "solo"]),
+  ):
+    assert preview.main() == 0
+  assert store.report("solo")["updated_at"] == before_pin
+  assert store.stale_reports() == [], "a pin overrides finished tasks"
+  lines, _ = store.state_lines(store.state()["notes"], store.tasks() or {})
+  saved = next(row for row in lines if row.get("id") == "solo")
+  assert saved["pinned"] is True
+  restored = preview.Store(tmp_path / "restored", create=True)
+  restored.import_state("\n".join(json.dumps(row) for row in lines))
+  assert restored.stale_reports() == []
+  restored.set_meta("port", guard_port())
+  with (
+    patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(tmp_path / "restored")}),
+    patch.object(sys, "argv", ["preview.py", "report", "unpin", "solo"]),
+  ):
+    assert preview.main() == 0
+  assert {row["id"] for row in restored.stale_reports()} == {"solo"}
+  restored.write_task("second", status="upcoming")
+  assert restored.stale_reports() == [], "reopening work keeps its report active"
+  with pytest.raises(TypeError):
+    restored.import_reports([dict(saved, pinned="yes")])
+  with pytest.raises(FileNotFoundError):
+    restored.pin_report("missing", True)
+  store.publish("via-answer", "Linked answer", source)
+  store.write_task("answer-task", "Answer task", ["Work"], task_type="code")
+  store.submission("linked-answer", "via-answer", "Answer", task_id="answer-task")
+  assert "via-answer" not in {row["id"] for row in store.stale_reports()}
+  store.write_task("answer-task", status="finished")
+  assert "via-answer" in {row["id"] for row in store.stale_reports()}
+  with pytest.raises(preview.ReportHeld):
+    store.unpublish("via-answer", stale_only=True)
+
+
 def test_stale_report_reminder():
-  # Ten published reports cross the stale threshold. A field-less report is stale at
-  # once. A fresh form with an open question is not.
+  # Ten published reports cross the reminder threshold. The finished task makes its report stale.
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     store = preview.Store(root, create=True)
@@ -619,6 +686,14 @@ def test_stale_report_reminder():
     plain = root / "plain.md"
     plain.write_text("Information only, with no question to answer.\n", "utf-8")
     store.publish("plain", "Plain", plain)
+    store.write_task(
+      "plain-task",
+      "Done",
+      ["Work"],
+      status="finished",
+      report_id="plain",
+      task_type="code",
+    )
     stale_at = preview.REMINDERS.index("Unpublish stale reports.")
     cycle = [store.reminder() for _ in range(len(preview.REMINDERS))]
     assert cycle[stale_at] == "Unpublish 1 stale report."
@@ -647,11 +722,27 @@ def test_stale_reports_command_lists_ids_and_reasons():
     plain = root / "plain.md"
     plain.write_text("Information only, with no question to answer.\n", "utf-8")
     store.publish("plain", "Plain", plain)
+    store.write_task(
+      "plain-task",
+      "Done",
+      ["Work"],
+      status="finished",
+      report_id="plain",
+      task_type="code",
+    )
     answered = root / "answered.md"
     answered.write_text("Select one: {#answered}\n\n- ( ) a\n- ( ) b\n", "utf-8")
     store.publish("answered", "Answered", answered)
     store.submission("answered-reply", "answered", "REPORT answered: a")
     store.acknowledge(["answered-reply"], "Received")
+    store.write_task(
+      "answered-task",
+      "Done",
+      ["Work"],
+      status="finished",
+      report_id="answered",
+      task_type="code",
+    )
     before = store.state()["reports"]
     result = subprocess.run(
       [sys.executable, str(Path(preview.__file__)), "report", "stale"],
@@ -10906,6 +10997,15 @@ def test_report_unpublish_stale_keeps_guards_answers_and_sources(tmp_path, capsy
     store.acknowledge(["answer-" + report], "Received")
   store.mark_report_ack_seen("ready")
   store.publish("tail", "More information", plain)
+  for report in ("plain", "ready", "held", "tail"):
+    store.write_task(
+      report + "-task",
+      "Done",
+      ["Work"],
+      status="finished",
+      report_id=report,
+      task_type="code",
+    )
   with (
     patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(directory)}),
     patch.object(sys, "argv", ["preview.py", "report", "unpublish", "--stale"]),
@@ -10945,7 +11045,10 @@ def test_report_unpublish_stale_rechecks_changed_publication(tmp_path):
   plain.write_text("# Information\n", encoding="utf-8")
   form = tmp_path / "form.md"
   form.write_text("Choose: {#select}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8")
-  store.publish("changed", "Information", plain)
+  idle = timedelta(minutes=30)
+  past = (datetime.now(timezone.utc) - idle - timedelta(seconds=1)).isoformat()
+  with patch("preview.now", return_value=past):
+    store.publish("changed", "Information", plain)
   original = preview.Store.stale_reports
 
   def changed_candidates(current):

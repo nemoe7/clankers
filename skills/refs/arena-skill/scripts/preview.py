@@ -258,6 +258,7 @@ TURN_ENDED_META = "turn_ended_at"
 REMOVED_META = "state_removed_at"
 # Agent report changes wait this long after a recorded owner view.
 REPORT_CHANGE_VIEW_SECONDS = 60
+REPORT_IDLE_SECONDS = 30 * 60
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
 # The proxy host, one HTTPS origin with no path, as the userscript saves it.
 AGENT_HOST_RE = re.compile(r"https://[A-Za-z0-9.-]+\Z")
@@ -1768,6 +1769,7 @@ REPORT_LINE_KEYS = (
   "published_at",
   "seen_at",
   "ack_seen_at",
+  "pinned",
   "source",
 )
 
@@ -4499,6 +4501,7 @@ def format_report_state(rows):
     lines.append(f"  published: {local_stamp(row['published_at']) or 'never'}")
     lines.append(f"  updated: {local_stamp(row['updated_at'])}")
     lines.append(f"  stale: {'yes' if row['stale'] else 'no'}")
+    lines.append(f"  pinned: {'yes' if row.get('pinned') else 'no'}")
     lines.append(f"  viewed: {local_stamp(row['viewed_at']) or 'never'}")
     if not row["answers"]:
       lines.append("  answers: none")
@@ -4692,6 +4695,10 @@ class Store:
         # fresh the last one is rather than when the report was first read.
         db.execute("ALTER TABLE reports ADD COLUMN viewed_at TEXT")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
+      if "last_viewed_at" not in columns:
+        db.execute("ALTER TABLE reports ADD COLUMN last_viewed_at TEXT")
+      if "pinned" not in columns:
+        db.execute("ALTER TABLE reports ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
       if "published_at" not in columns:
         # A store from before this column keeps no first-publish stamp, so the date the
         # owner sees starts at the row it already had: updated_at of the last republish.
@@ -5054,9 +5061,9 @@ class Store:
     """Every report source, oldest first, for the save file."""
     with closing(self.connect()) as db:
       return [
-        dict(row)
+        dict(row, pinned=bool(row["pinned"]))
         for row in db.execute(
-          "SELECT id, title, markdown, published_at, seen_at, ack_seen_at, source FROM reports ORDER BY seq, id"
+          "SELECT id, title, markdown, published_at, seen_at, ack_seen_at, pinned, source FROM reports ORDER BY seq, id"
         )
       ]
 
@@ -6457,6 +6464,9 @@ class Store:
         raise ValueError("A saved seen stamp is text")
       if seen_at is not None:
         when(seen_at)
+      pinned = record.get("pinned", False)
+      if not isinstance(pinned, bool):
+        raise TypeError("A saved report pin is a boolean")
       ack_seen_at = record.get("ack_seen_at")
       if ack_seen_at is not None:
         if not isinstance(ack_seen_at, str):
@@ -6475,6 +6485,7 @@ class Store:
           seen_at is not None,
           source,
           ack_seen_at,
+          pinned,
         )
       )
     with self.transaction(shared) as db:
@@ -6487,18 +6498,20 @@ class Store:
         ever_seen,
         source,
         ack_seen_at,
+        pinned,
       ) in prepared:
         highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
         db.execute(
           """INSERT INTO reports
-             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source, ack_seen_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source, ack_seen_at, pinned)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET title = excluded.title,
                markdown = excluded.markdown, updated_at = excluded.updated_at,
                source = COALESCE(excluded.source, reports.source),
                published_at = COALESCE(reports.published_at, excluded.published_at),
                seen_at = COALESCE(reports.seen_at, excluded.seen_at),
                ack_seen_at = COALESCE(reports.ack_seen_at, excluded.ack_seen_at),
+               pinned = MAX(reports.pinned, excluded.pinned),
                ever_seen = MAX(reports.ever_seen, excluded.ever_seen)""",
           (
             report_id,
@@ -6511,6 +6524,7 @@ class Store:
             ever_seen,
             source,
             ack_seen_at,
+            int(pinned),
           ),
         )
     return len(prepared)
@@ -6871,30 +6885,46 @@ class Store:
     return {"key": key, "host": host, "at": clip_stamp(record.get("at"))}
 
   def stale_report_rows(self, db):
-    """Published reports that are stale: no fields, or fields answered and acked."""
+    """Unpinned reports whose linked tasks finished, or whose unlinked view is idle."""
+    linked = {}
+    tasks = [dict(row) for row in db.execute("SELECT id, status, report_id FROM tasks")]
+    for task in link_task_answers(db, tasks):
+      reports = {task["report_id"]} | {
+        answer["report_id"] for answer in task.get("answers", [])
+      }
+      for report_id in reports - {None}:
+        linked.setdefault(report_id, []).append(task["status"])
     stale = []
+    current = import_stamp(now())
     rows = db.execute(
-      "SELECT id, markdown FROM reports WHERE published_at IS NOT NULL ORDER BY seq, id"
+      "SELECT id, updated_at, viewed_at, last_viewed_at FROM reports"
+      " WHERE published_at IS NOT NULL AND pinned = 0 ORDER BY seq, id"
     )
     for row in rows:
-      try:
-        fields = len(parse_fields(row["markdown"])[1])
-      except ValueError:
+      statuses = linked.get(row["id"])
+      if statuses:
+        if all(status == "finished" for status in statuses):
+          stale.append({"id": row["id"], "reason": "all linked tasks finished"})
         continue
-      if fields == 0:
-        stale.append({"id": row["id"], "reason": "no fields"})
-        continue
-      pending = db.execute(
-        "SELECT count(*) FROM submissions"
-        f" WHERE report_id = ? AND {PENDING_SUBMISSIONS}",
-        (row["id"],),
-      ).fetchone()[0]
-      answered = db.execute(
-        "SELECT count(*) FROM submissions WHERE report_id = ?", (row["id"],)
-      ).fetchone()[0]
-      if answered and not pending:
-        stale.append({"id": row["id"], "reason": "latest submission acknowledged"})
+      stamps = [
+        import_stamp(row[key]) for key in ("updated_at", "viewed_at", "last_viewed_at")
+      ]
+      latest = max((stamp for stamp in stamps if stamp is not None), default=None)
+      if latest is not None and current - latest >= timedelta(
+        seconds=REPORT_IDLE_SECONDS
+      ):
+        stale.append({"id": row["id"], "reason": "unlinked and idle for 30 minutes"})
     return stale
+
+  def pin_report(self, report_id, pinned):
+    """Set the durable staleness override without changing report content or read stamps."""
+    identifier(report_id)
+    with self.transaction() as db:
+      changed = db.execute(
+        "UPDATE reports SET pinned = ? WHERE id = ?", (int(pinned), report_id)
+      )
+      if changed.rowcount == 0:
+        raise FileNotFoundError("Report not found")
 
   def stale_report_ids(self, db):
     """The stale report IDs for the reminder line."""
@@ -6909,7 +6939,7 @@ class Store:
     """Row per report: publication, owner view stamp and answer visibility. No changes."""
     with closing(self.connect()) as db:
       rows = db.execute(
-        "SELECT id, title, published_at, updated_at, viewed_at FROM reports"
+        "SELECT id, title, published_at, updated_at, viewed_at, pinned FROM reports"
         + (" WHERE id = ?" if report_id else "")
         + " ORDER BY updated_at DESC",
         (report_id,) if report_id else (),
@@ -6930,6 +6960,7 @@ class Store:
             "updated_at": row["updated_at"],
             "viewed_at": row["viewed_at"],
             "stale": row["id"] in stale,
+            "pinned": bool(row["pinned"]),
             "answers": [
               {
                 "id": answer["id"],
@@ -7475,7 +7506,7 @@ class Store:
       )
 
   def mark_report_viewed(self, report_id, active=True):
-    """Stamp the moment the owner's page shows a report, for the unpublish guard.
+    """Stamp the owner's active view and last view for change guards and staleness.
 
     The stamp moves on every look, because the guard reads how fresh the last one is rather
     than when the report was first read. A page that hides the report, or a browser that hides
@@ -7489,7 +7520,10 @@ class Store:
       if row is None:
         raise FileNotFoundError("Report not found")
       stamp = now() if active else None
-      db.execute("UPDATE reports SET viewed_at = ? WHERE id = ?", (stamp, report_id))
+      db.execute(
+        "UPDATE reports SET viewed_at = ?, last_viewed_at = COALESCE(?, last_viewed_at) WHERE id = ?",
+        (stamp, stamp, report_id),
+      )
     return {"id": report_id, "viewed_at": clip_stamp(stamp)}
 
   def report(self, report_id, shared=None):
@@ -9293,6 +9327,11 @@ def main():
     "stale",
     help="List stale published report IDs and reasons without changing state",
   )
+  for verb in ("pin", "unpin"):
+    pin = report_verbs.add_parser(
+      verb, help=f"{verb.capitalize()} a report against staleness"
+    )
+    pin.add_argument("report_id")
   report_state = report_verbs.add_parser(
     "state",
     help="Print publication, owner view stamp and answer visibility for one report or all",
@@ -9411,6 +9450,8 @@ def main():
     ("report", "unpublish"): "unpublish",
     ("report", "stale"): "stale-reports",
     ("report", "state"): "report-state",
+    ("report", "pin"): "report-pin",
+    ("report", "unpin"): "report-unpin",
     ("task", "list"): "task-list",
     ("task", "show"): "task-show",
     ("task", "set"): "task",
@@ -9708,6 +9749,11 @@ def main():
       print(f"Stale reports {len(reports)}")
       for report in reports:
         print(f"{report['id']}\t{report['reason']}")
+    elif args.command in {"report-pin", "report-unpin"}:
+      report_id = store.resolve_id(args.report_id)
+      pinned = args.command == "report-pin"
+      store.pin_report(report_id, pinned)
+      print(f"{'Pinned' if pinned else 'Unpinned'} {report_id}.")
     elif args.command == "report-state":
       rows = store.report_state(args.report_id)
       if args.report_id and not rows:
