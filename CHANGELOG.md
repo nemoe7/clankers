@@ -24,6 +24,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### house
 
+- Check preview visibility after a branch change as well as initial setup. Reuse an active preview only on the same branch.
+
 - Check code-scanning status before reading alerts. Continue to the next task when disabled.
 
 - Put Ruff settings in pyproject.toml when suitable for the project, otherwise in ruff.toml. Keep defaults and gates unchanged.
