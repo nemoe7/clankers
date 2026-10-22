@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Add report submission maps and templates with typed selections. Keep raw custom text, answer history, and saved formats.
+
 - Add submission unlinking from task answer lists. Retain tasks, answer history, receipts, and unlink state in backups.
 
 - Warn about possible unparsed report diff markers at publication, with source locations. Retain parsing, source text, and successful publication.

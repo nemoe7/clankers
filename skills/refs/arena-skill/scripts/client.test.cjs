@@ -1907,7 +1907,7 @@ test('preview client', async (t) => {
     apiBox.checked = true;
     get('#report-form').events.input(event({}));
     assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers,
-      { name: 'ada', areas: ['ui', 'api'], verdict: 'Other: make it blue' },
+      { name: 'ada', areas: [{ type: 'preset', value: 'ui' }, { type: 'preset', value: 'api' }], verdict: { type: 'custom', label: 'Other', value: 'make it blue' } },
       'a checkbox edit reaches the saved answers');
     apiBox.checked = false;
     get('#report-form').events.input(event({}));
@@ -1919,6 +1919,10 @@ test('preview client', async (t) => {
     documentEvents.input({ target: get('#note') });
     documentEvents.input({});
     otherText.value = '   ';
+    const selectedBlank = context.collect(get('#report'));
+    assert.equal(selectedBlank.verdict.value, otherText.value, 'selected blank custom text reaches validation');
+    context.applyAnswers(get('#report'), selectedBlank);
+    assert.equal(otherBox.checked, true, 'a saved blank custom selection remains selected');
     documentEvents.input({ target: otherText });
     assert.equal(otherBox.checked, false);
     otherText.value = 'make it blue';
@@ -1926,9 +1930,14 @@ test('preview client', async (t) => {
     assert.equal(otherBox.checked, true);
     textInput.value = 'ada lovelace';
     apiBox.checked = true;
-    otherText.value = '  make it red  ';
+    const rawCustom = '  make it red  ';
+    otherText.value = rawCustom;
+    get('#report-form').events.input(event({ target: otherText }));
+    await get('#refresh-report').events.click();
+    await tick();
+    assert.equal(otherText.value, rawCustom, 'a draft reload preserves raw custom text');
     await get('#report-form').events.submit(event({}));
-    assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
+    assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: [{ type: 'preset', value: 'ui' }, { type: 'preset', value: 'api' }], verdict: { type: 'custom', label: 'Other', value: rawCustom } });
     assert.equal(sent.at(-1).revision, reportRevision, 'send the revision that supplied the form');
     assert.equal(get('#report-status').children[0].dataset.full, sent.at(-1).id);
     assert.doesNotMatch(get('#report-status').textContent, /Sent |Read |Awaiting ack|Acked /,
@@ -1941,7 +1950,7 @@ test('preview client', async (t) => {
       'the full stamp breakdown waits in the title');
     assert.ok(get('#report-agent-ack').textContent.includes(sent.at(-1).id.slice(0, 6)),
       'show the six-character ID immediately after sending');
-    assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
+    assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: [{ type: 'preset', value: 'ui' }, { type: 'preset', value: 'api' }], verdict: { type: 'custom', label: 'Other', value: rawCustom } });
     await get('#refresh-report').events.click();
     await tick();
     assert.match(get('#report-status').textContent, /^Published /,
@@ -1977,11 +1986,11 @@ test('preview client', async (t) => {
     assert.ok(px(reportNote.style.height) > 0, 'the quote regrows the composer');
     assert.equal(reportNote.value, 'RE: r1\n\na draft already written');
     assert.equal(otherBox.checked, true);
-    assert.equal(otherText.value, 'make it red');
+    assert.equal(otherText.value, rawCustom);
     otherText.value = '   ';
     shipBox.checked = true;
     await get('#report-form').events.submit(event({}));
-    assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Ship it' });
+    assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: [{ type: 'preset', value: 'ui' }, { type: 'preset', value: 'api' }], verdict: { type: 'preset', value: 'Ship it' } });
     // The status line keeps the report ID visible before and after submission.
     assert.equal(get('#report-status').children.find(child => child.dataset?.quote === 'full').textContent,
       get('#report').dataset.reportId,

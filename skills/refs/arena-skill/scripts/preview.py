@@ -1471,6 +1471,10 @@ def message_row(row):
   """
   record = dict(row)
   record.pop("seq", None)
+  if "answer_data" in record:
+    data = record.pop("answer_data")
+    if data is not None:
+      record["answer_data"] = json.loads(data)
   if "replies" in record:
     record["replies"] = replies_list(record["replies"])
   return record
@@ -1558,6 +1562,118 @@ def custom_answer(field, value):
   return False
 
 
+FORMAT_SLOT = re.compile(r"\{([^{}]+)\}")
+
+
+def validate_submission_format(value, fields):
+  if value is None:
+    return None
+  if not isinstance(value, dict) or set(value) - {"fields", "template"}:
+    raise ValueError("Submission format takes fields and an optional template")
+  if len(json.dumps(value, ensure_ascii=False).encode("utf-8")) > MAX_REPORT:
+    raise ValueError("Submission format exceeds the report size limit")
+  known = {field["id"]: field for field in fields}
+  mappings = value.get("fields", {})
+  if not isinstance(mappings, dict) or set(mappings) - set(known):
+    raise ValueError("Submission format names unknown fields")
+  slots = {
+    f"{field_id}.{part}" for field_id in known for part in ("question", "answer")
+  }
+
+  def template(text, allowed):
+    if not isinstance(text, str) or not text.strip():
+      raise ValueError("A submission template is nonblank text")
+    if set(FORMAT_SLOT.findall(text)) - allowed:
+      raise ValueError("Submission template contains an unknown placeholder")
+
+  for field_id, mapping in mappings.items():
+    if not isinstance(mapping, dict) or set(mapping) - {
+      "question",
+      "answers",
+      "custom_answer",
+    }:
+      raise ValueError("Field format takes question, answers, and custom_answer")
+    if "question" in mapping and (
+      not isinstance(mapping["question"], str)
+      or not 1 <= len(mapping["question"].strip()) <= 500
+    ):
+      raise ValueError("A mapped question is 1–500 characters")
+    presets = {
+      option
+      for option in known[field_id].get("options", [])
+      if custom_label(option) is None
+    }
+    answers = mapping.get("answers", {})
+    if not isinstance(answers, dict) or set(answers) - presets:
+      raise ValueError("Answer maps name preset choices only")
+    if any(not isinstance(text, str) or not text.strip() for text in answers.values()):
+      raise ValueError("Mapped preset answers are nonblank text")
+    if "custom_answer" in mapping:
+      template(mapping["custom_answer"], {"custom"})
+  if "template" in value:
+    template(value["template"], slots)
+  return value
+
+
+def expand_submission_template(text, values):
+  parts, size, position = [], 0, 0
+  for match in FORMAT_SLOT.finditer(text):
+    for part in (text[position : match.start()], values[match.group(1)]):
+      size += len(part.encode("utf-8"))
+      if size > MAX_REPORT:
+        raise ValueError("Expanded submission exceeds the report size limit")
+      parts.append(part)
+    position = match.end()
+  tail = text[position:]
+  if size + len(tail.encode("utf-8")) > MAX_REPORT:
+    raise ValueError("Expanded submission exceeds the report size limit")
+  return "".join(parts) + tail
+
+
+def formatted_selection(field, item, mapping):
+  presets = [option for option in field["options"] if custom_label(option) is None]
+  labels = {custom_label(option) for option in field["options"]} - {None}
+  if isinstance(item, str):
+    if mapping is None and item in field["options"]:
+      label = custom_label(item)
+      return ("custom", label) if label is not None else ("preset", item), item
+    if item in presets:
+      item = {"type": "preset", "value": item}
+    else:
+      for label in labels:
+        if item.startswith(f"{label}: "):
+          item = {"type": "custom", "label": label, "value": item[len(label) + 2 :]}
+          break
+  if (
+    not isinstance(item, dict)
+    or set(item) - {"type", "value", "label"}
+    or not isinstance(item.get("value"), str)
+  ):
+    raise ValueError(f"{field['id']}: choose a preset or enter a custom answer")
+  text = item["value"]
+  if (
+    item.get("type") == "preset" and set(item) == {"type", "value"} and text in presets
+  ):
+    return ("preset", text), (
+      mapping.get("answers", {}).get(text, text) if mapping is not None else text
+    )
+  if (
+    item.get("type") == "custom"
+    and set(item) == {"type", "label", "value"}
+    and item["label"] in labels
+    and text.strip()
+  ):
+    if mapping is None:
+      return ("custom", item["label"]), f"{item['label']}: {text}"
+    wrapper = mapping.get("custom_answer")
+    return ("custom", item["label"]), (
+      expand_submission_template(wrapper, {"custom": text})
+      if wrapper is not None
+      else text
+    )
+  raise ValueError(f"{field['id']}: invalid selection or blank custom answer")
+
+
 def option_continuation(line):
   """True when a line wraps the option above it instead of starting a new block."""
   if not line.strip() or BLOCK_START.match(line):
@@ -1643,6 +1759,11 @@ def parse_fields(markdown):
   blocks.append(("markdown", "\n".join(chunk)))
   if questions:
     Store.validate_fields(questions)
+    for question in questions:
+      if question["type"] != "text" and not any(
+        custom_label(option) is not None for option in question["options"]
+      ):
+        question["options"].append("Something else...: ___")
   return blocks, questions
 
 
@@ -1674,7 +1795,7 @@ def field_html(question):
       f'<label class="option"><input type="{control}" name="{name}" '
       f'value="{value}"{checked} data-label="{named}" aria-label="{named}">'
       f'<textarea class="custom-text" rows="1" data-custom="{named}" '
-      f'placeholder="{named}:" aria-label="{named}, your own answer"></textarea></label>'
+      f'placeholder="Something else..." aria-label="{named}, your own answer"></textarea></label>'
     )
   return f"{body}{group}</div></div>"
 
@@ -1885,17 +2006,23 @@ def saved_note_line(record):
 
 
 def saved_answer_line(record):
-  """Return the keys a saved report answer line carries, so a restore keeps the answer."""
+  """Return saved answer fields and optional raw selection data."""
   if not isinstance(record, dict):
     raise TypeError("Every saved answer is an object")
-  return {key: record.get(key) for key in SUBMISSION_LINE_KEYS}
+  line = {key: record.get(key) for key in SUBMISSION_LINE_KEYS}
+  if record.get("answer_data") is not None:
+    line["answer_data"] = record["answer_data"]
+  return line
 
 
 def saved_report_line(record):
-  """Return source and report read stamps for one report save line."""
+  """Return report source, read stamps, and optional submission formatting."""
   if not isinstance(record, dict):
     raise TypeError("Every saved report is an object")
-  return {key: record.get(key) for key in REPORT_LINE_KEYS}
+  line = {key: record.get(key) for key in REPORT_LINE_KEYS}
+  if record.get("submission_format") is not None:
+    line["submission_format"] = record["submission_format"]
+  return line
 
 
 def state_ndjson(lines):
@@ -4666,6 +4793,11 @@ class Store:
         db.execute(
           "ALTER TABLE submissions ADD COLUMN ack_edited_seen_count INTEGER NOT NULL DEFAULT 0"
         )
+      submission_columns = {
+        row["name"] for row in db.execute("PRAGMA table_info(submissions)")
+      }
+      if "answer_data" not in submission_columns:
+        db.execute("ALTER TABLE submissions ADD COLUMN answer_data TEXT")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
       if "seen_at" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN seen_at TEXT")
@@ -4695,6 +4827,8 @@ class Store:
         # fresh the last one is rather than when the report was first read.
         db.execute("ALTER TABLE reports ADD COLUMN viewed_at TEXT")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
+      if "submission_format" not in columns:
+        db.execute("ALTER TABLE reports ADD COLUMN submission_format TEXT")
       if "last_viewed_at" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN last_viewed_at TEXT")
       if "pinned" not in columns:
@@ -5005,12 +5139,24 @@ class Store:
     autosave=True,
     replies=None,
     ack_edited_seen_count=None,
+    answer_data=None,
   ):
     """Store report answers separately from messages. Restore receipts and read state without new stamps. Leave
     existing IDs unchanged."""
     identifier(submission_id)
     identifier(report_id)
     submission_text(text)
+    if answer_data is not None:
+      if (
+        not isinstance(answer_data, dict)
+        or set(answer_data) != {"revision", "answers"}
+        or not isinstance(answer_data["revision"], str)
+        or not isinstance(answer_data["answers"], dict)
+      ):
+        raise ValueError("Saved answer data requires a revision and raw answers")
+      when(answer_data["revision"])
+      if len(json.dumps(answer_data, ensure_ascii=False).encode("utf-8")) > MAX_REPORT:
+        raise ValueError("Saved answer data exceeds the report size limit")
     receipt = restore_receipt(acknowledged_at, ack_type, ack_text, ack_edited_at)
     more = restore_replies(replies, receipt[0])
     seen_reply_count = restore_reply_seen_count(ack_edited_seen_count, more)
@@ -5021,14 +5167,17 @@ class Store:
         "SELECT * FROM submissions WHERE id = ?", (submission_id,)
       ).fetchone()
       if existing:
-        if existing["text"] != text:
+        if existing["text"] != text or (
+          answer_data is not None
+          and json.loads(existing["answer_data"] or "null") != answer_data
+        ):
           raise ValueError("This message ID already belongs to different text")
         self.release_report_tasks(db, report_id)
         return message_row(existing)
       db.execute(
         "INSERT INTO submissions"
         " (id, report_id, text, at, acknowledged_at, ack_type, ack_text, ack_edited_at, seen_at,"
-        " task_id, replies, ack_edited_seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " task_id, replies, ack_edited_seen_count, answer_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
           submission_id,
           report_id,
@@ -5039,6 +5188,9 @@ class Store:
           task_id,
           more,
           seen_reply_count,
+          json.dumps(answer_data, ensure_ascii=False)
+          if answer_data is not None
+          else None,
         ),
       )
       self.release_report_tasks(db, report_id)
@@ -5061,9 +5213,16 @@ class Store:
     """Every report source, oldest first, for the save file."""
     with closing(self.connect()) as db:
       return [
-        dict(row, pinned=bool(row["pinned"]))
+        dict(
+          row,
+          pinned=bool(row["pinned"]),
+          submission_format=json.loads(row["submission_format"])
+          if row["submission_format"]
+          else None,
+        )
         for row in db.execute(
-          "SELECT id, title, markdown, published_at, seen_at, ack_seen_at, pinned, source FROM reports ORDER BY seq, id"
+          "SELECT id, title, markdown, published_at, seen_at, ack_seen_at, pinned, "
+          "submission_format, source FROM reports ORDER BY seq, id"
         )
       ]
 
@@ -6426,6 +6585,7 @@ class Store:
         if "report_id" in record:
           writer = self.submission
           args.append(record["report_id"])
+          options["answer_data"] = record.get("answer_data")
         writer(
           *args, record["text"], record.get("at"), shared=db, autosave=False, **options
         )
@@ -6464,6 +6624,9 @@ class Store:
         raise ValueError("A saved seen stamp is text")
       if seen_at is not None:
         when(seen_at)
+      metadata = record.get("submission_format")
+      if metadata is not None:
+        metadata = validate_submission_format(metadata, parse_fields(markdown)[1])
       pinned = record.get("pinned", False)
       if not isinstance(pinned, bool):
         raise TypeError("A saved report pin is a boolean")
@@ -6486,6 +6649,7 @@ class Store:
           source,
           ack_seen_at,
           pinned,
+          metadata,
         )
       )
     with self.transaction(shared) as db:
@@ -6499,12 +6663,14 @@ class Store:
         source,
         ack_seen_at,
         pinned,
+        metadata,
       ) in prepared:
         highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
         db.execute(
           """INSERT INTO reports
-             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source, ack_seen_at, pinned)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source,
+              ack_seen_at, pinned, submission_format)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET title = excluded.title,
                markdown = excluded.markdown, updated_at = excluded.updated_at,
                source = COALESCE(excluded.source, reports.source),
@@ -6512,6 +6678,7 @@ class Store:
                seen_at = COALESCE(reports.seen_at, excluded.seen_at),
                ack_seen_at = COALESCE(reports.ack_seen_at, excluded.ack_seen_at),
                pinned = MAX(reports.pinned, excluded.pinned),
+               submission_format = excluded.submission_format,
                ever_seen = MAX(reports.ever_seen, excluded.ever_seen)""",
           (
             report_id,
@@ -6525,6 +6692,7 @@ class Store:
             source,
             ack_seen_at,
             int(pinned),
+            json.dumps(metadata) if metadata is not None else None,
           ),
         )
     return len(prepared)
@@ -7359,7 +7527,7 @@ class Store:
         "The report has a submitted answer; publish the update under a new ID."
       )
 
-  def publish(self, report_id, title, source):
+  def publish(self, report_id, title, source, submission_format=None):
     identifier(report_id)
     if not isinstance(title, str) or not title.strip() or len(title) > 200:
       raise ValueError("Report title must contain 1–200 characters")
@@ -7376,6 +7544,7 @@ class Store:
     text = embed_report_images(text, source.resolve().parent)
     # Reject invalid fields before publication so the error names the field and preserves the report and connection.
     fields = parse_fields(text)[1]
+    metadata = validate_submission_format(submission_format, fields)
     with self.transaction() as db:
       report = db.execute(
         "SELECT ack_seen_at, viewed_at FROM reports WHERE id = ?", (report_id,)
@@ -7394,13 +7563,22 @@ class Store:
       self.refuse_shared_id(db, "reports", "tasks", report_id)
       highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
       db.execute(
-        """INSERT INTO reports (id, title, markdown, updated_at, published_at, seq, source)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO reports (id, title, markdown, updated_at, published_at, seq, source, submission_format)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET title = excluded.title,
              markdown = excluded.markdown, updated_at = excluded.updated_at,
-             source = excluded.source,
+             source = excluded.source, submission_format = excluded.submission_format,
              seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL""",
-        (report_id, title, text, now(), now(), highest + 1, str(source.resolve())),
+        (
+          report_id,
+          title,
+          text,
+          now(),
+          now(),
+          highest + 1,
+          str(source.resolve()),
+          json.dumps(metadata) if metadata is not None else None,
+        ),
       )
     return len(fields)
 
@@ -7532,7 +7710,12 @@ class Store:
       row = db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
       if row is None:
         raise FileNotFoundError("Report not found")
-      return dict(row)
+      return dict(
+        row,
+        submission_format=json.loads(row["submission_format"])
+        if row["submission_format"]
+        else None,
+      )
 
   @staticmethod
   def validate_fields(fields):
@@ -7582,48 +7765,78 @@ class Store:
       if not fields:
         raise ValueError("This report has no fields to answer")
       return self.submit(
-        report_id, report["title"], fields, note_id, answers, shared=db
+        report_id,
+        report["title"],
+        fields,
+        note_id,
+        answers,
+        shared=db,
+        submission_format=report["submission_format"],
+        revision=revision,
       )
 
-  def submit(self, report_id, title, fields, note_id, answers, shared=None):
+  def submit(
+    self,
+    report_id,
+    title,
+    fields,
+    note_id,
+    answers,
+    shared=None,
+    submission_format=None,
+    revision=None,
+  ):
     if not isinstance(answers, dict):
       raise TypeError("Answers is a JSON object keyed by field ID")
     known = {field["id"] for field in fields}
-    unknown = set(answers) - known
-    if unknown:
-      raise ValueError(f"Unknown field IDs: {', '.join(sorted(unknown))}")
+    if set(answers) - known:
+      raise ValueError(f"Unknown field IDs: {', '.join(sorted(set(answers) - known))}")
+    metadata = validate_submission_format(submission_format, fields)
+    mappings = metadata.get("fields", {}) if metadata is not None else {}
     lines = [f"REPORT {report_id} {title}:"]
+    slots, answered = {}, False
     for field in fields:
       field_id = field["id"]
       value = answers.get(field_id)
-      if field["type"] == "text":
-        if value is None:
-          rendered = "(skipped)"
-        elif not isinstance(value, str):
-          raise ValueError(f"{field_id}: text answers must be strings")
-        else:
-          rendered = value if value.strip() else "(skipped)"
-      elif value is None:
+      mapping = mappings.get(field_id, {}) if metadata is not None else None
+      if (
+        value is None
+        or (field["type"] == "checkbox" and value == [])
+        or (field["type"] == "text" and isinstance(value, str) and not value.strip())
+      ):
         rendered = "(skipped)"
+      elif field["type"] == "text":
+        if not isinstance(value, str):
+          raise ValueError(f"{field_id}: text answers must be strings")
+        rendered, answered = value, True
       elif field["type"] == "choice":
-        if value not in field["options"] and not custom_answer(field, value):
-          raise ValueError(f"{field_id}: choose one of " + ", ".join(field["options"]))
-        rendered = value
+        _, rendered = formatted_selection(field, value, mapping)
+        answered = True
       else:
-        if (
-          not isinstance(value, list)
-          or len({item for item in value if isinstance(item, str)}) != len(value)
-          or any(
-            item not in field["options"] and not custom_answer(field, item)
-            for item in value
-          )
+        if not isinstance(value, list) or any(
+          not isinstance(item, (str, dict)) for item in value
         ):
-          raise ValueError(
-            f"{field_id}: select options only: " + ", ".join(field["options"])
-          )
-        rendered = ", ".join(value) if value else "(skipped)"
-      lines.append(f"  {field['prompt']} ({field_id}): {rendered}")
-    return self.submission(note_id, report_id, "\n".join(lines), shared=shared)
+          raise ValueError(f"{field_id}: select options only")
+        selections = [formatted_selection(field, item, mapping) for item in value]
+        if len({key for key, _ in selections}) != len(value):
+          raise ValueError(f"{field_id}: repeated selections")
+        rendered = ", ".join(text for _, text in selections)
+        answered = True
+      question = (mapping or {}).get("question", field["prompt"])
+      slots[f"{field_id}.question"] = question
+      slots[f"{field_id}.answer"] = rendered
+      lines.append(f"  {question} ({field_id}): {rendered}")
+    if not answered:
+      raise ValueError("A report submission carries at least one answer")
+    if metadata is not None and "template" in metadata:
+      lines = [
+        lines[0],
+        expand_submission_template(metadata["template"], slots),
+      ]
+    data = {"revision": revision, "answers": answers} if revision is not None else None
+    return self.submission(
+      note_id, report_id, "\n".join(lines), shared=shared, answer_data=data
+    )
 
 
 def open_link(renderer, tokens, index, options, env):
@@ -9314,6 +9527,11 @@ def main():
   report_verbs = report_group.add_subparsers(dest="verb", required=True)
   publish = report_verbs.add_parser("publish", help="Publish report; -i ID, -t title")
   publish.add_argument("source", type=Path)
+  publish.add_argument(
+    "--submission-format",
+    type=Path,
+    help="Optional question, answer, and template JSON",
+  )
   publish.add_argument("-i", "--id", required=True)
   publish.add_argument("-t", "--title", required=True)
   unpublish = report_verbs.add_parser(
@@ -9706,7 +9924,16 @@ def main():
           )
         )
     elif args.command == "publish":
-      count = store.publish(args.id, args.title, args.source)
+      metadata = None
+      if args.submission_format is not None:
+        with args.submission_format.open("rb") as stream:
+          data = stream.read(MAX_REPORT + 1)
+        if len(data) > MAX_REPORT:
+          raise ValueError("Submission format exceeds the report size limit")
+        metadata = json.loads(data.decode("utf-8"))
+      count = store.publish(
+        args.id, args.title, args.source, submission_format=metadata
+      )
       revision = store.report(args.id)["updated_at"]
       warnings = verify_publication(store, args.id, revision, count)
       plural = "" if count == 1 else "s"

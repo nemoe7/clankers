@@ -614,6 +614,147 @@ def test_report_unpublish():
     assert [report["id"] for report in store.state()["reports"]] == ["blocked"]
 
 
+def test_submission_format_preserves_custom_type_and_raw_text(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  source = tmp_path / "form.md"
+  source.write_text(
+    "Sum? {#sum}\n\n- ( ) 2\n- ( ) 3\n- ( ) custom: ___\n\n"
+    "Checks? {#checks}\n\n- [ ] Unit\n- [ ] Browser\n- [ ] custom: ___\n",
+    encoding="utf-8",
+  )
+  format = {
+    "fields": {
+      "sum": {"question": "What is 1+1?", "answers": {"2": "1+1=2"}},
+      "checks": {"answers": {"Unit": "Run unit tests"}},
+    },
+    "template": "{sum.answer}\nChecks: {checks.answer}",
+  }
+  store.publish("mapped", "Mapped", source, submission_format=format)
+  revision = store.report("mapped")["updated_at"]
+  preset = {"sum": {"type": "preset", "value": "2"}}
+  answer = store.submit_report("mapped", "preset", preset, revision)
+  assert answer["text"] == "REPORT mapped Mapped:\n1+1=2\nChecks: (skipped)"
+  raw = "  2\n{sum.answer}, <script>  "
+  custom = {
+    "sum": {"type": "custom", "label": "custom", "value": raw},
+    "checks": [
+      {"type": "preset", "value": "Unit"},
+      {"type": "custom", "label": "custom", "value": "Phone, and tablet"},
+    ],
+  }
+  answer = store.submit_report("mapped", "custom-reply", custom, revision)
+  assert raw in answer["text"]
+  assert "Checks: Run unit tests, Phone, and tablet" in answer["text"]
+  assert answer["answer_data"] == {"revision": revision, "answers": custom}
+  lines, _ = store.state_lines(store.state()["notes"], store.tasks() or {})
+  restored = preview.Store(tmp_path / "restored", create=True)
+  restored.import_state("\n".join(json.dumps(row) for row in lines))
+  assert restored.report("mapped")["submission_format"] == format
+  kept = next(row for row in restored.submissions() if row["id"] == "custom-reply")
+  assert kept["text"] == answer["text"] and kept["answer_data"] == answer["answer_data"]
+  with pytest.raises(ValueError):
+    store.submit_report("mapped", "empty", {}, revision)
+  with pytest.raises(ValueError):
+    store.publish(
+      "invalid", "Invalid", source, submission_format={"template": "{missing.answer}"}
+    )
+  assert all(row["id"] != "invalid" for row in store.report_sources())
+  collision = {"sum": {"type": "custom", "label": "custom", "value": "2"}}
+  answer = store.submit_report("mapped", "collision", collision, revision)
+  assert answer["text"] == "REPORT mapped Mapped:\n2\nChecks: (skipped)"
+  wrapped = {
+    "fields": {"sum": {"custom_answer": "Raw: {custom}"}},
+    "template": "{sum.answer}",
+  }
+  store.publish("wrapped", "Wrapped", source, submission_format=wrapped)
+  answer = store.submit_report(
+    "wrapped", "wrapped-answer", custom, store.report("wrapped")["updated_at"]
+  )
+  assert answer["text"] == "REPORT wrapped Wrapped:\nRaw: " + raw
+  with (
+    patch("preview.MAX_REPORT", len(raw.encode("utf-8"))),
+    pytest.raises(ValueError, match="Expanded submission"),
+  ):
+    preview.expand_submission_template("{custom}{custom}", {"custom": raw})
+  _, fields = preview.parse_fields("Choice? {#auto}\n\n- ( ) One\n- ( ) Two\n")
+  assert any(
+    preview.custom_label(option) is not None for option in fields[0]["options"]
+  )
+  assert "Something else..." in preview.field_html(fields[0])
+
+  store.publish("unmapped", "Unmapped", source)
+  with pytest.raises(ValueError, match="at least one answer"):
+    store.submit_report(
+      "unmapped", "empty-unmapped", {}, store.report("unmapped")["updated_at"]
+    )
+
+  for invalid in (
+    {"fields": {"missing": {}}},
+    {"fields": {"sum": {"answers": {"4": "Wrong preset"}}}},
+    {"fields": {"sum": {"custom_answer": "{sum.answer}"}}},
+    {"template": " "},
+  ):
+    with pytest.raises(ValueError):
+      store.publish("bad-format", "Invalid", source, submission_format=invalid)
+  for invalid in (
+    {"type": "custom", "label": "custom", "value": " "},
+    {"type": "custom", "label": "missing", "value": "2"},
+    {"type": "preset", "value": "4"},
+  ):
+    with pytest.raises(ValueError):
+      store.submit_report("mapped", "bad-answer", {"sum": invalid}, revision)
+
+  for repeated in (
+    ["Unit", {"type": "preset", "value": "Unit"}],
+    [
+      {"type": "custom", "label": "custom", "value": "First"},
+      {"type": "custom", "label": "custom", "value": "Second"},
+    ],
+  ):
+    with pytest.raises(ValueError, match="repeated selections"):
+      store.submit_report("mapped", "repeated", {"checks": repeated}, revision)
+
+
+def test_submission_format_cli(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  source = tmp_path / "form.md"
+  source.write_text("Pick? {#pick}\n\n- ( ) One\n", encoding="utf-8")
+  format = {"fields": {"pick": {"answers": {"One": "Selected one"}}}}
+  metadata = tmp_path / "format.json"
+  metadata.write_text(json.dumps(format), encoding="utf-8")
+  server = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+  store.set_meta("port", str(server.server_port))
+  worker = threading.Thread(target=server.serve_forever, daemon=True)
+  worker.start()
+  try:
+    result = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "report",
+        "publish",
+        str(source),
+        "--id",
+        "cli-format",
+        "--title",
+        "CLI format",
+        "--submission-format",
+        str(metadata),
+      ],
+      capture_output=True,
+      check=False,
+      text=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert store.report("cli-format")["submission_format"] == format
+  finally:
+    server.shutdown()
+    server.server_close()
+    worker.join()
+
+
 def test_stale_report_task_completion_idle_and_pins(tmp_path):
   store = preview.Store(tmp_path, create=True)
   store.set_meta("port", guard_port())
@@ -1442,7 +1583,10 @@ def test_http_boundaries():
       assert 'data-custom="Other"' in served["html"]
       assert 'class="custom-text"' in served["html"]
       assert "maxlength=" not in served["html"]
-      assert "<textarea" in served["html"] and 'placeholder="Other:"' in served["html"]
+      assert (
+        "<textarea" in served["html"]
+        and 'placeholder="Something else..."' in served["html"]
+      )
       assert "> Other: <" not in served["html"]
       status, _, page_text = request("GET", "/")
       page = compact(page_text)
@@ -1864,7 +2008,9 @@ def test_http_boundaries():
       assert verdict["options"] == ["Ship it", "Other: ___"]
       markup = preview.field_html(verdict)
       assert 'data-label="Other"' in markup and 'data-custom="Other"' in markup
-      assert "> Ship it</label>" in markup and 'placeholder="Other:"' in markup
+      assert (
+        "> Ship it</label>" in markup and 'placeholder="Something else..."' in markup
+      )
       assert " Other: " not in markup and "<textarea" in markup
       assert 'aria-label="Other"' in markup
       assert 'aria-label="Other, your own answer"' in markup
@@ -3826,10 +3972,14 @@ def test_report_agent_seen_receipt():
     receipt = preview.Store(receipt_dir, create=True)
     source = Path(receipt_dir) / "form.md"
     source.write_text("Choice?\n- ( ) Yes\n- ( ) No\n\nCustom response: ___\n")
+    field = preview.parse_fields(source.read_text())[1][0]
     receipt.publish("form", "Form", source)
     with patch.object(preview, "now", return_value="2026-09-30T04:05:00"):
       receipt.submit_report(
-        "form", "answer-1", {}, receipt.report("form")["updated_at"]
+        "form",
+        "answer-1",
+        {field["id"]: field["options"][0]},
+        receipt.report("form")["updated_at"],
       )
     assert receipt.state()["reports"][0]["agent_seen_at"] is None
     with patch.object(preview, "now", return_value="2026-09-30T04:10:00"):
@@ -6726,6 +6876,7 @@ def test_report_unread_markers():
     marker_store.set_meta("port", guard_port())
     marker_source = Path(marker_dir) / "form.md"
     marker_source.write_text("Choice?\n- ( ) Yes\n- ( ) No\n\nCustom response: ___\n")
+    field = preview.parse_fields(marker_source.read_text())[1][0]
     marker_store.publish("form", "Form", marker_source)
     assert marker_store.state()["reports"][0]["needs_answer"] is True
     assert marker_store.state()["reports"][0]["ever_seen"] == 0
@@ -6733,7 +6884,10 @@ def test_report_unread_markers():
     assert marker_store.state()["reports"][0]["needs_answer"] is True
     assert marker_store.state()["reports"][0]["ever_seen"] == 1
     marker_store.submit_report(
-      "form", "answer", {}, marker_store.report("form")["updated_at"]
+      "form",
+      "answer",
+      {field["id"]: field["options"][0]},
+      marker_store.report("form")["updated_at"],
     )
     assert marker_store.state()["reports"][0]["needs_answer"] is False
     try:
@@ -9081,7 +9235,9 @@ def test_option_labels_join_wrapped_lines():
   )
   blocks, questions = preview.parse_fields(wrapped)
   assert [question["type"] for question in questions] == ["choice"]
-  assert questions[0]["options"] == [
+  assert [
+    option for option in questions[0]["options"] if preview.custom_label(option) is None
+  ] == [
     (
       "head tree: `ref: ${{ github.event.pull_request.head.sha || github.sha }}`. A pull "
       "request can then clear its own check, and three workflow tests need the new literal."
@@ -9101,8 +9257,12 @@ def test_option_join_stops_at_a_block_start():
   markdown = "- ( ) only option\n## Section\n- ( ) after heading\nNote: ___\n"
   _, questions = preview.parse_fields(markdown)
   assert [question["type"] for question in questions] == ["choice", "choice", "text"]
-  assert questions[0]["options"] == ["only option"]
-  assert questions[1]["options"] == ["after heading"]
+  assert [
+    option for option in questions[0]["options"] if preview.custom_label(option) is None
+  ] == ["only option"]
+  assert [
+    option for option in questions[1]["options"] if preview.custom_label(option) is None
+  ] == ["after heading"]
   assert questions[2]["prompt"] == "Note"
 
 
