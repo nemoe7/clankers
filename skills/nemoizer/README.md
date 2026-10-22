@@ -60,7 +60,7 @@ It does not execute or rewrite tests. Findings need manual review: exact executa
 
 ## Results and limits
 
-P004 (pick/select) is advisory. Checks report it without failure. Explicit formatting can still rewrite it.
+NMO002 (pick/select) is advisory. Checks report it without failure. Explicit formatting can still rewrite it.
 
 | Mode | Result |
 | --- | --- |

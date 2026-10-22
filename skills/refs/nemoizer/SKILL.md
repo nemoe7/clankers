@@ -21,6 +21,7 @@ run the linter before you hand work over.
 | `transmit` | send |
 | `pick` | select |
 | `kind` | type |
+| `repository` | repo |
 
 Read references/rules.md for lint IDs and their meanings.
 
@@ -34,11 +35,11 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 ```
 
 - Every text file is read, including comments and Markdown prose.
-- Print each finding as `path:line: ID word -> use`, and exit 1 only for non-advisory findings. Mark P004 findings as advisory.
+- Print each finding as `path:line: ID word -> use`, and exit 1 only for non-advisory findings. Mark NMO002 and STE003 findings as advisory.
 - Vendored and generated trees are skipped, and `--ignore` adds a directory or
   file.
 
-- Run word rotations, sentence-length checks, and paragraph-length checks by default.
+- Run word rotations (`NMO`), semicolon, sentence-length, and advisory passive-voice checks (`STE`), paragraph-length checks (`NMP`), and test-assertion reviews (`NMT`) by default.
 - Use 20 words per sentence for unclassified prose and 25 for an explicit description scope.
 
 ## Writing the rotation
@@ -109,6 +110,7 @@ Delete a marker when the line no longer needs it.
 - Limit instructions to 20 words and descriptions to 25 unless a longer form is necessary to preserve meaning.
 - Rewrite noun clusters longer than three words when the rewrite preserves the technical term and its meaning.
 - Keep one topic per paragraph within four sentences or the stricter project limit.
+- Use the serial (Oxford) comma in lists of three or more items.
 - Use a list for three or more steps or conditions while preserving their order and grouping.
 - Define an uncommon technical term when needed, and use that term consistently.
 - Prefer simple tenses unless a compound form carries confidence or current relevance that must survive.
