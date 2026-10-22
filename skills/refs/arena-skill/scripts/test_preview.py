@@ -13112,3 +13112,50 @@ def test_bare_path_reminder_distinguishes_invocations_from_arguments(tmp_path, c
     assert result == 0, command
     assert ("bare" in output.out) == expected, command
     assert bool(output.err) == expected, command
+
+
+def test_recommended_options_prefix_ui_and_print_on_publish(
+  tmp_path, monkeypatch, capsys
+):
+  state = tmp_path / "state"
+  report = tmp_path / "report.md"
+  report.write_text(
+    "Pick a strategy: {#strategy}\n"
+    "- ( ) Alpha\n"
+    "- (x) Beta\n"
+    "- ( ) Gamma\n\n"
+    "Include extras: {#extras}\n"
+    "- [x] Logs\n"
+    "- [ ] Metrics\n",
+    encoding="utf-8",
+  )
+  _blocks, questions = preview.parse_fields(report.read_text("utf-8"))
+  assert len(questions) == 2
+  choice_html = preview.field_html(questions[0])
+  assert 'value="Beta" checked> * Beta</label>' in choice_html
+  assert 'value="Alpha"> Alpha</label>' in choice_html
+  checkbox_html = preview.field_html(questions[1])
+  assert 'value="Logs" checked> * Logs</label>' in checkbox_html
+  assert 'value="Metrics"> Metrics</label>' in checkbox_html
+
+  preview.Store(state, create=True)
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: state)
+  monkeypatch.setattr(preview, "require_server", lambda store: None)
+  monkeypatch.setattr(preview, "verify_publication", lambda *args: [])
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    [
+      "arena-preview",
+      "report",
+      "publish",
+      str(report),
+      "--id",
+      "rec-report",
+      "--title",
+      "Recommended Report",
+    ],
+  )
+  assert preview.main() == 0
+  output = capsys.readouterr()
+  assert "you recommended:\nPick a strategy: Beta\nInclude extras: Logs\n" in output.out

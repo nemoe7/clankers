@@ -139,8 +139,8 @@ In report diffs, keep leading and trailing whitespace outside `~~...~~` and `==.
 
 | Markdown marker | Control |
 | --- | --- |
-| `- ( ) option` (`- (x)` to preselect) | One radio choice; the preselect is the marked recommended answer |
-| `- [ ] option` (`- [x]` to preselect) | Checkbox choices |
+| `- ( ) option` (`- (x)` to mark recommended) | One radio choice; the UI prefixes a marked choice with `* ` and `report publish` prints `you recommended:` |
+| `- [ ] option` (`- [x]` to mark recommended) | Checkbox choices; the UI prefixes each marked choice with `* ` |
 | `- ( ) Label: ___` or `- [ ] Label: ___` inside a group | A labeled free-text choice |
 | `Label: ___` or bare `___` | A text answer |
 
