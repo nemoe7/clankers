@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -94,24 +95,6 @@ def test_changed_files_limits_the_diff_to_the_paths(tmp_path):
   assert changed_paths.changed_files(base, ("docs",), repo) == []
 
 
-def test_preview_tests_step_flags_a_preview_change(tmp_path):
-  repo = init_repo(tmp_path)
-  base = base_of(repo)
-  commit_change(repo, "maintenance/minify/minify.py", "pass  # touched\n")
-  out = tmp_path / "out.txt"
-  assert changed_paths.step_preview_tests({"PUSH_BEFORE": base}, out, str(repo)) == 0
-  assert "run=true\n" in outputs(out)
-
-
-def test_preview_tests_step_skips_an_unrelated_change(tmp_path):
-  repo = init_repo(tmp_path)
-  base = base_of(repo)
-  commit_change(repo, "docs/readme.md")
-  out = tmp_path / "out.txt"
-  assert changed_paths.step_preview_tests({"PUSH_BEFORE": base}, out, str(repo)) == 0
-  assert "run=false\n" in outputs(out)
-
-
 def test_artifacts_step_reads_the_dispatch_inputs(tmp_path):
   repo = init_repo(tmp_path)
   out = tmp_path / "out.txt"
@@ -171,7 +154,7 @@ def test_main_runs_a_step_from_the_environment(tmp_path, monkeypatch):
   monkeypatch.setenv("PUSH_BEFORE", base)
   assert (
     changed_paths.main(
-      ["--step", "preview-tests", "--repo", str(repo), "--output", str(out)]
+      ["--step", "module-tests", "--repo", str(repo), "--output", str(out)]
     )
     == 0
   )
@@ -182,6 +165,90 @@ def test_main_needs_an_output_file(tmp_path, monkeypatch):
   repo = init_repo(tmp_path)
   monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
   assert (
-    changed_paths.main(["--step", "preview-tests", "--repo", str(repo), "--output", ""])
+    changed_paths.main(["--step", "artifacts", "--repo", str(repo), "--output", ""])
     == 1
   )
+
+
+def test_module_matrix_selects_owners_and_shared_changes():
+  path = "maintenance/measurements/test_measurements.py"
+  owners = [name for name, tests in changed_paths.MODULE_TESTS.items() if path in tests]
+  selected = changed_paths.module_matrix([path])
+  assert [row["name"] for row in selected] == owners
+  assert not changed_paths.module_matrix(["CHANGELOG.md"])
+  all_names = set(changed_paths.MODULE_TESTS)
+  for shared in (
+    "requirements.txt",
+    "package-lock.json",
+    "pytest.ini",
+    ".github/workflows/ci.yml",
+  ):
+    assert {row["name"] for row in changed_paths.module_matrix([shared])} == all_names
+
+
+def test_module_test_ownership_is_complete_and_unique():
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  owned = [path for paths in changed_paths.MODULE_TESTS.values() for path in paths]
+  discovered = {
+    str(path.relative_to(root))
+    for directory in ("maintenance", "skills/refs", "github/workflows")
+    for path in (root / directory).rglob("test_*.py")
+  }
+  assert set(owned) == discovered
+  assert len(owned) == len(set(owned))
+
+
+def test_module_step_routes_changes_and_missing_bases(tmp_path):
+  repo = init_repo(tmp_path)
+  base = base_of(repo)
+  path = "maintenance/measurements/test_measurements.py"
+  commit_change(repo, path)
+  out = tmp_path / "modules.txt"
+  assert changed_paths.step_module_tests({"PUSH_BEFORE": base}, out, str(repo)) == 0
+  values = dict(line.split("=", 1) for line in outputs(out).splitlines())
+  assert json.loads(values["matrix"])["include"] == changed_paths.module_matrix([path])
+  out.unlink()
+  assert changed_paths.step_module_tests({}, out, str(repo)) == 0
+  values = dict(line.split("=", 1) for line in outputs(out).splitlines())
+  assert json.loads(values["matrix"])["include"] == changed_paths.module_matrix(None)
+
+
+def test_unknown_tests_fail_before_scheduling(tmp_path):
+  repo = init_repo(tmp_path)
+  path = "maintenance/test_new_module.py"
+  commit_change(repo, path)
+  try:
+    changed_paths.check_module_ownership(str(repo))
+  except SystemExit as error:
+    assert path in str(error)
+  else:
+    raise AssertionError("An unowned test must not be skipped.")
+
+
+def test_renames_select_both_source_modules(tmp_path):
+  repo = init_repo(tmp_path)
+  old = "skills/refs/nemoizer/scripts/example.py"
+  new = "skills/refs/nemo-ui-ux/scripts/example.py"
+  commit_change(repo, old)
+  base = base_of(repo)
+  target = repo / new
+  target.parent.mkdir(parents=True, exist_ok=True)
+  (repo / old).rename(target)
+  git(repo, "add", "-A")
+  git(repo, "commit", "-q", "-m", "move source")
+  paths = changed_paths.changed_files(base, (), str(repo))
+  assert {old, new} <= set(paths)
+  assert changed_paths.module_matrix(paths) == changed_paths.module_matrix([old, new])
+
+
+def test_node_test_ownership_is_complete_and_unique():
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  owned = [path for paths in changed_paths.MODULE_NODE_TESTS.values() for path in paths]
+  discovered = {
+    str(path.relative_to(root))
+    for directory in ("maintenance", "skills/refs")
+    for suffix in ("*.test.cjs", "*.checks.cjs")
+    for path in (root / directory).rglob(suffix)
+  }
+  assert set(owned) == discovered
+  assert len(owned) == len(set(owned))

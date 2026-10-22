@@ -24,6 +24,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Rename workflow, job, and step labels. Remove standalone the, and use PR, Prep, and Docs. Retain IDs, commands, permissions, conditions, and dependencies.
 
+- Run affected product and maintenance tests in independent module jobs. Keep shared lint, build, security, and repository checks. Use full test coverage when comparison history is missing.
+
 #### nemoizer
 
 - Add contextual advice on article removal. Keep complete, natural wording and unchanged meaning. Retain linter behavior.
