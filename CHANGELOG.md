@@ -28,6 +28,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### house
 
+- Require complete, self-contained task details and `-A` or `--append` updates so compaction and workspace resets lose no progress.
+
 - Rerun the skill installer and restart the active preview server after skill source changes.
 
 - Check preview visibility after a branch change as well as initial setup. Reuse an active preview only on the same branch.

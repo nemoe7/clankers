@@ -101,7 +101,7 @@
 - Mermaid: ALWAYS in documentation, NEVER anywhere else.
 - For user-run commands, print Windows cmd by default; print bash for Raspberry Pi or bash requests.
 - Task completion alone requires no report.
-- MUST update the task status and keep required verification and landed commit details in the task record.
+- MUST update the task status and keep scope, progress, verification, and landed commit details complete in the task record with -A or --append so nothing is lost to compaction or workspace resets.
 - Do not waive requested reports or reports required for assessments, questions, or blocked tasks.
 - MUST end a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool.
 
