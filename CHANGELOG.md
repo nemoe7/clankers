@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Deliver the full pending inbox from polls that find a violation. Mark delivered items Seen without acknowledging them.
+
 - Keep questionnaire requests out of violation and bible-checkpoint handling. Retain request reuse and clause checks for violations.
 
 ## 2026-10-21

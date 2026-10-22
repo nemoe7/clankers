@@ -4062,21 +4062,9 @@ def poll_inbox(store, sleeper=None):
       if time.monotonic() >= deadline:
         break
       violation = store.pending_violation_note()
-      if violation:
-        print(
-          f"{violation['text']}\nRun `arena-preview read`, then ack"
-          f" `{violation['id']}`.",
-          flush=True,
-        )
-        return 0
       listing = store.read(include_quiet=False)
-      if listing["pending"]:
-        full = store.read()
-        print(format_read(full), flush=True)
-        store.mark_seen([item["id"] for item in full["pending"]])
-        store.mark_reports_agent_seen(
-          [item.get("report_id") for item in full["pending"]]
-        )
+      if violation or listing["pending"]:
+        print_read(store)
         return 0
       # A finished gate run ends this poll, so a separate closing poll still ends the turn.
       if run_notices(store.path.parent):

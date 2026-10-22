@@ -11833,22 +11833,62 @@ def test_repeat_poll_notice_keeps_system_wording_and_stderr(capsys, monkeypatch)
     assert "The call-count gate blocks after 6 unacknowledged calls." in note["text"]
 
 
-def test_preview_violation_wakes_poll_and_does_not_wait(capsys):
+@pytest.mark.parametrize("already_pending", (False, True))
+def test_preview_violation_wakes_poll_and_delivers_full_inbox(capsys, already_pending):
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
+    form = Path(directory) / "form.md"
+    form.write_text("Answer: ___\n", encoding="utf-8")
+    store.publish("form", "Form", form)
+    delivered = []
 
     def flag_during_wait(_):
       store.request_interrupt("notes")
+      store.note("owner-note", "Owner work")
+      store.note("quiet-note", "Quiet information", quiet=True)
+      store.note(
+        "request-note",
+        "Answer request",
+        quiet=True,
+        blocking=True,
+        type="questionnaire",
+      )
+      store.submission("report-answer", "form", "REPORT form: Answer")
+      delivered.extend(store.read()["pending"])
 
+    if already_pending:
+      flag_during_wait(None)
     with (
       patch("preview.pr_check_watch"),
       patch("preview.run_notices", return_value=False),
     ):
       assert preview.poll_inbox(store, sleeper=flag_during_wait) == 0
     output = capsys.readouterr().out
-    assert "The user flagged a violation." in output  # nonemo: T001
-    assert "Run `arena-preview read`, then ack" in output  # nonemo: T001
+    for item in delivered:
+      assert preview.format_pending_item(item) in output
+    assert "arena-preview read" not in output  # nonemo: T001
+    records = store.state()["notes"] + store.submissions()
+    assert {item["id"] for item in records} == {item["id"] for item in delivered}
+    assert all(item["seen_at"] is not None for item in records)
+    assert all(item["acknowledged_at"] is None for item in records)
+    assert store.report("form")["agent_seen_at"] is not None
     assert store.pending_violation_note() is not None
+    assert not store.gate(pending_only=True)
+    assert not store.polling()
+
+
+def test_poll_failed_delivery_leaves_violation_unseen():
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.request_interrupt("notes")
+    with (
+      patch("preview.pr_check_watch"),
+      patch("preview.run_notices", return_value=False),
+      patch.object(sys.stdout, "write", side_effect=OSError("dropped delivery")),
+      pytest.raises(OSError, match="dropped delivery"),
+    ):
+      preview.poll_inbox(store)
+    assert store.pending_violation_note()["seen_at"] is None
     assert not store.polling()
 
 

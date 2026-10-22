@@ -1467,10 +1467,8 @@ def poll_inbox(store,sleeper=None):
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			if time.monotonic()>=deadline:break
-			violation=store.pending_violation_note()
-			if violation:print(f"{violation['text']}\nRun `arena-preview read`, then ack `{violation['id']}`.",flush=True);return 0
-			listing=store.read(include_quiet=False)
-			if listing['pending']:full=store.read();print(format_read(full),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);return 0
+			violation=store.pending_violation_note();listing=store.read(include_quiet=False)
+			if violation or listing['pending']:print_read(store);return 0
 			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
 			if failures:print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
