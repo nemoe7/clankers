@@ -15,7 +15,7 @@
 - ALWAYS push verified commits to origin after each task completion; NEVER hold verified batches across tasks.
 - After every push, MUST confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
 - In an Arena session, ALWAYS install the `arena-skill` skill with its installer from the repository root before activating it, NEVER by hand, NEVER through the background process tool, even when ntfy or no steering is selected, and read its inbox at every cadence point.
-- After any arena-skill source file changes, MUST rerun the skill installer from the repository root before the next CLI call or preview-server start.
+- After any arena-skill source file changes, MUST rerun the skill installer from the repository root and restart the running preview server before the next CLI call or preview-server start.
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
