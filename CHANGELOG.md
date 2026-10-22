@@ -58,6 +58,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Keep report acknowledgement-view stamps in saved state and restore. Retain old-backup support and omit transient agent and active-view stamps.
+
 - Block output pipelines from inbox read and poll commands before execution. Keep bare calls and unrelated pipelines.
 
 - Restore connection-dot spacing. Keep the expanded touch target outside layout flow, with visible keyboard focus.

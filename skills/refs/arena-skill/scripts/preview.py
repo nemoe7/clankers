@@ -1761,7 +1761,15 @@ SUBMISSION_LINE_KEYS = (
   "seen_at",
   "task_id",
 )
-REPORT_LINE_KEYS = ("id", "title", "markdown", "published_at", "seen_at", "source")
+REPORT_LINE_KEYS = (
+  "id",
+  "title",
+  "markdown",
+  "published_at",
+  "seen_at",
+  "ack_seen_at",
+  "source",
+)
 
 
 def task_row(row):
@@ -1882,7 +1890,7 @@ def saved_answer_line(record):
 
 
 def saved_report_line(record):
-  """Return source and the owner's first-read stamp for one report save line."""
+  """Return source and report read stamps for one report save line."""
   if not isinstance(record, dict):
     raise TypeError("Every saved report is an object")
   return {key: record.get(key) for key in REPORT_LINE_KEYS}
@@ -5048,7 +5056,7 @@ class Store:
       return [
         dict(row)
         for row in db.execute(
-          "SELECT id, title, markdown, published_at, seen_at, source FROM reports ORDER BY seq, id"
+          "SELECT id, title, markdown, published_at, seen_at, ack_seen_at, source FROM reports ORDER BY seq, id"
         )
       ]
 
@@ -6449,11 +6457,25 @@ class Store:
         raise ValueError("A saved seen stamp is text")
       if seen_at is not None:
         when(seen_at)
+      ack_seen_at = record.get("ack_seen_at")
+      if ack_seen_at is not None:
+        if not isinstance(ack_seen_at, str):
+          raise ValueError("A saved acknowledgement-view stamp is text")
+        when(ack_seen_at)
       source = record.get("source")
       if source is not None and not isinstance(source, str):
         raise ValueError("A saved report source path is text")
       prepared.append(
-        (report_id, title, markdown, published_at, seen_at, seen_at is not None, source)
+        (
+          report_id,
+          title,
+          markdown,
+          published_at,
+          seen_at,
+          seen_at is not None,
+          source,
+          ack_seen_at,
+        )
       )
     with self.transaction(shared) as db:
       for (
@@ -6464,17 +6486,19 @@ class Store:
         seen_at,
         ever_seen,
         source,
+        ack_seen_at,
       ) in prepared:
         highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
         db.execute(
           """INSERT INTO reports
-             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source, ack_seen_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET title = excluded.title,
                markdown = excluded.markdown, updated_at = excluded.updated_at,
                source = COALESCE(excluded.source, reports.source),
                published_at = COALESCE(reports.published_at, excluded.published_at),
                seen_at = COALESCE(reports.seen_at, excluded.seen_at),
+               ack_seen_at = COALESCE(reports.ack_seen_at, excluded.ack_seen_at),
                ever_seen = MAX(reports.ever_seen, excluded.ever_seen)""",
           (
             report_id,
@@ -6486,6 +6510,7 @@ class Store:
             seen_at,
             ever_seen,
             source,
+            ack_seen_at,
           ),
         )
     return len(prepared)

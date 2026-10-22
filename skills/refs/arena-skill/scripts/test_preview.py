@@ -2210,6 +2210,21 @@ def test_report_reply_without_saved_path_names_stored_source():
       db.execute("ALTER TABLE reports DROP COLUMN source")
     store = preview.Store(thread_dir)
     assert store.report("legacy-report")["source"] is None
+    assert store.report("legacy-report")["ack_seen_at"] is None
+    for invalid_stamp in ([], "not-a-timestamp"):
+      with pytest.raises(ValueError):
+        store.import_reports(
+          [
+            {
+              "id": "invalid-stamp",
+              "title": "Invalid",
+              "markdown": "text",
+              "ack_seen_at": invalid_stamp,
+            }
+          ]
+        )
+      with pytest.raises(FileNotFoundError):
+        store.report("invalid-stamp")
     with pytest.raises(ValueError, match="source path is text"):
       store.import_reports(
         [{"id": "invalid-source", "title": "Invalid", "markdown": "text", "source": []}]
@@ -8556,10 +8571,9 @@ def test_report_sources_ride_in_the_saved_state():
     assert "Choice? {#select}" in saved["markdown"]
     assert saved["published_at"]
     assert saved["seen_at"] == "2026-10-13T03:12:00+00:00"
-    assert all(
-      key not in saved
-      for key in ("ever_seen", "ack_seen_at", "agent_seen_at", "viewed_at")
-    )
+    ack_seen_at = "2026-10-13T03:13:00+00:00"
+    assert saved["ack_seen_at"] == ack_seen_at
+    assert all(key not in saved for key in ("ever_seen", "agent_seen_at", "viewed_at"))
 
     restored_dir = Path(directory) / "restored"
     restored_dir.mkdir()
@@ -8572,7 +8586,7 @@ def test_report_sources_ride_in_the_saved_state():
     assert report["published_at"]
     assert report["seen_at"] == "2026-10-13T03:12:00+00:00"
     assert report["ever_seen"] == 1
-    assert report["ack_seen_at"] is None
+    assert report["ack_seen_at"] == ack_seen_at
     assert report["agent_seen_at"] is None and report["viewed_at"] is None
 
 

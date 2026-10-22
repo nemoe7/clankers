@@ -633,7 +633,7 @@ SAVED_STATE='saved-state.ndjson'
 NOTE_LINE_KEYS='id','text','at','acknowledged_at','ack_type','ack_text','ack_edited_at','replies','ack_edited_seen_count','seen_at','task_id'
 TASK_LINE_KEYS='id','title','details','status','completed_at','order','report_id','type'
 SUBMISSION_LINE_KEYS='id','report_id','text','at','acknowledged_at','ack_type','ack_text','ack_edited_at','replies','ack_edited_seen_count','seen_at','task_id'
-REPORT_LINE_KEYS='id','title','markdown','published_at','seen_at','source'
+REPORT_LINE_KEYS='id','title','markdown','published_at','seen_at','ack_seen_at','source'
 def task_row(row):
 	shaped={'id':row[0],'title':row[1],'details':json.loads(row[2]),'status':row[3],'order':row[4],'updated_at':row[5],'completed_at':row[6]if len(row)>6 else None,'blocked':bool(row[7])if len(row)>7 else False}
 	if len(row)>8 and row[8]:shaped['report_id']=row[8]
@@ -1743,7 +1743,7 @@ class Store:
 	def submissions(self):
 		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM submissions ORDER BY at, seq')]
 	def report_sources(self):
-		with closing(self.connect())as db:return[dict(row)for row in db.execute('SELECT id, title, markdown, published_at, seen_at, source FROM reports ORDER BY seq, id')]
+		with closing(self.connect())as db:return[dict(row)for row in db.execute('SELECT id, title, markdown, published_at, seen_at, ack_seen_at, source FROM reports ORDER BY seq, id')]
 	def state(self):
 		tasks=self.tasks()
 		with closing(self.connect())as db:
@@ -2173,11 +2173,15 @@ class Store:
 			seen_at=record.get('seen_at')
 			if seen_at is not None and not isinstance(seen_at,str):raise ValueError('A saved seen stamp is text')
 			if seen_at is not None:when(seen_at)
+			ack_seen_at=record.get('ack_seen_at')
+			if ack_seen_at is not None:
+				if not isinstance(ack_seen_at,str):raise ValueError('A saved acknowledgement-view stamp is text')
+				when(ack_seen_at)
 			source=record.get('source')
 			if source is not None and not isinstance(source,str):raise ValueError('A saved report source path is text')
-			prepared.append((report_id,title,markdown,published_at,seen_at,seen_at is not None,source))
+			prepared.append((report_id,title,markdown,published_at,seen_at,seen_at is not None,source,ack_seen_at))
 		with self.transaction(shared)as db:
-			for(report_id,title,markdown,published_at,seen_at,ever_seen,source)in prepared:highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports\n             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source)\n             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n             ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n               markdown = excluded.markdown, updated_at = excluded.updated_at,\n               source = COALESCE(excluded.source, reports.source),\n               published_at = COALESCE(reports.published_at, excluded.published_at),\n               seen_at = COALESCE(reports.seen_at, excluded.seen_at),\n               ever_seen = MAX(reports.ever_seen, excluded.ever_seen)',(report_id,title,markdown,now(),published_at,highest+1,seen_at,ever_seen,source))
+			for(report_id,title,markdown,published_at,seen_at,ever_seen,source,ack_seen_at)in prepared:highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports\n             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source, ack_seen_at)\n             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n             ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n               markdown = excluded.markdown, updated_at = excluded.updated_at,\n               source = COALESCE(excluded.source, reports.source),\n               published_at = COALESCE(reports.published_at, excluded.published_at),\n               seen_at = COALESCE(reports.seen_at, excluded.seen_at),\n               ack_seen_at = COALESCE(reports.ack_seen_at, excluded.ack_seen_at),\n               ever_seen = MAX(reports.ever_seen, excluded.ever_seen)',(report_id,title,markdown,now(),published_at,highest+1,seen_at,ever_seen,source,ack_seen_at))
 		return len(prepared)
 	def import_tasks(self,records,replace=False,autosave=True,shared=None):
 		if not isinstance(records,list):raise TypeError('Import a list of task objects')
