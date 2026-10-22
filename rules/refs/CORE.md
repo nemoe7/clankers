@@ -94,9 +94,9 @@
 ## Setup
 
 - Apply these Setup rules only in repositories owned by `nemoe7`; follow other repositories' conventions.
-- For a Python project, MUST use the project's own `ruff.toml` when it has one.
-- For Python projects without `ruff.toml`, MUST keep these defaults in this rule file: `Ruff defaults`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, and `required-version = "0.16.6"`.
-- For a Python project with no `ruff.toml`, MUST create one exactly as above before running the gates.
+- For a Python project, MUST keep Ruff settings in the project's own `pyproject.toml` when suitable for the project, otherwise in `ruff.toml`.
+- For Python projects without Ruff configuration, MUST keep these defaults in this rule file: `Ruff defaults`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, and `required-version = "0.16.6"`.
+- For a Python project with no Ruff configuration, MUST create it exactly as above in the selected file before running the gates.
 
 ## Verification
 

@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### house
 
+- Put Ruff settings in pyproject.toml when suitable for the project, otherwise in ruff.toml. Keep defaults and gates unchanged.
+
 - Check later dependency versions for advisory fixes. Report only advisories with an available fix.
 
 #### workflows

@@ -193,8 +193,8 @@
 - Markdown: defaults + MD060, MD013 off.
 - For a Python project, use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
 - Keep architecture; leave unrelated code alone.
-- For a Python project, Ruff is configured by the project's own `ruff.toml` when it has one, holding the AGENTS.md conventions and nothing else until flagged.
-- For a Python project with no `ruff.toml`, create one with exactly that before running gates.
+- For a Python project, keep Ruff settings in the project's own `pyproject.toml` when suitable for the project, otherwise in `ruff.toml`, holding the AGENTS.md conventions and nothing else until flagged.
+- For a Python project with no Ruff configuration, create it with exactly that in the selected file before running gates.
 - For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
 - Add code or configuration comments only when method complexity requires them.
 

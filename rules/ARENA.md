@@ -149,7 +149,7 @@
 
 ## Style
 
-- `nemoe7` repos: 2-space indent beats formatter defaults; Markdown: markdownlint defaults + MD060, MD013 off; Python: Ruff defaults via project `ruff.toml` or one created exactly per AGENTS.md; gates `ruff check`/`ruff format`, no CLI overrides.
+- `nemoe7` repos: 2-space indent beats formatter defaults; Markdown: markdownlint defaults + MD060, MD013 off; Python: Ruff defaults in project `pyproject.toml` when suitable, else `ruff.toml`, with only AGENTS.md conventions until flagged; create missing config exactly before gates; gates `ruff check`/`ruff format`, no CLI overrides.
 - Add code/config comments ONLY when method complexity needs them.
 
 ## Git
