@@ -44,17 +44,23 @@ test('preview client', async (t) => {
     addEventListener(name, callback) { this.events[name] = callback; }
     append(...children) {
       for (const child of children) {
+        if (child?.id) elements.set(`#${child.id}`, child);
         this.children = this.children.filter(item => item !== child);
         this.children.push(child);
       }
     }
     insertBefore(child, reference) {
+      if (child?.id) elements.set(`#${child.id}`, child);
       this.children = this.children.filter(item => item !== child);
       const index = this.children.indexOf(reference);
       this.children.splice(index < 0 ? this.children.length : index, 0, child);
       return child;
     }
-    removeChild(child) { this.children = this.children.filter(item => item !== child); return child; }
+    removeChild(child) {
+      if (child?.id) elements.delete(`#${child.id}`);
+      this.children = this.children.filter(item => item !== child);
+      return child;
+    }
     replaceChildren(...children) { this.children = children; this.replacements = (this.replacements || 0) + 1; }
     // Reset report scroll when replacing content, as browser layout does.
     set innerHTML(value) {
@@ -92,6 +98,7 @@ test('preview client', async (t) => {
   const copied = [];
   let clipboardFails = false;
   let execCommandResult = true;
+  const $ = id => elements.get(id) || null;
   const get = id => {
     if (!elements.has(id)) {
       const element = new Element();
@@ -116,7 +123,9 @@ test('preview client', async (t) => {
   get('#downloads-panel').hidden = true;
   get('#upload-file').files = [];
   // The dialog form owns the field container, so its FormData sees the controls.
-  get('#modal-form').append(get('#modal-fields'));
+  get('#questionnaire-again').hidden = true;
+  get('#modal-actions').append(get('#questionnaire-again'), get('#modal-cancel'), get('#modal-confirm'));
+  get('#modal-form').append(get('#modal-fields'), get('#modal-actions'));
   get('#note').placeholder = 'What should happen next?';
   get('#send').textContent = 'Send';
   get('#send').dataset.busyLabel = 'Sending...';
@@ -4721,12 +4730,22 @@ test('preview client', async (t) => {
     questionnaireResults = [
       { id: 'H8P3C', correct: false, confidence: 1 },
       { id: 'D9V4N', correct: true, confidence: 0.5 },
-      { id: 'G2W6M', correct: false, confidence: 0 },
+      { id: 'G2W6M', correct: null, confidence: 0 },
     ];
     await update();
     const content = get('#modal-fields').children[0];
     const rows = content.children.find(node => node.tagName === 'table').children.at(-1).children;
-    assert.deepEqual(rows.map(row => row.children[0].dataset.correct), ['false', 'true', 'false']);
+    assert.deepEqual(rows.map(row => row.children[0].dataset.correct), ['false', 'true', 'unknown']);
+    assert.deepEqual(rows.map(row => row.children[0].children[0].getAttribute('class')), [
+      'lucide lucide-x',
+      'lucide lucide-check',
+      'lucide lucide-circle-question-mark',
+    ]);
+    assert.deepEqual(rows.map(row => row.children[0].getAttribute('aria-label')), [
+      'H8P3C: incorrect',
+      'D9V4N: correct',
+      'G2W6M: unknown',
+    ]);
     assert.deepEqual(rows.map(row => row.children[1].children[0].value), [1, 0.5, 0]);
     assert.deepEqual(rows.map(row => row.children[0].children.at(-1).textContent), questionnaireResults.map(row => row.id));
     assert.equal(content.children.some(node => node.tagName === 'p'), false);
@@ -4734,17 +4753,19 @@ test('preview client', async (t) => {
     const time = footer.children.find(node => node.tagName === 'time');
     assert.equal(time.dateTime, questionnaireAnsweredAt);
     assert.equal(time.textContent, context.time(questionnaireAnsweredAt));
-    const again = footer.children.find(node => node.tagName === 'button');
+    const again = get('#questionnaire-again');
+    assert.equal(again.hidden, false, 'Answer again shows in the modal action row');
+    assert.equal(get('#modal-actions').children.indexOf(again) < get('#modal-actions').children.indexOf(get('#modal-cancel')), true);
     assert.equal(again.disabled, false);
     await again.events.click();
     assert.equal(questionnaireRequests.length, requestCount + 1);
     assert.equal(again.disabled, true);
     await update();
     assert.equal(questionnaireRequests.length, requestCount + 1);
-    assert.equal(footer.children.find(node => node.tagName === 'button'), again);
+    assert.equal(get('#questionnaire-again'), again);
     questionnaireAnsweredAt = new Date().toISOString();
     await update();
-    const retry = content.lastElementChild.children.find(node => node.tagName === 'button');
+    const retry = get('#questionnaire-again');
     failedWrites.add('/api/questionnaire/request');
     await retry.events.click();
     assert.equal(retry.disabled, false);

@@ -101,6 +101,7 @@ const ICONS = {
     ['path', { d: 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' }]],
   check: [['path', { d: 'M20 6 9 17l-5-5' }]],
   x: [['path', { d: 'M18 6 6 18' }], ['path', { d: 'm6 6 12 12' }]],
+  'circle-question-mark': [['circle', { cx: '12', cy: '12', r: '10' }], ['path', { d: 'M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3' }], ['path', { d: 'M12 17h.01' }]],
   eye: [['path', { d: 'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0' }],
     ['circle', { cx: '12', cy: '12', r: '3' }]],
   markdown: [['path', { d: 'M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z',
@@ -2775,6 +2776,7 @@ function openModal(config) {
     $('#modal-error').hidden = true;
     $('#modal-confirm').textContent = config.confirm || 'Submit';
     $('#modal-confirm').hidden = !!config.readOnly;
+    $('#questionnaire-again').hidden = true;
     modal.dataset.readOnly = String(!!config.readOnly);
     $('#modal-cancel').textContent = config.readOnly ? 'Close' : 'Cancel';
     modalSubmit = async event => {
@@ -2825,10 +2827,10 @@ function renderQuestionnaire(view, results, answeredAt) {
   const snapshot = JSON.stringify([results, answeredAt]);
   const relative = answeredAt ? time(answeredAt) : '';
   if (view.dataset.snapshot === snapshot) {
-    const footer = view.lastElementChild;
-    footer.querySelector('time').textContent = relative;
-    footer.querySelector('time').setAttribute('aria-label', `Last answer: ${relative}`);
-    footer.querySelector('button').disabled = questionnaireRequested;
+    const age = view.querySelector('time');
+    age.textContent = relative;
+    age.setAttribute('aria-label', `Last answer: ${relative}`);
+    $('#questionnaire-again').disabled = questionnaireRequested;
     return;
   }
   questionnaireRequested = false;
@@ -2849,11 +2851,12 @@ function renderQuestionnaire(view, results, answeredAt) {
     const row = document.createElement('tr');
     const id = document.createElement('th');
     id.scope = 'row';
-    id.dataset.correct = String(result.correct);
+    const state = result.correct === null ? 'unknown' : String(result.correct);
+    id.dataset.correct = state;
     const code = document.createElement('code');
     code.textContent = result.id;
-    id.append(icon(result.correct ? 'check' : 'x', 16), code);
-    id.setAttribute('aria-label', `${result.id}: ${result.correct ? 'correct' : 'incorrect'}`);
+    id.append(icon(state === 'true' ? 'check' : state === 'false' ? 'x' : 'circle-question-mark', 16), code);
+    id.setAttribute('aria-label', `${result.id}: ${state === 'true' ? 'correct' : state === 'false' ? 'incorrect' : 'unknown'}`);
     const confidence = document.createElement('td');
     confidence.className = 'questionnaire-confidence';
     const bar = document.createElement('progress');
@@ -2879,27 +2882,10 @@ function renderQuestionnaire(view, results, answeredAt) {
   age.hidden = !answeredAt;
   age.textContent = relative;
   age.setAttribute('aria-label', `Last answer: ${relative}`);
-  const again = document.createElement('button');
-  again.type = 'button';
-  again.textContent = 'Answer again';
-  again.addEventListener('click', async () => {
-    if (again.disabled) return;
-    again.disabled = true;
-    try {
-      await requestQuestionnaire();
-      if (questionnaireIsOpen(view)) {
-        delete view.dataset.requestError;
-        $('#modal-error').hidden = true;
-      }
-    } catch (error) {
-      if (questionnaireIsOpen(view)) {
-        view.dataset.requestError = 'true';
-        $('#modal-error').textContent = `Questionnaire request failed: ${error.message}. Try again.`;
-        $('#modal-error').hidden = false;
-      }
-    } finally { again.disabled = questionnaireRequested; }
-  });
-  footer.append(age, again);
+  const again = $('#questionnaire-again');
+  again.hidden = false;
+  again.disabled = questionnaireRequested;
+  footer.append(age);
   view.replaceChildren(table, footer);
   view.dataset.snapshot = snapshot;
 }
@@ -2911,6 +2897,7 @@ async function refreshQuestionnaire() {
     const { results, answered_at } = await (await request('/api/questionnaire')).json();
     if (!questionnaireIsOpen(view)) return;
     if (results === null) {
+      $('#questionnaire-again').hidden = true;
       view.textContent = 'No submission yet. Requesting an answer from the agent…';
       if (!questionnaireRequested) await requestQuestionnaire();
       if (questionnaireIsOpen(view)) view.textContent = 'No submission yet. A request was sent to the agent.';
@@ -2923,6 +2910,25 @@ async function refreshQuestionnaire() {
     }
   } finally { questionnaireBusy = false; }
 }
+$('#questionnaire-again').addEventListener('click', async () => {
+  const again = $('#questionnaire-again');
+  const view = questionnaireView;
+  if (again.disabled || !questionnaireIsOpen(view)) return;
+  again.disabled = true;
+  try {
+    await requestQuestionnaire();
+    if (questionnaireIsOpen(view)) {
+      delete view.dataset.requestError;
+      $('#modal-error').hidden = true;
+    }
+  } catch (error) {
+    if (questionnaireIsOpen(view)) {
+      view.dataset.requestError = 'true';
+      $('#modal-error').textContent = `Questionnaire request failed: ${error.message}. Try again.`;
+      $('#modal-error').hidden = false;
+    }
+  } finally { again.disabled = questionnaireRequested; }
+});
 $('#questionnaire-open').addEventListener('click', async () => {
   if (modal.open) return;
   questionnaireView = document.createElement('section');

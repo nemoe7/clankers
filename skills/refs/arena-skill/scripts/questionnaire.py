@@ -102,13 +102,20 @@ def loads(text):
       raise ValueError(
         f"{question['id']}.confidence must be zero when all values are unknown"
       )
-    normalized.append({"id": question["id"], "answer": clean, "confidence": confidence})
+    normalized.append(
+      {"id": question["id"], "answer": clean, "confidence": confidence, "known": known}
+    )
   return normalized
 
 
 def grade(text):
   results = []
   for index, row in enumerate(loads(text)):
+    if not row["known"]:
+      results.append(
+        {"id": row["id"], "correct": None, "confidence": row["confidence"]}
+      )
+      continue
     answer = dict(row["answer"])
     role = answer.pop("role") if index == 1 else None
     canonical = json.dumps(

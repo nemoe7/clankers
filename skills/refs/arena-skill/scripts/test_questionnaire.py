@@ -10,7 +10,7 @@ def test_questionnaire_schema_and_hashes(monkeypatch):
 
   empty = questionnaire.template()
   assert len(empty) == len(questionnaire.SPEC["questions"])
-  assert all(not row["correct"] for row in questionnaire.grade(json.dumps(empty)))
+  assert all(row["correct"] is None for row in questionnaire.grade(json.dumps(empty)))
   examples = copy.deepcopy(empty)
   examples[0]["answer"] = {"command_name": "Rebuild", "concurrency_option": "Online"}
   examples[1]["answer"] = {
@@ -83,3 +83,7 @@ def test_questionnaire_schema_and_hashes(monkeypatch):
   assert (
     questionnaire.loads(json.dumps(partial))[0]["answer"]["concurrency_option"] is None
   )
+  partial_graded = questionnaire.grade(json.dumps(partial))
+  assert partial_graded[0]["correct"] is False
+  assert partial_graded[1]["correct"] is None
+  assert partial_graded[2]["correct"] is None

@@ -459,6 +459,8 @@ mark code { color: var(--text); }
 .questionnaire-results th[data-correct] { white-space: nowrap; font-weight: 400; }
 .questionnaire-results th[data-correct="true"] { color: var(--questionnaire-success); }
 .questionnaire-results th[data-correct="false"] { color: var(--questionnaire-danger); }
+.questionnaire-results th[data-correct="unknown"] { color: var(--questionnaire-warning); }
+#modal[data-read-only="true"] .modal-actions { flex-wrap: nowrap; }
 .questionnaire-results th svg { vertical-align: middle; margin-right: 8px; }
 .questionnaire-confidence { width: 55%; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .questionnaire-confidence progress { appearance: none; width: 65%; height: 10px; border: 1px solid currentColor; border-radius: 8px; overflow: hidden; background: var(--bubble); vertical-align: middle; }

@@ -93,6 +93,8 @@ Accepted: retain the shared dialog and product themes. Add separate correctness 
 
 2026-10-22: add relative last-answer time and Answer again. Hide the heading and session notice, and retain the dialog name.
 
+2026-10-22: show green check, red cross, and orange question mark for correct, wrong, and wholly unknown answers. Keep Answer again and Close on one row.
+
 ## Message composer
 
 Empty and one-line drafts use one row on desktop and phones. Multiline drafts grow within the view and expose an expand control at the top right. The multiline layout stays until the draft is empty.
