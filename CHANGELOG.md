@@ -377,6 +377,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Recreate report Markdown source files in the active ignored state directory during import. Keep existing files and remove created files when an import fails.
+
 - Check command classification before the detached-worktree gate guard. Allow read-only commands and keep gate, run, commit, and push blocks.
 
 - Reorder queued tasks on touch devices through the drag handle. Keep saved task order on cancel and failed writes.

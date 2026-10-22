@@ -6562,7 +6562,6 @@ class Store:
         )
       for table in ("notes", "reports", "submissions", "tasks"):
         db.execute(f"DELETE FROM {table}")
-      self.import_reports(reports, shared=db)
       self.import_tasks(tasks, replace_tasks, autosave=False, shared=db)
       for record in messages:
         if "text" not in record or "title" in record:
@@ -6589,6 +6588,7 @@ class Store:
         writer(
           *args, record["text"], record.get("at"), shared=db, autosave=False, **options
         )
+      self.import_reports(reports, shared=db)
     receipt = {
       "notes": sum("report_id" not in r for r in messages),
       "answers": sum("report_id" in r for r in messages),
@@ -6652,49 +6652,113 @@ class Store:
           metadata,
         )
       )
-    with self.transaction(shared) as db:
-      for (
-        report_id,
-        title,
-        markdown,
-        published_at,
-        seen_at,
-        ever_seen,
-        source,
-        ack_seen_at,
-        pinned,
-        metadata,
-      ) in prepared:
-        highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
-        db.execute(
-          """INSERT INTO reports
-             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source,
-              ack_seen_at, pinned, submission_format)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET title = excluded.title,
-               markdown = excluded.markdown, updated_at = excluded.updated_at,
-               source = COALESCE(excluded.source, reports.source),
-               published_at = COALESCE(reports.published_at, excluded.published_at),
-               seen_at = COALESCE(reports.seen_at, excluded.seen_at),
-               ack_seen_at = COALESCE(reports.ack_seen_at, excluded.ack_seen_at),
-               pinned = MAX(reports.pinned, excluded.pinned),
-               submission_format = excluded.submission_format,
-               ever_seen = MAX(reports.ever_seen, excluded.ever_seen)""",
-          (
-            report_id,
-            title,
-            markdown,
-            now(),
-            published_at,
-            highest + 1,
-            seen_at,
-            ever_seen,
-            source,
-            ack_seen_at,
-            int(pinned),
-            json.dumps(metadata) if metadata is not None else None,
-          ),
-        )
+    state_root = self.path.parent.resolve()
+    created = []
+    try:
+      with self.transaction(shared) as db:
+        for (
+          report_id,
+          title,
+          markdown,
+          published_at,
+          seen_at,
+          ever_seen,
+          source,
+          ack_seen_at,
+          pinned,
+          metadata,
+        ) in prepared:
+          target = None
+          if source:
+            candidate = Path(source)
+            if not candidate.is_absolute():
+              candidate = state_root / candidate
+            try:
+              relative = candidate.relative_to(state_root)
+            except ValueError:
+              relative = None
+            if (
+              relative is not None
+              and relative.parts
+              and ".." not in relative.parts
+              and relative.suffix.lower() == ".md"
+            ):
+              current = state_root
+              valid = True
+              for part in relative.parts[:-1]:
+                current = current / part
+                if current.is_symlink() or (current.exists() and not current.is_dir()):
+                  valid = False
+                  break
+              leaf = current / relative.parts[-1]
+              if valid and not leaf.is_symlink() and not leaf.exists():
+                target = leaf
+          if target is None:
+            reports_dir = state_root / "reports"
+            if reports_dir.is_symlink() or (
+              reports_dir.exists() and not reports_dir.is_dir()
+            ):
+              reports_dir = state_root
+            stem = f"{report_id}.md"
+            target = reports_dir / stem
+            suffix = 2
+            while target.is_symlink() or target.exists():
+              target = reports_dir / f"{report_id}-{suffix}.md"
+              suffix += 1
+          parent = target.parent
+          missing_dirs = []
+          probe = parent
+          while probe != state_root and not probe.exists():
+            missing_dirs.append(probe)
+            probe = probe.parent
+          for directory in reversed(missing_dirs):
+            directory.mkdir()
+            created.append(directory)
+          with target.open("xb") as stream:
+            stream.write(markdown.encode("utf-8"))
+          created.append(target)
+          highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[
+            0
+          ]
+          db.execute(
+            """INSERT INTO reports
+               (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source,
+                ack_seen_at, pinned, submission_format)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET title = excluded.title,
+                 markdown = excluded.markdown, updated_at = excluded.updated_at,
+                 source = COALESCE(excluded.source, reports.source),
+                 published_at = COALESCE(reports.published_at, excluded.published_at),
+                 seen_at = COALESCE(reports.seen_at, excluded.seen_at),
+                 ack_seen_at = COALESCE(reports.ack_seen_at, excluded.ack_seen_at),
+                 pinned = MAX(reports.pinned, excluded.pinned),
+                 submission_format = excluded.submission_format,
+                 ever_seen = MAX(reports.ever_seen, excluded.ever_seen)""",
+            (
+              report_id,
+              title,
+              markdown,
+              now(),
+              published_at,
+              highest + 1,
+              seen_at,
+              ever_seen,
+              str(target),
+              ack_seen_at,
+              int(pinned),
+              json.dumps(metadata) if metadata is not None else None,
+            ),
+          )
+    except Exception:
+      for path in reversed(created):
+        try:
+          if path.is_dir():
+            path.rmdir()
+          else:
+            path.unlink(missing_ok=True)
+        except OSError:
+          pass
+      raise
     return len(prepared)
 
   def import_tasks(self, records, replace=False, autosave=True, shared=None):

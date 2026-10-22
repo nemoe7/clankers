@@ -2454,8 +2454,13 @@ def test_read_attaches_published_report_parent():
     )
     restored = preview.Store(Path(thread_dir) / "restored", create=True)
     restored.import_reports([saved])
+    restored_source = Path(restored.report("guide-report")["source"])
+    assert restored_source.resolve().is_relative_to(
+      (Path(thread_dir) / "restored").resolve()
+    )
+    assert restored_source.read_text(encoding="utf-8") == "# Guide\n\nKeep the draft.\n"
     restored.note("again", "RE: guide-report\nfollow up")
-    assert f"Source: {source}" in preview.format_read(restored.read())
+    assert f"Source: {restored_source}" in preview.format_read(restored.read())
 
 
 def test_report_reply_without_saved_path_names_stored_source():
@@ -8869,6 +8874,98 @@ def test_report_sources_ride_in_the_saved_state():
     assert report["ever_seen"] == 1
     assert report["ack_seen_at"] == ack_seen_at
     assert report["agent_seen_at"] is None and report["viewed_at"] is None
+
+
+def test_import_reports_recreates_sources_in_active_state(tmp_path):
+  state = tmp_path / "restored"
+  store = preview.Store(state, create=True)
+  outside = tmp_path / "do-not-write.md"
+  markdown = "  # Saved\r\n\r\nExact source text.\r\n"
+  store.import_reports(
+    [
+      {
+        "id": "source-copy",
+        "title": "Saved",
+        "markdown": markdown,
+        "source": str(outside),
+      }
+    ]
+  )
+  source = Path(store.report("source-copy")["source"])
+  assert source.resolve().is_relative_to(state.resolve())
+  assert source.read_bytes() == markdown.encode("utf-8")
+  assert not outside.exists()
+
+
+def test_import_reports_without_a_source_keeps_existing_files(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  existing = tmp_path / "reports" / "source-copy.md"
+  existing.parent.mkdir()
+  existing.write_text("Keep this file.\n", encoding="utf-8")
+  markdown = "# Restored\n\nSaved source.\n"
+  store.import_reports([{"id": "source-copy", "title": "Saved", "markdown": markdown}])
+  source = Path(store.report("source-copy")["source"])
+  assert source.is_relative_to(tmp_path)
+  assert source != existing
+  assert source.read_text(encoding="utf-8") == markdown
+  assert existing.read_text(encoding="utf-8") == "Keep this file.\n"
+
+
+def test_failed_import_creates_no_report_source_files(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  before = set(tmp_path.rglob("*.md"))
+  records = [
+    {"id": "saved-report", "title": "Saved", "markdown": "# Saved\n"},
+    {"id": "invalid-note", "unexpected": True},
+  ]
+  with pytest.raises(ValueError):
+    store.import_state("\n".join(json.dumps(record) for record in records))
+  assert set(tmp_path.rglob("*.md")) == before
+  with pytest.raises(FileNotFoundError):
+    store.report("saved-report")
+
+
+def test_invalid_report_batch_creates_no_source_files(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  before = set(tmp_path.rglob("*.md"))
+  with pytest.raises(ValueError):
+    store.import_reports(
+      [
+        {"id": "valid-report", "title": "Saved", "markdown": "# Saved\n"},
+        {"id": "invalid-report", "title": "Invalid", "markdown": " "},
+      ]
+    )
+  assert set(tmp_path.rglob("*.md")) == before
+  with pytest.raises(FileNotFoundError):
+    store.report("valid-report")
+
+
+def test_import_reports_does_not_follow_saved_source_symlinks(tmp_path):
+  state = tmp_path / "restored"
+  store = preview.Store(state, create=True)
+  outside = tmp_path / "outside"
+  outside.mkdir()
+  original = outside / "existing.md"
+  original.write_text("Keep this file.\n", encoding="utf-8")
+  link = state / "old-sources"
+  try:
+    link.symlink_to(outside, target_is_directory=True)
+  except OSError:
+    pytest.skip("Directory symlinks are unavailable")
+  store.import_reports(
+    [
+      {
+        "id": "safe-source",
+        "title": "Saved",
+        "markdown": "# Saved\n",
+        "source": str(link / "existing.md"),
+      }
+    ]
+  )
+  source = Path(store.report("safe-source")["source"])
+  assert source.resolve().is_relative_to(state.resolve())
+  assert source.read_text(encoding="utf-8") == "# Saved\n"
+  assert original.read_text(encoding="utf-8") == "Keep this file.\n"
 
 
 def test_removed_report_leaves_nothing_in_the_save():

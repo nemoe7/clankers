@@ -2218,12 +2218,13 @@ class Store:
 				for row in history:key=autosave_scope_key(row['scope']);receipts.setdefault(key,{}).update(row.get('receipts',{}));receipts[key][row['save_id']]=row['digest']
 				db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(AUTOSAVE_HISTORY,json.dumps(history)));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(AUTOSAVE_RECEIPTS,json.dumps(receipts)))
 			for table in('notes','reports','submissions','tasks'):db.execute(f"DELETE FROM {table}")
-			self.import_reports(reports,shared=db);self.import_tasks(tasks,replace_tasks,autosave=False,shared=db)
+			self.import_tasks(tasks,replace_tasks,autosave=False,shared=db)
 			for record in messages:
 				if'text'not in record or'title'in record:raise ValueError('Each record must be a note, task or report answer')
 				options={key:record.get(key)for key in('acknowledged_at','ack_type','ack_text','ack_edited_at','seen_at','task_id','replies','ack_edited_seen_count')};args=[record['id']];writer=self.note
 				if'report_id'in record:writer=self.submission;args.append(record['report_id']);options['answer_data']=record.get('answer_data')
 				writer(*args,record['text'],record.get('at'),shared=db,autosave=False,**options)
+			self.import_reports(reports,shared=db)
 		receipt={'notes':sum('report_id'not in r for r in messages),'answers':sum('report_id'in r for r in messages),'reports':len(reports),'tasks':len(tasks)};return receipt
 	def import_reports(self,records,shared=None):
 		if not isinstance(records,list):raise TypeError('Import a list of report objects')
@@ -2251,8 +2252,40 @@ class Store:
 			source=record.get('source')
 			if source is not None and not isinstance(source,str):raise ValueError('A saved report source path is text')
 			prepared.append((report_id,title,markdown,published_at,seen_at,seen_at is not None,source,ack_seen_at,pinned,metadata))
-		with self.transaction(shared)as db:
-			for(report_id,title,markdown,published_at,seen_at,ever_seen,source,ack_seen_at,pinned,metadata)in prepared:highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports\n             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source,\n              ack_seen_at, pinned, submission_format)\n             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n             ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n               markdown = excluded.markdown, updated_at = excluded.updated_at,\n               source = COALESCE(excluded.source, reports.source),\n               published_at = COALESCE(reports.published_at, excluded.published_at),\n               seen_at = COALESCE(reports.seen_at, excluded.seen_at),\n               ack_seen_at = COALESCE(reports.ack_seen_at, excluded.ack_seen_at),\n               pinned = MAX(reports.pinned, excluded.pinned),\n               submission_format = excluded.submission_format,\n               ever_seen = MAX(reports.ever_seen, excluded.ever_seen)',(report_id,title,markdown,now(),published_at,highest+1,seen_at,ever_seen,source,ack_seen_at,int(pinned),json.dumps(metadata)if metadata is not None else None))
+		state_root=self.path.parent.resolve();created=[]
+		try:
+			with self.transaction(shared)as db:
+				for(report_id,title,markdown,published_at,seen_at,ever_seen,source,ack_seen_at,pinned,metadata)in prepared:
+					target=None
+					if source:
+						candidate=Path(source)
+						if not candidate.is_absolute():candidate=state_root/candidate
+						try:relative=candidate.relative_to(state_root)
+						except ValueError:relative=None
+						if relative is not None and relative.parts and'..'not in relative.parts and relative.suffix.lower()=='.md':
+							current=state_root;valid=True
+							for part in relative.parts[:-1]:
+								current=current/part
+								if current.is_symlink()or current.exists()and not current.is_dir():valid=False;break
+							leaf=current/relative.parts[-1]
+							if valid and not leaf.is_symlink()and not leaf.exists():target=leaf
+					if target is None:
+						reports_dir=state_root/'reports'
+						if reports_dir.is_symlink()or reports_dir.exists()and not reports_dir.is_dir():reports_dir=state_root
+						stem=f"{report_id}.md";target=reports_dir/stem;suffix=2
+						while target.is_symlink()or target.exists():target=reports_dir/f"{report_id}-{suffix}.md";suffix+=1
+					parent=target.parent;missing_dirs=[];probe=parent
+					while probe!=state_root and not probe.exists():missing_dirs.append(probe);probe=probe.parent
+					for directory in reversed(missing_dirs):directory.mkdir();created.append(directory)
+					with target.open('xb')as stream:stream.write(markdown.encode('utf-8'))
+					created.append(target);highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports\n               (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen, source,\n                ack_seen_at, pinned, submission_format)\n               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n               ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n                 markdown = excluded.markdown, updated_at = excluded.updated_at,\n                 source = COALESCE(excluded.source, reports.source),\n                 published_at = COALESCE(reports.published_at, excluded.published_at),\n                 seen_at = COALESCE(reports.seen_at, excluded.seen_at),\n                 ack_seen_at = COALESCE(reports.ack_seen_at, excluded.ack_seen_at),\n                 pinned = MAX(reports.pinned, excluded.pinned),\n                 submission_format = excluded.submission_format,\n                 ever_seen = MAX(reports.ever_seen, excluded.ever_seen)',(report_id,title,markdown,now(),published_at,highest+1,seen_at,ever_seen,str(target),ack_seen_at,int(pinned),json.dumps(metadata)if metadata is not None else None))
+		except Exception:
+			for path in reversed(created):
+				try:
+					if path.is_dir():path.rmdir()
+					else:path.unlink(missing_ok=True)
+				except OSError:pass
+			raise
 		return len(prepared)
 	def import_tasks(self,records,replace=False,autosave=True,shared=None):
 		if not isinstance(records,list):raise TypeError('Import a list of task objects')
