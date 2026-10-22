@@ -356,35 +356,52 @@ def test_distribute_triggers_and_inputs():
   assert "${{ github.repository }}" in document["concurrency"]["group"]
 
 
-def test_distribute_jobs_share_one_action_and_keep_their_own_lists():
+def test_distribute_jobs_share_one_action_and_keep_their_own_lists(monkeypatch):
   jobs = load_workflow("distribute.yml")["jobs"]
   planner = distribution_planner()
-  profiles = {row["domain"]: row for row in planner.build_plan()["domains"]}
-  arena, gemini, nemo_ui_ux, nemoizer = (profiles[name] for name in planner.INPUTS)
-  assert arena["repos"].split()[0] == "nemoe7/clankers"
-  assert set(nemo_ui_ux["repos"].split()) == {
-    "nemoe7/request-tracker",
-    "nemoe7/daedalus",
-    "nemoe7/clankers",
-    "nemoe7/arena-cleanup",
-  }
-  assert gemini["repos"] == "nemoe7/daedalus nemoe7/request-tracker"
-  assert arena["skills"] == "arena-skill"
-  assert arena["rule_src"] == "rules/ARENA.md"
-  assert arena["rule_dest"] == "ARENA.md"
-  assert arena["legacy"] == (
-    "arena-live-steering arena-preview-reporting arena-preview-steering arena-proxy arena"
+  shared = "example/shared"
+  fixtures = (
+    {
+      "domain": "arena",
+      "repos": f"example/arena {shared}",
+      "rule_src": "fixture/rule.md",
+      "rule_dest": "RULE.md",
+      "skills": "fixture-arena",
+      "legacy": "retired-arena",
+    },
+    {"domain": "gemini", "repos": "example/gemini", "files": "fixture.yml fixture.py"},
+    {
+      "domain": "nemo-ui-ux",
+      "repos": "example/ui",
+      "skills": "fixture-ui",
+      "legacy": "retired-ui",
+    },
+    {
+      "domain": "nemoizer",
+      "repos": f"example/prose {shared}",
+      "skills": "fixture-prose",
+    },
   )
-  assert not gemini["skills"]
-  assert gemini["files"] == "gemini-release.yml gemini_release.py"
-  assert nemo_ui_ux["skills"] == "nemo-ui-ux"
-  assert nemo_ui_ux["legacy"] == "nemo-ui"
-  assert "allow-missing" not in nemo_ui_ux
-  assert nemoizer["repos"] == nemo_ui_ux["repos"] + " nemoe7/wiki"
-  assert nemoizer["skills"] == "nemoizer"
-  assert not any(
-    nemoizer[field] for field in ("rule_src", "rule_dest", "legacy", "files")
-  )
+  monkeypatch.setattr(planner, "PROFILES", fixtures)
+  plan = planner.build_plan()
+  profiles = {row["domain"]: row for row in plan["domains"]}
+  for fixture in fixtures:
+    profile = profiles[fixture["domain"]]
+    for field in ("repos", *planner.FIELDS):
+      assert profile[field] == fixture.get(field, "")
+  expected_repos = {repo for fixture in fixtures for repo in fixture["repos"].split()}
+  assert {target["repos"] for target in plan["targets"]} == expected_repos
+  assert len(plan["targets"]) == len(expected_repos)
+  for target in plan["targets"]:
+    matching = [
+      fixture for fixture in fixtures if target["repos"] in fixture["repos"].split()
+    ]
+    assert target["domains"] == [fixture["domain"] for fixture in matching]
+    for field in planner.FIELDS:
+      expected = {
+        item for fixture in matching for item in fixture.get(field, "").split()
+      }
+      assert set(target[field].split()) == expected
   manual = {
     "arena": "repos",
     "gemini": "gemini_repos",
