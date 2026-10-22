@@ -1669,13 +1669,23 @@ def test_http_boundaries():
       assert '<section class="card log-card" aria-label="Message log">' in page
       assert page.index('id="connection"') < page.index('id="log-search"')
       # On phones, hide the composer hint and keep Send right-aligned with smaller padding and gaps.
-      # Keep Copy beside Downloads and the bar on one line. Shrink labels and hide the clock and theme.
-      assert (
-        "@media (pointer:coarse){.topbar-row{flex-wrap:nowrap;}"
-        ".topbar-row>.row.tight{flex:0 0 auto;gap:4px;}#clock,#theme{display:none;}"
-        "nav button{padding:7px 3px;font-size:13px;}#send-hint{display:none;}"
-        "#send{margin-left:auto;}" in page
+      # Keep Copy beside Downloads with equal button gaps. Shrink labels and hide the clock and theme.
+      coarse_block = re.search(
+        r"@media \(pointer:coarse\)\{((?:[^{}]|\{[^}]*\})*)\}", page
       )
+      assert coarse_block is not None
+      coarse_rules = coarse_block[1]
+      assert ".topbar-row{flex-wrap:nowrap;" in coarse_rules
+      assert "#clock,#theme{display:none;}" in coarse_rules
+      assert "nav{flex:1;" in coarse_rules
+      assert "nav button{padding:7px 3px;font-size:13px;}" in coarse_rules
+      assert "#send-hint{display:none;}#send{margin-left:auto;}" in coarse_rules
+      coarse_gaps = [
+        re.search(rf"{selector}\{{[^}}]*gap:([^;}}]+)", coarse_rules)
+        for selector in (r"\.topbar-row", r"\.topbar-row>\.row\.tight", r"nav")
+      ]
+      assert all(coarse_gaps)
+      assert len({match[1] for match in coarse_gaps}) == 1
       coarse_composer = re.search(
         r"@media \(pointer:coarse\)\{.*?\.card\.compose\{([^}]+)\}", page
       )

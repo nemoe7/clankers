@@ -92,6 +92,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Equalize header button gaps on coarse-pointer screens. Keep desktop header spacing unchanged.
+
 - Keep one-line drafts compact on desktop and phones, retain the multiline layout until empty, and add expansion. Align text and controls, put footer lines below the panel, and show control backgrounds on hover or active state. Keep panel and button corners, files, Markdown preview, and save errors.
 
 - Keep linked reports active until all their tasks finish. Use a 30-minute edit or view interval for unlinked reports. Add saved CLI pins.

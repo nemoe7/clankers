@@ -305,9 +305,10 @@ mark code { color: var(--text); }
 /* The copy button stays beside Downloads on touch devices. The tab strip stays one line. Labels shrink. The clock and theme toggle leave the phone bar. */
 /* The touch Return key needs no caption, so its separator leaves too. Send stays right-aligned. The phone composer uses smaller padding and gaps. */
 @media (pointer: coarse) {
-  .topbar-row { flex-wrap: nowrap; }
-  .topbar-row > .row.tight { flex: 0 0 auto; gap: 4px; }
+  .topbar-row { flex-wrap: nowrap; gap: 6px; }
+  .topbar-row > .row.tight { flex: 0 0 auto; gap: 6px; }
   #clock, #theme { display: none; }
+  nav { flex: 1; gap: 6px; }
   nav button { padding: 7px 3px; font-size: 13px; }
   #send-hint { display: none; }
   #send { margin-left: auto; }
