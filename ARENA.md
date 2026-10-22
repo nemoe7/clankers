@@ -145,7 +145,7 @@
 - Grep-verify each file edit landed before building on it.
 - Review each diff for requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, and debug artifacts; fix in-scope issues, recheck, ALWAYS criticize documentation and code in chat and reports, and check external or version-specific facts against authoritative sources.
 - Before finishing, run repo validation entrypoints; parse every touched generated config.
-- MUST read open code-scanning alerts on the initial turn and when origin/main moves; address each without blocking PR creation.
+- On the initial turn and when origin/main moves, MUST check if code scanning is enabled; if enabled, read open alerts and address each without blocking PR creation; if disabled, continue to the next task.
 
 ## Style
 

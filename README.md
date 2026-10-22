@@ -36,7 +36,7 @@ Latest measurements as of 2026-10-22. `maintenance/check.py --update` rebuilds t
 | [`gpt-plugins/skills/gpt-planning/SKILL.md`](gpt-plugins/skills/gpt-planning/SKILL.md) | `o200k_base` | 359 `tok` |
 | [`gpt-plugins/skills/gpt-question/SKILL.md`](gpt-plugins/skills/gpt-question/SKILL.md) | `o200k_base` | 157 `tok` |
 | [`gpt-plugins/skills/gpt-quirks/SKILL.md`](gpt-plugins/skills/gpt-quirks/SKILL.md) | `o200k_base` | 134 `tok` |
-| [`rules/ARENA.md`](rules/ARENA.md) | `o200k_base` | 4,315 `tok` |
+| [`rules/ARENA.md`](rules/ARENA.md) | `o200k_base` | 4,332 `tok` |
 | [`rules/CHATGPT-CUSTOM.txt`](rules/CHATGPT-CUSTOM.txt) | `Unicode chars` | 1,474 `chars` |
 | [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 1,369 `chars` |
 | [`rules/CLINE.md`](rules/CLINE.md) | `o200k_base` | 335 `tok` |
