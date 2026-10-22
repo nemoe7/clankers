@@ -233,10 +233,9 @@ function paintConnection() {
   }
 }
 // The composer stays open and has no closed state.
-// A placeholder is a hint rather than a draft: past three lines it keeps two and an ellipsis.
+// A placeholder is a one-line hint, so a multiline note keeps only its first line.
 function clipPlaceholder(text) {
-  const lines = String(text).split('\n');
-  return lines.length > 3 ? `${lines.slice(0, 2).join('\n')}\n\u2026` : lines.join('\n');
+  return String(text).split(/\r?\n/, 1)[0];
 }
 const STATE_WORDS = { sent: 'Sent', seen: 'Seen', said: 'Said' };
 // The log search checks each row's message, rendered answer, and receipt ID. A note ID therefore finds its note.

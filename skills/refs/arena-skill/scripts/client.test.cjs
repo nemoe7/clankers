@@ -1729,9 +1729,9 @@ test('preview client', async (t) => {
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Sent');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').attributes['aria-label'], 'Sent');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').attributes.role, 'img');
-    assert.equal(context.clipPlaceholder('one\ntwo\nthree'), 'one\ntwo\nthree');
-    assert.equal(context.clipPlaceholder('one\ntwo\nthree\nfour'), 'one\ntwo\n\u2026');
-    assert.equal(context.clipPlaceholder('one\ntwo\nthree\nfour\nfive'), 'one\ntwo\n\u2026');
+    assert.equal(context.clipPlaceholder('one\ntwo\nthree'), 'one');
+    assert.equal(context.clipPlaceholder('one\r\ntwo\r\nthree\r\nfour'), 'one');
+    assert.equal(context.clipPlaceholder('single line'), 'single line');
     beforeGrow = get('#note').value;
     get('#note').value = ''; get('#note').scrollHeight = 300; context.grow();
     assert.equal(get('#note').style.height, '');

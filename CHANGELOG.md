@@ -385,6 +385,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Keep only the first line of the previous note in the composer placeholder.
+
 - Recreate report Markdown source files in the active ignored state directory during import. Keep existing files and remove created files when an import fails.
 
 - Check command classification before the detached-worktree gate guard. Allow read-only commands and keep gate, run, commit, and push blocks.
