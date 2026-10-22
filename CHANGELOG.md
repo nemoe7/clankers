@@ -18,6 +18,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Add `arena-preview outline` to parse local Python files with `ast`, emit qualified symbols and line ranges, and enforce repository path and size limits.
+
 - Add report submission maps and templates with typed selections. Keep raw custom text, answer history, and saved formats.
 
 - Add submission unlinking from task answer lists. Retain tasks, answer history, receipts, and unlink state in backups.

@@ -9001,6 +9001,214 @@ def image_data_uri(path: Path) -> str:
   return f"![{alt}](data:{mime};base64,{encoded})"
 
 
+OUTLINE_MAX_BYTES = 1_000_000
+OUTLINE_MAX_ENTRIES = 200
+
+
+def _outline_repo_root(repo_root=None):
+  if repo_root is not None:
+    return Path(repo_root).resolve()
+  cwd = Path.cwd().resolve()
+  for candidate in (cwd, *cwd.parents):
+    if (candidate / ".git").exists():
+      return candidate
+  return Path(resolve_repo_root()).resolve()
+
+
+def _resolve_outline_source(path, repo_root=None):
+  root = _outline_repo_root(repo_root)
+  raw = Path(path)
+  candidate = raw if raw.is_absolute() else (Path.cwd() / raw)
+  if not raw.is_absolute() and not candidate.exists() and not candidate.is_symlink():
+    alt = root / raw
+    if alt.exists() or alt.is_symlink():
+      candidate = alt
+  lexical = Path(os.path.abspath(candidate))
+  try:
+    lexical.relative_to(root)
+  except ValueError:
+    raise ValueError(f"{path} is outside the repository checkout ({root})") from None
+  resolved = candidate.resolve()
+  try:
+    rel_resolved = resolved.relative_to(root)
+  except ValueError:
+    raise ValueError(
+      f"{path} resolves outside the repository checkout ({root})"
+    ) from None
+  if not resolved.exists() or not resolved.is_file():
+    raise ValueError(f"{path} is not an existing file")
+  size = resolved.stat().st_size
+  if size > OUTLINE_MAX_BYTES:
+    raise ValueError(
+      f"{rel_resolved.as_posix()} is {size} bytes; the maximum is {OUTLINE_MAX_BYTES} bytes"
+    )
+  with resolved.open("rb") as handle:
+    data = handle.read(OUTLINE_MAX_BYTES + 1)
+  if len(data) > OUTLINE_MAX_BYTES:
+    raise ValueError(f"{rel_resolved.as_posix()} exceeds {OUTLINE_MAX_BYTES} bytes")
+  try:
+    text = data.decode("utf-8")
+  except UnicodeDecodeError as error:
+    raise ValueError(f"{rel_resolved.as_posix()} is not valid UTF-8: {error}") from None
+  return rel_resolved.as_posix(), resolved, text
+
+
+def _format_python_arguments(ast_mod, args):
+  parts = []
+  pos = list(args.posonlyargs) + list(args.args)
+  defaults = [None] * (len(pos) - len(args.defaults)) + list(args.defaults)
+  for index, (arg, default) in enumerate(zip(pos, defaults)):
+    piece = arg.arg
+    if arg.annotation is not None:
+      piece += f": {ast_mod.unparse(arg.annotation)}"
+    if default is not None:
+      piece += f" = {ast_mod.unparse(default)}"
+    parts.append(piece)
+    if args.posonlyargs and index + 1 == len(args.posonlyargs):
+      parts.append("/")
+  if args.vararg is not None:
+    vararg = f"*{args.vararg.arg}"
+    if args.vararg.annotation is not None:
+      vararg += f": {ast_mod.unparse(args.vararg.annotation)}"
+    parts.append(vararg)
+  elif args.kwonlyargs:
+    parts.append("*")
+  for arg, default in zip(args.kwonlyargs, args.kw_defaults):
+    piece = arg.arg
+    if arg.annotation is not None:
+      piece += f": {ast_mod.unparse(arg.annotation)}"
+    if default is not None:
+      piece += f" = {ast_mod.unparse(default)}"
+    parts.append(piece)
+  if args.kwarg is not None:
+    kwarg = f"**{args.kwarg.arg}"
+    if args.kwarg.annotation is not None:
+      kwarg += f": {ast_mod.unparse(args.kwarg.annotation)}"
+    parts.append(kwarg)
+  return ", ".join(parts)
+
+
+def _outline_python(rel_path, text):
+  import ast as ast_mod
+
+  try:
+    tree = ast_mod.parse(text, filename=rel_path)
+  except SyntaxError as error:
+    line = error.lineno or 1
+    col = error.offset or 1
+    raise ValueError(
+      f"{rel_path}:{line}:{col}: Python syntax error: {error.msg}"
+    ) from None
+
+  entries = []
+
+  def walk(body, stack, in_class=False):
+    for node in body:
+      if isinstance(
+        node, (ast_mod.ClassDef, ast_mod.FunctionDef, ast_mod.AsyncFunctionDef)
+      ):
+        qual_stack = [*stack, node.name]
+        qualified = ".".join(qual_stack)
+        decorators = [f"@{ast_mod.unparse(item)}" for item in node.decorator_list]
+        start_line = min([node.lineno, *(item.lineno for item in node.decorator_list)])
+        end_line = getattr(node, "end_lineno", None) or node.lineno
+        if isinstance(node, ast_mod.ClassDef):
+          symbol_type = "class"
+          bases = [ast_mod.unparse(base) for base in node.bases] + [
+            f"{kw.arg}={ast_mod.unparse(kw.value)}"
+            if kw.arg
+            else f"**{ast_mod.unparse(kw.value)}"
+            for kw in node.keywords
+          ]
+          signature = (
+            f"class {node.name}({', '.join(bases)})" if bases else f"class {node.name}"
+          )
+        else:
+          is_async = isinstance(node, ast_mod.AsyncFunctionDef)
+          if in_class:
+            symbol_type = "async_method" if is_async else "method"
+          else:
+            symbol_type = "async_function" if is_async else "function"
+          prefix = "async def" if is_async else "def"
+          params = _format_python_arguments(ast_mod, node.args)
+          returns = (
+            f" -> {ast_mod.unparse(node.returns)}" if node.returns is not None else ""
+          )
+          signature = f"{prefix} {node.name}({params}){returns}"
+        entries.append(
+          {
+            "type": symbol_type,
+            "name": node.name,
+            "qualified_name": qualified,
+            "signature": signature,
+            "decorators": decorators,
+            "line": start_line,
+            "def_line": node.lineno,
+            "end_line": end_line,
+          }
+        )
+        walk(
+          node.body,
+          qual_stack,
+          in_class=isinstance(node, ast_mod.ClassDef),
+        )
+
+  walk(tree.body, [], in_class=False)
+  return entries
+
+
+def outline_file(path, repo_root=None, max_entries=OUTLINE_MAX_ENTRIES):
+  if type(max_entries) is not int or not 1 <= max_entries <= OUTLINE_MAX_ENTRIES:
+    raise ValueError(
+      f"--max-entries must be an integer from 1 to {OUTLINE_MAX_ENTRIES}"
+    )
+  rel_path, resolved, text = _resolve_outline_source(path, repo_root=repo_root)
+  suffix = resolved.suffix.lower()
+  if suffix == ".py":
+    language = "python"
+    all_entries = _outline_python(rel_path, text)
+  else:
+    raise ValueError(
+      f"{rel_path}: unsupported outline file type ({suffix or 'no extension'})"
+    )
+  entries = all_entries[:max_entries]
+  total = len(all_entries)
+  return {
+    "path": rel_path,
+    "language": language,
+    "entries": entries,
+    "total": total,
+    "omitted": max(0, total - len(entries)),
+  }
+
+
+def format_outline(result, as_json=False):
+  if as_json:
+    return json.dumps(result, ensure_ascii=False)
+  entries = result["entries"]
+  total = result["total"]
+  omitted = result["omitted"]
+  unit = "tags" if result["language"] == "html" else "symbols"
+  omitted_note = f", {omitted} omitted" if omitted else ""
+  lines = [
+    f"{result['path']} ({result['language']}, {len(entries)}/{total} {unit}{omitted_note})"
+  ]
+  for entry in entries:
+    span = f"{entry['line']}-{entry['end_line']}"
+    label = entry.get("qualified_name") or entry.get("label") or entry.get("name", "")
+    detail = entry.get("signature") or entry.get("summary") or ""
+    if detail:
+      lines.append(f"{span} {label} — {detail}")
+    else:
+      lines.append(f"{span} {label}")
+  if omitted:
+    singular = unit[:-1] if omitted == 1 else unit
+    lines.append(
+      f"... {omitted} more {singular} omitted (use --max-entries up to {OUTLINE_MAX_ENTRIES})"
+    )
+  return "\n".join(lines)
+
+
 # An inline image destination, with the optional title or ` =WxH` suffix that follows it.
 IMAGE_IN_MARKDOWN = re.compile(r"!\[([^\]\n]*)\]\(\s*(<[^>]+>|[^)\s]+)([^)\n]*)\)")
 
@@ -9484,6 +9692,25 @@ def main():
   image_uri.add_argument(
     "path", type=Path, help="One local PNG, JPEG, GIF or WebP file up to 2 MiB"
   )
+  outline_parser = commands.add_parser(
+    "outline",
+    help="Print read-only source outline with line ranges for local repository files",
+  )
+  outline_parser.add_argument(
+    "path", type=Path, help="Local source file inside the repository checkout"
+  )
+  outline_parser.add_argument(
+    "--max-entries",
+    type=int,
+    default=OUTLINE_MAX_ENTRIES,
+    help=f"Maximum entries to print, 1 to {OUTLINE_MAX_ENTRIES} (default: {OUTLINE_MAX_ENTRIES})",
+  )
+  outline_parser.add_argument(
+    "--json",
+    dest="as_json",
+    action="store_true",
+    help="Print JSON outline with path, language, entries, total, and omitted count",
+  )
   commands.add_parser("key", help="Print the recorded agent key, host and use line")
   pre = commands.add_parser(
     "pre", help="Run all pre-Bash gates in order; list completed steps"
@@ -9807,6 +10034,14 @@ def main():
     if args.command == "image-data-uri":
       try:
         print(image_data_uri(args.path))
+      except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+      return 0
+    if args.command == "outline":
+      try:
+        result = outline_file(args.path, max_entries=args.max_entries)
+        print(format_outline(result, as_json=args.as_json))
       except ValueError as error:
         print(error, file=sys.stderr)
         return 1

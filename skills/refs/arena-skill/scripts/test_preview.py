@@ -13120,7 +13120,7 @@ def test_recommended_options_prefix_ui_and_print_on_publish(
   state = tmp_path / "state"
   report = tmp_path / "report.md"
   report.write_text(
-    "Pick a strategy: {#strategy}\n"
+    "Select a strategy: {#strategy}\n"
     "- ( ) Alpha\n"
     "- (x) Beta\n"
     "- ( ) Gamma\n\n"
@@ -13158,4 +13158,118 @@ def test_recommended_options_prefix_ui_and_print_on_publish(
   )
   assert preview.main() == 0
   output = capsys.readouterr()
-  assert "you recommended:\nPick a strategy: Beta\nInclude extras: Logs\n" in output.out
+  assert (
+    "you recommended:\nSelect a strategy: Beta\nInclude extras: Logs\n" in output.out
+  )
+
+
+def test_python_outline_command_parses_symbols_and_enforces_guards(
+  tmp_path, monkeypatch, capsys
+):
+  repo = tmp_path / "repo"
+  (repo / ".git").mkdir(parents=True)
+  marker = tmp_path / "executed.txt"
+  sample = repo / "pkg" / "sample.py"
+  sample.parent.mkdir(parents=True)
+  sample.write_text(
+    "from pathlib import Path\n"
+    f"Path({str(marker)!r}).write_text('ran', encoding='utf-8')\n\n"
+    "@decorator_one\n"
+    "def top_fn(alpha: int, beta: str = 'x', *args, flag: bool = True, **kwargs) -> str:\n"
+    "  def inner_helper(step: int = 1) -> int:\n"
+    "    return step + alpha\n"
+    "  return beta\n\n"
+    "class Worker(BaseWorker):\n"
+    "  @classmethod\n"
+    "  def build(cls, name: str) -> 'Worker':\n"
+    "    return cls()\n\n"
+    "  async def run(self, limit: int = 5) -> None:\n"
+    "    pass\n\n"
+    "  class Nested:\n"
+    "    def ping(self) -> bool:\n"
+    "      return True\n",
+    encoding="utf-8",
+  )
+  monkeypatch.chdir(repo)
+
+  result = preview.outline_file(sample, repo_root=repo)
+  assert not marker.exists()
+  assert result["language"] == "python"
+  assert result["path"] == "pkg/sample.py"
+  assert result["total"] == 7
+  assert result["omitted"] == 0
+  by_name = {entry["qualified_name"]: entry for entry in result["entries"]}
+  assert list(by_name) == [
+    "top_fn",
+    "top_fn.inner_helper",
+    "Worker",
+    "Worker.build",
+    "Worker.run",
+    "Worker.Nested",
+    "Worker.Nested.ping",
+  ]
+  assert by_name["top_fn"]["type"] == "function"
+  assert by_name["top_fn"]["decorators"] == ["@decorator_one"]
+  assert by_name["top_fn"]["line"] == 4
+  assert by_name["top_fn"]["def_line"] == 5
+  assert by_name["top_fn"]["end_line"] == 8
+  assert (
+    by_name["top_fn"]["signature"]
+    == "def top_fn(alpha: int, beta: str = 'x', *args, flag: bool = True, **kwargs) -> str"
+  )
+  assert by_name["Worker"]["type"] == "class"
+  assert by_name["Worker"]["signature"] == "class Worker(BaseWorker)"
+  assert by_name["Worker.build"]["type"] == "method"
+  assert by_name["Worker.run"]["type"] == "async_method"
+  assert (
+    by_name["Worker.run"]["signature"] == "async def run(self, limit: int = 5) -> None"
+  )
+
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    ["arena-preview", "outline", "pkg/sample.py", "--max-entries", "3", "--json"],
+  )
+  assert preview.main() == 0
+  payload = json.loads(capsys.readouterr().out)
+  assert payload["total"] == 7
+  assert payload["omitted"] == 4
+  assert [item["qualified_name"] for item in payload["entries"]] == [
+    "top_fn",
+    "top_fn.inner_helper",
+    "Worker",
+  ]
+
+  monkeypatch.setattr(
+    sys, "argv", ["arena-preview", "outline", "pkg/sample.py", "--max-entries", "2"]
+  )
+  assert preview.main() == 0
+  text_out = capsys.readouterr().out
+  assert "pkg/sample.py (python, 2/7 symbols, 5 omitted)" in text_out
+  assert "4-8 top_fn" in text_out
+  assert "5 more symbols omitted" in text_out
+
+  broken = repo / "broken.py"
+  broken.write_text("def broken(:\n  pass\n", encoding="utf-8")
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "outline", "broken.py"])
+  assert preview.main() == 1
+  err = capsys.readouterr().err
+  assert "broken.py:1:" in err and "syntax error" in err.lower()
+
+  outside = tmp_path / "outside.py"
+  outside.write_text("def secret():\n  pass\n", encoding="utf-8")
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "outline", str(outside)])
+  assert preview.main() == 1
+  assert "repository" in capsys.readouterr().err.lower()
+
+  escape_link = repo / "escape.py"
+  escape_link.symlink_to(outside)
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "outline", "escape.py"])
+  assert preview.main() == 1
+  assert "repository" in capsys.readouterr().err.lower()
+
+  oversized = repo / "huge.py"
+  oversized.write_bytes(b"x = 1\n" * ((preview.OUTLINE_MAX_BYTES // 6) + 10))
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "outline", "huge.py"])
+  assert preview.main() == 1
+  assert str(preview.OUTLINE_MAX_BYTES) in capsys.readouterr().err
