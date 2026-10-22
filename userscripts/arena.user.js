@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.59
+// @name         Arena.ai | NemoUtils | v1.10.60
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.59
+// @version      1.10.60
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2257,10 +2257,6 @@
     return "Could not read the preview state (GET " + status + ") at " + base;
   }
 
-  function copyLine(status, base) {
-    return getLine(status, base + "/api/copy-state");
-  }
-
   function writeFailLine(err) {
     return (
       "The file could not be saved (" + ((err && err.name) || "unknown") +
@@ -2273,10 +2269,6 @@
   }
 
   var STATE_LINES = {
-    hint: "no file selected; launching dialog",
-    history: "history does not match",
-    selecterClosed: "no file selected;",
-    noPreview: "no preview detected",
     noBranch: "The session branch is missing. State save is blocked.",
   };
 
@@ -2415,7 +2407,6 @@
 
     if (exposeChecks("stateDownload", {
       STATE_LINES: STATE_LINES,
-      copyLine: copyLine,
       getLine: getLine,
       writeFailLine: writeFailLine,
       managerFailLine: managerFailLine,

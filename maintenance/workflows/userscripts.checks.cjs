@@ -2019,8 +2019,6 @@ function checkStateDownload(api, session, logging) {
   var slugFromBare = api.slugFromBare;
   var pagePicker = api.pagePicker;
   var writtenName = api.writtenName;
-  var STATE_LINES = api.STATE_LINES;
-  var copyLine = api.copyLine;
   var getLine = api.getLine;
   var writeFailLine = api.writeFailLine;
   var managerFailLine = api.managerFailLine;
@@ -2416,14 +2414,6 @@ function checkStateDownload(api, session, logging) {
   assert.match(errorLines[0], /500/);
   assert.doesNotMatch(errorLines[0], /localhost|api\/copy-state/);
   assert.match(getLine(200, "http://localhost:8000"), /GET 200.*http:\/\/localhost:8000/);
-  // The owner's line texts: the no-file hint names the dialog it opens, a
-  // stale state reads as a history mismatch, and a closed selector reads as a plain no-file line.
-  assert.equal(STATE_LINES.hint, "no file selected; launching dialog");
-  assert.equal(STATE_LINES.history, "history does not match");
-  assert.equal(STATE_LINES.selecterClosed, "no file selected;");
-  // The refused copy reads as a `GET` too, and the missing frame reads plainly.
-  assert.equal(STATE_LINES.noPreview, "no preview detected");
-  assert.match(copyLine(500, "http://localhost:8000"), /GET 500.*http:\/\/localhost:8000\/api\/copy-state/);
   // Every comparison in the save path writes its own line, so one filter shows which test
   // refused a write.
   logging.setLogLevel("debug");

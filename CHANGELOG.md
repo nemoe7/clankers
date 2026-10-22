@@ -22,6 +22,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Rewrite prompt fill as one engineering brief. Include initial questionnaire questions and require a fresh CLI view after context replacement.
 
+### Removed
+
+#### userscripts
+
+- Remove unused state-popup constants and the copy-state error helper. Retain active messages, save guards, and tested fallback behavior.
+
 ### Fixed
 
 #### preview
