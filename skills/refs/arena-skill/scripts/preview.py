@@ -9003,6 +9003,150 @@ def image_data_uri(path: Path) -> str:
 
 OUTLINE_MAX_BYTES = 1_000_000
 OUTLINE_MAX_ENTRIES = 200
+PARSER_TOOL_DIR_ENV = "ARENA_PREVIEW_PARSER_DIR"
+PARSER_PACKAGES = {"acorn": "8.18.0", "css-tree": "3.2.1"}
+PARSER_MANIFEST = {
+  "name": "arena-preview-parsers",
+  "private": True,
+  "dependencies": dict(PARSER_PACKAGES),
+}
+PARSER_LOCKFILE = {
+  "name": "arena-preview-parsers",
+  "lockfileVersion": 3,
+  "requires": True,
+  "packages": {
+    "": {
+      "name": "arena-preview-parsers",
+      "dependencies": dict(PARSER_PACKAGES),
+    },
+    "node_modules/acorn": {
+      "version": "8.18.0",
+      "resolved": "https://registry.npmjs.org/acorn/-/acorn-8.18.0.tgz",
+      "integrity": "sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==",
+      "license": "MIT",
+      "bin": {"acorn": "bin/acorn"},
+      "engines": {"node": ">=0.4.0"},
+    },
+    "node_modules/css-tree": {
+      "version": "3.2.1",
+      "resolved": "https://registry.npmjs.org/css-tree/-/css-tree-3.2.1.tgz",
+      "integrity": "sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA==",
+      "license": "MIT",
+      "dependencies": {"mdn-data": "2.27.1", "source-map-js": "^1.2.1"},
+      "engines": {"node": "^10 || ^12.20.0 || ^14.13.0 || >=15.0.0"},
+    },
+    "node_modules/mdn-data": {
+      "version": "2.27.1",
+      "resolved": "https://registry.npmjs.org/mdn-data/-/mdn-data-2.27.1.tgz",
+      "integrity": "sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==",
+      "license": "CC0-1.0",
+    },
+    "node_modules/source-map-js": {
+      "version": "1.2.2",
+      "resolved": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.2.tgz",
+      "integrity": "sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==",
+      "license": "BSD-3-Clause",
+      "engines": {"node": ">=0.10.0"},
+    },
+  },
+}
+
+
+def parser_tool_dir(tool_dir=None):
+  if tool_dir is not None:
+    return Path(tool_dir).resolve()
+  configured = os.environ.get(PARSER_TOOL_DIR_ENV, "").strip()
+  if configured:
+    return Path(configured).resolve()
+  return (Path.home() / ".agents" / ".arena-preview-parsers").resolve()
+
+
+def _check_parser_package(base_dir, package_name, expected_version):
+  pkg_dir = Path(base_dir) / "node_modules" / package_name
+  pkg_json = pkg_dir / "package.json"
+  if not pkg_json.is_file():
+    return None, None
+  try:
+    meta = json.loads(pkg_json.read_text(encoding="utf-8"))
+  except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    return None, None
+  version_str = meta.get("version")
+  main_rel = meta.get("main") or "index.js"
+  entry = (pkg_dir / main_rel).resolve()
+  if version_str != expected_version or not entry.is_file():
+    return None, version_str
+  return str(entry), version_str
+
+
+def discover_portable_parsers(tool_dir=None):
+  target = parser_tool_dir(tool_dir)
+  acorn_entry, acorn_ver = _check_parser_package(
+    target, "acorn", PARSER_PACKAGES["acorn"]
+  )
+  csstree_entry, csstree_ver = _check_parser_package(
+    target, "css-tree", PARSER_PACKAGES["css-tree"]
+  )
+  available = bool(acorn_entry and csstree_entry)
+  message = (
+    f"Pinned Acorn {acorn_ver} and CSS-tree {csstree_ver} ready in {target}"
+    if available
+    else (
+      f"Local Acorn/CSS-tree parsers are not installed in {target}; "
+      "rerun .agents/skills/arena-skill/scripts/install.sh with Node and npm available."
+    )
+  )
+  return {
+    "available": available,
+    "directory": str(target),
+    "acorn": acorn_entry,
+    "css_tree": csstree_entry,
+    "versions": {"acorn": acorn_ver, "css-tree": csstree_ver},
+    "message": message,
+  }
+
+
+def install_portable_parsers(tool_dir=None, which=shutil.which, runner=subprocess.run):
+  target = parser_tool_dir(tool_dir)
+  target.mkdir(parents=True, exist_ok=True)
+  manifest_path = target / "package.json"
+  lockfile_path = target / "package-lock.json"
+  manifest_text = json.dumps(PARSER_MANIFEST, indent=2) + "\n"
+  lockfile_text = json.dumps(PARSER_LOCKFILE, indent=2) + "\n"
+  if (
+    not manifest_path.is_file()
+    or manifest_path.read_text(encoding="utf-8") != manifest_text
+  ):
+    manifest_path.write_text(manifest_text, encoding="utf-8")
+  if (
+    not lockfile_path.is_file()
+    or lockfile_path.read_text(encoding="utf-8") != lockfile_text
+  ):
+    lockfile_path.write_text(lockfile_text, encoding="utf-8")
+  existing = discover_portable_parsers(target)
+  if existing["available"]:
+    return {**existing, "status": "reused"}
+  if not which("node") or not which("npm"):
+    return {
+      **existing,
+      "status": "skipped",
+      "message": "Node or npm is unavailable; skipping portable parser install (preview remains usable).",
+    }
+  completed = runner(
+    ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
+    cwd=str(target),
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  after = discover_portable_parsers(target)
+  if completed.returncode != 0 or not after["available"]:
+    detail = (completed.stderr or completed.stdout or "npm ci failed").strip()
+    return {
+      **after,
+      "status": "failed",
+      "message": f"Portable parser install failed ({detail}); preview remains usable.",
+    }
+  return {**after, "status": "installed"}
 
 
 def _outline_repo_root(repo_root=None):
