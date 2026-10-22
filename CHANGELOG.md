@@ -72,6 +72,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### nuu
+
+- Include Evidence and handoff in generated design records. Keep existing design records unchanged.
+
 #### preview
 
 - Keep one-line drafts compact on desktop and phones, retain the multiline layout until empty, and add expansion. Align text and controls, put footer lines below the panel, and show control backgrounds on hover or active state. Keep panel and button corners, files, Markdown preview, and save errors.

@@ -1,6 +1,7 @@
 """Exercise the public UI workflow and preserve product authority."""
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -52,6 +53,11 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   authority = Path(record["authority"])
   content = authority.read_bytes()
   assert content
+  template = (SCRIPT.parent.parent / "references/design-document.md").read_text(
+    encoding="utf-8"
+  )
+  required_sections = re.findall(r"^\d+\. \*\*(.+?)\*\*:", template, re.MULTILINE)
+  assert re.findall(r"^## (.+)$", content.decode(), re.MULTILINE) == required_sections
   repeated = run("teach", "--create")
   assert not repeated["writes"]
   assert authority.read_bytes() == content

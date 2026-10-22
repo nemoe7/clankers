@@ -3,7 +3,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 const request = JSON.parse(fs.readFileSync(0, 'utf8'));
 
 function emit(value) {
