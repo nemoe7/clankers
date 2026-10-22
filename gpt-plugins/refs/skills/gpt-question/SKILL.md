@@ -17,6 +17,8 @@ Every form MUST give each choice group a selectable `Custom answer` option with 
 
 Use useful preset answers when they improve the response. Show a group's input beside or immediately below the group while its custom option is selected, preserve the typed text except for boundary whitespace, and avoid unrelated fields or decoration.
 
+Use "Something else..." as the placeholder for each custom-answer input.
+
 ## Detail
 
 Read [references/interactive-question.md](references/interactive-question.md) before building a question form or varying its controls.

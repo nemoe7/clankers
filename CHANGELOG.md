@@ -44,6 +44,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Extend the description to all questions from GPT to the user. Retain interactive forms and custom answers.
 
+- Set custom-answer input hints to "Something else...". Keep the existing whitespace rules.
+
 #### userscripts
 
 - Rewrite prompt fill as one engineering brief. Include initial questionnaire questions and require a fresh CLI view after context replacement.

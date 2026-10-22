@@ -36,6 +36,8 @@ Every question form MUST:
 
 Label each group's custom option **Custom answer** and its input **Custom answer (optional)** unless the user must provide custom text. Each independent question owns its custom option, input, state and validation, so one question never reads another's.
 
+Use "Something else..." as the placeholder for each custom-answer input.
+
 ## Choose the correct controls
 
 ### Single selection
@@ -135,7 +137,7 @@ const canSubmit = Boolean(choice) && (!customChosen || Boolean(customAnswer.trim
     <textarea
       value={customAnswer}
       onChange={setCustomAnswer}
-      placeholder="Custom answer"
+      placeholder="Something else..."
       rows={3}
     />
   {/if}
@@ -201,7 +203,7 @@ const canSubmit = selected.length > 0 && (!customChosen || Boolean(customAnswer.
     <textarea
       value={customAnswer}
       onChange={setCustomAnswer}
-      placeholder="Custom answer"
+      placeholder="Something else..."
       rows={3}
     />
   {/if}
@@ -276,7 +278,7 @@ const canSubmit = selectValid && pairValid && anyValid;
     <textarea
       value={selectCustom}
       onChange={setPickCustom}
-      placeholder="Custom answer"
+      placeholder="Something else..."
       rows={2}
     />
   {/if}
@@ -298,7 +300,7 @@ const canSubmit = selectValid && pairValid && anyValid;
     <textarea
       value={pairCustom}
       onChange={setPairCustom}
-      placeholder="Custom answer"
+      placeholder="Something else..."
       rows={2}
     />
   {/if}
@@ -320,7 +322,7 @@ const canSubmit = selectValid && pairValid && anyValid;
     <textarea
       value={anyCustom}
       onChange={setAnyCustom}
-      placeholder="Custom answer"
+      placeholder="Something else..."
       rows={2}
     />
   {/if}
