@@ -395,7 +395,7 @@ mark code { color: var(--text); }
   #task-search { max-width: none; }
 }
 .report .question { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; }
-.question-id { display: block; margin-bottom: 4px; }
+.question-id { display: block; margin-bottom: 4px; cursor: pointer; }
 /* The browser moves one queued HTTPS file at a time. Long URLs and errors must wrap. */
 .downloads-layout { max-width: 900px; margin: auto; display: flex; flex-direction: column; gap: 12px; }
 .downloads-layout h2, .downloads-layout p { margin: 0; }

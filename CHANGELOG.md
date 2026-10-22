@@ -64,6 +64,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Allow clicking report question IDs to quote `RE: <report-id>/<question-id>` in the message composer.
+
 - Increase `.report` list left padding so two-digit ordered list markers do not clip at the report edge.
 
 - Keep `#notes-panel` non-scrollable with `.log-card` `min-height: 0` so only the message history list shows a scrollbar.

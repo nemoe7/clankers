@@ -2462,6 +2462,13 @@ def test_read_attaches_published_report_parent():
     assert preview.format_pending_item(reply) == (
       f"`reply`\nRE: guide-report\nSource: {source}\n\nproposal"
     )
+    store.note("qreply", "RE: guide-report/next-action\nquestion note")
+    question_item = next(
+      item for item in store.read()["pending"] if item["id"] == "qreply"
+    )
+    assert preview.format_pending_item(question_item) == (
+      f"`qreply`\nRE: guide-report/next-action\nSource: {source}\n\nquestion note"
+    )
     assert "Keep the draft." not in json.dumps(reply)
     saved = next(
       record
