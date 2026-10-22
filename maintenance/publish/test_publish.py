@@ -110,42 +110,6 @@ def test_current_rule_names_when_requested():
   assert all(names[name] for name in EXPECTED)
 
 
-def test_publish_workflow_contract():
-  workflow = (ROOT / ".github/workflows/artifacts.yml").read_text()
-  for marker in (
-    "name: Artifacts",
-    "branches: [main]",
-    "- 'rules/**'",
-    "- '!rules/refs/**'",
-    "group: publish-clankers-rules-${{ github.repository }}",
-    "cancel-in-progress: false",
-    "contents: read",
-    "GH_TOKEN: ${{ secrets.GIST_TOKEN }}",
-    "GIST_ID: ${{ vars.GIST_ID }}",
-    "python -m pip install pytest==9.1.1 pytest-xdist==3.6.1",
-    "run: python3 -m pytest -q maintenance/publish/test_publish.py",
-    "run: python3 maintenance/publish/publish.py",
-    "github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.rules == 'true'",
-  ):
-    assert marker in workflow, marker
-  # The folded release job alone writes contents, and it stays after this publish job.
-  assert workflow.count("contents: write") == 1, "only the release job writes contents"
-  assert "actions: write" not in workflow
-  assert "contents: write" not in workflow.split("release-gpt-plugins:", 1)[0]
-  # The publish step lives in the publish job only, and no other job sees the Gist token.
-  publish_job = workflow.split("publish-clankers-rules:", 1)[1]
-  for marker in (
-    "GH_TOKEN: ${{ secrets.GIST_TOKEN }}",
-    "GIST_ID: ${{ vars.GIST_ID }}",
-    "run: python3 maintenance/publish/publish.py",
-  ):
-    assert marker in publish_job, marker
-  assert "secrets.GIST_TOKEN" not in workflow.split("publish-clankers-rules:", 1)[0], (
-    "only the publish job may read the Gist token"
-  )
-  assert "workflow_dispatch" in workflow, "the manual trigger survives the merge"
-
-
 def test_reconcile_lifecycle():
   with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)

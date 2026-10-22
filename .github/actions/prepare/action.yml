@@ -1,9 +1,9 @@
 name: Prepare Runner
-description: Set up Python and Node with the shared pip download cache.
+description: Set up Python and Node with the shared uv cache.
 
 inputs:
   pip-cache-key:
-    description: Suffix that keeps each job's pip cache apart.
+    description: Suffix that keeps each job's uv cache apart.
     default: ci
 
 runs:
@@ -15,14 +15,12 @@ runs:
         # Keep minifier output stable across interpreter releases.
         python-version: "3.11"
 
-    - name: Cache Pip Downloads
-      uses: actions/cache@v6
+    - name: Set Up uv
+      uses: astral-sh/setup-uv@v10.3.1
       with:
-        # Hash the workflow and action files for this pip download-cache key.
-        # requirements.txt is not part of this hash.
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ inputs.pip-cache-key }}-${{ hashFiles('.github/workflows/ci.yml', '.github/actions/prepare/action.yml') }}
-        restore-keys: ${{ runner.os }}-pip-${{ inputs.pip-cache-key }}-
+        enable-cache: true
+        cache-suffix: ${{ inputs.pip-cache-key }}
+        cache-dependency-glob: requirements.txt
 
     - name: Set Up Node
       uses: actions/setup-node@v7

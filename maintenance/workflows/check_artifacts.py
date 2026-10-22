@@ -11,7 +11,13 @@ import argparse
 from pathlib import Path
 
 import yaml
-from gate_workflows import triggers_of
+from gate_workflows import (
+  READ_ONLY_VALUES,
+  audit_document,
+  credential_names,
+  job_text,
+  triggers_of,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "artifacts.yml"
@@ -49,7 +55,7 @@ def step_runs(job: dict) -> str:
 
 def findings_for(document: dict) -> list[str]:
   """Return the contract findings for one parsed artifacts workflow."""
-  findings: list[str] = []
+  findings = audit_document(WORKFLOW.name, document)
   triggers = triggers_of(document)
   push = triggers.get("push") or {}
   pull = triggers.get("pull_request") or {}
@@ -64,6 +70,25 @@ def findings_for(document: dict) -> list[str]:
     findings.append("workflow_dispatch is missing")
 
   jobs = document.get("jobs") or {}
+  publish = jobs.get("publish-clankers-rules") or {}
+  concurrency = publish.get("concurrency") or {}
+  if not concurrency.get("group") or concurrency.get("cancel-in-progress") is not False:
+    findings.append(
+      "rules publishing must serialize without interrupting a running job"
+    )
+  for name, job in jobs.items():
+    permissions = job.get("permissions") or {}
+    if permissions.get("actions", "none") not in READ_ONLY_VALUES:
+      findings.append(f"{name} must not write actions")
+    if (
+      name != "release-gpt-plugins"
+      and permissions.get("contents", "none") not in READ_ONLY_VALUES
+    ):
+      findings.append(f"{name} must not write contents")
+    if name != "publish-clankers-rules" and "GIST_TOKEN" in credential_names(
+      job_text(job)
+    ):
+      findings.append(f"{name} must not use the rules publishing token")
   expected = (
     ("validate-gpt-plugins", VALIDATE_IF),
     ("package-gpt-plugins", PACKAGE_IF),
