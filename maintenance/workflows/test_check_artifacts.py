@@ -114,3 +114,30 @@ def test_main_fails_on_a_drifted_copy(tmp_path, capsys):
     if line.startswith("::error::")
   ]
   assert annotations == expected
+
+
+def test_publishing_guards_ignore_display_names():
+  document = workflow()
+  document["name"] = "Synthetic workflow"
+  for job in document["jobs"].values():
+    job["name"] = "Synthetic job"
+    for step in job.get("steps", []):
+      step["name"] = "Synthetic step"
+  assert not findings(document)
+
+  interrupt = copy.deepcopy(document)
+  interrupt["jobs"]["publish-clankers-rules"]["concurrency"]["cancel-in-progress"] = (
+    True
+  )
+  write_contents = copy.deepcopy(document)
+  write_contents["jobs"]["publish-clankers-rules"]["permissions"] = {
+    "contents": "write"
+  }
+  write_actions = copy.deepcopy(document)
+  write_actions["jobs"]["release-gpt-plugins"]["permissions"]["actions"] = "write"
+  leak_token = copy.deepcopy(document)
+  leak_token["jobs"]["validate-gpt-plugins"]["env"] = {
+    "GH_TOKEN": "${{ secrets.GIST_TOKEN }}"
+  }
+  for changed in (interrupt, write_contents, write_actions, leak_token):
+    assert findings(changed)

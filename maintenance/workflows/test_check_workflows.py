@@ -668,3 +668,32 @@ def test_artifacts_publishes_both_proxy_images_from_one_matrix():
   assert build["with"]["tags"] == (
     "ghcr.io/${{ github.repository_owner }}/${{ matrix.directory }}:latest"
   )
+
+
+def test_shared_runner_uses_uv_cache_before_workflow_installs():
+  prepare = yaml.safe_load(
+    (gate_workflows.ROOT / ".github/actions/prepare/action.yml").read_text()
+  )
+  steps = prepare["runs"]["steps"]
+  uv_steps = [
+    step for step in steps if step.get("uses", "").startswith("astral-sh/setup-uv@")
+  ]
+  assert uv_steps
+  cache = uv_steps[0]["with"]
+  assert cache["enable-cache"] is True
+  assert "requirements.txt" in cache["cache-dependency-glob"].splitlines()
+  cache_input = "pip-cache-key"
+  assert cache_input in prepare["inputs"]
+  assert cache["cache-suffix"] == "${{ inputs." + cache_input + " }}"
+  installs = []
+  for path in (gate_workflows.ROOT / ".github/workflows").glob("*.yml"):
+    for job in yaml.safe_load(path.read_text()).get("jobs", {}).values():
+      prepared = False
+      for step in job.get("steps", []):
+        prepared |= step.get("uses") == "./.github/actions/prepare"
+        for line in step.get("run", "").splitlines():
+          if "pip install " in line:
+            assert prepared, (path, line)
+            assert line.strip().startswith("uv pip install --system "), (path, line)
+            installs.append(line)
+  assert installs

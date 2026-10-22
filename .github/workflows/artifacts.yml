@@ -92,7 +92,7 @@ jobs:
           pip-cache-key: artifacts-validate
 
       - name: Install Validation Dependencies
-        run: python -m pip install -r requirements.txt
+        run: uv pip install --system -r requirements.txt
 
       # The required behaviour of this file is part of the check: the triggers, the job
       # conditions, the version-bump flag, the archive name and the artifact name are assertions.
@@ -137,7 +137,7 @@ jobs:
           pip-cache-key: artifacts-package
 
       - name: Install Validation Dependencies
-        run: python -m pip install -r requirements.txt
+        run: uv pip install --system -r requirements.txt
 
       - name: Check The Workflow Contract
         run: python maintenance/workflows/check_artifacts.py
@@ -210,7 +210,7 @@ jobs:
         with:
           pip-cache-key: artifacts-publish
       - name: Install Test Dependencies
-        run: python -m pip install pytest==9.1.1 pytest-xdist==3.6.1
+        run: uv pip install --system pytest==9.1.1 pytest-xdist==3.6.1
       - name: Test Reconciliation Fixtures Without GitHub Credentials
         run: python3 -m pytest -q maintenance/publish/test_publish.py
       - name: Reconcile Secret Clankers-Rules Gist
@@ -248,7 +248,7 @@ jobs:
           pip-cache-key: artifacts-release
 
       - name: Install Validation Dependencies
-        run: python -m pip install -r requirements.txt
+        run: uv pip install --system -r requirements.txt
 
       - name: Read The Manifest Version
         id: manifest
