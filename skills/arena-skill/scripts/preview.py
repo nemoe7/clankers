@@ -658,8 +658,8 @@ def field_html(question):
 	if question['type']=='text':return f'{body}<textarea class="answer-text" rows="2" placeholder="Answer" aria-label="{prompt}"></textarea></div>'
 	control='radio'if question['type']=='choice'else'checkbox';group=f'<div class="options" role="group" aria-label="{prompt}">'
 	for option in question['options']:
-		value=html.escape(option,quote=True);checked=' checked'if option in question['default']else'';label=custom_label(option)
-		if label is None:group+=f'<label class="option"><input type="{control}" name="{name}" value="{value}"{checked}> {html.escape(option)}</label>';continue
+		value=html.escape(option,quote=True);recommended=option in question['default'];checked=' checked'if recommended else'';label=custom_label(option)
+		if label is None:display=f"* {option}"if recommended else option;group+=f'<label class="option"><input type="{control}" name="{name}" value="{value}"{checked}> {html.escape(display)}</label>';continue
 		named=html.escape(label,quote=True);group+=f'<label class="option"><input type="{control}" name="{name}" value="{value}"{checked} data-label="{named}" aria-label="{named}"><textarea class="custom-text" rows="1" data-custom="{named}" placeholder="Something else..." aria-label="{named}, your own answer"></textarea></label>'
 	return f"{body}{group}</div></div>"
 TASK_STATUSES='upcoming','finished'
@@ -3251,7 +3251,8 @@ def main():
 				with args.submission_format.open('rb')as stream:data=stream.read(MAX_REPORT+1)
 				if len(data)>MAX_REPORT:raise ValueError('Submission format exceeds the report size limit')
 				metadata=json.loads(data.decode('utf-8'))
-			count=store.publish(args.id,args.title,args.source,submission_format=metadata);revision=store.report(args.id)['updated_at'];warnings=verify_publication(store,args.id,revision,count);plural=''if count==1 else's';print(f"Published {args.id}, {count} field{plural}. Verified.")
+			count=store.publish(args.id,args.title,args.source,submission_format=metadata);revision=store.report(args.id)['updated_at'];warnings=verify_publication(store,args.id,revision,count);plural=''if count==1 else's';print(f"Published {args.id}, {count} field{plural}. Verified.");recommendations=[f"{question['prompt']}: {', '.join(question['default'])}"for question in parse_fields(Path(args.source).read_text('utf-8'))[1]if question.get('default')]
+			if recommendations:print('you recommended:\n'+'\n'.join(recommendations))
 			for warning in warnings or():print(f"{args.source}:{warning['line']}: Warning: possible unparsed {warning['marker']} marker. Keep spaces outside the markers. Literal marker text can be intentional.",file=sys.stderr)
 			if not count and'{#'in Path(args.source).read_text('utf-8'):print('Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then the `- ( ) option` lines follow.',file=sys.stderr)
 		elif args.command=='report':

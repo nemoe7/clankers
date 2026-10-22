@@ -54,6 +54,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Prefix recommended report options with `* ` in rendered forms and print `you recommended:` lines during report publication. Keep raw option values unchanged.
+
 - Show a "Write something first" tooltip on the Markdown preview button when the draft is empty instead of writing a status line.
 
 - Submit the initial questionnaire after the visibility response and before the first inbox wait. Keep the context-replacement trigger.

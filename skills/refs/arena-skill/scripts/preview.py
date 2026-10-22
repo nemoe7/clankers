@@ -1782,12 +1782,14 @@ def field_html(question):
   group = f'<div class="options" role="group" aria-label="{prompt}">'
   for option in question["options"]:
     value = html.escape(option, quote=True)
-    checked = " checked" if option in question["default"] else ""
+    recommended = option in question["default"]
+    checked = " checked" if recommended else ""
     label = custom_label(option)
     if label is None:
+      display = f"* {option}" if recommended else option
       group += (
         f'<label class="option"><input type="{control}" name="{name}" '
-        f'value="{value}"{checked}> {html.escape(option)}</label>'
+        f'value="{value}"{checked}> {html.escape(display)}</label>'
       )
       continue
     named = html.escape(label, quote=True)
@@ -10009,6 +10011,13 @@ def main():
       warnings = verify_publication(store, args.id, revision, count)
       plural = "" if count == 1 else "s"
       print(f"Published {args.id}, {count} field{plural}. Verified.")
+      recommendations = [
+        f"{question['prompt']}: {', '.join(question['default'])}"
+        for question in parse_fields(Path(args.source).read_text("utf-8"))[1]
+        if question.get("default")
+      ]
+      if recommendations:
+        print("you recommended:\n" + "\n".join(recommendations))
       for warning in warnings or ():
         print(
           f"{args.source}:{warning['line']}: Warning: possible unparsed "
