@@ -741,7 +741,18 @@ test('preview client', async (t) => {
   await t.test("An empty field keeps the stylesheet's min-height; a placeholder no longer holds the box op", async () => {
     // An empty field keeps the stylesheet's min-height, independent of its placeholder.
     assert.equal(get('#note').style.height, '');
+    get('#note').value = '';
+    get('#send-status').textContent = '';
+    await get('#preview-note').events.click();
+    assert.equal(get('#note').hidden, false);
+    assert.equal(get('#send-status').textContent, '');
+    assert.equal(get('#preview-note').title, 'Write something first');
+    assert.equal(get('#preview-note').getAttribute('aria-label'), 'Write something first');
+    assert.equal(get('#preview-note').dataset.tooltip, 'Write something first');
     get('#note').value = 'a draft';
+    get('#note').events.input();
+    assert.equal(get('#preview-note').title, 'Preview Markdown');
+    assert.equal(get('#preview-note').dataset.tooltip, undefined);
     // The stub carries the height the browser would measure for three lines.
     get('#note').scrollHeight = 96;
     context.grow();

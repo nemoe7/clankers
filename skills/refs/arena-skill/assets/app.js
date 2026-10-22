@@ -280,8 +280,17 @@ note.value = stored('draft') || '';
 grow();
 try { pending = JSON.parse(stored('pending') || 'null'); }
 catch { status.textContent = 'Stored retry data is invalid. Draft retained; check the log before resending.'; }
+let previewTooltipTimer = null;
+function clearPreviewTooltip() {
+  clearTimeout(previewTooltipTimer);
+  previewTooltipTimer = null;
+  const button = $('#preview-note');
+  delete button.dataset.tooltip;
+  label(button, 'Preview Markdown');
+}
 note.addEventListener('input', () => {
   draftVersion++;
+  clearPreviewTooltip();
   grow();
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
@@ -1226,12 +1235,21 @@ function writeMode() {
   note.hidden = false;
   grow();
   $('#draft-preview').hidden = true;
+  clearPreviewTooltip();
   setPreviewIcon($('#preview-note'));
   $('#preview-note').setAttribute('aria-pressed', 'false');
 }
 $('#preview-note').addEventListener('click', async () => {
   if (note.hidden) { writeMode(); note.focus(); return; }
-  if (!note.value.trim()) { status.textContent = 'Write a message before previewing.'; return; }
+  if (!note.value.trim()) {
+    const button = $('#preview-note');
+    clearTimeout(previewTooltipTimer);
+    label(button, 'Write something first');
+    button.dataset.tooltip = 'Write something first';
+    previewTooltipTimer = setTimeout(clearPreviewTooltip, 1500);
+    return;
+  }
+  clearPreviewTooltip();
   const sequence = ++draftPreviewSequence;
   note.hidden = true;
   const panel = $('#draft-preview');

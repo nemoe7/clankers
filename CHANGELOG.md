@@ -54,6 +54,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Show a "Write something first" tooltip on the Markdown preview button when the draft is empty instead of writing a status line.
+
 - Submit the initial questionnaire after the visibility response and before the first inbox wait. Keep the context-replacement trigger.
 
 - Show green check, red cross, and orange question mark in questionnaire results. Mark only wholly unknown answers as unknown, and keep Answer again beside Close on one row.
