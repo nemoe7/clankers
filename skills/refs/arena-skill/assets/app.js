@@ -254,19 +254,36 @@ function paintExpansion() {
   setIcon(expandComposer, expanded ? 'minimize-2' : 'maximize-2', 16);
 }
 function grow() {
+  const history = $('#history');
+  const priorHistoryHeight = history.clientHeight;
+  const priorNoteHeight = parseFloat(note.style.height) || 0;
   const wasMultiline = Boolean(compose.dataset.multiline);
+  const wasAttachments = Boolean(compose.dataset.attachments);
   delete compose.dataset.multiline;
   if (!note.value) delete compose.dataset.expanded;
   note.style.height = 'auto';
   note.style.overflowY = note.value ? 'auto' : 'hidden';
   const css = window.getComputedStyle(note);
   const single = parseFloat(css.lineHeight) + parseFloat(css.paddingTop) + parseFloat(css.paddingBottom);
-  const multiline = note.value && (wasMultiline || note.hidden || note.value.includes('\n') || note.scrollHeight > Math.ceil(single));
+  const multiline = Boolean(note.value && (wasMultiline || note.hidden || note.value.includes('\n') || note.scrollHeight > Math.ceil(single)));
   if (multiline) compose.dataset.multiline = 'true';
   const border = parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth);
-  note.style.height = !note.value || compose.dataset.expanded ? '' : `${note.scrollHeight + border}px`;
+  const nextNoteHeight = !note.value || compose.dataset.expanded ? 0 : note.scrollHeight + border;
+  note.style.height = nextNoteHeight ? `${nextNoteHeight}px` : '';
   expandComposer.hidden = !multiline && !compose.dataset.expanded;
   paintExpansion();
+  const nextHistoryHeight = history.clientHeight;
+  const heightDrop = priorHistoryHeight > nextHistoryHeight
+    ? priorHistoryHeight - nextHistoryHeight
+    : nextHistoryHeight > 0
+      ? Math.max(0, nextNoteHeight - priorNoteHeight) + (!wasMultiline && multiline && !wasAttachments ? 38 : 0)
+      : 0;
+  if (heightDrop > 0 && !compose.dataset.expanded) {
+    history.scrollTop = logPinned
+      ? history.scrollHeight
+      : Math.min(history.scrollHeight, history.scrollTop + heightDrop);
+    updateLogJump();
+  }
 }
 expandComposer.addEventListener('click', () => {
   if (compose.dataset.expanded) delete compose.dataset.expanded;
@@ -274,7 +291,30 @@ expandComposer.addEventListener('click', () => {
   grow();
   (note.hidden ? $('#draft-preview') : note).focus();
 });
-window.addEventListener('resize', grow);
+let lastViewportHeight = 0;
+function syncViewport() {
+  const vv = window.visualViewport;
+  const nextHeight = Math.round(vv?.height || window.innerHeight || 0);
+  if (!nextHeight) return;
+  const history = $('#history');
+  const priorHistoryHeight = history.clientHeight;
+  if (nextHeight !== lastViewportHeight) {
+    lastViewportHeight = nextHeight;
+    document.documentElement.style?.setProperty?.('--app-height', `${nextHeight}px`);
+  }
+  if ((vv?.offsetTop || window.scrollY) && typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+  const nextHistoryHeight = history.clientHeight;
+  if (priorHistoryHeight > nextHistoryHeight && !compose.dataset.expanded) {
+    history.scrollTop = logPinned
+      ? history.scrollHeight
+      : Math.min(history.scrollHeight, history.scrollTop + (priorHistoryHeight - nextHistoryHeight));
+    updateLogJump();
+  }
+}
+window.addEventListener('resize', () => { syncViewport(); grow(); });
+window.visualViewport?.addEventListener?.('resize', syncViewport);
+window.visualViewport?.addEventListener?.('scroll', syncViewport);
+syncViewport();
 paintSend(false);
 note.value = stored('draft') || '';
 grow();
