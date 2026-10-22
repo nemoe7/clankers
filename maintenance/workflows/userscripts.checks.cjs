@@ -2536,8 +2536,8 @@ function checkStateDownload(api, session, logging) {
   );
   assert.equal(
     resetWindowAccepts(outside, true, "main", "https://old.arena.site", "https://new.arena.site", "main"),
-    false,
-    "outside the window the prompt stands",
+    true,
+    "outside the window a URL-only move still writes without the prompt",
   );
   assert.equal(
     resetWindowAccepts(atWindow, true, "dev", "https://old.arena.site", "https://new.arena.site", "main"),

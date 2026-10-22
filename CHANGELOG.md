@@ -98,6 +98,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Accept preview URL changes on the same branch regardless of the reset-window clock when previous saves match. Keep mismatch reporting and confirmation.
+
+- Wait a random 0-5 second delay before clicking Keep working, and enter wake up only after Keep working appeared and was clicked.
+
 - Rewrite prompt fill as one engineering brief. Include initial questionnaire questions and require a fresh CLI view after context replacement.
 
 - Shorten state save panels. Show only changed stamp comparisons, and offer Force save on state mismatch and missing branch. Show Forcing save at once.
@@ -111,6 +115,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Fixed
 
 #### userscripts
+
+- Wrap inline backtick spans in `<code>` elements during composer text insertion so ProseMirror keeps angle brackets unescaped on send.
 
 - Offer Choose file and Cancel on Force save for a fresh unlisted repository instead of starting a download. Clear the missing-branch warning only after a completed Choose file save.
 

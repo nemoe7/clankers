@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.63
+// @name         Arena.ai | NemoUtils | v1.10.64
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.63
+// @version      1.10.64
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -456,8 +456,12 @@
     range.selectNodeContents(el);
     selection.removeAllRanges();
     selection.addRange(range);
-    var ok = document.execCommand("insertText", false, text);
-    var matched = String(el.innerText || "").trim() === text;
+    var hasCode =
+      /`[^`\n]+`/.test(text) &&
+      typeof document.createElement === "function" &&
+      typeof el.appendChild === "function";
+    var ok = !hasCode && document.execCommand("insertText", false, text);
+    var matched = !hasCode && String(el.innerText || "").trim() === text;
     logEvent("fill", "inserted", { ok: ok, matched: matched }, "debug");
     if (!ok || !matched) {
       while (el.firstChild) {
@@ -466,7 +470,27 @@
       var lines = text.split("\n");
       for (var j = 0; j < lines.length; j += 1) {
         var paragraph = document.createElement("p");
-        paragraph.textContent = lines[j];
+        var line = lines[j];
+        var parts = line.split(/(`[^`\n]+`)/g);
+        if (parts.length > 1 && typeof document.createTextNode === "function") {
+          for (var k = 0; k < parts.length; k += 1) {
+            var part = parts[k];
+            if (!part) continue;
+            if (
+              part.length > 2 &&
+              part.charAt(0) === "`" &&
+              part.charAt(part.length - 1) === "`"
+            ) {
+              var code = document.createElement("code");
+              code.textContent = part.slice(1, -1);
+              paragraph.appendChild(code);
+            } else {
+              paragraph.appendChild(document.createTextNode(part));
+            }
+          }
+        } else {
+          paragraph.textContent = line;
+        }
         el.appendChild(paragraph);
       }
       el.dispatchEvent(
@@ -2187,16 +2211,25 @@
   var keepWorkingWaitingComposer = false;
   runFeature("keep-working", "Composer — keep working", function () {
     if (typeof document === "undefined") return function () {};
+    var timer = null;
+    var timerFor = null;
     var composing = false;
 
-    function sync(event) {
-      if (event && event.isComposing) composing = true;
+    function cancel() {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      timerFor = null;
+    }
+
+    function clickTarget() {
       if (
         (!isComposerUrl(location.href) && !isSessionUrl(location.href)) ||
         composing ||
         captchaSignal(document)
       ) {
-        return;
+        return null;
       }
       var message = lastMessageRoot(document);
       var rootKey =
@@ -2208,20 +2241,28 @@
       var lastRow = lastMessageRow(message);
       var keepWorking = keepWorkingButton(document);
       if (
-        message &&
-        rootKey &&
-        !keepWorkingRoots.has(rootKey) &&
-        lastRow &&
-        !isSpinnerRow(lastRow) &&
-        !hasClassToken(lastRow, "prose") &&
-        keepWorking
+        !message ||
+        !rootKey ||
+        keepWorkingRoots.has(rootKey) ||
+        !lastRow ||
+        isSpinnerRow(lastRow) ||
+        hasClassToken(lastRow, "prose") ||
+        !keepWorking
       ) {
-        keepWorkingRoots.add(rootKey);
-        keepWorkingWaitingComposer = true;
-        keepWorking.click();
-        logEvent("keep-working", "clicked");
+        return null;
       }
-      if (!keepWorkingWaitingComposer) return;
+      return { button: keepWorking, rootKey: rootKey };
+    }
+
+    function fillComposer() {
+      if (
+        !keepWorkingWaitingComposer ||
+        (!isComposerUrl(location.href) && !isSessionUrl(location.href)) ||
+        composing ||
+        captchaSignal(document)
+      ) {
+        return;
+      }
       var editor = document.querySelector('div.tiptap.ProseMirror[contenteditable="true"]');
       if (!editor || !renderedNode(editor) || editor.getAttribute("aria-disabled") === "true") {
         return;
@@ -2237,7 +2278,35 @@
       }
     }
 
-    function compositionStart() { composing = true; }
+    function sync(event) {
+      if (event && event.isComposing) composing = true;
+      var next = clickTarget();
+      if (!next) {
+        cancel();
+        fillComposer();
+        return;
+      }
+      if (timer !== null && timerFor === next.rootKey) {
+        fillComposer();
+        return;
+      }
+      cancel();
+      timerFor = next.rootKey;
+      timer = setTimeout(function () {
+        timer = null;
+        timerFor = null;
+        var current = clickTarget();
+        if (!current || current.rootKey !== next.rootKey) return;
+        keepWorkingRoots.add(current.rootKey);
+        keepWorkingWaitingComposer = true;
+        current.button.click();
+        logEvent("keep-working", "clicked");
+        fillComposer();
+      }, Math.floor(Math.random() * 5001));
+      fillComposer();
+    }
+
+    function compositionStart() { composing = true; cancel(); }
     function compositionEnd() { composing = false; sync(); }
     var observer = new MutationObserver(sync);
     observer.observe(document.documentElement, {
@@ -2249,6 +2318,7 @@
     window.addEventListener("popstate", sync);
     sync();
     return function () {
+      cancel();
       keepWorkingWaitingComposer = false;
       observer.disconnect();
       window.removeEventListener("compositionstart", compositionStart, true);
@@ -2432,7 +2502,6 @@
   // and a switch set to off keeps it at every hour.
   function resetWindowAccepts(when, on, branch, remembered, base, rememberedBranch) {
     if (!on) return false;
-    if (!inResetWindow(when)) return false;
     if (!branch || !remembered || remembered === base) return false;
     if (rememberedBranch && branch !== rememberedBranch) return false;
     return true;

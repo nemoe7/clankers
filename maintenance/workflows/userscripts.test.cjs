@@ -1348,8 +1348,14 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     roots = [messageRoot("newest-root", true)];
     fire(); flush();
     assert.equal(clicks, 4, "a new latest root permits one recovery");
-    present = false;
+    roots = [messageRoot("no-button-root", false, [proseRow, actionRow])];
+    present = true;
     editor.innerText = "";
+    keepWorkingVisible = false;
+    fire(); flush();
+    assert.equal(keepWorkingClicks, 0);
+    assert.equal(editor.innerText, "", "does not type wake up if Keep working never showed up");
+    present = false;
     keepWorkingVisible = true;
     roots = [messageRoot("spinner-root", false, [actionRow, spinnerRow])];
     fire(); flush();
@@ -1361,14 +1367,18 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const toggleKeepWorking = () => [...menus.values()].find(item => item.label.startsWith("Composer — keep working")).callback();
     toggleKeepWorking();
     assert.equal(saved.get("keep-working"), false);
-    fire();
+    fire(); flush();
     assert.equal(keepWorkingClicks, 0, "Keep working toggle Off disables the click");
     toggleKeepWorking();
     assert.equal(saved.get("keep-working"), true);
+    assert.equal(keepWorkingClicks, 0, "waits for the random 0-5s delay before clicking Keep working");
+    assert.equal(timers.size, 1);
+    assert.ok([...timers.values()].every(timer => timer.ms >= 0 && timer.ms <= 5000));
+    flush();
     assert.equal(keepWorkingClicks, 1, "Keep working clicks once when the last row is neither spinner nor prose");
     assert.ok(logged.some(([line]) => line === "[NemoUtils][keep-working][info] clicked"));
     assert.equal(editor.innerText, "", "waits for the composer before typing wake up");
-    fire();
+    fire(); flush();
     assert.equal(keepWorkingClicks, 1, "does not click Keep working repeatedly for the same root");
     keepWorkingVisible = false;
     present = true;
@@ -1377,6 +1387,115 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.ok(logged.some(([line]) => line === "[NemoUtils][keep-working][info] filled"));
     flush();
     assert.equal(clicks, 5, "sends wake up after Keep working opens the composer");
+  });
+}
+
+{
+  const { test } = require("node:test");
+  test("setComposerText renders inline backtick spans as code elements", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+    const makeNode = (tag) => ({
+      tagName: tag.toUpperCase(),
+      children: [],
+      _text: "",
+      get firstChild() { return this.children[0] || null; },
+      get textContent() {
+        return this.children.length
+          ? this.children.map(child => child.textContent).join("")
+          : this._text;
+      },
+      set textContent(value) {
+        this.children = [];
+        this._text = String(value);
+      },
+      get innerText() {
+        return this.children.length
+          ? this.children.map(child => child.textContent).join("\n")
+          : this._text;
+      },
+      appendChild(child) { this.children.push(child); return child; },
+      removeChild(child) {
+        const idx = this.children.indexOf(child);
+        if (idx >= 0) this.children.splice(idx, 1);
+      },
+      dispatchEvent() {},
+      focus() {},
+      getAttribute() { return null; },
+    });
+    const composer = makeNode("div");
+    let execCalled = false;
+    const context = {
+      console: { log() {}, warn() {}, error() {} },
+      URL,
+      InputEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
+      location: { href: "https://arena.ai/agent", pathname: "/agent" },
+      document: {
+        documentElement: {},
+        createElement(tag) { return makeNode(tag); },
+        createTextNode(text) { return { nodeType: 3, textContent: String(text) }; },
+        createRange() { return { selectNodeContents() {} }; },
+        execCommand() { execCalled = true; return true; },
+        querySelector(selector) {
+          if (selector === 'div.tiptap.ProseMirror[contenteditable="true"]') return composer;
+          if (selector.indexOf("div.relative.z-10") === 0) {
+            return {
+              textContent: "nemoe7/clankers",
+              querySelectorAll() {
+                return [{ textContent: "nemoe7/clankers" }];
+              },
+            };
+          }
+          return null;
+        },
+        querySelectorAll() { return []; },
+        title: "",
+      },
+      window: {
+        addEventListener() {},
+        removeEventListener() {},
+        getSelection() { return { removeAllRanges() {}, addRange() {} }; },
+      },
+      getComputedStyle() { return { overflowY: "auto" }; },
+      MutationObserver: class { observe() {} disconnect() {} },
+      ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+      requestAnimationFrame() { return 1; },
+      cancelAnimationFrame() {},
+      setInterval() { return 1; },
+      clearInterval() {},
+      setTimeout() { return 1; },
+      clearTimeout() {},
+      fetch(url) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(
+            url.includes("arena-prompt-fill.txt")
+              ? "Run `arena-preview questionnaire '<json>'` and `git ls-remote origin <branch>`.\nPlain line"
+              : "",
+          ),
+        });
+      },
+      sessionStorage: { getItem() { return null; }, setItem() {} },
+      GM_getValue(key, fallback) {
+        if (key === "prompt-fill") return true;
+        return false;
+      },
+      GM_setValue() {},
+      GM_registerMenuCommand() { return 1; },
+      GM_unregisterMenuCommand() {},
+      GM_xmlhttpRequest() {},
+    };
+    vm.runInNewContext(source, context);
+    return new Promise((resolve) => setImmediate(resolve)).then(() => {
+      assert.equal(execCalled, false, "inline backtick spans bypass plain-text execCommand");
+      assert.equal(composer.children.length, 4);
+      const codeNodes = composer.children[2].children.filter(node => node.tagName === "CODE");
+      assert.deepEqual(
+        codeNodes.map(node => node.textContent),
+        ["arena-preview questionnaire '<json>'", "git ls-remote origin <branch>"],
+      );
+      assert.equal(composer.children[3].textContent, "Plain line");
+    });
   });
 }
 
@@ -1762,3 +1881,300 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(logged.at(-1).length, 1, "unknown values and empty detail stay out of the log");
   });
 }
+
+{
+  const { test } = require("node:test");
+  const { spawn } = require("node:child_process");
+  test("autosave round-trips live preview HTTP responses and state import", async () => {
+    const pyScript = `
+import importlib.util, json, os, subprocess, sys, tempfile, threading
+from contextlib import closing
+from pathlib import Path
+
+root = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("preview_mod", root / "skills/refs/arena-skill/scripts/preview.py")
+preview = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(preview)
+
+tmp = tempfile.TemporaryDirectory()
+repo = Path(tmp.name) / "r"
+repo.mkdir()
+subprocess.run(["git", "init", "-b", "arena/11223344-r"], cwd=repo, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+subprocess.run(["git", "commit", "--allow-empty", "-m", "init"], cwd=repo, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+state_dir = repo / "arena-state"
+store = preview.Store(state_dir, create=True)
+store.note("first-note", "initial note")
+store.write_task("t-1", "Verify autosave", ["Check round-trip"], task_type="code")
+report_md = state_dir / "sample-report.md"
+report_md.write_text("# Sample Report\\n\\nProceed? {#go}\\n- (x) Yes\\n- ( ) No\\n", encoding="utf-8")
+store.publish("sample-report", "Sample Report", report_md)
+
+server = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+thread = threading.Thread(target=server.serve_forever, daemon=True)
+thread.start()
+print(json.dumps({"base": f"http://127.0.0.1:{server.server_port}"}), flush=True)
+
+for raw in sys.stdin:
+  cmd = json.loads(raw)
+  op = cmd["op"]
+  if op == "mutate":
+    store.note("second-note", "second note")
+    store.write_task("t-1", "Verify autosave", ["Check round-trip"], status="finished", task_type="code")
+    print(json.dumps({"ok": True}), flush=True)
+  elif op == "diverge":
+    snap = store.userscript_snapshot()
+    history = [
+      {
+        "type": "userscript-autosave",
+        "version": 1,
+        "save_id": "11111111-1111-4111-8111-111111111111",
+        "scope": snap["scope"],
+        "digest": snap["digest"],
+        "core": snap["core"],
+        "stamp": "2098-01-01T00:00:00+00:00",
+        "confirmed_at": "2098-01-01T00:00:00+00:00",
+        "receipts": {},
+      },
+      {
+        "type": "userscript-autosave",
+        "version": 1,
+        "save_id": "22222222-2222-4222-8222-222222222222",
+        "scope": snap["scope"],
+        "digest": snap["digest"],
+        "core": snap["core"],
+        "stamp": "2099-01-01T00:00:00+00:00",
+        "confirmed_at": "2099-01-01T00:00:00+00:00",
+        "receipts": {},
+      },
+    ]
+    with closing(store.connect()) as db, db:
+      db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (preview.AUTOSAVE_HISTORY, json.dumps(history)))
+    store.note("third-note", "diverged note")
+    print(json.dumps({"ok": True}), flush=True)
+  elif op == "inspect":
+    snap = store.userscript_snapshot()
+    print(json.dumps({"lastsave": snap["lastsave"], "beforelastsave": snap["beforelastsave"], "digest": snap["digest"]}), flush=True)
+  elif op == "import":
+    dest = Path(tmp.name) / "imported" / "r"
+    dest.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-b", "arena/11223344-r"], cwd=dest, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=dest, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=dest, check=True)
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "init"], cwd=dest, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    fresh = preview.Store(dest / "arena-state", create=True)
+    counts = fresh.import_state(cmd["text"], replace_tasks=True)
+    with closing(fresh.connect()) as db:
+      row = db.execute("SELECT source FROM reports WHERE id = ?", ("sample-report",)).fetchone()
+    hist_lines = fresh.userscript_history()
+    print(json.dumps({
+      "counts": counts,
+      "report_source": row[0] if row else None,
+      "history_count": len(hist_lines),
+      "lastsave": fresh.userscript_snapshot().get("lastsave"),
+    }), flush=True)
+  elif op == "quit":
+    server.shutdown()
+    tmp.cleanup()
+    print(json.dumps({"ok": True}), flush=True)
+    break
+`;
+    const repoRoot = path.resolve(__dirname, "../..");
+    const proc = spawn("python3", ["-c", pyScript, repoRoot], { stdio: ["pipe", "pipe", "inherit"] });
+    const lines = [];
+    let waiters = [];
+    let buffer = "";
+    proc.stdout.setEncoding("utf8");
+    proc.stdout.on("data", chunk => {
+      buffer += chunk;
+      let idx;
+      while ((idx = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (!line) continue;
+        const parsed = JSON.parse(line);
+        if (waiters.length) waiters.shift()(parsed);
+        else lines.push(parsed);
+      }
+    });
+    const nextMessage = () => lines.length ? Promise.resolve(lines.shift()) : new Promise(resolve => waiters.push(resolve));
+    const callPy = async payload => {
+      proc.stdin.write(JSON.stringify(payload) + "\n");
+      return nextMessage();
+    };
+
+    try {
+      const { base } = await nextMessage();
+      const source = fs.readFileSync(path.join(repoRoot, "userscripts/arena.user.js"), "utf8");
+      const saved = new Map();
+      const menus = new Map();
+      const timers = [];
+      let inFlight = [];
+      let fileText = "";
+      const writes = [];
+      const handle = {
+        name: "r-arena-11223344-r.ndjson",
+        getFile: async () => ({ text: async () => fileText }),
+        createWritable: async () => ({
+          write: async text => { writes.push(text); },
+          close: async () => { fileText = writes.at(-1); },
+        }),
+      };
+      const makeElement = tag => ({
+        tagName: tag,
+        children: [],
+        style: {},
+        attributes: {},
+        listeners: {},
+        textContent: "",
+        click() {},
+        setAttribute(name, value) { this.attributes[name] = String(value); },
+        getAttribute(name) { return name in this.attributes ? this.attributes[name] : null; },
+        appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+        removeChild(child) { this.children = this.children.filter(item => item !== child); return child; },
+        addEventListener(name, callback) { this.listeners[name] = callback; },
+      });
+      const body = makeElement("body");
+      const iframe = { getAttribute: name => (name === "title" ? "App preview on port 8000" : null), src: base + "/" };
+      const context = {
+        document: {
+          body,
+          title: "Arena | r",
+          visibilityState: "visible",
+          createElement: makeElement,
+          getElementById: id => body.children.find(child => child.id === id) || null,
+          querySelectorAll: selector => (selector === "iframe[title]" ? [iframe] : []),
+          querySelector: selector => {
+            if (selector.indexOf("div.relative.z-10") === 0) {
+              return {
+                querySelectorAll(sel) {
+                  if (sel === "span.truncate") return [{ textContent: "o/r" }];
+                  if (sel === "a, [title]") {
+                    return [{ getAttribute: name => (name === "href" ? "https://github.com/o/r/tree/arena/11223344-r" : null) }];
+                  }
+                  return [];
+                },
+              };
+            }
+            return null;
+          },
+          addEventListener: () => {},
+        },
+        location: { href: "https://arena.ai/agent/11223344", pathname: "/agent/11223344", search: "" },
+        navigator: {},
+        sessionStorage: { getItem: key => (key === "clankers-arena-agent-slug" ? "r" : null), setItem: () => {} },
+        localStorage: { getItem: () => null, setItem: () => {} },
+        MutationObserver: class { observe() {} disconnect() {} },
+        setInterval: callback => { timers.push(callback); return timers.length; },
+        clearInterval: () => {},
+        setTimeout: callback => { callback(); return 0; },
+        clearTimeout: () => {},
+        fetch: () => Promise.reject(new Error("offline")),
+        Blob: class { constructor(parts) { this.parts = parts; } },
+        URL,
+        console: { log() {}, warn() {}, error() {}, debug() {}, info() {} },
+        GM_getValue: (key, fallback) => (saved.has(key) ? saved.get(key) : fallback),
+        GM_setValue: (key, value) => { saved.set(key, value); },
+        GM_deleteValue: key => { saved.delete(key); },
+        GM_registerMenuCommand: (label, callback) => { menus.set(label, callback); return label; },
+        GM_unregisterMenuCommand: label => { menus.delete(label); },
+        GM_xmlhttpRequest: options => {
+          const p = fetch(options.url, {
+            method: options.method || "GET",
+            headers: options.headers || {},
+            body: options.data,
+          }).then(async res => {
+            const responseText = await res.text();
+            if (options.onload) options.onload({ status: res.status, responseText });
+          }).catch(err => {
+            if (options.onerror) options.onerror(err);
+          });
+          inFlight.push(p);
+        },
+        GM_addStyle: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+        showSaveFilePicker: () => Promise.resolve(handle),
+        indexedDB: {
+          open() {
+            const opening = {
+              result: {
+                transaction: () => ({
+                  objectStore: () => ({
+                    get() {
+                      const reading = { result: handle };
+                      queueMicrotask(() => reading.onsuccess());
+                      return reading;
+                    },
+                    put() {},
+                  }),
+                }),
+              },
+            };
+            queueMicrotask(() => opening.onsuccess());
+            return opening;
+          },
+        },
+      };
+      context.window = context;
+      context.self = context;
+      saved.set("clankers-arena-state-hinted", true);
+      vm.runInNewContext(source, context, { filename: "arena.user.js" });
+
+      const drain = async () => {
+        for (let i = 0; i < 6; i += 1) {
+          const batch = inFlight;
+          inFlight = [];
+          await Promise.all(batch);
+          await new Promise(setImmediate);
+        }
+      };
+      const tick = () => timers.forEach(callback => callback());
+      const panel = () => body.children.find(child => child.id === "clankers-state-panel") || null;
+      const receiptKey = "clankers-arena-state-receipt-r-arena-11223344-r";
+
+      await drain();
+      menus.get("State — choose the file")();
+      await drain();
+      assert.equal(writes.length, 1, "initial file selection writes and confirms the first snapshot");
+      const firstReceipt = structuredClone(saved.get(receiptKey));
+      const firstServer = await callPy({ op: "inspect" });
+      assert.ok(firstReceipt && firstReceipt.lastsave);
+      assert.equal(firstReceipt.lastsave, firstServer.lastsave);
+      assert.equal(firstReceipt.beforelastsave, null);
+
+      await callPy({ op: "mutate" });
+      tick();
+      await drain();
+      assert.equal(writes.length, 2, "second autosave writes the mutated state");
+      const secondReceipt = structuredClone(saved.get(receiptKey));
+      const secondServer = await callPy({ op: "inspect" });
+      assert.equal(secondReceipt.lastsave, secondServer.lastsave);
+      assert.equal(secondReceipt.beforelastsave, firstReceipt.lastsave);
+
+      await callPy({ op: "diverge" });
+      tick();
+      await drain();
+      assert.equal(writes.length, 2, "diverged server stamps block automatic overwrite");
+      assert.ok(panel());
+      assert.equal(panel().children[0].textContent, "State mismatch.");
+
+      panel().children[1].children.find(button => button.textContent === "Force save").listeners.click();
+      await drain();
+      assert.equal(writes.length, 3, "Force save writes and re-synchronizes after divergence");
+      assert.equal(panel(), null);
+      const thirdReceipt = structuredClone(saved.get(receiptKey));
+
+      const imported = await callPy({ op: "import", text: fileText });
+      assert.deepEqual(imported.counts, { notes: 3, tasks: 1, answers: 0, reports: 1 });
+      assert.ok(imported.report_source && imported.report_source.endsWith("sample-report.md"));
+      assert.equal(imported.history_count, 2);
+      assert.equal(imported.lastsave, thirdReceipt.beforelastsave);
+    } finally {
+      await callPy({ op: "quit" }).catch(() => {});
+    }
+  });
+}
+
