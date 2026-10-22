@@ -385,7 +385,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- Keep only the first line of the previous note in the composer placeholder.
+- Keep only the first line of the previous note in the composer placeholder, and halve the gap between the Attach and Markdown preview buttons.
 
 - Recreate report Markdown source files in the active ignored state directory during import. Keep existing files and remove created files when an import fails.
 

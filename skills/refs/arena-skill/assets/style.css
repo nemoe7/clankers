@@ -94,7 +94,7 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 #note, #draft-preview { grid-area: input; min-width: 0; }
 #note { min-height: 0; max-height: min(240px, 35dvh); overflow-y: auto; padding: 4px; border: 0; background: transparent; outline: none; }
 #attach-file { grid-area: attach; }
-#preview-note { grid-area: preview; }
+#preview-note { grid-area: preview; margin-left: -4px; }
 #send { grid-area: send; }
 #staged-files { grid-area: files; }
 #composer-expand { position: absolute; top: 0; right: 0; width: 30px; height: 30px; padding: 0; }
