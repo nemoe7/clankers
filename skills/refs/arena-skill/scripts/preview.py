@@ -54,7 +54,9 @@ PENDING_SUBMISSIONS = (
   "acknowledged_at IS NULL"
   " AND seq IN (SELECT MAX(seq) FROM submissions GROUP BY report_id)"
 )
-REPLY_REFERENCE = re.compile(r"^RE:\s*([a-zA-Z0-9_-]{1,80})(?:\s|$)", re.IGNORECASE)
+REPLY_REFERENCE = re.compile(
+  r"^RE:\s*([a-zA-Z0-9_-]{1,80}(?:/[a-zA-Z0-9_-]{1,80})?)(?:\s|$)", re.IGNORECASE
+)
 MAX_REPORT = 2_000_000
 WS_TICK_SECONDS = 0.25
 WS_HEARTBEAT_SECONDS = 10
@@ -1492,6 +1494,11 @@ def reply_thread(record, notes):
   target = reply_reference(record.get("text"))
   while target:
     parent = notes.get(target)
+    if parent is None and "/" in target:
+      report_id, question_id = target.split("/", 1)
+      candidate = notes.get(report_id)
+      if candidate is not None and candidate.get("type") == "report":
+        parent = candidate | {"question_id": question_id}
     if parent is None:
       matches = [note for note_id, note in notes.items() if note_id.startswith(target)]
       if len(matches) != 1:
@@ -2352,7 +2359,12 @@ def format_pending_item(item):
   for parent in item.get("thread") or []:
     if parent.get("type") == "report":
       source = parent.get("source") or f"/api/reports/{parent['id']}/source"
-      context = f"RE: {parent['id']}\nSource: {source}"
+      target_id = (
+        f"{parent['id']}/{parent['question_id']}"
+        if parent.get("question_id")
+        else parent["id"]
+      )
+      context = f"RE: {target_id}\nSource: {source}"
       continue
     body = REPLY_REFERENCE.sub("", parent.get("text") or "", count=1).lstrip("\r\n")
     body = format_pending_record(parent | {"text": body}).partition("\n")[2]

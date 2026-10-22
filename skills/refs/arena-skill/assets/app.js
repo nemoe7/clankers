@@ -1458,6 +1458,16 @@ function quoteTaskId(title) {
   // Keep the task ID tooltip after quoting.
   title.title = title.dataset.taskId;
 }
+function quoteQuestionId(target) {
+  const reportId = $('#report').dataset.reportId || $('#report-select').value;
+  const code = target.querySelector?.('CODE, code');
+  const questionId = target.dataset?.questionId ||
+    target.closest?.('.question')?.dataset?.field ||
+    (code && code.textContent) ||
+    (target.textContent || '').replace(/^Question ID:\s*/i, '').trim();
+  if (!reportId || !questionId) return;
+  quoteId(`${reportId}/${questionId}`, target);
+}
 // The tab buttons share one confirmation, and null text means there was nothing to copy.
 const copyTimers = new WeakMap();
 async function copyFrom(button, text, what, glyph = 'copy', failure = null) {
@@ -1498,7 +1508,10 @@ document.addEventListener('input', event => {
   if (slot) slot.checked = Boolean(target.value.trim());
 });
 document.addEventListener('click', event => {
-  const target = event.target?.closest?.('.copy-code, .note-id, .task-title') || event.target;
+  const parent = event.target?.parentElement;
+  const target = event.target?.closest?.('.copy-code, .note-id, .task-title, .question-id') ||
+    (typeof parent?.className === 'string' && parent.className.split(' ').includes('question-id')
+      ? parent : event.target);
   const reference = target?.closest?.('a.ack-reference') ||
     (typeof target?.className === 'string' && target.className.split(' ').includes('ack-reference')
       ? target : null);
@@ -1513,6 +1526,7 @@ document.addEventListener('click', event => {
   // An ID takes one gesture on every device: a click quotes it, with or without a modifier.
   else if (classes.includes('note-id')) quoteNoteId(target);
   else if (classes.includes('task-title')) quoteTaskId(target);
+  else if (classes.includes('question-id')) quoteQuestionId(target);
 });
 document.addEventListener('keydown', event => {
   const target = event.target;

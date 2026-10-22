@@ -3028,6 +3028,18 @@ test('preview client', async (t) => {
     get('#note').value = '';
     documentEvents.click({ target: answerCode });
     assert.equal(get('#note').value, `RE: ${answerCode.textContent}\n`);
+
+    get('#report').dataset.reportId = 'summarize-stops';
+    const questionId = context.document.createElement('small');
+    questionId.className = 'question-id';
+    const questionCode = context.document.createElement('code');
+    questionCode.textContent = 'next-action';
+    questionCode.parentElement = questionId;
+    questionId.append(questionCode);
+    get('#note').value = 'existing draft';
+    documentEvents.click({ target: questionCode });
+    assert.equal(get('#note').value, 'RE: summarize-stops/next-action\n\nexisting draft');
+    assert.equal(questionId.title, 'Quoted in the composer: RE: summarize-stops/next-action');
   });
 
   await t.test("The report copies its Markdown source, fetched on the click rather than riding the poll", async () => {
