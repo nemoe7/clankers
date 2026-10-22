@@ -30,7 +30,7 @@ The existing product style remains authoritative in `skills/refs/arena-skill/ass
 
 Questionnaire roles define red, amber, and green for both themes. Confidence mixes these roles from red at zero through amber at one-half to green at one.
 
-The dialog retains its existing width and layout. The connection-dot button has an expanded touch target and a visible focus ring.
+The dialog retains its existing width and layout. The connection-dot button keeps the dot's layout size. Its centered, out-of-flow target remains at least 44 px, with a visible focus ring.
 
 ## Components and contracts
 
@@ -63,6 +63,8 @@ Automated client checks cover independent results, empty requests, refresh, erro
 Local evidence: `arena-state/questionnaire-browser-evidence.json` and `arena-state/questionnaire-{360,1280}-{dark,light}.png`. The captures use synthetic results, not real questionnaire answers or verdicts.
 
 Chromium checks passed with no page errors. Safari, Firefox, physical devices, and screen readers have not run.
+
+Spacing evidence: `arena-state/questionnaire-spacing-evidence.json` and `arena-state/questionnaire-spacing-{360,1280}-{dark,light}.png`. Checks cover prior layout, touch hit area, focus, and nearby controls.
 
 | Usability check | Observed result |
 | --- | --- |

@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Restore connection-dot spacing. Keep the expanded touch target outside layout flow, with visible keyboard focus.
+
 - Deliver the full pending inbox from polls that find a violation. Mark delivered items Seen without acknowledging them.
 
 - Keep questionnaire requests out of violation and bible-checkpoint handling. Retain request reuse and clause checks for violations.
