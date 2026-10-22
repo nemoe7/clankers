@@ -24,6 +24,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `task list [-f]` | List upcoming task IDs, order, status, report links, set type marks and each linked report answer with its stamp and text. With -f, include finished tasks. Use task ID for details |
 | `task show ID` | Print one stored task: its title, status, order, primary type when set, report link, blocked mark and every detail |
 | `task set ID TITLE [DETAIL ...]` | Add or update a task; every task carries at least one detail, and reject a write that leaves none; one task holds one job, so several jobs mean several tasks rather than one task with many details; `--msg-id` is optional and only a note-born or report-born task carries it; `--unblocked` clears a report wait. |
+| `task unlink SUBMISSION-ID` | Remove an answer from all task answer lists without changing tasks, text, or receipts. Retain the explicit unlink in backups; `task set -m` can link it again |
 | `task remove ID` | Remove a task entered by mistake |
 | `state import [FILE]` | Import copied NDJSON or JSON notes, tasks and report answers from a file or stdin in one transaction; it always replaces the live notes, answers, reports and tasks; `--replace-tasks` replaces only tasks |
 | `download-request <url>` | Queue one pending file download for the owner to approve in Downloads; `--allow-proxy` permits the two proxies |

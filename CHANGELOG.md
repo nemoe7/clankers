@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-22
 
+### Added
+
+#### preview
+
+- Add submission unlinking from task answer lists. Retain tasks, answer history, receipts, and unlink state in backups.
+
 ### Changed
 
 #### gpt-question

@@ -1824,6 +1824,10 @@ def order_after_blockers(records):
   return placed
 
 
+# Empty task IDs retain an explicit unlink across report-derived links and backups.
+UNLINKED_TASK_ID = ""
+
+
 def link_task_answers(db, records):
   """Attach each task's linked answers, one entry per submission ID.
 
@@ -1852,8 +1856,11 @@ def link_task_answers(db, records):
         "report_id": answer["report_id"],
       }
       for answer in answers
-      if answer["task_id"] == item["id"]
-      or (answer["report_id"] and answer["report_id"] == item.get("report_id"))
+      if answer["task_id"] != UNLINKED_TASK_ID
+      and (
+        answer["task_id"] == item["id"]
+        or (answer["report_id"] and answer["report_id"] == item.get("report_id"))
+      )
     ]
     if linked:
       item["answers"] = linked
@@ -5761,6 +5768,7 @@ class Store:
       for record in self.submissions()
       if record.get("report_id") in live
       or record.get("task_id") in task_ids
+      or record.get("task_id") == UNLINKED_TASK_ID
       or record.get("report_id") in task_reports
     ]
     lines.extend(answers)
@@ -7067,6 +7075,20 @@ class Store:
         )
         return {"id": record_id, "ack_edited_seen_count": seen_count}
     raise FileNotFoundError("Message not found")
+
+  def unlink_submission(self, record_id):
+    "Remove an answer from task lists without changing its history or receipts."
+    identifier(record_id)
+    with self.transaction() as db:
+      cursor = db.execute(
+        "UPDATE submissions SET task_id = ? WHERE id = ?",
+        (UNLINKED_TASK_ID, record_id),
+      )
+      if not cursor.rowcount:
+        raise ValueError(f"No submission is stored under {record_id}")
+      return message_row(
+        db.execute("SELECT * FROM submissions WHERE id = ?", (record_id,)).fetchone()
+      )
 
   def mark_task(self, record_id, task_id, shared=None):
     """Mark the message task and append new attachment paths. Return the updated task when paths change.
@@ -9226,6 +9248,10 @@ def main():
     default=None,
     help="1-based place within div, not end",
   )
+  task_unlink = task_verbs.add_parser(
+    "unlink", help="Unlink a submission from all tasks; retain its history"
+  )
+  task_unlink.add_argument("submission_id")
   task_remove = task_verbs.add_parser("remove", help="Delete task by ID")
   task_remove.add_argument("task_id")
   state_group = commands.add_parser("state", help="Import or clear stored state")
@@ -9259,6 +9285,7 @@ def main():
     ("task", "show"): "task-show",
     ("task", "set"): "task",
     ("task", "remove"): "task-remove",
+    ("task", "unlink"): "task-unlink",
     ("state", "import"): "import-state",
     ("state", "clear"): "clear-state",
   }
@@ -9495,7 +9522,7 @@ def main():
         record_id
         for record_id in ids
         if not any(
-          record.get("task_id")
+          record.get("task_id") is not None
           for _, record in store.id_matches(record_id)
           if record["id"] == record_id
         )
@@ -9623,6 +9650,9 @@ def main():
           append_details=args.append_details,
         )
       print(format_task(record))
+    elif args.command == "task-unlink":
+      record = store.unlink_submission(store.resolve_id(args.submission_id))
+      print(f"Unlinked submission {record['id']} from tasks; history retained.")
     elif args.command == "task-remove":
       print(format_task(store.remove_task(store.resolve_id(args.task_id))))
     elif args.command == "task-list":

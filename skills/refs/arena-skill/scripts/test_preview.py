@@ -3797,6 +3797,72 @@ def test_bare_task_list_names_and_asks_about_the_current_task():
     ]
 
 
+def test_submission_unlink_preserves_history_and_restore(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  for task_id in ("first-task", "second-task"):
+    store.write_task(
+      task_id, "Task", ["Keep this step"], task_type="code", report_id="review"
+    )
+  store.submission("old-answer", "review", "Old answer", task_id="first-task")
+  store.submission("new-answer", "review", "Current answer")
+  store.submission(
+    "direct-answer", "removed-report", "Direct answer", task_id="first-task"
+  )
+  store.acknowledge(["old-answer"], "Received")
+  tasks_before = [store.task_record(name) for name in ("first-task", "second-task")]
+  before = {item["id"]: item for item in store.submissions()}
+  env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)}
+
+  def cli(answer_id):
+    return subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "task", "unlink", answer_id],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+
+  for answer_id in ("old-answer", "direct-answer", "old-answer"):
+    result = cli(answer_id)
+    assert result.returncode == 0, result.stderr
+  for task in store.list_tasks():
+    assert [answer["id"] for answer in task["answers"]] == ["new-answer"]
+  after = {item["id"]: item for item in store.submissions()}
+  assert after.keys() == before.keys()
+  for answer_id, original in before.items():
+    assert {
+      key: value for key, value in after[answer_id].items() if key != "task_id"
+    } == {key: value for key, value in original.items() if key != "task_id"}
+  assert [
+    store.task_record(name) for name in ("first-task", "second-task")
+  ] == tasks_before
+  ack = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), "ack", "direct-answer", "Received"],
+    capture_output=True,
+    text=True,
+    check=False,
+    env=env,
+  )
+  assert ack.returncode == 0, ack.stderr
+  expected_receipt = "ok direct"
+  assert ack.stdout.strip() == expected_receipt
+  restored = preview.Store(tmp_path / "restored", create=True)
+  restored.import_state(store.save_path.read_text())
+  assert restored.submissions() == store.submissions()
+  assert [
+    (row["id"], row["details"], row.get("answers")) for row in restored.list_tasks()
+  ] == [(row["id"], row["details"], row.get("answers")) for row in store.list_tasks()]
+  store.mark_task("old-answer", "first-task")
+  assert "old-answer" in {item["id"] for item in store.list_tasks()[0]["answers"]}
+  store.note("plain-note", "Keep this note")
+  for invalid in ("plain-note", "unknown-answer"):
+    snapshot = store.save_path.read_bytes()
+    result = cli(invalid)
+    assert result.returncode != 0
+    assert store.save_path.read_bytes() == snapshot
+
+
 def test_task_list_prints_a_linked_report_answer():
   """A report answer linked to a task prints in the list, the way the page links it."""
   with tempfile.TemporaryDirectory() as directory:
