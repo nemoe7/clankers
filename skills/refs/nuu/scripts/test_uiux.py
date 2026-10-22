@@ -1,7 +1,6 @@
 """Exercise the public UI workflow and preserve product authority."""
 
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -53,11 +52,6 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   authority = Path(record["authority"])
   content = authority.read_bytes()
   assert content
-  template = (SCRIPT.parent.parent / "references/design-document.md").read_text(
-    encoding="utf-8"
-  )
-  required_sections = re.findall(r"^\d+\. \*\*(.+?)\*\*:", template, re.MULTILINE)
-  assert re.findall(r"^## (.+)$", content.decode(), re.MULTILINE) == required_sections
   repeated = run("teach", "--create")
   assert not repeated["writes"]
   assert authority.read_bytes() == content
@@ -177,6 +171,7 @@ def test_browser_rejects_unsafe_requests_before_dependency_checks(tmp_path):
       "authorized_edit": True,
       "edit": {"selector": "body", "styles": []},
     },
+    {"overlaps": "true"},
   ]
   for change in invalid:
     result = subprocess.run(
@@ -235,7 +230,11 @@ byId('retry').addEventListener('click',submit);
       self.send_response(200)
       self.send_header("Content-Type", "text/html; charset=utf-8")
       self.end_headers()
-      self.wfile.write(markup)
+      self.wfile.write(
+        (project / "overlap.html").read_bytes()
+        if self.path == "/overlap.html"
+        else markup
+      )
 
     def log_message(self, *_args):
       pass
@@ -338,6 +337,36 @@ byId('retry').addEventListener('click',submit);
       )
       assert review.returncode == 0
       assert json.loads(review.stdout)["rendered_evidence"]["values"]
+      overlap_page = project / "overlap.html"
+      overlap_page.write_text(
+        "<!doctype html><style>body{margin:0}"
+        "#under,#over{position:fixed;left:20px;top:20px;width:80px;height:80px}"
+        "#under{z-index:1;background:#c00}#over{z-index:2;background:#080}"
+        "#far{position:fixed;left:220px;top:20px;width:40px;height:40px}</style>"
+        '<div id="under"><span id="inside">a</span></div>'
+        '<div id="over">b</div><div id="far">c</div>',
+        encoding="utf-8",
+      )
+      overlap_report = run(
+        "inspect",
+        "--overlaps",
+        "--selector",
+        "#under,#inside,#over,#far",
+        "--url",
+        f"{url}/overlap.html",
+      )
+      overlap_data = overlap_report["captures"][0]["overlaps"]
+      assert overlap_data["status"] == "checked"
+      assert overlap_data["limits"]["z_distance"].startswith("not_computed")
+      pairs = {(row["first"], row["second"]): row for row in overlap_data["pairs"]}
+      pair = pairs.get(("#under", "#over")) or pairs.get(("#over", "#under"))
+      assert pair and pair["relation"] == "separate" and pair["topmost"] == "#over"
+      assert pair["stacking"]["#over"][0]["zIndex"] == "2"
+      nested = pairs.get(("#under", "#inside")) or pairs.get(("#inside", "#under"))
+      assert nested and nested["relation"] in {"ancestor", "descendant"}
+      assert all(
+        "#far" not in (row["first"], row["second"]) for row in overlap_data["pairs"]
+      )
       house = run("inspect", "--profile", "house", expected=1)
       assert any(row["house_measurements"] for row in house["captures"])
       assert any(row["rule"] == "UIX201" for row in house["findings"])

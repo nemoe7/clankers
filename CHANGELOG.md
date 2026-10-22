@@ -8,6 +8,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+#### nuu
+
+- Add optional overlap and stacking-depth checks to browser inspection, with sampled hit-test order and ancestor stacking properties.
+
 #### preview
 
 - Add report submission maps and templates with typed selections. Keep raw custom text, answer history, and saved formats.
