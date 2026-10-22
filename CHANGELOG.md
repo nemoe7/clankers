@@ -377,6 +377,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Reorder queued tasks on touch devices through the drag handle. Keep saved task order on cancel and failed writes.
+
 - Refuse a republish when the report has any answer. Unpublish stays available after the owner reads the ack.
 
 #### house

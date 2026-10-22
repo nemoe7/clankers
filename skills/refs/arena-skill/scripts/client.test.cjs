@@ -1032,6 +1032,82 @@ test('preview client', async (t) => {
     }
   });
 
+  await t.test('Touch task reordering keeps the saved order on cancel and failed writes', async () => {
+    const prior = state.tasks;
+    const stamp = new Date().toISOString();
+    const panel = get('#tasks-panel');
+    let captured = null;
+    let pointed = null;
+    const priorHitTest = context.document.elementFromPoint;
+    panel.setPointerCapture = id => { captured = id; };
+    panel.hasPointerCapture = id => captured === id;
+    panel.releasePointerCapture = () => { captured = null; };
+    context.document.elementFromPoint = () => pointed;
+    state.tasks = {
+      finished: [],
+      upcoming: ['touch-first', 'touch-second', 'touch-third'].map((id, index) => ({
+        id, title: id, details: [], status: 'upcoming', order: index + 1,
+        type: 'code', updated_at: stamp,
+      })), updated_at: stamp,
+    };
+    const rows = () => [...get('#tasks-current-body').children, ...get('#tasks-upcoming-body').children];
+    const ids = () => rows().map(row => row.title);
+    const pointer = extra => event({ pointerType: 'touch', pointerId: 7, isPrimary: true, button: 0, clientX: 10, clientY: 10, ...extra });
+    const grab = row => {
+      const handle = row.children.find(child => child.className === 'task-drag-handle');
+      assert.equal(handle.style.touchAction, 'none', 'only the handle takes the touch gesture');
+      const down = pointer({ target: handle });
+      handle.events.pointerdown(down);
+      assert.equal(down.prevented, true);
+      assert.equal(captured, 7, 'the stable panel captures across row redraws');
+    };
+    const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+    try {
+      await refresh();
+      const original = ids();
+      const writes = orderWrites.length;
+      grab(rows()[2]);
+      pointed = rows()[0];
+      windowEvents.pointermove(pointer({ pointerId: 9 }));
+      assert.deepEqual(ids(), original, 'another pointer cannot move the queue');
+      windowEvents.pointermove(pointer({}));
+      const moved = [original[2], original[0], original[1]];
+      assert.deepEqual(ids(), moved, 'touch movement previews the new order');
+      pointed = rows()[0];
+      windowEvents.pointerup(pointer({}));
+      await settle();
+      assert.deepEqual(orderWrites.at(-1), moved);
+      assert.equal(captured, null);
+      grab(rows()[2]);
+      pointed = rows()[0];
+      windowEvents.pointermove(pointer({}));
+      windowEvents.pointercancel(pointer({}));
+      assert.deepEqual(ids(), moved, 'cancel restores the last saved order');
+      assert.equal(orderWrites.length, writes + 1, 'cancel writes nothing');
+      grab(rows()[2]);
+      pointed = rows()[0];
+      windowEvents.pointermove(pointer({}));
+      pointed = null;
+      windowEvents.pointerup(pointer({}));
+      assert.deepEqual(ids(), moved, 'release outside the queue cancels');
+      assert.equal(orderWrites.length, writes + 1);
+      orderFails = true;
+      grab(rows()[2]);
+      pointed = rows()[0];
+      windowEvents.pointermove(pointer({}));
+      pointed = rows()[0];
+      windowEvents.pointerup(pointer({}));
+      await settle();
+      assert.deepEqual(ids(), moved, 'failed writes restore the saved order');
+      assert.match(get('#tasks-status').textContent, /not saved/i);
+    } finally {
+      orderFails = false;
+      context.document.elementFromPoint = priorHitTest;
+      state.tasks = prior;
+      await refresh();
+    }
+  });
+
   await t.test("The operations badge reads Ops and a task click lifts a hiding filter", async () => {
     const prior = state.tasks;
     const stamp = new Date().toISOString();

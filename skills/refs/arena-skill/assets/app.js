@@ -1890,6 +1890,8 @@ function renderTasks(tasks) {
 let draggingTaskId = null;
 let dragStartPayload = null;
 let previewIds = null;
+let touchPointerId = null;
+let touchTarget = null;
 function queueTaskRows() {
   return [...$('#tasks-current-body').children, ...$('#tasks-upcoming-body').children];
 }
@@ -1957,6 +1959,12 @@ function previewTaskOrder(list, anchor) {
   return ids;
 }
 function endTaskDrag() {
+  const panel = $('#tasks-panel');
+  if (touchPointerId !== null && typeof panel.hasPointerCapture === 'function' && panel.hasPointerCapture(touchPointerId)) {
+    try { panel.releasePointerCapture(touchPointerId); } catch {}
+  }
+  touchPointerId = null;
+  touchTarget = null;
   delete $('#tasks-upcoming-body').dataset.drop;
   delete $('#tasks-upcoming-body').dataset.dragging;
   draggingTaskId = null;
@@ -1966,6 +1974,23 @@ function endTaskDrag() {
     delete row.dataset.dragging;
     delete row.dataset.drop;
   }
+}
+function startTaskDrag(row) {
+  draggingTaskId = row.title;
+  dragStartPayload = lastTasksPayload;
+  previewIds = null;
+  $('#tasks-upcoming-body').dataset.dragging = 'true';
+  row.dataset.dragging = 'true';
+}
+function touchQueueSeat(node) {
+  const lists = [$('#tasks-current-body'), $('#tasks-upcoming-body')];
+  for (const list of lists) {
+    if (node === list) return { list, row: null };
+    for (const row of list.children) {
+      if (row === node || (typeof row.contains === 'function' && row.contains(node))) return { list, row };
+    }
+  }
+  return null;
 }
 // A drag that ends without a drop, by Escape or a release outside the queue, puts the rows back.
 function cancelTaskDrag() {
@@ -1990,16 +2015,23 @@ function draggableTaskRow(task, list) {
   handle.className = 'task-drag-handle';
   handle.type = 'button';
   handle.draggable = true;
+  handle.style.touchAction = 'none';
   handle.setAttribute('aria-label', `Drag to reorder ${task.title}`);
   handle.title = `Drag to reorder ${task.title}`;
   row.dataset.dragHandle = 'true';
   row.insertBefore(handle, row.children[0]);
+  handle.addEventListener('pointerdown', event => {
+    if (event.pointerType !== 'touch' || event.isPrimary === false || (event.button ?? 0) !== 0) return;
+    event.preventDefault();
+    startTaskDrag(row);
+    touchPointerId = event.pointerId;
+    touchTarget = { list, row };
+    if (typeof $('#tasks-panel').setPointerCapture === 'function') {
+      try { $('#tasks-panel').setPointerCapture(event.pointerId); } catch {}
+    }
+  });
   handle.addEventListener('dragstart', event => {
-    draggingTaskId = row.title;
-    dragStartPayload = lastTasksPayload;
-    previewIds = null;
-    $('#tasks-upcoming-body').dataset.dragging = 'true';
-    row.dataset.dragging = 'true';
+    startTaskDrag(row);
     // Firefox starts no drag without payload data.
     if (event.dataTransfer) event.dataTransfer.setData('text/plain', row.title);
   });
@@ -2033,6 +2065,37 @@ for (const list of [$('#tasks-current-body'), $('#tasks-upcoming-body')]) {
     endTaskDrag();
   });
 }
+window.addEventListener('pointermove', event => {
+  if (!draggingTaskId || event.pointerId !== touchPointerId) return;
+  event.preventDefault();
+  const seat = typeof document.elementFromPoint === 'function'
+    ? touchQueueSeat(document.elementFromPoint(event.clientX, event.clientY))
+    : null;
+  touchTarget = seat;
+  if (!seat) return;
+  if (seat.row) {
+    if (seat.row.title !== draggingTaskId) previewTaskOrder(seat.list, seat.row);
+  } else {
+    previewTaskOrder(seat.list, null);
+    if (seat.list.id === 'tasks-upcoming-body') seat.list.dataset.drop = 'true';
+  }
+});
+window.addEventListener('pointerup', event => {
+  if (!draggingTaskId || event.pointerId !== touchPointerId) return;
+  const seat = typeof document.elementFromPoint === 'function'
+    ? touchQueueSeat(document.elementFromPoint(event.clientX, event.clientY))
+    : touchTarget;
+  if (!seat) { cancelTaskDrag(); return; }
+  const ids = seat.row
+    ? (seat.row.title === draggingTaskId && previewIds ? previewIds : drawnTaskIds(seat.list, seat.row.title))
+    : drawnTaskIds(seat.list, null);
+  void writeTaskOrder(ids, dragStartPayload);
+  endTaskDrag();
+});
+window.addEventListener('pointercancel', event => {
+  if (!draggingTaskId || event.pointerId !== touchPointerId) return;
+  cancelTaskDrag();
+});
 
 $('#task-type-filter').addEventListener('change', () => {
   taskTypeFilter = $('#task-type-filter').value;
