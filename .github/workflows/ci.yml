@@ -1,4 +1,4 @@
-name: CI
+name: Repo Checks
 
 on:
   push:
@@ -26,14 +26,14 @@ concurrency:
 
 jobs:
   quality:
-    name: Quality
+    name: Repository Quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v7
 
-      - name: Prepare The Runner
+      - name: Prep Runner
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: ci
@@ -54,19 +54,19 @@ jobs:
           ruff check .
           ruff format --diff .
 
-      - name: Check Budget Tests and Shipped Script Syntax
+      - name: Test Budgets and Check Script Syntax
         run: |
           python -m pytest -q maintenance/measurements/test_measurements.py
           node --check skills/arena-skill/assets/app.js
 
       # The covered list lives in maintenance/check.py (STE_DOCS), shared with the local gate.
-      - name: Lint The Covered Documentation
+      - name: Lint Covered Docs
         run: python maintenance/check.py --ste
 
-      - name: Test The Rules Gist Publisher
+      - name: Test Rules Gist Publisher
         run: python3 -m pytest -q maintenance/publish/test_publish.py
 
-      - name: Check The Workflow Set
+      - name: Check Workflow Set
         run: python maintenance/workflows/gate_workflows.py
 
       - name: Check Userscript Bundles
@@ -78,7 +78,7 @@ jobs:
         uses: DavidAnson/markdownlint-cli2-action@v24
 
   version-bumps:
-    name: Version Bumps
+    name: Check Module Versions
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -89,7 +89,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Prepare The Runner
+      - name: Prep Runner
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: version-bumps
@@ -97,7 +97,7 @@ jobs:
       - name: Install Validation Dependencies
         run: uv pip install --system -r requirements.txt
 
-      - name: Check The Versioned Modules
+      - name: Check Versioned Modules
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
@@ -120,7 +120,7 @@ jobs:
       - name: Check Out Repository
         uses: actions/checkout@v7
 
-      - name: Prepare The Runner
+      - name: Prep Runner
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: tests
@@ -161,7 +161,7 @@ jobs:
         # The preview path list lives in one script, so the step and the job share it.
         run: python3 maintenance/workflows/changed_paths.py --step preview-tests
 
-      - name: Prepare The Runner
+      - name: Prep Runner
         if: steps.preview.outputs.run == 'true'
         uses: ./.github/actions/prepare
         with:

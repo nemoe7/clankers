@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   lint:
-    name: actionlint and zizmor
+    name: Lint and Audit Workflows
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -46,10 +46,10 @@ jobs:
           sudo install -m 0755 /tmp/actionlint /usr/local/bin/actionlint
           actionlint --version
 
-      - name: Lint The Workflows
+      - name: Lint Workflows
         run: actionlint -color .github/workflows/*.yml
 
-      - name: Prepare The Runner
+      - name: Prep Runner
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: workflow-security-lint
@@ -57,25 +57,25 @@ jobs:
       - name: Install zizmor
         run: uv pip install --system -r requirements.txt
 
-      - name: Audit The Workflows
+      - name: Audit Workflows
         # Medium and above fail the run. The pinned policy accepts major-version action tags.
         run: zizmor --config .github/zizmor.yml --min-severity=medium --format github .github/workflows
 
   audit:
-    name: Workflow Set Contract
+    name: Check Workflow Contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v7
 
-      - name: Prepare The Runner
+      - name: Prep Runner
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: workflow-security-audit
 
-      - name: Install The Parser
+      - name: Install Parser
         run: uv pip install --system -r requirements.txt
 
-      - name: Check The Workflow Set
+      - name: Check Workflow Set
         run: python maintenance/workflows/gate_workflows.py

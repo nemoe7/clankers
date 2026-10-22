@@ -37,7 +37,7 @@ jobs:
   # One trigger feeds several jobs with different path interests, so a small job decides which side has work.
   # Use the PR base for pull requests and the previous push for pushes. Manual runs package main and never publish the Gist. Publish an image only when its input asks.
   changes:
-    name: Changes
+    name: Detect Changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -79,14 +79,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch The Pull Request Base
+      - name: Fetch PR Base
         env:
           # The base ref reaches the shell through the environment, never through a
           # template expansion inside the run block.
           BASE_REF: ${{ github.base_ref }}
         run: git fetch --no-tags origin "$BASE_REF"
 
-      - name: Prepare The Runner
+      - name: Prep Runner
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: artifacts-validate
@@ -96,13 +96,13 @@ jobs:
 
       # The required behaviour of this file is part of the check: the triggers, the job
       # conditions, the version-bump flag, the archive name and the artifact name are assertions.
-      - name: Check The Workflow Contract
+      - name: Check Workflow Contract
         run: python maintenance/workflows/check_artifacts.py
 
       - name: Check Version Comparison
         run: python maintenance/gpt_plugins/gate_gpt_plugins.py --self-check
 
-      - name: Validate The Plugin Collection
+      - name: Validate Plugin Collection
         env:
           # The base commit reaches the shell through the environment, never through a
           # template expansion inside the run block.
@@ -131,7 +131,7 @@ jobs:
       - name: Check Out Repository
         uses: actions/checkout@v7
 
-      - name: Prepare The Runner
+      - name: Prep Runner
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: artifacts-package
@@ -139,18 +139,18 @@ jobs:
       - name: Install Validation Dependencies
         run: uv pip install --system -r requirements.txt
 
-      - name: Check The Workflow Contract
+      - name: Check Workflow Contract
         run: python maintenance/workflows/check_artifacts.py
 
       - name: Build and Check Plugin Archives
         run: python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir .
 
-      - name: Verify The Archive
+      - name: Verify Archive
         run: |
           unzip -l gpt-plugins.zip
           python maintenance/gpt_plugins/gate_gpt_plugins.py --archive gpt-plugins.zip --archives-dir .
 
-      - name: Upload The Plugin Archive
+      - name: Upload Plugin Archive
         uses: actions/upload-artifact@v7
         with:
           path: gpt-plugins.zip
@@ -193,7 +193,7 @@ jobs:
           archive: false
 
   publish-clankers-rules:
-    name: Publish Clankers Rules
+    name: Publish Rules to Gist
     needs: changes
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.rules == 'true'
     runs-on: ubuntu-latest
@@ -203,9 +203,9 @@ jobs:
       group: publish-clankers-rules-${{ github.repository }}
       cancel-in-progress: false
     steps:
-      - name: Check Out The Pushed Rules
+      - name: Check Out Pushed Rules
         uses: actions/checkout@v7
-      - name: Prepare The Runner
+      - name: Prep Runner
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: artifacts-publish
@@ -242,7 +242,7 @@ jobs:
           # The release step uses GH_TOKEN, so the checkout keeps no credentials.
           persist-credentials: false
 
-      - name: Prepare The Runner
+      - name: Prep Runner
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: artifacts-release
@@ -250,26 +250,26 @@ jobs:
       - name: Install Validation Dependencies
         run: uv pip install --system -r requirements.txt
 
-      - name: Read The Manifest Version
+      - name: Read Manifest Version
         id: manifest
         run: |
           set -eu
           version="$(python -c "import json; print(json.load(open('gpt-plugins/plugin.json'))['version'])")"
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
-      - name: Download The Validated Archive
+      - name: Download Validated Archive
         uses: actions/download-artifact@v8
         with:
           pattern: gpt-*.zip
           merge-multiple: true
           skip-decompress: true
 
-      - name: Verify The Archive
+      - name: Verify Archive
         run: |
           unzip -l gpt-plugins.zip
           python maintenance/gpt_plugins/gate_gpt_plugins.py --archive gpt-plugins.zip --archives-dir .
 
-      - name: Publish The Release
+      - name: Publish Release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.manifest.outputs.version }}
@@ -327,7 +327,7 @@ jobs:
         if: matrix.changed == 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Log In To GHCR
+      - name: Log in to GHCR
         if: matrix.changed == 'true'
         uses: docker/login-action@v3
         with:
@@ -335,7 +335,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      - name: Build and Push
+      - name: Build and Push Proxy Image
         if: matrix.changed == 'true'
         uses: docker/build-push-action@v6
         with:

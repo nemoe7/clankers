@@ -22,6 +22,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Use uv for workflow package installs and caching. Retain interpreter versions, dependency versions, and cache-key inputs. Check publisher guards through parsed fields, not text snapshots.
 
+- Rename workflow, job, and step labels. Remove standalone the, and use PR, Prep, and Docs. Retain IDs, commands, permissions, conditions, and dependencies.
+
 #### nemoizer
 
 - Add contextual advice on article removal. Keep complete, natural wording and unchanged meaning. Retain linter behavior.

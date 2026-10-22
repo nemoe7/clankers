@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 STE_LINT = ROOT / ".agents" / "skills" / "asd-ste100" / "scripts" / "ste-lint.py"
 USERSCRIPT_GATE = ROOT / "maintenance" / "userscripts" / "gate_userscripts.py"
 PLUGINS_GATE = ROOT / "maintenance" / "gpt_plugins" / "gate_gpt_plugins.py"
-# The pull request's Version Bumps job watches these paths and nothing else.
+# The `version-bumps` job watches only these paths.
 VERSIONED_USERSCRIPTS = ("userscripts/arena.user.js", "userscripts/chatgpt.user.js")
 VERSIONED_PATHS = VERSIONED_USERSCRIPTS + (
   "gpt-plugins/plugin.json",
@@ -359,7 +359,7 @@ def bump_range(revision_range: str) -> tuple[str, str] | None:
 
 
 def run_version_checks(revision_range: str) -> list[Failure]:
-  """Validate the versioned modules the way the Version Bumps job does.
+  """Validate the versioned modules as the `version-bumps` job does.
 
   The job validates both module gates, then requires a higher version for every changed
   module. A module the base does not hold skips its bump, and a missing base skips every
