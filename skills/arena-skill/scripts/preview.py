@@ -3076,10 +3076,55 @@ def _outline_python(rel_path,text):
 					prefix='async def'if is_async else'def';params=_format_python_arguments(ast_mod,node.args);returns=f" -> {ast_mod.unparse(node.returns)}"if node.returns is not None else'';signature=f"{prefix} {node.name}({params}){returns}"
 				entries.append({'type':symbol_type,'name':node.name,'qualified_name':qualified,'signature':signature,'decorators':decorators,'line':start_line,'def_line':node.lineno,'end_line':end_line});walk(node.body,qual_stack,in_class=isinstance(node,ast_mod.ClassDef))
 	walk(tree.body,[],in_class=False);return entries
+HTML_VOID_TAGS=frozenset({'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'})
+HTML_LANDMARK_TAGS=frozenset({'main','header','footer','nav','aside','section','article','dialog'})
+HTML_FORM_TAGS=frozenset({'form','fieldset','legend','input','textarea','select','output','label'})
+HTML_INTERACTIVE_TAGS=frozenset({'button','details','summary'})
+HTML_STRUCTURAL_TAGS=frozenset({'html','head','body','template','table','h1','h2','h3','h4','h5','h6','script','style','link','meta','title'})
+HTML_KEY_ATTRIBUTES='id','class','role','type','name','href','src','for','action','method','aria-label','aria-labelledby','aria-controls','data-tab','data-action'
+def _outline_html(rel_path,text):
+	from html.parser import HTMLParser;del rel_path;entries=[];stack=[]
+	def classify_tag(tag,attrs_map):
+		if tag in HTML_LANDMARK_TAGS or'role'in attrs_map:return'landmark'
+		if tag in HTML_FORM_TAGS:return'form'
+		if tag in HTML_INTERACTIVE_TAGS or tag=='a'and'href'in attrs_map:return'interactive'
+		if tag in HTML_STRUCTURAL_TAGS:return'structural'
+		if any(key in attrs_map for key in('id','data-tab','data-action','aria-label','aria-labelledby','name')):return'identified'
+		return None
+	def build_label(tag,attrs_map):
+		label=tag
+		if attrs_map.get('id'):label+=f"#{attrs_map['id']}"
+		if attrs_map.get('class'):
+			classes='.'.join(part for part in attrs_map['class'].split()if part)
+			if classes:label+=f".{classes}"
+		elif not attrs_map.get('id')and attrs_map.get('name'):label+=f"[name={attrs_map['name']}]"
+		return label
+	class OutlineHTMLParser(HTMLParser):
+		def _record_open(self,tag,attrs,self_closing=False):
+			lower=tag.lower();attrs_map={}
+			for(key,value)in attrs:
+				if not key:continue
+				k=key.lower()
+				if k in HTML_KEY_ATTRIBUTES and value is not None and k not in attrs_map:attrs_map[k]=value
+			tag_type=classify_tag(lower,attrs_map);line,_=self.getpos();raw=self.get_starttag_text()or'';end_line=line+raw.count('\n');entry=None
+			if tag_type is not None:ordered_attrs={key:attrs_map[key]for key in HTML_KEY_ATTRIBUTES if key in attrs_map};summary=' '.join(f'{key}="{ordered_attrs[key]}"'for key in ordered_attrs);entry={'type':tag_type,'tag':lower,'label':build_label(lower,ordered_attrs),'attributes':ordered_attrs,'summary':summary,'line':line,'end_line':end_line};entries.append(entry)
+			if not self_closing and lower not in HTML_VOID_TAGS:stack.append((lower,entry))
+		def handle_starttag(self,tag,attrs):self._record_open(tag,attrs,self_closing=False)
+		def handle_startendtag(self,tag,attrs):self._record_open(tag,attrs,self_closing=True)
+		def handle_endtag(self,tag):
+			lower=tag.lower();end_line,_=self.getpos()
+			for index in range(len(stack)-1,-1,-1):
+				open_tag,_open_entry=stack[index]
+				if open_tag==lower:
+					for(_,closed_entry)in stack[index:]:
+						if closed_entry is not None and end_line>closed_entry['end_line']:closed_entry['end_line']=end_line
+					del stack[index:];break
+	parser=OutlineHTMLParser(convert_charrefs=True);parser.feed(text);parser.close();return entries
 def outline_file(path,repo_root=None,max_entries=OUTLINE_MAX_ENTRIES):
 	if type(max_entries)is not int or not 1<=max_entries<=OUTLINE_MAX_ENTRIES:raise ValueError(f"--max-entries must be an integer from 1 to {OUTLINE_MAX_ENTRIES}")
 	rel_path,resolved,text=_resolve_outline_source(path,repo_root=repo_root);suffix=resolved.suffix.lower()
 	if suffix=='.py':language='python';all_entries=_outline_python(rel_path,text)
+	elif suffix in{'.html','.htm'}:language='html';all_entries=_outline_html(rel_path,text)
 	else:raise ValueError(f"{rel_path}: unsupported outline file type ({suffix or'no extension'})")
 	entries=all_entries[:max_entries];total=len(all_entries);return{'path':rel_path,'language':language,'entries':entries,'total':total,'omitted':max(0,total-len(entries))}
 def format_outline(result,as_json=False):
