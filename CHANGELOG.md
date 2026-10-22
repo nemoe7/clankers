@@ -18,6 +18,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Install pinned `acorn` and `css-tree` packages into ignored tool storage during preview setup. Reuse valid installs and keep setup usable when `npm` fails.
+
 - Add `arena-preview outline` to parse local Python and HTML files with `ast` and `html.parser`. Emit symbols or landmark tags with line ranges, and enforce repository path and size limits.
 
 - Add report submission maps and templates with typed selections. Keep raw custom text, answer history, and saved formats.

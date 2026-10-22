@@ -13397,3 +13397,73 @@ def test_questionnaire_rejects_null_partial_and_zero_confidence_known_answers():
   assert graded[1]["id"] == "D9V4N"
   assert graded[1]["confidence"] == 0.4
   assert isinstance(graded[1]["correct"], bool)
+
+
+def test_portable_parser_installer_handles_fresh_reuse_missing_npm_and_failure(
+  tmp_path,
+):
+  tool_dir = tmp_path / "parsers"
+  missing = preview.discover_portable_parsers(tool_dir)
+  assert not missing["available"]
+  assert "install.sh" in missing["message"]
+
+  no_npm = preview.install_portable_parsers(tool_dir, which=lambda name: None)
+  assert no_npm["status"] == "skipped"
+  assert not no_npm["available"]
+  assert (tool_dir / "package.json").is_file()
+  assert (tool_dir / "package-lock.json").is_file()
+  manifest = json.loads((tool_dir / "package.json").read_text(encoding="utf-8"))
+  assert manifest["dependencies"] == {"acorn": "8.18.0", "css-tree": "3.2.1"}
+
+  calls = []
+
+  def fake_failed_runner(cmd, **kwargs):
+    calls.append(cmd)
+    return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="registry offline")
+
+  failed = preview.install_portable_parsers(
+    tool_dir,
+    which=lambda name: f"/usr/bin/{name}",
+    runner=fake_failed_runner,
+  )
+  assert failed["status"] == "failed"
+  assert not failed["available"]
+  assert "registry offline" in failed["message"]
+  assert len(calls) == 1
+
+  def fake_success_runner(cmd, **kwargs):
+    calls.append(cmd)
+    acorn_dir = tool_dir / "node_modules" / "acorn" / "dist"
+    acorn_dir.mkdir(parents=True, exist_ok=True)
+    (acorn_dir / "acorn.js").write_text("module.exports = {};\n", encoding="utf-8")
+    (tool_dir / "node_modules" / "acorn" / "package.json").write_text(
+      json.dumps({"name": "acorn", "version": "8.18.0", "main": "dist/acorn.js"}),
+      encoding="utf-8",
+    )
+    csstree_dir = tool_dir / "node_modules" / "css-tree" / "lib"
+    csstree_dir.mkdir(parents=True, exist_ok=True)
+    (csstree_dir / "index.cjs").write_text("module.exports = {};\n", encoding="utf-8")
+    (tool_dir / "node_modules" / "css-tree" / "package.json").write_text(
+      json.dumps({"name": "css-tree", "version": "3.2.1", "main": "lib/index.cjs"}),
+      encoding="utf-8",
+    )
+    return subprocess.CompletedProcess(cmd, 0, stdout="added 4 packages", stderr="")
+
+  installed = preview.install_portable_parsers(
+    tool_dir,
+    which=lambda name: f"/usr/bin/{name}",
+    runner=fake_success_runner,
+  )
+  assert installed["status"] == "installed"
+  assert installed["available"]
+  assert installed["versions"] == {"acorn": "8.18.0", "css-tree": "3.2.1"}
+  assert len(calls) == 2
+
+  reused = preview.install_portable_parsers(
+    tool_dir,
+    which=lambda name: f"/usr/bin/{name}",
+    runner=fake_success_runner,
+  )
+  assert reused["status"] == "reused"
+  assert reused["available"]
+  assert len(calls) == 2
