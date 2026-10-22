@@ -26,7 +26,7 @@ flowchart TB
 
 ## Instruction budgets
 
-Latest measurements as of 2026-10-21. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and the arena-skill clause files, one row each, plus one row for all non-clause arena-skill files. Skill refs stay out.
+Latest measurements as of 2026-10-22. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and the arena-skill clause files, one row each, plus one row for all non-clause arena-skill files. Skill refs stay out.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ Latest measurements as of 2026-10-21. `maintenance/check.py --update` rebuilds t
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 284 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 279 `tok` |
 | [`skills/amending-violations/SKILL.md`](skills/amending-violations/SKILL.md) | `o200k_base` | 1,607 `tok` |
-| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 487,174 `B` |
+| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 487,260 `B` |
 | [`skills/arena-skill/references/REFERENCE.md`](skills/arena-skill/references/REFERENCE.md) | `o200k_base` | 3,915 `tok` |
 | [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,175 `tok` |
 | [`skills/nemo-ui-ux/SKILL.md`](skills/nemo-ui-ux/SKILL.md) | `o200k_base` | 1,505 `tok` |

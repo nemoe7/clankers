@@ -4,6 +4,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-22
+
+### Fixed
+
+#### preview
+
+- Keep questionnaire requests out of violation and bible-checkpoint handling. Retain request reuse and clause checks for violations.
+
 ## 2026-10-21
 
 ### Added

@@ -29,6 +29,7 @@ def __getattr__(name):
 	raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 ASSETS=Path(__file__).resolve().parents[1]/'assets'
 IDENTIFIER=re.compile('[a-zA-Z0-9_-]{1,80}\\Z')
+VIOLATION_NOTES="type NOT IN ('', 'questionnaire')"
 PENDING_SUBMISSIONS='acknowledged_at IS NULL AND seq IN (SELECT MAX(seq) FROM submissions GROUP BY report_id)'
 REPLY_REFERENCE=re.compile('^RE:\\s*([a-zA-Z0-9_-]{1,80})(?:\\s|$)',re.IGNORECASE)
 MAX_REPORT=2000000
@@ -1678,10 +1679,10 @@ class Store:
 			flag=db.execute('SELECT value FROM meta WHERE key = ?',(AGENT_INTERRUPT_FLAG_META,)).fetchone()
 			try:flag_id=json.loads(flag['value']).get('id','')if flag else''
 			except ValueError:flag_id=''
-			row=db.execute('SELECT * FROM notes WHERE quiet = 1 AND blocking = 1 AND acknowledged_at IS NULL AND id <> ? ORDER BY at, seq LIMIT 1',(flag_id,)).fetchone()
+			row=db.execute("SELECT * FROM notes WHERE quiet = 1 AND blocking = 1 AND type = '' AND acknowledged_at IS NULL AND id <> ? ORDER BY at, seq LIMIT 1",(flag_id,)).fetchone()
 		return message_row(row)if row else None
 	def pending_violation_note(self):
-		with closing(self.connect())as db:row=db.execute("SELECT * FROM notes WHERE type <> '' AND acknowledged_at IS NULL ORDER BY at, seq LIMIT 1").fetchone()
+		with closing(self.connect())as db:row=db.execute(f"SELECT * FROM notes WHERE {VIOLATION_NOTES} AND acknowledged_at IS NULL ORDER BY at, seq LIMIT 1").fetchone()
 		return message_row(row)if row else None
 	def schedule_read_set_note(self,moment=None,root=None):
 		moment=moment or datetime.now(DISPLAY_ZONE or timezone.utc)
@@ -2376,8 +2377,8 @@ class Store:
 		with self.transaction(shared)as db:
 			for record_id in ids:identifier(record_id)
 			for record_id in ids:
-				row=db.execute('SELECT type FROM notes WHERE id = ?',(record_id,)).fetchone()
-				if row is not None and row['type']:
+				row=db.execute(f"SELECT 1 FROM notes WHERE id = ? AND {VIOLATION_NOTES}",(record_id,)).fetchone()
+				if row is not None:
 					error=clause_ack_error(text,self.repository_root())
 					if error:raise ValueError(error)
 			for record_id in ids:
@@ -2389,7 +2390,7 @@ class Store:
 					if table=='submissions':db.execute('UPDATE reports SET agent_seen_at = ? WHERE id = (SELECT report_id FROM submissions WHERE id = ?)',(stamp,record_id))
 					break
 				else:raise ValueError(f"Unknown note: {record_id}; no receipts written")
-			if not db.execute("SELECT 1 FROM notes WHERE type <> '' AND acknowledged_at IS NULL").fetchone():db.execute('DELETE FROM meta WHERE key = ?',(AGENT_INTERRUPT_FLAG_META,))
+			if not db.execute(f"SELECT 1 FROM notes WHERE {VIOLATION_NOTES} AND acknowledged_at IS NULL").fetchone():db.execute('DELETE FROM meta WHERE key = ?',(AGENT_INTERRUPT_FLAG_META,))
 			db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(stamp,))
 			if not gate_pending_count(db):db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
 	def guard_report_change(self,db,report_id,report,hold_view=True,hold_answer=True):

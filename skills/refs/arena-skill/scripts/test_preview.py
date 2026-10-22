@@ -113,6 +113,33 @@ def test_questionnaire_transport_keeps_grades_in_server_memory(
     app.server_close()
 
 
+@pytest.mark.parametrize(
+  "violation_type", ("self-raised", "bash-violation", "legacy-type")
+)
+def test_questionnaire_requests_are_not_violations(tmp_path, violation_type):
+  store = preview.Store(tmp_path / "state", create=True)
+  (tmp_path / "ARENA.md").write_text("# Rules\n", encoding="utf-8")
+  request_id = "questionnaire-note"
+  store.note(
+    request_id, "Answer request", quiet=True, blocking=True, type="questionnaire"
+  )
+  assert store.pending_violation_note() is None
+  assert store.pending_read_set_note() is None
+  assert store.pending_ack() == request_id
+  store.flag_violation_note("Violation", violation_type, "ARENA.md", "Rules")
+  violation = store.pending_violation_note()
+  assert violation["id"] != request_id
+  assert violation["type"] == violation_type
+  with pytest.raises(ValueError, match="clause"):
+    store.acknowledge([request_id, violation["id"]], "Received")
+  assert all(row["acknowledged_at"] is None for row in store.read()["pending"])
+  store.acknowledge([violation["id"]], "ARENA.md:1: Rules")
+  assert store.meta_value(preview.AGENT_INTERRUPT_FLAG_META) is None
+  assert store.pending_ack() == request_id
+  store.acknowledge([request_id], "Received")
+  assert store.read()["pending"] == []
+
+
 def test_only_latest_report_submission_requires_ack(tmp_path):
   store = preview.Store(tmp_path, create=True)
   store.set_meta("port", guard_port())

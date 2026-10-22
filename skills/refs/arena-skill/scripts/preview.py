@@ -49,6 +49,7 @@ def __getattr__(name):
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
+VIOLATION_NOTES = "type NOT IN ('', 'questionnaire')"
 PENDING_SUBMISSIONS = (
   "acknowledged_at IS NULL"
   " AND seq IN (SELECT MAX(seq) FROM submissions GROUP BY report_id)"
@@ -4822,7 +4823,7 @@ class Store:
         flag_id = ""
       row = db.execute(
         "SELECT * FROM notes"
-        " WHERE quiet = 1 AND blocking = 1 AND acknowledged_at IS NULL AND id <> ?"
+        " WHERE quiet = 1 AND blocking = 1 AND type = '' AND acknowledged_at IS NULL AND id <> ?"
         " ORDER BY at, seq LIMIT 1",
         (flag_id,),
       ).fetchone()
@@ -4831,12 +4832,12 @@ class Store:
   def pending_violation_note(self):
     """Return the one outstanding violation note, if any.
 
-    A bible checkpoint carries no type, so this query never returns one.
+    Bible checkpoints and questionnaire requests are not violations.
     """
     with closing(self.connect()) as db:
       row = db.execute(
         "SELECT * FROM notes"
-        " WHERE type <> '' AND acknowledged_at IS NULL"
+        f" WHERE {VIOLATION_NOTES} AND acknowledged_at IS NULL"
         " ORDER BY at, seq LIMIT 1"
       ).fetchone()
     return message_row(row) if row else None
@@ -7142,8 +7143,10 @@ class Store:
         identifier(record_id)
       # One refusal keeps every listed item pending, so a mixed call writes nothing.
       for record_id in ids:
-        row = db.execute("SELECT type FROM notes WHERE id = ?", (record_id,)).fetchone()
-        if row is not None and row["type"]:
+        row = db.execute(
+          f"SELECT 1 FROM notes WHERE id = ? AND {VIOLATION_NOTES}", (record_id,)
+        ).fetchone()
+        if row is not None:
           error = clause_ack_error(text, self.repository_root())
           if error:
             raise ValueError(error)
@@ -7178,7 +7181,7 @@ class Store:
         else:
           raise ValueError(f"Unknown note: {record_id}; no receipts written")
       if not db.execute(
-        "SELECT 1 FROM notes WHERE type <> '' AND acknowledged_at IS NULL"
+        f"SELECT 1 FROM notes WHERE {VIOLATION_NOTES} AND acknowledged_at IS NULL"
       ).fetchone():
         # The page banner reads the flag meta, so the last violation ack clears it.
         db.execute("DELETE FROM meta WHERE key = ?", (AGENT_INTERRUPT_FLAG_META,))
