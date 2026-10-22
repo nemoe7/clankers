@@ -32,6 +32,7 @@ license: MIT
 - Keep credentials and private page content out of external searches, asset requests, and shared artifacts.
 - Use existing design records as design authority, or docs/design.md if none exist.
 - Update the authoritative design record with settled design decisions in the same change.
+- MUST link the design record to separate local visual references for changed workflows and their applicable states.
 - Evaluate changed flows against the ten usability heuristics; cite observed behavior per finding.
 - Check alignment, hierarchy, color roles, typography, and useful imagery against the task and active design system.
 - Create interaction patterns only when existing patterns cannot meet the documented user need.

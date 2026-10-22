@@ -54,6 +54,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nuu
 
+- Link concise design records to separate project visual references for workflows, component states, and shared styles. Add a visual-reference template.
+
 - Rename the skill directories and metadata to nuu. Keep the full Nemo UI/UX name and existing command names.
 
 #### userscripts
