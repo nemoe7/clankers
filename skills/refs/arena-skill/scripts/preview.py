@@ -4346,6 +4346,11 @@ def autosave_core_and_stamp(records):
     raise TypeError("Autosave core must be an array of records")
   if any(row.get("type") == "userscript-autosave" for row in records):
     raise ValueError("Autosave core cannot contain history")
+  sources = {
+    row.get("id"): row.get("source")
+    for row in records
+    if "markdown" in row and isinstance(row.get("id"), str)
+  }
   with tempfile.TemporaryDirectory() as directory:
     checked = Store(directory, create=True)
     if records:
@@ -4355,6 +4360,8 @@ def autosave_core_and_stamp(records):
   # Renumber emitted tasks so a second canonical pass keeps every position and the digest.
   order = dict.fromkeys(TASK_STATUSES, 0)
   for row in core:
+    if "markdown" in row and row.get("id") in sources:
+      row["source"] = sources[row["id"]]
     status = row.get("status")
     if status in order and "title" in row and "markdown" not in row:
       order[status] += 1

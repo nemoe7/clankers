@@ -12772,6 +12772,24 @@ def test_task_autosave_confirmation_keeps_candidate_stamp():
       assert restored.userscript_history()[-1]["stamp"] == candidate["stamp"]
 
 
+def test_report_autosave_confirmation_preserves_source_and_digest():
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    source = root / "report.md"
+    source.write_text("# Report\n\nBody.\n", encoding="utf-8")
+    store = preview.Store(root / "arena-state", create=True)
+    with patch("preview.now", return_value="2026-10-22T09:47:00.000000+00:00"):
+      store.publish("saved-report", "Saved", source)
+    snapshot = store.userscript_snapshot()
+    report_rows = [row for row in snapshot["core"] if row.get("id") == "saved-report"]
+    assert len(report_rows) == 1
+    assert report_rows[0]["source"] == str(source)
+    assert preview.autosave_core(snapshot["core"]) == snapshot["core"]
+    receipt = {key: snapshot[key] for key in ("save_id", "scope", "digest", "core")}
+    receipt.update(lastsave=snapshot["stamp"], beforelastsave=snapshot["lastsave"])
+    assert store.confirm_userscript_save(receipt)["confirmed"]
+
+
 def test_autosave_core_is_idempotent_across_task_order():
   core = [
     {

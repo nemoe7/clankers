@@ -92,6 +92,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Preserve report source paths during autosave canonicalization so userscript save confirmations and comparisons match when reports exist. Keep active-state source restoration unchanged.
+
 - Equalize header button gaps on coarse-pointer screens. Keep desktop header spacing unchanged.
 
 - Keep one-line drafts compact on desktop and phones, retain the multiline layout until empty, and add expansion. Align text and controls, put footer lines below the panel, and show control backgrounds on hover or active state. Keep panel and button corners, files, Markdown preview, and save errors.
