@@ -13273,3 +13273,82 @@ def test_python_outline_command_parses_symbols_and_enforces_guards(
   monkeypatch.setattr(sys, "argv", ["arena-preview", "outline", "huge.py"])
   assert preview.main() == 1
   assert str(preview.OUTLINE_MAX_BYTES) in capsys.readouterr().err
+
+
+def test_html_tag_navigation_parses_landmarks_forms_and_ranges(
+  tmp_path, monkeypatch, capsys
+):
+  repo = tmp_path / "repo"
+  (repo / ".git").mkdir(parents=True)
+  page = repo / "ui" / "index.html"
+  page.parent.mkdir(parents=True)
+  page.write_text(
+    "<!doctype html>\n"
+    '<html lang="en">\n'
+    "  <head>\n"
+    "    <title>Preview Console</title>\n"
+    '    <link rel="stylesheet" href="/style.css">\n'
+    "  </head>\n"
+    "  <body>\n"
+    '    <header id="top-bar" class="bar" role="banner">\n'
+    "      <h1>Steering</h1>\n"
+    '      <nav aria-label="Primary">\n'
+    '        <button id="tab-inbox" class="tab active" type="button" data-tab="inbox">Inbox</button>\n'
+    "      </nav>\n"
+    "    </header>\n"
+    '    <main id="main-view">\n'
+    '      <section id="composer-panel" class="panel" aria-label="Composer">\n'
+    '        <form id="note-form" action="/api/note" method="post">\n'
+    '          <textarea id="note-input" name="note"></textarea>\n'
+    '          <input type="hidden" name="token" value="secret">\n'
+    '          <button id="send-btn" type="submit">Send</button>\n'
+    "        </form>\n"
+    "      </section>\n"
+    '      <div id="status-toast" role="status"><span>Ignored plain span</span></div>\n'
+    "      <div><p>Plain anonymous wrapper excluded</p></div>\n"
+    "    </main>\n"
+    "  </body>\n"
+    "</html>\n",
+    encoding="utf-8",
+  )
+  monkeypatch.chdir(repo)
+
+  result = preview.outline_file(page, repo_root=repo)
+  assert result["language"] == "html"
+  assert result["path"] == "ui/index.html"
+  assert result["omitted"] == 0
+  by_label = {entry["label"]: entry for entry in result["entries"]}
+  assert "header#top-bar.bar" in by_label
+  assert by_label["header#top-bar.bar"]["type"] == "landmark"
+  assert by_label["header#top-bar.bar"]["line"] == 8
+  assert by_label["header#top-bar.bar"]["end_line"] == 13
+  assert by_label["header#top-bar.bar"]["attributes"]["role"] == "banner"
+
+  assert "button#tab-inbox.tab.active" in by_label
+  assert by_label["button#tab-inbox.tab.active"]["type"] == "interactive"
+  assert by_label["button#tab-inbox.tab.active"]["attributes"]["data-tab"] == "inbox"
+
+  assert "form#note-form" in by_label
+  assert by_label["form#note-form"]["type"] == "form"
+  assert by_label["form#note-form"]["line"] == 16
+  assert by_label["form#note-form"]["end_line"] == 20
+  assert by_label["form#note-form"]["attributes"]["action"] == "/api/note"
+
+  assert "input[name=token]" in by_label
+  assert by_label["input[name=token]"]["line"] == 18
+  assert by_label["input[name=token]"]["end_line"] == 18
+  assert "value" not in by_label["input[name=token]"]["attributes"]
+
+  assert "div#status-toast" in by_label
+  assert not any(entry["tag"] in ("span", "p") for entry in result["entries"])
+
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    ["arena-preview", "outline", "ui/index.html", "--max-entries", "4"],
+  )
+  assert preview.main() == 0
+  text_out = capsys.readouterr().out
+  assert "ui/index.html (html, 4/" in text_out
+  assert "tags," in text_out
+  assert "more tags omitted" in text_out
