@@ -336,6 +336,12 @@ test('preview client', async (t) => {
         sent.push(note);
         // A send with upload IDs binds the staged rows the eager uploads already stored.
         if (Array.isArray(note.upload_ids)) {
+          if (note.upload_ids.some(id => !(state.uploads || []).some(item => item.id === id))) {
+            return {
+              ok: false, status: 400,
+              text: async () => JSON.stringify({ error: 'No staged file is stored under this ID' })
+            };
+          }
           const rows = (state.uploads || []).filter(item => note.upload_ids.includes(item.id));
           for (const row of rows) row.note_id = note.id;
           const saved = { id: note.id, text: note.text, attachment_name: rows[0]?.name || null,
@@ -3543,6 +3549,31 @@ test('preview client', async (t) => {
     assert.equal(uploadCalls.length, before + 2, 'the send retries the failed upload once');
     assert.equal(sent.at(-1).upload_ids.length, 1);
     assert.equal(get('#staged-files').hidden, true, 'the send clears the chip');
+  });
+
+  await t.test('Decoupled uploads mint a fresh message ID on file change, re-upload missing staged IDs, and show HTTP 502: Bad Gateway', async () => {
+    const priorHandler = sendHandler;
+    sendHandler = async () => ({
+      ok: false, status: 502, statusText: 'Bad Gateway',
+      text: async () => '<html><body>502 Bad Gateway</body></html>'
+    });
+    get('#note').value = 'gateway check';
+    await get('#form').events.submit(event({}));
+    assert.equal(get('#send-status').textContent, 'HTTP 502: Bad Gateway');
+    const failedTextId = sent.at(-1).id;
+
+    sendHandler = priorHandler;
+    selector.files = [{ name: 'added-later.bin', size: 8, type: 'application/octet-stream' }];
+    selector.events.change();
+    await tick();
+    // Simulate a server restart losing the staged upload row before the note send.
+    state.uploads = [];
+    const uploadsBeforeRetry = uploadCalls.length;
+    await get('#form').events.submit(event({}));
+    assert.notEqual(sent.at(-1).id, failedTextId, 'attaching a file mints a new message ID for the same draft text');
+    assert.equal(uploadCalls.length, uploadsBeforeRetry + 1, 'a missing staged upload ID is re-uploaded on send');
+    assert.equal(get('#send-status').textContent, '');
+    assert.equal(get('#staged-files').hidden, true);
   });
 
   await t.test("Clipboard images stage with epoch filenames, preserve bytes and use the normal send", async () => {

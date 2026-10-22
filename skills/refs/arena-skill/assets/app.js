@@ -339,14 +339,6 @@ note.addEventListener('input', () => {
 // carries its own state and the send binds the bytes the server already holds.
 let stagedFiles = [];
 const selector = $('#upload-file');
-const attachmentInfo = file => ({
-  name: file.name, size: file.size, type: file.type, lastModified: file.lastModified || null
-});
-function pendingFiles() {
-  if (!pending) return [];
-  if (Array.isArray(pending.attachments)) return pending.attachments;
-  return pending.attachment ? [pending.attachment] : [];
-}
 function chipState(entry) {
   if (entry.status === 'uploading') return 'uploading…';
   if (entry.status === 'failed') return 'upload failed';
@@ -365,7 +357,7 @@ async function uploadStaged(entry) {
     const response = await fetch('/api/uploads', {
       method: 'POST', body, cache: 'no-store', signal: entry.controller?.signal
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw new Error(response.status === 502 ? 'HTTP 502: Bad Gateway' : `HTTP ${response.status}`);
     entry.status = 'ready';
   } catch (error) {
     entry.status = entry.aborted ? 'dropped' : 'failed';
@@ -495,9 +487,6 @@ compose.addEventListener('drop', event => {
   delete compose.dataset.dragging;
   stageFiles(Array.from(event.dataTransfer.files || []));
 });
-if (pendingFiles().length) {
-  status.textContent = `Reselect ${pendingFiles().length} file${pendingFiles().length === 1 ? '' : 's'} before retrying; this page does not store file bytes.`;
-}
 
 let liveSocket = null;
 let socketRetry = null;
@@ -1186,15 +1175,10 @@ $('#form').addEventListener('submit', async event => {
   const submittedVersion = draftVersion;
   const names = stagedFiles.map(entry => entry.file.name);
   const text = draft.trim() ? draft : names.length === 1 ? `File: ${names[0]}` : `Files: ${names.join(', ')}`;
-  const attachments = stagedFiles.map(entry => attachmentInfo(entry.file));
-  const former = pendingFiles();
-  if (pending && pending.text === text && former.length &&
-      JSON.stringify(former) !== JSON.stringify(attachments)) {
-    status.textContent = `Reselect the ${former.length} original files in order to retry this message ID, or edit the draft to start a new message.`;
-    return;
-  }
-  if (!pending || pending.text !== text || JSON.stringify(former) !== JSON.stringify(attachments)) {
-    pending = { id: newId(), text, ...(attachments.length ? { attachments } : {}) };
+  const uploadIds = stagedFiles.map(entry => entry.id);
+  const formerIds = Array.isArray(pending?.upload_ids) ? pending.upload_ids : [];
+  if (!pending || pending.text !== text || JSON.stringify(formerIds) !== JSON.stringify(uploadIds)) {
+    pending = { id: newId(), text, ...(uploadIds.length ? { upload_ids: uploadIds } : {}) };
   }
   save('pending', JSON.stringify(pending));
   send.disabled = selector.disabled = $('#attach-file').disabled = true;
@@ -1221,11 +1205,13 @@ $('#form').addEventListener('submit', async event => {
       await Promise.all(broken.map(entry => uploadStaged(entry)));
     }
     if (stagedFiles.some(entry => entry.status !== 'ready')) {
+      const failedEntry = stagedFiles.find(entry => entry.status !== 'ready');
+      if (failedEntry?.error && /^HTTP 502\b/.test(failedEntry.error)) {
+        throw new Error('HTTP 502: Bad Gateway');
+      }
       throw new Error('A file did not upload. Check the connection and send again');
     }
-    const result = await optimisticWrite(apply, async () => {
-      // The note binds the uploads the server holds, so no bytes cross the wire twice. The same
-      // note ID, text and upload set twice is safe: the server answers with the first record.
+    const postNote = async () => {
       const payload = {
         id: pending.id, text,
         ...(stagedFiles.length ? { upload_ids: stagedFiles.map(entry => entry.id) } : {})
@@ -1233,6 +1219,22 @@ $('#form').addEventListener('submit', async event => {
       return (await request('/api/notes', {
         method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify(payload)
       })).json();
+    };
+    const result = await optimisticWrite(apply, async () => {
+      // The note binds the uploads the server holds, so no bytes cross the wire twice. The same
+      // note ID, text and upload set twice is safe: the server answers with the first record.
+      try {
+        return await postNote();
+      } catch (error) {
+        if (!stagedFiles.length || !/No staged file is stored under this ID/.test(error.message)) {
+          throw error;
+        }
+        await Promise.all(stagedFiles.map(entry => uploadStaged(entry)));
+        if (stagedFiles.some(entry => entry.status !== 'ready')) {
+          throw new Error('A file did not upload. Check the connection and send again');
+        }
+        return await postNote();
+      }
     });
     note.placeholder = clipPlaceholder(result.text);
     status.textContent = '';
@@ -1246,7 +1248,9 @@ $('#form').addEventListener('submit', async event => {
       save('draft', draft);
       writeMode();
     }
-    status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept; retry unchanged files and text with the same message ID.`;
+    status.textContent = /^HTTP 502\b/.test(error.message)
+      ? 'HTTP 502: Bad Gateway'
+      : `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept.`;
   }
   finally {
     send.disabled = selector.disabled = $('#attach-file').disabled = false;

@@ -64,6 +64,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Decouple staged file uploads from composer message IDs, re-upload missing staged IDs on send retry, and show `HTTP 502: Bad Gateway` on 502 composer errors.
+
 - Allow clicking report question IDs to quote `RE: <report-id>/<question-id>` in the message composer.
 
 - Increase `.report` list left padding so two-digit ordered list markers do not clip at the report edge.
