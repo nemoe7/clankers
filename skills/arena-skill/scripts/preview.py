@@ -1554,6 +1554,9 @@ def verify_publication(store,report_id,revision,count):
 	if not isinstance(state,dict)or not isinstance(state.get('reports'),list):raise TypeError(failure)
 	matches=[row for row in state['reports']if isinstance(row,dict)and row.get('id')==report_id]
 	if len(matches)!=1 or matches[0].get('updated_at')!=clip_stamp(revision)or not isinstance(rendered,dict)or rendered.get('revision')!=revision or type(rendered.get('fields'))is not int or rendered['fields']!=count or not isinstance(rendered.get('html'),str):raise ValueError(failure)
+	warnings=rendered.get('warnings',[])
+	if not isinstance(warnings,list):return[]
+	return[warning for warning in warnings if isinstance(warning,dict)and type(warning.get('line'))is int and warning['line']>0 and warning.get('marker')in('~~','==')]
 def task_steps(details):
 	steps=[]
 	for item in details or():steps.extend(part.strip()for part in str(item).splitlines())
@@ -2574,6 +2577,29 @@ def highlight_markdown(parser):
 				end-=1
 				if index!=end:state.tokens[index],state.tokens[end]=state.tokens[end],state.tokens[index]
 	parser.inline.ruler.before('emphasis','mark',tokenize);parser.inline.ruler2.before('emphasis','mark',post_process)
+def report_marker_warnings(markdown):
+	from markdown_it import MarkdownIt;parser=MarkdownIt('commonmark',{'html':False}).enable(['table','strikethrough']);highlight_markdown(parser);parser.disable('text_join');lines,findings=markdown.splitlines(),set()
+	for token in parser.parse(unescape_fences(markdown)):
+		if token.type!='inline'or not token.map:continue
+		start,end=token.map;raw,cursor='\n'.join(lines[start:end]),0
+		for child in token.children or():
+			if child.type=='code_inline':ticks=re.compile('(?<!`)'+re.escape(child.markup)+'(?!`)');opening=ticks.search(raw,cursor);closing=ticks.search(raw,opening.end())if opening else None;cursor=closing.end()if closing else len(raw);continue
+			if child.type in{'softbreak','hardbreak'}:
+				newline=raw.find('\n',cursor)
+				if newline>=0:cursor=newline+1
+				continue
+			content=child.markup if child.type=='text_special'else child.content
+			if not content:continue
+			offset=raw.find(content,cursor)
+			if offset<0 and end-start>1:continue
+			offset=max(0,offset);cursor=offset+len(content)
+			if child.type!='text':continue
+			for marker in('~~','=='):
+				pattern=re.escape(marker)+'(.*?)'+re.escape(marker)
+				for match in re.finditer(pattern,content):
+					body=match.group(1)
+					if body and(body[0].isspace()or body[-1].isspace()):line=start+1+raw.count('\n',0,offset+match.start());findings.add((line,marker))
+	return[{'line':line,'marker':marker}for(line,marker)in sorted(findings)]
 def render(markdown,breaks=False):
 	try:from markdown_it import MarkdownIt;from markdown_it.common.normalize_url import validateLink
 	except ImportError as error:raise RuntimeError("Markdown rendering needs markdown-it-py. Install it in the preview's venv and restart the server with that venv's Python; steering still works.")from error
@@ -2688,7 +2714,7 @@ def handler(store):
 					if type=='html':
 						try:body,questions=render_report(report['markdown'])
 						except ValueError as error:self.problem(500,f"This report cannot be rendered: {error}");return
-						self.reply(200,json.dumps({'html':body,'fields':len(questions),'revision':report['updated_at'],'published':report['published_at']or report['updated_at'],'edited':report['updated_at']},ensure_ascii=False));return
+						self.reply(200,json.dumps({'html':body,'fields':len(questions),'warnings':report_marker_warnings(report['markdown']),'revision':report['updated_at'],'published':report['published_at']or report['updated_at'],'edited':report['updated_at']},ensure_ascii=False));return
 					self.reply(200,report['markdown'],'text/plain; charset=utf-8',f"{report_id}.md");return
 				self.problem(404,'Not found')
 			except FileNotFoundError as error:self.problem(404,error)
@@ -3074,7 +3100,8 @@ def main():
 			short=[i[:6]for i in ids];print('ok '+' '.join(short));untracked=[record_id for record_id in ids if not any(record.get('task_id')is not None for(_,record)in store.id_matches(record_id)if record['id']==record_id)]
 			if untracked:print('link it with: '+'; '.join(f'arena-preview task set <id> "<title>" -m {i}'for i in untracked))
 		elif args.command=='publish':
-			count=store.publish(args.id,args.title,args.source);revision=store.report(args.id)['updated_at'];verify_publication(store,args.id,revision,count);plural=''if count==1 else's';print(f"Published {args.id}, {count} field{plural}. Verified.")
+			count=store.publish(args.id,args.title,args.source);revision=store.report(args.id)['updated_at'];warnings=verify_publication(store,args.id,revision,count);plural=''if count==1 else's';print(f"Published {args.id}, {count} field{plural}. Verified.")
+			for warning in warnings or():print(f"{args.source}:{warning['line']}: Warning: possible unparsed {warning['marker']} marker. Keep spaces outside the markers. Literal marker text can be intentional.",file=sys.stderr)
 			if not count and'{#'in Path(args.source).read_text('utf-8'):print('Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then the `- ( ) option` lines follow.',file=sys.stderr)
 		elif args.command=='report':
 			held=False

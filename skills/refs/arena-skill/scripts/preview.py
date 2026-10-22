@@ -4310,6 +4310,18 @@ def verify_publication(store, report_id, revision, count):
   ):
     raise ValueError(failure)
 
+  warnings = rendered.get("warnings", [])
+  if not isinstance(warnings, list):
+    return []
+  return [
+    warning
+    for warning in warnings
+    if isinstance(warning, dict)
+    and type(warning.get("line")) is int
+    and warning["line"] > 0
+    and warning.get("marker") in ("~~", "==")
+  ]
+
 
 def task_steps(details):
   """One step per line: a line break inside one argument becomes a break between steps."""
@@ -7690,6 +7702,51 @@ def highlight_markdown(parser):
   parser.inline.ruler2.before("emphasis", "mark", post_process)
 
 
+def report_marker_warnings(markdown):
+  """Find possible whitespace-broken marker pairs in ordinary Markdown text."""
+  from markdown_it import MarkdownIt
+
+  parser = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
+  highlight_markdown(parser)
+  parser.disable("text_join")
+  lines, findings = markdown.splitlines(), set()
+  for token in parser.parse(unescape_fences(markdown)):
+    if token.type != "inline" or not token.map:
+      continue
+    start, end = token.map
+    raw, cursor = "\n".join(lines[start:end]), 0
+    for child in token.children or ():
+      if child.type == "code_inline":
+        ticks = re.compile(r"(?<!`)" + re.escape(child.markup) + r"(?!`)")
+        opening = ticks.search(raw, cursor)
+        closing = ticks.search(raw, opening.end()) if opening else None
+        cursor = closing.end() if closing else len(raw)
+        continue
+      if child.type in {"softbreak", "hardbreak"}:
+        newline = raw.find("\n", cursor)
+        if newline >= 0:
+          cursor = newline + 1
+        continue
+      content = child.markup if child.type == "text_special" else child.content
+      if not content:
+        continue
+      offset = raw.find(content, cursor)
+      if offset < 0 and end - start > 1:
+        continue
+      offset = max(0, offset)
+      cursor = offset + len(content)
+      if child.type != "text":
+        continue
+      for marker in ("~~", "=="):
+        pattern = re.escape(marker) + r"(.*?)" + re.escape(marker)
+        for match in re.finditer(pattern, content):
+          body = match.group(1)
+          if body and (body[0].isspace() or body[-1].isspace()):
+            line = start + 1 + raw.count("\n", 0, offset + match.start())
+            findings.add((line, marker))
+  return [{"line": line, "marker": marker} for line, marker in sorted(findings)]
+
+
 def render(markdown, breaks=False):
   try:
     from markdown_it import MarkdownIt
@@ -8088,6 +8145,7 @@ def handler(store):
                 {
                   "html": body,
                   "fields": len(questions),
+                  "warnings": report_marker_warnings(report["markdown"]),
                   "revision": report["updated_at"],
                   "published": report["published_at"] or report["updated_at"],
                   "edited": report["updated_at"],
@@ -9537,9 +9595,16 @@ def main():
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
       revision = store.report(args.id)["updated_at"]
-      verify_publication(store, args.id, revision, count)
+      warnings = verify_publication(store, args.id, revision, count)
       plural = "" if count == 1 else "s"
       print(f"Published {args.id}, {count} field{plural}. Verified.")
+      for warning in warnings or ():
+        print(
+          f"{args.source}:{warning['line']}: Warning: possible unparsed "
+          f"{warning['marker']} marker. Keep spaces outside the markers. "
+          "Literal marker text can be intentional.",
+          file=sys.stderr,
+        )
       if not count and "{#" in Path(args.source).read_text("utf-8"):
         # A `{#id}` marker on its own parses as prose. The owner then sees no answer form.
         print(

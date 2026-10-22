@@ -11712,7 +11712,54 @@ def test_ack_task_cli_commits_both_records_or_neither(capsys):
     assert store.task_record("first-job")["details"] == ["Do the work"]
 
 
-def test_publication_verification_checks_state_and_rendered_revision():
+@pytest.mark.parametrize(
+  "markdown, expected",
+  [
+    ("~~bad ~~", [{"line": 1, "marker": "~~"}]),
+    ("== bad==", [{"line": 1, "marker": "=="}]),
+    ("==bad ==", [{"line": 1, "marker": "=="}]),
+    ("~~good~~ ==good==", []),
+    ("`~~bad ~~ == bad==`", []),
+    ("```text\n~~bad ~~ == bad==\n```", []),
+    (r"\~\~bad \~\~ \=\= bad\=\=", []),
+    ("# Heading\n\nFirst\n~~bad ~~", [{"line": 4, "marker": "~~"}]),
+    ("| A | B |\n|---|---|\n| text | ~~bad ~~ |", [{"line": 3, "marker": "~~"}]),
+    ("`~~bad ~~\ncode`\n~~bad ~~", [{"line": 3, "marker": "~~"}]),
+    pytest.param("\\```text\n~~bad ~~\n\\```", [], id="escaped-fence"),
+    pytest.param(
+      "| A | B |\n|---|---|\n| a\\|b ~~bad ~~ | text |",
+      [{"line": 3, "marker": "~~"}],
+      id="escaped-table-pipe",
+    ),
+  ],
+)
+def test_report_marker_warnings_preserve_markdown(markdown, expected):
+  before = preview.render(markdown)
+  assert preview.report_marker_warnings(markdown) == expected
+  assert preview.render(markdown) == before
+
+
+@pytest.mark.parametrize(
+  "warnings, expected",
+  [
+    (None, []),
+    ([], []),
+    ("invalid", []),
+    (
+      [
+        {"line": 3, "marker": "~~"},
+        {"line": True, "marker": "~~"},
+        {"line": -1, "marker": "=="},
+        {"line": 3, "marker": "other"},
+        None,
+      ],
+      [{"line": 3, "marker": "~~"}],
+    ),
+  ],
+)
+def test_publication_verification_checks_state_and_rendered_revision(
+  warnings, expected
+):
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.set_meta("port", guard_port())
@@ -11722,6 +11769,8 @@ def test_publication_verification_checks_state_and_rendered_revision():
       "token": "do-not-print",
     }
     rendered = {"html": "<p>Question</p>", "fields": 1, "revision": revision}
+    if warnings is not None:
+      rendered["warnings"] = warnings
     for first, second, valid in [
       (state, rendered, True),
       ({"reports": []}, rendered, False),
@@ -11741,7 +11790,9 @@ def test_publication_verification_checks_state_and_rendered_revision():
           json.dumps(second).encode(),
         ]
         if valid:
-          preview.verify_publication(store, "check-report", revision, 1)
+          with patch.dict(sys.modules, {"markdown_it": None}):
+            result = preview.verify_publication(store, "check-report", revision, 1)
+          assert result == expected
           assert [call.args[1] for call in client.request.call_args_list] == [
             "/api/state",
             "/api/reports/check-report/html",
@@ -11755,7 +11806,7 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "report.md"
-    source.write_text("Choose? {#choice}\n- ( ) yes\n- ( ) no\n", "utf-8")
+    source.write_text("Choose? {#choice}\n- ( ) yes\n- ( ) no\n\n~~bad ~~\n", "utf-8")
     with preview.ThreadingHTTPServer(
       ("127.0.0.1", 0), preview.handler(store)
     ) as server:
@@ -11800,6 +11851,9 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
         ) as verified:
           result, output = publish(source)
         assert result == 0 and verified.called
+        expected_location = f"{source}:5:"
+        assert expected_location in output.err
+        assert store.report("verified-report")["markdown"] == source.read_text()
         published = store.report("verified-report")
         assert published["id"] in output.out
         assert (
