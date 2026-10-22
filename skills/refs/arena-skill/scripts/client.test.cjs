@@ -4746,13 +4746,23 @@ test('preview client', async (t) => {
 
 });
 
-test('the phone footer keeps Send beside a long status', () => {
-  // The stacked key and status lines must shrink inside the footer row, so a long staged-files
-  // line wraps within its own column and never pushes the Send note button onto a line of its own.
-  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
-  const rule = /\.compose\s+\.row\s*>\s*\.stack\s*{[^}]*}/.exec(css);
-  assert.ok(rule, 'the footer stack has its own rule');
-  assert.match(rule[0], /flex:\s*1\s+1\s+0\b/, 'the status stack starts from zero width so Send stays on its line');
+test('the composer keeps Send inside and status lines outside its panel', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+  const locations = new Map();
+  const stack = [];
+  const controls = new Set(['send', 'send-hint', 'agent-key', 'send-status']);
+  new Parser({
+    onopentag(name, attributes) {
+      const inside = attributes.id === 'compose' || stack.at(-1) === true;
+      stack.push(inside);
+      if (controls.has(attributes.id)) locations.set(attributes.id, inside);
+    },
+    onclosetag() { stack.pop(); },
+  }).end(html);
+  assert.equal(locations.get('send'), true, 'Send remains in the composer');
+  for (const identity of ['send-hint', 'agent-key', 'send-status']) {
+    assert.equal(locations.get(identity), false, `${identity} remains outside the panel`);
+  }
 });
 
 test('a wide table scrolls sideways on its own and keeps its words whole', () => {

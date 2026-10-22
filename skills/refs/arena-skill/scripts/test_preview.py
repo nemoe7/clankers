@@ -1594,7 +1594,9 @@ def test_http_boundaries():
       assert status == 200 and re.search(
         r'#preview-note\[aria-pressed="?false"?\][^{}]*\{', page
       )
-      assert not re.search(r'#preview-note\[aria-pressed="?true"?\]', page)
+      assert re.search(
+        r'#preview-note\[aria-pressed="?true"?\][^{]*\{background:var\(--hover\)', page
+      )
       assert "--focus:#524d47" in page and "#f4ca93" not in page
       assert "--focus:#8f5b13" in page
       assert "--tab-border:#413d39" in page
@@ -1672,8 +1674,18 @@ def test_http_boundaries():
         "@media (pointer:coarse){.topbar-row{flex-wrap:nowrap;}"
         ".topbar-row>.row.tight{flex:0 0 auto;gap:4px;}#clock,#theme{display:none;}"
         "nav button{padding:7px 3px;font-size:13px;}#send-hint{display:none;}"
-        "#send{margin-left:auto;}.card.compose{padding:6px 12px;}.compose .row{margin:4px 0;}}"
-        in page
+        "#send{margin-left:auto;}" in page
+      )
+      coarse_composer = re.search(
+        r"@media \(pointer:coarse\)\{.*?\.card\.compose\{([^}]+)\}", page
+      )
+      assert coarse_composer is not None
+      coarse_padding = css_padding(coarse_composer[1])
+      assert len(set(coarse_padding)) == 1
+      assert len(set(css_padding(composer[1]))) == 1
+      assert all(
+        0 < phone_side < desktop_side
+        for phone_side, desktop_side in zip(coarse_padding, css_padding(composer[1]))
       )
       assert page.index('id="downloads-tab"') < page.index('id="copy-state"')
       assert "nav button{padding:7px 4px;font-size:14px;}" in page
@@ -1792,6 +1804,13 @@ def test_http_boundaries():
       assert re.search(r'aria-label="[^"]+"', expand.group())
       assert 'aria-controls="note draft-preview"' in expand.group()
       assert 'aria-expanded="false"' in expand.group()
+      composer = re.search(
+        r'<section\b[^>]*id="compose"[^>]*>(.*?)</section>', page, re.DOTALL
+      )
+      assert composer is not None
+      for identity in ("send-hint", "agent-key", "send-status"):
+        marker = f'id="{identity}"'
+        assert marker in page and marker not in composer.group(1)
       assert "resize:none" in page and "resize:vertical" not in page
       assert (
         "#notes-panel,#reports-panel,#tasks-panel,#downloads-panel{overflow-y:auto"

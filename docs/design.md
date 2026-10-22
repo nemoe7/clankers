@@ -99,8 +99,8 @@ Empty and one-line drafts use one row on desktop and phones. Multiline drafts gr
 
 Expansion retains the draft and selection. The panel and Send keep their existing corner shapes. Empty fields hide overflow from multiline placeholders.
 
-Attach and Markdown preview stay left, without button backgrounds. Send or its busy icon stays right.
+Attach and Markdown preview stay left, with Send or its busy icon on the right. Controls have no idle background or border. Hover and active states show a background.
 
-Removable file chips sit above the text. Markdown preview, key status, errors, storage checks, and keyboard controls remain available.
+Removable file chips sit above the text. Keyboard hints, key status, and error lines sit below the panel, including during expansion. Markdown preview, storage checks, and keyboard controls remain available.
 
 The composer uses existing product colors and local Lucide icons under `assets/lucide.LICENSE`. The `arrow-up`, `maximize-2`, and `minimize-2` paths in `assets/app.js` come from the [Lucide catalog](https://github.com/lucide-icons/lucide/tree/main/icons).

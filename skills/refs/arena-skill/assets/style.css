@@ -84,9 +84,9 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 /* The log header wraps into four short lines on a narrow width, and the row's 12px wrap gap
    spread them into dead space. The lines sit close now, so the header reads as one block. */
 .log-card > .row:first-child { margin-block: 0; row-gap: 2px; }
-.card.compose { flex: 0 0 auto; padding: 8px 18px; }
-.compose .row { margin: 6px 0; }
-.notes-layout { position: relative; }
+.card.compose { flex: 0 0 auto; padding: 8px; }
+.notes-layout > .composer-footer { flex: none; padding-inline: 18px; }
+.notes-layout:has(#compose[data-expanded]) .log-card { display: none; }
 .notes-layout:has(#compose[data-multiline], #compose[data-attachments]) .log-card { min-height: 0; }
 #form { min-height: 0; }
 .composer-shell { position: relative; display: grid; grid-template-columns: 30px 30px minmax(0, 1fr) 30px; grid-template-areas: "attach preview input send"; gap: 8px; align-items: center; }
@@ -97,11 +97,11 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 #preview-note { grid-area: preview; }
 #send { grid-area: send; }
 #staged-files { grid-area: files; }
-#composer-expand { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; padding: 0; }
+#composer-expand { position: absolute; top: 0; right: 0; width: 30px; height: 30px; padding: 0; }
 #compose[data-multiline] .composer-shell { grid-template-areas: "input input input input" "attach preview . send"; }
 #compose[data-attachments] .composer-shell { grid-template-areas: "files files files files" "input input input input" "attach preview . send"; }
-#compose[data-multiline] #note, #compose[data-expanded] #note { padding: 12px 48px 8px 12px; }
-#compose[data-expanded] { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; max-height: none; }
+#compose[data-multiline] #note, #compose[data-expanded] #note { padding: 4px 40px 8px 8px; }
+#compose[data-expanded] { flex: 1; min-height: 0; display: flex; flex-direction: column; max-height: none; }
 #compose[data-expanded] #form { flex: 1; display: flex; flex-direction: column; }
 #compose[data-expanded] .composer-shell { flex: 1; min-height: 0; grid-template-areas: "files files files files" "input input input input" "attach preview . send"; grid-template-rows: auto minmax(0, 1fr) auto; }
 #compose[data-expanded] #note, #compose[data-expanded] #draft-preview { height: 100%; max-height: none; overflow-y: auto; }
@@ -110,15 +110,15 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 .staged-chip-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .staged-chip button { min-height: 0; padding: 0 3px; border: 0; background: transparent; }
 #attach-file { min-height: 0; width: 30px; height: 30px; padding: 0; flex: none; }
-#attach-file, #preview-note { background: transparent; border-color: transparent; }
-#attach-file:focus-visible, #preview-note:focus-visible { border-color: var(--focus); }
+#attach-file, #preview-note, #composer-expand { background: transparent; border-color: transparent; }
+:is(#attach-file, #preview-note, #composer-expand):hover:not(:disabled), #preview-note[aria-pressed="true"], #composer-expand[aria-expanded="true"] { background: var(--hover); }
+:is(#attach-file, #preview-note, #composer-expand):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #compose[data-dragging] { outline: 2px dashed var(--accent); outline-offset: -4px; }
 #preview-note { display: inline-flex; align-items: center; justify-content: center; min-height: 0; width: 30px; height: 30px; padding: 0; }
 .row.tight { gap: 8px; margin: 0; flex: 0 0 auto; flex-wrap: nowrap; }
 /* The log's toolbar keeps one line on every width: a wrap would drop the search box under the
    skip button and read as a row of its own. */
 .stack { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-.compose .row > .stack { flex: 1 1 0; }
 #send { width: 30px; height: 30px; min-height: 0; padding: 0; }
 .stack h2, .stack p { margin: 0; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-width: 0; }
@@ -311,8 +311,7 @@ mark code { color: var(--text); }
   nav button { padding: 7px 3px; font-size: 13px; }
   #send-hint { display: none; }
   #send { margin-left: auto; }
-  .card.compose { padding: 6px 12px; }
-  .compose .row { margin: 4px 0; }
+  .card.compose { padding: 6px; }
 }
 
 #send-status { margin: 0; }
