@@ -6039,6 +6039,21 @@ def test_worktree_gate_flow():
     )
     assert nested.returncode == 1 and "registered root" in nested.stderr
     assert git("branch", "--show-current", cwd=worktree).strip() == ""
+    before_reads = set((state_dir / "runs").glob("*.json"))
+    for line in (
+      "git status --short",
+      "rg --line-number 'pytest|ruff' allowed/change.txt",
+    ):
+      allowed = subprocess.run(
+        [sys.executable, script, "pre", "--line", line, "--command", line],
+        cwd=worktree,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+      )
+      assert allowed.returncode == 0, allowed.stderr
+    assert set((state_dir / "runs").glob("*.json")) == before_reads
     blocked = subprocess.run(
       [sys.executable, script, "pre", "--line", "pytest -q", "--command", "pytest -q"],
       cwd=worktree,

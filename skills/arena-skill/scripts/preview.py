@@ -1454,10 +1454,10 @@ def agent_line(line):
 	else:return line or''
 	return' '.join(rest).strip()or(line or'')
 def pr_check_wait(state_dir,line,command=None):
-	line=agent_line(line);warning=worktree_warning(state_dir,'gate')
-	if warning:print(warning,file=sys.stderr,flush=True);return PR_CHECK_REFUSED
-	name=long_run_name(line)
+	line=agent_line(line);name=long_run_name(line)
 	if not name:return PR_CHECK_OTHER
+	warning=worktree_warning(state_dir,'gate')
+	if warning:print(warning,file=sys.stderr,flush=True);return PR_CHECK_REFUSED
 	if command is not None and line.strip()!=command.strip():print(f"RUN BLOCKED: automatic routing would replay a mixed shell line. Use `arena-preview run start {name} -- <remaining command>`; do not repeat completed commands.",file=sys.stderr,flush=True);return PR_CHECK_REFUSED
 	if not detach_run(state_dir,name,['bash','-c',line]):print(DETACHED_BLOCK.format(name=name),file=sys.stderr,flush=True);return PR_CHECK_REFUSED
 	print(DETACHED_NOTICE.format(name=name),file=sys.stderr,flush=True);return PR_CHECK_RUNS

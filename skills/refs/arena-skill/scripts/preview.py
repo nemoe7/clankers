@@ -3964,13 +3964,13 @@ def pr_check_wait(state_dir, line, command=None):
   `PR_CHECK_OTHER` and runs untouched. Each message rides stderr.
   """
   line = agent_line(line)
+  name = long_run_name(line)
+  if not name:
+    return PR_CHECK_OTHER
   warning = worktree_warning(state_dir, "gate")
   if warning:
     print(warning, file=sys.stderr, flush=True)
     return PR_CHECK_REFUSED
-  name = long_run_name(line)
-  if not name:
-    return PR_CHECK_OTHER
   if command is not None and line.strip() != command.strip():
     print(
       "RUN BLOCKED: automatic routing would replay a mixed shell line."
