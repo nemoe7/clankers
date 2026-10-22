@@ -2413,7 +2413,7 @@ function checkStateDownload(api, session, logging) {
   assert.match(errorLines[0], /copy-state/);
   assert.match(errorLines[0], /500/);
   assert.doesNotMatch(errorLines[0], /localhost|api\/copy-state/);
-  assert.match(getLine(200, "http://localhost:8000"), /GET 200.*http:\/\/localhost:8000/);
+  assert.match(getLine(200, "http://localhost:8000"), /^GET 200$/);
   // Every comparison in the save path writes its own line, so one filter shows which test
   // refused a write.
   logging.setLogLevel("debug");
@@ -2554,7 +2554,6 @@ function checkStateDownload(api, session, logging) {
     false,
     "a URL that did not move needs no acceptance",
   );
-  assert.match(overwriteLine("clankers-main.ndjson"), /Overwrite clankers-main\.ndjson\?$/);
   const overwriteContext = {
     branch: "main", rememberedBranch: "main", lastScope: "clankers-main",
     base: "https://new.arena.site", rememberedBase: "https://old.arena.site",
@@ -2562,34 +2561,48 @@ function checkStateDownload(api, session, logging) {
     stamp: "2026-10-06T20:00:00",
     stamps: { note: "2026-10-05T19:00:00", task: "2026-10-05T18:00:00" },
   };
-  const urlPrompt = overwriteLine("clankers-main.ndjson", overwriteContext);
-  assert.match(urlPrompt, /URL: https:\/\/old\.arena\.site -> https:\/\/new\.arena\.site/);
-  assert.doesNotMatch(urlPrompt, /Branch:/);
-  assert.match(urlPrompt, /overall forward, notes same, and tasks same/);
-  assert.match(urlPrompt, /Overwrite clankers-main\.ndjson\?/);
-  const branchPrompt = overwriteLine("file.ndjson", {
-    ...overwriteContext, base: overwriteContext.rememberedBase, branch: "dev",
-  });
-  assert.match(branchPrompt, /Branch: main -> dev/);
-  assert.doesNotMatch(branchPrompt, /URL:/);
-  const bothPrompt = overwriteLine("file.ndjson", { ...overwriteContext, branch: "dev" });
-  assert.match(bothPrompt, /URL:/);
-  assert.match(bothPrompt, /Branch: main -> dev/);
-  const olderPrompt = overwriteLine("file.ndjson", {
+  const FILE = "clankers-main.ndjson";
+  const forwardOnly = overwriteLine(FILE, overwriteContext);
+  assert.match(forwardOnly, /State: forward/);
+  assert.equal(/Notes|Tasks/.test(forwardOnly), false, "same comparisons are omitted");
+  for (const hidden of [FILE, overwriteContext.base, overwriteContext.rememberedBase, "URL", "Branch", "main"]) {
+    assert.equal(forwardOnly.includes(hidden), false, hidden + " stays out of the body");
+  }
+  assert.equal(
+    overwriteLine("other.ndjson", { ...overwriteContext, base: "https://x.example", branch: "dev" }),
+    forwardOnly,
+    "only stamp comparisons shape the body",
+  );
+  const mixed = overwriteLine(FILE, {
     ...overwriteContext, stamp: "2026-10-04T20:00:00",
     stamps: { note: "2026-10-04T19:00:00", task: "2026-10-06T18:00:00" },
   });
-  assert.match(olderPrompt, /overall older, notes older, and tasks forward/);
-  const legacyPrompt = overwriteLine("file.ndjson", {
-    ...overwriteContext, memory: overwriteContext.stamp,
+  assert.match(mixed, /State: older/);
+  assert.match(mixed, /Notes: older/);
+  assert.match(mixed, /Tasks: forward/);
+  const unchanged = overwriteLine(FILE, {
+    ...overwriteContext, stamp: overwriteContext.memory.stamp,
+    stamps: { note: overwriteContext.memory.note, task: overwriteContext.memory.task },
   });
-  assert.match(legacyPrompt, /overall same, notes unknown, and tasks unknown/);
-  const unknownPrompt = overwriteLine("file.ndjson", {
-    ...overwriteContext, stamp: "", stamps: null, branch: "", lastScope: "",
-  });
-  assert.match(unknownPrompt, /Branch\/scope: unknown/);
-  assert.doesNotMatch(unknownPrompt, /Branch:/);
-  assert.match(unknownPrompt, /overall unknown, notes unknown, and tasks unknown/);
+  assert.equal(/same|State|Notes|Tasks/.test(unchanged), false, "an all-same body names no comparison");
+  assert.ok(unchanged.length > 0 && unchanged.length < mixed.length);
+  const legacyStamp = overwriteLine(FILE, { ...overwriteContext, memory: overwriteContext.stamp });
+  assert.match(legacyStamp, /Notes: unknown/);
+  assert.match(legacyStamp, /Tasks: unknown/);
+  assert.equal(legacyStamp.includes("State"), false, "the same overall stamp is omitted");
+  const unknown = overwriteLine(FILE);
+  assert.match(unknown, /State: unknown/);
+  assert.match(unknown, /Notes: unknown/);
+  assert.match(unknown, /Tasks: unknown/);
+  assert.equal(unknown.includes(FILE), false);
+  const mismatchScope = api.handleMismatchScope;
+  const REPO = "clankers";
+  const BRANCH = "main";
+  const matching = REPO + "-" + BRANCH + "-n1-t1.ndjson";
+  assert.equal(mismatchScope({ name: matching }, REPO, BRANCH), "", "a matching file has no mismatch");
+  assert.equal(mismatchScope({ name: REPO + "-dev.ndjson" }, REPO, BRANCH), BRANCH, "another branch names the branch");
+  assert.equal(mismatchScope({ name: "widget-" + BRANCH + ".ndjson" }, REPO, BRANCH), REPO, "another repo names the repo");
+  assert.equal(mismatchScope({ name: "unrelated.ndjson" }, REPO, BRANCH), REPO, "an unknown scope names the repo");
 
   console.log("ok state download 32");
   // The session bar names an unpushed branch in a titled span. A pushed branch also has an
