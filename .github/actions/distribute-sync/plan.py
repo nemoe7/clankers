@@ -10,7 +10,7 @@ PROFILES = (
     "domain": "arena",
     "repos": (
       "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki "
-      "nemoe7/f360 nemoe7/request-tracker nemoe7/arena-cleanup"
+      "nemoe7/f360 nemoe7/request-tracker nemoe7/arena-cleanup nemoe7/template"
     ),
     "rule_src": "rules/ARENA.md",
     "rule_dest": "ARENA.md",
@@ -30,7 +30,7 @@ PROFILES = (
   },
   {
     "domain": "nemoizer",
-    "repos": "nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup nemoe7/wiki",
+    "repos": "nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup nemoe7/wiki nemoe7/template",
     "skills": "nemoizer",
   },
 )
