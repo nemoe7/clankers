@@ -260,7 +260,7 @@ a { color: #6ea3d6; text-underline-offset: 3px; }
 /* Use an 8px paragraph gap to match the heading rhythm. */
 .report p, .message-text p { margin: 8px 0; }
 /* The allowlisted list passes through unchanged. Give it paragraph spacing and marker indent. */
-.report ul, .report ol { margin: 8px 0; padding-left: 22px; }
+.report ul, .report ol { margin: 8px 0; padding-left: 28px; }
 /* A list in message text sits flush, the way the log's own lists and the composer do: the ack
    thread under a report was the last outlier, with the browser's default step under it. */
 .message-text ul, .message-text ol { margin: 8px 0; padding-left: 0; list-style-position: inside; }

@@ -64,6 +64,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Increase `.report` list left padding so two-digit ordered list markers do not clip at the report edge.
+
 - Keep `#notes-panel` non-scrollable with `.log-card` `min-height: 0` so only the message history list shows a scrollbar.
 
 - Keep the mobile composer in view on initial load, above the virtual keyboard, and stationary across state updates. Scroll the message log up when the composer grows.

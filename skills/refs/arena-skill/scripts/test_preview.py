@@ -1804,6 +1804,14 @@ def test_http_boundaries():
         r"padding-left:0;list-style-position:inside",
         page,
       ), "message text lists sit flush"
+      report_list = re.search(
+        r"\.report (?:ul,\.report ol|ol,\.report ul)\{([^}]+)\}", page
+      )
+      task_list = re.search(r"\.task-list\{([^}]+)\}", page)
+      assert report_list and task_list
+      assert css_px(report_list[1], "padding-left") > (
+        css_px(task_list[1], "padding-left") + 4
+      )
       # The narrow-screen and touch rules keep Send at the right.
       assert re.findall(r"#send\{(margin-left:[^}]*)\}", page) == [
         "margin-left:auto;",
