@@ -7123,6 +7123,47 @@ def test_reminder_stamps_the_call_end():
       hold.close()
 
 
+def test_exempted_bash_commands_refresh_timer_without_advancing_tally():
+  with tempfile.TemporaryDirectory() as end_dir:
+    store = preview.Store(end_dir, create=True)
+    store.note("pending-note", "pending note")
+    store.set_meta(preview.POLLS_SINCE_MESSAGE, "4")
+    store.set_meta(preview.AGENT_CALL_ENDED_META, "2026-10-20T00:00:00+00:00")
+    hold = socket.socket()
+    hold.bind(("127.0.0.1", 0))
+    port = hold.getsockname()[1]
+    hold.listen(16)
+    try:
+      store.set_meta("port", str(port))
+      for line in ("arena-preview read", "git status -sb", "gh pr view 119"):
+        assert preview.exempted_bash_line(line) is True, line
+        store.set_meta(preview.AGENT_CALL_ENDED_META, "2026-10-20T00:00:00+00:00")
+        rc = preview.pre_command(end_dir, line, line, end_dir, shell="bash")
+        assert rc == 0
+        after_pre = store.meta_value(preview.AGENT_CALL_ENDED_META)
+        assert after_pre != "2026-10-20T00:00:00+00:00"
+        result = subprocess.run(
+          [
+            sys.executable,
+            str(Path(preview.__file__)),
+            "--reminder",
+            "--line",
+            line,
+          ],
+          capture_output=True,
+          text=True,
+          check=False,
+          cwd=end_dir,
+          env={**os.environ, "ARENA_PREVIEW_STATE_DIR": end_dir},
+        )
+        assert result.returncode == 0, result.stderr
+        assert store.calls_since_message() == 4, line
+      assert preview.exempted_bash_line("ss -ltn") is False
+      assert preview.exempted_bash_line("python3 -c 'print(1)'") is False
+    finally:
+      hold.close()
+
+
 def test_require_server_names_the_restart_command():
   """A dead server fails the poll with the exact restart command and its port."""
   with tempfile.TemporaryDirectory() as directory:

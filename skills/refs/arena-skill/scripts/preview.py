@@ -3074,6 +3074,52 @@ def quiet_inbox_line(line):
   return first_blocking_piece(line) is None
 
 
+EXEMPT_BASH_WORDS = (
+  "preview",
+  "profile",
+  "bashrc",
+  "arena-state",
+  "git commit",
+  "--help",
+)
+EXEMPT_BASH_PREFIXES = (
+  "mkdir",
+  "[",
+  "gh",
+  "sleep",
+  "true",
+  ":",
+  "test",
+  "git status",
+  "git diff",
+  "git add",
+)
+
+
+def inert_bash_command(command):
+  """True when a command matches the Category B inert command exemptions."""
+  return any(word in command for word in EXEMPT_BASH_WORDS) or command.startswith(
+    EXEMPT_BASH_PREFIXES
+  )
+
+
+def exempted_bash_line(line):
+  """True when the Bash call-count gate exempts an agent-run command line."""
+  raw = line or ""
+  if not raw.strip() or platform_line(raw):
+    return False
+  command = agent_line(raw).strip()
+  if not command or platform_line(command) or "git push" in command:
+    return False
+  return inert_bash_command(command) or quiet_inbox_line(raw)
+
+
+def refresh_bash_timer(state_dir):
+  """Stamp the Bash call end timer when the state database exists."""
+  if (Path(state_dir).resolve() / "state.sqlite3").is_file():
+    Store(state_dir, create=False).set_meta(AGENT_CALL_ENDED_META, now())
+
+
 def read_set_actions(line):
   """Preview subcommands on an otherwise inert line, or None when the line does work."""
   actions = []
@@ -10836,34 +10882,10 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
         report(found)
         return finish(130)
   # case: inert-line
-  if (
-    any(
-      word in command
-      for word in (
-        "preview",
-        "profile",
-        "bashrc",
-        "arena-state",
-        "git commit",
-        "--help",
-      )
-    )
-    or command.startswith(
-      (
-        "mkdir",
-        "[",
-        "gh",
-        "sleep",
-        "true",
-        ":",
-        "test",
-        "git status",
-        "git diff",
-        "git add",
-      )
-    )
-    or any(word in command for word in ("arena-workspace", "ss -ltn", "netstat -ltn"))
-  ):
+  if any(word in command for word in ("arena-workspace", "ss -ltn", "netstat -ltn")):
+    return finish(0)
+  if inert_bash_command(command):
+    refresh_bash_timer(state_dir)
     return finish(0)
   # case: push-checkpoint
   if "git push" in command:
@@ -10875,6 +10897,7 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
       return finish(130)
   # case: inbox-line
   if quiet_inbox_line(line):
+    refresh_bash_timer(state_dir)
     return finish(0)
   # case: call-count
   if "gate" not in finished:
@@ -11340,7 +11363,7 @@ def main():
       store = Store(state_dir, create=False)
       require_server(store)
       auto_start_post_push_pr_checks(state_dir, args.reminder_line, rc=args.rc)
-      reminder = store.reminder(advance=True)
+      reminder = store.reminder(advance=not exempted_bash_line(args.reminder_line))
       # The hook runs this after every bash call, so the stamp marks the call's end: the
       # page keeps the long call text only while a call started after the last recorded end.
       store.set_meta(AGENT_CALL_ENDED_META, now())

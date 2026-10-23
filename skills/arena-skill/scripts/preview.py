@@ -1107,6 +1107,17 @@ def idle_wait(line):
 	if any(token.strip('"\'').endswith('.log')for piece in command_pieces(agent_line(line))for token in piece.split()):return'SLEEP BLOCKED: a sleep beside a .log read holds the turn. Use `arena-preview poll` to wait, and `arena-preview logs <name>` to read a run.'
 	return None
 def quiet_inbox_line(line):return first_blocking_piece(line)is None
+EXEMPT_BASH_WORDS='preview','profile','bashrc','arena-state','git commit','--help'
+EXEMPT_BASH_PREFIXES='mkdir','[','gh','sleep','true',':','test','git status','git diff','git add'
+def inert_bash_command(command):return any(word in command for word in EXEMPT_BASH_WORDS)or command.startswith(EXEMPT_BASH_PREFIXES)
+def exempted_bash_line(line):
+	raw=line or''
+	if not raw.strip()or platform_line(raw):return False
+	command=agent_line(raw).strip()
+	if not command or platform_line(command)or'git push'in command:return False
+	return inert_bash_command(command)or quiet_inbox_line(raw)
+def refresh_bash_timer(state_dir):
+	if(Path(state_dir).resolve()/'state.sqlite3').is_file():Store(state_dir,create=False).set_meta(AGENT_CALL_ENDED_META,now())
 def read_set_actions(line):
 	actions=[]
 	for piece in command_pieces(agent_line(line)):
@@ -3522,12 +3533,13 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 		if commit_store is not None:
 			found=commit_id_report(staged_session_id_hits(commit_store,str(Path.cwd())))
 			if found:report(found);return finish(130)
-	if any(word in command for word in('preview','profile','bashrc','arena-state','git commit','--help'))or command.startswith(('mkdir','[','gh','sleep','true',':','test','git status','git diff','git add'))or any(word in command for word in('arena-workspace','ss -ltn','netstat -ltn')):return finish(0)
+	if any(word in command for word in('arena-workspace','ss -ltn','netstat -ltn')):return finish(0)
+	if inert_bash_command(command):refresh_bash_timer(state_dir);return finish(0)
 	if'git push'in command:
 		warning=worktree_warning(state_dir,'push')
 		if warning:report(warning);return finish(130)
 		if gate_verdict(state_dir,True,line,out=sys.stderr)==1:return finish(130)
-	if quiet_inbox_line(line):return finish(0)
+	if quiet_inbox_line(line):refresh_bash_timer(state_dir);return finish(0)
 	if'gate'not in finished:
 		mark('gate')
 		if gate_verdict(state_dir,False,line,out=sys.stderr)==1:return finish(130)
@@ -3568,7 +3580,7 @@ def main():
 	state_dir=resolve_state_dir();fresh_state=not(Path(state_dir).resolve()/'state.sqlite3').is_file()
 	try:
 		if args.reminder:
-			store=Store(state_dir,create=False);require_server(store);auto_start_post_push_pr_checks(state_dir,args.reminder_line,rc=args.rc);reminder=store.reminder(advance=True);store.set_meta(AGENT_CALL_ENDED_META,now())
+			store=Store(state_dir,create=False);require_server(store);auto_start_post_push_pr_checks(state_dir,args.reminder_line,rc=args.rc);reminder=store.reminder(advance=not exempted_bash_line(args.reminder_line));store.set_meta(AGENT_CALL_ENDED_META,now())
 			if'unacked 'in reminder or TASK_ORDER_NOTICE in reminder or not run_notices(state_dir,show_running=True):print(reminder,file=sys.stderr,flush=True)
 			return 0
 		if not args.command:parser.error('Command required. Run arena-preview --help.')
