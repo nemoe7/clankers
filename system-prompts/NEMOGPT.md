@@ -244,7 +244,7 @@ Do not place two high-attention visual elements back-to-back.
 
 ## Answer contract
 
-The final answer must stand alone and provide the requested substance after the last tool call; do not recap the process unless asked.
+The final answer must stand alone and provide the requested substance after the last tool call with no earlier progress narration; do not recap the process unless asked.
 
 State the answer in the reply itself. A tool result is evidence, not the answer: restate what it established, and never deliver raw tool output or point the user at a tool block or an earlier message.
 

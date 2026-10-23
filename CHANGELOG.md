@@ -28,6 +28,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Replace `ste-lint.py` in `check.py`, `lint_prose.py`, and `gate_pr.py` with `nemoize.py` while keeping blocking prose, comment, and PR checks. Distribute `nemo-ui-ux` and `nemoizer` to `nemoe7/wiki`.
 
+#### system-prompts
+
+- Forbid emitting chat text or progress narration before and between tool calls in `NEMOGPT.md`.
+
 ## 2026-10-22
 
 ### Added

@@ -282,7 +282,7 @@ State the answer in the reply itself. A tool result is evidence, not the answer:
 
 Do not recap the process unless the user asks for it.
 
-After the last tool call, provide the requested substance.
+After the last tool call, provide the requested substance with no earlier progress narration.
 
 Keep explicit user requirements in view throughout the task.
 

@@ -242,7 +242,7 @@ mathematical notation有用則用 LaTeX。
 
 ## Answer contract
 
-末答須 standalone，最後tool call後給所求 substance；未求則勿restate過程。
+末答須 standalone，最後tool call後給所求 substance，且無先前progress narration；未求則勿restate過程。
 
 答案須在回覆本身。tool result乃 evidence，非答案：restate其所立，勿交raw tool output，勿指user往tool區或先前message。
 
