@@ -76,7 +76,7 @@ nav [aria-selected="true"] { background: var(--bubble); }
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1450px; margin: auto; padding: 18px 5vw 20px; overflow: hidden; }
 main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 .report-scroll-frame { position: relative; display: flex; flex-direction: column; }
-#notes-panel { overflow: hidden; }
+#notes-panel { overflow: clip; }
 #reports-panel, #tasks-panel, #downloads-panel { overflow-y: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
 /* The message log fills remaining height above the composer so the panel itself never scrolls. */
@@ -405,7 +405,7 @@ mark code { color: var(--text); }
 .downloads-layout h2, .downloads-layout p { margin: 0; }
 .fetch-controls { justify-content: flex-start; margin: 0 0 10px; }
 .fetch-controls input { flex: 1 1 260px; min-width: 0; height: 34px; min-height: 0; padding: 0 8px; }
-.key-line code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .95em; }
+.key-line code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .95em; padding-block: 0; }
 .fetch-approval { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
 .fetch-approval h3 { margin: 0 0 6px; }
 .fetch-approval .fetch-decisions { justify-content: flex-start; gap: 8px; margin: 6px 0 0; }
@@ -443,13 +443,13 @@ mark code { color: var(--text); }
   }
   @supports (animation-timeline: scroll(self)) {
     /* A non-scrollable region keeps both fade lengths at zero. */
-    #history, [role="tabpanel"], .draft-preview {
+    #history, [role="tabpanel"]:not(#notes-panel), .draft-preview {
       mask-image: linear-gradient(to bottom, transparent, black var(--edge-start), black calc(100% - var(--edge-end)), transparent);
       animation: edge-start linear both, edge-end linear both;
       animation-timeline: scroll(self), scroll(self);
       animation-range: 0px var(--edge-ramp), calc(100% - var(--edge-ramp)) 100%;
     }
-    [role="tabpanel"] {
+    [role="tabpanel"]:not(#notes-panel) {
       animation: panel-enter var(--motion-duration) ease-out, edge-start linear both, edge-end linear both;
       animation-timeline: auto, scroll(self), scroll(self);
       animation-range: normal, 0px var(--edge-ramp), calc(100% - var(--edge-ramp)) 100%;
