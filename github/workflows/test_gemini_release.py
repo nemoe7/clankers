@@ -178,7 +178,8 @@ def test_release_pipeline():
       [str(n) for n in range(start, start + 10)] for start in range(0, 80, 10)
     ]
     assert len(round_lines) == len(round_groups) + 1
-    assert any("after 43 exact token probe(s)" in line for line in round_lines)
+    assert any("after 16 exact token probe(s)" in line for line in round_lines)
+    assert len(probes) <= 35
     assert not any("countTokens" in line for line in round_lines)
 
     # One item's text halves only as a last resort, because a single item barely
@@ -1367,7 +1368,96 @@ def test_capacity_retry_budget():
   release.COOLDOWNS.clear()
 
 
+def test_daedalus_regressions():
+  assert release.CHUNK_TOKENS == 150_000
+  assert release.CHUNK_TIMEOUT_SECONDS == 90
+
+  # 1. Untried rungs win over a previously failed top rung whose short cooldown expired.
+  now, calls, waits = [0.0], [], []
+
+  def sleep(delay):
+    waits.append(delay)
+    now[0] += delay
+
+  def ping_pong_attempt(_context, _evidence, rung, **kwargs):
+    calls.append((rung, kwargs.get("timeout")))
+    if rung == "gemini-3.8-flash":
+      now[0] += 3.0
+      raise RuntimeError("Gemini generateContent failed: HTTP 503")
+    if rung == "gemini-3.6-flash":
+      now[0] += 75.0
+      raise RuntimeError("Gemini generateContent failed: HTTP 503")
+    return "lite-summary"
+
+  with (
+    patch.object(release, "measured", return_value=229_389),
+    patch.object(release, "summary"),
+    patch.object(release.time, "monotonic", side_effect=lambda: now[0]),
+    patch.object(release.time, "sleep", side_effect=sleep),
+    patch("random.uniform", return_value=0.0),
+    patch.object(release, "generate_once", side_effect=ping_pong_attempt),
+  ):
+    release.COOLDOWNS.clear()
+    # Start with all models cooling for 44s from previous requests: initial wait extends deadline.
+    for model_name in release.MODELS:
+      release.COOLDOWNS[model_name] = 44.0
+    result = release.generate({"phase": "chunk"}, [], list(release.MODELS))
+    assert result == "lite-summary"
+    assert [rung for rung, _ in calls] == [
+      "gemini-3.8-flash",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash-lite",
+    ]
+    assert all(timeout == release.CHUNK_TIMEOUT_SECONDS for _, timeout in calls)
+    # Large payload (> 125k tokens) 503 cools for at least SUCCESS_COOLDOWN + SAFETY_SECONDS (65s).
+    assert release.COOLDOWNS["gemini-3.8-flash"] >= 47.0 + 65.0
+
+  # 2. Diff-aware splitting splits on `diff --git` and `@@` boundaries before raw char midpoints.
+  def char_tokens(_model, request):
+    payload = json.loads(request["contents"][0]["parts"][0]["text"])
+    return sum(len(item["text"]) for item in payload["evidence"])
+
+  diff_text = (
+    "commit abcdef1234567890\nAuthor: Test\n\n"
+    "diff --git a/one.py b/one.py\n@@ -1 +1 @@\n-old1\n+new1\n"
+    "diff --git a/two.py b/two.py\n@@ -1 +1 @@\n-old2\n+new2\n"
+  )
+  cover = {"commit1": ["commit1"]}
+  with (
+    patch.object(release, "input_tokens", char_tokens),
+    patch.object(release, "TOKEN_COUNTS", {}),
+    patch.object(release, "summary"),
+  ):
+    parts = release.split_item(
+      {"id": "commit1", "text": diff_text}, {}, "test", 110, cover
+    )
+  assert len(parts) == 2
+  assert "diff --git a/one.py" in parts[0]["text"]
+  assert "diff --git a/two.py" not in parts[0]["text"]
+  assert "diff --git a/two.py" in parts[1]["text"]
+  assert parts[1]["text"].startswith("commit abcdef1234567890\n")
+
+  hunk_text = (
+    "diff --git a/big.py b/big.py\n"
+    "@@ -1,2 +1,2 @@\n-" + "a" * 30 + "\n+" + "b" * 30 + "\n"
+    "@@ -10,2 +10,2 @@\n-" + "c" * 30 + "\n+" + "d" * 30 + "\n"
+  )
+  hunk_cover = {"commit2": ["commit2"]}
+  with (
+    patch.object(release, "input_tokens", char_tokens),
+    patch.object(release, "TOKEN_COUNTS", {}),
+    patch.object(release, "summary"),
+  ):
+    hunk_parts = release.split_item(
+      {"id": "commit2", "text": hunk_text}, {}, "test", 120, hunk_cover
+    )
+  assert len(hunk_parts) == 2
+  assert "@@ -1,2 +1,2 @@" in hunk_parts[0]["text"]
+  assert "@@ -10,2 +10,2 @@" in hunk_parts[1]["text"]
+
+
 if __name__ == "__main__":
   test_release_pipeline()
   test_evidence_scope()
   test_capacity_retry_budget()
+  test_daedalus_regressions()
