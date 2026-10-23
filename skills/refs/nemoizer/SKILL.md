@@ -65,7 +65,7 @@ and the new one.
 - Use any comment syntax for `nonemo: <id>`; the scanner reads text, not syntax.
 - Apply an exclusion only to a known matching rule ID.
 - Print every nonemo marker with its path, line, rule ID, scope, and text when `nemoizer collect` or `--ignores` is used, and print every `nonemo` marker and manual-review finding when `nemoizer audit` or `--audit` is used.
-- Format audit reports with the [audit report template](references/audit-report.md).
+- Format audit reports with the [audit report template](references/audit-report.md), omit empty sections, and state 0 in Counts.
 
 ```bash
 python skills/nemoizer/scripts/nemoizer collect .

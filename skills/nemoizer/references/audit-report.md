@@ -1,8 +1,3 @@
-# Template: Nemoizer audit report
-
-Use this template when reporting `nemoizer audit` (`--audit`) findings.
-
-```markdown
 # Nemoizer Audit: <target>
 
 - **Command:** `python3 skills/nemoizer/scripts/nemoize.py --audit <target>`
@@ -26,6 +21,3 @@ Use this template when reporting `nemoizer audit` (`--audit`) findings.
 | Location | Rule | Scope | Text | Disposition |
 | --- | --- | --- | --- | --- |
 | `path:line` | `NMO100` | `line` or `file` | Marker line text | `keep` or `remove` |
-```
-
-- Omit any empty section and state `0` in `Counts`.

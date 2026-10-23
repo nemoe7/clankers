@@ -12,6 +12,7 @@ license: MIT
 - Search the catalog (`nuu search`) and verify assets (`nuu assets`), then run static checks (`nuu lint`, `nuu extract`) before rendered checks (`nuu inspect`, `flow`, `a11y`, `audit`, `live`) at project widths plus `1280` and `360` px.
 - Retain screenshots, measurements (`measure.py`), flow results, and annotated composite boards (`nuu annotate`), separating automated findings from visual judgment, naming each UI deviation from `nuu` with its reason, and naming unrun checks.
 - Keep live edits read-only unless authorized (`-Z`), repair only the requested scope, and update `docs/design.md` with linked visual references in the same change.
+- Format audit and verification reports with [references/audit-report.md](references/audit-report.md), omit empty table sections, and state 0 in Counts.
 
 ## House profile
 
@@ -91,3 +92,4 @@ python scripts/measure.py ruler --from 120,340 --to 264,340
 - `scripts/nuu`: CLI entry point (`references/nuu.md`), alongside `scripts/measure.py` (`references/measure.md`), `scripts/annotate.py` (`references/annotate.md`), and `scripts/browser.cjs`.
 - `data/vendor/`: licensed catalog data and source hashes.
 - `references/offline-fonts.md`: bundled and offline zero-jitter font recipe (`preload` with `crossorigin`, `font-display: block`, inline Base64 WOFF2, `FontFace` binary buffers, and metric-matched fallbacks).
+- `references/audit-report.md`: standalone template for nuu audits and visual verification reports.
