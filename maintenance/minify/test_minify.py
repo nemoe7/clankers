@@ -318,6 +318,7 @@ def test_compact_copies_drift_and_runtime():
     "assets/markdown-it.LICENSE",
     "assets/lucide.LICENSE",
     "assets/sortable.LICENSE",
+    "assets/gsap.LICENSE",
     "assets/style.css",
     "assets/index.html",
     "scripts/preview.py",

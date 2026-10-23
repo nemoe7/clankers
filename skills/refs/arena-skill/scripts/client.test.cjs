@@ -875,7 +875,7 @@ test('preview client', async (t) => {
       const rows = [...get('#tasks-current-body').children, ...get('#tasks-upcoming-body').children];
       assert.equal(rows.length, state.tasks.upcoming.length);
       for (const row of rows) {
-        const task = state.tasks.upcoming.find(item => item.id === row.title);
+        const task = state.tasks.upcoming.find(item => item.id === row.dataset.taskId);
         const badge = row.children.find(child => child.className === 'task-type');
         assert.ok(badge, 'each task has a visible type');
         assert.equal(badge.dataset.taskType, task.type || 'misc');
@@ -885,7 +885,7 @@ test('preview client', async (t) => {
         filter.events.change();
         const visible = [...get('#tasks-current-body').children, ...get('#tasks-upcoming-body').children];
         const expected = state.tasks.upcoming.filter(task => (task.type || 'misc') === type);
-        assert.deepEqual(visible.map(row => row.title), expected.map(task => task.id));
+        assert.deepEqual(visible.map(row => row.dataset.taskId), expected.map(task => task.id));
       }
     } finally {
       filter.value = 'all';
@@ -913,7 +913,7 @@ test('preview client', async (t) => {
     };
     await refresh();
     const head = get('#tasks-current-body').children[0];
-    assert.equal(head.title, 'code-work', 'the first open task keeps the seat');
+    assert.equal(head.dataset.taskId, 'code-work', 'the first open task keeps the seat');
     const headParts = taskParts(head);
     const badge = headParts[1];
     assert.equal(badge.className, 'task-type', 'the badge rides beside the title');
@@ -932,7 +932,7 @@ test('preview client', async (t) => {
     const filter = get('#task-type-filter');
     filter.value = 'docs';
     filter.events.change();
-    assert.equal(get('#tasks-current-body').children[0].title, 'docs-work',
+    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'docs-work',
       'the head follows the filter');
     assert.equal(get('#tasks-upcoming-body').children.length, 0,
       'the filtered list shows the head only in its own div');
@@ -944,7 +944,7 @@ test('preview client', async (t) => {
       'a finished row of another type leaves the div');
     filter.value = 'misc';
     filter.events.change();
-    assert.equal(get('#tasks-current-body').children[0].title, 'legacy-task',
+    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'legacy-task',
       'the Unspecified filter finds old rows');
     filter.value = 'all';
     filter.events.change();
@@ -975,7 +975,7 @@ test('preview client', async (t) => {
           target: handle, dataTransfer: { setData() {} },
         }));
       };
-      assert.deepEqual(rows().map(row => row.title), ['first', 'second', 'third']);
+      assert.deepEqual(rows().map(row => row.dataset.taskId), ['first', 'second', 'third']);
       assert.equal(typeof context.Sortable, 'function', 'Sortable is exposed on globalThis');
       assert.equal(context.Sortable.version, '1.15.7');
       assert.equal(typeof context.gsap, 'object', 'gsap is exposed on globalThis');
@@ -1014,7 +1014,7 @@ test('preview client', async (t) => {
       const hover = event({ target: rows()[0] });
       rows()[0].events.dragover(hover);
       assert.equal(hover.prevented, true, 'the seat under the pointer takes the drag');
-      assert.deepEqual(rows().map(row => row.title), ['third', 'first', 'second'], 'the drag previews the drawn order');
+      assert.deepEqual(rows().map(row => row.dataset.taskId), ['third', 'first', 'second'], 'the drag previews the drawn order');
       assert.equal(orderWrites.length, 0, 'a preview writes nothing');
       assert.equal(rows()[0].dataset.dragging, 'true', 'the dragged cue follows the row to its seat');
       assert.equal(rows()[1].dataset.drop, 'true', 'the row below the seat carries the mark');
@@ -1028,14 +1028,14 @@ test('preview client', async (t) => {
       await settle();
       assert.deepEqual(orderWrites.at(-1), ['third', 'first', 'second'], 'the write carries the drawn order');
       assert.equal(Object.hasOwn(writeHeadersSeen.at(-1), 'X-Preview-Token'), false);
-      assert.deepEqual(rows().map(row => row.title), ['third', 'first', 'second'], 'the reply re-renders the rows');
+      assert.deepEqual(rows().map(row => row.dataset.taskId), ['third', 'first', 'second'], 'the reply re-renders the rows');
       assert.equal(get('#tasks-current-body').children.length, 1, 'one task keeps the seat');
       // A drag that ends without a drop puts the stored rows back and writes nothing.
       grab(rows()[2]);
       rows()[0].events.dragover(event({ target: rows()[0] }));
-      assert.deepEqual(rows().map(row => row.title), ['second', 'third', 'first'], 'a preview moves the row under the hand');
+      assert.deepEqual(rows().map(row => row.dataset.taskId), ['second', 'third', 'first'], 'a preview moves the row under the hand');
       dragHandle(rows()[0]).events.dragend(event({ target: dragHandle(rows()[0]) }));
-      assert.deepEqual(rows().map(row => row.title), ['third', 'first', 'second'], 'a cancelled drag restores the stored rows');
+      assert.deepEqual(rows().map(row => row.dataset.taskId), ['third', 'first', 'second'], 'a cancelled drag restores the stored rows');
       assert.equal(orderWrites.length, 1, 'a cancelled drag writes nothing');
       // A drop on the list background moves the row to the end of that list.
       const last = rows()[1];
@@ -1052,13 +1052,13 @@ test('preview client', async (t) => {
       rows()[0].events.drop(event({ target: rows()[0] }));
       dragHandle(refused).events.dragend(event({ target: dragHandle(refused) }));
       await settle();
-      assert.deepEqual(rows().map(row => row.title), ['third', 'second', 'first'], 'the refused write keeps the stored rows');
+      assert.deepEqual(rows().map(row => row.dataset.taskId), ['third', 'second', 'first'], 'the refused write keeps the stored rows');
       assert.match(get('#tasks-status').textContent, /not saved/i);
       orderFails = false;
       const end = get('#tasks-upcoming-body');
       assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8'),
         /tasks-drop-end/, 'the dedicated end area is removed');
-      const beforeEnd = rows().map(row => row.title);
+      const beforeEnd = rows().map(row => row.dataset.taskId);
       const moved = rows()[0];
       const expectedEnd = [...beforeEnd.slice(1), beforeEnd[0]];
       grab(moved);
@@ -1067,7 +1067,7 @@ test('preview client', async (t) => {
       const endHover = event({ target: end });
       end.events.dragover(endHover);
       assert.equal(endHover.prevented, true, 'the end target accepts a task drag');
-      assert.deepEqual(rows().map(row => row.title), expectedEnd, 'the end target replaces the earlier row preview');
+      assert.deepEqual(rows().map(row => row.dataset.taskId), expectedEnd, 'the end target replaces the earlier row preview');
       assert.equal(end.dataset.drop, 'true', 'the end target marks its seat');
       const rowAgain = rows().at(-2);
       rowAgain.events.dragover(event({ target: rowAgain }));
@@ -1086,7 +1086,7 @@ test('preview client', async (t) => {
       end.events.drop(event({ target: end }));
       dragHandle(refusedEnd).events.dragend(event({ target: dragHandle(refusedEnd) }));
       await settle();
-      assert.deepEqual(rows().map(row => row.title), expectedEnd, 'a refused end drop restores the saved order');
+      assert.deepEqual(rows().map(row => row.dataset.taskId), expectedEnd, 'a refused end drop restores the saved order');
       assert.match(get('#tasks-status').textContent, /not saved/i);
     } finally {
       orderFails = false;
@@ -1114,7 +1114,7 @@ test('preview client', async (t) => {
       })), updated_at: stamp,
     };
     const rows = () => [...get('#tasks-current-body').children, ...get('#tasks-upcoming-body').children];
-    const ids = () => rows().map(row => row.title);
+    const ids = () => rows().map(row => row.dataset.taskId);
     const pointer = extra => event({ pointerType: 'touch', pointerId: 7, isPrimary: true, button: 0, clientX: 10, clientY: 10, ...extra });
     const grab = row => {
       const handle = row.children.find(child => child.className === 'task-drag-handle');
@@ -1196,7 +1196,7 @@ test('preview client', async (t) => {
     link.dataset = { referenceType: 'task', referenceId: 'ops-task' };
     documentEvents.click({ target: link, preventDefault: () => {} });
     assert.equal(filter.value, 'ops', 'the click sets the filter to the target type');
-    assert.equal(get('#tasks-current-body').children[0].title, 'ops-task',
+    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'ops-task',
       'the clicked task row comes into view');
     const search = get('#task-search');
     search.value = 'queue';
@@ -1207,7 +1207,7 @@ test('preview client', async (t) => {
     assert.equal(get('#tasks-current-body').children.length, 0, 'a wrong query hides the row');
     documentEvents.click({ target: link, preventDefault: () => {} });
     assert.equal(search.value, '', 'the click clears a query that hides the target');
-    assert.equal(get('#tasks-current-body').children[0].title, 'ops-task',
+    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'ops-task',
       'the row returns after the query clears');
     filter.value = 'all';
     filter.events.change();
@@ -1232,13 +1232,13 @@ test('preview client', async (t) => {
     const search = get('#task-search');
     search.value = 'proxy';
     search.events.input();
-    assert.equal(get('#tasks-current-body').children[0].title, 'alpha-task',
+    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'alpha-task',
       'a detail word matches its task into the head seat');
     assert.equal(get('#tasks-upcoming-body').children.length, 0,
       'the filtered list shows the head only in its own div');
     search.value = 'BETA';
     search.events.input();
-    assert.equal(get('#tasks-current-body').children[0].title, 'beta-task',
+    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'beta-task',
       'the query reads case-insensitive');
     search.value = 'zzz';
     search.events.input();
@@ -1246,7 +1246,7 @@ test('preview client', async (t) => {
     assert.equal(get('#tasks-upcoming-body').children.length, 0, 'no match leaves the list empty');
     search.value = '';
     search.events.input();
-    assert.equal(get('#tasks-current-body').children[0].title, 'alpha-task',
+    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'alpha-task',
       'clearing the query restores the head');
     assert.equal(get('#tasks-upcoming-body').children.length, 1,
       'clearing the query restores the rest of the list');
@@ -1274,7 +1274,7 @@ test('preview client', async (t) => {
     await refresh();
     try {
       query('proxy');
-      assert.equal(head().title, 'alpha-search');
+      assert.equal(head().dataset.taskId, 'alpha-search');
       assert.deepEqual(hits(head()), ['PROXY'], 'the visible match preserves its case');
       assert.equal(details().open, true, 'a detail match opens its body');
       const row = head();
@@ -1293,7 +1293,7 @@ test('preview client', async (t) => {
       get('#note').value = draft;
       get('#tasks-tab').events.click();
       query('confirmed');
-      assert.equal(head().title, 'beta-search', 'answer text is searchable inside the details');
+      assert.equal(head().dataset.taskId, 'beta-search', 'answer text is searchable inside the details');
       assert.deepEqual(hits(head()), ['Confirmed']);
       assert.equal(details().open, true, 'an answer match opens its body');
       query('<img');
@@ -1322,12 +1322,12 @@ test('preview client', async (t) => {
     ];
     await refresh();
     assert.equal(get('#tasks-current-body').children.length, 1);
-    assert.equal(get('#tasks-current-body').children[0].title, 'second', 'the open task holds the seat');
+    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'second', 'the open task holds the seat');
     assert.equal(get('#tasks-current').hidden, false);
     // The blocked task still reads in Upcoming, with its muted mark.
     upcomingBody = get('#tasks-upcoming-body');
     assert.equal(upcomingBody.children.length, 1);
-    assert.equal(upcomingBody.children[0].title, 'waits-on-report');
+    assert.equal(upcomingBody.children[0].dataset.taskId, 'waits-on-report');
     assert.equal(taskPart(upcomingBody.children[0], 'task-title').dataset.blocked, 'true');
     // With every upcoming task blocked, no task reads as current work.
     state.tasks.upcoming[1].blocked = true;
@@ -1352,12 +1352,12 @@ test('preview client', async (t) => {
     ];
     await refresh();
     assert.equal(get('#tasks-current-body').children.length, 1);
-    assert.equal(get('#tasks-current-body').children[0].title, 'second', 'the open task holds the seat');
+    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'second', 'the open task holds the seat');
     assert.equal(get('#tasks-current').hidden, false);
     // The blocked task still reads in Upcoming, with its muted mark.
     upcomingBody = get('#tasks-upcoming-body');
     assert.equal(upcomingBody.children.length, 1);
-    assert.equal(upcomingBody.children[0].title, 'waits-on-report');
+    assert.equal(upcomingBody.children[0].dataset.taskId, 'waits-on-report');
     assert.equal(taskPart(upcomingBody.children[0], 'task-title').dataset.blocked, 'true');
     // With every upcoming task blocked, no task reads as current work.
     state.tasks.upcoming[1].blocked = true;
@@ -1381,7 +1381,7 @@ test('preview client', async (t) => {
       ];
       await refresh();
       upcomingBody = get('#tasks-upcoming-body');
-      const rows = new Map(upcomingBody.children.map(row => [row.title, row]));
+      const rows = new Map(upcomingBody.children.map(row => [row.dataset.taskId, row]));
       const reportTitle = taskPart(rows.get('waits-on-report'), 'task-title');
       const gateRow = rows.get('waits-on-gate');
       const gateTitle = taskPart(gateRow, 'task-title');
@@ -1393,6 +1393,9 @@ test('preview client', async (t) => {
       for (const part of [gateRow, taskPart(gateRow, 'task-type'), taskPart(gateRow, 'task-details')]) {
         assert.equal(part.dataset.waitingGate, undefined, 'the blue marker stays off the row, badge, and details');
       }
+      assert.equal(gateRow.title, `2 ${context.time(state.tasks.upcoming[1].updated_at)}\nwaits-on-gate\npreview-checks`,
+        'the row tooltip shows order, relative timestamp, task ID, and running gate ID across lines');
+      assert.equal(gateTitle.title, gateRow.title, 'the title shares the multiline task tooltip');
     } finally {
       state.tasks.upcoming = saved;
       await refresh();
@@ -1408,9 +1411,12 @@ test('preview client', async (t) => {
     assert.equal(detailList.children[0].tagName, 'li');
     assert.equal(detailList.children[0].className, 'task-detail');
     assert.equal(detailList.children[0].textContent, 'its only detail');
-    assert.equal(upcomingBody.children[0].title, 'second', 'hover shows the task ID, not its detail');
+    assert.equal(upcomingBody.children[0].dataset.taskId, 'second', 'hover shows the task ID, not its detail');
+    assert.equal(upcomingBody.children[0].title, `2 ${context.time(state.tasks.upcoming[1].updated_at)}\nsecond`,
+      'hover formats order, relative timestamp, and task ID across lines');
     assert.equal(finishedBody.children.length, 1);
-    assert.equal(finishedBody.children[0].title, 'shipped');
+    assert.equal(finishedBody.children[0].dataset.taskId, 'shipped');
+    assert.equal(finishedBody.children[0].title, `1 ${context.time(state.tasks.finished[0].updated_at)}\nshipped`);
     assert.equal(finishedBody.children[0].children.length, 1);
     assert.equal(finishedBody.children[0].children[0].textContent, 'Dots in the receipt');
     assert.equal(get('#tasks-finished').hidden, false);
@@ -1424,7 +1430,7 @@ test('preview client', async (t) => {
       ...original
     ];
     await refresh();
-    assert.deepEqual(get('#tasks-finished-body').children.map(row => row.title), ['latest', 'shipped']);
+    assert.deepEqual(get('#tasks-finished-body').children.map(row => row.dataset.taskId), ['latest', 'shipped']);
     assert.deepEqual(state.tasks.finished.map(task => task.id), ['latest', 'shipped']);
     state.tasks.finished = original;
     await refresh();
@@ -1452,7 +1458,7 @@ test('preview client', async (t) => {
     };
     await refresh();
     const row = get('#tasks-upcoming-body').children[0];
-    assert.equal(row.title, 'answered-task', 'the filler holds the head seat');
+    assert.equal(row.dataset.taskId, 'answered-task', 'the filler holds the head seat');
     const rowParts = taskParts(row);
     assert.equal(rowParts.length, 2, 'the title and details stay beside the drag handle');
     assert.equal(row.children[0].className, 'task-drag-handle');
@@ -1518,7 +1524,7 @@ test('preview client', async (t) => {
     };
     await refresh();
     const host = get('#tasks-upcoming-body').children[0];
-    assert.equal(host.title, 'hostile-task', 'the filler still holds the head seat');
+    assert.equal(host.dataset.taskId, 'hostile-task', 'the filler still holds the head seat');
     assert.equal(taskParts(host).length, 2, 'the receipt stays in details beside the bullet handle');
     assert.equal(host.children[0].className, 'task-drag-handle');
     const hostileText = taskPart(host, 'task-details').children[1].children[0].children[2];
@@ -1536,7 +1542,8 @@ test('preview client', async (t) => {
     const currentTitle = taskPart(currentBody.children[0], 'task-title');
     assert.equal(currentTitle.textContent, '<img onerror=alert(1)> dir');
     assert.equal(currentTitle.className, 'task-title');
-    assert.equal(currentBody.children[0].title, 'docs-archive');
+    assert.equal(currentBody.children[0].dataset.taskId, 'docs-archive');
+    assert.equal(currentBody.children[0].title, `1 ${context.time(state.tasks.upcoming[0].updated_at)}\ndocs-archive`);
     taskControl = currentTitle;
     assert.equal(taskControl.dataset.taskId, 'docs-archive');
     assert.equal(taskControl.attributes.role, 'button');
@@ -4350,26 +4357,27 @@ test('preview client', async (t) => {
   });
   await t.test("Quoting a task title leaves the row tooltip on the task ID", async () => {
     const priorTasks = state.tasks;
+    const stamp = new Date().toISOString();
     state.tasks = {
       upcoming: [
         { type: 'unspecified', id: 'head-filler', title: 'Head filler', details: [], status: 'upcoming',
-          order: 1, updated_at: new Date().toISOString() },
+          order: 1, updated_at: stamp },
         { type: 'unspecified', id: 'hover-stays', title: 'Hover stays', details: [], status: 'upcoming',
-          order: 2, updated_at: new Date().toISOString() }
+          order: 2, updated_at: stamp }
       ],
       finished: [],
-      updated_at: new Date().toISOString()
+      updated_at: stamp
     };
     await refresh();
     try {
       const body = get('#tasks-upcoming-body');
-      const row = body.children.find(item => item.title === 'hover-stays');
+      const row = body.children.find(item => item.dataset.taskId === 'hover-stays');
       const title = taskPart(row, 'task-title');
       assert.equal(title.className, 'task-title');
       documentEvents.click({ target: title, preventDefault: () => {} });
       assert.equal(get('#note').value.startsWith('RE: hover-stays'), true, 'the quote still lands');
       assert.equal(title.title, row.title, 'the quoted title retains the task ID tooltip');
-      assert.equal(row.title, 'hover-stays', 'the row keeps the task ID as its tooltip');
+      assert.equal(row.title, `2 ${context.time(stamp)}\nhover-stays`, 'the row keeps the multiline task tooltip');
     } finally {
       state.tasks = priorTasks;
       get('#note').value = '';

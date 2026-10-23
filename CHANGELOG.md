@@ -16,7 +16,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Enable `hasTouch` and `isMobile` (`@media (pointer: coarse)`) for mobile viewport widths (`<= 768` px) in `browser.cjs`, and document the requirement in Clause 14 of `SKILL.md`.
 
-- Default `nuu annotate` (`annotate.py` and `uiux.py annotate`) to `scale=2` with `-S, --scale <1|2|3>` and `"scale"` JSON overrides. Add the optional scroll-edge fade CSS recipe to `references/nuu.md`.
+- Default `nuu annotate` (`annotate.py` and `uiux.py annotate`) to `scale=2` with `-S, --scale <1|2|3>` and `"scale"` JSON overrides. Add the optional scroll-edge fade CSS recipe to `references/nuu.md` and the pure audit-report template in `references/audit-report.md`.
 
 #### nemoizer
 
@@ -40,7 +40,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Require `-S`/`--scope` on new preview tasks in `preview.py` and store `"Scope: {scope}"` at `details[0]`. Vendor GSAP (`gsap.LICENSE`) for preview animations, add the `#image-modal` zoom dialog, and fix `360` px mobile toolbars, `#preview-note` tooltips, `<mark>` links, and `nemoizer` findings.
 
-- Require running `arena-preview key` before proxy `fetch_page` calls, after a `401`, or on an owner question in `SKILL.md`. Add `.preview-code-md` Markdown render toggles, double `--edge-ramp` to `192px`, skip same-tab transitions, and update the survey modal timestamp when the agent acknowledges a bible check note.
+- Require running `arena-preview key` before proxy `fetch_page` calls, after a `401`, or on an owner question in `SKILL.md`. Add `.preview-code-md` Markdown render toggles, double `--edge-ramp` to `192px`, skip same-tab transitions, and update the survey modal timestamp on bible check acknowledgements.
+
+- Run the survey after each preview restart, align `TASK_ORDER` and `format_task_list` with the user UI, and show task hover tooltips. Convert `references/handoff.md` and `nemoizer` `references/audit-report.md` into pure standalone templates, and move `chromium.md`, `github-job-logs.md`, and `pr-rest.md` to `references/recipes/`.
+
+#### gpt-plugins
+
+- Condense duplicated API tables, `<Chart>` and `GenUI` code blocks, and pointer sections in `gpt-display` while keeping self-contained guidance.
 
 #### maintenance
 

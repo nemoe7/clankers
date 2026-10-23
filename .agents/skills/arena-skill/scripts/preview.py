@@ -714,7 +714,7 @@ TASK_ORDER_PENDING_META='task_order_notice_pending'
 TASK_ORDER_NOTICE='Task order changed in the preview; preserve its upcoming task order.'
 ECHO_DETAIL=200
 TASK_COLUMNS='id, title, details, status, position, updated_at, completed_at, blocked, report_id, type'
-TASK_ORDER="status DESC, CASE WHEN status = 'finished' THEN completed_at END DESC, CASE WHEN status = 'finished' THEN id END DESC, (blocked = 0 OR report_id IS NULL), position, id"
+TASK_ORDER="status DESC, CASE WHEN status = 'finished' THEN completed_at END DESC, CASE WHEN status = 'finished' THEN id END DESC, position, id"
 RENAME_TARGETS={'note':('notes',(('uploads','note_id'),)),'answer':('submissions',()),'report':('reports',(('submissions','report_id'),('tasks','report_id'))),'task':('tasks',(('notes','task_id'),('submissions','task_id')))}
 RENAME_TABLES='notes','submissions','reports','tasks'
 CLI_DESCRIPTION="Notes, reports, tasks and the preview server for Arena steering. The installed hook calls `pre`, `gate` and `route-run`; the rest are the agent's."
@@ -912,6 +912,7 @@ def format_task_list(tasks,full=False):
 	shown=tasks if full else[t for t in tasks if t.get('status')=='upcoming'];lines=[f"Tasks {len(shown)}"if full else f"Tasks {len(shown)} upcoming"]
 	if any(t.get('blocked')for t in shown):lines.append('* = blocked on a report answer or linked run')
 	head=None if full else current_task(shown)
+	if head is not None:shown=[head,*(t for t in shown if t.get('id')!=head.get('id'))]
 	for task in shown:
 		order=task.get('order');status=task.get('status');is_current=head is not None and task.get('id')==head.get('id')
 		if is_current:status='current'
@@ -3678,13 +3679,14 @@ def main():
 			if args.title_arg is None and not args.detail_arg and args.task_details is None and not args.append_details and args.status is None and args.order is None and args.blocked is None and args.report is None and args.msg_id is None and args.amend is None and args.task_type is None and args.task_scope is None and args.blocked_by is None:print_task_row(store,task_id);return 0
 			details=args.task_details
 			if details is None and args.detail_arg:details=args.detail_arg
-			if details is not None:details=task_steps(details);check_task_steps(details)
-			if args.amend:store.amend_task(store.resolve_id(args.amend),task_id)
-			elif store.task_record(task_id)is None and args.task_scope is None and not(details and details[0].startswith(TASK_SCOPE_PREFIX)):raise ValueError('A new task needs an explicit scope (--scope)')
+			if details is not None:details=task_steps(details);check_task_steps(details);store.refuse_session_ids(details)
+			check_task(task_id,args.title_arg,details)
 			if args.report:
 				try:store.report(args.report)
 				except FileNotFoundError:raise ValueError(f"No report is stored under {args.report}")from None
 				if args.blocked is None:args.blocked=True
+			if args.amend:store.amend_task(store.resolve_id(args.amend),task_id)
+			elif store.task_record(task_id)is None and args.task_scope is None and not(details and details[0].startswith(TASK_SCOPE_PREFIX)):raise ValueError('A new task needs an explicit scope (--scope)')
 			if args.msg_id:
 				with store.transaction()as shared:record=store.write_task(task_id,args.title_arg,details,args.status,args.order,args.blocked,args.report,task_type=args.task_type,blocked_by=args.blocked_by,shared=shared,append_details=args.append_details,scope=args.task_scope);record=store.mark_task(args.msg_id,task_id,shared=shared)or record
 			else:record=store.write_task(task_id,args.title_arg,details,args.status,args.order,args.blocked,args.report,task_type=args.task_type,blocked_by=args.blocked_by,append_details=args.append_details,scope=args.task_scope)

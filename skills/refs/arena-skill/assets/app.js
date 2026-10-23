@@ -1504,8 +1504,9 @@ function reportStatusLine(text, id, answerId = null) {
 }
 function quoteTaskId(title) {
   quoteId(title.dataset.taskId, title);
-  // Keep the task ID tooltip after quoting.
-  title.title = title.dataset.taskId;
+  // Keep the task tooltip after quoting.
+  const row = title.closest?.('.task');
+  title.title = row?.title || title.dataset.taskId;
 }
 function quoteQuestionId(target) {
   const reportId = $('#report').dataset.reportId || $('#report-select').value;
@@ -2195,14 +2196,27 @@ function taskFilterType(task) {
   if (task.type === 'operations') return 'ops';
   return task.type === 'unspecified' ? 'misc' : task.type || 'misc';
 }
+function taskTooltip(task) {
+  const stamp = task.completed_at || task.updated_at;
+  const age = stamp ? time(stamp) : '';
+  const first = [task.order, age].filter(part => part !== undefined && part !== null && part !== '').join(' ');
+  const runs = Array.isArray(task.runs) && task.runs.length ? task.runs.join(' ') : '';
+  return [first, task.id, runs].filter(Boolean).join('\n');
+}
+function rowTaskId(row) {
+  return row?.dataset?.taskId || row?.querySelector?.('.task-title')?.dataset?.taskId || row?.title || '';
+}
 function taskRow(task) {
   const item = document.createElement('li');
   item.className = 'task';
-  item.title = task.id;
+  item.dataset.taskId = task.id;
+  const tooltip = taskTooltip(task);
+  item.title = tooltip;
   const title = document.createElement('span');
   title.className = 'task-title';
   title.textContent = task.title;
   title.dataset.taskId = task.id;
+  title.title = tooltip;
   // A blocked task reads muted, so the queue shows what the agent can act on next.
   if (task.blocked) {
     title.dataset.blocked = 'true';
@@ -2307,6 +2321,18 @@ function renderTasksIfChanged(tasks) {
   } else if (tasks) {
     $('#tasks-status').textContent = `Updated ${time(tasks.updated_at)}`;
   }
+  if (tasks) {
+    const byId = new Map([...(tasks.upcoming || []), ...(tasks.finished || [])].map(task => [task.id, task]));
+    for (const row of [...$('#tasks-current-body').children, ...$('#tasks-upcoming-body').children, ...$('#tasks-finished-body').children]) {
+      const record = byId.get(rowTaskId(row));
+      if (record) {
+        const tooltip = taskTooltip(record);
+        row.title = tooltip;
+        const titleNode = row.children?.find?.(child => child.className === 'task-title') || row.querySelector?.('.task-title');
+        if (titleNode) titleNode.title = tooltip;
+      }
+    }
+  }
   for (const stamp of document.querySelectorAll('.task-answer time')) {
     stamp.textContent = time(stamp.dateTime);
     if (taskSearch) markNode(stamp, taskSearch);
@@ -2367,7 +2393,7 @@ function queueTaskRows() {
 // Other queue rows keep their place.
 // The dragged row lands above the hovered row or at the end on empty space.
 function drawnTaskIds(list, anchorId) {
-  const ids = queueTaskRows().filter(row => row.title !== draggingTaskId).map(row => row.title);
+  const ids = queueTaskRows().filter(row => rowTaskId(row) !== draggingTaskId).map(row => rowTaskId(row));
   const at = anchorId ? ids.indexOf(anchorId) : -1;
   if (at >= 0) {
     ids.splice(at, 0, draggingTaskId);
@@ -2390,7 +2416,7 @@ function queueTops() {
   const tops = new Map();
   for (const row of queueTaskRows()) {
     if (typeof row.getBoundingClientRect === 'function') {
-      tops.set(row.title, row.getBoundingClientRect().top);
+      tops.set(rowTaskId(row), row.getBoundingClientRect().top);
     }
   }
   return tops;
@@ -2481,7 +2507,7 @@ globalThis.gsap = gsap;
 
 function slideTaskRows(before, duration = 140, easing = 'ease-out') {
   for (const row of queueTaskRows()) {
-    const was = before.get(row.title);
+    const was = before.get(rowTaskId(row));
     if (was === undefined || typeof row.getBoundingClientRect !== 'function') continue;
     const shift = was - row.getBoundingClientRect().top;
     if (!shift) continue;
@@ -2492,7 +2518,8 @@ function slideTaskRows(before, duration = 140, easing = 'ease-out') {
 // keeps its stored stamp, so a preview never reads as a saved order.
 function previewTaskOrder(list, anchor) {
   delete $('#tasks-upcoming-body').dataset.drop;
-  const ids = drawnTaskIds(list, anchor ? anchor.title : null);
+  const anchorId = anchor ? rowTaskId(anchor) : null;
+  const ids = drawnTaskIds(list, anchorId);
   const shown = previewIds;
   if (shown && shown.length === ids.length && shown.every((id, index) => id === ids[index])) {
     return ids;
@@ -2505,10 +2532,10 @@ function previewTaskOrder(list, anchor) {
   $('#tasks-status').textContent = status;
   for (const row of queueTaskRows()) {
     delete row.dataset.drop;
-    if (row.title === draggingTaskId) {
+    if (rowTaskId(row) === draggingTaskId) {
       row.dataset.dragging = 'true';
       Sortable.ghost = row;
-    } else if (anchor && row.title === anchor.title) {
+    } else if (anchorId && rowTaskId(row) === anchorId) {
       row.dataset.drop = 'true';
     }
   }
@@ -2537,7 +2564,7 @@ function endTaskDrag() {
   }
 }
 function startTaskDrag(row, sortable = null) {
-  draggingTaskId = row.title;
+  draggingTaskId = rowTaskId(row);
   dragStartPayload = lastTasksPayload;
   previewIds = null;
   Sortable.active = sortable;
@@ -2595,7 +2622,7 @@ class Sortable {
       easing: 'ease-out',
       ghostClass: 'sortable-ghost',
       dragClass: 'sortable-drag',
-      dataIdAttr: 'title',
+      dataIdAttr: 'data-task-id',
       ...options,
     };
     el.sortable = this;
@@ -2608,7 +2635,7 @@ class Sortable {
     return value;
   }
   toArray() {
-    return [...this.el.children].map(item => item.title || item.getAttribute?.(this.options.dataIdAttr) || '');
+    return [...this.el.children].map(item => rowTaskId(item) || item.getAttribute?.(this.options.dataIdAttr) || '');
   }
   captureAnimationState() {
     return this.options.animation ? queueTops() : new Map();
@@ -2624,7 +2651,7 @@ class Sortable {
     handle.type = 'button';
     handle.draggable = true;
     handle.style.touchAction = 'none';
-    const taskTitle = row.querySelector?.('.task-title')?.textContent || row.children[0]?.textContent || row.title;
+    const taskTitle = row.querySelector?.('.task-title')?.textContent || row.children[0]?.textContent || rowTaskId(row);
     handle.setAttribute('aria-label', `Drag to reorder ${taskTitle}`);
     handle.title = `Drag to reorder ${taskTitle}`;
     row.dataset.dragHandle = 'true';
@@ -2642,18 +2669,18 @@ class Sortable {
     handle.addEventListener('dragstart', event => {
       startTaskDrag(row, this);
       // Firefox starts no drag without payload data.
-      if (event.dataTransfer) event.dataTransfer.setData('text/plain', row.title);
+      if (event.dataTransfer) event.dataTransfer.setData('text/plain', rowTaskId(row));
     });
     row.addEventListener('dragover', event => {
       if (!draggingTaskId) return;
       // The seat under the pointer takes the drop, the dragged row included.
       event.preventDefault();
-      if (row.title !== draggingTaskId) previewTaskOrder(list, row);
+      if (rowTaskId(row) !== draggingTaskId) previewTaskOrder(list, row);
     });
     row.addEventListener('drop', event => {
       if (!draggingTaskId) return;
       event.preventDefault();
-      const ids = row.title === draggingTaskId && previewIds ? previewIds : drawnTaskIds(list, row.title);
+      const ids = rowTaskId(row) === draggingTaskId && previewIds ? previewIds : drawnTaskIds(list, rowTaskId(row));
       void writeTaskOrder(ids, dragStartPayload);
       endTaskDrag();
     });
@@ -2701,7 +2728,7 @@ window.addEventListener('pointermove', event => {
   touchTarget = seat;
   if (!seat) return;
   if (seat.row) {
-    if (seat.row.title !== draggingTaskId) previewTaskOrder(seat.list, seat.row);
+    if (rowTaskId(seat.row) !== draggingTaskId) previewTaskOrder(seat.list, seat.row);
   } else {
     previewTaskOrder(seat.list, null);
     if (seat.list.id === 'tasks-upcoming-body') seat.list.dataset.drop = 'true';
@@ -2714,7 +2741,7 @@ window.addEventListener('pointerup', event => {
     : touchTarget;
   if (!seat) { cancelTaskDrag(); return; }
   const ids = seat.row
-    ? (seat.row.title === draggingTaskId && previewIds ? previewIds : drawnTaskIds(seat.list, seat.row.title))
+    ? (rowTaskId(seat.row) === draggingTaskId && previewIds ? previewIds : drawnTaskIds(seat.list, rowTaskId(seat.row)))
     : drawnTaskIds(seat.list, null);
   void writeTaskOrder(ids, dragStartPayload);
   endTaskDrag();
@@ -2955,7 +2982,7 @@ function followReference(type, id) {
     ...$('#tasks-current-body').children,
     ...$('#tasks-upcoming-body').children,
     ...$('#tasks-finished-body').children
-  ].find(item => item.title === id);
+  ].find(item => rowTaskId(item) === id);
   const title = row && row.children[0];
   if (!title) return;
   const details = row.querySelector('details');

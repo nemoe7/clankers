@@ -4110,6 +4110,9 @@ def test_bare_task_list_names_and_asks_about_the_current_task():
     held = preview.format_task_list(bare.list_tasks()).splitlines()
     assert any("upcoming first" in line and "*" in line for line in held)
     assert any("current second" in line for line in held)
+    assert next(i for i, line in enumerate(held) if "current second" in line) < next(
+      i for i, line in enumerate(held) if "upcoming first" in line
+    )
     assert sum(line.rstrip().endswith("?") for line in held) == 1
     assert "* = blocked on a report answer or linked run" in held
     assert preview.current_task(bare.list_tasks())["id"] == "second"
@@ -4728,8 +4731,8 @@ def test_report_linked_task_sorts_ahead_in_its_status():
     upcoming = [
       item["id"] for item in sort_store.list_tasks() if item["status"] == "upcoming"
     ]
-    assert upcoming == ["linked", "plain"], "the report link outranks position"
-    assert sort_store.tasks()["upcoming"][0]["id"] == "linked"
+    assert upcoming == ["plain", "linked"]
+    assert sort_store.tasks()["upcoming"][0]["id"] == "plain"
     revision = sort_store.report("select")["updated_at"]
     sort_store.submit_report("select", "answer-1", {"select": "yes"}, revision)
     assert [item["id"] for item in sort_store.tasks()["upcoming"]] == [

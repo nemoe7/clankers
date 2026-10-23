@@ -1937,7 +1937,7 @@ TASK_COLUMNS = (
 )
 TASK_ORDER = (
   "status DESC, CASE WHEN status = 'finished' THEN completed_at END DESC,"
-  " CASE WHEN status = 'finished' THEN id END DESC, (blocked = 0 OR report_id IS NULL), position, id"
+  " CASE WHEN status = 'finished' THEN id END DESC, position, id"
 )
 # Each type has its own table and ID columns. No foreign keys or cascades change these rows.
 # A rename repoints them by hand.
@@ -2518,6 +2518,8 @@ def format_task_list(tasks, full=False):
   if any(t.get("blocked") for t in shown):
     lines.append("* = blocked on a report answer or linked run")
   head = None if full else current_task(shown)
+  if head is not None:
+    shown = [head, *(t for t in shown if t.get("id") != head.get("id"))]
   for task in shown:
     order = task.get("order")
     status = task.get("status")
@@ -11682,6 +11684,15 @@ def main():
       if details is not None:
         details = task_steps(details)
         check_task_steps(details)
+        store.refuse_session_ids(details)
+      check_task(task_id, args.title_arg, details)
+      if args.report:
+        try:
+          store.report(args.report)
+        except FileNotFoundError:
+          raise ValueError(f"No report is stored under {args.report}") from None
+        if args.blocked is None:
+          args.blocked = True
       if args.amend:
         store.amend_task(store.resolve_id(args.amend), task_id)
       elif (
@@ -11690,13 +11701,6 @@ def main():
         and not (details and details[0].startswith(TASK_SCOPE_PREFIX))
       ):
         raise ValueError("A new task needs an explicit scope (--scope)")
-      if args.report:
-        try:
-          store.report(args.report)
-        except FileNotFoundError:
-          raise ValueError(f"No report is stored under {args.report}") from None
-        if args.blocked is None:
-          args.blocked = True
       if args.msg_id:
         # One transaction: a message ID that matches nothing takes the task with it, rather than
         # leaving a task whose marker never landed.
