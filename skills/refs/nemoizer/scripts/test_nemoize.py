@@ -541,11 +541,33 @@ def test_generated_pytest_cache_is_not_scanned(tmp_path):
 def test_prose_and_test_ids_have_separate_domains():
   assert set(nemoize.RULE_IDS.values()) == {"NMO100", "NMO901"}
   assert nemoize.PROSE_RULE_IDS == {
+    "dangling_conjunction": "STE001",
     "semicolon": "STE100",
     "sentence": "STE200",
+    "nominalization": "STE300",
     "passive": "STE901",
     "phrasal": "STE902",
     "ellipsis": "STE903",
+    "compound_instruction": "STE904",
+    "noun_cluster": "STE905",
+    "synonym_cluster": "STE906",
+    "compound_tense": "STE908",
+    "staged_frame": "HMN100",
+    "stacked_qualifier": "HMN200",
+    "ai_vocabulary": "HMN300",
+    "arrow": "HMN400",
+    "chatbot_courtesy": "HMN500",
+    "curly_quote": "HMN600",
+    "negative_contrast": "HMN901",
+    "aphorism": "HMN902",
+    "rhetorical_setup": "HMN903",
+    "repeated_opener": "HMN904",
+    "prose_dash": "HMN905",
+    "vague_attribution": "HMN906",
+    "copula_avoidance": "HMN907",
+    "bold_label_bullet": "HMN908",
+    "consecutive_emoji": "HMN909",
+    "self_narration": "HMN910",
     "paragraph": "NMP100",
     "serial_comma": "NMO003",
   }
@@ -565,7 +587,6 @@ def test_prose_and_test_ids_have_separate_domains():
       "N003",
       "NMO001",
       "NMO002",
-      "STE001",
       "STE002",
       "STE003",
       "STE004",
@@ -873,3 +894,79 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   )
   reviewed = nemoize.review_tests([test_sample])
   assert {row["rule"] for row in reviewed["findings"]} == {"NMT100", "NMT200"}
+
+
+def test_ste_and_hmn_rules_and_audit_mode(tmp_path):
+  sys.path.insert(0, str(SCRIPT.parent))
+  import markers
+
+  note = tmp_path / "guide.md"
+  note.write_text(
+    "- First item, and\n"
+    "Make a decision to delve into the very unique workflow \u2192 now.\n"
+    "Let's dive in! As an AI, I suggest \u201cplain\u201d quotes.\n"
+    "Click save, and then click close.\n"
+    "Update the system server configuration management module.\n"
+    "Check each and every rule. The task will have finished.\n"
+    "It is not just fast, but also tiny. Key takeaway: ship it.\n"
+    "You might be wondering why. The system runs. The system stops. The system waits.\n"
+    "Wait\u2014now. Experts agree that it serves as a tool.\n"
+    "- **Bold Label:** item \U0001f680\U0001f525\n"
+    "This section covers the API. <!-- nonemo: HMN910 -->\n",
+    encoding="utf-8",
+  )
+  result = run(str(note), cwd=tmp_path)
+  assert result.returncode == 1, result.stderr
+  for code in (
+    "STE001",
+    "STE300",
+    "HMN100",
+    "HMN200",
+    "HMN300",
+    "HMN400",
+    "HMN500",
+    "HMN600",
+    "STE904",
+    "STE905",
+    "STE906",
+    "STE908",
+    "HMN901",
+    "HMN902",
+    "HMN903",
+    "HMN904",
+    "HMN905",
+    "HMN906",
+    "HMN907",
+    "HMN908",
+    "HMN909",
+  ):
+    assert code in result.stdout
+  assert "HMN910" not in result.stdout
+
+  quote_file = tmp_path / "quotes.md"
+  quote_file.write_text(
+    "Use \u201cstraight\u201d and \u2018plain\u2019 quotes.\n", encoding="utf-8"
+  )
+  assert run("--format", str(quote_file), cwd=tmp_path).returncode == 0
+  assert (
+    quote_file.read_text(encoding="utf-8") == "Use \"straight\" and 'plain' quotes.\n"
+  )
+
+  userscript = tmp_path / "demo.user.js"
+  userscript.write_text('const label = " Foo \\u2014 Bar ";\n', encoding="utf-8")
+  us_result = run(str(userscript), cwd=tmp_path)
+  assert us_result.returncode == 0
+  assert "HMN905" in us_result.stdout
+
+  audit = subprocess.run(
+    [sys.executable, str(SCRIPT.with_name("nemoizer")), "audit", str(note)],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert audit.returncode == 0, audit.stderr
+  assert "HMN910 line:" in audit.stdout
+  assert "STE904" in audit.stdout
+  assert "STE001" not in audit.stdout
+  assert markers.main([str(note)]) == 0

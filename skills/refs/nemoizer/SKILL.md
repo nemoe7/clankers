@@ -39,7 +39,7 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 - Vendored and generated trees are skipped, and `--ignore` adds a directory or
   file.
 
-- Run word rotations and serial-comma checks (`NMO`), semicolon, sentence-length, and manual-review style checks (`STE`), paragraph-length checks (`NMP`), and test-assertion reviews (`NMT`) by default.
+- Run word rotations and serial-comma checks (`NMO`), semicolon, sentence-length, nominalization, and manual-review style checks (`STE`), human-prose checks (`HMN`), paragraph-length checks (`NMP`), and test-assertion reviews (`NMT`) by default.
 - Use 20 words per sentence for unclassified prose and 25 for an explicit description scope.
 
 ## Writing the rotation
@@ -54,7 +54,7 @@ python3 skills/nemoizer/scripts/nemoize.py --format .
 Each change prints as a pair: `path:line: -` and the old line, then `path:line: +`
 and the new one.
 
-- Do not rewrite exclusion markers or the rotation table, and apply only unsuppressed rotations.
+- Do not rewrite exclusion markers or the rotation table, and apply only unsuppressed rotations and straight-quote replacements for curly quotation marks.
 - Pass a license file or a generated tree to `--ignore`; the tool reads every other
   text file.
 
@@ -64,11 +64,13 @@ and the new one.
 - For file scope, place `nonemo: <id>` in the first three lines with no avoided word before the marker.
 - Use any comment syntax for `nonemo: <id>`; the scanner reads text, not syntax.
 - Apply an exclusion only to a known matching rule ID.
-- Print every nonemo marker with its path, line, rule ID, scope, and text when `nemoizer collect` or `--ignores` is used.
+- Print every nonemo marker with its path, line, rule ID, scope, and text when `nemoizer collect` or `--ignores` is used, and print every `nonemo` marker and manual-review finding when `nemoizer audit` or `--audit` is used.
 
 ```bash
 python skills/nemoizer/scripts/nemoizer collect .
 python3 skills/nemoizer/scripts/nemoize.py --ignores .
+python skills/nemoizer/scripts/nemoizer audit .
+python3 skills/nemoizer/scripts/nemoize.py --audit .
 ```
 
 Delete a marker when the line no longer needs it.
@@ -83,7 +85,7 @@ Delete a marker when the line no longer needs it.
 
 ## Prose review
 
-- Prefer removing “the” only when the phrase or sentence stays complete and natural, with unchanged meaning.
+- Prefer removing "the" only when the phrase or sentence stays complete and natural, with unchanged meaning.
 - Replace wordy action phrases with plain verbs only when actor, timing, and meaning stay unchanged.
 - Remove stock openers and closers from prose only when they add no claim or required action.
 - State the supported claim directly unless both sides of a contrast carry distinct facts.
@@ -102,12 +104,13 @@ Delete a marker when the line no longer needs it.
 - Name the source and its claim when available, otherwise remove only unsupported appeals to authority.
 - Use is, are, or has only when it preserves the relation expressed by a longer verb phrase.
 - Remove bold labels only when the labels add no information or necessary structure.
-- Match the requested quotation style without changing quoted content.
+- Use straight quotation marks (`"` and `'`) instead of curly quotation marks, and avoid `→` arrows and consecutive emojis in Markdown prose.
 - State a missing source fact without inventing a plausible replacement or hiding a relevant knowledge limit.
 - Remove a sentence that repeats its heading only when it adds no information.
 - Remove redundant document narration while retaining useful source credits, action-changing caveats, and change history.
 - Lead a contextual reply with its decision while retaining required evidence and reasoning that can change that decision.
 - Limit instructions to 20 words and descriptions to 25 unless a longer form is necessary to preserve meaning.
+- Put one instruction in each sentence unless simultaneous actions require a single sentence.
 - Rewrite noun clusters longer than three words when the rewrite preserves the technical term and its meaning.
 - Keep one topic per paragraph within four sentences or the stricter project limit.
 - Use the serial (Oxford) comma in lists of three or more items.
