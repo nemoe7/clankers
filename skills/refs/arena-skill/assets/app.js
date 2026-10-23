@@ -1503,10 +1503,11 @@ function reportStatusLine(text, id, answerId = null) {
   status.replaceChildren(...parts);
 }
 function quoteTaskId(title) {
+  const savedTitle = title.title;
   quoteId(title.dataset.taskId, title);
   // Keep the task tooltip after quoting.
-  const row = title.closest?.('.task');
-  title.title = row?.title || title.dataset.taskId;
+  const row = title.closest?.('.task') || title.parentElement;
+  title.title = savedTitle || row?.title || title.dataset.taskId;
 }
 function quoteQuestionId(target) {
   const reportId = $('#report').dataset.reportId || $('#report-select').value;
