@@ -40,7 +40,13 @@ function cleanRecentLabel(value) {
 }
 
 function rememberRecent(entries, rawUrl, rawName, removed) {
-  const selected = parseSelectedUrl(String(rawUrl ?? '').trim());
+  let candidate = String(rawUrl ?? '').trim();
+  try {
+    candidate = `${new URL(candidate).origin}/`;
+  } catch {
+    // Let parseSelectedUrl report the invalid URL below.
+  }
+  const selected = parseSelectedUrl(candidate);
   const url = selected.origin;
   const name = cleanRecentLabel(rawName);
   if (removed) removed.delete(url);
@@ -52,7 +58,7 @@ function rememberRecent(entries, rawUrl, rawName, removed) {
 function forgetRecent(entries, rawUrl, removed) {
   let url;
   try {
-    url = parseSelectedUrl(String(rawUrl ?? '').trim()).origin;
+    url = parseSelectedUrl(`${new URL(String(rawUrl ?? '').trim()).origin}/`).origin;
   } catch {
     url = String(rawUrl ?? '').replace(/\/+$/, '');
   }
@@ -70,6 +76,7 @@ function sendJson(res, status, payload, cors = false) {
     headers['access-control-allow-origin'] = '*';
     headers['access-control-allow-methods'] = 'GET, POST, OPTIONS';
     headers['access-control-allow-headers'] = 'content-type';
+    headers['access-control-allow-private-network'] = 'true';
   }
   res.writeHead(status, headers);
   res.end(JSON.stringify(payload));
@@ -81,6 +88,7 @@ function serveRecent(req, res) {
       'access-control-allow-origin': '*',
       'access-control-allow-methods': 'GET, POST, OPTIONS',
       'access-control-allow-headers': 'content-type',
+      'access-control-allow-private-network': 'true',
       'cache-control': 'no-store'
     });
     return res.end();
@@ -115,6 +123,7 @@ function serveRecent(req, res) {
     } catch (err) {
       return sendJson(res, 400, { error: err.message || 'Invalid preview URL.' }, true);
     }
+    logLine('recent', 'post', recentEntries[0]?.url || '', recentEntries[0]?.name || '(unnamed)');
     return sendJson(res, 200, { entries: recentEntries, removed: [...removedRoots] }, true);
   });
 }
@@ -442,6 +451,10 @@ const server = http.createServer((req, res) => {
   );
   if (incoming.pathname === '/healthz') return sendText(res, 200, 'ok');
   if (incoming.pathname.startsWith('/pwa/')) return servePwa(incoming, req, res);
+  if (incoming.pathname === '/' && !incoming.searchParams.has('url') &&
+      (req.method === 'POST' || req.method === 'OPTIONS')) {
+    return serveRecent(req, res);
+  }
 
   let target;
   try {

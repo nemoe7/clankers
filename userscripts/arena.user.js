@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.71
+// @name         Arena.ai | NemoUtils | v1.10.72
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.71
+// @version      1.10.72
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -319,6 +319,7 @@
   var KEEP_WORKING_DELAY_KEY = "clankers-arena-keep-working-delay-ms";
   var featureRegistry = [];
   var restartStateWatchHook = null;
+  var syncPreviewProxyHook = null;
 
   function httpJitterMs() {
     if (typeof GM_getValue !== "function") return HTTP_JITTER_MS;
@@ -654,15 +655,33 @@
       if (!doc || typeof doc.querySelectorAll !== "function") return [];
       var name = previewHeaderName(doc);
       var frames = doc.querySelectorAll("iframe");
+      var links = doc.querySelectorAll("a");
+      var nodes = [];
       var seen = {};
       var found = [];
       var i;
-      var src;
+      var raw;
       var match;
       var root;
       for (i = 0; i < frames.length; i += 1) {
-        src = String(frames[i].src || "").trim();
-        match = /^(https:\/\/sbx-[a-z0-9-]+\.arena\.site)(?:\/.*)?$/i.exec(src);
+        nodes.push(
+          frames[i].src ||
+            (typeof frames[i].getAttribute === "function"
+              ? frames[i].getAttribute("src")
+              : ""),
+        );
+      }
+      for (i = 0; i < links.length; i += 1) {
+        nodes.push(
+          links[i].href ||
+            (typeof links[i].getAttribute === "function"
+              ? links[i].getAttribute("href")
+              : ""),
+        );
+      }
+      for (i = 0; i < nodes.length; i += 1) {
+        raw = String(nodes[i] || "").trim();
+        match = /^(https:\/\/sbx-[a-z0-9-]+\.arena\.site)(?:\/.*)?$/i.exec(raw);
         if (!match) continue;
         root = match[1] + "/";
         if (seen[root]) continue;
@@ -967,7 +986,9 @@
         keyTried = false;
         keyFetch = null;
         lastSlug = null;
+        postedPreviews = {};
         ensureAgentKey();
+        postRecentPreviews(document, true);
         sync();
       });
     }
@@ -1032,7 +1053,7 @@
       }
     }
 
-    function postRecentPreviews(doc) {
+    function postRecentPreviews(doc, force) {
       var items = discoverPreviews(doc);
       if (!items.length) return;
       var host = previewProxyHost(
@@ -1049,14 +1070,14 @@
       for (i = 0; i < items.length; i += 1) {
         item = items[i];
         stamp = host + "|" + item.url + "|" + (item.name || "");
-        if (postedPreviews[item.url] === stamp) continue;
+        if (!force && postedPreviews[item.url] === stamp) continue;
         postedPreviews[item.url] = stamp;
         sendRecentPreview(host + "/pwa/recent", item, stamp);
       }
     }
 
     function postKeyToPreview(force) {
-      postRecentPreviews(document);
+      postRecentPreviews(document, force === true);
       var base = previewBase(document);
       if (!keyPostDue(base, postedBase, force === true)) return;
       var pair = settings();
@@ -1113,6 +1134,8 @@
     }
 
     menuItem(proxyMenus, "Proxy - post key now", function () {
+      postedPreviews = {};
+      postRecentPreviews(document, true);
       var pair = settings();
       postKeyNow(
         { host: pair.host, key: heldKey },
@@ -1124,6 +1147,11 @@
         },
       );
     });
+
+    syncPreviewProxyHook = function () {
+      postedPreviews = {};
+      postRecentPreviews(document, true);
+    };
 
     rotateKey(ROTATE_MIN_SECONDS, null);
 
@@ -1925,6 +1953,7 @@
           "background:#2c2b28;color:#f0ede8;font:inherit";
         input.addEventListener("change", function () {
           GM_setValue("clankers-arena-preview-proxy-host", String(input.value || "").trim());
+          if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
         });
         row.appendChild(span);
         row.appendChild(input);

@@ -638,8 +638,11 @@ def test_pwa_recent_endpoint_accepts_posted_previews_and_merges_into_chooser():
     ]
 
     status, _, body = post_json(
-      "/pwa/recent",
-      {"url": "https://sbx-port8000.arena.site/", "name": "clankers - Steering"},
+      "/",
+      {
+        "url": "https://sbx-port8000.arena.site/app?tab=notes",
+        "name": "clankers - Steering",
+      },
     )
     assert status == 200, status
     assert body["entries"][0] == {

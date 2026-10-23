@@ -2504,13 +2504,23 @@ for raw in sys.stdin:
             },
           ];
         }
+        if (sel === "a") {
+          return [
+            {
+              href: "https://sbx-linkport.arena.site/preview",
+            },
+          ];
+        }
         return [];
       },
     };
     assert.deepEqual(
       JSON.parse(JSON.stringify(checks.promptFill.discoverPreviews(fakeDoc))),
-      [{ url: "https://sbx-otherport.arena.site/", name: "clankers - Web Preview" }],
-      "discovers non-steering preview iframe URLs on any port along with the header span name"
+      [
+        { url: "https://sbx-otherport.arena.site/", name: "clankers - Web Preview" },
+        { url: "https://sbx-linkport.arena.site/", name: "clankers - Web Preview" },
+      ],
+      "discovers non-steering preview iframe and link URLs on any port along with the header span name"
     );
   });
 }

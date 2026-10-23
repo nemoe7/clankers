@@ -30,7 +30,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Connect `#copy-state` in `app.js` to `Force save` in `userscripts/arena.user.js` via `postMessage`, keeping `/api/copy-state` clipboard copy as the standalone fallback.
 
-- Add the `Proxy - preview host` menu setting, `@connect ts.net` and `@connect *`, and `GM_xmlhttpRequest` transport preference in `userscripts/arena.user.js` (`v1.10.71`). Observe iframe `src` mutations and log `"preview-proxy"` events (`posted`, `failed`, `no-host`).
+- Add the `Proxy - preview host` menu setting, `@connect ts.net` and `@connect *`, and `GM_xmlhttpRequest` transport preference in `userscripts/arena.user.js`. Observe iframe and link `src`/`href` mutations, sync preview roots and names via `POST` to `/pwa/recent` and `/`, and fetch `/pwa/recent` in `recent.js`.
 
 ### Changed
 

@@ -196,10 +196,25 @@ function start() {
   const freshNames = () => cleanNames(load(), readNames());
   let names = freshNames();
   const render = () => show(box, load(), names);
+  const syncRemote = () => {
+    if (typeof fetch !== 'function') return;
+    fetch('/pwa/recent', { cache: 'no-store' })
+      .then(res => (res && res.ok ? res.json() : null))
+      .then(body => {
+        if (!body || typeof body !== 'object') return;
+        const merged = mergeRemote(load(), readNames(), body.entries, body.removed);
+        save(merged.list);
+        writeNames(merged.names);
+        names = freshNames();
+        render();
+      })
+      .catch(() => {});
+  };
   const refreshAtBoundary = () => {
     resetRecent();
     names = freshNames();
     render();
+    syncRemote();
     const when = new Date();
     const next = previousBoundary(when).getTime() + 6 * 3600000;
     setTimeout(refreshAtBoundary, next - when.getTime());
