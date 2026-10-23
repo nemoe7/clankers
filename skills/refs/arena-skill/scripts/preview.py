@@ -5120,6 +5120,85 @@ def _concise_rule_doc(markdown):
   return "\n\n".join(lines[:5])
 
 
+def _skill_exists(root, name):
+  roots = [Path(root or resolve_repo_root()).resolve()]
+  here = Path(__file__).resolve()
+  roots.extend(here.parents)
+  cwd = Path.cwd().resolve()
+  roots.append(cwd)
+  roots.extend(cwd.parents)
+  for base in roots:
+    for candidate in (
+      base / "skills" / "refs" / name,
+      base / "skills" / name,
+      base / ".agents" / "skills" / name,
+    ):
+      if (candidate / "SKILL.md").is_file():
+        return candidate
+  return None
+
+
+def discover_slash_commands(root=None):
+  commands = []
+  nuu_dir = _skill_exists(root, "nuu")
+  if nuu_dir is not None:
+    commands.extend(
+      [
+        {
+          "cmd": "/nuu audit",
+          "desc": "Send agent note: run a full nuu audit",
+        },
+        {
+          "cmd": "/nuu help",
+          "desc": "Show nuu commands and clauses (modal)",
+        },
+        {
+          "cmd": "/nuu recipes",
+          "desc": "List nuu UI recipes (modal)",
+        },
+        {
+          "cmd": "/nuu search ",
+          "desc": "Search the nuu UI/UX catalog (modal)",
+        },
+      ]
+    )
+    for name in sorted(_collect_nuu_recipes(nuu_dir)):
+      commands.append(
+        {
+          "cmd": f"/nuu recipe {name}",
+          "desc": f"Send agent note: apply {name} recipe",
+        }
+      )
+  nemo_dir = _skill_exists(root, "nemoizer")
+  if nemo_dir is not None:
+    commands.extend(
+      [
+        {
+          "cmd": "/nemoizer audit",
+          "desc": "Send agent note: run a nemoizer audit and report",
+        },
+        {
+          "cmd": "/nemoizer collect",
+          "desc": "Scan prose and code for nemoizer findings (modal)",
+        },
+        {
+          "cmd": "/nemoizer help",
+          "desc": "Show nemoizer commands and clauses (modal)",
+        },
+        {
+          "cmd": "/nemoizer recipes",
+          "desc": "Browse nemoizer templates and references (modal)",
+        },
+        {
+          "cmd": "/nemoizer rules",
+          "desc": "Browse nemoizer rules or /nemoizer rules <id> (modal)",
+        },
+      ]
+    )
+  commands.sort(key=lambda item: item["cmd"].strip())
+  return commands
+
+
 def resolve_slash_command(text, root=None):
   if not isinstance(text, str):
     return None
@@ -5146,22 +5225,11 @@ def resolve_slash_command(text, root=None):
         (
           "| Composer Command | Type | Action |\n"
           "| --- | --- | --- |\n"
-          "| `/nuu help` | Modal | Show `nuu` commands, CLI subcommands, and clauses |\n"
-          "| `/nuu recipes` | Modal | List available `nuu` recipes and summaries |\n"
-          "| `/nuu search <query>` | Modal | Search the `nuu` UI/UX catalog (`-d <dataset>`, `-s <stack>`) |\n"
           "| `/nuu audit [target]` | Agent note | Run a full `nuu` audit and publish the report |\n"
-          "| `/nuu recipe <name> [target]` | Agent note | Apply a `nuu` recipe to the target |"
-        ),
-        (
-          "### CLI Subcommands (`scripts/uiux.py`)\n\n"
-          "| Subcommand | Purpose |\n"
-          "| --- | --- |\n"
-          "| `search <query>` | Search vendored UI/UX catalogs (`-d`, `-s`, `-n`) |\n"
-          "| `system <query>` | Generate a five-part design system proposal |\n"
-          "| `record <init\\|check>` | Create or validate `docs/<project>/design.md` |\n"
-          "| `measure` | Measure computed styles, spacing, contrast, and density |\n"
-          "| `annotate` | Render numbered callout pins and boxes on screenshots |\n"
-          "| `check` | Run DOM, layout, contrast, density, and `a11y` checks |"
+          "| `/nuu help` | Modal | Show `nuu` composer commands and clauses |\n"
+          "| `/nuu recipe <name> [target]` | Agent note | Apply a `nuu` recipe to the target |\n"
+          "| `/nuu recipes` | Modal | List available `nuu` recipes and summaries |\n"
+          "| `/nuu search <query>` | Modal | Search the `nuu` UI/UX catalog |"
         ),
       ]
       if clauses:
@@ -5194,7 +5262,7 @@ def resolve_slash_command(text, root=None):
           "mode": "query",
           "command": "/nuu search",
           "title": "nuu search",
-          "markdown": "Usage: `/nuu search <query> [-d <dataset>] [-s <stack>]`",
+          "markdown": "Usage: `/nuu search <query>`",
         }
       try:
         tokens = shlex.split(arg)
@@ -5262,20 +5330,16 @@ def resolve_slash_command(text, root=None):
       (
         "| Composer Command | Type | Action |\n"
         "| --- | --- | --- |\n"
-        "| `/nemoizer help` | Modal | Show `nemoizer` commands, CLI options, and clauses |\n"
-        "| `/nemoizer rules [id]` | Modal | List STE, NMO, NMP, and NMT rules or view a rule summary |\n"
-        "| `/nemoizer recipes` | Modal | List `nemoizer` workflow references and templates |\n"
-        "| `/nemoizer collect [paths...]` | Modal | Run `nemoize.py --audit` and summarize findings |\n"
-        "| `/nemoizer audit [paths...]` | Agent note | Run a `nemoizer` audit, fix violations, and publish the report |"
-      ),
-      (
-        "### CLI Options (`scripts/nemoize.py`)\n\n"
-        "| Option | Purpose |\n"
-        "| --- | --- |\n"
-        "| `--audit` | Group inline suppressions, blocking violations, and manual-review findings |\n"
-        "| `--format` | Apply deterministic synonym rotations in place |\n"
-        "| `--ignores` | List active `nonemo` suppression comments |\n"
-        "| `--selftest` | Run built-in rule and rotation self-tests |"
+        "| `/nemoizer audit [paths...]` | Agent note |"
+        " Run a `nemoizer` audit, fix violations, and publish the report |\n"
+        "| `/nemoizer collect [paths...]` | Modal |"
+        " Scan prose and code and summarize `nemoizer` findings |\n"
+        "| `/nemoizer help` | Modal |"
+        " Show `nemoizer` composer commands and clauses |\n"
+        "| `/nemoizer recipes` | Modal |"
+        " List `nemoizer` workflow references and templates |\n"
+        "| `/nemoizer rules [id]` | Modal |"
+        " List STE, NMO, NMP, and NMT rules or view a rule summary |"
       ),
     ]
     if clauses:
@@ -5294,23 +5358,26 @@ def resolve_slash_command(text, root=None):
       "markdown": (
         "| Reference | Purpose | Composer Command |\n"
         "| --- | --- | --- |\n"
-        "| `references/audit-report.md` | Standalone audit report template | `/nemoizer audit [paths...]` |\n"
-        "| `references/rules.md` | Index of STE, NMO, NMP, and NMT rules | `/nemoizer rules [id]` |\n"
-        "| `scripts/nemoize.py --audit` | Scan suppressions and findings | `/nemoizer collect [paths...]` |"
+        "| `references/audit-report.md` | Standalone audit report template"
+        " | `/nemoizer audit [paths...]` |\n"
+        "| `references/rules.md` | Index of STE, NMO, NMP, and NMT rules"
+        " | `/nemoizer rules [id]` |\n"
+        "| Audit findings scan | Group suppressions, violations, and review items"
+        " | `/nemoizer collect [paths...]` |"
       ),
     }
   if sub in {"rules", "rule"}:
     refs_dir = nemo_dir / "references"
-    if arg:
+    if arg and refs_dir.is_dir():
       slug = re.sub(r"[^a-zA-Z0-9_-]", "", arg.split()[0]).lower()
-      candidate = refs_dir / f"{slug}.md"
-      if candidate.is_file():
-        return {
-          "mode": "query",
-          "command": f"/nemoizer {sub} {slug}",
-          "title": f"nemoizer · {slug.upper()}",
-          "markdown": _concise_rule_doc(candidate.read_text(encoding="utf-8")),
-        }
+      for item in sorted(refs_dir.glob("*.md")):
+        if item.stem.lower() == slug:
+          return {
+            "mode": "query",
+            "command": f"/nemoizer {sub} {slug}",
+            "title": f"nemoizer · {slug.upper()}",
+            "markdown": _concise_rule_doc(item.read_text(encoding="utf-8")),
+          }
     rules_file = (
       refs_dir / "rules.md"
       if (refs_dir / "rules.md").is_file()
@@ -9530,6 +9597,7 @@ def handler(store):
           return
         if path == "/api/state":
           state = store.state()
+          state["slash_commands"] = discover_slash_commands()
           try:
             for item in state["notes"] + [
               ack for report in state["reports"] for ack in report["acknowledgements"]

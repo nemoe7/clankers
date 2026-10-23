@@ -337,33 +337,61 @@ function clearPreviewTooltip() {
   delete button.dataset.tooltip;
   label(button, 'Preview Markdown');
 }
-const SLASH_COMMANDS = [
-  { cmd: '/nuu help', desc: 'Show nuu subcommands, clauses, and recipes (modal)' },
+let slashCommands = [
+  { cmd: '/nemoizer audit', desc: 'Send agent note: run a nemoizer audit and report' },
+  { cmd: '/nemoizer collect', desc: 'Scan prose and code for nemoizer findings (modal)' },
+  { cmd: '/nemoizer help', desc: 'Show nemoizer commands and clauses (modal)' },
+  { cmd: '/nemoizer recipes', desc: 'Browse nemoizer templates and references (modal)' },
+  { cmd: '/nemoizer rules', desc: 'Browse nemoizer rules or /nemoizer rules <id> (modal)' },
+  { cmd: '/nuu audit', desc: 'Send agent note: run a full nuu audit' },
+  { cmd: '/nuu help', desc: 'Show nuu commands and clauses (modal)' },
+  { cmd: '/nuu recipe offline-fonts', desc: 'Send agent note: apply offline-fonts recipe' },
+  { cmd: '/nuu recipe scroll-edge-fade', desc: 'Send agent note: apply scroll-edge-fade recipe' },
   { cmd: '/nuu recipes', desc: 'List nuu UI recipes (modal)' },
   { cmd: '/nuu search ', desc: 'Search the nuu UI/UX catalog (modal)' },
-  { cmd: '/nuu audit', desc: 'Send agent note: run a full nuu audit' },
-  { cmd: '/nuu recipe scroll-edge-fade', desc: 'Send agent note: apply scroll-edge-fade recipe' },
-  { cmd: '/nuu recipe offline-fonts', desc: 'Send agent note: apply offline-fonts recipe' },
-  { cmd: '/nemoizer help', desc: 'Show nemoizer CLI options and clauses (modal)' },
-  { cmd: '/nemoizer rules', desc: 'Browse nemoizer rules or /nemoizer rules <id> (modal)' },
-  { cmd: '/nemoizer recipes', desc: 'Browse nemoizer rule docs and templates (modal)' },
-  { cmd: '/nemoizer collect', desc: 'Run nemoize.py --audit and view findings (modal)' },
-  { cmd: '/nemoizer audit', desc: 'Send agent note: run a nemoizer audit and report' },
 ];
 let slashActiveIndex = 0;
 let slashMatches = [];
+function recognizedSlashPrefix(raw) {
+  if (typeof raw !== 'string' || !raw.startsWith('/')) return '';
+  const lower = raw.toLowerCase();
+  const prefixes = [
+    ...slashCommands.map(item => String(item.cmd || '').trim()).filter(Boolean),
+    '/nuu recipe',
+    '/nuu search',
+    '/nemoizer',
+    '/nuu',
+  ].sort((a, b) => b.length - a.length);
+  for (const candidate of prefixes) {
+    const target = candidate.toLowerCase();
+    if (lower.startsWith(target)) {
+      const next = raw[target.length];
+      if (!next || /\s/.test(next)) return raw.slice(0, target.length);
+    }
+  }
+  return '';
+}
 function syncSlashComposerStyle() {
-  const trimmed = note.value.trimStart();
-  const token = trimmed.split(/\s/)[0]?.toLowerCase() || '';
-  const isSlash = !note.hidden && trimmed.startsWith('/') && (
-    '/nuu'.startsWith(token) || '/nemoizer'.startsWith(token)
-  );
-  if (isSlash) {
+  const backdrop = $('#note-backdrop');
+  const prefix = note.hidden ? '' : recognizedSlashPrefix(note.value);
+  if (prefix) {
     note.dataset.slash = 'true';
-    note.closest?.('.composer-shell')?.setAttribute('data-slash', 'true');
+    note.spellcheck = false;
+    if (backdrop) {
+      const span = document.createElement('span');
+      span.className = 'slash-token';
+      span.textContent = prefix;
+      backdrop.replaceChildren(span, document.createTextNode(note.value.slice(prefix.length)));
+      backdrop.hidden = false;
+      backdrop.scrollTop = note.scrollTop;
+    }
   } else {
     delete note.dataset.slash;
-    note.closest?.('.composer-shell')?.removeAttribute('data-slash');
+    note.spellcheck = true;
+    if (backdrop) {
+      backdrop.replaceChildren();
+      backdrop.hidden = true;
+    }
   }
 }
 function hideSlashMenu() {
@@ -391,7 +419,7 @@ function updateSlashMenu() {
   const raw = note.value;
   if (!raw.startsWith('/') || raw.includes('\n')) return hideSlashMenu();
   const query = raw.trim().toLowerCase();
-  slashMatches = SLASH_COMMANDS.filter(item =>
+  slashMatches = slashCommands.filter(item =>
     item.cmd.toLowerCase().startsWith(query) || query === '/'
   );
   if (!slashMatches.length || (slashMatches.length === 1 && raw.startsWith(slashMatches[0].cmd))) {
@@ -424,6 +452,10 @@ note.addEventListener('input', () => {
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
 note.addEventListener('blur', () => setTimeout(hideSlashMenu, 120));
+note.addEventListener('scroll', () => {
+  const backdrop = $('#note-backdrop');
+  if (backdrop && !backdrop.hidden) backdrop.scrollTop = note.scrollTop;
+});
 
 // File bytes stay in this browser tab.
 // Staged files start uploading on drop so the chip shows progress and Send binds stored bytes.
@@ -1234,6 +1266,10 @@ async function readState() {
   pollCommits = [];
   try {
     const state = await (await request('/api/state')).json();
+    if (Array.isArray(state.slash_commands)) {
+      slashCommands = state.slash_commands;
+      syncSlashComposerStyle();
+    }
     for (const [key, entry] of optimisticState) if (entry.echo?.(state)) optimisticState.delete(key);
     for (const commit of pollCommits) commit(state);
     lastState = state;

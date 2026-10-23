@@ -14268,7 +14268,13 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   slash_help = preview.resolve_slash_command("/nuu help")
   assert slash_help is not None
   assert slash_help["mode"] == "query"
-  assert "uiux.py" in slash_help["markdown"] or "search" in slash_help["markdown"]
+  assert "search" in slash_help["markdown"]
+  assert "CLI Subcommands" not in slash_help["markdown"]
+  discovered = preview.discover_slash_commands()
+  assert [row["cmd"].strip() for row in discovered] == sorted(
+    row["cmd"].strip() for row in discovered
+  )
+  assert any(row["cmd"] == "/nuu recipe offline-fonts" for row in discovered)
   slash_recipes = preview.resolve_slash_command("/nuu recipes")
   assert slash_recipes is not None
   assert slash_recipes["mode"] == "query"
@@ -14278,6 +14284,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert slash_nemo_help is not None
   assert slash_nemo_help["mode"] == "query"
   assert "STE" in slash_nemo_help["markdown"]
+  assert "CLI Options" not in slash_nemo_help["markdown"]
   slash_nemo_rule = preview.resolve_slash_command("/nemoizer rules ste100")
   assert slash_nemo_rule is not None
   assert slash_nemo_rule["mode"] == "query"

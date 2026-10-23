@@ -5156,8 +5156,13 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /if \(selected && !alreadySelected\) gsap\.fromTo\(panel,/);
   assert.match(appSource, /\/api\/slash/);
   assert.match(appSource, /#slash-menu/);
+  assert.match(appSource, /recognizedSlashPrefix/);
   const htmlSource = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
   assert.match(htmlSource, /id="slash-menu"/);
+  assert.match(htmlSource, /id="note-backdrop"/);
   assert.match(htmlSource, /id="modal-close"/);
+  const styleSource = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  assert.match(styleSource, /\.slash-token\b/);
+  assert.doesNotMatch(styleSource, /#compose:has\(#note\[data-slash="true"\]\)/);
 });
 
