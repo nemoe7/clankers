@@ -35,7 +35,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 4. The roles resolve in light and in dark. The theme control names System, Light, and Dark, so the page can follow the machine.
 
-5. Four sizes from the sheet, three weights, one eyebrow size, and a tabular face for IDs, and MUST bundle and load custom fonts via [references/offline-fonts.md](references/offline-fonts.md) without reload jitter.
+5. Four sizes from the sheet, three weights, one eyebrow size, and a tabular face for IDs, and MUST bundle and load custom fonts via [references/recipes/offline-fonts.md](references/recipes/offline-fonts.md) without reload jitter.
 
 6. Every gap lands on the 8 px scale. Rows are 40 px, panels take a 10 px radius and no shadow, and a touch target is at least 44 px.
 
@@ -93,5 +93,6 @@ python scripts/measure.py ruler --from 120,340 --to 264,340
 
 - `scripts/nuu`: CLI entry point (`references/nuu.md`), alongside `scripts/measure.py` (`references/measure.md`), `scripts/annotate.py` (`references/annotate.md`), and `scripts/browser.cjs`.
 - `data/vendor/`: licensed catalog data and source hashes.
-- `references/offline-fonts.md`: bundled and offline zero-jitter font recipe (`preload` with `crossorigin`, `font-display: block`, inline Base64 WOFF2, `FontFace` binary buffers, and metric-matched fallbacks).
+- `references/recipes/offline-fonts.md`: bundled and offline zero-jitter font recipe (`preload` with `crossorigin`, `font-display: block`, inline Base64 WOFF2, `FontFace` binary buffers, and metric-matched fallbacks).
+- `references/recipes/scroll-edge-fade.md`: scroll-driven CSS edge-fade mask recipe (`@supports (animation-timeline: scroll(self))`).
 - `references/audit-report.md`: standalone template for nuu audits and visual verification reports.

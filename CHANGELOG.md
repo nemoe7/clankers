@@ -16,7 +16,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Enable `hasTouch` and `isMobile` (`@media (pointer: coarse)`) for mobile viewport widths (`<= 768` px) in `browser.cjs`, and document the requirement in Clause 14 of `SKILL.md`.
 
-- Default `nuu annotate` (`annotate.py` and `uiux.py annotate`) to `scale=2` with `-S, --scale <1|2|3>` and `"scale"` JSON overrides. Add the optional scroll-edge fade CSS recipe to `references/nuu.md` and the pure audit-report template in `references/audit-report.md`.
+- Default `nuu annotate` (`annotate.py` and `uiux.py annotate`) to `scale=2` with `-S, --scale <1|2|3>` and `"scale"` JSON overrides. Move `offline-fonts.md` and `scroll-edge-fade.md` into `references/recipes/`, add `references/audit-report.md`, and add Clause 15 for container exit and action button placement.
 
 #### nemoizer
 
