@@ -55,6 +55,8 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 14. Enable touch input (`hasTouch` and `isMobile`) when auditing or inspecting mobile widths (`<= 768` px, including `360` px) so `@media (pointer: coarse)` rules apply.
 
+15. Place a Lucide `x` exit button at the top right of a container, and place other action buttons at the bottom right.
+
 ## Go-to libraries
 
 - For draggable and reorderable lists, vendor only the required part of [SortableJS](https://github.com/SortableJS/Sortable) with its MIT license instead of writing custom drag-and-drop handlers.
