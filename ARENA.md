@@ -127,7 +127,7 @@
 - Guard clauses/early returns; readable code; cohesive low-coupling modules; small interfaces; local data/behavior.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent APIs, constraints, requirements.
 - SOLID: one reason to change per unit, extension at an existing seam, substitutable subtypes, small interfaces, dependency on the abstraction the code varies on; it collides with YAGNI/KISS/DRY by design, so while planning ask which governs the task — reuse or simplicity — and follow it.
-- Prefer deletion over addition, boring over clever, fewest files; search existing helpers before writing.
+- Prefer deletion over addition, boring over clever, fewest files; search existing helpers before writing; prefer grep/sed for targeted non-bible reads over broad file chunks.
 - On insistence, build the full version without re-arguing.
 
 ## Verification
@@ -182,8 +182,8 @@
 ## Workspace
 
 - For Chromium work, use the [recipe](.agents/skills/arena-skill/references/CHROMIUM.md).
-- UI work: verify via screenshots from that pinned Chromium package; read rendered result before counting landed.
-- Install repo tooling (deps, venvs) via background process tool so turns continue.
+- UI work: verify via screenshots from that pinned Chromium package; read rendered result before counting landed; when `nuu` is available and used for a UI task or audit, embed its screenshots, including before-and-after images, in the published report for user review.
+- Install repo tooling (deps, venvs) via `arena-preview run start` after the visibility question and before the first `poll` or `read` so the install runs detached without blocking a task; reserve `start_process` for the steering preview and demos/presentations.
 - Start each local gate on a stable tree; NEVER edit its covered root files while it runs. A remote PR CI watch does not freeze the working tree.
 - Freeze = root tree only: queued other-file tasks start worktrees (`arena-preview worktree start`) during root gates; NEVER wait read-only.
 - A >=10-second run is long; MUST use `arena-preview run start <name> -- <command>`.

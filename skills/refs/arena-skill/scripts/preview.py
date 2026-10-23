@@ -858,17 +858,20 @@ def pr_failed_check(root="."):
     )
     if rows.returncode:
       return None
-    # The API lists every run of a re-run job, so the newest start per name decides.
+    # The API lists every run of a re-run job, so an active run or the newest start per name decides.
     newest = {}
     for row in rows.stdout.splitlines():
       name, _, rest = row.partition("\t")
       stamp, _, conclusion = rest.partition("\t")
-      if name and (name not in newest or stamp.rstrip("Z") > newest[name][0]):
-        newest[name] = (stamp.rstrip("Z"), conclusion)
+      rank = (1 if not conclusion else 0, stamp.rstrip("Z"))
+      if name and (name not in newest or rank > newest[name][0]):
+        newest[name] = (rank, conclusion)
+    any_active = any(not conclusion for _, conclusion in newest.values())
     failed = [
       name
       for name, (_, conclusion) in newest.items()
       if conclusion in FAILED_CONCLUSIONS
+      and not (any_active and conclusion == "cancelled")
     ]
     return ", ".join(failed)
   except OSError:
@@ -1014,9 +1017,11 @@ def pr_check_latest(root, slug, sha):
       return None
     if stamp.tzinfo is None:
       return None
+    active = node["state"] not in PR_CHECK_SUCCESS_STATES + PR_CHECK_FAILURE_STATES
+    rank = (1 if active else 0, stamp)
     key = (node["type"], node["name"], node["workflow"])
-    if key not in latest or stamp > latest[key][0]:
-      latest[key] = stamp, node
+    if key not in latest or rank > latest[key][0]:
+      latest[key] = rank, node
   return [
     node
     for _stamp, node in sorted(
@@ -1143,7 +1148,16 @@ def pr_checks_watch(
     elapsed = time.monotonic() - started
     if latest:
       seen_any = True
-    failed = [node for node in latest if node["state"] in PR_CHECK_FAILURE_STATES]
+    active = any(
+      node["state"] not in PR_CHECK_SUCCESS_STATES + PR_CHECK_FAILURE_STATES
+      for node in latest
+    )
+    failed = [
+      node
+      for node in latest
+      if node["state"] in PR_CHECK_FAILURE_STATES
+      and not (active and node["state"] == "CANCELLED")
+    ]
     for node in failed:
       identity = (node["type"], node["workflow"], node["name"], node["at"])
       if identity in reported:
@@ -1848,7 +1862,7 @@ def parse_fields(markdown):
 
 
 def render_inline(markdown):
-  markdown = strip_md_comments(markdown)
+  markdown = unescape_fences(strip_md_comments(markdown))
   try:
     from markdown_it import MarkdownIt
   except ImportError:
@@ -2894,6 +2908,8 @@ def first_blocking_piece(line):
   """Return the first command that ends the inbox-only exemption. Return None only when the line contains an inbox
   call and inert prefixes. A redirect ends the exemption because it hides the reminder. Ignore debug traps that
   silence output."""
+  if platform_line(line or ""):
+    return None
   for piece in command_pieces(agent_line(line)):
     tokens, index = piece_tokens(piece)
     if index >= len(tokens):
@@ -4354,7 +4370,7 @@ def poll_inbox(store, sleeper=None):
   listing = {"checked_at": None, "pending": []}
   # A full wait ends for messages, tasks, or failed branch checks. A heartbeat lights the page dot.
   print(
-    f"poll max {POLL_WAIT_SECONDS} s; bash timeout 1800 s.",
+    f"poll max {POLL_WAIT_SECONDS} s; bash timeout 1800 s. {REMINDERS[0]}",
     file=sys.stderr,
     flush=True,
   )
@@ -4367,6 +4383,7 @@ def poll_inbox(store, sleeper=None):
     args=(failures, resolve_repo_root(), stop_checks),
     daemon=True,
   ).start()
+  announced_running = False
   try:
     for index in range(POLL_MAX_LOOPS):
       if time.monotonic() >= deadline:
@@ -4383,7 +4400,7 @@ def poll_inbox(store, sleeper=None):
         print("DO NOT END TURN. POLL AGAIN.", flush=True)
         return 0
       # A failed check on the branch pull request ends the wait, so the turn fixes it now.
-      if failures:
+      if failures and "pr-checks" not in live_runs(store.path.parent):
         print(
           f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",
           flush=True,
@@ -4420,6 +4437,9 @@ def poll_inbox(store, sleeper=None):
         )
         print(format_read(listing), flush=True)
         return 0
+      if not announced_running:
+        announced_running = True
+        run_notices(store.path.parent, show_running=True)
       if index + 1 < POLL_MAX_LOOPS:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -8152,14 +8172,47 @@ def add_copy_buttons(rendered):
 ESCAPED_FENCE = re.compile(
   r"^(?P<indent>[ \t]*)\\(?P<fence>(?:`{3,}|~{3,}))", re.MULTILINE
 )
+ESCAPED_INLINE_CODE = re.compile(
+  r"(?<![\\`])`(?P<body>"
+  r"(?!\\`|`)(?:(?<!\\)\\`|[^`\n])*?(?<!\\)\\`(?:(?<!\\)\\`|[^`\n])*"
+  r"|(?<!\\)\\`(?:(?:(?<!\\)\\`|[^`\n])*?(?<!\\)\\`)?"
+  r")`(?![`])"
+)
+
+
+def _unescape_inline_code_match(match):
+  content = re.sub(r"(?<!\\)\\`", "`", match.group("body"))
+  longest = max((len(run) for run in re.findall(r"`+", content)), default=0)
+  fence = "`" * (longest + 1)
+  if (
+    content.startswith("`")
+    or content.endswith("`")
+    or (content.startswith(" ") and content.endswith(" "))
+  ):
+    return f"{fence} {content} {fence}"
+  return f"{fence}{content}{fence}"
 
 
 def unescape_fences(source):
   """Restore a line-leading fence that a backslash hides. Markdown treats that fence as literal text instead of a
   code block. Accept backticks and tildes. Leave other escapes unchanged."""
-  return ESCAPED_FENCE.sub(
+  restored = ESCAPED_FENCE.sub(
     lambda match: match.group("indent") + match.group("fence"), source
   )
+  out, fence = [], None
+  for line in restored.splitlines(keepends=True):
+    if fence is not None:
+      out.append(line)
+      if line.strip().startswith(fence):
+        fence = None
+      continue
+    opening = FENCE.match(line)
+    if opening:
+      fence = opening.group(1)
+      out.append(line)
+      continue
+    out.append(ESCAPED_INLINE_CODE.sub(_unescape_inline_code_match, line))
+  return "".join(out)
 
 
 PARAGRAPH = re.compile(r"<p>.*?</p>", re.DOTALL)
@@ -10094,6 +10147,7 @@ def gate_verdict(state_dir, push, line, out=None):
         file=out,
         flush=True,
       )
+    print(REMINDERS[0], file=out, flush=True)
     return 1
   # A push whose content equals origin/main leaves the pull request without a diff,
   # and GitHub then closes it. The checkpoint holds before any such push.
@@ -10137,6 +10191,9 @@ PLATFORM_LINES = (
   "netstat -ltn",
   "source ~/.profile",
   "mkdir -p '/home/user'",
+  "/bin/bash -l -c mkdir -p '",
+  "/bin/bash -l -c [ -e '",
+  "python3 -I - <<'PY'",
 )
 
 

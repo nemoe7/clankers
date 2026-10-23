@@ -56,7 +56,7 @@
 - For each new user chat message, MUST state once in the first assistant reply whether reasoning is enabled, with the literal line `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line. Tool results, steering notes, context compaction or summary, and agent continuation do not start a new turn.
 - After any change to a path in the bible, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear.
 - In saved context, state the applicable start sequence and the duty to read missing-context paths in the bible in full before queued work; no verbatim ARENA.md copy is required.
-- Before the first non-setup tool call, complete the initial start sequence and wait for the visibility answer, then use `arena-preview poll` as the first inbox call.
+- Before the first non-setup tool call, complete the initial start sequence and wait for the visibility answer, start repository tooling installs via `arena-preview run start` and any demo or presentation server via `start_process` as the final setup step, then use `arena-preview poll` as the first inbox call.
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
 
 ## General
@@ -152,7 +152,7 @@
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
 - SOLID applies to design: one reason to change per unit, extension over modification at an existing seam, substitutable subtypes, small focused interfaces, and dependencies on the abstraction the code already varies on.
 - SOLID and the simplicity principles collide by design, so MUST ask during planning which governs the task — SOLID reuse and extensibility, or YAGNI/KISS/DRY simplicity — and follow the answer.
-- Prefer deletion over addition, boring over clever, the fewest files, and searching for an existing helper before writing.
+- Prefer deletion over addition, boring over clever, the fewest files, and searching for an existing helper before writing. Prefer grep and sed for targeted reads outside the bible instead of stepping through broad file chunks.
 - If the user insists on the full version, build it without re-arguing.
 
 ## Verification
@@ -241,8 +241,8 @@
 ## Workspace
 
 - For Chromium work, follow the [Chromium recipe](.agents/skills/arena-skill/references/CHROMIUM.md).
-- For ui work, verify changes with screenshots taken by that pinned chromium package and read the rendered result before the change counts as landed.
-- Install repository tooling such as dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
+- For ui work, verify changes with screenshots taken by that pinned chromium package and read the rendered result before the change counts as landed; when `nuu` is available and used for a UI task or audit, embed its screenshots, including before-and-after images, in the published report for user review.
+- Install repository tooling such as dependencies and virtual environments with `arena-preview run start` after the visibility question and before the first `poll` or `read`, so the install runs detached without blocking a task; reserve `start_process` for the steering preview and demos or presentations.
 - Treat a run that takes 10 seconds or more as a long run.
 - Start each local background gate on a stable tree and do not edit its covered root files while it runs; a remote PR CI watch does not freeze the working tree.
 - The freeze covers the root tree only: with queued tasks that edit other files, start a worktree for that work while the root gate runs (`arena-preview worktree start`), and do not wait read-only.

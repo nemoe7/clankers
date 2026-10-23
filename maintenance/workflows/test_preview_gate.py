@@ -105,20 +105,25 @@ def test_the_hook_skips_the_platform_shells() -> None:
     env = clean_env(STUB=str(stub))
     # The platform hosts its processes in a login shell over run.cmd under arena-workspace.
     # `. Exit 0` keeps the shaped shell alive as the hook's parent instead of exec'ing the hook.
-    hosted = subprocess.run(
-      [
-        "bash",
-        "-c",
-        'exec -a "bash -l /tmp/arena-workspace/procs/x/run.cmd" bash -c "'
-        + f'bash {hook}; exit 0"',
-      ],
-      capture_output=True,
-      text=True,
-      env=env,
-      check=False,
-    )
-    assert hosted.returncode == 0
-    assert not marker.exists(), "a hosted shell must not run the reminder"
+    for argv0 in (
+      "bash -l /tmp/arena-workspace/procs/x/run.cmd",
+      "/bin/bash -l -c mkdir -p 'arena-state'",
+      "/bin/bash -l -c [ -e 'ARENA.md' ] && [ ! -d 'ARENA.md' ]",
+      "/bin/bash -l -c python3 -I - <<'PY'",
+    ):
+      hosted = subprocess.run(
+        [
+          "bash",
+          "-c",
+          f'exec -a {shlex.quote(argv0)} bash -c "bash {hook}; exit 0"',
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+      )
+      assert hosted.returncode == 0
+      assert not marker.exists(), f"{argv0} must not run the reminder"
     plain = subprocess.run(
       ["bash", "-c", f"bash {hook}; exit 0"],
       capture_output=True,

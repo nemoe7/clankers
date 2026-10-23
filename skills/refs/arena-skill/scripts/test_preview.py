@@ -5394,7 +5394,7 @@ def test_bash_gate():
       blocked.stdout.strip() == "BASH BLOCKED AFTER 6 CALLS.\n"
       "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every"
       " note: `arena-preview ack <id> <markdown>`.\n"
-      "Pending: gate-note"
+      f"Pending: gate-note\n{preview.REMINDERS[0]}"
     )
     gate_store.acknowledge(["gate-note"], "Cleared")
     assert gate_store.gate()
@@ -7285,6 +7285,7 @@ def test_poll_inbox():
     )
     assert result.returncode == 0
     assert "poll-1" in result.stdout and "poll-2" in result.stdout
+    assert preview.REMINDERS[0] in result.stderr
     for flag in ("--interval", "--max"):
       result = subprocess.run(
         [sys.executable, str(Path(preview.__file__)), "poll", flag, "1"],
@@ -7712,6 +7713,7 @@ def test_a_live_run_holds_the_skip_poll_press():
       printed.clear()
       code, sleeps = run_poll()
       assert code == 1 and sleeps == [10, 10]
+      assert any("run pr-checks running " in value for value in printed)
       assert store.skip_poll_requested() is True
       # The run's finish outranks the press: the verdict breaks the next wait first.
       preview.run_command(hold_dir, "pr-checks", ["--", "true"])
@@ -9565,7 +9567,7 @@ def test_note_reread_prints_every_match():
     assert "ffff999" in gone.stderr
 
 
-def test_poll_breaks_on_finished_run(capsys):
+def test_poll_breaks_on_finished_run(capsys, monkeypatch):
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     sleeps = []
@@ -9584,6 +9586,36 @@ def test_poll_breaks_on_finished_run(capsys):
     assert "run gate done: exit 0" in out  # nonemo: NMT100
     assert out.rstrip().endswith("DO NOT END TURN. POLL AGAIN.")
     assert preview.run_notices(directory) == 0
+    preview.write_detached_placeholder(
+      directory,
+      "gate",
+      ["true"],
+      pid=os.getpid(),
+      pid_started_at=preview.process_start_identity(os.getpid()),
+    )
+    assert preview.run_notices(directory, show_running=True) == 1
+    assert "run gate running " in capsys.readouterr().err  # nonemo: NMT100
+
+  checks = [
+    {
+      "type": "check",
+      "name": "Repo Checks / Markdown Lint",
+      "workflow": "Repo Checks",
+      "state": "CANCELLED",
+      "at": "2026-10-23T02:01:00Z",
+    },
+    {
+      "type": "check",
+      "name": "Repo Checks / Markdown Lint",
+      "workflow": "Repo Checks",
+      "state": "IN_PROGRESS",
+      "at": "2026-10-23T02:00:55Z",
+    },
+  ]
+  monkeypatch.setattr(preview, "gh_check_json", lambda *_a, **_kw: checks)
+  latest = preview.pr_check_latest("/tmp", "nemoe7/clankers", "deadbeef")
+  assert len(latest) == 1
+  assert latest[0]["state"] == "IN_PROGRESS"
 
 
 def git_repo(directory):
@@ -13698,16 +13730,37 @@ def test_gate_exempts_mkdir_publish_tasks_and_help(tmp_path):
   store = preview.Store(state, create=True)
   store.note("gate-note", "Pending work")
   store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
+  edit_file_line = (
+    "/bin/bash -l -c [ -e 'ARENA.md' ] && [ ! -d 'ARENA.md' ] && "
+    "{ printf 'FILE:%s\\n' \"$(readlink -f 'ARENA.md')\"; exit 0; }; "
+    "[ -d 'ARENA.md' ] && { printf 'DIR\\n'; exit 0; }; printf 'OK\\n'"
+  )
 
   for line, command in (
     (
       "/bin/bash -l -c mkdir -p '/home/user/clankers'",
       "mkdir -p '/home/user/clankers'",
     ),
+    (
+      "/bin/bash -l -c mkdir -p 'arena-state'",
+      "mkdir -p 'arena-state'",
+    ),
     ("mkdir -p custom/dir", "mkdir -p custom/dir"),
     (
       "/bin/bash -l -c [ -e '/home/user/clankers/ARENA.md' ]",
       "[ -e '/home/user/clankers/ARENA.md' ]",
+    ),
+    (
+      edit_file_line,
+      "printf 'FILE:%s\\n' \"$(readlink -f 'ARENA.md')\"",
+    ),
+    (
+      edit_file_line,
+      "exit 0",
+    ),
+    (
+      "/bin/bash -l -c python3 -I - <<'PY'\nimport codecs\nPY",
+      "python3 -I - <<'PY'\nimport codecs\nPY",
     ),
     (
       "/bin/bash -l -c cd /home/user/clankers && arena-preview report publish r.md -i r -t 'Title'",
@@ -13727,6 +13780,16 @@ def test_gate_exempts_mkdir_publish_tasks_and_help(tmp_path):
       preview.pre_command(state, line, command, tmp_path, done="read-set", shell="bash")
       == 0
     ), (line, command)
+  installer = (preview.ASSETS.parent / "scripts" / "install.sh").read_text(
+    encoding="utf-8"
+  )
+  for expected in (
+    "commitlint: ok",
+    "gitignore: ok",
+    "arena-preview: ok",
+    "next action: `start_process`: `arena-preview --serve --port 8000`",
+  ):
+    assert expected in installer
 
 
 def test_field_html_renders_inline_markdown_in_option_labels():

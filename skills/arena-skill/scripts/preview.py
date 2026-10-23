@@ -320,9 +320,9 @@ def pr_failed_check(root='.'):
 		if rows.returncode:return None
 		newest={}
 		for row in rows.stdout.splitlines():
-			name,_,rest=row.partition('\t');stamp,_,conclusion=rest.partition('\t')
-			if name and(name not in newest or stamp.rstrip('Z')>newest[name][0]):newest[name]=stamp.rstrip('Z'),conclusion
-		failed=[name for(name,(_,conclusion))in newest.items()if conclusion in FAILED_CONCLUSIONS];return', '.join(failed)
+			name,_,rest=row.partition('\t');stamp,_,conclusion=rest.partition('\t');rank=1 if not conclusion else 0,stamp.rstrip('Z')
+			if name and(name not in newest or rank>newest[name][0]):newest[name]=rank,conclusion
+		any_active=any(not conclusion for(_,conclusion)in newest.values());failed=[name for(name,(_,conclusion))in newest.items()if conclusion in FAILED_CONCLUSIONS and not(any_active and conclusion=='cancelled')];return', '.join(failed)
 	except OSError:return None
 def pr_check_once(result,root):
 	failed=pr_failed_check(root)
@@ -360,8 +360,8 @@ def pr_check_latest(root,slug,sha):
 		try:stamp=datetime.fromisoformat(node['at'].replace('Z','+00:00'))
 		except ValueError:return None
 		if stamp.tzinfo is None:return None
-		key=node['type'],node['name'],node['workflow']
-		if key not in latest or stamp>latest[key][0]:latest[key]=stamp,node
+		active=node['state']not in PR_CHECK_SUCCESS_STATES+PR_CHECK_FAILURE_STATES;rank=1 if active else 0,stamp;key=node['type'],node['name'],node['workflow']
+		if key not in latest or rank>latest[key][0]:latest[key]=rank,node
 	return[node for(_stamp,node)in sorted(latest.values(),key=lambda entry:(entry[1]['workflow'],entry[1]['name'],entry[1]['type']))]
 def pr_check_rollup(root,slug,sha):
 	latest=pr_check_latest(root,slug,sha)
@@ -406,7 +406,7 @@ def pr_checks_watch(root='.',seconds=PR_CHECK_DISCOVERY_SECONDS,step=PR_CHECK_DI
 		if latest is None:return unavailable('gh did not read the check rollup')
 		elapsed=time.monotonic()-started
 		if latest:seen_any=True
-		failed=[node for node in latest if node['state']in PR_CHECK_FAILURE_STATES]
+		active=any(node['state']not in PR_CHECK_SUCCESS_STATES+PR_CHECK_FAILURE_STATES for node in latest);failed=[node for node in latest if node['state']in PR_CHECK_FAILURE_STATES and not(active and node['state']=='CANCELLED')]
 		for node in failed:
 			identity=node['type'],node['workflow'],node['name'],node['at']
 			if identity in reported:continue
@@ -684,7 +684,7 @@ def parse_fields(markdown):
 			if question['type']!='text'and not any(custom_label(option)is not None for option in question['options']):question['options'].append('Something else...: ___')
 	return blocks,questions
 def render_inline(markdown):
-	markdown=strip_md_comments(markdown)
+	markdown=unescape_fences(strip_md_comments(markdown))
 	try:from markdown_it import MarkdownIt
 	except ImportError:return html.escape(markdown)
 	parser=MarkdownIt('commonmark',{'html':False}).enable(['strikethrough']);highlight_markdown(parser);parser.add_render_rule('link_open',open_link);return parser.renderInline(markdown)
@@ -1042,6 +1042,7 @@ def egress_warning(line):
 	if not hosts:return None
 	names=', '.join(hosts);return f"arena-preview gate: {names} sits outside this sandbox's egress allowlist. The TLS handshake fails with SSL_ERROR_SYSCALL, which reads as a transient fault and never clears on a retry. Read it through the fetch_page tool instead."
 def first_blocking_piece(line):
+	if platform_line(line or''):return None
 	for piece in command_pieces(agent_line(line)):
 		tokens,index=piece_tokens(piece)
 		if index>=len(tokens):continue
@@ -1587,17 +1588,18 @@ def poll_once(store,sleeper=None):
 	return status
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
-	deadline=time.monotonic()+POLL_WAIT_SECONDS;listing={'checked_at':None,'pending':[]};print(f"poll max {POLL_WAIT_SECONDS} s; bash timeout 1800 s.",file=sys.stderr,flush=True);store.start_poll();failures=[];stop_checks=threading.Event();threading.Thread(target=pr_check_watch,args=(failures,resolve_repo_root(),stop_checks),daemon=True).start()
+	deadline=time.monotonic()+POLL_WAIT_SECONDS;listing={'checked_at':None,'pending':[]};print(f"poll max {POLL_WAIT_SECONDS} s; bash timeout 1800 s. {REMINDERS[0]}",file=sys.stderr,flush=True);store.start_poll();failures=[];stop_checks=threading.Event();threading.Thread(target=pr_check_watch,args=(failures,resolve_repo_root(),stop_checks),daemon=True).start();announced_running=False
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			if time.monotonic()>=deadline:break
 			violation=store.pending_violation_note();listing=store.read(include_quiet=False)
 			if violation or listing['pending']:print_read(store);return 0
 			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
-			if failures:print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);return 0
+			if failures and'pr-checks'not in live_runs(store.path.parent):print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
 			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: UNBLOCKED TASK {names}. Start a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
 			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);return 0
+			if not announced_running:announced_running=True;run_notices(store.path.parent,show_running=True)
 			if index+1<POLL_MAX_LOOPS:
 				remaining=deadline-time.monotonic()
 				if remaining<=0:break
@@ -2740,7 +2742,22 @@ def add_copy_buttons(rendered):
 	def replace(match):inner=match.group(1);code=html.unescape(CODE_TAG.sub('',inner));payload=html.escape(code,quote=True).replace('\n','&#10;');button=f'<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" data-code="{payload}">{ICON_COPY}</button>';return f'<div class="code-block">{button}<pre>{inner}</pre></div>'
 	return CODE_BLOCK.sub(replace,rendered)
 ESCAPED_FENCE=re.compile('^(?P<indent>[ \\t]*)\\\\(?P<fence>(?:`{3,}|~{3,}))',re.MULTILINE)
-def unescape_fences(source):return ESCAPED_FENCE.sub(lambda match:match.group('indent')+match.group('fence'),source)
+ESCAPED_INLINE_CODE=re.compile('(?<![\\\\`])`(?P<body>(?!\\\\`|`)(?:(?<!\\\\)\\\\`|[^`\\n])*?(?<!\\\\)\\\\`(?:(?<!\\\\)\\\\`|[^`\\n])*|(?<!\\\\)\\\\`(?:(?:(?<!\\\\)\\\\`|[^`\\n])*?(?<!\\\\)\\\\`)?)`(?![`])')
+def _unescape_inline_code_match(match):
+	content=re.sub('(?<!\\\\)\\\\`','`',match.group('body'));longest=max((len(run)for run in re.findall('`+',content)),default=0);fence='`'*(longest+1)
+	if content.startswith('`')or content.endswith('`')or content.startswith(' ')and content.endswith(' '):return f"{fence} {content} {fence}"
+	return f"{fence}{content}{fence}"
+def unescape_fences(source):
+	restored=ESCAPED_FENCE.sub(lambda match:match.group('indent')+match.group('fence'),source);out,fence=[],None
+	for line in restored.splitlines(keepends=True):
+		if fence is not None:
+			out.append(line)
+			if line.strip().startswith(fence):fence=None
+			continue
+		opening=FENCE.match(line)
+		if opening:fence=opening.group(1);out.append(line);continue
+		out.append(ESCAPED_INLINE_CODE.sub(_unescape_inline_code_match,line))
+	return''.join(out)
 PARAGRAPH=re.compile('<p>.*?</p>',re.DOTALL)
 PARAGRAPH_BREAK=re.compile('<br\\s*/?>')
 def drop_paragraph_breaks(rendered):return PARAGRAPH.sub(lambda match:PARAGRAPH_BREAK.sub('',match.group(0)),rendered)
@@ -3263,14 +3280,14 @@ def gate_verdict(state_dir,push,line,out=None):
 		if hint:print(hint,file=out,flush=True)
 		blocker=first_blocking_piece(line)
 		if blocker:blocker=shell_command_text(blocker);print(f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",file=out,flush=True)
-		return 1
+		print(REMINDERS[0],file=out,flush=True);return 1
 	if push and main_identical():print('HEAD equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',file=out,flush=True);return 1
 	stale=main_ancestor_warning()if push else''
 	if stale:print(stale,file=out,flush=True);return 1
 	return 0
 PRE_STEPS='interrupt','read-set','remind','main-local','main-fresh','bare','proxy','gate'
 GATED_SHELLS=frozenset({'bash','sh','dash','ksh','zsh'})
-PLATFORM_LINES='arena-workspace','ss -ltn','netstat -ltn','source ~/.profile',"mkdir -p '/home/user'"
+PLATFORM_LINES='arena-workspace','ss -ltn','netstat -ltn','source ~/.profile',"mkdir -p '/home/user'","/bin/bash -l -c mkdir -p '","/bin/bash -l -c [ -e '","python3 -I - <<'PY'"
 def platform_line(line):return any(pattern in line for pattern in PLATFORM_LINES)
 def state_file(state_dir):return Path(state_dir)/'state.sqlite3'
 def bare_script_invocation(line):

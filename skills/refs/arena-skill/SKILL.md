@@ -15,7 +15,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
 1. Run `<skill>/scripts/install.sh` from the repository root at session start and after this skill’s source files change, and restart the running preview server after those source changes, before the next CLI call or preview-server start.
 2. Start the preview as Setup step 3 describes.
-3. After the initial visibility response, read references/questionnaire.json and submit fresh answers with arena-preview questionnaire '<json>'. Use arena-preview poll as the first inbox call and answer with arena-preview ack.
+3. After the initial visibility response, read references/questionnaire.json and submit fresh answers with arena-preview questionnaire '<json>', start repository tooling installs via `arena-preview run start` and any demo or presentation server via `start_process`, then make arena-preview poll the first inbox call and answer with arena-preview ack.
 4. When a call needs the recorded agent key, after a 401 or an owner question, run `arena-preview key`; it prints the key, the host and the stamp. The call breaks with the restart line while the preview server is not up.
 5. Try `fetch_page` on the actual source URL first; use [proxy routes](#proxy-access) through `fetch_page` only if that call cannot return the needed data.
 
@@ -111,7 +111,7 @@ When a task creates a commit, MUST append the landed commit's subject and short 
 
 ## Publish reports and forms
 
-Report carriage always goes through this skill: a short answer goes in the `ack` reply; a long answer or a question goes in a fielded report. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports with `arena-preview report publish`; require its stored-revision and rendered-report checks to pass before announcing publication. When a report or note delivers an agent handoff, structure it with the [handoff recipe](references/HANDOFF.md).
+Report carriage always goes through this skill: a short answer goes in the `ack` reply; a long answer or a question goes in a fielded report. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports with `arena-preview report publish`; require its stored-revision and rendered-report checks to pass before announcing publication. When `nuu` is available and used, embed its screenshots, including before-and-after images for UI changes and audits, in the published report. When a report or note delivers an agent handoff, structure it with the [handoff recipe](references/HANDOFF.md).
 
 ```bash
 arena-preview report publish <source.md> --id <id> --title <title>

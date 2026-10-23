@@ -108,7 +108,7 @@ When a task creates a commit, MUST append its landed subject and short hash to t
 
 ## Publish reports and forms
 
-Report carriage always goes through this skill: a short answer goes in the `ack` reply; a long answer or a question goes in a fielded report. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports with `arena-preview report publish`; require its stored-revision and rendered-report checks to pass before announcing publication. Structure agent handoffs with the [handoff recipe](references/HANDOFF.md).
+Report carriage always goes through this skill: a short answer goes in the `ack` reply; a long answer or a question goes in a fielded report. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports with `arena-preview report publish`; require its stored-revision and rendered-report checks to pass before announcing publication. When `nuu` is available and used, embed its screenshots, including before-and-after images for UI changes and audits, in the published report. Structure agent handoffs with the [handoff recipe](references/HANDOFF.md).
 
 ```bash
 arena-preview report publish <source.md> --id <id> --title <title>

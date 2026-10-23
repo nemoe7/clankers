@@ -106,7 +106,6 @@ PY
 COMMIT_MSG_HOOK
 chmod 755 "$GIT_HOOK" || fail "cannot make $GIT_HOOK executable"
 git config --local core.hooksPath "$GIT_HOOKS" || fail "cannot set core.hooksPath"
-echo "arena-preview installer: commit-msg validation active at $GIT_HOOK"
 
 # 5. Hook script: save $?, print the unacked-count reminder on stderr, restore the exit code.
 cat > "$HOOK" <<EOF || fail "cannot write $HOOK"
@@ -117,7 +116,7 @@ rc=\$?
 # These are the shapes the gate already ignores, so the count and the stamp answer for the agent's own calls. The hook is a child of the shell that exits, so its parent carries that shell's line.
 # case: platform-shell
 case "\$(tr '\\0' ' ' < /proc/\$PPID/cmdline 2>/dev/null)" in
-  *arena-workspace*|*"ss -ltn"*|*"netstat -ltn"*|*"source ~/.profile"*|*"mkdir -p '/home/user'"*)
+  *arena-workspace*|*"ss -ltn"*|*"netstat -ltn"*|*"source ~/.profile"*|*"mkdir -p '/home/user'"*|*"/bin/bash -l -c mkdir -p '"*|*"/bin/bash -l -c [ -e '"*|*"python3 -I - <<'PY'"*)
     exit "\$rc" ;;
 esac
 "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" --reminder >&2
@@ -202,7 +201,12 @@ unset _arena_preview_scripts
 EOF
 sed -i "s|__ARENA_PREVIEW_ROOT__|$REPO_ROOT|" "$PROFILE" || fail "cannot pin PATH root in $PROFILE"
 
-echo "arena-preview installer: ok; state: $REPO_ROOT/$STATE_REL, ignored through $GLOBAL_IGNORE; command: arena-preview in new Bash shells"
+cat <<'EOF'
+commitlint: ok
+gitignore: ok
+arena-preview: ok
+next action: `start_process`: `arena-preview --serve --port 8000`
+EOF
 
 # 8. Install the DEBUG gate trap last in ~/.bash_profile.
 GATE_TRAP_MARKER="# arena-preview-gate-trap"

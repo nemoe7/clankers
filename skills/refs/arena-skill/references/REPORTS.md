@@ -12,6 +12,7 @@
 - Verify the rendered report before telling the owner it is available.
 - An image renders from its URL.
 - `![alt](src =320x200)` sets its size, and `=320x` scales the height.
+- When `nuu` is available and used, always embed its captures, including before-and-after images for UI changes and audits, in the report.
 - If an update rejects an answer, ask the owner to preserve the draft, reload and review the current report.
 
 ## Report fields

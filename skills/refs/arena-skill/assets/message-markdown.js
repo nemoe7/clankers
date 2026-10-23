@@ -72,6 +72,33 @@ messageMarkdown.renderer.rules.image = (tokens, index, options, env, renderer) =
   }
   return renderMessageImage(tokens, index, options, env, renderer);
 };
+const ESCAPED_INLINE_CODE = /(?<![\\`])`((?!\\`|`)(?:(?<!\\)\\`|[^`\n])*?(?<!\\)\\`(?:(?<!\\)\\`|[^`\n])*|(?<!\\)\\`(?:(?:(?<!\\)\\`|[^`\n])*?(?<!\\)\\`)?)`(?![`])/g;
+function unescapeMessageMarkdown(source) {
+  const restored = source.replace(/^([ \t]*)\\(`{3,}|~{3,})/gm, '$1$2');
+  let fence = null;
+  return restored.split(/(\r?\n)/).map(part => {
+    if (part === '\n' || part === '\r\n') return part;
+    if (fence !== null) {
+      if (part.trimStart().startsWith(fence)) fence = null;
+      return part;
+    }
+    const opening = /^ {0,3}(`{3,}|~{3,})/.exec(part);
+    if (opening) {
+      fence = opening[1];
+      return part;
+    }
+    return part.replace(ESCAPED_INLINE_CODE, (_, body) => {
+      const content = body.replace(/(?<!\\)\\`/g, '`');
+      const runs = content.match(/`+/g) || [];
+      const longest = runs.reduce((max, run) => Math.max(max, run.length), 0);
+      const ticks = '`'.repeat(longest + 1);
+      if (content.startsWith('`') || content.endsWith('`') || (content.startsWith(' ') && content.endsWith(' '))) {
+        return `${ticks} ${content} ${ticks}`;
+      }
+      return `${ticks}${content}${ticks}`;
+    });
+  }).join('');
+}
 function renderMessageMarkdown(source) {
   const attribute = value => messageMarkdown.utils.escapeHtml(value).replaceAll("'", '&#x27;');
   const images = [];
@@ -81,7 +108,7 @@ function renderMessageMarkdown(source) {
     images.push(`<img src="${attribute(url)}" alt="${attribute(alt)}" width="${width}"${height ? ` height="${height}"` : ''} />`);
     return ` ${imagePrefix}${images.length - 1}x `;
   });
-  let rendered = messageMarkdown.render(tagged.replace(/^([ \t]*)\\(`{3,}|~{3,})/gm, '$1$2'));
+  let rendered = messageMarkdown.render(unescapeMessageMarkdown(tagged));
   rendered = rendered.replace(/<p>[\s\S]*?<\/p>/g, paragraph => paragraph.replace(/<br\s*\/?>/g, ''));
   rendered = rendered.replace(new RegExp(`${imagePrefix}(\\d+)x`, 'g'), (_, index) => images[Number(index)]);
   return rendered.replace(/<pre>([\s\S]*?)<\/pre>/g, (_, inner) => {

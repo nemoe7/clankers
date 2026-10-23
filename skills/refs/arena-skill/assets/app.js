@@ -79,6 +79,11 @@ const messageNodes = new Map();
 // so a long session does not pay for every message at once.
 const HISTORY_PAGE = 20;
 let historyShown = HISTORY_PAGE;
+// Filters can shorten the log and clamp its scroll position, then leave the next view at the first message.
+// Restore the end when the owner followed it. Otherwise preserve the position they chose.
+let logPinned = true;
+const historyAtEnd = history =>
+  history.scrollHeight - history.scrollTop - history.clientHeight < 80;
 
 function stored(name) {
   try { return localStorage.getItem(`${key}:${name}`); }
@@ -897,11 +902,6 @@ function loadOlderMessages() {
   applyLogSearch();
   history.scrollTop += history.scrollHeight - before;
 }
-// Filters can shorten the log and clamp its scroll position, then leave the next view at the first message.
-// Restore the end when the owner followed it. Otherwise preserve the position they chose.
-let logPinned = true;
-const historyAtEnd = history =>
-  history.scrollHeight - history.scrollTop - history.clientHeight < 80;
 $('#history').addEventListener('scroll', () => {
   const history = $('#history');
   logPinned = historyAtEnd(history);
@@ -1156,7 +1156,10 @@ async function readState() {
     lastState = state;
     renderState();
     queueReady = true;
-  } catch (error) { pollSince = null; setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
+  } catch (error) {
+    pollSince = null;
+    setConnection('down', /^HTTP 502\b/.test(error.message) ? 'HTTP 502: Bad Gateway' : `Connection failed: ${error.message}. Draft kept; history may be stale.`);
+  }
   finally {
     stateBusy = null;
     pollCommits = null;
@@ -3161,12 +3164,16 @@ function releaseHeldReport(nextId) {
 }
 function clearReportPanel(id) {
   if ($('#report').dataset.reportId !== id && $('#report-select').value !== id) return;
+  if (heldReport?.id === id) heldReport = null;
   $('#report').replaceChildren();
   delete $('#report').dataset.reportId;
   delete $('#report').dataset.updatedAt;
   delete $('#report').dataset.revision;
-  save('report', '');
+  const nextId = $('#report-select').value && $('#report-select').value !== id ? $('#report-select').value : '';
+  save('report', nextId);
   $('#report-status').textContent = `Report ${id} · Deleted · ${time(new Date().toISOString())}`;
+  listSignature = null;
+  if (nextId && !$('#reports-panel').hidden) void loadReport(true);
   void refreshState();
 }
 $('#unpublish-report').addEventListener('click', async () => {
@@ -3188,7 +3195,10 @@ $('#unpublish-report').addEventListener('click', async () => {
     const report = ((getState()?.reports) || []).find(item => item.id === id);
     if (report && ackUnread(report)) await markAckSeen(id);
     saveReportDraft();
-    const remove = state => { state.reports = state.reports.filter(report => report.id !== id); };
+    const remove = state => {
+      if (heldReport?.id === id) heldReport = null;
+      state.reports = state.reports.filter(report => report.id !== id);
+    };
     await optimisticWrite(state => {
       remove(state);
       state.pending_report_deletes = [...(state.pending_report_deletes || []), id];

@@ -645,9 +645,13 @@ test('preview client', async (t) => {
     const literal = '&lt;script&gt;';
     probe.innerHTML = `<code>${literal.replaceAll('&', '&amp;')}</code>`;
     assert.equal(probe.content.textContent, literal, 'the fixture decodes HTML once without treating text as tags');
+    get('#history').clientHeight = 200;
+    get('#note').scrollHeight = 40;
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/markdown-it.min.js'), 'utf8'), context);
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/message-markdown.js'), 'utf8'), context);
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), context);
+    get('#history').clientHeight = 0;
+    get('#note').scrollHeight = 0;
     await tick();
   });
 
@@ -1904,7 +1908,7 @@ test('preview client', async (t) => {
     // A Cloudflare page for the dead sandbox must not land in the header. The status stands in.
     stateGatewayBody = '<!DOCTYPE html><html class="no-js ie6 oldie" lang="en-US"><head><title>arena-site.site | 502: Bad gateway</title></head><body><h2>Bad gateway</h2><p>Error code 502</p></body></html>';
     await refresh();
-    assert.equal(get('#connection-text').textContent, 'Connection failed: HTTP 502 Bad Gateway. Draft kept; history may be stale.');
+    assert.equal(get('#connection-text').textContent, 'HTTP 502: Bad Gateway');
     // A proxy that answers plain text keeps one short line of it, folded to 120 characters.
     stateGatewayBody = `proxy refused\n${'x'.repeat(200)}`;
     await refresh();
@@ -3295,6 +3299,7 @@ test('preview client', async (t) => {
     assert.equal(get('#unpublish-report').dataset.state, '');
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(state.reports.some(report => report.id === 'gone1'), false, 'the server dropped the row');
+    assert.equal(get('#report').dataset.reportId, 'keep1', 'deleting the selected report loads the next selected report instead of leaving an empty panel');
     assert.ok(statusLines.some(line => (
       /^Report gone1 · Deleted · /.test(line) && !line.includes('hides when seen')
     )), `the delete receipt must not wait for a read; flow wrote: ${statusLines.join(' | ')}`);
@@ -5077,3 +5082,38 @@ test('the queue end uses an accented line without an end card', () => {
   const line = css.match(/\.task-list\[data-drop\]\s*\{[^}]*box-shadow:\s*inset\s+0\s+(-?\d+)px/);
   assert.ok(line && Number(line[1]) < 0, 'the accented line marks the list bottom');
 });
+
+test('renderMessageMarkdown unescapes escaped backticks inside single-backtick code spans', () => {
+  const vm = require('node:vm');
+  const markdownItSource = fs.readFileSync(path.join(__dirname, '../assets/markdown-it.min.js'), 'utf8');
+  const messageMarkdownSource = fs.readFileSync(path.join(__dirname, '../assets/message-markdown.js'), 'utf8');
+  const context = {
+    atob,
+    btoa,
+    crypto: require('node:crypto'),
+    document: {
+      createElement() {
+        return { innerHTML: '', textContent: '' };
+      },
+    },
+    icon() {
+      return { outerHTML: '<svg></svg>' };
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(markdownItSource, context);
+  vm.runInContext(messageMarkdownSource, context);
+  assert.equal(
+    context.renderMessageMarkdown('`next action: \\`start_process\\`: \\`arena-preview --serve --port 8000\\``').trim(),
+    '<p><code>next action: `start_process`: `arena-preview --serve --port 8000`</code></p>'
+  );
+  assert.equal(
+    context.renderMessageMarkdown('`\\`start_process\\``').trim(),
+    '<p><code>`start_process`</code></p>'
+  );
+  assert.equal(
+    context.renderMessageMarkdown('replace `\\` with `/` in `bar`').trim(),
+    '<p>replace <code>\\</code> with <code>/</code> in <code>bar</code></p>'
+  );
+});
+
