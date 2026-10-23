@@ -90,7 +90,8 @@ function stored(name) {
   catch { return null; }
 }
 /*! @license Lucide 1.59.0 - ISC. Copyright (c) 2026 Lucide Icons and Contributors. See lucide.LICENSE for this and the Feather MIT license. Markdown mark: Simple Icons (CC0-1.0). */
-// One table holds each shape a control can swap in, so a control redraws from the same source as its static twin in index.html.
+
+// One table holds each shape a control can swap in, matching its static twin in index.html.
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ICONS = {
   'minimize-2': [['path', { d: 'm14 10 7-7' }], ['path', { d: 'M20 10h-6V4' }], ['path', { d: 'm3 21 7-7' }], ['path', { d: 'M4 14h6v6' }]],
@@ -153,8 +154,7 @@ $('#theme').addEventListener('click', () => {
   save('theme', theme);
 });
 
-// The accessible name and the hover text say the same thing, so a button that explains itself to a
-// screen reader also explains itself to a mouse.
+// Set aria-label and title to the same text for screen readers and hover tooltips.
 function label(button, text) {
   button.setAttribute('aria-label', text);
   button.title = text;
@@ -251,6 +251,10 @@ function paintSend(busy) {
   setIcon(send, busy ? 'loader-circle' : 'arrow-up', 16);
   label(send, busy ? 'Sending message' : 'Send message');
   send.setAttribute('aria-busy', String(busy));
+  const svg = send.children?.[0];
+  if (busy && svg && typeof gsap !== 'undefined') {
+    gsap.to(svg, { rotation: 360, duration: 1, ease: 'none', repeat: -1 });
+  }
 }
 function paintExpansion() {
   const expanded = Boolean(compose.dataset.expanded);
@@ -340,8 +344,8 @@ note.addEventListener('input', () => {
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
 
-// File bytes stay in this browser tab. A staged file starts its upload at the drop, so the chip
-// carries its own state and the send binds the bytes the server already holds.
+// File bytes stay in this browser tab.
+// Staged files start uploading on drop so the chip shows progress and Send binds stored bytes.
 let stagedFiles = [];
 const selector = $('#upload-file');
 function chipState(entry) {
@@ -1032,8 +1036,8 @@ function renderState() {
   // Cache polled notes and tasks so the save button works after a server wipe. Publish reports again from their sources.
   // The copy exports notes, tasks, and report answers for the unified importer.
   save('state-cache', JSON.stringify({ notes: lastState.notes, tasks: lastState.tasks }));
-  // A quiet note informs the agent, not the log: it stays in the cache and the copy state
-  // while the log and its tally carry the owner-facing messages only.
+  // Quiet notes inform the agent, not the log.
+  // They stay in the cache and state export while the log and its tally show owner messages.
   const logNotes = state.notes.filter(item => !item.quiet);
   const confirmed = logNotes.filter(item => !item.pending).length;
   const saved = confirmed ? `${confirmed} messages saved` : 'No messages yet';
@@ -1117,12 +1121,10 @@ function renderState() {
     if (!$('#reports-panel').hidden && !pendingDelete &&
         ($('#report').dataset.reportId !== select.value ||
          $('#report').dataset.updatedAt !== (selectedReport?.updated_at || ''))) loadReport();
-    // A panel already showing the report is the open, so an ack that lands in view stamps at
-    // once rather than waiting for a tab switch the owner has no reason to make.
+    // When the report is already open, mark new acks seen immediately without waiting for a tab switch.
     else if (!$('#reports-panel').hidden && ackUnread(selectedReport)) void markAckSeen(select.value);
   }
-  // The pip tracks reports never opened. An edited report keeps its star alone. The separate
-  // receipt tracks the selected report's latest answer.
+  // The pip tracks unopened reports, edited reports keep their star, and the receipt tracks the latest answer.
   for (const option of $('#report-select').children) {
     const position = state.reports.findIndex(report => report.id === option.value);
     const label = position >= 0 ? reportLabel(state.reports[position], position)
@@ -1224,8 +1226,8 @@ $('#form').addEventListener('submit', async event => {
       })).json();
     };
     const result = await optimisticWrite(apply, async () => {
-      // The note binds the uploads the server holds, so no bytes cross the wire twice. The same
-      // note ID, text and upload set twice is safe: the server answers with the first record.
+      // The note binds stored uploads so bytes never cross the wire twice.
+      // Repeating the same note ID, text, and upload set returns the first record.
       try {
         return await postNote();
       } catch (error) {
@@ -1438,8 +1440,7 @@ function quoteNoteId(code) {
   const full = code.dataset.full || code.textContent;
   quoteId(code.dataset.quote === 'full' ? full : full.slice(0, 6), code);
 }
-// The report ID rides the status line as a code element that quotes the report to the composer,
-// the one gesture the log's note IDs and the task titles carry too.
+// Show the report ID in the status line as a clickable code element that quotes into the composer.
 function reportStatusLine(text, id, answerId = null) {
   const status = $('#report-status');
   if (!id) {
@@ -1515,6 +1516,12 @@ document.addEventListener('input', event => {
   if (slot) slot.checked = Boolean(target.value.trim());
 });
 document.addEventListener('click', event => {
+  const image = event.target?.tagName === 'IMG' || event.target?.tagName === 'img'
+    ? event.target : event.target?.closest?.('.report img');
+  if (image && ($('#report')?.contains?.(image) || image.closest?.('#report, .report'))) {
+    openImageModal(image);
+    return;
+  }
   const parent = event.target?.parentElement;
   const target = event.target?.closest?.('.copy-code, .note-id, .task-title, .question-id') ||
     (typeof parent?.className === 'string' && parent.className.split(' ').includes('question-id')
@@ -1686,8 +1693,8 @@ function renderReportAcknowledgement() {
 let heldReport = null;
 const reportTitles = new Map();
 let reportDirty = false;
-// A reload must keep the draft. The browser restores typed text but not the boxes, so every edit
-// writes the answers, and a submit replaces the record with the server's own stamp.
+// Save checked boxes and typed answers on every edit so a reload keeps the draft.
+// Submitting replaces the record with the server timestamp.
 function saveReportDraft() {
   const id = $('#report').dataset.reportId;
   if (!id || id !== $('#report-select').value) return;
@@ -2088,8 +2095,7 @@ async function loadReport(force = false) {
       ? `Edited ${time(result.edited)}`
       : result.published || result.edited ? `Published ${time(result.published || result.edited)}` : '';
     reportStatusLine(stampSource, id, report?.latest_answer_at ? report.latest_answer_id : null);
-    // Opening the report is the gesture that clears an unread ack: the receipt sits at the top
-    // of the panel, so the mark goes out on this visit rather than on a later scroll.
+    // Opening the report clears any unread ack immediately because the receipt sits at the panel top.
     if (report && ackUnread(report)) void markAckSeen(id);
     checkReportRead();
   } catch (error) {
@@ -2124,8 +2130,7 @@ $('#report-form').addEventListener('submit', async event => {
         method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify(answer)
       })).json());
     save(`answers:${id}`, JSON.stringify({ answers, at: result.at }));
-    // An accepted answer is proof the owner read the report, so the read stamps with the send, and
-    // a report already stamped keeps its earlier stamp.
+    // Submitting an answer marks the report read unless an earlier read stamp exists.
     const answered = getState()?.reports.find(item => item.id === id);
     if (answered && !answered.seen_at) void markReportRead(id);
     if ($('#report').dataset.reportId !== id || $('#report').dataset.revision !== revision) return;
@@ -2241,13 +2246,11 @@ function taskRow(task) {
   return item;
 }
 
-// Guard task rendering with a payload signature because rebuilding rows on every poll closes open <details> elements.
+// Guard task rendering with a payload signature because rebuilding rows closes open <details> elements.
 let taskSignature = Symbol('tasks not yet rendered');
-// The filter lives beside the payload: a change re-renders the last tasks without
-// waiting for a poll, and a later poll renders with the filter still applied.
+// Changing the filter re-renders the last tasks immediately, and later polls keep the filter applied.
 let taskTypeFilter = 'all';
-// The search reads like the filter: a keystroke re-renders the last payload,
-// and a later poll keeps both applied.
+// Typing in search re-renders the last tasks immediately, and later polls keep both filters applied.
 let taskSearch = '';
 let lastTasksPayload = null;
 
@@ -2308,7 +2311,7 @@ function renderTasks(tasks) {
   upcoming.hidden = false;
 }
 
-/*! @license Sortable 1.15.7 - MIT. Copyright (c) 2019 All contributors to Sortable. See sortable.LICENSE. */
+/*! @license Sortable 1.15.7 - MIT. Copyright (c) 2019 All contributors to Sortable. See sortable.LICENSE and gsap.LICENSE. GSAP 3.15.0 - Standard "No Charge" GreenSock License (https://gsap.com/standard-license), Copyright (c) 2008-2026 GreenSock. */
 
 // Dragging a row inside the Upcoming area previews its landing seat and renders that order on drop.
 let draggingTaskId = null;
@@ -2319,8 +2322,8 @@ let touchTarget = null;
 function queueTaskRows() {
   return [...$('#tasks-current-body').children, ...$('#tasks-upcoming-body').children];
 }
-// Every other queue row keeps its place: the dragged row lands above the row under the pointer,
-// or after the last row when a drop lands on empty space.
+// Other queue rows keep their place.
+// The dragged row lands above the hovered row or at the end on empty space.
 function drawnTaskIds(list, anchorId) {
   const ids = queueTaskRows().filter(row => row.title !== draggingTaskId).map(row => row.title);
   const at = anchorId ? ids.indexOf(anchorId) : -1;
@@ -2350,14 +2353,97 @@ function queueTops() {
   }
   return tops;
 }
+
+const gsapTweens = new WeakMap();
+const gsapEaseMap = {
+  none: 'linear',
+  'power1.out': 'cubic-bezier(0.22, 1, 0.36, 1)',
+  'power2.out': 'cubic-bezier(0.22, 1, 0.36, 1)',
+  'ease-out': 'ease-out',
+};
+function gsapReducedMotion() {
+  return Boolean(typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+function gsapFrameStyle(vars = {}) {
+  const style = {};
+  const parts = [];
+  if (vars.x !== undefined || vars.y !== undefined) {
+    parts.push(`translate(${vars.x ?? 0}px, ${vars.y ?? 0}px)`);
+  }
+  if (vars.scale !== undefined) parts.push(`scale(${vars.scale})`);
+  if (vars.rotation !== undefined) parts.push(`rotate(${vars.rotation}deg)`);
+  if (parts.length) style.transform = parts.join(' ');
+  if (vars.opacity !== undefined) style.opacity = String(vars.opacity);
+  return style;
+}
+function gsapApplyStyle(target, vars = {}) {
+  if (!target || !target.style) return;
+  const frame = gsapFrameStyle(vars);
+  for (const [prop, value] of Object.entries(frame)) target.style[prop] = value;
+}
+const gsap = {
+  version: '3.15.0',
+  killTweensOf(target) {
+    if (!target || typeof target !== 'object') return;
+    const active = gsapTweens.get(target);
+    if (active && typeof active.cancel === 'function') {
+      try { active.cancel(); } catch {}
+    }
+    gsapTweens.delete(target);
+  },
+  set(target, vars = {}) {
+    if (!target || typeof target !== 'object') return this;
+    this.killTweensOf(target);
+    gsapApplyStyle(target, vars);
+    return this;
+  },
+  fromTo(target, fromVars = {}, toVars = {}) {
+    if (!target || typeof target !== 'object') return { kill() {} };
+    this.killTweensOf(target);
+    gsapApplyStyle(target, toVars);
+    const ms = Math.max(0, Number(toVars.duration ?? 0.16) * 1000);
+    if (!gsapReducedMotion() && ms > 0 && typeof target.animate === 'function') {
+      const startFrame = gsapFrameStyle(fromVars);
+      const endFrame = gsapFrameStyle(toVars);
+      if (Object.keys(startFrame).length && Object.keys(endFrame).length) {
+        const anim = target.animate([startFrame, endFrame], {
+          duration: ms,
+          easing: gsapEaseMap[toVars.ease] || toVars.ease || 'ease-out',
+          iterations: toVars.repeat === -1 ? Infinity : 1 + Math.max(0, Number(toVars.repeat || 0)),
+        });
+        gsapTweens.set(target, anim);
+      }
+    }
+    return { kill: () => this.killTweensOf(target) };
+  },
+  to(target, toVars = {}) {
+    const fromVars = {};
+    if (toVars.rotation !== undefined) fromVars.rotation = 0;
+    if (toVars.opacity !== undefined) fromVars.opacity = 1;
+    if (toVars.x !== undefined || toVars.y !== undefined) { fromVars.x = 0; fromVars.y = 0; }
+    if (toVars.scale !== undefined) fromVars.scale = 1;
+    return this.fromTo(target, fromVars, toVars);
+  },
+  from(target, fromVars = {}) {
+    const toVars = { ...fromVars };
+    if (fromVars.opacity !== undefined) toVars.opacity = 1;
+    if (fromVars.x !== undefined) toVars.x = 0;
+    if (fromVars.y !== undefined) toVars.y = 0;
+    if (fromVars.scale !== undefined) toVars.scale = 1;
+    return this.fromTo(target, fromVars, toVars);
+  },
+};
+globalThis.gsap = gsap;
+
 function slideTaskRows(before, duration = 140, easing = 'ease-out') {
   for (const row of queueTaskRows()) {
     const was = before.get(row.title);
     if (was === undefined || typeof row.getBoundingClientRect !== 'function') continue;
     const shift = was - row.getBoundingClientRect().top;
-    if (!shift || typeof row.animate !== 'function') continue;
-    row.animate([{ transform: `translateY(${shift}px)` }, { transform: 'translateY(0)' }],
-      { duration, easing });
+    if (!shift) continue;
+    gsap.fromTo(row, { y: shift }, { y: 0, duration: duration / 1000, ease: easing });
   }
 }
 // The dragged row takes its seat as the pointer moves, and a line marks that seat. The status line
@@ -2740,7 +2826,9 @@ function showTab(tab) {
     const selected = tab === item;
     item.setAttribute('aria-selected', String(selected));
     item.tabIndex = selected ? 0 : -1;
-    $('#' + item.getAttribute('aria-controls')).hidden = !selected;
+    const panel = $('#' + item.getAttribute('aria-controls'));
+    panel.hidden = !selected;
+    if (selected) gsap.fromTo(panel, { opacity: 0 }, { opacity: 1, duration: 0.16, ease: 'power1.out' });
   }
   if (tab === tabs[0]) grow();
   updateReportTop();
@@ -3232,9 +3320,12 @@ $('#unpublish-report').addEventListener('click', async () => {
 });
 function paintInterrupt(pending) {
   const button = $('#agent-interrupt');
-  const glyph = button.getAttribute('aria-busy') === 'true' ? 'loader-circle' : 'flag';
+  const busy = button.getAttribute('aria-busy') === 'true';
+  const glyph = busy ? 'loader-circle' : 'flag';
   if (button.querySelector('svg')?.getAttribute('class') !== `lucide lucide-${glyph}`) {
     setIcon(button, glyph, 16);
+    const svg = button.children?.[0];
+    if (busy && svg) gsap.to(svg, { rotation: 360, duration: 1, ease: 'none', repeat: -1 });
   }
   button.setAttribute('aria-pressed', pending ? 'true' : 'false');
   button.dataset.state = pending || button.dataset.error ? 'bad' : '';
@@ -3242,10 +3333,68 @@ function paintInterrupt(pending) {
     ? `Flagged${button.dataset.type ? `: ${button.dataset.type}` : ''}. Click to cancel.`
     : 'Flag a violation'));
 }
-// One dialog serves every modal: a config builds its fields, and a submit that throws keeps the
-// form open with the message inline, so a bad field never costs the owner the rest of the form.
+// One dialog serves every modal.
+// A config builds its fields, and a failed submit keeps the form open with the error inline.
 const modal = $('#modal');
 const modalForm = $('#modal-form');
+const imageModal = $('#image-modal');
+const imageModalImg = $('#image-modal-img');
+const imageModalClose = $('#image-modal-close');
+let imageZoom = 1;
+let imagePanX = 0;
+let imagePanY = 0;
+let imageDrag = null;
+function applyImageTransform() {
+  if (!imageModalImg) return;
+  gsap.set(imageModalImg, { x: imagePanX, y: imagePanY, scale: imageZoom });
+  imageModalImg.dataset.zoom = String(imageZoom);
+}
+function openImageModal(image) {
+  if (!imageModal || !imageModalImg) return;
+  const src = image.getAttribute?.('src') || image.src || '';
+  if (!src) return;
+  imageModalImg.src = src;
+  imageModalImg.alt = image.getAttribute?.('alt') || image.alt || '';
+  imageZoom = 1;
+  imagePanX = 0;
+  imagePanY = 0;
+  delete imageModalImg.dataset.dragging;
+  applyImageTransform();
+  imageModal.showModal();
+  imageModalClose?.focus?.();
+}
+if (imageModal && imageModalImg) {
+  imageModalClose?.addEventListener('click', () => imageModal.close());
+  imageModal.addEventListener('click', event => {
+    if (event.target === imageModal) imageModal.close();
+  });
+  imageModal.addEventListener('wheel', event => {
+    event.preventDefault();
+    const factor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
+    imageZoom = Math.min(8, Math.max(0.5, Number((imageZoom * factor).toFixed(3))));
+    if (imageZoom === 1) { imagePanX = 0; imagePanY = 0; }
+    applyImageTransform();
+  }, { passive: false });
+  imageModalImg.addEventListener('pointerdown', event => {
+    if (event.button !== undefined && event.button !== 0) return;
+    imageDrag = { startX: event.clientX - imagePanX, startY: event.clientY - imagePanY, id: event.pointerId };
+    imageModalImg.dataset.dragging = 'true';
+    imageModalImg.setPointerCapture?.(event.pointerId);
+  });
+  imageModalImg.addEventListener('pointermove', event => {
+    if (!imageDrag) return;
+    imagePanX = event.clientX - imageDrag.startX;
+    imagePanY = event.clientY - imageDrag.startY;
+    applyImageTransform();
+  });
+  const endImageDrag = () => {
+    if (!imageDrag) return;
+    imageDrag = null;
+    delete imageModalImg.dataset.dragging;
+  };
+  imageModalImg.addEventListener('pointerup', endImageDrag);
+  imageModalImg.addEventListener('pointercancel', endImageDrag);
+}
 let modalSubmit = null;
 let modalBusy = false;
 function modalField(field) {
@@ -3445,7 +3594,7 @@ $('#survey-open').addEventListener('click', async () => {
 });
 setInterval(refreshSurvey, SURVEY_REFRESH_MS);
 
-// The types follow the active page. Only paths in the repository's bible can be named.
+// Violation types follow the active tab, and only paths in the repository bible can be selected.
 const VIOLATION_TYPES = {
   notes: [
     ['bash-violation', 'Bash violation'],
@@ -3545,8 +3694,7 @@ $('#skip-poll').addEventListener('click', async () => {
   if (button.disabled) return;
   delete button.dataset.error;
   button.disabled = true;
-  // The painted button carries the server's own answer, so the press always flips what the
-  // poll last reported and a stale view cannot re-arm a flag the owner just cleared.
+  // The button state reflects the latest poll so clicking flips the server flag cleanly.
   const arm = button.getAttribute('aria-pressed') !== 'true';
   try {
     const answer = await optimisticWrite(state => { state.skip_poll = arm ? new Date().toISOString() : null; }, async () => (await request('/api/skip-poll', {

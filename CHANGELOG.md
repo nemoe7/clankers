@@ -16,19 +16,27 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Enable `hasTouch` and `isMobile` (`@media (pointer: coarse)`) for mobile viewport widths (`<= 768` px) in `browser.cjs`, and document the requirement in Clause 14 of `SKILL.md`.
 
+- Default `nuu annotate` (`annotate.py` and `uiux.py annotate`) to `scale=2` with `-S, --scale <1|2|3>` and `"scale"` in JSON specs as overrides.
+
 #### nemoizer
 
 - Format `references/rules.md` and per-rule `references/<id>.md` files in the `markdownlint` documentation layout, and add `--selftest` to `nemoize.py`.
 
+- Add `NMP101` (`COMMENT_BLOCK_CAP = 2`), `references/nmp101.md`, and `references/audit-report.md`. Ignore `.json` and `.webmanifest` files by default, scan extracted comments in `.jsonc`, and add the comment-limit, concise-response, and audit-report clauses to `SKILL.md`.
+
 #### userscripts
 
 - Connect `#copy-state` in `app.js` to `Force save` in `userscripts/arena.user.js` via `postMessage`, keeping `/api/copy-state` clipboard copy as the standalone fallback.
+
+- Add the `Proxy - preview host` menu setting, `@connect ts.net` and `@connect *`, and `GM_xmlhttpRequest` transport preference in `userscripts/arena.user.js` (`v1.10.71`). Observe iframe `src` mutations and log `"preview-proxy"` events (`posted`, `failed`, `no-host`).
 
 ### Changed
 
 #### arena-skill
 
 - Name banned tools (`web_search`, `fetch_page`, `image_search`) with `NEVER` in `survey.py` and `SKILL.md`, and include `survey.INSTRUCTIONS` in `/api/survey/request` and checkpoint notes in `preview.py`. Move the preview design record to `docs/arena-skill/design.md`, and stop recursive directory `grep` commands from falsely triggering `BIBLE BLOCKED` in `read_set_input_warning`.
+
+- Require `-S`/`--scope` on new preview tasks in `preview.py` and store `"Scope: {scope}"` at `details[0]`. Vendor GSAP (`gsap.LICENSE`) for preview animations, add the `#image-modal` zoom dialog, and fix `360` px mobile toolbars, `#preview-note` tooltips, `<mark>` links, and `nemoizer` findings.
 
 #### maintenance
 

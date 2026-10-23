@@ -25,6 +25,7 @@ COPIED_ASSETS = (
   "assets/markdown-it.LICENSE",
   "assets/lucide.LICENSE",
   "assets/sortable.LICENSE",
+  "assets/gsap.LICENSE",
 )
 BINARY_ASSETS = (
   "assets/Basel_Grotesk_Book.woff2",

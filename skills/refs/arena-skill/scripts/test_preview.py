@@ -3630,6 +3630,8 @@ def test_bare_task_reads_the_stored_row():
       "set",
       "read-task",
       "Read the queue",
+      "-S",
+      "arena suite",
       "-d",
       "Step one",
       "-d",
@@ -4283,7 +4285,18 @@ def test_short_flags_and_the_details_rename():
       ).stdout
 
     for flag in ("--details", "--details", "-d"):
-      out = cli("task", "set", "flag-task", "Flags", flag, "one\ntwo", "--type", "misc")
+      out = cli(
+        "task",
+        "set",
+        "flag-task",
+        "Flags",
+        "--scope",
+        "arena suite",
+        flag,
+        "one\ntwo",
+        "--type",
+        "misc",
+      )
       assert "one" in out and "two" in out, flag
     manual_block = subprocess.run(
       [sys.executable, script, "task", "set", "flag-task", "--blocked"],
@@ -5223,6 +5236,8 @@ def test_restore_import():
         "from-note",
         "Answer the note",
         "Answer it",
+        "--scope",
+        "arena suite",
         "--msg-id",
         "plain",
         "--type",
@@ -5246,6 +5261,8 @@ def test_restore_import():
         "orphan",
         "No message",
         "Answer it",
+        "--scope",
+        "arena suite",
         "--type",
         "misc",
         "--msg-id",
@@ -6731,6 +6748,8 @@ def test_dispatch_reminder():
           "reminder-task",
           "Track work",
           "Step one",
+          "--scope",
+          "arena suite",
           "--type",
           "misc",
         ],
@@ -9301,6 +9320,8 @@ def test_task_detail_steps():
         "set",
         "steps",
         "Steps",
+        "--scope",
+        "arena suite",
         "--details",
         "read it\n\n fix it \ncheck it",
         "--type",
@@ -9349,14 +9370,30 @@ def test_task_details_append_keeps_replacement_and_limits():
       )
 
     assert (
-      cli("task", "set", "append-task", "Append", "one", "--type", "misc").returncode
+      cli(
+        "task",
+        "set",
+        "append-task",
+        "Append",
+        "one",
+        "--scope",
+        "arena suite",
+        "--type",
+        "misc",
+      ).returncode
       == 0
     )
     result = cli("task", "set", "append-task", "--append", "--details", "two\nthree")
     assert result.returncode == 0, result.stderr
-    assert store.task_record("append-task")["details"] == ["one", "two", "three"]
+    assert store.task_record("append-task")["details"] == [
+      "Scope: arena suite",
+      "one",
+      "two",
+      "three",
+    ]
     assert cli("task", "set", "append-task", "-A", "-d", "four").returncode == 0
     assert store.task_record("append-task")["details"] == [
+      "Scope: arena suite",
       "one",
       "two",
       "three",
@@ -9364,7 +9401,10 @@ def test_task_details_append_keeps_replacement_and_limits():
     ]
     assert cli("task", "set", "append-task", "Renamed", "replacement").returncode == 0
     assert cli("task", "set", "append-task", "--status", "finished").returncode == 0
-    assert store.task_record("append-task")["details"] == ["replacement"]
+    assert store.task_record("append-task")["details"] == [
+      "Scope: arena suite",
+      "replacement",
+    ]
     for args in [
       ("--append",),
       ("--append", "--details", ""),
@@ -9372,7 +9412,10 @@ def test_task_details_append_keeps_replacement_and_limits():
       ("--append", "--details", "lost", "--msg-id", "aaaaaa"),
     ]:
       assert cli("task", "set", "append-task", *args).returncode != 0
-      assert store.task_record("append-task")["details"] == ["replacement"]
+      assert store.task_record("append-task")["details"] == [
+        "Scope: arena suite",
+        "replacement",
+      ]
     store.note("bbbbbb", "Request")
     assert (
       cli(
@@ -9387,14 +9430,21 @@ def test_task_details_append_keeps_replacement_and_limits():
       ).returncode
       == 0
     )
-    assert store.task_record("append-task")["details"] == ["replacement", "linked"]
+    assert store.task_record("append-task")["details"] == [
+      "Scope: arena suite",
+      "replacement",
+      "linked",
+    ]
     assert store.notes_matching("bbbbbb")[0]["task_id"] == "append-task"
-    store.write_task("append-task", details=["kept"] * 40)
+    store.write_task("append-task", details=["kept"] * 39)
     assert (
       cli("task", "set", "append-task", "--append", "--details", "overflow").returncode
       != 0
     )
-    assert store.task_record("append-task")["details"] == ["kept"] * 40
+    assert (
+      store.task_record("append-task")["details"]
+      == ["Scope: arena suite"] + ["kept"] * 39
+    )
 
 
 def test_download_header_name_is_safe():
@@ -10219,10 +10269,12 @@ def test_task_type_cli_flag_and_print():
         env=env,
       )
 
-    made = cli("typed-task", "Typed", "Step", "--type", "docs")
+    made = cli(
+      "typed-task", "Typed", "Step", "--scope", "arena suite", "--type", "docs"
+    )
     assert made.returncode == 0, made.stderr
 
-    missing = cli("missing-type", "Missing a type", "Step")
+    missing = cli("missing-type", "Missing a type", "Step", "--scope", "arena suite")
     assert missing.returncode != 0
     assert "type" in missing.stderr.lower()
     assert "type docs" in made.stdout
@@ -10231,7 +10283,9 @@ def test_task_type_cli_flag_and_print():
     assert "type docs" in again.stdout, "a call without the flag keeps the type"
     bare = cli("typed-task")
     assert "type docs" in bare.stdout
-    unknown = cli("other-task", "Other", "Step", "--type", "mixed")
+    unknown = cli(
+      "other-task", "Other", "Step", "--scope", "arena suite", "--type", "mixed"
+    )
     assert unknown.returncode != 0
 
 
@@ -11998,6 +12052,8 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
       "set",
       "uploaded-work",
       "Use uploads",
+      "--scope",
+      "arena suite",
       "--details",
       "Keep this step",
       "--type",
@@ -12007,7 +12063,7 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
     )
     assert result.returncode == 0, result.stderr
     details = store.task_record("uploaded-work")["details"]
-    assert details[0] == "Keep this step"
+    assert details[:2] == ["Scope: arena suite", "Keep this step"]
     for path in paths:
       assert sum(path in step for step in details) == 1
       assert path in result.stdout
@@ -12023,6 +12079,8 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
       "set",
       "boundary-work",
       "Boundary",
+      "--scope",
+      "arena suite",
       "--type",
       "code",
       "--details",
@@ -12030,13 +12088,16 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
     )
     assert boundary.returncode == 0, boundary.stderr
     assert store.task_record("boundary-work")["details"] == [
-      "x" * preview.TASK_STEP_MAX
+      "Scope: arena suite",
+      "x" * preview.TASK_STEP_MAX,
     ]
     ordinary = cli(
       "task",
       "set",
       "ordinary-work",
       "Ordinary",
+      "--scope",
+      "arena suite",
       "--type",
       "code",
       "--details",
@@ -12082,6 +12143,8 @@ def test_linked_upload_paths_are_complete_idempotent_and_atomic():
           "set",
           "oversized-work",
           "Oversized",
+          "--scope",
+          "arena suite",
           "--type",
           "code",
           "--details",
@@ -12183,6 +12246,8 @@ def test_ack_task_cli_commits_both_records_or_neither(capsys):
       "First job",
       "--type",
       "code",
+      "--scope",
+      "arena suite",
       "--detail",
       "Do the work",
     ]
@@ -12202,6 +12267,7 @@ def test_ack_task_cli_commits_both_records_or_neither(capsys):
       ([], options),
       (["first-note", "second-note"], options),
       (["first-note"], options[:-2]),
+      (["first-note"], options[:-4] + options[-2:]),
       (["first-note"], options[:-1] + ["x" * (preview.TASK_STEP_MAX + 1)]),
       (["missing-note"], options),
     ]:
@@ -12221,7 +12287,10 @@ def test_ack_task_cli_commits_both_records_or_neither(capsys):
     assert rows["second-note"]["acknowledged_at"] is None
     assert store.task_record("first-job")["type"] == "code"
     assert call(["second-note"], []) == 0
-    assert store.task_record("first-job")["details"] == ["Do the work"]
+    assert store.task_record("first-job")["details"] == [
+      "Scope: arena suite",
+      "Do the work",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -13586,6 +13655,21 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
   ).read_text(encoding="utf-8")
   assert "MIT License" in sortable_license
   assert "All contributors to Sortable" in sortable_license
+  gsap_license = (
+    Path(__file__).resolve().parent.parent / "assets" / "gsap.LICENSE"
+  ).read_text(encoding="utf-8")
+  assert "GreenSock" in gsap_license
+  index_html = (
+    Path(__file__).resolve().parent.parent / "assets" / "index.html"
+  ).read_text(encoding="utf-8")
+  assert 'id="image-modal"' in index_html
+  assert 'id="image-modal-close"' in index_html
+  assert 'id="image-modal-img"' in index_html
+  style_css = (
+    Path(__file__).resolve().parent.parent / "assets" / "style.css"
+  ).read_text(encoding="utf-8")
+  assert "left: 50%; transform: translateX(-50%);" in style_css
+  assert ".report-toolbar .select-wrap { flex: 1 1 100%; }" in style_css
 
   mermaid_md = "# Flow\n\n```mermaid\nflowchart TD\n  A[One] --> B[Two]\n```\n"
   mermaid_html, mermaid_fields = preview.render_report(mermaid_md)
@@ -14017,6 +14101,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   css_text = (preview.ASSETS / "style.css").read_text(encoding="utf-8")
   assert "Basel Grotesk" in css_text
   assert "Basel Grotesk Mono" in css_text
+  assert "mark a, a mark { color: var(--mark-link); }" in css_text
   for font_file in (
     "Basel_Grotesk_Book.woff2",
     "Basel_Grotesk_Regular.woff2",
@@ -14042,3 +14127,14 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     )
     is False
   )
+  store = preview.Store(state_dir, create=True)
+  scoped = store.write_task(
+    "scoped-task",
+    "Scoped task",
+    ["First step"],
+    task_type="code",
+    scope="arena suite",
+  )
+  assert scoped["details"] == ["Scope: arena suite", "First step"]
+  updated_scoped = store.write_task("scoped-task", scope="nemoizer")
+  assert updated_scoped["details"] == ["Scope: nemoizer", "First step"]

@@ -1924,6 +1924,7 @@ MAX_TASK_DETAIL = 2000
 MAX_TASK_DETAILS = 40
 # A task detail is one step: a longer line is a wall of text, and the tool refuses it.
 TASK_STEP_MAX = 120
+TASK_SCOPE_PREFIX = "Scope: "
 TASK_ORDER_OWNED_META = "task_order_owned"
 TASK_ORDER_PENDING_META = "task_order_notice_pending"
 TASK_ORDER_NOTICE = (
@@ -5816,13 +5817,27 @@ class Store:
     shared=None,
     append_details=False,
     restoring=False,
+    scope=None,
   ):
     """Insert or update a task and return it. Keep omitted title and detail values. Use a supplied transaction so
     imports remain atomic."""
     details = [str(item) for item in details if str(item).strip()] if details else None
+    scope_line = None
+    if scope is not None:
+      if (
+        not isinstance(scope, str)
+        or "\n" in scope
+        or "\r" in scope
+        or not scope.strip()
+      ):
+        raise ValueError("A task scope must be a non-empty single line of text")
+      scope_line = f"{TASK_SCOPE_PREFIX}{scope.strip()}"
+      check_task_steps([scope_line])
     # Check only the details this call supplies, so a stored board still updates and finishes.
     if details and not restoring:
       self.refuse_session_ids(details)
+    if scope_line and not restoring:
+      self.refuse_session_ids([scope_line])
     if append_details and not details:
       raise ValueError("Appending requires at least one task detail")
     check_task(task_id, title, details)
@@ -5844,11 +5859,39 @@ class Store:
       if stored is None:
         self.refuse_shared_id(db, "tasks", "reports", task_id)
       title = title if title is not None else stored["title"]
+      stored_details = list(stored["details"]) if stored else []
+      stored_scope = (
+        stored_details[0]
+        if stored_details and stored_details[0].startswith(TASK_SCOPE_PREFIX)
+        else None
+      )
       if append_details:
-        details = (stored["details"] if stored else []) + details
+        if scope_line is not None:
+          if stored_scope is not None:
+            stored_details[0] = scope_line
+          else:
+            stored_details.insert(0, scope_line)
+        details = stored_details + details
         check_task(task_id, title, details)
       elif details is None:
-        details = stored["details"] if stored else []
+        if scope_line is not None:
+          if stored_scope is not None:
+            stored_details[0] = scope_line
+          else:
+            stored_details.insert(0, scope_line)
+          check_task(task_id, title, stored_details)
+        details = stored_details
+      else:
+        if scope_line is not None:
+          if details and details[0].startswith(TASK_SCOPE_PREFIX):
+            details = [scope_line, *details[1:]]
+          else:
+            details = [scope_line, *details]
+        elif stored_scope is not None and not (
+          details and details[0].startswith(TASK_SCOPE_PREFIX)
+        ):
+          details = [stored_scope, *details]
+        check_task(task_id, title, details)
       if not details:
         # A task with no detail is a title alone, and the queue works from its steps.
         raise ValueError("A task needs at least one detail")
@@ -6096,7 +6139,7 @@ class Store:
     stamp = now()
     with self.transaction() as db:
       row = db.execute(
-        "SELECT id, title, details, status, position, created_at, completed_at, blocked, report_id"
+        "SELECT id, title, details, status, position, created_at, completed_at, blocked, report_id, type"
         " FROM tasks WHERE id = ?",
         (prev_id,),
       ).fetchone()
@@ -6109,7 +6152,7 @@ class Store:
       db.execute("DELETE FROM tasks WHERE id = ?", (prev_id,))
       db.execute(
         "INSERT INTO tasks (id, title, details, status, position, created_at, updated_at,"
-        " completed_at, blocked, report_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " completed_at, blocked, report_id, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
           task_id,
           row[1],
@@ -6121,6 +6164,7 @@ class Store:
           row[6],
           row[7],
           row[8],
+          row[9],
         ),
       )
       self.renumber(db)
@@ -11043,6 +11087,7 @@ def main():
   ack.add_argument("-i", "--id", dest="task_id")
   ack.add_argument("-t", "--title", dest="task_title")
   ack.add_argument("-T", "--type", dest="task_type", choices=TASK_TYPES)
+  ack.add_argument("-S", "--scope", dest="task_scope")
   ack.add_argument("-d", "--detail", dest="task_detail", action="append")
   report_group = commands.add_parser(
     "report", help="Publish, withdraw and inspect reports"
@@ -11097,7 +11142,7 @@ def main():
     "set",
     help=(
       "Write/update task; -s status, -o order, -d details, -A append,"
-      " -m message, -r report, -u unblocked, -a amend, -t/--type type"
+      " -m message, -r report, -u unblocked, -a amend, -t/--type type, -S/--scope scope"
     ),
   )
   task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
@@ -11159,6 +11204,13 @@ def main():
     choices=TASK_TYPES,
     default=None,
     help="Primary deliverable type; omitted flag keeps stored type",
+  )
+  task.add_argument(
+    "-S",
+    "--scope",
+    dest="task_scope",
+    default=None,
+    help="Free-text task scope; omitted flag keeps stored scope",
   )
   task.add_argument(
     "-o",
@@ -11434,11 +11486,17 @@ def main():
         if args.ids
         else [store.pending_ack()]
       )
-      task_options = (args.task_id, args.task_title, args.task_type, args.task_detail)
+      task_options = (
+        args.task_id,
+        args.task_title,
+        args.task_type,
+        args.task_scope,
+        args.task_detail,
+      )
       if any(value is not None for value in task_options):
         if len(args.ids) != 1 or not all(task_options):
           raise ValueError(
-            "A combined acknowledgement needs one explicit message ID and all four task options"
+            "A combined acknowledgement needs one explicit message ID and all five task options"
           )
         details = task_steps(args.task_detail)
         check_task_steps(details)
@@ -11448,6 +11506,7 @@ def main():
             args.task_title,
             details,
             task_type=args.task_type,
+            scope=args.task_scope,
             shared=shared,
           )
           store.acknowledge(ids, text, shared=shared)
@@ -11567,6 +11626,7 @@ def main():
         and args.msg_id is None
         and args.amend is None
         and args.task_type is None
+        and args.task_scope is None
         and args.blocked_by is None
       ):
         # A bare ID reads the stored row without writing. An ID that names nothing at
@@ -11581,6 +11641,12 @@ def main():
         check_task_steps(details)
       if args.amend:
         store.amend_task(store.resolve_id(args.amend), task_id)
+      elif (
+        store.task_record(task_id) is None
+        and args.task_scope is None
+        and not (details and details[0].startswith(TASK_SCOPE_PREFIX))
+      ):
+        raise ValueError("A new task needs an explicit scope (--scope)")
       if args.report:
         try:
           store.report(args.report)
@@ -11604,6 +11670,7 @@ def main():
             blocked_by=args.blocked_by,
             shared=shared,
             append_details=args.append_details,
+            scope=args.task_scope,
           )
           record = store.mark_task(args.msg_id, task_id, shared=shared) or record
       else:
@@ -11618,6 +11685,7 @@ def main():
           task_type=args.task_type,
           blocked_by=args.blocked_by,
           append_details=args.append_details,
+          scope=args.task_scope,
         )
       print(format_task(record))
     elif args.command == "task-unlink":
