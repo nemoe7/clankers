@@ -510,11 +510,36 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
   assert proc.returncode == 0, proc.stderr or proc.stdout
   payload = json.loads(proc.stdout)
   assert payload["status"] == "annotated"
+  assert payload["scale"] == 2
   assert payload["annotations"] == {"boxes": 2, "labels": 2, "arrows": 1, "callouts": 1}
   assert src_png.read_bytes() == original_bytes
   out_w, out_h, out_rgba = decode_png(out_png.read_bytes())
   assert (out_w, out_h) == (80, 60)
   assert out_rgba != pixels
+
+  scaled_png = tmp_path / "annotated-3.png"
+  scaled_proc = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "annotate",
+      "--project",
+      str(tmp_path),
+      "--input",
+      str(src_png),
+      "--output",
+      str(scaled_png),
+      "-S",
+      "3",
+      "-c",
+      "40,30,1,BIG,red",
+    ],
+    text=True,
+    capture_output=True,
+    check=False,
+  )
+  assert scaled_proc.returncode == 0, scaled_proc.stderr or scaled_proc.stdout
+  assert json.loads(scaled_proc.stdout)["scale"] == 3
 
   inplace = subprocess.run(
     [
