@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-The preview supports messages, reports, tasks, and downloads. The questionnaire adds a read-only results view without changing those tasks.
+The preview supports messages, reports, tasks, and downloads. The survey adds a read-only results view without changing those tasks.
 
 Status: implemented and browser-checked. Acceptance checks cover independent correctness and confidence, hidden requests, session-only results, and keyboard access.
 
@@ -24,7 +24,7 @@ Bible check sends one hidden, ACK-required bible checkpoint note. Prior results 
 
 The dialog has loading, unanswered, answered, and failed states. It retains prior results during a failed refresh and shows the error.
 
-The view refreshes while open. It sends no questionnaire reads while closed.
+The view refreshes while open. It sends no survey reads while closed.
 
 The dialog keeps its accessible name, without a visible heading or session notice. Results show relative last-answer time. Unchanged results retain the button and keyboard focus.
 
@@ -32,7 +32,7 @@ The dialog keeps its accessible name, without a visible heading or session notic
 
 The existing product style remains authoritative in `skills/refs/arena-skill/assets/style.css`. It defines surfaces, text, borders, type, spacing, and themes.
 
-Questionnaire roles define red, amber, and green for both themes. Confidence mixes these roles from red at zero through amber at one-half to green at one.
+Survey roles define red, amber, and green for both themes. Confidence mixes these roles from red at zero through amber at one-half to green at one.
 
 The dialog retains its existing width and layout. The connection-dot button keeps the dot's layout size. Its centered, out-of-flow target remains at least 44 px, with a visible focus ring.
 
@@ -52,7 +52,7 @@ Chromium checks cover keyboard access, focus return, both themes, reduced motion
 
 Interface text uses English. Question IDs remain code values, and percentages use locale-aware formatting.
 
-The existing local Lucide check and cross icons retain `assets/lucide.LICENSE`. No external assets or fonts are added.
+The existing local Lucide check and cross icons retain `assets/lucide.LICENSE`. The page adds no external assets or fonts.
 
 ## Behavior and data
 
@@ -64,13 +64,13 @@ A restart clears results. An unanswered view sends one hidden, ACK-required requ
 
 Automated client checks cover independent results, empty requests, refresh, errors, recovery, and closed-view reads. These checks are not participant studies.
 
-Local evidence: `arena-state/questionnaire-browser-evidence.json` and `arena-state/questionnaire-{360,1280}-{dark,light}.png`. The captures use synthetic results, not real questionnaire answers or verdicts.
+Local evidence: `arena-state/survey-browser-evidence.json` and `arena-state/survey-{360,1280}-{dark,light}.png`. The captures use synthetic results, not real survey answers or verdicts.
 
 Chromium checks passed with no page errors. Safari, Firefox, physical devices, and screen readers have not run.
 
-Spacing evidence: `arena-state/questionnaire-spacing-evidence.json` and `arena-state/questionnaire-spacing-{360,1280}-{dark,light}.png`. Checks cover prior layout, touch hit area, focus, and nearby controls.
+Spacing evidence: `arena-state/survey-spacing-evidence.json` and `arena-state/survey-spacing-{360,1280}-{dark,light}.png`. Checks cover prior layout, touch hit area, focus, and nearby controls.
 
-Relative-time evidence: `arena-state/questionnaire-relative-browser-evidence.json` and `arena-state/questionnaire-relative-{360,1280}-{dark,light}.png`. Synthetic browser checks cover relative time, the accessible dialog name, hidden request reuse, retry, unchanged-view focus, both themes, and narrow/wide layouts. Relative-time text passes WCAG contrast checks.
+Relative-time evidence: `arena-state/survey-relative-browser-evidence.json` and `arena-state/survey-relative-{360,1280}-{dark,light}.png`. Synthetic browser checks cover relative time, the accessible dialog name, hidden request reuse, retry, unchanged-view focus, both themes, and narrow/wide layouts. Relative-time text passes WCAG contrast checks.
 
 | Usability check | Observed result |
 | --- | --- |
@@ -94,6 +94,8 @@ Accepted: retain the shared dialog and product themes. Add separate correctness 
 2026-10-22: add relative last-answer time and Answer again. Hide the heading and session notice, and retain the dialog name.
 
 2026-10-22: show green check, red cross, and orange question mark for correct, wrong, and wholly unknown answers. Keep Answer again and Close on one row.
+
+2026-10-23: add `#image-modal` zoomable report image dialog, 480 px mobile wrapping rules for `#report-select` and `#log-search`, horizontally centered `#preview-note` tooltip, and GSAP 3.15.0 motion helpers.
 
 ## Message composer
 
