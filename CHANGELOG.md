@@ -44,7 +44,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Run the survey after each preview restart, align `TASK_ORDER` and `format_task_list` with the user UI, and show task hover tooltips. Convert `references/handoff.md` and `nemoizer` `references/audit-report.md` into pure standalone templates, and move `chromium.md`, `github-job-logs.md`, and `pr-rest.md` to `references/recipes/`.
 
-- Add `/nuu` and `/nemoizer` composer slash commands (`POST /api/slash`, `#slash-menu` autocomplete popover, wide reference modal with `#modal-close`, and expanded steering notes), `Bible Check` button icon, and `56.25em`/`40em` media-query breakpoints.
+- Add `/nuu` and `/nemoizer` composer slash commands (`POST /api/slash`, `#slash-menu` autocomplete popover, wide reference modal with `#modal-close`, and expanded steering notes), `Bible Check` button icon, and `56.25em`/`40em` media-query breakpoints. Strengthen full `read_file` bible reads after session summaries or violations in `ARENA.md` and `SKILL.md`.
 
 #### gpt-plugins
 
