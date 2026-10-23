@@ -1,31 +1,25 @@
 # MapWidgetV2
 
-Read this file before writing a `<MapWidgetV2>` block.
-
-## Properties
-
-`answer`, `arrive_by`, `carousel`, `depart_at`, `fill`, `groups`, `groups_title`, `minHeight`, `narrative`, `optimize_stop_order`, `origin`, `points`, `show_route`, `title`, `travel_mode`.
+Properties: `answer`, `arrive_by`, `carousel`, `depart_at`, `fill`, `groups`, `groups_title`, `minHeight`, `narrative`, `optimize_stop_order`, `origin`, `points`, `show_route`, `title`, `travel_mode`.
 
 ## When to use a map
 
-- Use a map for an explicit map request, geographic facts, routes, and multi-stop itineraries.
-- Use a map for at least three geolocatable recommendations in one area.
+- Use for an explicit map request, geographic facts, routes, multi-stop itineraries, or at least three geolocatable recommendations in one area.
 - For travel time or ETA, use `show_route={true}` and `carousel={{visibility: "auto"}}`.
 - When a map accompanies written recommendations or a comparison table, use `carousel={{visibility: "hidden"}}`.
 - Carousel visibility is only `"auto"` or `"hidden"`; omitting `carousel` shows cards.
-- Use one map unless distinct geography requires separate maps.
 
 ## Points
 
-Provide 1–25 grounded points. A point uses one of these locator shapes:
+Provide 1–25 grounded points using one locator shape:
 
 - Returned business reference: `{"ref":"turnNbusinessM"}`.
 - Address: `{"id":"a","address":"Place, City","name":"Place"}`.
 - Coordinates: `{"id":"a","lat":0,"long":0,"name":"Place"}`.
 
-Address and coordinate points require `id`. Named places require `name`. `category` is optional. The values above are shapes, not factual places.
+Address and coordinate points require `id`. Named places require `name`. `category` is optional.
 
-`icon` is a string such as `"🎓"`, `"$250"`, or `"1"`.
+`icon` is a string such as `"🎓"`, `"$250"`, or `"1"`:
 
 - Routes use the same place-emoji rule for every point, or omit every icon for automatic stop numbers.
 - Cost comparisons use grounded comparable cost amounts or bands for every point. If any cost is unavailable, use category icons for every point and state price units once in nearby prose.

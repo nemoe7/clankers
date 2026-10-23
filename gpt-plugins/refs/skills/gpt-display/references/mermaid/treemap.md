@@ -1,3 +1,3 @@
 # Treemap
 
-Indentation creates hierarchy. Parent nodes use quoted labels. Leaf nodes use a quoted label and numeric value. Values must share a consistent meaning and unit. Treemap syntax may evolve.
+Indentation creates hierarchy. Parent nodes use quoted labels; leaf nodes use a quoted label and numeric value sharing a consistent meaning and unit.

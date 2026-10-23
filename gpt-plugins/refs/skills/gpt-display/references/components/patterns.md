@@ -1,10 +1,10 @@
 # Interaction and response patterns
 
-Use these patterns only with the documented APIs. Replace illustrative labels and values with task-grounded values.
+Use these patterns only with documented APIs and task-grounded labels and values.
 
 ## Multi-select question with a custom answer
 
-Use independent controlled checkboxes and shared state. This supports zero or more selections without inventing a multi-select component.
+Use independent controlled checkboxes and shared state to support zero or more selections without inventing a multi-select component.
 
 ```jsx
 {@body
@@ -47,11 +47,11 @@ const submit = () => {
 </col>
 ```
 
-Include a recommended answer only when the context supports that recommendation. Do not guess a `select.options` or `segmented-control.options` object schema.
+Include a recommended answer only when context supports it. Do not guess a `select.options` or `segmented-control.options` object schema.
 
 ## Single-choice question
 
-Use a controlled `<radio-group>` with `<radio>` children. The declared contract does not list a separate radio-label property, so do not invent one.
+Use a controlled `<radio-group>` with `<radio>` children. Do not invent a separate radio-label property.
 
 ```jsx
 {@body
@@ -83,7 +83,7 @@ const submit = () => {
 
 ## Adjustable calculation
 
-Keep local calculations local. Use a controlled input or slider, derive the result from shared state, and update it without submitting a new turn.
+Keep local calculations local. Derive the result from shared state without submitting a new turn.
 
 ```jsx
 {@body
@@ -98,13 +98,9 @@ const total = quantity * unitPrice;
 </col>
 ```
 
-## Data visualization
-
-Use the exact `<Chart content={{...}}>` schema in [Component catalog](catalog.md#chart). Include labels, units, source information, and caveats. Use a table when exact values matter more than a pattern.
-
 ## Diagram
 
-Use Mermaid with the correct declaration and short labels. Make the source editable only when the user needs to edit it.
+Make Mermaid source editable in `<CodeBlock>` only when the user needs to edit it; see [Mermaid](../../SKILL.md#3-mermaid).
 
 ```jsx
 <CodeBlock editable={true} interactive={true} language="mermaid" model_previewable={true}>
@@ -115,15 +111,7 @@ flowchart TB
 </CodeBlock>
 ```
 
-Do not replace a required structured diagram with a generated image. See the selected family under [Mermaid](../../SKILL.md#4-mermaid).
-
-## Map or itinerary
-
-Use `<MapWidgetV2>` with grounded locations, valid groups, and documented route fields. For travel time or ETA, use `show_route={true}` with `carousel={{visibility: "auto"}}`. For a map beside written recommendations or a comparison table, use `carousel={{visibility: "hidden"}}`. Never fabricate locations, coordinates, hours, prices, ratings, ranks, or travel times. Read [MapWidgetV2](maps.md) before authoring the block.
-
 ## Standalone draft
-
-Use `<WritingBlock>` for complete text a user can copy, edit, or send.
 
 ```jsx
 <WritingBlock id="12345" variant="email" subject="Project update">
@@ -165,5 +153,3 @@ output?.addEventListener("click", () => {
 </script>
 </AppBlock>
 ```
-
-Do not use AppBlock for a static table, supported chart, or structured diagram.

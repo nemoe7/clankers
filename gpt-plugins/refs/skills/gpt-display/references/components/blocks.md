@@ -8,11 +8,11 @@ Use `<CodeBlock>` when editing or preview adds value beyond a Markdown fence. Do
 
 ## WritingBlock
 
-`<WritingBlock>` properties are `id`, `options`, `subject`, and `variant`. Its supported variants are `email`, `chat_message`, `social_post`, `document`, and `standard`.
+`<WritingBlock>` properties are `id`, `options`, `subject`, and `variant` (`email`, `chat_message`, `social_post`, `document`, or `standard`).
 
 - Use it for a practical standalone draft that a user is likely to copy, edit, or send.
 - Use `document` for a standalone document, proposal, memo, or description; use `standard` when no other variant fits.
-- `subject` is optional for email and omitted for every other variant.
+- `subject` is optional for `email` and omitted for every other variant.
 - Use a unique five-digit `id`.
 - For multiple tones, styles, or approaches, use one `options` array with the best default first.
 - Children contain raw text with basic Markdown support; do not put DIL components inside them.
@@ -37,62 +37,18 @@ Do not use AppBlock for a static table, supported chart, or structured diagram.
 
 Only these host actions are available. Call them synchronously from a supported, real user interaction. Let the host report success or failure; do not claim either first.
 
-### Open a URL
+| Action | Argument rules |
+| --- | --- |
+| `GenUI.openUrl(url)` | Pass one known string URL when navigation is intended |
+| `GenUI.copy(text)` | Pass one string to copy known text |
+| `GenUI.issueNewTurn(query)` | Pass one message string; do not pass payloads, metadata, attachments, or conversation/message IDs |
+| `GenUI.openEntityDetail(args)` | Pass a reference object or query object (see below) |
 
-```jsx
-GenUI.openUrl(url)
-```
-
-Pass one string URL. Use it only when the URL is known and navigation is the intended action.
-
-### Copy text
-
-```jsx
-GenUI.copy(text)
-```
-
-Pass one string. Use it from a real user interaction to copy known text.
-
-### Submit a new message
-
-```jsx
-GenUI.issueNewTurn(query)
-```
-
-Pass one message string. Do not pass payloads, metadata, attachments, or conversation or message IDs.
-
-### Open an entity detail
-
-```jsx
-GenUI.openEntityDetail({ category: "product", refId: "turn0product0" })
-```
-
-or:
-
-```jsx
-GenUI.openEntityDetail({
-  value: "Example business",
-  category: "business",
-  location: "Example city"
-})
-```
-
-The accepted shapes are:
+`GenUI.openEntityDetail` accepts either a current-response reference or a query object:
 
 ```js
 { category: "product" | "business", refId: string }
-```
-
-or:
-
-```js
-{
-  value: string,
-  category: string,
-  disambig?: string,
-  location?: string,
-  address?: string
-}
+{ value: string, category: string, disambig?: string, location?: string, address?: string }
 ```
 
 The reference form needs an exact current-response reference. Product and business query forms require enabled capture guidance; business query forms require `location` or `address`. Strings must be nonblank and no longer than 1024 characters. `category` must be lowercase and no longer than 128 characters.

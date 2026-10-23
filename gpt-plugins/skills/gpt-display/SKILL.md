@@ -10,7 +10,7 @@ Use the simplest representation that fully serves the request. Use Markdown for 
 | --- | --- |
 | Structured diagram | Mermaid with the correct declaration |
 | Quantitative pattern | `<Chart>` with grounded, labeled data |
-| Geographic request, route, or multi-stop itinerary | `<MapWidgetV2>` |
+| Geographic request, route, multi-stop itinerary, or 3+ area recommendations | `<MapWidgetV2>` matching grounded locations described nearby |
 | Editable or previewable source | `<CodeBlock>` |
 | Practical standalone draft | `<WritingBlock>` |
 | Required custom behavior unavailable in native components | `<AppBlock>` |
@@ -34,11 +34,9 @@ Read the detailed reference that matches the response before authoring it.
 | Text, media, layout, tables, lists, and charts | [Component catalog](references/components/catalog.md) |
 | Source bindings, citations, entities, and links | [Bindings and citations](references/components/bindings.md) |
 | CodeBlock, WritingBlock, AppBlock, and host actions | [Blocks and host actions](references/components/blocks.md) |
-| Questions, calculations, chart, diagram, map, draft, and custom-app patterns | [Interaction patterns](references/components/patterns.md) |
+| Questions, calculations, diagram, draft, and custom-app patterns | [Interaction patterns](references/components/patterns.md) |
 | MapWidgetV2 | [MapWidgetV2](references/components/maps.md) |
-## 3. Maps
-Use `<MapWidgetV2>` for an explicit map request, geographic facts, routes, multi-stop itineraries, or at least three geolocatable recommendations in one area. Read [MapWidgetV2](references/components/maps.md) before authoring it. The map must represent the same grounded locations described nearby.
-## 4. Mermaid
+## 3. Mermaid
 Use Mermaid for structured diagrams, not a generated image. Default to `flowchart TB` unless another direction represents the process better. Use the selected family’s declaration and syntax, keep labels concise, and check newer or beta syntax against the target renderer when possible. Never claim all clients render a diagram.
 
 | Diagram | Declaration | Best use |
@@ -70,7 +68,7 @@ Use Mermaid for structured diagrams, not a generated image. Default to `flowchar
 | [Wardley map](references/mermaid/wardley.md) | `wardley-beta` | Value chains and evolution |
 | [Cynefin](references/mermaid/cynefin.md) | `cynefin-beta` | Complexity domains |
 | [TreeView](references/mermaid/treeview.md) | `treeView-beta` | Hierarchical structures |
-## 5. Common failures
+## 4. Common failures
 - Invented components, properties, child structures, option-object schemas, or host actions.
 - Conditional hooks, changed hook order, or callbacks that expect DOM events.
 - A multi-select tag instead of stateful independent checkboxes.
@@ -83,7 +81,7 @@ Use Mermaid for structured diagrams, not a generated image. Default to `flowchar
 - Theme-specific colors that fail in the other theme or color-only meaning.
 - Invalid Mermaid declarations or an unverified claim of successful rendering.
 - An AppBlock where documented native components suffice.
-## 6. Completion checklist
+## 5. Completion checklist
 Before presenting an interface, verify:
 
 1. The representation matches the user’s goal without unnecessary complexity.
