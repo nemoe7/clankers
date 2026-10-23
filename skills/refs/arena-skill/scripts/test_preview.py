@@ -35,34 +35,32 @@ _GUARD_PORT = None
 CHECKPOINT_INTERVAL = timedelta(minutes=15)
 
 
-def test_questionnaire_transport_keeps_grades_in_server_memory(
-  tmp_path, monkeypatch, capsys
-):
-  import questionnaire
+def test_survey_transport_keeps_grades_in_server_memory(tmp_path, monkeypatch, capsys):
+  import survey
 
   global app
   store = preview.Store(tmp_path, create=True)
   headers = {"Content-Type": "application/json"}
-  payload = json.dumps(questionnaire.template())
+  payload = json.dumps(survey.template())
   expected = [
     {"id": row["id"], "correct": index == 1, "confidence": row["confidence"]}
-    for index, row in enumerate(questionnaire.loads(payload))
+    for index, row in enumerate(survey.loads(payload))
   ]
 
   def grade(text):
-    questionnaire.loads(text)
+    survey.loads(text)
     return expected
 
-  monkeypatch.setattr(questionnaire, "grade", grade)
+  monkeypatch.setattr(survey, "grade", grade)
   app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
   store.set_meta("port", str(app.server_port))
   threading.Thread(target=app.serve_forever, daemon=True).start()
   try:
-    status, _, body = request("GET", "/api/questionnaire")
+    status, _, body = request("GET", "/api/survey")
     assert status == 200
     assert json.loads(body) == {"results": None, "answered_at": None}
     for _ in range(2):
-      status, _, body = request("POST", "/api/questionnaire/request", "{}", headers)
+      status, _, body = request("POST", "/api/survey/request", "{}", headers)
       assert status == 200
       assert json.loads(body) == {"ok": True}
     pending = store.read()["pending"]
@@ -70,29 +68,30 @@ def test_questionnaire_transport_keeps_grades_in_server_memory(
     assert pending[0]["quiet"] and pending[0]["blocking"]
     snapshot = store.save_path.read_bytes()
     for body in ("[]", payload.replace('"confidence": 0', '"confidence": 2')):
-      status, _, _ = request("POST", "/api/questionnaire", body, headers)
+      status, _, _ = request("POST", "/api/survey", body, headers)
       assert status == 400
-    status, _, body = request("POST", "/api/questionnaire", payload, headers)
+    status, _, body = request("POST", "/api/survey", payload, headers)
     assert status == 200 and json.loads(body) == {"ok": True}
     assert store.save_path.read_bytes() == snapshot
-    status, _, body = request("GET", "/api/questionnaire")
+    status, _, body = request("GET", "/api/survey")
     assert status == 200
     received = json.loads(body)
     assert received["results"] == expected
     answered_at = received["answered_at"]
     assert datetime.fromisoformat(answered_at).tzinfo is not None
-    store.acknowledge([pending[0]["id"]], "Questionnaire complete.")
+    store.acknowledge([pending[0]["id"]], "Survey complete.")
     prior_notes = store.state()["notes"]
     for _ in range(2):
-      status, _, _ = request("POST", "/api/questionnaire/request", "{}", headers)
+      status, _, _ = request("POST", "/api/survey/request", "{}", headers)
       assert status == 200
     again = store.read()["pending"]
     assert len(again) == 1 and again[0]["id"] != pending[0]["id"]
     assert again[0]["quiet"] and again[0]["blocking"]
+    assert "Bible checkpoint." in again[0]["text"]
     assert [
       row for row in store.state()["notes"] if row["id"] != again[0]["id"]
     ] == prior_notes
-    status, _, body = request("GET", "/api/questionnaire")
+    status, _, body = request("GET", "/api/survey")
     assert status == 200 and json.loads(body) == received
     for path in ("/api/state", "/api/copy-state"):
       status, _, body = request("GET", path)
@@ -101,14 +100,12 @@ def test_questionnaire_transport_keeps_grades_in_server_memory(
     assert '"correct"' not in store.save_path.read_text()
     script = str(Path(preview.__file__))
     monkeypatch.setenv("ARENA_PREVIEW_STATE_DIR", str(tmp_path))
-    monkeypatch.setattr(sys, "argv", [script, "questionnaire"])
+    monkeypatch.setattr(sys, "argv", [script, "survey"])
     assert preview.main() == 0
     printed = capsys.readouterr().out
-    assert all(
-      question["id"] in printed for question in questionnaire.SPEC["questions"]
-    )
-    assert all(digest not in printed for digest in questionnaire.HASHES.values())
-    monkeypatch.setattr(sys, "argv", [script, "questionnaire", payload])
+    assert all(question["id"] in printed for question in survey.SPEC["questions"])
+    assert all(digest not in printed for digest in survey.HASHES.values())
+    monkeypatch.setattr(sys, "argv", [script, "survey", payload])
     assert preview.main() == 0
     receipt = capsys.readouterr().out
     assert '"correct"' not in receipt and not any(
@@ -121,10 +118,10 @@ def test_questionnaire_transport_keeps_grades_in_server_memory(
   app = preview.ThreadingHTTPServer(("127.0.0.1", 0), fresh_handler)
   threading.Thread(target=app.serve_forever, daemon=True).start()
   try:
-    status, _, body = request("GET", "/api/questionnaire")
+    status, _, body = request("GET", "/api/survey")
     assert status == 200
     assert json.loads(body) == {"results": None, "answered_at": None}
-    status, _, body = request("POST", "/api/questionnaire/request", "{}", headers)
+    status, _, body = request("POST", "/api/survey/request", "{}", headers)
     assert status == 200
     assert len(store.read()["pending"]) == len(pending)
   finally:
@@ -135,13 +132,11 @@ def test_questionnaire_transport_keeps_grades_in_server_memory(
 @pytest.mark.parametrize(
   "violation_type", ("self-raised", "bash-violation", "legacy-type")
 )
-def test_questionnaire_requests_are_not_violations(tmp_path, violation_type):
+def test_survey_requests_are_not_violations(tmp_path, violation_type):
   store = preview.Store(tmp_path / "state", create=True)
   (tmp_path / "ARENA.md").write_text("# Rules\n", encoding="utf-8")
-  request_id = "questionnaire-note"
-  store.note(
-    request_id, "Answer request", quiet=True, blocking=True, type="questionnaire"
-  )
+  request_id = "survey-note"
+  store.note(request_id, "Answer request", quiet=True, blocking=True, type="survey")
   assert store.pending_violation_note() is None
   assert store.pending_read_set_note() is None
   assert store.pending_ack() == request_id
@@ -12242,6 +12237,11 @@ def test_ack_task_cli_commits_both_records_or_neither(capsys):
       [{"line": 3, "marker": "~~"}],
       id="escaped-table-pipe",
     ),
+    pytest.param(
+      '| Line | Diff |\n|---|---|\n| 255 | "files==, and `cd` here==." |',
+      [{"line": 3, "marker": "=="}],
+      id="flanking-punctuation-and-inline-code",
+    ),
   ],
 )
 def test_report_marker_warnings_preserve_markdown(markdown, expected):
@@ -12522,7 +12522,7 @@ def test_preview_violation_wakes_poll_and_delivers_full_inbox(capsys, already_pe
         "Answer request",
         quiet=True,
         blocking=True,
-        type="questionnaire",
+        type="survey",
       )
       store.submission("report-answer", "form", "REPORT form: Answer")
       delivered.extend(store.read()["pending"])
@@ -13610,49 +13610,60 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
   assert "more symbols omitted" in text_out
 
 
-def test_questionnaire_rejects_null_partial_and_zero_confidence_known_answers():
-  import questionnaire
+def test_survey_rejects_null_partial_and_zero_confidence_known_answers():
+  import survey
 
-  blank = questionnaire.template()
-  assert blank[0]["answer"] == {
+  blank = survey.template()
+  assert blank[0]["answer"] == {"reasoning": False}
+  assert blank[1]["answer"] == {"image_in": False}
+  assert blank[3]["answer"] == {
     "command_name": "unknown",
     "concurrency_option": "unknown",
   }
-  parsed_blank = questionnaire.loads(json.dumps(blank))
-  assert all(not row["known"] and row["confidence"] == 0 for row in parsed_blank)
+  parsed_blank = survey.loads(json.dumps(blank))
+  assert [row["known"] for row in parsed_blank] == [
+    True,
+    True,
+    False,
+    False,
+    False,
+  ]
 
-  with_null = questionnaire.template()
-  with_null[0]["answer"]["command_name"] = None
+  with_null = survey.template()
+  with_null[3]["answer"]["command_name"] = None
   with pytest.raises(ValueError, match="must not be null"):
-    questionnaire.loads(json.dumps(with_null))
+    survey.loads(json.dumps(with_null))
 
-  partial = questionnaire.template()
-  partial[1]["answer"]["organization"] = "OpenAI"
-  partial[1]["confidence"] = 0.5
+  partial = survey.template()
+  partial[2]["answer"]["organization"] = "Test Org"
+  partial[2]["confidence"] = 0.5
   with pytest.raises(ValueError, match="fill every field or set all fields to unknown"):
-    questionnaire.loads(json.dumps(partial))
+    survey.loads(json.dumps(partial))
 
-  zero_conf = questionnaire.template()
-  zero_conf[0]["answer"] = {
-    "command_name": "repack",
-    "concurrency_option": "concurrently",
+  zero_conf = survey.template()
+  zero_conf[3]["answer"] = {
+    "command_name": "Rebuild",
+    "concurrency_option": "Online",
   }
-  zero_conf[0]["confidence"] = 0
+  zero_conf[3]["confidence"] = 0
   with pytest.raises(ValueError, match="greater than zero"):
-    questionnaire.loads(json.dumps(zero_conf))
+    survey.loads(json.dumps(zero_conf))
 
-  lower_conf = questionnaire.template()
-  lower_conf[1]["answer"] = {
-    "full_name": "Thibault Sottiaux",
-    "organization": "OpenAI",
-    "role": "Codex engineering lead",
+  lower_conf = survey.template()
+  lower_conf[0]["answer"] = {"reasoning": True}
+  lower_conf[2]["answer"] = {
+    "full_name": "Example Person",
+    "organization": "Test Org",
+    "role": "Shift lead",
   }
-  lower_conf[1]["confidence"] = 0.4
-  graded = questionnaire.grade(json.dumps(lower_conf))
-  assert graded[0] == {"id": "H8P3C", "correct": None, "confidence": 0}
-  assert graded[1]["id"] == "D9V4N"
-  assert graded[1]["confidence"] == 0.4
-  assert isinstance(graded[1]["correct"], bool)
+  lower_conf[2]["confidence"] = 0.4
+  graded = survey.grade(json.dumps(lower_conf))
+  assert graded[0] == {"id": "R3S0N", "correct": True, "confidence": 1}
+  assert graded[1] == {"id": "I4M6G", "correct": False, "confidence": 1}
+  assert graded[3] == {"id": "A2P6R", "correct": None, "confidence": 0}
+  assert graded[2]["id"] == "S2E5P"
+  assert graded[2]["confidence"] == 0.4
+  assert isinstance(graded[2]["correct"], bool)
 
 
 def test_portable_parser_installer_handles_fresh_reuse_missing_npm_and_failure(

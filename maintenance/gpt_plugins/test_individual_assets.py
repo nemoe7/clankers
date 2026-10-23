@@ -29,9 +29,10 @@ def test_package_collection_and_each_complete_skill(tmp_path):
       assert manifest["$schema"] == shared["$schema"]
       selected = gate.EXPECTED_SKILLS if name == gate.PLUGIN_NAME else (name,)
       expected = {
-        str(source.relative_to(gate.PLUGIN)): source.read_bytes()
-        for source in gate.shipped_paths()
-        if any(gate.SHIPPED / skill in source.parents for skill in selected)
+        member: source.read_bytes()
+        for member, source in gate.archive_members().items()
+        if member != "plugin.json"
+        and any(member.startswith(f"skills/{skill}/") for skill in selected)
       }
       files = {p for p in opened.namelist() if not p.endswith("/")}
       notes = set() if name == gate.PLUGIN_NAME else {"README.md"}

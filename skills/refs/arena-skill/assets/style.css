@@ -49,9 +49,9 @@
   --focus: #524d47;
   /* Tabs sit on the panel, so their resting border is a step darker than --border. */
   --tab-border: #413d39;
-  --questionnaire-danger: #ef4444;
-  --questionnaire-warning: #f59e0b;
-  --questionnaire-success: #22c55e;
+  --survey-danger: #ef4444;
+  --survey-warning: #f59e0b;
+  --survey-success: #22c55e;
   --dot-sent: var(--muted);
   --dot-seen: #7fa7d1;
   --dot-said: #8dc07f;
@@ -74,9 +74,9 @@
   --jump-hover: var(--accent);
   --focus: #8f5b13;
   --tab-border: var(--border);
-  --questionnaire-danger: #b91c1c;
-  --questionnaire-warning: #b8860b;
-  --questionnaire-success: #166534;
+  --survey-danger: #b91c1c;
+  --survey-warning: #b8860b;
+  --survey-success: #166534;
   --dot-seen: #3f6ea8;
   --dot-said: #4a7c3a;
 }
@@ -503,25 +503,25 @@ mark code { color: var(--text); }
   }
 }
 
-#questionnaire-open { position: relative; display: inline-grid; place-items: center; flex: none; min-height: 0; padding: 0; border: 0; background: transparent; }
-#questionnaire-open::after { content: ""; position: absolute; width: 44px; height: 44px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
-#questionnaire-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.questionnaire-results { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
-.questionnaire-results th, .questionnaire-results td { padding: 12px 4px; }
-.questionnaire-results tbody tr { border-top: 1px solid var(--border); }
-.questionnaire-results th[data-correct] { white-space: nowrap; font-weight: 400; }
-.questionnaire-results th[data-correct="true"] { color: var(--questionnaire-success); }
-.questionnaire-results th[data-correct="false"] { color: var(--questionnaire-danger); }
-.questionnaire-results th[data-correct="unknown"] { color: var(--questionnaire-warning); }
+#survey-open { position: relative; display: inline-grid; place-items: center; flex: none; min-height: 0; padding: 0; border: 0; background: transparent; }
+#survey-open::after { content: ""; position: absolute; width: 44px; height: 44px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+#survey-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.survey-results { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+.survey-results th, .survey-results td { padding: 12px 4px; }
+.survey-results tbody tr { border-top: 1px solid var(--border); }
+.survey-results th[data-correct] { white-space: nowrap; font-weight: 400; }
+.survey-results th[data-correct="true"] { color: var(--survey-success); }
+.survey-results th[data-correct="false"] { color: var(--survey-danger); }
+.survey-results th[data-correct="unknown"] { color: var(--survey-warning); }
 #modal[data-read-only="true"] .modal-actions { flex-wrap: nowrap; }
-.questionnaire-results th svg { vertical-align: middle; margin-right: 8px; }
-.questionnaire-confidence { width: 55%; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.questionnaire-confidence progress { appearance: none; width: 65%; height: 10px; border: 1px solid currentColor; border-radius: 8px; overflow: hidden; background: var(--bubble); vertical-align: middle; }
-.questionnaire-confidence progress::-webkit-progress-bar { background: var(--bubble); }
-.questionnaire-confidence progress::-webkit-progress-value { background: currentColor; }
-.questionnaire-confidence progress::-moz-progress-bar { background: currentColor; }
-.questionnaire-confidence span { display: inline-block; min-width: 4ch; margin-left: 8px; text-align: right; }
+.survey-results th svg { vertical-align: middle; margin-right: 8px; }
+.survey-confidence { width: 55%; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.survey-confidence progress { appearance: none; width: 65%; height: 10px; border: 1px solid currentColor; border-radius: 8px; overflow: hidden; background: var(--bubble); vertical-align: middle; }
+.survey-confidence progress::-webkit-progress-bar { background: var(--bubble); }
+.survey-confidence progress::-webkit-progress-value { background: currentColor; }
+.survey-confidence progress::-moz-progress-bar { background: currentColor; }
+.survey-confidence span { display: inline-block; min-width: 4ch; margin-left: 8px; text-align: right; }
 
 #modal[data-read-only="true"] button { min-height: 44px; touch-action: manipulation; }
 #modal[data-read-only="true"] button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-#questionnaire-open { touch-action: manipulation; }
+#survey-open { touch-action: manipulation; }

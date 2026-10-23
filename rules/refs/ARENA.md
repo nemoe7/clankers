@@ -51,9 +51,8 @@
 - NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a path in the bible.
 - MUST batch required bible reads into one call, splitting only where the harness output cap cuts the text.
 - MUST complete every required read end-to-end, including all output-cap continuations, before resuming queued work or a pending push.
-- Run the arena-skill questionnaire immediately after the initial visibility response and before the first inbox poll, and after compaction, summary, or context replacement before queued work.
+- Run the arena-skill survey immediately after the initial visibility response and before the first inbox poll, and after compaction, summary, or context replacement before queued work.
 - Each Markdown file under `references/` is supplementary: read or grep the file a question needs, and no end-to-end read is required; the gate and read cadence mechanics live in `references/commands.md` and `references/cadence.md`. A template copy kept for installation is supplementary too.
-- For each new user chat message, MUST state once in the first assistant reply whether reasoning is enabled, with the literal line `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line. Tool results, steering notes, context compaction or summary, and agent continuation do not start a new turn.
 - After any change to a path in the bible, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear.
 - In saved context, state the applicable start sequence and the duty to read missing-context paths in the bible in full before queued work; no verbatim ARENA.md copy is required.
 - Before the first non-setup tool call, complete the initial start sequence and wait for the visibility answer, start repository tooling installs via `arena-preview run start` and any demo or presentation server via `start_process` as the final setup step, then use `arena-preview poll` as the first inbox call.
@@ -73,7 +72,7 @@
 - NEVER silently restore ntfy.
 - Be concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs/conventions and existing patterns.
-- MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
+- MUST use `nemoizer` for every piece of human-facing text you produce (responses, code comments, and documentation), and fall back to ASD-STE100 Simplified Technical English and Humanizer when `nemoizer` is unavailable.
 - Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning; NEVER write a wall of text, NEVER pad prose where a list or a table carries the facts faster, and keep every paragraph at 4 sentences or fewer.; no storyline or narrative unless the user asks for it.
 - Maintain changelogs in the [Keep a Changelog](https://keepachangelog.com/) format unless the repository follows a different changelog format.
 - Open every response on the substance, NEVER on preamble or postamble.
@@ -195,7 +194,7 @@
 - Keep architecture; leave unrelated code alone.
 - For a Python project, keep Ruff settings in the project's own `pyproject.toml` when suitable for the project, otherwise in `ruff.toml`, holding the AGENTS.md conventions and nothing else until flagged.
 - For a Python project with no Ruff configuration, create it with exactly that in the selected file before running gates.
-- For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
+- For a Python project, run `ruff format` before other local gates, and run `ruff check` and `ruff format` before every commit, with no CLI rule overrides.
 - Add code or configuration comments only when method complexity requires them.
 
 ## Git
@@ -255,7 +254,7 @@
 - Keep the work moving and read the verdict on the next bash or `arena-preview` call, which prints it once as `run <name> done: exit N`, with one status line per call until then.
 - Read the verdict line before any push.
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both and drop large/temp artifacts.
-- Keep durable work in plain files.
+- Keep durable work in plain files; `bash` starts at the repository root, so `cd` into it is redundant.
 
 ## Deliverables
 

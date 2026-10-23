@@ -27,7 +27,7 @@
 
 - MUST keep negations, conditions, errors, commands, numbers, caveats.
 - MUST follow repo docs/conventions.
-- MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
+- MUST use `nemoizer` for all human-facing text (responses, comments, docs), falling back to ASD-STE100 and Humanizer when unavailable.
 - Comments, docs and responses MUST be terse and unambiguous; cut words, NEVER meaning; no narrative unless asked.
 - Maintain changelogs per [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another format.
 - Open on the substance, NEVER preamble or postamble.
@@ -95,7 +95,7 @@
 ## Style
 
 - In `nemoe7` repositories: 2-space indentation overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off.
-- Python: MUST use Ruff default selection plus `E501` at 120 chars; keep formatter width 88.
+- Python: MUST use Ruff default selection plus `E501` at 120 chars; keep formatter width 88; run `ruff format` before other local gates.
 - Add code/config comments ONLY when complexity needs them.
 - Leave unrelated code alone.
 - Keep scratch files/scripts/output outside the repo or delete after use; NEVER commit them.

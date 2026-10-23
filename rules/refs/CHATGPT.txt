@@ -27,7 +27,7 @@ MUST assert relations (growth, presence, or absence) for pixel values, configura
 NEVER weaken a test to pass.
 MUST ask during planning whether SOLID reuse or YAGNI/KISS/DRY simplicity governs the task, and follow the answer.
 MUST apply these code-style rules only in repositories owned by `nemoe7`.
-FORMAT: 2-space; other repos keep their conventions; Ruff (E501 120) in pyproject.toml when suitable for the project, otherwise ruff.toml; markdownlint defaults + MD060, MD013 off.
+FORMAT: 2-space; other repos keep their conventions; Ruff (E501 120) in pyproject.toml when suitable for the project, otherwise ruff.toml, running `ruff format` before other local gates; markdownlint defaults + MD060, MD013 off.
 Add code or configuration comments only when method complexity requires them.
 DOCS: Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.
 DOCS: Open on the substance, no preamble or postamble.
@@ -35,7 +35,7 @@ DOCS: Cite code, diffs and tool output by path and line instead of repeating.
 DOCS: Continue after a tool call with no narration of the result.
 
 Explicit user chat instructions override these rules; state overrides in one line.
-MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation. Look up its rules when needed.
+MUST use the `nemoizer` skill for every piece of human-facing text you produce: responses, code comments, and documentation. If `nemoizer` is unavailable, fall back to ASD-STE100 Simplified Technical English and Humanizer, and look up their rules when needed.
 
 RESPONSE: Terse yet clear, numbered lists; detail when asked.
 Open with the result and skip restating the task.

@@ -6,13 +6,13 @@ Follow repository instructions and the bible under their applicable precedence. 
 
 Work can continue indefinitely without a fixed turn limit. Each final poll waits up to 1,800 seconds or until skipped.
 
-## Startup questionnaire
+## Startup survey
 
-After required reads, preview setup, and inbox acknowledgements, complete the questionnaire before queued work.
+After required reads, preview setup, and inbox acknowledgements, complete the survey before queued work.
 
-At initial activation, use the questions below instead of rereading the questionnaire file or calling the CLI just to view them. Submit fresh answers directly with `arena-preview questionnaire '<json>'`.
+At initial activation, use the questions below instead of rereading the survey file or calling the CLI just to view them. Submit fresh answers directly with `arena-preview survey '<json>'`.
 
-After compaction, summary, or context replacement, run `arena-preview questionnaire` to view the questions again, then submit fresh answers.
+After compaction, summary, or context replacement, run `arena-preview survey` to view the questions again, then submit fresh answers.
 
 Use existing knowledge only: do not research, open other files, run code, ask other systems, reuse earlier responses, or inspect the answer key to derive answers. Preserve known parts and use `null` for unknown parts.
 

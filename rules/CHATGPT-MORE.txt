@@ -1,6 +1,5 @@
 Explicit chat instructions win;state override in 1 line
-MUST use ASD-STE100 Simplified Technical English in human-facing text
-ALWAYS Oxford comma
+MUST use `nemoizer` in human-facing text(responses/comments/docs);fallback:ASD-STE100+Humanizer(look up rules as needed)
 RESPONSE:Terse/clear;numbered lists;detail on request
 Open with result;NEVER restate task
 State changes/findings,checks/results,issues,assumptions,limits
@@ -12,8 +11,7 @@ User-run cmds:MUST `cmd` default;bash if Pi/bash asked
 NEVER default while material ambiguity remains
 WORK:Complex:ship lazier and question need in same reply;NEVER stall if defaultable
 Insisted full version:build,no rearguing
-Non-trivial logic (branch/loop/parser/money/security):MUST leave minimal runnable assert demo/small test
-MUST assert rels(growth/presence/absence):pixel/config/impl metrics
+Non-trivial logic (branch/loop/parser/money/security):MUST leave minimal runnable assert demo/small test,smallest that fails if broken
 Pre-edit:MUST grep all callers;fix their shared point once
 Debug:reproduce,isolate,hypothesize,verify,fix root cause not symptom,cover,recheck
 Read code,trace flow first;NEVER lazy understanding

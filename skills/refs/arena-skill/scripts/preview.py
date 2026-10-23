@@ -49,7 +49,7 @@ def __getattr__(name):
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
-VIOLATION_NOTES = "type NOT IN ('', 'questionnaire')"
+VIOLATION_NOTES = "type NOT IN ('', 'survey')"
 PENDING_SUBMISSIONS = (
   "acknowledged_at IS NULL"
   " AND seq IN (SELECT MAX(seq) FROM submissions GROUP BY report_id)"
@@ -211,6 +211,7 @@ REMINDERS = (
   "Before pushed-turn end: check PR CI; read verdict on a later call, never loop.",
   "Run `arena-preview`, not full path.",
   "NEVER spam `run logs`.",
+  "`bash` starts at repo root; `cd` into it is redundant.",
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
@@ -4715,13 +4716,13 @@ def autosave_record(record):
   return out
 
 
-def questionnaire_command(state_dir, answers):
-  import questionnaire
+def survey_command(state_dir, answers):
+  import survey
 
   if answers is None:
-    print(questionnaire.INSTRUCTIONS)
-    print(json.dumps(questionnaire.SPEC, indent=2, ensure_ascii=False))
-    print(json.dumps(questionnaire.template(), indent=2))
+    print(survey.INSTRUCTIONS)
+    print(json.dumps(survey.SPEC, indent=2, ensure_ascii=False))
+    print(json.dumps(survey.template(), indent=2))
     return 0
   from http.client import HTTPConnection, HTTPException
 
@@ -4733,7 +4734,7 @@ def questionnaire_command(state_dir, answers):
     ) as client:
       client.request(
         "POST",
-        "/api/questionnaire",
+        "/api/survey",
         answers.encode("utf-8"),
         {"Content-Type": "application/json"},
       )
@@ -4741,10 +4742,10 @@ def questionnaire_command(state_dir, answers):
       body = response.read()
       if response.status != 200:
         error = json.loads(body).get("error", "Request rejected")
-        raise ValueError(f"Questionnaire submission: HTTP {response.status}: {error}")
+        raise ValueError(f"Survey submission: HTTP {response.status}: {error}")
   except HTTPException as error:
-    raise ValueError(f"Questionnaire submission failed: {error}") from None
-  print("Questionnaire received.")
+    raise ValueError(f"Survey submission failed: {error}") from None
+  print("Survey received.")
   return 0
 
 
@@ -5326,7 +5327,7 @@ class Store:
   def pending_violation_note(self):
     """Return the one outstanding violation note, if any.
 
-    Bible checkpoints and questionnaire requests are not violations.
+    Bible checkpoints and survey requests are not violations.
     """
     with closing(self.connect()) as db:
       row = db.execute(
@@ -5336,21 +5337,22 @@ class Store:
       ).fetchone()
     return message_row(row) if row else None
 
-  def schedule_read_set_note(self, moment=None, root=None):
-    """Atomically create a checkpoint after each elapsed interval."""
+  def schedule_read_set_note(self, moment=None, root=None, manual=False):
+    """Atomically create a checkpoint after each elapsed interval or on manual request."""
     moment = moment or datetime.now(DISPLAY_ZONE or timezone.utc)
     if moment.tzinfo is None:
       moment = moment.replace(tzinfo=timezone.utc)
     slot = read_set_slot(moment)
-    paths = read_set_paths(root)
+    paths = read_set_paths(root or self.repository_root())
     with closing(self.connect()) as db, db:
       db.execute("BEGIN IMMEDIATE")
-      heartbeat = db.execute(
-        "SELECT value FROM meta WHERE key = ?", (POLLING_META,)
-      ).fetchone()
-      age = seconds_since(heartbeat["value"] if heartbeat else None)
-      if age is not None and 0 <= age < POLLING_FRESH_SECONDS:
-        return None
+      if not manual:
+        heartbeat = db.execute(
+          "SELECT value FROM meta WHERE key = ?", (POLLING_META,)
+        ).fetchone()
+        age = seconds_since(heartbeat["value"] if heartbeat else None)
+        if age is not None and 0 <= age < POLLING_FRESH_SECONDS:
+          return None
       row = db.execute(
         "SELECT * FROM notes"
         " WHERE quiet = 1 AND blocking = 1 AND acknowledged_at IS NULL"
@@ -5358,27 +5360,28 @@ class Store:
       ).fetchone()
       if row:
         return message_row(row)
-      recorded = db.execute(
-        "SELECT value FROM meta WHERE key = ?", (READ_SET_LAST_META,)
-      ).fetchone()
-      if recorded is None:
+      if not manual:
         recorded = db.execute(
-          "SELECT value FROM meta WHERE key = ?", (READ_SET_SLOT_META,)
+          "SELECT value FROM meta WHERE key = ?", (READ_SET_LAST_META,)
         ).fetchone()
-      try:
-        previous = datetime.fromisoformat(recorded["value"]) if recorded else None
-      except ValueError:
-        previous = None
-      if previous is None:
-        db.execute(
-          "INSERT OR REPLACE INTO meta VALUES (?, ?)",
-          (READ_SET_LAST_META, moment.isoformat()),
-        )
-        return None
-      if previous.tzinfo is None:
-        previous = previous.replace(tzinfo=timezone.utc)
-      if (moment - previous).total_seconds() < READ_SET_INTERVAL_MINUTES * 60:
-        return None
+        if recorded is None:
+          recorded = db.execute(
+            "SELECT value FROM meta WHERE key = ?", (READ_SET_SLOT_META,)
+          ).fetchone()
+        try:
+          previous = datetime.fromisoformat(recorded["value"]) if recorded else None
+        except ValueError:
+          previous = None
+        if previous is None:
+          db.execute(
+            "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+            (READ_SET_LAST_META, moment.isoformat()),
+          )
+          return None
+        if previous.tzinfo is None:
+          previous = previous.replace(tzinfo=timezone.utc)
+        if (moment - previous).total_seconds() < READ_SET_INTERVAL_MINUTES * 60:
+          return None
       for _ in range(MINT_ATTEMPTS):
         note_id = new_id()
         if not any(
@@ -5389,12 +5392,17 @@ class Store:
       else:
         raise RuntimeError("The state holds no free six-character ID for a bible note")
       listed = "\n".join(f"- `{path}`" for path in paths)
+      prefix = (
+        "Bible checkpoint."
+        if manual
+        else f"Bible checkpoint after a {READ_SET_INTERVAL_MINUTES}-minute interval."
+      )
       text = (
-        f"Bible checkpoint after a {READ_SET_INTERVAL_MINUTES}-minute interval."
+        f"{prefix}"
         " Read each listed path in full"
         " with the read tool only if its current full text is absent from context, then"
         " acknowledge this note.\n"
-        "Answer the questionnaire only if any required bible text was absent from context before this check.\n"
+        "Answer the survey only if any required bible text was absent from context before this check.\n"
         f"{listed}"
       )
       record = self.note(
@@ -8555,7 +8563,7 @@ def highlight_markdown(parser):
 
 
 def report_marker_warnings(markdown):
-  """Find possible whitespace-broken marker pairs in ordinary Markdown text."""
+  """Find possible unparsed marker pairs in ordinary Markdown text."""
   from markdown_it import MarkdownIt
 
   parser = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
@@ -8567,19 +8575,27 @@ def report_marker_warnings(markdown):
       continue
     start, end = token.map
     raw, cursor = "\n".join(lines[start:end]), 0
+    pieces = []
     for child in token.children or ():
       if child.type == "code_inline":
         ticks = re.compile(r"(?<!`)" + re.escape(child.markup) + r"(?!`)")
         opening = ticks.search(raw, cursor)
         closing = ticks.search(raw, opening.end()) if opening else None
         cursor = closing.end() if closing else len(raw)
+        pieces.append((cursor, "X"))
         continue
       if child.type in {"softbreak", "hardbreak"}:
         newline = raw.find("\n", cursor)
         if newline >= 0:
           cursor = newline + 1
+        pieces.append((cursor, "\n"))
         continue
-      content = child.markup if child.type == "text_special" else child.content
+      content = (
+        child.markup
+        if child.type
+        in {"text_special", "s_open", "s_close", "mark_open", "mark_close"}
+        else child.content
+      )
       if not content:
         continue
       offset = raw.find(content, cursor)
@@ -8587,15 +8603,18 @@ def report_marker_warnings(markdown):
         continue
       offset = max(0, offset)
       cursor = offset + len(content)
-      if child.type != "text":
-        continue
-      for marker in ("~~", "=="):
-        pattern = re.escape(marker) + r"(.*?)" + re.escape(marker)
-        for match in re.finditer(pattern, content):
-          body = match.group(1)
-          if body and (body[0].isspace() or body[-1].isspace()):
-            line = start + 1 + raw.count("\n", 0, offset + match.start())
-            findings.add((line, marker))
+      if child.type == "text":
+        pieces.append((offset, content))
+      else:
+        pieces.append((offset, "X" * len(content)))
+    combined = "".join(text for _, text in pieces)
+    offsets = [off for off, text in pieces for _ in text]
+    for marker in ("~~", "=="):
+      pattern = re.escape(marker) + r"(.+?)" + re.escape(marker)
+      for match in re.finditer(pattern, combined):
+        raw_offset = offsets[match.start()] if offsets else 0
+        line = start + 1 + raw.count("\n", 0, raw_offset)
+        findings.add((line, marker))
   return [{"line": line, "marker": marker} for line, marker in sorted(findings)]
 
 
@@ -8624,8 +8643,8 @@ def render(markdown, breaks=False):
 def handler(store):
   from http.server import BaseHTTPRequestHandler
 
-  questionnaire_state = {"results": None, "answered_at": None, "requested": False}
-  questionnaire_lock = threading.Lock()
+  survey_state = {"results": None, "answered_at": None, "requested": False}
+  survey_lock = threading.Lock()
 
   class Handler(BaseHTTPRequestHandler):
     def setup(self):
@@ -8907,12 +8926,12 @@ def handler(store):
         if font_match:
           self.reply(200, (ASSETS / font_match.group(1)).read_bytes(), "font/woff2")
           return
-        if path == "/api/questionnaire":
-          with questionnaire_lock:
+        if path == "/api/survey":
+          with survey_lock:
             body = json.dumps(
               {
-                "results": questionnaire_state["results"],
-                "answered_at": questionnaire_state["answered_at"],
+                "results": survey_state["results"],
+                "answered_at": survey_state["answered_at"],
               }
             )
           self.reply(200, body)
@@ -9066,8 +9085,8 @@ def handler(store):
           "/api/markdown",
           "/api/fetch-jobs",
           "/api/fetch-jobs/claim",
-          "/api/questionnaire",
-          "/api/questionnaire/request",
+          "/api/survey",
+          "/api/survey/request",
         }
         and not report_submit
         and not report_seen
@@ -9156,39 +9175,42 @@ def handler(store):
         if len(data) != length:
           self.problem(400, "Incomplete request body; retry the upload or request")
           return
-        if path == "/api/questionnaire":
-          import questionnaire
+        if path == "/api/survey":
+          import survey
 
-          results = questionnaire.grade(data.decode("utf-8"))
-          with questionnaire_lock:
-            questionnaire_state["results"] = results
-            questionnaire_state["answered_at"] = now()
-            questionnaire_state["requested"] = False
+          results = survey.grade(data.decode("utf-8"))
+          with survey_lock:
+            survey_state["results"] = results
+            survey_state["answered_at"] = now()
+            survey_state["requested"] = False
           self.reply(200, json.dumps({"ok": True}))
           return
         payload = json.loads(data)
         if not isinstance(payload, dict):
           self.problem(400, "Expected a JSON object")
           return
-        if path == "/api/questionnaire/request":
+        if path == "/api/survey/request":
           if payload:
-            raise ValueError("Questionnaire request requires an empty object")
-          with questionnaire_lock:
-            if not questionnaire_state["requested"]:
-              with closing(store.connect()) as db:
-                pending = db.execute(
-                  "SELECT id FROM notes WHERE type = ? AND acknowledged_at IS NULL LIMIT 1",
-                  ("questionnaire",),
-                ).fetchone()
-              if pending is None:
+            raise ValueError("Survey request requires an empty object")
+          with survey_lock:
+            with closing(store.connect()) as db:
+              pending = db.execute(
+                "SELECT id FROM notes"
+                " WHERE quiet = 1 AND blocking = 1 AND type IN ('', 'survey') AND acknowledged_at IS NULL"
+                " LIMIT 1"
+              ).fetchone()
+            if pending is None:
+              if survey_state["results"] is None:
                 store.note(
                   uuid.uuid4().hex[:6],
-                  "Acknowledge this note, then follow the arena-skill questionnaire procedure.",
+                  "Acknowledge this note, then follow the arena-skill survey procedure.",
                   quiet=True,
                   blocking=True,
-                  type="questionnaire",
+                  type="survey",
                 )
-              questionnaire_state["requested"] = True
+              else:
+                store.schedule_read_set_note(manual=True)
+            survey_state["requested"] = True
           self.reply(200, json.dumps({"ok": True}))
           return
         if autosave_post:
@@ -10832,10 +10854,10 @@ def main():
   )
   init = commands.add_parser("init", help="Create state directory and database")
   init.add_argument("-z", "--tz", help="CLI stamp IANA zone; TZ env wins")
-  questionnaire_parser = commands.add_parser(
-    "questionnaire", help="Show questions and schema, or submit ordered JSON"
+  survey_parser = commands.add_parser(
+    "survey", help="Show questions and schema, or submit ordered JSON"
   )
-  questionnaire_parser.add_argument("answers", nargs="?", help="Ordered answer JSON")
+  survey_parser.add_argument("answers", nargs="?", help="Ordered answer JSON")
   commands.add_parser("read", help="Print every pending note, answer and upload")
   commands.add_parser(
     "skills",
@@ -11227,8 +11249,8 @@ def main():
         done=args.done,
         shell=args.shell,
       )
-    if args.command == "questionnaire":
-      return questionnaire_command(state_dir, args.answers)
+    if args.command == "survey":
+      return survey_command(state_dir, args.answers)
     if args.command == "skills":
       print_skills()
       return 0

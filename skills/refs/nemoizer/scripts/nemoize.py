@@ -1490,7 +1490,7 @@ def main(argv=None):
     return prose_main(argv[1:])
   if argv[:1] == ["review-tests"]:
     return review_tests_main(argv[1:])
-  if argv[:1] == ["audit"]:
+  if argv[:1] in (["audit"], ["collect"]):
     argv = ["--audit", *argv[1:]]
   parser = argparse.ArgumentParser(description="Check Nemoizer prose and test domains.")
   parser.add_argument("targets", nargs="*", default=["."])

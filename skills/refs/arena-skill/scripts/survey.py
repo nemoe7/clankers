@@ -4,22 +4,24 @@ import math
 from pathlib import Path
 
 SPEC = json.loads(
-  (Path(__file__).resolve().parents[1] / "references/questionnaire.json").read_text(
+  (Path(__file__).resolve().parents[1] / "references/survey.json").read_text(
     encoding="utf-8"
   )
 )
 HASHES = {
-  "H8P3C": "30b4cb39218679f94c996a87c68e9bab23c0cd663e4edb8e7579ee9c022b727d",
-  "D9V4N": "44f269ed970fbc46c180734e387b5bb4aa11c2f4fcc20aa4e19fe94d71ca809c",
-  "G2W6M": "ec73ad585772530cbd4f68147276e562d01a147e86721338eae51ac56dd7e8c7",
+  "S2E5P": "44f269ed970fbc46c180734e387b5bb4aa11c2f4fcc20aa4e19fe94d71ca809c",
+  "A2P6R": "30b4cb39218679f94c996a87c68e9bab23c0cd663e4edb8e7579ee9c022b727d",
+  "M2A6Y": "ec73ad585772530cbd4f68147276e562d01a147e86721338eae51ac56dd7e8c7",
 }
 ROLE_FRAGMENT_LENGTH = 5
 INSTRUCTIONS = (
-  "When answering, use existing knowledge only; do not research answers, open other files, "
-  "run code, ask another system, reuse earlier responses, or inspect the answer key.\n"
+  "When answering knowledge questions, use existing knowledge only; do not research answers, "
+  "open other files, run code, ask another system, reuse earlier responses, or inspect the answer key.\n"
+  "For I4M6G, create a temporary empty image file, attempt to read it, and delete the file immediately afterward.\n"
   "Supply your best complete answer for a question and set a lower confidence from 0 to 1 "
-  "when uncertain; use unknown with confidence 0 only when the whole question is unknown.\n"
-  "Omit questionnaire answers and answer-key details from summaries and handoffs."
+  "when uncertain; boolean questions require true or false with confidence > 0, and knowledge questions "
+  "use unknown with confidence 0 only when the whole question is unknown.\n"
+  "Omit survey answers and answer-key details from summaries and handoffs."
 )
 
 
@@ -30,10 +32,14 @@ def template():
       "answer": {
         name: dict(SPEC["quantity"]["unknown"])
         if field == "quantity"
+        else False
+        if field == "boolean"
         else SPEC["unknown_value"]
         for name, field in question["answer_fields"].items()
       },
-      "confidence": 0,
+      "confidence": 1
+      if all(field == "boolean" for field in question["answer_fields"].values())
+      else 0,
     }
     for question in SPEC["questions"]
   ]
@@ -93,6 +99,10 @@ def loads(text):
       if field == "quantity":
         value = quantity(value, f"{question['id']}.{name}")
         known_count += int(value["operator"] != "unknown")
+      elif field == "boolean":
+        if type(value) is not bool:
+          raise ValueError(f"{question['id']}.{name} must be a boolean (true or false)")
+        known_count += 1
       else:
         if value is None:
           raise ValueError(f"{question['id']}.{name} must not be null; use 'unknown'")
@@ -127,21 +137,26 @@ def loads(text):
 
 def grade(text):
   results = []
-  for index, row in enumerate(loads(text)):
+  for row in loads(text):
     if not row["known"]:
       results.append(
         {"id": row["id"], "correct": None, "confidence": row["confidence"]}
       )
       continue
     answer = dict(row["answer"])
-    role = answer.pop("role") if index == 1 else None
+    if row["id"] not in HASHES:
+      correct = all(bool(value) for value in answer.values())
+      results.append(
+        {"id": row["id"], "correct": correct, "confidence": row["confidence"]}
+      )
+      continue
+    role = answer.pop("role", None)
     canonical = json.dumps(
       answer, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
     prefix = hashlib.sha256((canonical + "\0").encode())
     correct = False
-    if index == 1:
-      role = role or ""
+    if role is not None:
       for start in range(len(role) - ROLE_FRAGMENT_LENGTH + 1):
         candidate = prefix.copy()
         candidate.update(role[start : start + ROLE_FRAGMENT_LENGTH].encode())

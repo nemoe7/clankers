@@ -34,7 +34,7 @@ README = PLUGIN / "README.md"
 REFS = PLUGIN / "refs" / "skills"
 SHIPPED = PLUGIN / "skills"
 PLUGIN_NAME = "gpt-plugins"
-EXPECTED_SKILLS = (
+LOCAL_SKILLS = (
   "gpt-quirks",
   "gpt-handoff",
   "gpt-planning",
@@ -42,6 +42,10 @@ EXPECTED_SKILLS = (
   "gpt-display",
   "gpt-question",
 )
+MOUNTED_SKILLS = {
+  "nemoizer": (ROOT / "skills" / "refs" / "nemoizer", ROOT / "skills" / "nemoizer"),
+}
+EXPECTED_SKILLS = (*LOCAL_SKILLS, *MOUNTED_SKILLS)
 SCHEMA_URL = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 FENCED_CODE_BLOCK = re.compile(
   r"(?ms)^(?: {0,3})(?:(?P<ticks>`{3,})(?!`)|(?P<tildes>~{3,})(?!~))[^\n]*\n"
@@ -56,27 +60,43 @@ DEPENDENCY_NOTES = {
   "gpt-display": "Uses rendering and file features from the host. No host features are included.",
   "gpt-question": "Uses interactive form features from the host. No host features are included.",
   "gpt-quirks": "Uses file references from the host. No host tools are included.",
+  "nemoizer": "Includes Python prose and test linter scripts under scripts/.",
 }
+
+
+def skill_roots(name: str) -> tuple[Path, Path]:
+  """Return the (refs, shipped) directories for a collection skill."""
+  return MOUNTED_SKILLS.get(name, (REFS / name, SHIPPED / name))
 
 
 def shipped_paths() -> list[Path]:
   """Return the collection files the archive carries, in a stable order."""
-  paths = [MANIFEST]
-
-  for name in EXPECTED_SKILLS:
-    paths.append(SHIPPED / name / "SKILL.md")
-
-    # A skill may split detail into references/ so a reader loads only the file it needs.
-    for item in sorted((SHIPPED / name / "references").rglob("*")):
-      if item.is_file():
-        paths.append(item)
-
-  return paths
+  return list(archive_members().values())
 
 
 def archive_members() -> dict[str, Path]:
   """Return archive-root paths and their source files."""
-  return {path.relative_to(PLUGIN).as_posix(): path for path in shipped_paths()}
+  members: dict[str, Path] = {"plugin.json": MANIFEST}
+
+  for name in EXPECTED_SKILLS:
+    _, ship_dir = skill_roots(name)
+    members[f"skills/{name}/SKILL.md"] = ship_dir / "SKILL.md"
+
+    # A skill may split detail into references/ or scripts/ so a reader loads only the file it needs.
+    for sub in ("references", "scripts"):
+      folder = ship_dir / sub
+      if not folder.is_dir():
+        continue
+      for item in sorted(folder.rglob("*")):
+        if (
+          item.is_file()
+          and "__pycache__" not in item.parts
+          and not item.name.startswith("test_")
+        ):
+          rel = item.relative_to(ship_dir).as_posix()
+          members[f"skills/{name}/{rel}"] = item
+
+  return members
 
 
 def archive_contents(skill: str | None = None) -> dict[str, bytes]:
@@ -86,8 +106,9 @@ def archive_contents(skill: str | None = None) -> dict[str, bytes]:
   if skill not in EXPECTED_SKILLS:
     raise ValueError(f"Unknown skill: {skill}")
   manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+  _, ship_dir = skill_roots(skill)
   metadata, _ = check.parse_frontmatter(
-    (SHIPPED / skill / "SKILL.md").read_text(encoding="utf-8")
+    (ship_dir / "SKILL.md").read_text(encoding="utf-8")
   )
   manifest.update(name=skill, description=metadata["description"])
   contents = {
@@ -123,7 +144,11 @@ def package_archives(directory: Path) -> dict[str, Path]:
 def check_archives(directory: Path, errors: list[str]) -> None:
   """Check all release assets, including their names and complete payloads."""
   expected = {f"{name}.zip" for name in (PLUGIN_NAME, *EXPECTED_SKILLS)}
-  found = {path.name for path in directory.glob("gpt-*.zip")}
+  found = {
+    path.name
+    for path in directory.glob("*.zip")
+    if path.name in expected or path.name.startswith("gpt-")
+  }
   if found != expected:
     errors.append(
       f"{directory}: archive set differs: missing={sorted(expected - found)} extra={sorted(found - expected)}"
@@ -260,31 +285,38 @@ def check_collections(errors: list[str]) -> None:
 
     found = sorted(item.name for item in root.iterdir())
 
-    if found != sorted(EXPECTED_SKILLS):
-      errors.append(f"{label}: skills are {found}, expected {sorted(EXPECTED_SKILLS)}")
-
-    for name in EXPECTED_SKILLS:
-      check_skill(root, name, errors)
+    if found != sorted(LOCAL_SKILLS):
+      errors.append(f"{label}: skills are {found}, expected {sorted(LOCAL_SKILLS)}")
 
   for name in EXPECTED_SKILLS:
-    source = REFS / name / "SKILL.md"
-    copy = SHIPPED / name / "SKILL.md"
+    ref_dir, ship_dir = skill_roots(name)
+    check_skill(ref_dir.parent, name, errors)
+    check_skill(ship_dir.parent, name, errors)
+
+    source = ref_dir / "SKILL.md"
+    copy = ship_dir / "SKILL.md"
 
     if not source.is_file() or not copy.is_file():
       continue
 
     ref_text = source.read_text(encoding="utf-8")
     live_text = copy.read_text(encoding="utf-8")
-    if not matching_structure(ref_text, live_text):
+    if not matching_structure(
+      ref_text, live_text, require_headings=name not in MOUNTED_SKILLS
+    ):
       errors.append(
         f"{copy.relative_to(ROOT)}: headings differ or compressed copy exceeds refs size"
       )
 
 
-def matching_structure(reference: str, live: str) -> bool:
-  return re.findall(r"^#+ .+$", reference, re.MULTILINE) == re.findall(
-    r"^#+ .+$", live, re.MULTILINE
-  ) and len(live.encode()) <= len(reference.encode())
+def matching_structure(
+  reference: str, live: str, *, require_headings: bool = True
+) -> bool:
+  headings_match = not require_headings or (
+    re.findall(r"^#+ .+$", reference, re.MULTILINE)
+    == re.findall(r"^#+ .+$", live, re.MULTILINE)
+  )
+  return headings_match and len(live.encode()) <= len(reference.encode())
 
 
 def fenced_code_blocks(text: str) -> list[str]:
@@ -309,8 +341,9 @@ def reference_files(root: Path, name: str) -> list[Path]:
 def check_references(errors: list[str]) -> None:
   """Require matching reference paths and unchanged fenced Markdown code blocks."""
   for name in EXPECTED_SKILLS:
-    source = REFS / name / "references"
-    copy = SHIPPED / name / "references"
+    ref_dir, ship_dir = skill_roots(name)
+    source = ref_dir / "references"
+    copy = ship_dir / "references"
 
     if not source.is_dir() and not copy.is_dir():
       continue
@@ -320,16 +353,16 @@ def check_references(errors: list[str]) -> None:
       errors.append(f"{present.relative_to(ROOT)}: only one tree has references/")
       continue
 
-    ref_files = reference_files(REFS, name)
-    copy_files = reference_files(SHIPPED, name)
+    ref_files = reference_files(ref_dir.parent, name)
+    copy_files = reference_files(ship_dir.parent, name)
 
     if ref_files != copy_files:
       errors.append(f"{name}: references files differ between the two trees")
       continue
 
     for item in ref_files:
-      source_path = REFS / name / item
-      copy_path = SHIPPED / name / item
+      source_path = ref_dir / item
+      copy_path = ship_dir / item
       left = source_path.read_bytes()
       right = copy_path.read_bytes()
       same = (
@@ -439,7 +472,17 @@ def run_self_check() -> None:
   assert parse_plugin_version(None) is None
   assert matching_structure("# Skill\nFull wording", "# Skill\nShort")
   assert not matching_structure("# Skill\nFull wording", "# Other\nShort")
+  assert matching_structure(
+    "# Skill\n## Details\nFull wording",
+    "# Skill\nShort",
+    require_headings=False,
+  )
   assert not matching_structure("# Skill\nShort", "# Skill\nLonger wording")
+  collection_errors: list[str] = []
+  check_collections(collection_errors)
+  check_references(collection_errors)
+  check_tree(collection_errors)
+  assert not collection_errors, collection_errors
   fenced = "```jsx\nconst answer = 1;\n```"
   long_fence = "````jsx\nconst answer = 1;\n`````"
   assert fenced_code_blocks(fenced) == [fenced]

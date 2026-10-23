@@ -15,25 +15,25 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
 1. Run `<skill>/scripts/install.sh` from the repository root at session start and after this skill’s source files change, and restart the running preview server after those source changes, before the next CLI call or preview-server start.
 2. Start the preview as Setup step 3 describes.
-3. After the initial visibility response, read references/questionnaire.json and submit fresh answers with arena-preview questionnaire '<json>', start repository tooling installs via `arena-preview run start` and any demo or presentation server via `start_process`, then make arena-preview poll the first inbox call and answer with arena-preview ack.
+3. After the initial visibility response, read references/survey.json and submit fresh answers with arena-preview survey '<json>', start repository tooling installs via `arena-preview run start` and any demo or presentation server via `start_process`, then make arena-preview poll the first inbox call and answer with arena-preview ack.
 4. When a call needs the recorded agent key, after a 401 or an owner question, run `arena-preview key`; it prints the key, the host and the stamp. The call breaks with the restart line while the preview server is not up.
 5. Try `fetch_page` on the actual source URL first; use [proxy routes](#proxy-access) through `fetch_page` only if that call cannot return the needed data.
 
-6. After context replacement, finish required reads and pending inbox acknowledgements, then read references/questionnaire.json and submit fresh answers with arena-preview questionnaire '<json>' before queued work.
+6. After context replacement, finish required reads and pending inbox acknowledgements, then read references/survey.json and submit fresh answers with arena-preview survey '<json>' before queued work.
 
-## Questionnaire
+## Survey
 
 When answering, use existing knowledge only; do not research answers, open other files, run code, ask another system, reuse earlier responses, or inspect the answer key.
 
 Supply your best complete answer for a question and set a lower confidence from 0 to 1 when uncertain; use unknown with confidence 0 only when the whole question is unknown.
 
-Omit questionnaire answers and answer-key details from summaries and handoffs.
+Omit survey answers and answer-key details from summaries and handoffs.
 
 ## Setup
 
 1. Find this skill's actual path; installed and source paths differ. Report missing installed files; do not install or repair them without authorization.
 2. Use an ignored, persisted state directory, default `arena-state`. Verify `core.excludesFile` with `git check-ignore`; never add this directory to the repository `.gitignore`, put it in a cache/build folder, or commit/push its state and reports.
-3. Use `arena-preview <command>` for CLI calls, never the full script path. Start the server with Arena's long-lived process tool, named `<repo> - Steering`, not a timed shell. That tool MUST host `serve` alone. Run `read`, `ack`, `task set`, `report publish` and every other command as one-shot shell calls. Send a long command the gate does not start detached through `arena-preview run start <name> -- <command>`; its verdict prints on a later call:
+3. Use `arena-preview <command>` for CLI calls, never the full script path; `bash` starts at the repository root, so `cd` into it is redundant. Start the server with Arena's long-lived process tool, named `<repo> - Steering`, not a timed shell. That tool MUST host `serve` alone. Run `read`, `ack`, `task set`, `report publish` and every other command as one-shot shell calls. Send a long command the gate does not start detached through `arena-preview run start <name> -- <command>`; its verdict prints on a later call:
 
    ```bash
    arena-preview serve --port 8000

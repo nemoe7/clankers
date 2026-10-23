@@ -8,38 +8,10 @@ license: MIT
 
 ## Shared workflow
 
-- Classify the task as build, refine, audit, critique, harden, extract, or live inspection before choosing tools.
-- Preserve an existing product design system unless the user authorizes its redesign.
-- Apply the bundled house clauses, sheet, and work order only when no product design system exists or the user selects the house profile.
-- Record the audience, primary task, factual content, constraints, and acceptance checks before building a new interface.
-- Choose a visual direction from the brief without inventing claims, assets, or proof.
-- Search the local rule catalog for the task outcome and detected stack, and verify each recommendation against the project.
-- Identify fallback search results and missing evidence instead of presenting them as exact matches.
-- Generate design-system proposals without replacing existing tokens or design records until the change is approved.
-- Record each asset's source, license, attribution, and local path before using it.
-- Preserve applicable upstream licenses and notices when adapting source text, code, or data.
-- Run source checks with stable finding IDs, locations, severity, and evidence before browser verification.
-- Inspect rendered pages at project widths plus 1280 and 360 px with available browser tools.
-- Test the changed task flow, including keyboard operation, focus movement, validation, loading, failure, retry, and recovery where applicable.
-- Check supported themes, reduced motion, long content, and empty, sparse, dense, error, and offline states where applicable.
-- Keep viewport screenshots, computed measurements, browser errors, and flow results with the verification report.
-- Separate automated findings, visual judgments, synthesized input, and real-device evidence in every audit.
-- Name checks that did not run, missing dependencies, and unsupported browser or device coverage without claiming a pass.
-- Report audit and critique findings without changing files unless repair is requested.
-- Keep live inspection read-only until the user authorizes a specific edit, and retain its before-and-after evidence.
-- Extract reusable tokens and component patterns without introducing a competing source of truth.
-- Repair only the requested scope, then rerun affected source, browser, and task-flow checks.
-- Keep credentials and private page content out of external searches, asset requests, and shared artifacts.
-- Use existing design records, or docs/design.md when none exist, as the design authority.
-- Update the authoritative design record in the same change as a settled design decision.
-- MUST link the authoritative design record to separate local visual references for changed workflows and their applicable states.
-- Evaluate changed flows against the ten usability heuristics, citing observed behavior for each finding.
-- Check alignment, hierarchy, color roles, typography, and useful imagery against the task and active design system.
-- Create a new interaction pattern only when existing patterns cannot meet the documented user need.
-- Map accessibility findings to applicable WCAG criteria with the test method, evidence, and verification status.
-- Label automated task-flow checks separately from usability sessions with real participants.
-- Mark implementation readiness and link behavior, states, assets, and component sources in each handoff.
-- Create component forks only when existing variants cannot meet the task and the exception is recorded.
+- Install this skill's package with `pip install -e <skill>` or `uv pip install -e <skill>` (`uv tool install -e <skill>`) and run `nuu` directly; preserve an existing design record (`docs/design.md`), or use `references/style.css` (`-P house`).
+- Search the catalog (`nuu search`) and verify assets (`nuu assets`), then run static checks (`nuu lint`, `nuu extract`) before rendered checks (`nuu inspect`, `flow`, `a11y`, `audit`, `live`) at project widths plus `1280` and `360` px.
+- Retain screenshots, measurements (`measure.py`), flow results, and annotated composite boards (`nuu annotate`), separating automated findings from visual judgment and naming unrun checks.
+- Keep live edits read-only unless authorized (`-Z`), repair only the requested scope, and update `docs/design.md` with linked visual references in the same change.
 
 ## House profile
 
@@ -83,6 +55,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 ## Go-to libraries
 
 - For draggable and reorderable lists, vendor only the required part of [SortableJS](https://github.com/SortableJS/Sortable) with its MIT license instead of writing custom drag-and-drop handlers.
+- For animations and scroll-driven motion, vendor [GSAP](https://github.com/greensock/GSAP) into the project as the go-to library and respect `prefers-reduced-motion: reduce`.
 
 ## Order of work
 
@@ -113,8 +86,6 @@ python scripts/measure.py ruler --from 120,340 --to 264,340
 - `references/measure.md`: the report shape, the snippet, and the ruler.
 - `scripts/measure.py`: the check and the ruler.
 
-- `scripts/uiux.py`: briefs, catalog search, system proposals, design records, assets, source checks, screenshot annotation (`annotate`), extraction, and evidence-based task modes.
-- `scripts/browser.cjs`: optional Playwright captures, declared flows, and authorized transient live edits.
+- `scripts/nuu`: CLI entry point (`references/nuu.md`), alongside `scripts/measure.py` (`references/measure.md`), `scripts/annotate.py` (`references/annotate.md`), and `scripts/browser.cjs`.
 - `data/vendor/`: licensed catalog data and source hashes.
-- `references/tools.md`: command contracts, report fields, and coverage limits.
 - `references/offline-fonts.md`: bundled and offline zero-jitter font recipe (`preload` with `crossorigin`, `font-display: block`, inline Base64 WOFF2, `FontFace` binary buffers, and metric-matched fallbacks).

@@ -109,7 +109,7 @@ Read these first:
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
 - Ledger prose: neutral wording — actions, files, numbers; no narrative, rationale or story.
 - Every entry terse: one entry per event, no story between facts.
-- Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; MUST ASD-STE100; no skill or linter.
+- Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; MUST use `nemoizer`, falling back to ASD-STE100 and Humanizer when unavailable.
 - Chat text and reports: at most 3 sentences per block; keep terse.
 - No clause in a rule, skill, workflow or system-prompt file is added, amended, or deleted until the user approves the report; hold the work and say so in one line.
 - Edits that change no clause — a squash that removes no rule, a typo or link fix, formatting, a re-measure — need no report.
@@ -157,10 +157,8 @@ Read these first:
 - No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
 - markdownlint covers `rules/**/*.md` — 11 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`.
   - **MD060 enabled**, **MD013 disabled**.
-- Python: Ruff, configured by `ruff.toml`, which owns the selection and the pinned version.
-- Simplified Technical English: write and edit the documentation prose of this repository in ASD-STE100.
-  - The covered files are `docs/`, every `README.md`, and `CHANGELOG.md`.
-  - The vendored linter at `.agents/skills/asd-ste100/scripts/ste-lint.py` reports violations, and MUST pass on the text you add or change in those files.
+- Python: Ruff, configured by `ruff.toml`, which owns the selection and the pinned version; run `ruff format` before other local gates.
+- Prose style: write and edit the documentation prose of this repository (`docs/`, every `README.md`, and `CHANGELOG.md`) with `nemoizer` (`skills/nemoizer/scripts/nemoizer`), falling back to ASD-STE100 (`.agents/skills/asd-ste100/scripts/ste-lint.py`) and Humanizer when `nemoizer` is unavailable; both linters MUST pass on changed text.
   - Rules, skills and agent-facing files such as this one stay outside the linter's scope.
   - A copy of a third-party file stays outside it too, because the copy belongs to its upstream: no rewrite of a vendored file, and no path into the gate for one.
 

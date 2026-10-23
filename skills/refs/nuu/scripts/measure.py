@@ -119,33 +119,45 @@ def point(text: str) -> tuple[float, float]:
 
 def main(argv: list[str] | None = None) -> int:
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-  parser.add_argument("--sheet", type=Path, default=DEFAULT_SHEET)
-  parser.add_argument("--scale", type=float, default=DEFAULT_SCALE)
+  parser.add_argument("-s", "--sheet", type=Path, default=DEFAULT_SHEET)
+  parser.add_argument("-k", "--scale", type=float, default=DEFAULT_SCALE)
   commands = parser.add_subparsers(dest="command", required=True)
 
   check_command = commands.add_parser(
     "check", help="Check a JSON report against the sheet"
   )
   check_command.add_argument("report", type=Path)
+  check_command.add_argument("-s", "--sheet", dest="sub_sheet", type=Path, default=None)
+  check_command.add_argument(
+    "-k", "--scale", dest="sub_scale", type=float, default=None
+  )
 
   ruler_command = commands.add_parser(
     "ruler", help="Measure the gap between two guides"
   )
-  ruler_command.add_argument("--from", dest="start", type=point, required=True)
-  ruler_command.add_argument("--to", dest="end", type=point, required=True)
+  ruler_command.add_argument("-f", "--from", dest="start", type=point, required=True)
+  ruler_command.add_argument("-t", "--to", dest="end", type=point, required=True)
+  ruler_command.add_argument("-s", "--sheet", dest="sub_sheet", type=Path, default=None)
+  ruler_command.add_argument(
+    "-k", "--scale", dest="sub_scale", type=float, default=None
+  )
 
   arguments = parser.parse_args(argv)
-  tokens = parse_sheet(arguments.sheet.read_text(encoding="utf-8"))
+  sheet_path = arguments.sub_sheet or arguments.sheet
+  scale_val = (
+    arguments.sub_scale if arguments.sub_scale is not None else arguments.scale
+  )
+  tokens = parse_sheet(sheet_path.read_text(encoding="utf-8"))
 
   if arguments.command == "ruler":
-    gap = ruler(arguments.start, arguments.end, arguments.scale)
+    gap = ruler(arguments.start, arguments.end, scale_val)
     print(f"gap {gap['dx']:g} x {gap['dy']:g} px, distance {gap['distance']:g} px")
     for axis, fits in gap["axes"].items():
-      print(f"{axis}: {'on' if fits else 'off'} the {arguments.scale:g} px scale")
+      print(f"{axis}: {'on' if fits else 'off'} the {scale_val:g} px scale")
     return 0 if gap["on_scale"] else 1
 
   report = json.loads(arguments.report.read_text(encoding="utf-8"))
-  findings = check(report, tokens, arguments.scale)
+  findings = check(report, tokens, scale_val)
   for finding in findings:
     print(f"{report.get('width')} px {finding}")
   if findings:

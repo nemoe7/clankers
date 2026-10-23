@@ -123,8 +123,8 @@ test('preview client', async (t) => {
   get('#downloads-panel').hidden = true;
   get('#upload-file').files = [];
   // The dialog form owns the field container, so its FormData sees the controls.
-  get('#questionnaire-again').hidden = true;
-  get('#modal-actions').append(get('#questionnaire-again'), get('#modal-cancel'), get('#modal-confirm'));
+  get('#survey-again').hidden = true;
+  get('#modal-actions').append(get('#survey-again'), get('#modal-cancel'), get('#modal-confirm'));
   get('#modal-form').append(get('#modal-fields'), get('#modal-actions'));
   get('#note').placeholder = 'What should happen next?';
   get('#send').textContent = 'Send';
@@ -204,9 +204,9 @@ test('preview client', async (t) => {
   let reducedMotion = false;
   const pointerListeners = [];
   const pendingWrites = new Map();
-  let questionnaireResults = null;
-  let questionnaireAnsweredAt = null;
-  const questionnaireRequests = [];
+  let surveyResults = null;
+  let surveyAnsweredAt = null;
+  const surveyRequests = [];
   const interruptCalls = [];
   const failedWrites = new Set();
   const context = {
@@ -257,9 +257,9 @@ test('preview client', async (t) => {
       if (options?.signal?.aborted) throw abortError();
       if (pendingWrites.has(url)) await pendingWrites.get(url);
       if (failedWrites.has(url)) return response({ error: 'Write failed' }, false);
-      if (url === '/api/questionnaire') return response({ results: questionnaireResults, answered_at: questionnaireAnsweredAt });
-      if (url === '/api/questionnaire/request') {
-        questionnaireRequests.push(options);
+      if (url === '/api/survey') return response({ results: surveyResults, answered_at: surveyAnsweredAt });
+      if (url === '/api/survey/request') {
+        surveyRequests.push(options);
         return response({ ok: true });
       }
       if (url === '/api/state') {
@@ -4790,23 +4790,23 @@ test('preview client', async (t) => {
     }
   });
 
-  await t.test('Questionnaire results keep correctness separate from confidence', async () => {
-    const open = get('#questionnaire-open');
+  await t.test('Survey results keep correctness separate from confidence', async () => {
+    const open = get('#survey-open');
     await open.events.click();
     assert.equal(get('#modal').open, true);
     assert.equal(get('#modal-confirm').hidden, true);
     assert.equal(get('#modal-title').hidden, true);
     assert.ok(get('#modal-title').textContent);
-    assert.ok(questionnaireRequests.length);
-    const requestCount = questionnaireRequests.length;
-    const update = intervals.filter(callback => callback.name === 'refreshQuestionnaire').at(-1);
+    assert.ok(surveyRequests.length);
+    const requestCount = surveyRequests.length;
+    const update = intervals.filter(callback => callback.name === 'refreshSurvey').at(-1);
     await update();
-    assert.equal(questionnaireRequests.length, requestCount);
-    questionnaireAnsweredAt = new Date(Date.now() - 61000).toISOString();
-    questionnaireResults = [
-      { id: 'H8P3C', correct: false, confidence: 1 },
-      { id: 'D9V4N', correct: true, confidence: 0.5 },
-      { id: 'G2W6M', correct: null, confidence: 0 },
+    assert.equal(surveyRequests.length, requestCount);
+    surveyAnsweredAt = new Date(Date.now() - 61000).toISOString();
+    surveyResults = [
+      { id: 'S2E5P', correct: false, confidence: 1 },
+      { id: 'A2P6R', correct: true, confidence: 0.5 },
+      { id: 'M2A6Y', correct: null, confidence: 0 },
     ];
     await update();
     const content = get('#modal-fields').children[0];
@@ -4818,54 +4818,54 @@ test('preview client', async (t) => {
       'lucide lucide-circle-question-mark',
     ]);
     assert.deepEqual(rows.map(row => row.children[0].getAttribute('aria-label')), [
-      'H8P3C: incorrect',
-      'D9V4N: correct',
-      'G2W6M: unknown',
+      'S2E5P: incorrect',
+      'A2P6R: correct',
+      'M2A6Y: unknown',
     ]);
     assert.deepEqual(rows.map(row => row.children[1].children[0].value), [1, 0.5, 0]);
-    assert.deepEqual(rows.map(row => row.children[0].children.at(-1).textContent), questionnaireResults.map(row => row.id));
+    assert.deepEqual(rows.map(row => row.children[0].children.at(-1).textContent), surveyResults.map(row => row.id));
     assert.equal(content.children.some(node => node.tagName === 'p'), false);
     const footer = content.children.find(node => node.className === 'row');
     const time = footer.children.find(node => node.tagName === 'time');
-    assert.equal(time.dateTime, questionnaireAnsweredAt);
-    assert.equal(time.textContent, context.time(questionnaireAnsweredAt));
-    const again = get('#questionnaire-again');
+    assert.equal(time.dateTime, surveyAnsweredAt);
+    assert.equal(time.textContent, context.time(surveyAnsweredAt));
+    const again = get('#survey-again');
     assert.equal(again.hidden, false, 'Answer again shows in the modal action row');
     assert.equal(get('#modal-actions').children.indexOf(again) < get('#modal-actions').children.indexOf(get('#modal-cancel')), true);
     assert.equal(again.disabled, false);
     await again.events.click();
-    assert.equal(questionnaireRequests.length, requestCount + 1);
+    assert.equal(surveyRequests.length, requestCount + 1);
     assert.equal(again.disabled, true);
     await update();
-    assert.equal(questionnaireRequests.length, requestCount + 1);
-    assert.equal(get('#questionnaire-again'), again);
-    questionnaireAnsweredAt = new Date().toISOString();
+    assert.equal(surveyRequests.length, requestCount + 1);
+    assert.equal(get('#survey-again'), again);
+    surveyAnsweredAt = new Date().toISOString();
     await update();
-    const retry = get('#questionnaire-again');
-    failedWrites.add('/api/questionnaire/request');
+    const retry = get('#survey-again');
+    failedWrites.add('/api/survey/request');
     await retry.events.click();
     assert.equal(retry.disabled, false);
     assert.equal(get('#modal-error').hidden, false);
     await update();
     assert.equal(get('#modal-error').hidden, false);
-    failedWrites.delete('/api/questionnaire/request');
+    failedWrites.delete('/api/survey/request');
     await retry.events.click();
-    assert.equal(questionnaireRequests.length, requestCount + 2);
+    assert.equal(surveyRequests.length, requestCount + 2);
     assert.equal(get('#modal-error').hidden, true);
     get('#modal-cancel').events.click();
     assert.equal(get('#modal').open, false);
-    failedWrites.add('/api/questionnaire');
+    failedWrites.add('/api/survey');
     await open.events.click();
     assert.equal(get('#modal-error').hidden, false);
-    failedWrites.delete('/api/questionnaire');
+    failedWrites.delete('/api/survey');
     await update();
     assert.equal(get('#modal-error').hidden, true);
     get('#modal-cancel').events.click();
     const reads = context.fetch.mock.calls.length;
     await update();
     assert.equal(context.fetch.mock.calls.length, reads);
-    questionnaireResults = null;
-    questionnaireAnsweredAt = null;
+    surveyResults = null;
+    surveyAnsweredAt = null;
   });
 
   await t.test('WebSockets route JSON, retain binary HTTP, queue changes, and reject lost replies', async () => {

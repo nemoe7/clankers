@@ -1470,7 +1470,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
           status: 200,
           text: () => Promise.resolve(
             url.includes("arena-prompt-fill.txt")
-              ? "Run `arena-preview questionnaire '<json>'` and `git ls-remote origin <branch>`.\nPlain line"
+              ? "Run `arena-preview survey '<json>'` and `git ls-remote origin <branch>`.\nPlain line"
               : "",
           ),
         });
@@ -1492,7 +1492,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       const codeNodes = composer.children[2].children.filter(node => node.tagName === "CODE");
       assert.deepEqual(
         codeNodes.map(node => node.textContent),
-        ["arena-preview questionnaire '<json>'", "git ls-remote origin <branch>"],
+        ["arena-preview survey '<json>'", "git ls-remote origin <branch>"],
       );
       assert.equal(composer.children[3].textContent, "Plain line");
     });

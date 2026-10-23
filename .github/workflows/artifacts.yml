@@ -6,6 +6,8 @@ on:
     paths:
       - 'gpt-plugins/**'
       - 'maintenance/gpt_plugins/**'
+      - 'skills/nemoizer/**'
+      - 'skills/refs/nemoizer/**'
       - 'rules/**'
       - '!rules/refs/**'
       - 'maintenance/publish/publish.py'
@@ -18,6 +20,8 @@ on:
     paths:
       - 'gpt-plugins/**'
       - 'maintenance/gpt_plugins/**'
+      - 'skills/nemoizer/**'
+      - 'skills/refs/nemoizer/**'
       - '.github/workflows/artifacts.yml'
   workflow_dispatch:
     inputs:
@@ -110,7 +114,7 @@ jobs:
         run: |
           BASE="$PR_BASE"
           git show "$BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
-          changed="$(git diff --name-only "$BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills)"
+          changed="$(git diff --name-only "$BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills skills/nemoizer)"
           if [ -n "$changed" ]; then
             python maintenance/gpt_plugins/gate_gpt_plugins.py --base-manifest "$RUNNER_TEMP/base-plugin.json" --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
           else
@@ -192,6 +196,12 @@ jobs:
           path: gpt-question.zip
           archive: false
 
+      - name: Upload nemoizer Archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: nemoizer.zip
+          archive: false
+
   publish-clankers-rules:
     name: Publish Rules to Gist
     needs: changes
@@ -260,7 +270,7 @@ jobs:
       - name: Download Validated Archive
         uses: actions/download-artifact@v8
         with:
-          pattern: gpt-*.zip
+          pattern: '*.zip'
           merge-multiple: true
           skip-decompress: true
 
@@ -277,12 +287,12 @@ jobs:
           set -eu
           tag="gpt-plugins-v$VERSION"
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" gpt-*.zip --clobber
+            gh release upload "$tag" gpt-*.zip nemoizer.zip --clobber
           else
-            gh release create "$tag" gpt-*.zip \
+            gh release create "$tag" gpt-*.zip nemoizer.zip \
               --title "GPT Plugins $VERSION" \
               --target "$GITHUB_SHA" \
-              --notes "The GPT Plugins collection and six single-skill plugins at version $VERSION. Archive checks do not prove ChatGPT import support."
+              --notes "The GPT Plugins collection and seven single-skill plugins at version $VERSION. Archive checks do not prove ChatGPT import support."
           fi
 
   publish-proxy-images:

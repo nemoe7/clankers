@@ -46,7 +46,7 @@ Platform constraints made the three rule surfaces differ, so each row names one 
 | Changelogs | Use Keep a Changelog unless the repository uses another format. | Use Keep a Changelog unless the repository uses another format. | — |
 | Mermaid Diagrams | Default where rendered. Phone-sized. | NEVER in chat. Docs only. | MUST for pipelines/flows unless target explicitly cannot render Mermaid. NEVER ASCII. |
 | Recommendation | Required on three or more options. | Required on three or more options. | — |
-| Platform Specific | <ul><li>Shell check first. </li></ul> | <ul><li>10-4 opens the first reply. </li><li>Reasoning line each turn. </li><li>ALWAYS activate preview steering. </li><li>Negative rating on noncompliance. </li><li>Reports through the preview skill. </li><li>NEVER end with open tasks. </li><li>ALWAYS smallest task next. </li><li>Visibility question after first start. </li><li>Protected files, waiver only. </li><li>Suggest amendments only for a contributing rule gap. </li></ul> | <ul><li>ALWAYS think longer. </li></ul> |
+| Platform Specific | <ul><li>Shell check first. </li></ul> | <ul><li>10-4 opens the first reply. </li><li>ALWAYS activate preview steering. </li><li>Negative rating on noncompliance. </li><li>Reports through the preview skill. </li><li>NEVER end with open tasks. </li><li>ALWAYS smallest task next. </li><li>Visibility question after first start. </li><li>Protected files, waiver only. </li><li>Suggest amendments only for a contributing rule gap. </li></ul> | <ul><li>ALWAYS think longer. </li></ul> |
 
 ## Install rules
 

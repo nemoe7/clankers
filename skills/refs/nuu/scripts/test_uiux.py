@@ -30,35 +30,15 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   runtime = run("doctor")
   assert runtime["catalog"]["files"] > 0
   assert not runtime["catalog"]["mismatches"]
-  context = tmp_path / "brief.json"
-  result = run(
-    "brief", "--task", "Review a healthcare dashboard", "--output", str(context)
-  )
-  assert result["unknowns"]
-  assert json.loads(context.read_text(encoding="utf-8"))["task"] == result["task"]
-  exact = run("search", "healthcare dashboard", "--dataset", "products")
+  exact = run("search", "healthcare dashboard", "-d", "products", "-l", "5")
   assert exact["results"] and not exact["fallback"]
+  assert len(exact["results"]) <= 5
   assert all(row["matched_terms"] for row in exact["results"])
   fallback = run("search", "zzznomatchzzzx", "--dataset", "products")
   assert fallback["fallback"]
   assert not any(row["matched_terms"] for row in fallback["results"])
 
   before = {path: path.read_bytes() for path in (css, page)}
-  proposal = run("system", "--brief", str(context))
-  assert proposal["status"] == "proposed"
-  assert proposal["existing_authority"]["tokens"]
-  assert not proposal["writes"]
-  record = run("teach", "--create")
-  authority = Path(record["authority"])
-  content = authority.read_bytes()
-  assert content
-  repeated = run("teach", "--create")
-  assert not repeated["writes"]
-  assert authority.read_bytes() == content
-  rejected = run("teach", "--record", "../outside.md", "--create", expected=2)
-  assert rejected["status"] == "error"
-  assert not (tmp_path / "outside.md").exists()
-
   findings = run("lint", expected=1)
   assert {row["rule"] for row in findings["findings"]} >= {"UIX001", "UIX002"}
   assert all(row["line"] > 0 and row["evidence"] for row in findings["findings"])
@@ -94,15 +74,15 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
     ),
     encoding="utf-8",
   )
-  assert not run("assets", "--manifest", str(manifest))["findings"]
+  assert not run("assets", "-m", str(manifest))["findings"]
   asset.write_text('<svg onload="alert(1)"/>', encoding="utf-8")
   assert run("assets", "--manifest", str(manifest), expected=1)["findings"]
   assert (
     run(
       "assets",
-      "--fetch",
+      "-f",
       "https://example.com/art.svg",
-      "--destination",
+      "-d",
       "new.svg",
       expected=2,
     )["status"]
@@ -110,31 +90,32 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   )
   assert not (root / "new.svg").exists()
   assert run("extract")["tokens"]
-  for mode in (
-    "critique",
-    "polish",
-    "harden",
-    "normalize",
-    "animate",
-    "delight",
-    "distill",
-    "onboard",
-  ):
-    report = run(mode)
-    assert report["review_dimensions"]
-    assert not report["writes"]
-    assert report["visual_judgment"] == "not_run"
-  page.write_text('<img src="art.svg">', encoding="utf-8")
-  assert run("critique", expected=1)["findings"]
-  page.write_bytes(before[page])
-  malformed = tmp_path / "malformed.json"
-  for evidence in (
-    {"captures": [{"measurements": {"elements": [None]}}]},
-    {"captures": [{"measurements": {"elements": [{"values": []}]}}]},
-    {"captures": [{"flow": {"steps": "invalid"}}]},
-  ):
-    malformed.write_text(json.dumps(evidence))
-    assert run("animate", "--evidence", str(malformed), expected=2)["status"] == "error"
+  measured = tmp_path / "measured.json"
+  measured.write_text(
+    json.dumps(
+      {
+        "width": 1280,
+        "elements": [{"selector": ".row", "values": {"height": "40px", "gap": "16px"}}],
+      }
+    ),
+    encoding="utf-8",
+  )
+  check_proc = subprocess.run(
+    [sys.executable, str(SCRIPT), "check", str(measured), "-k", "8"],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert check_proc.returncode == 0
+  ruler_proc = subprocess.run(
+    [sys.executable, str(SCRIPT), "ruler", "-f", "0,0", "-t", "16,24", "-k", "8"],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert ruler_proc.returncode == 0
   audit = run("audit", expected=3)
   assert audit["rendered"]["status"] == "not_checked"
   assert audit["real_device"] == "not_run"

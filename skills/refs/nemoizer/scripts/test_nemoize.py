@@ -965,7 +965,16 @@ def test_ste_and_hmn_rules_and_audit_mode(tmp_path):
     text=True,
     check=False,
   )
+  collect_alias = subprocess.run(
+    [sys.executable, str(SCRIPT.with_name("nemoizer")), "collect", str(note)],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
   assert audit.returncode == 0, audit.stderr
+  assert collect_alias.returncode == 0, collect_alias.stderr
+  assert collect_alias.stdout == audit.stdout
   assert "HMN910 line:" in audit.stdout
   assert "STE904" in audit.stdout
   assert "STE001" not in audit.stdout

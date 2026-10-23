@@ -27,7 +27,7 @@
 
 - MUST keep key details: negations, conditions, errors, commands, numbers, and caveats.
 - MUST follow repository documentation and conventions.
-- MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
+- MUST use `nemoizer` for every piece of human-facing text you produce (responses, code comments, and documentation), and fall back to ASD-STE100 Simplified Technical English and Humanizer when `nemoizer` is unavailable.
 - Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning; no storyline or narrative unless the user asks for it.
 - Maintain changelogs in the [Keep a Changelog](https://keepachangelog.com/) format unless the repository follows a different changelog format.
 - Open every response on the substance, NEVER on preamble or postamble.
@@ -107,7 +107,7 @@
 
 - 2-space indentation (overrides formatter defaults).
 - Markdown: markdownlint defaults + MD060; MD013 disabled.
-- For a Python project, MUST use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
+- For a Python project, MUST use Ruff with its default rule selection plus `E501` at 120 characters, keep the formatter's 88-column width, and run `ruff format` before other local gates.
 - Add code or configuration comments only when method complexity requires them.
 - Leave unrelated code untouched.
 - MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and leave them out of every commit.

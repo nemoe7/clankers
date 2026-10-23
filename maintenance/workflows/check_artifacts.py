@@ -30,6 +30,8 @@ PUSH_PATHS = (
 PULL_PATHS = (
   "gpt-plugins/**",
   "maintenance/gpt_plugins/**",
+  "skills/nemoizer/**",
+  "skills/refs/nemoizer/**",
   ".github/workflows/artifacts.yml",
 )
 VALIDATE_IF = (

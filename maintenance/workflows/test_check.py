@@ -83,11 +83,11 @@ def test_lint_count_claims_include_root_agent_guide():
   assert any(document == root for document, _ in check.LINT_COUNT_CLAIMS)
 
 
-def test_arena_budget_includes_questionnaire_runtime():
+def test_arena_budget_includes_survey_runtime():
   _, files = check.EXPECTED_GROUPS["skills/arena-skill"]
   assert {
-    "skills/arena-skill/scripts/questionnaire.py",
-    "skills/arena-skill/references/questionnaire.json",
+    "skills/arena-skill/scripts/survey.py",
+    "skills/arena-skill/references/survey.json",
   } <= set(files)
 
 

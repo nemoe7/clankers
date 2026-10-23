@@ -17,7 +17,16 @@ ARTIFACTS = ".github/workflows/artifacts.yml"
 # One rule per artifact path family: the package archive, the rules gist, and the two
 # proxy images. The rules family skips `rules/refs/`, which no target repository sees.
 ARTIFACT_RULES = (
-  ("package", ("gpt-plugins/*", "maintenance/gpt_plugins/*", ARTIFACTS)),
+  (
+    "package",
+    (
+      "gpt-plugins/*",
+      "maintenance/gpt_plugins/*",
+      "skills/nemoizer/*",
+      "skills/refs/nemoizer/*",
+      ARTIFACTS,
+    ),
+  ),
   (
     "rules",
     (
@@ -119,7 +128,7 @@ def step_artifacts(env: Mapping[str, str], output: Path, repo: str = ".") -> int
 MODULE_TESTS = {
   "Preview": (
     "skills/refs/arena-skill/scripts/test_preview.py",
-    "skills/refs/arena-skill/scripts/test_questionnaire.py",
+    "skills/refs/arena-skill/scripts/test_survey.py",
     "maintenance/workflows/test_preview_gate.py",
   ),
   "Nemoizer": ("skills/refs/nemoizer/scripts/test_nemoize.py",),

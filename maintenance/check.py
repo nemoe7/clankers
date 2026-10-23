@@ -75,11 +75,11 @@ EXPECTED_GROUPS = {
       "skills/arena-skill/assets/markdown-it.min.js",
       "skills/arena-skill/assets/message-markdown.js",
       "skills/arena-skill/assets/style.css",
-      "skills/arena-skill/references/questionnaire.json",
+      "skills/arena-skill/references/survey.json",
       "skills/arena-skill/scripts/arena-preview",
       "skills/arena-skill/scripts/install.sh",
       "skills/arena-skill/scripts/preview.py",
-      "skills/arena-skill/scripts/questionnaire.py",
+      "skills/arena-skill/scripts/survey.py",
     ),
   ),
 }

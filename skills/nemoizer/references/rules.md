@@ -21,7 +21,7 @@ A row replaces its word as plain text, in lower, capital, and upper case. Stem e
 - Use any comment syntax for `nonemo: <id>`; the scanner reads text, not syntax.
 - Apply an exclusion only to a known matching rule ID.
 - Do not rewrite exclusion markers or the rotation table, and apply only unsuppressed rotations and straight-quote replacements for curly quotation marks.
-- Print every nonemo marker with its path, line, rule ID, scope, and text when `nemoizer collect` or `--ignores` is used, and print every `nonemo` marker and manual-review finding through `scripts/markers.py` when `nemoizer audit` or `--audit` is used.
+- Print every nonemo marker with its path, line, rule ID, scope, and text when `--ignores` is used, and print every `nonemo` marker and manual-review finding through `scripts/markers.py` when `nemoizer audit`, `nemoizer collect`, or `--audit` is used.
 
 ```python
 value = "kind"  # nonemo: NMO100

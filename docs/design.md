@@ -18,7 +18,7 @@ Select the connection dot to open the shared dialog. Close or Escape returns to 
 
 An empty view requests an answer from the agent. A failed read retries while the view stays open.
 
-Answer again sends one hidden, ACK-required request. Prior results stay visible until a new answer arrives.
+Bible check sends one hidden, ACK-required bible checkpoint note. Prior results stay visible until a new answer arrives.
 
 ## Screens and states
 

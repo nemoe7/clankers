@@ -321,7 +321,7 @@ def test_compact_copies_drift_and_runtime():
     "assets/style.css",
     "assets/index.html",
     "scripts/preview.py",
-    "scripts/questionnaire.py",
+    "scripts/survey.py",
   }
   for relative, (source, compact) in sources.items():
     if relative in minify.COPIED_ASSETS:
@@ -361,8 +361,8 @@ def test_compact_copies_drift_and_runtime():
       shutil.copyfile(minify.TARGETS[0] / relative, skill / relative)
     (skill / "references").mkdir()
     shutil.copyfile(
-      minify.SOURCE / "references/questionnaire.json",
-      skill / "references/questionnaire.json",
+      minify.SOURCE / "references/survey.json",
+      skill / "references/survey.json",
     )
     shutil.copyfile(
       minify.SOURCE / "scripts/test_preview.py", skill / "scripts/test_preview.py"

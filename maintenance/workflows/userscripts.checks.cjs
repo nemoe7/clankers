@@ -831,48 +831,42 @@ function checkHideComposer(api) {
   var hasSpacerHeight = api.hasSpacerHeight;
   var enforceSpacerHeight = api.enforceSpacerHeight;
   var SPACER_SELECTOR = api.SPACER_SELECTOR;
-  var SPACER_HEIGHT = api.SPACER_HEIGHT;
+  var SPACER_CLASS = api.SPACER_CLASS;
 
-  var styleState = { height: SPACER_HEIGHT, priority: "", writes: 0 };
-  var spacerStyle = {
-    getPropertyValue: function (name) {
-      return name === "height" ? styleState.height : "";
-    },
-    getPropertyPriority: function (name) {
-      return name === "height" ? styleState.priority : "";
-    },
-    setProperty: function (name, value, priority) {
-      if (name === "height") {
-        styleState.height = value;
-        styleState.priority = priority;
-        styleState.writes += 1;
-      }
-    },
-  };
+  var classes = new Set(["shrink-0"]);
+  var removals = 0;
   var spacer = {
     tagName: "DIV",
-    classList: { contains: function (name) { return name === "shrink-0"; } },
+    classList: {
+      contains: function (name) {
+        return classes.has(name);
+      },
+      remove: function (name) {
+        if (classes.delete(name)) removals += 1;
+      },
+      add: function (name) {
+        classes.add(name);
+      },
+    },
     textContent: "",
-    style: spacerStyle,
     getAttribute: function (name) {
-      return name === "style" ? "height: 24px;" : null;
+      return name === "style" ? "height: 10675px;" : null;
     },
   };
   var spacerDoc = {
     querySelectorAll: function (selector) {
-      return selector === SPACER_SELECTOR ? [spacer] : [];
+      return selector === SPACER_SELECTOR && classes.has("shrink-0") ? [spacer] : [];
     },
   };
   var candidate = isSpacerElement(spacer) && hasSpacerHeight(spacer.getAttribute("style"));
   enforceSpacerHeight(spacerDoc);
-  var initialPriority = styleState.priority;
-  styleState.height = "18px";
-  styleState.priority = "";
+  var removedAfterScan = !classes.has("shrink-0");
+  classes.add("shrink-0");
   enforceSpacerHeight(spacerDoc, [
     {
       type: "attributes",
-      attributeName: "style",
-      oldValue: "height: 24px !important;",
+      attributeName: "class",
+      oldValue: "",
       target: spacer,
     },
   ]);
@@ -890,14 +884,15 @@ function checkHideComposer(api) {
     [shouldHideComposer(true, true), true],
     [shouldHideComposer(true, false), false],
     [shouldHideComposer(false, true), false],
+    [SPACER_CLASS, "shrink-0"],
     [candidate, true],
     [hasSpacerHeight("height: 24px;"), true],
     [hasSpacerHeight("height: 24px !important;"), true],
-    [hasSpacerHeight("height: 25px;"), false],
-    [initialPriority, "important"],
-    [styleState.height, SPACER_HEIGHT],
-    [styleState.priority, "important"],
-    [styleState.writes, 2],
+    [hasSpacerHeight("height: 10675px;"), true],
+    [hasSpacerHeight("width: 24px;"), false],
+    [removedAfterScan, true],
+    [classes.has("shrink-0"), false],
+    [removals, 2],
   ];
   var failed = 0;
   var i;

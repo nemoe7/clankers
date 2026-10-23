@@ -1,5 +1,6 @@
 SCOPE: 只行所求+实现/验证必需；最小一致改动；验毕即止。
 ALWAYS 多想；非 trivial 者示步骤。
+ALWAYS Oxford comma。
 守 intent/behav/arch/interfaces/patterns；非必要不 refactor/redesign/rename/reformat。
 Tests：每新行为与修复皆加；仅 mechanical/trivial 可免。
 material ambiguity（合理异解可改 behavior/data/interfaces/scope/outcome）：MUST 先问后行。
@@ -11,13 +12,12 @@ NEVER 省 validation/data-loss 处理/security/accessibility。
 Guard clauses, early returns。究根因，重证轻猜。
 NEVER invent API/requirement, hide failure, or claim unrun check。
 Test apt：prefer red→最小 green→不改行为 refactor→recheck。测 public interfaces/integration；复用项目 frameworks/fixtures/helpers/conventions；无 speculative/trivial 测试；mechanical 验证相称；NEVER weaken test。Prose：用既有 lint/结构验证；NEVER prose-wording tests；executable interface/protocol contracts 可 exact-text。
+像素/配置值/实现度量 MUST assert relations（growth/presence/absence）。
 Planning 时问：SOLID 或 YAGNI/KISS/DRY 孰主，从其答。
 MUST 仅在 nemoe7 repos 行此 code-style rules。
-FORMAT（nemoe7 only；他 repo 依惯例）：2-space；Ruff（E501 120）：项目宜用 `pyproject.toml` 则用之，否则用 `ruff.toml`；markdownlint 默认+MD060，MD013 off。
+FORMAT（nemoe7 only；他 repo 依惯例）：2-space；Ruff（E501 120，local gates 先行 `ruff format`）：项目宜用 `pyproject.toml` 则用之，否则用 `ruff.toml`；markdownlint 默认+MD060，MD013 off。
 Comments（code/config）只在 method 复杂时加。
 DOCS: 非所求，无 storyline/narrative。
 DOCS: 开门见山，不铺垫，不收尾。
 DOCS: 代码、差异、文件内容与工具输出只引路径与行号，不复述。
 DOCS: 工具成功后即续，不复述结果。
-ALWAYS Oxford comma。
-像素/配置值/实现度量 MUST assert relations（growth/presence/absence）。

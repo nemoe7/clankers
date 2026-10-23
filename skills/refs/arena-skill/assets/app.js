@@ -3264,7 +3264,7 @@ function openModal(config) {
     $('#modal-error').hidden = true;
     $('#modal-confirm').textContent = config.confirm || 'Submit';
     $('#modal-confirm').hidden = !!config.readOnly;
-    $('#questionnaire-again').hidden = true;
+    $('#survey-again').hidden = true;
     modal.dataset.readOnly = String(!!config.readOnly);
     $('#modal-cancel').textContent = config.readOnly ? 'Close' : 'Cancel';
     modalSubmit = async event => {
@@ -3292,39 +3292,39 @@ function openModal(config) {
 modalForm.addEventListener('submit', event => modalSubmit?.(event));
 $('#modal-cancel').addEventListener('click', () => modal.close());
 
-const QUESTIONNAIRE_REFRESH_MS = 2000;
-let questionnaireView = null;
-let questionnaireBusy = false;
-let questionnaireRequested = false;
-function questionnaireIsOpen(view) {
+const SURVEY_REFRESH_MS = 2000;
+let surveyView = null;
+let surveyBusy = false;
+let surveyRequested = false;
+function surveyIsOpen(view) {
   return modal.open && $('#modal-fields').children[0] === view;
 }
-async function requestQuestionnaire() {
-  if (questionnaireRequested) return;
-  questionnaireRequested = true;
+async function requestSurvey() {
+  if (surveyRequested) return;
+  surveyRequested = true;
   try {
-    await request('/api/questionnaire/request', {
+    await request('/api/survey/request', {
       method: 'POST', headers: writeHeaders('application/json'), body: '{}'
     });
   } catch (error) {
-    questionnaireRequested = false;
+    surveyRequested = false;
     throw error;
   }
 }
-function renderQuestionnaire(view, results, answeredAt) {
+function renderSurvey(view, results, answeredAt) {
   const snapshot = JSON.stringify([results, answeredAt]);
   const relative = answeredAt ? time(answeredAt) : '';
   if (view.dataset.snapshot === snapshot) {
     const age = view.querySelector('time');
     age.textContent = relative;
     age.setAttribute('aria-label', `Last answer: ${relative}`);
-    $('#questionnaire-again').disabled = questionnaireRequested;
+    $('#survey-again').disabled = surveyRequested;
     return;
   }
-  questionnaireRequested = false;
+  surveyRequested = false;
   delete view.dataset.requestError;
   const table = document.createElement('table');
-  table.className = 'questionnaire-results';
+  table.className = 'survey-results';
   const header = document.createElement('thead');
   const headings = document.createElement('tr');
   for (const name of ['Correctness', 'Reported confidence']) {
@@ -3346,13 +3346,13 @@ function renderQuestionnaire(view, results, answeredAt) {
     id.append(icon(state === 'true' ? 'check' : state === 'false' ? 'x' : 'circle-question-mark', 16), code);
     id.setAttribute('aria-label', `${result.id}: ${state === 'true' ? 'correct' : state === 'false' ? 'incorrect' : 'unknown'}`);
     const confidence = document.createElement('td');
-    confidence.className = 'questionnaire-confidence';
+    confidence.className = 'survey-confidence';
     const bar = document.createElement('progress');
     bar.max = 1;
     bar.value = result.confidence;
     const upper = result.confidence > 0.5;
     const fraction = upper ? (result.confidence - 0.5) * 2 : result.confidence * 2;
-    bar.style.color = `color-mix(in srgb, var(--questionnaire-${upper ? 'warning' : 'danger'}) ${100 - fraction * 100}%, var(--questionnaire-${upper ? 'success' : 'warning'}))`;
+    bar.style.color = `color-mix(in srgb, var(--survey-${upper ? 'warning' : 'danger'}) ${100 - fraction * 100}%, var(--survey-${upper ? 'success' : 'warning'}))`;
     const value = document.createElement('span');
     value.textContent = `${(result.confidence * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
     bar.setAttribute('aria-label', `Reported confidence for ${result.id}`);
@@ -3370,63 +3370,63 @@ function renderQuestionnaire(view, results, answeredAt) {
   age.hidden = !answeredAt;
   age.textContent = relative;
   age.setAttribute('aria-label', `Last answer: ${relative}`);
-  const again = $('#questionnaire-again');
+  const again = $('#survey-again');
   again.hidden = false;
-  again.disabled = questionnaireRequested;
+  again.disabled = surveyRequested;
   footer.append(age);
   view.replaceChildren(table, footer);
   view.dataset.snapshot = snapshot;
 }
-async function refreshQuestionnaire() {
-  const view = questionnaireView;
-  if (!questionnaireIsOpen(view) || questionnaireBusy) return;
-  questionnaireBusy = true;
+async function refreshSurvey() {
+  const view = surveyView;
+  if (!surveyIsOpen(view) || surveyBusy) return;
+  surveyBusy = true;
   try {
-    const { results, answered_at } = await (await request('/api/questionnaire')).json();
-    if (!questionnaireIsOpen(view)) return;
+    const { results, answered_at } = await (await request('/api/survey')).json();
+    if (!surveyIsOpen(view)) return;
     if (results === null) {
-      $('#questionnaire-again').hidden = true;
+      $('#survey-again').hidden = true;
       view.textContent = 'No submission yet. Requesting an answer from the agent…';
-      if (!questionnaireRequested) await requestQuestionnaire();
-      if (questionnaireIsOpen(view)) view.textContent = 'No submission yet. A request was sent to the agent.';
-    } else renderQuestionnaire(view, results, answered_at);
-    if (questionnaireIsOpen(view) && !view.dataset.requestError) $('#modal-error').hidden = true;
+      if (!surveyRequested) await requestSurvey();
+      if (surveyIsOpen(view)) view.textContent = 'No submission yet. A request was sent to the agent.';
+    } else renderSurvey(view, results, answered_at);
+    if (surveyIsOpen(view) && !view.dataset.requestError) $('#modal-error').hidden = true;
   } catch (error) {
-    if (questionnaireIsOpen(view)) {
-      $('#modal-error').textContent = `Questionnaire load failed: ${error.message}. Retrying while this view stays open.`;
+    if (surveyIsOpen(view)) {
+      $('#modal-error').textContent = `Survey load failed: ${error.message}. Retrying while this view stays open.`;
       $('#modal-error').hidden = false;
     }
-  } finally { questionnaireBusy = false; }
+  } finally { surveyBusy = false; }
 }
-$('#questionnaire-again').addEventListener('click', async () => {
-  const again = $('#questionnaire-again');
-  const view = questionnaireView;
-  if (again.disabled || !questionnaireIsOpen(view)) return;
+$('#survey-again').addEventListener('click', async () => {
+  const again = $('#survey-again');
+  const view = surveyView;
+  if (again.disabled || !surveyIsOpen(view)) return;
   again.disabled = true;
   try {
-    await requestQuestionnaire();
-    if (questionnaireIsOpen(view)) {
+    await requestSurvey();
+    if (surveyIsOpen(view)) {
       delete view.dataset.requestError;
       $('#modal-error').hidden = true;
     }
   } catch (error) {
-    if (questionnaireIsOpen(view)) {
+    if (surveyIsOpen(view)) {
       view.dataset.requestError = 'true';
-      $('#modal-error').textContent = `Questionnaire request failed: ${error.message}. Try again.`;
+      $('#modal-error').textContent = `Survey request failed: ${error.message}. Try again.`;
       $('#modal-error').hidden = false;
     }
-  } finally { again.disabled = questionnaireRequested; }
+  } finally { again.disabled = surveyRequested; }
 });
-$('#questionnaire-open').addEventListener('click', async () => {
+$('#survey-open').addEventListener('click', async () => {
   if (modal.open) return;
-  questionnaireView = document.createElement('section');
-  questionnaireView.textContent = 'Loading questionnaire…';
-  questionnaireRequested = false;
-  void openModal({ title: 'Questionnaire', content: questionnaireView, readOnly: true, hideTitle: true });
+  surveyView = document.createElement('section');
+  surveyView.textContent = 'Loading survey…';
+  surveyRequested = false;
+  void openModal({ title: 'Survey', content: surveyView, readOnly: true, hideTitle: true });
   $('#modal-cancel').focus();
-  await refreshQuestionnaire();
+  await refreshSurvey();
 });
-setInterval(refreshQuestionnaire, QUESTIONNAIRE_REFRESH_MS);
+setInterval(refreshSurvey, SURVEY_REFRESH_MS);
 
 // The types follow the active page. Only paths in the repository's bible can be named.
 const VIOLATION_TYPES = {
