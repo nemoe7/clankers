@@ -7164,6 +7164,71 @@ def test_exempted_bash_commands_refresh_timer_without_advancing_tally():
       hold.close()
 
 
+def test_write_task_guards_finished_code_and_docs_until_clean_and_pushed():
+  with tempfile.TemporaryDirectory() as root_dir:
+    root = Path(root_dir)
+    remote = root / "remote.git"
+    repo = root / "repo"
+    subprocess.run(
+      ["git", "init", "--bare", str(remote)], check=True, capture_output=True
+    )
+    subprocess.run(
+      ["git", "init", "-b", "main", str(repo)], check=True, capture_output=True
+    )
+    subprocess.run(
+      ["git", "config", "user.email", "test@example.com"], cwd=repo, check=True
+    )
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    tracked = repo / "tracked.txt"
+    tracked.write_text("clean\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True)
+    subprocess.run(
+      ["git", "commit", "-m", "chore: initial"],
+      cwd=repo,
+      check=True,
+      capture_output=True,
+    )
+    subprocess.run(
+      ["git", "remote", "add", "origin", str(remote)], cwd=repo, check=True
+    )
+    subprocess.run(
+      ["git", "push", "-u", "origin", "main"], cwd=repo, check=True, capture_output=True
+    )
+
+    store = preview.Store(repo / "arena-state", create=True)
+    for tid, ttype in (
+      ("code-task", "code"),
+      ("docs-task", "docs"),
+      ("ops-task", "ops"),
+      ("report-task", "report"),
+    ):
+      store.write_task(tid, tid, ["Step one"], task_type=ttype, scope="arena-skill")
+
+    tracked.write_text("dirty\n", encoding="utf-8")
+    for guarded_id in ("code-task", "docs-task"):
+      with pytest.raises(ValueError, match="FINISH BLOCKED"):
+        store.write_task(guarded_id, status="finished")
+    assert store.write_task("ops-task", status="finished")["status"] == "finished"
+    assert store.write_task("report-task", status="finished")["status"] == "finished"
+
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True)
+    subprocess.run(
+      ["git", "commit", "-m", "feat: local change"],
+      cwd=repo,
+      check=True,
+      capture_output=True,
+    )
+    for guarded_id in ("code-task", "docs-task"):
+      with pytest.raises(ValueError, match="FINISH BLOCKED"):
+        store.write_task(guarded_id, status="finished")
+
+    subprocess.run(
+      ["git", "push", "origin", "main"], cwd=repo, check=True, capture_output=True
+    )
+    assert store.write_task("code-task", status="finished")["status"] == "finished"
+    assert store.write_task("docs-task", status="finished")["status"] == "finished"
+
+
 def test_require_server_names_the_restart_command():
   """A dead server fails the poll with the exact restart command and its port."""
   with tempfile.TemporaryDirectory() as directory:

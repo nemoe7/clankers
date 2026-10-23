@@ -1416,6 +1416,17 @@ def guard_task_runs(state_dir,task_id=None,action='change'):
 	linked=live_task_runs(state_dir);selected=linked if task_id is None else{task_id:linked.get(task_id,[])};held=[(identifier,names)for(identifier,names)in selected.items()if names]
 	if not held:return
 	labels='; '.join(f"{identifier}: {', '.join(names)}"for(identifier,names)in sorted(held));raise ValueError(f"Cannot {action}; live task run(s): {labels}")
+PUSH_GUARDED_TASK_TYPES='code','docs'
+def guard_task_push(repo_root,task_id,task_type):
+	if task_type not in PUSH_GUARDED_TASK_TYPES or repo_root is None:return
+	root=Path(repo_root)
+	if not(root/'.git').exists():return
+	dirty=subprocess.run(['git','status','--porcelain','-uno'],cwd=root,capture_output=True,text=True,check=False)
+	if dirty.returncode==0 and dirty.stdout.strip():raise ValueError(f"FINISH BLOCKED: commit and push verified changes before marking {task_id} finished.")
+	branch_proc=subprocess.run(['git','rev-parse','--abbrev-ref','HEAD'],cwd=root,capture_output=True,text=True,check=False);branch=branch_proc.stdout.strip()if branch_proc.returncode==0 else''
+	if not branch or branch=='HEAD':return
+	remote_proc=subprocess.run(['git','rev-parse','--verify',f"refs/remotes/origin/{branch}"],cwd=root,capture_output=True,text=True,check=False);head_proc=subprocess.run(['git','rev-parse','--verify','HEAD'],cwd=root,capture_output=True,text=True,check=False)
+	if remote_proc.returncode==0 and head_proc.returncode==0 and remote_proc.stdout.strip()!=head_proc.stdout.strip():raise ValueError(f"FINISH BLOCKED: commit and push verified changes before marking {task_id} finished.")
 def skip_poll_ready(store):return store.skip_poll_requested()and not live_runs(store.path.parent)
 def run_notices(state_dir,show_running=False,out=None):
 	out=sys.stdout if out is None else out;runs=Path(state_dir)/'runs'
@@ -2048,7 +2059,7 @@ class Store:
 				elif stored_scope is not None and not(details and details[0].startswith(TASK_SCOPE_PREFIX)):details=[stored_scope,*details]
 				check_task(task_id,title,details)
 			if not details:raise ValueError('A task needs at least one detail')
-			status=status or(stored['status']if stored else'upcoming')
+			status_arg=status;status=status or(stored['status']if stored else'upcoming')
 			if status=='finished':
 				if stored and stored['status']=='finished':completed_at=stored['completed_at']
 				elif completed_at is None:completed_at=stamp
@@ -2068,7 +2079,9 @@ class Store:
 			if report_id and blocked and(not stored or not stored['blocked']or stored.get('report_id')!=report_id):
 				report=db.execute('SELECT markdown FROM reports WHERE id = ?',(report_id,)).fetchone()
 				if report is not None and not parse_fields(report['markdown'])[1]:raise ValueError('A blocked task needs a report with answer fields')
-			if status=='finished':guard_task_runs(self.path.parent,task_id,'finish task')
+			if status=='finished':
+				guard_task_runs(self.path.parent,task_id,'finish task')
+				if not restoring and(status_arg=='finished'or not stored or stored['status']!='finished'):guard_task_push(self.repository_root(),task_id,task_type)
 			if status=='finished'and blocked:raise ValueError(f"Task {task_id} is blocked; clear the report wait with --unblocked first")
 			siblings=[task_row(item)for item in db.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE status = ? AND id != ? ORDER BY position, id",(status,task_id)).fetchall()];record={'id':task_id,'title':title,'details':details,'status':status,'order':len(siblings)+1,'updated_at':stamp,'completed_at':completed_at,'blocked':bool(blocked),'report_id':report_id,'type':task_type};blockers=self.task_blockers(task_id)
 			if blockers:record['blocked_by']=blockers
