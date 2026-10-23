@@ -32,6 +32,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Forbid emitting chat text or progress narration before and between tool calls in `NEMOGPT.md`.
 
+### Fixed
+
+#### userscripts
+
+- Restore the `24px` spacer height lock in `hide-composer` in `userscripts/arena.user.js` (`v1.10.70`) so stripping `shrink-0` across `div.shrink-0[style*="height"]` and observing document-wide `class` mutations do not block page load.
+
 ## 2026-10-22
 
 ### Added

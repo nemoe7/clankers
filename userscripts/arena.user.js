@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.69
+// @name         Arena.ai | NemoUtils | v1.10.70
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.69
+// @version      1.10.70
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2440,10 +2440,10 @@
     var SHELL_SELECTOR = "div.flex.w-full.flex-col.items-start.justify-center.p-2";
     var EDITOR_CONTENT_SELECTOR = "div.editor-content";
     var HIDE_MARK = "data-clankers-hidden";
-    var SPACER_SELECTOR = 'div.shrink-0[style*="height"]';
-    var SPACER_CLASS = "shrink-0";
+    var SPACER_SELECTOR = 'div.shrink-0[style*="height: 24px"]';
+    var SPACER_HEIGHT = "24px";
     var fixedSpacers = new WeakSet();
-    var modifiedSpacers = new Set();
+    var spacerStyles = new Map();
     var editorStates = new Map();
 
     function shouldHideComposer(session, stopGenerating) {
@@ -2452,37 +2452,28 @@
 
     function isSpacerElement(spacer) {
       return (
-        Boolean(spacer) &&
         String(spacer.tagName || "").toLowerCase() === "div" &&
-        (!spacer.children || spacer.children.length === 0) &&
-        !String(spacer.textContent || "").trim() &&
-        Boolean(
-          spacer.classList &&
-            typeof spacer.classList.contains === "function" &&
-            (spacer.classList.contains(SPACER_CLASS) || fixedSpacers.has(spacer)),
-        )
+        spacer.classList.contains("shrink-0") &&
+        !String(spacer.textContent || "").trim()
       );
     }
 
     function hasSpacerHeight(styleText) {
-      return /(?:^|;)\s*height\s*:\s*\d+(?:\.\d+)?px\s*(?:!important\s*)?(?:;|$)/i.test(
+      return /(?:^|;)\s*height\s*:\s*24px\s*(?:!important\s*)?(?:;|$)/i.test(
         String(styleText || ""),
       );
     }
 
-    function stripSpacerClass(spacer) {
+    function lockSpacerHeight(spacer) {
       fixedSpacers.add(spacer);
       if (
-        !spacer.classList ||
-        typeof spacer.classList.contains !== "function" ||
-        !spacer.classList.contains(SPACER_CLASS)
+        spacer.style.getPropertyValue("height") === SPACER_HEIGHT &&
+        spacer.style.getPropertyPriority("height") === "important"
       ) {
         return false;
       }
-      modifiedSpacers.add(spacer);
-      if (typeof spacer.classList.remove === "function") {
-        spacer.classList.remove(SPACER_CLASS);
-      }
+      if (!spacerStyles.has(spacer)) spacerStyles.set(spacer, [spacer.style.getPropertyValue("height"), spacer.style.getPropertyPriority("height")]);
+      spacer.style.setProperty("height", SPACER_HEIGHT, "important");
       return true;
     }
 
@@ -2494,21 +2485,12 @@
       if (changes) {
         for (i = 0; i < changes.length; i += 1) {
           change = changes[i];
-          if (
-            change.type === "attributes" &&
-            (change.attributeName === "style" || change.attributeName === "class")
-          ) {
+          if (change.type === "attributes" && change.attributeName === "style") {
             if (
               fixedSpacers.has(change.target) ||
-              (isSpacerElement(change.target) &&
-                (hasSpacerHeight(change.oldValue) ||
-                  hasSpacerHeight(
-                    typeof change.target.getAttribute === "function"
-                      ? change.target.getAttribute("style")
-                      : "",
-                  )))
+              (isSpacerElement(change.target) && hasSpacerHeight(change.oldValue))
             ) {
-              stripSpacerClass(change.target);
+              lockSpacerHeight(change.target);
             }
           } else {
             scan = true;
@@ -2522,14 +2504,9 @@
       for (i = 0; i < spacers.length; i += 1) {
         if (
           fixedSpacers.has(spacers[i]) ||
-          (isSpacerElement(spacers[i]) &&
-            hasSpacerHeight(
-              typeof spacers[i].getAttribute === "function"
-                ? spacers[i].getAttribute("style")
-                : "",
-            ))
+          (isSpacerElement(spacers[i]) && hasSpacerHeight(spacers[i].getAttribute("style")))
         ) {
-          stripSpacerClass(spacers[i]);
+          lockSpacerHeight(spacers[i]);
         }
       }
     }
@@ -2542,7 +2519,7 @@
       hasSpacerHeight: hasSpacerHeight,
       enforceSpacerHeight: enforceSpacerHeight,
       SPACER_SELECTOR: SPACER_SELECTOR,
-      SPACER_CLASS: SPACER_CLASS,
+      SPACER_HEIGHT: SPACER_HEIGHT,
     })) {
       return;
     }
@@ -2622,7 +2599,7 @@
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ["aria-label", "style", "class"],
+      attributeFilter: ["aria-label", "style"],
       attributeOldValue: true,
     });
     function onRoute() {
@@ -2636,12 +2613,13 @@
       observer.disconnect();
       window.removeEventListener("popstate", onRoute);
       editorStates.forEach(function (_, editor) { showEditor(editor); });
-      modifiedSpacers.forEach(function (spacer) {
-        if (spacer.classList && typeof spacer.classList.add === "function") {
-          spacer.classList.add(SPACER_CLASS);
+      spacerStyles.forEach(function (prior, spacer) {
+        if (spacer.style.getPropertyValue("height") === SPACER_HEIGHT && spacer.style.getPropertyPriority("height") === "important") {
+          if (prior[0]) spacer.style.setProperty("height", prior[0], prior[1]);
+          else spacer.style.removeProperty("height");
         }
       });
-      modifiedSpacers.clear();
+      spacerStyles.clear();
     };
   });
 
