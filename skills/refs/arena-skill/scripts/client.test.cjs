@@ -5154,5 +5154,10 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   const appSource = fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8');
   assert.match(appSource, /const alreadySelected = tab\.getAttribute\('aria-selected'\) === 'true';/);
   assert.match(appSource, /if \(selected && !alreadySelected\) gsap\.fromTo\(panel,/);
+  assert.match(appSource, /\/api\/slash/);
+  assert.match(appSource, /#slash-menu/);
+  const htmlSource = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+  assert.match(htmlSource, /id="slash-menu"/);
+  assert.match(htmlSource, /id="modal-close"/);
 });
 

@@ -97,6 +97,10 @@ Accepted: retain the shared dialog and product themes. Add separate correctness 
 
 2026-10-23: add `#image-modal` zoomable report image dialog, 480 px mobile wrapping rules for `#report-select` and `#log-search`, horizontally centered `#preview-note` tooltip, and GSAP 3.15.0 motion helpers.
 
+2026-10-23: add top-right `#modal-close` exit button, `{lucide book-bookmark} Bible Check` action button, `56.25em`/`40em` media-query breakpoints, and `/nuu` and `/nemoizer` composer slash commands (`#slash-menu` autocomplete and `#modal[data-wide="true"]` query view).
+
+
+
 ## Message composer
 
 Empty and one-line drafts use one row on desktop and phones. Multiline drafts grow within the view and expose an expand control at the top right. The multiline layout stays until the draft is empty.

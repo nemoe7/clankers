@@ -52,6 +52,7 @@
         <section class="card compose" id="compose" aria-label="Send a message">
           <form id="form">
             <div class="composer-shell">
+              <ul id="slash-menu" class="slash-menu" role="listbox" aria-label="Slash commands" hidden></ul>
               <div id="staged-files" role="status" hidden></div>
               <input id="upload-file" type="file" multiple aria-label="Choose files to attach" hidden>
               <button id="attach-file" class="icon-button" type="button" aria-label="Choose files to attach" title="Choose files to attach"><svg class="lucide lucide-paperclip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"></path></svg></button>
@@ -148,11 +149,12 @@
   </main>
   <dialog id="modal" aria-labelledby="modal-title">
     <form id="modal-form">
+      <button id="modal-close" class="icon-button modal-close" type="button" aria-label="Close dialog" title="Close dialog"><svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
       <h2 id="modal-title"></h2>
       <div id="modal-fields"></div>
       <p id="modal-error" role="alert" hidden></p>
       <div id="modal-actions" class="row modal-actions">
-        <button id="survey-again" type="button" hidden>Bible check</button>
+        <button id="survey-again" type="button" hidden><svg class="lucide lucide-book-bookmark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="M10 2v7.751a.25.25 0 0 0 .407.195l2.28-1.834a.5.5 0 0 1 .627 0l2.28 1.834A.25.25 0 0 0 16 9.751V2"></path><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"></path></svg> Bible Check</button>
         <button id="modal-cancel" type="button">Cancel</button>
         <button id="modal-confirm" type="submit">Confirm</button>
       </div>

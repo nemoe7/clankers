@@ -337,12 +337,93 @@ function clearPreviewTooltip() {
   delete button.dataset.tooltip;
   label(button, 'Preview Markdown');
 }
+const SLASH_COMMANDS = [
+  { cmd: '/nuu help', desc: 'Show nuu subcommands, clauses, and recipes (modal)' },
+  { cmd: '/nuu recipes', desc: 'List nuu UI recipes (modal)' },
+  { cmd: '/nuu search ', desc: 'Search the nuu UI/UX catalog (modal)' },
+  { cmd: '/nuu audit', desc: 'Send agent note: run a full nuu audit' },
+  { cmd: '/nuu recipe scroll-edge-fade', desc: 'Send agent note: apply scroll-edge-fade recipe' },
+  { cmd: '/nuu recipe offline-fonts', desc: 'Send agent note: apply offline-fonts recipe' },
+  { cmd: '/nemoizer help', desc: 'Show nemoizer CLI options and clauses (modal)' },
+  { cmd: '/nemoizer rules', desc: 'Browse nemoizer rules or /nemoizer rules <id> (modal)' },
+  { cmd: '/nemoizer recipes', desc: 'Browse nemoizer rule docs and templates (modal)' },
+  { cmd: '/nemoizer collect', desc: 'Run nemoize.py --audit and view findings (modal)' },
+  { cmd: '/nemoizer audit', desc: 'Send agent note: run a nemoizer audit and report' },
+];
+let slashActiveIndex = 0;
+let slashMatches = [];
+function syncSlashComposerStyle() {
+  const trimmed = note.value.trimStart();
+  const token = trimmed.split(/\s/)[0]?.toLowerCase() || '';
+  const isSlash = !note.hidden && trimmed.startsWith('/') && (
+    '/nuu'.startsWith(token) || '/nemoizer'.startsWith(token)
+  );
+  if (isSlash) {
+    note.dataset.slash = 'true';
+    note.closest?.('.composer-shell')?.setAttribute('data-slash', 'true');
+  } else {
+    delete note.dataset.slash;
+    note.closest?.('.composer-shell')?.removeAttribute('data-slash');
+  }
+}
+function hideSlashMenu() {
+  syncSlashComposerStyle();
+  const menu = $('#slash-menu');
+  if (!menu) return;
+  menu.hidden = true;
+  menu.replaceChildren();
+  slashMatches = [];
+  slashActiveIndex = 0;
+}
+function applySlashSelection(entry) {
+  if (!entry) return;
+  note.value = entry.cmd.endsWith(' ') ? entry.cmd : `${entry.cmd} `;
+  draftVersion++;
+  save('draft', note.value);
+  grow();
+  hideSlashMenu();
+  note.focus();
+}
+function updateSlashMenu() {
+  syncSlashComposerStyle();
+  const menu = $('#slash-menu');
+  if (!menu || note.hidden) return hideSlashMenu();
+  const raw = note.value;
+  if (!raw.startsWith('/') || raw.includes('\n')) return hideSlashMenu();
+  const query = raw.trim().toLowerCase();
+  slashMatches = SLASH_COMMANDS.filter(item =>
+    item.cmd.toLowerCase().startsWith(query) || query === '/'
+  );
+  if (!slashMatches.length || (slashMatches.length === 1 && raw.startsWith(slashMatches[0].cmd))) {
+    return hideSlashMenu();
+  }
+  slashActiveIndex = Math.min(slashActiveIndex, slashMatches.length - 1);
+  menu.replaceChildren(...slashMatches.map((item, idx) => {
+    const li = document.createElement('li');
+    li.className = 'slash-option';
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', String(idx === slashActiveIndex));
+    const code = document.createElement('code');
+    code.textContent = item.cmd.trim();
+    const span = document.createElement('span');
+    span.textContent = item.desc;
+    li.append(code, span);
+    li.addEventListener('mousedown', event => {
+      event.preventDefault();
+      applySlashSelection(item);
+    });
+    return li;
+  }));
+  menu.hidden = false;
+}
 note.addEventListener('input', () => {
   draftVersion++;
   clearPreviewTooltip();
   grow();
+  updateSlashMenu();
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
+note.addEventListener('blur', () => setTimeout(hideSlashMenu, 120));
 
 // File bytes stay in this browser tab.
 // Staged files start uploading on drop so the chip shows progress and Send binds stored bytes.
@@ -1176,10 +1257,43 @@ async function readState() {
 $('#form').addEventListener('submit', async event => {
   event.preventDefault();
   if (send.disabled || (!note.value.trim() && !stagedFiles.length)) return;
+  hideSlashMenu();
   const draft = note.value;
   const submittedVersion = draftVersion;
+  let expandedSlashText = '';
+  if (draft.trim().startsWith('/') && !stagedFiles.length && /^\/(nuu|nemoizer)(?:\s|$)/i.test(draft.trim())) {
+    send.disabled = selector.disabled = $('#attach-file').disabled = true;
+    paintSend(true);
+    status.textContent = '';
+    let slashResult = null;
+    try {
+      slashResult = await (await request('/api/slash', {
+        method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({ text: draft.trim() })
+      })).json();
+    } catch (error) {
+      status.textContent = `Slash command failed: ${error.message}`;
+      send.disabled = selector.disabled = $('#attach-file').disabled = false;
+      paintSend(false);
+      return;
+    }
+    if (slashResult?.mode === 'query') {
+      note.value = '';
+      save('draft', '');
+      writeMode();
+      send.disabled = selector.disabled = $('#attach-file').disabled = false;
+      paintSend(false);
+      const view = document.createElement('article');
+      view.className = 'report slash-output';
+      view.innerHTML = await renderMermaidBlocks(slashResult.html || renderMessageMarkdown(slashResult.markdown || ''));
+      void openModal({ title: slashResult.title || slashResult.command || 'Slash Command', content: view, readOnly: true, wide: true });
+      return;
+    }
+    if (slashResult?.mode === 'note' && typeof slashResult.text === 'string') {
+      expandedSlashText = slashResult.text;
+    }
+  }
   const names = stagedFiles.map(entry => entry.file.name);
-  const text = draft.trim() ? draft : names.length === 1 ? `File: ${names[0]}` : `Files: ${names.join(', ')}`;
+  const text = expandedSlashText || (draft.trim() ? draft : names.length === 1 ? `File: ${names[0]}` : `Files: ${names.join(', ')}`);
   const uploadIds = stagedFiles.map(entry => entry.id);
   const formerIds = Array.isArray(pending?.upload_ids) ? pending.upload_ids : [];
   if (!pending || pending.text !== text || JSON.stringify(formerIds) !== JSON.stringify(uploadIds)) {
@@ -1274,6 +1388,38 @@ function paintSendHint() {
 touchPointer?.addEventListener?.('change', paintSendHint);
 paintSendHint();
 note.addEventListener('keydown', event => {
+  const menu = $('#slash-menu');
+  if (menu && !menu.hidden && slashMatches.length) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      slashActiveIndex = (slashActiveIndex + step + slashMatches.length) % slashMatches.length;
+      Array.from(menu.children).forEach((li, idx) => {
+        const active = idx === slashActiveIndex;
+        li.setAttribute('aria-selected', String(active));
+        if (active) li.scrollIntoView?.({ block: 'nearest' });
+      });
+      return;
+    }
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      applySlashSelection(slashMatches[slashActiveIndex]);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      hideSlashMenu();
+      return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && !touchPointer?.matches) {
+      const selected = slashMatches[slashActiveIndex];
+      if (selected && note.value.trim().toLowerCase() !== selected.cmd.trim().toLowerCase()) {
+        event.preventDefault();
+        applySlashSelection(selected);
+        return;
+      }
+    }
+  }
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && !touchPointer?.matches) {
     event.preventDefault();
     if (!send.disabled) $('#form').requestSubmit();
@@ -1283,6 +1429,7 @@ function writeMode() {
   draftPreviewSequence++;
   note.hidden = false;
   grow();
+  syncSlashComposerStyle();
   $('#draft-preview').hidden = true;
   clearPreviewTooltip();
   setPreviewIcon($('#preview-note'));
@@ -3501,8 +3648,10 @@ function openModal(config) {
     $('#modal-error').hidden = true;
     $('#modal-confirm').textContent = config.confirm || 'Submit';
     $('#modal-confirm').hidden = !!config.readOnly;
+    $('#modal-cancel').hidden = !!config.readOnly;
     $('#survey-again').hidden = true;
     modal.dataset.readOnly = String(!!config.readOnly);
+    modal.dataset.wide = String(!!config.wide);
     $('#modal-cancel').textContent = config.readOnly ? 'Close' : 'Cancel';
     modalSubmit = async event => {
       event.preventDefault();
@@ -3528,6 +3677,7 @@ function openModal(config) {
 }
 modalForm.addEventListener('submit', event => modalSubmit?.(event));
 $('#modal-cancel').addEventListener('click', () => modal.close());
+$('#modal-close')?.addEventListener('click', () => modal.close());
 
 const SURVEY_REFRESH_MS = 2000;
 let surveyView = null;

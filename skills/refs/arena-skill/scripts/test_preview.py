@@ -1344,6 +1344,14 @@ def test_http_boundaries():
         status == 200 and "<strong>draft</strong>" in draft and "<script>" not in draft
       )
       assert store.state()["notes"] == []
+      slash_status, _, slash_body = request(
+        "POST",
+        "/api/slash",
+        json.dumps({"text": "/nuu help"}),
+        auth,
+      )
+      assert slash_status == 200 and json.loads(slash_body)["mode"] == "query"
+      assert store.state()["notes"] == []
       assert request("POST", "/api/markdown", '{"text":" "}', auth)[0] == 400
       assert request("POST", "/api/markdown", '{"text":"draft"}')[0] == 415
       assert request("POST", "/api/notes", "{}")[0] == 415
@@ -14257,3 +14265,40 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert cp_note is not None
   store.acknowledge([cp_note["id"]], "Bible texts in context.")
   assert store.meta_value("survey_checked_at") is not None
+  slash_help = preview.resolve_slash_command("/nuu help")
+  assert slash_help is not None
+  assert slash_help["mode"] == "query"
+  assert "uiux.py" in slash_help["markdown"] or "search" in slash_help["markdown"]
+  slash_recipes = preview.resolve_slash_command("/nuu recipes")
+  assert slash_recipes is not None
+  assert slash_recipes["mode"] == "query"
+  assert "offline-fonts" in slash_recipes["markdown"]
+  assert "scroll-edge-fade" in slash_recipes["markdown"]
+  slash_nemo_help = preview.resolve_slash_command("/nemoizer help")
+  assert slash_nemo_help is not None
+  assert slash_nemo_help["mode"] == "query"
+  assert "STE" in slash_nemo_help["markdown"]
+  slash_nemo_rule = preview.resolve_slash_command("/nemoizer rules ste100")
+  assert slash_nemo_rule is not None
+  assert slash_nemo_rule["mode"] == "query"
+  assert "STE100" in slash_nemo_rule["markdown"]
+  slash_nemo_collect = preview.resolve_slash_command("/nemoizer collect ARENA.md")
+  assert slash_nemo_collect is not None
+  assert slash_nemo_collect["mode"] == "query"
+  slash_nuu_audit = preview.resolve_slash_command("/nuu audit #compose")
+  assert slash_nuu_audit is not None
+  assert slash_nuu_audit["mode"] == "note"
+  assert "audit-report.md" in slash_nuu_audit["text"]
+  assert slash_nuu_audit["text"].endswith("#compose")
+  slash_nuu_recipe = preview.resolve_slash_command(
+    "/nuu recipe scroll-edge-fade #history"
+  )
+  assert slash_nuu_recipe is not None
+  assert slash_nuu_recipe["mode"] == "note"
+  assert "scroll-edge-fade" in slash_nuu_recipe["text"]
+  assert slash_nuu_recipe["text"].endswith("#history")
+  slash_nemo_audit = preview.resolve_slash_command("/nemoizer audit docs/")
+  assert slash_nemo_audit is not None
+  assert slash_nemo_audit["mode"] == "note"
+  assert "nemoize.py --audit" in slash_nemo_audit["text"]
+  assert slash_nemo_audit["text"].endswith("docs/")
