@@ -2,7 +2,7 @@
 
 This file belongs only in the source skill at `skills/arena-skill/README.md`.
 It is not an agent instruction and must not ship in `.agents/skills/arena-skill/`.
-The distributed `SKILL.md` and `references/REFERENCE.md` contain operating instructions only.
+The distributed `SKILL.md` and `references/reference.md` contain operating instructions only.
 
 ## Runtime and stored data
 

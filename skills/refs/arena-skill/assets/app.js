@@ -3438,7 +3438,7 @@ const VIOLATION_TYPES = {
     ['task-not-created', 'Task not created'],
   ],
   downloads: [['bash-violation', 'Bash violation'], ['process-violation', 'Process violation']],
-  reports: [['format-violation', 'Format violation'], ['unnecessary-report', 'Unnecessary report']],
+  reports: [['format-violation', 'Format violation'], ['unnecessary-report', 'Unnecessary report'], ['wall-of-text', 'Wall of text']],
   tasks: [
     ['current-task-violation', 'Current task violation'],
     ['empty-task-list', 'Empty task list'],

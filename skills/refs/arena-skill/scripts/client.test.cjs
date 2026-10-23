@@ -4749,7 +4749,7 @@ test('preview client', async (t) => {
       const selected = get('#report-select').value;
       const reportStatus = get('#report-status').textContent;
       const armingReport = button.events.click();
-      assert.deepEqual(values(0), ['format-violation', 'unnecessary-report'],
+      assert.deepEqual(values(0), ['format-violation', 'unnecessary-report', 'wall-of-text'],
         'the types follow the reports tab');
       await get('#modal-form').events.submit(event({}));
       await armingReport;

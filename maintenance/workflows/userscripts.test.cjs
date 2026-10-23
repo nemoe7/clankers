@@ -1714,10 +1714,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     tick();
     await respond("GET", "/api/userscript-autosave", 200, stale);
     assert.ok(panel(), "a pair mismatch blocks the automatic save");
-    assert.equal(panel().children[0].textContent, "State mismatch.");
+    assert.equal(panel().children[0].textContent, "State mismatch (notes 0, tasks 0).");
     assert.equal(writes.length, 1);
     const refusal = logs.map(args => args[1]).filter(data => data && data.code === "autosave-compare").at(-1);
-    assert.equal(refusal.detail, "saved t2/t1 server t9/t2 n0 t0", "the refusal names both stamp pairs");
+    assert.equal(refusal.detail, "saved t2/t1 server t9/t2 n1 t0 dn0 dt0", "the refusal names both stamp pairs");
     panel().children[1].children.find(button => button.textContent === "Force save").listeners.click();
     assert.equal(panel().children[0].textContent, "Forcing save...", "the click shows progress at once");
     await respond("GET", "/api/userscript-autosave", 200, stale);
@@ -1735,7 +1735,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     tick();
     await respond("GET", "/api/userscript-autosave", 200, diverged);
     assert.ok(panel(), "an unrelated save pair still blocks the automatic save");
-    assert.match(panel().children[0].textContent, /^State mismatch\.$/);
+    assert.match(panel().children[0].textContent, /^State mismatch \(notes 0, tasks 0\)\.$/);
     assert.equal(
       panel().children[1].children.some(button => button.textContent === "Force save"), true,
       "a mismatch offers Force save as an explicit action");
@@ -1844,7 +1844,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       removeEventListener: () => {},
     };
     vm.runInNewContext(source, context, { filename: "arena.user.js" });
-    const { sameSaves, sameSaveDetail } = context.CLANKERS_CHECKS.stateDownload;
+    const { sameSaves, sameSaveDetail, stateDiffCounts, stateMismatchLine } = context.CLANKERS_CHECKS.stateDownload;
     assert.equal(sameSaves(null, { lastsave: "a", beforelastsave: null }), false);
     assert.equal(sameSaves({ lastsave: "a", beforelastsave: null }, { lastsave: "a", beforelastsave: null }), true);
     assert.equal(sameSaves({ lastsave: "a", beforelastsave: "b" }, { lastsave: "a", beforelastsave: null }), false);
@@ -1853,6 +1853,28 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       sameSaveDetail({ lastsave: "t2", beforelastsave: "t1" }, { lastsave: "t9", beforelastsave: "t2" }),
       "saved t2/t1 server t9/t2 n0 t0",
       "the detail names both stamp pairs and the counts"
+    );
+    assert.equal(
+      sameSaveDetail(
+        { lastsave: "t2", beforelastsave: "t1", counts: { notes: 2, tasks: 1 } },
+        { lastsave: "t9", beforelastsave: "t2", counts: { notes: 4, tasks: 1 } }
+      ),
+      "saved t2/t1 server t9/t2 n4 t1 dn+2 dt0",
+      "the detail includes signed diff counts when baseline counts exist"
+    );
+    assert.equal(
+      stateMismatchLine(
+        { core: [{ id: "n1", text: "a" }] },
+        { core: [{ id: "n1", text: "a" }, { id: "n2", text: "b" }, { id: "t1", title: "Task" }] }
+      ),
+      "State mismatch (notes +1, tasks +1)."
+    );
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(stateDiffCounts(
+        { counts: { notes: 5, tasks: 3 } },
+        { counts: { notes: 3, tasks: 4 } }
+      ))).notes,
+      -2
     );
     assert.equal(
       sameSaveDetail(null, { lastsave: "t9", beforelastsave: null, counts: { notes: 3, tasks: 2 } }),
@@ -2159,7 +2181,7 @@ for raw in sys.stdin:
       await drain();
       assert.equal(writes.length, 2, "diverged server stamps block automatic overwrite");
       assert.ok(panel());
-      assert.equal(panel().children[0].textContent, "State mismatch.");
+      assert.equal(panel().children[0].textContent, "State mismatch (notes +1, tasks 0).");
 
       panel().children[1].children.find(button => button.textContent === "Force save").listeners.click();
       await drain();

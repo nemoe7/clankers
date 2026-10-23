@@ -72,7 +72,110 @@ messageMarkdown.renderer.rules.image = (tokens, index, options, env, renderer) =
   }
   return renderMessageImage(tokens, index, options, env, renderer);
 };
-const ESCAPED_INLINE_CODE = /(?<![\\`])`((?!\\`|`)(?:(?<!\\)\\`|[^`\n])*?(?<!\\)\\`(?:(?<!\\)\\`|[^`\n])*|(?<!\\)\\`(?:(?:(?<!\\)\\`|[^`\n])*?(?<!\\)\\`)?)`(?![`])/g;
+function formatUnescapedInlineCode(body) {
+  let content = '';
+  for (let i = 0; i < body.length; i += 1) {
+    if (body[i] === '\\' && i + 1 < body.length && body[i + 1] === '`' && (i === 0 || body[i - 1] !== '\\')) {
+      content += '`';
+      i += 1;
+    } else {
+      content += body[i];
+    }
+  }
+  let longest = 0;
+  let run = 0;
+  for (let i = 0; i < content.length; i += 1) {
+    if (content[i] === '`') {
+      run += 1;
+      if (run > longest) longest = run;
+    } else {
+      run = 0;
+    }
+  }
+  const ticks = '`'.repeat(longest + 1);
+  if (content.startsWith('`') || content.endsWith('`') || (content.startsWith(' ') && content.endsWith(' '))) {
+    return `${ticks} ${content} ${ticks}`;
+  }
+  return `${ticks}${content}${ticks}`;
+}
+function unescapeInlineCodeLine(part) {
+  let out = '';
+  const n = part.length;
+  let i = 0;
+  while (i < n) {
+    if (part[i] !== '`') {
+      out += part[i];
+      i += 1;
+      continue;
+    }
+    if (i > 0 && part[i - 1] === '\\') {
+      out += part[i];
+      i += 1;
+      continue;
+    }
+    if (i + 1 < n && part[i + 1] === '`') {
+      while (i < n && part[i] === '`') {
+        out += part[i];
+        i += 1;
+      }
+      continue;
+    }
+    if (i + 1 < n && part[i + 1] === '\\' && i + 2 < n && part[i + 2] === '`') {
+      if (i + 3 < n && part[i + 3] === '`' && (i + 4 === n || part[i + 4] !== '`')) {
+        out += formatUnescapedInlineCode(part.slice(i + 1, i + 3));
+        i += 4;
+        continue;
+      }
+      if (i + 3 < n && part[i + 3] === '`') {
+        out += part.slice(i, i + 3);
+        i += 3;
+        while (i < n && part[i] === '`') {
+          out += part[i];
+          i += 1;
+        }
+        continue;
+      }
+      let j = i + 3;
+      while (j < n) {
+        if (part[j] === '\\' && j + 1 < n && part[j + 1] === '`' && part[j - 1] !== '\\') {
+          j += 2;
+        } else if (part[j] === '`') {
+          break;
+        } else {
+          j += 1;
+        }
+      }
+      if (j < n && (j + 1 === n || part[j + 1] !== '`') && j - 2 >= i + 3 && part.slice(j - 2, j) === '\\`' && part[j - 3] !== '\\') {
+        out += formatUnescapedInlineCode(part.slice(i + 1, j));
+        i = j + 1;
+      } else {
+        out += part.slice(i, j);
+        i = j;
+      }
+      continue;
+    }
+    let j = i + 1;
+    let hasEscaped = false;
+    while (j < n) {
+      if (part[j] === '\\' && j + 1 < n && part[j + 1] === '`' && (j === i + 1 || part[j - 1] !== '\\')) {
+        hasEscaped = true;
+        j += 2;
+      } else if (part[j] === '`') {
+        break;
+      } else {
+        j += 1;
+      }
+    }
+    if (j < n && (j + 1 === n || part[j + 1] !== '`')) {
+      out += hasEscaped ? formatUnescapedInlineCode(part.slice(i + 1, j)) : part.slice(i, j + 1);
+      i = j + 1;
+    } else {
+      out += part.slice(i, j);
+      i = j;
+    }
+  }
+  return out;
+}
 function unescapeMessageMarkdown(source) {
   const restored = source.replace(/^([ \t]*)\\(`{3,}|~{3,})/gm, '$1$2');
   let fence = null;
@@ -87,16 +190,7 @@ function unescapeMessageMarkdown(source) {
       fence = opening[1];
       return part;
     }
-    return part.replace(ESCAPED_INLINE_CODE, (_, body) => {
-      const content = body.replace(/(?<!\\)\\`/g, '`');
-      const runs = content.match(/`+/g) || [];
-      const longest = runs.reduce((max, run) => Math.max(max, run.length), 0);
-      const ticks = '`'.repeat(longest + 1);
-      if (content.startsWith('`') || content.endsWith('`') || (content.startsWith(' ') && content.endsWith(' '))) {
-        return `${ticks} ${content} ${ticks}`;
-      }
-      return `${ticks}${content}${ticks}`;
-    });
+    return unescapeInlineCodeLine(part);
   }).join('');
 }
 function renderMessageMarkdown(source) {

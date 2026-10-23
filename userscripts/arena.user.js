@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.66
+// @name         Arena.ai | NemoUtils | v1.10.67
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.66
+// @version      1.10.67
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -3301,6 +3301,8 @@
       stateScopeKey: stateScopeKey,
       stateDownload: stateDownload,
       sameSaveDetail: sameSaveDetail,
+      stateDiffCounts: stateDiffCounts,
+      stateMismatchLine: stateMismatchLine,
       stateMemory: stateMemory,
       stateRemembered: stateRemembered,
       stateDelivery: stateDelivery,
@@ -3416,6 +3418,7 @@
       GM_setValue(receiptKey(storeKey), {
         save_id: receipt.save_id, digest: receipt.digest, scope: receipt.scope,
         lastsave: receipt.lastsave, beforelastsave: receipt.beforelastsave,
+        counts: pending.counts || coreCounts(receipt.core),
       });
       GM_setValue(pendingKey(storeKey), null);
       rememberState(pending.scope, storeKey, pending.base, pending.branch, pending.stamp, pending.stamps);
@@ -3672,10 +3675,78 @@
       return (known && known.lastsave || "none") + "/" + (known && known.beforelastsave || "none");
     }
 
+    function recordGroup(record) {
+      if (!record || typeof record !== "object") return "notes";
+      if ("markdown" in record) return "reports";
+      if ("title" in record) return "tasks";
+      if ("report_id" in record) return "answers";
+      return "notes";
+    }
+
+    function coreCounts(records) {
+      var counts = { notes: 0, tasks: 0, reports: 0, answers: 0 };
+      if (!Array.isArray(records)) return counts;
+      for (var i = 0; i < records.length; i += 1) {
+        var group = recordGroup(records[i]);
+        counts[group] = (counts[group] || 0) + 1;
+      }
+      return counts;
+    }
+
+    function signedCount(value) {
+      var num = Number(value) || 0;
+      return num > 0 ? "+" + num : String(num);
+    }
+
+    function stateDiffCounts(known, body) {
+      var server = body && Array.isArray(body.core)
+        ? coreCounts(body.core)
+        : {
+          notes: (body && body.counts && body.counts.notes) || 0,
+          tasks: (body && body.counts && body.counts.tasks) || 0,
+          reports: (body && body.counts && body.counts.reports) || 0,
+          answers: (body && body.counts && body.counts.answers) || 0,
+        };
+      var saved = null;
+      if (known && Array.isArray(known.core)) {
+        saved = coreCounts(known.core);
+      } else if (known && known.counts && typeof known.counts === "object") {
+        saved = {
+          notes: known.counts.notes || 0,
+          tasks: known.counts.tasks || 0,
+          reports: known.counts.reports || 0,
+          answers: known.counts.answers || 0,
+        };
+      }
+      return {
+        saved: saved,
+        server: server,
+        notes: saved ? server.notes - saved.notes : server.notes,
+        tasks: saved ? server.tasks - saved.tasks : server.tasks,
+        reports: saved ? server.reports - saved.reports : server.reports,
+        answers: saved ? server.answers - saved.answers : server.answers,
+      };
+    }
+
+    function stateMismatchLine(known, body) {
+      var diff = stateDiffCounts(known, body);
+      var parts = [
+        "notes " + signedCount(diff.notes),
+        "tasks " + signedCount(diff.tasks),
+      ];
+      if (diff.reports) parts.push("reports " + signedCount(diff.reports));
+      if (diff.answers) parts.push("answers " + signedCount(diff.answers));
+      return "State mismatch (" + parts.join(", ") + ").";
+    }
+
     function sameSaveDetail(known, body) {
-      var counts = body.counts || {};
-      return "saved " + saveStampPair(known) + " server " + saveStampPair(body) +
-        " n" + (counts.notes || 0) + " t" + (counts.tasks || 0);
+      var diff = stateDiffCounts(known, body);
+      var detail = "saved " + saveStampPair(known) + " server " + saveStampPair(body) +
+        " n" + diff.server.notes + " t" + diff.server.tasks;
+      if (diff.saved) {
+        detail += " dn" + signedCount(diff.notes) + " dt" + signedCount(diff.tasks);
+      }
+      return detail;
     }
 
     async function fetchStateFile(manual, force) {
@@ -3723,12 +3794,15 @@
         if (handle && !force) {
           var text = await (await handle.getFile()).text();
           initialFile = !text.trim() && !baseline;
-          if (text.trim() && baseline) baseline = Object.assign({}, baseline, { core: fileCore(text) });
-          if (!text.trim() && baseline) baseline = Object.assign({}, baseline, { core: [] });
+          if (text.trim()) {
+            baseline = Object.assign({}, baseline || {}, { core: fileCore(text) });
+          } else if (baseline) {
+            baseline = Object.assign({}, baseline, { core: [] });
+          }
         }
         var inSync = sameSaves(baseline, body);
         if (!force && !inSync && !(initialFile && !baseline)) {
-          stateError("State mismatch.", "Force save",
+          stateError(stateMismatchLine(baseline, body), "Force save",
             function () { fetchStateFile(true, true); }, "autosave-compare",
             undefined, undefined, sameSaveDetail(baseline, body));
           return;
@@ -3765,6 +3839,7 @@
             save_id: body.save_id, scope: body.scope, digest: body.digest, core: body.core,
             lastsave: body.stamp, beforelastsave: body.lastsave,
           },
+          counts: body.counts,
           scope: scope, base: base, branch: scope.branch || rememberedBranch, stamp: body.stamp,
           stamps: body.stamps, name: name, force: Boolean(force),
         };

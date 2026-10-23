@@ -27,6 +27,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `task unlink SUBMISSION-ID` | Remove an answer from all task answer lists without changing tasks, text, or receipts. Retain the explicit unlink in backups; `task set -m` can link it again |
 | `task remove ID` | Remove a task entered by mistake |
 | `state import [-r, --replace-tasks] [FILE]` | Import copied NDJSON or JSON notes, tasks and report answers from a file or stdin in one transaction; it always replaces the live notes, answers, reports and tasks; `-r, --replace-tasks` replaces only tasks |
+| `state compare [FILE]` | Compare an NDJSON or JSON state backup (or the newest uploaded backup when omitted) against the live store without replacing state |
 | `download-request [-a, --allow-proxy] <url>` | Queue one pending file download for the owner to approve in Downloads; `-a, --allow-proxy` permits the two proxies |
 | `image-data-uri <path>` | Print one Markdown line carrying a local PNG, JPEG, GIF or WebP file as a data URI; the command checks the type and a 2 MiB size cap before encoding |
 | `outline [-m, --max-entries N] [-j, --json] <path>` | Print a read-only source outline with line ranges for a local repository file up to 1 MB and 200 entries |

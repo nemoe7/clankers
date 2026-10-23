@@ -1,3 +1,38 @@
+@font-face {
+  font-family: "Basel Grotesk";
+  src: url("/assets/Basel_Grotesk_Book.woff2") format("woff2");
+  font-weight: 350;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Basel Grotesk";
+  src: url("/assets/Basel_Grotesk_Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Basel Grotesk";
+  src: url("/assets/Basel_Grotesk_Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Basel Grotesk";
+  src: url("/assets/Basel_Grotesk_Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Basel Grotesk Mono";
+  src: url("/assets/Basel_Grotesk_Mono_Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
 :root {
   color-scheme: dark;
   --bg: #252523;
@@ -20,7 +55,9 @@
   --dot-sent: var(--muted);
   --dot-seen: #7fa7d1;
   --dot-said: #8dc07f;
-  font-family: system-ui, sans-serif;
+  --font-sans: "Basel Grotesk", system-ui, sans-serif;
+  --font-mono: "Basel Grotesk Mono", ui-monospace, monospace;
+  font-family: var(--font-sans);
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -213,7 +250,8 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
 #history li ul, #history li ol { margin: 8px 0; padding-left: 0; list-style-position: inside; }
 .receipt { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
 /* A receipt ID is text rather than a chip, so it opts out by class instead of by ancestry. */
-code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background: none; padding: 0; cursor: pointer; }
+code, pre, kbd, samp { font-family: var(--font-mono); }
+code.note-id { font-family: var(--font-mono); font-size: 1em; background: none; padding: 0; cursor: pointer; }
 /* The clock takes the tab size rather than the muted 13px, and tabular numerals keep the
    seconds from nudging the theme button once a second. */
 #clock { font-size: inherit; font-variant-numeric: tabular-nums; }
@@ -283,7 +321,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .copy-code { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; min-height: 0; padding: 0; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); border-radius: 4px; cursor: pointer; }
 .copy-code:hover { color: var(--text); border-color: var(--focus); }
 .copy-code[data-state="bad"] { color: #ef4444; }
-.report code { font-family: ui-monospace, monospace; font-size: .9em; }
+.report code { font-family: var(--font-mono); font-size: .9em; }
 /* An image keeps the agent-specified size. A wider image shrinks to fit the panel. */
 .report img, .message-text img { max-width: 100%; }
 /* Inline code shares the message background.
@@ -405,13 +443,13 @@ mark code { color: var(--text); }
 .downloads-layout h2, .downloads-layout p { margin: 0; }
 .fetch-controls { justify-content: flex-start; margin: 0 0 10px; }
 .fetch-controls input { flex: 1 1 260px; min-width: 0; height: 34px; min-height: 0; padding: 0 8px; }
-.key-line code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .95em; padding-block: 0; }
+.key-line code { font-family: var(--font-mono); font-size: .95em; padding-block: 0; }
 .fetch-approval { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
 .fetch-approval h3 { margin: 0 0 6px; }
 .fetch-approval .fetch-decisions { justify-content: flex-start; gap: 8px; margin: 6px 0 0; }
 .download-row { padding: 10px 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
 .download-row > * { display: block; }
-.download-row .fetch-url { font-family: ui-monospace, monospace; font-size: 13px; }
+.download-row .fetch-url { font-family: var(--font-mono); font-size: 13px; }
 .download-row .fetch-meta { color: var(--muted); font-size: 13px; }
 .download-row button { margin-top: 6px; }
 /* One dialog serves every modal. Fields stack, and a rejected value's message sits above the

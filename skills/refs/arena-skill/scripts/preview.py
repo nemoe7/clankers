@@ -239,7 +239,7 @@ VIOLATION_TYPES = {
     "task-not-created",
   ),
   "downloads": ("bash-violation", "process-violation"),
-  "reports": ("format-violation", "unnecessary-report"),
+  "reports": ("format-violation", "unnecessary-report", "wall-of-text"),
   "tasks": (
     "current-task-violation",
     "empty-task-list",
@@ -2647,6 +2647,61 @@ def format_clear_state(counts):
   return "Cleared " + ", ".join(parts) if parts else "Cleared"
 
 
+def _state_record_category(record):
+  if "markdown" in record:
+    return "reports"
+  if "title" in record:
+    return "tasks"
+  if "report_id" in record:
+    return "answers"
+  return "notes"
+
+
+def resolve_compare_state_source(state_dir, source=None):
+  if source is not None:
+    return Path(source)
+  uploads_dir = Path(state_dir) / "uploads"
+  if uploads_dir.is_dir():
+    candidates = [
+      path
+      for path in uploads_dir.iterdir()
+      if path.is_file() and path.suffix.lower() in {".ndjson", ".json"}
+    ]
+    if candidates:
+      candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+      return candidates[0]
+  saved = Path(state_dir) / "saved-state.ndjson"
+  if saved.is_file():
+    return saved
+  raise ValueError("Give a state file or upload one first")
+
+
+def format_state_comparison(comparison, source=None):
+  label = f" ({Path(source).name})" if source is not None else ""
+  live_stamp = clip_stamp(comparison.get("live_stamp")) or "none"
+  file_stamp = clip_stamp(comparison.get("file_stamp")) or "none"
+  lines = [
+    (
+      f"State compare{label}: {comparison['verdict']}"
+      f" (live {live_stamp}, file {file_stamp})"
+    )
+  ]
+  groups = comparison.get("groups") or {}
+  for name in ("notes", "answers", "reports", "tasks"):
+    row = groups.get(name) or {}
+    only_live = row.get("only_live") or []
+    only_file = row.get("only_file") or []
+    changed = row.get("changed") or []
+    line = (
+      f"{name}: live {row.get('live', 0)} file {row.get('file', 0)}"
+      f" +{len(only_live)} -{len(only_file)} ~{len(changed)}"
+    )
+    if only_file:
+      line += f" file_only={','.join(only_file[:5])}"
+    lines.append(line)
+  return "\n".join(lines)
+
+
 def preview_server_available(store):
   """True while the recorded preview port accepts a local connect."""
   port = store.meta_value("port")
@@ -3046,7 +3101,8 @@ def read_set_actions(line):
 
 
 def inbox_pipeline_warning(line):
-  lexer = shlex.shlex(agent_line(line), posix=False, punctuation_chars=";&|()\n")
+  cleaned = re.sub(r"\d*>&\d+|\d*>&-|&>", " ", agent_line(line))
+  lexer = shlex.shlex(cleaned, posix=False, punctuation_chars=";&|()\n")
   lexer.whitespace = " \t\r"
   lexer.whitespace_split = True
   try:
@@ -4019,6 +4075,84 @@ def pr_checks_command(argv):
   return long_run_name(line) == "pr-checks"
 
 
+def post_push_pr_checks_command(line):
+  """Return `'pr-checks'` when `line` executes a non-dry-run `git push` or `gh pr create`."""
+  if platform_line(line):
+    return None
+  text = unquote_commands(agent_line(line or ""))
+  for separator in ("&&", "||", ";", "|", "\n", "$(", "`"):
+    text = text.replace(separator, "\x00")
+  for piece in text.split("\x00"):
+    tokens = [token for token in piece.split() if token]
+    index = 0
+    while (
+      index < len(tokens) and "=" in tokens[index] and not tokens[index].startswith("-")
+    ):
+      index += 1
+    while index < len(tokens):
+      head = tokens[index].lstrip("({\"'").rsplit("/", 1)[-1]
+      if head not in PR_CHECK_WRAPPERS:
+        break
+      index += 1
+      while index < len(tokens) and (
+        tokens[index].startswith("-")
+        or "=" in tokens[index]
+        or tokens[index].rstrip("smhd").isdigit()
+      ):
+        if head == "command" and re.fullmatch(r"-[pVv]*[Vv][pVv]*", tokens[index]):
+          index = len(tokens)
+          break
+        index += 1
+    if index >= len(tokens):
+      continue
+    head = tokens[index].lstrip("({\"'").rsplit("/", 1)[-1]
+    if head in INERT_COMMANDS or head in SHELL_BASENAMES:
+      continue
+    rest = tokens[index + 1 :]
+    if any(
+      flag in rest for flag in ("--help", "-h", "--version", "-V", "--dry-run", "-n")
+    ):
+      continue
+    if head == "git":
+      pos = 0
+      sub = None
+      while pos < len(rest):
+        tok = rest[pos]
+        if tok in ("-C", "-c", "--git-dir", "--work-tree", "--namespace"):
+          pos += 2
+          continue
+        if tok.startswith("-"):
+          pos += 1
+          continue
+        sub = tok
+        break
+      if sub == "push":
+        return "pr-checks"
+    elif head == "gh":
+      words = [tok for tok in rest if not tok.startswith("-")]
+      if tuple(words[:2]) == ("pr", "create"):
+        return "pr-checks"
+  return None
+
+
+def auto_start_post_push_pr_checks(state_dir, line, rc=0):
+  """Start detached `pr-checks` watcher after a successful `git push` or `gh pr create`."""
+  if rc != 0 or not post_push_pr_checks_command(line):
+    return False
+  if "pr-checks" in live_runs(state_dir):
+    return False
+  if not detach_run(
+    state_dir, "pr-checks", ["bash", "-c", "gh pr checks --watch"], link_task=False
+  ):
+    return False
+  print(
+    "routed pr-checks: background run after push. Verdict on later call.",
+    file=sys.stderr,
+    flush=True,
+  )
+  return True
+
+
 def detached_seconds(started_at):
   """Whole seconds since a detached run started, or None when the stamp will not parse."""
   try:
@@ -4149,7 +4283,7 @@ def run_task_id(state_dir, selected=None):
   return record.get("id") if record else None
 
 
-def detach_run(state_dir, name, argv, task_id=None, after=None):
+def detach_run(state_dir, name, argv, task_id=None, after=None, link_task=True):
   """Start one command detached under `name`, and say whether the spawn left.
 
   A detached child outlives the shell call that started it, so the run keeps going
@@ -4173,7 +4307,7 @@ def detach_run(state_dir, name, argv, task_id=None, after=None):
     if parent.get("exit") is None and not parent.get("detached"):
       raise ValueError(f"Gate {after} has no running or finished record")
     dependency = {"name": after, "run_id": parent.get("run_id")}
-  task_id = run_task_id(state_dir, task_id)
+  task_id = run_task_id(state_dir, task_id) if link_task else None
   if os.environ.get(DETACH_DRY_RUN):
     pid = os.getpid()
     write_detached_placeholder(
@@ -6770,6 +6904,57 @@ class Store:
     }
     return receipt
 
+  def compare_state(self, text):
+    """Compare an exported NDJSON or JSON state backup against the live database without changing state."""
+    records = parse_state_import(text)
+    core_records = [row for row in records if row.get("type") != "userscript-autosave"]
+    live_raw, _ = self.state_lines(self.state()["notes"], self.tasks() or {})
+    live_core, live_stamp = autosave_core_and_stamp(live_raw)
+    file_core, file_stamp = autosave_core_and_stamp(core_records)
+    groups = {}
+    for name in ("notes", "answers", "reports", "tasks"):
+      live_map = {
+        row["id"]: row for row in live_core if _state_record_category(row) == name
+      }
+      file_map = {
+        row["id"]: row for row in file_core if _state_record_category(row) == name
+      }
+      only_live = sorted(set(live_map) - set(file_map))
+      only_file = sorted(set(file_map) - set(live_map))
+      changed = sorted(
+        record_id
+        for record_id in set(live_map) & set(file_map)
+        if live_map[record_id] != file_map[record_id]
+      )
+      groups[name] = {
+        "live": len(live_map),
+        "file": len(file_map),
+        "only_live": only_live,
+        "only_file": only_file,
+        "changed": changed,
+      }
+    if all(
+      not row["only_live"] and not row["only_file"] and not row["changed"]
+      for row in groups.values()
+    ):
+      verdict = "equal"
+    elif all(
+      not groups[name]["only_file"] for name in ("notes", "answers", "tasks")
+    ) and any(row["only_live"] or row["changed"] for row in groups.values()):
+      verdict = "ahead"
+    elif all(
+      not row["only_live"] and not row["changed"] for row in groups.values()
+    ) and any(row["only_file"] for row in groups.values()):
+      verdict = "stale"
+    else:
+      verdict = "diverged"
+    return {
+      "verdict": verdict,
+      "live_stamp": live_stamp,
+      "file_stamp": file_stamp,
+      "groups": groups,
+    }
+
   def import_reports(self, records, shared=None):
     """Restore reports and published state from the save file. Use saved Markdown to rebuild report pages. Check
     every record before writing."""
@@ -8172,25 +8357,89 @@ def add_copy_buttons(rendered):
 ESCAPED_FENCE = re.compile(
   r"^(?P<indent>[ \t]*)\\(?P<fence>(?:`{3,}|~{3,}))", re.MULTILINE
 )
-ESCAPED_INLINE_CODE = re.compile(
-  r"(?<![\\`])`(?P<body>"
-  r"(?!\\`|`)(?:(?<!\\)\\`|[^`\n])*?(?<!\\)\\`(?:(?<!\\)\\`|[^`\n])*"
-  r"|(?<!\\)\\`(?:(?:(?<!\\)\\`|[^`\n])*?(?<!\\)\\`)?"
-  r")`(?![`])"
-)
 
 
-def _unescape_inline_code_match(match):
-  content = re.sub(r"(?<!\\)\\`", "`", match.group("body"))
-  longest = max((len(run) for run in re.findall(r"`+", content)), default=0)
-  fence = "`" * (longest + 1)
-  if (
-    content.startswith("`")
-    or content.endswith("`")
-    or (content.startswith(" ") and content.endswith(" "))
-  ):
-    return f"{fence} {content} {fence}"
-  return f"{fence}{content}{fence}"
+def _unescape_inline_code_line(line):
+  out = []
+  n = len(line)
+  i = 0
+  while i < n:
+    ch = line[i]
+    if ch != "`":
+      out.append(ch)
+      i += 1
+      continue
+    run_end = i
+    while run_end < n and line[run_end] == "`":
+      run_end += 1
+    if run_end - i > 1 or (i > 0 and line[i - 1] == "\\"):
+      out.append(line[i:run_end])
+      i = run_end
+      continue
+    if line[i : i + 3] == "`\\`" and (i + 3 == n or line[i + 3] != "`"):
+      out.append("`\\`")
+      i += 3
+      continue
+    j = i + 1
+    escaped = 0
+    closing = -1
+    while j < n and line[j] != "\n":
+      if (
+        line[j] == "\\"
+        and j + 1 < n
+        and line[j + 1] == "`"
+        and (j == i + 1 or line[j - 1] != "\\")
+      ):
+        escaped += 1
+        j += 2
+        continue
+      if line[j] == "`":
+        if j + 1 < n and line[j + 1] == "`":
+          closing = -1
+          break
+        closing = j
+        break
+      j += 1
+    if closing == -1 or escaped == 0:
+      out.append("`")
+      i += 1
+      continue
+    body = line[i + 1 : closing]
+    buf = []
+    k = 0
+    m = len(body)
+    while k < m:
+      if (
+        body[k] == "\\"
+        and k + 1 < m
+        and body[k + 1] == "`"
+        and (k == 0 or body[k - 1] != "\\")
+      ):
+        buf.append("`")
+        k += 2
+      else:
+        buf.append(body[k])
+        k += 1
+    content = "".join(buf)
+    longest = 0
+    current = 0
+    for c in content:
+      if c == "`":
+        current += 1
+        longest = max(longest, current)
+      else:
+        current = 0
+    fence = "`" * (longest + 1)
+    if (
+      content.startswith("`")
+      or content.endswith("`")
+      or (content.startswith(" ") and content.endswith(" "))
+    ):
+      out.append(f"{fence} {content} {fence}")
+    else:
+      out.append(f"{fence}{content}{fence}")
+    i = closing + 1
+  return "".join(out)
 
 
 def unescape_fences(source):
@@ -8211,7 +8460,7 @@ def unescape_fences(source):
       fence = opening.group(1)
       out.append(line)
       continue
-    out.append(ESCAPED_INLINE_CODE.sub(_unescape_inline_code_match, line))
+    out.append(_unescape_inline_code_line(line))
   return "".join(out)
 
 
@@ -8410,6 +8659,7 @@ def handler(store):
       self.send_header(
         "Content-Security-Policy",
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+        "font-src 'self' data:; "
         # Without this, default-src none blocks every image a report carries.
         "img-src 'self' data: https:; "
         "connect-src 'self' https: ws: wss:; base-uri 'none'; form-action 'self'",
@@ -8649,6 +8899,13 @@ def handler(store):
             + (ASSETS / "app.js").read_text(encoding="utf-8"),
           )
           self.reply(200, page, "text/html; charset=utf-8")
+          return
+        font_match = re.fullmatch(
+          r"/assets/(Basel_Grotesk_(?:Book|Regular|Medium|Bold|Mono_Regular)\.woff2)",
+          path,
+        )
+        if font_match:
+          self.reply(200, (ASSETS / font_match.group(1)).read_bytes(), "font/woff2")
           return
         if path == "/api/questionnaire":
           with questionnaire_lock:
@@ -10550,6 +10807,20 @@ def main():
     action="store_true",
     help="Print unacked-count reminder; exit",
   )
+  parser.add_argument(
+    "-c",
+    "--rc",
+    type=int,
+    default=0,
+    help="Exit status of shell call for --reminder",
+  )
+  parser.add_argument(
+    "-l",
+    "--line",
+    dest="reminder_line",
+    default="",
+    help="Shell command line for --reminder",
+  )
   commands = parser.add_subparsers(dest="command", required=False)
   serve = commands.add_parser("serve", help="Serve preview page; -p names port")
   serve.add_argument(
@@ -10862,7 +11133,9 @@ def main():
   task_unlink.add_argument("submission_id")
   task_remove = task_verbs.add_parser("remove", help="Delete task by ID")
   task_remove.add_argument("task_id")
-  state_group = commands.add_parser("state", help="Import or clear stored state")
+  state_group = commands.add_parser(
+    "state", help="Import, compare, or clear stored state"
+  )
   state_verbs = state_group.add_subparsers(dest="verb", required=True)
   state_import = state_verbs.add_parser(
     "import",
@@ -10870,6 +11143,11 @@ def main():
   )
   state_import.add_argument("source", nargs="?", type=Path)
   state_import.add_argument("-r", "--replace-tasks", action="store_true")
+  state_compare = state_verbs.add_parser(
+    "compare",
+    help="Compare NDJSON backup against live state without changing state",
+  )
+  state_compare.add_argument("source", nargs="?", type=Path)
   state_verbs.add_parser(
     "clear",
     help="Empty all state tables in place; keep agent key record",
@@ -10897,6 +11175,7 @@ def main():
     ("task", "remove"): "task-remove",
     ("task", "unlink"): "task-unlink",
     ("state", "import"): "import-state",
+    ("state", "compare"): "compare-state",
     ("state", "clear"): "clear-state",
   }
   args.command = grouped_commands.get((args.command, verb), args.command)
@@ -10923,6 +11202,7 @@ def main():
     if args.reminder:
       store = Store(state_dir, create=False)
       require_server(store)
+      auto_start_post_push_pr_checks(state_dir, args.reminder_line, rc=args.rc)
       reminder = store.reminder(advance=True)
       # The hook runs this after every bash call, so the stamp marks the call's end: the
       # page keeps the long call text only while a call started after the last recorded end.
@@ -11318,6 +11598,15 @@ def main():
       else:
         text = sys.stdin.read()
       print(format_import_receipt(store.import_state(text, args.replace_tasks)))
+    elif args.command == "compare-state":
+      source_path = resolve_compare_state_source(state_dir, args.source)
+      try:
+        text = source_path.read_text(encoding="utf-8")
+      except OSError as error:
+        raise ValueError(
+          f"No such state file: {error.filename or source_path}"
+        ) from None
+      print(format_state_comparison(store.compare_state(text), source=source_path))
     elif args.command == "clear-state":
       print(format_clear_state(store.clear_state()))
     elif args.command == "init":

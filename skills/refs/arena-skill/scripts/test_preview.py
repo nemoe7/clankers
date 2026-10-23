@@ -10712,9 +10712,9 @@ def test_a_routed_line_that_is_not_a_check_wait_skips_the_watcher(capsys):
 
 def test_the_worktree_reminder_shows_the_installed_start_form():
   references = Path(__file__).resolve().parent.parent / "references"
-  reference = references / "COMMANDS.md"
+  reference = references / "commands.md"
   if not reference.exists():
-    reference = references / "REFERENCE.md"
+    reference = references / "reference.md"
   if not reference.exists():
     pytest.skip("the compact runtime copy ships without the references directory")
   lines = reference.read_text(encoding="utf-8").splitlines()
@@ -13780,14 +13780,18 @@ def test_gate_exempts_mkdir_publish_tasks_and_help(tmp_path):
       preview.pre_command(state, line, command, tmp_path, done="read-set", shell="bash")
       == 0
     ), (line, command)
-  installer = (preview.ASSETS.parent / "scripts" / "install.sh").read_text(
-    encoding="utf-8"
-  )
+  installer_path = preview.ASSETS.parent / "scripts" / "install.sh"
+  if not installer_path.exists():
+    installer_path = (
+      Path.cwd() / "skills" / "refs" / "arena-skill" / "scripts" / "install.sh"
+    )
+  installer = installer_path.read_text(encoding="utf-8")
   for expected in (
     "commitlint: ok",
     "gitignore: ok",
     "arena-preview: ok",
     "next action: `start_process`: `arena-preview --serve --port 8000`",
+    "--reminder --rc",
   ):
     assert expected in installer
 
@@ -13898,3 +13902,119 @@ def test_report_markdown_comments_stripped_and_comment_ids_parsed():
   assert questions[0]["options"][:2] == ["Approve", "Reject"]
   assert questions[1]["id"] == "inline-anchor"
   assert questions[1]["prompt"] == "Inline anchor question"
+
+
+def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_push_watcher(
+  tmp_path, monkeypatch, capsys
+):
+  rendered_html, _ = preview.render_report(
+    "`next action: \\`start_process\\`: \\`arena-preview --serve --port 8000\\``\n\n"
+    "replace `\\` with `/` in `bar`\n"
+  )
+  assert (
+    "<code>next action: `start_process`: `arena-preview --serve --port 8000`</code>"
+    in rendered_html
+  )
+  assert (
+    "replace <code>\\</code> with <code>/</code> in <code>bar</code>" in rendered_html
+  )
+  assert "wall-of-text" in preview.VIOLATION_TYPES["reports"]
+
+  state_dir = tmp_path / "arena-state"
+  store = preview.Store(state_dir, create=True)
+  store.note("n1", "First note")
+  store.write_task("t1", "First task", ["Step one"], task_type="code")
+  backup_snap = store.userscript_snapshot()
+  uploads = state_dir / "uploads"
+  uploads.mkdir(parents=True, exist_ok=True)
+  backup_file = uploads / "backup.ndjson"
+  backup_file.write_text(backup_snap["text"], encoding="utf-8")
+
+  equal_cmp = store.compare_state(backup_snap["text"])
+  assert equal_cmp["verdict"] == "equal"
+  assert equal_cmp["groups"]["notes"]["only_file"] == []
+
+  store.note("n2", "Second note")
+  store.write_task(
+    "t1", "First task", ["Step one", "Step two"], task_type="code", append_details=True
+  )
+  ahead_cmp = store.compare_state(backup_snap["text"])
+  assert ahead_cmp["verdict"] == "ahead"
+  assert ahead_cmp["groups"]["notes"]["only_live"] == ["n2"]
+  assert ahead_cmp["groups"]["tasks"]["changed"] == ["t1"]
+  formatted = preview.format_state_comparison(ahead_cmp, source=backup_file)
+  assert "State compare (backup.ndjson): ahead" in formatted
+  assert "notes: live 2 file 1 +1 -0 ~0" in formatted
+  assert "tasks: live 1 file 1 +0 -0 ~1" in formatted
+
+  resolved = preview.resolve_compare_state_source(state_dir)
+  assert resolved == backup_file
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: state_dir)
+  monkeypatch.setattr(preview, "require_server", lambda _store: None)
+  monkeypatch.setattr(
+    sys, "argv", ["arena-preview", "state", "compare", str(backup_file)]
+  )
+  assert preview.main() == 0
+  cli_out = capsys.readouterr().out
+  assert "backup.ndjson" in cli_out
+  assert "ahead" in cli_out
+
+  assert (
+    preview.post_push_pr_checks_command(
+      "/bin/bash -l -c git push origin arena/293da56c-clankers"
+    )
+    == "pr-checks"
+  )
+  assert (
+    preview.post_push_pr_checks_command("/bin/bash -l -c gh pr create --fill")
+    == "pr-checks"
+  )
+  assert (
+    preview.post_push_pr_checks_command(
+      "/bin/bash -l -c git push --dry-run origin main"
+    )
+    is None
+  )
+  assert preview.post_push_pr_checks_command("/bin/bash -l -c git status") is None
+
+  monkeypatch.setenv(preview.DETACH_DRY_RUN, "1")
+  assert (
+    preview.auto_start_post_push_pr_checks(
+      state_dir,
+      "/bin/bash -l -c git push origin arena/293da56c-clankers",
+      rc=1,
+    )
+    is False
+  )
+  assert (
+    preview.auto_start_post_push_pr_checks(
+      state_dir,
+      "/bin/bash -l -c git push origin arena/293da56c-clankers",
+      rc=0,
+    )
+    is True
+  )
+  err = capsys.readouterr().err
+  assert "pr-checks" in err
+  assert "pr-checks" in preview.live_runs(state_dir)
+  css_text = (preview.ASSETS / "style.css").read_text(encoding="utf-8")
+  assert "Basel Grotesk" in css_text
+  assert "Basel Grotesk Mono" in css_text
+  for font_file in (
+    "Basel_Grotesk_Book.woff2",
+    "Basel_Grotesk_Regular.woff2",
+    "Basel_Grotesk_Medium.woff2",
+    "Basel_Grotesk_Bold.woff2",
+    "Basel_Grotesk_Mono_Regular.woff2",
+  ):
+    assert (preview.ASSETS / font_file).is_file()
+  assert preview.inbox_pipeline_warning("arena-preview poll 2>&1 | tail -15")
+  assert preview.inbox_pipeline_warning("arena-preview read 2>&1 | tail -15")
+  assert (
+    preview.auto_start_post_push_pr_checks(
+      state_dir,
+      "/bin/bash -l -c git push origin arena/293da56c-clankers",
+      rc=0,
+    )
+    is False
+  )

@@ -112,14 +112,15 @@ cat > "$HOOK" <<EOF || fail "cannot write $HOOK"
 #!/bin/bash
 # arena-preview-hook: poll the steering inbox after every agent call.
 rc=\$?
+cmd="\$(tr '\\0' ' ' < /proc/\$PPID/cmdline 2>/dev/null)"
 # The platform runs processes and probes through login shells. Those shells would otherwise count as agent calls and stamp call ends.
 # These are the shapes the gate already ignores, so the count and the stamp answer for the agent's own calls. The hook is a child of the shell that exits, so its parent carries that shell's line.
 # case: platform-shell
-case "\$(tr '\\0' ' ' < /proc/\$PPID/cmdline 2>/dev/null)" in
+case "\$cmd" in
   *arena-workspace*|*"ss -ltn"*|*"netstat -ltn"*|*"source ~/.profile"*|*"mkdir -p '/home/user'"*|*"/bin/bash -l -c mkdir -p '"*|*"/bin/bash -l -c [ -e '"*|*"python3 -I - <<'PY'"*)
     exit "\$rc" ;;
 esac
-"$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" --reminder >&2
+"$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" --reminder --rc "\$rc" --line "\$cmd" >&2
 exit "\$rc"
 EOF
 chmod 755 "$HOOK"

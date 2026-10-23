@@ -26,6 +26,13 @@ COPIED_ASSETS = (
   "assets/lucide.LICENSE",
   "assets/sortable.LICENSE",
 )
+BINARY_ASSETS = (
+  "assets/Basel_Grotesk_Book.woff2",
+  "assets/Basel_Grotesk_Regular.woff2",
+  "assets/Basel_Grotesk_Medium.woff2",
+  "assets/Basel_Grotesk_Bold.woff2",
+  "assets/Basel_Grotesk_Mono_Regular.woff2",
+)
 
 # One job per npm build: the file name, the pinned minifier, and the flags that produce the build.
 JOBS = (
@@ -249,6 +256,23 @@ def main() -> int:
       if arguments.update:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(built, encoding="utf-8")
+        print(f"wrote {relative}")
+      else:
+        drift.append(str(relative))
+
+    for name in BINARY_ASSETS:
+      src_path = SOURCE / name
+      if not src_path.is_file():
+        continue
+      built_bytes = src_path.read_bytes()
+      path = target / name
+      current_bytes = path.read_bytes() if path.is_file() else None
+      if current_bytes == built_bytes:
+        continue
+      relative = path.relative_to(ROOT)
+      if arguments.update:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(built_bytes)
         print(f"wrote {relative}")
       else:
         drift.append(str(relative))

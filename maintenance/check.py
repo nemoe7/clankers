@@ -52,7 +52,7 @@ EXPECTED_BUDGETS = {
   "system-prompts/wenyan/NEMOGPT.md": "o200k_base",
   "skills/amending-violations/SKILL.md": "o200k_base",
   "skills/arena-skill/SKILL.md": "o200k_base",
-  "skills/arena-skill/references/REFERENCE.md": "o200k_base",
+  "skills/arena-skill/references/reference.md": "o200k_base",
   "skills/nuu/SKILL.md": "o200k_base",
   "skills/nemoizer/SKILL.md": "o200k_base",
   "skills/squash/SKILL.md": "o200k_base",

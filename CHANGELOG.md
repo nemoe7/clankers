@@ -26,7 +26,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- Sync discovered `sbx-*.arena.site` preview URLs and header names to `/pwa/recent` on `arena-preview-proxy` and drop HTTP 502 targets from recents.
+- Sync discovered `sbx-*.arena.site` preview URLs and header names to `/pwa/recent` on `arena-preview-proxy` and drop HTTP 502 targets from recents. Show signed record diff counts on state mismatch.
 
 - Group `#clankers-settings-modal` settings into alphabetized sections and add `Keep working` and `Wake up` min/max range sliders. Use a Lucide `x` close button and remove long dashes across `userscripts/`.
 
@@ -35,6 +35,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add `Composer — keep working` to click Keep working, wait for the composer, and enter wake up after non-spinner, non-prose stops. Log `clicked` and `filled`, and keep prose completions and active spinner rows idle.
 
 #### preview
+
+- Add `arena-preview state compare`, add `wall-of-text` to Reports tab violation types, and start the detached `pr-checks` watcher after a successful `git push` or `gh pr create`.
 
 - Refresh the Reports tab selection after unpublishing a report so the next report loads instead of leaving an empty panel. Require `nuu` report screenshots and route repository tooling installs via `arena-preview run start` before the first `poll` or `read` while reserving `start_process` for `serve` and demos.
 

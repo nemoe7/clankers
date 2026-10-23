@@ -177,7 +177,8 @@ def test_release_pipeline():
     assert [[item["id"] for item in group] for group in round_groups] == [
       [str(n) for n in range(start, start + 10)] for start in range(0, 80, 10)
     ]
-    assert len(round_lines) == len(round_groups) + 1
+    round_body = [line for line in round_lines if not line.startswith("::")]
+    assert len(round_body) == len(round_groups) + 1
     assert any("after 16 exact token probe(s)" in line for line in round_lines)
     assert len(probes) <= 35
     assert not any("countTokens" in line for line in round_lines)
