@@ -29,7 +29,7 @@ from measure import (
 from measure import check as check_measurements
 from measure import main as measure_main
 
-VERSION = "0.1.5"
+VERSION = "0.1.6"
 NAMED_BREAKPOINTS = ("75em", "56.25em", "40em")
 MEDIA_BREAKPOINT_RE = re.compile(
   r"@media\b[^{]*?\(\s*(?:min|max)-width\s*:\s*([0-9.]+(?:em|rem|px))\s*\)",

@@ -746,10 +746,22 @@ module.exports = {
         "bounds": {"width": 560, "height": 40},
         "values": {"height": "40px"},
       },
+      {
+        "selector": "#modal-close",
+        "tag": "button",
+        "iconOnly": True,
+        "bounds": {"width": 32, "height": 44},
+        "values": {"width": "32px", "height": "44px"},
+      },
     ],
   }
   density_findings = measure.check_density(density_report)
-  assert [row["rule"] for row in density_findings] == ["UIX205", "UIX206", "UIX207"]
+  assert [row["rule"] for row in density_findings] == [
+    "UIX205",
+    "UIX206",
+    "UIX207",
+    "UIX208",
+  ]
   density_file = tmp_path / "density-report.json"
   density_file.write_text(json.dumps(density_report), encoding="utf-8")
   assert measure.main(["density", str(density_file)]) == 1

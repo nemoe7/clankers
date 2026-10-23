@@ -37,7 +37,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 5. Four sizes from the sheet, three weights, one eyebrow size, and a tabular face for IDs, and MUST bundle and load custom fonts via [references/recipes/offline-fonts.md](references/recipes/offline-fonts.md) without reload jitter.
 
-6. Every gap lands on the 8 px scale. Rows are 40 px, panels take a 10 px radius and no shadow, and a touch target is at least 44 px.
+6. Every gap lands on the 8 px scale. Rows are 40 px, panels take a 10 px radius and no shadow, icon-only buttons are square, and a touch target is at least 44 px.
 
 7. The sheet names 75em, 56.25em, and 40em. Choose each breakpoint where the content breaks. A width outside the list gets no behaviour of its own.
 
