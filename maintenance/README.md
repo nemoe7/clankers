@@ -58,7 +58,7 @@ The frontmatter of a skill uses only the specified fields, with `name` matching 
 
 ### Baselines
 
-`rules/refs/` keeps uncompressed baselines for agents without git history. Amend here first in complete sentences, preserving every negation, condition, command, number, threshold, filename and caveat. Compress only new or affected lines into live files. On removal, attempt one squash and keep the lower budget.
+`rules/refs/` keeps uncompressed baselines for agents without git history. Amend here first in complete sentences, preserving every negation, condition, command, number, threshold, filename, and caveat. Compress only new or affected lines into live files. On removal, attempt one squash and keep the lower budget.
 
 Verbatim baselines would exceed live budgets. Refs preserve originals, identical to live where no compression applied. The adjacent `GUIDELINES.md` is the writing/audit reference, not a baseline, with no live counterpart.
 
@@ -162,7 +162,7 @@ The profile gate and EXIT hook have case labels in `skills/refs/arena-skill/scri
 
 ## Minified assets and scripts
 
-The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all four `scripts/` files. Edit readable `skills/refs/arena-skill/` sources, never generated copies. Markdown compression is separate.
+The preview ships minified JavaScript, CSS, HTML, and Python in two distributed copies, including all four `scripts/` files. Edit readable `skills/refs/arena-skill/` sources, never generated copies. Markdown compression is separate.
 
 A dispatch workflow writes the `.agents/skills/arena-skill/` copy in each target repository. `.github/workflows/distribute.yml` carries it, so markdown drift there ends at the next dispatch. Compact Python gives less useful traceback line numbers.
 
@@ -175,7 +175,7 @@ python3 maintenance/minify/minify.py --update   # write both distributed copies
 
 `package.json` pins `terser` for JavaScript/CommonJS, `clean-css` for CSS, and `html-minifier-terser` for HTML. Build and CI pin `python-minifier==3.3.0`, not a server dependency. CI uses Python 3.11 for stable output. The script rejects unparseable JavaScript, unbalanced CSS braces, and HTML missing ids or visible words.
 
-Python must compile with the same parsed tree and Python 3.10 syntax. Names, annotations, assertions and shebangs remain. Ordinary comments and docstrings go, so a shipped script keeps no prose. Help text that a script prints lives in a string constant, not in a docstring.
+Python must compile with the same parsed tree and Python 3.10 syntax. Names, annotations, assertions, and shebangs remain. Ordinary comments and docstrings go, so a shipped script keeps no prose. Help text that a script prints lives in a string constant, not in a docstring.
 
 `check.py` rejects asset/script growth beyond recorded README budgets until an explicit table update. After each refs asset/script edit, run `minify.py`: budgets cannot detect stale copies. `python3 -m pytest maintenance/minify/test_minify.py` checks copy equality, drift, Python tree equality, syntax limits and generated runtime.
 

@@ -60,7 +60,7 @@ It does not execute or rewrite tests. Findings need manual review: exact executa
 
 ## Results and limits
 
-NMO002 (pick/select) is advisory. Checks report it without failure. Explicit formatting can still rewrite it.
+NMO901 (pick/select and repository/repo) and STE901-STE903 are marked for manual review. Checks report them without failure. Explicit formatting can still rewrite NMO901.
 
 | Mode | Result |
 | --- | --- |

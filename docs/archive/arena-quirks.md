@@ -22,7 +22,7 @@ Restores deleted the original steering notes, so [CHANGELOG.md](../../CHANGELOG.
 
 2026-10-03: The sandbox token reads much of a repository, and it cannot read security data.
 
-Readable sources hold workflow run, job and step metadata, check runs with annotations, artifact names and identifiers, pull request review comments, and GraphQL. The `code-scanning/codeql/databases` endpoint lists each database, its language and its commit.
+Readable sources hold workflow run, job, and step metadata, check runs with annotations, artifact names and identifiers, pull request review comments, and GraphQL. The `code-scanning/codeql/databases` endpoint lists each database, its language and its commit.
 
 Refused with 403: `code-scanning/alerts`, `code-scanning/analyses`, `code-scanning/default-setup`, `secret-scanning/alerts` and `dependabot/alerts`. A fetch of `code-scanning/sarifs` answers 404.
 
@@ -46,7 +46,7 @@ The documented limit is best effort: about 128 MB or 10,000 files across cumulat
 
 A reset can return HEAD to the branch base and delete ignored directories. In two observed resets on 2026-09-24, tooling, virtual environments and hooks under the home directory disappeared, and the preview server stopped. The first reset deleted preview SQLite state. The second kept it.
 
-Pushed commits survived remotely, and tree-only work appeared as uncommitted differences against the base. Notes, receipts and tasks in lost state do not survive.
+Pushed commits survived remotely, and tree-only work appeared as uncommitted differences against the base. Notes, receipts, and tasks in lost state do not survive.
 
 Recovery runs the steering installer first, then `git fetch -q origin <branch>` and `git reset --mixed FETCH_HEAD`, then the repository toolchain and a restarted preview. Rebuild tasks from commit history only if the state is missing. The installer rewrites the home-directory files a restore deletes, including the global ignore rule that keeps the state directory out of `git status`. A task backup protects against bad imports, not every restore.
 
@@ -72,7 +72,7 @@ Restore acknowledgement state with each note, or leave it unset. Never infer an 
 
 ### A refresh can reset the sandbox, not just the visible history
 
-2026-09-21: a refresh resets the working sandbox and loses all uncommitted data, including history. Filesystem, inbox and visible-history resets are the same event at different levels, and harness reasoning survives while files disappear. One later recovery request repeated an earlier report, with HEAD, remote and state intact. Check whether a message describes a new event or repeats one before treating it as evidence or instruction.
+2026-09-21: a refresh resets the working sandbox and loses all uncommitted data, including history. Filesystem, inbox, and visible-history resets are the same event at different levels, and harness reasoning survives while files disappear. One later recovery request repeated an earlier report, with HEAD, remote, and state intact. Check whether a message describes a new event or repeats one before treating it as evidence or instruction.
 
 Keep the retraction beside the claim, and recover from durable sources. Commit and push early, before turn end.
 
@@ -84,13 +84,13 @@ Keep the retraction beside the claim, and recover from durable sources. Commit a
 
 The agent resumes from the earlier point with no signal that anything was lost. Work done after that point is gone from all three at once. A note answered there reads as unanswered, and a commit made there is absent.
 
-Recovery needs both durable copies. The userscript downloads `arena-state/` as ndjson, which restores the notes, receipts and tasks. Pushed commits restore the tree. Neither one alone is enough: the backup holds no code, and the remote holds no steering state.
+Recovery needs both durable copies. The userscript downloads `arena-state/` as ndjson, which restores the notes, receipts, and tasks. Pushed commits restore the tree. Neither one alone is enough: the backup holds no code, and the remote holds no steering state.
 
 Rule: push after each verified commit, and keep the ndjson backup current. After a suspected rollback, read the inbox before other work, and compare HEAD with the remote before any edit.
 
 ### The token budget is not readable
 
-No surface gives the agent a remaining-token counter, warning or injected message. A claim about impending exhaustion infers it from conversation length, and one such claim ended a turn. Compaction does occur: a system block can replace earlier conversation with condensed memory. Nothing exposes a remaining count or a refill.
+No surface gives the agent a remaining-token counter, warning, or injected message. A claim about impending exhaustion infers it from conversation length, and one such claim ended a turn. Compaction does occur: a system block can replace earlier conversation with condensed memory. Nothing exposes a remaining count or a refill.
 
 [rules/ARENA.md](../../rules/ARENA.md) ends turns after it verifies and stops the work, never for a stated budget limit.
 
@@ -98,7 +98,7 @@ No surface gives the agent a remaining-token counter, warning or injected messag
 
 ### The question tool at token death
 
-2026-09-21: a dead token made four question blocks return `{"answers": [], "skipped": true}`, with no answer, error or reason. A skipped block neither ends the turn nor raises an error, and it gives no evidence that the user saw it. One later block returned `skipped: false` with two answers. The question shape differed, so that sample is one success against four skips, not a trial.
+2026-09-21: a dead token made four question blocks return `{"answers": [], "skipped": true}`, with no answer, error, or reason. A skipped block neither ends the turn nor raises an error, and it gives no evidence that the user saw it. One later block returned `skipped: false` with two answers. The question shape differed, so that sample is one success against four skips, not a trial.
 
 Ask rather than assume.
 

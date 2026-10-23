@@ -1668,7 +1668,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     await respond("GET", "/api/userscript-autosave", 200, synced);
     assert.equal(writes.length, 1, "an in-sync cycle with the same stamp writes nothing");
     assert.equal(panel(), null);
-    for (const field of ["type", "kind"]) { // nonemo: NMO001
+    for (const field of ["type", "kind"]) { // nonemo: NMO100
       const validText = [...changedCore, { [field]: "userscript-autosave" }].map(JSON.stringify).join("\n") + "\n";
       fileText = validText;
       const beforeWrites = writes.slice();

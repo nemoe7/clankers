@@ -35,11 +35,11 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 ```
 
 - Every text file is read, including comments and Markdown prose.
-- Print each finding as `path:line: ID word -> use`, and exit 1 only for non-advisory findings. Mark NMO002 and STE003 findings as advisory.
+- Print each finding as `path:line: ID word -> use`, exit 1 only for mandatory findings, and mark advisory findings for manual review by the agent or user.
 - Vendored and generated trees are skipped, and `--ignore` adds a directory or
   file.
 
-- Run word rotations (`NMO`), semicolon, sentence-length, and advisory passive-voice checks (`STE`), paragraph-length checks (`NMP`), and test-assertion reviews (`NMT`) by default.
+- Run word rotations and serial-comma checks (`NMO`), semicolon, sentence-length, and manual-review style checks (`STE`), paragraph-length checks (`NMP`), and test-assertion reviews (`NMT`) by default.
 - Use 20 words per sentence for unclassified prose and 25 for an explicit description scope.
 
 ## Writing the rotation

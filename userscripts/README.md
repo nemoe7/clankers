@@ -34,7 +34,7 @@ Every Arena entry leads with its module, and a switch shows its saved setting in
 6. Page
 7. Userscript
 
-Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature's observers, timers and listeners.
+Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature's observers, timers, and listeners.
 
 The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal, and they hold no check code. Switches never reload the page. Disabling a hiding feature restores its own DOM changes where the page has not replaced them. Earlier automatic clicks and inserted prompt text remain.
 
@@ -74,7 +74,7 @@ The message then carries a six-step checklist:
 2. Name the requirements and the constraints, and follow the conventions in the code.
 3. Take the smallest change that holds: reuse first, one line second, new code last, and add nothing the task does not ask for.
 4. Write the failing check before new or changed executable behavior, and reproduce a bug before the fix.
-5. Keep the behavior, interfaces, validation and security that stand.
+5. Keep the behavior, interfaces, validation, and security that stand.
 6. Run the project's own gate, and read the result before the report.
 
 Six rules follow the checklist:

@@ -23,7 +23,7 @@ One Agent Plugins 1.0.0 collection and six single-skill plugins for GPT-specific
 
 ## Edit a skill
 
-Skill sources live under `refs/skills/`. Compress shipped copies manually, preserving every rule, condition, exception, command and heading. Review each clause against its source. Increase the plugin version for every update.
+Skill sources live under `refs/skills/`. Compress shipped copies manually, preserving every rule, condition, exception, command, and heading. Review each clause against its source. Increase the plugin version for every update.
 
 See [maintenance/README.md](../maintenance/README.md) for synchronization and validation.
 

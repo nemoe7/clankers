@@ -49,7 +49,7 @@ A stale revision returns HTTP 409. The revision check and answer write use one t
 
 Routine inbox reads show quiet notes once. Note-ID lookups and reply-thread context still include them.
 
-Report answers live in a separate `submissions` table and appear as `kind: report` in CLI reads. <!-- nonemo: NMO001 -->
+Report answers live in a separate `submissions` table and appear as `kind: report` in CLI reads. <!-- nonemo: NMO100 -->
 Every resend creates a new submission. An answered report ID refuses republishing.
 The UI shows whether the agent answered the latest submission, not just an earlier one.
 
@@ -61,7 +61,7 @@ Next report selects the next list entry and stops at the last entry. An empty li
 
 The floating up button returns Reports to the top. It shares the message jump-button style and hides at the top or outside Reports.
 
-Owner notes, agent replies and draft rendering have no application length cap. Report answers, report sources, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk and proxy limits still apply.
+Owner notes, agent replies and draft rendering have no application length cap. Report answers, report sources, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk, and proxy limits still apply.
 
 The task CLI appends supplied details with `--append` (`-A`). Without that flag, supplied details replace the stored list. Existing limits still apply.
 
