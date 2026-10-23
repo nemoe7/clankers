@@ -28,12 +28,15 @@ import check
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "gpt-plugins"
 MANIFEST = PLUGIN / "plugin.json"
+ASSETS = PLUGIN / "assets"
 # The collection README documents the layout for a human reader, so the tree allows it
 # and shipped_paths() leaves it out of the archive.
 README = PLUGIN / "README.md"
 REFS = PLUGIN / "refs" / "skills"
 SHIPPED = PLUGIN / "skills"
 PLUGIN_NAME = "gpt-plugins"
+ICON_ARCHIVE_PATH = "assets/icon.svg"
+ICON_MANIFEST_REF = "./assets/icon.svg"
 LOCAL_SKILLS = (
   "gpt-quirks",
   "gpt-handoff",
@@ -76,7 +79,10 @@ def shipped_paths() -> list[Path]:
 
 def archive_members() -> dict[str, Path]:
   """Return archive-root paths and their source files."""
-  members: dict[str, Path] = {"plugin.json": MANIFEST}
+  members: dict[str, Path] = {
+    "plugin.json": MANIFEST,
+    ICON_ARCHIVE_PATH: ASSETS / f"{PLUGIN_NAME}.svg",
+  }
 
   for name in EXPECTED_SKILLS:
     _, ship_dir = skill_roots(name)
@@ -116,6 +122,7 @@ def archive_contents(skill: str | None = None) -> dict[str, bytes]:
     for name, source in archive_members().items()
     if name.startswith(f"skills/{skill}/")
   }
+  contents[ICON_ARCHIVE_PATH] = (ASSETS / f"{skill}.svg").read_bytes()
   contents["plugin.json"] = (json.dumps(manifest, indent=2) + "\n").encode()
   notes = (
     f"# {skill}\n\nVersion: {manifest['version']}.\n\n"
@@ -386,7 +393,7 @@ def check_tree(errors: list[str]) -> None:
     errors.append("gpt-plugins/ is missing")
     return
 
-  allowed = (MANIFEST, README, REFS, SHIPPED)
+  allowed = (MANIFEST, README, ASSETS, REFS, SHIPPED)
   stray = []
 
   for path in sorted(PLUGIN.rglob("*")):
@@ -398,6 +405,26 @@ def check_tree(errors: list[str]) -> None:
 
   if stray:
     errors.append(f"gpt-plugins/: unexpected files: {stray}")
+
+  expected_icons = sorted(f"{name}.svg" for name in (PLUGIN_NAME, *EXPECTED_SKILLS))
+  found_icons = (
+    sorted(p.name for p in ASSETS.iterdir() if p.is_file()) if ASSETS.is_dir() else []
+  )
+  if found_icons != expected_icons:
+    errors.append(
+      f"gpt-plugins/assets: icons are {found_icons}, expected {expected_icons}"
+    )
+  for icon_name in expected_icons:
+    icon_path = ASSETS / icon_name
+    if not icon_path.is_file():
+      continue
+    svg_text = icon_path.read_text(encoding="utf-8")
+    if (
+      'width="64"' not in svg_text
+      or 'height="64"' not in svg_text
+      or 'viewBox="0 0 64 64"' not in svg_text
+    ):
+      errors.append(f"gpt-plugins/assets/{icon_name}: expected square 64x64 SVG")
 
 
 def parse_plugin_version(value: object) -> tuple[int, ...] | None:

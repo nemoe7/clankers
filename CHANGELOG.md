@@ -50,6 +50,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Condense duplicated API tables, `<Chart>` and `GenUI` code blocks, and pointer sections in `gpt-display` while keeping self-contained guidance.
 
+- Add 8 square `64x64` SVG icons in `gpt-plugins/assets/<name>.svg`, package `./assets/icon.svg` in each archive, and wire `logo` and `composerIcon` under `extensions.com.openai.interface`.
+
 #### maintenance
 
 - Replace `ste-lint.py` in `check.py`, `lint_prose.py`, and `gate_pr.py` with `nemoize.py` while keeping blocking prose, comment, and PR checks. Distribute `nemo-ui-ux` and `nemoizer` to `nemoe7/wiki`.

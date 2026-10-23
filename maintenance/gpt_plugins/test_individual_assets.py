@@ -31,8 +31,13 @@ def test_package_collection_and_each_complete_skill(tmp_path):
       expected = {
         member: source.read_bytes()
         for member, source in gate.archive_members().items()
-        if member != "plugin.json"
+        if member not in {"plugin.json", gate.ICON_ARCHIVE_PATH}
         and any(member.startswith(f"skills/{skill}/") for skill in selected)
+      }
+      expected[gate.ICON_ARCHIVE_PATH] = (gate.ASSETS / f"{name}.svg").read_bytes()
+      assert manifest["extensions"]["com.openai"]["interface"] == {
+        "logo": gate.ICON_MANIFEST_REF,
+        "composerIcon": gate.ICON_MANIFEST_REF,
       }
       files = {p for p in opened.namelist() if not p.endswith("/")}
       notes = set() if name == gate.PLUGIN_NAME else {"README.md"}
