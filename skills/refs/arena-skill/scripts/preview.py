@@ -7930,8 +7930,13 @@ class Store:
             raise ValueError(error)
       for record_id in ids:
         for table in ("notes", "submissions"):
+          cols = (
+            "acknowledged_at, replies, quiet, blocking, type"
+            if table == "notes"
+            else "acknowledged_at, replies"
+          )
           row = db.execute(
-            f"SELECT acknowledged_at, replies FROM {table} WHERE id = ?", (record_id,)
+            f"SELECT {cols} FROM {table} WHERE id = ?", (record_id,)
           ).fetchone()
           if row is None:
             continue
@@ -7941,6 +7946,16 @@ class Store:
               " seen_at = COALESCE(seen_at, ?) WHERE id = ?",
               (stamp, "reply", text, stamp, record_id),
             )
+            if (
+              table == "notes"
+              and row["quiet"]
+              and row["blocking"]
+              and row["type"] == ""
+            ):
+              db.execute(
+                "INSERT OR REPLACE INTO meta VALUES ('survey_checked_at', ?)",
+                (stamp,),
+              )
           else:
             more = replies_list(row["replies"]) + [
               {"type": "reply", "text": text, "at": stamp}
@@ -8402,6 +8417,17 @@ ICON_COPY = (
   ' focusable="false"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>'
   '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>'
 )
+ICON_MARKDOWN = (
+  '<svg class="markdown-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+  ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"'
+  ' focusable="false"><path d="M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1'
+  " 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5"
+  "l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923"
+  'h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z" fill="currentColor" stroke="none"></path></svg>'
+)
+MARKDOWN_CODE_TAG = re.compile(
+  r'^<code\s+class="language-(?:markdown|md)"\s*>', re.IGNORECASE
+)
 
 
 def add_copy_buttons(rendered):
@@ -8412,11 +8438,17 @@ def add_copy_buttons(rendered):
     inner = match.group(1)
     code = html.unescape(CODE_TAG.sub("", inner))
     payload = html.escape(code, quote=True).replace("\n", "&#10;")
+    md_button = (
+      f'<button type="button" class="preview-code-md" aria-label="Preview Markdown" '
+      f'title="Preview Markdown" aria-pressed="false" data-code="{payload}">{ICON_MARKDOWN}</button>'
+      if MARKDOWN_CODE_TAG.match(inner.strip())
+      else ""
+    )
     button = (
       f'<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" '
       f'data-code="{payload}">{ICON_COPY}</button>'
     )
-    return f'<div class="code-block">{button}<pre>{inner}</pre></div>'
+    return f'<div class="code-block">{md_button}{button}<pre>{inner}</pre></div>'
 
   return CODE_BLOCK.sub(replace, rendered)
 
@@ -8986,7 +9018,18 @@ def handler(store):
           self.reply(200, (ASSETS / font_match.group(1)).read_bytes(), "font/woff2")
           return
         if path == "/api/survey":
+          checked_at = clip_stamp(store.meta_value("survey_checked_at"))
           with survey_lock:
+            if (
+              survey_state["results"] is not None
+              and checked_at
+              and (
+                not survey_state["answered_at"]
+                or checked_at > survey_state["answered_at"]
+              )
+            ):
+              survey_state["answered_at"] = checked_at
+              survey_state["requested"] = False
             body = json.dumps(
               {
                 "results": survey_state["results"],

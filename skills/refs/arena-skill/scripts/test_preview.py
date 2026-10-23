@@ -14102,6 +14102,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert "Basel Grotesk" in css_text
   assert "Basel Grotesk Mono" in css_text
   assert "mark a, a mark { color: var(--mark-link); }" in css_text
+  assert "--edge-ramp: 192px" in css_text
   for font_file in (
     "Basel_Grotesk_Book.woff2",
     "Basel_Grotesk_Regular.woff2",
@@ -14138,3 +14139,12 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert scoped["details"] == ["Scope: arena suite", "First step"]
   updated_scoped = store.write_task("scoped-task", scope="nemoizer")
   assert updated_scoped["details"] == ["Scope: nemoizer", "First step"]
+  md_rendered = preview.add_copy_buttons(preview.render("```markdown\n# Title\n```"))
+  assert 'class="preview-code-md"' in md_rendered
+  assert 'aria-pressed="false"' in md_rendered
+  py_rendered = preview.add_copy_buttons(preview.render("```python\nprint(1)\n```"))
+  assert 'class="preview-code-md"' not in py_rendered
+  cp_note = store.schedule_read_set_note(manual=True, root=tmp_path)
+  assert cp_note is not None
+  store.acknowledge([cp_note["id"]], "Bible texts in context.")
+  assert store.meta_value("survey_checked_at") is not None

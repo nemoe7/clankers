@@ -1421,6 +1421,47 @@ async function copyCode(button) {
   button.dataset.state = words ? 'good' : 'bad';
   setTimeout(() => rest(button), 1500);
 }
+async function toggleCodeMarkdown(button) {
+  const block = button.closest?.('.code-block') || button.parentElement;
+  if (!block) return;
+  const existing = typeof block.querySelector === 'function'
+    ? block.querySelector('.code-md-preview')
+    : [...(block.children || [])].find(child => child.className === 'code-md-preview');
+  if (block.dataset.mdState === 'rendered') {
+    delete block.dataset.mdState;
+    if (existing) existing.hidden = true;
+    button.setAttribute('aria-pressed', 'false');
+    label(button, 'Preview Markdown');
+    button.title = 'Preview Markdown';
+    return;
+  }
+  let rendered = existing;
+  if (!rendered) {
+    rendered = document.createElement('div');
+    rendered.className = 'code-md-preview';
+    const text = button.dataset.code || '';
+    if (typeof renderMessageMarkdown === 'function') {
+      rendered.innerHTML = renderMessageMarkdown(text);
+    } else {
+      try {
+        const reply = await request('/api/markdown', {
+          method: 'POST',
+          headers: writeHeaders('application/json'),
+          body: JSON.stringify({ text }),
+        });
+        rendered.innerHTML = await reply.text();
+      } catch {
+        rendered.textContent = text;
+      }
+    }
+    block.append(rendered);
+  }
+  rendered.hidden = false;
+  block.dataset.mdState = 'rendered';
+  button.setAttribute('aria-pressed', 'true');
+  label(button, 'Show Markdown source');
+  button.title = 'Show Markdown source';
+}
 // A click inserts `RE: <shortid>`, moves the caret after it, preserves the draft below a blank line, and replaces an existing quote prefix. The same gesture serves phones and desktops without Ctrl or a separate copy action.
 // Reveal the composer's tab, restore write mode, and regrow the textarea after changes because hidden panels collapse its height and preview mode hides the quote.
 function quoteId(id, control) {
@@ -1523,7 +1564,7 @@ document.addEventListener('click', event => {
     return;
   }
   const parent = event.target?.parentElement;
-  const target = event.target?.closest?.('.copy-code, .note-id, .task-title, .question-id') ||
+  const target = event.target?.closest?.('.copy-code, .preview-code-md, .note-id, .task-title, .question-id') ||
     (typeof parent?.className === 'string' && parent.className.split(' ').includes('question-id')
       ? parent : event.target);
   const reference = target?.closest?.('a.ack-reference') ||
@@ -1537,6 +1578,7 @@ document.addEventListener('click', event => {
   if (!target || typeof target.className !== 'string') return;
   const classes = target.className.split(' ');
   if (classes.includes('copy-code')) copyCode(target);
+  else if (classes.includes('preview-code-md')) toggleCodeMarkdown(target);
   // An ID takes one gesture on every device: a click quotes it, with or without a modifier.
   else if (classes.includes('note-id')) quoteNoteId(target);
   else if (classes.includes('task-title')) quoteTaskId(target);
@@ -2821,6 +2863,7 @@ document.addEventListener('visibilitychange', () => {
 });
 function showTab(tab) {
   clearJumpHighlight();
+  const alreadySelected = tab.getAttribute('aria-selected') === 'true';
   const left = tab === tabs[1] ? null : shownReportId();
   for (const item of tabs) {
     const selected = tab === item;
@@ -2828,7 +2871,7 @@ function showTab(tab) {
     item.tabIndex = selected ? 0 : -1;
     const panel = $('#' + item.getAttribute('aria-controls'));
     panel.hidden = !selected;
-    if (selected) gsap.fromTo(panel, { opacity: 0 }, { opacity: 1, duration: 0.16, ease: 'power1.out' });
+    if (selected && !alreadySelected) gsap.fromTo(panel, { opacity: 0 }, { opacity: 1, duration: 0.16, ease: 'power1.out' });
   }
   if (tab === tabs[0]) grow();
   updateReportTop();

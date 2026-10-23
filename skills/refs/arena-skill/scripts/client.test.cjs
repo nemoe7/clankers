@@ -5109,7 +5109,7 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
     crypto: require('node:crypto'),
     document: {
       createElement() {
-        return { innerHTML: '', textContent: '' };
+        return { innerHTML: '', textContent: '', content: { textContent: '' } };
       },
     },
     icon() {
@@ -5131,5 +5131,20 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
     context.renderMessageMarkdown('replace `\\` with `/` in `bar`').trim(),
     '<p>replace <code>\\</code> with <code>/</code> in <code>bar</code></p>'
   );
+  assert.match(
+    context.renderMessageMarkdown('```markdown\n# Heading\n```'),
+    /class="preview-code-md"/
+  );
+  assert.match(
+    context.renderMessageMarkdown('```md\n# Heading\n```'),
+    /class="preview-code-md"/
+  );
+  assert.doesNotMatch(
+    context.renderMessageMarkdown('```js\n1\n```'),
+    /class="preview-code-md"/
+  );
+  const appSource = fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8');
+  assert.match(appSource, /const alreadySelected = tab\.getAttribute\('aria-selected'\) === 'true';/);
+  assert.match(appSource, /if \(selected && !alreadySelected\) gsap\.fromTo\(panel,/);
 });
 

@@ -210,7 +210,10 @@ function renderMessageMarkdown(source) {
     template.innerHTML = inner;
     const code = template.content.textContent;
     const payload = attribute(code).replaceAll('\n', '&#10;');
+    const mdButton = /^<code\s+class="language-(?:markdown|md)"\s*>/i.test(inner.trim())
+      ? `<button type="button" class="preview-code-md" aria-label="Preview Markdown" title="Preview Markdown" aria-pressed="false" data-code="${payload}">${icon('markdown', 14).outerHTML}</button>`
+      : '';
     const button = `<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" data-code="${payload}">${icon('copy', 14).outerHTML}</button>`;
-    return `<div class="code-block">${button}<pre>${inner}</pre></div>`;
+    return `<div class="code-block">${mdButton}${button}<pre>${inner}</pre></div>`;
   });
 }

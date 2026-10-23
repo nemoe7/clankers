@@ -16,13 +16,15 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Enable `hasTouch` and `isMobile` (`@media (pointer: coarse)`) for mobile viewport widths (`<= 768` px) in `browser.cjs`, and document the requirement in Clause 14 of `SKILL.md`.
 
-- Default `nuu annotate` (`annotate.py` and `uiux.py annotate`) to `scale=2` with `-S, --scale <1|2|3>` and `"scale"` in JSON specs as overrides.
+- Default `nuu annotate` (`annotate.py` and `uiux.py annotate`) to `scale=2` with `-S, --scale <1|2|3>` and `"scale"` JSON overrides. Add the optional scroll-edge fade CSS recipe to `references/nuu.md`.
 
 #### nemoizer
 
 - Format `references/rules.md` and per-rule `references/<id>.md` files in the `markdownlint` documentation layout, and add `--selftest` to `nemoize.py`.
 
 - Add `NMP101` (`COMMENT_BLOCK_CAP = 2`), `references/nmp101.md`, and `references/audit-report.md`. Ignore `.json` and `.webmanifest` files by default, scan extracted comments in `.jsonc`, and add the comment-limit, concise-response, and audit-report clauses to `SKILL.md`.
+
+- Add descriptive violation messages (`describe_finding`) to `nemoize.py`. Adopt `STE400`, `STE401`, `STE909`, and `STE910`, add `pull request -> PR` (`NMO901`), and auto-exempt license filenames (`LICENSE`, `COPYING`, `NOTICE`).
 
 #### userscripts
 
@@ -37,6 +39,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Name banned tools (`web_search`, `fetch_page`, `image_search`) with `NEVER` in `survey.py` and `SKILL.md`, and include `survey.INSTRUCTIONS` in `/api/survey/request` and checkpoint notes in `preview.py`. Move the preview design record to `docs/arena-skill/design.md`, and stop recursive directory `grep` commands from falsely triggering `BIBLE BLOCKED` in `read_set_input_warning`.
 
 - Require `-S`/`--scope` on new preview tasks in `preview.py` and store `"Scope: {scope}"` at `details[0]`. Vendor GSAP (`gsap.LICENSE`) for preview animations, add the `#image-modal` zoom dialog, and fix `360` px mobile toolbars, `#preview-note` tooltips, `<mark>` links, and `nemoizer` findings.
+
+- Require running `arena-preview key` before proxy `fetch_page` calls, after a `401`, or on an owner question in `SKILL.md`. Add `.preview-code-md` Markdown render toggles, double `--edge-ramp` to `192px`, skip same-tab transitions, and update the survey modal timestamp when the agent acknowledges a bible check note.
 
 #### maintenance
 
