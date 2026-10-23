@@ -38,9 +38,9 @@ const bundles = {
     // Every Arena entry leads with its module and carries no role word. A switch ends in (ON)/(OFF).
     moduleSwitch: true,
     offByDefault: ["transcript-trim"],
-    // The prompt fill owns the three proxy entries. The state download owns its three. The auto
+    // The prompt fill owns the four proxy entries. The state download owns its three. The auto
     // trim gates its interval line behind the switch alone.
-    extraMenus: { "transcript-trim": 1, "prompt-fill": 3, "state-download": 3, "tab-title": 1 },
+    extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 3, "tab-title": 1 },
     // The keep-rows plan, the trim cap and the trim-now press stay on the menu whatever
     // the switch says.
     alwaysMenus: { "transcript-trim": 3 },
@@ -173,6 +173,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Composer - auto-send wake up (ON)",
       "Composer - keep working (ON)",
       "Proxy - host",
+      "Proxy - preview host",
       "Proxy - master key",
       "Proxy - post key now",
       "Steering - open (ON)",
@@ -362,6 +363,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Composer - auto-send wake up (ON)",
         "Composer - keep working (ON)",
         "Proxy - host",
+        "Proxy - preview host",
         "Proxy - master key",
         "Proxy - post key now",
         "Steering - open (ON)",
