@@ -84,12 +84,12 @@ function checkArenaLogging(api, menus) {
     assert.equal(api.getLogLevel(), "warn");
     api.setLogLevel("info");
     let ran = false;
-    api.menuItem([], "State — secret-message", () => { ran = true; });
-    menus.findLast((entry) => entry.label === "State — secret-message").run();
+    api.menuItem([], "State - secret-message", () => { ran = true; });
+    menus.findLast((entry) => entry.label === "State - secret-message").run();
     assert.equal(ran, true);
     assert.doesNotMatch(lines.at(-1).text, /secret-message/);
     api.registerLogMenu();
-    menus.findLast((entry) => entry.label.startsWith("Userscript — log level")).run();
+    menus.findLast((entry) => entry.label.startsWith("Userscript - log level")).run();
     assert.equal(api.getLogLevel(), "debug");
     for (const method of Object.keys(original)) console[method] = () => { throw Error("closed"); };
     assert.doesNotThrow(() => api.logEvent("state", "failed", fields, "error"));
@@ -135,15 +135,15 @@ function checkLogging(api, menus) {
   if (menuItem) {
     var ran = [];
     var list = [];
-    menuItem(list, "State — force save", function () {
+    menuItem(list, "State - force save", function () {
       ran.push("save");
     });
     assert.equal(list.length, 1);
     var registered = menus.filter(function (item) {
-      return item.label === "State — force save";
+      return item.label === "State - force save";
     }).pop();
     assert.ok(registered, "the registered entry is reachable by its label");
-    assert.equal(registered.label, "State — force save");
+    assert.equal(registered.label, "State - force save");
     lines.length = 0;
     var pressed = [];
     console.log = function () {
@@ -155,7 +155,7 @@ function checkLogging(api, menus) {
       console.log = original;
     }
     assert.deepEqual(ran, ["save"]);
-    assert.equal(pressed[0], "[NemoUtils][menu] State — force save");
+    assert.equal(pressed[0], "[NemoUtils][menu] State - force save");
   }
   console.log("ok logging 3");
 }
@@ -724,8 +724,8 @@ function checkTranscriptTrim(api) {
     [planParts("").rows, DEFAULT_ROWS],
     [planParts("4,75").rows, 75],
     [MIN_ROWS, 20],
-    [countLabel("50", 0), "Transcript \u2014 keep 50 rows"],
-    [countLabel("50", 3), "Transcript \u2014 keep 50 rows (3 removed)"],
+    [countLabel("50", 0), "Transcript - keep 50 rows"],
+    [countLabel("50", 3), "Transcript - keep 50 rows (3 removed)"],
     [ACTION_SELECTOR, ":scope > div > div > div.mt-3.flex.flex-col.gap-3"],
     [QUESTION_SELECTOR, '[role="radiogroup"]'],
     [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],

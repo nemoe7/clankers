@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.65
+// @name         Arena.ai | NemoUtils | v1.10.66
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.65
+// @version      1.10.66
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -121,7 +121,7 @@
   function registerLogMenu() {
     if (logMenuEntry) return logMenuEntry;
     logMenuEntry = menuAdd(function () {
-      return "Userscript — log level (" + getLogLevel().toUpperCase() + ")";
+      return "Userscript - log level (" + getLogLevel().toUpperCase() + ")";
     }, function () {
       var order = ["info", "debug", "warn", "error"];
       var next = order[(order.indexOf(getLogLevel()) + 1) % order.length];
@@ -150,7 +150,7 @@
   var menuOpened = false;
 
   function menuRank(label) {
-    var index = MENU_ORDER.indexOf(String(label).split(" — ")[0]);
+    var index = MENU_ORDER.indexOf(String(label).split(" - ")[0]);
     return index === -1 ? MENU_ORDER.length : index;
   }
 
@@ -273,7 +273,7 @@
   }
 
   function pauseLabel(paused) {
-    return PAUSE_LABEL + (paused ? " — resume all" : " — pause all");
+    return PAUSE_LABEL + (paused ? " - resume all" : " - pause all");
   }
 
   function registerPauseUnit(label, start, halt, stored) {
@@ -306,8 +306,14 @@
   var HTTP_JITTER_KEY = "clankers-arena-http-jitter-ms";
   var STATE_WATCH_KEY = "clankers-arena-state-watch-ms";
   var STATE_PANEL_KEY = "clankers-arena-state-panel-ms";
+  var WAKE_DELAY_MIN_MS = 0;
+  var WAKE_DELAY_MIN_KEY = "clankers-arena-wake-delay-min-ms";
   var WAKE_DELAY_MS = 5000;
   var WAKE_DELAY_KEY = "clankers-arena-wake-delay-ms";
+  var KEEP_WORKING_DELAY_MIN_MS = 0;
+  var KEEP_WORKING_DELAY_MIN_KEY = "clankers-arena-keep-working-delay-min-ms";
+  var KEEP_WORKING_DELAY_MS = 5000;
+  var KEEP_WORKING_DELAY_KEY = "clankers-arena-keep-working-delay-ms";
   var featureRegistry = [];
   var restartStateWatchHook = null;
 
@@ -332,11 +338,54 @@
     return Math.min(Math.round(ms), 60000);
   }
 
+  function wakeDelayMinMs() {
+    if (typeof GM_getValue !== "function") return WAKE_DELAY_MIN_MS;
+    var ms = Number(GM_getValue(WAKE_DELAY_MIN_KEY, WAKE_DELAY_MIN_MS));
+    if (!isFinite(ms) || ms < 0) return WAKE_DELAY_MIN_MS;
+    return Math.min(Math.round(ms), 60000);
+  }
+
   function wakeDelayMs() {
     if (typeof GM_getValue !== "function") return WAKE_DELAY_MS;
     var ms = Number(GM_getValue(WAKE_DELAY_KEY, WAKE_DELAY_MS));
     if (!isFinite(ms) || ms < 0) return WAKE_DELAY_MS;
     return Math.min(Math.round(ms), 60000);
+  }
+
+  function wakeDelayRangeMs() {
+    var a = wakeDelayMinMs();
+    var b = wakeDelayMs();
+    return { min: Math.min(a, b), max: Math.max(a, b) };
+  }
+
+  function randomWakeDelayMs() {
+    var r = wakeDelayRangeMs();
+    return r.min + Math.floor(Math.random() * (r.max - r.min + 1));
+  }
+
+  function keepWorkingDelayMinMs() {
+    if (typeof GM_getValue !== "function") return KEEP_WORKING_DELAY_MIN_MS;
+    var ms = Number(GM_getValue(KEEP_WORKING_DELAY_MIN_KEY, KEEP_WORKING_DELAY_MIN_MS));
+    if (!isFinite(ms) || ms < 0) return KEEP_WORKING_DELAY_MIN_MS;
+    return Math.min(Math.round(ms), 60000);
+  }
+
+  function keepWorkingDelayMs() {
+    if (typeof GM_getValue !== "function") return KEEP_WORKING_DELAY_MS;
+    var ms = Number(GM_getValue(KEEP_WORKING_DELAY_KEY, KEEP_WORKING_DELAY_MS));
+    if (!isFinite(ms) || ms < 0) return KEEP_WORKING_DELAY_MS;
+    return Math.min(Math.round(ms), 60000);
+  }
+
+  function keepWorkingDelayRangeMs() {
+    var a = keepWorkingDelayMinMs();
+    var b = keepWorkingDelayMs();
+    return { min: Math.min(a, b), max: Math.max(a, b) };
+  }
+
+  function randomKeepWorkingDelayMs() {
+    var r = keepWorkingDelayRangeMs();
+    return r.min + Math.floor(Math.random() * (r.max - r.min + 1));
   }
 
   function jitteredTimer(run, everyMs, spreadMs) {
@@ -550,17 +599,71 @@
   }
 
 
-  runFeature("prompt-fill", "Composer — fill", function () {
+  runFeature("prompt-fill", "Composer - fill", function () {
 
     var COMPOSER_SELECTOR = 'div.tiptap.ProseMirror[contenteditable="true"]';
     var TEMPLATE_RE = /^(\S+) read (?:AGENTS\.md ARENA\.md|ARENA\.md AGENTS\.md|ARENA\.md and AGENTS\.md)/;
 
     var PROXY_HOST_KEY = "clankers-arena-proxy-host";
+    var PREVIEW_PROXY_HOST_KEY = "clankers-arena-preview-proxy-host";
     var PROXY_MASTER_KEY = "clankers-arena-proxy-master";
 
     function proxyHost(raw) {
       var host = String(raw || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
       return /^https:\/\/[a-z0-9.-]+$/i.test(host) ? host : null;
+    }
+
+    function previewProxyHost(raw, fallbackProxyHost) {
+      var explicit = proxyHost(raw);
+      if (explicit) return explicit;
+      var base = proxyHost(fallbackProxyHost);
+      if (!base) return null;
+      var derived = base.replace(
+        /^https:\/\/arena-proxy(\.[a-z0-9.-]+)$/i,
+        "https://arena-preview$1",
+      );
+      return derived !== base ? derived : null;
+    }
+
+    function previewHeaderName(doc) {
+      if (!doc || typeof doc.querySelectorAll !== "function") return "";
+      var spans = doc.querySelectorAll("span");
+      var i;
+      var cls;
+      var text;
+      for (i = 0; i < spans.length; i += 1) {
+        cls = String(spans[i].className || "");
+        if (
+          cls.indexOf("text-text-secondary") !== -1 &&
+          cls.indexOf("max-w-[180px]") !== -1
+        ) {
+          text = String(spans[i].textContent || "").trim();
+          if (text) return text;
+        }
+      }
+      return "";
+    }
+
+    function discoverPreviews(doc) {
+      if (!doc || typeof doc.querySelectorAll !== "function") return [];
+      var name = previewHeaderName(doc);
+      var frames = doc.querySelectorAll("iframe");
+      var seen = {};
+      var found = [];
+      var i;
+      var src;
+      var match;
+      var root;
+      for (i = 0; i < frames.length; i += 1) {
+        src = String(frames[i].src || "").trim();
+        match = /^(https:\/\/sbx-[a-z0-9-]+\.arena\.site)(?:\/.*)?$/i.exec(src);
+        if (!match) continue;
+        root = match[1] + "/";
+        if (seen[root]) continue;
+        seen[root] = true;
+        found.push({ url: root, name: name });
+      }
+      return found;
     }
 
     function keyUrl(host, master) {
@@ -730,8 +833,12 @@
       PROMPT_FILL_URL: PROMPT_FILL_URL,
       ARENA_MD_URL: ARENA_MD_URL,
       PROXY_HOST_KEY: PROXY_HOST_KEY,
+      PREVIEW_PROXY_HOST_KEY: PREVIEW_PROXY_HOST_KEY,
       PROXY_MASTER_KEY: PROXY_MASTER_KEY,
       proxyHost: proxyHost,
+      previewProxyHost: previewProxyHost,
+      previewHeaderName: previewHeaderName,
+      discoverPreviews: discoverPreviews,
       keyUrl: keyUrl,
       agentKeyFrom: agentKeyFrom,
       PREVIEW_FRAME_TITLE: PREVIEW_FRAME_TITLE,
@@ -859,8 +966,8 @@
       });
     }
 
-    setProxyValue(PROXY_HOST_KEY, "Proxy — host", GM_getValue(PROXY_HOST_KEY, ""));
-    setProxyValue(PROXY_MASTER_KEY, "Proxy — master key", "");
+    setProxyValue(PROXY_HOST_KEY, "Proxy - host", GM_getValue(PROXY_HOST_KEY, ""));
+    setProxyValue(PROXY_MASTER_KEY, "Proxy - master key", "");
 
     function settings() {
       return {
@@ -870,7 +977,39 @@
     }
 
     var postedBase = null;
+    var postedPreviews = {};
+
+    function postRecentPreviews(doc) {
+      var host = previewProxyHost(
+        GM_getValue(PREVIEW_PROXY_HOST_KEY, ""),
+        GM_getValue(PROXY_HOST_KEY, ""),
+      );
+      if (!host) return;
+      var items = discoverPreviews(doc);
+      var i;
+      var item;
+      var stamp;
+      var payload;
+      for (i = 0; i < items.length; i += 1) {
+        item = items[i];
+        stamp = host + "|" + item.url + "|" + (item.name || "");
+        if (postedPreviews[item.url] === stamp) continue;
+        postedPreviews[item.url] = stamp;
+        payload = { url: item.url, name: item.name || "" };
+        if (typeof fetch === "function") {
+          fetch(host + "/pwa/recent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }).catch(function () {});
+        } else {
+          requestJson("POST", host + "/pwa/recent", payload, function () {});
+        }
+      }
+    }
+
     function postKeyToPreview(force) {
+      postRecentPreviews(document);
       var base = previewBase(document);
       if (!keyPostDue(base, postedBase, force === true)) return;
       var pair = settings();
@@ -926,7 +1065,7 @@
       );
     }
 
-    menuItem(proxyMenus, "Proxy — post key now", function () {
+    menuItem(proxyMenus, "Proxy - post key now", function () {
       var pair = settings();
       postKeyNow(
         { host: pair.host, key: heldKey },
@@ -1044,7 +1183,7 @@
     };
   });
 
-  runFeature("open-steering", "Steering — open", function () {
+  runFeature("open-steering", "Steering - open", function () {
 
     var STEERING_LABEL_RE = /steering|preview/i;
     var CLICK_DELAY_MS = 1000;
@@ -1231,7 +1370,7 @@
     };
   });
 
-  runFeature("preview-sandbox", "Steering — new tabs and downloads", function () {
+  runFeature("preview-sandbox", "Steering - new tabs and downloads", function () {
     var FRAME_TITLE = "App preview on port 8000";
     var FRAME_FLAGS = [
       "allow-popups",
@@ -1327,7 +1466,7 @@
     settingsToggleButton.setAttribute("aria-pressed", open ? "true" : "false");
   }
 
-  var autoScroll = runFeature("auto-scroll", "Transcript — auto-scroll", function () {
+  var autoScroll = runFeature("auto-scroll", "Transcript - auto-scroll", function () {
     var scroller = null;
     var content = null;
     var frame = null;
@@ -1467,11 +1606,30 @@
 
       var closeBtn = document.createElement("button");
       closeBtn.type = "button";
-      closeBtn.textContent = "Close";
+      closeBtn.setAttribute("data-clankers-settings-close", "true");
       closeBtn.setAttribute("aria-label", "Close settings");
+      closeBtn.setAttribute("title", "Close settings");
       closeBtn.style.cssText =
-        "cursor:pointer;border:1px solid #56504a;border-radius:5px;padding:2px 8px;" +
+        "cursor:pointer;display:inline-flex;align-items:center;justify-content:center;" +
+        "border:1px solid #56504a;border-radius:5px;padding:3px;width:24px;height:24px;" +
         "background:transparent;color:inherit;font:inherit";
+      var closeSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      closeSvg.setAttribute("width", "16");
+      closeSvg.setAttribute("height", "16");
+      closeSvg.setAttribute("viewBox", "0 0 24 24");
+      closeSvg.setAttribute("fill", "none");
+      closeSvg.setAttribute("stroke-width", "1.5");
+      closeSvg.setAttribute("color", "currentColor");
+      var closePaths = ["M18 6 6 18", "m6 6 12 12"];
+      for (var c = 0; c < closePaths.length; c += 1) {
+        var closePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        closePath.setAttribute("d", closePaths[c]);
+        closePath.setAttribute("stroke", "currentColor");
+        closePath.setAttribute("stroke-linecap", "round");
+        closePath.setAttribute("stroke-linejoin", "round");
+        closeSvg.appendChild(closePath);
+      }
+      closeBtn.appendChild(closeSvg);
       closeBtn.addEventListener("click", closeSettingsModal);
       header.appendChild(closeBtn);
 
@@ -1512,9 +1670,15 @@
       modal.appendChild(header);
 
       var body = document.createElement("div");
-      body.style.cssText = "padding:10px 12px;overflow-y:auto;display:flex;flex-direction:column;gap:8px";
+      body.style.cssText = "padding:10px 12px;overflow-y:auto;display:flex;flex-direction:column;gap:12px";
 
-      function addNumberField(labelText, key, currentSeconds, minSec, maxSec, scale, onSaved) {
+      var sectionMap = {};
+      function addSectionItem(sectionName, sortLabel, node) {
+        if (!sectionMap[sectionName]) sectionMap[sectionName] = [];
+        sectionMap[sectionName].push({ label: sortLabel, node: node });
+      }
+
+      function buildNumberRow(labelText, key, currentSeconds, minSec, maxSec, scale, onSaved) {
         var row = document.createElement("label");
         row.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px";
         var span = document.createElement("span");
@@ -1537,52 +1701,197 @@
         });
         row.appendChild(span);
         row.appendChild(input);
-        body.appendChild(row);
+        return row;
       }
 
-      addNumberField(
+      function buildDualRangeRow(labelText, minKey, maxKey, curMinSec, curMaxSec, minSec, maxSec, scale) {
+        var box = document.createElement("div");
+        box.style.cssText = "display:flex;flex-direction:column;gap:4px";
+        var topRow = document.createElement("div");
+        topRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px";
+        var span = document.createElement("span");
+        span.textContent = labelText;
+        var readout = document.createElement("span");
+        readout.style.cssText = "font-variant-numeric:tabular-nums;color:#b8b2a8";
+        topRow.appendChild(span);
+        topRow.appendChild(readout);
+
+        var track = document.createElement("div");
+        track.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center";
+        var minInput = document.createElement("input");
+        minInput.type = "range";
+        minInput.min = String(minSec);
+        minInput.max = String(maxSec);
+        minInput.step = "1";
+        minInput.value = String(curMinSec);
+        minInput.setAttribute("data-setting-key", minKey);
+        minInput.setAttribute("data-range-role", "min");
+        minInput.setAttribute("aria-label", labelText + " min");
+        minInput.style.cssText = "width:100%;accent-color:#d97757";
+
+        var maxInput = document.createElement("input");
+        maxInput.type = "range";
+        maxInput.min = String(minSec);
+        maxInput.max = String(maxSec);
+        maxInput.step = "1";
+        maxInput.value = String(curMaxSec);
+        maxInput.setAttribute("data-setting-key", maxKey);
+        maxInput.setAttribute("data-range-role", "max");
+        maxInput.setAttribute("aria-label", labelText + " max");
+        maxInput.style.cssText = "width:100%;accent-color:#d97757";
+
+        function updateReadout(lo, hi) {
+          readout.textContent = lo + " - " + hi + " s";
+        }
+        updateReadout(curMinSec, curMaxSec);
+
+        function applyMin() {
+          var rawMin = Number(String(minInput.value).trim());
+          var rawMax = Number(String(maxInput.value).trim());
+          if (!isFinite(rawMin)) return;
+          var lo = Math.min(Math.max(Math.round(rawMin), minSec), maxSec);
+          var hi = isFinite(rawMax) ? Math.min(Math.max(Math.round(rawMax), minSec), maxSec) : maxSec;
+          if (lo > hi) {
+            hi = lo;
+            maxInput.value = String(hi);
+            GM_setValue(maxKey, hi * scale);
+          }
+          minInput.value = String(lo);
+          GM_setValue(minKey, lo * scale);
+          updateReadout(lo, hi);
+          menuRefresh();
+        }
+
+        function applyMax() {
+          var rawMin = Number(String(minInput.value).trim());
+          var rawMax = Number(String(maxInput.value).trim());
+          if (!isFinite(rawMax)) return;
+          var hi = Math.min(Math.max(Math.round(rawMax), minSec), maxSec);
+          var lo = isFinite(rawMin) ? Math.min(Math.max(Math.round(rawMin), minSec), maxSec) : minSec;
+          if (hi < lo) {
+            lo = hi;
+            minInput.value = String(lo);
+            GM_setValue(minKey, lo * scale);
+          }
+          maxInput.value = String(hi);
+          GM_setValue(maxKey, hi * scale);
+          updateReadout(lo, hi);
+          menuRefresh();
+        }
+
+        minInput.addEventListener("input", applyMin);
+        minInput.addEventListener("change", applyMin);
+        maxInput.addEventListener("input", applyMax);
+        maxInput.addEventListener("change", applyMax);
+
+        track.appendChild(minInput);
+        track.appendChild(maxInput);
+        box.appendChild(topRow);
+        box.appendChild(track);
+        return box;
+      }
+
+      var wakeRange = wakeDelayRangeMs();
+      addSectionItem(
+        "Composer",
+        "Wake-up delay (s)",
+        buildDualRangeRow(
+          "Wake-up delay (s)",
+          WAKE_DELAY_MIN_KEY,
+          WAKE_DELAY_KEY,
+          Math.round(wakeRange.min / 1000),
+          Math.round(wakeRange.max / 1000),
+          0,
+          60,
+          1000,
+        ),
+      );
+      var keepRange = keepWorkingDelayRangeMs();
+      addSectionItem(
+        "Composer",
+        "Keep working delay (s)",
+        buildDualRangeRow(
+          "Keep working delay (s)",
+          KEEP_WORKING_DELAY_MIN_KEY,
+          KEEP_WORKING_DELAY_KEY,
+          Math.round(keepRange.min / 1000),
+          Math.round(keepRange.max / 1000),
+          0,
+          60,
+          1000,
+        ),
+      );
+      addSectionItem(
+        "State",
         "State autosave poll (s)",
-        STATE_WATCH_KEY,
-        Math.round(stateWatchMs() / 1000),
-        1,
-        60,
-        1000,
-        function () {
-          if (typeof restartStateWatchHook === "function") restartStateWatchHook();
-        },
+        buildNumberRow(
+          "State autosave poll (s)",
+          STATE_WATCH_KEY,
+          Math.round(stateWatchMs() / 1000),
+          1,
+          60,
+          1000,
+          function () {
+            if (typeof restartStateWatchHook === "function") restartStateWatchHook();
+          },
+        ),
       );
-      addNumberField(
+      addSectionItem(
+        "State",
         "State toast duration (s)",
-        STATE_PANEL_KEY,
-        Math.round(statePanelMs() / 1000),
-        1,
-        60,
-        1000,
+        buildNumberRow(
+          "State toast duration (s)",
+          STATE_PANEL_KEY,
+          Math.round(statePanelMs() / 1000),
+          1,
+          60,
+          1000,
+        ),
       );
-      addNumberField(
-        "Wake-up max delay (s)",
-        WAKE_DELAY_KEY,
-        Math.round(wakeDelayMs() / 1000),
-        0,
-        60,
-        1000,
-      );
-      addNumberField(
+      addSectionItem(
+        "Proxy",
         "HTTP jitter range (s)",
-        HTTP_JITTER_KEY,
-        Math.round(httpJitterMs() / 1000),
-        0,
-        60,
-        1000,
+        buildNumberRow(
+          "HTTP jitter range (s)",
+          HTTP_JITTER_KEY,
+          Math.round(httpJitterMs() / 1000),
+          0,
+          60,
+          1000,
+        ),
       );
+      (function () {
+        var row = document.createElement("label");
+        row.style.cssText =
+          "display:flex;align-items:center;justify-content:space-between;gap:8px";
+        var span = document.createElement("span");
+        span.textContent = "Preview proxy host";
+        var input = document.createElement("input");
+        input.type = "text";
+        input.value = String(GM_getValue("clankers-arena-preview-proxy-host", "") || "");
+        input.placeholder = "https://arena-preview.<tailnet>.ts.net";
+        input.setAttribute("data-setting-key", "clankers-arena-preview-proxy-host");
+        input.style.cssText =
+          "width:160px;padding:3px 6px;border-radius:5px;border:1px solid #56504a;" +
+          "background:#2c2b28;color:#f0ede8;font:inherit";
+        input.addEventListener("change", function () {
+          GM_setValue("clankers-arena-preview-proxy-host", String(input.value || "").trim());
+        });
+        row.appendChild(span);
+        row.appendChild(input);
+        addSectionItem("Proxy", "Preview proxy host", row);
+      })();
 
       var i;
       for (i = 0; i < featureRegistry.length; i += 1) {
         (function (item) {
+          var parts = String(item.label).split(" - ");
+          var secName = parts.length > 1 ? parts[0] : "General";
+          var shortLabel = parts.length > 1 ? parts.slice(1).join(" - ") : item.label;
           var row = document.createElement("label");
           row.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px";
           var span = document.createElement("span");
-          span.textContent = item.label;
+          span.textContent = shortLabel;
           var checkbox = document.createElement("input");
           checkbox.type = "checkbox";
           checkbox.checked = item.storedOn();
@@ -1592,8 +1901,31 @@
           });
           row.appendChild(span);
           row.appendChild(checkbox);
-          body.appendChild(row);
+          addSectionItem(secName, shortLabel, row);
         })(featureRegistry[i]);
+      }
+
+      var sectionNames = Object.keys(sectionMap).sort(function (a, b) {
+        return a.localeCompare(b);
+      });
+      for (var s = 0; s < sectionNames.length; s += 1) {
+        var secKey = sectionNames[s];
+        var secEl = document.createElement("section");
+        secEl.setAttribute("data-settings-section", secKey);
+        secEl.style.cssText =
+          "display:flex;flex-direction:column;gap:6px;padding-bottom:8px;border-bottom:1px solid #3a3733";
+        var secTitle = document.createElement("div");
+        secTitle.textContent = secKey;
+        secTitle.style.cssText =
+          "font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#b8b2a8";
+        secEl.appendChild(secTitle);
+        var entries = sectionMap[secKey].slice().sort(function (a, b) {
+          return a.label.localeCompare(b.label);
+        });
+        for (var e = 0; e < entries.length; e += 1) {
+          secEl.appendChild(entries[e].node);
+        }
+        body.appendChild(secEl);
       }
 
       modal.appendChild(body);
@@ -1716,7 +2048,7 @@
     function countLabel(plan, removed) {
       var kept = planParts(plan);
       return (
-        "Transcript — keep " +
+        "Transcript - keep " +
         kept.rows +
         " rows" +
         (removed ? " (" + removed + " removed)" : "")
@@ -1937,7 +2269,7 @@
     }
 
     function intervalLabel() {
-      return "Transcript — auto trim interval " + Math.round(tickMs() / 1000) + " s";
+      return "Transcript - auto trim interval " + Math.round(tickMs() / 1000) + " s";
     }
 
     function restartTick() {
@@ -1951,7 +2283,7 @@
     }
 
     function capLabel() {
-      return "Transcript \u2014 trim cap " + capValue() + " rows";
+      return "Transcript - trim cap " + capValue() + " rows";
     }
 
     function registerCap() {
@@ -2024,7 +2356,7 @@
       trim();
     }
 
-    runFeature("transcript-trim", "Transcript — auto trim", function () {
+    runFeature("transcript-trim", "Transcript - auto trim", function () {
       registerInterval();
       observer = new MutationObserver(function () {
         settleState.mutationAt = Date.now();
@@ -2045,13 +2377,13 @@
     registerCount();
     registerCap();
     nowEntry = menuAdd(function () {
-      return "Transcript — trim now";
+      return "Transcript - trim now";
     }, function () {
       trim();
     });
   })();
 
-  runFeature("transcript-alerts", "Transcript — hide generation alerts", function () {
+  runFeature("transcript-alerts", "Transcript - hide generation alerts", function () {
 
     function alertVisibility(doc) {
       var hidden = new Map();
@@ -2103,7 +2435,7 @@
     };
   });
 
-  runFeature("hide-composer", "Composer — hide", function () {
+  runFeature("hide-composer", "Composer - hide", function () {
 
     var SHELL_SELECTOR = "div.flex.w-full.flex-col.items-start.justify-center.p-2";
     var EDITOR_CONTENT_SELECTOR = "div.editor-content";
@@ -2413,7 +2745,7 @@
   var autoWakeSentFor = null;
   var autoWakeRoots = new Set();
   var autoWakeNotify = null;
-  runFeature("auto-wake", "Composer — auto-send wake up", function () {
+  runFeature("auto-wake", "Composer - auto-send wake up", function () {
     if (typeof document === "undefined") return function () {};
     var timer = null;
     var timerFor = null;
@@ -2465,7 +2797,7 @@
         autoWakeSentFor = current.url;
         current.button.click();
         logEvent("auto-wake", "clicked");
-      }, Math.floor(Math.random() * (wakeDelayMs() + 1)));
+      }, randomWakeDelayMs());
     }
 
     function compositionStart() { composing = true; cancel(); }
@@ -2494,7 +2826,7 @@
 
   var keepWorkingRoots = new Set();
   var keepWorkingWaitingComposer = false;
-  runFeature("keep-working", "Composer — keep working", function () {
+  runFeature("keep-working", "Composer - keep working", function () {
     if (typeof document === "undefined") return function () {};
     var timer = null;
     var timerFor = null;
@@ -2587,7 +2919,7 @@
         current.button.click();
         logEvent("keep-working", "clicked");
         fillComposer();
-      }, Math.floor(Math.random() * (wakeDelayMs() + 1)));
+      }, randomKeepWorkingDelayMs());
       fillComposer();
     }
 
@@ -2955,7 +3287,7 @@
     return { repo: stateRepo(doc), branch: stateBranch(doc) };
   }
 
-  runFeature("state-download", "State — download", function () {
+  runFeature("state-download", "State - download", function () {
     var STATE_PANEL_ID = "clankers-state-panel";
     var STATE_PANEL_MS = 6000;
 
@@ -3482,15 +3814,15 @@
     }
 
     var menus = [];
-    menuItem(menus, "State — choose the file", chooseStateFile);
-    menuItem(menus, "State — force save", function () {
+    menuItem(menus, "State - choose the file", chooseStateFile);
+    menuItem(menus, "State - force save", function () {
       fetchStateFile(true, true);
     });
     menus.push(
       menuAdd(
         function () {
           return (
-            "State — reset-window overwrite (" + (resetWindowOn() ? "ON" : "OFF") + ")"
+            "State - reset-window overwrite (" + (resetWindowOn() ? "ON" : "OFF") + ")"
           );
         },
         function () {
@@ -3523,7 +3855,7 @@
     };
   });
 
-  runFeature("keep-awake", "Page — keep awake", function () {
+  runFeature("keep-awake", "Page - keep awake", function () {
     function wakeLockPlan(generating, held, visible) {
       if (generating && !held && visible) return "acquire";
       if (!generating && held) return "release";
@@ -3587,7 +3919,7 @@
     };
   });
 
-  runFeature("tab-title", "Page — tab title", function () {
+  runFeature("tab-title", "Page - tab title", function () {
 
     var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';
     var MESSAGE_SELECTOR = "[data-agent-transcript-message]";
@@ -4099,7 +4431,7 @@
     }
 
     function titleIntervalLabel() {
-      return "Tab title — every " + Math.round(titleTickMs() / 1000) + " s";
+      return "Tab title - every " + Math.round(titleTickMs() / 1000) + " s";
     }
 
     function registerTitleInterval() {

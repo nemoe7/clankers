@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT.com | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.3.7
+// @version      1.3.8
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @icon         https://chatgpt.com/favicon.ico
@@ -58,7 +58,7 @@
 
     function showMenu(value) {
       menuId = GM_registerMenuCommand(
-        label + ": " + (value ? "ON" : "OFF") + " — toggle",
+        label + ": " + (value ? "ON" : "OFF") + " - toggle",
         function () {
           var next = GM_getValue(key, true) === false;
           GM_setValue(key, next);
@@ -95,7 +95,7 @@
   ].forEach(function (target) {
     var key = target[0];
     hideOptions[key] = false;
-    runFeature("hide-" + key, "Hide — " + target[1], function () {
+    runFeature("hide-" + key, "Hide - " + target[1], function () {
       hideOptions[key] = true;
       if (syncHidden) syncHidden();
       return function () {

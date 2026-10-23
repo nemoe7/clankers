@@ -4,36 +4,36 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const chatgptTargets = {
-  "hide-claim-offer": "Hide — Claim offer",
-  "hide-free-offer": "Hide — Free offer",
-  "hide-mode-toggle": "Hide — mode toggle",
-  "hide-codex": "Hide — Codex",
-  "hide-images": "Hide — Images",
-  "hide-library": "Hide — Library",
-  "hide-free-badge": "Hide — Free badge",
-  "hide-prompt-header": "Hide — prompt header",
-  "hide-header-upgrade": "Hide — header Upgrade",
-  "hide-header-share": "Hide — header Share",
-  "hide-sidebar-upgrade": "Hide — sidebar Upgrade",
-  "hide-plus-upsell": "Hide — Upgrade to Plus",
+  "hide-claim-offer": "Hide - Claim offer",
+  "hide-free-offer": "Hide - Free offer",
+  "hide-mode-toggle": "Hide - mode toggle",
+  "hide-codex": "Hide - Codex",
+  "hide-images": "Hide - Images",
+  "hide-library": "Hide - Library",
+  "hide-free-badge": "Hide - Free badge",
+  "hide-prompt-header": "Hide - prompt header",
+  "hide-header-upgrade": "Hide - header Upgrade",
+  "hide-header-share": "Hide - header Share",
+  "hide-sidebar-upgrade": "Hide - sidebar Upgrade",
+  "hide-plus-upsell": "Hide - Upgrade to Plus",
 };
 
 const bundles = {
   arena: {
     features: { "auto-wake": 1, "keep-working": 1, "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "transcript-alerts": 1, "tab-title": 1, "state-download": 0, "keep-awake": 0 },
     labels: {
-      "auto-wake": "Composer — auto-send wake up",
-      "keep-working": "Composer — keep working",
-      "prompt-fill": "Composer — fill",
-      "open-steering": "Steering — open",
-      "preview-sandbox": "Steering — new tabs and downloads",
-      "hide-composer": "Composer — hide",
-      "auto-scroll": "Transcript — auto-scroll",
-      "transcript-trim": "Transcript — auto trim",
-      "transcript-alerts": "Transcript — hide generation alerts",
-      "tab-title": "Page — tab title",
-      "state-download": "State — download",
-      "keep-awake": "Page — keep awake",
+      "auto-wake": "Composer - auto-send wake up",
+      "keep-working": "Composer - keep working",
+      "prompt-fill": "Composer - fill",
+      "open-steering": "Steering - open",
+      "preview-sandbox": "Steering - new tabs and downloads",
+      "hide-composer": "Composer - hide",
+      "auto-scroll": "Transcript - auto-scroll",
+      "transcript-trim": "Transcript - auto trim",
+      "transcript-alerts": "Transcript - hide generation alerts",
+      "tab-title": "Page - tab title",
+      "state-download": "State - download",
+      "keep-awake": "Page - keep awake",
     },
     // Every Arena entry leads with its module and carries no role word. A switch ends in (ON)/(OFF).
     moduleSwitch: true,
@@ -46,7 +46,7 @@ const bundles = {
     alwaysMenus: { "transcript-trim": 3 },
     // Logging and global pause stay outside the feature switches.
     globalMenus: 2,
-    countMenu: "Transcript — keep ",
+    countMenu: "Transcript - keep ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
     // The prompt fill owns two timers: the paint and the key watch. Both ride the one switch.
@@ -159,7 +159,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     return [...page.menus.values()].find((item) =>
       item.label.startsWith(labels[key] + (moduleSwitch ? " (" : ":")));
   }
-  // A switch label reads (ON)/(OFF) for the Arena bundle and `: ON — toggle` for ChatGPT.
+  // A switch label reads (ON)/(OFF) for the Arena bundle and `: ON - toggle` for ChatGPT.
   const reads = (label, on) => label.includes(moduleSwitch ? (on ? "(ON)" : "(OFF)") : (on ? ": ON" : ": OFF"));
 
   const defaults = load();
@@ -168,30 +168,30 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     // The owner's shape decision: one module's entries share a prefix, a switch names its state in parentheses, and no entry carries a role word.
     // The modules sit in one order, and one module's entries stay together: Composer, Proxy, Steering, Transcript, State, Page, Userscript.
     const expected = [
-      "Composer — fill (ON)",
-      "Composer — hide (ON)",
-      "Composer — auto-send wake up (ON)",
-      "Composer — keep working (ON)",
-      "Proxy — host",
-      "Proxy — master key",
-      "Proxy — post key now",
-      "Steering — open (ON)",
-      "Steering — new tabs and downloads (ON)",
-      "Transcript — auto-scroll (ON)",
-      "Transcript — auto trim (OFF)",
-      "Transcript — keep 50 rows",
-      "Transcript — trim cap 200 rows",
-      "Transcript — trim now",
-      "Transcript — hide generation alerts (ON)",
-      "State — download (ON)",
-      "State — choose the file",
-      "State — force save",
-      "State — reset-window overwrite (ON)",
-      "Page — keep awake (ON)",
-      "Page — tab title (ON)",
-      "Tab title — every 1 s",
-      "Userscript — log level (INFO)",
-      "Userscript — pause all",
+      "Composer - fill (ON)",
+      "Composer - hide (ON)",
+      "Composer - auto-send wake up (ON)",
+      "Composer - keep working (ON)",
+      "Proxy - host",
+      "Proxy - master key",
+      "Proxy - post key now",
+      "Steering - open (ON)",
+      "Steering - new tabs and downloads (ON)",
+      "Transcript - auto-scroll (ON)",
+      "Transcript - auto trim (OFF)",
+      "Transcript - keep 50 rows",
+      "Transcript - trim cap 200 rows",
+      "Transcript - trim now",
+      "Transcript - hide generation alerts (ON)",
+      "State - download (ON)",
+      "State - choose the file",
+      "State - force save",
+      "State - reset-window overwrite (ON)",
+      "Page - keep awake (ON)",
+      "Page - tab title (ON)",
+      "Tab title - every 1 s",
+      "Userscript - log level (INFO)",
+      "Userscript - pause all",
     ];
     assert.deepEqual(
       [...defaults.menus.values()].map((item) => item.label),
@@ -235,12 +235,12 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.ok(wakeTick);
     wakeTick(); wakeTick();
     assert.equal(wakeLines(), initialWake + 2, "repeated events must not be suppressed");
-    const loggingMenu = [...loggingPage.menus.values()].find((item) => item.label === "Userscript — log level (INFO)");
+    const loggingMenu = [...loggingPage.menus.values()].find((item) => item.label === "Userscript - log level (INFO)");
     assert.ok(loggingMenu);
     loggingMenu.callback();
     assert.equal(stored.get("clankers-arena-log-level"), "debug");
     assert.deepEqual(loggingPage.active, defaults.active, "Logging settings must not change feature activity");
-    assert.ok([...load().menus.values()].some((item) => item.label === "Userscript — log level (DEBUG)"));
+    assert.ok([...load().menus.values()].some((item) => item.label === "Userscript - log level (DEBUG)"));
     refuseWrite = true;
     try {
       assert.doesNotThrow(() => loggingMenu.callback());
@@ -339,7 +339,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     // The plan menu is the one that names rows. The switch menu reads ": ON/OFF".
     const findCount = () => [...counted.menus.values()].find((item) => item.label.includes(countMenu));
     const findNow = () =>
-      [...counted.menus.values()].find((item) => item.label === "Transcript — trim now");
+      [...counted.menus.values()].find((item) => item.label === "Transcript - trim now");
     // The manual entries answer the switch whatever it reads: a trim now runs with the auto
     // trim still off.
     assert.ok(findCount(), "The count menu stays while the auto trim is off");
@@ -357,37 +357,37 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.deepEqual(
       [...counted.menus.values()].map((item) => item.label),
       [
-        "Composer — fill (ON)",
-        "Composer — hide (ON)",
-        "Composer — auto-send wake up (ON)",
-        "Composer — keep working (ON)",
-        "Proxy — host",
-        "Proxy — master key",
-        "Proxy — post key now",
-        "Steering — open (ON)",
-        "Steering — new tabs and downloads (ON)",
-        "Transcript — auto-scroll (ON)",
-        "Transcript — auto trim (ON)",
-        "Transcript — keep 50 rows",
-        "Transcript — trim cap 200 rows",
-        "Transcript — trim now",
-        "Transcript — hide generation alerts (ON)",
-        "Transcript — auto trim interval 5 s",
-        "State — download (ON)",
-        "State — choose the file",
-        "State — force save",
-        "State — reset-window overwrite (ON)",
-        "Page — keep awake (ON)",
-        "Page — tab title (ON)",
-        "Tab title — every 1 s",
-        "Userscript — log level (INFO)",
-        "Userscript — pause all",
+        "Composer - fill (ON)",
+        "Composer - hide (ON)",
+        "Composer - auto-send wake up (ON)",
+        "Composer - keep working (ON)",
+        "Proxy - host",
+        "Proxy - master key",
+        "Proxy - post key now",
+        "Steering - open (ON)",
+        "Steering - new tabs and downloads (ON)",
+        "Transcript - auto-scroll (ON)",
+        "Transcript - auto trim (ON)",
+        "Transcript - keep 50 rows",
+        "Transcript - trim cap 200 rows",
+        "Transcript - trim now",
+        "Transcript - hide generation alerts (ON)",
+        "Transcript - auto trim interval 5 s",
+        "State - download (ON)",
+        "State - choose the file",
+        "State - force save",
+        "State - reset-window overwrite (ON)",
+        "Page - keep awake (ON)",
+        "Page - tab title (ON)",
+        "Tab title - every 1 s",
+        "Userscript - log level (INFO)",
+        "Userscript - pause all",
       ],
       "The keep-rows line sits in the Transcript group",
     );
     const findEvery = () =>
       [...counted.menus.values()].find((item) =>
-        item.label.startsWith("Transcript — auto trim interval"));
+        item.label.startsWith("Transcript - auto trim interval"));
     assert.ok(findEvery(), "The interval menu shows once the auto trim is on");
     assert.ok(findEvery().label.includes("5 s"), "The interval line shows the default tick");
     promptAnswer = "3";
@@ -406,7 +406,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     findEvery().callback();
     assert.equal(stored.get("clankers-arena-trim-interval-ms"), 60000, "A cancel keeps the saved tick");
     const findTitleEvery = () =>
-      [...counted.menus.values()].find((item) => item.label.startsWith("Tab title — every"));
+      [...counted.menus.values()].find((item) => item.label.startsWith("Tab title - every"));
     assert.ok(findTitleEvery(), "Missing the tab title interval menu");
     promptAnswer = "2";
     findTitleEvery().callback();
@@ -593,7 +593,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   scroller.scrollTop = 20;
   observers[0](); flush();
   assert.equal(scroller.scrollTop, 2100, 'Enabled mode follows on navigation');
-  const toggleMenu = () => [...menus].find(([label]) => label.startsWith('Transcript — auto-scroll ('))[1]();
+  const toggleMenu = () => [...menus].find(([label]) => label.startsWith('Transcript - auto-scroll ('))[1]();
   toggleButton.listeners.click();
   assert.equal(enabled, false, 'Button click turns follow off');
   assert.equal(toggleButton.attrs['aria-pressed'], 'false', 'Button shows unpressed when off');
@@ -1062,7 +1062,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const count = titleLines.length;
     sync();
     assert.equal(logged.filter(([line]) => line.startsWith("[NemoUtils][title]")).length, count);
-    titleMenus.get("Page — tab title (ON)")();
+    titleMenus.get("Page - tab title (ON)")();
     assert.equal(page.title, "", "disabling the feature restores the original title");
     assert.equal(logged.filter(([line]) => line === "[NemoUtils][title][info] restored").length, 1);
     console.log("ok tab title row mark: last root, row type, turn bound");
@@ -1113,9 +1113,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8"), context);
   const notify = () => observers.filter((o) => o.active).forEach((o) => o.callback());
-  const toggle = () => menus.get("Transcript — hide generation alerts (" + (saved.get("transcript-alerts") === false ? "OFF" : "ON") + ")")();
-  assert.ok(menus.has("Transcript — hide generation alerts (ON)"));
-  assert.ok(menus.has("Transcript — auto trim (OFF)"));
+  const toggle = () => menus.get("Transcript - hide generation alerts (" + (saved.get("transcript-alerts") === false ? "OFF" : "ON") + ")")();
+  assert.ok(menus.has("Transcript - hide generation alerts (ON)"));
+  assert.ok(menus.has("Transcript - auto trim (OFF)"));
   assert.equal(display, "flex");
   generating = true; notify();
   assert.equal(display, "none", "alert hiding must not require auto trim");
@@ -1125,9 +1125,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.equal(display, "flex");
   toggle();
   assert.equal(display, "none");
-  menus.get("Userscript — pause all")();
+  menus.get("Userscript - pause all")();
   assert.equal(display, "flex");
-  menus.get("Userscript — resume all")();
+  menus.get("Userscript - resume all")();
   assert.equal(display, "none");
   generating = false; notify();
   assert.equal(display, "flex");
@@ -1295,16 +1295,16 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     flush();
     assert.equal(clicks, 1, "IME composition cancels the pending send");
     emit("compositionend");
-    const toggle = () => [...menus.values()].find(item => item.label.startsWith("Composer — auto-send wake up")).callback();
+    const toggle = () => [...menus.values()].find(item => item.label.startsWith("Composer - auto-send wake up")).callback();
     toggle();
     fire(); flush();
     assert.equal(clicks, 1, "Off cancels the timer and observers");
     assert.equal(saved.get("auto-wake"), false);
     toggle();
-    [...menus.values()].find(item => item.label === "Userscript — pause all").callback();
+    [...menus.values()].find(item => item.label === "Userscript - pause all").callback();
     flush();
     assert.equal(clicks, 1, "global pause cancels the send");
-    [...menus.values()].find(item => item.label === "Userscript — resume all").callback();
+    [...menus.values()].find(item => item.label === "Userscript - resume all").callback();
     flush();
     assert.equal(clicks, 2);
     fire(); flush();
@@ -1364,7 +1364,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     fire(); flush();
     assert.equal(keepWorkingClicks, 0, "Keep working stays idle when the last row has the prose class");
     roots = [messageRoot("stopped-root", false, [proseRow, actionRow])];
-    const toggleKeepWorking = () => [...menus.values()].find(item => item.label.startsWith("Composer — keep working")).callback();
+    const toggleKeepWorking = () => [...menus.values()].find(item => item.label.startsWith("Composer - keep working")).callback();
     toggleKeepWorking();
     assert.equal(saved.get("keep-working"), false);
     fire(); flush();
@@ -1742,27 +1742,27 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(writes.length, 2);
 
     failWrite = true;
-    menus.get("State — force save")();
+    menus.get("State - force save")();
     await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "failed-write" });
     assert.equal(saved.get(pendingKey), null, "a failed write does not create a pending receipt");
     failWrite = false;
 
     availableHandle = null;
-    menus.get("State — force save")();
+    menus.get("State - force save")();
     await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "link-only" });
     assert.equal(linkClicks.length, 1);
     assert.equal(saved.get(pendingKey), null);
 
     let download;
     context.GM_download = options => { download = options; };
-    menus.get("State — force save")();
+    menus.get("State - force save")();
     await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "manager-failed" });
     download.onerror({ error: "blocked" });
     await settle();
     assert.equal(linkClicks.length, 2);
     assert.ok(panel(), "a download failure remains visible after link fallback");
 
-    menus.get("State — force save")();
+    menus.get("State - force save")();
     await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "manager-complete" });
     download.onload();
     await settle();
@@ -1794,7 +1794,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-2", lastsave: null, beforelastsave: null });
     assert.equal(panel().children[0].textContent, "Missing branch.");
     pickerPromise = Promise.reject(Object.assign(new Error("cancelled"), { name: "AbortError" }));
-    menus.get("State — choose the file")();
+    menus.get("State - choose the file")();
     await settle();
     assert.ok(panel(), "cancelling Choose file keeps the missing-branch warning");
     assert.equal(panel().children[0].textContent, "Missing branch.");
@@ -1814,7 +1814,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       return opening;
     } };
     pickerPromise = Promise.resolve(handle);
-    menus.get("State — choose the file")();
+    menus.get("State - choose the file")();
     await settle();
     await settle();
     await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-saved", lastsave: null, beforelastsave: null });
@@ -2136,7 +2136,7 @@ for raw in sys.stdin:
       const receiptKey = "clankers-arena-state-receipt-r-arena-11223344-r";
 
       await drain();
-      menus.get("State — choose the file")();
+      menus.get("State - choose the file")();
       await drain();
       assert.equal(writes.length, 1, "initial file selection writes and confirms the first snapshot");
       const firstReceipt = structuredClone(saved.get(receiptKey));
@@ -2260,6 +2260,7 @@ for raw in sys.stdin:
           if (sel === "[data-clankers-autoscroll-toggle]" && child.attrs["data-clankers-autoscroll-toggle"]) return child;
           if (sel === "[data-clankers-settings-toggle]" && child.attrs["data-clankers-settings-toggle"]) return child;
           if (sel === "[data-clankers-settings-drag]" && child.attrs["data-clankers-settings-drag"]) return child;
+          if (sel === "[data-clankers-settings-close]" && child.attrs["data-clankers-settings-close"]) return child;
           if (child.querySelector) {
             const hit = child.querySelector(sel);
             if (hit) return hit;
@@ -2273,6 +2274,7 @@ for raw in sys.stdin:
           for (const child of node.children || []) {
             if (sel === "input, select" && (child.tag === "input" || child.tag === "select")) out.push(child);
             if (sel === "path" && child.tag === "path") out.push(child);
+            if (sel === "section" && child.tag === "section") out.push(child);
             visit(child);
           }
         };
@@ -2365,13 +2367,61 @@ for raw in sys.stdin:
 
     const dragHeader = modalNode.querySelector("[data-clankers-settings-drag]");
     assert.ok(dragHeader, "settings modal has a draggable header");
+    const closeButton = modalNode.querySelector("[data-clankers-settings-close]");
+    assert.ok(closeButton, "settings modal header includes a close button");
+    assert.equal(closeButton.attrs["aria-label"], "Close settings", "close button carries accessible label");
+    assert.equal(closeButton.querySelectorAll("path").length, 2, "close button renders a 2-path Lucide X icon");
     dragHeader.listeners.mousedown({ button: 0, clientX: 300, clientY: 100, preventDefault() {} });
     windowListeners.get("mousemove")({ clientX: 420, clientY: 190 });
     windowListeners.get("mouseup")();
     assert.equal(modalNode.style.left, "360px", "dragging the modal header updates left position");
     assert.equal(modalNode.style.top, "170px", "dragging the modal header updates top position");
 
-    const watchInput = modalNode.querySelectorAll("input, select").find(
+    const sections = modalNode.querySelectorAll("section").map((sec) => sec.attrs["data-settings-section"]);
+    assert.deepEqual(
+      sections,
+      ["Composer", "Page", "Proxy", "State", "Steering", "Transcript"],
+      "settings modal groups settings into alphabetized sections",
+    );
+
+    const allInputs = modalNode.querySelectorAll("input, select");
+    const wakeMinInput = allInputs.find(
+      (el) => el.attrs["data-setting-key"] === "clankers-arena-wake-delay-min-ms",
+    );
+    const wakeMaxInput = allInputs.find(
+      (el) => el.attrs["data-setting-key"] === "clankers-arena-wake-delay-ms",
+    );
+    const keepMinInput = allInputs.find(
+      (el) => el.attrs["data-setting-key"] === "clankers-arena-keep-working-delay-min-ms",
+    );
+    const keepMaxInput = allInputs.find(
+      (el) => el.attrs["data-setting-key"] === "clankers-arena-keep-working-delay-ms",
+    );
+    assert.ok(wakeMinInput && wakeMaxInput, "settings modal renders min and max sliders for Wake-up delay");
+    assert.equal(wakeMinInput.type, "range", "Wake-up min uses a range slider");
+    assert.equal(wakeMaxInput.type, "range", "Wake-up max uses a range slider");
+    assert.equal(wakeMinInput.attrs["data-range-role"], "min", "Wake-up left slider is min");
+    assert.equal(wakeMaxInput.attrs["data-range-role"], "max", "Wake-up right slider is max");
+    assert.ok(
+      allInputs.indexOf(wakeMinInput) < allInputs.indexOf(wakeMaxInput),
+      "Wake-up min slider sits on the left before max slider",
+    );
+    assert.ok(keepMinInput && keepMaxInput, "settings modal renders min and max sliders for Keep working delay");
+    assert.equal(keepMinInput.type, "range", "Keep working min uses a range slider");
+    assert.equal(keepMaxInput.type, "range", "Keep working max uses a range slider");
+    assert.ok(
+      allInputs.indexOf(keepMinInput) < allInputs.indexOf(keepMaxInput),
+      "Keep working min slider sits on the left before max slider",
+    );
+
+    keepMinInput.value = "2";
+    keepMinInput.listeners.change();
+    keepMaxInput.value = "9";
+    keepMaxInput.listeners.change();
+    assert.equal(saved.get("clankers-arena-keep-working-delay-min-ms"), 2000, "changing Keep working min slider persists ms");
+    assert.equal(saved.get("clankers-arena-keep-working-delay-ms"), 9000, "changing Keep working max slider persists ms");
+
+    const watchInput = allInputs.find(
       (el) => el.attrs["data-setting-key"] === "clankers-arena-state-watch-ms",
     );
     assert.ok(watchInput, "settings modal exposes configurable state watch interval input");
@@ -2380,9 +2430,59 @@ for raw in sys.stdin:
     assert.equal(saved.get("clankers-arena-state-watch-ms"), 25000, "changing modal input persists milliseconds");
     assert.ok(intervals.some((entry) => entry.ms === 25000), "changing state watch interval restarts timer");
 
-    settingsButton.listeners.click();
-    assert.equal(modalNode, null, "clicking the settings button a second time closes the modal");
+    closeButton.listeners.click();
+    assert.equal(modalNode, null, "clicking the Lucide X close button closes the modal");
     assert.equal(settingsButton.attrs["aria-pressed"], "false", "settings button resets aria-pressed on close");
+
+    for (const rel of ["userscripts/arena.user.js", "userscripts/chatgpt.user.js", "userscripts/README.md"]) {
+      const content = fs.readFileSync(path.join(__dirname, "../..", rel), "utf8");
+      assert.ok(!new RegExp("[\\u2013\\u2014]|\\\\u201[34]", "i").test(content), `${rel} must not contain long dashes`);
+    }
+
+    const checks = checkContext.CLANKERS_CHECKS;
+    assert.equal(
+      checks.promptFill.PREVIEW_PROXY_HOST_KEY,
+      "clankers-arena-preview-proxy-host",
+      "exposes clankers-arena-preview-proxy-host setting key"
+    );
+    assert.equal(
+      checks.promptFill.previewProxyHost("", "https://arena-proxy.taile06e44.ts.net"),
+      "https://arena-preview.taile06e44.ts.net",
+      "derives arena-preview.<tailnet>.ts.net from clankers-arena-proxy-host when unset"
+    );
+    assert.equal(
+      checks.promptFill.previewProxyHost("https://custom-preview.taile06e44.ts.net/", "https://arena-proxy.taile06e44.ts.net"),
+      "https://custom-preview.taile06e44.ts.net",
+      "explicit preview proxy host overrides derived default"
+    );
+    const fakeDoc = {
+      querySelectorAll(sel) {
+        if (sel === "span") {
+          return [
+            {
+              className: "text-text-secondary min-w-0 max-w-[180px] truncate text-sm leading-[1.2]",
+              textContent: "clankers - Web Preview",
+            },
+          ];
+        }
+        if (sel === "iframe") {
+          return [
+            {
+              src: "https://sbx-otherport.arena.site/",
+              getAttribute(name) {
+                return name === "title" ? "App preview on port 3000" : "";
+              },
+            },
+          ];
+        }
+        return [];
+      },
+    };
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(checks.promptFill.discoverPreviews(fakeDoc))),
+      [{ url: "https://sbx-otherport.arena.site/", name: "clankers - Web Preview" }],
+      "discovers non-steering preview iframe URLs on any port along with the header span name"
+    );
   });
 }
 

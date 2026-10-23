@@ -81,6 +81,30 @@ function displayName(names, root) {
   return label || new URL(root).host;
 }
 
+function mergeRemote(list, names, entries, removed) {
+  let nextList = Array.isArray(list) ? clean(list) : [];
+  let nextNames = cleanNames(nextList, names);
+  if (Array.isArray(removed)) {
+    for (const item of removed) {
+      const root = previewRoot(item) || previewRoot(`${String(item ?? '').replace(/\/+$/, '')}/`);
+      if (root) nextList = forget(nextList, root);
+    }
+    nextNames = cleanNames(nextList, nextNames);
+  }
+  if (!Array.isArray(entries)) return { list: nextList, names: nextNames };
+  for (let idx = entries.length - 1; idx >= 0; idx -= 1) {
+    const item = entries[idx];
+    const raw = item && typeof item.url === 'string' ? item.url : '';
+    const root = previewRoot(raw) || previewRoot(`${raw.replace(/\/+$/, '')}/`);
+    if (!root) continue;
+    nextList = remember(nextList, root);
+    if (item && typeof item.name === 'string' && named(item.name)) {
+      nextNames = applyName(nextNames, root, item.name);
+    }
+  }
+  return { list: nextList, names: cleanNames(nextList, nextNames) };
+}
+
 // The list resets at 02:00, 08:00, 14:00 or 20:00 PHT, and PHT holds UTC+8 all year, so the
 // boundary math runs on fixed offsets. Before 02:00 the previous one lands at 20:00 the day before.
 function previousBoundary(when) {
@@ -271,7 +295,7 @@ function writeReset(boundary) {
 if (typeof module === 'object' && module.exports) {
   module.exports = {
     previewRoot, remember, forget, clean, fromShare, viewerHref,
-    named, applyName, cleanNames, displayName,
+    named, applyName, cleanNames, displayName, mergeRemote,
     previousBoundary, needsReset, LIMIT
   };
 } else {

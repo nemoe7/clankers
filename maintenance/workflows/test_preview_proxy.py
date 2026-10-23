@@ -578,3 +578,107 @@ def test_the_recent_list_clears_at_pht_reset_boundaries():
     "the boundary the stamp already recorded clears nothing"
   )
   assert result["ahead"] is False, "a clock behind the stamp clears nothing"
+
+
+def test_pwa_recent_endpoint_accepts_posted_previews_and_merges_into_chooser():
+  """POST /pwa/recent records { url, name } and GET /pwa/recent returns entries for recent.js."""
+  port = free_port()
+  server = subprocess.Popen(
+    ["node", "server.js"],
+    cwd=str(SERVER.parent),
+    env={
+      "PATH": "/usr/local/bin:/usr/bin:/bin",
+      "PORT": str(port),
+    },
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+  )
+  try:
+    deadline = time.time() + 15
+    while time.time() < deadline:
+      try:
+        if get(port, "/healthz")[0] == 200:
+          break
+      except OSError:
+        time.sleep(0.1)
+    else:
+      raise AssertionError(f"The proxy never answered: {server.stdout.read()}")
+
+    def post_json(path: str, payload: dict) -> tuple[int, str, dict]:
+      data = json.dumps(payload).encode("utf-8")
+      req = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+      )
+      try:
+        with urllib.request.urlopen(req, timeout=10) as answer:
+          return (
+            answer.status,
+            answer.headers.get("access-control-allow-origin", ""),
+            json.loads(answer.read().decode()),
+          )
+      except urllib.error.HTTPError as error:
+        return (
+          error.code,
+          error.headers.get("access-control-allow-origin", ""),
+          {},
+        )
+
+    status, cors, body = post_json(
+      "/pwa/recent",
+      {"url": "https://sbx-port3000.arena.site/", "name": "clankers - Web App"},
+    )
+    assert status == 200, status
+    assert cors == "*", cors
+    assert body["entries"] == [
+      {"url": "https://sbx-port3000.arena.site", "name": "clankers - Web App"}
+    ]
+
+    status, _, body = post_json(
+      "/pwa/recent",
+      {"url": "https://sbx-port8000.arena.site/", "name": "clankers - Steering"},
+    )
+    assert status == 200, status
+    assert body["entries"][0] == {
+      "url": "https://sbx-port8000.arena.site",
+      "name": "clankers - Steering",
+    }
+
+    status, _, raw = get(port, "/pwa/recent")
+    assert status == 200, status
+    fetched = json.loads(raw)
+    assert len(fetched["entries"]) == 2
+
+    bad_status, _, _ = post_json(
+      "/pwa/recent", {"url": "https://example.com/", "name": "bad"}
+    )
+    assert bad_status == 400, bad_status
+  finally:
+    server.terminate()
+    server.wait(timeout=10)
+
+  script = (
+    "const recent = require('./assets/recent.js');"
+    "const merged = recent.mergeRemote("
+    "  ['https://sbx-existing.arena.site', 'https://sbx-dead.arena.site'],"
+    "  { 'https://sbx-existing.arena.site': 'Existing', 'https://sbx-dead.arena.site': 'Dead' },"
+    "  ["
+    "    { url: 'https://sbx-port8000.arena.site/', name: 'clankers - Steering' },"
+    "    { url: 'https://sbx-port3000.arena.site/', name: 'clankers - Web App' }"
+    "  ],"
+    "  ['https://sbx-dead.arena.site']"
+    ");"
+    "console.log(JSON.stringify(merged));"
+  )
+  merged = json.loads(node(script))
+  assert merged["list"] == [
+    "https://sbx-port8000.arena.site",
+    "https://sbx-port3000.arena.site",
+    "https://sbx-existing.arena.site",
+  ]
+  assert merged["names"]["https://sbx-port8000.arena.site"] == "clankers - Steering"
+  assert merged["names"]["https://sbx-port3000.arena.site"] == "clankers - Web App"
+  assert "https://sbx-dead.arena.site" not in merged["names"]

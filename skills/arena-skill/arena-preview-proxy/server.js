@@ -29,6 +29,95 @@ const ASSET_TYPES = {
 const ASSETS = path.join(__dirname, 'assets');
 // The head rewrite buffers one small page. A larger body streams untouched.
 const HEAD_CAP = 1_000_000;
+const RECENT_LIMIT = 10;
+const RECENT_MAX_LABEL = 48;
+const RECENT_BODY_CAP = 4096;
+let recentEntries = [];
+const removedRoots = new Set();
+
+function cleanRecentLabel(value) {
+  return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, RECENT_MAX_LABEL);
+}
+
+function rememberRecent(entries, rawUrl, rawName, removed) {
+  const selected = parseSelectedUrl(String(rawUrl ?? '').trim());
+  const url = selected.origin;
+  const name = cleanRecentLabel(rawName);
+  if (removed) removed.delete(url);
+  const existing = entries.find(item => item.url === url);
+  const next = [{ url, name: name || (existing ? existing.name : '') }, ...entries.filter(item => item.url !== url)];
+  return next.slice(0, RECENT_LIMIT);
+}
+
+function forgetRecent(entries, rawUrl, removed) {
+  let url;
+  try {
+    url = parseSelectedUrl(String(rawUrl ?? '').trim()).origin;
+  } catch {
+    url = String(rawUrl ?? '').replace(/\/+$/, '');
+  }
+  if (removed && /^https:\/\/sbx-[a-z0-9-]+\.arena\.site$/i.test(url)) removed.add(url);
+  return entries.filter(item => item.url !== url);
+}
+
+function sendJson(res, status, payload, cors = false) {
+  const headers = {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff'
+  };
+  if (cors) {
+    headers['access-control-allow-origin'] = '*';
+    headers['access-control-allow-methods'] = 'GET, POST, OPTIONS';
+    headers['access-control-allow-headers'] = 'content-type';
+  }
+  res.writeHead(status, headers);
+  res.end(JSON.stringify(payload));
+}
+
+function serveRecent(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
+      'access-control-allow-headers': 'content-type',
+      'cache-control': 'no-store'
+    });
+    return res.end();
+  }
+  if (req.method === 'GET') {
+    return sendJson(res, 200, { entries: recentEntries, removed: [...removedRoots] }, true);
+  }
+  if (req.method !== 'POST') {
+    return sendJson(res, 405, { error: 'Method not allowed.' }, true);
+  }
+  const chunks = [];
+  let size = 0;
+  let overflow = false;
+  req.on('data', chunk => {
+    size += chunk.length;
+    if (size > RECENT_BODY_CAP) {
+      overflow = true;
+      return;
+    }
+    chunks.push(chunk);
+  });
+  req.on('end', () => {
+    if (overflow) return sendJson(res, 413, { error: 'Payload too large.' }, true);
+    let body;
+    try {
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    } catch {
+      return sendJson(res, 400, { error: 'Invalid JSON payload.' }, true);
+    }
+    try {
+      recentEntries = rememberRecent(recentEntries, body && body.url, body && body.name, removedRoots);
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message || 'Invalid preview URL.' }, true);
+    }
+    return sendJson(res, 200, { entries: recentEntries, removed: [...removedRoots] }, true);
+  });
+}
 
 function isAllowedPreview(url) {
   return url.protocol === 'https:' &&
@@ -242,6 +331,7 @@ function sharePreview(incoming, res) {
 }
 
 function servePwa(incoming, req, res) {
+  if (incoming.pathname === '/pwa/recent') return serveRecent(req, res);
   if (incoming.pathname === '/pwa/share') return sharePreview(incoming, res);
   if (incoming.pathname === '/pwa/manifest.webmanifest') {
     res.writeHead(200, {
@@ -410,6 +500,9 @@ const server = http.createServer((req, res) => {
       // the target. The browser default keeps the viewer URL on same-origin calls.
       responseHeaders['referrer-policy'] = 'strict-origin-when-cross-origin';
       const status = upstreamRes.statusCode || 502;
+      if (status === 502 && req.method === 'GET') {
+        recentEntries = forgetRecent(recentEntries, target.origin, removedRoots);
+      }
       logLine('upstream', status, req.method, target.origin + target.pathname,
         'referrer-policy', upstreamRes.headers['referrer-policy'] || 'none');
       const isHtml = /\btext\/html\b/i.test(String(responseHeaders['content-type'] || ''));
@@ -424,6 +517,9 @@ const server = http.createServer((req, res) => {
   upstream.setTimeout(120000, () => upstream.destroy(new Error('Upstream timeout')));
   upstream.on('error', err => {
     logLine('upstream error', err.message);
+    if (req.method === 'GET') {
+      recentEntries = forgetRecent(recentEntries, target.origin, removedRoots);
+    }
     if (!res.headersSent) sendText(res, 502, `Upstream request failed: ${err.message}`);
     else res.destroy(err);
   });

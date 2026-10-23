@@ -22,7 +22,7 @@ The baseline is `refs/arena-prompt-fill.txt`. The served `arena-prompt-fill.txt`
 
 ## Feature switches
 
-Twelve switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
+Twelve switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer - fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON - toggle` shape.
 
 Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. One module's entries stay together. The modules sit in one order:
 
@@ -40,7 +40,7 @@ The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu re
 
 ## Console log
 
-Arena uses `[NemoUtils][module][level] event` with allowlisted fields. Default `info` includes warnings and errors. `Userscript — log level` cycles `info`, `debug`, `warn`, and `error`, saves the setting, and applies it immediately.
+Arena uses `[NemoUtils][module][level] event` with allowlisted fields. Default `info` includes warnings and errors. `Userscript - log level` cycles `info`, `debug`, `warn`, and `error`, saves the setting, and applies it immediately.
 
 Only debug mode includes repository names and filenames. Keys, message text, page labels, URLs, and raw error text stay out. The logger does not suppress repeated events, save records, or send records.
 
@@ -88,7 +88,7 @@ Six rules follow the checklist:
 
 ## Arena auto-send wake up
 
-`Composer — auto-send wake up` defaults to On. On Arena composer and session pages, it clicks Send message after a random 0–5 second delay. The whole composer text must equal `wake up`. Case changes, whitespace, and other text do not match.
+`Composer - auto-send wake up` defaults to On. On Arena composer and session pages, it clicks Send message after a random 0-5 second delay. The whole composer text must equal `wake up`. Case changes, whitespace, and other text do not match.
 
 The feature checks the draft and controls again before the click. A hidden composer, disabled control, security check, IME composition, or global pause prevents the click. Disabling cancels the timer and listeners. An unchanged draft triggers at most one click in the current page runtime.
 
@@ -96,7 +96,7 @@ The same switch fills an empty composer when the latest message root contains a 
 
 Auto-wake logs `filled` after an error-recovery insert and `clicked` after the Send button click. These events contain no message text and do not prove server acceptance.
 
-`Composer — keep working` defaults to On. It checks whether the latest message root ends on a non-spinner, non-`prose` row while `Keep working` is visible. It then clicks `Keep working`, waits for an enabled empty composer, enters `wake up`, and logs `clicked` and `filled` once per root.
+`Composer - keep working` defaults to On. It checks whether the latest message root ends on a non-spinner, non-`prose` row while `Keep working` is visible. It then clicks `Keep working`, waits for an enabled empty composer, enters `wake up`, and logs `clicked` and `filled` once per root.
 
 ## Arena transcript trim
 
@@ -104,9 +104,9 @@ This switch ships OFF, and OFF stops the trim: a reload redraws the transcript f
 
 The trim removes a message's sibling action container only when that pass removes rows and leaves no live row. It keeps each message root because Arena crashes if a `#chat-message-*` root leaves its tree.
 
-The independent `Transcript — hide generation alerts` switch defaults to On. It hides red alerts with `role="alert"`, `border-red-500/30`, and `bg-red-500/10` while Stop generating is present, regardless of alert text. Auto trim does not control it. On generation stop, switch disable, or global pause, it restores only its own `display` changes.
+The independent `Transcript - hide generation alerts` switch defaults to On. It hides red alerts with `role="alert"`, `border-red-500/30`, and `bg-red-500/10` while Stop generating is present, regardless of alert text. Auto trim does not control it. On generation stop, switch disable, or global pause, it restores only its own `display` changes.
 
-The menu command reads `Transcript — keep 50 rows`. After a trim it adds the running row count, such as `Transcript — keep 50 rows (12 removed)`. A trim that removes rows also writes one console line.
+The menu command reads `Transcript - keep 50 rows`. After a trim it adds the running row count, such as `Transcript - keep 50 rows (12 removed)`. A trim that removes rows also writes one console line.
 
 The command takes one row limit:
 
@@ -119,7 +119,7 @@ While the Arena security check shows, the tab title carries the shield emoji and
 
 ## Arena userscript pause
 
-One entry, `Userscript — pause all`, stops every feature where it stands: the observers, the timers, the automatic posts and the tab title. The press applies at once, with no reload, and the entry then reads `Userscript — resume all`. The resume brings back every feature whose own switch is ON and leaves the others off.
+One entry, `Userscript - pause all`, stops every feature where it stands: the observers, the timers, the automatic posts and the tab title. The press applies at once, with no reload, and the entry then reads `Userscript - resume all`. The resume brings back every feature whose own switch is ON and leaves the others off.
 
 The script saves the pause, so a reload keeps it. Each feature switch stays in the menu while paused.
 
@@ -129,7 +129,7 @@ The userscript fetches a candidate from `GET /api/userscript-autosave`. It compa
 
 A stamp-pair mismatch stops automatic replacement. A changed digest writes the candidate.
 
-A new empty selected file can receive its first save. `State — force save` keeps the explicit override. Its successful completion receipt sets the pair that later automatic saves use.
+A new empty selected file can receive its first save. `State - force save` keeps the explicit override. Its successful completion receipt sets the pair that later automatic saves use.
 
 Only a successful file close or download-manager callback permits the completion receipt, sent to `POST /api/userscript-autosave`. Failed receipts retry without another file write. Browser-link downloads have no completion callback and do not advance the saved baseline.
 
@@ -139,11 +139,11 @@ The preview retains two saved core states with completion receipts per repositor
 
 Replacement imports check and restore supplied history. Legacy imports preserve it. Merge imports preserve existing history or adopt supplied history only when none exists.
 
-The existing minute timer defers each periodic request by a random 0–15 seconds. These autosave routes add no authentication or token check.
+The existing minute timer defers each periodic request by a random 0-15 seconds. These autosave routes add no authentication or token check.
 
 ## Arena state reset window
 
-The `State — reset-window overwrite` switch ships On.
+The `State - reset-window overwrite` switch ships On.
 
 A preview URL change skips the overwrite prompt within 150 seconds of 02:00, 08:00, 14:00, or 20:00 PHT. The saved-state comparison must permit the write. A branch change, a missing branch, and every hour outside that window keep the prompt.
 
