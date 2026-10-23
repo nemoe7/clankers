@@ -215,9 +215,9 @@
 - Reuse previous scopes, adding one only when none fits.
 - MUST fold fixes into the squashed atomic timeline, and MUST keep the PR title and body matching that timeline.
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
-- NEVER cite a session-local artifact in a repository file: a preview note ID, a report or submission ID, a task ID, or any other identifier minted for one session.
+- NEVER cite a session-local artifact or a local-only path in a repository file, commit, PR, task detail, or report: a preview note ID, a report or submission ID, a task ID, an ignored state or scratch path, a sandbox home path, or any other identifier minted for one session.
 - A session-local citation does not persist; ALWAYS strip one on sight.
-- Cite the durable record instead: the CHANGELOG entry, the report source, or the commit.
+- Cite the durable record instead: the CHANGELOG entry, the repository-relative path, or the commit.
 - Publish longer reports through the `arena-skill` skill in the shared preview; NEVER create local report commits for the native diff viewer.
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `GH_TOKEN` can expire mid-turn with nothing in the repository changed: `gh auth status` reports the token invalid, `git push` fails, and `gh auth setup-git` does not help.
