@@ -39,7 +39,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 6. Every gap lands on the 8 px scale. Rows are 40 px, panels take a 10 px radius and no shadow, and a touch target is at least 44 px.
 
-7. The sheet names 1200, 900, and 640. A width outside the list gets no behaviour of its own.
+7. The sheet names 75em, 56.25em, and 40em. Choose each breakpoint where the content breaks. A width outside the list gets no behaviour of its own.
 
 8. Every transition shares one curve over 160 to 220 ms; for animations, vendor [GSAP](https://github.com/greensock/GSAP) into the project as the go-to library. Reduced motion turns animation off.
 

@@ -92,6 +92,25 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   )
   assert not (root / "new.svg").exists()
   assert run("extract")["tokens"]
+  sheet_extract = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "extract",
+      "--project",
+      str(SCRIPT.parent.parent / "references"),
+    ],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert sheet_extract.returncode == 0
+  assert [row["value"] for row in json.loads(sheet_extract.stdout)["breakpoints"]] == [
+    "75em",
+    "56.25em",
+    "40em",
+  ]
   measured = tmp_path / "measured.json"
   measured.write_text(
     json.dumps(
