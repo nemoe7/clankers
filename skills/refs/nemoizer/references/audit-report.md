@@ -19,7 +19,7 @@ Use this template when reporting `nemoizer audit` (`--audit`) findings.
 
 | Location | Rule | Finding | Disposition | Reason |
 | --- | --- | --- | --- | --- |
-| `path:line` | `STE901` | `1 -> 0` | `keep` or `fix` | Active voice is clear or rewrite clause |
+| `path:line` | `STE901` | `passive voice` | `keep` or `fix` | Active voice is clear or rewrite clause |
 
 ## Suppression Markers (`nonemo`)
 

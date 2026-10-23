@@ -545,6 +545,8 @@ def test_prose_and_test_ids_have_separate_domains():
     "semicolon": "STE100",
     "sentence": "STE200",
     "nominalization": "STE300",
+    "wordy_phrase": "STE400",
+    "archaic_connector": "STE401",
     "passive": "STE901",
     "phrasal": "STE902",
     "ellipsis": "STE903",
@@ -552,6 +554,8 @@ def test_prose_and_test_ids_have_separate_domains():
     "noun_cluster": "STE905",
     "synonym_cluster": "STE906",
     "compound_tense": "STE908",
+    "inline_list": "STE909",
+    "double_negative": "STE910",
     "staged_frame": "HMN100",
     "stacked_qualifier": "HMN200",
     "ai_vocabulary": "HMN300",
@@ -569,6 +573,7 @@ def test_prose_and_test_ids_have_separate_domains():
     "consecutive_emoji": "HMN909",
     "self_narration": "HMN910",
     "paragraph": "NMP100",
+    "comment_block": "NMP101",
     "serial_comma": "NMO003",
   }
   assert nemoize.TEST_RULE_IDS == {"output_text": "NMT100", "measurement": "NMT200"}
@@ -607,9 +612,15 @@ def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
-  assert "note.md:1: STE200" in result.stdout  # nonemo: NMT100
-  assert "note.md:3: NMP100" in result.stdout  # nonemo: NMT100
-  assert "note.md:5: STE100 1 -> 0" in result.stdout  # nonemo: NMT100
+  assert (
+    f"note.md:1: STE200 {nemoize.describe_finding({'rule': 'STE200', 'count': 21, 'cap': 20})}"
+    in result.stdout
+  )
+  assert (
+    f"note.md:3: NMP100 {nemoize.describe_finding({'rule': 'NMP100', 'count': 5, 'cap': 4})}"
+    in result.stdout
+  )
+  assert f"note.md:5: STE100 {nemoize.RULE_DESCRIPTIONS['STE100']}" in result.stdout
   description = run("--context", "description", cwd=tmp_path)
   assert description.returncode == 1, description.stderr
   assert "STE200" not in description.stdout
@@ -618,7 +629,10 @@ def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
   code_file.write_text("# Line one.\n# Line two.\n# Line three.\nx = 1\n")
   comment_res = run(str(code_file), cwd=tmp_path)
   assert comment_res.returncode == 1, comment_res.stderr
-  assert f"{code_file}:1: NMP101 3 -> 2" in comment_res.stdout
+  assert (
+    f"{code_file}:1: NMP101 {nemoize.describe_finding({'rule': 'NMP101', 'count': 3, 'cap': 2})}"
+    in comment_res.stdout
+  )
 
 
 def test_cmd_and_bat_files_extract_only_batch_comments_and_enforce_ste001(tmp_path):
@@ -632,7 +646,7 @@ def test_cmd_and_bat_files_extract_only_batch_comments_and_enforce_ste001(tmp_pa
   )
   result = run(str(cmd), cwd=tmp_path)
   assert result.returncode == 1, result.stderr
-  assert f"{cmd}:3: STE100 1 -> 0" in result.stdout
+  assert f"{cmd}:3: STE100 {nemoize.RULE_DESCRIPTIONS['STE100']}" in result.stdout
   assert f"{cmd}:2:" not in result.stdout
   assert f"{cmd}:4:" not in result.stdout
 
@@ -875,7 +889,9 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   assert result.returncode == 0, result.stderr
   assert "NMO901 Repository -> repo (manual review)" in result.stdout
   assert "NMO901 repositories -> repo (manual review)" in result.stdout
-  assert "STE901 1 -> 0 (manual review)" in result.stdout
+  assert (
+    f"STE901 {nemoize.RULE_DESCRIPTIONS['STE901']} (manual review)" in result.stdout
+  )
   formatted = run("--format", str(source), cwd=tmp_path)
   assert formatted.returncode == 0
   assert (
@@ -886,12 +902,16 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   source.write_text("Set up the server. The state is parsed and validated.\n")
   advisory = run(str(source), cwd=tmp_path)
   assert advisory.returncode == 0, advisory.stderr
-  assert "STE902 1 -> 0 (manual review)" in advisory.stdout
-  assert "STE903 1 -> 0 (manual review)" in advisory.stdout
+  assert (
+    f"STE902 {nemoize.RULE_DESCRIPTIONS['STE902']} (manual review)" in advisory.stdout
+  )
+  assert (
+    f"STE903 {nemoize.RULE_DESCRIPTIONS['STE903']} (manual review)" in advisory.stdout
+  )
   source.write_text("Check red, green and blue.\n")
   serial = run(str(source), cwd=tmp_path)
   assert serial.returncode == 1, serial.stderr
-  assert "NMO003 1 -> 0" in serial.stdout
+  assert f"NMO003 {nemoize.RULE_DESCRIPTIONS['NMO003']}" in serial.stdout
   assert "manual review" not in serial.stdout
   test_sample = tmp_path / "test_sample.py"
   test_sample.write_text(
@@ -970,7 +990,7 @@ def test_ste_and_hmn_rules_and_audit_mode(tmp_path):
   )
   manifest_result = run(str(manifest), cwd=tmp_path)
   assert manifest_result.returncode == 0
-  assert manifest_result.stdout == ""
+  assert manifest_result.stdout.strip() == ""
 
   json_file = tmp_path / "package.json"
   json_file.write_text(
@@ -979,7 +999,7 @@ def test_ste_and_hmn_rules_and_audit_mode(tmp_path):
   )
   json_result = run(str(json_file), cwd=tmp_path)
   assert json_result.returncode == 0
-  assert json_result.stdout == ""
+  assert json_result.stdout.strip() == ""
 
   jsonc_file = tmp_path / "config.jsonc"
   jsonc_file.write_text(
@@ -1028,3 +1048,36 @@ def test_references_follow_markdownlint_doc_layout():
     assert "\nTags: " in text
     assert "\nAliases: " in text
     assert "\nRationale: " in text
+
+
+def test_adopted_ste_rules_pull_request_and_license_exemption(tmp_path):
+  sample = tmp_path / "sample.md"
+  sample.write_text(
+    "Save the file prior to closing the window.\n"
+    "Update the aforementioned config.\n"
+    "Check (1) formatting, (2) lint, and (3) tests.\n"
+    "Timeouts are not uncommon on slow links.\n"
+    "Open a pull request and merge pull requests.\n",
+    encoding="utf-8",
+  )
+  result = run(str(sample), cwd=tmp_path)
+  assert result.returncode == 1
+  for code in ("STE400", "STE401", "STE909", "STE910", "NMO901"):
+    assert code in result.stdout
+  assert (
+    nemoize.rotate("Open a pull request and merge Pull Requests.")
+    == "Open a PR and merge PRs."
+  )
+  for license_name in (
+    "LICENSE",
+    "LICENSE.md",
+    "LICENSE.txt",
+    "lucide.LICENSE",
+    "COPYING",
+    "NOTICE",
+  ):
+    lic = tmp_path / license_name
+    lic.write_text("Transmit this kind of repository.\n", encoding="utf-8")
+    lic_res = run(str(lic), cwd=tmp_path)
+    assert lic_res.returncode == 0
+    assert lic_res.stdout.strip() == ""
