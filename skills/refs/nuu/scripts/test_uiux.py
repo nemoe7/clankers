@@ -540,6 +540,8 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
   if not shutil.which("node"):
     pytest.skip("Node is not available")
   driver = SCRIPT.with_name("browser.cjs")
+  driver_src = driver.read_text(encoding="utf-8")
+  assert "hasTouch: touch" in driver_src and "isMobile: touch" in driver_src
   bad_ready = subprocess.run(
     ["node", str(driver)],
     input=json.dumps(

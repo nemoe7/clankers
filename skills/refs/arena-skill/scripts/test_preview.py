@@ -66,6 +66,11 @@ def test_survey_transport_keeps_grades_in_server_memory(tmp_path, monkeypatch, c
     pending = store.read()["pending"]
     assert len(pending) == 1
     assert pending[0]["quiet"] and pending[0]["blocking"]
+    assert all(
+      token in survey.INSTRUCTIONS
+      for token in ("NEVER", "web_search", "fetch_page", "image_search")
+    )
+    assert survey.INSTRUCTIONS in pending[0]["text"]
     snapshot = store.save_path.read_bytes()
     for body in ("[]", payload.replace('"confidence": 0', '"confidence": 2')):
       status, _, _ = request("POST", "/api/survey", body, headers)
@@ -88,6 +93,7 @@ def test_survey_transport_keeps_grades_in_server_memory(tmp_path, monkeypatch, c
     assert len(again) == 1 and again[0]["id"] != pending[0]["id"]
     assert again[0]["quiet"] and again[0]["blocking"]
     assert "Bible checkpoint." in again[0]["text"]
+    assert survey.INSTRUCTIONS in again[0]["text"]
     assert [
       row for row in store.state()["notes"] if row["id"] != again[0]["id"]
     ] == prior_notes
@@ -14021,6 +14027,13 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     assert (preview.ASSETS / font_file).is_file()
   assert preview.inbox_pipeline_warning("arena-preview poll 2>&1 | tail -15")
   assert preview.inbox_pipeline_warning("arena-preview read 2>&1 | tail -15")
+  assert (
+    preview.read_set_input_warning(
+      'grep -rn "docs/design\\.md" . --exclude-dir=.git --exclude-dir=arena-state --exclude=CHANGELOG.md || true'
+    )
+    is None
+  )
+  assert preview.read_set_input_warning("grep -n MUST ARENA.md")
   assert (
     preview.auto_start_post_push_pr_checks(
       state_dir,

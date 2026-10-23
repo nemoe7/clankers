@@ -3185,7 +3185,7 @@ def read_set_input_warning(line, root=None, cwd=None):
   incoming = set()
   piece = []
 
-  def paths(words, recursive=False):
+  def paths(words):
     nonlocal protected
     if protected is None:
       protected = {
@@ -3195,11 +3195,8 @@ def read_set_input_warning(line, root=None, cwd=None):
     found = set()
     for word in words:
       candidate = (here / Path(word).expanduser()).resolve()
-      found.update(
-        path
-        for path in protected
-        if path == candidate or (recursive and candidate in path.parents)
-      )
+      if candidate in protected:
+        found.add(candidate)
     return found
 
   for token in [*tokens, ";"]:
@@ -3236,7 +3233,6 @@ def read_set_input_warning(line, root=None, cwd=None):
     elif head in ("cat", "grep", "head", "tail"):
       files = []
       pattern = head != "grep"
-      recursive = False
       flags = True
       index = 0
       while index < len(words):
@@ -3250,13 +3246,29 @@ def read_set_input_warning(line, root=None, cwd=None):
           flags = False
         elif flags and word.startswith("-"):
           if head == "grep":
-            recursive |= word in ("--recursive", "--dereference-recursive") or (
-              not word.startswith("--") and any(flag in word[1:] for flag in "rR")
-            )
             if word in ("-e", "--regexp", "-f", "--file"):
               if word in ("-f", "--file"):
                 files.extend(words[index : index + 1])
               pattern = True
+              index += 1
+            elif word in (
+              "-m",
+              "--max-count",
+              "-A",
+              "--after-context",
+              "-B",
+              "--before-context",
+              "-C",
+              "--context",
+              "--exclude",
+              "--exclude-dir",
+              "--exclude-from",
+              "--include",
+              "--label",
+              "--devices",
+              "--directories",
+              "--binary-files",
+            ):
               index += 1
             elif word.startswith(("-e", "--regexp=", "-f", "--file=")):
               if word.startswith("-f"):
@@ -3270,7 +3282,7 @@ def read_set_input_warning(line, root=None, cwd=None):
           pattern = True
         else:
           files.append(word)
-      sources = paths(files, recursive) | incoming
+      sources = paths(files) | incoming
       if head in GATE_NOISE and sources:
         name = protected[min(sources)]
         return f"BIBLE BLOCKED: `{head}` reads {name}. Use read_file for the full file."
@@ -5397,12 +5409,15 @@ class Store:
         if manual
         else f"Bible checkpoint after a {READ_SET_INTERVAL_MINUTES}-minute interval."
       )
+      import survey
+
       text = (
         f"{prefix}"
         " Read each listed path in full"
         " with the read tool only if its current full text is absent from context, then"
         " acknowledge this note.\n"
         "Answer the survey only if any required bible text was absent from context before this check.\n"
+        f"{survey.INSTRUCTIONS}\n"
         f"{listed}"
       )
       record = self.note(
@@ -9201,9 +9216,12 @@ def handler(store):
               ).fetchone()
             if pending is None:
               if survey_state["results"] is None:
+                import survey
+
                 store.note(
                   uuid.uuid4().hex[:6],
-                  "Acknowledge this note, then follow the arena-skill survey procedure.",
+                  "Acknowledge this note, then follow the arena-skill survey procedure.\n"
+                  f"{survey.INSTRUCTIONS}",
                   quiet=True,
                   blocking=True,
                   type="survey",

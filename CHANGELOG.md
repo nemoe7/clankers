@@ -14,6 +14,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Require bundling and loading custom fonts via `references/offline-fonts.md` in Clause 5, and require the audit workflow to name each UI deviation from `nuu` with its reason.
 
+- Enable `hasTouch` and `isMobile` (`@media (pointer: coarse)`) for mobile viewport widths (`<= 768` px) in `browser.cjs`, and document the requirement in Clause 14 of `SKILL.md`.
+
 #### nemoizer
 
 - Format `references/rules.md` and per-rule `references/<id>.md` files in the `markdownlint` documentation layout, and add `--selftest` to `nemoize.py`.
@@ -23,6 +25,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Connect `#copy-state` in `app.js` to `Force save` in `userscripts/arena.user.js` via `postMessage`, keeping `/api/copy-state` clipboard copy as the standalone fallback.
 
 ### Changed
+
+#### arena-skill
+
+- Name banned tools (`web_search`, `fetch_page`, `image_search`) with `NEVER` in `survey.py` and `SKILL.md`, and include `survey.INSTRUCTIONS` in `/api/survey/request` and checkpoint notes in `preview.py`. Move the preview design record to `docs/arena-skill/design.md`, and stop recursive directory `grep` commands from falsely triggering `BIBLE BLOCKED` in `read_set_input_warning`.
 
 #### maintenance
 

@@ -1169,7 +1169,6 @@ def test_read_set_input_gate_matches_inputs_not_tool_text() -> None:
         "grep -n MUST ARENA.md",
         "grep -e MUST -- AGENTS.md",
         "grep -f ARENA.md source.py",
-        "grep -r MUST .",
         "head -n 3 ARENA.md",
         "tail -c 30 -- AGENTS.md",
         "head <ARENA.md",
@@ -1193,6 +1192,9 @@ def test_read_set_input_gate_matches_inputs_not_tool_text() -> None:
       for line in (
         "grep ARENA.md source.py",
         "grep -e ARENA.md source.py",
+        "grep -r MUST .",
+        'grep -rn "docs/design\\.md" . --exclude-dir=.git --exclude-dir=arena-state --exclude=CHANGELOG.md || true',
+        "grep -rn MUST . --exclude ARENA.md",
         "grep -r MUST .agents/skills/arena-skill/scripts",
         "head source.py",
         "cat ARENA.md; head source.py",

@@ -15,7 +15,8 @@ HASHES = {
 }
 ROLE_FRAGMENT_LENGTH = 5
 INSTRUCTIONS = (
-  "When answering knowledge questions, use existing knowledge only; do not research answers, "
+  "When answering knowledge questions, use existing knowledge only; NEVER research answers, "
+  "call web_search, fetch_page, or image_search, "
   "open other files, run code, ask another system, reuse earlier responses, or inspect the answer key.\n"
   "For I4M6G, create a temporary empty image file, attempt to read it, and delete the file immediately afterward.\n"
   "Supply your best complete answer for a question and set a lower confidence from 0 to 1 "
