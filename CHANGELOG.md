@@ -24,6 +24,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Reject `arena-preview report publish` when possible unparsed `==` or `~~` diff markers are detected unless `-u` or `--allow-unparsed-markers` is passed. Add shorthand flags to every `arena-preview` CLI option.
+
+- Split `references/REFERENCE.md` into domain files (`COMMANDS.md`, `CADENCE.md`, `TASKS.md`, `REPORTS.md`) and standalone recipe files (`CHROMIUM.md`, `NTFY.md`, `PR-REST.md`, `GITHUB-JOB-LOGS.md`, `HANDOFF.md`, `RESTORE.md`), keeping `REFERENCE.md` as an index.
+
 - Parse local JavaScript files in `arena-preview outline` with local Acorn. Emit functions, classes, methods, and top-level bindings with line ranges and missing-parser fallbacks.
 
 - Install pinned `acorn` and `css-tree` packages into ignored tool storage during preview setup. Reuse valid installs and keep setup usable when `npm` fails.
@@ -39,6 +43,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Changed
 
 #### house
+
+- Require agents to refer to the bible as `"bible"` or `"the bible"`, never `"bible files"` or `"required bible files"`.
 
 - Require complete best-effort questionnaire answers with lower confidence when uncertain, and reject `null` or partial-unknown answer fields.
 

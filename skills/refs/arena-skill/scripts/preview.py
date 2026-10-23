@@ -3907,7 +3907,7 @@ LONG_RUN_WORDS = (
 )
 WORKTREE_STEP = (
   "NEXT: work queued file task in worktree while this runs: `arena-preview "
-  "worktree start [--gate <gate-name>] [--allow <glob>] <name> <destination>`."
+  "worktree start [-g, --gate <gate-name>] [-a, --allow <glob>] <name> <destination>`."
 )
 DETACHED_NOTICE = (
   "RUN DETACHED: `{name}` runs in background, call ends clean. Verdict on "
@@ -7744,7 +7744,15 @@ class Store:
         "The report has a submitted answer; publish the update under a new ID."
       )
 
-  def publish(self, report_id, title, source, submission_format=None):
+  def publish(
+    self,
+    report_id,
+    title,
+    source,
+    submission_format=None,
+    *,
+    allow_unparsed_markers=True,
+  ):
     identifier(report_id)
     if not isinstance(title, str) or not title.strip() or len(title) > 200:
       raise ValueError("Report title must contain 1–200 characters")
@@ -7762,6 +7770,16 @@ class Store:
     # Reject invalid fields before publication so the error names the field and preserves the report and connection.
     fields = parse_fields(text)[1]
     metadata = validate_submission_format(submission_format, fields)
+    if not allow_unparsed_markers:
+      warnings = report_marker_warnings(text)
+      if warnings:
+        lines = [
+          f"{source}:{warning['line']}: Error: possible unparsed "
+          f"{warning['marker']} marker. Keep spaces outside the markers, "
+          "or pass -u / --allow-unparsed-markers if literal marker text is intentional."
+          for warning in warnings
+        ]
+        raise ValueError("\n".join(lines))
     with self.transaction() as db:
       report = db.execute(
         "SELECT ack_seen_at, viewed_at FROM reports WHERE id = ?", (report_id,)
@@ -10485,7 +10503,7 @@ def main():
     help=f"Port (default: {DEFAULT_PORT}; only supported port)",
   )
   init = commands.add_parser("init", help="Create state directory and database")
-  init.add_argument("--tz", help="CLI stamp IANA zone; TZ env wins")
+  init.add_argument("-z", "--tz", help="CLI stamp IANA zone; TZ env wins")
   questionnaire_parser = commands.add_parser(
     "questionnaire", help="Show questions and schema, or submit ordered JSON"
   )
@@ -10501,9 +10519,15 @@ def main():
     "list",
     help="Stored note IDs by page, newest first; acknowledged included",
   )
-  note_list.add_argument("--page", type=int, default=1, help="Page number (default: 1)")
   note_list.add_argument(
-    "--page-size", type=int, default=20, help="IDs per page, 1 to 100 (default: 20)"
+    "-p", "--page", type=int, default=1, help="Page number (default: 1)"
+  )
+  note_list.add_argument(
+    "-s",
+    "--page-size",
+    type=int,
+    default=20,
+    help="IDs per page, 1 to 100 (default: 20)",
   )
   note_reread = note_verbs.add_parser(
     "show",
@@ -10525,12 +10549,14 @@ def main():
     "path", type=Path, help="Local source file inside the repository checkout"
   )
   outline_parser.add_argument(
+    "-m",
     "--max-entries",
     type=int,
     default=OUTLINE_MAX_ENTRIES,
     help=f"Maximum entries to print, 1 to {OUTLINE_MAX_ENTRIES} (default: {OUTLINE_MAX_ENTRIES})",
   )
   outline_parser.add_argument(
+    "-j",
     "--json",
     dest="as_json",
     action="store_true",
@@ -10540,17 +10566,18 @@ def main():
   pre = commands.add_parser(
     "pre", help="Run all pre-Bash gates in order; list completed steps"
   )
-  pre.add_argument("--line", default="", help="Shell command line from hook")
+  pre.add_argument("-l", "--line", default="", help="Shell command line from hook")
   pre.add_argument(
+    "-c",
     "--command",
     dest="command_text",
     default="",
     help="Command reached by DEBUG trap",
   )
-  pre.add_argument("--repo", default=".", help="Bible repository")
-  pre.add_argument("--shell", default="", help="Shell name")
+  pre.add_argument("-r", "--repo", default=".", help="Bible repository")
+  pre.add_argument("-s", "--shell", default="", help="Shell name")
   pre.add_argument(
-    "--done", default="", help="This shell's completed steps, space-separated"
+    "-d", "--done", default="", help="This shell's completed steps, space-separated"
   )
   run_group = commands.add_parser("run", help="Start long command; read result")
   run_verbs = run_group.add_subparsers(dest="verb", required=True)
@@ -10559,12 +10586,15 @@ def main():
     help=("Detach command, keep output tail; show exit on later call"),
   )
   route.add_argument(
+    "-t",
     "--task",
     dest="task_id",
     metavar="TASK-ID",
     help="Link run to upcoming task, not current task",
   )
-  route.add_argument("--after", metavar="GATE", help="Run only after this gate passes")
+  route.add_argument(
+    "-a", "--after", metavar="GATE", help="Run only after this gate passes"
+  )
   route.add_argument("name", help="Short run name; example: gates")
   route.add_argument("command_args", nargs=argparse.REMAINDER, help="Command after --")
   # The child side of `route`. The gate and the CLI both spawn it, so one place runs
@@ -10591,10 +10621,10 @@ def main():
   worktree_start.add_argument("name", help="Short worktree name")
   worktree_start.add_argument("destination", type=Path, help="New path outside root")
   worktree_start.add_argument(
-    "--gate", default=None, help="Running root gate name; optional"
+    "-g", "--gate", default=None, help="Running root gate name; optional"
   )
   worktree_start.add_argument(
-    "--allow", action="append", default=[], help="Glob of paths task may change"
+    "-a", "--allow", action="append", default=[], help="Glob of paths task may change"
   )
   worktree_collect = worktree_action.add_parser(
     "collect", help="Print allowed detached-worktree patch after root gate passes"
@@ -10642,10 +10672,10 @@ def main():
   )
   ack.add_argument("ids", nargs="*")
   ack.add_argument("markdown", help="Literal inline Markdown answer")
-  ack.add_argument("--id", dest="task_id")
-  ack.add_argument("--title", dest="task_title")
-  ack.add_argument("--type", dest="task_type", choices=TASK_TYPES)
-  ack.add_argument("--detail", dest="task_detail", action="append")
+  ack.add_argument("-i", "--id", dest="task_id")
+  ack.add_argument("-t", "--title", dest="task_title")
+  ack.add_argument("-T", "--type", dest="task_type", choices=TASK_TYPES)
+  ack.add_argument("-d", "--detail", dest="task_detail", action="append")
   report_group = commands.add_parser(
     "report", help="Publish, withdraw and inspect reports"
   )
@@ -10653,18 +10683,25 @@ def main():
   publish = report_verbs.add_parser("publish", help="Publish report; -i ID, -t title")
   publish.add_argument("source", type=Path)
   publish.add_argument(
+    "-s",
     "--submission-format",
     type=Path,
     help="Optional question, answer, and template JSON",
   )
   publish.add_argument("-i", "--id", required=True)
   publish.add_argument("-t", "--title", required=True)
+  publish.add_argument(
+    "-u",
+    "--allow-unparsed-markers",
+    action="store_true",
+    help="Publish even when possible unparsed == or ~~ markers are found",
+  )
   unpublish = report_verbs.add_parser(
     "unpublish", help="Withdraw report by ID, or all stale reports with --stale"
   )
   unpublish.add_argument("report_id", nargs="?")
   unpublish.add_argument(
-    "--stale", action="store_true", help="Withdraw every stale report"
+    "-s", "--stale", action="store_true", help="Withdraw every stale report"
   )
   report_verbs.add_parser(
     "stale",
@@ -10692,7 +10729,7 @@ def main():
     "set",
     help=(
       "Write/update task; -s status, -o order, -d details, -A append,"
-      " -m message, -r report, -u unblocked, -a amend, --type type"
+      " -m message, -r report, -u unblocked, -a amend, -t/--type type"
     ),
   )
   task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
@@ -10747,6 +10784,8 @@ def main():
   )
   task.add_argument("-s", "--status", choices=TASK_STATUSES, default=None)
   task.add_argument(
+    "-t",
+    "-T",
     "--type",
     dest="task_type",
     choices=TASK_TYPES,
@@ -10810,7 +10849,7 @@ def main():
     if any(
       argument == option or argument.startswith(option + "=")
       for argument in command_args[:separator]
-      for option in ("--task", "--after")
+      for option in ("-t", "--task", "-a", "--after")
     ):
       parser.error(
         "put --task and --after before the run name. Use: "
@@ -11065,7 +11104,11 @@ def main():
           raise ValueError("Submission format exceeds the report size limit")
         metadata = json.loads(data.decode("utf-8"))
       count = store.publish(
-        args.id, args.title, args.source, submission_format=metadata
+        args.id,
+        args.title,
+        args.source,
+        submission_format=metadata,
+        allow_unparsed_markers=args.allow_unparsed_markers,
       )
       revision = store.report(args.id)["updated_at"]
       warnings = verify_publication(store, args.id, revision, count)

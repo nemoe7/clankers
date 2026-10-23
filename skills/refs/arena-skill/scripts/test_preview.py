@@ -9993,7 +9993,10 @@ def test_cli_help_keeps_usage():
 
 def test_reference_commands_table_lists_every_agent_facing_command():
   """The commands table in the reference matches the CLI parser, internal commands aside."""
-  reference = Path(__file__).parents[1] / "references" / "REFERENCE.md"
+  references = Path(__file__).parents[1] / "references"
+  reference = references / "COMMANDS.md"
+  if not reference.is_file():
+    reference = references / "REFERENCE.md"
   if not reference.is_file():
     return  # The generated runtime holds scripts only, so the reference is absent.
   section = reference.read_text(encoding="utf-8").split("## Commands", 1)[1]
@@ -10676,7 +10679,10 @@ def test_a_routed_line_that_is_not_a_check_wait_skips_the_watcher(capsys):
 
 
 def test_the_worktree_reminder_shows_the_installed_start_form():
-  reference = Path(__file__).resolve().parent.parent / "references" / "REFERENCE.md"
+  references = Path(__file__).resolve().parent.parent / "references"
+  reference = references / "COMMANDS.md"
+  if not reference.exists():
+    reference = references / "REFERENCE.md"
   if not reference.exists():
     pytest.skip("the compact runtime copy ships without the references directory")
   lines = reference.read_text(encoding="utf-8").splitlines()
@@ -12287,7 +12293,7 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
       thread = threading.Thread(target=server.serve_forever, daemon=True)
       thread.start()
 
-      def publish(path):
+      def publish(path, *extra):
         with (
           patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": directory}),
           patch.object(
@@ -12302,6 +12308,7 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
               "verified-report",
               "--title",
               "Report",
+              *extra,
             ],
           ),
         ):
@@ -12312,19 +12319,24 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
         result, output = publish(Path(directory) / "missing.md")
         assert result == 1 and "Published" not in output.out
         assert store.state()["reports"] == []
+        result, output = publish(source)
+        assert result == 1 and "Published" not in output.out
+        expected_location = f"{source}:5:"
+        assert expected_location in output.err
+        assert "--allow-unparsed-markers" in output.err
+        assert store.state()["reports"] == []
         with patch(
           "preview.verify_publication",
           side_effect=ValueError("Publication verification failed"),
         ):
-          result, output = publish(source)
+          result, output = publish(source, "--allow-unparsed-markers")
         assert result == 1 and "Published" not in output.out
         assert store.report("verified-report")["title"] == "Report"
         with patch(
           "preview.verify_publication", wraps=preview.verify_publication
         ) as verified:
-          result, output = publish(source)
+          result, output = publish(source, "-u")
         assert result == 0 and verified.called
-        expected_location = f"{source}:5:"
         assert expected_location in output.err
         assert store.report("verified-report")["markdown"] == source.read_text()
         published = store.report("verified-report")
@@ -12336,6 +12348,40 @@ def test_publish_cli_distinguishes_rejection_from_failed_verification(capsys):
       finally:
         server.shutdown()
         thread.join()
+
+
+def test_every_preview_cli_option_has_a_shorthand():
+  captured = []
+  original_init = preview.PreviewArgumentParser.__init__
+
+  def track_init(self, *args, **kwargs):
+    original_init(self, *args, **kwargs)
+    captured.append(self)
+
+  with (
+    patch.object(preview.PreviewArgumentParser, "__init__", track_init),
+    patch.object(
+      preview.PreviewArgumentParser,
+      "parse_args",
+      side_effect=SystemExit(0),
+    ),
+    pytest.raises(SystemExit),
+  ):
+    preview.main()
+
+  missing = []
+  for subparser in captured:
+    for action in subparser._actions:
+      if not action.option_strings:
+        continue
+      has_short = any(
+        opt.startswith("-") and not opt.startswith("--") and len(opt) == 2
+        for opt in action.option_strings
+      )
+      has_long = any(opt.startswith("--") for opt in action.option_strings)
+      if not (has_short and has_long):
+        missing.append((subparser.prog, action.option_strings))
+  assert not missing, f"CLI options missing short or long flag: {missing}"
 
 
 def test_user_flagged_report_violation_mints_a_quiet_note(capsys):
