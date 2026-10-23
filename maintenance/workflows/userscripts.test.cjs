@@ -2178,3 +2178,212 @@ for raw in sys.stdin:
   });
 }
 
+{
+  const { test } = require("node:test");
+  test("configurable timers, dropped stale inner VERSION, and draggable Lucide settings modal", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+    const checkContext = {
+      console,
+      URL,
+      GM_getValue: (_k, fallback) => fallback,
+      GM_setValue() {},
+      setTimeout: () => 0,
+      clearTimeout() {},
+      setInterval: () => 0,
+      clearInterval() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+    vm.runInNewContext(source, checkContext);
+    assert.equal(checkContext.CLANKERS_CHECKS.tabTitle.VERSION, undefined, "stale inner VERSION constant is dropped from tabTitle");
+
+    const saved = new Map([
+      ["auto-scroll", true],
+      ["auto-wake", true],
+      ["state-download", true],
+      ["clankers-arena-state-watch-ms", 12000],
+      ["clankers-arena-state-panel-ms", 3500],
+      ["clankers-arena-wake-delay-ms", 1200],
+      ["clankers-arena-http-jitter-ms", 4000],
+    ]);
+    const timeouts = [];
+    const intervals = [];
+    const windowListeners = new Map();
+    let modalNode = null;
+
+    const makeElement = (tag) => ({
+      tag,
+      id: "",
+      type: "",
+      value: "",
+      checked: false,
+      className: "",
+      textContent: "",
+      style: { cssText: "", left: "", top: "", right: "" },
+      attrs: {},
+      listeners: {},
+      children: [],
+      parentElement: null,
+      isConnected: true,
+      setAttribute(name, value) {
+        this.attrs[name] = String(value);
+        if (name === "id") this.id = String(value);
+      },
+      getAttribute(name) {
+        return Object.prototype.hasOwnProperty.call(this.attrs, name) ? this.attrs[name] : null;
+      },
+      appendChild(child) {
+        child.parentElement = this;
+        this.children.push(child);
+        if (child.id === "clankers-settings-modal") modalNode = child;
+        return child;
+      },
+      remove() {
+        this.isConnected = false;
+        if (this === modalNode) modalNode = null;
+        if (this.parentElement && Array.isArray(this.parentElement.children)) {
+          const idx = this.parentElement.children.indexOf(this);
+          if (idx >= 0) this.parentElement.children.splice(idx, 1);
+        }
+      },
+      addEventListener(name, fn) {
+        this.listeners[name] = fn;
+      },
+      closest() {
+        return null;
+      },
+      getBoundingClientRect() {
+        return { left: 240, top: 80, width: 380, height: 420 };
+      },
+      querySelector(sel) {
+        for (const child of this.children) {
+          if (sel === "[data-clankers-autoscroll-toggle]" && child.attrs["data-clankers-autoscroll-toggle"]) return child;
+          if (sel === "[data-clankers-settings-toggle]" && child.attrs["data-clankers-settings-toggle"]) return child;
+          if (sel === "[data-clankers-settings-drag]" && child.attrs["data-clankers-settings-drag"]) return child;
+          if (child.querySelector) {
+            const hit = child.querySelector(sel);
+            if (hit) return hit;
+          }
+        }
+        return null;
+      },
+      querySelectorAll(sel) {
+        const out = [];
+        const visit = (node) => {
+          for (const child of node.children || []) {
+            if (sel === "input, select" && (child.tag === "input" || child.tag === "select")) out.push(child);
+            if (sel === "path" && child.tag === "path") out.push(child);
+            visit(child);
+          }
+        };
+        visit(this);
+        return out;
+      },
+    });
+
+    const row = makeElement("div");
+    const stopButton = makeElement("button");
+    stopButton.setAttribute("aria-label", "Stop generating");
+    row.appendChild(stopButton);
+    row.insertBefore = function (node, ref) {
+      node.parentElement = this;
+      const idx = this.children.indexOf(ref);
+      if (idx >= 0) this.children.splice(idx, 0, node);
+      else this.children.push(node);
+      return node;
+    };
+
+    const body = makeElement("body");
+    const doc = {
+      documentElement: makeElement("html"),
+      body,
+      title: "Arena",
+      hidden: false,
+      getElementById(id) {
+        return id === "clankers-settings-modal" ? modalNode : null;
+      },
+      querySelector() { return null; },
+      querySelectorAll(sel) {
+        return sel === "button[aria-label]" ? [stopButton] : [];
+      },
+      createElement: (tag) => makeElement(tag),
+      createElementNS: (_ns, tag) => makeElement(tag),
+    };
+
+    const context = {
+      console,
+      URL,
+      Math: Object.assign(Object.create(Math), { random: () => 0.999999 }),
+      Date: { now: () => 10000 },
+      location: { pathname: "/c/session", href: "https://arena.ai/c/session", origin: "https://arena.ai", host: "arena.ai" },
+      document: doc,
+      window: {
+        innerWidth: 1280,
+        innerHeight: 800,
+        addEventListener(name, fn) { windowListeners.set(name, fn); },
+        removeEventListener(name) { windowListeners.delete(name); },
+      },
+      getComputedStyle() { return { display: "block", visibility: "visible", overflowY: "auto" }; },
+      MutationObserver: class { observe() {} disconnect() {} },
+      ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+      requestAnimationFrame() { return 1; },
+      cancelAnimationFrame() {},
+      setTimeout(fn, ms) { timeouts.push({ fn, ms }); return timeouts.length; },
+      clearTimeout() {},
+      setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; },
+      clearInterval() {},
+      GM_getValue(key, fallback) { return saved.has(key) ? saved.get(key) : fallback; },
+      GM_setValue(key, value) { saved.set(key, value); },
+      GM_registerMenuCommand() { return 1; },
+      GM_unregisterMenuCommand() {},
+    };
+
+    vm.runInNewContext(source, context);
+
+    const watchInterval = intervals.find((entry) => entry.ms === 12000);
+    assert.ok(watchInterval, "state-download timer uses configured 12000ms watch interval");
+    watchInterval.fn();
+    assert.ok(
+      timeouts.some((entry) => entry.ms === 3999),
+      "jitteredTimer uses configured 4000ms jitter range",
+    );
+
+    const autoIndex = row.children.findIndex((el) => el.attrs["data-clankers-autoscroll-toggle"] === "true");
+    const settingsIndex = row.children.findIndex((el) => el.attrs["data-clankers-settings-toggle"] === "true");
+    const stopIndex = row.children.indexOf(stopButton);
+    assert.ok(autoIndex >= 0, "auto-scroll button is in the row");
+    assert.equal(settingsIndex, autoIndex + 1, "Lucide settings button sits right after the auto-scroll button");
+    assert.equal(stopIndex, settingsIndex + 1, "settings button sits before Stop generating");
+
+    const settingsButton = row.children[settingsIndex];
+    assert.equal(settingsButton.attrs["aria-pressed"], "false", "settings toggle starts unpressed");
+    assert.ok(settingsButton.querySelectorAll("path").length >= 2, "settings button renders a Lucide SVG icon");
+
+    settingsButton.listeners.click();
+    assert.ok(modalNode, "clicking the settings button opens the settings modal");
+    assert.equal(settingsButton.attrs["aria-pressed"], "true", "settings button shows pressed while modal is open");
+
+    const dragHeader = modalNode.querySelector("[data-clankers-settings-drag]");
+    assert.ok(dragHeader, "settings modal has a draggable header");
+    dragHeader.listeners.mousedown({ button: 0, clientX: 300, clientY: 100, preventDefault() {} });
+    windowListeners.get("mousemove")({ clientX: 420, clientY: 190 });
+    windowListeners.get("mouseup")();
+    assert.equal(modalNode.style.left, "360px", "dragging the modal header updates left position");
+    assert.equal(modalNode.style.top, "170px", "dragging the modal header updates top position");
+
+    const watchInput = modalNode.querySelectorAll("input, select").find(
+      (el) => el.attrs["data-setting-key"] === "clankers-arena-state-watch-ms",
+    );
+    assert.ok(watchInput, "settings modal exposes configurable state watch interval input");
+    watchInput.value = "25";
+    watchInput.listeners.change();
+    assert.equal(saved.get("clankers-arena-state-watch-ms"), 25000, "changing modal input persists milliseconds");
+    assert.ok(intervals.some((entry) => entry.ms === 25000), "changing state watch interval restarts timer");
+
+    settingsButton.listeners.click();
+    assert.equal(modalNode, null, "clicking the settings button a second time closes the modal");
+    assert.equal(settingsButton.attrs["aria-pressed"], "false", "settings button resets aria-pressed on close");
+  });
+}
+
+

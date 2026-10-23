@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.64
+// @name         Arena.ai | NemoUtils | v1.10.65
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.64
+// @version      1.10.65
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -303,14 +303,50 @@
   }
 
   var HTTP_JITTER_MS = 15000;
+  var HTTP_JITTER_KEY = "clankers-arena-http-jitter-ms";
+  var STATE_WATCH_KEY = "clankers-arena-state-watch-ms";
+  var STATE_PANEL_KEY = "clankers-arena-state-panel-ms";
+  var WAKE_DELAY_MS = 5000;
+  var WAKE_DELAY_KEY = "clankers-arena-wake-delay-ms";
+  var featureRegistry = [];
+  var restartStateWatchHook = null;
+
+  function httpJitterMs() {
+    if (typeof GM_getValue !== "function") return HTTP_JITTER_MS;
+    var ms = Number(GM_getValue(HTTP_JITTER_KEY, HTTP_JITTER_MS));
+    if (!isFinite(ms) || ms < 0) return HTTP_JITTER_MS;
+    return Math.min(Math.round(ms), 60000);
+  }
+
+  function stateWatchMs() {
+    if (typeof GM_getValue !== "function") return STATE_WATCH_MS;
+    var ms = Number(GM_getValue(STATE_WATCH_KEY, STATE_WATCH_MS));
+    if (!isFinite(ms) || ms < 1000) return STATE_WATCH_MS;
+    return Math.min(Math.round(ms), 60000);
+  }
+
+  function statePanelMs() {
+    if (typeof GM_getValue !== "function") return 6000;
+    var ms = Number(GM_getValue(STATE_PANEL_KEY, 6000));
+    if (!isFinite(ms) || ms < 1000) return 6000;
+    return Math.min(Math.round(ms), 60000);
+  }
+
+  function wakeDelayMs() {
+    if (typeof GM_getValue !== "function") return WAKE_DELAY_MS;
+    var ms = Number(GM_getValue(WAKE_DELAY_KEY, WAKE_DELAY_MS));
+    if (!isFinite(ms) || ms < 0) return WAKE_DELAY_MS;
+    return Math.min(Math.round(ms), 60000);
+  }
 
   function jitteredTimer(run, everyMs, spreadMs) {
     var waiting = null;
     function tick() {
+      var activeSpread = spreadMs === HTTP_JITTER_MS ? httpJitterMs() : spreadMs;
       waiting = setTimeout(function () {
         waiting = null;
         run();
-      }, Math.floor(Math.random() * spreadMs));
+      }, Math.floor(Math.random() * activeSpread));
     }
     var beat = setInterval(tick, everyMs);
     return function () {
@@ -366,12 +402,20 @@
     if (enabled && !pauseStored()) {
       stop = run();
     }
-    return {
+    var controller = {
+      key: key,
+      label: label,
+      storedOn: storedOn,
       isOn: function () {
         return stop !== null;
       },
       toggle: toggle,
+      set: function (next) {
+        if (storedOn() !== Boolean(next)) toggle();
+      },
     };
+    featureRegistry.push(controller);
+    return controller;
   }
 
   function isStopGeneratingLabel(value) {
@@ -1246,6 +1290,9 @@
   });
 
   var AUTO_TOGGLE_MARK = "data-clankers-autoscroll-toggle";
+  var SETTINGS_TOGGLE_MARK = "data-clankers-settings-toggle";
+  var SETTINGS_DRAG_MARK = "data-clankers-settings-drag";
+  var SETTINGS_MODAL_ID = "clankers-settings-modal";
   var AUTO_TOGGLE_CLASS =
     "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-8 w-8 active:bg-interactive-cta-active rounded-[4px] font-normal touch-hitbox border-border-medium border text-text-primary";
 
@@ -1259,11 +1306,25 @@
   }
 
   var autoToggleButton = null;
+  var settingsToggleButton = null;
+  var settingsModalNode = null;
 
   function setToggleButtonPressed() {
     if (!autoToggleButton) return;
     autoToggleButton.className = autoToggleClasses(autoScroll.isOn());
     autoToggleButton.setAttribute("aria-pressed", autoScroll.isOn() ? "true" : "false");
+  }
+
+  function isSettingsModalOpen() {
+    if (!settingsModalNode) return false;
+    return settingsModalNode.isConnected !== false;
+  }
+
+  function setSettingsButtonPressed() {
+    if (!settingsToggleButton) return;
+    var open = isSettingsModalOpen();
+    settingsToggleButton.className = autoToggleClasses(open);
+    settingsToggleButton.setAttribute("aria-pressed", open ? "true" : "false");
   }
 
   var autoScroll = runFeature("auto-scroll", "Transcript — auto-scroll", function () {
@@ -1369,11 +1430,235 @@
       return button;
     }
 
+    function closeSettingsModal() {
+      if (settingsModalNode) {
+        if (typeof settingsModalNode.remove === "function") {
+          settingsModalNode.remove();
+        } else if (settingsModalNode.parentNode) {
+          settingsModalNode.parentNode.removeChild(settingsModalNode);
+        }
+        settingsModalNode = null;
+      }
+      setSettingsButtonPressed();
+    }
+
+    function openSettingsModal() {
+      if (!document.body || typeof document.createElement !== "function") return;
+      closeSettingsModal();
+      var modal = document.createElement("div");
+      modal.id = SETTINGS_MODAL_ID;
+      modal.setAttribute("id", SETTINGS_MODAL_ID);
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-label", "NemoUtils settings");
+      modal.style.cssText =
+        "position:fixed;right:16px;top:56px;z-index:2147483646;width:360px;max-height:78vh;" +
+        "display:flex;flex-direction:column;border-radius:10px;background:#201f1d;color:#f0ede8;" +
+        "font:12px/1.4 system-ui,-apple-system,sans-serif;" +
+        "box-shadow:0 10px 32px rgba(0,0,0,.45);border:1px solid #56504a;overflow:hidden";
+
+      var header = document.createElement("div");
+      header.setAttribute(SETTINGS_DRAG_MARK, "true");
+      header.style.cssText =
+        "display:flex;align-items:center;justify-content:space-between;padding:10px 12px;" +
+        "background:#2c2b28;border-bottom:1px solid #56504a;cursor:move;user-select:none;font-weight:600";
+      var title = document.createElement("span");
+      title.textContent = "NemoUtils Settings";
+      header.appendChild(title);
+
+      var closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.textContent = "Close";
+      closeBtn.setAttribute("aria-label", "Close settings");
+      closeBtn.style.cssText =
+        "cursor:pointer;border:1px solid #56504a;border-radius:5px;padding:2px 8px;" +
+        "background:transparent;color:inherit;font:inherit";
+      closeBtn.addEventListener("click", closeSettingsModal);
+      header.appendChild(closeBtn);
+
+      header.addEventListener("mousedown", function (event) {
+        if (event && typeof event.button === "number" && event.button !== 0) return;
+        if (!settingsModalNode) return;
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        var rect =
+          typeof settingsModalNode.getBoundingClientRect === "function"
+            ? settingsModalNode.getBoundingClientRect()
+            : { left: 240, top: 56 };
+        var startX = Number(event && event.clientX) || 0;
+        var startY = Number(event && event.clientY) || 0;
+        var baseLeft = Number(rect.left) || 0;
+        var baseTop = Number(rect.top) || 0;
+
+        function onMove(moveEvent) {
+          if (!settingsModalNode) return;
+          var dx = (Number(moveEvent && moveEvent.clientX) || 0) - startX;
+          var dy = (Number(moveEvent && moveEvent.clientY) || 0) - startY;
+          var maxLeft = Math.max(0, (Number(window.innerWidth) || 1280) - 120);
+          var maxTop = Math.max(0, (Number(window.innerHeight) || 800) - 48);
+          var nextLeft = Math.min(Math.max(0, Math.round(baseLeft + dx)), maxLeft);
+          var nextTop = Math.min(Math.max(0, Math.round(baseTop + dy)), maxTop);
+          settingsModalNode.style.right = "auto";
+          settingsModalNode.style.left = nextLeft + "px";
+          settingsModalNode.style.top = nextTop + "px";
+        }
+
+        function onUp() {
+          window.removeEventListener("mousemove", onMove);
+          window.removeEventListener("mouseup", onUp);
+        }
+
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+      });
+      modal.appendChild(header);
+
+      var body = document.createElement("div");
+      body.style.cssText = "padding:10px 12px;overflow-y:auto;display:flex;flex-direction:column;gap:8px";
+
+      function addNumberField(labelText, key, currentSeconds, minSec, maxSec, scale, onSaved) {
+        var row = document.createElement("label");
+        row.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px";
+        var span = document.createElement("span");
+        span.textContent = labelText;
+        var input = document.createElement("input");
+        input.type = "number";
+        input.value = String(currentSeconds);
+        input.setAttribute("data-setting-key", key);
+        input.style.cssText =
+          "width:72px;padding:3px 6px;border-radius:5px;border:1px solid #56504a;" +
+          "background:#2c2b28;color:#f0ede8;font:inherit";
+        input.addEventListener("change", function () {
+          var raw = Number(String(input.value).trim());
+          if (!isFinite(raw) || raw < minSec) return;
+          var clamped = Math.min(Math.round(raw), maxSec);
+          input.value = String(clamped);
+          GM_setValue(key, clamped * scale);
+          menuRefresh();
+          if (typeof onSaved === "function") onSaved();
+        });
+        row.appendChild(span);
+        row.appendChild(input);
+        body.appendChild(row);
+      }
+
+      addNumberField(
+        "State autosave poll (s)",
+        STATE_WATCH_KEY,
+        Math.round(stateWatchMs() / 1000),
+        1,
+        60,
+        1000,
+        function () {
+          if (typeof restartStateWatchHook === "function") restartStateWatchHook();
+        },
+      );
+      addNumberField(
+        "State toast duration (s)",
+        STATE_PANEL_KEY,
+        Math.round(statePanelMs() / 1000),
+        1,
+        60,
+        1000,
+      );
+      addNumberField(
+        "Wake-up max delay (s)",
+        WAKE_DELAY_KEY,
+        Math.round(wakeDelayMs() / 1000),
+        0,
+        60,
+        1000,
+      );
+      addNumberField(
+        "HTTP jitter range (s)",
+        HTTP_JITTER_KEY,
+        Math.round(httpJitterMs() / 1000),
+        0,
+        60,
+        1000,
+      );
+
+      var i;
+      for (i = 0; i < featureRegistry.length; i += 1) {
+        (function (item) {
+          var row = document.createElement("label");
+          row.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px";
+          var span = document.createElement("span");
+          span.textContent = item.label;
+          var checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = item.storedOn();
+          checkbox.setAttribute("data-setting-key", item.key);
+          checkbox.addEventListener("change", function () {
+            item.set(Boolean(checkbox.checked));
+          });
+          row.appendChild(span);
+          row.appendChild(checkbox);
+          body.appendChild(row);
+        })(featureRegistry[i]);
+      }
+
+      modal.appendChild(body);
+      settingsModalNode = modal;
+      document.body.appendChild(modal);
+      setSettingsButtonPressed();
+    }
+
+    function toggleSettingsModal() {
+      if (isSettingsModalOpen()) {
+        closeSettingsModal();
+      } else {
+        openSettingsModal();
+      }
+    }
+
+    function createSettingsButton() {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute(SETTINGS_TOGGLE_MARK, "true");
+      button.setAttribute("aria-label", "Toggle NemoUtils settings");
+      button.setAttribute("title", "Toggle NemoUtils settings");
+      settingsToggleButton = button;
+      setSettingsButtonPressed();
+      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", "16");
+      svg.setAttribute("height", "16");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke-width", "1.5");
+      svg.setAttribute("color", "currentColor");
+      var paths = [
+        "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
+        "M12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6z",
+      ];
+      var i;
+      for (i = 0; i < paths.length; i += 1) {
+        var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", paths[i]);
+        path.setAttribute("stroke", "currentColor");
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("stroke-linejoin", "round");
+        svg.appendChild(path);
+      }
+      button.appendChild(svg);
+      button.addEventListener("click", function () {
+        toggleSettingsModal();
+      });
+      return button;
+    }
+
     function ensureButton() {
       var stopButton = findStopGeneratingButton(document);
       var row = stopButton && stopButton.parentElement;
-      if (!row || row.querySelector("[" + AUTO_TOGGLE_MARK + "]")) return;
-      row.insertBefore(createButton(), stopButton);
+      if (!row) return;
+      var settingsBtn = row.querySelector("[" + SETTINGS_TOGGLE_MARK + "]");
+      var autoBtn = row.querySelector("[" + AUTO_TOGGLE_MARK + "]");
+      if (!settingsBtn) {
+        settingsBtn = createSettingsButton();
+        row.insertBefore(settingsBtn, stopButton);
+      }
+      if (!autoBtn) {
+        autoBtn = createButton();
+        row.insertBefore(autoBtn, settingsBtn);
+      }
     }
 
     var observer = new MutationObserver(ensureButton);
@@ -2180,7 +2465,7 @@
         autoWakeSentFor = current.url;
         current.button.click();
         logEvent("auto-wake", "clicked");
-      }, Math.floor(Math.random() * 5001));
+      }, Math.floor(Math.random() * (wakeDelayMs() + 1)));
     }
 
     function compositionStart() { composing = true; cancel(); }
@@ -2302,7 +2587,7 @@
         current.button.click();
         logEvent("keep-working", "clicked");
         fillComposer();
-      }, Math.floor(Math.random() * 5001));
+      }, Math.floor(Math.random() * (wakeDelayMs() + 1)));
       fillComposer();
     }
 
@@ -2955,7 +3240,7 @@
         row.appendChild(close);
         card.appendChild(row);
         document.body.appendChild(card);
-        if (autoHide) setTimeout(removeStatePanel, STATE_PANEL_MS);
+        if (autoHide) setTimeout(removeStatePanel, statePanelMs());
       } catch (err) {
         return;
       }
@@ -3223,8 +3508,15 @@
     fetchStateFile(false);
     var stopStateWatch = jitteredTimer(function () {
       fetchStateFile(false);
-    }, STATE_WATCH_MS, HTTP_JITTER_MS);
+    }, stateWatchMs(), HTTP_JITTER_MS);
+    restartStateWatchHook = function () {
+      stopStateWatch();
+      stopStateWatch = jitteredTimer(function () {
+        fetchStateFile(false);
+      }, stateWatchMs(), HTTP_JITTER_MS);
+    };
     return function () {
+      restartStateWatchHook = null;
       stopStateWatch();
       menus.forEach(menuDrop);
       menus = [];
@@ -3305,7 +3597,6 @@
     var LABEL_SPAN_SELECTOR = "span.body-sm";
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
-    var VERSION = "1.10.27";
     var AGENT_EMOJI = "\uD83D\uDCAC";
     var REASONING_EMOJI = "\uD83D\uDCAD";
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
@@ -3742,7 +4033,6 @@
       emojiForRow: emojiForRow,
       actionEmoji: actionEmoji,
       TITLE_PREFIX: TITLE_PREFIX,
-      VERSION: VERSION,
       EMOJI_HOLD_MS: EMOJI_HOLD_MS,
       POLL_RE: POLL_RE,
       MESSAGE_SELECTOR: MESSAGE_SELECTOR,

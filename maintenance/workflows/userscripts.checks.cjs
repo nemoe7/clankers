@@ -947,7 +947,6 @@ function checkTabTitle(api, logging) {
   var actionEmoji = api.actionEmoji;
   var TITLE_PREFIX = api.TITLE_PREFIX;
   var vtag = "";
-  var VERSION = api.VERSION;
   var EMOJI_HOLD_MS = api.EMOJI_HOLD_MS;
   var MESSAGE_SELECTOR = api.MESSAGE_SELECTOR;
   var LIVE_ICON_SELECTOR = api.LIVE_ICON_SELECTOR;
@@ -1579,7 +1578,7 @@ function checkTabTitle(api, logging) {
     [questionsLogLine.text, "[NemoUtils][title][info] changed"],
     [questionsLogLine.data.type, "action"],
     [questionsLogLine.data.emoji, QUESTION_EMOJI],
-    [VERSION, "1.10.27"],
+    [api.VERSION, undefined],
   ];
   // The title writes through syncTitle, which logs the signal that won. The capture keeps
   // the host console clean and returns the last line.

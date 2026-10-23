@@ -16,6 +16,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Add a Lucide settings toggle button after the transcript auto-scroll button that opens a draggable settings modal. Make state autosave, toast, wake-up, and jitter timers configurable, and drop the inner `VERSION` in `tab-title`.
+
 - Add `Composer — keep working` to click Keep working, wait for the composer, and enter wake up after non-spinner, non-prose stops. Log `clicked` and `filled`, and keep prose completions and active spinner rows idle.
 
 #### preview
