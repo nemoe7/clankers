@@ -26,7 +26,7 @@ Every skill must follow the [Agent Skills specification](https://agentskills.io/
 
 ## Upstream sources
 
-Adapted skills record `metadata.upstream`. Update from that source, then reapply local `Precedence`: explicit user requirements and project conventions outrank skill preferences.
+Adapted skills record `metadata.upstream`. Update from that source, then reapply local `Precedence`: explicit user requirements and project conventions outrank skill preferences. Visual-reference structure and image-board examples in `nuu` are adapted from [UI Prep, The Best Way to Document UX/UI Design](https://www.uiprep.com/blog/the-best-way-to-document-ux-ui-design).
 
 ## Install
 

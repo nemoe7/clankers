@@ -472,3 +472,228 @@ def test_authorized_asset_fetch_keeps_destinations_and_redirect_guards(tmp_path)
     finally:
       server.shutdown()
       thread.join()
+
+
+def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
+  import shutil
+  import sys
+
+  import pytest
+
+  sys.path.insert(0, str(SCRIPT.parent))
+  from annotate import decode_png, encode_png
+
+  src_png = tmp_path / "source.png"
+  pixels = bytearray([240, 244, 248, 255] * (80 * 60))
+  original_bytes = encode_png(80, 60, pixels)
+  src_png.write_bytes(original_bytes)
+  out_png = tmp_path / "annotated.png"
+  spec_file = tmp_path / "spec.json"
+  spec_file.write_text(
+    json.dumps(
+      {
+        "boxes": [{"x": 4, "y": 4, "width": 30, "height": 20, "color": "#2563eb"}],
+        "labels": [{"x": 8, "y": 28, "text": "CTA", "color": "amber"}],
+      }
+    ),
+    encoding="utf-8",
+  )
+  proc = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "annotate",
+      "--project",
+      str(tmp_path),
+      "--input",
+      str(src_png),
+      "--output",
+      str(out_png),
+      "--box",
+      "10,10,40,25,red",
+      "--label",
+      "12,12,HERO,blue",
+      "--arrow",
+      "5,5,50,40,green",
+      "--callout",
+      "60,20,1,FIX,red",
+      "--spec",
+      str(spec_file),
+    ],
+    text=True,
+    capture_output=True,
+    check=False,
+  )
+  assert proc.returncode == 0, proc.stderr or proc.stdout
+  payload = json.loads(proc.stdout)
+  assert payload["status"] == "annotated"
+  assert payload["annotations"] == {"boxes": 2, "labels": 2, "arrows": 1, "callouts": 1}
+  assert src_png.read_bytes() == original_bytes
+  out_w, out_h, out_rgba = decode_png(out_png.read_bytes())
+  assert (out_w, out_h) == (80, 60)
+  assert out_rgba != pixels
+
+  inplace = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "annotate",
+      "--project",
+      str(tmp_path),
+      "--input",
+      str(src_png),
+      "--output",
+      str(src_png),
+      "--box",
+      "1,1,10,10",
+    ],
+    text=True,
+    capture_output=True,
+    check=False,
+  )
+  assert inplace.returncode == 2
+  assert src_png.read_bytes() == original_bytes
+
+  if not shutil.which("node"):
+    pytest.skip("Node is not available")
+  driver = SCRIPT.with_name("browser.cjs")
+  bad_ready = subprocess.run(
+    ["node", str(driver)],
+    input=json.dumps(
+      {
+        "command": "inspect",
+        "url": "https://example.com",
+        "widths": [360],
+        "timeout": 1,
+        "engine": "auto",
+        "ready": "   ",
+        "flow": [],
+        "output": str(tmp_path / "bad-ready"),
+      }
+    ),
+    text=True,
+    capture_output=True,
+    check=False,
+  )
+  assert bad_ready.returncode == 2
+  assert json.loads(bad_ready.stdout)["status"] == "error"
+
+  fake_nm = tmp_path / "FakePlaywright"
+  pw_dir = fake_nm / "node_modules" / "playwright"
+  pw_dir.mkdir(parents=True)
+  fake_bin = fake_nm / "chromium-bin"
+  fake_bin.write_text("", encoding="utf-8")
+  for name in ("browser.cjs",):
+    shutil.copy2(SCRIPT.with_name(name), fake_nm / name)
+  (pw_dir / "index.js").write_text(
+    """
+const fs = require('node:fs');
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+  'base64'
+);
+module.exports = {
+  chromium: {
+    executablePath: () => process.env.FAKE_CHROMIUM_PATH,
+    launch: async () => ({
+      newContext: async () => ({
+        newPage: async () => ({
+          on() {},
+          goto: async () => ({ status: () => 200, ok: () => true }),
+          locator: sel => ({
+            first: () => ({
+              waitFor: async () => {
+                if (sel === '#missing-ready') throw new Error('Timeout waiting for #missing-ready');
+              },
+            }),
+            count: async () => 1,
+          }),
+          evaluate: async fn => {
+            const src = String(fn);
+            if (src.includes('UIX301')) {
+              if (process.env.FAKE_A11Y_MODE === 'clean') return { status: 'checked', findings: [] };
+              return {
+                status: 'checked',
+                findings: [
+                  { rule: 'UIX301', severity: 'review', criterion: '4.1.2', evidence: 'unlabeled' },
+                  { rule: 'UIX302', severity: 'review', criterion: '1.3.1', evidence: 'missing ref' },
+                  { rule: 'UIX303', severity: 'review', criterion: '4.1.2', evidence: 'nested' },
+                  { rule: 'UIX304', severity: 'review', criterion: '4.1.1', evidence: 'duplicate id' },
+                  { rule: 'UIX305', severity: 'review', criterion: '1.3.1', evidence: 'skipped h' },
+                  { rule: 'UIX306', severity: 'review', criterion: '1.4.3', evidence: 'contrast' },
+                ],
+              };
+            }
+            return {
+              width: 360,
+              height: 900,
+              elements: [],
+              overflow: false,
+              preference: { dark: false, reducedMotion: false },
+              active: { tag: 'BODY', id: '', role: null },
+            };
+          },
+          screenshot: async ({ path }) => fs.writeFileSync(path, PNG),
+        }),
+        close: async () => {},
+      }),
+      close: async () => {},
+    }),
+  },
+};
+""",
+    encoding="utf-8",
+  )
+
+  def run_driver(req, mode="findings"):
+    res = subprocess.run(
+      ["node", str(fake_nm / "browser.cjs")],
+      input=json.dumps(req),
+      text=True,
+      capture_output=True,
+      check=False,
+      env={
+        **__import__("os").environ,
+        "FAKE_CHROMIUM_PATH": str(fake_bin),
+        "FAKE_A11Y_MODE": mode,
+      },
+    )
+    return res.returncode, json.loads(res.stdout)
+
+  base_req = {
+    "command": "inspect",
+    "url": "https://example.com",
+    "widths": [360],
+    "timeout": 1,
+    "engine": "auto",
+    "selector": "main",
+    "flow": [],
+    "output": str(tmp_path / "out"),
+  }
+  code_ok, ready_ok = run_driver({**base_req, "ready": "#app-ready"}, mode="clean")
+  assert code_ok == 0 and ready_ok["status"] == "captured"
+
+  code_timeout, ready_timeout = run_driver(
+    {**base_req, "ready": "#missing-ready"}, mode="clean"
+  )
+  assert code_timeout == 0 and ready_timeout["status"] == "findings"
+  assert {row["rule"] for row in ready_timeout["findings"]} == {"UIX104"}
+
+  code_a11y, a11y_bad = run_driver(
+    {**base_req, "command": "a11y", "a11y": True}, mode="findings"
+  )
+  assert code_a11y == 0 and a11y_bad["status"] == "findings"
+  assert {row["rule"] for row in a11y_bad["findings"]} == {
+    "UIX301",
+    "UIX302",
+    "UIX303",
+    "UIX304",
+    "UIX305",
+    "UIX306",
+  }
+
+  code_clean, a11y_clean = run_driver(
+    {**base_req, "command": "a11y", "a11y": True}, mode="clean"
+  )
+  assert code_clean == 0 and a11y_clean["status"] == "captured"
+  assert not a11y_clean["findings"]
