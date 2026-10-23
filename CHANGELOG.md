@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nuu
 
+- Name `GSAP` in Clause 8 as the go-to library to vendor into projects for animations.
+
 - Add a `Go-to libraries` section naming `SortableJS` for draggable and reorderable lists instead of custom drag-and-drop handlers.
 
 - Add optional overlap and stacking-depth checks to browser inspection, with sampled hit-test order and ancestor stacking properties.

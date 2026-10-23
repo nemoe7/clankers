@@ -68,7 +68,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 7. The sheet names 1200, 900, and 640. A width outside the list gets no behaviour of its own.
 
-8. Every transition shares one curve over 160 to 220 ms. Reduced motion turns animation off.
+8. Every transition shares one curve over 160 to 220 ms; for animations, vendor [GSAP](https://github.com/greensock/GSAP) into the project as the go-to library. Reduced motion turns animation off.
 
 9. Each control shows default, hover, focus, active, disabled, and loading. Lists also show empty, failed, and offline. Hover exists only where a pointer does.
 
