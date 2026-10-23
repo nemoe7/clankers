@@ -2477,6 +2477,11 @@ for raw in sys.stdin:
       "https://custom-preview.taile06e44.ts.net",
       "explicit preview proxy host overrides derived default"
     );
+    assert.equal(
+      checks.promptFill.previewProxyHost("custom-preview.taile06e44.ts.net", ""),
+      "https://custom-preview.taile06e44.ts.net",
+      "bare hostname normalizes to https"
+    );
     const fakeDoc = {
       querySelectorAll(sel) {
         if (sel === "span") {

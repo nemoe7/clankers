@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.70
+// @name         Arena.ai | NemoUtils | v1.10.71
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.70
+// @version      1.10.71
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -19,6 +19,8 @@
 // @grant        GM_download
 // @grant        GM_unregisterMenuCommand
 // @connect      arena.site
+// @connect      ts.net
+// @connect      *
 // ==/UserScript==
 
 (function () {
@@ -47,6 +49,7 @@
     fill: ["inserted", "rebuilt", "no-repo", "no-composer", "no-template", "filled"],
     trim: ["removed"],
     state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-selector", "requested", "selector-closed", "reset-accept"],
+    "preview-proxy": ["posted", "failed", "no-host"],
     wake: ["refused", "unavailable"],
     title: ["changed", "restored", "conditions"],
   };
@@ -610,6 +613,9 @@
 
     function proxyHost(raw) {
       var host = String(raw || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
+      if (/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(host)) {
+        host = "https://" + host;
+      }
       return /^https:\/\/[a-z0-9.-]+$/i.test(host) ? host : null;
     }
 
@@ -967,6 +973,11 @@
     }
 
     setProxyValue(PROXY_HOST_KEY, "Proxy - host", GM_getValue(PROXY_HOST_KEY, ""));
+    setProxyValue(
+      PREVIEW_PROXY_HOST_KEY,
+      "Proxy - preview host",
+      GM_getValue(PREVIEW_PROXY_HOST_KEY, ""),
+    );
     setProxyValue(PROXY_MASTER_KEY, "Proxy - master key", "");
 
     function settings() {
@@ -979,32 +990,68 @@
     var postedBase = null;
     var postedPreviews = {};
 
+    function sendRecentPreview(endpoint, item, stamp) {
+      var payload = { url: item.url, name: item.name || "" };
+      function onDone(status) {
+        if (status >= 200 && status < 300) {
+          logEvent("preview-proxy", "posted", { url: item.url, status: status });
+        } else {
+          if (postedPreviews[item.url] === stamp) {
+            delete postedPreviews[item.url];
+          }
+          logEvent("preview-proxy", "failed", { url: item.url, status: status }, "warn");
+        }
+      }
+      function viaFetch() {
+        if (typeof fetch !== "function") {
+          onDone(0);
+          return;
+        }
+        fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+          .then(function (r) {
+            onDone(r && typeof r.status === "number" ? r.status : 200);
+          })
+          .catch(function () {
+            onDone(0);
+          });
+      }
+      if (typeof GM_xmlhttpRequest === "function") {
+        requestJson("POST", endpoint, payload, function (status) {
+          if (status === 0 && typeof fetch === "function") {
+            viaFetch();
+          } else {
+            onDone(status);
+          }
+        });
+      } else {
+        viaFetch();
+      }
+    }
+
     function postRecentPreviews(doc) {
+      var items = discoverPreviews(doc);
+      if (!items.length) return;
       var host = previewProxyHost(
         GM_getValue(PREVIEW_PROXY_HOST_KEY, ""),
         GM_getValue(PROXY_HOST_KEY, ""),
       );
-      if (!host) return;
-      var items = discoverPreviews(doc);
+      if (!host) {
+        logEvent("preview-proxy", "no-host", { count: items.length }, "debug");
+        return;
+      }
       var i;
       var item;
       var stamp;
-      var payload;
       for (i = 0; i < items.length; i += 1) {
         item = items[i];
         stamp = host + "|" + item.url + "|" + (item.name || "");
         if (postedPreviews[item.url] === stamp) continue;
         postedPreviews[item.url] = stamp;
-        payload = { url: item.url, name: item.name || "" };
-        if (typeof fetch === "function") {
-          fetch(host + "/pwa/recent", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }).catch(function () {});
-        } else {
-          requestJson("POST", host + "/pwa/recent", payload, function () {});
-        }
+        sendRecentPreview(host + "/pwa/recent", item, stamp);
       }
     }
 
@@ -1169,6 +1216,8 @@
       subtree: true,
       childList: true,
       characterData: true,
+      attributes: true,
+      attributeFilter: ["src"],
     });
     window.addEventListener("popstate", sync);
     sync();
