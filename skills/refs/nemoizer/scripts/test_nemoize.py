@@ -614,6 +614,11 @@ def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
   assert description.returncode == 1, description.stderr
   assert "STE200" not in description.stdout
   assert "NMP100" in description.stdout and "STE100" in description.stdout
+  code_file = tmp_path / "app.py"
+  code_file.write_text("# Line one.\n# Line two.\n# Line three.\nx = 1\n")
+  comment_res = run(str(code_file), cwd=tmp_path)
+  assert comment_res.returncode == 1, comment_res.stderr
+  assert f"{code_file}:1: NMP101 3 -> 2" in comment_res.stdout
 
 
 def test_cmd_and_bat_files_extract_only_batch_comments_and_enforce_ste001(tmp_path):
@@ -957,6 +962,35 @@ def test_ste_and_hmn_rules_and_audit_mode(tmp_path):
   us_result = run(str(userscript), cwd=tmp_path)
   assert us_result.returncode == 0
   assert "HMN905" in us_result.stdout
+
+  manifest = tmp_path / "site.webmanifest"
+  manifest.write_text(
+    '{\n  "name": "Demo",\n  "kind": "transmit",\n  "repository": "demo"\n}\n',
+    encoding="utf-8",
+  )
+  manifest_result = run(str(manifest), cwd=tmp_path)
+  assert manifest_result.returncode == 0
+  assert manifest_result.stdout == ""
+
+  json_file = tmp_path / "package.json"
+  json_file.write_text(
+    '{\n  "name": "demo",\n  "kind": "transmit",\n  "repository": "demo"\n}\n',
+    encoding="utf-8",
+  )
+  json_result = run(str(json_file), cwd=tmp_path)
+  assert json_result.returncode == 0
+  assert json_result.stdout == ""
+
+  jsonc_file = tmp_path / "config.jsonc"
+  jsonc_file.write_text(
+    '{\n  // Transmit the message.\n  "kind": "transmit",\n  "repository": "demo"\n}\n',
+    encoding="utf-8",
+  )
+  jsonc_result = run(str(jsonc_file), cwd=tmp_path)
+  assert jsonc_result.returncode == 1
+  assert "config.jsonc:2: NMO100 Transmit -> send" in jsonc_result.stdout
+  assert "kind" not in jsonc_result.stdout
+  assert "repository" not in jsonc_result.stdout
 
   audit = subprocess.run(
     [sys.executable, str(SCRIPT.with_name("nemoizer")), "audit", str(note)],

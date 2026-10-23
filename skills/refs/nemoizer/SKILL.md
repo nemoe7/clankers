@@ -65,6 +65,7 @@ and the new one.
 - Use any comment syntax for `nonemo: <id>`; the scanner reads text, not syntax.
 - Apply an exclusion only to a known matching rule ID.
 - Print every nonemo marker with its path, line, rule ID, scope, and text when `nemoizer collect` or `--ignores` is used, and print every `nonemo` marker and manual-review finding when `nemoizer audit` or `--audit` is used.
+- Format audit reports with the [audit report template](references/audit-report.md).
 
 ```bash
 python skills/nemoizer/scripts/nemoizer collect .
@@ -108,7 +109,7 @@ Delete a marker when the line no longer needs it.
 - State a missing source fact without inventing a plausible replacement or hiding a relevant knowledge limit.
 - Remove a sentence that repeats its heading only when it adds no information.
 - Remove redundant document narration while retaining useful source credits, action-changing caveats, and change history.
-- Lead a contextual reply with its decision while retaining required evidence and reasoning that can change that decision.
+- Lead with the direct answer, do not restate the question, and order needed explanations as conclusion, reason, and action.
 - Limit instructions to 20 words and descriptions to 25 unless a longer form is necessary to preserve meaning.
 - Put one instruction in each sentence unless simultaneous actions require a single sentence.
 - Rewrite noun clusters longer than three words when the rewrite preserves the technical term and its meaning.
@@ -117,6 +118,9 @@ Delete a marker when the line no longer needs it.
 - Use a list for three or more steps or conditions while preserving their order and grouping.
 - Define an uncommon technical term when needed, and use that term consistently.
 - Prefer simple tenses unless a compound form carries confidence or current relevance that must survive.
+- Add code comments only when non-obvious logic requires them, and limit each comment block to two lines.
+- Match length and structure to task complexity, omitting unrequested examples, sections, tables, background, and follow-ups.
+- Provide requested finished text without meta commentary.
 
 ## Test assertions
 

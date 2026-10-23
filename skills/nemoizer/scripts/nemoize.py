@@ -72,7 +72,14 @@ except ImportError:
     ]
 
 
-from prose import COMMENT_SUFFIXES, SPECIAL_CODE_NAMES, prose_spans
+from prose import (
+  COMMENT_BLOCK_CAP,
+  COMMENT_SUFFIXES,
+  SPECIAL_CODE_NAMES,
+  comment_blocks,
+  prose_spans,
+  slash_comments,
+)
 
 # (name, avoided pattern, plain word).
 # A stem word that takes its own plain word.
@@ -144,6 +151,7 @@ PROSE_RULE_IDS = {
   "consecutive_emoji": "HMN909",
   "self_narration": "HMN910",
   "paragraph": "NMP100",
+  "comment_block": "NMP101",
   "serial_comma": "NMO003",
 }
 TEST_RULE_IDS = {"output_text": "NMT100", "measurement": "NMT200"}
@@ -173,6 +181,10 @@ SKIP_PATHS = (
   ".agents/skills",
   "arena-state",
 )
+SKIP_SUFFIXES = {
+  ".json",
+  ".webmanifest",
+}
 
 
 def text_file(path):
@@ -191,6 +203,8 @@ def text_file(path):
 
 def skipped(path, root, ignores):
   """True when a path sits under a skipped directory or an ignored prefix."""
+  if path.suffix.lower() in SKIP_SUFFIXES:
+    return True
   try:
     relative = path.resolve().relative_to(root.resolve())
   except ValueError:
@@ -208,7 +222,8 @@ def walk(targets, ignores):
   for target in targets:
     path = Path(target)
     if path.is_file():
-      yield path
+      if path.suffix.lower() not in SKIP_SUFFIXES:
+        yield path
       continue
     root = path if path.is_dir() else Path(".")
     for candidate in sorted(root.rglob("*")):
@@ -269,7 +284,17 @@ def scan(targets, ignores):
     lines = text.splitlines()
     file_ids, line_ids, found = exclusions(path, lines)
     marks.extend(found)
-    for number, line in enumerate(lines, 1):
+    if path.suffix.lower() == ".jsonc":
+      comment_map = {}
+      for comment_text, first, _ in slash_comments(text):
+        for offset, comment_line in enumerate(comment_text.splitlines()):
+          comment_map.setdefault(first + offset, []).append(comment_line)
+      line_pairs = sorted(
+        (number, "\n".join(parts)) for number, parts in comment_map.items()
+      )
+    else:
+      line_pairs = list(enumerate(lines, 1))
+    for number, line in line_pairs:
       if TABLE_ROW.match(line.strip()):
         continue
       excluded = file_ids | line_ids[number - 1]
@@ -1053,13 +1078,31 @@ def source_prose(path, text, context, paragraph_cap):
     context = "description"
   if path.suffix in COMMENT_SUFFIXES or path.name in SPECIAL_CODE_NAMES:
     spans = prose_spans(path, text)
-  elif path.suffix in {".json", ".csv", ".lock"}:
+  elif path.suffix in {".json", ".webmanifest", ".csv", ".lock"}:
     spans = []
   else:
     spans = [(text, 1, len(text.splitlines()))]
   lines = text.splitlines()
   file_ids, line_ids, _ = exclusions(path, lines)
   findings = []
+  if path.suffix in COMMENT_SUFFIXES or path.name in SPECIAL_CODE_NAMES:
+    code = PROSE_RULE_IDS["comment_block"]
+    if not suppressed(code, file_ids):
+      for start, count in comment_blocks(path, text):
+        if count > COMMENT_BLOCK_CAP and not suppressed(
+          code, set().union(*line_ids[start - 1 : start - 1 + count])
+        ):
+          findings.append(
+            {
+              "rule": code,
+              "path": str(path),
+              "line": start,
+              "column": 1,
+              "count": count,
+              "cap": COMMENT_BLOCK_CAP,
+              "status": "review",
+            }
+          )
   for value, first, last in spans:
     for row in prose_review(
       path,
