@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import measure
+
 SCRIPT = Path(__file__).with_name("uiux.py")
 
 
@@ -678,3 +680,32 @@ module.exports = {
   )
   assert code_clean == 0 and a11y_clean["status"] == "captured"
   assert not a11y_clean["findings"]
+
+  sheet = measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8"))
+  assert sheet["font-mono"].startswith('"Monaspace Neon"')
+  density_report = {
+    "width": 1280,
+    "elements": [
+      {
+        "selector": ".step-row",
+        "tag": "div",
+        "bounds": {"width": 1200, "height": 40},
+        "inkRatio": 0.14,
+        "maxSiblingGap": 960,
+        "values": {"height": "40px", "padding-left": "16px"},
+      },
+      {
+        "selector": "#branch-select",
+        "tag": "select",
+        "bounds": {"width": 560, "height": 40},
+        "values": {"height": "40px"},
+      },
+    ],
+  }
+  density_findings = measure.check_density(density_report)
+  assert [row["rule"] for row in density_findings] == ["UIX205", "UIX206", "UIX207"]
+  density_file = tmp_path / "density-report.json"
+  density_file.write_text(json.dumps(density_report), encoding="utf-8")
+  assert measure.main(["density", str(density_file)]) == 1
+  assert measure.main(["check", "-d", str(density_file)]) == 1
+  assert measure.main(["check", str(density_file)]) == 0

@@ -10,7 +10,7 @@ license: MIT
 
 - Install this skill's package with `pip install -e <skill>` or `uv pip install -e <skill>` (`uv tool install -e <skill>`) and run `nuu` directly; preserve an existing design record (`docs/design.md`), or use `references/style.css` (`-P house`).
 - Search the catalog (`nuu search`) and verify assets (`nuu assets`), then run static checks (`nuu lint`, `nuu extract`) before rendered checks (`nuu inspect`, `flow`, `a11y`, `audit`, `live`) at project widths plus `1280` and `360` px.
-- Retain screenshots, measurements (`measure.py`), flow results, and annotated composite boards (`nuu annotate`), separating automated findings from visual judgment and naming unrun checks.
+- Retain screenshots, measurements (`measure.py`), flow results, and annotated composite boards (`nuu annotate`), separating automated findings from visual judgment, naming each UI deviation from `nuu` with its reason, and naming unrun checks.
 - Keep live edits read-only unless authorized (`-Z`), repair only the requested scope, and update `docs/design.md` with linked visual references in the same change.
 
 ## House profile
@@ -34,7 +34,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 4. The roles resolve in light and in dark. The theme control names System, Light, and Dark, so the page can follow the machine.
 
-5. Four sizes from the sheet, three weights, one eyebrow size, and a tabular face for IDs.
+5. Four sizes from the sheet, three weights, one eyebrow size, and a tabular face for IDs, and MUST bundle and load custom fonts via [references/offline-fonts.md](references/offline-fonts.md) without reload jitter.
 
 6. Every gap lands on the 8 px scale. Rows are 40 px, panels take a 10 px radius and no shadow, and a touch target is at least 44 px.
 

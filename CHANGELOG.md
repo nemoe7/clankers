@@ -4,6 +4,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-23
+
+### Added
+
+#### nuu
+
+- Add `UIX205`, `UIX206`, and `UIX207` whitespace and layout-density checks (`measure.py density` and `uiux.py check --density`). Set `Monaspace Neon` as the leading font in `--font-mono`.
+
+- Require bundling and loading custom fonts via `references/offline-fonts.md` in Clause 5, and require the audit workflow to name each UI deviation from `nuu` with its reason.
+
+#### nemoizer
+
+- Format `references/rules.md` and per-rule `references/<id>.md` files in the `markdownlint` documentation layout, and add `--selftest` to `nemoize.py`.
+
+#### userscripts
+
+- Connect `#copy-state` in `app.js` to `Force save` in `userscripts/arena.user.js` via `postMessage`, keeping `/api/copy-state` clipboard copy as the standalone fallback.
+
+### Changed
+
+#### maintenance
+
+- Replace `ste-lint.py` in `check.py`, `lint_prose.py`, and `gate_pr.py` with `nemoize.py` while keeping blocking prose, comment, and PR checks. Distribute `nemo-ui-ux` and `nemoizer` to `nemoe7/wiki`.
+
 ## 2026-10-22
 
 ### Added

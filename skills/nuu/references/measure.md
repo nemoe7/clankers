@@ -4,7 +4,8 @@ Read computed values, compare them with the sheet, and keep the numbers. Two wid
 
 | Subcommand | Purpose | Arguments and Shorthands |
 | --- | --- | --- |
-| `check` | Compare computed-style report JSON with the sheet | `<report>`, `-s, --sheet <path>`, `-g, --scale <px>`, `-j, --json` |
+| `check` | Compare computed-style report JSON with the sheet | `<report>`, `-s, --sheet <path>`, `-g, --scale <px>`, `-d, --density`, `-j, --json` |
+| `density` | Check row/card ink ratio, sibling gaps, and control width caps | `<report>` |
 | `ruler` | Measure pixel gap between two `x,y` guides | `-f, --from <x,y>`, `-t, --to <x,y>`, `-g, --scale <px>`, `-j, --json` |
 
 ## Read the values

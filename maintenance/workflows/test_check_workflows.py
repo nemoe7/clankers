@@ -43,6 +43,9 @@ def test_distribution_plan_groups_domains_and_keeps_one_writer(monkeypatch):
   import pytest
 
   planner = distribution_planner()
+  profiles = {row["domain"]: row["repos"].split() for row in planner.PROFILES}
+  assert "nemoe7/wiki" in profiles["nemo-ui-ux"]
+  assert "nemoe7/wiki" in profiles["nemoizer"]
   path = Path(planner.__file__)
   overrides = {
     "arena": "example/shared example/arena",

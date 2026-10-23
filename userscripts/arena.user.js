@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.68
+// @name         Arena.ai | NemoUtils | v1.10.69
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.68
+// @version      1.10.69
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -3351,6 +3351,9 @@
       writeToHandle: writeToHandle,
       writeStateDownload: writeStateDownload,
       sameSaves: sameSaves,
+      previewFrame: previewFrame,
+      previewBase: previewBase,
+      notifyPreviewReady: notifyPreviewReady,
       STATE_WATCH_MS: STATE_WATCH_MS,
     })) {
       return function () {};
@@ -3387,16 +3390,36 @@
     var selected = null;
     var selectedKey = null;
 
-    function previewBase(doc) {
+    function previewFrame(doc) {
+      if (!doc || typeof doc.querySelectorAll !== "function") return null;
       var frames = doc.querySelectorAll("iframe[title]");
       var i;
       for (i = 0; i < frames.length; i += 1) {
         var title = frames[i].getAttribute("title") || "";
         if (title.indexOf("App preview on port 8000") === 0 && frames[i].src) {
-          return frames[i].src.replace(/\/+$/, "");
+          return frames[i];
         }
       }
       return null;
+    }
+
+    function previewBase(doc) {
+      var frame = previewFrame(doc);
+      return frame ? frame.src.replace(/\/+$/, "") : null;
+    }
+
+    function notifyPreviewReady(doc) {
+      var frame = previewFrame(doc);
+      if (!frame || !frame.contentWindow || typeof frame.contentWindow.postMessage !== "function") {
+        return false;
+      }
+      var target = frame.src ? frame.src.replace(/\/+$/, "") : "*";
+      try {
+        frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, target);
+        return true;
+      } catch (err) {
+        return false;
+      }
     }
 
     function stateJson(url, payload) {
@@ -3772,6 +3795,7 @@
     }
 
     async function fetchStateFile(manual, force) {
+      notifyPreviewReady(document);
       var base = previewBase(document);
       if (!base || stateBusy) return;
       stateBusy = true;
@@ -3934,6 +3958,27 @@
       ),
     );
 
+    function onPreviewMessage(event) {
+      if (!event || !event.data || typeof event.data !== "object") return;
+      var frame = previewFrame(document);
+      var base = previewBase(document);
+      if (frame && frame.contentWindow && event.source && event.source !== frame.contentWindow) {
+        return;
+      }
+      if (!event.source && base && event.origin && base.indexOf(event.origin) !== 0) {
+        return;
+      }
+      if (event.data.type === "clankers:preview-ready") {
+        notifyPreviewReady(document);
+      } else if (event.data.type === "clankers:force-save") {
+        fetchStateFile(true, true);
+      }
+    }
+
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("message", onPreviewMessage);
+    }
+    notifyPreviewReady(document);
     fetchStateFile(false);
     var stopStateWatch = jitteredTimer(function () {
       fetchStateFile(false);
@@ -3945,6 +3990,9 @@
       }, stateWatchMs(), HTTP_JITTER_MS);
     };
     return function () {
+      if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+        window.removeEventListener("message", onPreviewMessage);
+      }
       restartStateWatchHook = null;
       stopStateWatch();
       menus.forEach(menuDrop);

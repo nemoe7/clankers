@@ -11,7 +11,8 @@
 | `record` | Initialize or check `docs/design.md` | `<init\|check>`, `-r, --root <path>`, `-p, --path <rel>`, `-t, --title <text>`, `-s, --status <state>`, `-f, --force`, `-j, --json` |
 | `asset` | Fetch, verify, or record licensed assets | `<fetch\|verify\|record>`, `-r, --root <path>`, `-u, --url <https-url>`, `-o, --output <rel>`, `-s, --sha256 <hex>`, `-l, --license <spdx>`, `-a, --attribution <text>`, `-p, --purpose <text>`, `-d, --design-doc <rel>`, `-f, --force`, `-j, --json` |
 | `extract` | Extract candidate tokens from source or measure JSON | `-r, --root <path>`, `-m, --measure <path>`, `-o, --output <rel>`, `-f, --force`, `-j, --json` |
-| `check` | Check computed-style measure JSON against the sheet | `<report>`, `-s, --sheet <path>`, `-g, --scale <px>`, `-j, --json` |
+| `check` | Check computed-style measure JSON against the sheet | `<report>`, `-s, --sheet <path>`, `-g, --scale <px>`, `-d, --density`, `-j, --json` |
+| `density` | Check row/card ink ratio (`UIX205`), sibling gaps (`UIX206`), and control width caps (`UIX207`) | `<report>` |
 | `ruler` | Measure pixel distance between two `x,y` guides | `-f, --from <x,y>`, `-t, --to <x,y>`, `-g, --scale <px>`, `-j, --json` |
 | `annotate` | Render boxes, arrows, labels, and callouts on a PNG | `-i, --input <png>`, `-o, --output <png>`, `-b, --box <spec>`, `-l, --label <spec>`, `-a, --arrow <spec>`, `-c, --callout <spec>`, `-s, --spec <json>`, `-j, --json` |
 | `audit` | Run source, measure, flow, and rendered a11y checks | `-r, --root <path>`, `-u, --url <url>`, `-s, --sheet <path>`, `-m, --measure <path>`, `-f, --flows <json>`, `-c, --change <spec>`, `-A, --allow-live-edits`, `-R, --ready <selector>`, `-o, --out <dir>`, `-j, --json` |
@@ -23,6 +24,7 @@
 | `UIX101`–`UIX103` | Source / browser | Missing control accessible name, image `alt`, form label, heading skip, `outline: none` without `:focus-visible`, or horizontal overflow |
 | `UIX104` | Browser (`--ready`) | Declared `--ready SELECTOR` did not match a visible element within the timeout |
 | `UIX201`–`UIX204` | Measure (`--measure`) | Off-scale spacing, off-ramp typography, unapproved border radius, or text contrast below 4.5:1 (`3:1` large text) |
+| `UIX205`–`UIX207` | Density (`density`, `--density`) | Row/card ink ratio below `0.25` at `>= 900` px (`UIX205`), sibling horizontal gap `> 320` px and `> 40%` width (`UIX206`), or form control width `> 480` px (`UIX207`) |
 | `UIX301` | Rendered `a11y` | Landmarks (`<main>` or `[role="main"]`) and skip-link target missing or broken |
 | `UIX302` | Rendered `a11y` | Visible interactive control without an accessible name or with `aria-hidden="true"` while focusable |
 | `UIX303` | Rendered `a11y` | Visible interactive control with bounding box smaller than `24x24` CSS px |

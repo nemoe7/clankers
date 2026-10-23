@@ -126,7 +126,7 @@ STE_DOCS = (
   "gpt-plugins/README.md",
   "CHANGELOG.md",
 )
-STE_LINT = ".agents/skills/asd-ste100/scripts/ste-lint.py"
+STE_LINT = "skills/refs/nemoizer/scripts/nemoize.py"
 # The prose lint covers the code comments and the documents outside the STE list.
 PROSE_LINT = "maintenance/lint_prose.py"
 NEMOIZER = "skills/refs/nemoizer/scripts/nemoize.py"

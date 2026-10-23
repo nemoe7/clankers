@@ -24,7 +24,7 @@ PROFILES = (
   },
   {
     "domain": "nemo-ui-ux",
-    "repos": "nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup",
+    "repos": "nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup nemoe7/wiki",
     "skills": "nuu",
     "legacy": "nemo-ui nemo-ui-ux",
   },

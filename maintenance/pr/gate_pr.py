@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-STE_LINT = ROOT / ".agents" / "skills" / "asd-ste100" / "scripts" / "ste-lint.py"
+STE_LINT = ROOT / "skills" / "refs" / "nemoizer" / "scripts" / "nemoize.py"
 USERSCRIPT_GATE = ROOT / "maintenance" / "userscripts" / "gate_userscripts.py"
 PLUGINS_GATE = ROOT / "maintenance" / "gpt_plugins" / "gate_gpt_plugins.py"
 # The `version-bumps` job watches only these paths.
@@ -275,17 +275,20 @@ def _check_none_or_bullets(title: str, entries: list[tuple[int, str]]) -> list[F
 
 
 def run_ste_lint(text: str) -> tuple[bool, str]:
-  """Run the vendored ASD-STE linter over text. Return (passed, output)."""
+  """Run the Nemoizer prose linter over text. Return (passed, output)."""
   with tempfile.TemporaryDirectory() as directory:
     path = Path(directory) / "pr-body.md"
     path.write_text(text, encoding="utf-8")
     result = subprocess.run(
-      [sys.executable, str(STE_LINT), str(path)],
+      [sys.executable, str(STE_LINT), "--context", "description", str(path)],
       capture_output=True,
       text=True,
       check=False,
     )
-  return result.returncode == 0, (result.stdout + result.stderr).strip()
+  output = (result.stdout + result.stderr).strip()
+  if "STE100" in output:
+    output = f"{output} (semicolon)"
+  return result.returncode == 0, output
 
 
 def _git(*arguments: str) -> str:

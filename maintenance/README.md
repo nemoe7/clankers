@@ -123,7 +123,7 @@ python3 maintenance/lint_prose.py
 
 `maintenance/check.py` runs the same lint, so the local gate and CI cover it.
 
-The prose linter runs the ste-lint rules over the covered scope: `docs/`, every `README.md`, and `CHANGELOG.md`. It also checks each tracked first-party code comment and Python docstring. It reads `.bat`, `.cjs`, `.css`, `.html`, `.ini`, `.js`, `.jsonc`, `.py`, `.sh`, `.svg`, `.toml`, and `.yml` files, plus `Dockerfile` and `arena-preview`.
+The prose linter runs the nemoizer rules over the covered scope: `docs/`, every `README.md`, and `CHANGELOG.md`. It also checks each tracked first-party code comment and Python docstring. It reads `.bat`, `.cjs`, `.css`, `.html`, `.ini`, `.js`, `.jsonc`, `.py`, `.sh`, `.svg`, `.toml`, and `.yml` files, plus `Dockerfile` and `arena-preview`.
 
 `maintenance/extract_prose.py` groups code prose by file in JSON. With no path arguments it selects tracked first-party code. `lint_prose.py` consumes these groups. Sentence rules apply per section, and synonym rules span each file.
 

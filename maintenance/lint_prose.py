@@ -16,7 +16,6 @@ from extract_prose import (
   span_comments,
 )
 
-LINTER = Path(".agents/skills/asd-ste100/scripts/ste-lint.py")
 SKIP_PARTS = {".git", ".venv", "node_modules", ".agents", "arena-state", "__pycache__"}
 ADR_REFERENCE = re.compile(r"\bADR[- ]?\d|docs/adr")
 COMMENT_BLOCK_CAP = 2
@@ -25,7 +24,18 @@ DIRECTIVE_MARKER = re.compile(
   r"nonemo:\s*[A-Za-z0-9_-]+|noqa(?::.*)?|type:\s*ignore(?:\[.*\])?|pragma:\s*no cover|region|endregion)\s*$",
   re.IGNORECASE,
 )
-_STE_LINTER = None
+_NEMOIZER = None
+STRICT_PASSIVE_RE = re.compile(
+  r"\b(?:is|are|was|were|been|being)\s+[a-z]{3,}ed\b",
+  re.IGNORECASE,
+)
+SYNONYM_GROUPS = (
+  ("check", "validate"),
+  ("delete", "remove"),
+  ("start", "begin"),
+  ("stop", "halt"),
+  ("modify", "alter"),
+)
 
 
 def directive_marker_lines(source: str, path: Path | None = None) -> set[int]:
@@ -97,12 +107,59 @@ def report(label: str, findings: list[dict], note: str | None = None) -> None:
     )
 
 
+def _nemoizer_findings(label: str, text: str, strict: bool = False) -> list[dict]:
+  """Collect nemoizer findings for one prose block or section."""
+  module = nemoizer_linter()
+  blocking = {"STE001", "STE100", "STE300"}
+  if not strict:
+    blocking |= {"STE200", "NMP100", "NMO003"}
+  findings: list[dict] = []
+  for row in module.prose_review(
+    Path(label), text, "description", module.PARAGRAPH_CAP
+  ):
+    rule = row["rule"]
+    if rule in blocking:
+      findings.append(
+        {
+          "line": row["line"],
+          "col": row["column"],
+          "level": "advisory-free",
+          "rule": rule,
+          "message": f"{row['count']} -> {row['cap']}",
+        }
+      )
+  for line_no, line in enumerate(text.splitlines(), start=1):
+    for match in STRICT_PASSIVE_RE.finditer(line):
+      findings.append(
+        {
+          "line": line_no,
+          "col": match.start() + 1,
+          "level": "advisory",
+          "rule": "STE901",
+          "message": f"passive voice '{match.group(0)}'",
+        }
+      )
+  words = set(re.findall(r"[a-z]+", text.lower()))
+  for first, second in SYNONYM_GROUPS:
+    if first in words and second in words:
+      findings.append(
+        {
+          "line": 1,
+          "col": 1,
+          "level": "advisory",
+          "rule": "synonym-rotation",
+          "message": f"uses both '{first}' and '{second}'",
+        }
+      )
+  return findings
+
+
 def lint(label: str, text: str, adr: bool, strict: bool = False) -> int:
   """Run the linter once, failing on a hard finding, or on any finding in strict mode."""
   if adr and ADR_REFERENCE.search(text):
     report(label, [], "A comment or docstring refers to an ADR.")
     return 1
-  findings, _ = ste_linter().lint(text, filename=label)
+  findings = _nemoizer_findings(label, text, strict=strict)
   hard = any(item["level"] == "advisory-free" for item in findings)
   if not findings or not (strict or hard):
     return 0
@@ -110,22 +167,9 @@ def lint(label: str, text: str, adr: bool, strict: bool = False) -> int:
   return 1
 
 
-def ste_linter():
-  """Load the vendored STE linter without changing its code."""
-  global _STE_LINTER
-  if _STE_LINTER is None:
-    spec = importlib.util.spec_from_file_location("ste_lint", LINTER)
-    if spec is None or spec.loader is None:
-      raise RuntimeError(f"Cannot load {LINTER}.")
-    _STE_LINTER = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(_STE_LINTER)
-  return _STE_LINTER
-
-
 def strict_lint(label: str, sections: list[str], adr: bool) -> int:
   """Check sentences per prose section and synonyms across the file."""
   failures = 0
-  module = ste_linter()
   for number, text in enumerate(sections, start=1):
     if adr and ADR_REFERENCE.search(text):
       report(
@@ -133,14 +177,14 @@ def strict_lint(label: str, sections: list[str], adr: bool) -> int:
       )
       failures += 1
       continue
-    findings, _ = module.lint(text, filename=label)
+    findings = _nemoizer_findings(label, text, strict=True)
     findings = [item for item in findings if item["rule"] != "synonym-rotation"]
     if not findings:
       continue
     report(f"{label} section {number}", findings)
     failures += 1
-  findings, _ = module.lint("\n\n".join(sections), filename=label)
-  rotations = [item for item in findings if item["rule"] == "synonym-rotation"]
+  combined = _nemoizer_findings(label, "\n\n".join(sections), strict=True)
+  rotations = [item for item in combined if item["rule"] == "synonym-rotation"]
   if rotations:
     report(f"{label} file-wide synonyms", rotations)
     failures += 1

@@ -19,7 +19,13 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from annotate import annotate_image
-from measure import DEFAULT_SCALE, DEFAULT_SHEET, parse_sheet, point
+from measure import (
+  DEFAULT_SCALE,
+  DEFAULT_SHEET,
+  check_density,
+  parse_sheet,
+  point,
+)
 from measure import check as check_measurements
 from measure import main as measure_main
 
@@ -380,18 +386,30 @@ def browser(args):
       capture["house_measurements"] = check_measurements(
         capture.get("measurements", {}), sheet
       )
+      capture["density_findings"] = check_density(capture.get("measurements", {}))
+      location = {
+        "width": capture["width"],
+        "scheme": capture["scheme"],
+        "motion": capture["motion"],
+      }
       result.setdefault("findings", []).extend(
         {
           "rule": "UIX201",
           "severity": "review",
           "evidence": finding,
-          "location": {
-            "width": capture["width"],
-            "scheme": capture["scheme"],
-            "motion": capture["motion"],
-          },
+          "location": location,
         }
         for finding in capture["house_measurements"]
+      )
+      result.setdefault("findings", []).extend(
+        {
+          "rule": row["rule"],
+          "severity": "review",
+          "selector": row["selector"],
+          "evidence": row["evidence"],
+          "location": location,
+        }
+        for row in capture["density_findings"]
       )
     if result.get("findings"):
       result["status"] = "findings"
@@ -462,7 +480,7 @@ def doctor(root, manifest=None, config=None):
 
 def main(argv=None):
   raw_args = list(sys.argv[1:] if argv is None else argv)
-  if raw_args and raw_args[0] in {"check", "ruler"}:
+  if raw_args and raw_args[0] in {"check", "ruler", "density"}:
     return measure_main(raw_args)
   parser = argparse.ArgumentParser(description=__doc__)
   commands = parser.add_subparsers(dest="command", required=True)
@@ -479,6 +497,7 @@ def main(argv=None):
     "a11y",
     "live",
     "check",
+    "density",
     "ruler",
   ):
     command = commands.add_parser(name)
@@ -486,6 +505,10 @@ def main(argv=None):
       command.add_argument("report", type=Path)
       command.add_argument("-s", "--sheet", type=Path, default=DEFAULT_SHEET)
       command.add_argument("-k", "--scale", type=float, default=DEFAULT_SCALE)
+      command.add_argument("-d", "--density", action="store_true")
+      continue
+    if name == "density":
+      command.add_argument("report", type=Path)
       continue
     if name == "ruler":
       command.add_argument("-f", "--from", dest="start", type=point, required=True)

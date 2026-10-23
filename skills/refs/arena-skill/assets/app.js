@@ -1557,7 +1557,24 @@ setInterval(showClock, 1000);
 // Copy state exports notes, tasks, and report answers for `state import`.
 // One request carries the server's NDJSON, which matches the save file.
 const copyStateButton = $('#copy-state');
+let userscriptForceSave = false;
+window.addEventListener('message', event => {
+  if (!event || !event.data || event.data.type !== 'clankers:userscript-ready') return;
+  userscriptForceSave = true;
+  copyStateButton.title = 'Force save state';
+  copyStateButton.setAttribute('aria-label', 'Force save state');
+});
+if (typeof window !== 'undefined' && window.parent && window.parent !== window &&
+    typeof window.parent.postMessage === 'function') {
+  try { window.parent.postMessage({ type: 'clankers:preview-ready' }, '*'); }
+  catch {}
+}
 copyStateButton.addEventListener('click', async () => {
+  if (userscriptForceSave && typeof window !== 'undefined' && window.parent &&
+      window.parent !== window && typeof window.parent.postMessage === 'function') {
+    window.parent.postMessage({ type: 'clankers:force-save' }, '*');
+    return;
+  }
   let payload = null;
   try { payload = await (await request('/api/copy-state')).json(); }
   catch { payload = null; }

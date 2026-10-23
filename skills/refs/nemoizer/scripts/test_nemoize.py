@@ -979,3 +979,18 @@ def test_ste_and_hmn_rules_and_audit_mode(tmp_path):
   assert "STE904" in audit.stdout
   assert "STE001" not in audit.stdout
   assert markers.main([str(note)]) == 0
+
+
+def test_references_follow_markdownlint_doc_layout():
+  refs_dir = SCRIPT.parent.parent / "references"
+  rules_md = (refs_dir / "rules.md").read_text(encoding="utf-8")
+  assert "\n# Rules\n" in rules_md
+  for code in sorted(nemoize.KNOWN_RULE_IDS - nemoize.RESERVED_RULE_IDS):
+    assert f"\n## `{code}` - " in rules_md
+    rule_file = refs_dir / f"{code.lower()}.md"
+    assert rule_file.is_file(), f"missing {rule_file.name}"
+    text = rule_file.read_text(encoding="utf-8")
+    assert f"\n# `{code}` - " in text
+    assert "\nTags: " in text
+    assert "\nAliases: " in text
+    assert "\nRationale: " in text

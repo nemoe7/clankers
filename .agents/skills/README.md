@@ -4,7 +4,7 @@ These third-party tools audit and lint the repository. They are not owner skills
 
 Copies retain skill entry points, required references and scripts, and licenses. Retained upstream files stay unchanged. Local fixes belong upstream.
 
-Copies keep upstream paths: ponytail’s six skills sit under its own `skills/` directory. Style gates deliberately skip them.
+Copies keep upstream paths: ponytail's six skills sit under its own `skills/` directory. Style gates deliberately skip them.
 
 `ruff.toml` excludes `.agents/skills`. Markdownlint covers `rules/**/*.md`, ignores `skills/**`, and excludes vendored Markdown from the count `check.py` guards.
 

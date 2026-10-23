@@ -2628,7 +2628,29 @@ function checkStateDownload(api, session, logging) {
     "A pushed branch reads from its /tree/ anchor",
   );
   assert.equal(stateBranch(docWith([repoLink])), "", "A repository link alone names no branch");
-  console.log("ok state download 33");
+  var posted = [];
+  var previewDoc = {
+    querySelectorAll: function () {
+      return [
+        {
+          src: "https://sbx-test.arena.site/",
+          getAttribute: function (name) {
+            return name === "title" ? "App preview on port 8000" : "";
+          },
+          contentWindow: {
+            postMessage: function (payload, target) {
+              posted.push([payload, target]);
+            },
+          },
+        },
+      ];
+    },
+  };
+  assert.equal(api.notifyPreviewReady(previewDoc), true);
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0][0].type, "clankers:userscript-ready");
+  assert.equal(posted[0][1], "https://sbx-test.arena.site");
+  console.log("ok state download 34");
 }
 
 const { test } = require("node:test");
