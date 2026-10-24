@@ -998,8 +998,8 @@ def resolve_compare_state_source(state_dir,source=None):
 	if uploads_dir.is_dir():
 		candidates=[path for path in uploads_dir.iterdir()if path.is_file()and path.suffix.lower()in{'.ndjson','.json'}]
 		if candidates:candidates.sort(key=lambda path:path.stat().st_mtime,reverse=True);return candidates[0]
-	saved=Path(state_dir)/'saved-state.ndjson'
-	if saved.is_file():return saved
+	for candidate in(Path(state_dir)/'backups'/'state-latest.ndjson',Path(state_dir)/'backups'/'state-previous.ndjson',Path(state_dir)/'saved-state.ndjson'):
+		if candidate.is_file():return candidate
 	raise ValueError('Give a state file or upload one first')
 def format_state_comparison(comparison,source=None):
 	label=f" ({Path(source).name})"if source is not None else'';live_stamp=clip_stamp(comparison.get('live_stamp'))or'none';file_stamp=clip_stamp(comparison.get('file_stamp'))or'none';lines=[f"State compare{label}: {comparison['verdict']} (live {live_stamp}, file {file_stamp})"];groups=comparison.get('groups')or{}
@@ -1847,6 +1847,11 @@ def parse_state_import(text):
 AUTOSAVE_HISTORY='userscript-autosave-history'
 AUTOSAVE_RECEIPTS='userscript-autosave-receipts'
 AUTOSAVE_OFFER_META='userscript-autosave-offered'
+FORCE_SAVE_META='userscript-force-save'
+CLEARED_META='state-explicitly-cleared'
+BACKUP_DIR='backups'
+LATEST_BACKUP='state-latest.ndjson'
+PREVIOUS_BACKUP='state-previous.ndjson'
 def autosave_core_and_stamp(records):
 	if not isinstance(records,list)or not all(isinstance(row,dict)for row in records):raise TypeError('Autosave core must be an array of records')
 	if any(row.get('type')=='userscript-autosave'for row in records):raise ValueError('Autosave core cannot contain history')
@@ -2101,7 +2106,7 @@ def sqlite_api():
 	return sqlite3
 class Store:
 	def __init__(self,directory,create=False,save_path=None):
-		directory=Path(directory).resolve();self.path=directory/'state.sqlite3';self.save_path=Path(save_path)if save_path else self.path.parent/SAVED_STATE;existed=self.path.is_file()
+		directory=Path(directory).resolve();self.path=directory/'state.sqlite3';self.save_path=Path(save_path)if save_path else self.path.parent/SAVED_STATE;self.latest_backup_path=self.path.parent/BACKUP_DIR/LATEST_BACKUP;self.previous_backup_path=self.path.parent/BACKUP_DIR/PREVIOUS_BACKUP;existed=self.path.is_file()
 		if not create and not existed:raise FileNotFoundError(f"Inbox missing: {self.path}. The sandbox may have been reset, so follow the restore routine: run scripts/install.sh from the repository root, start `arena-preview serve --port 8000` with the start_process tool, then `arena-preview read`.")
 		if create and not existed:directory.mkdir(parents=True,exist_ok=True,mode=448)
 		with closing(self.connect())as db,db:
@@ -2147,6 +2152,18 @@ class Store:
 			if'approval'not in columns:db.execute("ALTER TABLE fetch_jobs ADD COLUMN approval TEXT NOT NULL DEFAULT 'approved' CHECK (approval IN ('pending', 'approved', 'denied'))")
 			if'origin'not in columns:db.execute("ALTER TABLE fetch_jobs ADD COLUMN origin TEXT NOT NULL DEFAULT 'agent'")
 		if not existed:self.path.chmod(384)
+		if create:self._auto_restore_if_empty()
+	def _auto_restore_if_empty(self):
+		if self.meta_value(CLEARED_META)=='1':return
+		with closing(self.connect())as db:has_rows=any(db.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()for table in('notes','reports','submissions','tasks'))
+		if has_rows:return
+		for candidate in(self.latest_backup_path,self.previous_backup_path):
+			if not candidate.is_file():continue
+			try:text=candidate.read_text(encoding='utf-8')
+			except OSError:continue
+			if not text.strip():continue
+			try:self.import_state(text,replace_tasks=True);self.autosave();return
+			except(OSError,ValueError,TypeError,KeyError,sqlite_api().Error,RuntimeError)as error:print(f"preview: auto-restore skipped {candidate.name}: {error}",file=sys.stderr)
 	def id_matches(self,token):
 		token=bare_id(token);like=f"{token}%";found=[]
 		with closing(self.connect())as db:
@@ -2252,7 +2269,7 @@ class Store:
 			if tasks is not None:
 				for item in tasks['finished']+tasks['upcoming']:item['updated_at']=clip_stamp(item['updated_at'])
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
-			polling=self.polling();runs=live_runs(self.path.parent)if polling else[];return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_FLAG_META)),'read_set':read_set_files(self.repository_root()),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META)),'gate_threshold':GATE_THRESHOLD,'display_tz':meta.get(TIMEZONE_META),'repo':self.repository_root().name}
+			polling=self.polling();runs=live_runs(self.path.parent)if polling else[];return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_FLAG_META)),'read_set':read_set_files(self.repository_root()),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META)),'gate_threshold':GATE_THRESHOLD,'display_tz':meta.get(TIMEZONE_META),'repo':self.repository_root().name,'force_save_id':meta.get(FORCE_SAVE_META)}
 	def tasks(self):
 		with closing(self.connect())as db:
 			rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall();records=attach_blockers(db,[task_row(row)for row in rows])
@@ -2424,7 +2441,11 @@ class Store:
 	def userscript_history(self,shared=None):
 		with self.transaction(shared,autosave=False)as db:row=db.execute('SELECT value FROM meta WHERE key = ?',(AUTOSAVE_HISTORY,)).fetchone();return json.loads(row[0])if row else[]
 	def userscript_scope(self):root=self.path.parent.parent;return{'repo':root.name,'branch':workspace_branch(root)or''}
-	def userscript_snapshot(self):core,counts=self.state_lines(self.state()['notes'],self.tasks()or{});core,stamp=autosave_core_and_stamp(core);scope=self.userscript_scope();history=self.userscript_history();stamps=self.newest_stamps();rows=[row for row in history if row['scope']==scope and row.get('stamp')];return{'save_id':str(uuid.uuid4()),'scope':scope,'core':core,'digest':autosave_digest(core),'history':rows,'lastsave':rows[-1]['stamp']if rows else None,'beforelastsave':rows[-2]['stamp']if len(rows)>1 else None,'text':state_ndjson(core+rows),'counts':counts,'stamp':stamp,'stamps':stamps}
+	def request_userscript_force_save(self,shared=None):
+		save_id=str(uuid.uuid4())
+		with self.transaction(shared,autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(FORCE_SAVE_META,save_id))
+		return save_id
+	def userscript_snapshot(self):core,counts=self.state_lines(self.state()['notes'],self.tasks()or{});core,stamp=autosave_core_and_stamp(core);scope=self.userscript_scope();history=self.userscript_history();stamps=self.newest_stamps();rows=[row for row in history if row['scope']==scope and row.get('stamp')];force_save_id=self.meta_value(FORCE_SAVE_META);save_id=force_save_id if force_save_id else str(uuid.uuid4());return{'save_id':save_id,'force':bool(force_save_id),'scope':scope,'core':core,'digest':autosave_digest(core),'history':rows,'lastsave':rows[-1]['stamp']if rows else None,'beforelastsave':rows[-2]['stamp']if len(rows)>1 else None,'text':state_ndjson(core+rows),'counts':counts,'stamp':stamp,'stamps':stamps}
 	def confirm_userscript_save(self,payload):
 		save_id,scope=payload.get('save_id'),payload.get('scope')
 		if not isinstance(save_id,str):raise TypeError('Autosave save ID must be a UUID string')
@@ -2442,6 +2463,7 @@ class Store:
 				scope_receipts[save_id]=digest;history=self.userscript_history(db);record={'type':'userscript-autosave','version':1,'save_id':save_id,'scope':scope,'digest':digest,'core':core,'stamp':stamp,'confirmed_at':now()};previous=[item for item in history if item['scope']==scope];kept=previous[-1:]+[record]
 				for item in kept:item['receipts']=scope_receipts.copy()
 				history=[item for item in history if item['scope']!=scope]+kept;db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(AUTOSAVE_HISTORY,json.dumps(history)));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(AUTOSAVE_RECEIPTS,json.dumps(receipts)));db.execute('DELETE FROM meta WHERE key = ?',(AUTOSAVE_OFFER_META,))
+			db.execute('DELETE FROM meta WHERE key = ?',(FORCE_SAVE_META,))
 		return{'confirmed':True,'save_id':save_id,'digest':digest}
 	def offer_userscript_backup(self,payload):
 		if not isinstance(payload,dict):raise TypeError('Expected a backup offer object')
@@ -2500,13 +2522,36 @@ class Store:
 			removed=db.execute('SELECT value FROM meta WHERE key = ?',(REMOVED_META,)).fetchone();mark=import_stamp(removed[0])if removed else None;stamps['removed']=mark.isoformat()if mark else None
 		return stamps
 	def newest_stamp(self,stamps=None):stamps=stamps or self.newest_stamps();values=[import_stamp(value)for value in stamps.values()];values=[value for value in values if value];return max(values).isoformat()if values else None
+	def rotate_backup(self):
+		text=''
+		if self.latest_backup_path.is_file():
+			try:text=self.latest_backup_path.read_text(encoding='utf-8')
+			except OSError:text=''
+		if not text.strip():
+			lines,counts=self.state_lines(self.state()['notes'],self.tasks()or{})
+			if any(counts.values()):text=state_ndjson(lines+self.userscript_history())
+		if text.strip():self.previous_backup_path.parent.mkdir(parents=True,exist_ok=True);self.previous_backup_path.write_text(text,encoding='utf-8');return True
+		return False
 	def save_state(self,payload):
 		if not isinstance(payload,dict):raise TypeError('Save a state object')
 		notes=payload.get('notes');tasks=payload.get('tasks')
 		if tasks is None:tasks={}
-		lines,counts=self.state_lines(notes,tasks);path=self.save_path
+		lines,counts=self.state_lines(notes,tasks);text=state_ndjson(lines+self.userscript_history());path=self.save_path
 		if path.parent!=Path('.'):path.parent.mkdir(parents=True,exist_ok=True)
-		path.write_text(state_ndjson(lines+self.userscript_history()),encoding='utf-8');return{'path':str(path),**counts}
+		path.write_text(text,encoding='utf-8');self.latest_backup_path.parent.mkdir(parents=True,exist_ok=True);self.latest_backup_path.write_text(text,encoding='utf-8')
+		if any(counts.values()):
+			with closing(self.connect())as db,db:db.execute('DELETE FROM meta WHERE key = ?',(CLEARED_META,))
+		return{'path':str(path),'latest_path':str(self.latest_backup_path),**counts}
+	def save_backup(self):result=self.save_state({'notes':self.state()['notes'],'tasks':self.tasks()});self.request_userscript_force_save();return result
+	def restore_state(self,previous=False):
+		candidates=(self.previous_backup_path,)if previous else(self.latest_backup_path,self.previous_backup_path,self.save_path);chosen=None;text=''
+		for candidate in candidates:
+			if not candidate.is_file():continue
+			try:raw=candidate.read_text(encoding='utf-8')
+			except OSError:continue
+			if raw.strip():chosen=candidate;text=raw;break
+		if chosen is None:label='previous backup'if previous else'backup';raise ValueError(f"No non-empty {label} file found to restore")
+		receipt=self.import_state(text,replace_tasks=True,rotate=not previous);self.request_userscript_force_save();self.autosave();return receipt
 	def uploads(self):
 		with closing(self.connect())as db:rows=db.execute('SELECT * FROM uploads WHERE note_id IS NOT NULL ORDER BY seq').fetchall()
 		return[upload_row(row,self.path.parent)for row in rows]
@@ -2664,8 +2709,13 @@ class Store:
 			if target is not None:target.unlink(missing_ok=True)
 			raise
 		self.autosave();return fetch_row(result,self.path.parent)
-	def import_state(self,text,replace_tasks=False):
-		records=parse_state_import(text);raw_history=[row for row in records if row.get('type')=='userscript-autosave'];history=[autosave_record(row)for row in raw_history];refreshed={raw_row['save_id']:(raw_row['digest'],row['digest'])for(raw_row,row)in zip(raw_history,history)if raw_row.get('digest')!=row['digest']}
+	def import_state(self,text,replace_tasks=False,rotate=True):
+		records=parse_state_import(text)
+		if rotate and self.latest_backup_path.is_file():
+			try:prior=self.latest_backup_path.read_text(encoding='utf-8')
+			except OSError:prior=''
+			if prior.strip():self.previous_backup_path.parent.mkdir(parents=True,exist_ok=True);self.previous_backup_path.write_text(prior,encoding='utf-8')
+		raw_history=[row for row in records if row.get('type')=='userscript-autosave'];history=[autosave_record(row)for row in raw_history];refreshed={raw_row['save_id']:(raw_row['digest'],row['digest'])for(raw_row,row)in zip(raw_history,history)if raw_row.get('digest')!=row['digest']}
 		for row in history:
 			if'receipts'in row:row['receipts']={save_id:refreshed[save_id][1]if save_id in refreshed and digest==refreshed[save_id][0]else digest for(save_id,digest)in row['receipts'].items()}
 		records=[row for row in records if row.get('type')!='userscript-autosave'];groups={};imported_receipts={}
@@ -3066,11 +3116,12 @@ class Store:
 			if dismissed_by_owner:db.execute('INSERT INTO notes (id, text, at, quiet, blocking) VALUES (?, ?, ?, 1, 0)',(new_id(),f"The owner dismissed the report {report_id} ({row['title']}).",now()))
 		if stale_only:return True
 	def clear_state(self):
-		guard_task_runs(self.path.parent,action='clear state');counts={}
+		guard_task_runs(self.path.parent,action='clear state');self.rotate_backup();counts={}
 		with self.transaction()as db:
 			for table in('notes','reports','submissions','tasks','uploads','fetch_jobs'):counts[table]=db.execute(f"SELECT count(*) FROM {table}").fetchone()[0];db.execute(f"DELETE FROM {table}")
 			kept=db.execute('SELECT key, value FROM meta WHERE key IN (?, ?)',(AGENT_KEY_META,'port')).fetchall();db.execute('DELETE FROM meta')
 			for(key,value)in kept:db.execute('INSERT INTO meta VALUES (?, ?)',(key,value))
+			db.execute("INSERT OR REPLACE INTO meta VALUES (?, '1')",(CLEARED_META,));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(FORCE_SAVE_META,str(uuid.uuid4())))
 		return counts
 	def mark_report_seen(self,report_id):
 		identifier(report_id)
@@ -3966,9 +4017,9 @@ class PreviewArgumentParser(argparse.ArgumentParser):
 def main():
 	parser=PreviewArgumentParser(description=CLI_DESCRIPTION,prog='arena-preview');parser.add_argument('-r','--reminder',action='store_true',help='Print unacked-count reminder; exit');parser.add_argument('-c','--rc',type=int,default=0,help='Exit status of shell call for --reminder');parser.add_argument('-l','--line',dest='reminder_line',default='',help='Shell command line for --reminder');parser.add_argument('-e','--elapsed',type=float,default=None,help=argparse.SUPPRESS);commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve',help='Serve preview page; -p names port');serve.add_argument('-p','--port',type=int,default=DEFAULT_PORT,help=f"Port (default: {DEFAULT_PORT}; only supported port)");init=commands.add_parser('init',help='Create state directory and database');init.add_argument('-z','--tz',help='CLI stamp IANA zone; TZ env wins');survey_parser=commands.add_parser('survey',help='Show questions and schema, or submit ordered JSON');survey_parser.add_argument('-i','--smallest-image',action='store_true',help='Print the smallest image path in the repository tree, or exit 1 when none exists');survey_parser.add_argument('answers',nargs='?',help='Ordered answer JSON');commands.add_parser('read',help='Print every pending note, answer and upload');commands.add_parser('skills',help='List skill names, full descriptions, and paths without loading skills');note_group=commands.add_parser('note',help='Read stored notes');note_verbs=note_group.add_subparsers(dest='verb',required=True);note_list=note_verbs.add_parser('list',help='Stored note IDs by page, newest first; acknowledged included');note_list.add_argument('-p','--page',type=int,default=1,help='Page number (default: 1)');note_list.add_argument('-s','--page-size',type=int,default=20,help='IDs per page, 1 to 100 (default: 20)');note_reread=note_verbs.add_parser('show',help='Reread stored note by short or full ID');note_reread.add_argument('id',help='Six or all note ID characters');image_uri=commands.add_parser('image-data-uri',help='Print Markdown: one local image as data URI');image_uri.add_argument('path',type=Path,help='One local PNG, JPEG, GIF or WebP file up to 2 MiB');outline_parser=commands.add_parser('outline',help='Print read-only source outline with line ranges for local repository files');outline_parser.add_argument('path',type=Path,help='Local source file inside the repository checkout');outline_parser.add_argument('-m','--max-entries',type=int,default=OUTLINE_MAX_ENTRIES,help=f"Maximum entries to print, 1 to {OUTLINE_MAX_ENTRIES} (default: {OUTLINE_MAX_ENTRIES})");outline_parser.add_argument('-j','--json',dest='as_json',action='store_true',help='Print JSON outline with path, language, entries, total, and omitted count');pr_update_parser=commands.add_parser('pr-update',help='Update a pull request title and body via REST from a workspace file and verify parity');pr_update_parser.add_argument('-n','--number',type=int,required=True,help='Pull request number');pr_update_parser.add_argument('-t','--title',required=True,help='Pull request title');pr_update_parser.add_argument('-f','--body-file',type=Path,required=True,help='Workspace Markdown file for pull request body');job_log_parser=commands.add_parser('job-log',help='Resolve the signed GitHub Actions job-log Location URL or fallback /v1/gh proxy URL');job_log_parser.add_argument('-j','--job',dest='job_id',help='GitHub Actions job ID');job_log_parser.add_argument('-r','--run',dest='run_id',help='GitHub Actions run ID');commands.add_parser('key',help='Print the recorded agent key, host and use line');pre=commands.add_parser('pre',help='Run all pre-Bash gates in order; list completed steps');pre.add_argument('-l','--line',default='',help='Shell command line from hook');pre.add_argument('-c','--command',dest='command_text',default='',help='Command reached by DEBUG trap');pre.add_argument('-r','--repo',default='.',help='Bible repository');pre.add_argument('-s','--shell',default='',help='Shell name');pre.add_argument('-d','--done',default='',help="This shell's completed steps, space-separated");run_group=commands.add_parser('run',help='Start long command; read result');run_verbs=run_group.add_subparsers(dest='verb',required=True);route=run_verbs.add_parser('start',help='Detach command, keep output tail; show exit on later call');route.add_argument('-t','--task',dest='task_id',metavar='TASK-ID',help='Link run to upcoming task, not current task');route.add_argument('-a','--after',metavar='GATE',help='Run only after this gate passes');route.add_argument('name',help='Short run name; example: gates');route.add_argument('command_args',nargs=argparse.REMAINDER,help='Command after --');route_run=commands.add_parser('route-run',help='Run command here; record exit for later call');route_run.add_argument('name',help='Run name already recorded by caller');route_run.add_argument('command_args',nargs=argparse.REMAINDER,help='Command after --');logs=run_verbs.add_parser('logs',help='Print routed run status and recorded output tail');logs.add_argument('name',help='Run name to read');worktree=commands.add_parser('worktree',help='Create or collect detached task worktree beside root gate');worktree_action=worktree.add_subparsers(dest='worktree_action',required=True);worktree_start=worktree_action.add_parser('start',help='Create detached worktree beside root gate, or without one');worktree_start.add_argument('name',help='Short worktree name');worktree_start.add_argument('destination',type=Path,help='New path outside root');worktree_start.add_argument('-g','--gate',default=None,help='Running root gate name; optional');worktree_start.add_argument('-a','--allow',action='append',default=[],help='Glob of paths task may change');worktree_collect=worktree_action.add_parser('collect',help='Print allowed detached-worktree patch after root gate passes');worktree_collect.add_argument('name',help='Worktree name to collect');rename=commands.add_parser('rename',help='Move note, answer, report, or task to new ID');rename.add_argument('old_id',help='Stored ID or unique record prefix');rename.add_argument('new_id',help='Destination record ID');gate=commands.add_parser('gate',help='Inbox gate; -p blocks on any unacked note; -l names blocked line');gate.add_argument('-p','--push',action='store_true',help='Block on any unacked note or answer, regardless of call count');gate.add_argument('-l','--line',default='',help='Command line from hook; blocked calls name commands to drop');commands.add_parser('poll',help='Wait for owner answer or gate completion');download=commands.add_parser('download-request',help='Request HTTPS browser download; preview Approve click required; -a allows proxy fallback');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('-a','--allow-proxy',action='store_true',help='Owner may opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack',help='Answer notes with inline Markdown; omit IDs for one pending item');ack.add_argument('ids',nargs='*');ack.add_argument('markdown',help='Literal inline Markdown answer');ack.add_argument('-i','--id',dest='task_id');ack.add_argument('-t','--title',dest='task_title');ack.add_argument('-T','--type',dest='task_type',choices=TASK_TYPES);ack.add_argument('-S','--scope',dest='task_scope');ack.add_argument('-d','--detail',dest='task_detail',action='append');report_group=commands.add_parser('report',help='Publish, withdraw and inspect reports');report_verbs=report_group.add_subparsers(dest='verb',required=True);publish=report_verbs.add_parser('publish',help='Publish report; -i ID, -t title');publish.add_argument('source',type=Path);publish.add_argument('-s','--submission-format',type=Path,help='Optional question, answer, and template JSON');publish.add_argument('-i','--id',required=True);publish.add_argument('-t','--title',required=True);publish.add_argument('-u','--allow-unparsed-markers',action='store_true',help='Publish even when possible unparsed == or ~~ markers are found');unpublish=report_verbs.add_parser('unpublish',help='Withdraw report by ID, or all stale reports with --stale');unpublish.add_argument('report_id',nargs='?');unpublish.add_argument('-s','--stale',action='store_true',help='Withdraw every stale report');report_verbs.add_parser('stale',help='List stale published report IDs and reasons without changing state')
 	for verb in('pin','unpin'):pin=report_verbs.add_parser(verb,help=f"{verb.capitalize()} a report against staleness");pin.add_argument('report_id')
-	report_state=report_verbs.add_parser('state',help='Print publication, owner view stamp and answer visibility for one report or all');report_state.add_argument('report_id',nargs='?');task_group=commands.add_parser('task',help='Read and update tasks');task_verbs=task_group.add_subparsers(dest='verb',required=True);task_list=task_verbs.add_parser('list',help='List tasks; -f includes finished');task_list.add_argument('-f','--full',action='store_true',help='print every task, finished included');task_show=task_verbs.add_parser('show',help='Print one stored task in full');task_show.add_argument('task_id',metavar='TASK-ID');task=task_verbs.add_parser('set',help='Write/update task; -s status, -o order, -d details, -A append, -m message, -r report, -u unblocked, -a amend, -t/--type type, -S/--scope scope');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('-d','--details',dest='task_details',action='append',help='One step per line; max 120 characters; repeatable');task.add_argument('-A','--append',dest='append_details',action='store_true',help='Append provided details instead of replacing stored details');task.add_argument('-u','--unblocked',dest='blocked',action='store_false',default=None,help='Clear report wait or legacy blocked mark');task.add_argument('-m','--msg-id',help='Message task answers; mark it as having a task');task.add_argument('-r','--report',metavar='REPORT-ID',help='Awaited report; answer clears blocked mark');task.add_argument('-a','--amend',metavar='PREV-ID',help='Rename task under this ID to given ID');task.add_argument('-b','--blocked-by',dest='blocked_by',action='append',metavar='TASK-ID',help='Dependency task; repeatable; cycles refused');task.add_argument('-s','--status',choices=TASK_STATUSES,default=None);task.add_argument('-t','-T','--type',dest='task_type',choices=TASK_TYPES,default=None,help='Primary deliverable type; omitted flag keeps stored type');task.add_argument('-S','--scope',dest='task_scope',default=None,help='Free-text task scope; omitted flag keeps stored scope');task.add_argument('-o','--order',type=int,default=None,help='1-based place within div, not end');task_unlink=task_verbs.add_parser('unlink',help='Unlink a submission from all tasks; retain its history');task_unlink.add_argument('submission_id');task_remove=task_verbs.add_parser('remove',help='Delete task by ID');task_remove.add_argument('task_id');state_group=commands.add_parser('state',help='Import, compare, or clear stored state');state_verbs=state_group.add_subparsers(dest='verb',required=True);state_import=state_verbs.add_parser('import',help='Import NDJSON backup; replace live state');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('-r','--replace-tasks',action='store_true');state_compare=state_verbs.add_parser('compare',help='Compare NDJSON backup against live state without changing state');state_compare.add_argument('source',nargs='?',type=Path);state_verbs.add_parser('clear',help='Empty all state tables in place; keep agent key record');args=parser.parse_args()
+	report_state=report_verbs.add_parser('state',help='Print publication, owner view stamp and answer visibility for one report or all');report_state.add_argument('report_id',nargs='?');task_group=commands.add_parser('task',help='Read and update tasks');task_verbs=task_group.add_subparsers(dest='verb',required=True);task_list=task_verbs.add_parser('list',help='List tasks; -f includes finished');task_list.add_argument('-f','--full',action='store_true',help='print every task, finished included');task_show=task_verbs.add_parser('show',help='Print one stored task in full');task_show.add_argument('task_id',metavar='TASK-ID');task=task_verbs.add_parser('set',help='Write/update task; -s status, -o order, -d details, -A append, -m message, -r report, -u unblocked, -a amend, -t/--type type, -S/--scope scope');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('-d','--details',dest='task_details',action='append',help='One step per line; max 120 characters; repeatable');task.add_argument('-A','--append',dest='append_details',action='store_true',help='Append provided details instead of replacing stored details');task.add_argument('-u','--unblocked',dest='blocked',action='store_false',default=None,help='Clear report wait or legacy blocked mark');task.add_argument('-m','--msg-id',help='Message task answers; mark it as having a task');task.add_argument('-r','--report',metavar='REPORT-ID',help='Awaited report; answer clears blocked mark');task.add_argument('-a','--amend',metavar='PREV-ID',help='Rename task under this ID to given ID');task.add_argument('-b','--blocked-by',dest='blocked_by',action='append',metavar='TASK-ID',help='Dependency task; repeatable; cycles refused');task.add_argument('-s','--status',choices=TASK_STATUSES,default=None);task.add_argument('-t','-T','--type',dest='task_type',choices=TASK_TYPES,default=None,help='Primary deliverable type; omitted flag keeps stored type');task.add_argument('-S','--scope',dest='task_scope',default=None,help='Free-text task scope; omitted flag keeps stored scope');task.add_argument('-o','--order',type=int,default=None,help='1-based place within div, not end');task_unlink=task_verbs.add_parser('unlink',help='Unlink a submission from all tasks; retain its history');task_unlink.add_argument('submission_id');task_remove=task_verbs.add_parser('remove',help='Delete task by ID');task_remove.add_argument('task_id');state_group=commands.add_parser('state',help='Import, compare, save, restore, or clear stored state');state_verbs=state_group.add_subparsers(dest='verb',required=True);state_import=state_verbs.add_parser('import',help='Import NDJSON backup; replace live state');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('-r','--replace-tasks',action='store_true');state_compare=state_verbs.add_parser('compare',help='Compare NDJSON backup against live state without changing state');state_compare.add_argument('source',nargs='?',type=Path);state_verbs.add_parser('save',help='Snapshot live state to state-latest.ndjson and queue userscript local sync');state_restore=state_verbs.add_parser('restore',help='Restore state-latest.ndjson or state-previous.ndjson and queue userscript local sync');state_restore.add_argument('-p','--previous',action='store_true',help='Restore state-previous.ndjson instead of state-latest.ndjson');state_verbs.add_parser('clear',help='Empty all state tables in place; keep agent key record');args=parser.parse_args()
 	if args.command=='serve'and args.port!=DEFAULT_PORT:serve.error(f"--port must be {DEFAULT_PORT}")
-	verb=getattr(args,'verb',None);grouped_commands={('note','list'):'note-list',('note','show'):'note',('run','start'):'route',('run','logs'):'logs',('report','publish'):'publish',('report','unpublish'):'unpublish',('report','stale'):'stale-reports',('report','state'):'report-state',('report','pin'):'report-pin',('report','unpin'):'report-unpin',('task','list'):'task-list',('task','show'):'task-show',('task','set'):'task',('task','remove'):'task-remove',('task','unlink'):'task-unlink',('state','import'):'import-state',('state','compare'):'compare-state',('state','clear'):'clear-state'};args.command=grouped_commands.get((args.command,verb),args.command)
+	verb=getattr(args,'verb',None);grouped_commands={('note','list'):'note-list',('note','show'):'note',('run','start'):'route',('run','logs'):'logs',('report','publish'):'publish',('report','unpublish'):'unpublish',('report','stale'):'stale-reports',('report','state'):'report-state',('report','pin'):'report-pin',('report','unpin'):'report-unpin',('task','list'):'task-list',('task','show'):'task-show',('task','set'):'task',('task','remove'):'task-remove',('task','unlink'):'task-unlink',('state','import'):'import-state',('state','compare'):'compare-state',('state','save'):'save-state',('state','restore'):'restore-state',('state','clear'):'clear-state'};args.command=grouped_commands.get((args.command,verb),args.command)
 	if args.command=='route':
 		command_args=args.command_args;separator=command_args.index('--')if'--'in command_args else len(command_args)
 		if any(argument==option or argument.startswith(option+'=')for argument in command_args[:separator]for option in('-t','--task','-a','--after')):parser.error('put --task and --after before the run name. Use: arena-preview run start --task <id> <name> -- <command>')
@@ -4023,7 +4074,7 @@ def main():
 			except ValueError as error:print(error,file=sys.stderr);return 1
 			print(f"ok {type} {old_id} -> {args.new_id}");return 0
 		if args.command=='gate':return gate_verdict(state_dir,args.push,args.line)
-		store=Store(state_dir,create=args.command in{'serve','init','import-state'});global DISPLAY_ZONE;DISPLAY_ZONE=resolve_display_zone(store)
+		store=Store(state_dir,create=args.command in{'serve','init','import-state','restore-state'});global DISPLAY_ZONE;DISPLAY_ZONE=resolve_display_zone(store)
 		if args.command!='poll':clear_poll_repeat(store)
 		if args.command not in{'serve','init'}:require_server(store)
 		read_only=args.command in{'stale-reports','note-list','report-state'}
@@ -4124,6 +4175,8 @@ def main():
 			try:text=source_path.read_text(encoding='utf-8')
 			except OSError as error:raise ValueError(f"No such state file: {error.filename or source_path}")from None
 			print(format_state_comparison(store.compare_state(text),source=source_path))
+		elif args.command=='save-state':saved=store.save_backup();print(f"Saved state to {saved['latest_path']} (notes {saved['notes']}, tasks {saved['tasks']}, reports {saved['reports']}, answers {saved['answers']}); queued local sync.")
+		elif args.command=='restore-state':print(format_import_receipt(store.restore_state(previous=args.previous)))
 		elif args.command=='clear-state':print(format_clear_state(store.clear_state()))
 		elif args.command=='init':
 			if args.tz:

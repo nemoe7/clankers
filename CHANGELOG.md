@@ -38,6 +38,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Preserve PNG alpha channels in `nuu` by passing `omitBackground: true` in `_chromium_render_png` and using straight-alpha `source-over` blending in `blend_pixel` and `blit_rgba`.
 - List `nonuu: <ID>` suppressions (`marks` and `suppressions`) in `nuu lint`, `nuu audit`, and the new `nuu collect` command to match `nemoizer`.
 - Add full settings and action buttons (`Choose file`, `Force save`, `Trim now`, and `Post key now`) to the `userscripts/arena.user.js` panel. Add a `Userscript - show settings button` master switch in Tampermonkey that hides the individual menu commands when enabled and reveals them when disabled.
+- Add a two-file rolling state backup (`backups/state-latest.ndjson` and `backups/state-previous.ndjson`), cold-start auto-restore when `state.sqlite3` is missing or empty, and `arena-preview state save` and `state restore [-p, --previous]` commands that force-sync local `.ndjson` files in `userscripts/arena.user.js`.
 - Amend Clause 1 in `SKILL.md` to default control glyphs to Lucide first, then Simple Icons, then the vendored Phosphor catalog. Include non-blocking `icons` checks (`NUI001`–`NUI003`) in `nuu audit`.
 
 ### Changed

@@ -2010,6 +2010,12 @@ for raw in sys.stdin:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (preview.AUTOSAVE_HISTORY, json.dumps(history)))
     store.note("third-note", "diverged note")
     print(json.dumps({"ok": True}), flush=True)
+  elif op == "clear":
+    store.clear_state()
+    print(json.dumps({"ok": True, "force": store.userscript_snapshot().get("force")}), flush=True)
+  elif op == "restore_prev":
+    store.restore_state(previous=True)
+    print(json.dumps({"ok": True, "force": store.userscript_snapshot().get("force")}), flush=True)
   elif op == "inspect":
     snap = store.userscript_snapshot()
     state_notes = {item["id"]: item for item in store.state()["notes"]}
@@ -2032,6 +2038,7 @@ for raw in sys.stdin:
       "lastsave": snap["lastsave"],
       "beforelastsave": snap["beforelastsave"],
       "digest": snap["digest"],
+      "force": snap.get("force"),
       "backup_notes": backup_notes,
       "visible_notes": visible_notes,
     }), flush=True)
@@ -2268,6 +2275,21 @@ for raw in sys.stdin:
       assert.ok(imported.report_source && imported.report_source.endsWith("sample-report.md"));
       assert.equal(imported.history_count, 2);
       assert.equal(imported.lastsave, thirdReceipt.beforelastsave);
+
+      const clearedResp = await callPy({ op: "clear" });
+      assert.equal(clearedResp.force, true, "clear_state sets force=true on userscript snapshot");
+      tick();
+      await drain();
+      assert.equal(writes.length, 4, "server-side force flag writes cleared state without mismatch prompt");
+      const afterClearServer = await callPy({ op: "inspect" });
+      assert.equal(afterClearServer.force, false, "confirmation clears force flag");
+
+      const restoredResp = await callPy({ op: "restore_prev" });
+      assert.equal(restoredResp.force, true, "restore_state sets force=true on userscript snapshot");
+      tick();
+      await drain();
+      assert.equal(writes.length, 5, "server-side force flag writes restored state without mismatch prompt");
+      assert.match(fileText, /third-note/);
     } finally {
       await callPy({ op: "quit" }).catch(() => {});
     }
