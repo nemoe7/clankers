@@ -14607,3 +14607,34 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   tz_store.import_state(backup_ndjson)
   tz_store.acknowledge([offer1["note_id"]], "Compared and imported backup state.")
   assert not any(item["id"] == offer1["note_id"] for item in tz_store.read()["pending"])
+
+  import survey
+
+  img_repo = tmp_path / "img-repo"
+  (img_repo / ".git").mkdir(parents=True)
+  (img_repo / "arena-state").mkdir(parents=True)
+  (img_repo / "arena-state" / "ignored.png").write_bytes(b"12")
+  (img_repo / "empty.png").write_bytes(b"")
+  assert survey.smallest_image(img_repo) is None
+  monkeypatch.chdir(img_repo)
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "survey", "--smallest-image"])
+  assert preview.main() == 1
+  capsys.readouterr()
+
+  (img_repo / ".agents" / "skills" / "demo").mkdir(parents=True)
+  (img_repo / ".agents" / "skills" / "demo" / "tie.png").write_bytes(b"12345")
+  (img_repo / "docs").mkdir(parents=True)
+  (img_repo / "docs" / "big.jpg").write_bytes(b"123456789")
+  (img_repo / "assets").mkdir(parents=True)
+  (img_repo / "assets" / "tie.png").write_bytes(b"12345")
+  assert survey.smallest_image(img_repo) == "assets/tie.png"
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "survey", "-i"])
+  assert preview.main() == 0
+  assert capsys.readouterr().out.strip() == "assets/tie.png"
+
+  monkeypatch.setattr(
+    sys, "argv", ["arena-preview", "survey", "-i", json.dumps(survey.template())]
+  )
+  assert preview.main() == 1
+  assert "--smallest-image" in capsys.readouterr().err
+  assert "--smallest-image" in survey.INSTRUCTIONS

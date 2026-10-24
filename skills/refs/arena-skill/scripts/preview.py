@@ -5098,9 +5098,25 @@ def autosave_record(record):
   return out
 
 
-def survey_command(state_dir, answers):
+def survey_command(state_dir, answers, smallest_image=False, root=None):
   import survey
 
+  if smallest_image:
+    if answers is not None:
+      raise ValueError("Pass either --smallest-image or survey answer JSON, not both")
+    if root is None:
+      cwd = Path.cwd().resolve()
+      for candidate in (cwd, *cwd.parents):
+        if (candidate / ".git").exists():
+          root = candidate
+          break
+      else:
+        root = cwd
+    found = survey.smallest_image(root)
+    if not found:
+      return 1
+    print(found)
+    return 0
   if answers is None:
     print(survey.INSTRUCTIONS)
     print(json.dumps(survey.SPEC, indent=2, ensure_ascii=False))
@@ -12120,6 +12136,12 @@ def main():
   survey_parser = commands.add_parser(
     "survey", help="Show questions and schema, or submit ordered JSON"
   )
+  survey_parser.add_argument(
+    "-i",
+    "--smallest-image",
+    action="store_true",
+    help="Print the smallest image path in the repository tree, or exit 1 when none exists",
+  )
   survey_parser.add_argument("answers", nargs="?", help="Ordered answer JSON")
   commands.add_parser("read", help="Print every pending note, answer and upload")
   commands.add_parser(
@@ -12551,7 +12573,11 @@ def main():
         shell=args.shell,
       )
     if args.command == "survey":
-      return survey_command(state_dir, args.answers)
+      return survey_command(
+        state_dir,
+        args.answers,
+        smallest_image=args.smallest_image,
+      )
     if args.command == "skills":
       print_skills()
       return 0

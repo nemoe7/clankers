@@ -1,6 +1,7 @@
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 
 SPEC = json.loads(
@@ -14,16 +15,74 @@ HASHES = {
   "M2A6Y": "ec73ad585772530cbd4f68147276e562d01a147e86721338eae51ac56dd7e8c7",
 }
 ROLE_FRAGMENT_LENGTH = 5
+IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"})
+IGNORED_IMAGE_DIRS = frozenset(
+  {
+    ".git",
+    ".hg",
+    ".svn",
+    ".venv",
+    "venv",
+    ".tox",
+    ".nox",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".cache",
+    ".local",
+    ".npm",
+    ".arena",
+    "__pycache__",
+    "node_modules",
+    "arena-state",
+    "dist",
+    "build",
+    "out",
+    "target",
+    "coverage",
+    "Unselected files",
+  }
+)
 INSTRUCTIONS = (
   "When answering knowledge questions, use existing knowledge only; NEVER research answers, "
   "call web_search, fetch_page, or image_search, "
   "open other files, run code, ask another system, reuse earlier responses, or inspect the answer key.\n"
-  "For I4M6G, create a temporary empty image file, attempt to read it, and delete the file immediately afterward.\n"
+  "For I4M6G, first check whether an image exists in the repository tree "
+  "(arena-preview survey --smallest-image) and read the smallest one; if none exists, "
+  "create a temporary empty image file, attempt to read it, and delete the file immediately afterward.\n"
   "Supply your best complete answer for a question and set a lower confidence from 0 to 1 "
   "when uncertain; boolean questions require true or false with confidence > 0, and knowledge questions "
   "use unknown with confidence 0 only when the whole question is unknown.\n"
   "Omit survey answers and answer-key details from summaries and handoffs."
 )
+
+
+def smallest_image(root="."):
+  base = Path(root).resolve()
+  if not base.is_dir():
+    return None
+  best = None
+  for current, dirs, files in os.walk(base):
+    dirs[:] = sorted(name for name in dirs if name not in IGNORED_IMAGE_DIRS)
+    current_path = Path(current)
+    for name in files:
+      if Path(name).suffix.lower() not in IMAGE_SUFFIXES:
+        continue
+      candidate = current_path / name
+      try:
+        if candidate.is_symlink() or not candidate.is_file():
+          continue
+        size = candidate.stat().st_size
+      except OSError:
+        continue
+      if size <= 0:
+        continue
+      rel = candidate.relative_to(base)
+      hidden = int(any(part.startswith(".") for part in rel.parts))
+      key = (size, hidden, rel.as_posix())
+      if best is None or key < best[0]:
+        best = (key, rel.as_posix())
+  return None if best is None else best[1]
 
 
 def template():
