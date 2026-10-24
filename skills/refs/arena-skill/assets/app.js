@@ -3613,10 +3613,13 @@ let imageZoom = 1;
 let imagePanX = 0;
 let imagePanY = 0;
 let imageDrag = null;
+let imageDragMoved = false;
 function applyImageTransform() {
   if (!imageModalImg) return;
   gsap.set(imageModalImg, { x: imagePanX, y: imagePanY, scale: imageZoom });
   imageModalImg.dataset.zoom = String(imageZoom);
+  imageModalImg.dataset.panX = String(imagePanX);
+  imageModalImg.dataset.panY = String(imagePanY);
 }
 function openImageModal(image) {
   if (!imageModal || !imageModalImg) return;
@@ -3624,42 +3627,71 @@ function openImageModal(image) {
   if (!src) return;
   imageModalImg.src = src;
   imageModalImg.alt = image.getAttribute?.('alt') || image.alt || '';
+  imageModalImg.draggable = false;
   imageZoom = 1;
   imagePanX = 0;
   imagePanY = 0;
+  imageDragMoved = false;
   delete imageModalImg.dataset.dragging;
   applyImageTransform();
   imageModal.showModal();
   imageModalClose?.focus?.();
 }
 if (imageModal && imageModalImg) {
+  imageModalImg.draggable = false;
+  imageModalImg.addEventListener('dragstart', event => event.preventDefault());
   imageModalClose?.addEventListener('click', () => imageModal.close());
   imageModal.addEventListener('click', event => {
+    if (imageDragMoved) { imageDragMoved = false; return; }
     if (event.target === imageModal) imageModal.close();
   });
   imageModal.addEventListener('wheel', event => {
     event.preventDefault();
+    const prevZoom = imageZoom;
     const factor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
-    imageZoom = Math.min(8, Math.max(0.5, Number((imageZoom * factor).toFixed(3))));
-    if (imageZoom === 1) { imagePanX = 0; imagePanY = 0; }
+    const nextZoom = Math.min(8, Math.max(0.5, Number((prevZoom * factor).toFixed(3))));
+    const scaleRatio = nextZoom / prevZoom;
+    if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+      const rect = imageModalImg.getBoundingClientRect?.();
+      const hasRect = rect && (rect.width > 0 || rect.height > 0);
+      const centerX = hasRect ? rect.left + rect.width / 2 : (Number(window.innerWidth) || 0) / 2 + imagePanX;
+      const centerY = hasRect ? rect.top + rect.height / 2 : (Number(window.innerHeight) || 0) / 2 + imagePanY;
+      imagePanX = Number((imagePanX + (event.clientX - centerX) * (1 - scaleRatio)).toFixed(3));
+      imagePanY = Number((imagePanY + (event.clientY - centerY) * (1 - scaleRatio)).toFixed(3));
+    } else if (nextZoom === 1) {
+      imagePanX = 0;
+      imagePanY = 0;
+    }
+    imageZoom = nextZoom;
     applyImageTransform();
   }, { passive: false });
   imageModalImg.addEventListener('pointerdown', event => {
     if (event.button !== undefined && event.button !== 0) return;
-    imageDrag = { startX: event.clientX - imagePanX, startY: event.clientY - imagePanY, id: event.pointerId };
+    event.preventDefault();
+    imageDragMoved = false;
+    imageDrag = {
+      startX: event.clientX - imagePanX,
+      startY: event.clientY - imagePanY,
+      originX: event.clientX,
+      originY: event.clientY,
+      id: event.pointerId,
+    };
     imageModalImg.dataset.dragging = 'true';
     imageModalImg.setPointerCapture?.(event.pointerId);
   });
   imageModalImg.addEventListener('pointermove', event => {
     if (!imageDrag) return;
+    if (Math.hypot(event.clientX - imageDrag.originX, event.clientY - imageDrag.originY) > 2) imageDragMoved = true;
     imagePanX = event.clientX - imageDrag.startX;
     imagePanY = event.clientY - imageDrag.startY;
     applyImageTransform();
   });
-  const endImageDrag = () => {
+  const endImageDrag = event => {
     if (!imageDrag) return;
+    const id = event?.pointerId ?? imageDrag.id;
     imageDrag = null;
     delete imageModalImg.dataset.dragging;
+    if (id !== undefined) imageModalImg.releasePointerCapture?.(id);
   };
   imageModalImg.addEventListener('pointerup', endImageDrag);
   imageModalImg.addEventListener('pointercancel', endImageDrag);

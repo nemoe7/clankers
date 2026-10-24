@@ -13790,7 +13790,7 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
   ).read_text(encoding="utf-8")
   assert 'id="image-modal"' in index_html
   assert 'id="image-modal-close"' in index_html
-  assert 'id="image-modal-img"' in index_html
+  assert 'id="image-modal-img" alt="" draggable="false"' in index_html
   style_css = (
     Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
