@@ -10,6 +10,10 @@ const MAX_LABEL = 48;
 const BOUNDARY_HOURS = [2, 8, 14, 20];
 const ROOT = /^https:\/\/sbx-[a-z0-9-]+\.arena\.site$/i;
 
+function isUnavailableLabel(value) {
+  return /\b(?:preview\s+)?unavailable\b/i.test(String(value ?? '').trim());
+}
+
 function previewRoot(raw) {
   let url;
   try {
@@ -56,13 +60,13 @@ function inputRoot(raw) {
   return match ? previewRoot(`${match[0]}/`) : null;
 }
 
-function postRecentRoot(root) {
+function postRecentRoot(root, extra = {}) {
   if (!root || typeof fetch !== 'function') return;
   try {
     fetch('/pwa/recent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: `${root}/` }),
+      body: JSON.stringify({ url: `${root}/`, manual: true, ...extra }),
       keepalive: true
     }).catch(() => {});
   } catch {
@@ -77,7 +81,8 @@ function viewerHref(root) {
 // A label trims its edges, drops control characters and caps its length, so one entry cannot
 // flood the list or hide its own remove button.
 function named(value) {
-  return String(value).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, MAX_LABEL);
+  const text = String(value).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, MAX_LABEL);
+  return isUnavailableLabel(text) ? '' : text;
 }
 
 function applyName(names, root, raw) {
@@ -108,6 +113,9 @@ function displayName(names, root) {
 
 function mergeRemote(list, names, entries, removed) {
   let nextList = Array.isArray(list) ? clean(list) : [];
+  if (names && typeof names === 'object' && !Array.isArray(names)) {
+    nextList = nextList.filter(root => !isUnavailableLabel(names[root]));
+  }
   let nextNames = cleanNames(nextList, names);
   if (Array.isArray(removed)) {
     for (const item of removed) {
@@ -117,17 +125,38 @@ function mergeRemote(list, names, entries, removed) {
     nextNames = cleanNames(nextList, nextNames);
   }
   if (!Array.isArray(entries)) return { list: nextList, names: nextNames };
-  for (let idx = entries.length - 1; idx >= 0; idx -= 1) {
-    const item = entries[idx];
+  const manualEntries = [];
+  const scriptEntries = [];
+  for (const item of entries) {
     const raw = item && typeof item.url === 'string' ? item.url : '';
     const root = previewRoot(raw) || previewRoot(`${raw.replace(/\/+$/, '')}/`);
     if (!root) continue;
-    nextList = remember(nextList, root);
-    if (item && typeof item.name === 'string' && named(item.name)) {
-      nextNames = applyName(nextNames, root, item.name);
+    if (item && isUnavailableLabel(item.name)) {
+      nextList = forget(nextList, root);
+      continue;
+    }
+    if (item && item.manual === true) {
+      manualEntries.push({ root, name: item.name });
+    } else {
+      scriptEntries.push({ root, name: item ? item.name : '' });
     }
   }
-  return { list: nextList, names: cleanNames(nextList, nextNames) };
+  for (let idx = manualEntries.length - 1; idx >= 0; idx -= 1) {
+    const { root, name } = manualEntries[idx];
+    nextList = remember(nextList, root);
+    if (typeof name === 'string' && named(name) && !nextNames[root]) {
+      nextNames = applyName(nextNames, root, name);
+    }
+  }
+  for (const { root, name } of scriptEntries) {
+    if (!nextList.includes(root) && nextList.length < LIMIT) {
+      nextList.push(root);
+    }
+    if (nextList.includes(root) && typeof name === 'string' && named(name) && !nextNames[root]) {
+      nextNames = applyName(nextNames, root, name);
+    }
+  }
+  return { list: nextList.slice(0, LIMIT), names: cleanNames(nextList, nextNames) };
 }
 
 // The list resets at 02:00, 08:00, 14:00 or 20:00 PHT, and PHT holds UTC+8 all year, so the
@@ -272,6 +301,7 @@ function start() {
         if (cancelled) return;
         names = applyName(names, root, input.value);
         writeNames(names);
+        postRecentRoot(root, { name: names[root] || '' });
         render();
       };
       input.addEventListener('keydown', press => {
@@ -291,13 +321,17 @@ function start() {
     if (button) {
       const list = forget(load(), button.value);
       save(list);
+      postRecentRoot(button.value, { remove: true });
       names = freshNames();
       render();
       return;
     }
     const link = event.target.closest('a');
     const root = link && previewRoot(new URL(link.href).searchParams.get('url'));
-    if (root) save(remember(load(), root));
+    if (root) {
+      save(remember(load(), root));
+      postRecentRoot(root);
+    }
   });
 }
 

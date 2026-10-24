@@ -2581,6 +2581,27 @@ for raw in sys.stdin:
       ],
       "discovers non-steering preview iframe and link URLs on any port along with the header span name"
     );
+    const unavailableDoc = {
+      querySelectorAll(sel) {
+        if (sel === "span") {
+          return [
+            {
+              className: "text-text-secondary min-w-0 max-w-[180px] truncate text-sm leading-[1.2]",
+              textContent: "Preview Unavailable",
+            },
+          ];
+        }
+        if (sel === "iframe") {
+          return [{ src: "https://sbx-dead.arena.site/" }];
+        }
+        return [];
+      },
+    };
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(checks.promptFill.discoverPreviews(unavailableDoc))),
+      [],
+      "skips preview URLs when the header says Preview Unavailable"
+    );
   });
 }
 

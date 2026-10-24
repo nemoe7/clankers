@@ -398,6 +398,7 @@ def test_a_share_rides_through_the_chooser_into_the_recent_list():
     assert {
       "url": "https://sbx-path.arena.site",
       "name": "Path Preview",
+      "manual": True,
     } in recent_body["entries"], recent_body
     # The landing request keeps the chooser: `shared` names no proxy target.
     status, type, body = get(port, location)
@@ -649,7 +650,11 @@ def test_pwa_recent_endpoint_accepts_posted_previews_and_merges_into_chooser():
     assert status == 200, status
     assert cors == "*", cors
     assert body["entries"] == [
-      {"url": "https://sbx-port3000.arena.site", "name": "clankers - Web App"}
+      {
+        "url": "https://sbx-port3000.arena.site",
+        "name": "clankers - Web App",
+        "manual": False,
+      }
     ]
 
     status, _, body = post_json(
@@ -657,18 +662,30 @@ def test_pwa_recent_endpoint_accepts_posted_previews_and_merges_into_chooser():
       {
         "url": "https://sbx-port8000.arena.site/app?tab=notes",
         "name": "clankers - Steering",
+        "manual": True,
       },
     )
     assert status == 200, status
     assert body["entries"][0] == {
       "url": "https://sbx-port8000.arena.site",
       "name": "clankers - Steering",
+      "manual": True,
     }
+
+    status, _, body = post_json(
+      "/pwa/recent",
+      {"url": "https://sbx-port3000.arena.site/", "name": "Preview Unavailable"},
+    )
+    assert status == 200, status
+    assert [item["url"] for item in body["entries"]] == [
+      "https://sbx-port8000.arena.site"
+    ]
+    assert body["removed"] == ["https://sbx-port3000.arena.site"]
 
     status, _, raw = get(port, "/pwa/recent")
     assert status == 200, status
     fetched = json.loads(raw)
-    assert len(fetched["entries"]) == 2
+    assert len(fetched["entries"]) == 1
 
     bad_status, _, _ = post_json(
       "/pwa/recent", {"url": "https://example.com/", "name": "bad"}
@@ -681,11 +698,21 @@ def test_pwa_recent_endpoint_accepts_posted_previews_and_merges_into_chooser():
   script = (
     "const recent = require('./assets/recent.js');"
     "const merged = recent.mergeRemote("
-    "  ['https://sbx-existing.arena.site', 'https://sbx-dead.arena.site'],"
-    "  { 'https://sbx-existing.arena.site': 'Existing', 'https://sbx-dead.arena.site': 'Dead' },"
     "  ["
-    "    { url: 'https://sbx-port8000.arena.site/', name: 'clankers - Steering' },"
-    "    { url: 'https://sbx-port3000.arena.site/', name: 'clankers - Web App' }"
+    "    'https://sbx-existing.arena.site',"
+    "    'https://sbx-dead.arena.site',"
+    "    'https://sbx-broken.arena.site'"
+    "  ],"
+    "  {"
+    "    'https://sbx-existing.arena.site': 'Existing',"
+    "    'https://sbx-dead.arena.site': 'Dead',"
+    "    'https://sbx-broken.arena.site': 'Preview Unavailable'"
+    "  },"
+    "  ["
+    "    { url: 'https://sbx-shared.arena.site/', name: 'Shared App', manual: true },"
+    "    { url: 'https://sbx-port8000.arena.site/', name: 'clankers - Steering', manual: false },"
+    "    { url: 'https://sbx-port3000.arena.site/', name: 'clankers - Web App' },"
+    "    { url: 'https://sbx-existing.arena.site/', name: 'Userscript Overwrite', manual: false }"
     "  ],"
     "  ['https://sbx-dead.arena.site']"
     ");"
@@ -693,10 +720,14 @@ def test_pwa_recent_endpoint_accepts_posted_previews_and_merges_into_chooser():
   )
   merged = json.loads(node(script))
   assert merged["list"] == [
+    "https://sbx-shared.arena.site",
+    "https://sbx-existing.arena.site",
     "https://sbx-port8000.arena.site",
     "https://sbx-port3000.arena.site",
-    "https://sbx-existing.arena.site",
   ]
-  assert merged["names"]["https://sbx-port8000.arena.site"] == "clankers - Steering"
-  assert merged["names"]["https://sbx-port3000.arena.site"] == "clankers - Web App"
-  assert "https://sbx-dead.arena.site" not in merged["names"]
+  assert merged["names"] == {
+    "https://sbx-shared.arena.site": "Shared App",
+    "https://sbx-existing.arena.site": "Existing",
+    "https://sbx-port8000.arena.site": "clankers - Steering",
+    "https://sbx-port3000.arena.site": "clankers - Web App",
+  }

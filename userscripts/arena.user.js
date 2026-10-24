@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.74
+// @name         Arena.ai | NemoUtils | v1.10.75
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.74
+// @version      1.10.75
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -688,6 +688,10 @@
       return derived !== base ? derived : null;
     }
 
+    function isUnavailablePreviewName(value) {
+      return /\b(?:preview\s+)?unavailable\b/i.test(String(value || "").trim());
+    }
+
     function previewHeaderName(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") return "";
       var spans = doc.querySelectorAll("span");
@@ -701,6 +705,7 @@
           cls.indexOf("max-w-[180px]") !== -1
         ) {
           text = String(spans[i].textContent || "").trim();
+          if (isUnavailablePreviewName(text)) return "";
           if (text) return text;
         }
       }
@@ -710,6 +715,7 @@
     function discoverPreviews(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") return [];
       var name = previewHeaderName(doc);
+      if (!name || isUnavailablePreviewName(name)) return [];
       var frames = doc.querySelectorAll("iframe");
       var links = doc.querySelectorAll("a");
       var nodes = [];
@@ -1133,7 +1139,7 @@
     }
 
     function postKeyToPreview(force) {
-      postRecentPreviews(document, force === true);
+      postRecentPreviews(document, false);
       var base = previewBase(document);
       if (!keyPostDue(base, postedBase, force === true)) return;
       var pair = settings();
@@ -1217,7 +1223,7 @@
 
     var stopKeyWatch = jitteredTimer(function () {
       if (captchaSignal(document)) return;
-      postRecentPreviews(document, true);
+      postRecentPreviews(document, false);
       var pair = settings();
       if (!pair.host || !pair.master) return;
       fetch(keyUrl(pair.host, pair.master))

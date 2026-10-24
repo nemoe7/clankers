@@ -35,11 +35,16 @@ const RECENT_BODY_CAP = 4096;
 let recentEntries = [];
 const removedRoots = new Set();
 
-function cleanRecentLabel(value) {
-  return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, RECENT_MAX_LABEL);
+function isUnavailableLabel(value) {
+  return /\b(?:preview\s+)?unavailable\b/i.test(String(value ?? '').trim());
 }
 
-function rememberRecent(entries, rawUrl, rawName, removed) {
+function cleanRecentLabel(value) {
+  const cleaned = String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, RECENT_MAX_LABEL);
+  return isUnavailableLabel(cleaned) ? '' : cleaned;
+}
+
+function rememberRecent(entries, rawUrl, rawName, removed, manual = false) {
   let candidate = String(rawUrl ?? '').trim();
   try {
     candidate = `${new URL(candidate).origin}/`;
@@ -49,10 +54,26 @@ function rememberRecent(entries, rawUrl, rawName, removed) {
   const selected = parseSelectedUrl(candidate);
   const url = selected.origin;
   const name = cleanRecentLabel(rawName);
+  if (!manual && removed && removed.has(url)) {
+    return entries;
+  }
   if (removed) removed.delete(url);
   const existing = entries.find(item => item.url === url);
-  const next = [{ url, name: name || (existing ? existing.name : '') }, ...entries.filter(item => item.url !== url)];
-  return next.slice(0, RECENT_LIMIT);
+  const isManual = Boolean(manual || (existing && existing.manual));
+  const resolvedName = manual
+    ? (name || (existing ? existing.name : ''))
+    : ((existing && existing.name) ? existing.name : name);
+  const updated = { url, name: resolvedName, manual: isManual };
+  if (!manual && existing) {
+    return entries.map(item => (item.url === url ? updated : item));
+  }
+  const rest = entries.filter(item => item.url !== url);
+  if (isManual) {
+    return [updated, ...rest].slice(0, RECENT_LIMIT);
+  }
+  const manualEntries = rest.filter(item => item.manual);
+  const scriptEntries = rest.filter(item => !item.manual);
+  return [...manualEntries, updated, ...scriptEntries].slice(0, RECENT_LIMIT);
 }
 
 function forgetRecent(entries, rawUrl, removed) {
@@ -94,6 +115,7 @@ function serveRecent(req, res) {
     return res.end();
   }
   if (req.method === 'GET') {
+    recentEntries = recentEntries.filter(item => !isUnavailableLabel(item.name));
     return sendJson(res, 200, { entries: recentEntries, removed: [...removedRoots] }, true);
   }
   if (req.method !== 'POST') {
@@ -118,8 +140,18 @@ function serveRecent(req, res) {
     } catch {
       return sendJson(res, 400, { error: 'Invalid JSON payload.' }, true);
     }
+    if (body && (body.remove === true || body.forget || isUnavailableLabel(body.name))) {
+      recentEntries = forgetRecent(recentEntries, body.forget || body.url, removedRoots);
+      return sendJson(res, 200, { entries: recentEntries, removed: [...removedRoots] }, true);
+    }
     try {
-      recentEntries = rememberRecent(recentEntries, body && body.url, body && body.name, removedRoots);
+      recentEntries = rememberRecent(
+        recentEntries,
+        body && body.url,
+        body && body.name,
+        removedRoots,
+        Boolean(body && body.manual)
+      );
     } catch (err) {
       return sendJson(res, 400, { error: err.message || 'Invalid preview URL.' }, true);
     }
@@ -341,7 +373,8 @@ function sharePreview(incoming, res) {
     recentEntries,
     `${selected.origin}/`,
     incoming.searchParams.get('title') || '',
-    removedRoots
+    removedRoots,
+    true
   );
   // The chooser saves the root into the recent list, then opens the preview itself. A
   // straight jump to the preview would skip that save, because the preview runs no chooser code.
@@ -533,7 +566,7 @@ const server = http.createServer((req, res) => {
         recentEntries = forgetRecent(recentEntries, target.origin, removedRoots);
       } else if (status < 500) {
         if (isViewerRoot && req.method === 'GET') {
-          recentEntries = rememberRecent(recentEntries, `${target.origin}/`, '', removedRoots);
+          recentEntries = rememberRecent(recentEntries, `${target.origin}/`, '', removedRoots, true);
         } else {
           removedRoots.delete(target.origin);
         }
