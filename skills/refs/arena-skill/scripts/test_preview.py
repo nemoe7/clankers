@@ -14320,6 +14320,12 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert rendered_rules.lstrip().startswith("<h1>Rules</h1>")
   assert "<code>&lt;!-- nonemo: NMO100 --&gt;</code>" in rendered_rules
   assert "&lt;!-- fenced --&gt;" in rendered_rules
+  assert preview.slow_bash_hint("/bin/bash -l -c pytest -q", 12.4) is not None
+  assert "arena-preview run start" in preview.slow_bash_hint(
+    "/bin/bash -l -c pytest -q", 12.4
+  )
+  assert preview.slow_bash_hint("/bin/bash -l -c pytest -q", 4.2) is None
+  assert preview.slow_bash_hint("/bin/bash -l -c arena-preview poll", 120.0) is None
   slash_nemo_collect = preview.resolve_slash_command("/nemoizer collect ARENA.md")
   assert slash_nemo_collect is not None
   assert slash_nemo_collect["mode"] == "query"

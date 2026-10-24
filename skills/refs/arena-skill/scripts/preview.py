@@ -3114,6 +3114,34 @@ def exempted_bash_line(line):
   return inert_bash_command(command) or quiet_inbox_line(raw)
 
 
+SLOW_BASH_SECONDS = 10
+
+
+def slow_bash_hint(line, elapsed_seconds):
+  """Return a background-run hint when a non-preview Bash call ran for 10+ seconds."""
+  if elapsed_seconds is None or elapsed_seconds < SLOW_BASH_SECONDS:
+    return None
+  raw = line or ""
+  if not raw.strip() or platform_line(raw) or exempted_bash_line(raw):
+    return None
+  command = agent_line(raw).strip()
+  if not command or any(
+    word in command
+    for word in (
+      "arena-preview poll",
+      "preview.py poll",
+      "preview.py --poll",
+      "arena-preview run",
+      "preview.py run",
+    )
+  ):
+    return None
+  return (
+    f"Bash call took {elapsed_seconds:.1f}s (>= {SLOW_BASH_SECONDS}s). "
+    "Use `arena-preview run start -t <task-id> <name> -- <cmd>` for slow commands."
+  )
+
+
 def refresh_bash_timer(state_dir):
   """Stamp the Bash call end timer when the state database exists."""
   if (Path(state_dir).resolve() / "state.sqlite3").is_file():
@@ -11547,6 +11575,13 @@ def main():
     default="",
     help="Shell command line for --reminder",
   )
+  parser.add_argument(
+    "-e",
+    "--elapsed",
+    type=float,
+    default=None,
+    help=argparse.SUPPRESS,
+  )
   commands = parser.add_subparsers(dest="command", required=False)
   serve = commands.add_parser("serve", help="Serve preview page; -p names port")
   serve.add_argument(
@@ -11937,10 +11972,13 @@ def main():
       store = Store(state_dir, create=False)
       require_server(store)
       auto_start_post_push_pr_checks(state_dir, args.reminder_line, rc=args.rc)
+      slow_hint = slow_bash_hint(args.reminder_line, args.elapsed)
       reminder = store.reminder(advance=not exempted_bash_line(args.reminder_line))
       # The hook runs this after every bash call, so the stamp marks the call's end: the
       # page keeps the long call text only while a call started after the last recorded end.
       store.set_meta(AGENT_CALL_ENDED_META, now())
+      if slow_hint:
+        print(slow_hint, file=sys.stderr, flush=True)
       # A pending inbox item outranks a routed status. Otherwise one routed status or one
       # reminder line is enough for the agent to act.
       if (

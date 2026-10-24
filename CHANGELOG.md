@@ -36,6 +36,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Wire `#copy-state` to force-save with a Lucide `save` icon when `userscripts/arena.user.js` is active. Clear the `#history` edge fade when message history ceases to scroll. Keep `#last-check` inline with `#connection` on mobile viewports, and pad `.report .question` so focus outlines do not clip.
 - Render unified 40px attachment cards in `#staged-files` with `32x32` image thumbnails (`.staged-chip-thumb`) and `32x32` Lucide `file-text` tiles (`.staged-chip-file`) for non-image files.
 - Keep recognized slash command pills inline and content-sized, reject glued command tokens, and unregister the command into plain text on `Backspace`. Strip Markdown HTML comments outside code spans and keep modal `.copy-code` buttons symmetric (`28x28`).
+- Measure Bash duration (`--elapsed "$SECONDS"`) in `install.sh` and `preview.py` (`slow_bash_hint`). Emit a stderr hint for `arena-preview run start` after 10-second non-preview calls.
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
 
