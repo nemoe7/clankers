@@ -14302,8 +14302,9 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert slash_nuu_audit is not None
   assert slash_nuu_audit["mode"] == "note"
   assert "75em" in slash_nuu_audit["text"]
-  assert "56.25em" in slash_nuu_audit["text"]
+  assert "60em" in slash_nuu_audit["text"]
   assert "40em" in slash_nuu_audit["text"]
+  assert "30em" in slash_nuu_audit["text"]
   assert "audit-report.md" in slash_nuu_audit["text"]
   assert slash_nuu_audit["text"].endswith("#compose")
   app_js_text = (

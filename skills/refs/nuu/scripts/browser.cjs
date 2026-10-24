@@ -571,10 +571,11 @@ async function run() {
   const timeout = request.timeout * 1000;
   try {
     for (const width of request.widths) {
-      const touch = width <= 768;
+      const height = Number(request.height || 900);
+      const touch = width <= 768 || height <= 480;
       for (const scheme of ['light', 'dark']) {
         for (const motion of ['no-preference', 'reduce']) {
-          const context = await browser.newContext({viewport: {width, height: 900},
+          const context = await browser.newContext({viewport: {width, height},
             hasTouch: touch, isMobile: touch,
             colorScheme: scheme, reducedMotion: motion, acceptDownloads: false});
           const page = await context.newPage();

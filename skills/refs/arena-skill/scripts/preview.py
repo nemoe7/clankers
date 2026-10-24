@@ -5088,7 +5088,7 @@ def _extract_nuu_breakpoints(nuu_dir):
       items = re.findall(r"\b[0-9.]+(?:em|rem|px)\b", line)
       if items:
         return tuple(items)
-  return ("75em", "56.25em", "40em")
+  return ("75em", "60em", "40em", "30em")
 
 
 def _recipe_summary_line(content):

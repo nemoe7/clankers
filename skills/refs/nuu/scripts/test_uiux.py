@@ -108,8 +108,9 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   assert sheet_extract.returncode == 0
   assert [row["value"] for row in json.loads(sheet_extract.stdout)["breakpoints"]] == [
     "75em",
-    "56.25em",
+    "60em",
     "40em",
+    "30em",
   ]
   measured = tmp_path / "measured.json"
   measured.write_text(
@@ -586,6 +587,7 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
   driver = SCRIPT.with_name("browser.cjs")
   driver_src = driver.read_text(encoding="utf-8")
   assert "hasTouch: touch" in driver_src and "isMobile: touch" in driver_src
+  assert "height <= 480" in driver_src
   bad_ready = subprocess.run(
     ["node", str(driver)],
     input=json.dumps(

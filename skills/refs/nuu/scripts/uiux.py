@@ -29,10 +29,10 @@ from measure import (
 from measure import check as check_measurements
 from measure import main as measure_main
 
-VERSION = "0.1.6"
-NAMED_BREAKPOINTS = ("75em", "56.25em", "40em")
+VERSION = "0.1.7"
+NAMED_BREAKPOINTS = ("75em", "60em", "40em", "30em")
 MEDIA_BREAKPOINT_RE = re.compile(
-  r"@media\b[^{]*?\(\s*(?:min|max)-width\s*:\s*([0-9.]+(?:em|rem|px))\s*\)",
+  r"@media\b[^{]*?\(\s*(?:min|max)-(?:width|height)\s*:\s*([0-9.]+(?:em|rem|px))\s*\)",
   re.IGNORECASE,
 )
 HOME = Path(__file__).resolve().parent.parent

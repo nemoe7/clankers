@@ -334,7 +334,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 mark code { color: var(--text); }
 .report blockquote { margin-left: 0; padding-left: 16px; color: var(--muted); border-left: 3px solid rgb(199, 194, 188); }
 .draft-preview blockquote { border-left-color: rgb(199, 194, 188); }
-@media (max-width: 56.25em) {
+@media (max-width: 60em) {
   .topbar { padding: 10px 16px; }
   main { padding: 14px 16px 16px; }
   .card { padding: 18px; }
@@ -360,6 +360,11 @@ mark code { color: var(--text); }
   .log-card > .row > .row.tight { flex: 1 1 100%; }
   #log-search { flex: 1 1 auto; max-width: none; }
   .report-toolbar .select-wrap { flex: 1 1 100%; }
+}
+@media (max-height: 30em) {
+  .topbar { padding: 6px 12px; }
+  main { padding: 8px 12px 10px; }
+  .compose { max-height: 48%; }
 }
 
 /* On touch devices, the tab strip and copy button stay on one line while the clock, theme toggle, and Return hint hide. */
@@ -440,7 +445,7 @@ mark code { color: var(--text); }
 .task-filter { flex: 0 1 auto; max-width: 200px; margin-left: 0; }
 .task-filter select { display: inline-block; width: auto; vertical-align: middle; }
 #tasks-status { margin: 0; }
-@media (max-width: 56.25em) {
+@media (max-width: 60em) {
   .tasks-layout > .row.tight { grid-template-columns: minmax(0, 1fr) auto; }
   #tasks-status { grid-column: 1 / -1; }
   #task-search { max-width: none; }
