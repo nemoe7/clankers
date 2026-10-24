@@ -221,10 +221,11 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
   white-space: nowrap; pointer-events: none;
   box-shadow: 0 4px 6px rgb(0 0 0 / 25%);
 }
-#history { list-style: none; padding: 12px 0 14px; margin: 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+#history { list-style: none; padding: 24px max(5vw, calc((100% - 900px) / 2)) 40px; margin: 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 /* The log scroll area leaves space for its jump bar.
    Show the bar only away from the log end. */
-.log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100vw; margin: -12px calc(50% - 50vw) -36px; }
+#log-newest { bottom: 30px; z-index: 2; }
 /* Keep the reply pill at the log top and the jump bar at the bottom. */
 .log-edited {
   /* Offset the pill from the card border and use the theme's text color. */
