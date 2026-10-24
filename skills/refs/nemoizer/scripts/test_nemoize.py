@@ -1218,12 +1218,20 @@ def test_config_caps_respect_gitignore_and_bundled_default_config(tmp_path):
   assert cfg["comment_block_cap"] == nemoize.COMMENT_BLOCK_CAP
   assert cfg["the_density_cap"] == nemoize.THE_DENSITY_CAP
   assert cfg["min_the_count"] == nemoize.MIN_THE_COUNT
+  for expected_item in ("AGENTS.md", "**/AGENTS.md", "ARENA.md", "**/ARENA.md"):
+    assert expected_item in cfg["exclude"]
 
   repo = tmp_path / "gitrepo"
   repo.mkdir()
   subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
   (repo / ".gitignore").write_text("ignored.md\n", encoding="utf-8")
   (repo / "ignored.md").write_text("Do not transmit this.\n", encoding="utf-8")
+  (repo / "AGENTS.md").write_text("Do not transmit this.\n", encoding="utf-8")
+  (repo / "ARENA.md").write_text("Do not transmit this.\n", encoding="utf-8")
+  sub = repo / "sub"
+  sub.mkdir()
+  (sub / "AGENTS.md").write_text("Do not transmit this.\n", encoding="utf-8")
+  (sub / "ARENA.md").write_text("Do not transmit this.\n", encoding="utf-8")
   (repo / "tracked.md").write_text(
     "# Heading one. Heading two.\n\n"
     "- List one. List two. List three.\n\n"
@@ -1233,10 +1241,13 @@ def test_config_caps_respect_gitignore_and_bundled_default_config(tmp_path):
   default_run = run(cwd=repo)
   assert default_run.returncode == 1
   assert "ignored.md" not in default_run.stdout
+  assert "AGENTS.md" not in default_run.stdout
+  assert "ARENA.md" not in default_run.stdout
   assert "NMP100" in default_run.stdout
   assert "NMO902" in default_run.stdout
 
   (repo / "nemoizer.toml").write_text(
+    "exclude = []\n"
     "respect-gitignore = false\n"
     "heading-sentence-cap = 2\n"
     "list-sentence-cap = 3\n"
@@ -1247,6 +1258,10 @@ def test_config_caps_respect_gitignore_and_bundled_default_config(tmp_path):
   custom_run = run(cwd=repo)
   assert custom_run.returncode == 1
   assert "ignored.md" in custom_run.stdout
+  assert "AGENTS.md" in custom_run.stdout
+  assert "ARENA.md" in custom_run.stdout
+  assert "sub/AGENTS.md" in custom_run.stdout
+  assert "sub/ARENA.md" in custom_run.stdout
   assert "NMP100" not in custom_run.stdout
   assert "NMO902" not in custom_run.stdout
 
