@@ -14790,3 +14790,32 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert preview.main() == 0
   assert "state-latest.ndjson" in capsys.readouterr().out
   assert cold_store.userscript_snapshot()["force"] is True
+
+  with pytest.raises(ValueError, match="free-text"):
+    preview.parse_fields(
+      "# Report\n\nPick one {#multi-free}\n- (x) Alpha\n- ( ) Beta: ___\n- ( ) Gamma: ___\n"
+    )
+  unrec_file = rep_dir / "unrecommended.md"
+  unrec_file.write_text(
+    "# Report\n\nPick one {#missing-rec-id}\n- ( ) Alpha\n- ( ) Beta\n",
+    encoding="utf-8",
+  )
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: str(tmp_path / "tz-state"))
+  monkeypatch.setattr(preview, "verify_publication", lambda *_args: [])
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    [
+      "arena-preview",
+      "report",
+      "publish",
+      "-i",
+      "unrec-report",
+      "-t",
+      "Unrecommended Report",
+      str(unrec_file),
+    ],
+  )
+  assert preview.main() == 0
+  unrec_io = capsys.readouterr()
+  assert "missing-rec-id" in unrec_io.err
