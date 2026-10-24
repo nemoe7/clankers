@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.77
+// @name         Arena.ai | NemoUtils | v1.10.78
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.77
+// @version      1.10.78
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -190,7 +190,7 @@
 
   function menuRegister(entry) {
     if (typeof GM_registerMenuCommand !== "function") return;
-    if (showSettingsButtonOn() && !entry.master) {
+    if (typeof document !== "undefined" && showSettingsButtonOn() && !entry.master) {
       entry.id = null;
       return;
     }
