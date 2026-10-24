@@ -1,7 +1,16 @@
 __pycache__/
+*.py[cod]
+*.egg-info/
 .venv/
+.pytest_cache/
+.ruff_cache/
 .tiktoken-cache/
+build/
+dist/
 .env
+.env.*
+!.env.example
+*.log
 reports/
 node_modules/
 

@@ -1,6 +1,29 @@
+[tool.pytest.ini_options]
+# One root `pytest` runs every Python test. Product `gate_*.py` files stay gates, not tests.
+# Every run splits across the workers, local and CI both, so the config is the single source.
+addopts = "-n auto"
+testpaths = [
+  "skills/refs/nemoizer/scripts",
+  "skills/refs/arena-skill/scripts",
+  "skills/refs/nuu/scripts",
+  "github/workflows",
+  "maintenance",
+]
+python_files = ["test_*.py"]
+pythonpath = [
+  "github/workflows",
+  "maintenance",
+  "maintenance/gpt_plugins",
+  "maintenance/measurements",
+  "maintenance/minify",
+  "maintenance/pr",
+  "maintenance/publish",
+  "maintenance/workflows",
+]
+
+[tool.ruff]
 required-version = "0.16.6"
 indent-width = 2
-
 # The project does not own vendored third-party code. Do not reformat or lint it.
 # Check generated Python through minify.py. Lint and format its readable refs.
 extend-exclude = [
@@ -9,12 +32,12 @@ extend-exclude = [
   "skills/arena-skill/scripts/survey.py",
 ]
 
-[lint]
+[tool.ruff.lint]
 ignore = ["BLE001", "S110"]
 # E501 is not in ruff's default rule set, and the formatter's own `line-length` must stay where `ruff format` put it.
 # The 120-character limit rides the pycodestyle setting alone, so lint and format keep their separate widths.
 extend-select = ["E501"]
 extend-safe-fixes = ["C408", "PERF102", "RUF059"]
 
-[lint.pycodestyle]
+[tool.ruff.lint.pycodestyle]
 max-line-length = 120

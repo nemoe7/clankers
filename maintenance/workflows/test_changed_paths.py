@@ -180,7 +180,7 @@ def test_module_matrix_selects_owners_and_shared_changes():
   for shared in (
     "requirements.txt",
     "package-lock.json",
-    "pytest.ini",
+    "pyproject.toml",
     ".github/workflows/ci.yml",
   ):
     assert {row["name"] for row in changed_paths.module_matrix([shared])} == all_names

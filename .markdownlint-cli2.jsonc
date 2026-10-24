@@ -1,9 +1,11 @@
 {
   "globs": ["rules/**/*.md"],
   "ignores": ["*.md", "skills/**", "rules/CHATGPT.*", "rules/README.md", "rules/refs/kilo/**", "rules/kilo/**"],
+  "gitignore": true,
   "config": {
     "default": true,
     "MD013": false,
+    "MD024": { "siblings_only": true },
     "MD060": true
   }
 }

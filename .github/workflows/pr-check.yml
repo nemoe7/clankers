@@ -10,13 +10,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: PR-Check-${{ github.ref }}
+  group: pr-check-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   contract:
     name: Check Commits and PR Contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read

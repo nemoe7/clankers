@@ -200,7 +200,7 @@ MODULE_PATHS = {
     "maintenance/check.py",
     "maintenance/lint_prose.py",
     "maintenance/extract_prose.py",
-    "ruff.toml",
+    "pyproject.toml",
     ".markdownlint*",
     "README.md",
     "rules/*",
@@ -220,7 +220,7 @@ MODULE_COMMANDS = {
 }
 SHARED_TEST_PATHS = (
   "requirements.txt",
-  "pytest.ini",
+  "pyproject.toml",
   "package.json",
   "package-lock.json",
   ".github/workflows/ci.yml",

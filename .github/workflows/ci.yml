@@ -21,13 +21,13 @@ env:
   ARENA_PREVIEW_NO_BOOTSTRAP: "1"
 
 concurrency:
-  group: CI-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   quality:
     name: Repository Quality
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check Out Repository
@@ -70,7 +70,7 @@ jobs:
 
   version-bumps:
     name: Check Module Versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -105,7 +105,7 @@ jobs:
 
   test-changes:
     name: Select Module Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       run: ${{ steps.modules.outputs.run }}
@@ -128,7 +128,7 @@ jobs:
     name: ${{ matrix.name }} Tests
     needs: test-changes
     if: needs.test-changes.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false

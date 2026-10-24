@@ -4,6 +4,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-24
+
+### Added
+
+#### nemoizer
+
+- Add the advisory `"the"` usage-density check (`NMO902` and `references/nmo902.md`), format CLI findings in `ste-lint.py` style with an indented source snippet and `Summary` footer, and auto-discover `nemoizer.toml` or `[tool.nemoizer]` in `pyproject.toml`.
+
+#### nuu
+
+- Export `DEVICE_BREAKPOINTS` (`75em`, `60em`, `40em` width and `30em` height) from `scripts/uiux.py`, and enable mobile touch emulation when viewport height is at most `480` px (`30em`) in `scripts/browser.cjs`.
+
+### Changed
+
+#### arena-skill
+
+- Sync the browser IANA timezone (`X-Timezone`) to `display_tz` in `preview.py` and export `TZ` in `install.sh`. Read `/nuu audit` device widths from `nuu`, pass standard repo ignores to `/nemoizer collect`, show `"{order}. {task id}\n{timestamp}"` task tooltips, and cap `--app-height` composer height at `50%` under `@media (max-height: 30em)`.
+
+#### maintenance
+
+- Standardize repo hygiene with `template-main`. Add `.editorconfig`, `.gitattributes`, `.github/PULL_REQUEST_TEMPLATE.md`, and `.github/actionlint.yaml`, expand `.gitignore` and `.markdownlint-cli2.jsonc`, align `ci.yml` and `pr-check.yml`, and consolidate `pytest.ini` and `ruff.toml` into `pyproject.toml`.
+
 ## 2026-10-23
 
 ### Added

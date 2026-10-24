@@ -64,12 +64,12 @@ Read these first:
 - It validates live skill metadata, baseline/live skill parity, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, and skill licensing for adapted skills.
   - It also checks the markdownlint scope, refs/live rule parity, and the root `ARENA.md` copy.
 - `.github/workflows/ci.yml` runs `python maintenance/check.py --update` on PRs targeting any branch, except changes limited to its `paths-ignore` list, and after every push to `main`.
-- It runs Ruff at the version `ruff.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
+- It runs Ruff at the version `pyproject.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
 
 ## Verification
 
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
-2. `ruff check .` and `ruff format --diff .` at the version `ruff.toml` pins.
+2. `ruff check .` and `ruff format --diff .` at the version `pyproject.toml` pins.
 3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements. It gates the root copy: `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute.yml` pushes to the target repositories.
 
 ## Rules
@@ -157,7 +157,7 @@ Read these first:
 - No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
 - markdownlint covers `rules/**/*.md` — 11 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`.
   - **MD060 enabled**, **MD013 disabled**.
-- Python: Ruff, configured by `ruff.toml`, which owns the selection and the pinned version; run `ruff format` before other local gates.
+- Python: Ruff, configured by `pyproject.toml`, which owns the selection and the pinned version; run `ruff format` before other local gates.
 - Prose style: write and edit the documentation prose of this repository (`docs/`, every `README.md`, and `CHANGELOG.md`) with `nemoizer` (`skills/nemoizer/scripts/nemoizer`), falling back to ASD-STE100 (`.agents/skills/asd-ste100/scripts/ste-lint.py`) and Humanizer when `nemoizer` is unavailable; both linters MUST pass on changed text.
   - Rules, skills and agent-facing files such as this one stay outside the linter's scope.
   - A copy of a third-party file stays outside it too, because the copy belongs to its upstream: no rewrite of a vendored file, and no path into the gate for one.
