@@ -14571,25 +14571,20 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert inlined_md == f"![sample](data:image/png;base64,{encoded_out})"
   import shutil
 
+  repo_base = Path.cwd().resolve()
+  if not (
+    repo_base / "skills" / "refs" / "nemoizer" / "scripts" / "nemoize.py"
+  ).is_file():
+    repo_base = Path(preview.resolve_repo_root())
   fake_nemo = tmp_path / ".agents" / "skills" / "nemoizer" / "scripts"
   fake_nemo.mkdir(parents=True, exist_ok=True)
   shutil.copy2(
-    Path(preview.resolve_repo_root())
-    / "skills"
-    / "refs"
-    / "nemoizer"
-    / "scripts"
-    / "nemoize.py",
+    repo_base / "skills" / "refs" / "nemoizer" / "scripts" / "nemoize.py",
     fake_nemo / "nemoize.py",
   )
   for helper_name in ("prose.py", "markers.py", "javascript-comments.cjs"):
     shutil.copy2(
-      Path(preview.resolve_repo_root())
-      / "skills"
-      / "refs"
-      / "nemoizer"
-      / "scripts"
-      / helper_name,
+      repo_base / "skills" / "refs" / "nemoizer" / "scripts" / helper_name,
       fake_nemo / helper_name,
     )
   bad_rep = rep_dir / "bad-nemo.md"
