@@ -5272,6 +5272,13 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
     context.renderMessageMarkdown('```js\n1\n```'),
     /class="preview-code-md"/
   );
+  const commentedMd = context.renderMessageMarkdown(
+    '<!-- nonemo: NMO100; nonemo: NMO901 -->\n# Rules\nKeep `<!-- inline -->` and:\n```html\n<!-- fenced -->\n```'
+  );
+  assert.doesNotMatch(commentedMd, /nonemo:\s*NMO100/, 'top-level HTML comments are stripped');
+  assert.match(commentedMd, /<h1>Rules<\/h1>/, 'heading after HTML comment renders as h1');
+  assert.match(commentedMd, /<code>&lt;!-- inline --&gt;<\/code>/, 'inline code HTML comment is preserved');
+  assert.match(commentedMd, /&lt;!-- fenced --&gt;/, 'fenced code HTML comment is preserved');
   const appSource = fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8');
   assert.match(appSource, /const alreadySelected = tab\.getAttribute\('aria-selected'\) === 'true';/);
   assert.match(appSource, /if \(selected && !alreadySelected\) gsap\.fromTo\(panel,/);
@@ -5288,6 +5295,16 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   const slashTokenRule = styleSource.match(/\.slash-token\s*\{([^}]*)\}/);
   assert.ok(slashTokenRule, '.slash-token rule exists');
   assert.doesNotMatch(slashTokenRule[1], /width:\s*100%/, '.slash-token sizes to its text rather than full row width');
+  const copyCodeRule = styleSource.match(/\.copy-code,\s*\.preview-code-md\s*\{([^}]*)\}/);
+  assert.ok(copyCodeRule, '.copy-code rule exists');
+  const copyWidth = copyCodeRule[1].match(/\bwidth:\s*(\d+px)/);
+  const copyHeight = copyCodeRule[1].match(/\bheight:\s*(\d+px)/);
+  assert.ok(copyWidth && copyHeight && copyWidth[1] === copyHeight[1], '.copy-code has symmetric width and height');
+  assert.match(
+    styleSource,
+    /#modal\[data-read-only="true"\]\s+button:not\([^)]*\.copy-code[^)]*\)/,
+    'read-only modal min-height rule excludes .copy-code so it stays symmetric'
+  );
   assert.match(styleSource, /body\s*\{[^}]*height:\s*var\(--app-height,\s*100dvh\)/);
   assert.doesNotMatch(styleSource, /#compose:has\(#note\[data-slash="true"\]\)/);
 });

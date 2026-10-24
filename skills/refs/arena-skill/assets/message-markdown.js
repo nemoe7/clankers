@@ -176,8 +176,56 @@ function unescapeInlineCodeLine(part) {
   }
   return out;
 }
+function stripMarkdownHtmlComments(source) {
+  let out = '';
+  let i = 0;
+  const n = source.length;
+  let fence = null;
+  let atLineStart = true;
+  while (i < n) {
+    if (atLineStart) {
+      const m = /^ {0,3}(`{3,}|~{3,})/.exec(source.slice(i));
+      if (m) {
+        if (fence === null) fence = m[1];
+        else if (m[1][0] === fence[0] && m[1].length >= fence.length) fence = null;
+      }
+      atLineStart = false;
+    }
+    if (fence === null && source[i] === '`') {
+      let ticks = 0;
+      while (i + ticks < n && source[i + ticks] === '`') ticks++;
+      const delim = '`'.repeat(ticks);
+      const close = source.indexOf(delim, i + ticks);
+      if (close !== -1) {
+        const span = source.slice(i, close + ticks);
+        out += span;
+        atLineStart = span.endsWith('\n');
+        i = close + ticks;
+        continue;
+      }
+    }
+    if (fence === null && source.startsWith('<!--', i)) {
+      const end = source.indexOf('-->', i + 4);
+      if (end !== -1) {
+        let next = end + 3;
+        if (out === '' || out.endsWith('\n')) {
+          if (source.startsWith('\r\n', next)) next += 2;
+          else if (source[next] === '\n') next += 1;
+          atLineStart = true;
+        }
+        i = next;
+        continue;
+      }
+    }
+    const ch = source[i];
+    out += ch;
+    if (ch === '\n') atLineStart = true;
+    i++;
+  }
+  return out;
+}
 function unescapeMessageMarkdown(source) {
-  const restored = source.replace(/^([ \t]*)\\(`{3,}|~{3,})/gm, '$1$2');
+  const restored = stripMarkdownHtmlComments(source).replace(/^([ \t]*)\\(`{3,}|~{3,})/gm, '$1$2');
   let fence = null;
   return restored.split(/(\r?\n)/).map(part => {
     if (part === '\n' || part === '\r\n') return part;

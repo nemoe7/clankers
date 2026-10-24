@@ -5394,7 +5394,9 @@ def resolve_slash_command(text, root=None):
             "mode": "query",
             "command": f"/nemoizer {sub} {slug}",
             "title": f"nemoizer · {slug.upper()}",
-            "markdown": _concise_rule_doc(item.read_text(encoding="utf-8")),
+            "markdown": strip_fenced_md_comments(
+              _concise_rule_doc(item.read_text(encoding="utf-8"))
+            ).strip(),
           }
     rules_file = (
       refs_dir / "rules.md"
@@ -5402,7 +5404,7 @@ def resolve_slash_command(text, root=None):
       else refs_dir / "Rules.md"
     )
     body = (
-      rules_file.read_text(encoding="utf-8").strip()
+      strip_fenced_md_comments(rules_file.read_text(encoding="utf-8")).strip()
       if rules_file.is_file()
       else "No rules file found."
     )
@@ -9310,7 +9312,10 @@ def render(markdown, breaks=False):
   parser.add_render_rule("link_open", open_link)
   parser.add_render_rule("image", render_image)
   tagged, images = hold_out(
-    markdown, SIZED_IMAGE, lambda match: sized_image(match, validateLink), "image"
+    strip_fenced_md_comments(markdown),
+    SIZED_IMAGE,
+    lambda match: sized_image(match, validateLink),
+    "image",
   )
   rendered = drop_paragraph_breaks(parser.render(unescape_fences(tagged)))
   return add_copy_buttons(put_back(rendered, images, "image"))

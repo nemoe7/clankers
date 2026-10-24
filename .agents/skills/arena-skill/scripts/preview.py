@@ -1909,8 +1909,8 @@ def resolve_slash_command(text,root=None):
 		if arg and refs_dir.is_dir():
 			slug=re.sub('[^a-zA-Z0-9_-]','',arg.split()[0]).lower()
 			for item in sorted(refs_dir.glob('*.md')):
-				if item.stem.lower()==slug:return{'mode':'query','command':f"/nemoizer {sub} {slug}",'title':f"nemoizer · {slug.upper()}",'markdown':_concise_rule_doc(item.read_text(encoding='utf-8'))}
-		rules_file=refs_dir/'rules.md'if(refs_dir/'rules.md').is_file()else refs_dir/'Rules.md';body=rules_file.read_text(encoding='utf-8').strip()if rules_file.is_file()else'No rules file found.';return{'mode':'query','command':f"/nemoizer {sub}",'title':'nemoizer · Rules','markdown':body}
+				if item.stem.lower()==slug:return{'mode':'query','command':f"/nemoizer {sub} {slug}",'title':f"nemoizer · {slug.upper()}",'markdown':strip_fenced_md_comments(_concise_rule_doc(item.read_text(encoding='utf-8'))).strip()}
+		rules_file=refs_dir/'rules.md'if(refs_dir/'rules.md').is_file()else refs_dir/'Rules.md';body=strip_fenced_md_comments(rules_file.read_text(encoding='utf-8')).strip()if rules_file.is_file()else'No rules file found.';return{'mode':'query','command':f"/nemoizer {sub}",'title':'nemoizer · Rules','markdown':body}
 	if sub in{'collect','check'}:
 		target_args=[]
 		if arg:
@@ -3093,7 +3093,7 @@ def report_marker_warnings(markdown):
 def render(markdown,breaks=False):
 	try:from markdown_it import MarkdownIt;from markdown_it.common.normalize_url import validateLink
 	except ImportError as error:raise RuntimeError("Markdown rendering needs markdown-it-py. Install it in the preview's venv and restart the server with that venv's Python; steering still works.")from error
-	parser=MarkdownIt('commonmark',{'html':False,'breaks':breaks}).enable(['table','strikethrough']);highlight_markdown(parser);parser.add_render_rule('link_open',open_link);parser.add_render_rule('image',render_image);tagged,images=hold_out(markdown,SIZED_IMAGE,lambda match:sized_image(match,validateLink),'image');rendered=drop_paragraph_breaks(parser.render(unescape_fences(tagged)));return add_copy_buttons(put_back(rendered,images,'image'))
+	parser=MarkdownIt('commonmark',{'html':False,'breaks':breaks}).enable(['table','strikethrough']);highlight_markdown(parser);parser.add_render_rule('link_open',open_link);parser.add_render_rule('image',render_image);tagged,images=hold_out(strip_fenced_md_comments(markdown),SIZED_IMAGE,lambda match:sized_image(match,validateLink),'image');rendered=drop_paragraph_breaks(parser.render(unescape_fences(tagged)));return add_copy_buttons(put_back(rendered,images,'image'))
 def handler(store):
 	from http.server import BaseHTTPRequestHandler;survey_state={'results':None,'answered_at':None,'requested':False};survey_lock=threading.Lock()
 	class Handler(BaseHTTPRequestHandler):

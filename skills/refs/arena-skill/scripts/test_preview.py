@@ -14310,6 +14310,16 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert slash_nemo_rule is not None
   assert slash_nemo_rule["mode"] == "query"
   assert "STE100" in slash_nemo_rule["markdown"]
+  slash_nemo_rules_all = preview.resolve_slash_command("/nemoizer rules")
+  assert slash_nemo_rules_all is not None
+  assert not slash_nemo_rules_all["markdown"].lstrip().startswith("<!--")
+  rendered_rules = preview.render(
+    "<!-- nonemo: NMO100 -->\n# Rules\nKeep `<!-- nonemo: NMO100 -->` and:\n```html\n<!-- fenced -->\n```"
+  )
+  assert "&lt;!-- nonemo: NMO100 --&gt;\n<h1>Rules</h1>" not in rendered_rules
+  assert rendered_rules.lstrip().startswith("<h1>Rules</h1>")
+  assert "<code>&lt;!-- nonemo: NMO100 --&gt;</code>" in rendered_rules
+  assert "&lt;!-- fenced --&gt;" in rendered_rules
   slash_nemo_collect = preview.resolve_slash_command("/nemoizer collect ARENA.md")
   assert slash_nemo_collect is not None
   assert slash_nemo_collect["mode"] == "query"

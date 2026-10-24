@@ -322,8 +322,8 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .mermaid-diagram { padding: 12px 40px 12px 12px; border-radius: 6px; overflow-x: auto; background: var(--bg); }
 .code-md-preview { padding: 12px 70px 12px 12px; border-radius: 6px; overflow-x: auto; background: var(--bg); border: 1px solid var(--border); }
 .mermaid-svg { display: block; max-width: 100%; height: auto; color: var(--text); font-family: inherit; }
-.copy-code, .preview-code-md { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; min-height: 0; padding: 0; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); border-radius: 4px; cursor: pointer; }
-.preview-code-md { right: 36px; }
+.copy-code, .preview-code-md { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; min-height: 0; padding: 0; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); border-radius: 4px; cursor: pointer; }
+.preview-code-md { right: 38px; }
 .copy-code:hover, .preview-code-md:hover, .preview-code-md[aria-pressed="true"] { color: var(--text); border-color: var(--focus); }
 .preview-code-md[aria-pressed="true"] { background: var(--panel-2); }
 .copy-code[data-state="bad"] { color: #ef4444; }
@@ -558,7 +558,7 @@ mark code { color: var(--text); }
 .survey-confidence progress::-moz-progress-bar { background: currentColor; }
 .survey-confidence span { display: inline-block; min-width: 4ch; margin-left: 8px; text-align: right; }
 
-#modal[data-read-only="true"] button:not(.modal-close) { min-height: 44px; touch-action: manipulation; }
+#modal[data-read-only="true"] button:not(.modal-close, .copy-code, .preview-code-md) { min-height: 44px; touch-action: manipulation; }
 #survey-again { display: inline-flex; align-items: center; gap: 6px; }
 #modal[data-read-only="true"] button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #survey-open { touch-action: manipulation; }

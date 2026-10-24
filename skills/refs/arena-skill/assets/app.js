@@ -1385,7 +1385,8 @@ $('#form').addEventListener('submit', async event => {
       paintSend(false);
       const view = document.createElement('article');
       view.className = 'report slash-output';
-      view.innerHTML = await renderMermaidBlocks(slashResult.html || renderMessageMarkdown(slashResult.markdown || ''));
+      const rawHtml = (slashResult.html && !slashResult.html.includes('&lt;!--')) ? slashResult.html : renderMessageMarkdown(slashResult.markdown || '');
+      view.innerHTML = await renderMermaidBlocks(rawHtml);
       void openModal({ title: slashResult.title || slashResult.command || 'Slash Command', content: view, readOnly: true, wide: true });
       return;
     }
