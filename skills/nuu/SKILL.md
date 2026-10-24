@@ -65,6 +65,8 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 19. Style scrollbars with the thin 10 px rounded thumb on the background track and no arrow buttons via [references/recipes/scrollbars.md](references/recipes/scrollbars.md).
 
+21. Open a confirmation modal warning about the deletion before executing any delete action via [references/recipes/modal-manager.md](references/recipes/modal-manager.md).
+
 ## Go-to libraries
 
 - For draggable and reorderable lists, vendor only the required part of [SortableJS](https://github.com/SortableJS/Sortable) with its MIT license instead of writing custom drag-and-drop handlers.
