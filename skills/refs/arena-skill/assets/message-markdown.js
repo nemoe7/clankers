@@ -258,6 +258,14 @@ function formatCodeLanguage(inner) {
   const raw = match[1].toLowerCase();
   return CODE_LANG_NAMES[raw] || (raw.charAt(0).toUpperCase() + raw.slice(1));
 }
+function ensureCodeBlockHeaders(html) {
+  if (typeof html !== 'string' || !html.includes('class="code-block"') || html.includes('class="code-block-header"')) return html;
+  const attribute = value => messageMarkdown.utils.escapeHtml(value).replaceAll("'", '&#x27;');
+  return html.replace(/<div class="code-block">((?:\s*<button\b[\s\S]*?<\/button>)*)\s*<pre>([\s\S]*?)<\/pre>\s*<\/div>/g, (_, buttons, inner) => {
+    const header = `<div class="code-block-header"><span class="code-block-lang">${icon('braces', 14).outerHTML}<span>${attribute(formatCodeLanguage(inner))}</span></span></div>`;
+    return `<div class="code-block">${buttons}${header}<pre>${inner}</pre></div>`;
+  });
+}
 function renderMessageMarkdown(source) {
   const attribute = value => messageMarkdown.utils.escapeHtml(value).replaceAll("'", '&#x27;');
   const images = [];

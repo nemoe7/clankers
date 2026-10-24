@@ -1003,7 +1003,7 @@ function showHistory(notes) {
     const text = node.children[0];
     text.className = item.html === undefined ? 'raw-message' : 'message-text';
     if (item.html === undefined) text.textContent = item.text.replace(/\\n/g, '\n');
-    else text.innerHTML = item.html;
+    else text.innerHTML = typeof ensureCodeBlockHeaders === 'function' ? ensureCodeBlockHeaders(item.html) : item.html;
     const receipt = node.children[2];
     receipt.className = 'receipt';
     const receiptId = document.createElement('code');
@@ -2489,7 +2489,8 @@ async function loadReport(force = false) {
   try {
     const result = await (await request(`/api/reports/${encodeURIComponent(id)}/html`)).json();
     if (sequence !== reportRequest || keepEntries()) return;
-    const html = await renderMermaidBlocks(result.html, sequence);
+    const rawReportHtml = typeof ensureCodeBlockHeaders === 'function' ? ensureCodeBlockHeaders(result.html) : result.html;
+    const html = await renderMermaidBlocks(rawReportHtml, sequence);
     if (sequence !== reportRequest || keepEntries()) return;
     reportDirty = false;
     if ($('#report-status') && $('#report-form')) $('#report-form').insertBefore?.($('#report-status'), $('#report'));
