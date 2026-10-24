@@ -14506,7 +14506,6 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     preview.job_log_command(tz_store, job_id="42", root=tmp_path)
     == "https://results.actions.githubusercontent.com/signed-log"
   )
-  monkeypatch.setattr(preview.subprocess, "run", real_subproc_run)
   test_key = "k" * 24
   tz_store.set_agent_key(test_key, "https://proxy.example.test")
   assert (
@@ -14542,6 +14541,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     )
     == 130
   )
+  monkeypatch.setattr(preview.subprocess, "run", real_subproc_run)
   style_text = (
     preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
