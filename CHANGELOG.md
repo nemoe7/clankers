@@ -88,6 +88,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Lock the sole `.shrink-0` sibling of `div.flex.w-full.shrink-0.flex-col.gap-4.mx-auto.max-w-3xl.px-4.pt-14.md\:pt-12` to `24px`, keep settings visible when idle, use Lucide icons, and combine min/max delay sliders (`userscripts/arena.user.js` `1.10.76`).
 - Auto-upload the `.ndjson` backup once per state mismatch to `/api/userscript-autosave/offer` as a quiet, agent-blocking inbox note instructing the agent to run `arena-preview state compare` before `state import` (`userscripts/arena.user.js` and `scripts/preview.py`).
 - Register shared and manual `sbx-*.arena.site` preview URLs in `skills/arena-skill/arena-preview-proxy/` (`server.js` and `assets/recent.js`). Prioritize manual and shared URLs over userscript URLs, and reject `"Preview Unavailable"` entries in `server.js`, `assets/recent.js`, and `userscripts/arena.user.js`.
+- Auto-flag a `process-violation` on `ARENA.md` to `/api/agent-interrupt` in `userscripts/arena.user.js` when the port 8000 steering preview button label does not match `<repo> - Steering`.
 
 #### maintenance
 

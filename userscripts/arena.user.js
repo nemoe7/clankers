@@ -50,6 +50,7 @@
     trim: ["removed"],
     state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-selector", "requested", "selector-closed", "reset-accept"],
     "preview-proxy": ["posted", "failed", "no-host"],
+    steering: ["flagged-name"],
     wake: ["refused", "unavailable"],
     title: ["changed", "restored", "conditions"],
   };
@@ -1496,6 +1497,144 @@
       }
     }
 
+    function steeringLabelViolation(label, expectedSlug) {
+      var name = String(label || "").replace(/\s*:8000\s*$/, "").trim();
+      if (!name || /^start\b/i.test(name)) {
+        return null;
+      }
+      var slug = String(expectedSlug || "").trim();
+      if (slug) {
+        var expected = slug + " - Steering";
+        if (name === expected) {
+          return null;
+        }
+        return {
+          actual: name,
+          expected: expected,
+          note:
+            'Port 8000 preview process is named "' +
+            name +
+            '" instead of "' +
+            expected +
+            '" (ARENA.md requires "<repo> - Steering").',
+        };
+      }
+      if (/^[A-Za-z0-9][A-Za-z0-9._-]* - Steering$/.test(name)) {
+        return null;
+      }
+      return {
+        actual: name,
+        expected: "<repo> - Steering",
+        note:
+          'Port 8000 preview process is named "' +
+          name +
+          '" instead of "<repo> - Steering" (ARENA.md requires "<repo> - Steering").',
+      };
+    }
+
+    function interruptPayloadForSteering(label, expectedSlug) {
+      var violation = steeringLabelViolation(label, expectedSlug);
+      if (!violation) {
+        return null;
+      }
+      return {
+        armed: true,
+        tab: "notes",
+        report_id: null,
+        reason: "process-violation",
+        clause_file: "ARENA.md",
+        note: violation.note,
+      };
+    }
+
+    var flaggedSteeringKey = null;
+    var flaggingSteeringKey = null;
+
+    function steeringPreviewBase(doc) {
+      if (!doc || typeof doc.querySelectorAll !== "function") return null;
+      var frames = doc.querySelectorAll("iframe[title]");
+      var i;
+      var title;
+      for (i = 0; i < frames.length; i += 1) {
+        title =
+          (frames[i].getAttribute && frames[i].getAttribute("title")) ||
+          frames[i].title ||
+          "";
+        if (title.indexOf("App preview on port 8000") === 0 && frames[i].src) {
+          return String(frames[i].src).replace(/\/+$/, "");
+        }
+      }
+      return null;
+    }
+
+    function sendSteeringInterrupt(url, payload, done) {
+      if (typeof GM_xmlhttpRequest === "function") {
+        GM_xmlhttpRequest({
+          method: "POST",
+          url: url,
+          headers: { "Content-Type": "application/json" },
+          data: JSON.stringify(payload),
+          onload: function (answer) {
+            done(answer && answer.status ? answer.status : 0);
+          },
+          onerror: function () {
+            done(0);
+          },
+        });
+        return;
+      }
+      if (typeof fetch === "function") {
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+          .then(function (r) {
+            done(r && r.status ? r.status : 0);
+          })
+          .catch(function () {
+            done(0);
+          });
+        return;
+      }
+      done(0);
+    }
+
+    function flagSteeringLabelViolation(doc, expectedSlug, sender) {
+      var slug =
+        expectedSlug !== undefined
+          ? expectedSlug
+          : previewUiRepo || readSlug(doc) || recalledSlug();
+      var button = findSteeringButton(doc, slug);
+      if (!button) {
+        return false;
+      }
+      var payload = interruptPayloadForSteering(button.textContent, slug);
+      if (!payload) {
+        return false;
+      }
+      var base = steeringPreviewBase(doc);
+      if (!base) {
+        return false;
+      }
+      var key = base + "|" + payload.note;
+      if (flaggedSteeringKey === key || flaggingSteeringKey === key) {
+        return false;
+      }
+      flaggingSteeringKey = key;
+      var post = typeof sender === "function" ? sender : sendSteeringInterrupt;
+      post(base + "/api/agent-interrupt", payload, function (status) {
+        if (flaggingSteeringKey === key) {
+          flaggingSteeringKey = null;
+        }
+        if (status >= 200 && status < 300) {
+          flaggedSteeringKey = key;
+          logEvent("steering", "flagged-name", null, "warn");
+        }
+      });
+      return true;
+    }
+
     if (exposeChecks("openSteering", {
       isSessionUrl: isSessionUrl,
       slugFromOwnerRepo: slugFromOwnerRepo,
@@ -1504,6 +1643,13 @@
       isSteeringPort: isSteeringPort,
       buttonMatchesSteering: buttonMatchesSteering,
       findSteeringButton: findSteeringButton,
+      steeringLabelViolation: steeringLabelViolation,
+      interruptPayloadForSteering: interruptPayloadForSteering,
+      flagSteeringLabelViolation: flagSteeringLabelViolation,
+      resetFlaggedSteering: function () {
+        flaggedSteeringKey = null;
+        flaggingSteeringKey = null;
+      },
       CLICK_DELAY_MS: CLICK_DELAY_MS,
     })) {
       return;
@@ -1531,13 +1677,14 @@
       if (clickedPath === path) {
         return;
       }
-      var slug = readSlug(document) || recalledSlug();
+      var slug = previewUiRepo || readSlug(document) || recalledSlug();
       var button = findSteeringButton(document, slug);
       if (!button) {
         return;
       }
       button.click();
       clickedPath = path;
+      flagSteeringLabelViolation(document, slug);
     }
 
     function parseSteeringButton(button) {
@@ -1601,10 +1748,11 @@
         clearClickTimer();
         return;
       }
+      var slug = previewUiRepo || readSlug(document) || recalledSlug();
+      flagSteeringLabelViolation(document, slug);
       if (clickedPath === location.pathname) {
         return;
       }
-      var slug = readSlug(document) || recalledSlug();
       var button = findSteeringButton(document, slug);
       if (!button) {
         return;
@@ -1625,6 +1773,8 @@
       subtree: true,
       childList: true,
       characterData: true,
+      attributes: true,
+      attributeFilter: ["src", "title"],
     });
     window.addEventListener("popstate", sync);
     sync();

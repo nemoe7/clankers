@@ -695,7 +695,10 @@ def test_pwa_recent_endpoint_accepts_posted_previews_and_merges_into_chooser():
     assert [item["url"] for item in body["entries"]] == [
       "https://sbx-port8000-v2.arena.site"
     ]
-    assert body["removed"] == ["https://sbx-port8000.arena.site"]
+    assert body["removed"] == [
+      "https://sbx-port3000.arena.site",
+      "https://sbx-port8000.arena.site",
+    ]
 
     bad_status, _, _ = post_json(
       "/pwa/recent", {"url": "https://example.com/", "name": "bad"}
