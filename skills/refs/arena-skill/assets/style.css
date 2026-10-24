@@ -130,7 +130,7 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 #reports-panel, #tasks-panel, #downloads-panel { overflow-y: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
 /* The message log fills remaining height above the composer so the panel itself never scrolls. */
-.log-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-block: 12px; }
+.log-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-block: 12px 0; margin-bottom: -14px; }
 /* The log header wraps into four short lines on a narrow width, and the row's 12px wrap gap
    spread them into dead space. The lines sit close now, so the header reads as one block. */
 .log-card > .row:first-child { margin-block: 0; row-gap: 2px; }
@@ -221,7 +221,7 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
   white-space: nowrap; pointer-events: none;
   box-shadow: 0 4px 6px rgb(0 0 0 / 25%);
 }
-#history { list-style: none; padding: 0; margin: 12px 0 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+#history { list-style: none; padding: 12px 0 14px; margin: 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 /* The log scroll area leaves space for its jump bar.
    Show the bar only away from the log end. */
 .log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
@@ -510,7 +510,13 @@ mark code { color: var(--text); }
 #modal-error { margin: 0 0 10px; color: #ef4444; font-size: 14px; }
 .modal-actions { justify-content: flex-end; margin: 0; }
 
-:root { --motion-duration: 160ms; --edge-fade: 12px; --edge-ramp: 192px; }
+.tasks-layout > .row.tight::after {
+  content: ""; position: absolute; left: 0; right: 0; top: calc(100% + 1px);
+  height: var(--edge-fade); background: linear-gradient(to bottom, var(--bg), transparent);
+  opacity: 0; pointer-events: none;
+}
+
+:root { --motion-duration: 160ms; --edge-fade: 24px; --edge-ramp: 192px; }
 @property --edge-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --edge-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @media (prefers-reduced-motion: no-preference) {
@@ -550,6 +556,15 @@ mark code { color: var(--text); }
       animation: panel-enter var(--motion-duration) ease-out, edge-end linear both;
       animation-timeline: auto, scroll(self);
       animation-range: normal, calc(100% - var(--edge-ramp)) 100%;
+    }
+    .tasks-layout > .row.tight::after {
+      animation: sticky-edge-fade linear both;
+      animation-timeline: scroll();
+      animation-range: 0px var(--edge-ramp);
+    }
+    @keyframes sticky-edge-fade {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
     @keyframes edge-start {
       from { --edge-start: 0px; }
