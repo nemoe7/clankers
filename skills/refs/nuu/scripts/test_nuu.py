@@ -60,7 +60,13 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   page.write_text('<img src="art.svg"> <!-- nonuu: NUL0010 -->\n', encoding="utf-8")
   assert run("lint", expected=1)["findings"]
   page.write_text('<img src="art.svg"> <!-- nonuu: NUL001 -->\n', encoding="utf-8")
-  assert not run("lint")["findings"]
+  suppressed_lint = run("lint")
+  assert not suppressed_lint["findings"]
+  assert suppressed_lint["suppressions"] and suppressed_lint["marks"]
+  assert suppressed_lint["suppressions"][0]["rule"] == "NUL001"
+  collected = run("collect", expected=3)
+  assert collected["suppressions"] and collected["marks"]
+  assert collected["suppressions"][0]["rule"] == "NUL001"
   css.write_text(before[css].decode() + "button:focus {outline: none !important;}\n")
   assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"NUL003"}
   css.write_text(
@@ -942,6 +948,58 @@ def test_design_boards_and_html_typography(tmp_path):
   assert typo["font_sans"].startswith('"Inter"')
   assert typo["font_mono"].startswith('"JetBrains Mono"')
 
+  toml_proj = tmp_path / "TomlFontProject"
+  toml_proj.mkdir()
+  (toml_proj / "CustomFont.woff2").write_bytes(b"wOF2custom")
+  (toml_proj / "nuu.toml").write_text(
+    "[fonts]\n"
+    "sans = '\"Custom Toml Sans\", sans-serif'\n"
+    "mono = '\"Custom Toml Mono\", monospace'\n"
+    'files = ["CustomFont.woff2"]\n\n'
+    "[annotate]\n"
+    "scale = 3\n\n"
+    "[board]\n"
+    "columns = 1\n"
+    "wireframe = true\n",
+    encoding="utf-8",
+  )
+  toml_typo = annotate.resolve_project_typography(toml_proj)
+  assert toml_typo["font_sans"].startswith('"Custom Toml Sans"')
+  assert toml_typo["font_mono"].startswith('"Custom Toml Mono"')
+  assert toml_typo["embedded_fonts"] == 1
+  assert toml_typo["config_path"] == str(toml_proj / "nuu.toml")
+  toml_src = toml_proj / "shot.png"
+  toml_src.write_bytes(
+    annotate.encode_png(60, 40, bytearray([20, 24, 32, 255] * (60 * 40)))
+  )
+  toml_ann = annotate.annotate_image(
+    toml_src,
+    toml_proj / "shot-ann.png",
+    boxes=["4,4,20,20,red"],
+    project=toml_proj,
+    renderer="bitmap",
+  )
+  assert toml_ann["scale"] == 3
+  assert toml_ann["font_family"].startswith('"Custom Toml Sans"')
+  doc_toml = nuu.doctor(toml_proj)
+  assert doc_toml["configuration"]["status"] == "checked"
+  assert doc_toml["configuration"]["path"] == str(toml_proj / "nuu.toml")
+
+  trans_src = toml_proj / "transparent.png"
+  trans_src.write_bytes(annotate.encode_png(20, 20, bytearray([0, 0, 0, 0] * 400)))
+  trans_dst = toml_proj / "transparent-ann.png"
+  annotate.annotate_image(
+    trans_src,
+    trans_dst,
+    boxes=["2,2,10,10,red"],
+    project=toml_proj,
+    renderer="bitmap",
+  )
+  _, _, trans_rgba = annotate.decode_png(trans_dst.read_bytes())
+  assert trans_rgba[3] == 0
+  inside_idx = (5 * 20 + 5) * 4
+  assert trans_rgba[inside_idx] == 225 and trans_rgba[inside_idx + 3] == 32
+
   shots_dir = html_font_proj / "shots"
   shots_dir.mkdir()
   dash_png = shots_dir / "dashboard.png"
@@ -1115,3 +1173,51 @@ def test_design_boards_and_html_typography(tmp_path):
   )
   assert bad_style_proc.returncode == 1
   assert "nostyle.html" in bad_style_proc.stdout
+
+  import walk
+
+  walk.clear_steps()
+  demo = walk.Demo("http://127.0.0.1:1500")
+  demo.sign_in(False)
+  demo.wait_until_checked(False)
+  assert demo.signed_in is False
+  assert demo.checked is False
+  assert demo.url_for(1500) == "http://127.0.0.1:1500"
+  assert demo.url_for("/settings") == "http://127.0.0.1:1500/settings"
+
+  class FakePage:
+    def __init__(self, viewport=(1280, 800)):
+      self.viewport = viewport
+      self.visited = []
+      self._listeners = {}
+
+    def on(self, event, callback):
+      self._listeners[event] = callback
+
+    def goto(self, url, wait_until="networkidle"):
+      self.visited.append((url, wait_until))
+
+    def screenshot(self, **_kwargs):
+      return b"\x89PNG\r\n\x1a\nfake"
+
+  @walk.step("desktop")
+  def sample_step(w: walk.Walker, d: walk.Demo) -> None:
+    w.goto(1500)
+    assert d.url_for(2500) == "http://127.0.0.1:2500"
+
+  walk_out = tmp_path / "walk-out"
+  step_results = walk.run_steps_with_factory(
+    lambda vp: FakePage(vp), demo, out_dir=walk_out
+  )
+  assert len(step_results) == 1
+  assert step_results[0]["step"] == "sample_step"
+  assert step_results[0]["device"] == "desktop"
+  assert Path(step_results[0]["screenshot"]).is_file()
+
+  views = walk.capture_views(
+    walk.Walker(FakePage(), demo),
+    demo,
+    {"dashboard": 1500, "signed-out": lambda w, _d: w.goto(2500)},
+  )
+  assert set(views) == {"dashboard", "signed-out"}
+  walk.clear_steps()

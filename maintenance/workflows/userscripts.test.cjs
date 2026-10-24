@@ -44,8 +44,8 @@ const bundles = {
     // The keep-rows plan, the trim cap and the trim-now press stay on the menu whatever
     // the switch says.
     alwaysMenus: { "transcript-trim": 3 },
-    // Logging and global pause stay outside the feature switches.
-    globalMenus: 2,
+    // Logging, global pause, and show-settings-button stay outside the feature switches.
+    globalMenus: 3,
     countMenu: "Transcript - keep ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
@@ -134,7 +134,11 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       setTimeout() { throw new Error("No steering button should schedule a click"); },
       clearTimeout() {},
       prompt() { return promptAnswer; },
-      GM_getValue(key, fallback) { return stored.has(key) ? stored.get(key) : fallback; },
+      GM_getValue(key, fallback) {
+        if (stored.has(key)) return stored.get(key);
+        if (key === "clankers-arena-show-settings-button" && !testMasterSwitchDefault) return false;
+        return fallback;
+      },
       GM_setValue(key, value) {
         if (refuseWrite) throw new Error("Storage write failed");
         assert.ok(
@@ -154,6 +158,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     return { menus, active, logs, intervals };
   }
 
+  let testMasterSwitchDefault = false;
   const moduleSwitch = bundle.moduleSwitch === true;
   function menuFor(page, key) {
     return [...page.menus.values()].find((item) =>
@@ -161,6 +166,24 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   }
   // A switch label reads (ON)/(OFF) for the Arena bundle and `: ON - toggle` for ChatGPT.
   const reads = (label, on) => label.includes(moduleSwitch ? (on ? "(ON)" : "(OFF)") : (on ? ": ON" : ": OFF"));
+
+  if (domain === "arena") {
+    testMasterSwitchDefault = true;
+    const masterDefault = load();
+    assert.deepEqual(
+      [...masterDefault.menus.values()].map((item) => item.label),
+      ["Userscript - show settings button (ON)"],
+      "When show settings button is ON, Tampermonkey hides all other menu items",
+    );
+    masterDefault.menus.values().next().value.callback();
+    assert.equal(stored.get("clankers-arena-show-settings-button"), false);
+    assert.ok(
+      masterDefault.menus.size > 1,
+      "Disabling show settings button reveals all other Tampermonkey menu items",
+    );
+    stored.clear();
+    testMasterSwitchDefault = false;
+  }
 
   const defaults = load();
   assert.equal(defaults.menus.size, menusFor(stored));
@@ -193,6 +216,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Tab title - every 1 s",
       "Userscript - log level (INFO)",
       "Userscript - pause all",
+      "Userscript - show settings button (OFF)",
     ];
     assert.deepEqual(
       [...defaults.menus.values()].map((item) => item.label),
@@ -384,6 +408,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Tab title - every 1 s",
         "Userscript - log level (INFO)",
         "Userscript - pause all",
+        "Userscript - show settings button (OFF)",
       ],
       "The keep-rows line sits in the Transcript group",
     );
@@ -562,7 +587,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     ResizeObserver: class { constructor(fn) { observers.push(fn); } observe() {} unobserve() {} disconnect() {} },
     requestAnimationFrame(fn) { frames.set(++serial, fn); return serial; },
     cancelAnimationFrame(id) { frames.delete(id); },
-    GM_getValue(key) { return key === 'auto-scroll' && enabled; },
+    GM_getValue(key) {
+      if (key === 'clankers-arena-show-settings-button') return false;
+      return key === 'auto-scroll' && enabled;
+    },
     GM_registerMenuCommand(label, fn) { menus.set(label, fn); return label; },
     GM_unregisterMenuCommand(label) { menus.delete(label); },
     GM_setValue(key, value) { enabled = value; },
@@ -772,6 +800,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     };
     stored.set("clankers-arena-proxy-host", "https://proxy.example");
     stored.set("clankers-arena-proxy-master", "master-secret");
+    stored.set("clankers-arena-show-settings-button", false);
     vm.runInNewContext(source, context, { filename: "arena.user.js" });
     const goto = (path) => {
       context.location.pathname = path;
@@ -1022,7 +1051,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       },
       sessionStorage: { getItem() { return null; }, setItem() {} },
       prompt() { return null; },
-      GM_getValue(key, fallback) { return fallback; },
+      GM_getValue(key, fallback) {
+        return key === "clankers-arena-show-settings-button" ? false : fallback;
+      },
       GM_setValue() {},
       GM_registerMenuCommand(label, callback) { titleMenus.set(label, callback); return label; },
       GM_unregisterMenuCommand(label) { titleMenus.delete(label); },
@@ -1140,6 +1171,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   test("auto wake sends an exact visible draft once after a cancellable delay", () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const saved = new Map(Object.keys(bundles.arena.features).filter(key => key !== "auto-wake" && key !== "keep-working").map(key => [key, false]));
+  saved.set("clankers-arena-show-settings-button", false);
     const timers = new Map();
     const menus = new Map();
     const listeners = new Map();
@@ -1573,6 +1605,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     context.window = context;
     context.self = context;
     saved.set("clankers-arena-state-hinted", true);
+    saved.set("clankers-arena-show-settings-button", false);
     vm.runInNewContext(source, context, { filename: "arena.user.js" });
     const settle = () => new Promise(setImmediate);
     const digest = core => require("node:crypto").createHash("sha256").update(JSON.stringify(core)).digest("hex");
@@ -1977,6 +2010,12 @@ for raw in sys.stdin:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (preview.AUTOSAVE_HISTORY, json.dumps(history)))
     store.note("third-note", "diverged note")
     print(json.dumps({"ok": True}), flush=True)
+  elif op == "clear":
+    store.clear_state()
+    print(json.dumps({"ok": True, "force": store.userscript_snapshot().get("force")}), flush=True)
+  elif op == "restore_prev":
+    store.restore_state(previous=True)
+    print(json.dumps({"ok": True, "force": store.userscript_snapshot().get("force")}), flush=True)
   elif op == "inspect":
     snap = store.userscript_snapshot()
     state_notes = {item["id"]: item for item in store.state()["notes"]}
@@ -1999,6 +2038,7 @@ for raw in sys.stdin:
       "lastsave": snap["lastsave"],
       "beforelastsave": snap["beforelastsave"],
       "digest": snap["digest"],
+      "force": snap.get("force"),
       "backup_notes": backup_notes,
       "visible_notes": visible_notes,
     }), flush=True)
@@ -2120,7 +2160,11 @@ for raw in sys.stdin:
         Blob: class { constructor(parts) { this.parts = parts; } },
         URL,
         console: { log() {}, warn() {}, error() {}, debug() {}, info() {} },
-        GM_getValue: (key, fallback) => (saved.has(key) ? saved.get(key) : fallback),
+        GM_getValue: (key, fallback) => {
+          if (saved.has(key)) return saved.get(key);
+          if (key === "clankers-arena-show-settings-button") return false;
+          return fallback;
+        },
         GM_setValue: (key, value) => { saved.set(key, value); },
         GM_deleteValue: key => { saved.delete(key); },
         GM_registerMenuCommand: (label, callback) => { menus.set(label, callback); return label; },
@@ -2231,6 +2275,21 @@ for raw in sys.stdin:
       assert.ok(imported.report_source && imported.report_source.endsWith("sample-report.md"));
       assert.equal(imported.history_count, 2);
       assert.equal(imported.lastsave, thirdReceipt.beforelastsave);
+
+      const clearedResp = await callPy({ op: "clear" });
+      assert.equal(clearedResp.force, true, "clear_state sets force=true on userscript snapshot");
+      tick();
+      await drain();
+      assert.equal(writes.length, 4, "server-side force flag writes cleared state without mismatch prompt");
+      const afterClearServer = await callPy({ op: "inspect" });
+      assert.equal(afterClearServer.force, false, "confirmation clears force flag");
+
+      const restoredResp = await callPy({ op: "restore_prev" });
+      assert.equal(restoredResp.force, true, "restore_state sets force=true on userscript snapshot");
+      tick();
+      await drain();
+      assert.equal(writes.length, 5, "server-side force flag writes restored state without mismatch prompt");
+      assert.match(fileText, /third-note/);
     } finally {
       await callPy({ op: "quit" }).catch(() => {});
     }
@@ -2334,6 +2393,7 @@ for raw in sys.stdin:
             if (sel === "input, select" && (child.tag === "input" || child.tag === "select")) out.push(child);
             if (sel === "path" && child.tag === "path") out.push(child);
             if (sel === "section" && child.tag === "section") out.push(child);
+            if (sel === "button" && child.tag === "button") out.push(child);
             visit(child);
           }
         };
@@ -2459,11 +2519,36 @@ for raw in sys.stdin:
     const sections = modalNode.querySelectorAll("section").map((sec) => sec.attrs["data-settings-section"]);
     assert.deepEqual(
       sections,
-      ["Composer", "Page", "Proxy", "State", "Steering", "Transcript"],
+      ["Composer", "Page", "Proxy", "State", "Steering", "Transcript", "Userscript"],
       "settings modal groups settings into alphabetized sections",
     );
 
     const allInputs = modalNode.querySelectorAll("input, select");
+    const allButtons = modalNode.querySelectorAll("button");
+    for (const actionId of ["choose-state-file", "force-save", "trim-now", "post-key-now"]) {
+      assert.ok(
+        allButtons.some((btn) => btn.attrs["data-settings-action"] === actionId),
+        `settings modal exposes action button ${actionId}`,
+      );
+    }
+    for (const key of [
+      "clankers-arena-proxy-host",
+      "clankers-arena-preview-proxy-host",
+      "clankers-arena-proxy-master",
+      "clankers-arena-trim-keep",
+      "clankers-arena-trim-cap",
+      "clankers-arena-trim-interval-ms",
+      "clankers-arena-title-interval-ms",
+      "clankers-arena-state-reset-window",
+      "clankers-arena-log-level",
+      "clankers-arena-userscript-paused",
+      "clankers-arena-show-settings-button",
+    ]) {
+      assert.ok(
+        allInputs.some((el) => el.attrs["data-setting-key"] === key),
+        `settings modal exposes setting ${key}`,
+      );
+    }
     const wakeMinInput = allInputs.find(
       (el) => el.attrs["data-setting-key"] === "clankers-arena-wake-delay-min-ms",
     );
@@ -2637,7 +2722,77 @@ for raw in sys.stdin:
       [],
       "skips preview URLs when the header says Preview Unavailable"
     );
+    const steeringAndDemoDoc = {
+      querySelectorAll(sel) {
+        if (sel === "span") {
+          return [
+            {
+              className: "text-text-secondary min-w-0 max-w-[180px] truncate text-sm leading-[1.2]",
+              textContent: "Demo App",
+            },
+          ];
+        }
+        if (sel === "iframe[title]" || sel === "iframe") {
+          return [
+            {
+              src: "https://sbx-steering8000.arena.site/",
+              getAttribute(name) {
+                return name === "title" ? "App preview on port 8000" : "";
+              },
+            },
+            {
+              src: "https://sbx-demo3000.arena.site/",
+              getAttribute(name) {
+                return name === "title" ? "App preview on port 3000" : "";
+              },
+            },
+          ];
+        }
+        return [];
+      },
+    };
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(checks.promptFill.discoverPreviews(steeringAndDemoDoc, "clankers"))),
+      [
+        { url: "https://sbx-steering8000.arena.site/", name: "clankers - Steering" },
+        { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
+      ],
+      "uses the arena-skill preview UI repo name for the steering preview while keeping DOM header labels for other previews"
+    );
+    const reconciled = checks.promptFill.reconcileRecentPreviews(
+      { "clankers - Steering": "https://sbx-old8000.arena.site/" },
+      [{ url: "https://sbx-steering8000.arena.site/", name: "clankers - Steering" }]
+    );
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(reconciled)),
+      {
+        byName: { "clankers - Steering": "https://sbx-steering8000.arena.site/" },
+        invalidated: ["https://sbx-old8000.arena.site/"],
+      },
+      "invalidates the previous preview URL when a new URL arrives for the same preview name"
+    );
+    const makePollRow = (stderrText) => {
+      const pres = [{ textContent: "$ arena-preview poll" }];
+      if (stderrText) {
+        pres.push({ textContent: stderrText });
+      }
+      return {
+        getAttribute: () => "",
+        querySelector: (sel) => (sel === "pre" ? pres[0] : null),
+        querySelectorAll: (sel) => (sel === "pre" ? pres : []),
+      };
+    };
+    assert.equal(checks.tabTitle.emojiForRow(makePollRow("")), "\uD83D\uDCA4");
+    assert.equal(
+      checks.tabTitle.emojiForRow(
+        makePollRow(
+          "poll max 1799 s; bash timeout 1800 s.\nrun suite-readme-shot running 39s\n"
+        )
+      ),
+      checks.tabTitle.BASH_EMOJI
+    );
   });
 }
+
 
 

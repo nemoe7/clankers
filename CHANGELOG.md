@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-25
+
+### Changed
+
+#### arena-skill
+
+- Auto-append `-2`, `-3`, ... when `arena-preview run start <name>` reuses an existing run name (`scripts/preview.py`). Add `arena-preview worktree forget <name>`, auto-prune missing worktrees, and retain pytest tracebacks in routed gate tails.
+- Unblock `--status finished` when a task's report has an answer or a remote CI watch run is active (`scripts/preview.py`). Let explicit `--order` outrank blocked report tasks and skip mandatory regates for `.agents/skills/**`-only diffs on `origin/main`.
+
+#### userscripts
+
+- Show the bash emoji (`BASH_EMOJI`) in `userscripts/arena.user.js` when a running `arena-preview poll` row reports an active gate in `stderr` (`run <name> running <N>s`). Keep the waiting emoji (`WAITING_EMOJI`) for idle polls.
+
 ## 2026-10-24
 
 ### Added
@@ -18,6 +31,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Rotate proper-name variations of `nemoizer` and `the nemoizer` to lowercase `nemoizer` (`NMO100`), and collapse repeated leading `"the"` articles in `NMO902` comma lists under `--format`.
 - Evaluate `NMO902`, `HMN904`, `HMN910`, `NMO003`, `STE300`, `STE400`–`STE401`, `STE901`–`STE910`, and multi-word `HMN*` rules across each prose block mapped to the starting line.
 - Exclude `AGENTS.md`, `**/AGENTS.md`, `ARENA.md`, and `**/ARENA.md` by default in `scripts/nemoize.py` and `references/nemoizer.toml`. Allow `exclude` in `nemoizer.toml` or `[tool.nemoizer]` to override all default excludes.
+- Add `pyproject.toml` with `[project.scripts] nemoizer = "nemoize:main"` so `nemoizer` installs as a bare CLI command alongside `nuu`.
 
 #### nuu
 
@@ -33,6 +47,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add Clause 18 to `SKILL.md` and `references/recipes/loading-bar.md` for subtle delayed edge loading bars (`200ms` delay, `aria-busy` region, left-origin `scaleX` growth, and `prefers-reduced-motion` fallback). Reserve loud loading bars for explicit requests.
 - Add Clause 22 to `SKILL.md` and `references/recipes/relative-timestamps.md` for full and abbreviated relative timestamps. Omit seconds unless second-level resolution is requested.
 - Amend Clause 9 in `SKILL.md` to keep control dimensions invariant across states. Add rendered `NUA309` in `scripts/browser.cjs` and static `NUL005` in `scripts/nuu.py`.
+- Support `nuu.toml` in `nuu` (`annotate`, `board`, `doctor`, and browser wireframe captures) to configure default font stacks (`[fonts]`), embedded font files, and rendering defaults.
+- Preserve PNG alpha channels in `nuu` by passing `omitBackground: true` in `_chromium_render_png` and using straight-alpha `source-over` blending in `blend_pixel` and `blit_rgba`.
+- List `nonuu: <ID>` suppressions (`marks` and `suppressions`) in `nuu lint`, `nuu audit`, and the new `nuu collect` command to match `nemoizer`.
+- Add full settings and action buttons (`Choose file`, `Force save`, `Trim now`, and `Post key now`) to the `userscripts/arena.user.js` panel. Add a `Userscript - show settings button` master switch in Tampermonkey that hides the individual menu commands when enabled and reveals them when disabled.
+- Add a two-file rolling state backup (`backups/state-latest.ndjson` and `backups/state-previous.ndjson`), cold-start auto-restore when `state.sqlite3` is missing or empty, and `arena-preview state save` and `state restore [-p, --previous]` commands that force-sync local `.ndjson` files in `userscripts/arena.user.js`.
+- Reject multiple free-text (`___`) options in a single `choice` or `checkbox` report field. Warn on `report publish` with the question ID when no option is recommended.
+- Add `live-dot.md`, `table-to-cards.md`, and `page-memory.md` recipes in `skills/refs/nuu/references/recipes/` and `skills/nuu/references/recipes/`, and link them from Clauses 9 and 18 in `SKILL.md`.
+- Add `scripts/walk.py`, `references/walk.md`, and the `nuu walk` subcommand (`Demo`, `Walker`, `@step`, and `capture_views`) for deterministic browser walks and named `nuu board` view captures.
 - Amend Clause 1 in `SKILL.md` to default control glyphs to Lucide first, then Simple Icons, then the vendored Phosphor catalog. Include non-blocking `icons` checks (`NUI001`–`NUI003`) in `nuu audit`.
 
 ### Changed
@@ -46,6 +68,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Style `.code-block` with a bordered container, a `.code-block-header` showing the Lucide `braces` icon and language label, and a `var(--panel)` code body distinct from the scroll-fade background.
 - Bundle minified PrismJS (`prism-core` and 13 language grammars) to syntax-highlight fenced code blocks in messages and reports.
 - Remove `scrollbar-gutter: stable` from `#history` and size `.message` to `min(900px, 90vw)` so message bubbles align flush with the toolbar and composer on both edges.
+- Wrap long Mermaid flowchart node labels into `<tspan>` lines and size boxes and diamonds to fit wrapped text. Offset parallel edges and edge labels so they do not overlap.
+- Include seconds by default in `assets/app.js` relative timestamps (`time()`) and switch to abbreviated units (`5s ago`, `5min ago`) on mobile viewports (`<= 40em` width or `<= 30em` height).
+- Pass `state.repo` from `assets/app.js` in `clankers:preview-ready` and use it for the steering preview in `userscripts/arena.user.js`. Invalidate replaced URLs and deduplicate entries by non-empty `name` in `arena-preview-proxy`.
+- Center `.notes-layout > .composer-footer` horizontally under the composer in `assets/style.css`.
 
 #### rules and system-prompts
 
@@ -75,6 +101,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Lock the sole `.shrink-0` sibling of `div.flex.w-full.shrink-0.flex-col.gap-4.mx-auto.max-w-3xl.px-4.pt-14.md\:pt-12` to `24px`, keep settings visible when idle, use Lucide icons, and combine min/max delay sliders (`userscripts/arena.user.js` `1.10.76`).
 - Auto-upload the `.ndjson` backup once per state mismatch to `/api/userscript-autosave/offer` as a quiet, agent-blocking inbox note instructing the agent to run `arena-preview state compare` before `state import` (`userscripts/arena.user.js` and `scripts/preview.py`).
 - Register shared and manual `sbx-*.arena.site` preview URLs in `skills/arena-skill/arena-preview-proxy/` (`server.js` and `assets/recent.js`). Prioritize manual and shared URLs over userscript URLs, and reject `"Preview Unavailable"` entries in `server.js`, `assets/recent.js`, and `userscripts/arena.user.js`.
+- Auto-flag a `process-violation` on `ARENA.md` to `/api/agent-interrupt` in `userscripts/arena.user.js` when the port 8000 steering preview button label does not match `<repo> - Steering`.
 
 #### maintenance
 

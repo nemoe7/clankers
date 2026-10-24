@@ -1861,6 +1861,12 @@ test('preview client', async (t) => {
       assert.equal(context.time(at(500), { compact: true }), 'now');
       assert.equal(context.time(at(1000), { includeSeconds: true }), 'a second ago');
       assert.equal(context.time(at(5000), { includeSeconds: true }), '5 seconds ago');
+      assert.equal(context.time(at(1000)), 'a second ago');
+      assert.equal(context.time(at(5000)), '5 seconds ago');
+      context.window.innerWidth = 360;
+      assert.equal(context.time(at(5000)), '5s ago');
+      assert.equal(context.time(at(5 * 60_000)), '5min ago');
+      delete context.window.innerWidth;
       assert.equal(context.time(at(1000), { compact: true, includeSeconds: true }), '1s ago');
       assert.equal(context.time(at(5000), { compact: true, includeSeconds: true }), '5s ago');
       assert.equal(context.time(at(60_000)), 'a minute ago');
@@ -1901,7 +1907,7 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'said');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Said');
-    assert.match(get('#last-check').textContent, /^Last read\/ack: (just now|a minute ago|\d+ minutes ago|an hour ago|\d+ hours ago)$/);
+    assert.match(get('#last-check').textContent, /^Last read\/ack: (just now|a second ago|\d+ seconds ago|a minute ago|\d+ minutes ago|an hour ago|\d+ hours ago)$/);
     assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
     state.notes[0].ack_type = 'reply';
     state.notes[0].ack_text = '**done**';
@@ -3058,7 +3064,7 @@ test('preview client', async (t) => {
     assert.equal(longReceipt.children[0].title, 'a66700e4-37f0-4182-b782-33c38a83728d');
     assert.equal(longReceipt.children[0].className, 'note-id');
     assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
-    assert.match(longReceipt.textContent, /^a66700 ·  · (just now|a minute ago|\d+ minutes ago|an hour ago|\d+ hours ago)$/);
+    assert.match(longReceipt.textContent, /^a66700 ·  · (just now|a second ago|\d+ seconds ago|a minute ago|\d+ minutes ago|an hour ago|\d+ hours ago)$/);
     assert.equal(part(longReceipt, 'state-dot').dataset.state, 'sent');
   });
 
@@ -5084,6 +5090,10 @@ test('preview client', async (t) => {
     assert.match(renderedFlow, /class="copy-code"/);
     assert.match(renderedFlow, /<pre><code class="language-mermaid">/);
 
+    const longFlow = '<div class="code-block"><pre><code class="language-mermaid">flowchart TD\n  A["Write arena-state/backups/state-latest.ndjson and rotate 10 snapshots"] -->|state-latest.ndjson| B[Restore]\n  A -->|saved-state.ndjson| B</code></pre></div>';
+    const renderedLong = await context.renderMermaidBlocks(longFlow);
+    assert.match(renderedLong, /<tspan\b/);
+
     const seqHtml = '<div class="code-block"><button class="copy-code" data-code="sequenceDiagram"></button><pre><code class="language-mermaid">sequenceDiagram\n  Alice-&gt;&gt;Bob: Hello</code></pre></div>';
     const renderedSeq = await context.renderMermaidBlocks(seqHtml);
     assert.match(renderedSeq, /data-mermaid-state="rendered"/);
@@ -5123,8 +5133,10 @@ test('preview client', async (t) => {
     context.window.setTimeout = callback => { restoreIcon = callback; return 1; };
     await copyBtn.events.click();
     delete context.window.setTimeout;
-    assert.equal(parentMessages.length, 1);
-    assert.equal(parentMessages[0].data.type, 'clankers:force-save');
+    assert.equal(parentMessages.length, 2);
+    assert.equal(parentMessages[0].data.type, 'clankers:preview-ready');
+    assert.equal(parentMessages[0].data.repo, 'clankers');
+    assert.equal(parentMessages[1].data.type, 'clankers:force-save');
     assert.equal(copyBtn.children[0].getAttribute('class'), 'lucide lucide-check');
     assert.equal(copyBtn.dataset.state, 'good');
     restoreIcon();
@@ -5209,6 +5221,8 @@ test('the composer keeps Send inside and status lines outside its panel', () => 
   for (const identity of ['agent-key', 'send-status']) {
     assert.equal(locations.get(identity), false, `${identity} remains outside the panel`);
   }
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  assert.match(css, /\.notes-layout\s*>\s*\.composer-footer\s*\{[^}]*align-items:\s*center;[^}]*text-align:\s*center;/);
 });
 
 test('a wide table scrolls sideways on its own and keeps its words whole', () => {
@@ -5405,5 +5419,6 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   );
   assert.match(styleSource, /body\s*\{[^}]*height:\s*var\(--app-height,\s*100dvh\)/);
   assert.doesNotMatch(styleSource, /#compose:has\(#note\[data-slash="true"\]\)/);
+  assert.match(appSource, /notifyParentPreviewReady\(state\.repo\)/);
 });
 

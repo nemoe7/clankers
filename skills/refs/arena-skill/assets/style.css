@@ -141,7 +141,7 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
    spread them into dead space. The lines sit close now, so the header reads as one block. */
 .log-card > .row:first-child { margin-block: 0; row-gap: 2px; position: relative; z-index: 2; }
 .card.compose { flex: 0 0 auto; padding: 8px; position: relative; z-index: 2; }
-.notes-layout > .composer-footer { flex: none; padding-inline: 18px; position: relative; z-index: 2; }
+.notes-layout > .composer-footer { flex: none; align-items: center; text-align: center; padding-inline: 18px; position: relative; z-index: 2; }
 .notes-layout:has(#compose[data-expanded]) .log-card { display: none; }
 #form { min-height: 0; }
 .composer-shell { position: relative; display: grid; grid-template-columns: 30px 30px minmax(0, 1fr) 30px; grid-template-areas: "attach preview input send"; gap: 8px; align-items: center; }

@@ -514,6 +514,69 @@ function checkOpenSteering(api) {
   if (failed) {
     throw new Error(failed + " checks failed");
   }
+  assert.equal(api.steeringLabelViolation("clankers - Steering :8000", "clankers"), null);
+  assert.equal(api.steeringLabelViolation("clankers - Steering :8000", null), null);
+  assert.equal(api.steeringLabelViolation("Start Preview server :8000", "clankers"), null);
+  var violation = api.steeringLabelViolation("Preview server :8000", "clankers");
+  assert.equal(violation.actual, "Preview server");
+  assert.equal(violation.expected, "clankers - Steering");
+  var payload = api.interruptPayloadForSteering("Preview server :8000", "clankers");
+  assert.equal(payload.armed, true);
+  assert.equal(payload.tab, "notes");
+  assert.equal(payload.reason, "process-violation");
+  assert.equal(payload.clause_file, "ARENA.md");
+  assert.match(payload.note, /Preview server/);
+  assert.match(payload.note, /clankers - Steering/);
+  var sent = [];
+  var violationDoc = {
+    querySelectorAll: function (selector) {
+      if (selector === 'button[type="button"]') {
+        return [
+          {
+            textContent: "Preview server :8000",
+            getAttribute: function () { return null; },
+            querySelectorAll: function (sel) {
+              return sel === "span"
+                ? [{ textContent: "Preview server" }, { textContent: ":8000" }]
+                : [];
+            },
+          },
+        ];
+      }
+      if (selector === "iframe[title]") {
+        return [
+          {
+            title: "App preview on port 8000",
+            src: "https://sbx-port8000.arena.site/",
+            getAttribute: function (name) {
+              return name === "title" ? "App preview on port 8000" : null;
+            },
+          },
+        ];
+      }
+      return [];
+    },
+  };
+  api.resetFlaggedSteering();
+  assert.equal(
+    api.flagSteeringLabelViolation(violationDoc, "clankers", function (url, body, done) {
+      sent.push({ url: url, body: body });
+      done(200);
+    }),
+    true,
+  );
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, "https://sbx-port8000.arena.site/api/agent-interrupt");
+  assert.equal(sent[0].body.reason, "process-violation");
+  assert.equal(sent[0].body.clause_file, "ARENA.md");
+  assert.equal(
+    api.flagSteeringLabelViolation(violationDoc, "clankers", function (url, body, done) {
+      sent.push({ url: url, body: body });
+      done(200);
+    }),
+    false,
+  );
+  assert.equal(sent.length, 1);
   console.log("ok open steering " + cases.length);
 }
 
@@ -1252,12 +1315,17 @@ function checkTabTitle(api, logging) {
     button.attrs["aria-label"] = "Collapse";
     return node("div", "", [button]);
   }
-  function commandRow(label, command) {
+  function commandRow(label, command, stderr) {
     var row = actionRow(label);
     if (command) {
       var pre = node("pre", "", []);
       pre.textContent = command;
       row.children[0].children.push(pre);
+    }
+    if (stderr) {
+      var errPre = node("pre", "", []);
+      errPre.textContent = stderr;
+      row.children[0].children.push(errPre);
     }
     return row;
   }
@@ -1608,6 +1676,26 @@ function checkTabTitle(api, logging) {
     [emojiForRow(directChat), AGENT_EMOJI],
     [emojiForRow(directReasoning), REASONING_EMOJI],
     [emojiForRow(directPoll), "\uD83D\uDCA4"],
+    [
+      emojiForRow(
+        commandRow(
+          "running Bash",
+          "$ arena-preview poll",
+          "poll max 1799 s; bash timeout 1800 s.\nrun suite-readme-shot running 39s\n"
+        )
+      ),
+      BASH_EMOJI,
+    ],
+    [
+      emojiForRow(
+        commandRow(
+          "running Bash",
+          "$ arena-preview poll",
+          "poll max 1799 s; bash timeout 1800 s.\n"
+        )
+      ),
+      "\uD83D\uDCA4",
+    ],
     [emojiForRow(null), null],
     [chatLogLine.data.type, "chat"],
     [reasoningLogLine.data.type, "reasoning"],

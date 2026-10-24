@@ -1859,6 +1859,10 @@ def test_http_boundaries():
       for identity in ("agent-key", "send-status"):
         marker = f'id="{identity}"'
         assert marker in page and marker not in composer.group(1)
+      assert (
+        ".notes-layout>.composer-footer{flex:none;align-items:center;text-align:center;"
+        in page
+      )
       assert "resize:none" in page and "resize:vertical" not in page
       assert "#notes-panel{overflow:clip" in page
       assert "#reports-panel,#tasks-panel,#downloads-panel{overflow-y:auto" in page
@@ -14744,3 +14748,200 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   monkeypatch.setattr(lock_store, "connect", single_connection_only)
   receipt = lock_store.import_state(exported_ndjson, replace_tasks=True)
   assert receipt["tasks"] == 1 and receipt["notes"] == 1
+
+  backup_root = tmp_path / "rolling-backup-state"
+  backup_store = preview.Store(backup_root, create=True)
+  backup_store.set_meta("port", guard_port())
+  backup_store.note("b11111", "first backup note")
+  backup_store.write_task(
+    "backup-task-1",
+    "Rolling backup task",
+    ["Verify latest and previous backup files"],
+    status="upcoming",
+    task_type="code",
+    scope="skills/refs/arena-skill/",
+  )
+  latest_file = backup_root / "backups" / "state-latest.ndjson"
+  prev_file = backup_root / "backups" / "state-previous.ndjson"
+  assert latest_file.is_file()
+  assert "b11111" in latest_file.read_text(encoding="utf-8")
+
+  # Cold-start auto-restore when state.sqlite3 is missing and state-latest.ndjson exists.
+  (backup_root / "state.sqlite3").unlink()
+  cold_store = preview.Store(backup_root, create=True)
+  cold_store.set_meta("port", guard_port())
+  assert [n["id"] for n in cold_store.state()["notes"]] == ["b11111"]
+  assert [t["id"] for t in cold_store.tasks()["upcoming"]] == ["backup-task-1"]
+
+  # state clear rotates state-latest.ndjson to state-previous.ndjson and sets force=True.
+  cleared_counts = cold_store.clear_state()
+  assert cleared_counts["notes"] == 1 and cleared_counts["tasks"] == 1
+  assert prev_file.is_file() and "b11111" in prev_file.read_text(encoding="utf-8")
+  assert cold_store.userscript_snapshot()["force"] is True
+  # Explicitly cleared store does not auto-restore on reopen.
+  reopened_cleared = preview.Store(backup_root, create=True)
+  assert reopened_cleared.state()["notes"] == []
+
+  # state restore --previous restores state-previous.ndjson and sets force=True.
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: str(backup_root))
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "state", "restore", "-p"])
+  assert preview.main() == 0
+  capsys.readouterr()
+  assert [n["id"] for n in cold_store.state()["notes"]] == ["b11111"]
+  assert cold_store.userscript_snapshot()["force"] is True
+
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "state", "save"])
+  assert preview.main() == 0
+  assert "state-latest.ndjson" in capsys.readouterr().out
+  assert cold_store.userscript_snapshot()["force"] is True
+
+  with pytest.raises(ValueError, match="free-text"):
+    preview.parse_fields(
+      "# Report\n\nPick one {#multi-free}\n- (x) Alpha\n- ( ) Beta: ___\n- ( ) Gamma: ___\n"
+    )
+  unrec_file = rep_dir / "unrecommended.md"
+  unrec_file.write_text(
+    "# Report\n\nPick one {#missing-rec-id}\n- ( ) Alpha\n- ( ) Beta\n",
+    encoding="utf-8",
+  )
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: str(tmp_path / "tz-state"))
+  monkeypatch.setattr(preview, "verify_publication", lambda *_args: [])
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    [
+      "arena-preview",
+      "report",
+      "publish",
+      "-i",
+      "unrec-report",
+      "-t",
+      "Unrecommended Report",
+      str(unrec_file),
+    ],
+  )
+  assert preview.main() == 0
+  unrec_io = capsys.readouterr()
+  assert "missing-rec-id" in unrec_io.err
+
+  obs_state = tmp_path / "obs-state"
+  obs_store = preview.Store(obs_state, create=True)
+  obs_store.set_meta("port", guard_port())
+  monkeypatch.setenv("ARENA_PREVIEW_DETACH_DRY", "1")
+  assert preview.route_command(str(obs_state), "suite", ["--", "true"]) == 0
+  assert preview.route_command(str(obs_state), "suite", ["--", "true"]) == 0
+  assert "routed suite-2:" in capsys.readouterr().err
+  assert (obs_state / "runs" / "suite-2.json").is_file()
+  wt_dir = tmp_path / "wt-active"
+  wt_dir.mkdir()
+  preview.write_run_record(
+    obs_state / "worktrees" / "wt-active.json",
+    {"name": "wt-active", "root": str(tmp_path), "worktree": str(wt_dir)},
+  )
+  wt_msg = preview.worktree_warning(obs_state, "gate", cwd=wt_dir)
+  assert "bash -c" in wt_msg and str(wt_dir) in wt_msg
+  assert preview.forget_worktree(obs_state, "wt-active") == "wt-active"
+  assert not (obs_state / "worktrees" / "wt-active.json").exists()
+  preview.write_run_record(
+    obs_state / "worktrees" / "wt-gone.json",
+    {
+      "name": "wt-gone",
+      "root": str(tmp_path),
+      "worktree": str(tmp_path / "missing-wt"),
+    },
+  )
+  preview.prune_stale_worktrees(obs_state)
+  assert not (obs_state / "worktrees" / "wt-gone.json").exists()
+  overlong_step = "step-" + ("z" * 120)
+  with pytest.raises(ValueError) as step_err:
+    preview.check_task_steps([overlong_step])
+  assert str(len(overlong_step)) in str(step_err.value)
+  assert overlong_step in str(step_err.value)
+  obs_rep = rep_dir / "obs-q.md"
+  obs_rep.write_text("# Q\n\nAsk {#obs-q}\n- (x) Yes\n- ( ) No\n", encoding="utf-8")
+  obs_store.publish("obs-rep", "Obs Report", obs_rep)
+  obs_store.write_task(
+    "obs-task",
+    "Obs Task",
+    ["Step"],
+    status="upcoming",
+    blocked=True,
+    report_id="obs-rep",
+    task_type="misc",
+    scope="skills/",
+  )
+  obs_store.submission("ans123", "obs-rep", "Yes", task_id="obs-task")
+  preview.write_detached_placeholder(
+    obs_state,
+    "pr-checks",
+    ["gh", "pr", "checks", "--watch"],
+    pid=os.getpid(),
+    pid_started_at=preview.process_start_identity(os.getpid()),
+    task_id="obs-task",
+  )
+  finished_obs = obs_store.write_task("obs-task", status="finished")
+  assert finished_obs["status"] == "finished" and finished_obs["blocked"] is False
+  assert (
+    preview.pr_check_wait(obs_state, "ruff check . && pytest -q", command="pytest -q")
+    == preview.PR_CHECK_REFUSED
+  )
+  assert "RUN BLOCKED:" in capsys.readouterr().err
+  monkeypatch.setattr(preview, "pr_queued_runs", lambda *_a: ["CI"])
+  monkeypatch.setattr(preview, "workspace_branch", lambda *_a: "topic")
+  monkeypatch.setattr(preview, "repo_slug", lambda *_a: "nemoe7/clankers")
+  monkeypatch.setattr(preview, "pr_head_sha", lambda *_a: "abc1234567")
+  monkeypatch.setattr(preview, "pr_check_latest", lambda *_a: [])
+  q_clock = [0.0]
+  monkeypatch.setattr(preview.time, "monotonic", lambda: q_clock[0])
+  q_status, q_lines = preview.pr_checks_watch(
+    tmp_path,
+    seconds=5,
+    step=5,
+    sleep=lambda s: q_clock.__setitem__(0, q_clock[0] + s),
+  )
+  assert q_status == "not_started" and any("PR CHECKS QUEUED" in ln for ln in q_lines)
+  assert (
+    preview.job_log_command(None, run_id="77", root=tmp_path)
+    == "gh api -i /repos/nemoe7/clankers/actions/runs/77/logs"
+  )
+  sample_pytest_out = [
+    "=== FAILURES ===",
+    "___________________________ test_alpha ___________________________",
+    "test_alpha.py:12: AssertionError: expected 1 == 2",
+    "=== short test summary info ===",
+    *[f"line {i}" for i in range(50)],
+  ]
+  retained_tb = preview.pytest_failure_tracebacks(sample_pytest_out)
+  assert any("test_alpha.py:12" in ln for ln in retained_tb)
+  obs_store.publish("obs-rep-2", "Obs Report 2", obs_rep)
+  obs_store.write_task(
+    "blocked-rep-task",
+    "Blocked",
+    ["Step"],
+    status="upcoming",
+    blocked=True,
+    report_id="obs-rep-2",
+    order=1,
+    task_type="misc",
+    scope="skills/",
+  )
+  obs_store.write_task(
+    "active-one",
+    "Active 1",
+    ["Step"],
+    status="upcoming",
+    order=2,
+    task_type="misc",
+    scope="skills/",
+  )
+  obs_store.write_task(
+    "active-two",
+    "Active 2",
+    ["Step"],
+    status="upcoming",
+    order=2,
+    task_type="misc",
+    scope="skills/",
+  )
+  listed_text = preview.format_task_list(obs_store.list_tasks())
+  assert listed_text.index("active-two") < listed_text.index("blocked-rep-task")

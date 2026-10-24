@@ -143,17 +143,25 @@ function mergeRemote(list, names, entries, removed) {
   }
   for (let idx = manualEntries.length - 1; idx >= 0; idx -= 1) {
     const { root, name } = manualEntries[idx];
+    const cleanLabel = typeof name === 'string' ? named(name) : '';
+    if (cleanLabel) {
+      nextList = nextList.filter(item => item === root || nextNames[item] !== cleanLabel);
+    }
     nextList = remember(nextList, root);
-    if (typeof name === 'string' && named(name) && !nextNames[root]) {
-      nextNames = applyName(nextNames, root, name);
+    if (cleanLabel && !nextNames[root]) {
+      nextNames = applyName(nextNames, root, cleanLabel);
     }
   }
   for (const { root, name } of scriptEntries) {
+    const cleanLabel = typeof name === 'string' ? named(name) : '';
+    if (cleanLabel) {
+      nextList = nextList.filter(item => item === root || nextNames[item] !== cleanLabel);
+    }
     if (!nextList.includes(root) && nextList.length < LIMIT) {
       nextList.push(root);
     }
-    if (nextList.includes(root) && typeof name === 'string' && named(name) && !nextNames[root]) {
-      nextNames = applyName(nextNames, root, name);
+    if (nextList.includes(root) && cleanLabel && !nextNames[root]) {
+      nextNames = applyName(nextNames, root, cleanLabel);
     }
   }
   return { list: nextList.slice(0, LIMIT), names: cleanNames(nextList, nextNames) };
