@@ -364,7 +364,7 @@ mark code { color: var(--text); }
 @media (max-height: 30em) {
   .topbar { padding: 6px 12px; }
   main { padding: 8px 12px 10px; }
-  .compose { max-height: 48%; }
+  .compose { max-height: 50%; }
 }
 
 /* On touch devices, the tab strip and copy button stay on one line while the clock, theme toggle, and Return hint hide. */

@@ -14328,3 +14328,20 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert slash_nemo_audit["mode"] == "note"
   assert "nemoize.py --audit" in slash_nemo_audit["text"]
   assert slash_nemo_audit["text"].endswith("docs/")
+
+  tz_store = preview.Store(tmp_path / "tz-state", create=True)
+  assert tz_store.set_display_timezone("Asia/Manila") == "Asia/Manila"
+  assert tz_store.state()["display_tz"] == "Asia/Manila"
+  assert (tmp_path / "tz-state" / "display_tz").read_text(
+    encoding="utf-8"
+  ).strip() == "Asia/Manila"
+  assert "X-Timezone" in app_js_text
+  install_sh_text = (
+    Path(preview.resolve_repo_root())
+    / "skills"
+    / "refs"
+    / "arena-skill"
+    / "scripts"
+    / "install.sh"
+  ).read_text(encoding="utf-8")
+  assert "display_tz" in install_sh_text

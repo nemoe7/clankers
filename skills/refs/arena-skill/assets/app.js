@@ -1266,11 +1266,16 @@ async function refreshState() {
     if (stateBusy === running) stateBusy = null;
   }
 }
+function browserTimezone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; }
+  catch { return ''; }
+}
 async function readState() {
   let queueReady = false;
   pollCommits = [];
   try {
-    const state = await (await request('/api/state')).json();
+    const tz = browserTimezone();
+    const state = await (await request('/api/state', tz ? { headers: { 'X-Timezone': tz } } : undefined)).json();
     if (Array.isArray(state.slash_commands)) {
       slashCommands = state.slash_commands;
       syncSlashComposerStyle();

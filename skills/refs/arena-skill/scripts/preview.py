@@ -6226,6 +6226,7 @@ class Store:
         "agent_call_ended_at": clip_stamp(meta.get(AGENT_CALL_ENDED_META)),
         # The page counts down to the same block the gate applies.
         "gate_threshold": GATE_THRESHOLD,
+        "display_tz": meta.get(TIMEZONE_META),
       }
 
   def tasks(self):
@@ -8068,6 +8069,17 @@ class Store:
       json.dumps({"key": key, "host": host, "at": now()}, ensure_ascii=False),
     )
 
+  def set_display_timezone(self, tz):
+    """Persist the browser or CLI IANA timezone in meta and arena-state/display_tz."""
+    if not isinstance(tz, str) or not tz.strip() or not zone_exists(tz.strip()):
+      raise ValueError(f"Unknown zone {tz}")
+    name = tz.strip()
+    self.set_meta(TIMEZONE_META, name)
+    (self.path.parent / "display_tz").write_text(f"{name}\n", encoding="utf-8")
+    global DISPLAY_ZONE
+    DISPLAY_ZONE = resolve_display_zone(self)
+    return name
+
   def notice_expired_key(self):
     """Tell the agent once per record when the recorded key outlives the rotation window.
 
@@ -9392,7 +9404,7 @@ def handler(store):
       ):
         raise ValueError("Invalid WebSocket request")
       fields = Message()
-      for name in ("Content-Type", "X-Fetch-Claim", "X-Fetch-Source"):
+      for name in ("Content-Type", "X-Fetch-Claim", "X-Fetch-Source", "X-Timezone"):
         item = headers.get(name)
         if item is not None:
           if not isinstance(item, str) or "\r" in item or "\n" in item:
@@ -9614,6 +9626,13 @@ def handler(store):
           self.reply(200, json.dumps(store.userscript_snapshot(), ensure_ascii=False))
           return
         if path == "/api/state":
+          header_tz = (self.headers.get("X-Timezone") or "").strip()
+          if (
+            header_tz
+            and zone_exists(header_tz)
+            and store.meta_value(TIMEZONE_META) != header_tz
+          ):
+            store.set_display_timezone(header_tz)
           state = store.state()
           state["slash_commands"] = discover_slash_commands()
           try:
@@ -9749,6 +9768,7 @@ def handler(store):
       staged_upload = path == "/api/uploads"
       upload_drop = re.fullmatch(r"/api/uploads/([a-zA-Z0-9_-]{1,80})/drop", path)
       agent_key_post = path == "/api/key"
+      timezone_post = path == "/api/timezone"
       skip_poll_post = path == "/api/skip-poll"
       interrupt_post = path == "/api/agent-interrupt"
       task_order_post = path == "/api/tasks/order"
@@ -9775,6 +9795,7 @@ def handler(store):
         and not upload_drop
         and not fetch_post
         and not agent_key_post
+        and not timezone_post
         and not skip_poll_post
         and not interrupt_post
         and not task_order_post
@@ -12335,8 +12356,7 @@ def main():
         if not zone_exists(args.tz):
           print(f"Unknown zone {args.tz}.", file=sys.stderr)
           return 1
-        store.set_meta(TIMEZONE_META, args.tz)
-        DISPLAY_ZONE = resolve_display_zone(store)
+        store.set_display_timezone(args.tz)
       # The command reports what it did, so a reader can tell a fresh state from a
       # re-used one without looking at the directory.
       print(f"state {store.path} {'created' if fresh_state else 'present'}")
