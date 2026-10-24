@@ -2722,6 +2722,55 @@ for raw in sys.stdin:
       [],
       "skips preview URLs when the header says Preview Unavailable"
     );
+    const steeringAndDemoDoc = {
+      querySelectorAll(sel) {
+        if (sel === "span") {
+          return [
+            {
+              className: "text-text-secondary min-w-0 max-w-[180px] truncate text-sm leading-[1.2]",
+              textContent: "Demo App",
+            },
+          ];
+        }
+        if (sel === "iframe[title]" || sel === "iframe") {
+          return [
+            {
+              src: "https://sbx-steering8000.arena.site/",
+              getAttribute(name) {
+                return name === "title" ? "App preview on port 8000" : "";
+              },
+            },
+            {
+              src: "https://sbx-demo3000.arena.site/",
+              getAttribute(name) {
+                return name === "title" ? "App preview on port 3000" : "";
+              },
+            },
+          ];
+        }
+        return [];
+      },
+    };
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(checks.promptFill.discoverPreviews(steeringAndDemoDoc, "clankers"))),
+      [
+        { url: "https://sbx-steering8000.arena.site/", name: "clankers - Steering" },
+        { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
+      ],
+      "uses the arena-skill preview UI repo name for the steering preview while keeping DOM header labels for other previews"
+    );
+    const reconciled = checks.promptFill.reconcileRecentPreviews(
+      { "clankers - Steering": "https://sbx-old8000.arena.site/" },
+      [{ url: "https://sbx-steering8000.arena.site/", name: "clankers - Steering" }]
+    );
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(reconciled)),
+      {
+        byName: { "clankers - Steering": "https://sbx-steering8000.arena.site/" },
+        invalidated: ["https://sbx-old8000.arena.site/"],
+      },
+      "invalidates the previous preview URL when a new URL arrives for the same preview name"
+    );
   });
 }
 

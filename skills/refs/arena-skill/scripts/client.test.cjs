@@ -5133,8 +5133,10 @@ test('preview client', async (t) => {
     context.window.setTimeout = callback => { restoreIcon = callback; return 1; };
     await copyBtn.events.click();
     delete context.window.setTimeout;
-    assert.equal(parentMessages.length, 1);
-    assert.equal(parentMessages[0].data.type, 'clankers:force-save');
+    assert.equal(parentMessages.length, 2);
+    assert.equal(parentMessages[0].data.type, 'clankers:preview-ready');
+    assert.equal(parentMessages[0].data.repo, 'clankers');
+    assert.equal(parentMessages[1].data.type, 'clankers:force-save');
     assert.equal(copyBtn.children[0].getAttribute('class'), 'lucide lucide-check');
     assert.equal(copyBtn.dataset.state, 'good');
     restoreIcon();
@@ -5415,5 +5417,6 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   );
   assert.match(styleSource, /body\s*\{[^}]*height:\s*var\(--app-height,\s*100dvh\)/);
   assert.doesNotMatch(styleSource, /#compose:has\(#note\[data-slash="true"\]\)/);
+  assert.match(appSource, /notifyParentPreviewReady\(state\.repo\)/);
 });
 

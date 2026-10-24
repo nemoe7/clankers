@@ -687,6 +687,16 @@ def test_pwa_recent_endpoint_accepts_posted_previews_and_merges_into_chooser():
     fetched = json.loads(raw)
     assert len(fetched["entries"]) == 1
 
+    status, _, body = post_json(
+      "/pwa/recent",
+      {"url": "https://sbx-port8000-v2.arena.site/", "name": "clankers - Steering"},
+    )
+    assert status == 200, status
+    assert [item["url"] for item in body["entries"]] == [
+      "https://sbx-port8000-v2.arena.site"
+    ]
+    assert "https://sbx-port8000.arena.site" in body["removed"]
+
     bad_status, _, _ = post_json(
       "/pwa/recent", {"url": "https://example.com/", "name": "bad"}
     )
