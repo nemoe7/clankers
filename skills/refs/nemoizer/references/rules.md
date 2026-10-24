@@ -66,7 +66,7 @@ Aliases: `the-density`
 
 Parameters: `the_density_cap` (`int`; default `20`), `min_the_count` (`int`; default `3`)
 
-This rule triggers for manual review when a prose line uses `"the"` at least three times and `"the"` accounts for `20%` or more of the words on that line. On flagged lines, `nemoize.py --format` collapses repeated leading `"the"` articles in comma-separated lists.
+This rule triggers for manual review when a prose block (paragraph, list item, blockquote, heading, or table cell) uses `"the"` at least three times and `"the"` accounts for `20%` or more of the words in that block. In flagged blocks, `nemoize.py --format` collapses repeated leading `"the"` articles in comma-separated lists.
 
 ```text
 Check the status, the logs, and the metrics for the worker.

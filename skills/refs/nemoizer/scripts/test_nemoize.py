@@ -1282,3 +1282,34 @@ def test_nemoizer_proper_name_rotation_and_nmo902_list_article_collapse(tmp_path
     == "Use nemoizer on the source text, target, and unit.\n"
   )
   assert "--format" in nemoize.RULE_DESCRIPTIONS["NMO902"]
+
+
+def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
+  wrapped = (
+    "The service reads the input\n"
+    "and writes the output.\n\n"
+    "- The server runs.\n"
+    "  The server stops.\n"
+    "  The server waits.\n\n"
+    "Run in order\n"
+    "to check red,\n"
+    "green and blue.\n\n"
+    "This section\n"
+    "covers the API.\n"
+  )
+  assert nemoize.prose_the_density(wrapped) == [(1, 1, 33), (4, 1, 33)]
+  assert nemoize.prose_repeated_openers(wrapped) == [(4, 1, 1)]
+  assert [row[0] for row in nemoize.prose_wordy_phrases(wrapped)] == [8]
+  assert [row[0] for row in nemoize.prose_serial_commas(wrapped)] == [8]
+  assert [row[0] for row in nemoize.prose_self_narration(wrapped)] == [12]
+
+  doc = tmp_path / "wrapped.md"
+  doc.write_text(
+    "Check the source, the target,\nand the unit for the worker.\n",
+    encoding="utf-8",
+  )
+  assert nemoize.format_paths([doc], []) == 1
+  assert (
+    doc.read_text(encoding="utf-8")
+    == "Check the source, target,\nand the unit for the worker.\n"
+  )

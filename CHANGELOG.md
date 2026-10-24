@@ -16,6 +16,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Extend `NMP100` to cap paragraphs and table cells at `paragraph_cap` (`4`), list items at `2` sentences, and headings at `1` sentence. Flag blockquotes exceeding `paragraph_cap` sentences for manual review.
 - Update `references/audit-report.md` to lead with `Status` and `Counts` and group findings into one section per file (`Rule | Before | After | Verdict | Reason`) with rule-applied `After` text.
 - Rotate proper-name variations of `nemoizer` and `the nemoizer` to lowercase `nemoizer` (`NMO100`), and collapse repeated leading `"the"` articles in `NMO902` comma lists under `--format`.
+- Evaluate `NMO902`, `HMN904`, `HMN910`, `NMO003`, `STE300`, `STE400`–`STE401`, `STE901`–`STE910`, and multi-word `HMN*` rules across each prose block mapped to the starting line.
 
 #### nuu
 
