@@ -2725,8 +2725,8 @@ function renderTasks(tasks) {
     && (!taskSearch || taskHaystack(task).includes(taskSearch));
   // Show the first unblocked upcoming task separately. Report-blocked tasks may sort first in the stored list.
   // Preserve stored order and the copy button's two stored sections.
-  const shownUpcoming = tasks.upcoming.filter(visible);
-  const head = shownUpcoming.find(task => !task.blocked);
+  const currentTask = tasks.upcoming.find(task => !task.blocked);
+  const head = currentTask && visible(currentTask) ? currentTask : null;
   // The current seat and the upcoming list read as one queue, so a dragged row crosses both.
   const currentBody = $('#tasks-current-body');
   const upcomingBody = $('#tasks-upcoming-body');
@@ -2734,7 +2734,7 @@ function renderTasks(tasks) {
   current.hidden = !head;
   $('#tasks-finished-body').replaceChildren(...tasks.finished.filter(visible).map(task => taskRow(task)));
   // The head already renders in its own div above. Re-listing it in Upcoming duplicates it.
-  const restUpcoming = shownUpcoming.filter(task => task !== head);
+  const restUpcoming = tasks.upcoming.filter(task => task !== currentTask && visible(task));
   upcomingBody.replaceChildren(...restUpcoming.map(task => draggableTaskRow(task, upcomingBody)));
   finished.hidden = false;
   upcoming.hidden = false;

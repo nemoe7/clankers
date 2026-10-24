@@ -936,20 +936,26 @@ test('preview client', async (t) => {
     const filter = get('#task-type-filter');
     filter.value = 'docs';
     filter.events.change();
-    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'docs-work',
-      'the head follows the filter');
-    assert.equal(get('#tasks-upcoming-body').children.length, 0,
-      'the filtered list shows the head only in its own div');
+    assert.equal(get('#tasks-current').hidden, true,
+      'filtering out the current task omits the Current group');
+    assert.equal(get('#tasks-current-body').children.length, 0,
+      'filtering out the current task never promotes an upcoming task to Current');
+    assert.equal(get('#tasks-upcoming-body').children[0].dataset.taskId, 'docs-work',
+      'matching upcoming tasks remain in Upcoming');
     assert.equal(get('#tasks-finished-body').children.length, 1,
       'finished rows filter too');
     filter.value = 'code';
     filter.events.change();
+    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'code-work',
+      'matching the current task keeps it in Current');
     assert.equal(get('#tasks-finished-body').children.length, 0,
       'a finished row of another type leaves the div');
     filter.value = 'misc';
     filter.events.change();
-    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'legacy-task',
-      'the Unspecified filter finds old rows');
+    assert.equal(get('#tasks-current').hidden, true,
+      'the Unspecified filter omits Current when the current task is another type');
+    assert.equal(get('#tasks-upcoming-body').children[0].dataset.taskId, 'legacy-task',
+      'the Unspecified filter finds old rows in Upcoming');
     filter.value = 'all';
     filter.events.change();
     state.tasks = prior;
@@ -1262,8 +1268,12 @@ test('preview client', async (t) => {
       'the filtered list shows the head only in its own div');
     search.value = 'BETA';
     search.events.input();
-    assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'beta-task',
-      'the query reads case-insensitive');
+    assert.equal(get('#tasks-current').hidden, true,
+      'filtering out the current task omits the Current group');
+    assert.equal(get('#tasks-current-body').children.length, 0,
+      'filtering out the current task does not promote an upcoming task to Current');
+    assert.equal(get('#tasks-upcoming-body').children[0].dataset.taskId, 'beta-task',
+      'the query reads case-insensitive and keeps upcoming tasks in Upcoming');
     search.value = 'zzz';
     search.events.input();
     assert.equal(get('#tasks-current-body').children.length, 0, 'no match leaves the head empty');
@@ -1284,7 +1294,7 @@ test('preview client', async (t) => {
     const search = get('#task-search');
     const hits = node => (node.children || []).flatMap(child => typeof child === 'string' ? []
       : [...(child.className === 'search-hit' ? [child.textContent] : []), ...hits(child)]);
-    const head = () => get('#tasks-current-body').children[0];
+    const head = () => get('#tasks-current-body').children[0] || get('#tasks-upcoming-body').children[0];
     const details = () => head().children.find(child => child.className === 'task-details');
     const query = value => { search.value = value; search.events.input(); };
     state.tasks = { updated_at: at, finished: [], upcoming: [
