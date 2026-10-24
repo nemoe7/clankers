@@ -55,6 +55,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Bundle minified PrismJS (`prism-core` and 13 language grammars) to syntax-highlight fenced code blocks in messages and reports.
 - Remove `scrollbar-gutter: stable` from `#history` and size `.message` to `min(900px, 90vw)` so message bubbles align flush with the toolbar and composer on both edges.
 - Wrap long Mermaid flowchart node labels into `<tspan>` lines and size boxes and diamonds to fit wrapped text. Offset parallel edges and edge labels so they do not overlap.
+- Include seconds by default in `assets/app.js` relative timestamps (`time()`) and switch to abbreviated units (`5s ago`, `5min ago`) on mobile viewports (`<= 40em` width or `<= 30em` height).
 
 #### rules and system-prompts
 

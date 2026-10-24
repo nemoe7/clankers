@@ -1861,6 +1861,12 @@ test('preview client', async (t) => {
       assert.equal(context.time(at(500), { compact: true }), 'now');
       assert.equal(context.time(at(1000), { includeSeconds: true }), 'a second ago');
       assert.equal(context.time(at(5000), { includeSeconds: true }), '5 seconds ago');
+      assert.equal(context.time(at(1000)), 'a second ago');
+      assert.equal(context.time(at(5000)), '5 seconds ago');
+      context.window.innerWidth = 360;
+      assert.equal(context.time(at(5000)), '5s ago');
+      assert.equal(context.time(at(5 * 60_000)), '5min ago');
+      delete context.window.innerWidth;
       assert.equal(context.time(at(1000), { compact: true, includeSeconds: true }), '1s ago');
       assert.equal(context.time(at(5000), { compact: true, includeSeconds: true }), '5s ago');
       assert.equal(context.time(at(60_000)), 'a minute ago');
@@ -1901,7 +1907,7 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'said');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Said');
-    assert.match(get('#last-check').textContent, /^Last read\/ack: (just now|a minute ago|\d+ minutes ago|an hour ago|\d+ hours ago)$/);
+    assert.match(get('#last-check').textContent, /^Last read\/ack: (just now|a second ago|\d+ seconds ago|a minute ago|\d+ minutes ago|an hour ago|\d+ hours ago)$/);
     assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
     state.notes[0].ack_type = 'reply';
     state.notes[0].ack_text = '**done**';
@@ -3058,7 +3064,7 @@ test('preview client', async (t) => {
     assert.equal(longReceipt.children[0].title, 'a66700e4-37f0-4182-b782-33c38a83728d');
     assert.equal(longReceipt.children[0].className, 'note-id');
     assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
-    assert.match(longReceipt.textContent, /^a66700 ·  · (just now|a minute ago|\d+ minutes ago|an hour ago|\d+ hours ago)$/);
+    assert.match(longReceipt.textContent, /^a66700 ·  · (just now|a second ago|\d+ seconds ago|a minute ago|\d+ minutes ago|an hour ago|\d+ hours ago)$/);
     assert.equal(part(longReceipt, 'state-dot').dataset.state, 'sent');
   });
 
