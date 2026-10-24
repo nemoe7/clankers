@@ -12,7 +12,7 @@ Restores deleted the original steering notes, so [CHANGELOG.md](../CHANGELOG.md)
 
 ### `gh pr edit --body-file` fails
 
-2026-09, day unrecorded: editing a PR body from a file failed, and `gh api -X PATCH` with the body in the request succeeded. These apparently equivalent commands behave differently here.
+2026-09, day unrecorded: editing a PR body from a file failed, while `arena-preview pr-update` (`gh api -X PATCH` with JSON stdin) succeeded. These commands behave differently here.
 
 ### `git am` does not carry work across sessions
 
@@ -182,7 +182,7 @@ Rule: hand a file to the PC as text through the clipboard. NEVER report a downlo
 
 The sandbox blocks the normal Chromium installation paths: the Playwright browser CDN, Google CDNs and `apt`. Observation date unrecorded.
 
-Current setup: [Chromium recipe](../skills/arena-skill/references/REFERENCE.md#chromium).
+Current setup: [Chromium recipe](../skills/arena-skill/references/recipes/chromium.md).
 
 ### Recorded environment
 

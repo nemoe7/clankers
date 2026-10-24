@@ -14,7 +14,7 @@ The project supplies its page, running application, and browser. Tools capture p
 
 1. Read the project's design record, or start from [the template](references/design-document.md).
 2. Preserve the product system, or select the house [sheet](references/style.css) and [examples](references/examples.md).
-3. Change the page and inspect the rendered states at 1280 and 360 pixels.
+3. Change the page and inspect rendered states at `75em` (`1200`), `60em` (`960`), `40em` (`640`), and `30em` (`480`) breakpoints.
 4. Collect computed values with [the browser snippet](references/measure.md), check them, and retain the reports and screenshots.
 5. Update the project design record with settled decisions and evidence.
 
@@ -57,17 +57,17 @@ A report has this shape:
 From the repository root in Windows cmd:
 
 ```cmd
-set UI=skills\nuu\scripts\uiux.py
+set UI=skills\nuu\scripts\nuu.py
 python %UI% doctor
-python %UI% brief --task "Review the request form" --output brief.json
 python %UI% search "dashboard accessibility" --dataset ux-guidelines
-python %UI% system --brief brief.json --output system-proposal.json
-python %UI% teach --record docs/design.md
 python %UI% lint --project path\to\product
+python %UI% extract --url https://example.com --artifacts evidence
+python %UI% annotate --screenshot evidence\1200-light-no-preference.png --findings findings.json --output annotated.png
+python %UI% board --artifacts evidence --type design --output board.png
 python %UI% inspect --url https://example.com --artifacts evidence --output inspect.json
 python %UI% flow --url https://example.com --flow flow.json
+python %UI% a11y --url https://example.com --output a11y.json
 python %UI% audit --project path\to\product --url https://example.com
-python %UI% polish --project path\to\product --evidence inspect.json
 ```
 
 ```mermaid

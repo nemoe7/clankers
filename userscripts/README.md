@@ -127,7 +127,7 @@ The script saves the pause, so a reload keeps it. Each feature switch stays in t
 
 The userscript fetches a candidate from `GET /api/userscript-autosave`. It compares the server's two retained completion stamps with the browser's last successful receipt. After the pair matches, it uses the digest to skip an unchanged candidate.
 
-A stamp-pair mismatch stops automatic replacement. A changed digest writes the candidate.
+A stamp-pair mismatch stops automatic replacement and uploads the `.ndjson` backup once per mismatch to `POST /api/userscript-autosave/offer` as a quiet blocking note instructing `state compare` before `state import`. A changed digest writes the candidate.
 
 A new empty selected file can receive its first save. `State - force save` keeps the explicit override. Its successful completion receipt sets the pair that later automatic saves use.
 

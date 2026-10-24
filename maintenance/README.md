@@ -127,7 +127,7 @@ The prose linter runs the nemoizer rules over the covered scope: `docs/`, every 
 
 `maintenance/extract_prose.py` groups code prose by file in JSON. With no path arguments it selects tracked first-party code. `lint_prose.py` consumes these groups. Sentence rules apply per section, and synonym rules span each file.
 
-Identifiers and ordinary strings remain outside the extracted prose.
+Identifiers and ordinary code strings remain outside the extracted prose, while visible HTML text nodes and HTML `aria-label`, `title`, and `placeholder` attributes are included.
 
 Vendored code stays outside the code target. Required userscript metadata stays, and the linter checks prose in `@name` and `@description`. Every ordinary code-comment block has a two-line limit. Required directive markers stay outside that limit.
 
