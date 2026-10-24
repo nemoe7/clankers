@@ -86,7 +86,7 @@ Delete a marker when the line no longer needs it.
 
 ## Prose review
 
-- Prefer removing "the" only when the phrase or sentence stays complete and natural, with unchanged meaning.
+- Prefer removing "the" when the meaning stays unchanged.
 - Replace wordy action phrases with plain verbs only when actor, timing, and meaning stay unchanged.
 - Remove stock openers and closers from prose only when they add no claim or required action.
 - State the supported claim directly unless both sides of a contrast carry distinct facts.

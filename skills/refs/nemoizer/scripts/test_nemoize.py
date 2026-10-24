@@ -575,6 +575,7 @@ def test_prose_and_test_ids_have_separate_domains():
     "paragraph": "NMP100",
     "comment_block": "NMP101",
     "serial_comma": "NMO003",
+    "the_density": "NMO902",
   }
   assert nemoize.TEST_RULE_IDS == {"output_text": "NMT100", "measurement": "NMT200"}
   assert nemoize.RESERVED_RULE_IDS == {"HMN000"}
@@ -1081,3 +1082,11 @@ def test_adopted_ste_rules_pull_request_and_license_exemption(tmp_path):
     lic_res = run(str(lic), cwd=tmp_path)
     assert lic_res.returncode == 0
     assert lic_res.stdout.strip() == ""
+  dense = tmp_path / "dense.md"
+  dense.write_text(
+    "Check the status of the server in the logs of the worker.\n",
+    encoding="utf-8",
+  )
+  dense_res = run(str(dense), cwd=tmp_path)
+  assert dense_res.returncode == 0
+  assert "NMO902" in dense_res.stdout

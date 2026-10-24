@@ -106,6 +106,7 @@ RULE_IDS = {
 }
 ADVISORY_RULE_IDS = {
   "NMO901",
+  "NMO902",
   "STE901",
   "STE902",
   "STE903",
@@ -128,6 +129,8 @@ ADVISORY_RULE_IDS = {
 }
 SENTENCE_CAPS = {"instruction": 20, "description": 25}
 PARAGRAPH_CAP = 4
+THE_DENSITY_CAP = 20
+MIN_THE_COUNT = 3
 PROSE_RULE_IDS = {
   "dangling_conjunction": "STE001",
   "semicolon": "STE100",
@@ -163,6 +166,7 @@ PROSE_RULE_IDS = {
   "paragraph": "NMP100",
   "comment_block": "NMP101",
   "serial_comma": "NMO003",
+  "the_density": "NMO902",
 }
 RULE_DESCRIPTIONS = {
   "STE001": "dangling conjunction",
@@ -199,6 +203,7 @@ RULE_DESCRIPTIONS = {
   "NMP100": "paragraph has {count} sentences (cap {cap})",
   "NMP101": "comment block has {count} lines (cap {cap})",
   "NMO003": "missing Oxford comma",
+  "NMO902": '"the" density is {count}% (cap {cap}%)',
 }
 
 
@@ -1088,6 +1093,36 @@ def prose_self_narration(text):
   return prose_line_matches(text, lambda clean: list(SELF_NARRATION_RE.finditer(clean)))
 
 
+def prose_the_density(text, cap=THE_DENSITY_CAP, min_the=MIN_THE_COUNT):
+  """Find prose lines where 'the' appears at least min_the times and >= cap% of words."""
+  rows = []
+  fence = None
+  for index, line in enumerate(text.splitlines()):
+    number = index + 1
+    marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+    if marker:
+      if fence is None:
+        fence = marker[1]
+      elif (
+        marker[1][0] == fence[0]
+        and len(marker[1]) >= len(fence)
+        and not line[marker.end() :].strip()
+      ):
+        fence = None
+      continue
+    if fence is not None or TABLE_ROW.match(line.strip()):
+      continue
+    clean = re.sub(r"(`+)(.*?)\1", lambda match: " " * len(match[0]), line)
+    clean = blank_inline_comments(clean)
+    words = re.findall(r"[A-Za-z0-9_'-]+", clean)
+    hits = list(re.finditer(r"\bthe\b", clean, re.IGNORECASE))
+    if len(hits) >= min_the and words:
+      density = round(len(hits) * 100 / len(words))
+      if density >= cap:
+        rows.append((number, hits[0].start() + 1, density))
+  return rows
+
+
 def prose_review(path, text, context, paragraph_cap):
   """Return unsuppressed measurable candidates for one explicit text scope."""
   lines = text.splitlines()
@@ -1186,6 +1221,21 @@ def prose_review(path, text, context, paragraph_cap):
             "count": count,
             "cap": paragraph_cap,
             "status": "review",
+          }
+        )
+  code = PROSE_RULE_IDS["the_density"]
+  if not suppressed(code, file_ids):
+    for number, column, density in prose_the_density(text):
+      if not suppressed(code, line_ids[number - 1]):
+        findings.append(
+          {
+            "rule": code,
+            "path": str(path),
+            "line": number,
+            "column": column,
+            "count": density,
+            "cap": THE_DENSITY_CAP,
+            "status": "manual_review",
           }
         )
   return findings
@@ -1714,7 +1764,7 @@ def main(argv=None):
   for path in walk([*targets, *arguments.test_helper], arguments.ignore):
     text = text_file(path)
     try:
-      if is_test_file(path, text or "", helpers):
+      if not arguments.audit and is_test_file(path, text or "", helpers):
         tests.append(str(path))
       if text is None:
         continue

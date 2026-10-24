@@ -49,7 +49,7 @@ Limit sentences to 20 words for unclassified prose, 25 for explicit description 
 
 ## Prose review
 
-- Prefer removing "the" only if phrases/sentences stay complete and natural without changing meaning.
+- Prefer removing "the" when the meaning stays unchanged.
 - Replace wordy action phrases with plain verbs only when actor, timing, and meaning stay unchanged.
 - Remove stock prose openers and closers only if they add no claim or required action.
 - State supported claims directly unless both contrast sides carry distinct facts.
