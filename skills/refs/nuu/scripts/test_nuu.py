@@ -979,6 +979,21 @@ def test_design_boards_and_html_typography(tmp_path):
   assert doc_toml["configuration"]["status"] == "checked"
   assert doc_toml["configuration"]["path"] == str(toml_proj / "nuu.toml")
 
+  trans_src = toml_proj / "transparent.png"
+  trans_src.write_bytes(annotate.encode_png(20, 20, bytearray([0, 0, 0, 0] * 400)))
+  trans_dst = toml_proj / "transparent-ann.png"
+  annotate.annotate_image(
+    trans_src,
+    trans_dst,
+    boxes=["2,2,10,10,red"],
+    project=toml_proj,
+    renderer="bitmap",
+  )
+  _, _, trans_rgba = annotate.decode_png(trans_dst.read_bytes())
+  assert trans_rgba[3] == 0
+  inside_idx = (5 * 20 + 5) * 4
+  assert trans_rgba[inside_idx] == 225 and trans_rgba[inside_idx + 3] == 32
+
   shots_dir = html_font_proj / "shots"
   shots_dir.mkdir()
   dash_png = shots_dir / "dashboard.png"

@@ -35,6 +35,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add Clause 22 to `SKILL.md` and `references/recipes/relative-timestamps.md` for full and abbreviated relative timestamps. Omit seconds unless second-level resolution is requested.
 - Amend Clause 9 in `SKILL.md` to keep control dimensions invariant across states. Add rendered `NUA309` in `scripts/browser.cjs` and static `NUL005` in `scripts/nuu.py`.
 - Support `nuu.toml` in `nuu` (`annotate`, `board`, `doctor`, and browser wireframe captures) to configure default font stacks (`[fonts]`), embedded font files, and rendering defaults.
+- Preserve PNG alpha channels in `nuu` by passing `omitBackground: true` in `_chromium_render_png` and using straight-alpha `source-over` blending in `blend_pixel` and `blit_rgba`.
 - Amend Clause 1 in `SKILL.md` to default control glyphs to Lucide first, then Simple Icons, then the vendored Phosphor catalog. Include non-blocking `icons` checks (`NUI001`–`NUI003`) in `nuu audit`.
 
 ### Changed
