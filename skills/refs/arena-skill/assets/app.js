@@ -1917,12 +1917,18 @@ document.addEventListener('click', event => {
   else if (classes.includes('question-id')) quoteQuestionId(target);
 });
 document.addEventListener('keydown', event => {
+  if (['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event?.key)) {
+    document.documentElement.dataset.keyboardNav = 'true';
+  }
   const target = event.target;
   if (!target || typeof target.className !== 'string' ||
       !target.className.split(' ').includes('task-title')) return;
   if (event.key !== 'Enter' && event.key !== ' ') return;
   event.preventDefault();
   quoteTaskId(target);
+});
+document.addEventListener('pointerdown', () => {
+  delete document.documentElement.dataset.keyboardNav;
 });
 // Append seconds to the header's local clock.
 function showClock() {
