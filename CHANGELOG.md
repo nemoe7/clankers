@@ -29,6 +29,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add `-W, --wireframe` to `nuu inspect`, `nuu audit`, and `nuu board` to generate high-contrast DOM component outline captures (`*-wireframe.png`), and block staging, committing, or embedding wireframe files in reports.
 - Add Clause 17 to `SKILL.md` requiring 24-hour time by default, 12-hour time when requested, and a 24h/12h option in settings when settings exist.
 - Suppress initial modal `:focus-visible` outlines until keyboard navigation in `references/recipes/modal-manager.md`, extend `references/recipes/scroll-edge-fade.md` to scrollable `textarea` inputs, and include recipe deviations in `SKILL.md` and `references/audit-report.md`.
+- Add Clause 18 to `SKILL.md` and `references/recipes/loading-bar.md` for subtle delayed edge loading bars (`200ms` delay, `aria-busy` region, compositor `transform`/`opacity`, and `prefers-reduced-motion` fallback). Reserve loud loading bars for explicit requests.
 
 ### Changed
 
