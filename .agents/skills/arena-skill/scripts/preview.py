@@ -429,11 +429,11 @@ HEX7_RE=re.compile('[0-9a-f]{7}')
 MINT_ATTEMPTS=16
 DIFF_FILE_RE=re.compile('^\\+\\+\\+ b/(.+)$')
 DIFF_HUNK_RE=re.compile('^@@ -\\S+ \\+(\\d+)')
-def session_id_tokens(store):
+def session_id_tokens(store,db=None):
 	tokens={}
-	with closing(store.connect())as db:
+	with store.transaction(db,autosave=False)as conn:
 		for(table,label)in SESSION_ID_TABLES:
-			for row in db.execute(f"SELECT id FROM {table}").fetchall():
+			for row in conn.execute(f"SELECT id FROM {table}").fetchall():
 				ident=row['id'];tokens.setdefault(ident,(label,ident))
 				if NOTE_ID.fullmatch(ident):tokens.setdefault(ident[:6],(label,ident))
 				head=ident.split('-',1)[0]
@@ -2256,17 +2256,18 @@ class Store:
 		if db is not None:yield db;return
 		with closing(self.connect())as own,own:yield own
 		if autosave:self.autosave()
-	def task_blockers(self,task_id):
-		with closing(self.connect())as db:rows=db.execute('SELECT blocked_by FROM task_dependencies WHERE task_id = ? ORDER BY blocked_by',(task_id,)).fetchall()
+	def task_blockers(self,task_id,db=None):
+		with self.transaction(db,autosave=False)as conn:rows=conn.execute('SELECT blocked_by FROM task_dependencies WHERE task_id = ? ORDER BY blocked_by',(task_id,)).fetchall()
 		return[row[0]for row in rows]
-	def all_task_blockers(self):
+	def all_task_blockers(self,db=None):
 		edges={}
-		with closing(self.connect())as db:rows=db.execute('SELECT task_id, blocked_by FROM task_dependencies ORDER BY blocked_by').fetchall()
+		with self.transaction(db,autosave=False)as conn:rows=conn.execute('SELECT task_id, blocked_by FROM task_dependencies ORDER BY blocked_by').fetchall()
 		for row in rows:edges.setdefault(row[0],[]).append(row[1])
 		return edges
-	def check_dependency(self,task_id,blocker,edges):
+	def check_dependency(self,task_id,blocker,edges,db=None):
 		if blocker==task_id:raise ValueError(f"{task_id} cannot wait on itself")
-		if not self.task_record(blocker):raise ValueError(f"No task holds {blocker}; add it before another waits on it")
+		with self.transaction(db,autosave=False)as conn:exists=conn.execute('SELECT 1 FROM tasks WHERE id = ?',(blocker,)).fetchone()
+		if not exists:raise ValueError(f"No task holds {blocker}; add it before another waits on it")
 		pending=[blocker];seen=set()
 		while pending:
 			node=pending.pop()
@@ -2276,8 +2277,8 @@ class Store:
 	def write_dependencies(self,db,task_id,blocked_by):
 		db.execute('DELETE FROM task_dependencies WHERE task_id = ?',(task_id,))
 		for blocker in blocked_by:db.execute('INSERT OR IGNORE INTO task_dependencies (task_id, blocked_by) VALUES (?, ?)',(task_id,blocker))
-	def refuse_session_ids(self,details):
-		tokens={token:found for(token,found)in session_id_tokens(self).items()if NOTE_ID.fullmatch(token)or HEX7_RE.fullmatch(token)}
+	def refuse_session_ids(self,details,db=None):
+		tokens={token:found for(token,found)in session_id_tokens(self,db=db).items()if NOTE_ID.fullmatch(token)or HEX7_RE.fullmatch(token)}
 		for detail in details:
 			for(token,(type,ident))in tokens.items():
 				if re.search(f"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])",detail):named=ident if token==ident else f"{token} of {ident}";raise ValueError(f"That detail cites the session-local {type} {named}. A repository reader cannot resolve that ID. Describe the work instead")
@@ -2286,8 +2287,8 @@ class Store:
 		if scope is not None:
 			if not isinstance(scope,str)or'\n'in scope or'\r'in scope or not scope.strip():raise ValueError('A task scope must be a non-empty single line of text')
 			scope_line=f"{TASK_SCOPE_PREFIX}{scope.strip()}";check_task_steps([scope_line])
-		if details and not restoring:self.refuse_session_ids(details)
-		if scope_line and not restoring:self.refuse_session_ids([scope_line])
+		if details and not restoring:self.refuse_session_ids(details,db=shared)
+		if scope_line and not restoring:self.refuse_session_ids([scope_line],db=shared)
 		if append_details and not details:raise ValueError('Appending requires at least one task detail')
 		check_task(task_id,title,details)
 		if status is not None and status not in TASK_STATUSES:raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
@@ -2331,8 +2332,8 @@ class Store:
 				task_type=(stored.get('type')if stored else None)or TASK_MISC
 			if report_id:identifier(report_id)
 			if blocked_by is not None:
-				blocked_by=[str(item)for item in blocked_by if str(item).strip()];edges=self.all_task_blockers()
-				for blocker in blocked_by:self.check_dependency(task_id,blocker,edges)
+				blocked_by=[str(item)for item in blocked_by if str(item).strip()];edges=self.all_task_blockers(db=db)
+				for blocker in blocked_by:self.check_dependency(task_id,blocker,edges,db=db)
 				self.write_dependencies(db,task_id,blocked_by)
 			if report_wait and report_id and blocked and self.report_has_answers(db,report_id):blocked=False
 			if report_id and blocked and(not stored or not stored['blocked']or stored.get('report_id')!=report_id):
@@ -2342,7 +2343,7 @@ class Store:
 				guard_task_runs(self.path.parent,task_id,'finish task')
 				if not restoring and(status_arg=='finished'or not stored or stored['status']!='finished'):guard_task_push(self.repository_root(),task_id,task_type)
 			if status=='finished'and blocked:raise ValueError(f"Task {task_id} is blocked; clear the report wait with --unblocked first")
-			siblings=[task_row(item)for item in db.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE status = ? AND id != ? ORDER BY position, id",(status,task_id)).fetchall()];record={'id':task_id,'title':title,'details':details,'status':status,'order':len(siblings)+1,'updated_at':stamp,'completed_at':completed_at,'blocked':bool(blocked),'report_id':report_id,'type':task_type};blockers=self.task_blockers(task_id)
+			siblings=[task_row(item)for item in db.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE status = ? AND id != ? ORDER BY position, id",(status,task_id)).fetchall()];record={'id':task_id,'title':title,'details':details,'status':status,'order':len(siblings)+1,'updated_at':stamp,'completed_at':completed_at,'blocked':bool(blocked),'report_id':report_id,'type':task_type};blockers=self.task_blockers(task_id,db=db)
 			if blockers:record['blocked_by']=blockers
 			if order is not None:index=max(0,min(order-1,len(siblings)))
 			elif stored and stored['status']==status:index=max(0,min(stored['order']-1,len(siblings)))

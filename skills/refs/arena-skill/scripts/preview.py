@@ -1217,7 +1217,7 @@ DIFF_FILE_RE = re.compile(r"^\+\+\+ b/(.+)$")
 DIFF_HUNK_RE = re.compile(r"^@@ -\S+ \+(\d+)")
 
 
-def session_id_tokens(store):
+def session_id_tokens(store, db=None):
   """Every literal the commit trap matches, mapped to the record it names.
 
   The list comes from the state database and never from a pattern, so a git SHA
@@ -1226,9 +1226,9 @@ def session_id_tokens(store):
   seven-character head, the form older prose cites.
   """
   tokens = {}
-  with closing(store.connect()) as db:
+  with store.transaction(db, autosave=False) as conn:
     for table, label in SESSION_ID_TABLES:
-      for row in db.execute(f"SELECT id FROM {table}").fetchall():
+      for row in conn.execute(f"SELECT id FROM {table}").fetchall():
         ident = row["id"]
         tokens.setdefault(ident, (label, ident))
         # Only a minted ID takes a citation token: a written ID such as a task name
@@ -6624,31 +6624,33 @@ class Store:
     if autosave:
       self.autosave()
 
-  def task_blockers(self, task_id):
+  def task_blockers(self, task_id, db=None):
     """The tasks this one waits on, sorted, so the store reads a stable order."""
-    with closing(self.connect()) as db:
-      rows = db.execute(
+    with self.transaction(db, autosave=False) as conn:
+      rows = conn.execute(
         "SELECT blocked_by FROM task_dependencies WHERE task_id = ? ORDER BY blocked_by",
         (task_id,),
       ).fetchall()
     return [row[0] for row in rows]
 
-  def all_task_blockers(self):
+  def all_task_blockers(self, db=None):
     """Every dependency edge as a mapping of task to the tasks it waits on."""
     edges = {}
-    with closing(self.connect()) as db:
-      rows = db.execute(
+    with self.transaction(db, autosave=False) as conn:
+      rows = conn.execute(
         "SELECT task_id, blocked_by FROM task_dependencies ORDER BY blocked_by"
       ).fetchall()
     for row in rows:
       edges.setdefault(row[0], []).append(row[1])
     return edges
 
-  def check_dependency(self, task_id, blocker, edges):
+  def check_dependency(self, task_id, blocker, edges, db=None):
     """Refuse an edge that names no task, itself, or a task that already waits on this one."""
     if blocker == task_id:
       raise ValueError(f"{task_id} cannot wait on itself")
-    if not self.task_record(blocker):
+    with self.transaction(db, autosave=False) as conn:
+      exists = conn.execute("SELECT 1 FROM tasks WHERE id = ?", (blocker,)).fetchone()
+    if not exists:
       raise ValueError(f"No task holds {blocker}; add it before another waits on it")
     # Walk down from the blocker: a path back to this task closes the cycle.
     pending = [blocker]
@@ -6673,7 +6675,7 @@ class Store:
         (task_id, blocker),
       )
 
-  def refuse_session_ids(self, details):
+  def refuse_session_ids(self, details, db=None):
     """Refuse a detail that cites a minted session ID, which no repository reader can resolve.
 
     A written ID such as a task name stays a plain word, so a detail may still describe
@@ -6681,7 +6683,7 @@ class Store:
     """
     tokens = {
       token: found
-      for token, found in session_id_tokens(self).items()
+      for token, found in session_id_tokens(self, db=db).items()
       if NOTE_ID.fullmatch(token) or HEX7_RE.fullmatch(token)
     }
     for detail in details:
@@ -6726,9 +6728,9 @@ class Store:
       check_task_steps([scope_line])
     # Check only the details this call supplies, so a stored board still updates and finishes.
     if details and not restoring:
-      self.refuse_session_ids(details)
+      self.refuse_session_ids(details, db=shared)
     if scope_line and not restoring:
-      self.refuse_session_ids([scope_line])
+      self.refuse_session_ids([scope_line], db=shared)
     if append_details and not details:
       raise ValueError("Appending requires at least one task detail")
     check_task(task_id, title, details)
@@ -6808,9 +6810,9 @@ class Store:
         identifier(report_id)
       if blocked_by is not None:
         blocked_by = [str(item) for item in blocked_by if str(item).strip()]
-        edges = self.all_task_blockers()
+        edges = self.all_task_blockers(db=db)
         for blocker in blocked_by:
-          self.check_dependency(task_id, blocker, edges)
+          self.check_dependency(task_id, blocker, edges, db=db)
         self.write_dependencies(db, task_id, blocked_by)
       if (
         report_wait and report_id and blocked and self.report_has_answers(db, report_id)
@@ -6859,7 +6861,7 @@ class Store:
         "report_id": report_id,
         "type": task_type,
       }
-      blockers = self.task_blockers(task_id)
+      blockers = self.task_blockers(task_id, db=db)
       if blockers:
         record["blocked_by"] = blockers
       if order is not None:

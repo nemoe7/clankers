@@ -14666,3 +14666,46 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     )
     == "pick-me"
   )
+
+  # State import and write_task reuse the caller's SQLite connection instead of opening a second one.
+  lock_store = preview.Store(tmp_path / "lock-import-state", create=True)
+  lock_store.note("c11111", "import note")
+  lock_store.write_task(
+    "import-task-1",
+    "First imported task",
+    ["Step one"],
+    status="upcoming",
+    task_type="code",
+    scope="skills/refs/arena-skill/",
+  )
+  exported_ndjson = lock_store.save_path.read_text(encoding="utf-8")
+  real_connect = lock_store.connect
+  active_connections = 0
+
+  def single_connection_only():
+    nonlocal active_connections
+    assert active_connections == 0, "nested connect() inside active transaction"
+    active_connections += 1
+    conn = real_connect()
+
+    class GuardedConn:
+      def __getattr__(self, name):
+        return getattr(conn, name)
+
+      def __enter__(self):
+        conn.__enter__()
+        return self
+
+      def __exit__(self, *exc):
+        return conn.__exit__(*exc)
+
+      def close(self):
+        nonlocal active_connections
+        active_connections -= 1
+        conn.close()
+
+    return GuardedConn()
+
+  monkeypatch.setattr(lock_store, "connect", single_connection_only)
+  receipt = lock_store.import_state(exported_ndjson, replace_tasks=True)
+  assert receipt["tasks"] == 1 and receipt["notes"] == 1
