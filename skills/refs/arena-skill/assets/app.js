@@ -1792,13 +1792,29 @@ function quoteNoteId(code) {
   quoteId(code.dataset.quote === 'full' ? full : full.slice(0, 6), code);
 }
 // Show the report ID in the status line as a clickable code element that quotes into the composer.
+function placeReportStatus() {
+  const status = $('#report-status');
+  const report = $('#report');
+  const form = $('#report-form');
+  if (!status || !report || !form) return;
+  const heading = report.querySelector?.('h1, H1');
+  if (heading?.parentNode) heading.parentNode.insertBefore(status, heading.nextSibling);
+  else form.insertBefore?.(status, report);
+}
+function clearReportBody() {
+  const status = $('#report-status');
+  const report = $('#report');
+  const form = $('#report-form');
+  if (status && report && form) form.insertBefore?.(status, report);
+  report.replaceChildren();
+}
 function reportStatusLine(text, id, answerId = null) {
   const status = $('#report-status');
   if (!id) {
     status.textContent = text;
     return;
   }
-  const parts = text ? [text] : [];
+  const parts = [];
   for (const [value, full] of [[answerId, false], [id, true]]) {
     if (!value) continue;
     const code = document.createElement('code');
@@ -1809,6 +1825,10 @@ function reportStatusLine(text, id, answerId = null) {
     code.title = value;
     if (parts.length) parts.push(' · ');
     parts.push(code);
+  }
+  if (text) {
+    if (parts.length) parts.push('\n');
+    parts.push(text);
   }
   status.replaceChildren(...parts);
 }
@@ -3681,7 +3701,7 @@ function releaseHeldReport(nextId) {
   select.replaceChildren(...keep);
   if (wasSelected) select.value = keep.length ? keep[0].value : '';
   if ($('#report').dataset.reportId !== id) return;
-  $('#report').replaceChildren();
+  clearReportBody();
   delete $('#report').dataset.reportId;
   delete $('#report').dataset.updatedAt;
   delete $('#report').dataset.revision;
@@ -3691,7 +3711,7 @@ function releaseHeldReport(nextId) {
 function clearReportPanel(id) {
   if ($('#report').dataset.reportId !== id && $('#report-select').value !== id) return;
   if (heldReport?.id === id) heldReport = null;
-  $('#report').replaceChildren();
+  clearReportBody();
   delete $('#report').dataset.reportId;
   delete $('#report').dataset.updatedAt;
   delete $('#report').dataset.revision;

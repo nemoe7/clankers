@@ -2185,8 +2185,8 @@ test('preview client', async (t) => {
     assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: [{ type: 'preset', value: 'ui' }, { type: 'preset', value: 'api' }], verdict: { type: 'custom', label: 'Other', value: rawCustom } });
     await get('#refresh-report').events.click();
     await tick();
-    assert.match(get('#report-status').textContent, /^Published /,
-      'a report never republished shows the publish stamp');
+    assert.match(get('#report-status').textContent, /\nPublished /,
+      'a report never republished shows the publish stamp on the line below the ID');
     assert.ok(get('#report-status').textContent.includes(sent.at(-1).id.slice(0, 6)));
     assert.doesNotMatch(get('#report-status').textContent, /Sent /);
     // The ID is on show, a click quotes it like a note ID, and a ctrl-click is the same gesture.

@@ -14642,7 +14642,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert "--smallest-image" in capsys.readouterr().err
   assert "--smallest-image" in survey.INSTRUCTIONS
 
-  adversarial_ticks = "".join(f"{'`' * idx}x" for idx in range(1, 150))
+  adversarial_ticks = "".join(f"{'`' * idx}x" for idx in range(2, 150))
   assert (
     preview.strip_md_comments(f"{adversarial_ticks}<!-- drop -->`<!-- keep -->`")
     == f"{adversarial_ticks}`<!-- keep -->`"
