@@ -259,6 +259,12 @@ def main_identical(root='.'):
 			if git('rev-parse','--verify','--quiet',ref).returncode:return False
 		return git('diff','--quiet','origin/main','HEAD','--').returncode==0
 	except OSError:return False
+def skills_only_main_diff(root='.',base_ref='HEAD',target_ref='origin/main'):
+	if not base_ref or not target_ref:return False
+	try:proc=subprocess.run(['git','diff','--name-only',f"{base_ref}..{target_ref}"],cwd=root,capture_output=True,text=True,check=False,timeout=30)
+	except(OSError,subprocess.TimeoutExpired):return False
+	if proc.returncode!=0:return False
+	paths=[line.strip()for line in proc.stdout.splitlines()if line.strip()];return bool(paths)and all(path.startswith('.agents/skills/')for path in paths)
 def main_drift_warning(root='.',fresh=True):
 	def git(*arguments):return subprocess.run(['git',*arguments],cwd=root,capture_output=True,text=True,check=False,timeout=30,env={**os.environ,'GIT_TERMINAL_PROMPT':'0'})
 	def unavailable(reason):return f"Remote branch check unavailable: {reason}; behind count is unknown."
@@ -279,13 +285,17 @@ def main_drift_warning(root='.',fresh=True):
 			behind,_ahead=map(int,counts.stdout.split())
 			if git('diff','--quiet',main_ref,branch_ref,'--').returncode==0:
 				if behind:return f"Remote branch {branch} and origin/main have identical trees; do not replay those commits. Start new work from main."
-			elif behind:return f"Remote branch {branch} is {behind} commit(s) behind origin/main. Check whether main absorbed its commits before rebasing."
+			elif behind:
+				if skills_only_main_diff(root,branch_ref,main_ref):return f"Remote branch {branch} is {behind} commit(s) behind origin/main (`.agents/skills/**` sync only; no regate needed)."
+				return f"Remote branch {branch} is {behind} commit(s) behind origin/main. Check whether main absorbed its commits before rebasing."
 		if main_identical(root):return''
 		if git('rev-parse','--is-shallow-repository').stdout.strip()=='true':
 			visible=git('rev-list','--count','origin/main').stdout.strip()
 			if visible in{'','0','1'}:return''
 		count=git('rev-list','--count','HEAD..origin/main')
-		if count.returncode==0 and int(count.stdout.strip())>0:return f"Local check: origin/main carries {count.stdout.strip()} commit(s) this branch lacks. Replay your commits over main: run git fetch origin and git rebase origin/main, then push."
+		if count.returncode==0 and int(count.stdout.strip())>0:
+			if skills_only_main_diff(root,'HEAD','origin/main'):return f"Local check: origin/main carries {count.stdout.strip()} commit(s) this branch lacks (`.agents/skills/**` sync only; no regate needed)."
+			return f"Local check: origin/main carries {count.stdout.strip()} commit(s) this branch lacks. Replay your commits over main: run git fetch origin and git rebase origin/main, then push."
 		return''
 	except subprocess.TimeoutExpired:return unavailable('Git timed out')
 	except(OSError,ValueError):return unavailable('cannot read Git state')
@@ -299,6 +309,7 @@ def main_ancestor_warning(root='.'):
 		if git(*arguments,'origin',f"+refs/heads/main:{main_ref}").returncode:return''
 		if git('rev-parse','--verify','--quiet',main_ref).returncode:return''
 		if git('merge-base','--is-ancestor',main_ref,'HEAD').returncode!=1:return''
+		if skills_only_main_diff(root,'HEAD',main_ref):return''
 		return'PUSH BLOCKED: `origin/main` is not an ancestor of HEAD, so the push replays onto a stale base. Run `git fetch origin` and `git rebase origin/main`, then push again.'
 	except subprocess.TimeoutExpired:return''
 	except(OSError,ValueError):return''
@@ -391,17 +402,26 @@ def pr_check_label(node):
 	workflow=node['workflow']
 	if workflow and workflow!=node['name']:return f"{workflow} / {node['name']}"
 	return node['name']
+def pr_queued_runs(root,slug,sha):
+	if not slug or not sha:return[]
+	try:result=subprocess.run(['gh','run','list','--repo',slug,'--commit',sha,'--json','name,status'],cwd=root,capture_output=True,text=True,check=False)
+	except OSError:return[]
+	if result.returncode!=0:return[]
+	try:rows=json.loads(result.stdout or'[]')
+	except json.JSONDecodeError:return[]
+	if not isinstance(rows,list):return[]
+	return[str(row.get('name')or'workflow')for row in rows if isinstance(row,dict)and str(row.get('status')or'').lower()in{'queued','in_progress','waiting','requested','pending'}]
 def pr_checks_watch(root='.',seconds=PR_CHECK_DISCOVERY_SECONDS,step=PR_CHECK_DISCOVERY_STEP,sleep=None,progress=None):
 	pause=sleep or time.sleep
 	def unavailable(reason):return'unavailable',[f"PR CHECKS UNAVAILABLE: {reason}."]
 	branch=workspace_branch(root);slug=repo_slug(root)
 	if not branch or not slug:return unavailable('no branch pull request to watch')
-	pinned='';started=.0;seen_any=False;reported=set();lines=[]
+	pinned='';started=.0;seen_any=False;reported=set();queued_reported=set();lines=[]
 	while True:
 		head=pr_head_sha(root,branch,slug)
 		if head is None:return unavailable('gh did not read the pull request head')
 		if not head:return unavailable('no branch pull request to watch')
-		if head!=pinned:pinned=head;started=time.monotonic();seen_any=False;reported=set();lines=[]
+		if head!=pinned:pinned=head;started=time.monotonic();seen_any=False;reported=set();queued_reported=set();lines=[]
 		latest=pr_check_latest(root,slug,pinned)
 		if latest is None:return unavailable('gh did not read the check rollup')
 		elapsed=time.monotonic()-started
@@ -413,7 +433,16 @@ def pr_checks_watch(root='.',seconds=PR_CHECK_DISCOVERY_SECONDS,step=PR_CHECK_DI
 			reported.add(identity);line=f"Failed so far: {pr_check_label(node)}";lines.append(line)
 			if progress is not None:progress(line)
 		if not seen_any:
-			if elapsed>=seconds:return'not_started',[f"PR CHECKS NOT STARTED: no visible checks appeared on {pinned[:7]} within {seconds} seconds."]
+			if elapsed>=seconds:
+				queued=pr_queued_runs(root,slug,pinned)
+				if queued:
+					queued_key=tuple(queued)
+					if queued_key not in queued_reported:
+						queued_reported.add(queued_key);queued_line=f"Queued on {pinned[:7]}: {', '.join(queued)}";lines.append(queued_line)
+						if progress is not None:progress(queued_line)
+					if elapsed<max(seconds*2,seconds+step):pause(step);continue
+					return'not_started',[*lines,f"PR CHECKS QUEUED: {', '.join(queued)} still queued on {pinned[:7]} after {int(elapsed)} seconds."]
+				return'not_started',[f"PR CHECKS NOT STARTED: no visible checks appeared on {pinned[:7]} within {seconds} seconds."]
 		elif elapsed>=seconds and all(node['state']in PR_CHECK_SUCCESS_STATES+PR_CHECK_FAILURE_STATES for node in latest):
 			head=pr_head_sha(root,branch,slug)
 			if head is None:return unavailable('gh did not read the pull request head')
@@ -942,6 +971,7 @@ def current_task(tasks):
 def format_task_list(tasks,full=False):
 	shown=tasks if full else[t for t in tasks if t.get('status')=='upcoming'];lines=[f"Tasks {len(shown)}"if full else f"Tasks {len(shown)} upcoming"]
 	if any(t.get('blocked')for t in shown):lines.append('* = blocked on a report answer or linked run')
+	if not full:shown=[t for t in shown if not t.get('blocked')]+[t for t in shown if t.get('blocked')]
 	head=None if full else current_task(shown)
 	if head is not None:shown=[head,*(t for t in shown if t.get('id')!=head.get('id'))]
 	for task in shown:
@@ -1339,12 +1369,22 @@ def under_path(path,parent):
 	try:Path(path).resolve().relative_to(Path(parent).resolve())
 	except ValueError:return False
 	return True
+def prune_stale_worktrees(state_dir):
+	directory=Path(state_dir)/WORKTREE_DIR
+	if not directory.is_dir():return
+	for path in sorted(directory.glob('*.json')):
+		record=json_record(path);target=record.get('worktree')if record else None
+		if not isinstance(target,str)or not Path(target).exists():path.unlink(missing_ok=True)
+def forget_worktree(state_dir,name):
+	name=checked_worktree_name(name);path=worktree_record_path(state_dir,name)
+	if not path.exists():raise ValueError(f"No worktree named {name}.")
+	path.unlink(missing_ok=True);return name
 def stored_worktree(state_dir,name):
 	name=checked_worktree_name(name);record=json_record(worktree_record_path(state_dir,name))
 	if record is None:raise ValueError(f"No worktree named {name}.")
 	return record
 def worktree_at(state_dir,cwd=None):
-	current=Path(cwd or Path.cwd()).resolve();directory=Path(state_dir)/WORKTREE_DIR
+	prune_stale_worktrees(state_dir);current=Path(cwd or Path.cwd()).resolve();directory=Path(state_dir)/WORKTREE_DIR
 	if not directory.is_dir():return None
 	for path in sorted(directory.glob('*.json')):
 		record=json_record(path);target=record.get('worktree')if record else None
@@ -1353,12 +1393,12 @@ def worktree_at(state_dir,cwd=None):
 def worktree_warning(state_dir,action,cwd=None):
 	record=worktree_at(state_dir,cwd)
 	if record is None:return None
-	label=WORKTREE_ACTIONS.get(action,action);return f"WORKTREE BLOCKED: {record.get('name')} is detached. Do not run {label} here. Run it from {record.get('root')}."
+	label=WORKTREE_ACTIONS.get(action,action);root=record.get('root');worktree=record.get('worktree');hint=f' Run it from {root} (or `bash -c "cd {worktree} && <command>"` from {root}).'if action=='gate'and worktree else f" Run it from {root}.";return f"WORKTREE BLOCKED: {record.get('name')} is detached. Do not run {label} here.{hint}"
 def checked_worktree_name(name):
 	if not RUN_NAME.fullmatch(name or''):raise ValueError('Worktree names take 1 to 64 letters, digits, dots, dashes or underscores.')
 	return name
 def start_worktree(state_dir,name,destination,gate,allowed,cwd=None):
-	name=checked_worktree_name(name)
+	name=checked_worktree_name(name);prune_stale_worktrees(state_dir)
 	if not allowed or any(not pattern for pattern in allowed):raise ValueError('Give at least one --allow path glob.')
 	current=Path(cwd or Path.cwd()).resolve();registered=worktree_at(state_dir,current)
 	if registered is not None:raise ValueError(f"Start a worktree from the registered root: {registered.get('root')}.")
@@ -1412,6 +1452,31 @@ def run_chain_error(state_dir,record):
 			if parent['exit']!=0:return f"CANCELLED: gate {dependency['name']} failed with exit {parent['exit']}."
 			return None
 		time.sleep(RUN_CHAIN_POLL_SECONDS)
+PYTEST_FAILURE_HEADER_RE=re.compile('^_{3,}\\s+(.+?)\\s+_{3,}$')
+PYTEST_SECTION_RE=re.compile('^={3,}\\s+(.+?)\\s+={3,}$')
+def pytest_failure_tracebacks(lines):
+	in_failures=False;blocks={};order=[];current_name=None;current_lines=[]
+	def flush():
+		nonlocal current_name,current_lines
+		if current_name and current_lines:
+			if current_name not in blocks:order.append(current_name)
+			blocks[current_name]=list(current_lines[-10:])
+		current_name=None;current_lines=[]
+	for line in lines:
+		section=PYTEST_SECTION_RE.match(line.strip())
+		if section:flush();in_failures=section.group(1).strip().upper()=='FAILURES';continue
+		if not in_failures:continue
+		header=PYTEST_FAILURE_HEADER_RE.match(line.strip())
+		if header:flush();current_name=header.group(1).strip();current_lines=[line]
+		elif current_name is not None:
+			if line.strip():current_lines.append(line)
+		elif line.strip():
+			key=line.split(':',2)[0]
+			if key not in blocks:order.append(key)
+			blocks[key]=[line]
+	flush();retained=[]
+	for name in order:retained.extend(blocks[name])
+	return retained
 def run_command(state_dir,name,argv):
 	if not RUN_NAME.fullmatch(name or''):print('arena-preview run start: the name takes 1 to 64 letters, digits, dot, dash or underscore.',flush=True);return 2
 	if argv[:1]==['--']:argv=argv[1:]
@@ -1423,7 +1488,11 @@ def run_command(state_dir,name,argv):
 		if status=='failure':watched+=[f"Failed: {step}"for step in pr_failed_steps(root)]
 		completed=subprocess.CompletedProcess(argv,0 if status=='success'else 1,'\n'.join(watched)+'\n','')
 	else:completed=subprocess.run(argv,capture_output=True,text=True,check=False)
-	seconds=round(time.monotonic()-started,1);output=(completed.stdout+completed.stderr).splitlines();tail=clean_run_tail(output[-RUN_TAIL_LINES:]);verdict=tail[-1]if tail else'(no output)';path=run_record_path(state_dir,name);existing=json_record(path)or{};record={**existing,'run_id':existing.get('run_id')or uuid.uuid4().hex,'name':name,'argv':argv,'exit':completed.returncode,'seconds':seconds,'finished_at':now(),'verdict':verdict,'tail':tail,'announced':False};write_run_record(path,record)
+	seconds=round(time.monotonic()-started,1);output=(completed.stdout+completed.stderr).splitlines();tail=clean_run_tail(output[-RUN_TAIL_LINES:]);tracebacks=pytest_failure_tracebacks(output)
+	if tracebacks:
+		missing=[line for line in tracebacks if line not in tail]
+		if missing:tail=missing+tail
+	verdict=tail[-1]if tail else'(no output)';path=run_record_path(state_dir,name);existing=json_record(path)or{};record={**existing,'run_id':existing.get('run_id')or uuid.uuid4().hex,'name':name,'argv':argv,'exit':completed.returncode,'seconds':seconds,'finished_at':now(),'verdict':verdict,'tail':tail,'announced':False};write_run_record(path,record)
 	for line in tail:print(line,flush=True)
 	print(f"run {name} done: exit {completed.returncode} {seconds}s {verdict}",flush=True);return completed.returncode
 def live_runs(state_dir):
@@ -1444,15 +1513,25 @@ def live_task_runs(state_dir):
 		record=reconcile_routed_record(path,record);task_id=record.get('task_id')
 		if record.get('detached')and record.get('exit')is None and isinstance(task_id,str)and task_id:linked.setdefault(task_id,[]).append(record.get('name')or path.stem)
 	return linked
+def remote_watch_run(state_dir,name):
+	if re.match('^(?:pr-checks|run-watch)(?:-\\d+)?$',str(name)):return True
+	record=json_record(run_record_path(state_dir,name))or{};argv=record.get('argv')or[]
+	if pr_checks_command(argv):return True
+	text=' '.join(str(item)for item in argv);return long_run_name(text)in{'pr-checks','run-watch'}
 def link_task_runs(records,state_dir):
 	linked=live_task_runs(state_dir)
 	for record in records:
 		names=linked.get(record.get('id'))
-		if names:record['runs']=names;record['blocked']=True
+		if names:
+			record['runs']=names
+			if record.get('status')!='finished':record['blocked']=True
 		else:record.pop('runs',None)
 	return records
 def guard_task_runs(state_dir,task_id=None,action='change'):
-	linked=live_task_runs(state_dir);selected=linked if task_id is None else{task_id:linked.get(task_id,[])};held=[(identifier,names)for(identifier,names)in selected.items()if names]
+	linked=live_task_runs(state_dir);target_map=linked if task_id is None else{task_id:linked.get(task_id,[])};held=[]
+	for(identifier,names)in target_map.items():
+		blocking=[name for name in names if not remote_watch_run(state_dir,name)]if action=='finish task'else list(names)
+		if blocking:held.append((identifier,blocking))
 	if not held:return
 	labels='; '.join(f"{identifier}: {', '.join(names)}"for(identifier,names)in sorted(held));raise ValueError(f"Cannot {action}; live task run(s): {labels}")
 PUSH_GUARDED_TASK_TYPES='code','docs'
@@ -1527,7 +1606,7 @@ LONG_RUN_HEADS={'pytest':'pytest','py.test':'pytest','tox':'tox','nox':'nox'}
 LONG_RUN_WORDS=(('npm','test'),'npm-tests'),(('npm','run','test*'),'npm-tests'),(('yarn','test'),'yarn-tests'),(('pnpm','test'),'pnpm-tests'),(('make','test'),'make-tests'),(('npx','jest'),'npx-tests'),(('npx','vitest'),'npx-tests'),(('npx','mocha'),'npx-tests'),(('npx','ava'),'npx-tests'),(('go','test'),'go-tests'),(('cargo','test'),'cargo-tests'),(('dotnet','test'),'dotnet-tests'),(('mvn','test'),'mvn-tests'),(('mvnw','test'),'mvn-tests'),(('gradle','test'),'gradle-tests'),(('gradlew','test'),'gradle-tests')
 WORKTREE_STEP='NEXT: work queued file task in worktree while this runs: `arena-preview worktree start [-g, --gate <gate-name>] [-a, --allow <glob>] <name> <destination>`.'
 DETACHED_NOTICE='RUN DETACHED: `{name}` runs in background, call ends clean. Verdict on later call. '+WORKTREE_STEP
-DETACHED_BLOCK='RUN BLOCKED: background start failed, wait not started. Use `arena-preview run start {name} -- <the same line>` instead.'
+DETACHED_BLOCK='RUN BLOCKED: background start failed, wait not started. Nothing on this line ran. Use `arena-preview run start {name} -- <the same line>` instead.'
 DETACHED_STATUS_SECONDS=7200
 DETACH_DRY_RUN='ARENA_PREVIEW_DETACH_DRY'
 def long_run_words(tokens,index,head):
@@ -1618,12 +1697,13 @@ def job_log_command(store=None,job_id=None,run_id=None,root=None):
 	if run_clean and not run_clean.isdigit():raise ValueError('--run must be a numeric GitHub Actions run ID')
 	root_path=Path(root or resolve_repo_root()).resolve();slug=repo_slug(root_path)
 	if not slug:raise ValueError('Could not resolve GitHub repository slug from origin remote')
+	target_id=run_clean or job_clean;log_type='runs'if run_clean else'jobs'
 	if job_clean:
 		proc=subprocess.run(['gh','api','-i',f"/repos/{slug}/actions/jobs/{job_clean}/logs"],cwd=root_path,capture_output=True,text=True,check=False);combined=f"{proc.stdout}\n{proc.stderr}";match=re.search('(?im)^location:\\s*(\\S+)',combined)
 		if match:return match.group(1).strip()
 	record=store.agent_key()if store is not None else None
-	if record and record.get('host')and record.get('key'):host=str(record['host']).rstrip('/');key=record['key'];target_id=run_clean or job_clean;log_type='runs'if run_clean else'jobs';return f"{host}/v1/gh?key={key}&path=repos/{slug}/actions/{log_type}/{target_id}/logs"
-	raise ValueError('Job log redirect URL unavailable and no recorded agent key for /v1/gh fallback')
+	if record and record.get('host')and record.get('key'):host=str(record['host']).rstrip('/');key=record['key'];return f"{host}/v1/gh?key={key}&path=repos/{slug}/actions/{log_type}/{target_id}/logs"
+	return f"gh api -i /repos/{slug}/actions/{log_type}/{target_id}/logs"
 def _extract_pr_patch_args(text):
 	title=None;body_file=None;jq_title=re.search('--arg\\s+title\\s+(?:\\"([^\\"]+)\\"|\'([^\']+)\'|([^\\s\\"\'|]+))',text)
 	if jq_title:title=next(group for group in jq_title.groups()if group is not None)
@@ -1726,7 +1806,7 @@ def pr_check_wait(state_dir,line,command=None):
 	if not name:return PR_CHECK_OTHER
 	warning=worktree_warning(state_dir,'gate')
 	if warning:print(warning,file=sys.stderr,flush=True);return PR_CHECK_REFUSED
-	if command is not None and line.strip()!=command.strip():print(f"RUN BLOCKED: automatic routing would replay a mixed shell line. Use `arena-preview run start {name} -- <remaining command>`; do not repeat completed commands.",file=sys.stderr,flush=True);return PR_CHECK_REFUSED
+	if command is not None and line.strip()!=command.strip():print(f"RUN BLOCKED: automatic routing would replay a mixed shell line. Nothing on this line ran. Use `arena-preview run start {name} -- <remaining command>`; do not repeat completed commands.",file=sys.stderr,flush=True);return PR_CHECK_REFUSED
 	if not detach_run(state_dir,name,['bash','-c',line]):print(DETACHED_BLOCK.format(name=name),file=sys.stderr,flush=True);return PR_CHECK_REFUSED
 	print(DETACHED_NOTICE.format(name=name),file=sys.stderr,flush=True);return PR_CHECK_RUNS
 def run_task_id(state_dir,selected=None):
@@ -1764,14 +1844,22 @@ def detach_run(state_dir,name,argv,task_id=None,after=None,link_task=True):
 		if started:record['pid_started_at']=started
 		write_run_record(path,record)
 	return True
+def resolve_run_name(state_dir,name):
+	if not run_record_path(state_dir,name).exists():return name
+	base=re.sub('-\\d+$','',name)or name;suffix=2
+	while True:
+		candidate=f"{base[:64-len(str(suffix))-1]}-{suffix}"
+		if not run_record_path(state_dir,candidate).exists():return candidate
+		suffix+=1
 def route_command(state_dir,name,argv,task_id=None,after=None):
 	if not RUN_NAME.fullmatch(name or''):print('arena-preview run start: the name takes 1 to 64 letters, digits, dot, dash or underscore.',flush=True);return 2
 	if argv[:1]==['--']:argv=argv[1:]
 	if not argv:print('arena-preview run start: name a command after --, for example: run start gates check',flush=True);return 2
 	try:clear_poll_repeat(Store(state_dir,create=False))
 	except FileNotFoundError:pass
-	if not detach_run(state_dir,name,argv,task_id=task_id,after=after):print(f"arena-preview run start: the start of `{name}` failed.",flush=True);return 1
-	print(f"routed {name}: background run. Verdict on later call. {WORKTREE_STEP}",file=sys.stderr,flush=True);return 0
+	resolved=resolve_run_name(state_dir,name)
+	if not detach_run(state_dir,resolved,argv,task_id=task_id,after=after):print(f"arena-preview run start: the start of `{resolved}` failed.",flush=True);return 1
+	print(f"routed {resolved}: background run. Verdict on later call. {WORKTREE_STEP}",file=sys.stderr,flush=True);return 0
 def next_open_task(state_dir,gate_name):
 	try:store=Store(state_dir)
 	except FileNotFoundError:return None
@@ -1935,7 +2023,7 @@ def task_steps(details):
 	return[step for step in steps if step]
 def check_task_steps(details):
 	for step in details or():
-		if len(step)>TASK_STEP_MAX:raise ValueError(f"A task detail is one step per line, {TASK_STEP_MAX} characters or fewer; this line runs {len(step)}. Split it and repeat --details")
+		if len(step)>TASK_STEP_MAX:raise ValueError(f"A task detail is one step per line, {TASK_STEP_MAX} characters or fewer; this line runs {len(step)} ({step!r}). Split it and repeat --details")
 def check_task(task_id,title,details):
 	if not TASK_ID.match(task_id or''):raise ValueError('A task ID is 1-64 characters of lowercase letters, digits and hyphens, and starts with a letter or digit')
 	if NOTE_ID.match(task_id or''):raise ValueError('That ID is a note ID. A task ID names the job: give the task a proper name, like fix-the-widget')
@@ -2375,7 +2463,7 @@ class Store:
 				blocked_by=[str(item)for item in blocked_by if str(item).strip()];edges=self.all_task_blockers(db=db)
 				for blocker in blocked_by:self.check_dependency(task_id,blocker,edges,db=db)
 				self.write_dependencies(db,task_id,blocked_by)
-			if report_wait and report_id and blocked and self.report_has_answers(db,report_id):blocked=False
+			if blocked and(report_wait or status=='finished')and self.task_has_report_answer(db,task_id,report_id):blocked=False
 			if report_id and blocked and(not stored or not stored['blocked']or stored.get('report_id')!=report_id):
 				report=db.execute('SELECT markdown FROM reports WHERE id = ?',(report_id,)).fetchone()
 				if report is not None and not parse_fields(report['markdown'])[1]:raise ValueError('A blocked task needs a report with answer fields')
@@ -2383,7 +2471,9 @@ class Store:
 				guard_task_runs(self.path.parent,task_id,'finish task')
 				if not restoring and(status_arg=='finished'or not stored or stored['status']!='finished'):guard_task_push(self.repository_root(),task_id,task_type)
 			if status=='finished'and blocked:raise ValueError(f"Task {task_id} is blocked; clear the report wait with --unblocked first")
-			siblings=[task_row(item)for item in db.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE status = ? AND id != ? ORDER BY position, id",(status,task_id)).fetchall()];record={'id':task_id,'title':title,'details':details,'status':status,'order':len(siblings)+1,'updated_at':stamp,'completed_at':completed_at,'blocked':bool(blocked),'report_id':report_id,'type':task_type};blockers=self.task_blockers(task_id,db=db)
+			siblings=[task_row(item)for item in db.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE status = ? AND id != ? ORDER BY position, id",(status,task_id)).fetchall()]
+			if not restoring and order is not None and not blocked and status=='upcoming':siblings=[item for item in siblings if not(item.get('blocked')and item.get('report_id'))]+[item for item in siblings if item.get('blocked')and item.get('report_id')]
+			record={'id':task_id,'title':title,'details':details,'status':status,'order':len(siblings)+1,'updated_at':stamp,'completed_at':completed_at,'blocked':bool(blocked),'report_id':report_id,'type':task_type};blockers=self.task_blockers(task_id,db=db)
 			if blockers:record['blocked_by']=blockers
 			if order is not None:index=max(0,min(order-1,len(siblings)))
 			elif stored and stored['status']==status:index=max(0,min(stored['order']-1,len(siblings)))
@@ -2406,6 +2496,9 @@ class Store:
 		return self.tasks()
 	@staticmethod
 	def report_has_answers(db,report_id):return bool(db.execute('SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1',(report_id,)).fetchone())
+	def task_has_report_answer(self,db,task_id,report_id=None):
+		if report_id and self.report_has_answers(db,report_id):return True
+		return bool(db.execute('SELECT 1 FROM submissions WHERE task_id = ? LIMIT 1',(task_id,)).fetchone())
 	@staticmethod
 	def release_report_tasks(db,report_id):db.execute('UPDATE tasks SET blocked = 0, updated_at = ? WHERE report_id = ? AND blocked = 1',(now(),report_id))
 	def remove_task(self,task_id):
@@ -3037,6 +3130,7 @@ class Store:
 			for table in('notes','submissions'):
 				cursor=db.execute(f"UPDATE {table} SET task_id = ? WHERE id = ?",(task_id,record_id))
 				if cursor.rowcount:
+					if table=='submissions':db.execute('UPDATE tasks SET blocked = 0, updated_at = ? WHERE id = ? AND blocked = 1',(now(),task_id))
 					if table=='notes':
 						uploads=db.execute('SELECT * FROM uploads WHERE note_id = ? ORDER BY seq',(record_id,)).fetchall()
 						if uploads:
@@ -4015,7 +4109,7 @@ class PreviewArgumentParser(argparse.ArgumentParser):
 	def print_usage(self,file=None):pass
 	def exit(self,status=0,message=None):super().exit(status,message.removeprefix('arena-preview: ')if message else message)
 def main():
-	parser=PreviewArgumentParser(description=CLI_DESCRIPTION,prog='arena-preview');parser.add_argument('-r','--reminder',action='store_true',help='Print unacked-count reminder; exit');parser.add_argument('-c','--rc',type=int,default=0,help='Exit status of shell call for --reminder');parser.add_argument('-l','--line',dest='reminder_line',default='',help='Shell command line for --reminder');parser.add_argument('-e','--elapsed',type=float,default=None,help=argparse.SUPPRESS);commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve',help='Serve preview page; -p names port');serve.add_argument('-p','--port',type=int,default=DEFAULT_PORT,help=f"Port (default: {DEFAULT_PORT}; only supported port)");init=commands.add_parser('init',help='Create state directory and database');init.add_argument('-z','--tz',help='CLI stamp IANA zone; TZ env wins');survey_parser=commands.add_parser('survey',help='Show questions and schema, or submit ordered JSON');survey_parser.add_argument('-i','--smallest-image',action='store_true',help='Print the smallest image path in the repository tree, or exit 1 when none exists');survey_parser.add_argument('answers',nargs='?',help='Ordered answer JSON');commands.add_parser('read',help='Print every pending note, answer and upload');commands.add_parser('skills',help='List skill names, full descriptions, and paths without loading skills');note_group=commands.add_parser('note',help='Read stored notes');note_verbs=note_group.add_subparsers(dest='verb',required=True);note_list=note_verbs.add_parser('list',help='Stored note IDs by page, newest first; acknowledged included');note_list.add_argument('-p','--page',type=int,default=1,help='Page number (default: 1)');note_list.add_argument('-s','--page-size',type=int,default=20,help='IDs per page, 1 to 100 (default: 20)');note_reread=note_verbs.add_parser('show',help='Reread stored note by short or full ID');note_reread.add_argument('id',help='Six or all note ID characters');image_uri=commands.add_parser('image-data-uri',help='Print Markdown: one local image as data URI');image_uri.add_argument('path',type=Path,help='One local PNG, JPEG, GIF or WebP file up to 2 MiB');outline_parser=commands.add_parser('outline',help='Print read-only source outline with line ranges for local repository files');outline_parser.add_argument('path',type=Path,help='Local source file inside the repository checkout');outline_parser.add_argument('-m','--max-entries',type=int,default=OUTLINE_MAX_ENTRIES,help=f"Maximum entries to print, 1 to {OUTLINE_MAX_ENTRIES} (default: {OUTLINE_MAX_ENTRIES})");outline_parser.add_argument('-j','--json',dest='as_json',action='store_true',help='Print JSON outline with path, language, entries, total, and omitted count');pr_update_parser=commands.add_parser('pr-update',help='Update a pull request title and body via REST from a workspace file and verify parity');pr_update_parser.add_argument('-n','--number',type=int,required=True,help='Pull request number');pr_update_parser.add_argument('-t','--title',required=True,help='Pull request title');pr_update_parser.add_argument('-f','--body-file',type=Path,required=True,help='Workspace Markdown file for pull request body');job_log_parser=commands.add_parser('job-log',help='Resolve the signed GitHub Actions job-log Location URL or fallback /v1/gh proxy URL');job_log_parser.add_argument('-j','--job',dest='job_id',help='GitHub Actions job ID');job_log_parser.add_argument('-r','--run',dest='run_id',help='GitHub Actions run ID');commands.add_parser('key',help='Print the recorded agent key, host and use line');pre=commands.add_parser('pre',help='Run all pre-Bash gates in order; list completed steps');pre.add_argument('-l','--line',default='',help='Shell command line from hook');pre.add_argument('-c','--command',dest='command_text',default='',help='Command reached by DEBUG trap');pre.add_argument('-r','--repo',default='.',help='Bible repository');pre.add_argument('-s','--shell',default='',help='Shell name');pre.add_argument('-d','--done',default='',help="This shell's completed steps, space-separated");run_group=commands.add_parser('run',help='Start long command; read result');run_verbs=run_group.add_subparsers(dest='verb',required=True);route=run_verbs.add_parser('start',help='Detach command, keep output tail; show exit on later call');route.add_argument('-t','--task',dest='task_id',metavar='TASK-ID',help='Link run to upcoming task, not current task');route.add_argument('-a','--after',metavar='GATE',help='Run only after this gate passes');route.add_argument('name',help='Short run name; example: gates');route.add_argument('command_args',nargs=argparse.REMAINDER,help='Command after --');route_run=commands.add_parser('route-run',help='Run command here; record exit for later call');route_run.add_argument('name',help='Run name already recorded by caller');route_run.add_argument('command_args',nargs=argparse.REMAINDER,help='Command after --');logs=run_verbs.add_parser('logs',help='Print routed run status and recorded output tail');logs.add_argument('name',help='Run name to read');worktree=commands.add_parser('worktree',help='Create or collect detached task worktree beside root gate');worktree_action=worktree.add_subparsers(dest='worktree_action',required=True);worktree_start=worktree_action.add_parser('start',help='Create detached worktree beside root gate, or without one');worktree_start.add_argument('name',help='Short worktree name');worktree_start.add_argument('destination',type=Path,help='New path outside root');worktree_start.add_argument('-g','--gate',default=None,help='Running root gate name; optional');worktree_start.add_argument('-a','--allow',action='append',default=[],help='Glob of paths task may change');worktree_collect=worktree_action.add_parser('collect',help='Print allowed detached-worktree patch after root gate passes');worktree_collect.add_argument('name',help='Worktree name to collect');rename=commands.add_parser('rename',help='Move note, answer, report, or task to new ID');rename.add_argument('old_id',help='Stored ID or unique record prefix');rename.add_argument('new_id',help='Destination record ID');gate=commands.add_parser('gate',help='Inbox gate; -p blocks on any unacked note; -l names blocked line');gate.add_argument('-p','--push',action='store_true',help='Block on any unacked note or answer, regardless of call count');gate.add_argument('-l','--line',default='',help='Command line from hook; blocked calls name commands to drop');commands.add_parser('poll',help='Wait for owner answer or gate completion');download=commands.add_parser('download-request',help='Request HTTPS browser download; preview Approve click required; -a allows proxy fallback');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('-a','--allow-proxy',action='store_true',help='Owner may opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack',help='Answer notes with inline Markdown; omit IDs for one pending item');ack.add_argument('ids',nargs='*');ack.add_argument('markdown',help='Literal inline Markdown answer');ack.add_argument('-i','--id',dest='task_id');ack.add_argument('-t','--title',dest='task_title');ack.add_argument('-T','--type',dest='task_type',choices=TASK_TYPES);ack.add_argument('-S','--scope',dest='task_scope');ack.add_argument('-d','--detail',dest='task_detail',action='append');report_group=commands.add_parser('report',help='Publish, withdraw and inspect reports');report_verbs=report_group.add_subparsers(dest='verb',required=True);publish=report_verbs.add_parser('publish',help='Publish report; -i ID, -t title');publish.add_argument('source',type=Path);publish.add_argument('-s','--submission-format',type=Path,help='Optional question, answer, and template JSON');publish.add_argument('-i','--id',required=True);publish.add_argument('-t','--title',required=True);publish.add_argument('-u','--allow-unparsed-markers',action='store_true',help='Publish even when possible unparsed == or ~~ markers are found');unpublish=report_verbs.add_parser('unpublish',help='Withdraw report by ID, or all stale reports with --stale');unpublish.add_argument('report_id',nargs='?');unpublish.add_argument('-s','--stale',action='store_true',help='Withdraw every stale report');report_verbs.add_parser('stale',help='List stale published report IDs and reasons without changing state')
+	parser=PreviewArgumentParser(description=CLI_DESCRIPTION,prog='arena-preview');parser.add_argument('-r','--reminder',action='store_true',help='Print unacked-count reminder; exit');parser.add_argument('-c','--rc',type=int,default=0,help='Exit status of shell call for --reminder');parser.add_argument('-l','--line',dest='reminder_line',default='',help='Shell command line for --reminder');parser.add_argument('-e','--elapsed',type=float,default=None,help=argparse.SUPPRESS);commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve',help='Serve preview page; -p names port');serve.add_argument('-p','--port',type=int,default=DEFAULT_PORT,help=f"Port (default: {DEFAULT_PORT}; only supported port)");init=commands.add_parser('init',help='Create state directory and database');init.add_argument('-z','--tz',help='CLI stamp IANA zone; TZ env wins');survey_parser=commands.add_parser('survey',help='Show questions and schema, or submit ordered JSON');survey_parser.add_argument('-i','--smallest-image',action='store_true',help='Print the smallest image path in the repository tree, or exit 1 when none exists');survey_parser.add_argument('answers',nargs='?',help='Ordered answer JSON');commands.add_parser('read',help='Print every pending note, answer and upload');commands.add_parser('skills',help='List skill names, full descriptions, and paths without loading skills');note_group=commands.add_parser('note',help='Read stored notes');note_verbs=note_group.add_subparsers(dest='verb',required=True);note_list=note_verbs.add_parser('list',help='Stored note IDs by page, newest first; acknowledged included');note_list.add_argument('-p','--page',type=int,default=1,help='Page number (default: 1)');note_list.add_argument('-s','--page-size',type=int,default=20,help='IDs per page, 1 to 100 (default: 20)');note_reread=note_verbs.add_parser('show',help='Reread stored note by short or full ID');note_reread.add_argument('id',help='Six or all note ID characters');image_uri=commands.add_parser('image-data-uri',help='Print Markdown: one local image as data URI');image_uri.add_argument('path',type=Path,help='One local PNG, JPEG, GIF or WebP file up to 2 MiB');outline_parser=commands.add_parser('outline',help='Print read-only source outline with line ranges for local repository files');outline_parser.add_argument('path',type=Path,help='Local source file inside the repository checkout');outline_parser.add_argument('-m','--max-entries',type=int,default=OUTLINE_MAX_ENTRIES,help=f"Maximum entries to print, 1 to {OUTLINE_MAX_ENTRIES} (default: {OUTLINE_MAX_ENTRIES})");outline_parser.add_argument('-j','--json',dest='as_json',action='store_true',help='Print JSON outline with path, language, entries, total, and omitted count');pr_update_parser=commands.add_parser('pr-update',help='Update a pull request title and body via REST from a workspace file and verify parity');pr_update_parser.add_argument('-n','--number',type=int,required=True,help='Pull request number');pr_update_parser.add_argument('-t','--title',required=True,help='Pull request title');pr_update_parser.add_argument('-f','--body-file',type=Path,required=True,help='Workspace Markdown file for pull request body');job_log_parser=commands.add_parser('job-log',help='Resolve the signed GitHub Actions job-log Location URL or fallback /v1/gh proxy URL');job_log_parser.add_argument('-j','--job',dest='job_id',help='GitHub Actions job ID');job_log_parser.add_argument('-r','--run',dest='run_id',help='GitHub Actions run ID');commands.add_parser('key',help='Print the recorded agent key, host and use line');pre=commands.add_parser('pre',help='Run all pre-Bash gates in order; list completed steps');pre.add_argument('-l','--line',default='',help='Shell command line from hook');pre.add_argument('-c','--command',dest='command_text',default='',help='Command reached by DEBUG trap');pre.add_argument('-r','--repo',default='.',help='Bible repository');pre.add_argument('-s','--shell',default='',help='Shell name');pre.add_argument('-d','--done',default='',help="This shell's completed steps, space-separated");run_group=commands.add_parser('run',help='Start long command; read result');run_verbs=run_group.add_subparsers(dest='verb',required=True);route=run_verbs.add_parser('start',help='Detach command, keep output tail; show exit on later call');route.add_argument('-t','--task',dest='task_id',metavar='TASK-ID',help='Link run to upcoming task, not current task');route.add_argument('-a','--after',metavar='GATE',help='Run only after this gate passes');route.add_argument('name',help='Short run name; example: gates');route.add_argument('command_args',nargs=argparse.REMAINDER,help='Command after --');route_run=commands.add_parser('route-run',help='Run command here; record exit for later call');route_run.add_argument('name',help='Run name already recorded by caller');route_run.add_argument('command_args',nargs=argparse.REMAINDER,help='Command after --');logs=run_verbs.add_parser('logs',help='Print routed run status and recorded output tail');logs.add_argument('name',help='Run name to read');worktree=commands.add_parser('worktree',help='Create or collect detached task worktree beside root gate');worktree_action=worktree.add_subparsers(dest='worktree_action',required=True);worktree_start=worktree_action.add_parser('start',help='Create detached worktree beside root gate, or without one');worktree_start.add_argument('name',help='Short worktree name');worktree_start.add_argument('destination',type=Path,help='New path outside root');worktree_start.add_argument('-g','--gate',default=None,help='Running root gate name; optional');worktree_start.add_argument('-a','--allow',action='append',default=[],help='Glob of paths task may change');worktree_collect=worktree_action.add_parser('collect',help='Print allowed detached-worktree patch after root gate passes');worktree_collect.add_argument('name',help='Worktree name to collect');worktree_forget=worktree_action.add_parser('forget',help='Remove a stored worktree record');worktree_forget.add_argument('name',help='Worktree name to forget');rename=commands.add_parser('rename',help='Move note, answer, report, or task to new ID');rename.add_argument('old_id',help='Stored ID or unique record prefix');rename.add_argument('new_id',help='Destination record ID');gate=commands.add_parser('gate',help='Inbox gate; -p blocks on any unacked note; -l names blocked line');gate.add_argument('-p','--push',action='store_true',help='Block on any unacked note or answer, regardless of call count');gate.add_argument('-l','--line',default='',help='Command line from hook; blocked calls name commands to drop');commands.add_parser('poll',help='Wait for owner answer or gate completion');download=commands.add_parser('download-request',help='Request HTTPS browser download; preview Approve click required; -a allows proxy fallback');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('-a','--allow-proxy',action='store_true',help='Owner may opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack',help='Answer notes with inline Markdown; omit IDs for one pending item');ack.add_argument('ids',nargs='*');ack.add_argument('markdown',help='Literal inline Markdown answer');ack.add_argument('-i','--id',dest='task_id');ack.add_argument('-t','--title',dest='task_title');ack.add_argument('-T','--type',dest='task_type',choices=TASK_TYPES);ack.add_argument('-S','--scope',dest='task_scope');ack.add_argument('-d','--detail',dest='task_detail',action='append');report_group=commands.add_parser('report',help='Publish, withdraw and inspect reports');report_verbs=report_group.add_subparsers(dest='verb',required=True);publish=report_verbs.add_parser('publish',help='Publish report; -i ID, -t title');publish.add_argument('source',type=Path);publish.add_argument('-s','--submission-format',type=Path,help='Optional question, answer, and template JSON');publish.add_argument('-i','--id',required=True);publish.add_argument('-t','--title',required=True);publish.add_argument('-u','--allow-unparsed-markers',action='store_true',help='Publish even when possible unparsed == or ~~ markers are found');unpublish=report_verbs.add_parser('unpublish',help='Withdraw report by ID, or all stale reports with --stale');unpublish.add_argument('report_id',nargs='?');unpublish.add_argument('-s','--stale',action='store_true',help='Withdraw every stale report');report_verbs.add_parser('stale',help='List stale published report IDs and reasons without changing state')
 	for verb in('pin','unpin'):pin=report_verbs.add_parser(verb,help=f"{verb.capitalize()} a report against staleness");pin.add_argument('report_id')
 	report_state=report_verbs.add_parser('state',help='Print publication, owner view stamp and answer visibility for one report or all');report_state.add_argument('report_id',nargs='?');task_group=commands.add_parser('task',help='Read and update tasks');task_verbs=task_group.add_subparsers(dest='verb',required=True);task_list=task_verbs.add_parser('list',help='List tasks; -f includes finished');task_list.add_argument('-f','--full',action='store_true',help='print every task, finished included');task_show=task_verbs.add_parser('show',help='Print one stored task in full');task_show.add_argument('task_id',metavar='TASK-ID');task=task_verbs.add_parser('set',help='Write/update task; -s status, -o order, -d details, -A append, -m message, -r report, -u unblocked, -a amend, -t/--type type, -S/--scope scope');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('-d','--details',dest='task_details',action='append',help='One step per line; max 120 characters; repeatable');task.add_argument('-A','--append',dest='append_details',action='store_true',help='Append provided details instead of replacing stored details');task.add_argument('-u','--unblocked',dest='blocked',action='store_false',default=None,help='Clear report wait or legacy blocked mark');task.add_argument('-m','--msg-id',help='Message task answers; mark it as having a task');task.add_argument('-r','--report',metavar='REPORT-ID',help='Awaited report; answer clears blocked mark');task.add_argument('-a','--amend',metavar='PREV-ID',help='Rename task under this ID to given ID');task.add_argument('-b','--blocked-by',dest='blocked_by',action='append',metavar='TASK-ID',help='Dependency task; repeatable; cycles refused');task.add_argument('-s','--status',choices=TASK_STATUSES,default=None);task.add_argument('-t','-T','--type',dest='task_type',choices=TASK_TYPES,default=None,help='Primary deliverable type; omitted flag keeps stored type');task.add_argument('-S','--scope',dest='task_scope',default=None,help='Free-text task scope; omitted flag keeps stored scope');task.add_argument('-o','--order',type=int,default=None,help='1-based place within div, not end');task_unlink=task_verbs.add_parser('unlink',help='Unlink a submission from all tasks; retain its history');task_unlink.add_argument('submission_id');task_remove=task_verbs.add_parser('remove',help='Delete task by ID');task_remove.add_argument('task_id');state_group=commands.add_parser('state',help='Import, compare, save, restore, or clear stored state');state_verbs=state_group.add_subparsers(dest='verb',required=True);state_import=state_verbs.add_parser('import',help='Import NDJSON backup; replace live state');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('-r','--replace-tasks',action='store_true');state_compare=state_verbs.add_parser('compare',help='Compare NDJSON backup against live state without changing state');state_compare.add_argument('source',nargs='?',type=Path);state_verbs.add_parser('save',help='Snapshot live state to state-latest.ndjson and queue userscript local sync');state_restore=state_verbs.add_parser('restore',help='Restore state-latest.ndjson or state-previous.ndjson and queue userscript local sync');state_restore.add_argument('-p','--previous',action='store_true',help='Restore state-previous.ndjson instead of state-latest.ndjson');state_verbs.add_parser('clear',help='Empty all state tables in place; keep agent key record');args=parser.parse_args()
 	if args.command=='serve'and args.port!=DEFAULT_PORT:serve.error(f"--port must be {DEFAULT_PORT}")
@@ -4055,6 +4149,7 @@ def main():
 			return 0
 		if args.command=='worktree':
 			if args.worktree_action=='start':record=start_worktree(state_dir,args.name,args.destination,args.gate,args.allow);print(f"Worktree {record['name']} at {record['worktree']}");return 0
+			if args.worktree_action=='forget':removed=forget_worktree(state_dir,args.name);print(f"Forgot worktree {removed}");return 0
 			print(collect_worktree(state_dir,args.name),end='');return 0
 		if args.command=='route':
 			warning=worktree_warning(state_dir,'gate')

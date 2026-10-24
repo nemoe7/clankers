@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-25
+
+### Changed
+
+#### arena-skill
+
+- Auto-append `-2`, `-3`, ... when `arena-preview run start <name>` reuses an existing run name (`scripts/preview.py`). Add `arena-preview worktree forget <name>`, auto-prune missing worktrees, and retain pytest tracebacks in routed gate tails.
+- Unblock `--status finished` when a task's report has an answer or a remote CI watch run is active (`scripts/preview.py`). Let explicit `--order` outrank blocked report tasks and skip mandatory regates for `.agents/skills/**`-only diffs on `origin/main`.
+
 ## 2026-10-24
 
 ### Added
