@@ -181,13 +181,15 @@ def fill_reminder(tail, remaining):
   return tail.replace("{remaining} tasks", count)
 
 
-def reminder_tail(cursor, remaining, stale=0):
+def reminder_tail(cursor, remaining, stale=0, unpushed=0):
   """Return the rotating tail at the cursor. A hidden entry yields the next one."""
   for step in range(len(REMINDERS)):
     tail = fill_reminder(REMINDERS[(cursor + step) % len(REMINDERS)], remaining)
     if tail:
       if tail == "Unpublish stale reports." and stale:
         return f"Unpublish {stale} stale report{'s' if stale != 1 else ''}."
+      if tail == "Always push." and unpushed:
+        return f"{unpushed} commit/s unpushed. ALWAYS push. NEVER delay for batch."
       return tail
   return REMINDERS[cursor % len(REMINDERS)]
 
@@ -3925,6 +3927,39 @@ def guard_task_runs(state_dir, task_id=None, action="change"):
 
 
 PUSH_GUARDED_TASK_TYPES = ("code", "docs")
+
+
+def unpushed_commit_count(repo_root):
+  """Return the count of local commits on HEAD not yet pushed to origin."""
+  if repo_root is None:
+    return 0
+  root = Path(repo_root)
+  if not (root / ".git").exists():
+    return 0
+  branch_proc = subprocess.run(
+    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+    cwd=root,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  branch = branch_proc.stdout.strip() if branch_proc.returncode == 0 else ""
+  if not branch or branch == "HEAD":
+    return 0
+  for target in (f"refs/remotes/origin/{branch}", "@{upstream}"):
+    count_proc = subprocess.run(
+      ["git", "rev-list", "--count", f"{target}..HEAD"],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    if count_proc.returncode == 0:
+      try:
+        return max(0, int(count_proc.stdout.strip()))
+      except ValueError:
+        return 0
+  return 0
 
 
 def guard_task_push(repo_root, task_id, task_type):
@@ -8418,10 +8453,18 @@ class Store:
         head = [f"calls {polls}"]
     else:
       head = []
-    tail = reminder_tail(cursor, remaining, len(stale)) if routine else ""
+    unpushed = unpushed_commit_count(self.repository_root()) if routine else 0
+    tail = reminder_tail(cursor, remaining, len(stale), unpushed) if routine else ""
     parts = [" ".join([*head, *unacked]).strip()]
     if order_notice:
       parts.append(TASK_ORDER_NOTICE)
+    unpushed_notice = (
+      f"{unpushed} commit/s unpushed. ALWAYS push. NEVER delay for batch."
+      if unpushed
+      else ""
+    )
+    if unpushed_notice and unpushed_notice != tail:
+      parts.append(unpushed_notice)
     parts.append(tail)
     return " | ".join(parts).strip(" |")
 
@@ -11509,6 +11552,9 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
         root=root,
       )
   # case: task-reminder
+  if "commit-remind" not in finished and "git commit" in command:
+    mark("commit-remind")
+    report("ALWAYS push. NEVER delay for batch.")
   if "remind" not in finished and any(
     word in command for word in ("git commit", "git push", "gh pr checks")
   ):

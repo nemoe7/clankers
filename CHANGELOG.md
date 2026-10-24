@@ -44,6 +44,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Remove the 300-character limit on the cited reason in the flag-violation modal (`assets/app.js` and `scripts/preview.py`) and enable vertical scrolling in `#modal textarea` (`assets/style.css`).
 - Remove outer `.log-card` and tab `.card` backgrounds, borders, and inline padding while keeping `.message` and `#compose` cards. Unify tab container widths at `900px` (`assets/style.css`).
 - Middle-truncate staged attachment filename stems by splitting the stem in half while keeping directory prefixes, file extensions, and file sizes visible (`assets/app.js` and `assets/style.css`).
+- Detect local-only unpushed commits (`unpushed_commit_count`) in `scripts/preview.py` and remind to push without delaying for a batch on `git commit` and in rotating reminders.
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
 - Require descriptive `arena-preview run start <name>` gate IDs naming what the gate runs (`-2`, `-3`, ... on retries) in `ARENA.md` and `SKILL.md`.

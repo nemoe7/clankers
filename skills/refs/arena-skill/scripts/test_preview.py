@@ -7256,6 +7256,30 @@ def test_write_task_guards_finished_code_and_docs_until_clean_and_pushed():
       check=True,
       capture_output=True,
     )
+    assert preview.unpushed_commit_count(repo) == 1
+    assert (
+      "1 commit/s unpushed. ALWAYS push. NEVER delay for batch." in store.reminder()
+    )  # nonemo: NMT100
+    pre_commit = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "pre",
+        "--line",
+        "git commit -m 'feat: local'",
+        "--command",
+        "git commit -m 'feat: local'",
+        "--repo",
+        str(repo),
+      ],
+      cwd=repo,
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(repo / "arena-state")},
+    )
+    assert pre_commit.returncode == 0
+    assert "ALWAYS push. NEVER delay for batch." in pre_commit.stderr  # nonemo: NMT100
     for guarded_id in ("code-task", "docs-task"):
       with pytest.raises(ValueError, match="FINISH BLOCKED"):
         store.write_task(guarded_id, status="finished")
@@ -7263,6 +7287,8 @@ def test_write_task_guards_finished_code_and_docs_until_clean_and_pushed():
     subprocess.run(
       ["git", "push", "origin", "main"], cwd=repo, check=True, capture_output=True
     )
+    assert preview.unpushed_commit_count(repo) == 0
+    assert "commit/s unpushed" not in store.reminder()
     assert store.write_task("code-task", status="finished")["status"] == "finished"
     assert store.write_task("docs-task", status="finished")["status"] == "finished"
 
