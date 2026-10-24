@@ -252,6 +252,29 @@ const CODE_LANG_NAMES = {
   txt: 'Text', typescript: 'TypeScript', xml: 'XML', yaml: 'YAML', yml: 'YAML',
   zsh: 'Zsh',
 };
+const PRISM_LANG_ALIASES = { cjs: 'javascript', mjs: 'javascript', zsh: 'bash' };
+function decodeCodeHtml(html) {
+  return html
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#x27;', "'")
+    .replaceAll('&#39;', "'")
+    .replaceAll('&#10;', '\n')
+    .replaceAll('&amp;', '&');
+}
+function highlightCodeInner(inner) {
+  if (typeof Prism === 'undefined' || !Prism?.languages || inner.includes('class="token ')) return inner;
+  const match = /^(<code\s+class="language-([^\s"]+)"[^>]*>)([\s\S]*?)(<\/code>\s*)$/i.exec(inner.trim());
+  if (!match) return inner;
+  const [, openTag, rawLang, body, closeTag] = match;
+  const langKey = PRISM_LANG_ALIASES[rawLang.toLowerCase()] || rawLang.toLowerCase();
+  if (langKey === 'mermaid') return inner;
+  const grammar = Prism.languages[langKey];
+  if (!grammar || typeof grammar !== 'object' || !Object.keys(grammar).length) return inner;
+  const highlighted = Prism.highlight(decodeCodeHtml(body), grammar, langKey).replaceAll('-->', '--&gt;');
+  return `${openTag}${highlighted}${closeTag}`;
+}
 function formatCodeLanguage(inner) {
   const match = /^<code\s+class="language-([^\s"]+)"/i.exec(inner.trim());
   if (!match) return 'Code';
@@ -259,11 +282,11 @@ function formatCodeLanguage(inner) {
   return CODE_LANG_NAMES[raw] || (raw.charAt(0).toUpperCase() + raw.slice(1));
 }
 function ensureCodeBlockHeaders(html) {
-  if (typeof html !== 'string' || !html.includes('class="code-block"') || html.includes('class="code-block-header"')) return html;
+  if (typeof html !== 'string' || !html.includes('class="code-block"')) return html;
   const attribute = value => messageMarkdown.utils.escapeHtml(value).replaceAll("'", '&#x27;');
-  return html.replace(/<div class="code-block">((?:\s*<button\b[\s\S]*?<\/button>)*)\s*<pre>([\s\S]*?)<\/pre>\s*<\/div>/g, (_, buttons, inner) => {
-    const header = `<div class="code-block-header"><span class="code-block-lang">${icon('braces', 14).outerHTML}<span>${attribute(formatCodeLanguage(inner))}</span></span></div>`;
-    return `<div class="code-block">${buttons}${header}<pre>${inner}</pre></div>`;
+  return html.replace(/<div class="code-block">((?:\s*<button\b[\s\S]*?<\/button>)*)(\s*<div class="code-block-header">[\s\S]*?<\/div>)?\s*<pre>([\s\S]*?)<\/pre>\s*<\/div>/g, (_, buttons, existingHeader, inner) => {
+    const header = existingHeader || `<div class="code-block-header"><span class="code-block-lang">${icon('braces', 14).outerHTML}<span>${attribute(formatCodeLanguage(inner))}</span></span></div>`;
+    return `<div class="code-block">${buttons}${header}<pre>${highlightCodeInner(inner)}</pre></div>`;
   });
 }
 function renderMessageMarkdown(source) {
@@ -281,13 +304,13 @@ function renderMessageMarkdown(source) {
   return rendered.replace(/<pre>([\s\S]*?)<\/pre>/g, (_, inner) => {
     const template = document.createElement('template');
     template.innerHTML = inner;
-    const code = template.content.textContent;
+    const code = template.content.textContent || decodeCodeHtml(inner.replace(/^<code[^>]*>|<\/code>\s*$/gi, ''));
     const payload = attribute(code).replaceAll('\n', '&#10;');
     const mdButton = /^<code\s+class="language-(?:markdown|md)"\s*>/i.test(inner.trim())
       ? `<button type="button" class="preview-code-md" aria-label="Preview Markdown" title="Preview Markdown" aria-pressed="false" data-code="${payload}">${icon('markdown', 14).outerHTML}</button>`
       : '';
     const button = `<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" data-code="${payload}">${icon('copy', 14).outerHTML}</button>`;
     const header = `<div class="code-block-header"><span class="code-block-lang">${icon('braces', 14).outerHTML}<span>${attribute(formatCodeLanguage(inner))}</span></span></div>`;
-    return `<div class="code-block">${mdButton}${button}${header}<pre>${inner}</pre></div>`;
+    return `<div class="code-block">${mdButton}${button}${header}<pre>${highlightCodeInner(inner)}</pre></div>`;
   });
 }

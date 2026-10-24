@@ -5359,6 +5359,14 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
     /class="code-block-header"><span class="code-block-lang"><svg><\/svg><span>Python<\/span><\/span><\/div>/
   );
   assert.match(
+    context.renderMessageMarkdown('```python\ndef hello():\n  pass\n```'),
+    /<span class="token keyword">def<\/span> <span class="token function">hello<\/span>/
+  );
+  assert.match(
+    context.ensureCodeBlockHeaders('<div class="code-block"><pre><code class="language-js">const x = 1;</code></pre></div>'),
+    /<span class="token keyword">const<\/span> x <span class="token operator">=<\/span> <span class="token number">1<\/span>/
+  );
+  assert.match(
     context.renderMessageMarkdown('```\nplain\n```'),
     /class="code-block-header"><span class="code-block-lang"><svg><\/svg><span>Code<\/span><\/span><\/div>/
   );

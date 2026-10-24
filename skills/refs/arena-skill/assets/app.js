@@ -924,7 +924,8 @@ function referenceTypes(state) {
   return references;
 }
 function linkReferences(html, references) {
-  return html.replace(/<code>([^<]+)<\/code>/g, (code, id) => {
+  const upgraded = typeof ensureCodeBlockHeaders === 'function' ? ensureCodeBlockHeaders(html) : html;
+  return upgraded.replace(/<code>([^<]+)<\/code>/g, (code, id) => {
     const type = references.get(id);
     if (!type) return code;
     const panel = ACK_REFERENCE_PANELS[type];
