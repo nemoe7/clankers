@@ -58,6 +58,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Wrap long Mermaid flowchart node labels into `<tspan>` lines and size boxes and diamonds to fit wrapped text. Offset parallel edges and edge labels so they do not overlap.
 - Include seconds by default in `assets/app.js` relative timestamps (`time()`) and switch to abbreviated units (`5s ago`, `5min ago`) on mobile viewports (`<= 40em` width or `<= 30em` height).
 - Pass `state.repo` from `assets/app.js` in `clankers:preview-ready` and use it for the steering preview in `userscripts/arena.user.js`. Invalidate replaced URLs and deduplicate entries by non-empty `name` in `arena-preview-proxy`.
+- Center `.notes-layout > .composer-footer` horizontally under the composer in `assets/style.css`.
 
 #### rules and system-prompts
 

@@ -5221,6 +5221,8 @@ test('the composer keeps Send inside and status lines outside its panel', () => 
   for (const identity of ['agent-key', 'send-status']) {
     assert.equal(locations.get(identity), false, `${identity} remains outside the panel`);
   }
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  assert.match(css, /\.notes-layout\s*>\s*\.composer-footer\s*\{[^}]*align-items:\s*center;[^}]*text-align:\s*center;/);
 });
 
 test('a wide table scrolls sideways on its own and keeps its words whole', () => {
