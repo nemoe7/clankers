@@ -3,7 +3,7 @@ name: nemoizer
 description: >
   Replace AI-flavored synonyms with the plain word, using one rotation table and
   a bundled linter that reads every text file, comments and prose included.
-compatibility: Python 3.10+, with Node.js and Acorn for JavaScript checks.
+compatibility: Python 3.11+, with Node.js and Acorn for JavaScript checks.
 ---
 
 # Nemoizer
@@ -25,7 +25,7 @@ python skills/nemoizer/scripts/nemoizer collect .
 ```
 
 Print each finding as `path:line: [ID] (advisory-free|advisory) description` with its indented source line and `Summary` footer; exit 1 only for mandatory findings, and mark advisory findings for manual review by agent or user. Vendored and generated
-trees are skipped, and `--ignore` adds a directory or file.
+trees are skipped, and `--ignore` or repo-root `nemoizer.toml` / `[tool.nemoizer]` in `pyproject.toml` configures exclusions, rule selection, and caps.
 
 `--format` rewrites the tree and prints each changed line as it was and as it
 becomes:

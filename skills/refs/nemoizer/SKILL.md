@@ -6,7 +6,7 @@ description: >
   prose included. Use when naming a variable, field, parameter, key, or prose
   term, when a draft sounds machine-written, or when asked to run or extend the
   rotation table.
-compatibility: Python 3.10+, with Node.js and Acorn for JavaScript checks.
+compatibility: Python 3.11+, with Node.js and Acorn for JavaScript checks.
 ---
 
 # Nemoizer
@@ -36,8 +36,7 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 
 - Every text file is read, including comments and Markdown prose.
 - Print each finding as `path:line: [ID] (advisory-free|advisory) description` with its indented source line and a `Summary` footer, exit 1 only for mandatory findings, and mark advisory findings for manual review by the agent or user.
-- Vendored and generated trees are skipped, and `--ignore` adds a directory or
-  file.
+- Vendored and generated trees are skipped, and `--ignore` or repo-root `nemoizer.toml` / `[tool.nemoizer]` in `pyproject.toml` configures exclusions, rule selection, and caps.
 
 - Run word rotations and serial-comma checks (`NMO`), semicolon, sentence-length, nominalization, and manual-review style checks (`STE`), human-prose checks (`HMN`), paragraph-length checks (`NMP`), and test-assertion reviews (`NMT`) by default.
 - Use 20 words per sentence for unclassified prose and 25 for an explicit description scope.

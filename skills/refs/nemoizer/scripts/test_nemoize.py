@@ -1114,3 +1114,46 @@ def test_adopted_ste_rules_pull_request_and_license_exemption(tmp_path):
   dense_res = run(str(dense), cwd=tmp_path)
   assert dense_res.returncode == 0
   assert "NMO902" in dense_res.stdout
+
+
+def test_nemoizer_toml_and_pyproject_config_discovery(tmp_path):
+  vendor = tmp_path / "vendor"
+  vendor.mkdir()
+  (vendor / "skipped.md").write_text("Transmit this kind.\n", encoding="utf-8")
+  note = tmp_path / "note.md"
+  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  note.write_text(f"{sentence}\nStart; stop.\n", encoding="utf-8")
+  code = tmp_path / "app.py"
+  code.write_text("# One.\n# Two.\n# Three.\nx = 1\n", encoding="utf-8")
+  (tmp_path / "nemoizer.toml").write_text(
+    'extend-exclude = ["vendor"]\n'
+    'context = "description"\n'
+    "paragraph-cap = 4\n"
+    "comment-block-cap = 3\n"
+    "\n"
+    "[lint]\n"
+    'select = ["ALL"]\n'
+    'ignore = ["STE9"]\n'
+    "\n"
+    "[lint.per-file-ignores]\n"
+    '"note.md" = ["STE100"]\n',
+    encoding="utf-8",
+  )
+  res = run(cwd=tmp_path)
+  assert res.returncode == 0, res.stdout + res.stderr
+  no_cfg = run("--no-config", cwd=tmp_path)
+  assert no_cfg.returncode == 1
+  assert "STE200" in no_cfg.stdout and "STE100" in no_cfg.stdout
+  (tmp_path / "nemoizer.toml").unlink()
+  (tmp_path / "pyproject.toml").write_text(
+    "[tool.nemoizer]\n"
+    'extend-exclude = ["vendor"]\n'
+    'context = "description"\n'
+    "comment-block-cap = 3\n"
+    "\n"
+    "[tool.nemoizer.lint.per-file-ignores]\n"
+    '"note.md" = ["STE100"]\n',
+    encoding="utf-8",
+  )
+  py_res = run(cwd=tmp_path)
+  assert py_res.returncode == 0, py_res.stdout + py_res.stderr
