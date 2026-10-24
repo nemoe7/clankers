@@ -1348,3 +1348,14 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
   assert (4, "STE100") in html_rows
   assert (5, "STE100") in html_rows
   assert not any(line in {2, 3} for line, _ in html_rows)
+
+  pyproject_toml = SCRIPT.parent.parent / "pyproject.toml"
+  assert pyproject_toml.is_file()
+  pyproject_data = nemoize.tomllib.loads(pyproject_toml.read_text(encoding="utf-8"))
+  assert pyproject_data["project"]["name"] == "nemoizer"
+  assert pyproject_data["project"]["scripts"]["nemoizer"] == "nemoize:main"
+  assert set(pyproject_data["tool"]["setuptools"]["py-modules"]) == {
+    "nemoize",
+    "prose",
+    "markers",
+  }

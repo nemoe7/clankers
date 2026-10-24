@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Rotate proper-name variations of `nemoizer` and `the nemoizer` to lowercase `nemoizer` (`NMO100`), and collapse repeated leading `"the"` articles in `NMO902` comma lists under `--format`.
 - Evaluate `NMO902`, `HMN904`, `HMN910`, `NMO003`, `STE300`, `STE400`–`STE401`, `STE901`–`STE910`, and multi-word `HMN*` rules across each prose block mapped to the starting line.
 - Exclude `AGENTS.md`, `**/AGENTS.md`, `ARENA.md`, and `**/ARENA.md` by default in `scripts/nemoize.py` and `references/nemoizer.toml`. Allow `exclude` in `nemoizer.toml` or `[tool.nemoizer]` to override all default excludes.
+- Add `pyproject.toml` with `[project.scripts] nemoizer = "nemoize:main"` so `nemoizer` installs as a bare CLI command alongside `nuu`.
 
 #### nuu
 
