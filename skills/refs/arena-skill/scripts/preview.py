@@ -11103,6 +11103,12 @@ def embed_report_images(markdown, report_dir):
     path = Path(source)
     if not path.is_absolute():
       path = report_dir / path
+    if path.name.lower().endswith("-wireframe.png") or source.lower().endswith(
+      "-wireframe.png"
+    ):
+      raise ValueError(
+        f"Wireframe image {source} (*-wireframe.png) is for agent inspection only and cannot be embedded in reports"
+      )
     try:
       mime, encoded = image_payload(path)
     except ValueError as error:
@@ -11466,11 +11472,40 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
     warning = egress_warning(command)
     if warning:
       report(warning)
+  # case: wireframe-commit
+  if "git add" in command and re.search(
+    r"(?:^|[\s'\"/])[^\s'\"]*-wireframe\.png(?:$|[\s'\"])", command, re.IGNORECASE
+  ):
+    report(
+      "WIREFRAME BLOCKED: never stage or commit wireframe captures (*-wireframe.png)."
+    )
+    return finish(130)
   # case: commit-id
   if "git commit" in command:
     warning = worktree_warning(state_dir, "commit", cwd=Path.cwd())
     if warning:
       report(warning)
+      return finish(130)
+    try:
+      staged_wf = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+        cwd=str(Path.cwd()),
+        capture_output=True,
+        text=True,
+        check=False,
+      )
+      wf_paths = [
+        line.strip()
+        for line in staged_wf.stdout.splitlines()
+        if line.strip().lower().endswith("-wireframe.png")
+      ]
+    except OSError:
+      wf_paths = []
+    if wf_paths:
+      report(
+        "WIREFRAME BLOCKED: never stage or commit wireframe captures (*-wireframe.png): "
+        + ", ".join(wf_paths)
+      )
       return finish(130)
     try:
       commit_store = Store(state_dir)

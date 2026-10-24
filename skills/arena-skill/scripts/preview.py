@@ -3559,6 +3559,7 @@ def embed_report_images(markdown,report_dir):
 		if source.startswith('//')or re.match('[a-zA-Z][a-zA-Z0-9+.-]*:',source):return f"Publication skips remote image {source}. Fetch it locally, then embed it with arena-preview image-data-uri."
 		path=Path(source)
 		if not path.is_absolute():path=report_dir/path
+		if path.name.lower().endswith('-wireframe.png')or source.lower().endswith('-wireframe.png'):raise ValueError(f"Wireframe image {source} (*-wireframe.png) is for agent inspection only and cannot be embedded in reports")
 		try:mime,encoded=image_payload(path)
 		except ValueError as error:return f"Publication skips local image {source}: {error}. Run arena-preview image-data-uri for the helper."
 		return f"![{alt}](data:{mime};base64,{encoded}{suffix})"
@@ -3688,9 +3689,13 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 	if any(word in command for word in('curl','wget','git clone','git fetch'))or'git ls-remote'in command:
 		warning=egress_warning(command)
 		if warning:report(warning)
+	if'git add'in command and re.search('(?:^|[\\s\'\\"/])[^\\s\'\\"]*-wireframe\\.png(?:$|[\\s\'\\"])',command,re.IGNORECASE):report('WIREFRAME BLOCKED: never stage or commit wireframe captures (*-wireframe.png).');return finish(130)
 	if'git commit'in command:
 		warning=worktree_warning(state_dir,'commit',cwd=Path.cwd())
 		if warning:report(warning);return finish(130)
+		try:staged_wf=subprocess.run(['git','diff','--cached','--name-only','--diff-filter=ACMR'],cwd=str(Path.cwd()),capture_output=True,text=True,check=False);wf_paths=[line.strip()for line in staged_wf.stdout.splitlines()if line.strip().lower().endswith('-wireframe.png')]
+		except OSError:wf_paths=[]
+		if wf_paths:report('WIREFRAME BLOCKED: never stage or commit wireframe captures (*-wireframe.png): '+', '.join(wf_paths));return finish(130)
 		try:commit_store=Store(state_dir)
 		except FileNotFoundError:commit_store=None
 		if commit_store is not None:

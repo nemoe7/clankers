@@ -26,6 +26,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Raise `MIN_INK_RATIO` (`NUM205`) to `0.75` and automatically exempt header and toolbar bars (`<header>`, `<nav>`, `<footer>`, toolbar roles, and single-row `space-between` control bars). Add Clause 16 mandating shared-track min/max range sliders and integer step snap points, and Clause 17 (`references/recipes/modal-manager.md`) mandating a shared `<dialog>` modal manager.
 - Update `references/audit-report.md` and `SKILL.md` to lead with `Status`, `Counts`, and non-empty `Unrun Checks`, capture dark-themed breakpoints plus mobile, and show cropped, annotated `Before` and `After` columns in `Visual Judgments` and `Deviations`.
 - Add `nuu board` for multi-panel visual boards and render `nuu board` and `nuu annotate` text with the project CSS font via Chromium. Rename `scripts/uiux.py` and `scripts/test_uiux.py` to `scripts/nuu.py` and `scripts/test_nuu.py`.
+- Add `-W, --wireframe` to `nuu inspect`, `nuu audit`, and `nuu board` to generate high-contrast DOM component outline captures (`*-wireframe.png`), and block staging, committing, or embedding wireframe files in reports.
 
 ### Changed
 

@@ -738,6 +738,13 @@ module.exports = {
   assert code_clean == 0 and a11y_clean["status"] == "captured"
   assert not a11y_clean["findings"]
 
+  code_wf, wf_res = run_driver(
+    {**base_req, "command": "inspect", "wireframe": True}, mode="clean"
+  )
+  assert code_wf == 0 and wf_res["status"] == "captured"
+  assert wf_res["captures"][0]["wireframe_screenshot"].endswith("-wireframe.png")
+  assert Path(wf_res["captures"][0]["wireframe_screenshot"]).is_file()
+
   sheet = measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8"))
   assert sheet["font-mono"].startswith('"Monaspace Neon"')
   assert measure.MIN_INK_RATIO == 0.75
@@ -833,6 +840,7 @@ module.exports = {
       f"After={panel_b}@0,0,60,50",
       "-c",
       "1,Updated layout,green",
+      "-W",
       "-o",
       str(board_out),
     ],
@@ -847,6 +855,8 @@ module.exports = {
   assert board_res["panels"] == 2
   assert board_res["font_family"].startswith('"Demo Sans"')
   assert board_out.is_file()
+  assert board_res["wireframe_output"].endswith("board-out-wireframe.png")
+  assert Path(board_res["wireframe_output"]).is_file()
   bw, bh, _ = annotate.decode_png(board_out.read_bytes())
   assert bw > 80 and bh > 60
   assert nuu.DEVICE_BREAKPOINTS == uiux.DEVICE_BREAKPOINTS

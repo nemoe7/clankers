@@ -14400,3 +14400,16 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     / "install.sh"
   ).read_text(encoding="utf-8")
   assert "display_tz" in install_sh_text
+  wf_img = tmp_path / "1280-light-no-preference-wireframe.png"
+  wf_img.write_bytes(b"\x89PNG\r\n\x1a\n")
+  with pytest.raises(ValueError, match="Wireframe image"):
+    preview.embed_report_images(f"![wf]({wf_img})", tmp_path)
+  assert (
+    preview.pre_command(
+      tmp_path / "tz-state",
+      "git add 1280-light-no-preference-wireframe.png",
+      "git add 1280-light-no-preference-wireframe.png",
+      tmp_path,
+    )
+    == 130
+  )
