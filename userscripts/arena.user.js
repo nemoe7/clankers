@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.76
+// @name         Arena.ai | NemoUtils | v1.10.77
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.76
+// @version      1.10.77
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -151,6 +151,37 @@
   var menuEntries = [];
   var menuNextSeq = 0;
   var menuOpened = false;
+  var SHOW_SETTINGS_BUTTON_KEY = "clankers-arena-show-settings-button";
+  var showSettingsEntry = null;
+  var syncSettingsButtonHook = null;
+
+  function showSettingsButtonOn() {
+    if (typeof GM_getValue !== "function") return true;
+    return GM_getValue(SHOW_SETTINGS_BUTTON_KEY, true) !== false;
+  }
+
+  function showSettingsButtonLabel(on) {
+    return "Userscript - show settings button (" + (on ? "ON" : "OFF") + ")";
+  }
+
+  function setShowSettingsButton(next) {
+    GM_setValue(SHOW_SETTINGS_BUTTON_KEY, Boolean(next));
+    if (typeof syncSettingsButtonHook === "function") syncSettingsButtonHook();
+    menuRefresh();
+  }
+
+  function showSettingsMenu() {
+    if (showSettingsEntry !== null) return;
+    showSettingsEntry = menuAdd(
+      function () {
+        return showSettingsButtonLabel(showSettingsButtonOn());
+      },
+      function () {
+        setShowSettingsButton(!showSettingsButtonOn());
+      },
+      true,
+    );
+  }
 
   function menuRank(label) {
     var index = MENU_ORDER.indexOf(String(label).split(" - ")[0]);
@@ -159,6 +190,10 @@
 
   function menuRegister(entry) {
     if (typeof GM_registerMenuCommand !== "function") return;
+    if (showSettingsButtonOn() && !entry.master) {
+      entry.id = null;
+      return;
+    }
     entry.id = GM_registerMenuCommand(entry.label(), entry.press);
   }
 
@@ -179,8 +214,14 @@
     ordered.forEach(menuRegister);
   }
 
-  function menuAdd(label, press) {
-    var entry = { seq: menuNextSeq, label: label, press: press, id: null };
+  function menuAdd(label, press, master) {
+    var entry = {
+      seq: menuNextSeq,
+      label: label,
+      press: press,
+      id: null,
+      master: Boolean(master),
+    };
     menuNextSeq += 1;
     menuEntries.push(entry);
     menuRegister(entry);
@@ -320,6 +361,17 @@
   var featureRegistry = [];
   var restartStateWatchHook = null;
   var syncPreviewProxyHook = null;
+  var syncProxySettingsHook = null;
+  var postKeyNowHook = null;
+  var applyTrimKeepHook = null;
+  var registerTrimCapHook = null;
+  var restartTrimTimerHook = null;
+  var trimNowHook = null;
+  var chooseStateFileHook = null;
+  var forceSaveStateHook = null;
+  var setResetWindowHook = null;
+  var restartTitleTimerHook = null;
+  var syncSettingsModalVisibilityHook = null;
 
   function httpJitterMs() {
     if (typeof GM_getValue !== "function") return HTTP_JITTER_MS;
@@ -1195,7 +1247,7 @@
       );
     }
 
-    menuItem(proxyMenus, "Proxy - post key now", function () {
+    function triggerPostKeyNow() {
       postedPreviews = {};
       postRecentPreviews(document, true);
       var pair = settings();
@@ -1208,8 +1260,20 @@
           fetchAgentKey();
         },
       );
-    });
+    }
 
+    menuItem(proxyMenus, "Proxy - post key now", triggerPostKeyNow);
+
+    syncProxySettingsHook = function () {
+      keyTried = false;
+      keyFetch = null;
+      lastSlug = null;
+      postedPreviews = {};
+      ensureAgentKey();
+      postRecentPreviews(document, true);
+      sync();
+    };
+    postKeyNowHook = triggerPostKeyNow;
     syncPreviewProxyHook = function () {
       postedPreviews = {};
       postRecentPreviews(document, true);
@@ -1998,8 +2062,97 @@
         return box;
       }
 
+      var dependentNodes = [];
+      function addDependentSectionItem(sectionName, sortLabel, node, depKey) {
+        if (depKey) {
+          node.setAttribute("data-depends-on", depKey);
+          dependentNodes.push({ node: node, key: depKey, display: node.style.display || "flex" });
+        }
+        addSectionItem(sectionName, sortLabel, node);
+      }
+
+      function featureStoredOn(key) {
+        for (var f = 0; f < featureRegistry.length; f += 1) {
+          if (featureRegistry[f].key === key) return featureRegistry[f].storedOn();
+        }
+        return true;
+      }
+
+      function syncDependentVisibility() {
+        for (var d = 0; d < dependentNodes.length; d += 1) {
+          var item = dependentNodes[d];
+          var on = featureStoredOn(item.key);
+          item.node.hidden = !on;
+          item.node.style.display = on ? item.display : "none";
+        }
+      }
+      syncSettingsModalVisibilityHook = syncDependentVisibility;
+
+      function buildTextRow(labelText, key, placeholder, onSaved, inputType) {
+        var row = document.createElement("label");
+        row.style.cssText =
+          "display:flex;align-items:center;justify-content:space-between;gap:8px";
+        var span = document.createElement("span");
+        span.textContent = labelText;
+        var input = document.createElement("input");
+        input.type = inputType || "text";
+        input.value = String(GM_getValue(key, "") || "");
+        if (placeholder) input.placeholder = placeholder;
+        input.setAttribute("data-setting-key", key);
+        input.style.cssText =
+          "width:160px;padding:3px 6px;border-radius:5px;border:1px solid #56504a;" +
+          "background:#2c2b28;color:#f0ede8;font:inherit";
+        input.addEventListener("change", function () {
+          GM_setValue(key, String(input.value || "").trim());
+          menuRefresh();
+          if (typeof onSaved === "function") onSaved();
+        });
+        row.appendChild(span);
+        row.appendChild(input);
+        return row;
+      }
+
+      function buildCheckboxRow(labelText, key, checkedVal, onSaved) {
+        var row = document.createElement("label");
+        row.style.cssText =
+          "display:flex;align-items:center;justify-content:space-between;gap:8px";
+        var span = document.createElement("span");
+        span.textContent = labelText;
+        var checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = Boolean(checkedVal);
+        checkbox.setAttribute("data-setting-key", key);
+        checkbox.addEventListener("change", function () {
+          if (typeof onSaved === "function") onSaved(Boolean(checkbox.checked));
+        });
+        row.appendChild(span);
+        row.appendChild(checkbox);
+        return row;
+      }
+
+      function buildActionRow(labelText, buttonLabel, actionId, onPress) {
+        var row = document.createElement("div");
+        row.style.cssText =
+          "display:flex;align-items:center;justify-content:space-between;gap:8px";
+        var span = document.createElement("span");
+        span.textContent = labelText;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = buttonLabel;
+        btn.setAttribute("data-settings-action", actionId);
+        btn.style.cssText =
+          "cursor:pointer;padding:3px 8px;border-radius:5px;border:1px solid #56504a;" +
+          "background:#2c2b28;color:#f0ede8;font:inherit";
+        btn.addEventListener("click", function () {
+          if (typeof onPress === "function") onPress();
+        });
+        row.appendChild(span);
+        row.appendChild(btn);
+        return row;
+      }
+
       var wakeRange = wakeDelayRangeMs();
-      addSectionItem(
+      addDependentSectionItem(
         "Composer",
         "Wake-up delay (s)",
         buildDualRangeRow(
@@ -2012,9 +2165,10 @@
           60,
           1000,
         ),
+        "auto-wake",
       );
       var keepRange = keepWorkingDelayRangeMs();
-      addSectionItem(
+      addDependentSectionItem(
         "Composer",
         "Keep working delay (s)",
         buildDualRangeRow(
@@ -2027,8 +2181,9 @@
           60,
           1000,
         ),
+        "keep-working",
       );
-      addSectionItem(
+      addDependentSectionItem(
         "State",
         "State autosave poll (s)",
         buildNumberRow(
@@ -2042,8 +2197,9 @@
             if (typeof restartStateWatchHook === "function") restartStateWatchHook();
           },
         ),
+        "state-download",
       );
-      addSectionItem(
+      addDependentSectionItem(
         "State",
         "State toast duration (s)",
         buildNumberRow(
@@ -2054,8 +2210,43 @@
           60,
           1000,
         ),
+        "state-download",
       );
-      addSectionItem(
+      addDependentSectionItem(
+        "State",
+        "reset-window overwrite",
+        buildCheckboxRow(
+          "reset-window overwrite",
+          "clankers-arena-state-reset-window",
+          GM_getValue("clankers-arena-state-reset-window", true) !== false,
+          function (next) {
+            if (typeof setResetWindowHook === "function") {
+              setResetWindowHook(next);
+            } else {
+              GM_setValue("clankers-arena-state-reset-window", next);
+              menuRefresh();
+            }
+          },
+        ),
+        "state-download",
+      );
+      addDependentSectionItem(
+        "State",
+        "Choose state file",
+        buildActionRow("State file", "Choose file", "choose-state-file", function () {
+          if (typeof chooseStateFileHook === "function") chooseStateFileHook();
+        }),
+        "state-download",
+      );
+      addDependentSectionItem(
+        "State",
+        "Force save state",
+        buildActionRow("Force save", "Force save", "force-save", function () {
+          if (typeof forceSaveStateHook === "function") forceSaveStateHook();
+        }),
+        "state-download",
+      );
+      addDependentSectionItem(
         "Proxy",
         "HTTP jitter range (s)",
         buildNumberRow(
@@ -2066,29 +2257,204 @@
           60,
           1000,
         ),
+        "prompt-fill",
       );
+      addDependentSectionItem(
+        "Proxy",
+        "Proxy host",
+        buildTextRow(
+          "Proxy host",
+          "clankers-arena-proxy-host",
+          "https://arena-proxy.<tailnet>.ts.net",
+          function () {
+            if (typeof syncProxySettingsHook === "function") syncProxySettingsHook();
+          },
+        ),
+        "prompt-fill",
+      );
+      addDependentSectionItem(
+        "Proxy",
+        "Preview proxy host",
+        buildTextRow(
+          "Preview proxy host",
+          "clankers-arena-preview-proxy-host",
+          "https://arena-preview.<tailnet>.ts.net",
+          function () {
+            if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
+          },
+        ),
+        "prompt-fill",
+      );
+      addDependentSectionItem(
+        "Proxy",
+        "Master key",
+        buildTextRow(
+          "Master key",
+          "clankers-arena-proxy-master",
+          "Master key",
+          function () {
+            if (typeof syncProxySettingsHook === "function") syncProxySettingsHook();
+          },
+          "password",
+        ),
+        "prompt-fill",
+      );
+      addDependentSectionItem(
+        "Proxy",
+        "Post key now",
+        buildActionRow("Post key", "Post key now", "post-key-now", function () {
+          if (typeof postKeyNowHook === "function") postKeyNowHook();
+        }),
+        "prompt-fill",
+      );
+
+      var curKeepRows = Number(String(GM_getValue("clankers-arena-trim-keep", "50")).trim());
+      if (!isFinite(curKeepRows) || curKeepRows < 20) curKeepRows = 50;
       (function () {
         var row = document.createElement("label");
         row.style.cssText =
           "display:flex;align-items:center;justify-content:space-between;gap:8px";
         var span = document.createElement("span");
-        span.textContent = "Preview proxy host";
+        span.textContent = "Keep rows";
         var input = document.createElement("input");
-        input.type = "text";
-        input.value = String(GM_getValue("clankers-arena-preview-proxy-host", "") || "");
-        input.placeholder = "https://arena-preview.<tailnet>.ts.net";
-        input.setAttribute("data-setting-key", "clankers-arena-preview-proxy-host");
+        input.type = "number";
+        input.value = String(Math.round(curKeepRows));
+        input.setAttribute("data-setting-key", "clankers-arena-trim-keep");
         input.style.cssText =
-          "width:160px;padding:3px 6px;border-radius:5px;border:1px solid #56504a;" +
+          "width:72px;padding:3px 6px;border-radius:5px;border:1px solid #56504a;" +
           "background:#2c2b28;color:#f0ede8;font:inherit";
         input.addEventListener("change", function () {
-          GM_setValue("clankers-arena-preview-proxy-host", String(input.value || "").trim());
-          if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
+          var raw = Number(String(input.value).trim());
+          if (!isFinite(raw) || raw < 20) return;
+          var clamped = Math.min(Math.round(raw), 1000);
+          input.value = String(clamped);
+          GM_setValue("clankers-arena-trim-keep", String(clamped));
+          if (typeof applyTrimKeepHook === "function") applyTrimKeepHook();
+          menuRefresh();
         });
         row.appendChild(span);
         row.appendChild(input);
-        addSectionItem("Proxy", "Preview proxy host", row);
+        addSectionItem("Transcript", "Keep rows", row);
       })();
+
+      var curTrimCap = Number(GM_getValue("clankers-arena-trim-cap", 200));
+      if (!isFinite(curTrimCap) || curTrimCap < 1) curTrimCap = 200;
+      addSectionItem(
+        "Transcript",
+        "Trim cap (rows)",
+        buildNumberRow(
+          "Trim cap (rows)",
+          "clankers-arena-trim-cap",
+          Math.round(curTrimCap),
+          1,
+          1000,
+          1,
+          function () {
+            if (typeof registerTrimCapHook === "function") registerTrimCapHook();
+          },
+        ),
+      );
+      var curTrimSec = Math.round(
+        Math.min(Math.max(Number(GM_getValue("clankers-arena-trim-interval-ms", 5000)) || 5000, 1000), 60000) /
+          1000,
+      );
+      addDependentSectionItem(
+        "Transcript",
+        "Auto trim interval (s)",
+        buildNumberRow(
+          "Auto trim interval (s)",
+          "clankers-arena-trim-interval-ms",
+          curTrimSec,
+          1,
+          60,
+          1000,
+          function () {
+            if (typeof restartTrimTimerHook === "function") restartTrimTimerHook();
+          },
+        ),
+        "transcript-trim",
+      );
+      addSectionItem(
+        "Transcript",
+        "Trim now",
+        buildActionRow("Trim transcript", "Trim now", "trim-now", function () {
+          if (typeof trimNowHook === "function") trimNowHook();
+        }),
+      );
+
+      var curTitleSec = Math.round(
+        Math.min(Math.max(Number(GM_getValue("clankers-arena-title-interval-ms", 1000)) || 1000, 1000), 60000) /
+          1000,
+      );
+      addDependentSectionItem(
+        "Page",
+        "Tab title interval (s)",
+        buildNumberRow(
+          "Tab title interval (s)",
+          "clankers-arena-title-interval-ms",
+          curTitleSec,
+          1,
+          60,
+          1000,
+          function () {
+            if (typeof restartTitleTimerHook === "function") restartTitleTimerHook();
+          },
+        ),
+        "tab-title",
+      );
+
+      (function () {
+        var row = document.createElement("label");
+        row.style.cssText =
+          "display:flex;align-items:center;justify-content:space-between;gap:8px";
+        var span = document.createElement("span");
+        span.textContent = "Log level";
+        var sel = document.createElement("select");
+        sel.setAttribute("data-setting-key", LOG_LEVEL_KEY);
+        sel.style.cssText =
+          "padding:3px 6px;border-radius:5px;border:1px solid #56504a;" +
+          "background:#2c2b28;color:#f0ede8;font:inherit";
+        for (var l = 0; l < LOG_LEVELS.length; l += 1) {
+          var opt = document.createElement("option");
+          opt.value = LOG_LEVELS[l];
+          opt.setAttribute("value", LOG_LEVELS[l]);
+          opt.textContent = LOG_LEVELS[l].toUpperCase();
+          if (LOG_LEVELS[l] === getLogLevel()) {
+            opt.selected = true;
+            opt.setAttribute("selected", "selected");
+          }
+          sel.appendChild(opt);
+        }
+        sel.value = getLogLevel();
+        sel.addEventListener("change", function () {
+          if (setLogLevel(String(sel.value))) {
+            logEvent("logging", "level", { level: String(sel.value) });
+            menuRefresh();
+          }
+        });
+        row.appendChild(span);
+        row.appendChild(sel);
+        addSectionItem("Userscript", "Log level", row);
+      })();
+      addSectionItem(
+        "Userscript",
+        "Pause all",
+        buildCheckboxRow("Pause all", PAUSE_KEY, pauseStored(), function (next) {
+          setPause(next);
+        }),
+      );
+      addSectionItem(
+        "Userscript",
+        "Show settings button",
+        buildCheckboxRow(
+          "Show settings button",
+          SHOW_SETTINGS_BUTTON_KEY,
+          showSettingsButtonOn(),
+          function (next) {
+            setShowSettingsButton(next);
+          },
+        ),
+      );
 
       var i;
       for (i = 0; i < featureRegistry.length; i += 1) {
@@ -2106,12 +2472,14 @@
           checkbox.setAttribute("data-setting-key", item.key);
           checkbox.addEventListener("change", function () {
             item.set(Boolean(checkbox.checked));
+            syncDependentVisibility();
           });
           row.appendChild(span);
           row.appendChild(checkbox);
           addSectionItem(secName, shortLabel, row);
         })(featureRegistry[i]);
       }
+      syncDependentVisibility();
 
       var sectionNames = Object.keys(sectionMap).sort(function (a, b) {
         return a.localeCompare(b);
@@ -2177,6 +2545,19 @@
       if (!row) return;
       var settingsBtn = row.querySelector("[" + SETTINGS_TOGGLE_MARK + "]");
       var autoBtn = row.querySelector("[" + AUTO_TOGGLE_MARK + "]");
+      if (!showSettingsButtonOn()) {
+        if (settingsBtn) {
+          if (typeof settingsBtn.remove === "function") settingsBtn.remove();
+          else if (settingsBtn.parentNode) settingsBtn.parentNode.removeChild(settingsBtn);
+        }
+        settingsToggleButton = null;
+        closeSettingsModal();
+        if (!autoBtn) {
+          autoBtn = createButton();
+          row.insertBefore(autoBtn, actionButton);
+        }
+        return;
+      }
       if (!settingsBtn) {
         settingsBtn = createSettingsButton();
         row.insertBefore(settingsBtn, actionButton);
@@ -2186,6 +2567,7 @@
         row.insertBefore(autoBtn, settingsBtn);
       }
     }
+    syncSettingsButtonHook = ensureButton;
 
     var observer = new MutationObserver(ensureButton);
 
@@ -2552,12 +2934,17 @@
 
     runFeature("transcript-trim", "Transcript - auto trim", function () {
       registerInterval();
+      restartTrimTimerHook = function () {
+        restartTick();
+        registerInterval();
+      };
       observer = new MutationObserver(function () {
         settleState.mutationAt = Date.now();
       });
       observer.observe(document.documentElement, { childList: true, subtree: true });
       timer = setInterval(tick, tickMs());
       return function () {
+        restartTrimTimerHook = null;
         if (timer !== null) clearInterval(timer);
         timer = null;
         observer.disconnect();
@@ -2570,6 +2957,12 @@
     }, null, false);
     registerCount();
     registerCap();
+    applyTrimKeepHook = function () {
+      registerCount();
+      trim();
+    };
+    registerTrimCapHook = registerCap;
+    trimNowHook = trim;
     nowEntry = menuAdd(function () {
       return "Transcript - trim now";
     }, function () {
@@ -4281,6 +4674,18 @@
     }
 
     var menus = [];
+    chooseStateFileHook = chooseStateFile;
+    forceSaveStateHook = function () {
+      fetchStateFile(true, true);
+    };
+    setResetWindowHook = function (next) {
+      GM_setValue(RESET_WINDOW_KEY, Boolean(next));
+      logEvent("feature", "change", {
+        feature: "state-download",
+        enabled: resetWindowOn(),
+      });
+      menuRefresh();
+    };
     menuItem(menus, "State - choose the file", chooseStateFile);
     menuItem(menus, "State - force save", function () {
       fetchStateFile(true, true);
@@ -4294,12 +4699,7 @@
         },
         function () {
           logEvent("menu", "run");
-          GM_setValue(RESET_WINDOW_KEY, !resetWindowOn());
-          logEvent("feature", "change", {
-            feature: "state-download",
-            enabled: resetWindowOn(),
-          });
-          menuRefresh();
+          setResetWindowHook(!resetWindowOn());
         },
       ),
     );
@@ -4956,6 +5356,10 @@
 
     restartTitleTimer();
     registerTitleInterval();
+    restartTitleTimerHook = function () {
+      restartTitleTimer();
+      registerTitleInterval();
+    };
     function onRoute() {
       lastRepo = null;
       lastPath = null;
@@ -4963,6 +5367,7 @@
     }
     window.addEventListener("popstate", onRoute);
     return function () {
+      restartTitleTimerHook = null;
       clearInterval(titleTimer);
       if (titleEntry !== null) {
         menuDrop(titleEntry);
@@ -4976,9 +5381,15 @@
   });
 
   exposeChecks("pause", { PAUSE_KEY: PAUSE_KEY, pauseLabel: pauseLabel });
-  exposeChecks("menus", { menuRank: menuRank, MENU_ORDER: MENU_ORDER });
+  exposeChecks("menus", {
+    menuRank: menuRank,
+    MENU_ORDER: MENU_ORDER,
+    SHOW_SETTINGS_BUTTON_KEY: SHOW_SETTINGS_BUTTON_KEY,
+    showSettingsButtonLabel: showSettingsButtonLabel,
+  });
   exposeChecks("timers", { jitteredTimer: jitteredTimer, HTTP_JITTER_MS: HTTP_JITTER_MS });
   showPauseMenu();
+  showSettingsMenu();
   menuOpen();
 
 })();

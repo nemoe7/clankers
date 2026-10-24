@@ -36,6 +36,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Amend Clause 9 in `SKILL.md` to keep control dimensions invariant across states. Add rendered `NUA309` in `scripts/browser.cjs` and static `NUL005` in `scripts/nuu.py`.
 - Support `nuu.toml` in `nuu` (`annotate`, `board`, `doctor`, and browser wireframe captures) to configure default font stacks (`[fonts]`), embedded font files, and rendering defaults.
 - Preserve PNG alpha channels in `nuu` by passing `omitBackground: true` in `_chromium_render_png` and using straight-alpha `source-over` blending in `blend_pixel` and `blit_rgba`.
+- Add full settings and action buttons (`Choose file`, `Force save`, `Trim now`, and `Post key now`) to the `userscripts/arena.user.js` panel. Add a `Userscript - show settings button` master switch in Tampermonkey that hides the individual menu commands when enabled and reveals them when disabled.
 - Amend Clause 1 in `SKILL.md` to default control glyphs to Lucide first, then Simple Icons, then the vendored Phosphor catalog. Include non-blocking `icons` checks (`NUI001`–`NUI003`) in `nuu audit`.
 
 ### Changed
