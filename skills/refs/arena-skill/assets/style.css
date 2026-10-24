@@ -162,7 +162,7 @@ button, select, textarea, input[type="url"], input[type="search"] { font: inheri
 button { padding: 7px 11px; min-height: 36px; cursor: pointer; }
 button:hover:not(:disabled) { background: var(--hover); }
 button:disabled { opacity: .55; cursor: wait; }
-:focus-visible { outline: none; border-color: var(--focus); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--focus); }
 textarea { width: 100%; padding: 10px 12px; line-height: 1.6; resize: none; min-height: 72px; overflow: hidden; }
 textarea::placeholder { color: var(--muted); opacity: 0.5; }
 /* Every select draws the same chevron in CSS, so no markup adds a caret or a data image. */

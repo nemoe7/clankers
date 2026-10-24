@@ -1868,6 +1868,10 @@ def test_http_boundaries():
         r"\.topbar-row\{[^}]*max-width:900px;margin:0 auto;",
         page,
       )
+      assert (
+        ":focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--focus)"
+        in page
+      )
       assert "resize:none;min-height:72px;overflow:hidden" in page
       # The document does not scroll. Panels do. A short viewport lowers the log-card floor.
       # A small phone then keeps the column on screen with the composer closed.

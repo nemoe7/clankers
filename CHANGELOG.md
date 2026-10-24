@@ -20,7 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
-- Sync the browser IANA timezone (`X-Timezone`) to `display_tz` in `preview.py` and export `TZ` in `install.sh`. Read `/nuu audit` device widths from `nuu`, pass standard repo ignores to `/nemoizer collect`, show `"{order}. {task id}\n{timestamp}"` task tooltips, center `.topbar-row` at `max-width: 900px`, and cap `--app-height` composer height at `50%` under `@media (max-height: 30em)`.
+- Sync the browser IANA timezone (`X-Timezone`) to `display_tz` in `preview.py` and export `TZ` in `install.sh`. Read `/nuu audit` device widths from `nuu` and pass standard repo ignores to `/nemoizer collect`.
+- Show `"{order}. {task id}\n{timestamp}"` task tooltips, center `.topbar-row` at `max-width: 900px`, add a `2px` `:focus-visible` accent outline ring, and cap `--app-height` composer height at `50%`.
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
 

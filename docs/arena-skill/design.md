@@ -36,6 +36,8 @@ Survey roles define red, amber, and green for both themes. Confidence mixes thes
 
 The dialog retains its existing width and layout. The connection-dot button keeps the dot's layout size. Its centered, out-of-flow target remains at least 44 px, with a visible focus ring.
 
+Local deviations from the `nuu` house sheet keep compact density at 1280 and 360 px. They retain warm-neutral themes, 13 to 15 px text, 12 px card radii, and 18 to 24 px card padding. Controls use 30 to 36 px heights, 22.4 by 24 px drag handles, and 6 to 18 px gaps.
+
 ## Components and contracts
 
 `assets/app.js` extends the existing shared dialog with read-only content. `assets/index.html` retains the connection indicator inside a native button.
@@ -99,7 +101,7 @@ Accepted: retain the shared dialog and product themes. Add separate correctness 
 
 2026-10-23: add top-right `#modal-close` exit button, `{lucide book-bookmark} Bible Check` action button, `60em`/`40em` width and `30em` max-height media-query breakpoints, and `/nuu` and `/nemoizer` composer slash commands (`#slash-menu` autocomplete and `#modal[data-wide="true"]` query view).
 
-2026-10-24: center `.topbar-row` at `max-width: 900px` (`margin: 0 auto`) so the desktop topbar aligns with the `900` px `.notes-layout` and `.downloads-layout` columns (`UIX206`).
+2026-10-24: center `.topbar-row` at `max-width: 900px` (`margin: 0 auto`) so the desktop topbar aligns with the `900` px `.notes-layout` and `.downloads-layout` columns (`UIX206`). Add a `2px` `:focus-visible` accent outline ring (`outline-offset: 2px`) and record compact house-scale deviations.
 
 ## Message composer
 
