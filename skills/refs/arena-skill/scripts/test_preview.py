@@ -1893,6 +1893,15 @@ def test_http_boundaries():
       # as dead space. The lines sit close now.
       assert ".log-card>.row:first-child{margin-block:0;row-gap:2px" in page
       assert ".log-card{flex:1 1 auto;min-height:0" in page
+      assert re.search(
+        r"#downloads-panel>\.card,#notes-panel \.log-card,#reports-panel>\.card,#tasks-panel>\.card\{"
+        r"background:(?:transparent|0 0);border:0;padding-inline:0",
+        page,
+      )
+      assert (
+        "#downloads-panel>.card,#reports-panel>.card,#tasks-panel>.card{"
+        "max-width:900px;width:100%;margin-inline:auto" in page
+      )
       assert "h1{letter-spacing:-.035em;margin:4px 0" in page
       assert "h2{margin:0 0 8px" in page
       assert re.search(r"\.report p[^{}]*\{margin:8px 0", page)
