@@ -504,25 +504,33 @@ def blit_rgba(
       if not (0 <= tx < dst_w):
         continue
       s_idx = (row * src_w + col) * 4
-      d_idx = (ty * dst_w + tx) * 4
-      dst[d_idx : d_idx + 4] = src[s_idx : s_idx + 4]
+      blend_pixel(dst, dst_w, dst_h, tx, ty, src[s_idx : s_idx + 4])
 
 
 def blend_pixel(rgba: bytearray, width: int, height: int, x: int, y: int, color):
   if not (0 <= x < width and 0 <= y < height):
     return
-  idx = (y * width + x) * 4
   sr, sg, sb, sa = color
+  if sa <= 0:
+    return
+  idx = (y * width + x) * 4
   if sa >= 255:
     rgba[idx : idx + 4] = bytes((sr, sg, sb, 255))
     return
   dr, dg, db, da = rgba[idx : idx + 4]
-  alpha = sa / 255.0
-  inv = 1.0 - alpha
-  rgba[idx] = int(sr * alpha + dr * inv)
-  rgba[idx + 1] = int(sg * alpha + dg * inv)
-  rgba[idx + 2] = int(sb * alpha + db * inv)
-  rgba[idx + 3] = min(255, int(sa + da * inv))
+  if da <= 0:
+    rgba[idx : idx + 4] = bytes((sr, sg, sb, sa))
+    return
+  sa_f = sa / 255.0
+  da_f = da / 255.0
+  out_a = sa_f + da_f * (1.0 - sa_f)
+  if out_a <= 0:
+    rgba[idx : idx + 4] = b"\x00\x00\x00\x00"
+    return
+  rgba[idx] = min(255, round((sr * sa_f + dr * da_f * (1.0 - sa_f)) / out_a))
+  rgba[idx + 1] = min(255, round((sg * sa_f + dg * da_f * (1.0 - sa_f)) / out_a))
+  rgba[idx + 2] = min(255, round((sb * sa_f + db * da_f * (1.0 - sa_f)) / out_a))
+  rgba[idx + 3] = min(255, round(out_a * 255.0))
 
 
 def fill_rect(rgba, width, height, x, y, w, h, color):
@@ -812,7 +820,7 @@ const payload = JSON.parse(fs.readFileSync(0, "utf8"));
         height: Math.max(vh, rect.height + 64)
       });
     }
-    await root.screenshot({ path: payload.output });
+    await root.screenshot({ path: payload.output, omitBackground: true });
   } finally {
     await browser.close();
   }
