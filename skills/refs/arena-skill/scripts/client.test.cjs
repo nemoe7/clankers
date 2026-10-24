@@ -3775,6 +3775,37 @@ test('preview client', async (t) => {
     } finally { await clear(); }
   });
 
+  await t.test('Staged chips middle-truncate the filename stem while keeping path prefix, extension, and size visible', async () => {
+    const holder = get('#staged-files');
+    const clear = async () => {
+      for (const chip of holder.children.slice()) await chip.children[1].events.click();
+    };
+    const savedWidth = holder.clientWidth;
+    try {
+      holder.clientWidth = 249;
+      selector.files = [{ name: 'abcdefg1234567.txt', size: 12, type: 'text/plain' }];
+      selector.events.change();
+      await tick();
+      assert.equal(holder.children[0].children[0].textContent, 'abcd...4567.txt · 12 B');
+      assert.equal(holder.children[0].children[0].title, 'abcdefg1234567.txt · 12 bytes');
+      holder.clientWidth = 264;
+      windowEvents.resize?.();
+      assert.equal(holder.children[0].children[0].textContent, 'abcde...34567.txt · 12 B');
+      holder.clientWidth = 500;
+      windowEvents.resize?.();
+      assert.equal(holder.children[0].children[0].textContent, 'abcdefg1234567.txt · 12 B');
+      await clear();
+      holder.clientWidth = 309;
+      selector.files = [{ name: 'dir/sub/abcdefg1234567.txt', size: 12, type: 'text/plain' }];
+      selector.events.change();
+      await tick();
+      assert.equal(holder.children[0].children[0].textContent, 'dir/sub/abcd...4567.txt · 12 B');
+    } finally {
+      holder.clientWidth = savedWidth;
+      await clear();
+    }
+  });
+
   await t.test("The queue records per-job opt-in and a browser worker claims one URL at a time", async () => {
     // The queue records per-job opt-in and a browser worker claims one URL at a time. Remote fetches
     // omit credentials and referrers. None of these mocks assert actual browser CORS behavior.

@@ -142,11 +142,11 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 #compose[data-expanded] .composer-shell { flex: 1; min-height: 0; grid-template-areas: "files files files files" "input input input input" "attach preview . send"; grid-template-rows: auto minmax(0, 1fr) auto; }
 #compose[data-expanded] :is(#note, #draft-preview, #note-backdrop) { height: 100%; max-height: none; overflow-y: auto; }
 #staged-files { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; max-width: 100%; }
-.staged-chip { display: inline-flex; align-items: center; gap: 8px; height: 40px; min-width: 0; padding: 4px 6px 4px 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--bubble); }
+.staged-chip { display: inline-flex; align-items: center; gap: 8px; height: 40px; min-width: 0; max-width: 100%; padding: 4px 6px 4px 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--bubble); }
 .staged-chip-lead { order: -1; flex: none; width: 32px; height: 32px; border-radius: 4px; }
 .staged-chip-thumb { display: block; object-fit: cover; background: var(--code-bg); }
 .staged-chip-file { display: inline-flex; align-items: center; justify-content: center; background: var(--code-bg); color: var(--muted); }
-.staged-chip-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.staged-chip-name { min-width: 0; overflow: hidden; white-space: nowrap; font-size: 13px; }
 .staged-chip button { min-height: 0; padding: 0 3px; border: 0; background: transparent; }
 #attach-file { min-height: 0; width: 30px; height: 30px; padding: 0; flex: none; }
 #attach-file, #preview-note, #composer-expand { background: transparent; border-color: transparent; }

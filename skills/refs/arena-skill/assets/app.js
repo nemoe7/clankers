@@ -330,7 +330,7 @@ function syncViewport() {
     updateLogJump();
   }
 }
-window.addEventListener('resize', () => { syncViewport(); grow(); });
+window.addEventListener('resize', () => { syncViewport(); if (stagedFiles.length) renderStagedFiles(); else grow(); });
 window.addEventListener('pageshow', () => { syncViewport(); grow(); });
 window.visualViewport?.addEventListener?.('resize', syncViewport);
 window.visualViewport?.addEventListener?.('scroll', syncViewport);
@@ -526,14 +526,46 @@ async function dropStaged(entry) {
     });
   } catch { /* No row landed, or a note already owns the bytes. */ }
 }
+function splitStagedFileName(rawName) {
+  const text = String(rawName || '');
+  const slash = Math.max(text.lastIndexOf('/'), text.lastIndexOf('\\'));
+  const dir = slash >= 0 ? text.slice(0, slash + 1) : '';
+  const base = slash >= 0 ? text.slice(slash + 1) : text;
+  const dot = base.lastIndexOf('.');
+  if (dot > 0) return { dir, stem: base.slice(0, dot), ext: base.slice(dot) };
+  return { dir, stem: base, ext: '' };
+}
+function truncateStagedStem(stem, maxStemChars) {
+  if (!(maxStemChars > 0) || stem.length <= maxStemChars) return stem;
+  if (maxStemChars <= 3) return `${stem.slice(0, Math.max(1, maxStemChars))}...`;
+  const mid = Math.ceil(stem.length / 2);
+  const leftHalf = stem.slice(0, mid);
+  const rightHalf = stem.slice(mid);
+  const keep = Math.max(2, maxStemChars - 3);
+  const keepLeft = Math.ceil(keep / 2);
+  const keepRight = Math.floor(keep / 2);
+  return `${leftHalf.slice(0, keepLeft)}...${keepRight > 0 ? rightHalf.slice(rightHalf.length - keepRight) : ''}`;
+}
+function formatStagedChipText(rawName, stateText, containerWidth = 0) {
+  const { dir, stem, ext } = splitStagedFileName(rawName);
+  const suffix = ` · ${stateText}`;
+  const fixedChars = dir.length + ext.length + suffix.length;
+  const totalBudget = containerWidth > 0
+    ? Math.max(fixedChars + 5, Math.floor(Math.max(40, containerWidth - 84) / 7.5))
+    : 64;
+  const maxStemChars = Math.max(5, totalBudget - fixedChars);
+  return `${dir}${truncateStagedStem(stem, maxStemChars)}${ext}${suffix}`;
+}
 function renderStagedFiles() {
   const holder = $('#staged-files');
+  const containerWidth = holder.clientWidth || compose.clientWidth || 0;
   holder.replaceChildren(...stagedFiles.map(entry => {
     const chip = document.createElement('span');
     chip.className = 'staged-chip';
     const name = document.createElement('span');
     name.className = 'staged-chip-name';
-    name.textContent = `${entry.file.name} · ${chipState(entry)}`;
+    const stateText = chipState(entry);
+    name.textContent = formatStagedChipText(entry.file.name, stateText, containerWidth);
     name.title = entry.error
       ? `${entry.file.name} · ${entry.error}`
       : `${entry.file.name} · ${entry.file.size.toLocaleString()} bytes`;
@@ -569,6 +601,18 @@ function renderStagedFiles() {
     chip.append(name, remove, lead);
     return chip;
   }));
+  for (const [index, chip] of holder.children.entries()) {
+    const name = chip.children?.[0];
+    const entry = stagedFiles[index];
+    if (!name || !entry || !(name.clientWidth > 0) || !(name.scrollWidth > name.clientWidth)) continue;
+    const { dir, stem, ext } = splitStagedFileName(entry.file.name);
+    const suffix = ` · ${chipState(entry)}`;
+    let limit = stem.length - 1;
+    while (limit >= 5 && name.scrollWidth > name.clientWidth) {
+      name.textContent = `${dir}${truncateStagedStem(stem, limit)}${ext}${suffix}`;
+      limit -= 1;
+    }
+  }
   holder.hidden = !stagedFiles.length;
   if (stagedFiles.length) compose.dataset.attachments = 'true';
   else delete compose.dataset.attachments;
