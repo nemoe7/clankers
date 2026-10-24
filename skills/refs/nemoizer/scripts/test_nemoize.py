@@ -1203,3 +1203,49 @@ def test_nmp100_counts_lists_tables_headings_and_blockquotes(tmp_path):
   audit_res = run("--audit", str(quote_only), cwd=tmp_path)
   assert audit_res.returncode == 0, audit_res.stderr
   assert f"[NMP100] (advisory) {quote_msg} (manual review)" in audit_res.stdout
+
+
+def test_config_caps_respect_gitignore_and_bundled_default_config(tmp_path):
+  default_toml = SCRIPT.parent.parent / "references" / "nemoizer.toml"
+  assert default_toml.is_file()
+  cfg = nemoize.load_config(config_path=default_toml)
+  assert cfg["respect_gitignore"] is True
+  assert cfg["instruction_sentence_cap"] == nemoize.SENTENCE_CAPS["instruction"]
+  assert cfg["description_sentence_cap"] == nemoize.SENTENCE_CAPS["description"]
+  assert cfg["paragraph_cap"] == nemoize.PARAGRAPH_CAP
+  assert cfg["list_sentence_cap"] == nemoize.LIST_SENTENCE_CAP
+  assert cfg["heading_sentence_cap"] == nemoize.HEADING_SENTENCE_CAP
+  assert cfg["comment_block_cap"] == nemoize.COMMENT_BLOCK_CAP
+  assert cfg["the_density_cap"] == nemoize.THE_DENSITY_CAP
+  assert cfg["min_the_count"] == nemoize.MIN_THE_COUNT
+
+  repo = tmp_path / "gitrepo"
+  repo.mkdir()
+  subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+  (repo / ".gitignore").write_text("ignored.md\n", encoding="utf-8")
+  (repo / "ignored.md").write_text("Do not transmit this.\n", encoding="utf-8")
+  (repo / "tracked.md").write_text(
+    "# Heading one. Heading two.\n\n"
+    "- List one. List two. List three.\n\n"
+    "The cat chased the mouse across the floor.\n",
+    encoding="utf-8",
+  )
+  default_run = run(cwd=repo)
+  assert default_run.returncode == 1
+  assert "ignored.md" not in default_run.stdout
+  assert "NMP100" in default_run.stdout
+  assert "NMO902" in default_run.stdout
+
+  (repo / "nemoizer.toml").write_text(
+    "respect-gitignore = false\n"
+    "heading-sentence-cap = 2\n"
+    "list-sentence-cap = 3\n"
+    "the-density-cap = 50\n"
+    "min-the-count = 4\n",
+    encoding="utf-8",
+  )
+  custom_run = run(cwd=repo)
+  assert custom_run.returncode == 1
+  assert "ignored.md" in custom_run.stdout
+  assert "NMP100" not in custom_run.stdout
+  assert "NMO902" not in custom_run.stdout
