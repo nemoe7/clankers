@@ -11472,7 +11472,7 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
     warning = egress_warning(command)
     if warning:
       report(warning)
-  # case: wireframe-commit
+  # case: commit-id
   if "git add" in command and re.search(
     r"(?:^|[\s'\"/])[^\s'\"]*-wireframe\.png(?:$|[\s'\"])", command, re.IGNORECASE
   ):
@@ -11480,7 +11480,6 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
       "WIREFRAME BLOCKED: never stage or commit wireframe captures (*-wireframe.png)."
     )
     return finish(130)
-  # case: commit-id
   if "git commit" in command:
     warning = worktree_warning(state_dir, "commit", cwd=Path.cwd())
     if warning:

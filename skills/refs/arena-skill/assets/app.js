@@ -601,7 +601,7 @@ function renderStagedFiles() {
     chip.append(name, remove, lead);
     return chip;
   }));
-  for (const [index, chip] of holder.children.entries()) {
+  for (const [index, chip] of Array.from(holder.children).entries()) {
     const name = chip.children?.[0];
     const entry = stagedFiles[index];
     if (!name || !entry || !(name.clientWidth > 0) || !(name.scrollWidth > name.clientWidth)) continue;

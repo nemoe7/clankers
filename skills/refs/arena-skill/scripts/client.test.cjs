@@ -61,7 +61,11 @@ test('preview client', async (t) => {
       this.children = this.children.filter(item => item !== child);
       return child;
     }
-    replaceChildren(...children) { this.children = children; this.replacements = (this.replacements || 0) + 1; }
+    replaceChildren(...children) {
+      this.children = children;
+      this.children.entries = undefined;
+      this.replacements = (this.replacements || 0) + 1;
+    }
     // Reset report scroll when replacing content, as browser layout does.
     set innerHTML(value) {
       this.inner = value; this.renders = (this.renders || 0) + 1;
