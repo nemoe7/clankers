@@ -1690,7 +1690,7 @@ def test_http_boundaries():
       assert "#clock,#theme{display:none;}" in coarse_rules
       assert "nav{flex:1;" in coarse_rules
       assert "nav button{padding:7px 3px;font-size:13px;}" in coarse_rules
-      assert "#send-hint{display:none;}#send{margin-left:auto;}" in coarse_rules
+      assert "#send{margin-left:auto;}" in coarse_rules
       coarse_gaps = [
         re.search(rf"{selector}\{{[^}}]*gap:([^;}}]+)", coarse_rules)
         for selector in (r"\.topbar-row", r"\.topbar-row>\.row\.tight", r"nav")
@@ -1822,9 +1822,7 @@ def test_http_boundaries():
       assert re.search(r"nav button\{[^}]*min-width:0;[^}]*padding:7px 9px;", page)
       assert re.search(r"nav button\{[^}]*white-space:nowrap", page)
       assert "nav button{padding:7px 4px;font-size:14px" in page
-      # The footer has short hints and a short key line for narrow widths. Touch keyboards write a newline. Send sends.
-      # The hint and its separator share a span, so hiding it leaves the key line whole.
-      assert '<span id="send-hint">Enter sends · Shift+Enter:new line ·</span>' in page
+      assert 'id="send-hint"' not in page
       # A list in message text sits flush, matching the log's lists and the composer: the ack
       # thread under a report was the last outlier, on the browser's own step.
       assert (
@@ -1858,7 +1856,7 @@ def test_http_boundaries():
         r'<section\b[^>]*id="compose"[^>]*>(.*?)</section>', page, re.DOTALL
       )
       assert composer is not None
-      for identity in ("send-hint", "agent-key", "send-status"):
+      for identity in ("agent-key", "send-status"):
         marker = f'id="{identity}"'
         assert marker in page and marker not in composer.group(1)
       assert "resize:none" in page and "resize:vertical" not in page

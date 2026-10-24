@@ -388,14 +388,13 @@ mark code { color: var(--text); }
   #note, .note-backdrop { max-height: min(120px, 24dvh); }
 }
 
-/* On touch devices, the tab strip and copy button stay on one line while the clock, theme toggle, and Return hint hide. */
+/* On touch devices, the tab strip and copy button stay on one line while the clock and theme toggle hide. */
 @media (pointer: coarse) {
   .topbar-row { flex-wrap: nowrap; gap: 6px; }
   .topbar-row > .row.tight { flex: 0 0 auto; gap: 6px; }
   #clock, #theme { display: none; }
   nav { flex: 1; gap: 6px; }
   nav button { padding: 7px 3px; font-size: 13px; }
-  #send-hint { display: none; }
   #send { margin-left: auto; }
   .card.compose { padding: 6px; }
 }

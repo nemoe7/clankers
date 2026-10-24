@@ -1701,12 +1701,10 @@ test('preview client', async (t) => {
     get('#note').events.keydown(newline);
     assert.equal(newline.prevented, undefined, 'the browser writes the newline');
     assert.equal(get('#form').submissions, 1, 'no send from the Return key');
-    assert.match(get('#send-hint').textContent, /Return: new line/);
     coarsePointer = false;
     pointerListeners.forEach(callback => callback({ matches: false }));
     get('#note').events.keydown(event({ key: 'Enter', shiftKey: false, isComposing: false }));
     assert.equal(get('#form').submissions, 2, 'a desk Enter sends again');
-    assert.match(get('#send-hint').textContent, /Enter sends/);
     sendHandler = async () => { throw new Error('response lost'); };
     await get('#form').events.submit(event({}));
     assert.equal(get('#note').value, 'keep draft');
@@ -4301,18 +4299,19 @@ test('preview client', async (t) => {
   });
 
   await t.test("The composer footer names the key and its hour, and the tooltip keeps the host", async () => {
+    state.repo = 'clankers';
     state.agent_key = {
       key: 'K'.repeat(43),
       host: 'https://arena-proxy.example.ts.net',
       at: '2026-10-03T15:00:00+00:00',
     };
     await refresh();
-    assert.match(get('#agent-key').textContent, /^Key K{7} · \d{2}:\d{2}$/,
-      'seven characters and the hour name the key');
+    assert.match(get('#agent-key').textContent, /^clankers · Key K{7} · \d{2}:\d{2}$/,
+      'repo, seven characters, and the hour name the key');
     assert.doesNotMatch(get('#agent-key').textContent, /K{8}/, 'the full key never prints');
     assert.equal(get('#agent-key').children.find(child => child.tagName === 'code')?.textContent,
       'KKKKKKK', 'only the key characters carry the code element');
-    assert.equal(get('#agent-key').children[0], 'Key ', 'the label stays prose');
+    assert.equal(get('#agent-key').children[0], 'clankers · Key ', 'the label stays prose');
     assert.doesNotMatch(get('#agent-key').textContent, /example/,
       'the host leaves the line, so the footer fits a narrow width');
     assert.match(get('#agent-key').title, /^https:\/\/arena-proxy\.example\.ts\.net · set (just now|\d+ (mins?|hours?) ago)$/,
@@ -4323,7 +4322,7 @@ test('preview client', async (t) => {
       'a hostless record leaves the tooltip with the stamp alone');
     state.agent_key = null;
     await refresh();
-    assert.equal(get('#agent-key').textContent, 'No key recorded.');
+    assert.equal(get('#agent-key').textContent, 'clankers · No key recorded.');
     assert.equal(get('#agent-key').title, '', 'the tooltip clears with the record');
   });
 
@@ -5149,7 +5148,7 @@ test('the composer keeps Send inside and status lines outside its panel', () => 
   const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
   const locations = new Map();
   const stack = [];
-  const controls = new Set(['send', 'send-hint', 'agent-key', 'send-status']);
+  const controls = new Set(['send', 'agent-key', 'send-status']);
   new Parser({
     onopentag(name, attributes) {
       const inside = attributes.id === 'compose' || stack.at(-1) === true;
@@ -5159,7 +5158,7 @@ test('the composer keeps Send inside and status lines outside its panel', () => 
     onclosetag() { stack.pop(); },
   }).end(html);
   assert.equal(locations.get('send'), true, 'Send remains in the composer');
-  for (const identity of ['send-hint', 'agent-key', 'send-status']) {
+  for (const identity of ['agent-key', 'send-status']) {
     assert.equal(locations.get(identity), false, `${identity} remains outside the panel`);
   }
 });

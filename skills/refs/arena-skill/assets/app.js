@@ -1287,7 +1287,7 @@ function renderState() {
   showHistory(logNotes);
   renderTasksIfChanged(state.tasks);
   renderFetchIfChanged(state.fetch_jobs || []);
-  renderAgentKey(state.agent_key);
+  renderAgentKey(state.agent_key, state.repo);
   paintSkipPoll(state.skip_poll);
   paintInterrupt(state.agent_interrupt_pending);
   showWorkspace(state.workspace);
@@ -1527,16 +1527,8 @@ $('#form').addEventListener('submit', async event => {
   }
 });
 // A touch keyboard offers no Shift key, so there the Return key writes the newline and the Send
-// button sends. The hint names whichever the Return key does.
+// button sends.
 const touchPointer = window.matchMedia?.('(pointer: coarse)');
-function paintSendHint() {
-  // The separator rides the hint, so a phone that drops the hint leaves the key line whole.
-  $('#send-hint').textContent = touchPointer?.matches
-    ? 'Return: new line · Send sends · '
-    : 'Enter sends · Shift+Enter: new line · ';
-}
-touchPointer?.addEventListener?.('change', paintSendHint);
-paintSendHint();
 note.addEventListener('keydown', event => {
   if (event.key === 'Backspace' && !event.ctrlKey && !event.metaKey && !event.altKey && note.dataset.slash === 'true') {
     const prefix = recognizedSlashPrefix(note.value);
@@ -3513,19 +3505,20 @@ function approvalRow(item) {
   row.append(url, meta, actions);
   return row;
 }
-// Show seven characters of the userscript key and its freshness hour so a stale key is visible without exposing the full key in the log.
+// Show the repository name, seven characters of the userscript key, and its freshness hour so a stale key is visible without exposing the full key in the log.
 // Keep the host and full timestamp in the tooltip so the footer fits a phone.
-function renderAgentKey(record) {
+function renderAgentKey(record, repo) {
   const line = $('#agent-key');
+  const prefix = repo ? `${repo} · ` : '';
   if (!record) {
-    line.textContent = 'No key recorded.';
+    line.textContent = `${prefix}No key recorded.`;
     line.title = '';
     return;
   }
   // Only the key characters are monospace, so the label and the hour read as prose.
   const key = document.createElement('code');
   key.textContent = record.key.slice(0, 7);
-  line.replaceChildren('Key ', key, ` · ${clock(record.at)}`);
+  line.replaceChildren(`${prefix}Key `, key, ` · ${clock(record.at)}`);
   line.title = `${record.host ? `${record.host} · ` : ''}set ${time(record.at)}`;
 }
 function renderFetchIfChanged(jobs) {
