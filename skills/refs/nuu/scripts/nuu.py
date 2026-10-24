@@ -36,6 +36,7 @@ from measure import (
 )
 from measure import check as check_measurements
 from measure import main as measure_main
+from walk import main as walk_main
 
 VERSION = "0.1.16"
 NAMED_BREAKPOINTS = ("75em", "60em", "40em", "30em")
@@ -731,6 +732,8 @@ def main(argv=None):
   raw_args = list(sys.argv[1:] if argv is None else argv)
   if raw_args and raw_args[0] in {"check", "ruler", "density"}:
     return measure_main(raw_args)
+  if raw_args and raw_args[0] == "walk":
+    return walk_main(raw_args[1:])
   parser = argparse.ArgumentParser(description=__doc__)
   commands = parser.add_subparsers(dest="command", required=True)
   for name in (
@@ -740,6 +743,7 @@ def main(argv=None):
     "extract",
     "annotate",
     "board",
+    "walk",
     "doctor",
     "inspect",
     "flow",
@@ -752,6 +756,12 @@ def main(argv=None):
     "ruler",
   ):
     command = commands.add_parser(name)
+    if name == "walk":
+      command.add_argument("target", nargs="?", default="http://127.0.0.1:1500")
+      command.add_argument("-s", "--script", type=Path, default=None)
+      command.add_argument("-V", "--views", action="store_true")
+      command.add_argument("-o", "--out", type=Path, default=Path("/tmp/walk"))
+      continue
     if name == "check":
       command.add_argument("report", type=Path)
       command.add_argument("-s", "--sheet", type=Path, default=DEFAULT_SHEET)

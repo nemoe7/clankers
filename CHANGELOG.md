@@ -41,6 +41,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add a two-file rolling state backup (`backups/state-latest.ndjson` and `backups/state-previous.ndjson`), cold-start auto-restore when `state.sqlite3` is missing or empty, and `arena-preview state save` and `state restore [-p, --previous]` commands that force-sync local `.ndjson` files in `userscripts/arena.user.js`.
 - Reject multiple free-text (`___`) options in a single `choice` or `checkbox` report field. Warn on `report publish` with the question ID when no option is recommended.
 - Add `live-dot.md`, `table-to-cards.md`, and `page-memory.md` recipes in `skills/refs/nuu/references/recipes/` and `skills/nuu/references/recipes/`, and link them from Clauses 9 and 18 in `SKILL.md`.
+- Add `scripts/walk.py`, `references/walk.md`, and the `nuu walk` subcommand (`Demo`, `Walker`, `@step`, and `capture_views`) for deterministic browser walks and named `nuu board` view captures.
 - Amend Clause 1 in `SKILL.md` to default control glyphs to Lucide first, then Simple Icons, then the vendored Phosphor catalog. Include non-blocking `icons` checks (`NUI001`–`NUI003`) in `nuu audit`.
 
 ### Changed

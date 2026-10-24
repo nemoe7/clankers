@@ -103,7 +103,7 @@ python scripts/measure.py ruler --from 120,340 --to 264,340
 - `references/measure.md`: the report shape, the snippet, and the ruler.
 - `scripts/measure.py`: the check and the ruler.
 
-- `scripts/nuu`: CLI entry point (`references/nuu.md`), alongside `scripts/measure.py` (`references/measure.md`), `scripts/annotate.py` (`references/annotate.md`), and `scripts/browser.cjs`.
+- `scripts/nuu`: CLI entry point (`references/nuu.md`), alongside `scripts/measure.py` (`references/measure.md`), `scripts/annotate.py` (`references/annotate.md`), `scripts/walk.py` (`references/walk.md`), and `scripts/browser.cjs`.
 - `data/vendor/`: licensed catalog data and source hashes.
 - `references/recipes/offline-fonts.md`: bundled and offline zero-jitter font recipe (`preload` with `crossorigin`, `font-display: block`, inline Base64 WOFF2, `FontFace` binary buffers, and metric-matched fallbacks).
 - `references/recipes/scroll-edge-fade.md`: scroll-driven CSS edge-fade mask recipe for scrollable panels and inputs (`@supports (animation-timeline: scroll(self))`).

@@ -1173,3 +1173,51 @@ def test_design_boards_and_html_typography(tmp_path):
   )
   assert bad_style_proc.returncode == 1
   assert "nostyle.html" in bad_style_proc.stdout
+
+  import walk
+
+  walk.clear_steps()
+  demo = walk.Demo("http://127.0.0.1:1500")
+  demo.sign_in(False)
+  demo.wait_until_checked(False)
+  assert demo.signed_in is False
+  assert demo.checked is False
+  assert demo.url_for(1500) == "http://127.0.0.1:1500"
+  assert demo.url_for("/settings") == "http://127.0.0.1:1500/settings"
+
+  class FakePage:
+    def __init__(self, viewport=(1280, 800)):
+      self.viewport = viewport
+      self.visited = []
+      self._listeners = {}
+
+    def on(self, event, callback):
+      self._listeners[event] = callback
+
+    def goto(self, url, wait_until="networkidle"):
+      self.visited.append((url, wait_until))
+
+    def screenshot(self, **_kwargs):
+      return b"\x89PNG\r\n\x1a\nfake"
+
+  @walk.step("desktop")
+  def sample_step(w: walk.Walker, d: walk.Demo) -> None:
+    w.goto(1500)
+    assert d.url_for(2500) == "http://127.0.0.1:2500"
+
+  walk_out = tmp_path / "walk-out"
+  step_results = walk.run_steps_with_factory(
+    lambda vp: FakePage(vp), demo, out_dir=walk_out
+  )
+  assert len(step_results) == 1
+  assert step_results[0]["step"] == "sample_step"
+  assert step_results[0]["device"] == "desktop"
+  assert Path(step_results[0]["screenshot"]).is_file()
+
+  views = walk.capture_views(
+    walk.Walker(FakePage(), demo),
+    demo,
+    {"dashboard": 1500, "signed-out": lambda w, _d: w.goto(2500)},
+  )
+  assert set(views) == {"dashboard", "signed-out"}
+  walk.clear_steps()
