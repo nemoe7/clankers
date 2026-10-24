@@ -861,3 +861,202 @@ module.exports = {
   assert bw > 80 and bh > 60
   assert nuu.DEVICE_BREAKPOINTS == uiux.DEVICE_BREAKPOINTS
   assert callable(nuu.main) and callable(uiux.main)
+
+
+def test_design_boards_and_html_typography(tmp_path):
+  html_font_proj = tmp_path / "HtmlFontProject"
+  html_font_proj.mkdir()
+  (html_font_proj / "Inter-Regular.woff2").write_bytes(b"wOF2inter400")
+  (html_font_proj / "Inter-Bold.woff2").write_bytes(b"wOF2inter700")
+  (html_font_proj / "index.html").write_text(
+    "<!doctype html><html><head><style>\n"
+    '@font-face { font-family: "Inter"; src: url("Inter-Regular.woff2") format("woff2"); font-weight: 400; }\n'
+    '@font-face { font-family: "Inter"; src: url("Inter-Bold.woff2") format("woff2"); font-weight: 700; }\n'
+    ':root { --sans: "Inter", system-ui, sans-serif; --mono: "JetBrains Mono", monospace; }\n'
+    ".btn { padding: 6px 12px; border-radius: 6px; background: #2563eb; color: #fff; }\n"
+    "</style></head><body><script>\n"
+    'const svg = (d) => `<svg viewBox="0 0 16 16" width="16" height="16">${d}</svg>`;\n'
+    "const ICONS = {\n"
+    "  plus: svg('<path d=\"M8 3v10M3 8h10\"/>'),\n"
+    "};\n"
+    "</script></body></html>",
+    encoding="utf-8",
+  )
+  typo = annotate.resolve_project_typography(html_font_proj)
+  assert typo["embedded_fonts"] == 2
+  assert typo["font_sans"].startswith('"Inter"')
+  assert typo["font_mono"].startswith('"JetBrains Mono"')
+
+  shots_dir = html_font_proj / "shots"
+  shots_dir.mkdir()
+  dash_png = shots_dir / "dashboard.png"
+  dash_png.write_bytes(
+    annotate.encode_png(1360, 200, bytearray([18, 22, 30, 255] * (1360 * 200)))
+  )
+  comp_dir = html_font_proj / "components"
+  comp_dir.mkdir()
+  (comp_dir / "buttons.html").write_text(
+    '<button class="btn"><span data-icon="plus"></span>New repository</button>',
+    encoding="utf-8",
+  )
+
+  spec_path = html_font_proj / "boards.json"
+  spec_data = {
+    "stylesheet": "index.html",
+    "icons": {"file": "index.html", "table": "ICONS"},
+    "shots": {"dashboard": "shots/dashboard.png"},
+    "boards": [
+      {
+        "name": "views",
+        "title": "Example views",
+        "lede": "Full views at 1360 px, two to a row.",
+        "wide": True,
+        "frames": [
+          {
+            "label": "Default view",
+            "sub": "Five remembered repos.",
+            "shot": "dashboard",
+            "width": 1360,
+          },
+          {
+            "label": "Second view",
+            "sub": "Native resolution preserved.",
+            "shot": "dashboard",
+          },
+        ],
+      },
+      {
+        "name": "components",
+        "title": "Global components",
+        "lede": "Every control in every state.",
+        "frames": [
+          {
+            "label": "Buttons",
+            "sub": "Primary, default, ghost, icon.",
+            "html": "components/buttons.html",
+          }
+        ],
+      },
+    ],
+  }
+  spec_path.write_text(json.dumps(spec_data, indent=2), encoding="utf-8")
+
+  out_dir = tmp_path / "design-out"
+  proc = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "board",
+      "--project",
+      str(html_font_proj),
+      "-T",
+      "design",
+      "-s",
+      str(spec_path),
+      "-o",
+      str(out_dir),
+    ],
+    text=True,
+    capture_output=True,
+    check=False,
+  )
+  assert proc.returncode == 0, proc.stderr or proc.stdout
+  res = json.loads(proc.stdout)
+  assert res["status"] == "composed"
+  assert res["type"] == "design"
+  assert res["embedded_fonts"] == 2
+  assert res["font_family"].startswith('"Inter"')
+  assert len(res["boards"]) == 2
+  views_png = out_dir / "views.png"
+  comp_png = out_dir / "components.png"
+  assert views_png.is_file() and comp_png.is_file()
+  vw, vh, _ = annotate.decode_png(views_png.read_bytes())
+  cw, ch, _ = annotate.decode_png(comp_png.read_bytes())
+  assert vw == 2816 and vh > 200
+  assert 200 < cw <= 1536 and ch > 80
+
+  only_dir = tmp_path / "only-out"
+  only_proc = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "board",
+      "--project",
+      str(html_font_proj),
+      "--type",
+      "design",
+      "--only",
+      "components",
+      "--spec",
+      str(spec_path),
+      "--output",
+      str(only_dir),
+    ],
+    text=True,
+    capture_output=True,
+    check=False,
+  )
+  assert only_proc.returncode == 0, only_proc.stderr or only_proc.stdout
+  assert (only_dir / "components.png").is_file()
+  assert not (only_dir / "views.png").exists()
+
+  bad_shot_spec = html_font_proj / "bad-shot.json"
+  bad_shot_spec.write_text(
+    json.dumps(
+      {
+        **spec_data,
+        "shots": {"missing_dash": "shots/does-not-exist.png"},
+      }
+    ),
+    encoding="utf-8",
+  )
+  bad_shot_proc = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "board",
+      "--project",
+      str(html_font_proj),
+      "-T",
+      "design",
+      "-s",
+      str(bad_shot_spec),
+      "-o",
+      str(tmp_path / "bad-shot-out"),
+    ],
+    text=True,
+    capture_output=True,
+    check=False,
+  )
+  assert bad_shot_proc.returncode == 1
+  assert "missing_dash" in bad_shot_proc.stdout
+
+  no_style_html = html_font_proj / "nostyle.html"
+  no_style_html.write_text(
+    "<!doctype html><html><body>No style</body></html>", encoding="utf-8"
+  )
+  bad_style_spec = html_font_proj / "bad-style.json"
+  bad_style_spec.write_text(
+    json.dumps({**spec_data, "stylesheet": "nostyle.html"}),
+    encoding="utf-8",
+  )
+  bad_style_proc = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "board",
+      "--project",
+      str(html_font_proj),
+      "-T",
+      "design",
+      "-s",
+      str(bad_style_spec),
+      "-o",
+      str(tmp_path / "bad-style-out"),
+    ],
+    text=True,
+    capture_output=True,
+    check=False,
+  )
+  assert bad_style_proc.returncode == 1
+  assert "nostyle.html" in bad_style_proc.stdout
