@@ -1864,6 +1864,10 @@ def test_http_boundaries():
       assert (
         ".notes-layout{display:flex;flex-direction:column;gap:14px;height:100%" in page
       )
+      assert re.search(
+        r"\.topbar-row\{[^}]*max-width:900px;margin:0 auto;",
+        page,
+      )
       assert "resize:none;min-height:72px;overflow:hidden" in page
       # The document does not scroll. Panels do. A short viewport lowers the log-card floor.
       # A small phone then keeps the column on screen with the composer closed.

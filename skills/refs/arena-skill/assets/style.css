@@ -97,7 +97,7 @@ h1 { letter-spacing: -.035em; margin: 4px 0; }
 h2 { margin: 0 0 8px; }
 p, li { line-height: 1.6; }
 .topbar { flex: none; position: sticky; top: 0; z-index: 5; padding: 10px 5vw; background: var(--bg); border-bottom: 1px solid var(--border); }
-.topbar-row { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.topbar-row { min-width: 0; max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 /* The tab strip shrinks and scrolls rather than widen the viewport. Its four tabs must fit phones and desks. */
 /* The four tabs share one width: the grid makes every track equal, so the longest label sets no tab's shape. */
 nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-width: 100%; min-width: 0; overflow-x: auto; }

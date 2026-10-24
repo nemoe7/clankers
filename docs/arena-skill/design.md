@@ -99,6 +99,8 @@ Accepted: retain the shared dialog and product themes. Add separate correctness 
 
 2026-10-23: add top-right `#modal-close` exit button, `{lucide book-bookmark} Bible Check` action button, `60em`/`40em` width and `30em` max-height media-query breakpoints, and `/nuu` and `/nemoizer` composer slash commands (`#slash-menu` autocomplete and `#modal[data-wide="true"]` query view).
 
+2026-10-24: center `.topbar-row` at `max-width: 900px` (`margin: 0 auto`) so the desktop topbar aligns with the `900` px `.notes-layout` and `.downloads-layout` columns (`UIX206`).
+
 ## Message composer
 
 Empty and one-line drafts use one row on desktop and phones. Multiline drafts grow within the view and expose an expand control at the top right. The multiline layout stays until the draft is empty.
