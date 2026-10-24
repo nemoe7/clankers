@@ -356,7 +356,7 @@ mark code { color: var(--text); }
   .select-wrap { flex: 1 1 0; min-width: 0; max-width: none; }
 }
 @media (max-width: 40em) {
-  .log-card > .row:first-child > .stack { flex: 1 1 100%; }
+  .log-card > .row:first-child > .stack { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .log-card > .row > .row.tight { flex: 1 1 100%; }
   #log-search { flex: 1 1 auto; max-width: none; }
   .report-toolbar .select-wrap { flex: 1 1 100%; }
@@ -450,7 +450,7 @@ mark code { color: var(--text); }
   #tasks-status { grid-column: 1 / -1; }
   #task-search { max-width: none; }
 }
-.report .question { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; }
+.report .question { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; padding-right: 4px; }
 .question-id { display: block; margin-bottom: 4px; cursor: pointer; }
 /* The browser moves one queued HTTPS file at a time. Long URLs and errors must wrap. */
 .downloads-layout { max-width: 900px; margin: auto; display: flex; flex-direction: column; gap: 12px; }

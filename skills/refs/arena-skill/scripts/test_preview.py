@@ -1719,6 +1719,16 @@ def test_http_boundaries():
         ".report-toolbar{gap:8px;}"
         ".select-wrap{flex:1 1 0;min-width:0;max-width:none;}}" in page
       ), "the phone block still ends with the select wrap rule"
+      assert (
+        "@media (max-width:40em){"
+        ".log-card>.row:first-child>.stack{"
+        "flex:1 1 100%;flex-direction:row;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"
+        "}" in page
+      )
+      assert (
+        ".report .question{border-left:2px solid rgb(199,194,188);padding-left:12px;padding-right:4px;}"
+        in page
+      )
       # The composer's outer rows give up the space they face.
       assert "#form>div:first-child{margin-top:0;padding-top:0" in page
       assert "#form>div:last-child{margin-bottom:0;padding-bottom:0" in page

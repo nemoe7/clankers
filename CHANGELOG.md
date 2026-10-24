@@ -30,7 +30,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add composite visual-reference boards under `docs/arena-skill/design-visuals/` and `docs/arena-skill/images/`, and link them from `docs/arena-skill/design.md`.
 - Prevent native browser drag on `#image-modal-img` (`draggable="false"` and `dragstart` prevention) so pointer dragging pans report images, and anchor `#image-modal` wheel zoom to the cursor position.
 - Format the preview tab title as `"{repo} - Steering"` on Messages and `"{repo} - Steering | {tab}"` on other tabs, and automatically request the bible-check survey whenever it is unanswered.
-- Wire `#copy-state` to force-save with a Lucide `save` icon when `userscripts/arena.user.js` is active, and clear the `#history` edge fade when message history ceases to scroll.
+- Wire `#copy-state` to force-save with a Lucide `save` icon when `userscripts/arena.user.js` is active. Clear the `#history` edge fade when message history ceases to scroll. Keep `#last-check` inline with `#connection` on mobile viewports, and pad `.report .question` so focus outlines do not clip.
 - Register recognized slash commands on their own line, reject glued command tokens, and unregister the command line into plain text on `Backspace`.
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
