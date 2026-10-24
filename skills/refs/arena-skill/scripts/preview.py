@@ -9030,6 +9030,7 @@ class Store:
           for warning in warnings
         ]
         raise ValueError("\n".join(lines))
+    check_report_nemoizer(source, data.decode("utf-8"), self.repository_root())
     with self.transaction() as db:
       report = db.execute(
         "SELECT ack_seen_at, viewed_at FROM reports WHERE id = ?", (report_id,)
@@ -11455,11 +11456,22 @@ def resolve_report_image(path_arg, root=None):
     raise ValueError(
       f"Wireframe image {clean} (*-wireframe.png) is for agent inspection only and cannot be served in reports"
     )
-  base = _outline_repo_root(root)
+  start = Path(root).resolve() if root is not None else _outline_repo_root()
+  base = next(
+    (parent for parent in (start, *start.parents) if (parent / ".git").exists()),
+    start,
+  )
   raw_path = Path(clean)
   candidate = (
     raw_path.resolve() if raw_path.is_absolute() else (base / raw_path).resolve()
   )
+  if not candidate.is_file() and not raw_path.is_absolute():
+    for search_dir in (start, base / "arena-state" / "reports"):
+      alt = (search_dir / raw_path).resolve()
+      if alt.is_relative_to(search_dir) and alt.is_file():
+        base = search_dir
+        candidate = alt
+        break
   if not candidate.is_relative_to(base):
     raise ValueError(f"Report image {clean} is outside the repository root")
   mime, encoded = image_payload(candidate)
@@ -11532,6 +11544,67 @@ def embed_report_images(markdown, report_dir):
     return f"![{alt}](data:{mime};base64,{encoded}{suffix})"
 
   return IMAGE_IN_MARKDOWN.sub(swap, markdown)
+
+
+def check_report_nemoizer(source, markdown, repo_root=None):
+  """Run the installed `nemoizer` linter on a report source when available."""
+  if repo_root is None:
+    return
+  nemoize_py = (
+    Path(repo_root).resolve()
+    / ".agents"
+    / "skills"
+    / "nemoizer"
+    / "scripts"
+    / "nemoize.py"
+  )
+  if not nemoize_py.is_file():
+    return
+  lines = []
+  after_final_clause = False
+  for line in markdown.splitlines():
+    stripped = line.strip()
+    if re.match(r"^Final clause\b", stripped, re.IGNORECASE):
+      after_final_clause = True
+      lines.append(line)
+      continue
+    if after_final_clause and stripped:
+      if stripped.startswith('"') and stripped.endswith('"'):
+        lines.append('"Quoted clause."')
+        after_final_clause = False
+        continue
+      after_final_clause = False
+    masked = re.sub(
+      r"^(\|\s*\d+(?:-\d+)?\s*\|)\s*.*?\s*(\|[^|]+\|\s*)$",
+      r"\1 ok \2",
+      line,
+    )
+    lines.append(masked)
+  with tempfile.NamedTemporaryFile(
+    mode="w", suffix=".md", encoding="utf-8", delete=False
+  ) as handle:
+    handle.write("\n".join(lines) + "\n")
+    tmp_name = handle.name
+  try:
+    proc = subprocess.run(
+      [
+        sys.executable,
+        str(nemoize_py),
+        "--no-config",
+        "--context",
+        "description",
+        tmp_name,
+      ],
+      capture_output=True,
+      text=True,
+      timeout=25,
+      check=False,
+    )
+  finally:
+    Path(tmp_name).unlink(missing_ok=True)
+  if proc.returncode != 0:
+    detail = (proc.stdout or proc.stderr or "").replace(tmp_name, str(source)).strip()
+    raise ValueError(f"nemoizer check failed for {source}:\n{detail}")
 
 
 def gate_verdict(state_dir, push, line, out=None):

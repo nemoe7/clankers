@@ -14496,6 +14496,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
       stderr="",
     )
 
+  real_subproc_run = preview.subprocess.run
   monkeypatch.setattr(preview.subprocess, "run", fake_gh_run)
   receipt = preview.pr_update_command(119, "feat: title", pr_body_path, root=tmp_path)
   assert "119" in receipt
@@ -14505,6 +14506,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     preview.job_log_command(tz_store, job_id="42", root=tmp_path)
     == "https://results.actions.githubusercontent.com/signed-log"
   )
+  monkeypatch.setattr(preview.subprocess, "run", real_subproc_run)
   test_key = "k" * 24
   tz_store.set_agent_key(test_key, "https://proxy.example.test")
   assert (
@@ -14544,6 +14546,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
   assert "padding-top: 0;" in style_text
+  assert "position: sticky; top: 0; z-index: 2; background: var(--bg);" in style_text
   sample_png = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
     b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
@@ -14551,15 +14554,54 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   (tmp_path / ".git").mkdir(exist_ok=True)
   (tmp_path / "sample.png").write_bytes(sample_png)
+  rep_dir = tmp_path / "arena-state" / "reports"
+  rep_dir.mkdir(parents=True, exist_ok=True)
+  (rep_dir / "local-report.png").write_bytes(sample_png)
   mime_out, raw_out, encoded_out = preview.resolve_report_image(
-    "sample.png", root=tmp_path
+    "sample.png", root=rep_dir
   )
   assert mime_out == "image/png"
   assert raw_out == sample_png
+  assert (
+    preview.resolve_report_image("local-report.png", root=tmp_path)[1] == sample_png
+  )
   inlined_md = preview.inline_report_image_urls(
-    "![sample](/api/report-image?path=sample.png)", report_dir=tmp_path
+    "![sample](/api/report-image?path=sample.png)", report_dir=rep_dir
   )
   assert inlined_md == f"![sample](data:image/png;base64,{encoded_out})"
+  import shutil
+
+  fake_nemo = tmp_path / ".agents" / "skills" / "nemoizer" / "scripts"
+  fake_nemo.mkdir(parents=True, exist_ok=True)
+  shutil.copy2(
+    Path(preview.resolve_repo_root())
+    / "skills"
+    / "refs"
+    / "nemoizer"
+    / "scripts"
+    / "nemoize.py",
+    fake_nemo / "nemoize.py",
+  )
+  for helper_name in ("prose.py", "markers.py", "javascript-comments.cjs"):
+    shutil.copy2(
+      Path(preview.resolve_repo_root())
+      / "skills"
+      / "refs"
+      / "nemoizer"
+      / "scripts"
+      / helper_name,
+      fake_nemo / helper_name,
+    )
+  bad_rep = rep_dir / "bad-nemo.md"
+  bad_rep.write_text("# Report\n\nFirst clause; second clause.\n", encoding="utf-8")
+  with pytest.raises(ValueError, match="STE100"):
+    tz_store.publish("bad-nemo", "Bad Report", bad_rep)
+  good_rep = rep_dir / "good-nemo.md"
+  good_rep.write_text(
+    "# Report\n\nFirst sentence. Second sentence.\n", encoding="utf-8"
+  )
+  tz_store.publish("good-nemo", "Good Report", good_rep)
+  shutil.rmtree(tmp_path / ".agents")
   assert offer2["note_id"] == offer1["note_id"]
   tz_read = tz_store.read(include_quiet=False)
   assert any(item["id"] == offer1["note_id"] for item in tz_read["pending"])

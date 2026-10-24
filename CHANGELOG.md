@@ -53,6 +53,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Demote `#downloads-tab` to a header `.icon-button` between `#agent-interrupt` and `#theme` (`assets/index.html`, `assets/style.css`, and `assets/app.js`). Move panel padding off `main` so panel scrollbars sit at the viewport edge.
 - Suppress initial `:focus-visible` outlines inside `#modal` until keyboard navigation (`assets/app.js` and `assets/style.css`), and extend the `scroll(self)` edge-fade mask to scrollable `textarea` inputs (`assets/style.css`).
 - Show a subtle report loading bar under `.topbar` while `#reports-panel` loads (`assets/app.js` and `assets/style.css`), and keep `.report-toolbar .select-wrap` inline with its action buttons on narrow screens.
+- Make `.tasks-layout > .row.tight` sticky at the top of `#tasks-panel` (`assets/style.css`). Run report sources through installed `nemoizer` during `arena-preview report publish` (`scripts/preview.py` and `SKILL.md`).
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
 - Require descriptive `arena-preview run start <name>` gate IDs naming what the gate runs (`-2`, `-3`, ... on retries) in `ARENA.md` and `SKILL.md`.
