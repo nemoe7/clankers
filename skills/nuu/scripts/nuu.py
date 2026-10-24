@@ -322,6 +322,109 @@ def lint(root):
   }
 
 
+def check_icons(root):
+  counts = Counter()
+  findings = []
+  license_files = [
+    path.relative_to(root).as_posix()
+    for path in sorted(root.rglob("*"))
+    if path.is_file()
+    and not path.is_symlink()
+    and not any(part in SKIP for part in path.relative_to(root).parts)
+    and re.search(r"(?:licen[cs]e|copying)", path.name, re.IGNORECASE)
+  ]
+  for path in files(root, {".html", ".js", ".jsx", ".ts", ".tsx"}):
+    text = path.read_text(encoding="utf-8")
+    current = []
+    sizes = {}
+    for svg_match in re.finditer(
+      r"<svg\b([^>]*)>([\s\S]*?)</svg>", text, re.IGNORECASE
+    ):
+      attrs = svg_match[1]
+      body = svg_match[2]
+      line_no = text.count("\n", 0, svg_match.start()) + 1
+      class_match = re.search(
+        r'\bclass\s*=\s*["\']([^"\']*)["\']', attrs, re.IGNORECASE
+      )
+      classes = class_match[1].lower() if class_match else ""
+      viewbox_match = re.search(
+        r'\bviewBox\s*=\s*["\']([^"\']*)["\']', attrs, re.IGNORECASE
+      )
+      viewbox = viewbox_match[1].strip() if viewbox_match else ""
+      if "lucide" in classes or (
+        viewbox == "0 0 24 24" and "stroke=" in attrs and "stroke-linecap" in attrs
+      ):
+        icon_source = "lucide"
+      elif (
+        "simple-icon" in classes
+        or "markdown-icon" in classes
+        or (viewbox == "0 0 24 24" and "<path" in body and "stroke=" not in attrs)
+      ):
+        icon_source = "simple-icons"
+      elif "phosphor" in classes or viewbox == "0 0 256 256":
+        icon_source = "phosphor"
+      else:
+        icon_source = "custom"
+        current.append(
+          {
+            "rule": "NUI002",
+            "path": str(path),
+            "line": line_no,
+            "column": 1,
+            "severity": "advisory",
+            "blocking": False,
+            "evidence": "Inline <svg> outside the Lucide -> Simple Icons -> Phosphor ladder",
+            "criterion": "clause-1",
+          }
+        )
+      counts[icon_source] += 1
+      w_match = re.search(r'\bwidth\s*=\s*["\']([0-9.]+)["\']', attrs, re.IGNORECASE)
+      h_match = re.search(r'\bheight\s*=\s*["\']([0-9.]+)["\']', attrs, re.IGNORECASE)
+      if w_match and h_match:
+        sizes.setdefault(f"{w_match[1]}x{h_match[1]}", line_no)
+    if len(sizes) > 1:
+      first_line = min(sizes.values())
+      current.append(
+        {
+          "rule": "NUI003",
+          "path": str(path),
+          "line": first_line,
+          "column": 1,
+          "severity": "advisory",
+          "blocking": False,
+          "evidence": f"Multiple inline icon sizes in one source file: {', '.join(sorted(sizes))}",
+          "criterion": "clause-2",
+        }
+      )
+    lines = text.splitlines()
+    for finding in current:
+      line = lines[finding["line"] - 1] if 0 < finding["line"] <= len(lines) else ""
+      ignored = set(re.findall(r"\bnonuu:\s*([A-Za-z0-9_-]+)", line))
+      if finding["rule"] not in ignored:
+        findings.append(finding)
+  if sum(counts.values()) > 0 and not license_files:
+    findings.append(
+      {
+        "rule": "NUI001",
+        "path": str(root),
+        "line": 1,
+        "column": 1,
+        "severity": "advisory",
+        "blocking": False,
+        "evidence": "Inline icons present without a companion license file in project",
+        "criterion": "clause-1",
+      }
+    )
+  return {
+    "status": "checked",
+    "blocking": False,
+    "ladder": ["lucide", "simple-icons", "phosphor"],
+    "counts": dict(counts),
+    "licenses": license_files,
+    "findings": findings,
+  }
+
+
 def assets(root, manifest):
   rows = load(manifest)
   if not isinstance(rows, list):
@@ -720,6 +823,7 @@ def main(argv=None):
     else:
       result = {
         "source": lint(root),
+        "icons": check_icons(root),
         "design": extract(root),
         "rendered": browser(args)
         if args.url

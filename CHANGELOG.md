@@ -33,7 +33,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add Clause 18 to `SKILL.md` and `references/recipes/loading-bar.md` for subtle delayed edge loading bars (`200ms` delay, `aria-busy` region, left-origin `scaleX` growth, and `prefers-reduced-motion` fallback). Reserve loud loading bars for explicit requests.
 - Add Clause 22 to `SKILL.md` and `references/recipes/relative-timestamps.md` for full and abbreviated relative timestamps. Omit seconds unless second-level resolution is requested.
 - Amend Clause 9 in `SKILL.md` to keep control dimensions invariant across states. Add rendered `NUA309` in `scripts/browser.cjs` and static `NUL005` in `scripts/nuu.py`.
-- Amend Clause 1 in `SKILL.md` to default control glyphs to Lucide first, then Simple Icons, then the vendored Phosphor catalog.
+- Amend Clause 1 in `SKILL.md` to default control glyphs to Lucide first, then Simple Icons, then the vendored Phosphor catalog. Include non-blocking `icons` checks (`NUI001`–`NUI003`) in `nuu audit`.
 
 ### Changed
 

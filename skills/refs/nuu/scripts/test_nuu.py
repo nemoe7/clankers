@@ -74,6 +74,29 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   )
   assert not run("lint")["findings"]
   css.write_bytes(before[css])
+  page.write_text(
+    '<button aria-label="Close">'
+    '<svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" '
+    'stroke="currentColor" stroke-linecap="round"><path d="M18 6 6 18"/></svg>'
+    "</button>"
+    '<button aria-label="Custom">'
+    '<svg width="20" height="20" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>'
+    "</button>\n",
+    encoding="utf-8",
+  )
+  icon_audit = run("audit", expected=3)
+  assert not icon_audit["findings"]
+  assert icon_audit["icons"]["status"] == "checked"
+  assert icon_audit["icons"]["blocking"] is False
+  assert icon_audit["icons"]["ladder"] == ["lucide", "simple-icons", "phosphor"]
+  assert icon_audit["icons"]["counts"] == {"lucide": 1, "custom": 1}
+  assert {row["rule"] for row in icon_audit["icons"]["findings"]} == {
+    "NUI001",
+    "NUI002",
+    "NUI003",
+  }
+  assert all(row["blocking"] is False for row in icon_audit["icons"]["findings"])
+  page.write_text('<img src="art.svg"> <!-- nonuu: NUL001 -->\n', encoding="utf-8")
   before[page] = page.read_bytes()
   manifest = tmp_path / "assets.json"
   asset = root / "art.svg"
