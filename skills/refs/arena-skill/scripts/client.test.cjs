@@ -4829,6 +4829,19 @@ test('preview client', async (t) => {
   });
 
   await t.test('Survey results keep correctness separate from confidence', async () => {
+    assert.ok(surveyRequests.length >= 1, 'unanswered survey is requested automatically before clicking #survey-open');
+    state.repo = 'clankers';
+    await refresh();
+    context.showTab(get('#notes-tab'));
+    assert.equal(context.document.title, 'clankers - Steering');
+    context.showTab(get('#reports-tab'));
+    assert.equal(context.document.title, 'clankers - Steering | Reports');
+    context.showTab(get('#tasks-tab'));
+    assert.equal(context.document.title, 'clankers - Steering | Tasks');
+    context.showTab(get('#downloads-tab'));
+    assert.equal(context.document.title, 'clankers - Steering | Downloads');
+    context.showTab(get('#notes-tab'));
+    assert.equal(context.document.title, 'clankers - Steering');
     const open = get('#survey-open');
     await open.events.click();
     assert.equal(get('#modal').open, true);

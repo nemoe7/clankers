@@ -28,6 +28,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Show `"{order}. {task id}\n{timestamp}"` task tooltips, center `.topbar-row` at `max-width: 900px`, add a `2px` `:focus-visible` accent outline ring, and cap `--app-height` composer height at `50%`.
 - Add composite visual-reference boards under `docs/arena-skill/design-visuals/` and `docs/arena-skill/images/`, and link them from `docs/arena-skill/design.md`.
 - Prevent native browser drag on `#image-modal-img` (`draggable="false"` and `dragstart` prevention) so pointer dragging pans report images, and anchor `#image-modal` wheel zoom to the cursor position.
+- Format the preview tab title as `"{repo} - Steering"` on Messages and `"{repo} - Steering | {tab}"` on other tabs, and automatically request the bible-check survey whenever it is unanswered.
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
 

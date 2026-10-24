@@ -1847,6 +1847,8 @@ def test_http_boundaries():
       assert '<ul id="tasks-current-body" class="task-list"></ul>' in page
       assert '<ul id="tasks-finished-body" class="task-list"></ul>' in page
       assert '<ul id="tasks-upcoming-body" class="task-list"></ul>' in page
+      assert store.state()["repo"] == store.repository_root().name
+      assert f"<title>{store.repository_root().name} - Steering</title>" in page
       assert page.index('id="tasks-current"') < page.index('id="tasks-upcoming"')
       assert page.index('id="tasks-upcoming"') < page.index('id="tasks-finished"')
       assert ".task-list{margin:0;padding-left:20px" in page

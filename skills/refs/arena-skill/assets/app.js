@@ -1193,6 +1193,7 @@ function renderState() {
   paintSkipPoll(state.skip_poll);
   paintInterrupt(state.agent_interrupt_pending);
   showWorkspace(state.workspace);
+  syncDocumentTitle();
   const signature = reportsSignature(state.reports);
   if (signature !== listSignature) {
     listSignature = signature;
@@ -3087,6 +3088,18 @@ document.addEventListener('visibilitychange', () => {
     checkReportRead();
   }
 });
+const TAB_TITLES = {
+  'notes-tab': 'Messages',
+  'reports-tab': 'Reports',
+  'tasks-tab': 'Tasks',
+  'downloads-tab': 'Downloads',
+};
+function syncDocumentTitle() {
+  const repo = getState()?.repo || String(document.title || '').split(' - Steering')[0].trim() || 'Workspace';
+  const active = tabs.find(item => item.getAttribute('aria-selected') === 'true') || tabs[0];
+  const label = TAB_TITLES[active?.id] || 'Messages';
+  document.title = `${repo} - Steering${label === 'Messages' ? '' : ` | ${label}`}`;
+}
 function showTab(tab) {
   clearJumpHighlight();
   const alreadySelected = tab.getAttribute('aria-selected') === 'true';
@@ -3099,6 +3112,7 @@ function showTab(tab) {
     panel.hidden = !selected;
     if (selected && !alreadySelected) gsap.fromTo(panel, { opacity: 0 }, { opacity: 1, duration: 0.16, ease: 'power1.out' });
   }
+  syncDocumentTitle();
   if (tab === tabs[0]) grow();
   updateReportTop();
   if (tab === tabs[1]) {
@@ -3766,6 +3780,7 @@ const SURVEY_REFRESH_MS = 2000;
 let surveyView = null;
 let surveyBusy = false;
 let surveyRequested = false;
+let surveyAnswered = false;
 function surveyIsOpen(view) {
   return modal.open && $('#modal-fields').children[0] === view;
 }
@@ -3849,17 +3864,20 @@ function renderSurvey(view, results, answeredAt) {
 }
 async function refreshSurvey() {
   const view = surveyView;
-  if (!surveyIsOpen(view) || surveyBusy) return;
+  const open = surveyIsOpen(view);
+  if ((!open && (surveyAnswered || surveyRequested)) || surveyBusy) return;
   surveyBusy = true;
   try {
     const { results, answered_at } = await (await request('/api/survey')).json();
-    if (!surveyIsOpen(view)) return;
+    surveyAnswered = results !== null;
     if (results === null) {
-      $('#survey-again').hidden = true;
-      view.textContent = 'No submission yet. Requesting an answer from the agent…';
+      if (surveyIsOpen(view)) {
+        $('#survey-again').hidden = true;
+        view.textContent = 'No submission yet. Requesting an answer from the agent…';
+      }
       if (!surveyRequested) await requestSurvey();
       if (surveyIsOpen(view)) view.textContent = 'No submission yet. A request was sent to the agent.';
-    } else renderSurvey(view, results, answered_at);
+    } else if (surveyIsOpen(view)) renderSurvey(view, results, answered_at);
     if (surveyIsOpen(view) && !view.dataset.requestError) $('#modal-error').hidden = true;
   } catch (error) {
     if (surveyIsOpen(view)) {
@@ -3891,11 +3909,12 @@ $('#survey-open').addEventListener('click', async () => {
   if (modal.open) return;
   surveyView = document.createElement('section');
   surveyView.textContent = 'Loading survey…';
-  surveyRequested = false;
+  if (surveyAnswered) surveyRequested = false;
   void openModal({ title: 'Survey', content: surveyView, readOnly: true, hideTitle: true });
   $('#modal-cancel').focus();
   await refreshSurvey();
 });
+void refreshSurvey();
 setInterval(refreshSurvey, SURVEY_REFRESH_MS);
 
 // Violation types follow the active tab, and only paths in the repository bible can be selected.

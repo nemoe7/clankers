@@ -6227,6 +6227,7 @@ class Store:
         # The page counts down to the same block the gate applies.
         "gate_threshold": GATE_THRESHOLD,
         "display_tz": meta.get(TIMEZONE_META),
+        "repo": self.repository_root().name,
       }
 
   def tasks(self):
@@ -9579,6 +9580,10 @@ def handler(store):
           return
         if path == "/":
           page = (ASSETS / "index.html").read_text(encoding="utf-8")
+          page = page.replace(
+            "<title>Workspace · Messages & reports</title>",
+            f"<title>{html.escape(store.repository_root().name)} - Steering</title>",
+          )
           page = page.replace(
             "__STYLE__", (ASSETS / "style.css").read_text(encoding="utf-8")
           )
