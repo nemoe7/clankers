@@ -1568,7 +1568,19 @@ def long_run_name(line):
 def pr_checks_command(argv):line=argv[-1]if len(argv)>2 and argv[0]in SHELL_BASENAMES else' '.join(argv);return long_run_name(line)=='pr-checks'
 JOB_LOG_PATH_RE=re.compile('(?:^|/|repos/[^/\\s\\"\']+/[^/\\s\\"\']+/)actions/(jobs|runs)/(\\d+)/logs\\b')
 PR_PATCH_PATH_RE=re.compile('(?:^|/|repos/[^/\\s\\"\']+/[^/\\s\\"\']+/)pulls/(\\d+)\\b')
-def pr_update_command(number,title,body_file,root=None):
+def pr_session_id_hits(store,title,body,body_label='body'):
+	if store is None:return[]
+	tokens=session_id_tokens(store)
+	if not tokens:return[]
+	patterns={token:re.compile(f"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])")for token in tokens};hits=[]
+	for(number,line)in enumerate(str(title or'').splitlines(),1):
+		for(token,pattern)in patterns.items():
+			if pattern.search(line):entry_type,ident=tokens[token];hits.append(('title',number,token,entry_type,ident))
+	for(number,line)in enumerate(str(body or'').splitlines(),1):
+		for(token,pattern)in patterns.items():
+			if pattern.search(line):entry_type,ident=tokens[token];hits.append((body_label,number,token,entry_type,ident))
+	return hits
+def pr_update_command(number,title,body_file,root=None,store=None):
 	root_path=Path(root or resolve_repo_root()).resolve()
 	if type(number)is not int or number<=0:raise ValueError('Pull request number must be a positive integer')
 	clean_title=str(title or'').strip()
@@ -1580,7 +1592,16 @@ def pr_update_command(number,title,body_file,root=None):
 		if str(candidate).startswith('/tmp/')or candidate==Path('/tmp'):raise ValueError('Stage pull request text in the workspace, never /tmp')
 		raise ValueError(f"Pull request body file must be inside the workspace ({root_path})")
 	if not candidate.is_file():raise ValueError(f"Pull request body file not found: {raw_arg}")
-	body=candidate.read_text(encoding='utf-8');slug=repo_slug(root_path)
+	body=candidate.read_text(encoding='utf-8');rel=candidate.relative_to(root_path).as_posix()
+	if store is None:
+		candidate_state=root_path/'arena-state'if root is not None else Path(resolve_state_dir())
+		if state_file(candidate_state).is_file():store=Store(candidate_state,create=False)
+	hits=pr_session_id_hits(store,clean_title,body,body_label=rel)
+	if hits:
+		lines=['PR UPDATE BLOCKED: the pull request title or body cites a session-local ID. Strip message, report, and task IDs before updating the pull request:']
+		for(source_label,line_no,token,entry_type,ident)in hits:named=ident if token==ident else f"{token} of {ident}";lines.append(f"  {source_label}:{line_no}: {entry_type} {named}")
+		raise ValueError('\n'.join(lines))
+	slug=repo_slug(root_path)
 	if not slug:raise ValueError('Could not resolve GitHub repository slug from origin remote')
 	payload=json.dumps({'title':clean_title,'body':body});patch_proc=subprocess.run(['gh','api',f"repos/{slug}/pulls/{number}",'-X','PATCH','--input','-'],input=payload,cwd=root_path,capture_output=True,text=True,check=False)
 	if patch_proc.returncode!=0:detail=(patch_proc.stderr or patch_proc.stdout or'gh api PATCH failed').strip();raise ValueError(f"Pull request #{number} update failed: {detail}")
@@ -1589,7 +1610,7 @@ def pr_update_command(number,title,body_file,root=None):
 	try:fetched=json.loads(fetch_proc.stdout)
 	except json.JSONDecodeError as error:raise ValueError(f"Pull request #{number} verification returned invalid JSON: {error}")from None
 	if fetched.get('title')!=clean_title or(fetched.get('body')or'')!=body:raise ValueError(f"Pull request #{number} title/body parity mismatch after PATCH")
-	rel=candidate.relative_to(root_path).as_posix();return f"Updated PR #{number}: {clean_title} (verified against {rel})"
+	return f"Updated PR #{number}: {clean_title} (verified against {rel})"
 def job_log_command(store=None,job_id=None,run_id=None,root=None):
 	job_clean=str(job_id or'').strip();run_clean=str(run_id or'').strip()
 	if not job_clean and not run_clean:raise ValueError('Supply --job <job-id> or --run <run-id>')
@@ -3965,7 +3986,7 @@ def main():
 			except ValueError as error:print(error,file=sys.stderr);return 1
 			return 0
 		if args.command=='pr-update':
-			try:print(pr_update_command(args.number,args.title,args.body_file))
+			try:store=Store(state_dir,create=False)if state_file(state_dir).is_file()else None;print(pr_update_command(args.number,args.title,args.body_file,store=store))
 			except ValueError as error:print(error,file=sys.stderr);return 1
 			return 0
 		if args.command=='job-log':

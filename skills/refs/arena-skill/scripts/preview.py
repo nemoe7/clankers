@@ -4304,7 +4304,32 @@ JOB_LOG_PATH_RE = re.compile(
 PR_PATCH_PATH_RE = re.compile(r"(?:^|/|repos/[^/\s\"']+/[^/\s\"']+/)pulls/(\d+)\b")
 
 
-def pr_update_command(number, title, body_file, root=None):
+def pr_session_id_hits(store, title, body, body_label="body"):
+  """Find session-local message, report, or task IDs cited in a pull request title or body."""
+  if store is None:
+    return []
+  tokens = session_id_tokens(store)
+  if not tokens:
+    return []
+  patterns = {
+    token: re.compile(rf"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])")
+    for token in tokens
+  }
+  hits = []
+  for number, line in enumerate(str(title or "").splitlines(), 1):
+    for token, pattern in patterns.items():
+      if pattern.search(line):
+        entry_type, ident = tokens[token]
+        hits.append(("title", number, token, entry_type, ident))
+  for number, line in enumerate(str(body or "").splitlines(), 1):
+    for token, pattern in patterns.items():
+      if pattern.search(line):
+        entry_type, ident = tokens[token]
+        hits.append((body_label, number, token, entry_type, ident))
+  return hits
+
+
+def pr_update_command(number, title, body_file, root=None, store=None):
   """Update a pull request title and body via REST from a workspace file and verify parity."""
   root_path = Path(root or resolve_repo_root()).resolve()
   if type(number) is not int or number <= 0:
@@ -4328,6 +4353,25 @@ def pr_update_command(number, title, body_file, root=None):
   if not candidate.is_file():
     raise ValueError(f"Pull request body file not found: {raw_arg}")
   body = candidate.read_text(encoding="utf-8")
+  rel = candidate.relative_to(root_path).as_posix()
+  if store is None:
+    candidate_state = (
+      root_path / "arena-state" if root is not None else Path(resolve_state_dir())
+    )
+    if state_file(candidate_state).is_file():
+      store = Store(candidate_state, create=False)
+  hits = pr_session_id_hits(store, clean_title, body, body_label=rel)
+  if hits:
+    lines = [
+      (
+        "PR UPDATE BLOCKED: the pull request title or body cites a session-local ID."
+        " Strip message, report, and task IDs before updating the pull request:"
+      )
+    ]
+    for source_label, line_no, token, entry_type, ident in hits:
+      named = ident if token == ident else f"{token} of {ident}"
+      lines.append(f"  {source_label}:{line_no}: {entry_type} {named}")
+    raise ValueError("\n".join(lines))
   slug = repo_slug(root_path)
   if not slug:
     raise ValueError("Could not resolve GitHub repository slug from origin remote")
@@ -4361,7 +4405,6 @@ def pr_update_command(number, title, body_file, root=None):
     ) from None
   if fetched.get("title") != clean_title or (fetched.get("body") or "") != body:
     raise ValueError(f"Pull request #{number} title/body parity mismatch after PATCH")
-  rel = candidate.relative_to(root_path).as_posix()
   return f"Updated PR #{number}: {clean_title} (verified against {rel})"
 
 
@@ -12638,7 +12681,10 @@ def main():
       return 0
     if args.command == "pr-update":
       try:
-        print(pr_update_command(args.number, args.title, args.body_file))
+        store = (
+          Store(state_dir, create=False) if state_file(state_dir).is_file() else None
+        )
+        print(pr_update_command(args.number, args.title, args.body_file, store=store))
       except ValueError as error:
         print(error, file=sys.stderr)
         return 1

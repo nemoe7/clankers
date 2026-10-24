@@ -14518,6 +14518,29 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert "119" in receipt
   assert len(gh_calls) == 2
   assert gh_calls[0][0][:4] == ["gh", "api", "repos/nemoe7/clankers/pulls/119", "-X"]
+  tz_store.note("a11b22", "ban ids from pr body")
+  rep_md = tmp_path / "pr-ban-rep.md"
+  rep_md.write_text("# Report\n\nSummary text.\n", encoding="utf-8")
+  tz_store.publish("pr-ban-report-id", "Ban Report", rep_md)
+  tz_store.write_task(
+    "pr-ban-task-id",
+    "Ban task",
+    ["Step one"],
+    status="upcoming",
+    task_type="code",
+    scope="skills/refs/arena-skill/",
+  )
+  for bad_token in ("a11b22", "pr-ban-report-id", "pr-ban-task-id"):
+    bad_pr_path = tmp_path / "bad-pr.md"
+    bad_pr_path.write_text(f"## Summary\n\nRef {bad_token}.\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="PR UPDATE BLOCKED"):
+      preview.pr_update_command(
+        119, "feat: title", bad_pr_path, root=tmp_path, store=tz_store
+      )
+  with pytest.raises(ValueError, match="PR UPDATE BLOCKED"):
+    preview.pr_update_command(
+      119, "feat: pr-ban-task-id", pr_body_path, root=tmp_path, store=tz_store
+    )
   assert (
     preview.job_log_command(tz_store, job_id="42", root=tmp_path)
     == "https://results.actions.githubusercontent.com/signed-log"
