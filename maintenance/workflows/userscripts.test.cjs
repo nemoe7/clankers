@@ -44,8 +44,8 @@ const bundles = {
     // The keep-rows plan, the trim cap and the trim-now press stay on the menu whatever
     // the switch says.
     alwaysMenus: { "transcript-trim": 3 },
-    // Logging and global pause stay outside the feature switches.
-    globalMenus: 2,
+    // Logging, global pause, and show-settings-button stay outside the feature switches.
+    globalMenus: 3,
     countMenu: "Transcript - keep ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
@@ -134,7 +134,11 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       setTimeout() { throw new Error("No steering button should schedule a click"); },
       clearTimeout() {},
       prompt() { return promptAnswer; },
-      GM_getValue(key, fallback) { return stored.has(key) ? stored.get(key) : fallback; },
+      GM_getValue(key, fallback) {
+        if (stored.has(key)) return stored.get(key);
+        if (key === "clankers-arena-show-settings-button" && !testMasterSwitchDefault) return false;
+        return fallback;
+      },
       GM_setValue(key, value) {
         if (refuseWrite) throw new Error("Storage write failed");
         assert.ok(
@@ -154,6 +158,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     return { menus, active, logs, intervals };
   }
 
+  let testMasterSwitchDefault = false;
   const moduleSwitch = bundle.moduleSwitch === true;
   function menuFor(page, key) {
     return [...page.menus.values()].find((item) =>
@@ -161,6 +166,24 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   }
   // A switch label reads (ON)/(OFF) for the Arena bundle and `: ON - toggle` for ChatGPT.
   const reads = (label, on) => label.includes(moduleSwitch ? (on ? "(ON)" : "(OFF)") : (on ? ": ON" : ": OFF"));
+
+  if (domain === "arena") {
+    testMasterSwitchDefault = true;
+    const masterDefault = load();
+    assert.deepEqual(
+      [...masterDefault.menus.values()].map((item) => item.label),
+      ["Userscript - show settings button (ON)"],
+      "When show settings button is ON, Tampermonkey hides all other menu items",
+    );
+    masterDefault.menus.values().next().value.callback();
+    assert.equal(stored.get("clankers-arena-show-settings-button"), false);
+    assert.ok(
+      masterDefault.menus.size > 1,
+      "Disabling show settings button reveals all other Tampermonkey menu items",
+    );
+    stored.clear();
+    testMasterSwitchDefault = false;
+  }
 
   const defaults = load();
   assert.equal(defaults.menus.size, menusFor(stored));
@@ -193,6 +216,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Tab title - every 1 s",
       "Userscript - log level (INFO)",
       "Userscript - pause all",
+      "Userscript - show settings button (OFF)",
     ];
     assert.deepEqual(
       [...defaults.menus.values()].map((item) => item.label),
@@ -384,6 +408,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Tab title - every 1 s",
         "Userscript - log level (INFO)",
         "Userscript - pause all",
+        "Userscript - show settings button (OFF)",
       ],
       "The keep-rows line sits in the Transcript group",
     );
@@ -562,7 +587,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     ResizeObserver: class { constructor(fn) { observers.push(fn); } observe() {} unobserve() {} disconnect() {} },
     requestAnimationFrame(fn) { frames.set(++serial, fn); return serial; },
     cancelAnimationFrame(id) { frames.delete(id); },
-    GM_getValue(key) { return key === 'auto-scroll' && enabled; },
+    GM_getValue(key) {
+      if (key === 'clankers-arena-show-settings-button') return false;
+      return key === 'auto-scroll' && enabled;
+    },
     GM_registerMenuCommand(label, fn) { menus.set(label, fn); return label; },
     GM_unregisterMenuCommand(label) { menus.delete(label); },
     GM_setValue(key, value) { enabled = value; },
@@ -772,6 +800,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     };
     stored.set("clankers-arena-proxy-host", "https://proxy.example");
     stored.set("clankers-arena-proxy-master", "master-secret");
+    stored.set("clankers-arena-show-settings-button", false);
     vm.runInNewContext(source, context, { filename: "arena.user.js" });
     const goto = (path) => {
       context.location.pathname = path;
@@ -1022,7 +1051,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       },
       sessionStorage: { getItem() { return null; }, setItem() {} },
       prompt() { return null; },
-      GM_getValue(key, fallback) { return fallback; },
+      GM_getValue(key, fallback) {
+        return key === "clankers-arena-show-settings-button" ? false : fallback;
+      },
       GM_setValue() {},
       GM_registerMenuCommand(label, callback) { titleMenus.set(label, callback); return label; },
       GM_unregisterMenuCommand(label) { titleMenus.delete(label); },
@@ -1140,6 +1171,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   test("auto wake sends an exact visible draft once after a cancellable delay", () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const saved = new Map(Object.keys(bundles.arena.features).filter(key => key !== "auto-wake" && key !== "keep-working").map(key => [key, false]));
+  saved.set("clankers-arena-show-settings-button", false);
     const timers = new Map();
     const menus = new Map();
     const listeners = new Map();
@@ -1573,6 +1605,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     context.window = context;
     context.self = context;
     saved.set("clankers-arena-state-hinted", true);
+    saved.set("clankers-arena-show-settings-button", false);
     vm.runInNewContext(source, context, { filename: "arena.user.js" });
     const settle = () => new Promise(setImmediate);
     const digest = core => require("node:crypto").createHash("sha256").update(JSON.stringify(core)).digest("hex");
@@ -2120,7 +2153,11 @@ for raw in sys.stdin:
         Blob: class { constructor(parts) { this.parts = parts; } },
         URL,
         console: { log() {}, warn() {}, error() {}, debug() {}, info() {} },
-        GM_getValue: (key, fallback) => (saved.has(key) ? saved.get(key) : fallback),
+        GM_getValue: (key, fallback) => {
+          if (saved.has(key)) return saved.get(key);
+          if (key === "clankers-arena-show-settings-button") return false;
+          return fallback;
+        },
         GM_setValue: (key, value) => { saved.set(key, value); },
         GM_deleteValue: key => { saved.delete(key); },
         GM_registerMenuCommand: (label, callback) => { menus.set(label, callback); return label; },
@@ -2334,6 +2371,7 @@ for raw in sys.stdin:
             if (sel === "input, select" && (child.tag === "input" || child.tag === "select")) out.push(child);
             if (sel === "path" && child.tag === "path") out.push(child);
             if (sel === "section" && child.tag === "section") out.push(child);
+            if (sel === "button" && child.tag === "button") out.push(child);
             visit(child);
           }
         };
@@ -2459,11 +2497,36 @@ for raw in sys.stdin:
     const sections = modalNode.querySelectorAll("section").map((sec) => sec.attrs["data-settings-section"]);
     assert.deepEqual(
       sections,
-      ["Composer", "Page", "Proxy", "State", "Steering", "Transcript"],
+      ["Composer", "Page", "Proxy", "State", "Steering", "Transcript", "Userscript"],
       "settings modal groups settings into alphabetized sections",
     );
 
     const allInputs = modalNode.querySelectorAll("input, select");
+    const allButtons = modalNode.querySelectorAll("button");
+    for (const actionId of ["choose-state-file", "force-save", "trim-now", "post-key-now"]) {
+      assert.ok(
+        allButtons.some((btn) => btn.attrs["data-settings-action"] === actionId),
+        `settings modal exposes action button ${actionId}`,
+      );
+    }
+    for (const key of [
+      "clankers-arena-proxy-host",
+      "clankers-arena-preview-proxy-host",
+      "clankers-arena-proxy-master",
+      "clankers-arena-trim-keep",
+      "clankers-arena-trim-cap",
+      "clankers-arena-trim-interval-ms",
+      "clankers-arena-title-interval-ms",
+      "clankers-arena-state-reset-window",
+      "clankers-arena-log-level",
+      "clankers-arena-userscript-paused",
+      "clankers-arena-show-settings-button",
+    ]) {
+      assert.ok(
+        allInputs.some((el) => el.attrs["data-setting-key"] === key),
+        `settings modal exposes setting ${key}`,
+      );
+    }
     const wakeMinInput = allInputs.find(
       (el) => el.attrs["data-setting-key"] === "clankers-arena-wake-delay-min-ms",
     );
