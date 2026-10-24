@@ -43,7 +43,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 8. Every transition shares one curve over 160 to 220 ms; for animations, vendor [GSAP](https://github.com/greensock/GSAP) into the project as the go-to library. Reduced motion turns animation off.
 
-9. Each control shows default, hover, focus, active, disabled, and loading. Lists also show empty, failed, and offline. Hover exists only where a pointer does.
+9. Each control shows default, hover, focus, active, disabled, and loading. Lists also show empty, failed, and offline. Hover exists only where a pointer does, and the focus outline appears only on keyboard navigation (NUA307).
 
 10. The pending row appears before the reply. A failure retries once with the same ID, so the list holds one row.
 

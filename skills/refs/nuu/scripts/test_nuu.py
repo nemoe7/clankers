@@ -597,6 +597,7 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
   driver_src = driver.read_text(encoding="utf-8")
   assert "hasTouch: touch" in driver_src and "isMobile: touch" in driver_src
   assert "height <= 480" in driver_src
+  assert "NUA307" in driver_src
   bad_ready = subprocess.run(
     ["node", str(driver)],
     input=json.dumps(

@@ -261,6 +261,10 @@ body {
   outline-offset: 0;
 }
 
+:root:not([data-keyboard-nav="true"]) :focus-visible {
+  outline: 0; /* nonuu: NUL003 */
+}
+
 /* Rows and panels */
 .row {
   display: flex;

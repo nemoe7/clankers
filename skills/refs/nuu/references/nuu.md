@@ -17,7 +17,7 @@
 | `annotate`, `board` | Render boxes, arrows, labels, callouts, and multi-panel comparison boards with the project's default text font | `-i, --input <png>`, `-o, --output <png>`, `-b, --box <spec>`, `-l, --label <spec>`, `-a, --arrow <spec>`, `-c, --callout <spec>`, `-t, --title <text>`, `-p, --panel <spec>`, `-s, --spec <json>`, `-S, --scale <1-6>`, `-W, --wireframe` |
 | `audit` | Run source, measure, flow, and rendered a11y checks | `-r, --root <path>`, `-u, --url <url>`, `-s, --sheet <path>`, `-m, --measure <path>`, `-f, --flows <json>`, `-c, --change <spec>`, `-A, --allow-live-edits`, `-R, --ready <selector>`, `-W, --wireframe`, `-o, --out <dir>`, `-j, --json` |
 
-## Audit Coverage (`NUL001`–`NUA306`)
+## Audit Coverage (`NUL001`–`NUA307`)
 
 Suppress a source-lint finding on a line with `nonuu: <ID>` (for example, `<!-- nonuu: NUL001 -->` or `/* nonuu: NUL003 */`).
 
@@ -34,6 +34,7 @@ Suppress a source-lint finding on a line with `nonuu: <ID>` (for example, `<!-- 
 | `NUA304` | Rendered `a11y` | Interactive control whose `:focus-visible` ring is clipped or identical to its unfocused outline/box-shadow |
 | `NUA305` | Rendered `a11y` | Invalid `role`, missing required ARIA state (`aria-checked`, `aria-expanded`, `aria-selected`), or broken `aria-labelledby` / `aria-describedby` / `aria-controls` ID target |
 | `NUA306` | Rendered `a11y` | Stylesheet animation or transition without a `@media (prefers-reduced-motion: reduce)` rule |
+| `NUA307` | Rendered `a11y` | Interactive control that renders a visible focus outline on pointer focus before keyboard navigation |
 
 ## Optional Recipes
 

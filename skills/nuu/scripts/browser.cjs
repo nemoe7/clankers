@@ -423,6 +423,53 @@ async function a11yChecks(page) {
       }
     }
 
+    let hasAuthorFocusOutline = false;
+    for (const sheet of Array.from(document.styleSheets || [])) {
+      let rules;
+      try {
+        rules = sheet.cssRules;
+      } catch {
+        continue;
+      }
+      for (const rule of Array.from(rules || [])) {
+        const text = String(rule.cssText || '');
+        if (/:focus(?:-visible)?\b/.test(text) && /\boutline\b/.test(text)) {
+          hasAuthorFocusOutline = true;
+          break;
+        }
+      }
+      if (hasAuthorFocusOutline) break;
+    }
+    if (hasAuthorFocusOutline) {
+      const prevActive = document.activeElement;
+      const prevKeyboardNav = document.documentElement.dataset.keyboardNav;
+      delete document.documentElement.dataset.keyboardNav;
+      for (const control of document.querySelectorAll(interactiveSelector)) {
+        if (!isVisible(control) || control.disabled) continue;
+        try {
+          control.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));
+          control.focus({preventScroll: true});
+          const fStyle = getComputedStyle(control);
+          const outlineW = parseFloat(fStyle.outlineWidth) || 0;
+          if (outlineW > 0 && fStyle.outlineStyle !== 'none') {
+            findings.push({
+              rule: 'NUA307',
+              severity: 'review',
+              criterion: '2.4.7',
+              selector: selectorFor(control),
+              evidence: `Interactive control ${selectorFor(control)} shows focus outline (${fStyle.outlineWidth} ${fStyle.outlineStyle}) on pointer focus before keyboard navigation`,
+            });
+          }
+        } catch {}
+      }
+      if (prevKeyboardNav !== undefined) document.documentElement.dataset.keyboardNav = prevKeyboardNav;
+      else delete document.documentElement.dataset.keyboardNav;
+      try {
+        if (prevActive && typeof prevActive.focus === 'function') prevActive.focus({preventScroll: true});
+        else if (document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
+      } catch {}
+    }
+
     return {status: 'checked', findings};
   });
 }
