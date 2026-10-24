@@ -1005,6 +1005,12 @@ test('preview client', async (t) => {
       assert.equal(get('#image-modal-img').dataset.panX, '15', 'pointermove pans X from current offset');
       assert.equal(get('#image-modal-img').dataset.panY, '15', 'pointermove pans Y from current offset');
       get('#image-modal-img').events.pointerup(event({ pointerId: 7 }));
+      get('#image-modal-img').events.pointerdown(event({ button: 0, clientX: 200, clientY: 200, pointerId: 11 }));
+      get('#image-modal-img').events.pointerdown(event({ button: 0, clientX: 400, clientY: 200, pointerId: 12 }));
+      get('#image-modal-img').events.pointermove(event({ clientX: 600, clientY: 200, pointerId: 12 }));
+      assert.equal(get('#image-modal-img').dataset.zoom, '2.4', 'two-pointer pinch out scales image zoom');
+      get('#image-modal-img').events.pointerup(event({ pointerId: 12 }));
+      get('#image-modal-img').events.pointerup(event({ pointerId: 11 }));
       get('#image-modal-close').events.click();
       assert.equal(get('#image-modal').open, false, 'close button closes #image-modal');
       assert.equal(get('#tasks-current-body').sortable?.option('handle'), '.task-drag-handle');
@@ -3472,6 +3478,10 @@ test('preview client', async (t) => {
     assert.equal(chipText(), 'report card.pdf · 12 B', 'the chip carries the size of the file');
     assert.equal(get('#staged-files').hidden, false);
     assert.equal(get('#staged-files').children[0].children[1].getAttribute('aria-label'), 'Remove report card.pdf');
+    assert.equal(get('#staged-files').children[0].children[2]?.className, 'staged-chip-lead staged-chip-file');
+    assert.equal(get('#staged-files').children[1].children[2]?.tagName, 'img');
+    assert.equal(get('#staged-files').children[1].children[2]?.className, 'staged-chip-lead staged-chip-thumb');
+    assert.equal(get('#staged-files').children[1].children[2]?.alt, 'photo.png');
     assert.equal(uploadCalls.length, 9, 'both selected files upload at once');
     dragging = event({ dataTransfer: { types: ['Files'], files: [thirdFile] } });
     get('#compose').events.dragover(dragging);

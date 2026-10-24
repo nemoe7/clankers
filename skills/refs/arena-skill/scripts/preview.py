@@ -9356,7 +9356,7 @@ def handler(store):
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
         "font-src 'self' data:; "
         # Without this, default-src none blocks every image a report carries.
-        "img-src 'self' data: https:; "
+        "img-src 'self' data: https: blob:; "
         "connect-src 'self' https: ws: wss:; base-uri 'none'; form-action 'self'",
       )
       if filename:

@@ -28,9 +28,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Sync the browser IANA timezone (`X-Timezone`) to `display_tz` in `preview.py` and export `TZ` in `install.sh`. Read `/nuu audit` device widths from `nuu` and pass standard repo ignores to `/nemoizer collect`.
 - Show `"{order}. {task id}\n{timestamp}"` task tooltips, center `.topbar-row` at `max-width: 900px`, add a `2px` `:focus-visible` accent outline ring, and cap `--app-height` composer height at `50%`.
 - Add composite visual-reference boards under `docs/arena-skill/design-visuals/` and `docs/arena-skill/images/`, and link them from `docs/arena-skill/design.md`.
-- Prevent native browser drag on `#image-modal-img` (`draggable="false"` and `dragstart` prevention) so pointer dragging pans report images, and anchor `#image-modal` wheel zoom to the cursor position.
+- Prevent native browser drag on `#image-modal-img` (`draggable="false"` and `dragstart` prevention), anchor `#image-modal` wheel zoom to the cursor, and support two-pointer pinch-to-zoom on mobile.
 - Format the preview tab title as `"{repo} - Steering"` on Messages and `"{repo} - Steering | {tab}"` on other tabs, and automatically request the bible-check survey whenever it is unanswered.
 - Wire `#copy-state` to force-save with a Lucide `save` icon when `userscripts/arena.user.js` is active. Clear the `#history` edge fade when message history ceases to scroll. Keep `#last-check` inline with `#connection` on mobile viewports, and pad `.report .question` so focus outlines do not clip.
+- Render unified 40px attachment cards in `#staged-files` with `32x32` image thumbnails (`.staged-chip-thumb`) and `32x32` Lucide `file-text` tiles (`.staged-chip-file`) for non-image files.
 - Register recognized slash commands on their own line, reject glued command tokens, and unregister the command line into plain text on `Backspace`.
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.

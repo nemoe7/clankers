@@ -116,6 +116,9 @@ const ICONS = {
   markdown: [['path', { d: 'M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z',
     fill: 'currentColor', stroke: 'none' }]],
   flag: [['path', { d: 'M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528' }]],
+  'file-text': [['path', { d: 'M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z' }],
+    ['path', { d: 'M14 2v4a2 2 0 0 0 2 2h4' }], ['path', { d: 'M10 9H8' }],
+    ['path', { d: 'M16 13H8' }], ['path', { d: 'M16 17H8' }]],
   'loader-circle': [['path', { d: 'M21 12a9 9 0 1 1-6.219-8.56' }]],
 };
 function icon(name, size = 15) {
@@ -505,7 +508,17 @@ async function uploadStaged(entry) {
     if (stagedFiles.includes(entry)) renderStagedFiles();
   }
 }
+function isImageAttachment(file) {
+  return Boolean(file && ((typeof file.type === 'string' && /^image\//i.test(file.type)) || /\.(?:png|jpe?g|gif|webp|svg|bmp|avif|ico)$/i.test(String(file.name || ''))));
+}
+function revokeStagedPreview(entry) {
+  if (entry && entry.previewUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+    try { URL.revokeObjectURL(entry.previewUrl); } catch { /* Ignore invalid object URL. */ }
+    entry.previewUrl = '';
+  }
+}
 async function dropStaged(entry) {
+  revokeStagedPreview(entry);
   entry.aborted = true;
   entry.controller?.abort();
   try { await entry.request; } catch { /* The request reports its own state. */ }
@@ -541,7 +554,21 @@ function renderStagedFiles() {
       renderStagedFiles();
       status.textContent = '';
     });
-    chip.append(name, remove);
+    let lead;
+    if (entry.isImage || isImageAttachment(entry.file)) {
+      lead = document.createElement('img');
+      lead.className = 'staged-chip-lead staged-chip-thumb';
+      lead.src = entry.previewUrl || `/api/uploads/${encodeURIComponent(entry.id)}`;
+      lead.alt = entry.file.name;
+      lead.width = 32;
+      lead.height = 32;
+    } else {
+      lead = document.createElement('span');
+      lead.className = 'staged-chip-lead staged-chip-file';
+      lead.setAttribute('aria-hidden', 'true');
+      setIcon(lead, 'file-text', 16);
+    }
+    chip.append(name, remove, lead);
     return chip;
   }));
   holder.hidden = !stagedFiles.length;
@@ -550,6 +577,7 @@ function renderStagedFiles() {
   grow();
 }
 function clearStagedFiles() {
+  for (const entry of stagedFiles) revokeStagedPreview(entry);
   stagedFiles = [];
   selector.value = '';
   renderStagedFiles();
@@ -564,7 +592,12 @@ function stageFiles(files) {
   for (const file of files) {
     let id = newId();
     while (stagedFiles.some(entry => entry.id === id) || entries.some(entry => entry.id === id)) id = newId();
-    entries.push({ file, id, status: 'uploading', error: '', aborted: false, controller: null, request: null });
+    const isImage = isImageAttachment(file);
+    let previewUrl = '';
+    if (isImage && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+      try { previewUrl = URL.createObjectURL(file); } catch { previewUrl = ''; }
+    }
+    entries.push({ file, id, isImage, previewUrl, status: 'uploading', error: '', aborted: false, controller: null, request: null });
   }
   stagedFiles.push(...entries);
   selector.value = '';
@@ -3677,12 +3710,28 @@ let imagePanX = 0;
 let imagePanY = 0;
 let imageDrag = null;
 let imageDragMoved = false;
+const imagePointers = new Map();
+let imagePinch = null;
 function applyImageTransform() {
   if (!imageModalImg) return;
   gsap.set(imageModalImg, { x: imagePanX, y: imagePanY, scale: imageZoom });
   imageModalImg.dataset.zoom = String(imageZoom);
   imageModalImg.dataset.panX = String(imagePanX);
   imageModalImg.dataset.panY = String(imagePanY);
+}
+function startImagePinch() {
+  if (imagePointers.size < 2) { imagePinch = null; return; }
+  const [p1, p2] = [...imagePointers.values()];
+  const dist = Math.max(Math.hypot(p2.x - p1.x, p2.y - p1.y), 1);
+  imagePinch = {
+    dist,
+    zoom: imageZoom,
+    panX: imagePanX,
+    panY: imagePanY,
+    midX: (p1.x + p2.x) / 2,
+    midY: (p1.y + p2.y) / 2,
+  };
+  imageDrag = null;
 }
 function openImageModal(image) {
   if (!imageModal || !imageModalImg) return;
@@ -3694,6 +3743,9 @@ function openImageModal(image) {
   imageZoom = 1;
   imagePanX = 0;
   imagePanY = 0;
+  imageDrag = null;
+  imagePinch = null;
+  imagePointers.clear();
   imageDragMoved = false;
   delete imageModalImg.dataset.dragging;
   applyImageTransform();
@@ -3731,30 +3783,78 @@ if (imageModal && imageModalImg) {
   imageModalImg.addEventListener('pointerdown', event => {
     if (event.button !== undefined && event.button !== 0) return;
     event.preventDefault();
+    const pid = event.pointerId ?? 0;
+    imagePointers.set(pid, { x: event.clientX, y: event.clientY });
+    imageModalImg.setPointerCapture?.(event.pointerId);
+    if (imagePointers.size >= 2) {
+      imageDragMoved = true;
+      startImagePinch();
+      return;
+    }
     imageDragMoved = false;
+    imagePinch = null;
     imageDrag = {
       startX: event.clientX - imagePanX,
       startY: event.clientY - imagePanY,
       originX: event.clientX,
       originY: event.clientY,
-      id: event.pointerId,
+      id: pid,
     };
     imageModalImg.dataset.dragging = 'true';
-    imageModalImg.setPointerCapture?.(event.pointerId);
   });
   imageModalImg.addEventListener('pointermove', event => {
-    if (!imageDrag) return;
+    const pid = event.pointerId ?? (imageDrag ? imageDrag.id : 0);
+    if (imagePointers.has(pid)) imagePointers.set(pid, { x: event.clientX, y: event.clientY });
+    if (imagePointers.size >= 2 && imagePinch) {
+      const [p1, p2] = [...imagePointers.values()];
+      const dist = Math.max(Math.hypot(p2.x - p1.x, p2.y - p1.y), 1);
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+      const nextZoom = Math.min(8, Math.max(0.5, Number((imagePinch.zoom * (dist / imagePinch.dist)).toFixed(3))));
+      const scaleRatio = nextZoom / imagePinch.zoom;
+      const rect = imageModalImg.getBoundingClientRect?.();
+      const hasRect = rect && (rect.width > 0 || rect.height > 0);
+      const baseCenterX = hasRect
+        ? rect.left + rect.width / 2 - imagePanX + imagePinch.panX
+        : (Number(window.innerWidth) || 0) / 2 + imagePinch.panX;
+      const baseCenterY = hasRect
+        ? rect.top + rect.height / 2 - imagePanY + imagePinch.panY
+        : (Number(window.innerHeight) || 0) / 2 + imagePinch.panY;
+      imagePanX = Number((imagePinch.panX + (midX - imagePinch.midX) + (imagePinch.midX - baseCenterX) * (1 - scaleRatio)).toFixed(3));
+      imagePanY = Number((imagePinch.panY + (midY - imagePinch.midY) + (imagePinch.midY - baseCenterY) * (1 - scaleRatio)).toFixed(3));
+      imageZoom = nextZoom;
+      applyImageTransform();
+      return;
+    }
+    if (!imageDrag || pid !== imageDrag.id) return;
     if (Math.hypot(event.clientX - imageDrag.originX, event.clientY - imageDrag.originY) > 2) imageDragMoved = true;
     imagePanX = event.clientX - imageDrag.startX;
     imagePanY = event.clientY - imageDrag.startY;
     applyImageTransform();
   });
   const endImageDrag = event => {
-    if (!imageDrag) return;
-    const id = event?.pointerId ?? imageDrag.id;
+    const pid = event?.pointerId ?? (imageDrag ? imageDrag.id : 0);
+    imagePointers.delete(pid);
+    if (event?.pointerId !== undefined) imageModalImg.releasePointerCapture?.(event.pointerId);
+    if (imagePointers.size >= 2) {
+      startImagePinch();
+      return;
+    }
+    imagePinch = null;
+    if (imagePointers.size === 1) {
+      const [[remId, remPt]] = [...imagePointers.entries()];
+      imageDrag = {
+        startX: remPt.x - imagePanX,
+        startY: remPt.y - imagePanY,
+        originX: remPt.x,
+        originY: remPt.y,
+        id: remId,
+      };
+      imageModalImg.dataset.dragging = 'true';
+      return;
+    }
     imageDrag = null;
     delete imageModalImg.dataset.dragging;
-    if (id !== undefined) imageModalImg.releasePointerCapture?.(id);
   };
   imageModalImg.addEventListener('pointerup', endImageDrag);
   imageModalImg.addEventListener('pointercancel', endImageDrag);
