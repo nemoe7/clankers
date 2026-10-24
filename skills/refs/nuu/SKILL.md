@@ -63,6 +63,8 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 18. Show a subtle delayed loading bar for long-running UI operations via [references/recipes/loading-bar.md](references/recipes/loading-bar.md); use a loud loading bar only when requested.
 
+19. Style scrollbars with the thin 10 px rounded thumb on the background track and no arrow buttons via [references/recipes/scrollbars.md](references/recipes/scrollbars.md).
+
 ## Go-to libraries
 
 - For draggable and reorderable lists, vendor only the required part of [SortableJS](https://github.com/SortableJS/Sortable) with its MIT license instead of writing custom drag-and-drop handlers.
@@ -103,4 +105,5 @@ python scripts/measure.py ruler --from 120,340 --to 264,340
 - `references/recipes/scroll-edge-fade.md`: scroll-driven CSS edge-fade mask recipe for scrollable panels and inputs (`@supports (animation-timeline: scroll(self))`).
 - `references/recipes/modal-manager.md`: shared dialog modal manager and reusable template recipe (`showModal()`, deliberate autofocus with initial focus-ring suppression until keyboard navigation, and trigger focus restoration).
 - `references/recipes/loading-bar.md`: subtle delayed edge loading-bar recipe for long-running UI operations (`200ms` anti-flicker delay, `aria-busy` container, compositor `transform`, reduced-motion static fallback, and opt-in loud variant).
+- `references/recipes/scrollbars.md`: thin 10 px rounded-thumb scrollbar recipe on the surface track with arrow buttons hidden.
 - `references/audit-report.md`: standalone template for nuu audits and visual verification reports.
