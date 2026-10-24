@@ -112,4 +112,5 @@ python scripts/measure.py ruler --from 120,340 --to 264,340
 - `references/recipes/loading-bar.md`: subtle delayed edge loading-bar recipe for long-running UI operations (`200ms` anti-flicker delay, `aria-busy` container, compositor `transform`, reduced-motion static fallback, and opt-in loud variant).
 - `references/recipes/scrollbars.md`: thin 10 px rounded-thumb scrollbar recipe on the surface track with arrow buttons hidden.
 - `references/recipes/overflow-and-clipping.md`: overflow, focus-halo, and tooltip anti-clipping recipe (`NUM209`, `NUM210`, `NUA308`).
+- `references/recipes/relative-timestamps.md` - Relative timestamp scale in full and abbreviated forms
 - `references/audit-report.md`: standalone template for nuu audits and visual verification reports.

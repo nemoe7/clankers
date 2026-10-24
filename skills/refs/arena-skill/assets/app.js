@@ -361,6 +361,7 @@ let slashCommands = [
   { cmd: '/nuu recipe modal-manager', desc: 'Send agent note: apply modal-manager recipe' },
   { cmd: '/nuu recipe offline-fonts', desc: 'Send agent note: apply offline-fonts recipe' },
   { cmd: '/nuu recipe overflow-and-clipping', desc: 'Send agent note: apply overflow-and-clipping recipe' },
+  { cmd: '/nuu recipe relative-timestamps', desc: 'Send agent note: apply relative-timestamps recipe' },
   { cmd: '/nuu recipe scroll-edge-fade', desc: 'Send agent note: apply scroll-edge-fade recipe' },
   { cmd: '/nuu recipe scrollbars', desc: 'Send agent note: apply scrollbars recipe' },
   { cmd: '/nuu recipes', desc: 'List nuu UI recipes (modal)' },
@@ -860,13 +861,29 @@ function clock(value) {
   }).formatToParts(stampDate(value)).map(part => [part.type, part.value]));
   return `${parts.hour}:${parts.minute}`;
 }
-function time(value) {
-  // The stamps read as an age: minutes under an hour, whole hours from an hour up.
-  const minutes = Math.floor((Date.now() - stampDate(value).getTime()) / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+function time(value, { compact = false, includeSeconds = false } = {}) {
+  const seconds = Math.max(0, Math.floor((Date.now() - stampDate(value).getTime()) / 1000));
+  if (includeSeconds) {
+    if (seconds < 1) return compact ? 'now' : 'just now';
+    if (seconds < 60) return compact ? `${seconds}s ago` : (seconds === 1 ? 'a second ago' : `${seconds} seconds ago`);
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 1) return compact ? 'now' : 'just now';
+  if (minutes < 60) return compact ? `${minutes}min ago` : (minutes === 1 ? 'a minute ago' : `${minutes} minutes ago`);
   const hours = Math.floor(minutes / 60);
-  return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  if (hours < 24) return compact ? `${hours}h ago` : (hours === 1 ? 'an hour ago' : `${hours} hours ago`);
+  const days = Math.floor(hours / 24);
+  if (days < 7) return compact ? `${days}d ago` : (days === 1 ? 'yesterday' : `${days} days ago`);
+  if (days < 30) {
+    const weeks = Math.floor(days / 7);
+    return compact ? `${weeks}wk ago` : (weeks === 1 ? 'last week' : `${weeks} weeks ago`);
+  }
+  if (days < 365) {
+    const months = Math.max(1, Math.floor(days / 30));
+    return compact ? `${months}mo ago` : (months === 1 ? 'last month' : `${months} months ago`);
+  }
+  const years = Math.max(1, Math.floor(days / 365));
+  return compact ? `${years}yr ago` : (years === 1 ? 'last year' : `${years} years ago`);
 }
 function clockTime(value) {
   // The header clock shows absolute time in the browser's local zone.
