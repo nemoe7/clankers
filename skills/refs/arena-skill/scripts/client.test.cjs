@@ -5084,6 +5084,10 @@ test('preview client', async (t) => {
     assert.match(renderedFlow, /class="copy-code"/);
     assert.match(renderedFlow, /<pre><code class="language-mermaid">/);
 
+    const longFlow = '<div class="code-block"><pre><code class="language-mermaid">flowchart TD\n  A["Write arena-state/backups/state-latest.ndjson and rotate 10 snapshots"] -->|state-latest.ndjson| B[Restore]\n  A -->|saved-state.ndjson| B</code></pre></div>';
+    const renderedLong = await context.renderMermaidBlocks(longFlow);
+    assert.match(renderedLong, /<tspan\b/);
+
     const seqHtml = '<div class="code-block"><button class="copy-code" data-code="sequenceDiagram"></button><pre><code class="language-mermaid">sequenceDiagram\n  Alice-&gt;&gt;Bob: Hello</code></pre></div>';
     const renderedSeq = await context.renderMermaidBlocks(seqHtml);
     assert.match(renderedSeq, /data-mermaid-state="rendered"/);

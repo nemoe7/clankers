@@ -2190,6 +2190,32 @@ function parseFlowNodeToken(token, nodes) {
   nodes.set(id, record);
   return id;
 }
+function wrapMermaidLabel(label, maxChars = 24) {
+  const text = String(label || '').trim();
+  if (!text) return [''];
+  if (text.length <= maxChars) return [text];
+  const tokens = text.split(/\s+/).flatMap(word => {
+    if (word.length <= maxChars) return [word];
+    const parts = word.split(/(?<=[/-])/);
+    if (parts.length > 1 && parts.every(p => p.length <= maxChars)) return parts;
+    const chunks = [];
+    for (let i = 0; i < word.length; i += maxChars) chunks.push(word.slice(i, i + maxChars));
+    return chunks;
+  });
+  const lines = [];
+  let current = '';
+  for (const token of tokens) {
+    const joiner = current && !current.endsWith('/') && !current.endsWith('-') ? ' ' : '';
+    if (current && (current + joiner + token).length > maxChars) {
+      lines.push(current);
+      current = token;
+    } else {
+      current = current ? current + joiner + token : token;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [text];
+}
 function renderFlowchartSvg(lines, header, config) {
   const dirMatch = /^(?:flowchart|graph)(?:\s+(TD|TB|BT|LR|RL))?\s*$/.exec(header);
   if (!dirMatch) throw new Error('Invalid flowchart header');
@@ -2219,6 +2245,12 @@ function renderFlowchartSvg(lines, header, config) {
   }
   if (!nodes.size) throw new Error('Empty flowchart');
   const ordered = [...nodes.values()];
+  for (const node of ordered) {
+    node.lines = wrapMermaidLabel(node.label, node.shape === 'diamond' ? 20 : 26);
+    const longest = Math.max(6, ...node.lines.map(l => l.length));
+    node.w = Math.round(Math.max(148, longest * 7.6 + (node.shape === 'diamond' ? 64 : 28)));
+    node.h = Math.round(Math.max(44, node.lines.length * 18 + (node.shape === 'diamond' ? 28 : 18)));
+  }
   const depths = new Map(ordered.map(node => [node.id, 0]));
   for (let pass = 0; pass < ordered.length; pass++) {
     for (const edge of edges) {
@@ -2238,10 +2270,11 @@ function renderFlowchartSvg(lines, header, config) {
   const denseLayers = layers.filter(Boolean);
   if (reverse) denseLayers.reverse();
   const maxBreadth = Math.max(1, ...denseLayers.map(layer => layer.length));
-  const boxW = 148;
-  const boxH = 44;
-  const mainGap = 56;
-  const crossGap = 36;
+  const boxW = Math.max(148, ...ordered.map(n => n.w));
+  const boxH = Math.max(44, ...ordered.map(n => n.h));
+  const hasEdgeLabels = edges.some(e => Boolean(e.label));
+  const mainGap = hasEdgeLabels ? 74 : 56;
+  const crossGap = 44;
   const pad = 24;
   const spanW = maxBreadth * boxW + (maxBreadth - 1) * crossGap;
   const spanH = maxBreadth * boxH + (maxBreadth - 1) * crossGap;
@@ -2269,23 +2302,35 @@ function renderFlowchartSvg(lines, header, config) {
     `<${'svg'} class="mermaid-svg" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" data-diagram-type="flowchart" data-direction="${dir}">`,
     '<defs><marker id="mermaid-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" /></marker></defs>',
   ];
-  for (const edge of edges) {
+  const pairGroups = new Map();
+  edges.forEach((edge, idx) => {
+    const key = `${edge.from}->${edge.to}`;
+    if (!pairGroups.has(key)) pairGroups.set(key, []);
+    pairGroups.get(key).push(idx);
+  });
+  edges.forEach((edge, idx) => {
     const a = coords.get(edge.from);
     const b = coords.get(edge.to);
-    if (!a || !b) continue;
-    const x1 = horizontal ? (a.cx <= b.cx ? a.x + boxW : a.x) : a.cx;
-    const y1 = horizontal ? a.cy : (a.cy <= b.cy ? a.y + boxH : a.y);
-    const x2 = horizontal ? (a.cx <= b.cx ? b.x : b.x + boxW) : b.cx;
-    const y2 = horizontal ? b.cy : (a.cy <= b.cy ? b.y : b.y + boxH);
+    if (!a || !b) return;
+    const siblings = pairGroups.get(`${edge.from}->${edge.to}`) || [idx];
+    const slot = siblings.indexOf(idx);
+    const shift = siblings.length > 1 ? Math.round((slot - (siblings.length - 1) / 2) * 32) : 0;
+    const x1 = (horizontal ? (a.cx <= b.cx ? a.x + boxW : a.x) : a.cx) + (horizontal ? 0 : shift);
+    const y1 = (horizontal ? a.cy : (a.cy <= b.cy ? a.y + boxH : a.y)) + (horizontal ? shift : 0);
+    const x2 = (horizontal ? (a.cx <= b.cx ? b.x : b.x + boxW) : b.cx) + (horizontal ? 0 : shift);
+    const y2 = (horizontal ? b.cy : (a.cy <= b.cy ? b.y : b.y + boxH)) + (horizontal ? shift : 0);
     const dash = edge.dotted ? ' stroke-dasharray="4 3"' : '';
     const marker = edge.open ? '' : ' marker-end="url(#mermaid-arrow)"';
     parts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
     if (edge.label) {
+      const labelVerticalShift = siblings.length > 1 ? Math.round((slot - (siblings.length - 1) / 2) * 16) : -6;
       const mx = Math.round((x1 + x2) / 2);
-      const my = Math.round((y1 + y2) / 2) - 6;
+      const my = Math.round((y1 + y2) / 2) + labelVerticalShift;
+      const pillW = Math.round(edge.label.length * 6.8 + 12);
+      parts.push(`<rect x="${Math.round(mx - pillW / 2)}" y="${my - 11}" width="${pillW}" height="16" rx="4" fill="var(--panel)" />`);
       parts.push(`<text class="mermaid-edge-label" x="${mx}" y="${my}" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeSvgText(edge.label)}</text>`);
     }
-  }
+  });
   for (const node of ordered) {
     const pos = coords.get(node.id);
     const rx = node.shape === 'round' ? 12 : node.shape === 'circle' ? 22 : 6;
@@ -2296,7 +2341,13 @@ function renderFlowchartSvg(lines, header, config) {
     } else {
       parts.push(`<rect x="${pos.x}" y="${pos.y}" width="${boxW}" height="${boxH}" rx="${rx}" fill="var(--panel)" stroke="var(--border)" stroke-width="1.5" />`);
     }
-    parts.push(`<text x="${pos.cx}" y="${pos.cy + 4}" text-anchor="middle" fill="var(--text)" font-size="13">${escapeSvgText(node.label)}</text></g>`);
+    if (node.lines.length === 1) {
+      parts.push(`<text x="${pos.cx}" y="${pos.cy + 4}" text-anchor="middle" fill="var(--text)" font-size="13">${escapeSvgText(node.lines[0])}</text></g>`);
+    } else {
+      const startY = Math.round(pos.cy + 4 - ((node.lines.length - 1) * 18) / 2);
+      const tspans = node.lines.map((ln, idx) => `<tspan x="${pos.cx}" dy="${idx === 0 ? 0 : 18}">${escapeSvgText(ln)}</tspan>`).join('');
+      parts.push(`<text x="${pos.cx}" y="${startY}" text-anchor="middle" fill="var(--text)" font-size="13">${tspans}</text></g>`);
+    }
   }
   parts.push('</svg>');
   return parts.join('');
