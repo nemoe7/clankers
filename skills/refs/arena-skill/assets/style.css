@@ -528,7 +528,7 @@ mark code { color: var(--text); }
   }
   @supports (animation-timeline: scroll(self)) {
     /* A non-scrollable region keeps both fade lengths at zero. */
-    #history, [role="tabpanel"]:not(#notes-panel), .draft-preview {
+    #history, #modal textarea, #note, .draft-preview, .note-backdrop, [role="tabpanel"]:not(#notes-panel) {
       mask-image: linear-gradient(to bottom, transparent, black var(--edge-start), black calc(100% - var(--edge-end)), transparent);
       animation: edge-start linear both, edge-end linear both;
       animation-timeline: scroll(self), scroll(self);

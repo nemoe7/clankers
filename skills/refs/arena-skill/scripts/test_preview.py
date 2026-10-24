@@ -1867,6 +1867,9 @@ def test_http_boundaries():
       assert "padding-block:0" in page and ".key-line code{" in page
       assert '[role="tabpanel"]:not(#notes-panel)' in page
       assert (
+        "#history,#modal textarea,#note,.draft-preview,.note-backdrop,[role=" in page
+      )
+      assert (
         "#tasks-panel{animation:panel-enter var(--motion-duration) ease-out,edge-end linear both"
         in page
       )
