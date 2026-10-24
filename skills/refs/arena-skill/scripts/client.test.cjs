@@ -5164,6 +5164,7 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(htmlSource, /id="modal-close"/);
   const styleSource = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
   assert.match(styleSource, /\.slash-token\b/);
+  assert.match(styleSource, /body\s*\{[^}]*height:\s*var\(--app-height,\s*100dvh\)/);
   assert.doesNotMatch(styleSource, /#compose:has\(#note\[data-slash="true"\]\)/);
 });
 

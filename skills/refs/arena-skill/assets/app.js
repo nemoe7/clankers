@@ -303,7 +303,11 @@ expandComposer.addEventListener('click', () => {
 let lastViewportHeight = 0;
 function syncViewport() {
   const vv = window.visualViewport;
-  const nextHeight = Math.round(vv?.height || window.innerHeight || 0);
+  const vvHeight = vv?.height || 0;
+  const innerHeight = window.innerHeight || 0;
+  const nextHeight = Math.round(
+    vvHeight && innerHeight ? Math.min(vvHeight, innerHeight) : vvHeight || innerHeight
+  );
   if (!nextHeight) return;
   const history = $('#history');
   const priorHistoryHeight = history.clientHeight;
@@ -321,6 +325,7 @@ function syncViewport() {
   }
 }
 window.addEventListener('resize', () => { syncViewport(); grow(); });
+window.addEventListener('pageshow', () => { syncViewport(); grow(); });
 window.visualViewport?.addEventListener?.('resize', syncViewport);
 window.visualViewport?.addEventListener?.('scroll', syncViewport);
 syncViewport();

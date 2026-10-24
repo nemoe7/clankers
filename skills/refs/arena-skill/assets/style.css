@@ -91,7 +91,7 @@
 /* The document never scrolls: each panel owns its own scrolling, and a touch drag on the page
    behind them bounces nothing. */
 html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
-body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: var(--app-height, 100dvh); overflow: hidden; }
 /* Headings use browser default sizes (32, 24, 18.72, 16, 13.28, and 10.72px) so h2 stays distinct from h3. */
 h1 { letter-spacing: -.035em; margin: 4px 0; }
 h2 { margin: 0 0 8px; }
@@ -548,7 +548,7 @@ mark code { color: var(--text); }
 #survey-again { display: inline-flex; align-items: center; gap: 6px; }
 #modal[data-read-only="true"] button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #survey-open { touch-action: manipulation; }
-#image-modal { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); overflow: hidden; }
+#image-modal { width: 100vw; max-width: 100vw; height: var(--app-height, 100dvh); max-height: var(--app-height, 100dvh); margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); overflow: hidden; }
 #image-modal[open] { display: grid; place-items: center; }
 #image-modal::backdrop { background: rgb(0 0 0 / .82); }
 #image-modal-close { position: fixed; top: 16px; right: 16px; z-index: 2; width: 40px; height: 40px; border-radius: 8px; background: var(--panel); color: var(--text); border: 1px solid var(--border); }

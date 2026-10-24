@@ -1868,6 +1868,7 @@ def test_http_boundaries():
       # The document does not scroll. Panels do. A short viewport lowers the log-card floor.
       # A small phone then keeps the column on screen with the composer closed.
       assert "html,body{height:100%;overflow:hidden;overscroll-behavior:none" in page
+      assert "height:var(--app-height,100dvh)" in page
       # The log header wraps into four short lines on a narrow width, and the 12px wrap gap read
       # as dead space. The lines sit close now.
       assert ".log-card>.row:first-child{margin-block:0;row-gap:2px" in page
