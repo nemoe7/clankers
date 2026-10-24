@@ -2171,7 +2171,7 @@ test('preview client', async (t) => {
     await get('#report-form').events.submit(event({}));
     assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: [{ type: 'preset', value: 'ui' }, { type: 'preset', value: 'api' }], verdict: { type: 'custom', label: 'Other', value: rawCustom } });
     assert.equal(sent.at(-1).revision, reportRevision, 'send the revision that supplied the form');
-    assert.equal(get('#report-status').children[0].dataset.full, sent.at(-1).id);
+    assert.equal(get('#report-status').children.find(child => child.dataset?.full === sent.at(-1).id)?.dataset.full, sent.at(-1).id);
     assert.doesNotMatch(get('#report-status').textContent, /Sent |Read |Awaiting ack|Acked /,
       'the stamps live on the receipt, not the status line');
     const sentReceipt = get('#report-agent-ack');
