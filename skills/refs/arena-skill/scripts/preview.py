@@ -5072,6 +5072,25 @@ def _extract_clauses(skill_md):
   return "\n".join(lines)
 
 
+def _extract_nuu_breakpoints(nuu_dir):
+  uiux_py = nuu_dir / "scripts" / "uiux.py"
+  if uiux_py.is_file():
+    match = re.search(
+      r"NAMED_BREAKPOINTS\s*=\s*\(([^)]+)\)", uiux_py.read_text(encoding="utf-8")
+    )
+    if match:
+      items = re.findall(r'["\']([^"\']+)["\']', match.group(1))
+      if items:
+        return tuple(items)
+  clauses = _extract_clauses(nuu_dir / "SKILL.md")
+  for line in clauses.splitlines():
+    if line.startswith("7."):
+      items = re.findall(r"\b[0-9.]+(?:em|rem|px)\b", line)
+      if items:
+        return tuple(items)
+  return ("75em", "56.25em", "40em")
+
+
 def _recipe_summary_line(content):
   for raw in content.splitlines():
     line = raw.strip()
@@ -5287,8 +5306,9 @@ def resolve_slash_command(text, root=None):
         "markdown": f"```text\n{out}\n```",
       }
     if sub == "audit":
+      bp_list = ", ".join(f"`{bp}`" for bp in _extract_nuu_breakpoints(nuu_dir))
       note_text = (
-        "Run a full `nuu` UI/UX audit (`1280` px and `360` px viewports, `a11y`, "
+        f"Run a full `nuu` UI/UX audit (breakpoints {bp_list}; `a11y`, "
         "`density`, and `annotate`) and publish the audit report using "
         "`skills/refs/nuu/references/audit-report.md`."
       )

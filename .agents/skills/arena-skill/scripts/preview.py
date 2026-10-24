@@ -1816,6 +1816,19 @@ def _extract_clauses(skill_md):
 	text=skill_md.read_text(encoding='utf-8')
 	if'## Clauses'not in text:return''
 	after=text.split('## Clauses',1)[1];section=after.split('\n## ',1)[0].strip();lines=[line.strip()for line in section.splitlines()if re.match('^\\d+\\.',line.strip())];return'\n'.join(lines)
+def _extract_nuu_breakpoints(nuu_dir):
+	uiux_py=nuu_dir/'scripts'/'uiux.py'
+	if uiux_py.is_file():
+		match=re.search('NAMED_BREAKPOINTS\\s*=\\s*\\(([^)]+)\\)',uiux_py.read_text(encoding='utf-8'))
+		if match:
+			items=re.findall('["\\\']([^"\\\']+)["\\\']',match.group(1))
+			if items:return tuple(items)
+	clauses=_extract_clauses(nuu_dir/'SKILL.md')
+	for line in clauses.splitlines():
+		if line.startswith('7.'):
+			items=re.findall('\\b[0-9.]+(?:em|rem|px)\\b',line)
+			if items:return tuple(items)
+	return'75em','56.25em','40em'
 def _recipe_summary_line(content):
 	for raw in content.splitlines():
 		line=raw.strip()
@@ -1877,7 +1890,7 @@ def resolve_slash_command(text,root=None):
 			except ValueError as err:return{'mode':'query','command':'/nuu search','title':'nuu search','markdown':f"Invalid search arguments: `{err}`"}
 			proc=subprocess.run([sys.executable,str(nuu_dir/'scripts'/'uiux.py'),'search',*tokens],cwd=str(repo_root),capture_output=True,text=True,timeout=15,check=False);out=(proc.stdout or proc.stderr or'No results.').strip();return{'mode':'query','command':f"/nuu search {arg}",'title':f"nuu search · {arg}",'markdown':f"```text\n{out}\n```"}
 		if sub=='audit':
-			note_text='Run a full `nuu` UI/UX audit (`1280` px and `360` px viewports, `a11y`, `density`, and `annotate`) and publish the audit report using `skills/refs/nuu/references/audit-report.md`.'
+			bp_list=', '.join(f"`{bp}`"for bp in _extract_nuu_breakpoints(nuu_dir));note_text=f"Run a full `nuu` UI/UX audit (breakpoints {bp_list}; `a11y`, `density`, and `annotate`) and publish the audit report using `skills/refs/nuu/references/audit-report.md`."
 			if trailing:note_text=f"{note_text}\n\n{trailing}"
 			return{'mode':'note','command':'/nuu audit','text':note_text}
 		if sub=='recipe':

@@ -14300,8 +14300,20 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   slash_nuu_audit = preview.resolve_slash_command("/nuu audit #compose")
   assert slash_nuu_audit is not None
   assert slash_nuu_audit["mode"] == "note"
+  assert "75em" in slash_nuu_audit["text"]
+  assert "56.25em" in slash_nuu_audit["text"]
+  assert "40em" in slash_nuu_audit["text"]
   assert "audit-report.md" in slash_nuu_audit["text"]
   assert slash_nuu_audit["text"].endswith("#compose")
+  app_js_text = (
+    preview.Path(__file__).resolve().parent.parent / "assets" / "app.js"
+  ).read_text(encoding="utf-8")
+  fallback_cmds = re.findall(
+    r"\{\s*cmd:\s*'([^']+)',\s*desc:\s*'([^']+)'\s*\}", app_js_text
+  )
+  assert [
+    {"cmd": cmd, "desc": desc} for cmd, desc in fallback_cmds
+  ] == preview.discover_slash_commands()
   slash_nuu_recipe = preview.resolve_slash_command(
     "/nuu recipe scroll-edge-fade #history"
   )
