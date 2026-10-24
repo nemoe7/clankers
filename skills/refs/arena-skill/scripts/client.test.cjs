@@ -5014,6 +5014,90 @@ test('preview client', async (t) => {
     assert.equal(context.sanitizeMermaidSvg('<svg><a href="https://example.com"><text>x</text></a></svg>'), null);
   });
 
+  await t.test('Userscript readiness swaps #copy-state to the Lucide save icon and posts clankers:force-save', async () => {
+    const parentMessages = [];
+    context.window.parent = {
+      postMessage(data, target) {
+        parentMessages.push({ data, target });
+      },
+    };
+    windowEvents.message({ data: { type: 'clankers:userscript-ready' } });
+    const copyBtn = get('#copy-state');
+    assert.equal(copyBtn.getAttribute('aria-label'), 'Force save state');
+    assert.equal(copyBtn.title, 'Force save state');
+    assert.equal(copyBtn.children[0].getAttribute('class'), 'lucide lucide-save');
+    assert.equal(copyBtn.children[0].children.length, 3);
+    let restoreIcon = null;
+    context.window.setTimeout = callback => { restoreIcon = callback; return 1; };
+    await copyBtn.events.click();
+    delete context.window.setTimeout;
+    assert.equal(parentMessages.length, 1);
+    assert.equal(parentMessages[0].data.type, 'clankers:force-save');
+    assert.equal(copyBtn.children[0].getAttribute('class'), 'lucide lucide-check');
+    assert.equal(copyBtn.dataset.state, 'good');
+    restoreIcon();
+    assert.equal(copyBtn.children[0].getAttribute('class'), 'lucide lucide-save');
+    assert.equal(copyBtn.getAttribute('aria-label'), 'Force save state');
+    delete context.window.parent;
+  });
+
+  await t.test('Slash command lines reject glued tokens, register on their own line, and unregister on Backspace', async () => {
+    const noteEl = get('#note');
+    const backdropEl = get('#note-backdrop');
+    assert.equal(context.recognizedSlashPrefix('/nemoizer helptest'), '');
+    assert.equal(context.recognizedSlashPrefix('/nemoizer help extra'), '');
+    assert.equal(context.recognizedSlashPrefix('/nemoizer help'), '/nemoizer help');
+    assert.equal(context.recognizedSlashPrefix('/nemoizer help\nfollow up'), '/nemoizer help');
+    assert.equal(context.recognizedSlashPrefix('/nemoizer audit docs/'), '/nemoizer audit');
+
+    noteEl.value = '/nemoizer helptest';
+    noteEl.events.input();
+    assert.equal(noteEl.dataset.slash, undefined, 'glued token is not registered as a slash command');
+    assert.equal(backdropEl.hidden, true);
+
+    noteEl.value = '/nemoizer hel';
+    noteEl.events.input();
+    const tabEvent = event({ key: 'Tab' });
+    noteEl.events.keydown(tabEvent);
+    assert.equal(tabEvent.prevented, true);
+    assert.equal(noteEl.value, '/nemoizer help\n', 'selected command registers as its own line of text');
+    assert.equal(noteEl.dataset.slash, 'true', 'registered command sets data-slash=true');
+    assert.equal(backdropEl.hidden, false);
+    assert.equal(backdropEl.children[0].textContent, '/nemoizer help');
+
+    const backspaceEvent = event({ key: 'Backspace', ctrlKey: false, metaKey: false, altKey: false });
+    noteEl.selectionStart = noteEl.value.length;
+    noteEl.selectionEnd = noteEl.value.length;
+    noteEl.events.keydown(backspaceEvent);
+    assert.equal(backspaceEvent.prevented, true, 'Backspace on registered command intercepts deletion');
+    assert.equal(noteEl.value, '/nemoizer help', 'trailing command newline is removed');
+    assert.equal(noteEl.dataset.slash, undefined, 'Backspace unregisters the command into regular text');
+    assert.equal(backdropEl.hidden, true);
+
+    noteEl.value = '';
+    noteEl.events.input();
+
+    const historyEl = get('#history');
+    const prevClientHeight = historyEl.clientHeight;
+    const prevScrollHeight = historyEl.scrollHeight;
+    const prevScrollTop = historyEl.scrollTop;
+    historyEl.clientHeight = 200;
+    historyEl.scrollHeight = 600;
+    context.showHistory([
+      { id: 'n1', text: 'first', at: '2026-10-24T00:00:00Z' },
+      { id: 'n2', text: 'second', at: '2026-10-24T00:01:00Z' },
+    ]);
+    assert.equal(historyEl.dataset.scrollable, 'true', 'overflowing history marks data-scrollable=true');
+    historyEl.scrollHeight = 120;
+    historyEl.scrollTop = 90;
+    context.showHistory([{ id: 'n3', text: 'after clear', at: '2026-10-24T00:02:00Z' }]);
+    assert.equal(historyEl.dataset.scrollable, 'false', 'non-scrollable history after clear drops edge fade immediately');
+    assert.equal(historyEl.scrollTop, 0, 'non-scrollable history resets scrollTop to 0');
+    historyEl.clientHeight = prevClientHeight;
+    historyEl.scrollHeight = prevScrollHeight;
+    historyEl.scrollTop = prevScrollTop;
+  });
+
 });
 
 test('the composer keeps Send inside and status lines outside its panel', () => {

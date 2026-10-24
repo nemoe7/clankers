@@ -105,6 +105,9 @@ const ICONS = {
   moon: [['path', { d: 'M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401' }]],
   copy: [['rect', { width: '14', height: '14', x: '8', y: '8', rx: '2', ry: '2' }],
     ['path', { d: 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' }]],
+  save: [['path', { d: 'M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z' }],
+    ['path', { d: 'M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7' }],
+    ['path', { d: 'M7 3v4a1 1 0 0 0 1 1h7' }]],
   check: [['path', { d: 'M20 6 9 17l-5-5' }]],
   x: [['path', { d: 'M18 6 6 18' }], ['path', { d: 'm6 6 12 12' }]],
   'circle-question-mark': [['circle', { cx: '12', cy: '12', r: '10' }], ['path', { d: 'M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3' }], ['path', { d: 'M12 17h.01' }]],
@@ -350,6 +353,7 @@ let slashCommands = [
   { cmd: '/nemoizer rules', desc: 'Browse nemoizer rules or /nemoizer rules <id> (modal)' },
   { cmd: '/nuu audit', desc: 'Send agent note: run a full nuu audit' },
   { cmd: '/nuu help', desc: 'Show nuu commands and clauses (modal)' },
+  { cmd: '/nuu recipe modal-manager', desc: 'Send agent note: apply modal-manager recipe' },
   { cmd: '/nuu recipe offline-fonts', desc: 'Send agent note: apply offline-fonts recipe' },
   { cmd: '/nuu recipe scroll-edge-fade', desc: 'Send agent note: apply scroll-edge-fade recipe' },
   { cmd: '/nuu recipes', desc: 'List nuu UI recipes (modal)' },
@@ -357,28 +361,30 @@ let slashCommands = [
 ];
 let slashActiveIndex = 0;
 let slashMatches = [];
+let slashUnregistered = false;
 function recognizedSlashPrefix(raw) {
   if (typeof raw !== 'string' || !raw.startsWith('/')) return '';
-  const lower = raw.toLowerCase();
-  const prefixes = [
-    ...slashCommands.map(item => String(item.cmd || '').trim()).filter(Boolean),
-    '/nuu recipe',
-    '/nuu search',
-    '/nemoizer',
-    '/nuu',
-  ].sort((a, b) => b.length - a.length);
+  const firstLine = raw.split(/\r?\n/, 1)[0];
+  const lower = firstLine.toLowerCase();
+  const prefixes = slashCommands
+    .map(item => String(item.cmd || '').trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
   for (const candidate of prefixes) {
     const target = candidate.toLowerCase();
-    if (lower.startsWith(target)) {
-      const next = raw[target.length];
-      if (!next || /\s/.test(next)) return raw.slice(0, target.length);
-    }
+    if (!lower.startsWith(target)) continue;
+    const next = firstLine[target.length];
+    if (next && !/\s/.test(next)) continue;
+    const restOnLine = firstLine.slice(target.length).trim();
+    if (restOnLine && /(\s|^)(help|recipes)$/i.test(target)) continue;
+    return firstLine.slice(0, target.length);
   }
   return '';
 }
 function syncSlashComposerStyle() {
   const backdrop = $('#note-backdrop');
-  const prefix = note.hidden ? '' : recognizedSlashPrefix(note.value);
+  if (!note.value.startsWith('/')) slashUnregistered = false;
+  const prefix = note.hidden || slashUnregistered ? '' : recognizedSlashPrefix(note.value);
   if (prefix) {
     note.dataset.slash = 'true';
     note.spellcheck = false;
@@ -410,7 +416,11 @@ function hideSlashMenu() {
 }
 function applySlashSelection(entry) {
   if (!entry) return;
-  note.value = entry.cmd.endsWith(' ') ? entry.cmd : `${entry.cmd} `;
+  slashUnregistered = false;
+  note.value = entry.cmd.endsWith(' ') ? entry.cmd : `${entry.cmd.trim()}\n`;
+  if (typeof note.setSelectionRange === 'function') {
+    note.setSelectionRange(note.value.length, note.value.length);
+  }
   draftVersion++;
   save('draft', note.value);
   grow();
@@ -420,14 +430,14 @@ function applySlashSelection(entry) {
 function updateSlashMenu() {
   syncSlashComposerStyle();
   const menu = $('#slash-menu');
-  if (!menu || note.hidden) return hideSlashMenu();
+  if (!menu || note.hidden || slashUnregistered) return hideSlashMenu();
   const raw = note.value;
   if (!raw.startsWith('/') || raw.includes('\n')) return hideSlashMenu();
   const query = raw.trim().toLowerCase();
   slashMatches = slashCommands.filter(item =>
     item.cmd.toLowerCase().startsWith(query) || query === '/'
   );
-  if (!slashMatches.length || (slashMatches.length === 1 && raw.startsWith(slashMatches[0].cmd))) {
+  if (!slashMatches.length || (slashMatches.length === 1 && raw.trim().toLowerCase() === slashMatches[0].cmd.trim().toLowerCase())) {
     return hideSlashMenu();
   }
   slashActiveIndex = Math.min(slashActiveIndex, slashMatches.length - 1);
@@ -993,7 +1003,12 @@ function showHistory(notes) {
   renderHistoryWindow(notes);
   updateEdits(notes);
   applyLogSearch();
-  history.scrollTop = logPinned ? history.scrollHeight : place;
+  if (history.clientHeight > 0 && history.scrollHeight <= history.clientHeight + 1) {
+    history.scrollTop = 0;
+    logPinned = true;
+  } else {
+    history.scrollTop = logPinned ? history.scrollHeight : place;
+  }
   updateLogJump();
 }
 
@@ -1023,6 +1038,7 @@ function loadOlderMessages() {
   renderHistoryWindow(notes);
   applyLogSearch();
   history.scrollTop += history.scrollHeight - before;
+  updateLogJump();
 }
 $('#history').addEventListener('scroll', () => {
   const history = $('#history');
@@ -1033,6 +1049,9 @@ $('#history').addEventListener('scroll', () => {
 // Show the jump bar only when a nonempty log extends beyond its panel and the owner scrolls away from the end.
 // The jump returns to that end. An empty log has no destination.
 function updateLogJump() {
+  const history = $('#history');
+  const scrollable = messageNodes.size > 0 && history.scrollHeight > history.clientHeight + 1;
+  history.dataset.scrollable = scrollable ? 'true' : 'false';
   $('#log-newest').hidden = logPinned || !messageNodes.size;
 }
 function scrollJump(element, top) {
@@ -1439,6 +1458,22 @@ function paintSendHint() {
 touchPointer?.addEventListener?.('change', paintSendHint);
 paintSendHint();
 note.addEventListener('keydown', event => {
+  if (event.key === 'Backspace' && !event.ctrlKey && !event.metaKey && !event.altKey && note.dataset.slash === 'true') {
+    const prefix = recognizedSlashPrefix(note.value);
+    const selStart = typeof note.selectionStart === 'number' ? note.selectionStart : note.value.length;
+    const selEnd = typeof note.selectionEnd === 'number' ? note.selectionEnd : selStart;
+    if (prefix && selStart === selEnd && (selStart <= prefix.length || (selStart === prefix.length + 1 && note.value[prefix.length] === '\n'))) {
+      event.preventDefault();
+      if (note.value.slice(prefix.length) === '\n') {
+        note.value = note.value.slice(0, prefix.length);
+        save('draft', note.value);
+      }
+      slashUnregistered = true;
+      hideSlashMenu();
+      grow();
+      return;
+    }
+  }
   const menu = $('#slash-menu');
   if (menu && !menu.hidden && slashMatches.length) {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -1803,35 +1838,49 @@ function showClock() {
 }
 showClock();
 setInterval(showClock, 1000);
-// Copy state exports notes, tasks, and report answers for `state import`.
-// One request carries the server's NDJSON, which matches the save file.
-const copyStateButton = $('#copy-state');
-let userscriptForceSave = false;
-window.addEventListener('message', event => {
-  if (!event || !event.data || event.data.type !== 'clankers:userscript-ready') return;
-  userscriptForceSave = true;
-  copyStateButton.title = 'Force save state';
-  copyStateButton.setAttribute('aria-label', 'Force save state');
-});
-if (typeof window !== 'undefined' && window.parent && window.parent !== window &&
-    typeof window.parent.postMessage === 'function') {
-  try { window.parent.postMessage({ type: 'clankers:preview-ready' }, '*'); }
-  catch {}
-}
-copyStateButton.addEventListener('click', async () => {
-  if (userscriptForceSave && typeof window !== 'undefined' && window.parent &&
-      window.parent !== window && typeof window.parent.postMessage === 'function') {
-    window.parent.postMessage({ type: 'clankers:force-save' }, '*');
-    return;
+  // Copy state exports notes, tasks, and report answers for `state import`.
+  // One request carries the server's NDJSON, which matches the save file.
+  const copyStateButton = $('#copy-state');
+  let userscriptForceSave = false;
+  function enableUserscriptForceSave() {
+    userscriptForceSave = true;
+    setIcon(copyStateButton, 'save', 16);
+    label(copyStateButton, 'Force save state');
   }
-  let payload = null;
-  try { payload = await (await request('/api/copy-state')).json(); }
-  catch { payload = null; }
-  if (!payload || !payload.text) {
-    return copyFrom(copyStateButton, null, 'state', 'copy', 'The state route did not answer; nothing is copied.');
+  function notifyParentPreviewReady() {
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window &&
+        typeof window.parent.postMessage === 'function') {
+      try { window.parent.postMessage({ type: 'clankers:preview-ready' }, '*'); }
+      catch {}
+    }
   }
-  await copyFrom(copyStateButton, payload.text, 'state');
-});
+  window.addEventListener('message', event => {
+    if (!event || !event.data || event.data.type !== 'clankers:userscript-ready') return;
+    enableUserscriptForceSave();
+  });
+  notifyParentPreviewReady();
+  copyStateButton.addEventListener('click', async () => {
+    if (userscriptForceSave && typeof window !== 'undefined' && window.parent &&
+        window.parent !== window && typeof window.parent.postMessage === 'function') {
+      window.parent.postMessage({ type: 'clankers:force-save' }, '*');
+      setIcon(copyStateButton, 'check', 16);
+      copyStateButton.dataset.state = 'good';
+      label(copyStateButton, 'Force save requested');
+      (window.setTimeout || setTimeout)(() => {
+        delete copyStateButton.dataset.state;
+        setIcon(copyStateButton, 'save', 16);
+        label(copyStateButton, 'Force save state');
+      }, 1500);
+      return;
+    }
+    let payload = null;
+    try { payload = await (await request('/api/copy-state')).json(); }
+    catch { payload = null; }
+    if (!payload || !payload.text) {
+      return copyFrom(copyStateButton, null, 'state', 'copy', 'The state route did not answer; nothing is copied.');
+    }
+    await copyFrom(copyStateButton, payload.text, 'state');
+  });
 $('#copy-report').addEventListener('click', async () => {
   const id = $('#report-select').value;
   if (!id) return copyFrom($('#copy-report'), null, 'report');
