@@ -60,7 +60,13 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   page.write_text('<img src="art.svg"> <!-- nonuu: NUL0010 -->\n', encoding="utf-8")
   assert run("lint", expected=1)["findings"]
   page.write_text('<img src="art.svg"> <!-- nonuu: NUL001 -->\n', encoding="utf-8")
-  assert not run("lint")["findings"]
+  suppressed_lint = run("lint")
+  assert not suppressed_lint["findings"]
+  assert suppressed_lint["suppressions"] and suppressed_lint["marks"]
+  assert suppressed_lint["suppressions"][0]["rule"] == "NUL001"
+  collected = run("collect", expected=3)
+  assert collected["suppressions"] and collected["marks"]
+  assert collected["suppressions"][0]["rule"] == "NUL001"
   css.write_text(before[css].decode() + "button:focus {outline: none !important;}\n")
   assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"NUL003"}
   css.write_text(

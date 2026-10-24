@@ -37,7 +37,7 @@ from measure import (
 from measure import check as check_measurements
 from measure import main as measure_main
 
-VERSION = "0.1.15"
+VERSION = "0.1.16"
 NAMED_BREAKPOINTS = ("75em", "60em", "40em", "30em")
 DEVICE_BREAKPOINTS = NAMED_BREAKPOINTS
 MEDIA_BREAKPOINT_RE = re.compile(
@@ -48,6 +48,46 @@ HOME = Path(__file__).resolve().parent.parent
 CATALOG = HOME / "data" / "vendor" / "ui-ux-pro-max"
 WIDTHS = (1280, 360)
 SKIP = {".git", ".venv", "node_modules", "dist", "build", "__pycache__"}
+KNOWN_NUU_RULES = {
+  *(f"NUL00{i}" for i in range(1, 6)),
+  *(f"NUI00{i}" for i in range(1, 4)),
+  *(f"NUM{i}" for i in range(201, 211)),
+  *(f"NUA{i}" for i in range(301, 310)),
+}
+NONUU_MARKER_RE = re.compile(r"\bnonuu:[ \t]*(.*?)(?=-->|\*/|;|\s|$|\bnonuu:)")
+
+
+def collect_nonuu_markers(path, lines):
+  file_ids, line_ids, marks, suppressions = set(), [], [], []
+  for number, line in enumerate(lines, 1):
+    suppressed = set()
+    for marker in NONUU_MARKER_RE.finditer(line):
+      code = marker[1]
+      scope = "unknown"
+      if code in KNOWN_NUU_RULES:
+        suppressed.add(code)
+        before = line[: marker.start()].strip()
+        scope = (
+          "file"
+          if number <= 3 and not re.sub(r"^(?:#|/\*|<!--|//)\s*", "", before).strip()
+          else "line"
+        )
+        if scope == "file":
+          file_ids.add(code)
+      mark_str = f"{path}:{number}: {code or '<missing>'} {scope}: {line.strip()}"
+      marks.append(mark_str)
+      suppressions.append(
+        {
+          "path": str(path),
+          "line": number,
+          "rule": code or "<missing>",
+          "scope": scope,
+          "source": line.strip(),
+          "mark": mark_str,
+        }
+      )
+    line_ids.append(suppressed)
+  return file_ids, line_ids, marks, suppressions
 
 
 def load(path):
@@ -235,9 +275,13 @@ class SourcePage(HTMLParser):
 
 
 def lint(root):
-  findings, coverage = [], []
+  findings, coverage, marks, suppressions = [], [], [], []
   for path in files(root, {".html", ".css", ".js", ".jsx", ".ts", ".tsx"}):
     text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    file_ids, line_ids, file_marks, file_supps = collect_nonuu_markers(path, lines)
+    marks.extend(file_marks)
+    suppressions.extend(file_supps)
     supported = path.suffix.lower() in {".html", ".css"}
     coverage.append(
       {
@@ -301,8 +345,8 @@ def lint(root):
             }
           )
     for finding in current:
-      line = text.splitlines()[finding["line"] - 1]
-      ignored = set(re.findall(r"\bnonuu:\s*([A-Za-z0-9_-]+)", line))
+      ln = finding["line"]
+      ignored = file_ids | (line_ids[ln - 1] if 0 < ln <= len(line_ids) else set())
       if finding["rule"] not in ignored:
         findings.append(finding)
   docs_dir = root / "docs"
@@ -325,6 +369,8 @@ def lint(root):
     )
   return {
     "findings": findings,
+    "marks": marks,
+    "suppressions": suppressions,
     "coverage": coverage,
     "limits": [
       "Source patterns do not prove accessible names or WCAG conformance.",
@@ -698,6 +744,7 @@ def main(argv=None):
     "inspect",
     "flow",
     "audit",
+    "collect",
     "a11y",
     "live",
     "check",
@@ -763,8 +810,8 @@ def main(argv=None):
       command.add_argument("-f", "--fetch")
       command.add_argument("-d", "--destination")
       command.add_argument("-A", "--authorize-fetch", action="store_true")
-    if name in {"inspect", "flow", "audit", "a11y", "live"}:
-      command.add_argument("-u", "--url", required=name != "audit")
+    if name in {"inspect", "flow", "audit", "collect", "a11y", "live"}:
+      command.add_argument("-u", "--url", required=name not in {"audit", "collect"})
       command.add_argument("-d", "--artifacts", default="ui-evidence")
       command.add_argument("-w", "--widths", nargs="*", type=int, default=[])
       command.add_argument(
@@ -857,10 +904,13 @@ def main(argv=None):
         raise ValueError("timeout and widths must be positive")
       result = browser(args)
     else:
+      source_res = lint(root)
       result = {
-        "source": lint(root),
+        "source": source_res,
         "icons": check_icons(root),
         "design": extract(root),
+        "marks": source_res.get("marks", []),
+        "suppressions": source_res.get("suppressions", []),
         "rendered": browser(args)
         if args.url
         else {"status": "not_checked", "reason": "url_missing"},
@@ -868,7 +918,7 @@ def main(argv=None):
         "participant_research": "not_run",
         "real_device": "not_run",
       }
-    if args.command == "audit":
+    if args.command in {"audit", "collect"}:
       result["findings"] = result["source"]["findings"] + result["rendered"].get(
         "findings", []
       )
