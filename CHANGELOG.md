@@ -22,6 +22,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Sync the browser IANA timezone (`X-Timezone`) to `display_tz` in `preview.py` and export `TZ` in `install.sh`. Read `/nuu audit` device widths from `nuu`, pass standard repo ignores to `/nemoizer collect`, show `"{order}. {task id}\n{timestamp}"` task tooltips, and cap `--app-height` composer height at `50%` under `@media (max-height: 30em)`.
 
+- Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
+
 #### maintenance
 
 - Standardize repo hygiene with `template-main`. Add `.editorconfig`, `.gitattributes`, `.github/PULL_REQUEST_TEMPLATE.md`, and `.github/actionlint.yaml`, expand `.gitignore` and `.markdownlint-cli2.jsonc`, align `ci.yml` and `pr-check.yml`, and consolidate `pytest.ini` and `ruff.toml` into `pyproject.toml`.
