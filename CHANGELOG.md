@@ -44,6 +44,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add composite visual-reference boards under `docs/arena-skill/design-visuals/` and `docs/arena-skill/images/`, and link them from `docs/arena-skill/design.md`.
 - Add `-i, --smallest-image` to `arena-preview survey` and update `I4M6G` in `references/survey.json`, `SKILL.md`, and `references/commands.md` to read the smallest repository image first before falling back to a temporary empty image.
 - Style `.code-block` with a bordered container, a `.code-block-header` showing the Lucide `braces` icon and language label, and a `var(--panel)` code body distinct from the scroll-fade background.
+- Remove `scrollbar-gutter: stable` from `#history` and size `.message` to `min(900px, 90vw)` so message bubbles align flush with the toolbar and composer on both edges.
 
 #### rules and system-prompts
 
