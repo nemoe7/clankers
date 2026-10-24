@@ -57,6 +57,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Remove `scrollbar-gutter: stable` from `#history` and size `.message` to `min(900px, 90vw)` so message bubbles align flush with the toolbar and composer on both edges.
 - Wrap long Mermaid flowchart node labels into `<tspan>` lines and size boxes and diamonds to fit wrapped text. Offset parallel edges and edge labels so they do not overlap.
 - Include seconds by default in `assets/app.js` relative timestamps (`time()`) and switch to abbreviated units (`5s ago`, `5min ago`) on mobile viewports (`<= 40em` width or `<= 30em` height).
+- Pass `state.repo` from `assets/app.js` in `clankers:preview-ready` and use it for the steering preview in `userscripts/arena.user.js`. Invalidate replaced URLs and deduplicate entries by non-empty `name` in `arena-preview-proxy`.
 
 #### rules and system-prompts
 

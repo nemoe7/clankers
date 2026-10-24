@@ -1319,6 +1319,10 @@ function renderState() {
   renderTasksIfChanged(state.tasks);
   renderFetchIfChanged(state.fetch_jobs || []);
   renderAgentKey(state.agent_key, state.repo);
+  if (typeof state.repo === 'string' && state.repo && state.repo !== lastAnnouncedRepo) {
+    lastAnnouncedRepo = state.repo;
+    notifyParentPreviewReady(state.repo);
+  }
   if (state.force_save_id && state.force_save_id !== lastForceSaveId) {
     lastForceSaveId = state.force_save_id;
     if (typeof window !== 'undefined' && window.parent && window.parent !== window &&
@@ -1979,22 +1983,26 @@ setInterval(showClock, 1000);
   // One request carries the server's NDJSON, which matches the save file.
   const copyStateButton = $('#copy-state');
   let userscriptForceSave = false;
-  let lastForceSaveId = null;
+  var lastForceSaveId = null;
+  var lastAnnouncedRepo = '';
   function enableUserscriptForceSave() {
     userscriptForceSave = true;
     setIcon(copyStateButton, 'save', 16);
     label(copyStateButton, 'Force save state');
   }
-  function notifyParentPreviewReady() {
+  function notifyParentPreviewReady(repo = lastAnnouncedRepo) {
     if (typeof window !== 'undefined' && window.parent && window.parent !== window &&
         typeof window.parent.postMessage === 'function') {
-      try { window.parent.postMessage({ type: 'clankers:preview-ready' }, '*'); }
+      const payload = { type: 'clankers:preview-ready' };
+      if (repo) payload.repo = repo;
+      try { window.parent.postMessage(payload, '*'); }
       catch {}
     }
   }
   window.addEventListener('message', event => {
     if (!event || !event.data || event.data.type !== 'clankers:userscript-ready') return;
     enableUserscriptForceSave();
+    if (lastAnnouncedRepo) notifyParentPreviewReady(lastAnnouncedRepo);
   });
   notifyParentPreviewReady();
   copyStateButton.addEventListener('click', async () => {

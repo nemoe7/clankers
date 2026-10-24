@@ -64,10 +64,23 @@ function rememberRecent(entries, rawUrl, rawName, removed, manual = false) {
     ? (name || (existing ? existing.name : ''))
     : ((existing && existing.name) ? existing.name : name);
   const updated = { url, name: resolvedName, manual: isManual };
-  if (!manual && existing) {
+  if (resolvedName && removed) {
+    for (const item of entries) {
+      if (item.url !== url && item.name === resolvedName) {
+        removed.add(item.url);
+      }
+    }
+  }
+  if (
+    !manual &&
+    existing &&
+    !entries.some(item => item.url !== url && resolvedName && item.name === resolvedName)
+  ) {
     return entries.map(item => (item.url === url ? updated : item));
   }
-  const rest = entries.filter(item => item.url !== url);
+  const rest = entries.filter(
+    item => item.url !== url && !(resolvedName && item.name === resolvedName)
+  );
   if (isManual) {
     return [updated, ...rest].slice(0, RECENT_LIMIT);
   }

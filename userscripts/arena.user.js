@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.79
+// @name         Arena.ai | NemoUtils | v1.10.80
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.79
+// @version      1.10.80
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -361,6 +361,7 @@
   var featureRegistry = [];
   var restartStateWatchHook = null;
   var syncPreviewProxyHook = null;
+  var previewUiRepo = "";
   var syncProxySettingsHook = null;
   var postKeyNowHook = null;
   var applyTrimKeepHook = null;
@@ -744,7 +745,7 @@
       return /\b(?:preview\s+)?unavailable\b/i.test(String(value || "").trim());
     }
 
-    function previewHeaderName(doc) {
+    function previewHeaderRaw(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") return "";
       var spans = doc.querySelectorAll("span");
       var i;
@@ -757,17 +758,48 @@
           cls.indexOf("max-w-[180px]") !== -1
         ) {
           text = String(spans[i].textContent || "").trim();
-          if (isUnavailablePreviewName(text)) return "";
           if (text) return text;
         }
       }
       return "";
     }
 
-    function discoverPreviews(doc) {
+    function previewHeaderName(doc) {
+      var text = previewHeaderRaw(doc);
+      return isUnavailablePreviewName(text) ? "" : text;
+    }
+
+    function reconcileRecentPreviews(previousByName, items) {
+      var nextByName = Object.assign({}, previousByName || {});
+      var invalidated = [];
+      var i;
+      var item;
+      var key;
+      var prevUrl;
+      for (i = 0; i < (items || []).length; i += 1) {
+        item = items[i];
+        if (!item || !item.url) continue;
+        key = String(item.name || "").trim();
+        if (!key) continue;
+        prevUrl = nextByName[key];
+        if (prevUrl && prevUrl !== item.url && invalidated.indexOf(prevUrl) === -1) {
+          invalidated.push(prevUrl);
+        }
+        nextByName[key] = item.url;
+      }
+      return { byName: nextByName, invalidated: invalidated };
+    }
+
+    function discoverPreviews(doc, reportedRepo) {
       if (!doc || typeof doc.querySelectorAll !== "function") return [];
-      var name = previewHeaderName(doc);
-      if (!name || isUnavailablePreviewName(name)) return [];
+      var rawHeader = previewHeaderRaw(doc);
+      if (isUnavailablePreviewName(rawHeader)) return [];
+      var domName = isUnavailablePreviewName(rawHeader) ? "" : rawHeader;
+      var uiRepo = String(
+        reportedRepo !== undefined ? reportedRepo : previewUiRepo || "",
+      ).trim();
+      var steeringBase = previewBase(doc);
+      var steeringRoot = steeringBase ? steeringBase + "/" : "";
       var frames = doc.querySelectorAll("iframe");
       var links = doc.querySelectorAll("a");
       var nodes = [];
@@ -777,6 +809,7 @@
       var raw;
       var match;
       var root;
+      var resolvedName;
       for (i = 0; i < frames.length; i += 1) {
         nodes.push(
           frames[i].src ||
@@ -800,7 +833,12 @@
         root = match[1] + "/";
         if (seen[root]) continue;
         seen[root] = true;
-        found.push({ url: root, name: name });
+        resolvedName =
+          uiRepo && (!steeringRoot || root === steeringRoot)
+            ? uiRepo + " - Steering"
+            : domName;
+        if (!resolvedName || isUnavailablePreviewName(resolvedName)) continue;
+        found.push({ url: root, name: resolvedName });
       }
       return found;
     }
@@ -977,6 +1015,7 @@
       proxyHost: proxyHost,
       previewProxyHost: previewProxyHost,
       previewHeaderName: previewHeaderName,
+      reconcileRecentPreviews: reconcileRecentPreviews,
       discoverPreviews: discoverPreviews,
       keyUrl: keyUrl,
       agentKeyFrom: agentKeyFrom,
@@ -1124,6 +1163,20 @@
 
     var postedBase = null;
     var postedPreviews = {};
+    var postedByName = {};
+
+    function removeRecentPreview(endpoint, url) {
+      var payload = { url: url, remove: true, forget: url };
+      if (typeof GM_xmlhttpRequest === "function") {
+        requestJson("POST", endpoint, payload, function () {});
+      } else if (typeof fetch === "function") {
+        fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).catch(function () {});
+      }
+    }
 
     function sendRecentPreview(endpoint, item, stamp) {
       var payload = { url: item.url, name: item.name || "" };
@@ -1178,9 +1231,17 @@
         logEvent("preview-proxy", "no-host", { count: items.length }, "debug");
         return;
       }
+      var reconciled = reconcileRecentPreviews(postedByName, items);
+      postedByName = reconciled.byName;
       var i;
       var item;
       var stamp;
+      var oldUrl;
+      for (i = 0; i < reconciled.invalidated.length; i += 1) {
+        oldUrl = reconciled.invalidated[i];
+        delete postedPreviews[oldUrl];
+        removeRecentPreview(host + "/pwa/recent", oldUrl);
+      }
       for (i = 0; i < items.length; i += 1) {
         item = items[i];
         stamp = host + "|" + item.url + "|" + (item.name || "");
@@ -4718,6 +4779,13 @@
         return;
       }
       if (event.data.type === "clankers:preview-ready") {
+        if (typeof event.data.repo === "string" && event.data.repo.trim()) {
+          var nextRepo = event.data.repo.trim();
+          if (nextRepo !== previewUiRepo) {
+            previewUiRepo = nextRepo;
+            if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
+          }
+        }
         notifyPreviewReady(document);
       } else if (event.data.type === "clankers:force-save") {
         fetchStateFile(true, true);
