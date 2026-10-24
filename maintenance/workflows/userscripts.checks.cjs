@@ -524,6 +524,47 @@ function checkAutoScrollToggle(api) {
 
   var AUTO_TOGGLE_CLASS = api.AUTO_TOGGLE_CLASS;
   var autoToggleClasses = api.autoToggleClasses;
+  var findComposerActionButton = api.findComposerActionButton;
+
+  var stopBtn = {
+    getAttribute: function (name) {
+      return name === "aria-label" ? "Stop generating" : null;
+    },
+  };
+  var sendBtn = {
+    getAttribute: function (name) {
+      return name === "aria-label" ? "Send message" : null;
+    },
+  };
+  var submitBtn = {
+    getAttribute: function (name) {
+      return name === "type" ? "submit" : null;
+    },
+  };
+  var injectedBtn = {
+    getAttribute: function (name) {
+      return name === "data-clankers-settings-toggle"
+        ? "true"
+        : name === "type"
+          ? "submit"
+          : null;
+    },
+  };
+  var docWithStop = {
+    querySelectorAll: function (sel) {
+      return sel === "button[aria-label]" ? [sendBtn, stopBtn] : [sendBtn, stopBtn];
+    },
+  };
+  var docWithSend = {
+    querySelectorAll: function (sel) {
+      return sel === "button[aria-label]" ? [sendBtn] : [sendBtn];
+    },
+  };
+  var docWithSubmit = {
+    querySelectorAll: function (sel) {
+      return sel === "button[aria-label]" ? [] : [injectedBtn, submitBtn];
+    },
+  };
 
   var on = autoToggleClasses(true);
   var off = autoToggleClasses(false);
@@ -536,6 +577,9 @@ function checkAutoScrollToggle(api) {
     [hasToggleClass(off, "hover:bg-surface-raised"), true],
     [hasToggleClass(AUTO_TOGGLE_CLASS, "h-8"), true],
     [hasToggleClass(AUTO_TOGGLE_CLASS, "w-8"), true],
+    [findComposerActionButton(docWithStop), stopBtn],
+    [findComposerActionButton(docWithSend), sendBtn],
+    [findComposerActionButton(docWithSubmit), submitBtn],
   ];
   var failed = 0;
   var i;
@@ -828,8 +872,11 @@ function checkHideComposer(api) {
   var isStopGeneratingLabel = api.isStopGeneratingLabel;
   var shouldHideComposer = api.shouldHideComposer;
   var isSpacerElement = api.isSpacerElement;
+  var isSpacerSibling = api.isSpacerSibling;
+  var isTranscriptColumn = api.isTranscriptColumn;
   var hasSpacerHeight = api.hasSpacerHeight;
   var enforceSpacerHeight = api.enforceSpacerHeight;
+  var TRANSCRIPT_COLUMN_SELECTOR = api.TRANSCRIPT_COLUMN_SELECTOR;
   var SPACER_SELECTOR = api.SPACER_SELECTOR;
   var SPACER_HEIGHT = api.SPACER_HEIGHT;
 
@@ -862,22 +909,88 @@ function checkHideComposer(api) {
       return name === "style" ? "height: 24px;" : null;
     },
   };
+  var columnClasses = [
+    "flex",
+    "w-full",
+    "shrink-0",
+    "flex-col",
+    "gap-4",
+    "mx-auto",
+    "max-w-3xl",
+    "px-4",
+    "pt-14",
+    "md:pt-12",
+  ];
+  var transcriptColumn = {
+    tagName: "DIV",
+    classList: {
+      contains: function (name) {
+        return columnClasses.indexOf(name) !== -1;
+      },
+    },
+    textContent: "message",
+  };
+  var siblingStyleState = { height: "706px", priority: "", writes: 0 };
+  var siblingSpacer = {
+    tagName: "DIV",
+    classList: {
+      contains: function (name) {
+        return name === "shrink-0";
+      },
+    },
+    textContent: "",
+    style: {
+      getPropertyValue: function (name) {
+        return name === "height" ? siblingStyleState.height : "";
+      },
+      getPropertyPriority: function (name) {
+        return name === "height" ? siblingStyleState.priority : "";
+      },
+      setProperty: function (name, value, priority) {
+        if (name === "height") {
+          siblingStyleState.height = value;
+          siblingStyleState.priority = priority;
+          siblingStyleState.writes += 1;
+        }
+      },
+    },
+    getAttribute: function (name) {
+      return name === "style" ? "height: 706px;" : null;
+    },
+  };
+  var scrollParent = { children: [transcriptColumn, siblingSpacer] };
+  transcriptColumn.parentElement = scrollParent;
+  siblingSpacer.parentElement = scrollParent;
+
   var spacerDoc = {
     querySelectorAll: function (selector) {
-      return selector === SPACER_SELECTOR ? [spacer] : [];
+      if (selector === SPACER_SELECTOR) return [spacer];
+      if (selector === TRANSCRIPT_COLUMN_SELECTOR) return [transcriptColumn];
+      if (selector === "div.shrink-0") return [transcriptColumn, siblingSpacer, spacer];
+      return [];
     },
   };
   var candidate = isSpacerElement(spacer) && hasSpacerHeight(spacer.getAttribute("style"));
   enforceSpacerHeight(spacerDoc);
   var initialPriority = styleState.priority;
+  var initialSiblingHeight = siblingStyleState.height;
+  var initialSiblingPriority = siblingStyleState.priority;
   styleState.height = "18px";
   styleState.priority = "";
+  siblingStyleState.height = "706px";
+  siblingStyleState.priority = "";
   enforceSpacerHeight(spacerDoc, [
     {
       type: "attributes",
       attributeName: "style",
       oldValue: "height: 24px !important;",
       target: spacer,
+    },
+    {
+      type: "attributes",
+      attributeName: "style",
+      oldValue: "height: 706px;",
+      target: siblingSpacer,
     },
   ]);
   var cases = [
@@ -894,17 +1007,30 @@ function checkHideComposer(api) {
     [shouldHideComposer(true, true), true],
     [shouldHideComposer(true, false), false],
     [shouldHideComposer(false, true), false],
+    [
+      TRANSCRIPT_COLUMN_SELECTOR,
+      "div.flex.w-full.shrink-0.flex-col.gap-4.mx-auto.max-w-3xl.px-4.pt-14.md\\:pt-12",
+    ],
     [SPACER_SELECTOR, 'div.shrink-0[style*="height: 24px"]'],
     [SPACER_HEIGHT, "24px"],
     [candidate, true],
+    [isTranscriptColumn(transcriptColumn), true],
+    [isTranscriptColumn(siblingSpacer), false],
+    [isSpacerSibling(siblingSpacer), true],
+    [isSpacerSibling(spacer), false],
     [hasSpacerHeight("height: 24px;"), true],
     [hasSpacerHeight("height: 24px !important;"), true],
     [hasSpacerHeight("height: 25px;"), false],
     [hasSpacerHeight("height: 10675px;"), false],
     [initialPriority, "important"],
+    [initialSiblingHeight, SPACER_HEIGHT],
+    [initialSiblingPriority, "important"],
     [styleState.height, SPACER_HEIGHT],
     [styleState.priority, "important"],
     [styleState.writes, 2],
+    [siblingStyleState.height, SPACER_HEIGHT],
+    [siblingStyleState.priority, "important"],
+    [siblingStyleState.writes, 2],
   ];
   var failed = 0;
   var i;

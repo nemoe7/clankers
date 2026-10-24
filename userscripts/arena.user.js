@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.72
+// @name         Arena.ai | NemoUtils | v1.10.73
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.72
+// @version      1.10.73
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -475,6 +475,11 @@
     return String(value || "").trim().toLowerCase() === "stop generating";
   }
 
+  function isSendMessageLabel(value) {
+    var normalized = String(value || "").trim().toLowerCase();
+    return normalized === "send message" || normalized === "send";
+  }
+
   function findStopGeneratingButton(doc) {
     var buttons = doc.querySelectorAll("button[aria-label]");
     var i;
@@ -483,6 +488,57 @@
       button = buttons[i];
       if (isStopGeneratingLabel(button.getAttribute("aria-label"))) {
         return button;
+      }
+    }
+    return null;
+  }
+
+  function isInjectedControlButton(button) {
+    if (!button || typeof button.getAttribute !== "function") return false;
+    return Boolean(
+      button.getAttribute("data-clankers-autoscroll-toggle") ||
+        button.getAttribute("data-clankers-settings-toggle") ||
+        button.getAttribute("data-clankers-prompt-fill"),
+    );
+  }
+
+  function findComposerActionButton(doc) {
+    var stopBtn = findStopGeneratingButton(doc);
+    if (stopBtn) return stopBtn;
+    if (!doc || typeof doc.querySelectorAll !== "function") return null;
+    var labeled = doc.querySelectorAll("button[aria-label]");
+    var i;
+    for (i = 0; i < labeled.length; i += 1) {
+      if (
+        !isInjectedControlButton(labeled[i]) &&
+        isSendMessageLabel(labeled[i].getAttribute("aria-label"))
+      ) {
+        return labeled[i];
+      }
+    }
+    var buttons = doc.querySelectorAll("button");
+    for (i = 0; i < buttons.length; i += 1) {
+      var btn = buttons[i];
+      if (isInjectedControlButton(btn)) continue;
+      var typeAttr =
+        typeof btn.getAttribute === "function" ? btn.getAttribute("type") : btn.type;
+      if (String(typeAttr || "").toLowerCase() === "submit") {
+        return btn;
+      }
+    }
+    var composer =
+      typeof doc.querySelector === "function"
+        ? doc.querySelector('div.tiptap.ProseMirror[contenteditable="true"]')
+        : null;
+    if (!composer) return null;
+    var scope =
+      (composer.parentElement && composer.parentElement.parentElement) ||
+      composer.parentElement;
+    if (!scope || typeof scope.querySelectorAll !== "function") return null;
+    var scopedButtons = scope.querySelectorAll("button");
+    for (i = scopedButtons.length - 1; i >= 0; i -= 1) {
+      if (!isInjectedControlButton(scopedButtons[i])) {
+        return scopedButtons[i];
       }
     }
     return null;
@@ -1524,6 +1580,7 @@
   var autoToggleButton = null;
   var settingsToggleButton = null;
   var settingsModalNode = null;
+  var notifyPreviewReadyHook = null;
 
   function setToggleButtonPressed() {
     if (!autoToggleButton) return;
@@ -1610,8 +1667,37 @@
     if (exposeChecks("autoScrollToggle", {
       AUTO_TOGGLE_CLASS: AUTO_TOGGLE_CLASS,
       autoToggleClasses: autoToggleClasses,
+      findComposerActionButton: findComposerActionButton,
     })) {
       return;
+    }
+
+    function createLucideIcon(name, shapes) {
+      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "lucide lucide-" + name);
+      svg.setAttribute("width", "16");
+      svg.setAttribute("height", "16");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "currentColor");
+      svg.setAttribute("stroke-width", "2");
+      svg.setAttribute("stroke-linecap", "round");
+      svg.setAttribute("stroke-linejoin", "round");
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("focusable", "false");
+      var i;
+      for (i = 0; i < shapes.length; i += 1) {
+        var entry = shapes[i];
+        var tag = typeof entry === "string" ? "path" : entry[0];
+        var attrs = typeof entry === "string" ? { d: entry } : entry[1];
+        var node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+        var keys = Object.keys(attrs);
+        for (var k = 0; k < keys.length; k += 1) {
+          node.setAttribute(keys[k], attrs[keys[k]]);
+        }
+        svg.appendChild(node);
+      }
+      return svg;
     }
 
     function createButton() {
@@ -1622,24 +1708,13 @@
       button.setAttribute("title", "Toggle transcript autoscroll");
       autoToggleButton = button;
       setToggleButtonPressed();
-      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("width", "16");
-      svg.setAttribute("height", "16");
-      svg.setAttribute("viewBox", "0 0 24 24");
-      svg.setAttribute("fill", "none");
-      svg.setAttribute("stroke-width", "1.5");
-      svg.setAttribute("color", "currentColor");
-      var paths = ["M12 4v12", "M6 10l6 6 6-6", "M5 20h14"];
-      var i;
-      for (i = 0; i < paths.length; i += 1) {
-        var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", paths[i]);
-        path.setAttribute("stroke", "currentColor");
-        path.setAttribute("stroke-linecap", "round");
-        path.setAttribute("stroke-linejoin", "round");
-        svg.appendChild(path);
-      }
-      button.appendChild(svg);
+      button.appendChild(
+        createLucideIcon("arrow-down-to-line", [
+          "M12 17V3",
+          "m6 11 6 6 6-6",
+          "M19 21H5",
+        ]),
+      );
       button.addEventListener("click", function () {
         autoScroll.toggle();
       });
@@ -1658,9 +1733,27 @@
       setSettingsButtonPressed();
     }
 
+    function ensureDualSliderStyle() {
+      var styleId = "clankers-settings-slider-style";
+      if (!document.head || typeof document.createElement !== "function") return;
+      if (typeof document.getElementById === "function" && document.getElementById(styleId)) return;
+      var style = document.createElement("style");
+      style.id = styleId;
+      style.setAttribute("id", styleId);
+      style.textContent =
+        "#clankers-settings-modal [data-dual-slider=\"true\"]{position:relative;height:20px;display:flex;align-items:center}" +
+        "#clankers-settings-modal [data-dual-slider=\"true\"] input[type=\"range\"]{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;padding:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none;accent-color:#d97757}" +
+        "#clankers-settings-modal [data-dual-slider=\"true\"] input[type=\"range\"]::-webkit-slider-runnable-track{background:transparent;height:6px}" +
+        "#clankers-settings-modal [data-dual-slider=\"true\"] input[type=\"range\"]::-moz-range-track{background:transparent;height:6px}" +
+        "#clankers-settings-modal [data-dual-slider=\"true\"] input[type=\"range\"]::-webkit-slider-thumb{pointer-events:auto;-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:#d97757;border:1px solid #201f1d;cursor:pointer;margin-top:-4px}" +
+        "#clankers-settings-modal [data-dual-slider=\"true\"] input[type=\"range\"]::-moz-range-thumb{pointer-events:auto;width:14px;height:14px;border-radius:50%;background:#d97757;border:1px solid #201f1d;cursor:pointer}";
+      document.head.appendChild(style);
+    }
+
     function openSettingsModal() {
       if (!document.body || typeof document.createElement !== "function") return;
       closeSettingsModal();
+      ensureDualSliderStyle();
       var modal = document.createElement("div");
       modal.id = SETTINGS_MODAL_ID;
       modal.setAttribute("id", SETTINGS_MODAL_ID);
@@ -1690,23 +1783,7 @@
         "cursor:pointer;display:inline-flex;align-items:center;justify-content:center;" +
         "border:1px solid #56504a;border-radius:5px;padding:3px;width:24px;height:24px;" +
         "background:transparent;color:inherit;font:inherit";
-      var closeSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      closeSvg.setAttribute("width", "16");
-      closeSvg.setAttribute("height", "16");
-      closeSvg.setAttribute("viewBox", "0 0 24 24");
-      closeSvg.setAttribute("fill", "none");
-      closeSvg.setAttribute("stroke-width", "1.5");
-      closeSvg.setAttribute("color", "currentColor");
-      var closePaths = ["M18 6 6 18", "m6 6 12 12"];
-      for (var c = 0; c < closePaths.length; c += 1) {
-        var closePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        closePath.setAttribute("d", closePaths[c]);
-        closePath.setAttribute("stroke", "currentColor");
-        closePath.setAttribute("stroke-linecap", "round");
-        closePath.setAttribute("stroke-linejoin", "round");
-        closeSvg.appendChild(closePath);
-      }
-      closeBtn.appendChild(closeSvg);
+      closeBtn.appendChild(createLucideIcon("x", ["M18 6 6 18", "m6 6 12 12"]));
       closeBtn.addEventListener("click", closeSettingsModal);
       header.appendChild(closeBtn);
 
@@ -1794,17 +1871,52 @@
         topRow.appendChild(readout);
 
         var track = document.createElement("div");
-        track.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center";
+        track.setAttribute("data-dual-slider", "true");
+        track.style.cssText = "position:relative;height:20px;display:flex;align-items:center";
+        var rail = document.createElement("div");
+        rail.setAttribute("data-slider-rail", "true");
+        rail.style.cssText =
+          "position:absolute;left:0;right:0;height:6px;border-radius:999px;" +
+          "background:#2c2b28;border:1px solid #56504a;overflow:hidden;pointer-events:none";
+        var fill = document.createElement("div");
+        fill.setAttribute("data-slider-fill", "true");
+        fill.style.cssText =
+          "position:absolute;top:0;bottom:0;background:#d97757;border-radius:999px";
+        var ticks = document.createElement("div");
+        ticks.setAttribute("data-slider-ticks", "true");
+        ticks.style.cssText =
+          "position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 6px;pointer-events:none";
+        var listId = "clankers-snap-" + minKey;
+        var datalist = document.createElement("datalist");
+        datalist.id = listId;
+        datalist.setAttribute("id", listId);
+        for (var s = minSec; s <= maxSec; s += 1) {
+          var opt = document.createElement("option");
+          opt.value = String(s);
+          opt.setAttribute("value", String(s));
+          datalist.appendChild(opt);
+          var tick = document.createElement("span");
+          tick.setAttribute("data-snap-point", String(s));
+          tick.style.cssText =
+            "width:2px;height:2px;border-radius:50%;background:rgba(240,237,232,.35)";
+          ticks.appendChild(tick);
+        }
+        rail.appendChild(fill);
+        rail.appendChild(ticks);
+
         var minInput = document.createElement("input");
         minInput.type = "range";
         minInput.min = String(minSec);
         minInput.max = String(maxSec);
         minInput.step = "1";
         minInput.value = String(curMinSec);
+        minInput.setAttribute("list", listId);
         minInput.setAttribute("data-setting-key", minKey);
         minInput.setAttribute("data-range-role", "min");
         minInput.setAttribute("aria-label", labelText + " min");
-        minInput.style.cssText = "width:100%;accent-color:#d97757";
+        minInput.style.cssText =
+          "position:absolute;left:0;top:0;width:100%;height:100%;margin:0;background:transparent;" +
+          "pointer-events:none;accent-color:#d97757;z-index:2";
 
         var maxInput = document.createElement("input");
         maxInput.type = "range";
@@ -1812,13 +1924,22 @@
         maxInput.max = String(maxSec);
         maxInput.step = "1";
         maxInput.value = String(curMaxSec);
+        maxInput.setAttribute("list", listId);
         maxInput.setAttribute("data-setting-key", maxKey);
         maxInput.setAttribute("data-range-role", "max");
         maxInput.setAttribute("aria-label", labelText + " max");
-        maxInput.style.cssText = "width:100%;accent-color:#d97757";
+        maxInput.style.cssText =
+          "position:absolute;left:0;top:0;width:100%;height:100%;margin:0;background:transparent;" +
+          "pointer-events:none;accent-color:#d97757;z-index:3";
 
         function updateReadout(lo, hi) {
           readout.textContent = lo + " - " + hi + " s";
+          var spanSec = Math.max(1, maxSec - minSec);
+          var leftPct = Math.min(100, Math.max(0, ((lo - minSec) / spanSec) * 100));
+          var rightPct = Math.min(100, Math.max(leftPct, ((hi - minSec) / spanSec) * 100));
+          fill.style.left = leftPct + "%";
+          fill.style.width = Math.max(0, rightPct - leftPct) + "%";
+          minInput.style.zIndex = lo >= maxSec - 1 ? "4" : "2";
         }
         updateReadout(curMinSec, curMaxSec);
 
@@ -1861,8 +1982,10 @@
         maxInput.addEventListener("input", applyMax);
         maxInput.addEventListener("change", applyMax);
 
+        track.appendChild(rail);
         track.appendChild(minInput);
         track.appendChild(maxInput);
+        track.appendChild(datalist);
         box.appendChild(topRow);
         box.appendChild(track);
         return box;
@@ -2028,27 +2151,12 @@
       button.setAttribute("title", "Toggle NemoUtils settings");
       settingsToggleButton = button;
       setSettingsButtonPressed();
-      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("width", "16");
-      svg.setAttribute("height", "16");
-      svg.setAttribute("viewBox", "0 0 24 24");
-      svg.setAttribute("fill", "none");
-      svg.setAttribute("stroke-width", "1.5");
-      svg.setAttribute("color", "currentColor");
-      var paths = [
-        "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
-        "M12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6z",
-      ];
-      var i;
-      for (i = 0; i < paths.length; i += 1) {
-        var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", paths[i]);
-        path.setAttribute("stroke", "currentColor");
-        path.setAttribute("stroke-linecap", "round");
-        path.setAttribute("stroke-linejoin", "round");
-        svg.appendChild(path);
-      }
-      button.appendChild(svg);
+      button.appendChild(
+        createLucideIcon("settings", [
+          "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915",
+          ["circle", { cx: "12", cy: "12", r: "3" }],
+        ]),
+      );
       button.addEventListener("click", function () {
         toggleSettingsModal();
       });
@@ -2056,14 +2164,15 @@
     }
 
     function ensureButton() {
-      var stopButton = findStopGeneratingButton(document);
-      var row = stopButton && stopButton.parentElement;
+      if (typeof notifyPreviewReadyHook === "function") notifyPreviewReadyHook();
+      var actionButton = findComposerActionButton(document);
+      var row = actionButton && actionButton.parentElement;
       if (!row) return;
       var settingsBtn = row.querySelector("[" + SETTINGS_TOGGLE_MARK + "]");
       var autoBtn = row.querySelector("[" + AUTO_TOGGLE_MARK + "]");
       if (!settingsBtn) {
         settingsBtn = createSettingsButton();
-        row.insertBefore(settingsBtn, stopButton);
+        row.insertBefore(settingsBtn, actionButton);
       }
       if (!autoBtn) {
         autoBtn = createButton();
@@ -2518,8 +2627,24 @@
     var SHELL_SELECTOR = "div.flex.w-full.flex-col.items-start.justify-center.p-2";
     var EDITOR_CONTENT_SELECTOR = "div.editor-content";
     var HIDE_MARK = "data-clankers-hidden";
+    var TRANSCRIPT_COLUMN_SELECTOR =
+      "div.flex.w-full.shrink-0.flex-col.gap-4.mx-auto.max-w-3xl.px-4.pt-14.md\\:pt-12";
     var SPACER_SELECTOR = 'div.shrink-0[style*="height: 24px"]';
+    var SPACER_MARK = "data-clankers-spacer";
+    var SPACER_STYLE_ID = "clankers-spacer-lock";
     var SPACER_HEIGHT = "24px";
+    var TRANSCRIPT_COLUMN_CLASSES = [
+      "flex",
+      "w-full",
+      "shrink-0",
+      "flex-col",
+      "gap-4",
+      "mx-auto",
+      "max-w-3xl",
+      "px-4",
+      "pt-14",
+      "md:pt-12",
+    ];
     var fixedSpacers = new WeakSet();
     var spacerStyles = new Map();
     var editorStates = new Map();
@@ -2529,11 +2654,38 @@
     }
 
     function isSpacerElement(spacer) {
-      return (
-        String(spacer.tagName || "").toLowerCase() === "div" &&
-        spacer.classList.contains("shrink-0") &&
-        !String(spacer.textContent || "").trim()
+      return Boolean(
+        spacer &&
+          String(spacer.tagName || "").toLowerCase() === "div" &&
+          spacer.classList &&
+          spacer.classList.contains("shrink-0") &&
+          !String(spacer.textContent || "").trim(),
       );
+    }
+
+    function isTranscriptColumn(node) {
+      if (!node || String(node.tagName || "").toLowerCase() !== "div" || !node.classList) {
+        return false;
+      }
+      for (var i = 0; i < TRANSCRIPT_COLUMN_CLASSES.length; i += 1) {
+        if (!node.classList.contains(TRANSCRIPT_COLUMN_CLASSES[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function isSpacerSibling(spacer) {
+      if (!isSpacerElement(spacer)) return false;
+      var parent = spacer.parentElement || spacer.parentNode;
+      if (!parent || !parent.children) return false;
+      var siblings = parent.children;
+      for (var i = 0; i < siblings.length; i += 1) {
+        if (siblings[i] !== spacer && isTranscriptColumn(siblings[i])) {
+          return true;
+        }
+      }
+      return false;
     }
 
     function hasSpacerHeight(styleText) {
@@ -2544,6 +2696,9 @@
 
     function lockSpacerHeight(spacer) {
       fixedSpacers.add(spacer);
+      if (typeof spacer.setAttribute === "function") {
+        spacer.setAttribute(SPACER_MARK, "true");
+      }
       if (
         spacer.style.getPropertyValue("height") === SPACER_HEIGHT &&
         spacer.style.getPropertyPriority("height") === "important"
@@ -2566,6 +2721,7 @@
           if (change.type === "attributes" && change.attributeName === "style") {
             if (
               fixedSpacers.has(change.target) ||
+              isSpacerSibling(change.target) ||
               (isSpacerElement(change.target) && hasSpacerHeight(change.oldValue))
             ) {
               lockSpacerHeight(change.target);
@@ -2578,14 +2734,40 @@
       if (!scan) {
         return;
       }
-      var spacers = doc.querySelectorAll(SPACER_SELECTOR);
-      for (i = 0; i < spacers.length; i += 1) {
-        if (
-          fixedSpacers.has(spacers[i]) ||
-          (isSpacerElement(spacers[i]) && hasSpacerHeight(spacers[i].getAttribute("style")))
-        ) {
-          lockSpacerHeight(spacers[i]);
+      var matched = [];
+      if (doc && typeof doc.querySelectorAll === "function") {
+        try {
+          var columns = doc.querySelectorAll(TRANSCRIPT_COLUMN_SELECTOR);
+          for (i = 0; i < columns.length; i += 1) {
+            var parent = columns[i].parentElement || columns[i].parentNode;
+            if (!parent || !parent.children) continue;
+            for (var j = 0; j < parent.children.length; j += 1) {
+              var sib = parent.children[j];
+              if (sib !== columns[i] && isSpacerElement(sib)) {
+                matched.push(sib);
+              }
+            }
+          }
+        } catch (err) {}
+        var shrinkNodes = doc.querySelectorAll("div.shrink-0");
+        for (i = 0; i < shrinkNodes.length; i += 1) {
+          if (isSpacerSibling(shrinkNodes[i])) {
+            matched.push(shrinkNodes[i]);
+          }
         }
+        var spacers = doc.querySelectorAll(SPACER_SELECTOR);
+        for (i = 0; i < spacers.length; i += 1) {
+          if (
+            fixedSpacers.has(spacers[i]) ||
+            isSpacerSibling(spacers[i]) ||
+            (isSpacerElement(spacers[i]) && hasSpacerHeight(spacers[i].getAttribute("style")))
+          ) {
+            matched.push(spacers[i]);
+          }
+        }
+      }
+      for (i = 0; i < matched.length; i += 1) {
+        lockSpacerHeight(matched[i]);
       }
     }
 
@@ -2594,12 +2776,27 @@
       isStopGeneratingLabel: isStopGeneratingLabel,
       shouldHideComposer: shouldHideComposer,
       isSpacerElement: isSpacerElement,
+      isSpacerSibling: isSpacerSibling,
+      isTranscriptColumn: isTranscriptColumn,
       hasSpacerHeight: hasSpacerHeight,
       enforceSpacerHeight: enforceSpacerHeight,
+      TRANSCRIPT_COLUMN_SELECTOR: TRANSCRIPT_COLUMN_SELECTOR,
       SPACER_SELECTOR: SPACER_SELECTOR,
       SPACER_HEIGHT: SPACER_HEIGHT,
     })) {
       return;
+    }
+
+    function ensureSpacerStyle() {
+      if (!document.head || typeof document.createElement !== "function") return;
+      if (typeof document.getElementById === "function" && document.getElementById(SPACER_STYLE_ID)) return;
+      var style = document.createElement("style");
+      style.id = SPACER_STYLE_ID;
+      style.setAttribute("id", SPACER_STYLE_ID);
+      style.textContent =
+        TRANSCRIPT_COLUMN_SELECTOR + " ~ div.shrink-0," +
+        "div[" + SPACER_MARK + "=\"true\"]{height:" + SPACER_HEIGHT + " !important}";
+      document.head.appendChild(style);
     }
 
     function findEditorContent(doc, stopButton) {
@@ -2657,6 +2854,7 @@
 
     function enforceCurrentSpacerHeight(mutations) {
       if (isSessionUrl(location.href)) {
+        ensureSpacerStyle();
         enforceSpacerHeight(document, mutations);
       }
     }
@@ -2690,8 +2888,16 @@
     return function () {
       observer.disconnect();
       window.removeEventListener("popstate", onRoute);
+      if (typeof document.getElementById === "function") {
+        var styleNode = document.getElementById(SPACER_STYLE_ID);
+        if (styleNode) {
+          if (typeof styleNode.remove === "function") styleNode.remove();
+          else if (styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        }
+      }
       editorStates.forEach(function (_, editor) { showEditor(editor); });
       spacerStyles.forEach(function (prior, spacer) {
+        if (typeof spacer.removeAttribute === "function") spacer.removeAttribute(SPACER_MARK);
         if (spacer.style.getPropertyValue("height") === SPACER_HEIGHT && spacer.style.getPropertyPriority("height") === "important") {
           if (prior[0]) spacer.style.setProperty("height", prior[0], prior[1]);
           else spacer.style.removeProperty("height");
@@ -3469,12 +3675,23 @@
       if (!frame || !frame.contentWindow || typeof frame.contentWindow.postMessage !== "function") {
         return false;
       }
+      if (typeof frame.addEventListener === "function" && !frame.getAttribute("data-clankers-preview-bound")) {
+        frame.setAttribute("data-clankers-preview-bound", "true");
+        frame.addEventListener("load", function () {
+          notifyPreviewReady(doc);
+        });
+      }
       var target = frame.src ? frame.src.replace(/\/+$/, "") : "*";
       try {
         frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, target);
         return true;
       } catch (err) {
-        return false;
+        try {
+          frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, "*");
+          return true;
+        } catch (fallbackErr) {
+          return false;
+        }
       }
     }
 
@@ -4018,10 +4235,10 @@
       if (!event || !event.data || typeof event.data !== "object") return;
       var frame = previewFrame(document);
       var base = previewBase(document);
-      if (frame && frame.contentWindow && event.source && event.source !== frame.contentWindow) {
+      if (base && event.origin && base.indexOf(event.origin) !== 0) {
         return;
       }
-      if (!event.source && base && event.origin && base.indexOf(event.origin) !== 0) {
+      if (!event.origin && frame && frame.contentWindow && event.source && event.source !== frame.contentWindow) {
         return;
       }
       if (event.data.type === "clankers:preview-ready") {
@@ -4034,6 +4251,9 @@
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
       window.addEventListener("message", onPreviewMessage);
     }
+    notifyPreviewReadyHook = function () {
+      notifyPreviewReady(document);
+    };
     notifyPreviewReady(document);
     fetchStateFile(false);
     var stopStateWatch = jitteredTimer(function () {
@@ -4046,6 +4266,7 @@
       }, stateWatchMs(), HTTP_JITTER_MS);
     };
     return function () {
+      notifyPreviewReadyHook = null;
       if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
         window.removeEventListener("message", onPreviewMessage);
       }

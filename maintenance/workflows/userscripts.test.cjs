@@ -2381,9 +2381,24 @@ for raw in sys.stdin:
     assert.equal(settingsIndex, autoIndex + 1, "Lucide settings button sits right after the auto-scroll button");
     assert.equal(stopIndex, settingsIndex + 1, "settings button sits before Stop generating");
 
+    const autoButton = row.children[autoIndex];
+    const autoSvg = autoButton.children[0];
+    assert.equal(
+      autoSvg.attrs.class,
+      "lucide lucide-arrow-down-to-line",
+      "auto-scroll button renders the Lucide arrow-down-to-line SVG",
+    );
+    assert.equal(autoSvg.attrs["stroke-width"], "2", "Lucide icon uses stroke-width 2");
     const settingsButton = row.children[settingsIndex];
+    const settingsSvg = settingsButton.children[0];
     assert.equal(settingsButton.attrs["aria-pressed"], "false", "settings toggle starts unpressed");
-    assert.ok(settingsButton.querySelectorAll("path").length >= 2, "settings button renders a Lucide SVG icon");
+    assert.equal(
+      settingsSvg.attrs.class,
+      "lucide lucide-settings",
+      "settings button renders the Lucide settings SVG",
+    );
+    assert.equal(settingsSvg.children.length, 2, "Lucide settings icon has path and circle");
+    assert.equal(settingsSvg.children[1].attrs.r, "3", "Lucide settings icon uses a circle center");
 
     settingsButton.listeners.click();
     assert.ok(modalNode, "clicking the settings button opens the settings modal");
@@ -2394,6 +2409,11 @@ for raw in sys.stdin:
     const closeButton = modalNode.querySelector("[data-clankers-settings-close]");
     assert.ok(closeButton, "settings modal header includes a close button");
     assert.equal(closeButton.attrs["aria-label"], "Close settings", "close button carries accessible label");
+    assert.equal(
+      closeButton.children[0].attrs.class,
+      "lucide lucide-x",
+      "close button renders the Lucide x SVG",
+    );
     assert.equal(closeButton.querySelectorAll("path").length, 2, "close button renders a 2-path Lucide X icon");
     dragHeader.listeners.mousedown({ button: 0, clientX: 300, clientY: 100, preventDefault() {} });
     windowListeners.get("mousemove")({ clientX: 420, clientY: 190 });
@@ -2437,6 +2457,44 @@ for raw in sys.stdin:
       allInputs.indexOf(keepMinInput) < allInputs.indexOf(keepMaxInput),
       "Keep working min slider sits on the left before max slider",
     );
+    assert.equal(
+      keepMinInput.parentElement,
+      keepMaxInput.parentElement,
+      "min and max inputs share a single dual-thumb slider track",
+    );
+    assert.equal(
+      keepMinInput.parentElement.attrs["data-dual-slider"],
+      "true",
+      "shared slider track marks data-dual-slider=true",
+    );
+    const keepRail = keepMinInput.parentElement.children[0];
+    const keepFill = keepRail.children[0];
+    assert.equal(
+      keepFill.attrs["data-slider-fill"],
+      "true",
+      "dual-thumb slider track renders a filled range bar between the two thumbs",
+    );
+    const keepTicks = keepRail.children[1];
+    assert.equal(
+      keepTicks.attrs["data-slider-ticks"],
+      "true",
+      "dual-thumb slider track renders integer snap point ticks",
+    );
+    assert.equal(
+      keepTicks.children.length,
+      61,
+      "0..60 second slider renders 61 integer snap point ticks",
+    );
+    assert.equal(
+      keepMinInput.attrs.list,
+      "clankers-snap-clankers-arena-keep-working-delay-min-ms",
+      "min slider links to integer snap datalist",
+    );
+    assert.equal(
+      keepMaxInput.attrs.list,
+      "clankers-snap-clankers-arena-keep-working-delay-min-ms",
+      "max slider links to the same integer snap datalist",
+    );
 
     keepMinInput.value = "2";
     keepMinInput.listeners.change();
@@ -2444,6 +2502,7 @@ for raw in sys.stdin:
     keepMaxInput.listeners.change();
     assert.equal(saved.get("clankers-arena-keep-working-delay-min-ms"), 2000, "changing Keep working min slider persists ms");
     assert.equal(saved.get("clankers-arena-keep-working-delay-ms"), 9000, "changing Keep working max slider persists ms");
+    assert.ok(parseFloat(keepFill.style.width) > 0, "filled range bar updates its width between min and max thumbs");
 
     const watchInput = allInputs.find(
       (el) => el.attrs["data-setting-key"] === "clankers-arena-state-watch-ms",
