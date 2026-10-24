@@ -223,8 +223,8 @@
 - Retry once to confirm the failure, NEVER loop the retry, and NEVER ask the user for a token, a password, or a one-time code.
 - MUST ask through `ask_user` immediately; NEVER end the turn in silence: ask the owner to reconnect GitHub in Arena and reply in chat for a new turn with fresh credentials.
 - Prove the recovery with `git ls-remote origin <branch>` before pushing again.
-- Update PR title/body through the [REST recipe](.agents/skills/arena-skill/references/recipes/pr-rest.md).
-- To read a GitHub Actions job log, follow the [job-log redirect recipe](.agents/skills/arena-skill/references/recipes/github-job-logs.md).
+- Update PR title/body through `arena-preview pr-update -n <pr> -t <title> -f <workspace-file>`.
+- To read a GitHub Actions job log, run `arena-preview job-log -j <job-id>` (or `-r <run-id>`) and pass the printed URL to `fetch_page`.
 - **NEVER `-f body=@path`**.
 - Stage PR text in the workspace, NEVER /tmp.
 - After every PATCH, re-fetch title and body and diff against the staged file to confirm the change is live; a 200 is not proof.

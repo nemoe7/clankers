@@ -4255,6 +4255,203 @@ def pr_checks_command(argv):
   return long_run_name(line) == "pr-checks"
 
 
+JOB_LOG_PATH_RE = re.compile(
+  r"(?:^|/|repos/[^/\s\"']+/[^/\s\"']+/)actions/(jobs|runs)/(\d+)/logs\b"
+)
+PR_PATCH_PATH_RE = re.compile(r"(?:^|/|repos/[^/\s\"']+/[^/\s\"']+/)pulls/(\d+)\b")
+
+
+def pr_update_command(number, title, body_file, root=None):
+  """Update a pull request title and body via REST from a workspace file and verify parity."""
+  root_path = Path(root or resolve_repo_root()).resolve()
+  if type(number) is not int or number <= 0:
+    raise ValueError("Pull request number must be a positive integer")
+  clean_title = str(title or "").strip()
+  if not clean_title:
+    raise ValueError("Pull request title must not be empty")
+  raw_arg = str(body_file or "").strip().removeprefix("@")
+  if not raw_arg:
+    raise ValueError("Pull request body file is required")
+  raw_path = Path(raw_arg)
+  candidate = (
+    raw_path.resolve() if raw_path.is_absolute() else (Path.cwd() / raw_path).resolve()
+  )
+  if not candidate.is_relative_to(root_path):
+    if str(candidate).startswith("/tmp/") or candidate == Path("/tmp"):
+      raise ValueError("Stage pull request text in the workspace, never /tmp")
+    raise ValueError(
+      f"Pull request body file must be inside the workspace ({root_path})"
+    )
+  if not candidate.is_file():
+    raise ValueError(f"Pull request body file not found: {raw_arg}")
+  body = candidate.read_text(encoding="utf-8")
+  slug = repo_slug(root_path)
+  if not slug:
+    raise ValueError("Could not resolve GitHub repository slug from origin remote")
+  payload = json.dumps({"title": clean_title, "body": body})
+  patch_proc = subprocess.run(
+    ["gh", "api", f"repos/{slug}/pulls/{number}", "-X", "PATCH", "--input", "-"],
+    input=payload,
+    cwd=root_path,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  if patch_proc.returncode != 0:
+    detail = (patch_proc.stderr or patch_proc.stdout or "gh api PATCH failed").strip()
+    raise ValueError(f"Pull request #{number} update failed: {detail}")
+  fetch_proc = subprocess.run(
+    ["gh", "api", f"repos/{slug}/pulls/{number}"],
+    cwd=root_path,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  if fetch_proc.returncode != 0:
+    detail = (fetch_proc.stderr or fetch_proc.stdout or "gh api GET failed").strip()
+    raise ValueError(f"Pull request #{number} verification read failed: {detail}")
+  try:
+    fetched = json.loads(fetch_proc.stdout)
+  except json.JSONDecodeError as error:
+    raise ValueError(
+      f"Pull request #{number} verification returned invalid JSON: {error}"
+    ) from None
+  if fetched.get("title") != clean_title or (fetched.get("body") or "") != body:
+    raise ValueError(f"Pull request #{number} title/body parity mismatch after PATCH")
+  rel = candidate.relative_to(root_path).as_posix()
+  return f"Updated PR #{number}: {clean_title} (verified against {rel})"
+
+
+def job_log_command(store=None, job_id=None, run_id=None, root=None):
+  """Resolve the signed GitHub Actions job-log Location URL or fallback /v1/gh proxy URL."""
+  job_clean = str(job_id or "").strip()
+  run_clean = str(run_id or "").strip()
+  if not job_clean and not run_clean:
+    raise ValueError("Supply --job <job-id> or --run <run-id>")
+  if job_clean and not job_clean.isdigit():
+    raise ValueError("--job must be a numeric GitHub Actions job ID")
+  if run_clean and not run_clean.isdigit():
+    raise ValueError("--run must be a numeric GitHub Actions run ID")
+  root_path = Path(root or resolve_repo_root()).resolve()
+  slug = repo_slug(root_path)
+  if not slug:
+    raise ValueError("Could not resolve GitHub repository slug from origin remote")
+  if job_clean:
+    proc = subprocess.run(
+      ["gh", "api", "-i", f"/repos/{slug}/actions/jobs/{job_clean}/logs"],
+      cwd=root_path,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    combined = f"{proc.stdout}\n{proc.stderr}"
+    match = re.search(r"(?im)^location:\s*(\S+)", combined)
+    if match:
+      return match.group(1).strip()
+  record = store.agent_key() if store is not None else None
+  if record and record.get("host") and record.get("key"):
+    host = str(record["host"]).rstrip("/")
+    key = record["key"]
+    target_id = run_clean or job_clean
+    log_type = "runs" if run_clean else "jobs"
+    return (
+      f"{host}/v1/gh?key={key}&path=repos/{slug}/actions/{log_type}/{target_id}/logs"
+    )
+  raise ValueError(
+    "Job log redirect URL unavailable and no recorded agent key for /v1/gh fallback"
+  )
+
+
+def _extract_pr_patch_args(text):
+  """Extract (title, body_file) from a jq/gh/curl PR PATCH command line when present."""
+  title = None
+  body_file = None
+  jq_title = re.search(r"--arg\s+title\s+(?:\"([^\"]+)\"|'([^']+)'|([^\s\"'|]+))", text)
+  if jq_title:
+    title = next(group for group in jq_title.groups() if group is not None)
+  gh_title = re.search(
+    r"-(?:f|F|--field|--raw-field)\s+title=(?:\"([^\"]+)\"|'([^']+)'|([^\s\"'|]+))",
+    text,
+  )
+  if gh_title and title is None:
+    title = next(group for group in gh_title.groups() if group is not None)
+  jq_body = re.search(
+    r"--rawfile\s+body\s+(?:\"([^\"]+)\"|'([^']+)'|([^\s\"'|]+))", text
+  )
+  if jq_body:
+    body_file = next(group for group in jq_body.groups() if group is not None)
+  gh_body = re.search(
+    r"-(?:f|F|--field|--raw-field)\s+body=@(?:\"([^\"]+)\"|'([^']+)'|([^\s\"'|]+))",
+    text,
+  )
+  if gh_body and body_file is None:
+    body_file = next(group for group in gh_body.groups() if group is not None)
+  return title, body_file
+
+
+def route_recipe_command(state_dir, line, root=None):
+  """Route matching `gh api` / `curl` PR PATCH and job-log commands to `arena-preview`."""
+  if platform_line(line):
+    return None
+  text = agent_line(line or "").strip()
+  if not text:
+    return None
+  heads = [head for head in map(piece_head, command_pieces(text)) if head]
+  if not any(head in ("gh", "curl") for head in heads):
+    return None
+  if any(head in ("arena-preview", "preview.py") for head in heads):
+    return None
+  job_match = JOB_LOG_PATH_RE.search(text)
+  if job_match:
+    log_type, target_id = job_match.groups()
+    flag = "-j" if log_type == "jobs" else "-r"
+    print(
+      f"Routed to: arena-preview job-log {flag} {target_id}",
+      file=sys.stderr,
+      flush=True,
+    )
+    store = Store(state_dir, create=False) if state_file(state_dir).is_file() else None
+    try:
+      url = job_log_command(
+        store,
+        job_id=target_id if log_type == "jobs" else None,
+        run_id=target_id if log_type == "runs" else None,
+        root=root,
+      )
+    except ValueError as error:
+      print(f"Preview error: {error}", file=sys.stderr, flush=True)
+      return 130
+    print(url, flush=True)
+    return 2
+  pr_match = PR_PATCH_PATH_RE.search(text)
+  if pr_match and re.search(
+    r"(?:-X|--method)(?:=|\s+)['\"]?PATCH\b", text, re.IGNORECASE
+  ):
+    number = int(pr_match.group(1))
+    title, body_file = _extract_pr_patch_args(text)
+    if not title or not body_file:
+      print(
+        f"PR UPDATE ROUTED: use `arena-preview pr-update -n {number} -t <title> -f <workspace-file>`"
+        " instead of direct gh api/curl PATCH calls.",
+        file=sys.stderr,
+        flush=True,
+      )
+      return 130 if "curl" in heads else None
+    print(
+      f"Routed to: arena-preview pr-update -n {number} -t {shlex.quote(title)} -f {shlex.quote(body_file)}",
+      file=sys.stderr,
+      flush=True,
+    )
+    try:
+      receipt = pr_update_command(number, title, body_file, root=root)
+    except ValueError as error:
+      print(f"Preview error: {error}", file=sys.stderr, flush=True)
+      return 130
+    print(receipt, flush=True)
+    return 2
+  return None
+
+
 def post_push_pr_checks_command(line):
   """Return `'pr-checks'` when `line` executes a non-dry-run `git push` or `gh pr create`."""
   if platform_line(line):
@@ -11595,6 +11792,9 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
     mark("bare")
     report("Use bare arena-preview from any directory. Drop full path.")
   # case: proxy-route
+  recipe_status = route_recipe_command(state_dir, line, root=root)
+  if recipe_status is not None:
+    return finish(recipe_status)
   if "proxy" not in finished and any(
     word in line
     for word in (
@@ -11835,6 +12035,33 @@ def main():
     dest="as_json",
     action="store_true",
     help="Print JSON outline with path, language, entries, total, and omitted count",
+  )
+  pr_update_parser = commands.add_parser(
+    "pr-update",
+    help="Update a pull request title and body via REST from a workspace file and verify parity",
+  )
+  pr_update_parser.add_argument(
+    "-n", "--number", type=int, required=True, help="Pull request number"
+  )
+  pr_update_parser.add_argument(
+    "-t", "--title", required=True, help="Pull request title"
+  )
+  pr_update_parser.add_argument(
+    "-f",
+    "--body-file",
+    type=Path,
+    required=True,
+    help="Workspace Markdown file for pull request body",
+  )
+  job_log_parser = commands.add_parser(
+    "job-log",
+    help="Resolve the signed GitHub Actions job-log Location URL or fallback /v1/gh proxy URL",
+  )
+  job_log_parser.add_argument(
+    "-j", "--job", dest="job_id", help="GitHub Actions job ID"
+  )
+  job_log_parser.add_argument(
+    "-r", "--run", dest="run_id", help="GitHub Actions run ID"
   )
   commands.add_parser("key", help="Print the recorded agent key, host and use line")
   pre = commands.add_parser(
@@ -12200,6 +12427,23 @@ def main():
       try:
         result = outline_file(args.path, max_entries=args.max_entries)
         print(format_outline(result, as_json=args.as_json))
+      except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+      return 0
+    if args.command == "pr-update":
+      try:
+        print(pr_update_command(args.number, args.title, args.body_file))
+      except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+      return 0
+    if args.command == "job-log":
+      try:
+        store = (
+          Store(state_dir, create=False) if state_file(state_dir).is_file() else None
+        )
+        print(job_log_command(store, job_id=args.job_id, run_id=args.run_id))
       except ValueError as error:
         print(error, file=sys.stderr)
         return 1

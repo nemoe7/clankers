@@ -14457,6 +14457,74 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     }
   )
   assert offer2["duplicate"] is True
+
+  pr_body_path = tmp_path / "pr-body.md"
+  pr_body_path.write_text("## Summary\n\nBody text.\n", encoding="utf-8")
+  with pytest.raises(ValueError, match="/tmp"):
+    preview.pr_update_command(119, "feat: title", Path("/tmp/pr.md"), root=tmp_path)
+  monkeypatch.setattr(preview, "repo_slug", lambda _root=None: "nemoe7/clankers")
+  gh_calls = []
+
+  def fake_gh_run(cmd, **kwargs):
+    gh_calls.append((cmd, kwargs.get("input")))
+    if "-i" in cmd:
+      return subprocess.CompletedProcess(
+        cmd,
+        0,
+        stdout="HTTP/2 302\r\nLocation: https://results.actions.githubusercontent.com/signed-log\r\n\r\n",
+        stderr="",
+      )
+    return subprocess.CompletedProcess(
+      cmd,
+      0,
+      stdout=json.dumps({"title": "feat: title", "body": "## Summary\n\nBody text.\n"}),
+      stderr="",
+    )
+
+  monkeypatch.setattr(preview.subprocess, "run", fake_gh_run)
+  receipt = preview.pr_update_command(119, "feat: title", pr_body_path, root=tmp_path)
+  assert "119" in receipt
+  assert len(gh_calls) == 2
+  assert gh_calls[0][0][:4] == ["gh", "api", "repos/nemoe7/clankers/pulls/119", "-X"]
+  assert (
+    preview.job_log_command(tz_store, job_id="42", root=tmp_path)
+    == "https://results.actions.githubusercontent.com/signed-log"
+  )
+  test_key = "k" * 24
+  tz_store.set_agent_key(test_key, "https://proxy.example.test")
+  assert (
+    preview.job_log_command(tz_store, run_id="99", root=tmp_path)
+    == f"https://proxy.example.test/v1/gh?key={test_key}&path=repos/nemoe7/clankers/actions/runs/99/logs"
+  )
+  assert (
+    preview.route_recipe_command(
+      tmp_path / "tz-state",
+      "gh api -i /repos/nemoe7/clankers/actions/jobs/42/logs",
+      root=tmp_path,
+    )
+    == 2
+  )
+  jq_patch_cmd = (
+    f'jq -n --rawfile body "{pr_body_path}" --arg title "feat: title" '
+    "'{body: $body, title: $title}' | "
+    "gh api repos/nemoe7/clankers/pulls/119 -X PATCH --input -"
+  )
+  assert (
+    preview.route_recipe_command(
+      tmp_path / "tz-state",
+      jq_patch_cmd,
+      root=tmp_path,
+    )
+    == 2
+  )
+  assert (
+    preview.route_recipe_command(
+      tmp_path / "tz-state",
+      "curl -X PATCH https://api.github.com/repos/nemoe7/clankers/pulls/119 -d '{}'",
+      root=tmp_path,
+    )
+    == 130
+  )
   assert offer2["note_id"] == offer1["note_id"]
   tz_read = tz_store.read(include_quiet=False)
   assert any(item["id"] == offer1["note_id"] for item in tz_read["pending"])

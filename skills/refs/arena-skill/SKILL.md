@@ -137,7 +137,7 @@ Keep `state.sqlite3`, `saved-state.ndjson`, report sources and saved file bytes 
 
 ## Proxy access
 
-The backend answers over one public HTTPS URL. An Arena session reads it through `fetch_page`, with a key in the URL. To read a GitHub Actions job log without triggering the proxy-HTTP gate, follow the [job-log redirect recipe](references/recipes/github-job-logs.md).
+The backend answers over one public HTTPS URL. An Arena session reads it through `fetch_page`, with a key in the URL. To read a GitHub Actions job log without triggering the proxy-HTTP gate, run `arena-preview job-log -j <job-id>` (or `-r <run-id>`) and pass the printed URL to `fetch_page`.
 
 - Read-only data that neither the sandbox nor its token can reach: code scanning alerts, secret scanning alerts, workflow run logs, run artifacts, or another service the owner fronts.
 - A binary file, a page, or a signed URL, as text the session can carry.

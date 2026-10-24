@@ -45,6 +45,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Remove outer `.log-card` and tab `.card` backgrounds, borders, and inline padding while keeping `.message` and `#compose` cards. Unify tab container widths at `900px` (`assets/style.css`).
 - Middle-truncate staged attachment filename stems by splitting the stem in half while keeping directory prefixes, file extensions, and file sizes visible (`assets/app.js` and `assets/style.css`).
 - Detect local-only unpushed commits (`unpushed_commit_count`) in `scripts/preview.py` and remind to push without delaying for a batch on `git commit` and in rotating reminders.
+- Add `arena-preview pr-update` and `arena-preview job-log` subcommands (`scripts/preview.py`), route matching `gh api` and `curl` commands in `pre_command`, and remove `references/recipes/pr-rest.md` and `references/recipes/github-job-logs.md`.
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
 - Require descriptive `arena-preview run start <name>` gate IDs naming what the gate runs (`-2`, `-3`, ... on retries) in `ARENA.md` and `SKILL.md`.
