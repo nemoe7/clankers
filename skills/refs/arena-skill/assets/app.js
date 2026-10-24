@@ -119,6 +119,8 @@ const ICONS = {
   'file-text': [['path', { d: 'M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z' }],
     ['path', { d: 'M14 2v4a2 2 0 0 0 2 2h4' }], ['path', { d: 'M10 9H8' }],
     ['path', { d: 'M16 13H8' }], ['path', { d: 'M16 17H8' }]],
+  braces: [['path', { d: 'M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1' }],
+    ['path', { d: 'M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1' }]],
   'loader-circle': [['path', { d: 'M21 12a9 9 0 1 1-6.219-8.56' }]],
 };
 function icon(name, size = 15) {
@@ -2425,7 +2427,7 @@ const mermaidRuntime = {
   sanitizeSvg: sanitizeMermaidSvg,
 };
 globalThis.mermaid = mermaidRuntime;
-const MERMAID_BLOCK_RE = /<div class="code-block">(\s*<button\b[^>]*class="copy-code"[\s\S]*?<\/button>)?\s*<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>\s*<\/div>/g;
+const MERMAID_BLOCK_RE = /<div class="code-block">(\s*<button\b[^>]*class="copy-code"[\s\S]*?<\/button>)?(\s*<div class="code-block-header">[\s\S]*?<\/div>)?\s*<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>\s*<\/div>/g;
 async function renderMermaidBlocks(html, sequence) {
   if (typeof html !== 'string' || !html.includes('language-mermaid')) return html;
   const matches = [...html.matchAll(MERMAID_BLOCK_RE)];
@@ -2435,7 +2437,7 @@ async function renderMermaidBlocks(html, sequence) {
   let index = 0;
   for (const match of matches) {
     if (sequence !== undefined && sequence !== reportRequest) return html;
-    const [full, copyBtn = '', escapedSource = ''] = match;
+    const [full, copyBtn = '', header = '', escapedSource = ''] = match;
     out += html.slice(cursor, match.index);
     cursor = match.index + full.length;
     const rawSource = unescapeHtmlEntities(escapedSource);
@@ -2447,9 +2449,9 @@ async function renderMermaidBlocks(html, sequence) {
       safeSvg = null;
     }
     if (safeSvg) {
-      out += `<div class="code-block" data-mermaid-state="rendered">${copyBtn}<div class="mermaid-diagram" role="figure" aria-label="Mermaid diagram">${safeSvg}</div><pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
+      out += `<div class="code-block" data-mermaid-state="rendered">${copyBtn}${header}<div class="mermaid-diagram" role="figure" aria-label="Mermaid diagram">${safeSvg}</div><pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
     } else {
-      out += `<div class="code-block" data-mermaid-state="fallback">${copyBtn}<pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
+      out += `<div class="code-block" data-mermaid-state="fallback">${copyBtn}${header}<pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
     }
   }
   out += html.slice(cursor);

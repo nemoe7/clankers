@@ -331,16 +331,19 @@ mark a, a mark { color: var(--mark-link); }
 /* Compact message-table rows limit the space used by three columns. */
 .message-text th, .message-text td { text-align: left; border-bottom: 1px solid var(--border); padding: 3px 8px; overflow-wrap: normal; }
 /* Use the same code background wherever Markdown renders. A message fence and `draft-preview` fence are the same block. */
-pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg); }
-.code-block { position: relative; }
-.code-block pre { padding-right: 40px; }
-.code-block:has(> .preview-code-md) > pre { padding-right: 70px; }
+pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--panel); }
+.code-block { position: relative; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); overflow: hidden; }
+.code-block-header { display: flex; align-items: center; min-height: 28px; padding: 2px 36px 2px 10px; border-bottom: 1px solid var(--tab-border); background: var(--bg); color: var(--text); font-family: var(--font-mono); font-size: 12px; line-height: 1.2; }
+.code-block:has(> .preview-code-md) > .code-block-header { padding-right: 62px; }
+.code-block-lang { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.code-block-lang svg { color: var(--muted); flex: none; }
+.code-block pre { margin: 0; padding: 10px 12px; border-radius: 0; background: var(--panel); }
 .code-block[data-mermaid-state="rendered"] > pre, .code-block[data-md-state="rendered"] > pre { display: none; }
-.mermaid-diagram { padding: 12px 40px 12px 12px; border-radius: 6px; overflow-x: auto; background: var(--bg); }
-.code-md-preview { padding: 12px 70px 12px 12px; border-radius: 6px; overflow-x: auto; background: var(--bg); border: 1px solid var(--border); }
+.mermaid-diagram { padding: 12px; border-radius: 0; overflow-x: auto; background: var(--panel); }
+.code-md-preview { padding: 12px; border-radius: 0; overflow-x: auto; background: var(--panel); }
 .mermaid-svg { display: block; max-width: 100%; height: auto; color: var(--text); font-family: inherit; }
-.copy-code, .preview-code-md { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; min-height: 0; padding: 0; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); border-radius: 4px; cursor: pointer; }
-.preview-code-md { right: 38px; }
+.copy-code, .preview-code-md { position: absolute; top: 2px; right: 4px; width: 24px; height: 24px; min-height: 0; padding: 0; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); background: transparent; border-color: transparent; border-radius: 4px; cursor: pointer; }
+.preview-code-md { right: 30px; }
 .copy-code:hover, .preview-code-md:hover, .preview-code-md[aria-pressed="true"] { color: var(--text); border-color: var(--focus); }
 .preview-code-md[aria-pressed="true"] { background: var(--panel-2); }
 .copy-code[data-state="bad"] { color: #ef4444; }

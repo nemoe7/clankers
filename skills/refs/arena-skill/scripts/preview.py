@@ -9495,9 +9495,67 @@ ICON_MARKDOWN = (
   "l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923"
   'h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z" fill="currentColor" stroke="none"></path></svg>'
 )
+ICON_BRACES = (
+  '<svg class="lucide lucide-braces" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+  ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"'
+  ' focusable="false"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"></path>'
+  '<path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"></path></svg>'
+)
 MARKDOWN_CODE_TAG = re.compile(
   r'^<code\s+class="language-(?:markdown|md)"\s*>', re.IGNORECASE
 )
+CODE_LANG_TAG = re.compile(r'^<code\s+class="language-([^\s"]+)"', re.IGNORECASE)
+CODE_LANG_NAMES = {
+  "bash": "Bash",
+  "c": "C",
+  "cjs": "JavaScript",
+  "cpp": "C++",
+  "cs": "C#",
+  "css": "CSS",
+  "diff": "Diff",
+  "go": "Go",
+  "html": "HTML",
+  "java": "Java",
+  "javascript": "JavaScript",
+  "js": "JavaScript",
+  "json": "JSON",
+  "jsx": "JSX",
+  "kt": "Kotlin",
+  "markdown": "Markdown",
+  "md": "Markdown",
+  "mermaid": "Mermaid",
+  "mjs": "JavaScript",
+  "php": "PHP",
+  "plaintext": "Text",
+  "py": "Python",
+  "python": "Python",
+  "rb": "Ruby",
+  "rs": "Rust",
+  "rust": "Rust",
+  "sh": "Shell",
+  "shell": "Shell",
+  "sql": "SQL",
+  "svg": "SVG",
+  "swift": "Swift",
+  "text": "Text",
+  "toml": "TOML",
+  "ts": "TypeScript",
+  "tsx": "TSX",
+  "txt": "Text",
+  "typescript": "TypeScript",
+  "xml": "XML",
+  "yaml": "YAML",
+  "yml": "YAML",
+  "zsh": "Zsh",
+}
+
+
+def format_code_language(inner):
+  match = CODE_LANG_TAG.match(inner.strip())
+  if not match:
+    return "Code"
+  raw = match.group(1).lower()
+  return CODE_LANG_NAMES.get(raw, raw[:1].upper() + raw[1:])
 
 
 def add_copy_buttons(rendered):
@@ -9518,7 +9576,14 @@ def add_copy_buttons(rendered):
       f'<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" '
       f'data-code="{payload}">{ICON_COPY}</button>'
     )
-    return f'<div class="code-block">{md_button}{button}<pre>{inner}</pre></div>'
+    lang = html.escape(format_code_language(inner), quote=True)
+    header = (
+      f'<div class="code-block-header"><span class="code-block-lang">'
+      f"{ICON_BRACES}<span>{lang}</span></span></div>"
+    )
+    return (
+      f'<div class="code-block">{md_button}{button}{header}<pre>{inner}</pre></div>'
+    )
 
   return CODE_BLOCK.sub(replace, rendered)
 

@@ -1790,7 +1790,7 @@ def test_http_boundaries():
       # A code block carries its background wherever markdown renders, not in a report alone: the
       # owner read a fence in a message as having no background.
       assert (
-        "pre{padding:10px;border-radius:6px;overflow-x:auto;background:var(--bg)"
+        "pre{padding:10px;border-radius:6px;overflow-x:auto;background:var(--panel)"
         in page
       )
       # Search boxes match the icon square and its minimum height.

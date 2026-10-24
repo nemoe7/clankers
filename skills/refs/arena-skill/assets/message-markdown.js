@@ -241,6 +241,23 @@ function unescapeMessageMarkdown(source) {
     return unescapeInlineCodeLine(part);
   }).join('');
 }
+const CODE_LANG_NAMES = {
+  bash: 'Bash', c: 'C', cjs: 'JavaScript', cpp: 'C++', cs: 'C#', css: 'CSS',
+  diff: 'Diff', go: 'Go', html: 'HTML', java: 'Java', javascript: 'JavaScript',
+  js: 'JavaScript', json: 'JSON', jsx: 'JSX', kt: 'Kotlin', markdown: 'Markdown',
+  md: 'Markdown', mermaid: 'Mermaid', mjs: 'JavaScript', php: 'PHP',
+  plaintext: 'Text', py: 'Python', python: 'Python', rb: 'Ruby', rs: 'Rust',
+  rust: 'Rust', sh: 'Shell', shell: 'Shell', sql: 'SQL', svg: 'SVG',
+  swift: 'Swift', text: 'Text', toml: 'TOML', ts: 'TypeScript', tsx: 'TSX',
+  txt: 'Text', typescript: 'TypeScript', xml: 'XML', yaml: 'YAML', yml: 'YAML',
+  zsh: 'Zsh',
+};
+function formatCodeLanguage(inner) {
+  const match = /^<code\s+class="language-([^\s"]+)"/i.exec(inner.trim());
+  if (!match) return 'Code';
+  const raw = match[1].toLowerCase();
+  return CODE_LANG_NAMES[raw] || (raw.charAt(0).toUpperCase() + raw.slice(1));
+}
 function renderMessageMarkdown(source) {
   const attribute = value => messageMarkdown.utils.escapeHtml(value).replaceAll("'", '&#x27;');
   const images = [];
@@ -262,6 +279,7 @@ function renderMessageMarkdown(source) {
       ? `<button type="button" class="preview-code-md" aria-label="Preview Markdown" title="Preview Markdown" aria-pressed="false" data-code="${payload}">${icon('markdown', 14).outerHTML}</button>`
       : '';
     const button = `<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" data-code="${payload}">${icon('copy', 14).outerHTML}</button>`;
-    return `<div class="code-block">${mdButton}${button}<pre>${inner}</pre></div>`;
+    const header = `<div class="code-block-header"><span class="code-block-lang">${icon('braces', 14).outerHTML}<span>${attribute(formatCodeLanguage(inner))}</span></span></div>`;
+    return `<div class="code-block">${mdButton}${button}${header}<pre>${inner}</pre></div>`;
   });
 }

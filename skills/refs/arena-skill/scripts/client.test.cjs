@@ -5354,6 +5354,14 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
     context.renderMessageMarkdown('```js\n1\n```'),
     /class="preview-code-md"/
   );
+  assert.match(
+    context.renderMessageMarkdown('```python\ndef hello():\n  pass\n```'),
+    /class="code-block-header"><span class="code-block-lang"><svg><\/svg><span>Python<\/span><\/span><\/div>/
+  );
+  assert.match(
+    context.renderMessageMarkdown('```\nplain\n```'),
+    /class="code-block-header"><span class="code-block-lang"><svg><\/svg><span>Code<\/span><\/span><\/div>/
+  );
   const commentedMd = context.renderMessageMarkdown(
     '<!-- nonemo: NMO100; nonemo: NMO901 -->\n# Rules\nKeep `<!-- inline -->` and:\n```html\n<!-- fenced -->\n```'
   );
