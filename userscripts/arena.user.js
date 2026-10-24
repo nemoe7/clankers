@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.75
+// @name         Arena.ai | NemoUtils | v1.10.76
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.75
+// @version      1.10.76
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -3594,6 +3594,8 @@
       sameSaveDetail: sameSaveDetail,
       stateDiffCounts: stateDiffCounts,
       stateMismatchLine: stateMismatchLine,
+      mismatchOfferId: mismatchOfferId,
+      backupTextForOffer: backupTextForOffer,
       stateMemory: stateMemory,
       stateRemembered: stateRemembered,
       stateDelivery: stateDelivery,
@@ -3728,6 +3730,7 @@
 
     function receiptKey(storeKey) { return "clankers-arena-state-receipt-" + storeKey; }
     function pendingKey(storeKey) { return "clankers-arena-state-pending-" + storeKey; }
+    function offerKey(storeKey) { return "clankers-arena-state-offered-" + storeKey; }
 
     async function confirmPending(base, storeKey, pending) {
       var answer = await stateJson(base + "/api/userscript-autosave", pending.receipt);
@@ -3746,6 +3749,7 @@
         counts: pending.counts || coreCounts(receipt.core),
       });
       GM_setValue(pendingKey(storeKey), null);
+      GM_setValue(offerKey(storeKey), "");
       rememberState(pending.scope, storeKey, pending.base, pending.branch, pending.stamp, pending.stamps);
       removeStatePanel(true);
       logEvent("state", "saved", { repo: pending.scope.repo, filename: pending.name });
@@ -4074,6 +4078,55 @@
       return detail;
     }
 
+    function mismatchOfferId(known, body) {
+      return [
+        saveStampPair(known),
+        (known && known.digest) || "",
+        saveStampPair(body),
+        (body && body.digest) || "",
+      ].join("|");
+    }
+
+    function backupTextForOffer(backupText, known) {
+      var raw = String(backupText || "");
+      if (raw.trim()) return raw;
+      if (known && Array.isArray(known.core) && known.core.length) {
+        return known.core.map(function (row) { return JSON.stringify(row); }).join("\n") + "\n";
+      }
+      return "";
+    }
+
+    function offerStateBackup(base, storeKey, scope, handle, known, body, backupText, summary) {
+      var text = backupTextForOffer(backupText, known);
+      if (!text) return;
+      try {
+        if (!fileCore(text).length) return;
+      } catch (err) {
+        return;
+      }
+      var offerId = mismatchOfferId(known, body);
+      if (GM_getValue(offerKey(storeKey), "") === offerId) return;
+      GM_setValue(offerKey(storeKey), offerId);
+      var fallbackName = stateFileName(
+        scope && scope.repo,
+        scope && scope.branch,
+        (known && known.lastsave) || "",
+        (known && known.counts) || (known && Array.isArray(known.core) ? coreCounts(known.core) : null),
+      );
+      var name = writtenName(handle, fallbackName);
+      stateJson(base + "/api/userscript-autosave/offer", {
+        name: name,
+        text: text,
+        summary: summary || stateMismatchLine(known, body),
+      }).then(function (answer) {
+        if ((answer.status !== 200 && answer.status !== 201) || !answer.body || answer.body.offered !== true) {
+          if (GM_getValue(offerKey(storeKey), "") === offerId) {
+            GM_setValue(offerKey(storeKey), "");
+          }
+        }
+      });
+    }
+
     async function fetchStateFile(manual, force) {
       notifyPreviewReady(document);
       var base = previewBase(document);
@@ -4117,8 +4170,10 @@
         }
         var baseline = GM_getValue(receiptKey(storeKey), null);
         var initialFile = false;
+        var backupText = "";
         if (handle && !force) {
           var text = await (await handle.getFile()).text();
+          backupText = text;
           initialFile = !text.trim() && !baseline;
           if (text.trim()) {
             baseline = Object.assign({}, baseline || {}, { core: fileCore(text) });
@@ -4128,9 +4183,20 @@
         }
         var inSync = sameSaves(baseline, body);
         if (!force && !inSync && !(initialFile && !baseline)) {
-          stateError(stateMismatchLine(baseline, body), "Force save",
+          var mismatchLine = stateMismatchLine(baseline, body);
+          stateError(mismatchLine, "Force save",
             function () { fetchStateFile(true, true); }, "autosave-compare",
             undefined, undefined, sameSaveDetail(baseline, body));
+          offerStateBackup(
+            base,
+            storeKey,
+            scope,
+            handle,
+            baseline,
+            body,
+            backupText,
+            mismatchLine,
+          );
           return;
         }
         if (!force && inSync && body.digest === (baseline && baseline.digest)) return;

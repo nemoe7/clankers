@@ -49,7 +49,7 @@ def __getattr__(name):
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
-VIOLATION_NOTES = "type NOT IN ('', 'survey')"
+VIOLATION_NOTES = "type NOT IN ('', 'survey', 'state-backup')"
 PENDING_SUBMISSIONS = (
   "acknowledged_at IS NULL"
   " AND seq IN (SELECT MAX(seq) FROM submissions GROUP BY report_id)"
@@ -4761,6 +4761,7 @@ def parse_state_import(text):
 
 AUTOSAVE_HISTORY = "userscript-autosave-history"
 AUTOSAVE_RECEIPTS = "userscript-autosave-receipts"
+AUTOSAVE_OFFER_META = "userscript-autosave-offered"
 
 
 def autosave_core_and_stamp(records):
@@ -6856,7 +6857,108 @@ class Store:
           "INSERT OR REPLACE INTO meta VALUES (?, ?)",
           (AUTOSAVE_RECEIPTS, json.dumps(receipts)),
         )
+        db.execute("DELETE FROM meta WHERE key = ?", (AUTOSAVE_OFFER_META,))
     return {"confirmed": True, "save_id": save_id, "digest": digest}
+
+  def offer_userscript_backup(self, payload):
+    if not isinstance(payload, dict):
+      raise TypeError("Expected a backup offer object")
+    text = payload.get("text")
+    if not isinstance(text, str) or not text.strip():
+      raise ValueError("Backup offer text must be a nonblank string")
+    records = parse_state_import(text)
+    raw_name = payload.get("name")
+    name = upload_name(
+      raw_name
+      if isinstance(raw_name, str) and raw_name.strip()
+      else "state-backup.ndjson"
+    )
+    if not name.lower().endswith((".ndjson", ".json")):
+      name = f"{name}.ndjson"
+    summary = payload.get("summary")
+    summary_text = (
+      summary.strip()
+      if isinstance(summary, str) and summary.strip()
+      else "State mismatch detected."
+    )
+    data = text.encode("utf-8")
+    backup_digest = body_digest(data)
+    live_core, _ = self.state_lines(self.state()["notes"], self.tasks() or {})
+    live_digest = autosave_digest(live_core)
+    mismatch_key = f"{backup_digest}:{live_digest}"
+    backup_ids = {
+      str(row.get("id")) for row in records if isinstance(row, dict) and row.get("id")
+    }
+    created = []
+    try:
+      with self.transaction(autosave=False) as db:
+        db.execute("BEGIN IMMEDIATE")
+        offered = db.execute(
+          "SELECT value FROM meta WHERE key = ?", (AUTOSAVE_OFFER_META,)
+        ).fetchone()
+        pending = db.execute(
+          "SELECT id FROM notes WHERE type = 'state-backup' AND acknowledged_at IS NULL"
+          " ORDER BY at DESC, seq DESC LIMIT 1"
+        ).fetchone()
+        if pending is not None and offered and offered[0] == mismatch_key:
+          upload = db.execute(
+            "SELECT * FROM uploads WHERE note_id = ? ORDER BY seq LIMIT 1",
+            (pending["id"],),
+          ).fetchone()
+          return {
+            "offered": True,
+            "duplicate": True,
+            "note_id": pending["id"],
+            "path": upload_row(upload, self.path.parent)["path"] if upload else None,
+          }
+        for _ in range(MINT_ATTEMPTS):
+          note_id = new_id()
+          if note_id not in backup_ids and not any(
+            db.execute(f"SELECT 1 FROM {table} WHERE id = ?", (note_id,)).fetchone()
+            for table in ("notes", "submissions", "uploads", "reports", "tasks")
+          ):
+            break
+        else:
+          raise RuntimeError(
+            "The state holds no free six-character ID for a backup note"
+          )
+        record = self.save_upload(
+          name,
+          "application/x-ndjson",
+          data,
+          upload_id=note_id,
+          note_id=note_id,
+          shared=db,
+        )
+        created.append(Path(record["path"]))
+        note_body = (
+          f"{summary_text} Backed-up state `{record['name']}` uploaded to `{record['path']}`.\n"
+          "Run `arena-preview state compare` to inspect differences against live state before running "
+          f"`arena-preview state import {record['path']} -r` if the backup is newer, then acknowledge this note."
+        )
+        note = self.note(
+          note_id,
+          note_body,
+          shared=db,
+          autosave=False,
+          quiet=True,
+          blocking=True,
+          type="state-backup",
+        )
+        db.execute(
+          "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+          (AUTOSAVE_OFFER_META, mismatch_key),
+        )
+    except Exception:
+      for path in created:
+        path.unlink(missing_ok=True)
+      raise
+    return {
+      "offered": True,
+      "duplicate": False,
+      "note_id": note["id"],
+      "path": record["path"],
+    }
 
   def compare_userscript_save(self, payload):
     candidate, candidate_stamp = autosave_core_and_stamp(payload.get("core"))
@@ -7539,7 +7641,10 @@ class Store:
           (AUTOSAVE_RECEIPTS, json.dumps(receipts)),
         )
       for table in ("notes", "reports", "submissions", "tasks"):
-        db.execute(f"DELETE FROM {table}")
+        if table == "notes":
+          db.execute("DELETE FROM notes WHERE type <> 'state-backup'")
+        else:
+          db.execute(f"DELETE FROM {table}")
       self.import_tasks(tasks, replace_tasks, autosave=False, shared=db)
       for record in messages:
         if "text" not in record or "title" in record:
@@ -8344,7 +8449,7 @@ class Store:
     quiet_filter = (
       " AND (quiet = 0 OR blocking = 1 OR seen_at IS NULL)"
       if include_quiet
-      else " AND quiet = 0"
+      else " AND (quiet = 0 OR (type = 'state-backup' AND blocking = 1))"
     )
     with self.transaction(autosave=False) as db:
       pending = [
@@ -9783,6 +9888,7 @@ def handler(store):
       autosave_post = path in {
         "/api/userscript-autosave",
         "/api/userscript-autosave/compare",
+        "/api/userscript-autosave/offer",
       }
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
       report_seen = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/seen", path)
@@ -9950,11 +10056,12 @@ def handler(store):
           self.reply(200, json.dumps({"ok": True}))
           return
         if autosave_post:
-          result = (
-            store.compare_userscript_save(payload)
-            if path.endswith("/compare")
-            else store.confirm_userscript_save(payload)
-          )
+          if path.endswith("/compare"):
+            result = store.compare_userscript_save(payload)
+          elif path.endswith("/offer"):
+            result = store.offer_userscript_backup(payload)
+          else:
+            result = store.confirm_userscript_save(payload)
           self.reply(200, json.dumps(result, ensure_ascii=False))
           return
         if agent_key_post:

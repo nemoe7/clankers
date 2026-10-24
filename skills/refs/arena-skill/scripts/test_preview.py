@@ -14413,3 +14413,31 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     )
     == 130
   )
+  backup_ndjson = json.dumps({"id": "b1a2c3", "text": "backed up note"}) + "\n"
+  offer1 = tz_store.offer_userscript_backup(
+    {
+      "name": "backup.ndjson",
+      "text": backup_ndjson,
+      "summary": "State mismatch (notes -1, tasks 0).",
+    }
+  )
+  assert offer1["offered"] is True
+  assert offer1["duplicate"] is False
+  offer2 = tz_store.offer_userscript_backup(
+    {
+      "name": "backup.ndjson",
+      "text": backup_ndjson,
+      "summary": "State mismatch (notes -1, tasks 0).",
+    }
+  )
+  assert offer2["duplicate"] is True
+  assert offer2["note_id"] == offer1["note_id"]
+  tz_read = tz_store.read(include_quiet=False)
+  assert any(item["id"] == offer1["note_id"] for item in tz_read["pending"])
+  tz_state_notes = tz_store.state()["notes"]
+  assert not any(
+    item["id"] == offer1["note_id"] for item in tz_state_notes if not item.get("quiet")
+  )
+  tz_store.import_state(backup_ndjson)
+  tz_store.acknowledge([offer1["note_id"]], "Compared and imported backup state.")
+  assert not any(item["id"] == offer1["note_id"] for item in tz_store.read()["pending"])

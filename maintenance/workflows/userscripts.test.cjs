@@ -1979,7 +1979,29 @@ for raw in sys.stdin:
     print(json.dumps({"ok": True}), flush=True)
   elif op == "inspect":
     snap = store.userscript_snapshot()
-    print(json.dumps({"lastsave": snap["lastsave"], "beforelastsave": snap["beforelastsave"], "digest": snap["digest"]}), flush=True)
+    state_notes = {item["id"]: item for item in store.state()["notes"]}
+    backup_notes = [
+      {
+        "id": item["id"],
+        "quiet": item.get("quiet"),
+        "blocking": item.get("blocking"),
+        "type": (state_notes.get(item["id"]) or {}).get("type"),
+        "text": item.get("text"),
+        "attachments": [att["path"] for att in (item.get("attachments") or [])],
+      }
+      for item in store.read(include_quiet=True)["pending"]
+      if (state_notes.get(item["id"]) or {}).get("type") == "state-backup"
+    ]
+    visible_notes = [
+      item["id"] for item in store.state()["notes"] if not item.get("quiet")
+    ]
+    print(json.dumps({
+      "lastsave": snap["lastsave"],
+      "beforelastsave": snap["beforelastsave"],
+      "digest": snap["digest"],
+      "backup_notes": backup_notes,
+      "visible_notes": visible_notes,
+    }), flush=True)
   elif op == "import":
     dest = Path(tmp.name) / "imported" / "r"
     dest.mkdir(parents=True, exist_ok=True)
@@ -2184,6 +2206,19 @@ for raw in sys.stdin:
       assert.equal(writes.length, 2, "diverged server stamps block automatic overwrite");
       assert.ok(panel());
       assert.equal(panel().children[0].textContent, "State mismatch (notes +1, tasks 0).");
+      const divergedServer = await callPy({ op: "inspect" });
+      assert.equal(divergedServer.backup_notes.length, 1, "mismatch auto-uploads backup once to inbox");
+      assert.equal(divergedServer.backup_notes[0].quiet, 1, "backup note is non-user-visible");
+      assert.equal(divergedServer.backup_notes[0].blocking, 1, "backup note requires agent ack");
+      assert.equal(divergedServer.backup_notes[0].type, "state-backup");
+      assert.equal(divergedServer.visible_notes.includes(divergedServer.backup_notes[0].id), false);
+      assert.match(divergedServer.backup_notes[0].text, /arena-preview state compare/);
+      assert.match(divergedServer.backup_notes[0].text, /arena-preview state import/);
+      assert.equal(divergedServer.backup_notes[0].attachments.length, 1);
+      tick();
+      await drain();
+      const divergedAgain = await callPy({ op: "inspect" });
+      assert.equal(divergedAgain.backup_notes.length, 1, "repeated ticks on same mismatch do not re-upload");
 
       panel().children[1].children.find(button => button.textContent === "Force save").listeners.click();
       await drain();
