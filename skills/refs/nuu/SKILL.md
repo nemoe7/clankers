@@ -27,7 +27,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 ## Clauses
 
-1. Take the glyph a control needs from the icon set, keep its licence beside it, and inline that same path. A name with no glyph shows its word.
+1. Take each control glyph from Lucide first, then Simple Icons (https://simpleicons.org/), then the vendored Phosphor catalog. Keep the icon licence beside it and inline that same path. A name with no glyph shows its word.
 
 2. Every glyph on a surface takes the single size the sheet names.
 
