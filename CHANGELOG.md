@@ -37,7 +37,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- Lock the sole `.shrink-0` sibling of `div.flex.w-full.shrink-0.flex-col.gap-4.mx-auto.max-w-3xl.px-4.pt-14.md\:pt-12` to `24px`, keep settings visible when idle, use Lucide icons, and combine min/max delay sliders (`userscripts/arena.user.js` `1.10.73`).
+- Lock the sole `.shrink-0` sibling of `div.flex.w-full.shrink-0.flex-col.gap-4.mx-auto.max-w-3xl.px-4.pt-14.md\:pt-12` to `24px`, keep settings visible when idle, use Lucide icons, and combine min/max delay sliders (`userscripts/arena.user.js` `1.10.74`).
+- Register shared and manually entered `sbx-*.arena.site` preview URLs in `skills/arena-skill/arena-preview-proxy/` (`server.js` and `assets/recent.js`), ignore subresource and client-aborted `GET` errors when pruning `recentEntries`, and watch link `href` mutations in `userscripts/arena.user.js`.
 
 #### maintenance
 

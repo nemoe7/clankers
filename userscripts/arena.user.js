@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.73
+// @name         Arena.ai | NemoUtils | v1.10.74
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.73
+// @version      1.10.74
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1217,6 +1217,7 @@
 
     var stopKeyWatch = jitteredTimer(function () {
       if (captchaSignal(document)) return;
+      postRecentPreviews(document, true);
       var pair = settings();
       if (!pair.host || !pair.master) return;
       fetch(keyUrl(pair.host, pair.master))
@@ -1301,7 +1302,7 @@
       childList: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ["src"],
+      attributeFilter: ["src", "href"],
     });
     window.addEventListener("popstate", sync);
     sync();

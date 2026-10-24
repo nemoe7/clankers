@@ -382,12 +382,23 @@ def test_a_share_rides_through_the_chooser_into_the_recent_list():
     status, location = share("/pwa/share?url=https%3A%2F%2Fsbx-shared.arena.site%2F")
     assert status == 302, status
     assert location == "/?shared=https%3A%2F%2Fsbx-shared.arena.site%2F", location
-    # The share can also carry the link inside its text field.
+    # The share can also carry the link inside its text field, or include a path/query and title.
     status, location = share(
       "/pwa/share?text=See+https%3A%2F%2Fsbx-text.arena.site%2F+now"
     )
     assert status == 302, status
     assert location == "/?shared=https%3A%2F%2Fsbx-text.arena.site%2F", location
+    status, location = share(
+      "/pwa/share?url=https%3A%2F%2Fsbx-path.arena.site%2Fapp%3Ftab%3D1&title=Path+Preview"
+    )
+    assert status == 302, status
+    assert location == "/?shared=https%3A%2F%2Fsbx-path.arena.site%2F", location
+    _, _, recent_raw = get(port, "/pwa/recent")
+    recent_body = json.loads(recent_raw)
+    assert {
+      "url": "https://sbx-path.arena.site",
+      "name": "Path Preview",
+    } in recent_body["entries"], recent_body
     # The landing request keeps the chooser: `shared` names no proxy target.
     status, type, body = get(port, location)
     assert status == 200 and "text/html" in type, (status, type)
@@ -407,6 +418,7 @@ def test_a_share_rides_through_the_chooser_into_the_recent_list():
     "const roots = n => Array.from({ length: n }, (_, i) => `https://sbx-p${i}.arena.site`);"
     "const out = {};"
     "out.fromShared = recent.fromShare('?shared=https%3A%2F%2Fsbx-shared.arena.site%2F');"
+    "out.fromSharedPath = recent.fromShare('?shared=https%3A%2F%2Fsbx-shared.arena.site%2Fapp%3Fx%3D1');"
     "out.fromJunk = recent.fromShare('?shared=javascript%3Aalert(1)');"
     "out.fromLink = recent.fromShare('?url=https%3A%2F%2Fsbx-shared.arena.site%2F');"
     "out.href = recent.viewerHref('https://sbx-shared.arena.site');"
@@ -416,6 +428,9 @@ def test_a_share_rides_through_the_chooser_into_the_recent_list():
   )
   result = json.loads(node(script))
   assert result["fromShared"] == "https://sbx-shared.arena.site", result["fromShared"]
+  assert result["fromSharedPath"] == "https://sbx-shared.arena.site", result[
+    "fromSharedPath"
+  ]
   assert result["fromJunk"] is None, result["fromJunk"]
   assert result["fromLink"] is None, "a plain preview link still adds no entry"
   assert result["href"] == "/?url=https%3A%2F%2Fsbx-shared.arena.site%2F", result[

@@ -42,7 +42,32 @@ function fromShare(search) {
   } catch {
     return null;
   }
-  return previewRoot(params.get('shared') || '');
+  const raw = params.get('shared') || '';
+  const direct = previewRoot(raw);
+  if (direct) return direct;
+  const match = String(raw).match(/^https:\/\/sbx-[a-z0-9-]+\.arena\.site(?=[/?#]|$)/i);
+  return match ? previewRoot(`${match[0]}/`) : null;
+}
+
+function inputRoot(raw) {
+  const direct = previewRoot(raw);
+  if (direct) return direct;
+  const match = String(raw ?? '').trim().match(/^https:\/\/sbx-[a-z0-9-]+\.arena\.site(?=[/?#]|$)/i);
+  return match ? previewRoot(`${match[0]}/`) : null;
+}
+
+function postRecentRoot(root) {
+  if (!root || typeof fetch !== 'function') return;
+  try {
+    fetch('/pwa/recent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: `${root}/` }),
+      keepalive: true
+    }).catch(() => {});
+  } catch {
+    // Ignore network errors on background registration.
+  }
 }
 
 function viewerHref(root) {
@@ -187,6 +212,7 @@ function start() {
   if (shared) {
     // Save before the jump: the preview page runs no part of this list.
     save(remember(load(), shared));
+    postRecentRoot(shared);
     location.replace(viewerHref(shared));
     return;
   }
@@ -221,8 +247,12 @@ function start() {
   };
   refreshAtBoundary();
   form.addEventListener('submit', () => {
-    const root = previewRoot(form.elements.url.value);
-    if (root) save(remember(load(), root));
+    const root = inputRoot(form.elements.url.value);
+    if (root) {
+      form.elements.url.value = `${root}/`;
+      save(remember(load(), root));
+      postRecentRoot(root);
+    }
   });
   box.addEventListener('click', event => {
     const button = event.target.closest('button');

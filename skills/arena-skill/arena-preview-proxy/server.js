@@ -320,16 +320,29 @@ function manifestJson() {
   });
 }
 
+function extractSharedRoot(incoming) {
+  for (const key of ['url', 'text', 'title']) {
+    const value = incoming.searchParams.get(key) || '';
+    const match = value.match(/https:\/\/sbx-[a-z0-9-]+\.arena\.site(?=[/?#]|$)/i);
+    if (match) return `${match[0].toLowerCase()}/`;
+  }
+  return incoming.searchParams.get('url') || '';
+}
+
 function sharePreview(incoming, res) {
-  const shared = incoming.searchParams.get('url') ||
-    (incoming.searchParams.get('text') || '').match(/https:\/\/sbx-[a-z0-9-]+\.arena\.site\/?/i)?.[0] ||
-    '';
+  const shared = extractSharedRoot(incoming);
   let selected;
   try {
     selected = parseSelectedUrl(shared);
   } catch {
     return sendText(res, 400, 'Share an Arena preview link: https://sbx-*.arena.site/');
   }
+  recentEntries = rememberRecent(
+    recentEntries,
+    `${selected.origin}/`,
+    incoming.searchParams.get('title') || '',
+    removedRoots
+  );
   // The chooser saves the root into the recent list, then opens the preview itself. A
   // straight jump to the preview would skip that save, because the preview runs no chooser code.
   res.writeHead(302, {
@@ -488,6 +501,9 @@ const server = http.createServer((req, res) => {
   for (const name of FETCH_METADATA_HEADERS) delete headers[name];
   headers.host = target.host;
 
+  const isViewerRoot = incoming.pathname === '/' && incoming.searchParams.has('url');
+  let clientAborted = false;
+
   // The target origin comes from parseSelectedUrl, and isAllowedPreview pins both to HTTPS roots on sbx-*.arena.site with no credentials, port or path.
   // CodeQL cannot model that pattern allowlist, so .github/codeql/codeql-config.yml excludes js/request-forgery for this forwarding request.
   const upstream = https.request(target, { method: req.method, headers, timeout: 120000 },
@@ -513,8 +529,14 @@ const server = http.createServer((req, res) => {
       // the target. The browser default keeps the viewer URL on same-origin calls.
       responseHeaders['referrer-policy'] = 'strict-origin-when-cross-origin';
       const status = upstreamRes.statusCode || 502;
-      if (status === 502 && req.method === 'GET') {
+      if (status === 502 && req.method === 'GET' && isViewerRoot) {
         recentEntries = forgetRecent(recentEntries, target.origin, removedRoots);
+      } else if (status < 500) {
+        if (isViewerRoot && req.method === 'GET') {
+          recentEntries = rememberRecent(recentEntries, `${target.origin}/`, '', removedRoots);
+        } else {
+          removedRoots.delete(target.origin);
+        }
       }
       logLine('upstream', status, req.method, target.origin + target.pathname,
         'referrer-policy', upstreamRes.headers['referrer-policy'] || 'none');
@@ -530,13 +552,22 @@ const server = http.createServer((req, res) => {
   upstream.setTimeout(120000, () => upstream.destroy(new Error('Upstream timeout')));
   upstream.on('error', err => {
     logLine('upstream error', err.message);
-    if (req.method === 'GET') {
+    if (req.method === 'GET' && isViewerRoot && !res.headersSent && !clientAborted) {
       recentEntries = forgetRecent(recentEntries, target.origin, removedRoots);
     }
     if (!res.headersSent) sendText(res, 502, `Upstream request failed: ${err.message}`);
     else res.destroy(err);
   });
-  req.on('aborted', () => upstream.destroy());
+  req.on('aborted', () => {
+    clientAborted = true;
+    upstream.destroy();
+  });
+  res.on('close', () => {
+    if (!res.writableEnded) {
+      clientAborted = true;
+      upstream.destroy();
+    }
+  });
   req.pipe(upstream);
 });
 
