@@ -5370,7 +5370,7 @@ def render_report_block(markdown):
   return out
 
 
-def render_report(markdown):
+def render_report(markdown, title=None):
   blocks, questions = parse_fields(markdown)
   parts = []
   for type, item in blocks:
@@ -5379,7 +5379,14 @@ def render_report(markdown):
         parts.append(render_report_block(item))
     else:
       parts.append(field_html(item))
-  return "".join(parts), questions
+  rendered = "".join(parts)
+  if (
+    isinstance(title, str)
+    and title.strip()
+    and not re.match(r"^\s*<h1\b", rendered, re.IGNORECASE)
+  ):
+    rendered = f"<h1>{html.escape(title.strip())}</h1>\n{rendered}"
+  return rendered, questions
 
 
 SLASH_COMMAND_RE = re.compile(r"^/(nuu|nemoizer)(?:\s+([\s\S]*))?$", re.IGNORECASE)

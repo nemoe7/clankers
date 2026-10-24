@@ -1948,13 +1948,15 @@ def hold_out(markdown,pattern,build,slug):
 	return re.sub(pattern,hold,markdown),held
 def put_back(rendered,held,slug):return re.sub(f"preview{slug}(\\d+)x",lambda match:held[int(match.group(1))],rendered)
 def render_report_block(markdown):markdown=strip_fenced_md_comments(markdown);tagged,held=hold_out(markdown,'(?:\\s*(?:</?(?:ul|ol|li)>)\\s*){2,}',lambda match:match.group(0).strip().lower(),'listtag');out=put_back(render(tagged),held,'listtag');out=re.sub('<p>(<(?:ul|ol)>)','\\1',out);out=re.sub('(</(?:ul|ol)>)</p>','\\1',out);return out
-def render_report(markdown):
+def render_report(markdown,title=None):
 	blocks,questions=parse_fields(markdown);parts=[]
 	for(type,item)in blocks:
 		if type=='markdown':
 			if item.strip():parts.append(render_report_block(item))
 		else:parts.append(field_html(item))
-	return''.join(parts),questions
+	rendered=''.join(parts)
+	if isinstance(title,str)and title.strip()and not re.match('^\\s*<h1\\b',rendered,re.IGNORECASE):rendered=f"<h1>{html.escape(title.strip())}</h1>\n{rendered}"
+	return rendered,questions
 SLASH_COMMAND_RE=re.compile('^/(nuu|nemoizer)(?:\\s+([\\s\\S]*))?$',re.IGNORECASE)
 NEMOIZER_COLLECT_IGNORES='arena-state','.agents','.git','node_modules','LICENSE.md','skills/arena-skill','skills/refs/arena-skill/assets/markdown-it.min.js','skills/amending-violations/LICENSE.txt','skills/refs/amending-violations/LICENSE.txt','skills/squash/LICENSE.txt','skills/refs/squash/LICENSE.txt','skills/refs/arena-skill/assets/lucide.LICENSE','skills/refs/arena-skill/assets/markdown-it.LICENSE','skills/refs/arena-skill/assets/sortable.LICENSE','skills/nuu/data/vendor','skills/refs/nuu/data/vendor'
 def _find_skill_dir(root,name):
