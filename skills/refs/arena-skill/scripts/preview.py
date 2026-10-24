@@ -2132,6 +2132,11 @@ def saved_report_line(record):
   if not isinstance(record, dict):
     raise TypeError("Every saved report is an object")
   line = {key: record.get(key) for key in REPORT_LINE_KEYS}
+  if isinstance(line.get("markdown"), str) and "/api/report-image?" in line["markdown"]:
+    line["markdown"] = inline_report_image_urls(
+      line["markdown"],
+      Path(record["source"]).resolve().parent if record.get("source") else None,
+    )
   if record.get("submission_format") is not None:
     line["submission_format"] = record["submission_format"]
   return line
@@ -10074,6 +10079,20 @@ def handler(store):
             "application/json; charset=utf-8",
           )
           return
+        if path == "/api/report-image":
+          from urllib.parse import parse_qsl
+
+          query = dict(parse_qsl(urlsplit(self.path).query))
+          rel_target = query.get("path", "")
+          try:
+            mime, raw_bytes, _ = resolve_report_image(
+              rel_target, store.repository_root()
+            )
+          except ValueError as error:
+            self.problem(404, error)
+            return
+          self.reply(200, raw_bytes, mime)
+          return
         if path == "/api/report-sources":
           # The copy button asks for the report lines too, so the clipboard carries the same
           # fields as the save file and a restore rebuilds the report pages from either one.
@@ -11427,6 +11446,48 @@ def format_outline(result, as_json=False):
 IMAGE_IN_MARKDOWN = re.compile(r"!\[([^\]\n]*)\]\(\s*(<[^>]+>|[^)\s]+)([^)\n]*)\)")
 
 
+def resolve_report_image(path_arg, root=None):
+  """Resolve one workspace image path for `/api/report-image` and return `(mime, raw_bytes, encoded)`."""
+  clean = str(path_arg or "").strip()
+  if not clean:
+    raise ValueError("Report image path is required")
+  if clean.lower().endswith("-wireframe.png"):
+    raise ValueError(
+      f"Wireframe image {clean} (*-wireframe.png) is for agent inspection only and cannot be served in reports"
+    )
+  base = _outline_repo_root(root)
+  raw_path = Path(clean)
+  candidate = (
+    raw_path.resolve() if raw_path.is_absolute() else (base / raw_path).resolve()
+  )
+  if not candidate.is_relative_to(base):
+    raise ValueError(f"Report image {clean} is outside the repository root")
+  mime, encoded = image_payload(candidate)
+  return mime, base64.b64decode(encoded), encoded
+
+
+def inline_report_image_urls(markdown, report_dir=None):
+  """Convert `/api/report-image?path=...` markdown images to `data:` URIs for state export."""
+  from urllib.parse import parse_qsl
+
+  root = _outline_repo_root(report_dir)
+
+  def replace(match):
+    alt, destination, suffix = match.groups()
+    source = destination[1:-1] if destination.startswith("<") else destination
+    if not source.startswith("/api/report-image?"):
+      return match.group(0)
+    query = dict(parse_qsl(urlsplit(source).query))
+    rel_target = query.get("path", "")
+    try:
+      mime, _, encoded = resolve_report_image(rel_target, root)
+    except ValueError:
+      return match.group(0)
+    return f"![{alt}](data:{mime};base64,{encoded}{suffix})"
+
+  return IMAGE_IN_MARKDOWN.sub(replace, markdown)
+
+
 def embed_report_images(markdown, report_dir):
   """Rewrite report images for publication: local bytes become data URIs.
 
@@ -11436,11 +11497,16 @@ def embed_report_images(markdown, report_dir):
   Plain links and data URIs keep their original text, and the renderer reads no
   file: the stored text already carries the bytes.
   """
+  from urllib.parse import parse_qsl
 
   def swap(match):
     alt, destination, suffix = match.groups()
     source = destination[1:-1] if destination.startswith("<") else destination
     if source.startswith("data:"):
+      return match.group(0)
+    if source.startswith("/api/report-image?"):
+      query = dict(parse_qsl(urlsplit(source).query))
+      resolve_report_image(query.get("path", ""), _outline_repo_root(report_dir))
       return match.group(0)
     if source.startswith("//") or re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", source):
       return (

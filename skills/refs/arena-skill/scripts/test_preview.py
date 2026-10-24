@@ -1706,7 +1706,17 @@ def test_http_boundaries():
         0 < phone_side < desktop_side
         for phone_side, desktop_side in zip(coarse_padding, css_padding(composer[1]))
       )
-      assert page.index('id="downloads-tab"') < page.index('id="copy-state"')
+      assert (
+        page.index('id="agent-interrupt"')
+        < page.index('id="downloads-tab"')
+        < page.index('id="theme"')
+        < page.index('id="copy-state"')
+      )
+      assert "grid-template-columns:repeat(3,1fr)" in page
+      assert (
+        '.report-scroll-frame>section[role="tabpanel"],main>section[role="tabpanel"]{padding-inline:5vw;}'
+        in page
+      )
       assert "nav button{padding:7px 4px;font-size:14px;}" in page
       # The phone header remains one line. Search stays above Skip. The Reports toolbar keeps buttons beside its select.
       # The status line keeps a row of its own.
@@ -1803,9 +1813,9 @@ def test_http_boundaries():
       assert re.search(r"nav\{[^}]*min-width:0;", page), (
         "the tab strip shrinks rather than pushing the bar"
       )
-      # The four tabs share one width: the grid gives every track 1fr, so no label sets a tab's shape.
+      # The three tabs share one width: the grid gives every track 1fr, so no label sets a tab's shape.
       # The narrow block steps the padding and the font down, and the tracks stay equal then.
-      assert re.search(r"nav\{[^}]*grid-template-columns:repeat\(4,1fr\)", page)
+      assert re.search(r"nav\{[^}]*grid-template-columns:repeat\(3,1fr\)", page)
       assert re.search(r"nav button\{[^}]*min-width:0;[^}]*padding:7px 9px;", page)
       assert re.search(r"nav button\{[^}]*white-space:nowrap", page)
       assert "nav button{padding:7px 4px;font-size:14px" in page
@@ -13852,7 +13862,12 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
     Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
   assert "left: 50%; transform: translateX(-50%);" in style_css
-  assert ".report-toolbar .select-wrap { flex: 1 1 100%; }" in style_css
+  assert ".report-toolbar .select-wrap { flex: 1 1 100%; }" not in style_css
+  assert (
+    '.topbar:has(~ main #reports-panel[data-loading="true"]:not([hidden]))::after'
+    in style_css
+  )
+  assert '#modal:not([data-keyboard-nav="true"]) :focus-visible' in style_css
 
   mermaid_md = "# Flow\n\n```mermaid\nflowchart TD\n  A[One] --> B[Two]\n```\n"
   mermaid_html, mermaid_fields = preview.render_report(mermaid_md)
@@ -14525,6 +14540,26 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     )
     == 130
   )
+  style_text = (
+    preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
+  ).read_text(encoding="utf-8")
+  assert "padding-top: 0;" in style_text
+  sample_png = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+  )
+  (tmp_path / ".git").mkdir(exist_ok=True)
+  (tmp_path / "sample.png").write_bytes(sample_png)
+  mime_out, raw_out, encoded_out = preview.resolve_report_image(
+    "sample.png", root=tmp_path
+  )
+  assert mime_out == "image/png"
+  assert raw_out == sample_png
+  inlined_md = preview.inline_report_image_urls(
+    "![sample](/api/report-image?path=sample.png)", report_dir=tmp_path
+  )
+  assert inlined_md == f"![sample](data:image/png;base64,{encoded_out})"
   assert offer2["note_id"] == offer1["note_id"]
   tz_read = tz_store.read(include_quiet=False)
   assert any(item["id"] == offer1["note_id"] for item in tz_read["pending"])

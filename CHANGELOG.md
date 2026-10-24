@@ -28,6 +28,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add `nuu board` for multi-panel visual boards and render `nuu board` and `nuu annotate` text with the project CSS font via Chromium. Rename `scripts/uiux.py` and `scripts/test_uiux.py` to `scripts/nuu.py` and `scripts/test_nuu.py`.
 - Add `-W, --wireframe` to `nuu inspect`, `nuu audit`, and `nuu board` to generate high-contrast DOM component outline captures (`*-wireframe.png`), and block staging, committing, or embedding wireframe files in reports.
 - Add Clause 17 to `SKILL.md` requiring 24-hour time by default, 12-hour time when requested, and a 24h/12h option in settings when settings exist.
+- Suppress initial modal `:focus-visible` outlines until keyboard navigation in `references/recipes/modal-manager.md`, extend `references/recipes/scroll-edge-fade.md` to scrollable `textarea` inputs, and include recipe deviations in `SKILL.md` and `references/audit-report.md`.
 
 ### Changed
 
@@ -43,10 +44,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Keep recognized slash command pills inline and content-sized, reject glued command tokens, and unregister the command into plain text on `Backspace`. Strip Markdown HTML comments outside code spans and keep modal `.copy-code` buttons symmetric (`28x28`).
 - Measure Bash duration (`--elapsed "$SECONDS"`) in `install.sh` and `preview.py` (`slow_bash_hint`). Emit a stderr hint for `arena-preview run start` after 10-second non-preview calls.
 - Remove the 300-character limit on the cited reason in the flag-violation modal (`assets/app.js` and `scripts/preview.py`) and enable vertical scrolling in `#modal textarea` (`assets/style.css`).
-- Remove outer `.log-card` and tab `.card` backgrounds, borders, and inline padding while keeping `.message` and `#compose` cards. Unify tab container widths at `900px` (`assets/style.css`).
+- Remove outer `.log-card` and tab `.card` backgrounds, borders, and inline padding while keeping `.message` and `#compose` cards. Unify tab container widths at `900px` and set `padding-top: 0` on tab panel cards (`assets/style.css`).
 - Middle-truncate staged attachment filename stems by splitting the stem in half while keeping directory prefixes, file extensions, and file sizes visible (`assets/app.js` and `assets/style.css`).
 - Detect local-only unpushed commits (`unpushed_commit_count`) in `scripts/preview.py` and remind to push without delaying for a batch on `git commit` and in rotating reminders.
 - Add `arena-preview pr-update` and `arena-preview job-log` subcommands (`scripts/preview.py`), route matching `gh api` and `curl` commands in `pre_command`, and remove `references/recipes/pr-rest.md` and `references/recipes/github-job-logs.md`.
+- Serve workspace report images over `/api/report-image?path=<path>` in `scripts/preview.py` and inline `/api/report-image` URLs as base64 data URIs on state export (`saved_report_line`).
+- Demote `#downloads-tab` to a header `.icon-button` between `#agent-interrupt` and `#theme` (`assets/index.html`, `assets/style.css`, and `assets/app.js`). Move panel padding off `main` so panel scrollbars sit at the viewport edge.
+- Suppress initial `:focus-visible` outlines inside `#modal` until keyboard navigation (`assets/app.js` and `assets/style.css`), and extend the `scroll(self)` edge-fade mask to scrollable `textarea` inputs (`assets/style.css`).
+- Show a subtle report loading bar under `.topbar` while `#reports-panel` loads (`assets/app.js` and `assets/style.css`), and keep `.report-toolbar .select-wrap` inline with its action buttons on narrow screens.
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
 - Require descriptive `arena-preview run start <name>` gate IDs naming what the gate runs (`-2`, `-3`, ... on retries) in `ARENA.md` and `SKILL.md`.

@@ -760,6 +760,7 @@ def saved_answer_line(record):
 def saved_report_line(record):
 	if not isinstance(record,dict):raise TypeError('Every saved report is an object')
 	line={key:record.get(key)for key in REPORT_LINE_KEYS}
+	if isinstance(line.get('markdown'),str)and'/api/report-image?'in line['markdown']:line['markdown']=inline_report_image_urls(line['markdown'],Path(record['source']).resolve().parent if record.get('source')else None)
 	if record.get('submission_format')is not None:line['submission_format']=record['submission_format']
 	return line
 def state_ndjson(lines):return''.join(json.dumps(line,ensure_ascii=False)+'\n'for line in lines)
@@ -3317,6 +3318,11 @@ def handler(store):
 					self.reply(200,json.dumps(state,ensure_ascii=False));return
 				if path=='/api/submissions':live={report['id']for report in store.state()['reports']};self.reply(200,json.dumps([saved_answer_line(record)for record in store.submissions()if record['report_id']in live],ensure_ascii=False),'application/json; charset=utf-8');return
 				if path=='/api/copy-state':notes=store.state()['notes'];lines,counts=store.state_lines(notes,store.tasks()or{});stamps=store.newest_stamps();self.reply(200,json.dumps({'text':state_ndjson(lines),'counts':counts,'stamp':store.newest_stamp(stamps),'stamps':{'note':stamps['note'],'task':stamps['task']},'repo':store.path.parent.parent.name,'branch':workspace_branch(store.path.parent.parent)},ensure_ascii=False),'application/json; charset=utf-8');return
+				if path=='/api/report-image':
+					from urllib.parse import parse_qsl;query=dict(parse_qsl(urlsplit(self.path).query));rel_target=query.get('path','')
+					try:mime,raw_bytes,_=resolve_report_image(rel_target,store.repository_root())
+					except ValueError as error:self.problem(404,error);return
+					self.reply(200,raw_bytes,mime);return
 				if path=='/api/report-sources':self.reply(200,json.dumps([saved_report_line(record)for record in store.report_sources()],ensure_ascii=False),'application/json; charset=utf-8');return
 				match=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/(html|source)',path)
 				if match:
@@ -3663,10 +3669,29 @@ def format_outline(result,as_json=False):
 	if omitted:singular=unit[:-1]if omitted==1 else unit;lines.append(f"... {omitted} more {singular} omitted (use --max-entries up to {OUTLINE_MAX_ENTRIES})")
 	return'\n'.join(lines)
 IMAGE_IN_MARKDOWN=re.compile('!\\[([^\\]\\n]*)\\]\\(\\s*(<[^>]+>|[^)\\s]+)([^)\\n]*)\\)')
+def resolve_report_image(path_arg,root=None):
+	clean=str(path_arg or'').strip()
+	if not clean:raise ValueError('Report image path is required')
+	if clean.lower().endswith('-wireframe.png'):raise ValueError(f"Wireframe image {clean} (*-wireframe.png) is for agent inspection only and cannot be served in reports")
+	base=_outline_repo_root(root);raw_path=Path(clean);candidate=raw_path.resolve()if raw_path.is_absolute()else(base/raw_path).resolve()
+	if not candidate.is_relative_to(base):raise ValueError(f"Report image {clean} is outside the repository root")
+	mime,encoded=image_payload(candidate);return mime,base64.b64decode(encoded),encoded
+def inline_report_image_urls(markdown,report_dir=None):
+	from urllib.parse import parse_qsl;root=_outline_repo_root(report_dir)
+	def replace(match):
+		alt,destination,suffix=match.groups();source=destination[1:-1]if destination.startswith('<')else destination
+		if not source.startswith('/api/report-image?'):return match.group(0)
+		query=dict(parse_qsl(urlsplit(source).query));rel_target=query.get('path','')
+		try:mime,_,encoded=resolve_report_image(rel_target,root)
+		except ValueError:return match.group(0)
+		return f"![{alt}](data:{mime};base64,{encoded}{suffix})"
+	return IMAGE_IN_MARKDOWN.sub(replace,markdown)
 def embed_report_images(markdown,report_dir):
+	from urllib.parse import parse_qsl
 	def swap(match):
 		alt,destination,suffix=match.groups();source=destination[1:-1]if destination.startswith('<')else destination
 		if source.startswith('data:'):return match.group(0)
+		if source.startswith('/api/report-image?'):query=dict(parse_qsl(urlsplit(source).query));resolve_report_image(query.get('path',''),_outline_repo_root(report_dir));return match.group(0)
 		if source.startswith('//')or re.match('[a-zA-Z][a-zA-Z0-9+.-]*:',source):return f"Publication skips remote image {source}. Fetch it locally, then embed it with arena-preview image-data-uri."
 		path=Path(source)
 		if not path.is_absolute():path=report_dir/path
