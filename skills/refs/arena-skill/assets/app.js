@@ -2730,14 +2730,15 @@ function renderTasks(tasks) {
   // The current seat and the upcoming list read as one queue, so a dragged row crosses both.
   const currentBody = $('#tasks-current-body');
   const upcomingBody = $('#tasks-upcoming-body');
+  const shownFinished = tasks.finished.filter(visible);
   currentBody.replaceChildren(...(head ? [draggableTaskRow(head, currentBody)] : []));
   current.hidden = !head;
-  $('#tasks-finished-body').replaceChildren(...tasks.finished.filter(visible).map(task => taskRow(task)));
+  $('#tasks-finished-body').replaceChildren(...shownFinished.map(task => taskRow(task)));
   // The head already renders in its own div above. Re-listing it in Upcoming duplicates it.
   const restUpcoming = tasks.upcoming.filter(task => task !== currentTask && visible(task));
   upcomingBody.replaceChildren(...restUpcoming.map(task => draggableTaskRow(task, upcomingBody)));
-  finished.hidden = false;
-  upcoming.hidden = false;
+  finished.hidden = !shownFinished.length;
+  upcoming.hidden = !restUpcoming.length;
 }
 
 /*! @license Sortable 1.15.7 - MIT. Copyright (c) 2019 All contributors to Sortable. See sortable.LICENSE and gsap.LICENSE. GSAP 3.15.0 - Standard "No Charge" GreenSock License (https://gsap.com/standard-license), Copyright (c) 2008-2026 GreenSock. */

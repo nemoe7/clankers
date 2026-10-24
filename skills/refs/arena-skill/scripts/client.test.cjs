@@ -1278,6 +1278,9 @@ test('preview client', async (t) => {
     search.events.input();
     assert.equal(get('#tasks-current-body').children.length, 0, 'no match leaves the head empty');
     assert.equal(get('#tasks-upcoming-body').children.length, 0, 'no match leaves the list empty');
+    assert.equal(get('#tasks-current').hidden, true, 'empty Current group is omitted');
+    assert.equal(get('#tasks-upcoming').hidden, true, 'empty Upcoming group is omitted');
+    assert.equal(get('#tasks-finished').hidden, true, 'empty Finished group is omitted');
     search.value = '';
     search.events.input();
     assert.equal(get('#tasks-current-body').children[0].dataset.taskId, 'alpha-task',
@@ -1676,7 +1679,10 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(get('#tasks-current').hidden, true, 'an empty queue has no current task');
     assert.equal(currentBody.children.length, 0);
-    assert.equal(get('#tasks-upcoming').hidden, false, 'the section still renders, empty');
+    assert.equal(get('#tasks-upcoming').hidden, true, 'an empty Upcoming group is omitted');
+    state.tasks.finished = [];
+    await refresh();
+    assert.equal(get('#tasks-finished').hidden, true, 'an empty Finished group is omitted');
     delete state.tasks;
     await refresh();
     assert.equal(get('#tasks-finished').hidden, true);
