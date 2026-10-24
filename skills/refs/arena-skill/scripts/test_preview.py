@@ -1617,14 +1617,8 @@ def test_http_boundaries():
       card = re.search(r"\.card\{([^}]+)\}", page)
       composer = re.search(r"\.card\.compose\{([^}]+)\}", page)
       assert card and composer, "composer padding must override .card"
-      assert "display:flex;flex-direction:column;min-height:0" in composer[1]
-      assert (
-        "#form{flex:1 1 auto;display:flex;flex-direction:column;min-height:0" in page
-      )
-      assert re.search(
-        r"#compose\[data-attachments\] \.composer-shell\{[^}]*grid-template-rows:auto minmax\(0,1fr\) auto",
-        page,
-      )
+      assert "flex:0 0 auto" in composer[1]
+      assert ".compose{max-height:" not in page
       assert all(
         0 < compact_side < card_side
         for compact_side, card_side in zip(
