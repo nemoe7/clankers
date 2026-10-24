@@ -1872,6 +1872,10 @@ def test_http_boundaries():
       assert "#reports-panel,#tasks-panel,#downloads-panel{overflow-y:auto" in page
       assert "padding-block:0" in page and ".key-line code{" in page
       assert '[role="tabpanel"]:not(#notes-panel)' in page
+      assert (
+        "#tasks-panel{animation:panel-enter var(--motion-duration) ease-out,edge-end linear both"
+        in page
+      )
       assert 'id="tasks-tab" aria-controls="tasks-panel"' in page
       assert '<ul id="tasks-current-body" class="task-list"></ul>' in page
       assert '<ul id="tasks-finished-body" class="task-list"></ul>' in page

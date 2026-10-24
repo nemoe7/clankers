@@ -545,6 +545,11 @@ mark code { color: var(--text); }
       animation-timeline: auto, scroll(self), scroll(self);
       animation-range: normal, 0px var(--edge-ramp), calc(100% - var(--edge-ramp)) 100%;
     }
+    #tasks-panel {
+      animation: panel-enter var(--motion-duration) ease-out, edge-end linear both;
+      animation-timeline: auto, scroll(self);
+      animation-range: normal, calc(100% - var(--edge-ramp)) 100%;
+    }
     @keyframes edge-start {
       from { --edge-start: 0px; }
       to { --edge-start: var(--edge-fade); }
