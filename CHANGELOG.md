@@ -39,6 +39,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Show `"{order}. {task id}\n{timestamp}"` task tooltips, center `.topbar-row` at `max-width: 900px`, add a `2px` `:focus-visible` accent outline ring, and cap `--app-height` composer height at `50%`.
 - Add composite visual-reference boards under `docs/arena-skill/design-visuals/` and `docs/arena-skill/images/`, and link them from `docs/arena-skill/design.md`.
 - Add `-i, --smallest-image` to `arena-preview survey` and update `I4M6G` in `references/survey.json`, `SKILL.md`, and `references/commands.md` to read the smallest repository image first before falling back to a temporary empty image.
+
+#### rules and system-prompts
+
+- Restore `Requested explanation is NEVER debt.` to `rules/refs/CORE.md`, `rules/refs/ARENA.md`, and `rules/refs/CHATGPT.txt`, and align `rules/CORE.md`, `rules/ARENA.md`, `rules/CHATGPT-MORE.txt`, `rules/wenyan/`, and `system-prompts/NEMOGPT.md` (`live` and `wenyan`) with their `refs` baselines.
 - Prevent native browser drag on `#image-modal-img` (`draggable="false"` and `dragstart` prevention), anchor `#image-modal` wheel zoom to the cursor, and support two-pointer pinch-to-zoom on mobile.
 - Format the preview tab title as `"{repo} - Steering"` on Messages and `"{repo} - Steering | {tab}"` on other tabs, and automatically request the bible-check survey whenever it is unanswered.
 - Wire `#copy-state` to force-save with a Lucide `save` icon when `userscripts/arena.user.js` is active. Clear the `#history` edge fade when message history ceases to scroll. Keep `#last-check` inline with `#connection` on mobile viewports, and pad `.report .question` so focus outlines do not clip.

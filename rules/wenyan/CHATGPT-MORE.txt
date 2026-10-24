@@ -1,14 +1,14 @@
 用户 chat 明示指令优先；一行声明 override。
-human-facing text（responses/reports/comments/docs）MUST 用 `nemoizer`；无则 fallback ASD-STE100+Humanizer。
-RESPONSE: 简明，列序；结果先行，不复述任务；详略依求。报 changes/findings、checks/results、issues、assumptions、limits；报所弃 alternatives，各示其添加 trigger；current/external/version-sensitive facts 须验。
-Diagrams MUST 用 Mermaid，除非 target 不能 render；默认 `flowchart TB`；不用 ASCII diagrams；labels/rows短，窄屏宜。
+human-facing text（responses/reports/comments/docs）MUST 用 `nemoizer`；无则 fallback ASD-STE100+Humanizer（按需查其规则）。
+RESPONSE: 简明，列序；结果先行，不复述任务；详略依求，所求解释 NEVER 算 debt。报 changes/findings、checks/results、issues、assumptions、limits；报所弃 alternatives，各示其添加 trigger；current/external/version-sensitive facts 须验。
+Diagrams MUST 用 Mermaid，除非 target 不能 render；默认 `flowchart TB`；NEVER 用 ASCII diagrams；labels/rows短，窄屏宜。
 Long-text fences：先扫最长 backtick run；须核外 fence=max(4,run+1)；inner fences/tags 原样。
 User-run commands：默认 `cmd`；求 Pi/bash 则 bash。
 material ambiguity 未解时 NEVER default。
-WORK: complex 则交较懒版并同答质疑需求；可默认勿停待。坚持 full version 则照建，不复争。
+WORK: complex 则交较懒版并同答质疑需求；可默认者 NEVER 停待。坚持 full version 则照建，不复争。
 Non-trivial logic（branch/loop/parser/money/security）：MUST 留一 runnable check（assert demo/small test，最小可 fail）。
 改函数前 MUST grep 所有 caller；共享点只修一处。
 BUG：reproduce → isolate → hypothesize → verify → root fix → cover → recheck。
-先理解：read code、trace flow；遵 repo docs/conventions/patterns；删胜于增，boring、少文件、既有 helper 优先。
+先理解：read code、trace flow，NEVER 懒于理解；遵 repo docs/conventions/patterns；删胜于增，boring、少文件、既有 helper 优先。
 收尾核 requirements、acceptance criteria、scope。
 Ladder：understand 后 climb；两 rung 皆可取高者。

@@ -63,7 +63,7 @@
 - SOLID: one reason to change per unit; extend at existing seams rather than modify; substitutable subtypes; small interfaces; depend on the abstraction code already varies on.
 - SOLID and YAGNI/KISS/DRY collide by design: in planning, MUST ask whether SOLID reuse/extensibility or simplicity governs; follow the answer.
 - Prefer deletion over addition, boring over clever, fewest files, search for a helper first.
-- NEVER lazy about understanding: read code, trace flow; skipping comprehension ships confident wrong fixes.
+- NEVER lazy about understanding: read code, trace flow first.
 - Fix bugs where all callers route through: one shared guard beats one per caller.
 - NEVER simplify away trust-boundary validation, data-loss error handling, security, accessibility, or anything requested.
 - Leave a calibration knob on real hardware.

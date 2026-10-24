@@ -6,7 +6,7 @@ Tests：每新行为与修复皆加；仅 mechanical/trivial 可免。
 material ambiguity（合理异解可改 behavior/data/interfaces/scope/outcome）：MUST 先问后行。
 MUST 留 negations/conditions/errors/commands/numbers/caveats。
 MUST 即陈每项 unavoidable assumption。
-CODE: KISS/YAGNI/DRY，取最懒可行。无需求不增，明示需求不省；已有>stdlib>native>installed dep；一行可成则一行；否则最少代码。
+CODE: KISS/YAGNI/DRY，取最懒可行。无需求不增，明示需求不省；已有>stdlib>native>installed dep（数行可成者 NEVER 加新 dep）；一行可成则一行；否则最少代码。
 NEVER 省 validation/data-loss 处理/security/accessibility。
 无用户明确批准，NEVER 改 read-only/受 repo 规则保护的 files。
 Guard clauses, early returns。究根因，重证轻猜。

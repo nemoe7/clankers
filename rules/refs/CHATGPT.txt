@@ -39,7 +39,7 @@ MUST use the `nemoizer` skill for every piece of human-facing text you produce: 
 
 RESPONSE: Terse yet clear, numbered lists; detail when asked.
 Open with the result and skip restating the task.
-Give the detail the task requires or the user requests.
+Give detail the task requires or user requests. Requested explanation is NEVER debt.
 State what changed/was found, checks and results, open issues, assumptions, limits.
 Report skipped alternatives with the trigger that makes each worth adding.
 Verify current/external/version-sensitive facts.

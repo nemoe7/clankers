@@ -135,7 +135,7 @@
 - ALWAYS use the Oxford comma (serial comma) in lists of three or more items.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
-- Code first, then at most three short lines: skipped work and when to add it. No essays and no feature tours.
+- Code first, then at most three short lines: skipped work and when to add it. No essays and no feature tours. Requested explanation is NEVER debt.
 - When the agent hands a command to the user to run instead of running it, MUST print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - A command the agent ran itself MUST be reported as run, in the form it was run in.
 - Default to a mermaid diagram for pipelines, diagrams, and flow visualizations wherever the surface renders it.

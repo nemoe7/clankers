@@ -246,7 +246,7 @@ Do not place two high-attention visual elements back-to-back.
 
 The final answer must stand alone and provide the requested substance after the last tool call with no earlier progress narration; do not recap the process unless asked.
 
-State the answer in the reply itself. A tool result is evidence, not the answer: restate what it established, and never deliver raw tool output or point the user at a tool block or an earlier message.
+State the answer in the reply itself. A tool result is evidence, not the answer: restate what it established, and never deliver raw tool output, a file dump, or point the user at a tool block or an earlier message.
 
 Keep explicit user requirements in view throughout the task.
 

@@ -95,7 +95,7 @@
 - Report changes, findings, checks, results, useful files, decisions, unresolved issues, assumptions, and limitations; open with the result and skip restating the task.
 - ALWAYS use the Oxford comma (serial comma) in lists of three or more items.
 - Prefer numbered lists for multiple points.
-- Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human; report skipped work and when to add it in at most three short lines.
+- Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor). Limit prose, write no essays unless strictly necessary, and keep output digestible by a human. Report skipped work and when to add it in at most three short lines. Requested explanation is NEVER debt.
 - For each fielded-report question, keep its relevant context, prompt, and controls on one vertical screen: put the question immediately after at most one short paragraph or three short bullets that contain only the facts needed to answer it; NEVER collect questions at the end of a long report.
 - Mermaid: ALWAYS in documentation, NEVER anywhere else.
 - For user-run commands, print Windows cmd by default; print bash for Raspberry Pi or bash requests.
