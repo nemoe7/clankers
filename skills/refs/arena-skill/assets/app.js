@@ -356,6 +356,7 @@ let slashCommands = [
   { cmd: '/nemoizer rules', desc: 'Browse nemoizer rules or /nemoizer rules <id> (modal)' },
   { cmd: '/nuu audit', desc: 'Send agent note: run a full nuu audit' },
   { cmd: '/nuu help', desc: 'Show nuu commands and clauses (modal)' },
+  { cmd: '/nuu recipe loading-bar', desc: 'Send agent note: apply loading-bar recipe' },
   { cmd: '/nuu recipe modal-manager', desc: 'Send agent note: apply modal-manager recipe' },
   { cmd: '/nuu recipe offline-fonts', desc: 'Send agent note: apply offline-fonts recipe' },
   { cmd: '/nuu recipe scroll-edge-fade', desc: 'Send agent note: apply scroll-edge-fade recipe' },
