@@ -470,6 +470,45 @@ async function a11yChecks(page) {
       } catch {}
     }
 
+    for (const node of document.querySelectorAll(`${interactiveSelector},[role="tooltip"]`)) {
+      if (!isVisible(node)) continue;
+      const rect = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      const isTooltip = node.getAttribute('role') === 'tooltip';
+      const halo = isTooltip
+        ? 0
+        : Math.max(0, (parseFloat(style.outlineWidth) || 0) + (parseFloat(style.outlineOffset) || 0));
+      if (!isTooltip && halo <= 0) continue;
+      let anc = node.parentElement;
+      while (anc && anc !== document.body && anc !== document.documentElement) {
+        const aStyle = getComputedStyle(anc);
+        const ox = aStyle.overflowX;
+        const oy = aStyle.overflowY;
+        const clips = isTooltip
+          ? ['hidden', 'clip', 'auto', 'scroll'].includes(ox) || ['hidden', 'clip', 'auto', 'scroll'].includes(oy)
+          : ['hidden', 'clip'].includes(ox) || ['hidden', 'clip'].includes(oy);
+        if (clips) {
+          const aRect = anc.getBoundingClientRect();
+          if (
+            rect.left - halo < aRect.left - 0.5 ||
+            rect.top - halo < aRect.top - 0.5 ||
+            rect.right + halo > aRect.right + 0.5 ||
+            rect.bottom + halo > aRect.bottom + 0.5
+          ) {
+            findings.push({
+              rule: 'NUA308',
+              severity: 'review',
+              criterion: '2.4.11',
+              selector: selectorFor(node),
+              evidence: `${isTooltip ? 'Tooltip' : 'Focus halo'} on ${selectorFor(node)} is clipped by ${selectorFor(anc)}`,
+            });
+            break;
+          }
+        }
+        anc = anc.parentElement;
+      }
+    }
+
     return {status: 'checked', findings};
   });
 }

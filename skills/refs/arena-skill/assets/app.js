@@ -359,7 +359,9 @@ let slashCommands = [
   { cmd: '/nuu recipe loading-bar', desc: 'Send agent note: apply loading-bar recipe' },
   { cmd: '/nuu recipe modal-manager', desc: 'Send agent note: apply modal-manager recipe' },
   { cmd: '/nuu recipe offline-fonts', desc: 'Send agent note: apply offline-fonts recipe' },
+  { cmd: '/nuu recipe overflow-and-clipping', desc: 'Send agent note: apply overflow-and-clipping recipe' },
   { cmd: '/nuu recipe scroll-edge-fade', desc: 'Send agent note: apply scroll-edge-fade recipe' },
+  { cmd: '/nuu recipe scrollbars', desc: 'Send agent note: apply scrollbars recipe' },
   { cmd: '/nuu recipes', desc: 'List nuu UI recipes (modal)' },
   { cmd: '/nuu search ', desc: 'Search the nuu UI/UX catalog (modal)' },
 ];

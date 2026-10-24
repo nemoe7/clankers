@@ -598,6 +598,7 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
   assert "hasTouch: touch" in driver_src and "isMobile: touch" in driver_src
   assert "height <= 480" in driver_src
   assert "NUA307" in driver_src
+  assert "NUA308" in driver_src
   bad_ready = subprocess.run(
     ["node", str(driver)],
     input=json.dumps(
@@ -802,6 +803,30 @@ module.exports = {
   assert measure.main(["density", str(density_file)]) == 1
   assert measure.main(["check", "-d", str(density_file)]) == 1
   assert measure.main(["check", str(density_file)]) == 0
+  clip_overlap_report = {
+    "width": 1280,
+    "elements": [
+      {
+        "selector": ".clipped-card",
+        "tag": "div",
+        "bounds": {"width": 200, "height": 40},
+        "clientWidth": 200,
+        "scrollWidth": 280,
+        "clientHeight": 40,
+        "scrollHeight": 40,
+        "values": {"overflow": "hidden"},
+      },
+      {
+        "selector": "#btn-a",
+        "tag": "button",
+        "bounds": {"width": 80, "height": 40},
+        "siblingOverlap": "#btn-b",
+        "values": {},
+      },
+    ],
+  }
+  co_findings = measure.check_density(clip_overlap_report)
+  assert [row["rule"] for row in co_findings] == ["NUM209", "NUM210"]
 
   font_proj = tmp_path / "FontProject"
   font_proj.mkdir()
