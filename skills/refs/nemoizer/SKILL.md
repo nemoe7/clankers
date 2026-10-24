@@ -117,7 +117,7 @@ Delete a marker when the line no longer needs it.
 - Use a list for three or more steps or conditions while preserving their order and grouping.
 - Define an uncommon technical term when needed, and use that term consistently.
 - Prefer simple tenses unless a compound form carries confidence or current relevance that must survive.
-- Add code comments only when non-obvious logic requires them, and limit each comment block to two lines.
+- Add comments or docstrings only for non-obvious logic, omit them when names are self-explanatory, and cap blocks at two lines.
 - Match length and structure to task complexity, omitting unrequested examples, sections, tables, background, and follow-ups.
 - Provide requested finished text without meta commentary.
 
