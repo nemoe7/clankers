@@ -120,7 +120,7 @@ STE_DOCS = (
   "skills/README.md",
   "README.md",
   ".agents/skills/README.md",
-  "docs/archive/arena-quirks.md",
+  "docs/arena-quirks.md",
   "rules/README.md",
   "rules/refs/README.md",
   "gpt-plugins/README.md",

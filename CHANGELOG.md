@@ -31,6 +31,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - Standardize repo hygiene with `template-main`. Add `.editorconfig`, `.gitattributes`, `.github/PULL_REQUEST_TEMPLATE.md`, and `.github/actionlint.yaml`, expand `.gitignore` and `.markdownlint-cli2.jsonc`, align `ci.yml` and `pr-check.yml`, and consolidate `pytest.ini` and `ruff.toml` into `pyproject.toml`.
+- Move `docs/archive/arena-quirks.md` to `docs/arena-quirks.md`, remove `docs/archive/`, and update `STE_DOCS` in `maintenance/check.py`.
 
 ## 2026-10-23
 

@@ -2,13 +2,13 @@
 
 Observed Arena.ai platform behaviours, not repository defects. Linked rules are authoritative. Each entry records an observation, its consequence and the current rule. Dates are sandbox observation dates, and unknown days stay unspecified.
 
-Restores deleted the original steering notes, so [CHANGELOG.md](../../CHANGELOG.md) is the durable record.
+Restores deleted the original steering notes, so [CHANGELOG.md](../CHANGELOG.md) is the durable record.
 
 ## GitHub session
 
 ### GitHub token expiry mid-turn
 
-[rules/ARENA.md](../../rules/ARENA.md) carries the rule. `GH_TOKEN` can die without a repository change: `gh auth status` calls it invalid, pushes fail with `could not read Username`, and `gh auth setup-git` does not help. Recovery can occur mid-turn after a variable failure count, so "retry once, then end the turn" does not hold.
+[rules/ARENA.md](../rules/ARENA.md) carries the rule. `GH_TOKEN` can die without a repository change: `gh auth status` calls it invalid, pushes fail with `could not read Username`, and `gh auth setup-git` does not help. Recovery can occur mid-turn after a variable failure count, so "retry once, then end the turn" does not hold.
 
 ### `gh pr edit --body-file` fails
 
@@ -182,7 +182,7 @@ Rule: hand a file to the PC as text through the clipboard. NEVER report a downlo
 
 The sandbox blocks the normal Chromium installation paths: the Playwright browser CDN, Google CDNs and `apt`. Observation date unrecorded.
 
-Current setup: [Chromium recipe](../../skills/arena-skill/references/REFERENCE.md#chromium).
+Current setup: [Chromium recipe](../skills/arena-skill/references/REFERENCE.md#chromium).
 
 ### Recorded environment
 
