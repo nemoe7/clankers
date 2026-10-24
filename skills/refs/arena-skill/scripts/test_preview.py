@@ -14292,6 +14292,11 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   slash_nemo_collect = preview.resolve_slash_command("/nemoizer collect ARENA.md")
   assert slash_nemo_collect is not None
   assert slash_nemo_collect["mode"] == "query"
+  assert ".agents" in preview.NEMOIZER_COLLECT_IGNORES
+  slash_nemo_collect_all = preview.resolve_slash_command("/nemoizer collect")
+  assert slash_nemo_collect_all is not None
+  assert slash_nemo_collect_all["mode"] == "query"
+  assert slash_nemo_collect_all["title"] == "nemoizer collect · Audit Findings"
   slash_nuu_audit = preview.resolve_slash_command("/nuu audit #compose")
   assert slash_nuu_audit is not None
   assert slash_nuu_audit["mode"] == "note"

@@ -1304,7 +1304,11 @@ $('#form').addEventListener('submit', async event => {
     let slashResult = null;
     try {
       slashResult = await (await request('/api/slash', {
-        method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({ text: draft.trim() })
+        method: 'POST',
+        headers: writeHeaders('application/json'),
+        body: JSON.stringify({ text: draft.trim() }),
+        timeoutMs: 30_000,
+        retryOnFailure: false,
       })).json();
     } catch (error) {
       status.textContent = `Slash command failed: ${error.message}`;

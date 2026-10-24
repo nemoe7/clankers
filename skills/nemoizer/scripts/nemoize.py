@@ -1714,7 +1714,7 @@ def main(argv=None):
   for path in walk([*targets, *arguments.test_helper], arguments.ignore):
     text = text_file(path)
     try:
-      if is_test_file(path, text or "", helpers):
+      if not arguments.audit and is_test_file(path, text or "", helpers):
         tests.append(str(path))
       if text is None:
         continue
