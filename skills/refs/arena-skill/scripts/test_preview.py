@@ -1783,7 +1783,8 @@ def test_http_boundaries():
       # The minified sheet rewrites background none to 0 0, so both spellings count.
       assert re.search(r"background:(?:none|0 0);padding:0;cursor:pointer", page)
       assert "#send{border-color:var(--accent)" not in page
-      assert "#report-submit{margin-top:16px" in page
+      assert "#report-submit{margin-top:16px;margin-left:auto;display:block" in page
+      assert '<button id="report-submit" type="submit" hidden>Submit</button>' in page
       # A code block carries its background wherever markdown renders, not in a report alone: the
       # owner read a fence in a message as having no background.
       assert (
