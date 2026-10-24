@@ -221,10 +221,10 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
   white-space: nowrap; pointer-events: none;
   box-shadow: 0 4px 6px rgb(0 0 0 / 25%);
 }
-#history { list-style: none; padding: 24px max(5vw, calc((100% - 900px) / 2)) 40px; margin: 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+#history { --edge-fade-end: 36px; list-style: none; padding: 12px max(5vw, calc((100% - 900px) / 2)) 40px; margin: 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 /* The log scroll area leaves space for its jump bar.
    Show the bar only away from the log end. */
-.log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100vw; margin: -12px calc(50% - 50vw) -36px; }
+.log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100vw; margin: 0 calc(50% - 50vw) -36px; }
 #log-newest { bottom: 30px; z-index: 2; }
 /* Keep the reply pill at the log top and the jump bar at the bottom. */
 .log-edited {
@@ -517,7 +517,7 @@ mark code { color: var(--text); }
   opacity: 0; pointer-events: none;
 }
 
-:root { --motion-duration: 160ms; --edge-fade: 36px; --edge-ramp: 192px; }
+:root { --motion-duration: 160ms; --edge-fade: 12px; --edge-ramp: 192px; }
 @property --edge-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --edge-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @media (prefers-reduced-motion: no-preference) {
@@ -572,7 +572,7 @@ mark code { color: var(--text); }
       to { --edge-start: var(--edge-fade); }
     }
     @keyframes edge-end {
-      from { --edge-end: var(--edge-fade); }
+      from { --edge-end: var(--edge-fade-end, var(--edge-fade)); }
       to { --edge-end: 0px; }
     }
   }

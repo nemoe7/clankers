@@ -13882,8 +13882,8 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
   assert ':root:not([data-keyboard-nav="true"]) :focus-visible' in style_css
   assert '#modal:not([data-keyboard-nav="true"]) :focus-visible' in style_css
   assert ".tasks-layout > .row.tight::after" in style_css
-  assert "margin: -12px calc(50% - 50vw) -36px;" in style_css
-  assert "padding: 24px max(5vw, calc((100% - 900px) / 2)) 40px;" in style_css
+  assert "margin: 0 calc(50% - 50vw) -36px;" in style_css
+  assert "padding: 12px max(5vw, calc((100% - 900px) / 2)) 40px;" in style_css
 
   mermaid_md = "# Flow\n\n```mermaid\nflowchart TD\n  A[One] --> B[Two]\n```\n"
   mermaid_html, mermaid_fields = preview.render_report(mermaid_md)
