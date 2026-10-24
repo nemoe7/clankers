@@ -98,6 +98,6 @@ python scripts/measure.py ruler --from 120,340 --to 264,340
 - `scripts/nuu`: CLI entry point (`references/nuu.md`), alongside `scripts/measure.py` (`references/measure.md`), `scripts/annotate.py` (`references/annotate.md`), and `scripts/browser.cjs`.
 - `data/vendor/`: licensed catalog data and source hashes.
 - `references/recipes/offline-fonts.md`: bundled and offline zero-jitter font recipe (`preload` with `crossorigin`, `font-display: block`, inline Base64 WOFF2, `FontFace` binary buffers, and metric-matched fallbacks).
-- `references/recipes/scroll-edge-fade.md`: scroll-driven CSS edge-fade mask recipe (`@supports (animation-timeline: scroll(self))`).
-- `references/recipes/modal-manager.md`: shared dialog modal manager and reusable template recipe (showModal(), deliberate autofocus, and trigger focus restoration).
+- `references/recipes/scroll-edge-fade.md`: scroll-driven CSS edge-fade mask recipe for scrollable panels and inputs (`@supports (animation-timeline: scroll(self))`).
+- `references/recipes/modal-manager.md`: shared dialog modal manager and reusable template recipe (`showModal()`, deliberate autofocus with initial focus-ring suppression until keyboard navigation, and trigger focus restoration).
 - `references/audit-report.md`: standalone template for nuu audits and visual verification reports.
