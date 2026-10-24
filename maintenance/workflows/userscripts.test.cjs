@@ -2771,7 +2771,28 @@ for raw in sys.stdin:
       },
       "invalidates the previous preview URL when a new URL arrives for the same preview name"
     );
+    const makePollRow = (stderrText) => {
+      const pres = [{ textContent: "$ arena-preview poll" }];
+      if (stderrText) {
+        pres.push({ textContent: stderrText });
+      }
+      return {
+        getAttribute: () => "",
+        querySelector: (sel) => (sel === "pre" ? pres[0] : null),
+        querySelectorAll: (sel) => (sel === "pre" ? pres : []),
+      };
+    };
+    assert.equal(checks.tabTitle.emojiForRow(makePollRow("")), "\uD83D\uDCA4");
+    assert.equal(
+      checks.tabTitle.emojiForRow(
+        makePollRow(
+          "poll max 1799 s; bash timeout 1800 s.\nrun suite-readme-shot running 39s\n"
+        )
+      ),
+      checks.tabTitle.BASH_EMOJI
+    );
   });
 }
+
 
 

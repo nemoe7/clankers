@@ -1315,12 +1315,17 @@ function checkTabTitle(api, logging) {
     button.attrs["aria-label"] = "Collapse";
     return node("div", "", [button]);
   }
-  function commandRow(label, command) {
+  function commandRow(label, command, stderr) {
     var row = actionRow(label);
     if (command) {
       var pre = node("pre", "", []);
       pre.textContent = command;
       row.children[0].children.push(pre);
+    }
+    if (stderr) {
+      var errPre = node("pre", "", []);
+      errPre.textContent = stderr;
+      row.children[0].children.push(errPre);
     }
     return row;
   }
@@ -1671,6 +1676,26 @@ function checkTabTitle(api, logging) {
     [emojiForRow(directChat), AGENT_EMOJI],
     [emojiForRow(directReasoning), REASONING_EMOJI],
     [emojiForRow(directPoll), "\uD83D\uDCA4"],
+    [
+      emojiForRow(
+        commandRow(
+          "running Bash",
+          "$ arena-preview poll",
+          "poll max 1799 s; bash timeout 1800 s.\nrun suite-readme-shot running 39s\n"
+        )
+      ),
+      BASH_EMOJI,
+    ],
+    [
+      emojiForRow(
+        commandRow(
+          "running Bash",
+          "$ arena-preview poll",
+          "poll max 1799 s; bash timeout 1800 s.\n"
+        )
+      ),
+      "\uD83D\uDCA4",
+    ],
     [emojiForRow(null), null],
     [chatLogLine.data.type, "chat"],
     [reasoningLogLine.data.type, "reasoning"],
