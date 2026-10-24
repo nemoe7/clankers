@@ -34,11 +34,22 @@ def test_package_collection_and_each_complete_skill(tmp_path):
         if member not in {"plugin.json", gate.ICON_ARCHIVE_PATH}
         and any(member.startswith(f"skills/{skill}/") for skill in selected)
       }
+      for skill in selected:
+        assert (
+          gate.archive_members()[f"skills/{skill}/assets/icon.svg"]
+          == gate.ASSETS / f"{skill}.svg"
+        )
+        expected[f"skills/{skill}/agents/openai.yaml"] = gate.skill_openai_yaml(skill)
       expected[gate.ICON_ARCHIVE_PATH] = (gate.ASSETS / f"{name}.svg").read_bytes()
-      assert manifest["extensions"]["com.openai"]["interface"] == {
-        "logo": gate.ICON_MANIFEST_REF,
-        "composerIcon": gate.ICON_MANIFEST_REF,
-      }
+      interface = manifest["extensions"]["com.openai"]["interface"]
+      assert interface["logo"] == gate.ICON_MANIFEST_REF
+      assert interface["composerIcon"] == gate.ICON_MANIFEST_REF
+      assert 1 <= len(interface["displayName"]) <= 30
+      assert 1 <= len(interface["shortDescription"]) <= 30
+      assert 1 <= len(interface["longDescription"]) <= 4000
+      assert interface["developerName"] == "nemoe7"
+      assert interface["category"] == "Developer Tools"
+      assert interface["brandColor"].startswith("#")
       files = {p for p in opened.namelist() if not p.endswith("/")}
       notes = set() if name == gate.PLUGIN_NAME else {"README.md"}
       assert files == {"plugin.json", *expected, *notes}

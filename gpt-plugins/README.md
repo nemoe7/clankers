@@ -5,7 +5,7 @@ One Agent Plugins 1.0.0 collection and seven single-skill plugins for GPT-specif
 | Path | Purpose |
 | --- | --- |
 | `plugin.json` | Manifest. The checker checks it against the canonical schema at agent-plugins.org. |
-| `assets/<name>.svg` | Square `64x64` SVG icons for the collection and each single-skill archive, packaged at `assets/icon.svg`. |
+| `assets/<name>.svg` | Square `64x64` SVG icons for the collection and each single-skill archive, packaged at `assets/icon.svg` and `skills/<name>/assets/icon.svg` with `skills/<name>/agents/openai.yaml`. |
 | `skills/<name>/SKILL.md` | Shipped skill copies. The archive carries these. |
 | `refs/skills/<name>/SKILL.md` | Readable sources. Keep these full. Compress shipped copies without losing rules. |
 | `skills/<name>/references/` | Per-type detail files. A reader loads only the file its answer needs. The shipped copy may be squashed, but it preserves every fenced code block byte for byte. |

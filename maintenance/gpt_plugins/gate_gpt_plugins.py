@@ -66,6 +66,59 @@ DEPENDENCY_NOTES = {
   "nemoizer": "Includes Python prose and test linter scripts under scripts/.",
 }
 
+SKILL_INTERFACES = {
+  "gpt-quirks": {
+    "displayName": "GPT Quirks",
+    "shortDescription": "Verified GPT tool quirks",
+    "brandColor": "#D97706",
+  },
+  "gpt-handoff": {
+    "displayName": "GPT Handoff",
+    "shortDescription": "New-work handoffs and audits",
+    "brandColor": "#2563EB",
+  },
+  "gpt-planning": {
+    "displayName": "GPT Planning",
+    "shortDescription": "Requirements and completion",
+    "brandColor": "#059669",
+  },
+  "gpt-github": {
+    "displayName": "GPT GitHub",
+    "shortDescription": "Git and GitHub workflow rules",
+    "brandColor": "#7C3AED",
+  },
+  "gpt-display": {
+    "displayName": "GPT Display",
+    "shortDescription": "Supported response formats",
+    "brandColor": "#0284C7",
+  },
+  "gpt-question": {
+    "displayName": "GPT Question",
+    "shortDescription": "Interactive question forms",
+    "brandColor": "#DB2777",
+  },
+  "nemoizer": {
+    "displayName": "Nemoizer",
+    "shortDescription": "STE prose and test linter",
+    "brandColor": "#4F46E5",
+  },
+}
+HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def skill_openai_yaml(name: str) -> bytes:
+  """Build the skills/<name>/agents/openai.yaml metadata for ChatGPT."""
+  info = SKILL_INTERFACES[name]
+  lines = (
+    "interface:",
+    f'  display_name: "{info["displayName"]}"',
+    f'  short_description: "{info["shortDescription"]}"',
+    f'  icon_small: "{ICON_MANIFEST_REF}"',
+    f'  icon_large: "{ICON_MANIFEST_REF}"',
+    f'  brand_color: "{info["brandColor"]}"',
+  )
+  return ("\n".join(lines) + "\n").encode("utf-8")
+
 
 def skill_roots(name: str) -> tuple[Path, Path]:
   """Return the (refs, shipped) directories for a collection skill."""
@@ -87,6 +140,7 @@ def archive_members() -> dict[str, Path]:
   for name in EXPECTED_SKILLS:
     _, ship_dir = skill_roots(name)
     members[f"skills/{name}/SKILL.md"] = ship_dir / "SKILL.md"
+    members[f"skills/{name}/{ICON_ARCHIVE_PATH}"] = ASSETS / f"{name}.svg"
 
     # A skill may split detail into references/ or scripts/ so a reader loads only the file it needs.
     for sub in ("references", "scripts"):
@@ -108,7 +162,10 @@ def archive_members() -> dict[str, Path]:
 def archive_contents(skill: str | None = None) -> dict[str, bytes]:
   """Return complete archive payloads without changing the shipped skill files."""
   if skill is None:
-    return {name: source.read_bytes() for name, source in archive_members().items()}
+    contents = {name: source.read_bytes() for name, source in archive_members().items()}
+    for name in EXPECTED_SKILLS:
+      contents[f"skills/{name}/agents/openai.yaml"] = skill_openai_yaml(name)
+    return contents
   if skill not in EXPECTED_SKILLS:
     raise ValueError(f"Unknown skill: {skill}")
   manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -116,12 +173,20 @@ def archive_contents(skill: str | None = None) -> dict[str, bytes]:
   metadata, _ = check.parse_frontmatter(
     (ship_dir / "SKILL.md").read_text(encoding="utf-8")
   )
+  info = SKILL_INTERFACES[skill]
   manifest.update(name=skill, description=metadata["description"])
+  manifest["extensions"]["com.openai"]["interface"].update(
+    displayName=info["displayName"],
+    shortDescription=info["shortDescription"],
+    longDescription=metadata["description"],
+    brandColor=info["brandColor"],
+  )
   contents = {
     name: source.read_bytes()
     for name, source in archive_members().items()
     if name.startswith(f"skills/{skill}/")
   }
+  contents[f"skills/{skill}/agents/openai.yaml"] = skill_openai_yaml(skill)
   contents[ICON_ARCHIVE_PATH] = (ASSETS / f"{skill}.svg").read_bytes()
   contents["plugin.json"] = (json.dumps(manifest, indent=2) + "\n").encode()
   notes = (
@@ -202,6 +267,33 @@ def load_schema(source: str, errors: list[str]) -> dict | None:
   return schema
 
 
+def check_openai_interface(label: str, manifest: dict, errors: list[str]) -> None:
+  """Check the OpenAI client extension interface fields required for ChatGPT."""
+  ext = manifest.get("extensions")
+  openai_ext = ext.get("com.openai") if isinstance(ext, dict) else None
+  interface = openai_ext.get("interface") if isinstance(openai_ext, dict) else None
+  if not isinstance(interface, dict):
+    errors.append(f"{label}: missing extensions.com.openai.interface object")
+    return
+  limits = (
+    ("displayName", 1, 30),
+    ("shortDescription", 1, 30),
+    ("longDescription", 1, 4000),
+    ("developerName", 1, 80),
+    ("category", 1, 80),
+  )
+  for field, low, high in limits:
+    value = interface.get(field)
+    if not isinstance(value, str) or not (low <= len(value.strip()) <= high):
+      errors.append(f"{label}: interface.{field} must be {low}..{high} characters")
+  brand = interface.get("brandColor")
+  if not isinstance(brand, str) or not HEX_COLOR_RE.fullmatch(brand):
+    errors.append(f"{label}: interface.brandColor must match #RRGGBB")
+  for icon_key in ("logo", "composerIcon"):
+    if interface.get(icon_key) != ICON_MANIFEST_REF:
+      errors.append(f"{label}: interface.{icon_key} must equal {ICON_MANIFEST_REF!r}")
+
+
 def check_manifest(schema: dict | None, errors: list[str]) -> None:
   """Check the manifest identity, then compare it with the schema."""
   if not MANIFEST.is_file():
@@ -227,6 +319,8 @@ def check_manifest(schema: dict | None, errors: list[str]) -> None:
     errors.append(
       f"gpt-plugins/plugin.json: $schema is {manifest.get('$schema')!r}, expected {SCHEMA_URL!r}"
     )
+
+  check_openai_interface("gpt-plugins/plugin.json", manifest, errors)
 
   if schema is None:
     return
@@ -509,6 +603,13 @@ def run_self_check() -> None:
   check_collections(collection_errors)
   check_references(collection_errors)
   check_tree(collection_errors)
+  check_manifest(None, collection_errors)
+  for skill in EXPECTED_SKILLS:
+    check_openai_interface(
+      f"{skill}/plugin.json",
+      json.loads(archive_contents(skill)["plugin.json"]),
+      collection_errors,
+    )
   assert not collection_errors, collection_errors
   fenced = "```jsx\nconst answer = 1;\n```"
   long_fence = "````jsx\nconst answer = 1;\n`````"
@@ -521,18 +622,19 @@ def run_self_check() -> None:
   assert "plugin.json" in expected
   assert any(name.startswith("skills/") for name in expected)
   assert not any(name.startswith("gpt-plugins/") for name in expected)
+  payloads = archive_contents()
   with tempfile.TemporaryDirectory() as directory:
     archive = Path(directory) / "gpt-plugins.zip"
     with zipfile.ZipFile(archive, "w") as opened:
-      for name, source in expected.items():
-        opened.writestr(name, source.read_bytes())
+      for name, data in payloads.items():
+        opened.writestr(name, data)
     errors: list[str] = []
     check_archive(archive, errors)
     assert not errors, errors
     legacy = Path(directory) / "legacy-gpt-plugins.zip"
     with zipfile.ZipFile(legacy, "w") as opened:
-      for name, source in expected.items():
-        opened.writestr(f"gpt-plugins/{name}", source.read_bytes())
+      for name, data in payloads.items():
+        opened.writestr(f"gpt-plugins/{name}", data)
     legacy_errors: list[str] = []
     check_archive(legacy, legacy_errors)
     assert legacy_errors, "a nested gpt-plugins archive passed"
@@ -612,6 +714,7 @@ def main() -> int:
     validator = jsonschema.Draft202012Validator(schema)
     for skill in EXPECTED_SKILLS:
       manifest = json.loads(archive_contents(skill)["plugin.json"])
+      check_openai_interface(f"{skill}/plugin.json", manifest, errors)
       for problem in validator.iter_errors(manifest):
         errors.append(f"{skill}/plugin.json: schema violation: {problem.message}")
 

@@ -1,12 +1,24 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "gpt-plugins",
-  "version": "1.10.2",
+  "version": "1.10.3",
   "description": "GPT-specific agent skills: verified tool quirks, requirements and completion validation, independent audits, new-work handoffs, git and GitHub rules, and the supported response representations.",
+  "author": {
+    "name": "nemoe7",
+    "url": "https://github.com/nemoe7"
+  },
   "repository": "https://github.com/nemoe7/clankers",
+  "license": "MIT",
   "extensions": {
     "com.openai": {
       "interface": {
+        "displayName": "GPT Plugins",
+        "shortDescription": "GPT skills and linters",
+        "longDescription": "GPT-specific agent skills: verified tool quirks, requirements and completion validation, independent audits, new-work handoffs, git and GitHub rules, and the supported response representations.",
+        "developerName": "nemoe7",
+        "category": "Developer Tools",
+        "capabilities": [],
+        "brandColor": "#10A37F",
         "logo": "./assets/icon.svg",
         "composerIcon": "./assets/icon.svg"
       }
