@@ -656,6 +656,27 @@ def main_identical(root="."):
     return False
 
 
+def skills_only_main_diff(root=".", base_ref="HEAD", target_ref="origin/main"):
+  """True when the diff from `base_ref` to `target_ref` touches `.agents/skills/**` only."""
+  if not base_ref or not target_ref:
+    return False
+  try:
+    proc = subprocess.run(
+      ["git", "diff", "--name-only", f"{base_ref}..{target_ref}"],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+      timeout=30,
+    )
+  except (OSError, subprocess.TimeoutExpired):
+    return False
+  if proc.returncode != 0:
+    return False
+  paths = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+  return bool(paths) and all(path.startswith(".agents/skills/") for path in paths)
+
+
 def main_drift_warning(root=".", fresh=True):
   """Read origin tips without moving HEAD, the index, or working files.
 
@@ -717,6 +738,11 @@ def main_drift_warning(root=".", fresh=True):
             "do not replay those commits. Start new work from main."
           )
       elif behind:
+        if skills_only_main_diff(root, branch_ref, main_ref):
+          return (
+            f"Remote branch {branch} is {behind} commit(s) behind origin/main"
+            " (`.agents/skills/**` sync only; no regate needed)."
+          )
         return (
           f"Remote branch {branch} is {behind} commit(s) behind origin/main. "
           "Check whether main absorbed its commits before rebasing."
@@ -730,6 +756,11 @@ def main_drift_warning(root=".", fresh=True):
         return ""
     count = git("rev-list", "--count", "HEAD..origin/main")
     if count.returncode == 0 and int(count.stdout.strip()) > 0:
+      if skills_only_main_diff(root, "HEAD", "origin/main"):
+        return (
+          f"Local check: origin/main carries {count.stdout.strip()} commit(s) "
+          "this branch lacks (`.agents/skills/**` sync only; no regate needed)."
+        )
       return (
         f"Local check: origin/main carries {count.stdout.strip()} commit(s) "
         "this branch lacks. Replay your commits over main: run git fetch "
@@ -777,6 +808,8 @@ def main_ancestor_warning(root="."):
     # Exit 0 holds the ancestry and exit 1 denies it. Any other code names a tip the
     # repository cannot compare, so only the denial blocks the push.
     if git("merge-base", "--is-ancestor", main_ref, "HEAD").returncode != 1:
+      return ""
+    if skills_only_main_diff(root, "HEAD", main_ref):
       return ""
     return (
       "PUSH BLOCKED: `origin/main` is not an ancestor of HEAD, so the push replays"
@@ -1102,6 +1135,47 @@ def pr_check_label(node):
   return node["name"]
 
 
+def pr_queued_runs(root, slug, sha):
+  """Active workflow run names on `sha` before individual check runs register."""
+  if not slug or not sha:
+    return []
+  try:
+    result = subprocess.run(
+      [
+        "gh",
+        "run",
+        "list",
+        "--repo",
+        slug,
+        "--commit",
+        sha,
+        "--json",
+        "name,status",
+      ],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+  except OSError:
+    return []
+  if result.returncode != 0:
+    return []
+  try:
+    rows = json.loads(result.stdout or "[]")
+  except json.JSONDecodeError:
+    return []
+  if not isinstance(rows, list):
+    return []
+  return [
+    str(row.get("name") or "workflow")
+    for row in rows
+    if isinstance(row, dict)
+    and str(row.get("status") or "").lower()
+    in {"queued", "in_progress", "waiting", "requested", "pending"}
+  ]
+
+
 def pr_checks_watch(
   root=".",
   seconds=PR_CHECK_DISCOVERY_SECONDS,
@@ -1131,6 +1205,7 @@ def pr_checks_watch(
   started = 0.0
   seen_any = False
   reported = set()
+  queued_reported = set()
   lines = []
   while True:
     head = pr_head_sha(root, branch, slug)
@@ -1143,6 +1218,7 @@ def pr_checks_watch(
       started = time.monotonic()
       seen_any = False
       reported = set()
+      queued_reported = set()
       lines = []
     latest = pr_check_latest(root, slug, pinned)
     if latest is None:
@@ -1171,6 +1247,25 @@ def pr_checks_watch(
         progress(line)
     if not seen_any:
       if elapsed >= seconds:
+        queued = pr_queued_runs(root, slug, pinned)
+        if queued:
+          queued_key = tuple(queued)
+          if queued_key not in queued_reported:
+            queued_reported.add(queued_key)
+            queued_line = f"Queued on {pinned[:7]}: {', '.join(queued)}"
+            lines.append(queued_line)
+            if progress is not None:
+              progress(queued_line)
+          if elapsed < max(seconds * 2, seconds + step):
+            pause(step)
+            continue
+          return "not_started", [
+            *lines,
+            (
+              f"PR CHECKS QUEUED: {', '.join(queued)} still queued on "
+              f"{pinned[:7]} after {int(elapsed)} seconds."
+            ),
+          ]
         return "not_started", [
           (
             "PR CHECKS NOT STARTED: no visible checks appeared on "
@@ -2562,6 +2657,10 @@ def format_task_list(tasks, full=False):
   lines = [f"Tasks {len(shown)}" if full else f"Tasks {len(shown)} upcoming"]
   if any(t.get("blocked") for t in shown):
     lines.append("* = blocked on a report answer or linked run")
+  if not full:
+    shown = [t for t in shown if not t.get("blocked")] + [
+      t for t in shown if t.get("blocked")
+    ]
   head = None if full else current_task(shown)
   if head is not None:
     shown = [head, *(t for t in shown if t.get("id") != head.get("id"))]
@@ -3648,6 +3747,28 @@ def under_path(path, parent):
   return True
 
 
+def prune_stale_worktrees(state_dir):
+  """Remove worktree records whose worktree directory no longer exists on disk."""
+  directory = Path(state_dir) / WORKTREE_DIR
+  if not directory.is_dir():
+    return
+  for path in sorted(directory.glob("*.json")):
+    record = json_record(path)
+    target = record.get("worktree") if record else None
+    if not isinstance(target, str) or not Path(target).exists():
+      path.unlink(missing_ok=True)
+
+
+def forget_worktree(state_dir, name):
+  """Remove one stored worktree record by name."""
+  name = checked_worktree_name(name)
+  path = worktree_record_path(state_dir, name)
+  if not path.exists():
+    raise ValueError(f"No worktree named {name}.")
+  path.unlink(missing_ok=True)
+  return name
+
+
 def stored_worktree(state_dir, name):
   name = checked_worktree_name(name)
   record = json_record(worktree_record_path(state_dir, name))
@@ -3657,6 +3778,7 @@ def stored_worktree(state_dir, name):
 
 
 def worktree_at(state_dir, cwd=None):
+  prune_stale_worktrees(state_dir)
   current = Path(cwd or Path.cwd()).resolve()
   directory = Path(state_dir) / WORKTREE_DIR
   if not directory.is_dir():
@@ -3675,9 +3797,16 @@ def worktree_warning(state_dir, action, cwd=None):
   if record is None:
     return None
   label = WORKTREE_ACTIONS.get(action, action)
+  root = record.get("root")
+  worktree = record.get("worktree")
+  hint = (
+    f' Run it from {root} (or `bash -c "cd {worktree} && <command>"` from {root}).'
+    if action == "gate" and worktree
+    else f" Run it from {root}."
+  )
   return (
     f"WORKTREE BLOCKED: {record.get('name')} is detached. Do not run {label} here."
-    f" Run it from {record.get('root')}."
+    f"{hint}"
   )
 
 
@@ -3692,6 +3821,7 @@ def checked_worktree_name(name):
 def start_worktree(state_dir, name, destination, gate, allowed, cwd=None):
   """Create one detached task worktree, beside a routed root gate when one runs."""
   name = checked_worktree_name(name)
+  prune_stale_worktrees(state_dir)
   if not allowed or any(not pattern for pattern in allowed):
     raise ValueError("Give at least one --allow path glob.")
   current = Path(cwd or Path.cwd()).resolve()
@@ -3826,6 +3956,55 @@ def run_chain_error(state_dir, record):
     time.sleep(RUN_CHAIN_POLL_SECONDS)
 
 
+PYTEST_FAILURE_HEADER_RE = re.compile(r"^_{3,}\s+(.+?)\s+_{3,}$")
+PYTEST_SECTION_RE = re.compile(r"^={3,}\s+(.+?)\s+={3,}$")
+
+
+def pytest_failure_tracebacks(lines):
+  """Extract the last traceback summary per failed test from pytest output."""
+  in_failures = False
+  blocks = {}
+  order = []
+  current_name = None
+  current_lines = []
+
+  def flush():
+    nonlocal current_name, current_lines
+    if current_name and current_lines:
+      if current_name not in blocks:
+        order.append(current_name)
+      blocks[current_name] = list(current_lines[-10:])
+    current_name = None
+    current_lines = []
+
+  for line in lines:
+    section = PYTEST_SECTION_RE.match(line.strip())
+    if section:
+      flush()
+      in_failures = section.group(1).strip().upper() == "FAILURES"
+      continue
+    if not in_failures:
+      continue
+    header = PYTEST_FAILURE_HEADER_RE.match(line.strip())
+    if header:
+      flush()
+      current_name = header.group(1).strip()
+      current_lines = [line]
+    elif current_name is not None:
+      if line.strip():
+        current_lines.append(line)
+    elif line.strip():
+      key = line.split(":", 2)[0]
+      if key not in blocks:
+        order.append(key)
+      blocks[key] = [line]
+  flush()
+  retained = []
+  for name in order:
+    retained.extend(blocks[name])
+  return retained
+
+
 def run_command(state_dir, name, argv):
   """Run one command in this process, then record its exit for a later call.
 
@@ -3876,6 +4055,11 @@ def run_command(state_dir, name, argv):
   seconds = round(time.monotonic() - started, 1)
   output = (completed.stdout + completed.stderr).splitlines()
   tail = clean_run_tail(output[-RUN_TAIL_LINES:])
+  tracebacks = pytest_failure_tracebacks(output)
+  if tracebacks:
+    missing = [line for line in tracebacks if line not in tail]
+    if missing:
+      tail = missing + tail
   verdict = tail[-1] if tail else "(no output)"
   path = run_record_path(state_dir, name)
   existing = json_record(path) or {}
@@ -3947,6 +4131,18 @@ def live_task_runs(state_dir):
   return linked
 
 
+def remote_watch_run(state_dir, name):
+  """Whether `name` is a remote CI watch run (`pr-checks*`, `run-watch*`, or a `gh pr checks` command)."""
+  if re.match(r"^(?:pr-checks|run-watch)(?:-\d+)?$", str(name)):
+    return True
+  record = json_record(run_record_path(state_dir, name)) or {}
+  argv = record.get("argv") or []
+  if pr_checks_command(argv):
+    return True
+  text = " ".join(str(item) for item in argv)
+  return long_run_name(text) in {"pr-checks", "run-watch"}
+
+
 def link_task_runs(records, state_dir):
   """Overlay run-owned blocking on task records without changing stored task rows."""
   linked = live_task_runs(state_dir)
@@ -3954,7 +4150,8 @@ def link_task_runs(records, state_dir):
     names = linked.get(record.get("id"))
     if names:
       record["runs"] = names
-      record["blocked"] = True
+      if record.get("status") != "finished":
+        record["blocked"] = True
     else:
       record.pop("runs", None)
   return records
@@ -3963,8 +4160,16 @@ def link_task_runs(records, state_dir):
 def guard_task_runs(state_dir, task_id=None, action="change"):
   """Refuse a destructive task change while one of its linked runs is live."""
   linked = live_task_runs(state_dir)
-  selected = linked if task_id is None else {task_id: linked.get(task_id, [])}
-  held = [(identifier, names) for identifier, names in selected.items() if names]
+  target_map = linked if task_id is None else {task_id: linked.get(task_id, [])}
+  held = []
+  for identifier, names in target_map.items():
+    blocking = (
+      [name for name in names if not remote_watch_run(state_dir, name)]
+      if action == "finish task"
+      else list(names)
+    )
+    if blocking:
+      held.append((identifier, blocking))
   if not held:
     return
   labels = "; ".join(
@@ -4213,8 +4418,8 @@ DETACHED_NOTICE = (
   "later call. " + WORKTREE_STEP
 )
 DETACHED_BLOCK = (
-  "RUN BLOCKED: background start failed, wait not started. Use `arena-preview "
-  "run start {name} -- <the same line>` instead."
+  "RUN BLOCKED: background start failed, wait not started. Nothing on this line ran."
+  " Use `arena-preview run start {name} -- <the same line>` instead."
 )
 # A detached record older than this stops printing its status line, so a killed child
 # leaves no forever-running line.
@@ -4413,7 +4618,7 @@ def pr_update_command(number, title, body_file, root=None, store=None):
 
 
 def job_log_command(store=None, job_id=None, run_id=None, root=None):
-  """Resolve the signed GitHub Actions job-log Location URL or fallback /v1/gh proxy URL."""
+  """Resolve the signed GitHub Actions job-log Location URL, /v1/gh proxy URL, or gh api fallback."""
   job_clean = str(job_id or "").strip()
   run_clean = str(run_id or "").strip()
   if not job_clean and not run_clean:
@@ -4426,6 +4631,8 @@ def job_log_command(store=None, job_id=None, run_id=None, root=None):
   slug = repo_slug(root_path)
   if not slug:
     raise ValueError("Could not resolve GitHub repository slug from origin remote")
+  target_id = run_clean or job_clean
+  log_type = "runs" if run_clean else "jobs"
   if job_clean:
     proc = subprocess.run(
       ["gh", "api", "-i", f"/repos/{slug}/actions/jobs/{job_clean}/logs"],
@@ -4442,14 +4649,10 @@ def job_log_command(store=None, job_id=None, run_id=None, root=None):
   if record and record.get("host") and record.get("key"):
     host = str(record["host"]).rstrip("/")
     key = record["key"]
-    target_id = run_clean or job_clean
-    log_type = "runs" if run_clean else "jobs"
     return (
       f"{host}/v1/gh?key={key}&path=repos/{slug}/actions/{log_type}/{target_id}/logs"
     )
-  raise ValueError(
-    "Job log redirect URL unavailable and no recorded agent key for /v1/gh fallback"
-  )
+  return f"gh api -i /repos/{slug}/actions/{log_type}/{target_id}/logs"
 
 
 def _extract_pr_patch_args(text):
@@ -4714,6 +4917,7 @@ def pr_check_wait(state_dir, line, command=None):
   if command is not None and line.strip() != command.strip():
     print(
       "RUN BLOCKED: automatic routing would replay a mixed shell line."
+      " Nothing on this line ran."
       f" Use `arena-preview run start {name} -- <remaining command>`;"
       " do not repeat completed commands.",
       file=sys.stderr,
@@ -4822,6 +5026,19 @@ def detach_run(state_dir, name, argv, task_id=None, after=None, link_task=True):
   return True
 
 
+def resolve_run_name(state_dir, name):
+  """Return `name` when unused, else append `-2`, `-3`, ... for a fresh run record."""
+  if not run_record_path(state_dir, name).exists():
+    return name
+  base = re.sub(r"-\d+$", "", name) or name
+  suffix = 2
+  while True:
+    candidate = f"{base[: 64 - len(str(suffix)) - 1]}-{suffix}"
+    if not run_record_path(state_dir, candidate).exists():
+      return candidate
+    suffix += 1
+
+
 def route_command(state_dir, name, argv, task_id=None, after=None):
   """Start a command detached under `name`, and return at once.
 
@@ -4849,11 +5066,12 @@ def route_command(state_dir, name, argv, task_id=None, after=None):
     clear_poll_repeat(Store(state_dir, create=False))
   except FileNotFoundError:
     pass
-  if not detach_run(state_dir, name, argv, task_id=task_id, after=after):
-    print(f"arena-preview run start: the start of `{name}` failed.", flush=True)
+  resolved = resolve_run_name(state_dir, name)
+  if not detach_run(state_dir, resolved, argv, task_id=task_id, after=after):
+    print(f"arena-preview run start: the start of `{resolved}` failed.", flush=True)
     return 1
   print(
-    f"routed {name}: background run. Verdict on later call. {WORKTREE_STEP}",
+    f"routed {resolved}: background run. Verdict on later call. {WORKTREE_STEP}",
     file=sys.stderr,
     flush=True,
   )
@@ -5300,8 +5518,8 @@ def check_task_steps(details):
     if len(step) > TASK_STEP_MAX:
       raise ValueError(
         "A task detail is one step per line,"
-        f" {TASK_STEP_MAX} characters or fewer; this line runs {len(step)}."
-        " Split it and repeat --details"
+        f" {TASK_STEP_MAX} characters or fewer; this line runs {len(step)}"
+        f" ({step!r}). Split it and repeat --details"
       )
 
 
@@ -6913,7 +7131,9 @@ class Store:
           self.check_dependency(task_id, blocker, edges, db=db)
         self.write_dependencies(db, task_id, blocked_by)
       if (
-        report_wait and report_id and blocked and self.report_has_answers(db, report_id)
+        blocked
+        and (report_wait or status == "finished")
+        and self.task_has_report_answer(db, task_id, report_id)
       ):
         # The wait is over before it starts when the report already has its answer.
         blocked = False
@@ -6947,6 +7167,12 @@ class Store:
           (status, task_id),
         ).fetchall()
       ]
+      if not restoring and order is not None and not blocked and status == "upcoming":
+        siblings = [
+          item
+          for item in siblings
+          if not (item.get("blocked") and item.get("report_id"))
+        ] + [item for item in siblings if item.get("blocked") and item.get("report_id")]
       record = {
         "id": task_id,
         "title": title,
@@ -7052,6 +7278,16 @@ class Store:
     return bool(
       db.execute(
         "SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1", (report_id,)
+      ).fetchone()
+    )
+
+  def task_has_report_answer(self, db, task_id, report_id=None):
+    """Whether the task's linked report or linked submission already holds an answer."""
+    if report_id and self.report_has_answers(db, report_id):
+      return True
+    return bool(
+      db.execute(
+        "SELECT 1 FROM submissions WHERE task_id = ? LIMIT 1", (task_id,)
       ).fetchone()
     )
 
@@ -9064,6 +9300,12 @@ class Store:
           f"UPDATE {table} SET task_id = ? WHERE id = ?", (task_id, record_id)
         )
         if cursor.rowcount:
+          if table == "submissions":
+            db.execute(
+              "UPDATE tasks SET blocked = 0, updated_at = ?"
+              " WHERE id = ? AND blocked = 1",
+              (now(), task_id),
+            )
           if table == "notes":
             uploads = db.execute(
               "SELECT * FROM uploads WHERE note_id = ? ORDER BY seq", (record_id,)
@@ -12581,6 +12823,10 @@ def main():
     "collect", help="Print allowed detached-worktree patch after root gate passes"
   )
   worktree_collect.add_argument("name", help="Worktree name to collect")
+  worktree_forget = worktree_action.add_parser(
+    "forget", help="Remove a stored worktree record"
+  )
+  worktree_forget.add_argument("name", help="Worktree name to forget")
   rename = commands.add_parser(
     "rename",
     help="Move note, answer, report, or task to new ID",
@@ -12927,6 +13173,10 @@ def main():
           state_dir, args.name, args.destination, args.gate, args.allow
         )
         print(f"Worktree {record['name']} at {record['worktree']}")
+        return 0
+      if args.worktree_action == "forget":
+        removed = forget_worktree(state_dir, args.name)
+        print(f"Forgot worktree {removed}")
         return 0
       print(collect_worktree(state_dir, args.name), end="")
       return 0
