@@ -2719,9 +2719,13 @@ def resolve_compare_state_source(state_dir, source=None):
     if candidates:
       candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
       return candidates[0]
-  saved = Path(state_dir) / "saved-state.ndjson"
-  if saved.is_file():
-    return saved
+  for candidate in (
+    Path(state_dir) / "backups" / "state-latest.ndjson",
+    Path(state_dir) / "backups" / "state-previous.ndjson",
+    Path(state_dir) / "saved-state.ndjson",
+  ):
+    if candidate.is_file():
+      return candidate
   raise ValueError("Give a state file or upload one first")
 
 
@@ -5080,6 +5084,11 @@ def parse_state_import(text):
 AUTOSAVE_HISTORY = "userscript-autosave-history"
 AUTOSAVE_RECEIPTS = "userscript-autosave-receipts"
 AUTOSAVE_OFFER_META = "userscript-autosave-offered"
+FORCE_SAVE_META = "userscript-force-save"
+CLEARED_META = "state-explicitly-cleared"
+BACKUP_DIR = "backups"
+LATEST_BACKUP = "state-latest.ndjson"
+PREVIOUS_BACKUP = "state-previous.ndjson"
 
 
 def autosave_core_and_stamp(records):
@@ -5910,6 +5919,8 @@ class Store:
     # The save file is not the database, and it lands beside it by default: one directory the installer ignores
     # through core.excludesFile carries both, and a sandbox restore keeps a path the repository does not ignore.
     self.save_path = Path(save_path) if save_path else self.path.parent / SAVED_STATE
+    self.latest_backup_path = self.path.parent / BACKUP_DIR / LATEST_BACKUP
+    self.previous_backup_path = self.path.parent / BACKUP_DIR / PREVIOUS_BACKUP
     existed = self.path.is_file()
     if not create and not existed:
       raise FileNotFoundError(
@@ -6107,6 +6118,43 @@ class Store:
         )
     if not existed:
       self.path.chmod(0o600)
+    if create:
+      self._auto_restore_if_empty()
+
+  def _auto_restore_if_empty(self):
+    if self.meta_value(CLEARED_META) == "1":
+      return
+    with closing(self.connect()) as db:
+      has_rows = any(
+        db.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()
+        for table in ("notes", "reports", "submissions", "tasks")
+      )
+    if has_rows:
+      return
+    for candidate in (self.latest_backup_path, self.previous_backup_path):
+      if not candidate.is_file():
+        continue
+      try:
+        text = candidate.read_text(encoding="utf-8")
+      except OSError:
+        continue
+      if not text.strip():
+        continue
+      try:
+        self.import_state(text, replace_tasks=True)
+        self.autosave()
+        return
+      except (
+        OSError,
+        ValueError,
+        TypeError,
+        KeyError,
+        sqlite_api().Error,
+        RuntimeError,
+      ) as error:
+        print(
+          f"preview: auto-restore skipped {candidate.name}: {error}", file=sys.stderr
+        )
 
   def id_matches(self, token):
     """Every record whose ID equals the token or starts with it, across all four types.
@@ -6600,6 +6648,7 @@ class Store:
         "gate_threshold": GATE_THRESHOLD,
         "display_tz": meta.get(TIMEZONE_META),
         "repo": self.repository_root().name,
+        "force_save_id": meta.get(FORCE_SAVE_META),
       }
 
   def tasks(self):
@@ -7128,6 +7177,14 @@ class Store:
     root = self.path.parent.parent
     return {"repo": root.name, "branch": workspace_branch(root) or ""}
 
+  def request_userscript_force_save(self, shared=None):
+    save_id = str(uuid.uuid4())
+    with self.transaction(shared, autosave=False) as db:
+      db.execute(
+        "INSERT OR REPLACE INTO meta VALUES (?, ?)", (FORCE_SAVE_META, save_id)
+      )
+    return save_id
+
   def userscript_snapshot(self):
     core, counts = self.state_lines(self.state()["notes"], self.tasks() or {})
     core, stamp = autosave_core_and_stamp(core)
@@ -7135,8 +7192,11 @@ class Store:
     history = self.userscript_history()
     stamps = self.newest_stamps()
     rows = [row for row in history if row["scope"] == scope and row.get("stamp")]
+    force_save_id = self.meta_value(FORCE_SAVE_META)
+    save_id = force_save_id if force_save_id else str(uuid.uuid4())
     return {
-      "save_id": str(uuid.uuid4()),
+      "save_id": save_id,
+      "force": bool(force_save_id),
       "scope": scope,
       "core": core,
       "digest": autosave_digest(core),
@@ -7201,6 +7261,7 @@ class Store:
           (AUTOSAVE_RECEIPTS, json.dumps(receipts)),
         )
         db.execute("DELETE FROM meta WHERE key = ?", (AUTOSAVE_OFFER_META,))
+      db.execute("DELETE FROM meta WHERE key = ?", (FORCE_SAVE_META,))
     return {"confirmed": True, "save_id": save_id, "digest": digest}
 
   def offer_userscript_backup(self, payload):
@@ -7457,6 +7518,24 @@ class Store:
     values = [value for value in values if value]
     return max(values).isoformat() if values else None
 
+  def rotate_backup(self):
+    """Copy the current latest backup (or non-empty live state) to state-previous.ndjson."""
+    text = ""
+    if self.latest_backup_path.is_file():
+      try:
+        text = self.latest_backup_path.read_text(encoding="utf-8")
+      except OSError:
+        text = ""
+    if not text.strip():
+      lines, counts = self.state_lines(self.state()["notes"], self.tasks() or {})
+      if any(counts.values()):
+        text = state_ndjson(lines + self.userscript_history())
+    if text.strip():
+      self.previous_backup_path.parent.mkdir(parents=True, exist_ok=True)
+      self.previous_backup_path.write_text(text, encoding="utf-8")
+      return True
+    return False
+
   def save_state(self, payload):
     """Write the current state to the save file, in the shape the importer reads.
 
@@ -7472,11 +7551,51 @@ class Store:
     if tasks is None:
       tasks = {}
     lines, counts = self.state_lines(notes, tasks)
+    text = state_ndjson(lines + self.userscript_history())
     path = self.save_path
     if path.parent != Path("."):
       path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(state_ndjson(lines + self.userscript_history()), encoding="utf-8")
-    return {"path": str(path), **counts}
+    path.write_text(text, encoding="utf-8")
+    self.latest_backup_path.parent.mkdir(parents=True, exist_ok=True)
+    self.latest_backup_path.write_text(text, encoding="utf-8")
+    if any(counts.values()):
+      with closing(self.connect()) as db, db:
+        db.execute("DELETE FROM meta WHERE key = ?", (CLEARED_META,))
+    return {"path": str(path), "latest_path": str(self.latest_backup_path), **counts}
+
+  def save_backup(self):
+    """Snapshot live state to state-latest.ndjson and queue a force-save for the userscript."""
+    result = self.save_state({"notes": self.state()["notes"], "tasks": self.tasks()})
+    self.request_userscript_force_save()
+    return result
+
+  def restore_state(self, previous=False):
+    """Restore state from state-latest.ndjson or state-previous.ndjson and queue a force-save."""
+    candidates = (
+      (self.previous_backup_path,)
+      if previous
+      else (self.latest_backup_path, self.previous_backup_path, self.save_path)
+    )
+    chosen = None
+    text = ""
+    for candidate in candidates:
+      if not candidate.is_file():
+        continue
+      try:
+        raw = candidate.read_text(encoding="utf-8")
+      except OSError:
+        continue
+      if raw.strip():
+        chosen = candidate
+        text = raw
+        break
+    if chosen is None:
+      label = "previous backup" if previous else "backup"
+      raise ValueError(f"No non-empty {label} file found to restore")
+    receipt = self.import_state(text, replace_tasks=True, rotate=not previous)
+    self.request_userscript_force_save()
+    self.autosave()
+    return receipt
 
   def uploads(self):
     """Every upload, newest last, with `present` saying whether its bytes are still on disk."""
@@ -7921,9 +8040,17 @@ class Store:
     self.autosave()  # the completion wrote an inbox note. Unfinished queue rows stay only in SQLite
     return fetch_row(result, self.path.parent)
 
-  def import_state(self, text, replace_tasks=False):
+  def import_state(self, text, replace_tasks=False, rotate=True):
     "Import a backup. Replace every live entry."
     records = parse_state_import(text)
+    if rotate and self.latest_backup_path.is_file():
+      try:
+        prior = self.latest_backup_path.read_text(encoding="utf-8")
+      except OSError:
+        prior = ""
+      if prior.strip():
+        self.previous_backup_path.parent.mkdir(parents=True, exist_ok=True)
+        self.previous_backup_path.write_text(prior, encoding="utf-8")
     raw_history = [row for row in records if row.get("type") == "userscript-autosave"]
     history = [autosave_record(row) for row in raw_history]
     refreshed = {
@@ -9222,6 +9349,7 @@ class Store:
     Keep the agent key record that the page posts on load.
     Keep the recorded server port for the next command's live-server check."""
     guard_task_runs(self.path.parent, action="clear state")
+    self.rotate_backup()
     counts = {}
     with self.transaction() as db:
       for table in (
@@ -9240,6 +9368,11 @@ class Store:
       db.execute("DELETE FROM meta")
       for key, value in kept:
         db.execute("INSERT INTO meta VALUES (?, ?)", (key, value))
+      db.execute("INSERT OR REPLACE INTO meta VALUES (?, '1')", (CLEARED_META,))
+      db.execute(
+        "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+        (FORCE_SAVE_META, str(uuid.uuid4())),
+      )
     return counts
 
   def mark_report_seen(self, report_id):
@@ -12633,7 +12766,7 @@ def main():
   task_remove = task_verbs.add_parser("remove", help="Delete task by ID")
   task_remove.add_argument("task_id")
   state_group = commands.add_parser(
-    "state", help="Import, compare, or clear stored state"
+    "state", help="Import, compare, save, restore, or clear stored state"
   )
   state_verbs = state_group.add_subparsers(dest="verb", required=True)
   state_import = state_verbs.add_parser(
@@ -12647,6 +12780,20 @@ def main():
     help="Compare NDJSON backup against live state without changing state",
   )
   state_compare.add_argument("source", nargs="?", type=Path)
+  state_verbs.add_parser(
+    "save",
+    help="Snapshot live state to state-latest.ndjson and queue userscript local sync",
+  )
+  state_restore = state_verbs.add_parser(
+    "restore",
+    help="Restore state-latest.ndjson or state-previous.ndjson and queue userscript local sync",
+  )
+  state_restore.add_argument(
+    "-p",
+    "--previous",
+    action="store_true",
+    help="Restore state-previous.ndjson instead of state-latest.ndjson",
+  )
   state_verbs.add_parser(
     "clear",
     help="Empty all state tables in place; keep agent key record",
@@ -12675,6 +12822,8 @@ def main():
     ("task", "unlink"): "task-unlink",
     ("state", "import"): "import-state",
     ("state", "compare"): "compare-state",
+    ("state", "save"): "save-state",
+    ("state", "restore"): "restore-state",
     ("state", "clear"): "clear-state",
   }
   args.command = grouped_commands.get((args.command, verb), args.command)
@@ -12821,7 +12970,7 @@ def main():
       return gate_verdict(state_dir, args.push, args.line)
     store = Store(
       state_dir,
-      create=args.command in {"serve", "init", "import-state"},
+      create=args.command in {"serve", "init", "import-state", "restore-state"},
     )
     global DISPLAY_ZONE
     DISPLAY_ZONE = resolve_display_zone(store)
@@ -13151,6 +13300,16 @@ def main():
           f"No such state file: {error.filename or source_path}"
         ) from None
       print(format_state_comparison(store.compare_state(text), source=source_path))
+    elif args.command == "save-state":
+      saved = store.save_backup()
+      print(
+        f"Saved state to {saved['latest_path']} "
+        f"(notes {saved['notes']}, tasks {saved['tasks']}, "
+        f"reports {saved['reports']}, answers {saved['answers']}); "
+        "queued local sync."
+      )
+    elif args.command == "restore-state":
+      print(format_import_receipt(store.restore_state(previous=args.previous)))
     elif args.command == "clear-state":
       print(format_clear_state(store.clear_state()))
     elif args.command == "init":

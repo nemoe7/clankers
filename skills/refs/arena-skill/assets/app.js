@@ -1308,6 +1308,14 @@ function renderState() {
   renderTasksIfChanged(state.tasks);
   renderFetchIfChanged(state.fetch_jobs || []);
   renderAgentKey(state.agent_key, state.repo);
+  if (state.force_save_id && state.force_save_id !== lastForceSaveId) {
+    lastForceSaveId = state.force_save_id;
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window &&
+        typeof window.parent.postMessage === 'function') {
+      try { window.parent.postMessage({ type: 'clankers:force-save', save_id: state.force_save_id }, '*'); }
+      catch {}
+    }
+  }
   paintSkipPoll(state.skip_poll);
   paintInterrupt(state.agent_interrupt_pending);
   showWorkspace(state.workspace);
@@ -1960,6 +1968,7 @@ setInterval(showClock, 1000);
   // One request carries the server's NDJSON, which matches the save file.
   const copyStateButton = $('#copy-state');
   let userscriptForceSave = false;
+  let lastForceSaveId = null;
   function enableUserscriptForceSave() {
     userscriptForceSave = true;
     setIcon(copyStateButton, 'save', 16);

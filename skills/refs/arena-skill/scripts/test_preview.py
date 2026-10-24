@@ -14744,3 +14744,49 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   monkeypatch.setattr(lock_store, "connect", single_connection_only)
   receipt = lock_store.import_state(exported_ndjson, replace_tasks=True)
   assert receipt["tasks"] == 1 and receipt["notes"] == 1
+
+  backup_root = tmp_path / "rolling-backup-state"
+  backup_store = preview.Store(backup_root, create=True)
+  backup_store.set_meta("port", guard_port())
+  backup_store.note("b11111", "first backup note")
+  backup_store.write_task(
+    "backup-task-1",
+    "Rolling backup task",
+    ["Verify latest and previous backup files"],
+    status="upcoming",
+    task_type="code",
+    scope="skills/refs/arena-skill/",
+  )
+  latest_file = backup_root / "backups" / "state-latest.ndjson"
+  prev_file = backup_root / "backups" / "state-previous.ndjson"
+  assert latest_file.is_file()
+  assert "b11111" in latest_file.read_text(encoding="utf-8")
+
+  # Cold-start auto-restore when state.sqlite3 is missing and state-latest.ndjson exists.
+  (backup_root / "state.sqlite3").unlink()
+  cold_store = preview.Store(backup_root, create=True)
+  cold_store.set_meta("port", guard_port())
+  assert [n["id"] for n in cold_store.state()["notes"]] == ["b11111"]
+  assert [t["id"] for t in cold_store.tasks()["upcoming"]] == ["backup-task-1"]
+
+  # state clear rotates state-latest.ndjson to state-previous.ndjson and sets force=True.
+  cleared_counts = cold_store.clear_state()
+  assert cleared_counts["notes"] == 1 and cleared_counts["tasks"] == 1
+  assert prev_file.is_file() and "b11111" in prev_file.read_text(encoding="utf-8")
+  assert cold_store.userscript_snapshot()["force"] is True
+  # Explicitly cleared store does not auto-restore on reopen.
+  reopened_cleared = preview.Store(backup_root, create=True)
+  assert reopened_cleared.state()["notes"] == []
+
+  # state restore --previous restores state-previous.ndjson and sets force=True.
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: str(backup_root))
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "state", "restore", "-p"])
+  assert preview.main() == 0
+  capsys.readouterr()
+  assert [n["id"] for n in cold_store.state()["notes"]] == ["b11111"]
+  assert cold_store.userscript_snapshot()["force"] is True
+
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "state", "save"])
+  assert preview.main() == 0
+  assert "state-latest.ndjson" in capsys.readouterr().out
+  assert cold_store.userscript_snapshot()["force"] is True
