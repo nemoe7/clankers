@@ -314,7 +314,7 @@ async function a11yChecks(page) {
             severity: 'review',
             criterion: '2.5.8',
             selector: selectorFor(control),
-            evidence: `Icon-only button ${selectorFor(control)} is ${Math.round(box.width)}x${Math.round(box.height)} px (not square)`,
+            evidence: `Icon-only button ${selectorFor(control)} is ${Math.round(box.width)}x${Math.round(box.height)} px (not symmetric)`,
           });
         }
       }

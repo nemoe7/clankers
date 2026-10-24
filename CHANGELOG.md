@@ -15,6 +15,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### nuu
 
 - Export `DEVICE_BREAKPOINTS` (`75em`, `60em`, `40em` width and `30em` height) from `scripts/uiux.py`, and enable mobile touch emulation when viewport height is at most `480` px (`30em`) in `scripts/browser.cjs`.
+- Describe icon-only buttons as `symmetric` instead of `square` in Clause 6 (`SKILL.md`), `scripts/measure.py`, and `scripts/browser.cjs`.
 
 ### Changed
 

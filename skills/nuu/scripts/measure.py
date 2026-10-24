@@ -171,7 +171,7 @@ def check_density(report: dict) -> list[dict]:
           "rule": "UIX208",
           "selector": selector,
           "evidence": (
-            f"{selector}: icon-only button is {width:g}x{height:g} px (not square)"
+            f"{selector}: icon-only button is {width:g}x{height:g} px (not symmetric)"
           ),
         }
       )
