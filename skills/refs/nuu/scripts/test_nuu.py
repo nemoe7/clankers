@@ -213,7 +213,7 @@ def test_rendered_public_flow_and_live_evidence(tmp_path):
 body {margin:16px;font:16px sans-serif;background:#fff;color:#111}
 @media(prefers-color-scheme:dark){body{background:#111;color:#fff}}
 input,button {font:inherit;min-height:44px;max-width:100%;box-sizing:border-box}
-:focus-visible{outline:2px solid #08c;outline-offset:2px}
+:focus-visible{outline:2px solid #08c;outline-offset:0}
 main {max-width:640px} [hidden]{display:none}
 </style></head><body><main><h1>Tool fixture</h1><form id="form">
 <label for="entry">Value</label><input id="entry"><button id="send">Continue</button>

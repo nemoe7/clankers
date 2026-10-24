@@ -254,7 +254,7 @@ body {
 
 :focus-visible {
   outline: var(--focus-ring) solid var(--focus);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 /* Rows and panels */

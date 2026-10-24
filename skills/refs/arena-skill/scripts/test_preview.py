@@ -1903,7 +1903,7 @@ def test_http_boundaries():
         page,
       )
       assert (
-        ":focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--focus)"
+        ":focus-visible{outline:2px solid var(--accent);outline-offset:0;border-color:var(--focus)"
         in page
       )
       assert "resize:none;min-height:72px;overflow:hidden" in page

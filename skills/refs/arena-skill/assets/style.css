@@ -164,7 +164,7 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 #attach-file { min-height: 0; width: 30px; height: 30px; padding: 0; flex: none; }
 #attach-file, #preview-note, #composer-expand { background: transparent; border-color: transparent; }
 :is(#attach-file, #preview-note, #composer-expand):hover:not(:disabled), #preview-note[aria-pressed="true"], #composer-expand[aria-expanded="true"] { background: var(--hover); }
-:is(#attach-file, #preview-note, #composer-expand):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+:is(#attach-file, #preview-note, #composer-expand):focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
 #compose[data-dragging] { outline: 2px dashed var(--accent); outline-offset: -4px; }
 #preview-note { display: inline-flex; align-items: center; justify-content: center; min-height: 0; width: 30px; height: 30px; padding: 0; }
 .row.tight { gap: 8px; margin: 0; flex: 0 0 auto; flex-wrap: nowrap; }
@@ -180,7 +180,7 @@ button, select, textarea, input[type="url"], input[type="search"] { font: inheri
 button { padding: 7px 11px; min-height: 36px; cursor: pointer; }
 button:hover:not(:disabled) { background: var(--hover); }
 button:disabled { opacity: .55; cursor: wait; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--focus); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--focus); }
 textarea { width: 100%; padding: 10px 12px; line-height: 1.6; resize: none; min-height: 72px; overflow: hidden; }
 textarea::placeholder { color: var(--muted); opacity: 0.5; }
 /* Every select draws the same chevron in CSS, so no markup adds a caret or a data image. */
@@ -583,7 +583,7 @@ mark code { color: var(--text); }
 
 #modal[data-read-only="true"] button:not(.modal-close, .copy-code, .preview-code-md) { min-height: 44px; touch-action: manipulation; }
 #survey-again { display: inline-flex; align-items: center; gap: 6px; }
-#modal[data-read-only="true"] button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#modal[data-read-only="true"] button:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 #modal:not([data-keyboard-nav="true"]) :focus-visible { outline: 0; border-color: var(--border); }
 #survey-open { touch-action: manipulation; }
 #image-modal { width: 100vw; max-width: 100vw; height: var(--app-height, 100dvh); max-height: var(--app-height, 100dvh); margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); overflow: hidden; touch-action: none; }
