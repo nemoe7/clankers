@@ -130,12 +130,12 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 #reports-panel, #tasks-panel, #downloads-panel { overflow-y: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
 /* The message log fills remaining height above the composer so the panel itself never scrolls. */
-.log-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-block: 12px 0; margin-bottom: -14px; }
+.log-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-block: 12px 0; }
 /* The log header wraps into four short lines on a narrow width, and the row's 12px wrap gap
    spread them into dead space. The lines sit close now, so the header reads as one block. */
-.log-card > .row:first-child { margin-block: 0; row-gap: 2px; }
-.card.compose { flex: 0 0 auto; padding: 8px; }
-.notes-layout > .composer-footer { flex: none; padding-inline: 18px; }
+.log-card > .row:first-child { margin-block: 0; row-gap: 2px; position: relative; z-index: 2; }
+.card.compose { flex: 0 0 auto; padding: 8px; position: relative; z-index: 2; }
+.notes-layout > .composer-footer { flex: none; padding-inline: 18px; position: relative; z-index: 2; }
 .notes-layout:has(#compose[data-expanded]) .log-card { display: none; }
 #form { min-height: 0; }
 .composer-shell { position: relative; display: grid; grid-template-columns: 30px 30px minmax(0, 1fr) 30px; grid-template-areas: "attach preview input send"; gap: 8px; align-items: center; }
@@ -517,7 +517,7 @@ mark code { color: var(--text); }
   opacity: 0; pointer-events: none;
 }
 
-:root { --motion-duration: 160ms; --edge-fade: 24px; --edge-ramp: 192px; }
+:root { --motion-duration: 160ms; --edge-fade: 36px; --edge-ramp: 192px; }
 @property --edge-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --edge-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @media (prefers-reduced-motion: no-preference) {
