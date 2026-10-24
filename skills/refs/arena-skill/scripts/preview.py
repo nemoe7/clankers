@@ -10211,7 +10211,9 @@ def handler(store):
           report = store.report(report_id)
           if type == "html":
             try:
-              body, questions = render_report(report["markdown"])
+              body, questions = render_report(
+                report["markdown"], title=report.get("title")
+              )
             except ValueError as error:
               # A report saved before field validation can still fail to render. Do_GET returns its ValueError.
               # Otherwise the connection closes without a response and the tab cannot explain the fetch failure.

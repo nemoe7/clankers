@@ -3390,7 +3390,7 @@ def handler(store):
 				if match:
 					report_id,type=match.groups();report=store.report(report_id)
 					if type=='html':
-						try:body,questions=render_report(report['markdown'])
+						try:body,questions=render_report(report['markdown'],title=report.get('title'))
 						except ValueError as error:self.problem(500,f"This report cannot be rendered: {error}");return
 						self.reply(200,json.dumps({'html':body,'fields':len(questions),'warnings':report_marker_warnings(report['markdown']),'revision':report['updated_at'],'published':report['published_at']or report['updated_at'],'edited':report['updated_at']},ensure_ascii=False));return
 					self.reply(200,report['markdown'],'text/plain; charset=utf-8',f"{report_id}.md");return

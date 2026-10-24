@@ -30,7 +30,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add Clause 17 to `SKILL.md` requiring 24-hour time by default, 12-hour time when requested, and a 24h/12h option in settings when settings exist.
 - Suppress initial modal `:focus-visible` outlines until keyboard navigation in `references/recipes/modal-manager.md`, extend `references/recipes/scroll-edge-fade.md` to scrollable `textarea` inputs, and include recipe deviations in `SKILL.md` and `references/audit-report.md`.
 - Add Clause 18 to `SKILL.md` and `references/recipes/loading-bar.md` for subtle delayed edge loading bars (`200ms` delay, `aria-busy` region, left-origin `scaleX` growth, and `prefers-reduced-motion` fallback). Reserve loud loading bars for explicit requests.
-- Add Clause 22 to `SKILL.md` and `references/recipes/relative-timestamps.md` defining full (`just now`, `a second/minute/hour ago`, `yesterday`, `last week/month/year`, `X <units> ago`) and abbreviated (`now`, `Xs`, `Xmin`, `Xh`, `Xd`, `Xwk`, `Xmo`, `Xyr ago`) relative timestamps, with seconds omitted unless requested.
+- Add Clause 22 to `SKILL.md` and `references/recipes/relative-timestamps.md` for full and abbreviated relative timestamps. Omit seconds unless second-level resolution is requested.
 
 ### Changed
 

@@ -14581,6 +14581,18 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     == 130
   )
   monkeypatch.setattr(preview.subprocess, "run", real_subproc_run)
+  auto_h1_html, _ = preview.render_report(
+    "Status: proposal. No line lands before approval.\n",
+    title="Proposal Title <safe>",
+  )
+  assert auto_h1_html.startswith("<h1>Proposal Title &lt;safe&gt;</h1>\n")
+  existing_h1_html, _ = preview.render_report(
+    "# Custom Heading\n\nBody text.\n",
+    title="Fallback Title",
+  )
+  assert existing_h1_html.count("<h1") == 1
+  assert "<h1>Custom Heading</h1>" in existing_h1_html
+  assert "Fallback Title" not in existing_h1_html
   style_text = (
     preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
