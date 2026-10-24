@@ -23,7 +23,7 @@ Suppress a source-lint finding on a line with `nonuu: <ID>` (for example, `<!-- 
 
 | Code | Pass | Condition |
 | --- | --- | --- |
-| `NUL001`–`NUL003` | Source (`lint`) | Missing image `alt` (`NUL001`), missing control naming evidence (`NUL002`), or `outline: none` / `0` (`NUL003`) |
+| `NUL001`–`NUL004` | Source (`lint`) | Missing image `alt` (`NUL001`), missing control naming evidence (`NUL002`), `outline: none` / `0` (`NUL003`), or missing `docs/design.md` (`NUL004`) |
 | `NUB101`–`NUB103` | Browser (`inspect`, `flow`) | Horizontal overflow (`NUB101`), runtime console/page error (`NUB102`), or failed interaction flow (`NUB103`) |
 | `NUB104` | Browser (`--ready`) | Declared `--ready SELECTOR` did not match a visible element within the timeout |
 | `NUM201`–`NUM204` | Measure (`--measure`) | Off-scale spacing, off-ramp typography, unapproved border radius, or text contrast below 4.5:1 (`3:1` large text) |

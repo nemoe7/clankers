@@ -19,7 +19,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Export `DEVICE_BREAKPOINTS` (`75em`, `60em`, `40em` width and `30em` height) from `scripts/uiux.py`, and enable mobile touch emulation when viewport height is at most `480` px (`30em`) in `scripts/browser.cjs`.
 - Describe icon-only buttons as `symmetric` instead of `square` in Clause 6 (`SKILL.md`), `scripts/measure.py`, and `scripts/browser.cjs`.
-- Rename `UIX001`–`UIX306` rule IDs to `NUL001`–`NUL003` (lint), `NUB101`–`NUB104` (browser/flow), `NUM201`–`NUM208` (measure/density), and `NUA301`–`NUA306` (accessibility), and change the inline suppression marker from `noui:` to `nonuu:`.
+- Rename `UIX001`–`UIX306` rule IDs to `NUL001`–`NUL004` (including `NUL004` for missing `docs/design.md`), `NUB101`–`NUB104`, `NUM201`–`NUM208`, and `NUA301`–`NUA306`. Change `noui:` to `nonuu:`.
 - Raise `MIN_INK_RATIO` (`NUM205`) to `0.75` and automatically exempt header and toolbar bars (`<header>`, `<nav>`, `<footer>`, toolbar roles, and single-row `space-between` control bars). Add Clause 16 mandating shared-track min/max range sliders and integer step snap points, and Clause 17 (`references/recipes/modal-manager.md`) mandating a shared `<dialog>` modal manager.
 - Update `references/audit-report.md` and `SKILL.md` to lead with `Status`, `Counts`, and non-empty `Unrun Checks`, capture dark-themed breakpoints plus mobile, and show cropped, annotated `Before` and `After` columns in `Visual Judgments` and `Deviations`.
 

@@ -42,11 +42,17 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
 
   before = {path: path.read_bytes() for path in (css, page)}
   findings = run("lint", expected=1)
-  assert {row["rule"] for row in findings["findings"]} >= {"NUL001", "NUL002"}
+  assert {row["rule"] for row in findings["findings"]} >= {"NUL001", "NUL002", "NUL004"}
   assert all(row["line"] > 0 and row["evidence"] for row in findings["findings"])
   page.write_text(
     '<img src="art.svg" alt=""><label>Field<input></label>\n', encoding="utf-8"
   )
+  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"NUL004"}
+  missing_doc_audit = run("audit", expected=1)
+  assert {row["rule"] for row in missing_doc_audit["findings"]} == {"NUL004"}
+  design_doc = root / "docs" / "design.md"
+  design_doc.parent.mkdir(exist_ok=True)
+  design_doc.write_text("# Design\n", encoding="utf-8")
   assert not run("lint")["findings"]
   page.write_text('<img src="art.svg"> <!-- nonuu: NUL0010 -->\n', encoding="utf-8")
   assert run("lint", expected=1)["findings"]

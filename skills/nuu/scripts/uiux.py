@@ -29,7 +29,7 @@ from measure import (
 from measure import check as check_measurements
 from measure import main as measure_main
 
-VERSION = "0.1.11"
+VERSION = "0.1.12"
 NAMED_BREAKPOINTS = ("75em", "60em", "40em", "30em")
 MEDIA_BREAKPOINT_RE = re.compile(
   r"@media\b[^{]*?\(\s*(?:min|max)-(?:width|height)\s*:\s*([0-9.]+(?:em|rem|px))\s*\)",
@@ -268,6 +268,24 @@ def lint(root):
       ignored = set(re.findall(r"\bnonuu:\s*([A-Za-z0-9_-]+)", line))
       if finding["rule"] not in ignored:
         findings.append(finding)
+  docs_dir = root / "docs"
+  has_design_doc = (docs_dir / "design.md").is_file() or (
+    docs_dir.is_dir()
+    and any(p.is_file() and not p.is_symlink() for p in docs_dir.rglob("design.md"))
+  )
+  if not has_design_doc:
+    findings.append(
+      {
+        "rule": "NUL004",
+        "path": str(docs_dir / "design.md"),
+        "line": 1,
+        "column": 1,
+        "severity": "review",
+        "status": "source_candidate",
+        "evidence": "Missing docs/design.md",
+        "criterion": "clause-11",
+      }
+    )
   return {
     "findings": findings,
     "coverage": coverage,
