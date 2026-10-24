@@ -3086,7 +3086,7 @@ test('preview client', async (t) => {
     const report = 'summarize-stops';
     context.reportStatusLine('', report, answer);
     const codes = get('#report-status').children.filter(child => child.className === 'note-id');
-    assert.deepEqual(codes.map(code => code.dataset.full), [answer, report]);
+    assert.deepEqual(codes.map(code => code.dataset.full), [report, answer]);
     const answerCode = codes.find(code => code.dataset.full === answer);
     assert.equal(answerCode.textContent, answer.slice(0, 6));
     get('#note').value = '';

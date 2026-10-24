@@ -1815,7 +1815,7 @@ function reportStatusLine(text, id, answerId = null) {
     return;
   }
   const parts = [];
-  for (const [value, full] of [[answerId, false], [id, true]]) {
+  for (const [value, full] of [[id, true], [answerId, false]]) {
     if (!value) continue;
     const code = document.createElement('code');
     code.className = 'note-id';
@@ -2459,7 +2459,7 @@ async function loadReport(force = false) {
   if (keepEntries()) return;
   const revision = getState()?.reports.find(report => report.id === id)?.updated_at || '';
   if (!updating || !id) {
-    $('#report').replaceChildren();
+    clearReportBody();
     $('#report-submit').hidden = true;
   }
   if (!id) {
@@ -2478,7 +2478,9 @@ async function loadReport(force = false) {
     const html = await renderMermaidBlocks(result.html, sequence);
     if (sequence !== reportRequest || keepEntries()) return;
     reportDirty = false;
+    if ($('#report-status') && $('#report-form')) $('#report-form').insertBefore?.($('#report-status'), $('#report'));
     $('#report').innerHTML = html;
+    placeReportStatus();
     $('#report').dataset.reportId = id;
     $('#report').dataset.updatedAt = revision;
     $('#report').dataset.revision = result.revision;
