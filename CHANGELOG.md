@@ -42,6 +42,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Measure Bash duration (`--elapsed "$SECONDS"`) in `install.sh` and `preview.py` (`slow_bash_hint`). Emit a stderr hint for `arena-preview run start` after 10-second non-preview calls.
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
+- Require descriptive `arena-preview run start <name>` gate IDs naming what the gate runs (`-2`, `-3`, ... on retries) in `ARENA.md` and `SKILL.md`.
 
 #### userscripts
 

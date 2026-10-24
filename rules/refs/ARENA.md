@@ -242,7 +242,7 @@
 - For Chromium work, follow the [Chromium recipe](.agents/skills/arena-skill/references/recipes/chromium.md).
 - For ui work, verify changes with screenshots taken by that pinned chromium package and read the rendered result before the change counts as landed; when `nuu` is available and used for a UI task or audit, embed its screenshots, including before-and-after images, in the published report for user review.
 - Install repository tooling such as dependencies and virtual environments with `arena-preview run start` after the visibility question and before the first `poll` or `read`, so the install runs detached without blocking a task; reserve `start_process` for the steering preview and demos or presentations.
-- Treat a run that takes 10 seconds or more as a long run.
+- Treat a run that takes 10 seconds or more as a long run; start it with `arena-preview run start <name> -- <command>`, naming `<name>` after what the gate runs (never a generic ID such as `gate123`) and appending `-2`, `-3`, ... for retries after a failure.
 - Start each local background gate on a stable tree and do not edit its covered root files while it runs; a remote PR CI watch does not freeze the working tree.
 - The freeze covers the root tree only: with queued tasks that edit other files, start a worktree for that work while the root gate runs (`arena-preview worktree start`), and do not wait read-only.
 - NEVER sleep while a gate runs in the background.
