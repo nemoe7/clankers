@@ -4132,7 +4132,6 @@ $('#agent-interrupt').addEventListener('click', async () => {
         name: 'note',
         label: 'Cited reason (optional)',
         type: 'textarea',
-        maxLength: 300,
         placeholder: 'Which clause, and what happened?',
       },
     ],

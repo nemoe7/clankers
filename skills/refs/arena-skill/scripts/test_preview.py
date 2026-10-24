@@ -12064,6 +12064,16 @@ def test_flag_carries_type_clause_file_and_cited_reason():
         assert status == 200, body
         assert store.pending_violation_note()["text"].splitlines() == lines
         clear_flag()
+      long_note = "x" * 500
+      status, _, body = request(
+        "POST",
+        "/api/agent-interrupt",
+        json.dumps({"tab": "notes", "reason": "bash-violation", "note": long_note}),
+        headers,
+      )
+      assert status == 200, body
+      assert long_note in store.pending_violation_note()["text"]
+      clear_flag()
       for payload, field in [
         ({"tab": "notes", "reason": "not-a-type"}, "reason"),
         ({"tab": "reports", "reason": "bash-violation"}, "reason"),
@@ -12071,7 +12081,7 @@ def test_flag_carries_type_clause_file_and_cited_reason():
           {"tab": "notes", "reason": "bash-violation", "clause_file": "docs/STYLE.md"},
           "clause_file",
         ),
-        ({"tab": "notes", "reason": "bash-violation", "note": "x" * 301}, "note"),
+        ({"tab": "notes", "reason": "bash-violation", "note": 123}, "note"),
       ]:
         status, _, body = request(
           "POST", "/api/agent-interrupt", json.dumps(payload), headers

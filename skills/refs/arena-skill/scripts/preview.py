@@ -7926,8 +7926,6 @@ class Store:
     if note is not None and not isinstance(note, str):
       raise ValueError("note must be text")
     cited = " ".join((note or "").split())
-    if len(cited) > 300:
-      raise ValueError("note must contain at most 300 characters")
     evidence = []
     if reason is not None:
       # The approved notice text omits the clause file. The page sends it with the flag.

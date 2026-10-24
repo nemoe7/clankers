@@ -2635,9 +2635,7 @@ class Store:
 		if reason is not None and reason not in VIOLATION_TYPES[tab]:raise ValueError('reason must name a violation type for this tab')
 		if clause_file not in(None,'')and clause_file not in read_set_files(self.repository_root()):raise ValueError('clause_file must name a path in the bible')
 		if note is not None and not isinstance(note,str):raise ValueError('note must be text')
-		cited=' '.join((note or'').split())
-		if len(cited)>300:raise ValueError('note must contain at most 300 characters')
-		evidence=[]
+		cited=' '.join((note or'').split());evidence=[]
 		if reason is not None:
 			heading=f"User flagged violation: {reason}."
 			if cited:heading+=f" Cited: {cited}"

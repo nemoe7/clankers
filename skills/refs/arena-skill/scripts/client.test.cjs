@@ -4755,7 +4755,7 @@ test('preview client', async (t) => {
       assert.deepEqual(values(1), ['', 'AGENTS.md', 'ARENA.md'],
         'the clause files come from the state bible');
       assert.equal(control(1).options[0].text, 'No clause file');
-      assert.equal(control(2).maxLength, 300);
+      assert.equal(control(2).maxLength, undefined);
       assert.equal(control(0).focused, true, 'the type takes focus on open');
       assert.equal(button.disabled, false, 'an open dialog leaves the flag free');
       control(1).value = 'AGENTS.md';

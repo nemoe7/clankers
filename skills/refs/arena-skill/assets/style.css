@@ -489,7 +489,7 @@ mark code { color: var(--text); }
 .slash-token { display: inline; color: transparent; background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 4px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
 #modal .field { margin: 0 0 12px; font-size: 16px; font-weight: 400; }
 #modal .field > span { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 650; }
-#modal textarea { min-height: 64px; }
+#modal textarea { min-height: 64px; max-height: 180px; overflow-y: auto; }
 #modal-error { margin: 0 0 10px; color: #ef4444; font-size: 14px; }
 .modal-actions { justify-content: flex-end; margin: 0; }
 
