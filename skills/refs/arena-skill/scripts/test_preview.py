@@ -1859,6 +1859,10 @@ def test_http_boundaries():
       for identity in ("agent-key", "send-status"):
         marker = f'id="{identity}"'
         assert marker in page and marker not in composer.group(1)
+      assert (
+        ".notes-layout>.composer-footer{flex:none;align-items:center;text-align:center;"
+        in page
+      )
       assert "resize:none" in page and "resize:vertical" not in page
       assert "#notes-panel{overflow:clip" in page
       assert "#reports-panel,#tasks-panel,#downloads-panel{overflow-y:auto" in page
