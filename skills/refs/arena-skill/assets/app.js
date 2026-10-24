@@ -2383,9 +2383,10 @@ function taskFilterType(task) {
 function taskTooltip(task) {
   const stamp = task.completed_at || task.updated_at;
   const age = stamp ? time(stamp) : '';
-  const first = [task.order, age].filter(part => part !== undefined && part !== null && part !== '').join(' ');
+  const hasOrder = task.order !== undefined && task.order !== null && task.order !== '';
+  const first = hasOrder ? `${task.order}. ${task.id}` : task.id;
   const runs = Array.isArray(task.runs) && task.runs.length ? task.runs.join(' ') : '';
-  return [first, task.id, runs].filter(Boolean).join('\n');
+  return [first, age, runs].filter(Boolean).join('\n');
 }
 function rowTaskId(row) {
   return row?.dataset?.taskId || row?.querySelector?.('.task-title')?.dataset?.taskId || row?.title || '';

@@ -1393,8 +1393,8 @@ test('preview client', async (t) => {
       for (const part of [gateRow, taskPart(gateRow, 'task-type'), taskPart(gateRow, 'task-details')]) {
         assert.equal(part.dataset.waitingGate, undefined, 'the blue marker stays off the row, badge, and details');
       }
-      assert.equal(gateRow.title, `2 ${context.time(state.tasks.upcoming[1].updated_at)}\nwaits-on-gate\npreview-checks`,
-        'the row tooltip shows order, relative timestamp, task ID, and running gate ID across lines');
+      assert.equal(gateRow.title, `2. waits-on-gate\n${context.time(state.tasks.upcoming[1].updated_at)}\npreview-checks`,
+        'the row tooltip shows order, task ID, relative timestamp, and running gate ID across lines');
       assert.equal(gateTitle.title, gateRow.title, 'the title shares the multiline task tooltip');
     } finally {
       state.tasks.upcoming = saved;
@@ -1412,11 +1412,11 @@ test('preview client', async (t) => {
     assert.equal(detailList.children[0].className, 'task-detail');
     assert.equal(detailList.children[0].textContent, 'its only detail');
     assert.equal(upcomingBody.children[0].dataset.taskId, 'second', 'hover shows the task ID, not its detail');
-    assert.equal(upcomingBody.children[0].title, `2 ${context.time(state.tasks.upcoming[1].updated_at)}\nsecond`,
-      'hover formats order, relative timestamp, and task ID across lines');
+    assert.equal(upcomingBody.children[0].title, `2. second\n${context.time(state.tasks.upcoming[1].updated_at)}`,
+      'hover formats order, task ID, and relative timestamp across lines');
     assert.equal(finishedBody.children.length, 1);
     assert.equal(finishedBody.children[0].dataset.taskId, 'shipped');
-    assert.equal(finishedBody.children[0].title, `1 ${context.time(state.tasks.finished[0].updated_at)}\nshipped`);
+    assert.equal(finishedBody.children[0].title, `1. shipped\n${context.time(state.tasks.finished[0].updated_at)}`);
     assert.equal(finishedBody.children[0].children.length, 1);
     assert.equal(finishedBody.children[0].children[0].textContent, 'Dots in the receipt');
     assert.equal(get('#tasks-finished').hidden, false);
@@ -1543,7 +1543,7 @@ test('preview client', async (t) => {
     assert.equal(currentTitle.textContent, '<img onerror=alert(1)> dir');
     assert.equal(currentTitle.className, 'task-title');
     assert.equal(currentBody.children[0].dataset.taskId, 'docs-archive');
-    assert.equal(currentBody.children[0].title, `1 ${context.time(state.tasks.upcoming[0].updated_at)}\ndocs-archive`);
+    assert.equal(currentBody.children[0].title, `1. docs-archive\n${context.time(state.tasks.upcoming[0].updated_at)}`);
     taskControl = currentTitle;
     assert.equal(taskControl.dataset.taskId, 'docs-archive');
     assert.equal(taskControl.attributes.role, 'button');
@@ -4377,7 +4377,7 @@ test('preview client', async (t) => {
       documentEvents.click({ target: title, preventDefault: () => {} });
       assert.equal(get('#note').value.startsWith('RE: hover-stays'), true, 'the quote still lands');
       assert.equal(title.title, row.title, 'the quoted title retains the task ID tooltip');
-      assert.equal(row.title, `2 ${context.time(stamp)}\nhover-stays`, 'the row keeps the multiline task tooltip');
+      assert.equal(row.title, `2. hover-stays\n${context.time(stamp)}`, 'the row keeps the multiline task tooltip');
     } finally {
       state.tasks = priorTasks;
       get('#note').value = '';
