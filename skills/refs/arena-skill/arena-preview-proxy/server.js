@@ -1,0 +1,619 @@
+'use strict';
+
+const fs = require('node:fs');
+const http = require('node:http');
+const https = require('node:https');
+const path = require('node:path');
+const zlib = require('node:zlib');
+
+const PORT = Number(process.env.PORT || 8080);
+const HOP_BY_HOP_HEADERS = [
+  'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
+  'te', 'trailer', 'transfer-encoding', 'upgrade', 'proxy-connection'
+];
+// Browser navigation metadata triggers Arena's mobile preview gate, so the proxy
+// drops it before the upstream request.
+const FETCH_METADATA_HEADERS = [
+  'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-user', 'referer'
+];
+const ALLOWED_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
+const PREVIEW_HOST = /^sbx-[a-z0-9-]+\.arena\.site$/i;
+const ASSET_TYPES = {
+  'register.js': 'text/javascript; charset=utf-8',
+  'recent.js': 'text/javascript; charset=utf-8',
+  'service-worker.js': 'text/javascript; charset=utf-8',
+  'icon.svg': 'image/svg+xml',
+  'icon-192.png': 'image/png',
+  'icon-512.png': 'image/png'
+};
+const ASSETS = path.join(__dirname, 'assets');
+// The head rewrite buffers one small page. A larger body streams untouched.
+const HEAD_CAP = 1_000_000;
+const RECENT_LIMIT = 10;
+const RECENT_MAX_LABEL = 48;
+const RECENT_BODY_CAP = 4096;
+let recentEntries = [];
+const removedRoots = new Set();
+
+function isUnavailableLabel(value) {
+  return /\b(?:preview\s+)?unavailable\b/i.test(String(value ?? '').trim());
+}
+
+function cleanRecentLabel(value) {
+  const cleaned = String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, RECENT_MAX_LABEL);
+  return isUnavailableLabel(cleaned) ? '' : cleaned;
+}
+
+function rememberRecent(entries, rawUrl, rawName, removed, manual = false) {
+  let candidate = String(rawUrl ?? '').trim();
+  try {
+    candidate = `${new URL(candidate).origin}/`;
+  } catch {
+    // Let parseSelectedUrl report the invalid URL below.
+  }
+  const selected = parseSelectedUrl(candidate);
+  const url = selected.origin;
+  const name = cleanRecentLabel(rawName);
+  if (!manual && removed && removed.has(url)) {
+    return entries;
+  }
+  if (removed) removed.delete(url);
+  const existing = entries.find(item => item.url === url);
+  const isManual = Boolean(manual || (existing && existing.manual));
+  const resolvedName = manual
+    ? (name || (existing ? existing.name : ''))
+    : ((existing && existing.name) ? existing.name : name);
+  const updated = { url, name: resolvedName, manual: isManual };
+  if (!manual && existing) {
+    return entries.map(item => (item.url === url ? updated : item));
+  }
+  const rest = entries.filter(item => item.url !== url);
+  if (isManual) {
+    return [updated, ...rest].slice(0, RECENT_LIMIT);
+  }
+  const manualEntries = rest.filter(item => item.manual);
+  const scriptEntries = rest.filter(item => !item.manual);
+  return [...manualEntries, updated, ...scriptEntries].slice(0, RECENT_LIMIT);
+}
+
+function forgetRecent(entries, rawUrl, removed) {
+  let url;
+  try {
+    url = parseSelectedUrl(`${new URL(String(rawUrl ?? '').trim()).origin}/`).origin;
+  } catch {
+    url = String(rawUrl ?? '').replace(/\/+$/, '');
+  }
+  if (removed && /^https:\/\/sbx-[a-z0-9-]+\.arena\.site$/i.test(url)) removed.add(url);
+  return entries.filter(item => item.url !== url);
+}
+
+function sendJson(res, status, payload, cors = false) {
+  const headers = {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff'
+  };
+  if (cors) {
+    headers['access-control-allow-origin'] = '*';
+    headers['access-control-allow-methods'] = 'GET, POST, OPTIONS';
+    headers['access-control-allow-headers'] = 'content-type';
+    headers['access-control-allow-private-network'] = 'true';
+  }
+  res.writeHead(status, headers);
+  res.end(JSON.stringify(payload));
+}
+
+function serveRecent(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
+      'access-control-allow-headers': 'content-type',
+      'access-control-allow-private-network': 'true',
+      'cache-control': 'no-store'
+    });
+    return res.end();
+  }
+  if (req.method === 'GET') {
+    recentEntries = recentEntries.filter(item => !isUnavailableLabel(item.name));
+    return sendJson(res, 200, { entries: recentEntries, removed: [...removedRoots] }, true);
+  }
+  if (req.method !== 'POST') {
+    return sendJson(res, 405, { error: 'Method not allowed.' }, true);
+  }
+  const chunks = [];
+  let size = 0;
+  let overflow = false;
+  req.on('data', chunk => {
+    size += chunk.length;
+    if (size > RECENT_BODY_CAP) {
+      overflow = true;
+      return;
+    }
+    chunks.push(chunk);
+  });
+  req.on('end', () => {
+    if (overflow) return sendJson(res, 413, { error: 'Payload too large.' }, true);
+    let body;
+    try {
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    } catch {
+      return sendJson(res, 400, { error: 'Invalid JSON payload.' }, true);
+    }
+    if (body && (body.remove === true || body.forget || isUnavailableLabel(body.name))) {
+      recentEntries = forgetRecent(recentEntries, body.forget || body.url, removedRoots);
+      return sendJson(res, 200, { entries: recentEntries, removed: [...removedRoots] }, true);
+    }
+    try {
+      recentEntries = rememberRecent(
+        recentEntries,
+        body && body.url,
+        body && body.name,
+        removedRoots,
+        Boolean(body && body.manual)
+      );
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message || 'Invalid preview URL.' }, true);
+    }
+    logLine('recent', 'post', recentEntries[0]?.url || '', recentEntries[0]?.name || '(unnamed)');
+    return sendJson(res, 200, { entries: recentEntries, removed: [...removedRoots] }, true);
+  });
+}
+
+function isAllowedPreview(url) {
+  return url.protocol === 'https:' &&
+    !url.username && !url.password && !url.port &&
+    PREVIEW_HOST.test(url.hostname) &&
+    url.pathname === '/' && !url.search && !url.hash;
+}
+
+function parseSelectedUrl(raw) {
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error('The url parameter must be a valid, URL-encoded HTTPS preview URL.');
+  }
+  if (!isAllowedPreview(url)) {
+    throw new Error('Only HTTPS preview roots on sbx-*.arena.site are accepted.');
+  }
+  return url;
+}
+
+// A page's own calls name no target, so the target comes from the Referer of the page that
+// made the call. The Referer must be a viewer page carrying a valid url. Otherwise there is none.
+function targetFromReferer(incoming, referer) {
+  let page;
+  try {
+    page = new URL(referer || '');
+  } catch {
+    return null;
+  }
+  if (page.pathname !== '/' || !page.searchParams.has('url')) return null;
+  try {
+    const selected = parseSelectedUrl(page.searchParams.get('url'));
+    return makeTarget(selected.origin, incoming.pathname, incoming.search);
+  } catch {
+    return null;
+  }
+}
+function makeTarget(origin, pathname, search) {
+  const target = new URL(`${origin}/`);
+  target.pathname = pathname || '/';
+  target.search = search || '';
+  return target;
+}
+
+function sendText(res, status, text) {
+  res.writeHead(status, {
+    'content-type': 'text/plain; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff'
+  });
+  res.end(text);
+}
+
+function sendHtml(res, status, body) {
+  res.writeHead(status, {
+    'content-type': 'text/html; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff'
+  });
+  res.end(body);
+}
+
+function rewriteArenaCookie(cookie) {
+  // The browser is on the tailnet host, so make Arena's cookie host-only there.
+  // the proxy forwards it upstream on later requests.
+  return cookie.replace(/;\s*domain=\.?arena\.site(?=;|$)/i, '');
+}
+
+function pwaHead() {
+  // The manifest link rides the served head, so installability never waits on script.
+  return '<link rel="manifest" href="/pwa/manifest.webmanifest">' +
+    '<script src="/pwa/register.js" defer></script>';
+}
+
+function injectPwa(html) {
+  // The tags go before </head>, and a page without one still takes them: after its <body> or
+  // <html> opener, or after its doctype. A served page always carries the manifest link.
+  const close = /<\/head\s*>/i.exec(html);
+  if (close) return html.slice(0, close.index) + pwaHead() + html.slice(close.index);
+  const open = /<body[^>]*>/i.exec(html) || /<html[^>]*>/i.exec(html);
+  if (open) {
+    const at = open.index + open[0].length;
+    return html.slice(0, at) + pwaHead() + html.slice(at);
+  }
+  const type = /^\s*<!doctype[^>]*>/i.exec(html);
+  const at = type ? type[0].length : 0;
+  return html.slice(0, at) + pwaHead() + html.slice(at);
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[character]);
+}
+
+function viewerPage(message) {
+  // The installed app needs the viewer root's HTML head and manifest link.
+  // Its URL box opens a preview without a manual query string. A plain-text root cannot provide the manifest.
+  const reason = message ? `<p class="reason">${escapeHtml(message)}</p>` : '';
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Arena preview</title>
+${pwaHead()}
+<script src="/pwa/recent.js" defer></script>
+<style>
+body { margin: 0; padding: 2rem 1rem; font: 16px/1.5 system-ui, sans-serif;
+  background: #1f2430; color: #e8ecf4; }
+main { max-width: 34rem; margin: 0 auto; }
+h1 { font-size: 1.4rem; margin: 0 0 1rem; }
+.reason { padding: .6rem .8rem; border-radius: .4rem; background: #3a2b34; color: #ffd9e0; }
+form { display: flex; gap: .5rem; margin: 1rem 0; }
+input { flex: 1; padding: .6rem .7rem; border-radius: .4rem; border: 1px solid #48506a;
+  background: #141922; color: inherit; font: inherit; min-width: 0; }
+button { padding: .6rem 1rem; border-radius: .4rem; border: 0; background: #4f7cff;
+  color: #fff; font: inherit; }
+.hint { color: #a8b0c4; font-size: .9rem; }
+.recent { list-style: none; padding: 0; margin: 1rem 0; }
+.recent li { display: flex; gap: .5rem; margin: 0 0 .5rem; }
+.recent a { flex: 1; min-width: 0; padding: .6rem .7rem; border-radius: .4rem; border: 1px solid #48506a;
+  background: #141922; color: inherit; text-decoration: none; overflow-wrap: anywhere; }
+.recent button { background: #3a2b34; color: #ffd9e0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Arena preview</h1>
+${reason}
+<ul id="recent" class="recent" aria-label="Recent previews" hidden></ul>
+<form method="get" action="/">
+<label for="url" hidden>Preview URL</label>
+<input id="url" name="url" type="url" inputmode="url" required autocomplete="off"
+  placeholder="https://sbx-xxxx.arena.site/">
+<button type="submit">Open</button>
+</form>
+<p class="hint">Only HTTPS preview roots on <code>sbx-*.arena.site</code>. Install this page
+as an app from the browser menu to reopen the preview in one tap.</p>
+</main>
+</body>
+</html>
+`;
+}
+
+function decodeBody(buffer, encoding) {
+  // Forwarding the browser's Accept-Encoding can produce compressed upstream HTML.
+  // Decode it before rewriting. Return null on decode failure so the original body passes through unchanged.
+  const name = String(encoding || '').trim().toLowerCase();
+  if (!name || name === 'identity') return buffer;
+  try {
+    if (name === 'gzip' || name === 'x-gzip') return zlib.gunzipSync(buffer);
+    if (name === 'deflate') return zlib.inflateSync(buffer);
+    if (name === 'br') return zlib.brotliDecompressSync(buffer);
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function manifestJson() {
+  return JSON.stringify({
+    name: 'Arena preview',
+    short_name: 'Preview',
+    // The app opens the home page. Embedding a preview origin in `start_url` trapped the owner on a dead sandbox and forced reinstallation.
+    // The share sheet and URL box choose previews there, while a fixed id keeps the same installed app across preview changes.
+    id: '/',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+    background_color: '#1f2430',
+    theme_color: '#1f2430',
+    // Opening the app reuses the open window, so the preview stays in-page.
+    launch_handler: { client_mode: 'navigate-existing' },
+    // The installed app takes a shared link. Android has no per-link "open with"
+    // entry for a web app, so the share sheet is the system path in.
+    share_target: {
+      action: '/pwa/share',
+      method: 'GET',
+      params: { title: 'title', text: 'text', url: 'url' }
+    },
+    // Chrome offers the install from an icon that resolves at 192px and 512px, so the two
+    // raster icons ship beside the scalable one.
+    icons: [
+      { src: '/pwa/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/pwa/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { src: '/pwa/icon.svg', sizes: 'any', type: 'image/svg+xml' }
+    ]
+  });
+}
+
+function extractSharedRoot(incoming) {
+  for (const key of ['url', 'text', 'title']) {
+    const value = incoming.searchParams.get(key) || '';
+    const match = value.match(/https:\/\/sbx-[a-z0-9-]+\.arena\.site(?=[/?#]|$)/i);
+    if (match) return `${match[0].toLowerCase()}/`;
+  }
+  return incoming.searchParams.get('url') || '';
+}
+
+function sharePreview(incoming, res) {
+  const shared = extractSharedRoot(incoming);
+  let selected;
+  try {
+    selected = parseSelectedUrl(shared);
+  } catch {
+    return sendText(res, 400, 'Share an Arena preview link: https://sbx-*.arena.site/');
+  }
+  recentEntries = rememberRecent(
+    recentEntries,
+    `${selected.origin}/`,
+    incoming.searchParams.get('title') || '',
+    removedRoots,
+    true
+  );
+  // The chooser saves the root into the recent list, then opens the preview itself. A
+  // straight jump to the preview would skip that save, because the preview runs no chooser code.
+  res.writeHead(302, {
+    location: `/?shared=${encodeURIComponent(`${selected.origin}/`)}`,
+    'cache-control': 'no-store'
+  });
+  return res.end();
+}
+
+function servePwa(incoming, req, res) {
+  if (incoming.pathname === '/pwa/recent') return serveRecent(req, res);
+  if (incoming.pathname === '/pwa/share') return sharePreview(incoming, res);
+  if (incoming.pathname === '/pwa/manifest.webmanifest') {
+    res.writeHead(200, {
+      'content-type': 'application/manifest+json; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff'
+    });
+    return res.end(manifestJson());
+  }
+  const name = incoming.pathname.slice('/pwa/'.length);
+  if (!Object.hasOwn(ASSET_TYPES, name) || name.includes('/')) {
+    return sendText(res, 404, 'Unknown installed-app file.');
+  }
+  let body;
+  try {
+    body = fs.readFileSync(path.join(ASSETS, name));
+  } catch {
+    return sendText(res, 500, 'The installed-app file is missing.');
+  }
+  const headers = {
+    'content-type': ASSET_TYPES[name],
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff'
+  };
+  // The worker controls the whole proxy origin, not only the /pwa/ prefix.
+  if (name === 'service-worker.js') headers['service-worker-allowed'] = '/';
+  res.writeHead(200, headers);
+  return res.end(body);
+}
+
+function rewriteHtml(upstreamRes, res, status, headers) {
+  const chunks = [];
+  let size = 0;
+  let capped = false;
+  const flush = () => {
+    capped = true;
+    res.writeHead(status, headers);
+    for (const item of chunks) res.write(item);
+  };
+  upstreamRes.on('data', chunk => {
+    if (capped) return;
+    size += chunk.length;
+    if (size > HEAD_CAP) {
+      // Too large to rewrite: flush the head buffer and stream the rest.
+      flush();
+      res.write(chunk);
+      upstreamRes.pipe(res);
+      return;
+    }
+    chunks.push(chunk);
+  });
+  upstreamRes.on('end', () => {
+    if (capped) return;
+    const raw = Buffer.concat(chunks);
+    const decoded = decodeBody(raw, headers['content-encoding']);
+    if (decoded === null || decoded.length > HEAD_CAP * 4) {
+      // Undecodable or oversized: the bytes pass through untouched, with no injection.
+      res.writeHead(status, headers);
+      return res.end(raw);
+    }
+    const body = Buffer.from(injectPwa(decoded.toString('utf8')), 'utf8');
+    delete headers['content-encoding'];
+    headers['content-length'] = String(body.length);
+    res.writeHead(status, headers);
+    res.end(body);
+  });
+  upstreamRes.on('error', err => {
+    if (!res.headersSent) sendText(res, 502, `Upstream request failed: ${err.message}`);
+    else res.destroy(err);
+  });
+}
+
+// Logs show the method, the path and the query, with secret-looking query values hidden.
+// Headers and cookies never reach a log line.
+const SECRET_PARAM = /key|token|secret|auth|pass|cookie/i;
+function redactedHref(raw) {
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return '(unparsed)';
+  }
+  for (const name of [...url.searchParams.keys()]) {
+    if (SECRET_PARAM.test(name)) url.searchParams.set(name, '***');
+  }
+  return url.href;
+}
+function logLine(...fields) {
+  console.log(new Date().toISOString(), ...fields);
+}
+
+const server = http.createServer((req, res) => {
+  if (!ALLOWED_METHODS.has(req.method)) {
+    return sendText(res, 405, 'Method not allowed.');
+  }
+
+  let incoming;
+  try {
+    incoming = new URL(req.url, 'http://proxy.invalid');
+  } catch {
+    return sendText(res, 400, 'Invalid request URL.');
+  }
+
+  logLine(
+    'request', req.method,
+    redactedHref(`http://proxy.invalid${incoming.pathname}${incoming.search}`).slice('http://proxy.invalid'.length),
+    'referer', req.headers.referer ? redactedHref(req.headers.referer) : 'none'
+  );
+  if (incoming.pathname === '/healthz') return sendText(res, 200, 'ok');
+  if (incoming.pathname.startsWith('/pwa/')) return servePwa(incoming, req, res);
+  if (incoming.pathname === '/' && !incoming.searchParams.has('url') &&
+      (req.method === 'POST' || req.method === 'OPTIONS')) {
+    return serveRecent(req, res);
+  }
+
+  let target;
+  try {
+    if (incoming.searchParams.has('url')) {
+      if (incoming.pathname !== '/') {
+        return sendText(res, 400, 'Pass url only on the viewer root: /?url=<encoded-preview-url>');
+      }
+      target = parseSelectedUrl(incoming.searchParams.get('url'));
+    } else {
+      // The proxy keeps no memory. A page's own calls carry no url, so they take the target
+      // from the page that made them. The viewer root always opens the chooser.
+      target = incoming.pathname === '/' ? null : targetFromReferer(incoming, req.headers.referer);
+      if (!target) {
+        logLine('route', 'chooser: no target from the url or the referer');
+        return sendHtml(res, 200, viewerPage(
+          'Choose a preview: paste its URL, or open this page from a share or a link that'
+          + ' carries one.'
+        ));
+      }
+    }
+  } catch (err) {
+    if (incoming.pathname === '/') {
+      return sendHtml(res, 400, viewerPage(err.message || 'Invalid preview URL.'));
+    }
+    return sendText(res, 400, err.message || 'Invalid preview URL.');
+  }
+
+  logLine('route', target.href.includes('?') ? redactedHref(target.href) : target.href);
+  const headers = { ...req.headers };
+  for (const name of HOP_BY_HOP_HEADERS) delete headers[name];
+  for (const name of FETCH_METADATA_HEADERS) delete headers[name];
+  headers.host = target.host;
+
+  const isViewerRoot = incoming.pathname === '/' && incoming.searchParams.has('url');
+  let clientAborted = false;
+
+  // The target origin comes from parseSelectedUrl, and isAllowedPreview pins both to HTTPS roots on sbx-*.arena.site with no credentials, port or path.
+  // CodeQL cannot model that pattern allowlist, so .github/codeql/codeql-config.yml excludes js/request-forgery for this forwarding request.
+  const upstream = https.request(target, { method: req.method, headers, timeout: 120000 },
+    upstreamRes => {
+      const responseHeaders = { ...upstreamRes.headers };
+      for (const name of HOP_BY_HOP_HEADERS) delete responseHeaders[name];
+      if (responseHeaders['set-cookie']) {
+        responseHeaders['set-cookie'] = responseHeaders['set-cookie'].map(rewriteArenaCookie);
+      }
+      const location = responseHeaders.location;
+      if (location) {
+        try {
+          const redirected = new URL(location, target);
+          if (redirected.origin === target.origin) {
+            responseHeaders.location = `${redirected.pathname}${redirected.search}${redirected.hash}`;
+          }
+        } catch {
+          // Leave malformed or relative Location values unchanged.
+        }
+      }
+      responseHeaders['cache-control'] = 'no-store';
+      // A page with no-referrer sends no Referer on its own calls, so the proxy could not read
+      // the target. The browser default keeps the viewer URL on same-origin calls.
+      responseHeaders['referrer-policy'] = 'strict-origin-when-cross-origin';
+      const status = upstreamRes.statusCode || 502;
+      if (status === 502 && req.method === 'GET' && isViewerRoot) {
+        recentEntries = forgetRecent(recentEntries, target.origin, removedRoots);
+      } else if (status < 500) {
+        if (isViewerRoot && req.method === 'GET') {
+          recentEntries = rememberRecent(recentEntries, `${target.origin}/`, '', removedRoots, true);
+        } else {
+          removedRoots.delete(target.origin);
+        }
+      }
+      logLine('upstream', status, req.method, target.origin + target.pathname,
+        'referrer-policy', upstreamRes.headers['referrer-policy'] || 'none');
+      const isHtml = /\btext\/html\b/i.test(String(responseHeaders['content-type'] || ''));
+      if (isHtml && req.method !== 'HEAD') {
+        delete responseHeaders['content-length'];
+        return rewriteHtml(upstreamRes, res, status, responseHeaders);
+      }
+      res.writeHead(status, responseHeaders);
+      upstreamRes.pipe(res);
+    });
+
+  upstream.setTimeout(120000, () => upstream.destroy(new Error('Upstream timeout')));
+  upstream.on('error', err => {
+    logLine('upstream error', err.message);
+    if (req.method === 'GET' && isViewerRoot && !res.headersSent && !clientAborted) {
+      recentEntries = forgetRecent(recentEntries, target.origin, removedRoots);
+    }
+    if (!res.headersSent) sendText(res, 502, `Upstream request failed: ${err.message}`);
+    else res.destroy(err);
+  });
+  req.on('aborted', () => {
+    clientAborted = true;
+    upstream.destroy();
+  });
+  res.on('close', () => {
+    if (!res.writableEnded) {
+      clientAborted = true;
+      upstream.destroy();
+    }
+  });
+  req.pipe(upstream);
+});
+
+server.headersTimeout = 65_000;
+server.requestTimeout = 10 * 60 * 1000;
+
+// Checks import the pure helpers.
+// The image runs this file directly, so require does not start the server.
+module.exports = { injectPwa, decodeBody, viewerPage, targetFromReferer };
+
+if (require.main === module) {
+  server.listen(PORT, '127.0.0.1', () => {
+    console.log(`Arena preview proxy listening on 127.0.0.1:${PORT}`);
+    console.log('Allowed target pattern: https://sbx-*.arena.site/');
+  });
+}

@@ -241,7 +241,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         return
       try:
         cached = json.loads(blob["path"].read_bytes())
-        if cached.get("type") not in ("github", "github-text"):
+        if cached.get("kind") not in ("github", "github-text"):  # nonemo: NMO100
           raise ValueError()
       except (ValueError, AttributeError):
         raise output.OutputError("id is not a GitHub response") from None
@@ -313,21 +313,28 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       if text is None:
         self._send_json(502, {"error": "the log download was not a zip archive"})
         return
-      record.update(type="github-text", text=text)
+      record.update(kind="github-text", text=text)  # nonemo: NMO100
     else:
       try:
         value = json.loads(body)
       except ValueError:
         value = None
       if status != 200 or value is None:
-        record.update(type="github-text", text=body.decode("utf-8", "replace"))
+        record.update(
+          kind="github-text",  # nonemo: NMO100
+          text=body.decode("utf-8", "replace"),
+        )
       else:
         try:
           next_target = github_api.next_target(links, self.server.api)
         except ValueError as error:
           self._send_json(502, {"error": str(error)})
           return
-        record.update(type="github", data=value, next_target=next_target)
+        record.update(
+          kind="github",  # nonemo: NMO100
+          data=value,
+          next_target=next_target,
+        )
     blob_id = self._cache(record)
     self._gh_page(record, blob_id, dict(params, offset=["0"]))
 
@@ -336,7 +343,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     offset = output.number(params, "offset")
     metadata = {"id": blob_id, "source": "github"}
     status = record["status"]
-    if record["type"] == "github-text":
+    if record["kind"] == "github-text":  # nonemo: NMO100
       self._send_json(
         status,
         output.text_page(

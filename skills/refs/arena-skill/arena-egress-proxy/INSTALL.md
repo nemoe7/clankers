@@ -19,6 +19,7 @@ docker run --rm -p 8787:8787 \
 - Images are multi-arch, so an arm64 host pulls and builds natively.
 - The image holds no secrets. Pass them as environment variables, and mount a volume when staged bytes should outlive the container.
 - Every start makes a new agent key and prints `agent key (new on every start): ...`. The key is never read from the environment, so a restart rotates it.
+- A rotation prints the new key the same way: `agent key (rotated): ...`.
 - The server holds no state beyond the state directory, so `--rm` costs nothing but staged bytes.
 
 ## Compose and the funnel

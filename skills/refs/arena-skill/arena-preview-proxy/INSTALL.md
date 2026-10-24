@@ -1,0 +1,46 @@
+# Arena preview proxy install
+
+This page carries the install detail for the tailnet preview proxy. The proxy is an installed web app. It opens an Arena sandbox preview on Android in the page, without the mobile redirect to a new window.
+
+## Container
+
+The repository holds the source. `server.js` is the proxy, and `assets/` holds the installed-app files. The [`Dockerfile`](Dockerfile) copies both into a `node:22-alpine` image. The image runs as a non-root user and needs no build step.
+
+- The published image is `ghcr.io/nemoe7/arena-preview-proxy:latest`, one mutable tag that follows the branch head. Images are multi-arch, so an arm64 host pulls natively.
+- Build locally with `docker build -t arena-preview-proxy .`, or let compose pull the published image.
+- The image holds no secrets and keeps no memory: every open lands on the chooser.
+- `PORT` defaults to 8080, and the server binds `127.0.0.1` only: the Tailscale sidecar is the single way in.
+- `/healthz` answers `ok`, for the container health check.
+
+## Compose and serve
+
+[`docker-compose.yml`](docker-compose.yml) runs the image behind a Tailscale sidecar. [`tailscale-serve.json`](tailscale-serve.json) carries the Serve route and keeps Funnel off.
+
+- The tailnet needs an auth key for `TS_AUTHKEY`, with HTTPS certificates and MagicDNS enabled.
+- Serve publishes HTTPS inside the tailnet only. `AllowFunnel` stays false, so the route never reaches the public internet.
+- The sidecar uses userspace networking: no host `/dev/net/tun`, no added capabilities.
+- `docker compose down` keeps the Tailscale identity. `docker compose down -v` deletes it and needs a new enrollment.
+
+## The installed app
+
+- The first request carries the preview: `https://arena-preview.<tailnet>.ts.net/?url=https%3A%2F%2Fsbx-xxxx.arena.site%2F`.
+- The proxy answers with the preview itself, in-page. The preview's later `/api/...` calls carry no parameter, so the proxy takes their target from the Referer of the viewer page that made them.
+- The proxy injects a manifest link and a worker registration into the preview HTML, so Android Chrome offers to install the page. The installed app reopens the same preview.
+- Chrome offers that install when the worker controls the viewer root and the manifest carries a 192px and a 512px PNG icon. The package ships both beside the scalable icon, and the worker registers on the root scope.
+- When the request names no preview, the viewer root answers its own page: the manifest link, the worker registration and a URL box. A rejected URL answers the same page with the reason, so the page never loses its manifest.
+- The chooser lists the last 10 previews opened from its URL box, its list, or a share, newest first. Each entry opens its preview in one tap, its ✎ button edits the row label without changing the URL, and its × button deletes it.
+- The recent list lives in browser storage, so the server keeps no memory and a plain link adds no entry. The list clears at 02:00, 08:00, 14:00, and 20:00 PHT, or on the next open after a missed boundary.
+- The proxy accepts only HTTPS roots on `sbx-*.arena.site`: no other host, no credentials, no port, no subpath. Write methods reach the selected preview only, and the proxy never forges the browser's `Origin`.
+- A strict `Content-Security-Policy` on the preview page can suppress the manifest. The preview keeps working either way.
+
+## Links and the share sheet
+
+- A web app cannot capture `https://` links on another host, so tapping a raw `sbx-*.arena.site` link never opens this app directly. That dialog belongs to native apps.
+- A share does reach the app: the manifest registers `share_target`, so the Android share sheet lists the installed app. The share lands on the chooser, which saves the shared root among the ten most recent and then opens the preview.
+- A link inside the preview keeps its own behavior: the proxy adds no click interception.
+
+## Tailnet notes
+
+- The preview page embeds a client-side API token, so anyone who can load the page can read it and send writes. Check the tailnet policy before sharing the node.
+- The proxy strips the browser's navigation-context headers (`Sec-Fetch-*` and `Referer`) and forwards the rest. That is the whole mechanism: no TLS bypass, no browser spoofing.
+- Cloudflare can still refuse the upstream request for its own reasons, and then the preview shows its gate again. The proxy cannot fix that.
