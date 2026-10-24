@@ -64,6 +64,8 @@ A restart clears results. An unanswered view sends one hidden, ACK-required requ
 
 ## Evidence and handoff
 
+Visual references: [Preview workflow](design-visuals/preview.md), [Shared components](design-visuals/components.md), and [Style reference](design-visuals/styles.md).
+
 Automated client checks cover independent results, empty requests, refresh, errors, recovery, and closed-view reads. These checks are not participant studies.
 
 Local evidence: `arena-state/survey-browser-evidence.json` and `arena-state/survey-{360,1280}-{dark,light}.png`. The captures use synthetic results, not real survey answers or verdicts.
