@@ -1,4 +1,4 @@
-"""Extract repository code prose through Nemoizer's shared parser."""
+"""Extract repository code prose through nemoizer's shared parser."""
 
 import argparse
 import importlib.util

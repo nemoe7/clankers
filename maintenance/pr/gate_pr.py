@@ -275,7 +275,7 @@ def _check_none_or_bullets(title: str, entries: list[tuple[int, str]]) -> list[F
 
 
 def run_ste_lint(text: str) -> tuple[bool, str]:
-  """Run the Nemoizer prose linter over text. Return (passed, output)."""
+  """Run the nemoizer prose linter over text. Return (passed, output)."""
   with tempfile.TemporaryDirectory() as directory:
     path = Path(directory) / "pr-body.md"
     path.write_text(text, encoding="utf-8")

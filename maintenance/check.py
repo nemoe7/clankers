@@ -129,7 +129,7 @@ STE_DOCS = (
 STE_LINT = "skills/refs/nemoizer/scripts/nemoize.py"
 # The prose lint covers the code comments and the documents outside the STE list.
 PROSE_LINT = "maintenance/lint_prose.py"
-NEMOIZER = "skills/refs/nemoizer/scripts/nemoize.py"
+NEMOIZER = "skills/refs/nemoizer/scripts/nemoize.py"  # nonemo: NMO100
 NEMOIZER_IGNORES = (
   "LICENSE.md",
   "skills/arena-skill/assets/markdown-it.min.js",
@@ -238,7 +238,7 @@ def check_prose(errors: list[str]) -> None:
 
 
 def check_nemoizer(errors: list[str]) -> None:
-  """Check Nemoizer domains with repository prose scope and license exclusions."""
+  """Check nemoizer domains with repository prose scope and license exclusions."""
   command = [sys.executable, str(ROOT / PROSE_LINT), "--nemoizer"]
   for path in NEMOIZER_IGNORES:
     command.extend(("--ignore", path))
@@ -247,7 +247,7 @@ def check_nemoizer(errors: list[str]) -> None:
   )
   if result.returncode:
     output = (result.stdout + result.stderr).strip()
-    errors.append(f"Nemoizer domains failed:\n{output}")
+    errors.append(f"Nemoizer domains failed:\n{output}")  # nonemo: NMO100
 
 
 def sentence_count(text: str) -> int:
@@ -1064,7 +1064,11 @@ def main() -> int:
     return 0
   skills, workflows = run_check("repository", errors, lambda: validate(errors))
   run_check("STE lint", errors, lambda: check_ste(errors))
-  run_check("Nemoizer domains", errors, lambda: check_nemoizer(errors))
+  run_check(
+    "Nemoizer domains",  # nonemo: NMO100
+    errors,
+    lambda: check_nemoizer(errors),
+  )
   run_check("prose lint", errors, lambda: check_prose(errors))
   run_check("paragraph caps", errors, lambda: check_paragraph_caps(errors))
   span = time.perf_counter() - started

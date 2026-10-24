@@ -9,7 +9,7 @@ description: >
 compatibility: Python 3.11+, with Node.js and Acorn for JavaScript checks.
 ---
 
-# Nemoizer
+# nemoizer
 
 One table, one plain word per row. Read the table before you name something, and
 run the linter before you hand work over.

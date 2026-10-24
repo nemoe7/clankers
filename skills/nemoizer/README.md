@@ -1,4 +1,4 @@
-# Nemoizer
+# nemoizer
 
 Find and replace AI-flavored synonyms with plain words from one rotation table. The skill also guides prose and test review. Its tools check lexical matches and measurable prose limits, not meaning.
 

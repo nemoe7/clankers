@@ -97,12 +97,25 @@ EXCEPTIONS = {
   "pull request": "PR",
   "pull requests": "PRs",
 }
+NEMOIZER_MODIFIED_NOUNS = (
+  r"rules?|lists?|linters?|prose|skills?|configs?|checks?|scripts?|"
+  r"parsers?|suites?|tests?|plugins?|domains?|targets?|markers?"
+)
+KEEP_LOWER = {"nemoizer"}
 ROTATIONS = (
   ("pick", r"(?<![A-Za-z0-9])pick\w*(?![A-Za-z0-9])", "select"),
   ("transmit", r"(?<![A-Za-z0-9])transmit\w*(?![A-Za-z0-9])", "send"),
   ("kind", r"(?<![A-Za-z0-9])kinds?(?![A-Za-z0-9])", "type"),
   ("repository", r"(?<![A-Za-z0-9])repositor(?:y|ies)(?![A-Za-z0-9])", "repo"),
   ("pull request", r"(?<![A-Za-z0-9])pull[ \t]+requests?(?![A-Za-z0-9])", "PR"),
+  (
+    "nemoizer",
+    (
+      rf"(?<![A-Za-z0-9_./:-])(?:the[ \t]+(?!nemoizer[ \t]+(?:{NEMOIZER_MODIFIED_NOUNS})\b))?"
+      r"nemoizer(?![A-Za-z0-9_/-]|\.[A-Za-z0-9_])"
+    ),
+    "nemoizer",
+  ),
 )
 RULE_IDS = {
   "transmit": "NMO100",
@@ -110,6 +123,7 @@ RULE_IDS = {
   "kind": "NMO100",
   "repository": "NMO901",
   "pull request": "NMO901",
+  "nemoizer": "NMO100",
 }
 ADVISORY_RULE_IDS = {
   "NMO901",
@@ -212,7 +226,10 @@ RULE_DESCRIPTIONS = {
   "NMP100": "paragraph has {count} sentences (cap {cap})",
   "NMP101": "comment block has {count} lines (cap {cap})",
   "NMO003": "missing Oxford comma",
-  "NMO902": '"the" density is {count}% (cap {cap}%)',
+  "NMO902": (
+    '"the" density is {count}% (cap {cap}%); '
+    'collapse list "the" articles (--format) or drop "the" before proper names'
+  ),
 }
 
 
@@ -553,6 +570,8 @@ def suppressed(code, ids, name=None):
 
 def plain(word, name, use):
   """Give the matched word its plain word, and keep the old word's case."""
+  if name in KEEP_LOWER:
+    return use
   normalized = " ".join(word.lower().split())
   form = EXCEPTIONS.get(normalized) or re.sub(
     re.escape(name), use, word, flags=re.IGNORECASE
@@ -562,6 +581,26 @@ def plain(word, name, use):
   if word[:1].isupper():
     return form[:1].upper() + form[1:]
   return form
+
+
+LIST_THE_SPAN = re.compile(
+  r"\b(the[ \t]+[^,.;:!?()\n]+)"
+  r"((?:,[ \t]+(?:(?:and|or)[ \t]+)?the[ \t]+[^,.;:!?()\n]+)+"
+  r"(?:\s+(?:and|or)[ \t]+the[ \t]+[^,.;:!?()\n]+)?)",
+  re.IGNORECASE,
+)
+SUBSEQUENT_LIST_THE = re.compile(
+  r"(,[ \t]+(?:(?:and|or)[ \t]+)?|[ \t]+(?:and|or)[ \t]+)the[ \t]+",
+  re.IGNORECASE,
+)
+
+
+def collapse_list_articles(line):
+  """Collapse repeated leading 'the' articles across comma-separated list items."""
+  return LIST_THE_SPAN.sub(
+    lambda match: match.group(1) + SUBSEQUENT_LIST_THE.sub(r"\1", match.group(2)),
+    line,
+  )
 
 
 def rotate(line, suppressed=frozenset()):
@@ -637,6 +676,8 @@ def scan(targets, ignores):
         if suppressed(code, excluded, name):
           continue
         for word in sorted(set(re.findall(pattern, visible, flags=re.IGNORECASE))):
+          if name in KEEP_LOWER and word == use:
+            continue
           findings.append(format_finding(path, number, code, f"{word} -> {use}", line))
   return findings, marks
 
@@ -655,17 +696,30 @@ def format_paths(targets, ignores, out=None):
       continue
     lines = text.split("\n")
     file_ids, line_ids, _ = exclusions(path, lines)
+    the_cap = ACTIVE_CONFIG.get("the_density_cap", THE_DENSITY_CAP)
+    min_the = ACTIVE_CONFIG.get("min_the_count", MIN_THE_COUNT)
+    dense_lines = {
+      row_line
+      for row_line, _, _ in prose_the_density(text, cap=the_cap, min_the=min_the)
+    }
     rewritten, touched = [], False
     for number, line in enumerate(lines, 1):
       if TABLE_ROW.match(line.strip()):
         rewritten.append(line)
         continue
       suppressed = file_ids | line_ids[number - 1]
+      collapse_the = number in dense_lines and "NMO902" not in suppressed
       parts, start = [], 0
       for marker in MARKER.finditer(line):
-        parts.extend((rotate(line[start : marker.start()], suppressed), marker[0]))
+        seg = rotate(line[start : marker.start()], suppressed)
+        if collapse_the:
+          seg = collapse_list_articles(seg)
+        parts.extend((seg, marker[0]))
         start = marker.end()
-      parts.append(rotate(line[start:], suppressed))
+      tail = rotate(line[start:], suppressed)
+      if collapse_the:
+        tail = collapse_list_articles(tail)
+      parts.append(tail)
       rotated = "".join(parts)
       if rotated != line:
         print(f"{path}:{number}: -{line}", file=out)

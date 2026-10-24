@@ -1,4 +1,5 @@
 <!-- nonemo: NMP100 -->
+<!-- nonemo: NMO100 -->
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). This repository uses `YYYY-MM-DD` dates as versions instead of [Semantic Versioning](https://semver.org/).
@@ -14,6 +15,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add the advisory `"the"` usage-density check (`NMO902` and `references/nmo902.md`) and format CLI findings in `ste-lint.py` style with a `Summary` footer. Auto-discover `nemoizer.toml` or `[tool.nemoizer]` and ship `references/nemoizer.toml` with sentence, list, heading, `"the"`, and `respect-gitignore = true` defaults.
 - Extend `NMP100` to cap paragraphs and table cells at `paragraph_cap` (`4`), list items at `2` sentences, and headings at `1` sentence. Flag blockquotes exceeding `paragraph_cap` sentences for manual review.
 - Update `references/audit-report.md` to lead with `Status` and `Counts` and group findings into one section per file (`Rule | Before | After | Verdict | Reason`) with rule-applied `After` text.
+- Rotate proper-name variations of `nemoizer` and `the nemoizer` to lowercase `nemoizer` (`NMO100`), and collapse repeated leading `"the"` articles in `NMO902` comma lists under `--format`.
 
 #### nuu
 

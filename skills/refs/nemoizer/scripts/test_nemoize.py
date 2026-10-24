@@ -1249,3 +1249,36 @@ def test_config_caps_respect_gitignore_and_bundled_default_config(tmp_path):
   assert "ignored.md" in custom_run.stdout
   assert "NMP100" not in custom_run.stdout
   assert "NMO902" not in custom_run.stdout
+
+
+def test_nemoizer_proper_name_rotation_and_nmo902_list_article_collapse(tmp_path):
+  assert (
+    nemoize.rotate("Use the nemoizer, The Nemoizer, THE NEMOIZER, and Nemoizer.")
+    == "Use nemoizer, nemoizer, nemoizer, and nemoizer."
+  )
+  assert (
+    nemoize.rotate("The prose linter runs the nemoizer rules.")
+    == "The prose linter runs the nemoizer rules."
+  )
+  assert (
+    nemoize.collapse_list_articles(
+      "Supply the source text, the target, and the unit for the worker."
+    )
+    == "Supply the source text, target, and unit for the worker."
+  )
+  doc = tmp_path / "sample.md"
+  doc.write_text(
+    "Use The Nemoizer on the source text, the target, and the unit.\n",
+    encoding="utf-8",
+  )
+  findings, _ = nemoize.scan([doc], [])
+  assert any(
+    "NMO100" in item and "The Nemoizer -> nemoizer" in item for item in findings
+  )
+  changed = nemoize.format_paths([doc], [])
+  assert changed == 1
+  assert (
+    doc.read_text(encoding="utf-8")
+    == "Use nemoizer on the source text, target, and unit.\n"
+  )
+  assert "--format" in nemoize.RULE_DESCRIPTIONS["NMO902"]

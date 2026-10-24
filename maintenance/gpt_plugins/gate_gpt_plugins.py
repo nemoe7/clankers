@@ -98,7 +98,7 @@ SKILL_INTERFACES = {
     "brandColor": "#DB2777",
   },
   "nemoizer": {
-    "displayName": "Nemoizer",
+    "displayName": "Nemoizer",  # nonemo: NMO100
     "shortDescription": "STE prose and test linter",
     "brandColor": "#4F46E5",
   },
