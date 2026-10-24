@@ -139,12 +139,12 @@ Apply the same single-block rule to `audit`: findings, required changes, require
 
 For `handoff`, include only:
 
-- required behavior
-- design direction
-- minimum checks
-- material evidence
+- `# Handoff: <subject>` and `## Problem` (1 to 3 sentences)
+- `## Piece N - <deliverable title>` (`Files`, `CLI / Interface`, and snippet)
+- `## Limits` (`Checked`, `Skipped`, and `External / Human verification`)
+- `## Acceptance tests` (numbered runnable scenarios with inputs, findings, and exit codes)
+- `## Reference numbers` (`Versions` and `Thresholds / IDs`)
 - unresolved questions, only when material
-- next actions
 - `handoff-by`
 
 Do not repeat:

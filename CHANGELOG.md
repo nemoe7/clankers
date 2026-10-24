@@ -47,7 +47,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Standardize repo hygiene with `template-main`. Add `.editorconfig`, `.gitattributes`, `.github/PULL_REQUEST_TEMPLATE.md`, and `.github/actionlint.yaml`, expand `.gitignore` and `.markdownlint-cli2.jsonc`, align `ci.yml` and `pr-check.yml`, and consolidate `pytest.ini` and `ruff.toml` into `pyproject.toml`.
 - Move `docs/archive/arena-quirks.md` to `docs/arena-quirks.md`, remove `docs/archive/`, and update `STE_DOCS` in `maintenance/check.py`.
-- Populate required `extensions.com.openai.interface` metadata (`displayName`, `shortDescription`, `longDescription`, `developerName`, `category`, and `brandColor`) in `gpt-plugins/plugin.json` (`1.10.3`) and package per-skill `skills/<name>/assets/icon.svg` and `skills/<name>/agents/openai.yaml` in `maintenance/gpt_plugins/gate_gpt_plugins.py`.
+- Populate required `extensions.com.openai.interface` metadata (`displayName`, `shortDescription`, `longDescription`, `developerName`, `category`, and `brandColor`) in `gpt-plugins/plugin.json` (`1.10.5`) and package per-skill `skills/<name>/assets/icon.svg` and `skills/<name>/agents/openai.yaml` in `maintenance/gpt_plugins/gate_gpt_plugins.py`.
+- Align `gpt-plugins/skills/gpt-handoff/SKILL.md` with Arena's `Problem`, `Piece N`, `Limits`, `Acceptance tests`, and `Reference numbers` sections. Keep the single fenced block, two modes, and signoff tags.
 
 ## 2026-10-23
 

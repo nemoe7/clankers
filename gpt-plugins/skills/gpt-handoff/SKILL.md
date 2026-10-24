@@ -127,12 +127,12 @@ For `audit`, include only:
 
 For `handoff`, include only:
 
-- required behavior
-- design direction
-- minimum checks
-- material evidence
+- `# Handoff: <subject>` and `## Problem` (1–3 sentences)
+- `## Piece N - <deliverable title>` (`Files`, `CLI / Interface`, snippet)
+- `## Limits` (`Checked`, `Skipped`, `External / Human verification`)
+- `## Acceptance tests` (numbered runnable scenarios with inputs, findings, exit codes)
+- `## Reference numbers` (`Versions`, `Thresholds / IDs`)
 - unresolved questions, only when material
-- next actions
 - `handoff-by`
 
 Do not repeat:
