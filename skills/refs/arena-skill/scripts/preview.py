@@ -6142,7 +6142,6 @@ class Store:
         continue
       try:
         self.import_state(text, replace_tasks=True)
-        self.autosave()
         return
       except (
         OSError,
@@ -7558,7 +7557,7 @@ class Store:
     path.write_text(text, encoding="utf-8")
     self.latest_backup_path.parent.mkdir(parents=True, exist_ok=True)
     self.latest_backup_path.write_text(text, encoding="utf-8")
-    if any(counts.values()):
+    if any(counts.values()) and self.meta_value(CLEARED_META) == "1":
       with closing(self.connect()) as db, db:
         db.execute("DELETE FROM meta WHERE key = ?", (CLEARED_META,))
     return {"path": str(path), "latest_path": str(self.latest_backup_path), **counts}
@@ -9469,9 +9468,9 @@ class Store:
         )
       labels = [custom_label(option) for option in options]
       labels = [label for label in labels if label is not None]
-      if len(set(labels)) != len(labels):
+      if len(labels) > 1:
         raise ValueError(
-          f"{field['type']} fields give each free-text option its own label"
+          f"{field['type']} field '{field_id}' takes at most one free-text option"
         )
 
   def submit_report(self, report_id, note_id, answers, revision=None):
@@ -13133,13 +13132,27 @@ def main():
       warnings = verify_publication(store, args.id, revision, count)
       plural = "" if count == 1 else "s"
       print(f"Published {args.id}, {count} field{plural}. Verified.")
+      parsed_questions = parse_fields(Path(args.source).read_text("utf-8"))[1]
       recommendations = [
         f"{question['prompt']}: {', '.join(question['default'])}"
-        for question in parse_fields(Path(args.source).read_text("utf-8"))[1]
+        for question in parsed_questions
         if question.get("default")
       ]
       if recommendations:
         print("you recommended:\n" + "\n".join(recommendations))
+      missing_recommended = [
+        question["id"]
+        for question in parsed_questions
+        if question.get("type") in {"choice", "checkbox"}
+        and not question.get("default")
+      ]
+      if missing_recommended:
+        print(
+          "Warning: no recommended answer supplied for question ID(s): "
+          + ", ".join(missing_recommended)
+          + ". Preselect a recommended option with (x) or [x].",
+          file=sys.stderr,
+        )
       for warning in warnings or ():
         print(
           f"{args.source}:{warning['line']}: Warning: possible unparsed "

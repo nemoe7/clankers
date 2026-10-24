@@ -2162,7 +2162,7 @@ class Store:
 			try:text=candidate.read_text(encoding='utf-8')
 			except OSError:continue
 			if not text.strip():continue
-			try:self.import_state(text,replace_tasks=True);self.autosave();return
+			try:self.import_state(text,replace_tasks=True);return
 			except(OSError,ValueError,TypeError,KeyError,sqlite_api().Error,RuntimeError)as error:print(f"preview: auto-restore skipped {candidate.name}: {error}",file=sys.stderr)
 	def id_matches(self,token):
 		token=bare_id(token);like=f"{token}%";found=[]
@@ -2539,7 +2539,7 @@ class Store:
 		lines,counts=self.state_lines(notes,tasks);text=state_ndjson(lines+self.userscript_history());path=self.save_path
 		if path.parent!=Path('.'):path.parent.mkdir(parents=True,exist_ok=True)
 		path.write_text(text,encoding='utf-8');self.latest_backup_path.parent.mkdir(parents=True,exist_ok=True);self.latest_backup_path.write_text(text,encoding='utf-8')
-		if any(counts.values()):
+		if any(counts.values())and self.meta_value(CLEARED_META)=='1':
 			with closing(self.connect())as db,db:db.execute('DELETE FROM meta WHERE key = ?',(CLEARED_META,))
 		return{'path':str(path),'latest_path':str(self.latest_backup_path),**counts}
 	def save_backup(self):result=self.save_state({'notes':self.state()['notes'],'tasks':self.tasks()});self.request_userscript_force_save();return result
@@ -3161,7 +3161,7 @@ class Store:
 			options=field['options']
 			if not 1<=len(options)<=20 or len(set(options))!=len(options)or any(not option.strip()or len(option)>200 for option in options):raise ValueError(f"{field['type']} fields take 1–20 unique options of 1–200 characters")
 			labels=[custom_label(option)for option in options];labels=[label for label in labels if label is not None]
-			if len(set(labels))!=len(labels):raise ValueError(f"{field['type']} fields give each free-text option its own label")
+			if len(labels)>1:raise ValueError(f"{field['type']} field '{field_id}' takes at most one free-text option")
 	def submit_report(self,report_id,note_id,answers,revision=None):
 		if not isinstance(revision,str)or not revision:raise ValueError('Report revision required; copy your entries and reload the preview')
 		with self.transaction()as db:
@@ -4120,8 +4120,10 @@ def main():
 				with args.submission_format.open('rb')as stream:data=stream.read(MAX_REPORT+1)
 				if len(data)>MAX_REPORT:raise ValueError('Submission format exceeds the report size limit')
 				metadata=json.loads(data.decode('utf-8'))
-			count=store.publish(args.id,args.title,args.source,submission_format=metadata,allow_unparsed_markers=args.allow_unparsed_markers);revision=store.report(args.id)['updated_at'];warnings=verify_publication(store,args.id,revision,count);plural=''if count==1 else's';print(f"Published {args.id}, {count} field{plural}. Verified.");recommendations=[f"{question['prompt']}: {', '.join(question['default'])}"for question in parse_fields(Path(args.source).read_text('utf-8'))[1]if question.get('default')]
+			count=store.publish(args.id,args.title,args.source,submission_format=metadata,allow_unparsed_markers=args.allow_unparsed_markers);revision=store.report(args.id)['updated_at'];warnings=verify_publication(store,args.id,revision,count);plural=''if count==1 else's';print(f"Published {args.id}, {count} field{plural}. Verified.");parsed_questions=parse_fields(Path(args.source).read_text('utf-8'))[1];recommendations=[f"{question['prompt']}: {', '.join(question['default'])}"for question in parsed_questions if question.get('default')]
 			if recommendations:print('you recommended:\n'+'\n'.join(recommendations))
+			missing_recommended=[question['id']for question in parsed_questions if question.get('type')in{'choice','checkbox'}and not question.get('default')]
+			if missing_recommended:print('Warning: no recommended answer supplied for question ID(s): '+', '.join(missing_recommended)+'. Preselect a recommended option with (x) or [x].',file=sys.stderr)
 			for warning in warnings or():print(f"{args.source}:{warning['line']}: Warning: possible unparsed {warning['marker']} marker. Keep spaces outside the markers. Literal marker text can be intentional.",file=sys.stderr)
 			if not count and'{#'in Path(args.source).read_text('utf-8'):print('Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then the `- ( ) option` lines follow.',file=sys.stderr)
 		elif args.command=='report':
