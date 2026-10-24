@@ -84,7 +84,7 @@ Read-only tools keep product files unchanged. Record creation, asset fetches, an
 
 ## Limits
 
-`measure.py` checks supplied pixel values. `uiux.py` adds local tools and optional browser evidence. Source checks cover selected HTML and CSS patterns. Script markup remains unverified until rendered.
+`measure.py` checks supplied pixel values. `nuu.py` adds local tools and optional browser evidence. Source checks cover selected HTML and CSS patterns. Script markup remains unverified until rendered.
 
 Missing elements and non-pixel values do not become complete coverage checks. A passing report does not prove accessibility, usability, behavior, or visual quality. Those need rendered and interaction review.
 

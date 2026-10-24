@@ -133,7 +133,7 @@ MODULE_TESTS = {
   ),
   "Nemoizer": ("skills/refs/nemoizer/scripts/test_nemoize.py",),
   "UI/UX": (
-    "skills/refs/nuu/scripts/test_uiux.py",
+    "skills/refs/nuu/scripts/test_nuu.py",
     "maintenance/test_nemo_ui_ux.py",
   ),
   "Userscripts": (),

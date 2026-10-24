@@ -1,6 +1,6 @@
 # `nuu` CLI Reference
 
-`scripts/nuu` (`scripts/uiux.py`) is the single command-line entry point for UI/UX audits, system proposals, design records, measurements, and screenshot annotations.
+`scripts/nuu` (`scripts/nuu.py`) is the single command-line entry point for UI/UX audits, system proposals, design records, measurements, and screenshot annotations.
 
 ## Subcommands and Short Flags
 

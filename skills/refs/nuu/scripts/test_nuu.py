@@ -7,8 +7,10 @@ from pathlib import Path
 
 import annotate
 import measure
+import nuu
+import uiux
 
-SCRIPT = Path(__file__).with_name("uiux.py")
+SCRIPT = Path(__file__).with_name("nuu.py")
 
 
 def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
@@ -847,3 +849,5 @@ module.exports = {
   assert board_out.is_file()
   bw, bh, _ = annotate.decode_png(board_out.read_bytes())
   assert bw > 80 and bh > 60
+  assert nuu.DEVICE_BREAKPOINTS == uiux.DEVICE_BREAKPOINTS
+  assert callable(nuu.main) and callable(uiux.main)
