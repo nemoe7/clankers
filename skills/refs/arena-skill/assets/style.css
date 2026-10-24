@@ -96,28 +96,41 @@ body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex
 h1 { letter-spacing: -.035em; margin: 4px 0; }
 h2 { margin: 0 0 8px; }
 p, li { line-height: 1.6; }
-.topbar { flex: none; position: sticky; top: 0; z-index: 5; padding: 10px 5vw; background: var(--bg); border-bottom: 1px solid var(--border); }
+.topbar { flex: none; position: sticky; top: 0; z-index: 5; padding: 10px 5vw; background: var(--bg); border-bottom: 1px solid var(--border); overflow: hidden; }
+.topbar:has(~ main #reports-panel[data-loading="true"]:not([hidden]))::after {
+  content: ""; position: absolute; left: 0; bottom: 0; width: 40%; height: 2px; opacity: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 65%, transparent), transparent);
+  animation: report-loading 1.2s 200ms ease-in-out infinite; pointer-events: none;
+}
+@keyframes report-loading { 0% { opacity: 1; transform: translateX(-100%); } 100% { opacity: 1; transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) {
+  .topbar:has(~ main #reports-panel[data-loading="true"]:not([hidden]))::after {
+    width: 100%; opacity: .45; background: var(--accent); animation: none;
+  }
+}
 .topbar-row { min-width: 0; max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 /* The tab strip shrinks and scrolls rather than widen the viewport. Its four tabs must fit phones and desks. */
 /* The four tabs share one width: the grid makes every track equal, so the longest label sets no tab's shape. */
-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-width: 100%; min-width: 0; overflow-x: auto; }
-/* The four labels fit a phone strip at a shorter minimum, so the whole strip reads without a
+nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 100%; min-width: 0; overflow-x: auto; }
+/* The three labels fit a phone strip at a shorter minimum, so the whole strip reads without a
    scroll of its own. */
 nav button { min-width: 0; padding: 7px 9px; white-space: nowrap; position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-color: var(--tab-border); }
 /* nav button outranks the global :focus-visible, so focus needs its own rule here. */
 nav button:focus-visible { border-color: var(--focus); }
-nav [aria-selected="true"] { background: var(--bubble); }
+nav [aria-selected="true"], #downloads-tab[aria-selected="true"] { background: var(--bubble); }
+#downloads-tab { position: relative; }
 /* The pip is the tab's unread mark. `[hidden] { display: none !important; }` keeps it hidden against its inline-block shape. */
 /* The pip is a corner badge rather than an inline box, so a tab keeps one width whether the dot shows or not. */
 #report-pip, #notes-pip, #downloads-pip { position: absolute; top: 5px; right: 5px; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1450px; margin: auto; padding: 18px 5vw 20px; overflow: hidden; }
+main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; margin: auto; padding: 18px 0 20px; overflow: hidden; }
 main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
+.report-scroll-frame > section[role="tabpanel"], main > section[role="tabpanel"] { padding-inline: 5vw; }
 .report-scroll-frame { position: relative; display: flex; flex-direction: column; }
 #notes-panel { overflow: clip; }
 #reports-panel, #tasks-panel, #downloads-panel { overflow-y: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
 /* The message log fills remaining height above the composer so the panel itself never scrolls. */
-.log-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-block: 12px; }
+.log-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-block: 12px; }
 /* The log header wraps into four short lines on a narrow width, and the row's 12px wrap gap
    spread them into dead space. The lines sit close now, so the header reads as one block. */
 .log-card > .row:first-child { margin-block: 0; row-gap: 2px; }
@@ -160,7 +173,7 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 #send { width: 30px; height: 30px; min-height: 0; padding: 0; }
 .stack h2, .stack p { margin: 0; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-width: 0; }
-#downloads-panel > .card, #notes-panel .log-card, #reports-panel > .card, #tasks-panel > .card { background: transparent; border: 0; padding-inline: 0; }
+#downloads-panel > .card, #notes-panel .log-card, #reports-panel > .card, #tasks-panel > .card { background: transparent; border: 0; padding-inline: 0; padding-top: 0; }
 #downloads-panel > .card, #reports-panel > .card, #tasks-panel > .card { max-width: 900px; width: 100%; margin-inline: auto; }
 label { display: block; font-size: 14px; font-weight: 650; margin-bottom: 8px; }
 button, select, textarea, input[type="url"], input[type="search"] { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; }
@@ -341,10 +354,11 @@ mark code { color: var(--text); }
 .draft-preview blockquote { border-left-color: rgb(199, 194, 188); }
 @media (max-width: 60em) {
   .topbar { padding: 10px 16px; }
-  main { padding: 14px 16px 16px; }
+  main { padding: 14px 0 16px; }
+  main > section[role="tabpanel"], .report-scroll-frame > section[role="tabpanel"] { padding-inline: 16px; }
   .card { padding: 18px; }
   .compose { max-height: 55%; }
-  /* A narrow strip keeps the four tracks equal and the labels whole: the padding and the font
+  /* A narrow strip keeps the three tracks equal and the labels whole: the padding and the font
      step down rather than a track giving way. */
   nav { gap: 6px; }
   nav button { padding: 7px 4px; font-size: 14px; }
@@ -364,11 +378,11 @@ mark code { color: var(--text); }
   .log-card > .row:first-child > .stack { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .log-card > .row > .row.tight { flex: 1 1 100%; }
   #log-search { flex: 1 1 auto; max-width: none; }
-  .report-toolbar .select-wrap { flex: 1 1 100%; }
 }
 @media (max-height: 30em) {
   .topbar { padding: 6px 12px; }
-  main { padding: 8px 12px 10px; }
+  main { padding: 8px 0 10px; }
+  main > section[role="tabpanel"], .report-scroll-frame > section[role="tabpanel"] { padding-inline: 12px; }
   .compose { max-height: 50%; }
 }
 
@@ -563,6 +577,7 @@ mark code { color: var(--text); }
 #modal[data-read-only="true"] button:not(.modal-close, .copy-code, .preview-code-md) { min-height: 44px; touch-action: manipulation; }
 #survey-again { display: inline-flex; align-items: center; gap: 6px; }
 #modal[data-read-only="true"] button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#modal:not([data-keyboard-nav="true"]) :focus-visible { outline: 0; border-color: var(--border); }
 #survey-open { touch-action: manipulation; }
 #image-modal { width: 100vw; max-width: 100vw; height: var(--app-height, 100dvh); max-height: var(--app-height, 100dvh); margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); overflow: hidden; touch-action: none; }
 #image-modal[open] { display: grid; place-items: center; }

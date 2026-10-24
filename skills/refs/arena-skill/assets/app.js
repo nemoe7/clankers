@@ -2435,8 +2435,15 @@ async function loadReport(force = false) {
     $('#report').replaceChildren();
     $('#report-submit').hidden = true;
   }
-  if (!id) { $('#report-status').textContent = 'No report published yet.'; return; }
+  if (!id) {
+    delete panel.dataset.loading;
+    panel.setAttribute('aria-busy', 'false');
+    $('#report-status').textContent = 'No report published yet.';
+    return;
+  }
   save('report', id);
+  panel.dataset.loading = 'true';
+  panel.setAttribute('aria-busy', 'true');
   $('#report-status').textContent = 'Loading report…';
   try {
     const result = await (await request(`/api/reports/${encodeURIComponent(id)}/html`)).json();
@@ -2467,6 +2474,11 @@ async function loadReport(force = false) {
     checkReportRead();
   } catch (error) {
     if (sequence === reportRequest) $('#report-status').textContent = `Report unavailable: ${error.message}`;
+  } finally {
+    if (sequence === reportRequest) {
+      delete panel.dataset.loading;
+      panel.setAttribute('aria-busy', 'false');
+    }
   }
 }
 $('#report-form').addEventListener('submit', async event => {
@@ -3232,7 +3244,7 @@ function showTab(tab) {
   for (const item of tabs) {
     const selected = tab === item;
     item.setAttribute('aria-selected', String(selected));
-    item.tabIndex = selected ? 0 : -1;
+    item.tabIndex = item.id === 'downloads-tab' ? 0 : (selected ? 0 : -1);
     const panel = $('#' + item.getAttribute('aria-controls'));
     panel.hidden = !selected;
     if (selected && !alreadySelected) gsap.fromTo(panel, { opacity: 0 }, { opacity: 1, duration: 0.16, ease: 'power1.out' });
@@ -3959,6 +3971,7 @@ function openModal(config) {
         modalBusy = false;
       }
     };
+    delete modal.dataset.keyboardNav;
     modal.showModal();
     nodes[0]?.querySelector('select, input, textarea')?.focus();
     modal.addEventListener('close', () => resolve(null), { once: true });
@@ -3967,6 +3980,14 @@ function openModal(config) {
 modalForm.addEventListener('submit', event => modalSubmit?.(event));
 $('#modal-cancel').addEventListener('click', () => modal.close());
 $('#modal-close')?.addEventListener('click', () => modal.close());
+modal.addEventListener('keydown', event => {
+  if (['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+    modal.dataset.keyboardNav = 'true';
+  }
+});
+modal.addEventListener('pointerdown', () => {
+  delete modal.dataset.keyboardNav;
+});
 
 const SURVEY_REFRESH_MS = 2000;
 let surveyView = null;
