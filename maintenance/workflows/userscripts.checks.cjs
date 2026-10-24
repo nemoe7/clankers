@@ -514,6 +514,69 @@ function checkOpenSteering(api) {
   if (failed) {
     throw new Error(failed + " checks failed");
   }
+  assert.equal(api.steeringLabelViolation("clankers - Steering :8000", "clankers"), null);
+  assert.equal(api.steeringLabelViolation("clankers - Steering :8000", null), null);
+  assert.equal(api.steeringLabelViolation("Start Preview server :8000", "clankers"), null);
+  var violation = api.steeringLabelViolation("Preview server :8000", "clankers");
+  assert.equal(violation.actual, "Preview server");
+  assert.equal(violation.expected, "clankers - Steering");
+  var payload = api.interruptPayloadForSteering("Preview server :8000", "clankers");
+  assert.equal(payload.armed, true);
+  assert.equal(payload.tab, "notes");
+  assert.equal(payload.reason, "process-violation");
+  assert.equal(payload.clause_file, "ARENA.md");
+  assert.match(payload.note, /Preview server/);
+  assert.match(payload.note, /clankers - Steering/);
+  var sent = [];
+  var violationDoc = {
+    querySelectorAll: function (selector) {
+      if (selector === 'button[type="button"]') {
+        return [
+          {
+            textContent: "Preview server :8000",
+            getAttribute: function () { return null; },
+            querySelectorAll: function (sel) {
+              return sel === "span"
+                ? [{ textContent: "Preview server" }, { textContent: ":8000" }]
+                : [];
+            },
+          },
+        ];
+      }
+      if (selector === "iframe[title]") {
+        return [
+          {
+            title: "App preview on port 8000",
+            src: "https://sbx-port8000.arena.site/",
+            getAttribute: function (name) {
+              return name === "title" ? "App preview on port 8000" : null;
+            },
+          },
+        ];
+      }
+      return [];
+    },
+  };
+  api.resetFlaggedSteering();
+  assert.equal(
+    api.flagSteeringLabelViolation(violationDoc, "clankers", function (url, body, done) {
+      sent.push({ url: url, body: body });
+      done(200);
+    }),
+    true,
+  );
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, "https://sbx-port8000.arena.site/api/agent-interrupt");
+  assert.equal(sent[0].body.reason, "process-violation");
+  assert.equal(sent[0].body.clause_file, "ARENA.md");
+  assert.equal(
+    api.flagSteeringLabelViolation(violationDoc, "clankers", function (url, body, done) {
+      sent.push({ url: url, body: body });
+      done(200);
+    }),
+    false,
+  );
+  assert.equal(sent.length, 1);
   console.log("ok open steering " + cases.length);
 }
 
