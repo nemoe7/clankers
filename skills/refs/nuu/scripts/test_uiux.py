@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import annotate
 import measure
 
 SCRIPT = Path(__file__).with_name("uiux.py")
@@ -791,3 +792,58 @@ module.exports = {
   assert measure.main(["density", str(density_file)]) == 1
   assert measure.main(["check", "-d", str(density_file)]) == 1
   assert measure.main(["check", str(density_file)]) == 0
+
+  font_proj = tmp_path / "FontProject"
+  font_proj.mkdir()
+  (font_proj / "DemoSans.woff2").write_bytes(b"wOF2demo")
+  (font_proj / "style.css").write_text(
+    '@font-face { font-family: "Demo Sans"; src: url("/assets/DemoSans.woff2") format("woff2"); font-weight: 400; }\n'
+    ':root { --font-sans: "Demo Sans", system-ui, sans-serif; --font-mono: "Demo Mono", monospace; }\n',
+    encoding="utf-8",
+  )
+  typo = annotate.resolve_project_typography(font_proj)
+  assert typo["font_sans"].startswith('"Demo Sans"')
+  assert typo["font_mono"].startswith('"Demo Mono"')
+  assert typo["embedded_fonts"] == 1
+  assert "data:font/woff2;base64," in typo["font_faces_css"]
+
+  panel_a = tmp_path / "panel-a.png"
+  panel_b = tmp_path / "panel-b.png"
+  panel_a.write_bytes(
+    annotate.encode_png(80, 60, bytearray([24, 24, 28, 255] * (80 * 60)))
+  )
+  panel_b.write_bytes(
+    annotate.encode_png(80, 60, bytearray([28, 36, 28, 255] * (80 * 60)))
+  )
+  board_out = tmp_path / "board-out.png"
+  board_proc = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "board",
+      "--project",
+      str(font_proj),
+      "-t",
+      "Comparison Board",
+      "-p",
+      f"Before={panel_a}",
+      "-p",
+      f"After={panel_b}@0,0,60,50",
+      "-c",
+      "1,Updated layout,green",
+      "-o",
+      str(board_out),
+    ],
+    text=True,
+    capture_output=True,
+    check=False,
+  )
+  assert board_proc.returncode == 0, board_proc.stderr or board_proc.stdout
+  board_res = json.loads(board_proc.stdout)
+  assert board_res["tool"] == "board"
+  assert board_res["status"] == "composed"
+  assert board_res["panels"] == 2
+  assert board_res["font_family"].startswith('"Demo Sans"')
+  assert board_out.is_file()
+  bw, bh, _ = annotate.decode_png(board_out.read_bytes())
+  assert bw > 80 and bh > 60

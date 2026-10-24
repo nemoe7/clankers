@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
-from annotate import annotate_image
+from annotate import annotate_image, build_board
 from measure import (
   DEFAULT_SCALE,
   DEFAULT_SHEET,
@@ -29,7 +29,7 @@ from measure import (
 from measure import check as check_measurements
 from measure import main as measure_main
 
-VERSION = "0.1.12"
+VERSION = "0.1.13"
 NAMED_BREAKPOINTS = ("75em", "60em", "40em", "30em")
 MEDIA_BREAKPOINT_RE = re.compile(
   r"@media\b[^{]*?\(\s*(?:min|max)-(?:width|height)\s*:\s*([0-9.]+(?:em|rem|px))\s*\)",
@@ -527,6 +527,7 @@ def main(argv=None):
     "lint",
     "extract",
     "annotate",
+    "board",
     "doctor",
     "inspect",
     "flow",
@@ -553,8 +554,13 @@ def main(argv=None):
       command.add_argument("-s", "--sheet", type=Path, default=DEFAULT_SHEET)
       command.add_argument("-k", "--scale", type=float, default=DEFAULT_SCALE)
       continue
-    command.add_argument("-p", "--project", type=Path, default=Path.cwd())
-    command.add_argument("-o", "--output", type=Path, required=name == "annotate")
+    if name == "board":
+      command.add_argument("--project", type=Path, default=Path.cwd())
+    else:
+      command.add_argument("-p", "--project", type=Path, default=Path.cwd())
+    command.add_argument(
+      "-o", "--output", type=Path, required=name in {"annotate", "board"}
+    )
     if name == "annotate":
       command.add_argument("-i", "--input", type=Path, required=True)
       command.add_argument("-b", "--box", action="append", default=[])
@@ -563,6 +569,13 @@ def main(argv=None):
       command.add_argument("-c", "--callout", action="append", default=[])
       command.add_argument("-s", "--spec", type=Path)
       command.add_argument("-S", "--scale", type=int)
+    if name == "board":
+      command.add_argument("-t", "--title")
+      command.add_argument("-p", "--panel", action="append", default=[])
+      command.add_argument("-c", "--callout", action="append", default=[])
+      command.add_argument("-s", "--spec", type=Path)
+      command.add_argument("-S", "--scale", type=int)
+      command.add_argument("-C", "--columns", type=int)
     if name == "search":
       command.add_argument("query")
       command.add_argument("-d", "--dataset")
@@ -627,6 +640,19 @@ def main(argv=None):
         callouts=args.callout,
         spec_path=args.spec,
         scale=args.scale,
+        project=root,
+      )
+      args.output = None
+    elif args.command == "board":
+      result = build_board(
+        args.output,
+        title=args.title,
+        panels=args.panel,
+        callouts=args.callout,
+        spec_path=args.spec,
+        columns=args.columns,
+        scale=args.scale,
+        project=root,
       )
       args.output = None
     elif args.command == "doctor":
