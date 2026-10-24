@@ -1870,7 +1870,9 @@ def test_http_boundaries():
         "#history,#modal textarea,#note,.draft-preview,.note-backdrop,[role=" in page
       )
       assert (
-        "#tasks-panel{animation:panel-enter var(--motion-duration) ease-out,edge-end linear both"
+        '#tasks-panel[role="tabpanel"]{mask-image:linear-gradient(to bottom,'
+        "black,black calc(100% - var(--edge-end)),transparent);"
+        "animation:panel-enter var(--motion-duration) ease-out,edge-end linear both"
         in page
       )
       assert 'id="tasks-tab" aria-controls="tasks-panel"' in page

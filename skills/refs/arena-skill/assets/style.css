@@ -357,7 +357,7 @@ mark code { color: var(--text); }
   main { padding: 14px 0 16px; }
   main > section[role="tabpanel"], .report-scroll-frame > section[role="tabpanel"] { padding-inline: 16px; }
   .card { padding: 18px; }
-  .compose { max-height: 55%; }
+  #note, .note-backdrop { max-height: min(160px, 28dvh); }
   /* A narrow strip keeps the three tracks equal and the labels whole: the padding and the font
      step down rather than a track giving way. */
   nav { gap: 6px; }
@@ -383,7 +383,7 @@ mark code { color: var(--text); }
   .topbar { padding: 6px 12px; }
   main { padding: 8px 0 10px; }
   main > section[role="tabpanel"], .report-scroll-frame > section[role="tabpanel"] { padding-inline: 12px; }
-  .compose { max-height: 50%; }
+  #note, .note-backdrop { max-height: min(120px, 24dvh); }
 }
 
 /* On touch devices, the tab strip and copy button stay on one line while the clock, theme toggle, and Return hint hide. */
@@ -545,7 +545,8 @@ mark code { color: var(--text); }
       animation-timeline: auto, scroll(self), scroll(self);
       animation-range: normal, 0px var(--edge-ramp), calc(100% - var(--edge-ramp)) 100%;
     }
-    #tasks-panel {
+    #tasks-panel[role="tabpanel"] {
+      mask-image: linear-gradient(to bottom, black, black calc(100% - var(--edge-end)), transparent);
       animation: panel-enter var(--motion-duration) ease-out, edge-end linear both;
       animation-timeline: auto, scroll(self);
       animation-range: normal, calc(100% - var(--edge-ramp)) 100%;
