@@ -13,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Add the advisory `"the"` usage-density check (`NMO902` and `references/nmo902.md`), format CLI findings in `ste-lint.py` style with an indented source snippet and `Summary` footer, and auto-discover `nemoizer.toml` or `[tool.nemoizer]` in `pyproject.toml`.
 - Extend `NMP100` to cap paragraphs and table cells at `paragraph_cap` (`4`), list items at `2` sentences, and headings at `1` sentence. Flag blockquotes exceeding `paragraph_cap` sentences for manual review.
+- Update `references/audit-report.md` to lead with `Status` and `Counts`, include rule descriptions in `Rule`, and show `Before` and `After` line comparison columns.
 
 #### nuu
 
@@ -20,6 +21,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Describe icon-only buttons as `symmetric` instead of `square` in Clause 6 (`SKILL.md`), `scripts/measure.py`, and `scripts/browser.cjs`.
 - Rename `UIX001`–`UIX306` rule IDs to `NUL001`–`NUL003` (lint), `NUB101`–`NUB104` (browser/flow), `NUM201`–`NUM208` (measure/density), and `NUA301`–`NUA306` (accessibility), and change the inline suppression marker from `noui:` to `nonuu:`.
 - Raise `MIN_INK_RATIO` (`NUM205`) to `0.75` and automatically exempt header and toolbar bars (`<header>`, `<nav>`, `<footer>`, toolbar roles, and single-row `space-between` control bars). Add Clause 16 mandating shared-track min/max range sliders and integer step snap points, and Clause 17 (`references/recipes/modal-manager.md`) mandating a shared `<dialog>` modal manager.
+- Update `references/audit-report.md` and `SKILL.md` to lead with `Status`, `Counts`, and non-empty `Unrun Checks`, capture dark-themed breakpoints plus mobile, and show cropped, annotated `Before` and `After` columns in `Visual Judgments` and `Deviations`.
 
 ### Changed
 
