@@ -27,6 +27,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Update `references/audit-report.md` and `SKILL.md` to lead with `Status`, `Counts`, and non-empty `Unrun Checks`, capture dark-themed breakpoints plus mobile, and show cropped, annotated `Before` and `After` columns in `Visual Judgments` and `Deviations`.
 - Add `nuu board` for multi-panel visual boards and render `nuu board` and `nuu annotate` text with the project CSS font via Chromium. Rename `scripts/uiux.py` and `scripts/test_uiux.py` to `scripts/nuu.py` and `scripts/test_nuu.py`.
 - Add `-W, --wireframe` to `nuu inspect`, `nuu audit`, and `nuu board` to generate high-contrast DOM component outline captures (`*-wireframe.png`), and block staging, committing, or embedding wireframe files in reports.
+- Add Clause 17 to `SKILL.md` requiring 24-hour time by default, 12-hour time when requested, and a 24h/12h option in settings when settings exist.
 
 ### Changed
 

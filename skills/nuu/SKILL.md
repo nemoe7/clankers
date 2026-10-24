@@ -59,6 +59,8 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 16. Combine min/max range sliders on one shared track, and set integer step snap points on integer sliders.
 
+17. Format time in 24-hour time by default; add 12-hour time when requested, and include a 24h/12h option in settings when settings exist.
+
 ## Go-to libraries
 
 - For draggable and reorderable lists, vendor only the required part of [SortableJS](https://github.com/SortableJS/Sortable) with its MIT license instead of writing custom drag-and-drop handlers.
