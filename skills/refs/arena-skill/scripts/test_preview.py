@@ -13867,6 +13867,8 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
     '.topbar:has(~ main #reports-panel[data-loading="true"]:not([hidden]))::after'
     in style_css
   )
+  assert "transform-origin: left center; transform: scaleX(0);" in style_css
+  assert "transform: scaleX(.92)" in style_css
   assert '#modal:not([data-keyboard-nav="true"]) :focus-visible' in style_css
 
   mermaid_md = "# Flow\n\n```mermaid\nflowchart TD\n  A[One] --> B[Two]\n```\n"
