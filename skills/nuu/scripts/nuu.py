@@ -264,6 +264,31 @@ def lint(root):
             "criterion": "2.4.7",
           }
         )
+      for rule_match in re.finditer(r"([^{}@]+)\{([^{}]*)\}", clean):
+        selector_text = rule_match[1]
+        if not re.search(
+          r"(?::hover|:focus(?:-visible|-within)?|:active|:disabled|\[disabled\b|\[aria-busy\b)",
+          selector_text,
+        ):
+          continue
+        body_start = rule_match.start(2)
+        for prop_match in re.finditer(
+          r"(?:^|[;\s])((?:(?:min|max)-)?(?:width|height)|padding(?:-(?:top|right|bottom|left|inline|block))?|border(?:-(?:top|right|bottom|left))?-width|font-size|line-height)\s*:\s*([^;}]+)",
+          rule_match[2],
+        ):
+          prop_pos = body_start + prop_match.start(1)
+          current.append(
+            {
+              "rule": "NUL005",
+              "path": str(path),
+              "line": text.count("\n", 0, prop_pos) + 1,
+              "column": 1,
+              "severity": "review",
+              "status": "source_candidate",
+              "evidence": f"{prop_match[1]}: {prop_match[2].strip()}",
+              "criterion": "clause-9",
+            }
+          )
     for finding in current:
       line = text.splitlines()[finding["line"] - 1]
       ignored = set(re.findall(r"\bnonuu:\s*([A-Za-z0-9_-]+)", line))

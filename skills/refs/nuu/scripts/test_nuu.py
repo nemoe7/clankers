@@ -67,6 +67,12 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
     before[css].decode() + "button:focus {outline: none;} /* nonuu: NUL003 */\n"
   )
   assert not run("lint")["findings"]
+  css.write_text(before[css].decode() + "button:hover {padding: 12px 24px;}\n")
+  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"NUL005"}
+  css.write_text(
+    before[css].decode() + "button:hover {padding: 12px 24px;} /* nonuu: NUL005 */\n"
+  )
+  assert not run("lint")["findings"]
   css.write_bytes(before[css])
   before[page] = page.read_bytes()
   manifest = tmp_path / "assets.json"
