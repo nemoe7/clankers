@@ -59,7 +59,9 @@ except ImportError:
     return file_ids, line_ids, marks
 
   def is_advisory_finding(finding, advisory_rule_ids):
-    return finding.rsplit(": ", 1)[-1].split()[0] in advisory_rule_ids
+    first = finding.splitlines()[0]
+    token = first.rsplit(": ", 1)[-1].split()[0].strip("[]")
+    return token in advisory_rule_ids
 
   def audit_lines(marks, findings, advisory_rule_ids):
     return [
@@ -349,6 +351,36 @@ def rotate(line, suppressed=frozenset()):
   return line
 
 
+def format_finding(path, line, code, message, source_line=None):
+  """Format one finding in STE-linter style with an indented source snippet."""
+  level = "advisory" if code in ADVISORY_RULE_IDS else "advisory-free"
+  suffix = (
+    " (manual review)"
+    if code in ADVISORY_RULE_IDS and "(manual review)" not in message
+    else ""
+  )
+  header = f"{path}:{line}: [{code}] ({level}) {message}{suffix}"
+  if source_line is None:
+    return header
+  snippet = source_line.strip()
+  if len(snippet) > 100:
+    snippet = snippet[:97] + "..."
+  return f"{header}\n    {snippet}" if snippet else header
+
+
+def format_summary(findings):
+  """Format the STE-linter summary footer for a non-empty finding list."""
+  if not findings:
+    return ""
+  hard = sum(1 for item in findings if not is_advisory(item))
+  advisory = len(findings) - hard
+  files = len({item.splitlines()[0].rsplit(":", 2)[0] for item in findings})
+  return (
+    f"\nSummary: {hard} hard violation(s), "
+    f"{advisory} advisory finding(s) across {files} file(s)."
+  )
+
+
 def scan(targets, ignores):
   """Return findings and all exclusion markers with locations and rule IDs."""
   findings, marks = [], []
@@ -379,8 +411,7 @@ def scan(targets, ignores):
         if suppressed(code, excluded, name):
           continue
         for word in sorted(set(re.findall(pattern, visible, flags=re.IGNORECASE))):
-          suffix = " (manual review)" if code in ADVISORY_RULE_IDS else ""
-          findings.append(f"{path}:{number}: {code} {word} -> {use}{suffix}")
+          findings.append(format_finding(path, number, code, f"{word} -> {use}", line))
   return findings, marks
 
 
@@ -1781,9 +1812,15 @@ def main(argv=None):
     ) as error:
       errors.append(f"{path}: {type(error).__name__}: {error}")
       continue
+    lines = text.splitlines()
     findings.extend(
-      f"{row['path']}:{row['line']}: {row['rule']} {describe_finding(row)}"
-      + (" (manual review)" if row["rule"] in ADVISORY_RULE_IDS else "")
+      format_finding(
+        row["path"],
+        row["line"],
+        row["rule"],
+        describe_finding(row),
+        lines[row["line"] - 1] if 0 < row["line"] <= len(lines) else None,
+      )
       for row in rows
     )
   if arguments.audit:
@@ -1793,10 +1830,17 @@ def main(argv=None):
       return 2
     return 0
   result = review_tests(tests)
-  findings.extend(
-    f"{row['path']}:{row['line']}: {row['rule']} {row['evidence']}"
-    for row in result["findings"]
-  )
+  for row in result["findings"]:
+    test_lines = (text_file(Path(row["path"])) or "").splitlines()
+    findings.append(
+      format_finding(
+        row["path"],
+        row["line"],
+        row["rule"],
+        row["evidence"],
+        test_lines[row["line"] - 1] if 0 < row["line"] <= len(test_lines) else None,
+      )
+    )
   for row in result["coverage"]:
     if row["status"] != "checked":
       errors.append(f"{row['path']}: tests not checked: {row['reason']}")
@@ -1806,7 +1850,7 @@ def main(argv=None):
       "Test scope: static paths and declarations. Dynamic helpers may be unresolved.",
       file=sys.stderr,
     )
-  print("\n".join(findings))
+  print("\n".join(findings) + ("\n" + format_summary(findings) if findings else ""))
   if errors:
     print("\n".join(errors), file=sys.stderr)
     return 2

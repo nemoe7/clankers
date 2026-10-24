@@ -35,7 +35,7 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 ```
 
 - Every text file is read, including comments and Markdown prose.
-- Print each finding as `path:line: ID word -> use`, exit 1 only for mandatory findings, and mark advisory findings for manual review by the agent or user.
+- Print each finding as `path:line: [ID] (advisory-free|advisory) description` with its indented source line and a `Summary` footer, exit 1 only for mandatory findings, and mark advisory findings for manual review by the agent or user.
 - Vendored and generated trees are skipped, and `--ignore` adds a directory or
   file.
 

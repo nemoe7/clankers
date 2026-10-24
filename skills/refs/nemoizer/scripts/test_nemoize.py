@@ -32,9 +32,20 @@ def test_a_rotation_matches_the_stem_and_prose():
     (root / "code.py").write_text("kind = 'plain'\n", encoding="utf-8")
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "note.md:1: NMO901 picked -> select" in result.stdout
-    assert "note.md:1: NMO100 transmit -> send" in result.stdout
-    assert "code.py:1: NMO100 kind -> type" in result.stdout
+    assert "note.md:1: [NMO901] (advisory) picked -> select" in result.stdout
+    assert "note.md:1: [NMO100] (advisory-free) transmit -> send" in result.stdout
+    assert "code.py:1: [NMO100] (advisory-free) kind -> type" in result.stdout
+    assert "\n    He picked one. Do not transmit this." in result.stdout
+    assert (
+      nemoize.format_summary(
+        [
+          "note.md:1: [NMO100] (advisory-free) transmit -> send",
+          "code.py:1: [NMO100] (advisory-free) kind -> type",
+          "note.md:1: [NMO901] (advisory) picked -> select",
+        ]
+      )
+      in result.stdout
+    )
 
 
 def test_a_line_marker_skips_that_line_and_a_head_marker_skips_the_file():
@@ -50,9 +61,9 @@ def test_a_line_marker_skips_that_line_and_a_head_marker_skips_the_file():
     )
     result = run(cwd=directory)
     assert "marked.py:1:" not in result.stdout
-    assert "marked.py:2: NMO901 picked -> select" in result.stdout
-    assert "whole.md:2: NMO901 picked -> select" in result.stdout
-    assert "whole.md:2: NMO100 kind -> type" not in result.stdout
+    assert "marked.py:2: [NMO901] (advisory) picked -> select" in result.stdout
+    assert "whole.md:2: [NMO901] (advisory) picked -> select" in result.stdout
+    assert "whole.md:2: [NMO100] (advisory-free) kind -> type" not in result.stdout
     listing = run("--ignores", cwd=directory)
     assert listing.returncode == 0
     assert "marked.py:1:" in listing.stdout
@@ -97,8 +108,8 @@ def test_a_picker_is_a_rotation_and_a_marked_pickle_is_not():
     )
     result = run(cwd=directory)
     assert result.returncode == 0
-    assert "ui.js:1: NMO901 picker -> select" in result.stdout
-    assert "ui.js:2: NMO901 pick -> select" in result.stdout
+    assert "ui.js:1: [NMO901] (advisory) picker -> select" in result.stdout
+    assert "ui.js:2: [NMO901] (advisory) pick -> select" in result.stdout
     assert "ui.js:3" not in result.stdout
     assert "ui.js:4" not in result.stdout
     formatted = run("--format", cwd=directory)
@@ -169,9 +180,9 @@ def test_rule_ids_suppress_only_the_named_rotation():
     )
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "note.md:1: NMO901 picked -> select" in result.stdout
-    assert "note.md:1: NMO100 kind -> type" not in result.stdout
-    assert "note.md:2: NMO100 transmit -> send" in result.stdout
+    assert "note.md:1: [NMO901] (advisory) picked -> select" in result.stdout
+    assert "note.md:1: [NMO100] (advisory-free) kind -> type" not in result.stdout
+    assert "note.md:2: [NMO100] (advisory-free) transmit -> send" in result.stdout
     result = run("--format", cwd=directory)
     assert result.returncode == 0
     assert (
@@ -216,7 +227,7 @@ def test_multiple_rule_exclusions_preserve_the_marker_text():
     note.write_text(content, encoding="utf-8")
     result = run(cwd=directory)
     assert "note.md:1:" not in result.stdout
-    assert "note.md:2: NMO100 kind -> type" in result.stdout
+    assert "note.md:2: [NMO100] (advisory-free) kind -> type" in result.stdout
     formatted = run("--format", cwd=directory)
     assert formatted.returncode == 0
     assert (
@@ -534,7 +545,7 @@ def test_generated_pytest_cache_is_not_scanned(tmp_path):
   (tmp_path / "prose.md").write_text("picked wording\n", encoding="utf-8")
   result = run(cwd=tmp_path)
   assert result.returncode == 0
-  assert "prose.md:1: NMO901" in result.stdout  # nonemo: NMT100
+  assert "prose.md:1: [NMO901]" in result.stdout  # nonemo: NMT100
   assert ".pytest_cache" not in result.stdout
 
 
@@ -614,14 +625,17 @@ def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert (
-    f"note.md:1: STE200 {nemoize.describe_finding({'rule': 'STE200', 'count': 21, 'cap': 20})}"
+    f"note.md:1: [STE200] (advisory-free) {nemoize.describe_finding({'rule': 'STE200', 'count': 21, 'cap': 20})}"
     in result.stdout
   )
   assert (
-    f"note.md:3: NMP100 {nemoize.describe_finding({'rule': 'NMP100', 'count': 5, 'cap': 4})}"
+    f"note.md:3: [NMP100] (advisory-free) {nemoize.describe_finding({'rule': 'NMP100', 'count': 5, 'cap': 4})}"
     in result.stdout
   )
-  assert f"note.md:5: STE100 {nemoize.RULE_DESCRIPTIONS['STE100']}" in result.stdout
+  assert (
+    f"note.md:5: [STE100] (advisory-free) {nemoize.RULE_DESCRIPTIONS['STE100']}"
+    in result.stdout
+  )
   description = run("--context", "description", cwd=tmp_path)
   assert description.returncode == 1, description.stderr
   assert "STE200" not in description.stdout
@@ -631,7 +645,7 @@ def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
   comment_res = run(str(code_file), cwd=tmp_path)
   assert comment_res.returncode == 1, comment_res.stderr
   assert (
-    f"{code_file}:1: NMP101 {nemoize.describe_finding({'rule': 'NMP101', 'count': 3, 'cap': 2})}"
+    f"{code_file}:1: [NMP101] (advisory-free) {nemoize.describe_finding({'rule': 'NMP101', 'count': 3, 'cap': 2})}"
     in comment_res.stdout
   )
 
@@ -647,7 +661,10 @@ def test_cmd_and_bat_files_extract_only_batch_comments_and_enforce_ste001(tmp_pa
   )
   result = run(str(cmd), cwd=tmp_path)
   assert result.returncode == 1, result.stderr
-  assert f"{cmd}:3: STE100 {nemoize.RULE_DESCRIPTIONS['STE100']}" in result.stdout
+  assert (
+    f"{cmd}:3: [STE100] (advisory-free) {nemoize.RULE_DESCRIPTIONS['STE100']}"
+    in result.stdout
+  )
   assert f"{cmd}:2:" not in result.stdout
   assert f"{cmd}:4:" not in result.stdout
 
@@ -660,7 +677,7 @@ def test_default_prose_checks_extract_python_comments_not_literals(tmp_path):
   source.write_text(f'value = "{sentence}"\n# {sentence}\n')
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
-  assert "example.py:2: STE200" in result.stdout  # nonemo: NMT100
+  assert "example.py:2: [STE200]" in result.stdout  # nonemo: NMT100
   assert "example.py:1:" not in result.stdout
 
 
@@ -673,9 +690,9 @@ def test_rotation_group_markers_and_removed_legacy_aliases(tmp_path):
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert "note.md:1:" not in result.stdout
-  assert "note.md:2: NMO901 picked -> select" in result.stdout
-  assert "note.md:2: NMO100 transmit -> send" in result.stdout
-  assert "note.md:2: NMO100 kind -> type" in result.stdout
+  assert "note.md:2: [NMO901] (advisory) picked -> select" in result.stdout
+  assert "note.md:2: [NMO100] (advisory-free) transmit -> send" in result.stdout
+  assert "note.md:2: [NMO100] (advisory-free) kind -> type" in result.stdout
 
 
 def test_default_prose_scan_reports_parse_errors(tmp_path):
@@ -693,8 +710,8 @@ def test_default_test_scope_excludes_imported_production_files(tmp_path):
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
-  assert "test_status.py:2: NMT100" in result.stdout  # nonemo: NMT100
-  assert "app.py:1: NMT100" not in result.stdout  # nonemo: NMT100
+  assert "test_status.py:2: [NMT100]" in result.stdout  # nonemo: NMT100
+  assert "app.py:1: [NMT100]" not in result.stdout  # nonemo: NMT100
 
 
 def test_default_test_scope_uses_configured_patterns_and_explicit_helpers(tmp_path):
@@ -710,11 +727,11 @@ def test_default_test_scope_uses_configured_patterns_and_explicit_helpers(tmp_pa
   helper.write_text('assert result.stdout == "Saved the report."\n')
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
-  assert "scenario_status.py:1: NMT100" in result.stdout  # nonemo: NMT100
-  assert "helper.py:1: NMT100" not in result.stdout  # nonemo: NMT100
+  assert "scenario_status.py:1: [NMT100]" in result.stdout  # nonemo: NMT100
+  assert "helper.py:1: [NMT100]" not in result.stdout  # nonemo: NMT100
   explicit = run("--test-helper", str(helper), cwd=tmp_path)
   assert explicit.returncode == 1, explicit.stderr
-  assert "helper.py:1: NMT100" in explicit.stdout  # nonemo: NMT100
+  assert "helper.py:1: [NMT100]" in explicit.stdout  # nonemo: NMT100
 
 
 def test_default_javascript_test_scope_uses_declarations_not_string_examples(tmp_path):
@@ -730,8 +747,8 @@ def test_default_javascript_test_scope_uses_declarations_not_string_examples(tmp
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
-  assert "suite.js:1: NMT100" in result.stdout  # nonemo: NMT100
-  assert "app.js:1: NMT100" not in result.stdout  # nonemo: NMT100
+  assert "suite.js:1: [NMT100]" in result.stdout  # nonemo: NMT100
+  assert "app.js:1: [NMT100]" not in result.stdout  # nonemo: NMT100
 
 
 def test_explicit_prose_mode_uses_shared_source_extraction(tmp_path):
@@ -767,14 +784,14 @@ def test_block_comment_prose_keeps_its_source_line_and_exclusion(tmp_path):
   first = source.read_text().splitlines().index(" * " + sentence) + 1
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
-  assert f"example.js:{first}: STE200" in result.stdout
+  assert f"example.js:{first}: [STE200]" in result.stdout
   source.write_text(
     prefix + "/*\n * " + sentence + " nonemo: STE200\n * " + sentence + "\n */\n"
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
-  assert f"example.js:{first}: STE200" not in result.stdout
-  assert f"example.js:{first + 1}: STE200" in result.stdout
+  assert f"example.js:{first}: [STE200]" not in result.stdout
+  assert f"example.js:{first + 1}: [STE200]" in result.stdout
 
 
 def test_escaped_docstring_newline_uses_a_physical_source_line(tmp_path):
@@ -784,7 +801,7 @@ def test_escaped_docstring_newline_uses_a_physical_source_line(tmp_path):
     source.write_text('"""' + prefix + sentence + '"""\n')
     result = run(cwd=tmp_path)
     assert result.returncode == 1, result.stderr
-    assert "example.py:1: STE200" in result.stdout  # nonemo: NMT100
+    assert "example.py:1: [STE200]" in result.stdout  # nonemo: NMT100
 
 
 def test_source_extractors_skip_module_and_yaml_data_literals(tmp_path):
@@ -837,8 +854,8 @@ def test_markdown_trailing_newline_keeps_source_lines_and_local_exclusions(tmp_p
   first = lines.index(sentence) + 1
   second = len(lines)
   assert result.returncode == 1, result.stderr
-  assert f"note.md:{first}: STE200" in result.stdout
-  assert f"note.md:{second}: STE200" not in result.stdout
+  assert f"note.md:{first}: [STE200]" in result.stdout
+  assert f"note.md:{second}: [STE200]" not in result.stdout
 
 
 def test_wrapped_prose_counts_the_complete_sentence(tmp_path):
@@ -857,7 +874,7 @@ def test_wrapped_prose_counts_the_complete_sentence(tmp_path):
       result = run(str(source), cwd=tmp_path)
       assert result.returncode == int(count > cap), result.stderr
       if count > cap:
-        assert f"{source}:{first}: STE200" in result.stdout
+        assert f"{source}:{first}: [STE200]" in result.stdout
     lines[first - 1] += " nonemo: STE200"
     source.write_text("\n".join(lines) + "\n")
     assert run(str(source), cwd=tmp_path).returncode == 0
@@ -869,7 +886,7 @@ def test_soft_rotation_is_advisory_in_checks_and_explicit_in_format(tmp_path):
   source.write_text(original)
   result = run(str(source), cwd=tmp_path)
   assert result.returncode == 0, result.stderr
-  assert "NMO901 Pick -> select" in result.stdout
+  assert "[NMO901] (advisory) Pick -> select" in result.stdout
   assert "manual review" in result.stdout
   assert source.read_text() == original
   formatted = run("--format", str(source), cwd=tmp_path)
@@ -888,10 +905,11 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   )
   result = run(str(source), cwd=tmp_path)
   assert result.returncode == 0, result.stderr
-  assert "NMO901 Repository -> repo (manual review)" in result.stdout
-  assert "NMO901 repositories -> repo (manual review)" in result.stdout
+  assert "[NMO901] (advisory) Repository -> repo (manual review)" in result.stdout
+  assert "[NMO901] (advisory) repositories -> repo (manual review)" in result.stdout
   assert (
-    f"STE901 {nemoize.RULE_DESCRIPTIONS['STE901']} (manual review)" in result.stdout
+    f"[STE901] (advisory) {nemoize.RULE_DESCRIPTIONS['STE901']} (manual review)"
+    in result.stdout
   )
   formatted = run("--format", str(source), cwd=tmp_path)
   assert formatted.returncode == 0
@@ -904,15 +922,19 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   advisory = run(str(source), cwd=tmp_path)
   assert advisory.returncode == 0, advisory.stderr
   assert (
-    f"STE902 {nemoize.RULE_DESCRIPTIONS['STE902']} (manual review)" in advisory.stdout
+    f"[STE902] (advisory) {nemoize.RULE_DESCRIPTIONS['STE902']} (manual review)"
+    in advisory.stdout
   )
   assert (
-    f"STE903 {nemoize.RULE_DESCRIPTIONS['STE903']} (manual review)" in advisory.stdout
+    f"[STE903] (advisory) {nemoize.RULE_DESCRIPTIONS['STE903']} (manual review)"
+    in advisory.stdout
   )
   source.write_text("Check red, green and blue.\n")
   serial = run(str(source), cwd=tmp_path)
   assert serial.returncode == 1, serial.stderr
-  assert f"NMO003 {nemoize.RULE_DESCRIPTIONS['NMO003']}" in serial.stdout
+  assert (
+    f"[NMO003] (advisory-free) {nemoize.RULE_DESCRIPTIONS['NMO003']}" in serial.stdout
+  )
   assert "manual review" not in serial.stdout
   test_sample = tmp_path / "test_sample.py"
   test_sample.write_text(
@@ -1009,7 +1031,9 @@ def test_ste_and_hmn_rules_and_audit_mode(tmp_path):
   )
   jsonc_result = run(str(jsonc_file), cwd=tmp_path)
   assert jsonc_result.returncode == 1
-  assert "config.jsonc:2: NMO100 Transmit -> send" in jsonc_result.stdout
+  assert (
+    "config.jsonc:2: [NMO100] (advisory-free) Transmit -> send" in jsonc_result.stdout
+  )
   assert "kind" not in jsonc_result.stdout
   assert "repository" not in jsonc_result.stdout
 

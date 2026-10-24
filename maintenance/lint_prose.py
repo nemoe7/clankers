@@ -244,9 +244,17 @@ def nemoizer_main(argv: list[str]) -> int:
       context, scoped = nemoizer_scope(path, text)
       if not scoped:
         continue
+      scoped_lines = scoped.splitlines()
       findings.extend(
-        f"{row['path']}:{row['line']}: {row['rule']} {module.describe_finding(row)}"
-        + (" (manual review)" if row["rule"] in module.ADVISORY_RULE_IDS else "")
+        module.format_finding(
+          row["path"],
+          row["line"],
+          row["rule"],
+          module.describe_finding(row),
+          scoped_lines[row["line"] - 1]
+          if 0 < row["line"] <= len(scoped_lines)
+          else None,
+        )
         for row in module.source_prose(path, scoped, context, module.PARAGRAPH_CAP)
       )
     except (
@@ -261,17 +269,26 @@ def nemoizer_main(argv: list[str]) -> int:
     ) as error:
       errors.append(f"{path}: {type(error).__name__}: {error}")
   result = module.review_tests(tests)
-  findings.extend(
-    f"{row['path']}:{row['line']}: {row['rule']} {row['evidence']}"
-    for row in result["findings"]
-  )
+  for row in result["findings"]:
+    test_lines = (module.text_file(Path(row["path"])) or "").splitlines()
+    findings.append(
+      module.format_finding(
+        row["path"],
+        row["line"],
+        row["rule"],
+        row["evidence"],
+        test_lines[row["line"] - 1] if 0 < row["line"] <= len(test_lines) else None,
+      )
+    )
   errors.extend(
     f"{row['path']}: tests not checked: {row['reason']}"
     for row in result["coverage"]
     if row["status"] != "checked"
   )
   errors.extend(f"{row['path']}: {row['type']}" for row in result["errors"])
-  print("\n".join(findings))
+  print(
+    "\n".join(findings) + ("\n" + module.format_summary(findings) if findings else "")
+  )
   print(
     "Repository length scope: human documentation only, at 25 words and four sentences. Test discovery is static.",
     file=sys.stderr,
