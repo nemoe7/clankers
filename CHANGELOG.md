@@ -16,6 +16,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Export `DEVICE_BREAKPOINTS` (`75em`, `60em`, `40em` width and `30em` height) from `scripts/uiux.py`, and enable mobile touch emulation when viewport height is at most `480` px (`30em`) in `scripts/browser.cjs`.
 - Describe icon-only buttons as `symmetric` instead of `square` in Clause 6 (`SKILL.md`), `scripts/measure.py`, and `scripts/browser.cjs`.
+- Rename `UIX001`–`UIX306` rule IDs to `NUL001`–`NUL003` (lint), `NUB101`–`NUB104` (browser/flow), `NUM201`–`NUM208` (measure/density), and `NUA301`–`NUA306` (accessibility), and change the inline suppression marker from `noui:` to `nonuu:`.
 
 ### Changed
 

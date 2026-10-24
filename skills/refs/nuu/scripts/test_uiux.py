@@ -42,20 +42,20 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
 
   before = {path: path.read_bytes() for path in (css, page)}
   findings = run("lint", expected=1)
-  assert {row["rule"] for row in findings["findings"]} >= {"UIX001", "UIX002"}
+  assert {row["rule"] for row in findings["findings"]} >= {"NUL001", "NUL002"}
   assert all(row["line"] > 0 and row["evidence"] for row in findings["findings"])
   page.write_text(
     '<img src="art.svg" alt=""><label>Field<input></label>\n', encoding="utf-8"
   )
   assert not run("lint")["findings"]
-  page.write_text('<img src="art.svg"> <!-- noui: UIX0010 -->\n', encoding="utf-8")
+  page.write_text('<img src="art.svg"> <!-- nonuu: NUL0010 -->\n', encoding="utf-8")
   assert run("lint", expected=1)["findings"]
-  page.write_text('<img src="art.svg"> <!-- noui: UIX001 -->\n', encoding="utf-8")
+  page.write_text('<img src="art.svg"> <!-- nonuu: NUL001 -->\n', encoding="utf-8")
   assert not run("lint")["findings"]
   css.write_text(before[css].decode() + "button:focus {outline: none !important;}\n")
-  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"UIX003"}
+  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"NUL003"}
   css.write_text(
-    before[css].decode() + "button:focus {outline: none;} /* noui: UIX003 */\n"
+    before[css].decode() + "button:focus {outline: none;} /* nonuu: NUL003 */\n"
   )
   assert not run("lint")["findings"]
   css.write_bytes(before[css])
@@ -372,7 +372,7 @@ byId('retry').addEventListener('click',submit);
       )
       house = run("inspect", "--profile", "house", expected=1)
       assert any(row["house_measurements"] for row in house["captures"])
-      assert any(row["rule"] == "UIX201" for row in house["findings"])
+      assert any(row["rule"] == "NUM201" for row in house["findings"])
       live = run("live", "--edit", str(edit_file), "--authorize-edit")
       edit = live["captures"][0]["edit"]
       assert (
@@ -641,17 +641,17 @@ module.exports = {
           }),
           evaluate: async fn => {
             const src = String(fn);
-            if (src.includes('UIX301')) {
+            if (src.includes('NUA301')) {
               if (process.env.FAKE_A11Y_MODE === 'clean') return { status: 'checked', findings: [] };
               return {
                 status: 'checked',
                 findings: [
-                  { rule: 'UIX301', severity: 'review', criterion: '4.1.2', evidence: 'unlabeled' },
-                  { rule: 'UIX302', severity: 'review', criterion: '1.3.1', evidence: 'missing ref' },
-                  { rule: 'UIX303', severity: 'review', criterion: '4.1.2', evidence: 'nested' },
-                  { rule: 'UIX304', severity: 'review', criterion: '4.1.1', evidence: 'duplicate id' },
-                  { rule: 'UIX305', severity: 'review', criterion: '1.3.1', evidence: 'skipped h' },
-                  { rule: 'UIX306', severity: 'review', criterion: '1.4.3', evidence: 'contrast' },
+                  { rule: 'NUA301', severity: 'review', criterion: '4.1.2', evidence: 'unlabeled' },
+                  { rule: 'NUA302', severity: 'review', criterion: '1.3.1', evidence: 'missing ref' },
+                  { rule: 'NUA303', severity: 'review', criterion: '4.1.2', evidence: 'nested' },
+                  { rule: 'NUA304', severity: 'review', criterion: '4.1.1', evidence: 'duplicate id' },
+                  { rule: 'NUA305', severity: 'review', criterion: '1.3.1', evidence: 'skipped h' },
+                  { rule: 'NUA306', severity: 'review', criterion: '1.4.3', evidence: 'contrast' },
                 ],
               };
             }
@@ -708,19 +708,19 @@ module.exports = {
     {**base_req, "ready": "#missing-ready"}, mode="clean"
   )
   assert code_timeout == 0 and ready_timeout["status"] == "findings"
-  assert {row["rule"] for row in ready_timeout["findings"]} == {"UIX104"}
+  assert {row["rule"] for row in ready_timeout["findings"]} == {"NUB104"}
 
   code_a11y, a11y_bad = run_driver(
     {**base_req, "command": "a11y", "a11y": True}, mode="findings"
   )
   assert code_a11y == 0 and a11y_bad["status"] == "findings"
   assert {row["rule"] for row in a11y_bad["findings"]} == {
-    "UIX301",
-    "UIX302",
-    "UIX303",
-    "UIX304",
-    "UIX305",
-    "UIX306",
+    "NUA301",
+    "NUA302",
+    "NUA303",
+    "NUA304",
+    "NUA305",
+    "NUA306",
   }
 
   code_clean, a11y_clean = run_driver(
@@ -759,10 +759,10 @@ module.exports = {
   }
   density_findings = measure.check_density(density_report)
   assert [row["rule"] for row in density_findings] == [
-    "UIX205",
-    "UIX206",
-    "UIX207",
-    "UIX208",
+    "NUM205",
+    "NUM206",
+    "NUM207",
+    "NUM208",
   ]
   density_file = tmp_path / "density-report.json"
   density_file.write_text(json.dumps(density_report), encoding="utf-8")
