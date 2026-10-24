@@ -942,6 +942,43 @@ def test_design_boards_and_html_typography(tmp_path):
   assert typo["font_sans"].startswith('"Inter"')
   assert typo["font_mono"].startswith('"JetBrains Mono"')
 
+  toml_proj = tmp_path / "TomlFontProject"
+  toml_proj.mkdir()
+  (toml_proj / "CustomFont.woff2").write_bytes(b"wOF2custom")
+  (toml_proj / "nuu.toml").write_text(
+    "[fonts]\n"
+    "sans = '\"Custom Toml Sans\", sans-serif'\n"
+    "mono = '\"Custom Toml Mono\", monospace'\n"
+    'files = ["CustomFont.woff2"]\n\n'
+    "[annotate]\n"
+    "scale = 3\n\n"
+    "[board]\n"
+    "columns = 1\n"
+    "wireframe = true\n",
+    encoding="utf-8",
+  )
+  toml_typo = annotate.resolve_project_typography(toml_proj)
+  assert toml_typo["font_sans"].startswith('"Custom Toml Sans"')
+  assert toml_typo["font_mono"].startswith('"Custom Toml Mono"')
+  assert toml_typo["embedded_fonts"] == 1
+  assert toml_typo["config_path"] == str(toml_proj / "nuu.toml")
+  toml_src = toml_proj / "shot.png"
+  toml_src.write_bytes(
+    annotate.encode_png(60, 40, bytearray([20, 24, 32, 255] * (60 * 40)))
+  )
+  toml_ann = annotate.annotate_image(
+    toml_src,
+    toml_proj / "shot-ann.png",
+    boxes=["4,4,20,20,red"],
+    project=toml_proj,
+    renderer="bitmap",
+  )
+  assert toml_ann["scale"] == 3
+  assert toml_ann["font_family"].startswith('"Custom Toml Sans"')
+  doc_toml = nuu.doctor(toml_proj)
+  assert doc_toml["configuration"]["status"] == "checked"
+  assert doc_toml["configuration"]["path"] == str(toml_proj / "nuu.toml")
+
   shots_dir = html_font_proj / "shots"
   shots_dir.mkdir()
   dash_png = shots_dir / "dashboard.png"

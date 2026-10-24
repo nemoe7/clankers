@@ -18,7 +18,15 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
-from annotate import annotate_image, build_board, build_design_boards
+import tomllib
+from annotate import (
+  annotate_image,
+  build_board,
+  build_design_boards,
+  find_nuu_config,
+  load_nuu_config,
+  resolve_project_typography,
+)
 from measure import (
   DEFAULT_SCALE,
   DEFAULT_SHEET,
@@ -29,7 +37,7 @@ from measure import (
 from measure import check as check_measurements
 from measure import main as measure_main
 
-VERSION = "0.1.14"
+VERSION = "0.1.15"
 NAMED_BREAKPOINTS = ("75em", "60em", "40em", "30em")
 DEVICE_BREAKPOINTS = NAMED_BREAKPOINTS
 MEDIA_BREAKPOINT_RE = re.compile(
@@ -43,7 +51,10 @@ SKIP = {".git", ".venv", "node_modules", "dist", "build", "__pycache__"}
 
 
 def load(path):
-  return json.loads(Path(path).read_text(encoding="utf-8"))
+  target = Path(path)
+  if target.suffix.lower() == ".toml":
+    return tomllib.loads(target.read_text(encoding="utf-8"))
+  return json.loads(target.read_text(encoding="utf-8"))
 
 
 def contained(root, name):
@@ -510,11 +521,25 @@ def browser(args):
     raise ValueError("live edits require live mode and --authorize-edit")
   if not shutil.which("node"):
     return {"status": "not_checked", "reason": "node_unavailable", "coverage": []}
+  project_root = getattr(args, "project", None) or Path.cwd()
+  cfg_info = load_nuu_config(project_root)
+  cfg_audit = (
+    cfg_info["config"].get("audit")
+    if isinstance(cfg_info["config"].get("audit"), dict)
+    else {}
+  )
+  cfg_widths = cfg_audit.get("widths") or cfg_info["config"].get("widths") or []
+  extra_widths = (
+    args.widths
+    if args.widths
+    else [w for w in cfg_widths if isinstance(w, int) and w > 0]
+  )
+  typography = resolve_project_typography(project_root)
   request = {
     "command": args.command,
     "url": args.url,
     "output": str(Path(args.artifacts).resolve()),
-    "widths": sorted({*WIDTHS, *args.widths}),
+    "widths": sorted({*WIDTHS, *extra_widths}),
     "selector": args.selector,
     "ready": getattr(args, "ready", None),
     "a11y": bool(getattr(args, "a11y", False) or args.command in {"a11y", "audit"}),
@@ -525,7 +550,16 @@ def browser(args):
     "edit": load(args.edit) if args.edit else None,
     "authorized_edit": args.authorize_edit,
     "overlaps": args.overlaps,
-    "wireframe": bool(getattr(args, "wireframe", False)),
+    "wireframe": bool(
+      getattr(args, "wireframe", False)
+      or cfg_audit.get("wireframe")
+      or cfg_info["config"].get("wireframe")
+    ),
+    "typography": {
+      "font_sans": typography["font_sans"],
+      "font_mono": typography["font_mono"],
+      "font_faces_css": typography["font_faces_css"],
+    },
   }
   process = subprocess.run(
     ["node", str(HOME / "scripts" / "browser.cjs")],
@@ -610,7 +644,8 @@ def doctor(root, manifest=None, config=None):
         "exit": process.returncode,
       }
     )
-  configuration = load(config) if config else {}
+  resolved_config = config or find_nuu_config(root)
+  configuration = load(resolved_config) if resolved_config else {}
   if not isinstance(configuration, dict):
     raise TypeError("configuration must be an object")
   if configuration.get("url"):
@@ -638,7 +673,8 @@ def doctor(root, manifest=None, config=None):
     "browser": runtime,
     "assets": asset_report,
     "configuration": {
-      "status": "checked" if config else "not_checked",
+      "status": "checked" if resolved_config else "not_checked",
+      "path": str(resolved_config) if resolved_config else None,
       "values": configuration,
     },
     "findings": mismatches + asset_report.get("findings", []),
