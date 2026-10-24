@@ -866,7 +866,15 @@ function clock(value) {
   }).formatToParts(stampDate(value)).map(part => [part.type, part.value]));
   return `${parts.hour}:${parts.minute}`;
 }
-function time(value, { compact = false, includeSeconds = false } = {}) {
+function compactViewport() {
+  return Boolean(
+    window.matchMedia?.('(max-width: 40em)')?.matches ||
+    window.matchMedia?.('(max-height: 30em)')?.matches ||
+    (Number(window.innerWidth) > 0 && Number(window.innerWidth) <= 640) ||
+    (Number(window.innerHeight) > 0 && Number(window.innerHeight) <= 480)
+  );
+}
+function time(value, { compact = compactViewport(), includeSeconds = true } = {}) {
   const seconds = Math.max(0, Math.floor((Date.now() - stampDate(value).getTime()) / 1000));
   if (includeSeconds) {
     if (seconds < 1) return compact ? 'now' : 'just now';
