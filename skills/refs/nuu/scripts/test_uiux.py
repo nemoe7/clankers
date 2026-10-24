@@ -731,14 +731,29 @@ module.exports = {
 
   sheet = measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8"))
   assert sheet["font-mono"].startswith('"Monaspace Neon"')
+  assert measure.MIN_INK_RATIO == 0.75
   density_report = {
     "width": 1280,
     "elements": [
       {
+        "selector": "#header",
+        "tag": "header",
+        "bounds": {"width": 900, "height": 48},
+        "inkRatio": 0.38,
+        "values": {"height": "48px"},
+      },
+      {
+        "selector": ".report-toolbar",
+        "tag": "div",
+        "bounds": {"width": 900, "height": 48},
+        "inkRatio": 0.34,
+        "values": {"height": "48px", "justify-content": "space-between"},
+      },
+      {
         "selector": ".step-row",
         "tag": "div",
         "bounds": {"width": 1200, "height": 40},
-        "inkRatio": 0.14,
+        "inkRatio": 0.60,
         "maxSiblingGap": 960,
         "values": {"height": "40px", "padding-left": "16px"},
       },
@@ -764,6 +779,7 @@ module.exports = {
     "NUM207",
     "NUM208",
   ]
+  assert density_findings[0]["selector"] == ".step-row"
   density_file = tmp_path / "density-report.json"
   density_file.write_text(json.dumps(density_report), encoding="utf-8")
   assert measure.main(["density", str(density_file)]) == 1
