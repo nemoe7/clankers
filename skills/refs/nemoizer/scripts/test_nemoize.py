@@ -1313,3 +1313,23 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
     doc.read_text(encoding="utf-8")
     == "Check the source, target,\nand the unit for the worker.\n"
   )
+
+  html_doc = tmp_path / "page.html"
+  html_doc.write_text(
+    "<!doctype html><html><body>\n"
+    "<style>.btn { content: 'a; b'; }</style>\n"
+    "<script>const x = 'a; b';</script>\n"
+    '<button aria-label="First clause; second clause">Run</button>\n'
+    "<small>Answers reach the agent inbox as one submission; resending makes a new one.</small>\n"
+    "</body></html>\n",
+    encoding="utf-8",
+  )
+  html_rows = [
+    (row["line"], row["rule"])
+    for row in nemoize.source_prose(
+      html_doc, html_doc.read_text(encoding="utf-8"), "instruction", 4
+    )
+  ]
+  assert (4, "STE100") in html_rows
+  assert (5, "STE100") in html_rows
+  assert not any(line in {2, 3} for line, _ in html_rows)
