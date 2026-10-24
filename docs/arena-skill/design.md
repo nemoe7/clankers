@@ -103,7 +103,7 @@ Accepted: retain the shared dialog and product themes. Add separate correctness 
 
 2026-10-23: add top-right `#modal-close` exit button, `{lucide book-bookmark} Bible Check` action button, `60em`/`40em` width and `30em` max-height media-query breakpoints, and `/nuu` and `/nemoizer` composer slash commands (`#slash-menu` autocomplete and `#modal[data-wide="true"]` query view).
 
-2026-10-24: center `.topbar-row` at `max-width: 900px` (`margin: 0 auto`) so the desktop topbar aligns with the `900` px `.notes-layout` and `.downloads-layout` columns (`NUM206`). Add a `2px` `:focus-visible` accent outline ring (`outline-offset: 2px`), demote `#downloads-tab` to a header icon control, add a sticky `.tasks-layout > .row.tight` bar, and add `#report-loading-bar` under `.topbar`.
+2026-10-24: center `.topbar-row` at `max-width: 900px` (`margin: 0 auto`) so the desktop topbar aligns with the `900` px `.notes-layout` and `.downloads-layout` columns (`NUM206`). Add a `2px` keyboard-only `:focus-visible` accent outline ring (`outline-offset: 0`), demote `#downloads-tab` to a header icon control, add a sticky `.tasks-layout > .row.tight` bar, and add `#report-loading-bar` under `.topbar`. Remove scrollbar hover and scroll-container focus highlights from Preview so the `#302e2c` scrollbar thumb matches Arena's constant scrollbar state.
 
 ## Message composer
 

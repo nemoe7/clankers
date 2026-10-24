@@ -82,11 +82,11 @@
   --mark-link: #cfe8ff;
 }
 * { box-sizing: border-box; scrollbar-color: #302e2c var(--bg); scrollbar-width: thin; }
-*:hover { scrollbar-color: #666261 var(--bg); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: #302e2c; border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover { background: #666261; }
+:is(#history, [role="tabpanel"], #staged-files, .draft-preview, #modal-fields):focus,
+:is(#history, [role="tabpanel"], #staged-files, .draft-preview, #modal-fields):focus-visible { outline: 0; }
 [hidden] { display: none !important; }
 /* The document never scrolls: each panel owns its own scrolling, and a touch drag on the page
    behind them bounces nothing. */
