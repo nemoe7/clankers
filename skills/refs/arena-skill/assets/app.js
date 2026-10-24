@@ -378,8 +378,6 @@ function recognizedSlashPrefix(raw) {
     if (!lower.startsWith(target)) continue;
     const next = firstLine[target.length];
     if (next && !/\s/.test(next)) continue;
-    const restOnLine = firstLine.slice(target.length).trim();
-    if (restOnLine && /(\s|^)(help|recipes)$/i.test(target)) continue;
     return firstLine.slice(0, target.length);
   }
   return '';
@@ -420,7 +418,7 @@ function hideSlashMenu() {
 function applySlashSelection(entry) {
   if (!entry) return;
   slashUnregistered = false;
-  note.value = entry.cmd.endsWith(' ') ? entry.cmd : `${entry.cmd.trim()}\n`;
+  note.value = `${entry.cmd.trim()} `;
   if (typeof note.setSelectionRange === 'function') {
     note.setSelectionRange(note.value.length, note.value.length);
   }
@@ -1495,9 +1493,9 @@ note.addEventListener('keydown', event => {
     const prefix = recognizedSlashPrefix(note.value);
     const selStart = typeof note.selectionStart === 'number' ? note.selectionStart : note.value.length;
     const selEnd = typeof note.selectionEnd === 'number' ? note.selectionEnd : selStart;
-    if (prefix && selStart === selEnd && (selStart <= prefix.length || (selStart === prefix.length + 1 && note.value[prefix.length] === '\n'))) {
+    if (prefix && selStart === selEnd && (selStart <= prefix.length || (selStart === prefix.length + 1 && (note.value[prefix.length] === ' ' || note.value[prefix.length] === '\n')))) {
       event.preventDefault();
-      if (note.value.slice(prefix.length) === '\n') {
+      if (note.value.slice(prefix.length) === ' ' || note.value.slice(prefix.length) === '\n') {
         note.value = note.value.slice(0, prefix.length);
         save('draft', note.value);
       }

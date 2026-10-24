@@ -34,7 +34,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Format the preview tab title as `"{repo} - Steering"` on Messages and `"{repo} - Steering | {tab}"` on other tabs, and automatically request the bible-check survey whenever it is unanswered.
 - Wire `#copy-state` to force-save with a Lucide `save` icon when `userscripts/arena.user.js` is active. Clear the `#history` edge fade when message history ceases to scroll. Keep `#last-check` inline with `#connection` on mobile viewports, and pad `.report .question` so focus outlines do not clip.
 - Render unified 40px attachment cards in `#staged-files` with `32x32` image thumbnails (`.staged-chip-thumb`) and `32x32` Lucide `file-text` tiles (`.staged-chip-file`) for non-image files.
-- Register recognized slash commands on their own line, reject glued command tokens, and unregister the command line into plain text on `Backspace`.
+- Keep recognized slash command pills inline and content-sized, reject glued command tokens, and unregister the command into plain text on `Backspace`.
 
 - Forbid form fields in agent handoffs in `ARENA.md` and `SKILL.md`.
 

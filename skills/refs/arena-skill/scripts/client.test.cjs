@@ -5051,11 +5051,11 @@ test('preview client', async (t) => {
     delete context.window.parent;
   });
 
-  await t.test('Slash command lines reject glued tokens, register on their own line, and unregister on Backspace', async () => {
+  await t.test('Slash command pills stay inline with other text, reject glued tokens, and unregister on Backspace', async () => {
     const noteEl = get('#note');
     const backdropEl = get('#note-backdrop');
     assert.equal(context.recognizedSlashPrefix('/nemoizer helptest'), '');
-    assert.equal(context.recognizedSlashPrefix('/nemoizer help extra'), '');
+    assert.equal(context.recognizedSlashPrefix('/nemoizer help extra'), '/nemoizer help');
     assert.equal(context.recognizedSlashPrefix('/nemoizer help'), '/nemoizer help');
     assert.equal(context.recognizedSlashPrefix('/nemoizer help\nfollow up'), '/nemoizer help');
     assert.equal(context.recognizedSlashPrefix('/nemoizer audit docs/'), '/nemoizer audit');
@@ -5070,7 +5070,7 @@ test('preview client', async (t) => {
     const tabEvent = event({ key: 'Tab' });
     noteEl.events.keydown(tabEvent);
     assert.equal(tabEvent.prevented, true);
-    assert.equal(noteEl.value, '/nemoizer help\n', 'selected command registers as its own line of text');
+    assert.equal(noteEl.value, '/nemoizer help ', 'selected command stays inline with a trailing space');
     assert.equal(noteEl.dataset.slash, 'true', 'registered command sets data-slash=true');
     assert.equal(backdropEl.hidden, false);
     assert.equal(backdropEl.children[0].textContent, '/nemoizer help');
@@ -5080,7 +5080,7 @@ test('preview client', async (t) => {
     noteEl.selectionEnd = noteEl.value.length;
     noteEl.events.keydown(backspaceEvent);
     assert.equal(backspaceEvent.prevented, true, 'Backspace on registered command intercepts deletion');
-    assert.equal(noteEl.value, '/nemoizer help', 'trailing command newline is removed');
+    assert.equal(noteEl.value, '/nemoizer help', 'trailing command space is removed');
     assert.equal(noteEl.dataset.slash, undefined, 'Backspace unregisters the command into regular text');
     assert.equal(backdropEl.hidden, true);
 
@@ -5285,6 +5285,9 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(htmlSource, /id="modal-close"/);
   const styleSource = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
   assert.match(styleSource, /\.slash-token\b/);
+  const slashTokenRule = styleSource.match(/\.slash-token\s*\{([^}]*)\}/);
+  assert.ok(slashTokenRule, '.slash-token rule exists');
+  assert.doesNotMatch(slashTokenRule[1], /width:\s*100%/, '.slash-token sizes to its text rather than full row width');
   assert.match(styleSource, /body\s*\{[^}]*height:\s*var\(--app-height,\s*100dvh\)/);
   assert.doesNotMatch(styleSource, /#compose:has\(#note\[data-slash="true"\]\)/);
 });
