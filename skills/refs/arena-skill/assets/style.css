@@ -260,7 +260,7 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
 .log-newest:focus-visible { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--focus), 0 4px 6px rgb(0 0 0 / 25%); }
 /* Keep the report scroll-to-top button at the top of its frame. */
 #report-top { top: 8px; bottom: auto; }
-.message { width: min(900px, 90vw); margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }
+.message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; width: min(900px, 90vw); }
 .message:last-child { margin-bottom: 0; }
 .message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; }
 /* Lists render flush-left like the composer's plain text, so a sent message reads the
