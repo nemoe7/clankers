@@ -1,3 +1,4 @@
+<!-- nonemo: NMP100 -->
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). This repository uses `YYYY-MM-DD` dates as versions instead of [Semantic Versioning](https://semver.org/).
@@ -11,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### nemoizer
 
 - Add the advisory `"the"` usage-density check (`NMO902` and `references/nmo902.md`), format CLI findings in `ste-lint.py` style with an indented source snippet and `Summary` footer, and auto-discover `nemoizer.toml` or `[tool.nemoizer]` in `pyproject.toml`.
+- Extend `NMP100` to cap paragraphs and table cells at `paragraph_cap` (`4`), list items at `2` sentences, and headings at `1` sentence. Flag blockquotes exceeding `paragraph_cap` sentences for manual review.
 
 #### nuu
 

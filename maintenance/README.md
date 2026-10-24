@@ -4,14 +4,14 @@
 
 1. Amend the appropriate file in `rules/refs/` first. Then mirror the amendment into the live file and compress only the new or affected line.
 2. Optimize `rules/ARENA.md` for UTF-8 file size. Match the core in meaning, except for push and PR handling (see Arena file).
-3. Keep `rules/CLINE.md` and `rules/KILO.md` platform-specific: command discipline, tool names, timeouts. Check every version-specific claim. The Kilo mode overrides pair `rules/refs/kilo/` with the live `rules/kilo/`. The maintainer compresses and budgets each live file, and both sides stay out of the lint because their required shape fails MD001 and MD041.
-4. Keep the filename headings of the rule files. Keep `rules/CHATGPT-CUSTOM.txt` and `rules/CHATGPT-MORE.txt`, named for the fields they go into. ChatGPT's Personalization gives `Custom Instructions` and `More about you`, each with a 1,500 Unicode character ceiling. Keep both files plain text with inline labels, never Markdown headings or bullets, within budget, and aligned with the core where it fits. Both fields extract their clauses from one merged baseline, `rules/refs/CHATGPT.txt`. The split places work rules in `Custom Instructions`, and it places response rules plus overflow work rules in `More about you`. ChatGPT keeps nickname and occupation as structured profile fields rather than rule space, and this repository does not version them.
+3. Keep `rules/CLINE.md`, `rules/KILO.md`, and `rules/kilo/` platform-specific (command discipline, tool names, timeouts, and checked version claims). The maintainer compresses and budgets each live file, and Kilo mode files stay outside markdownlint (`MD001`, `MD041`).
+4. Keep the filename headings of the rule files and keep `rules/CHATGPT-CUSTOM.txt` and `rules/CHATGPT-MORE.txt` as plain text with inline labels within the 1,500-character ceiling. Both fields extract from `rules/refs/CHATGPT.txt` (work rules in `Custom Instructions`, response and overflow rules in `More about you`), while nickname and occupation remain unversioned profile fields.
 5. Ration the emphasis: a hard rule uses `MUST` or `NEVER`, and a file bolds two clauses at most (see Emphasis).
 6. A skill specializes a default. It NEVER weakens an explicit requirement, a convention, or an acceptance criterion.
 7. Keep the skill resources on demand, and keep their relative links valid. Do not move essential instructions out of `SKILL.md`.
 8. Keep every skill conformant to the Agent Skills specification, with recorded provenance (see Skill rules).
-9. Keep this repository light: no further CI workflow, dependency manifest or test scaffolding unless the owner asks for one. The pinned minifier manifest the preview build uses is the one exception, on the owner's approved answers. Review a change directly, and never claim a check that did not run.
-10. Keep full wording in `rules/refs/` and compressed wording in the live files. On a removal, attempt one squash and keep the lower budget. Full wording stays in refs, and the compressed form stays in `rules/` (see Baselines).
+9. Keep this repository light, with no new CI workflow, dependency manifest, or test scaffolding unless requested (except the approved preview minifier manifest). Review changes directly, and never claim a check that did not run.
+10. Keep full wording in `rules/refs/` and compressed wording in the live files (see Baselines). On a removal, attempt one squash and keep the lower budget.
 
 ### Arena file
 

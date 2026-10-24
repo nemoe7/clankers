@@ -254,6 +254,7 @@ def nemoizer_main(argv: list[str]) -> int:
           scoped_lines[row["line"] - 1]
           if 0 < row["line"] <= len(scoped_lines)
           else None,
+          status=row.get("status"),
         )
         for row in module.source_prose(path, scoped, context, module.PARAGRAPH_CAP)
       )

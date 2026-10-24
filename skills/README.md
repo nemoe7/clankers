@@ -17,7 +17,7 @@ Every skill must follow the [Agent Skills specification](https://agentskills.io/
 - `SKILL.md` is the entry point. It holds YAML frontmatter and Markdown instructions.
 - Required `name`: 1 to 64 lowercase letters, digits, or single internal hyphens, matching the directory name.
 - Required `description`: 1 to 1024 characters stating the action and when to use it. Agents select skills from name and description alone.
-- Optional fields: `license`, `compatibility`, `metadata`, and `allowed-tools`. The validator requires `license` with `metadata.upstream`. No other top-level keys: put others, such as `argument-hint`, under `metadata` as strings.
+- Optional fields: `license`, `compatibility`, `metadata`, and `allowed-tools` (`license` is required with `metadata.upstream`). Put any other keys, such as `argument-hint`, under `metadata` as strings.
 - The optional directories are `scripts/`, `references/`, and `assets/`.
 - Keep `SKILL.md` below 500 lines. Move the detail into `references/`, which the agent loads only when necessary.
 - A skill carries only what an agent needs to use it. Leave background, rationale, and history to the changelog.

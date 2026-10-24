@@ -1157,3 +1157,49 @@ def test_nemoizer_toml_and_pyproject_config_discovery(tmp_path):
   )
   py_res = run(cwd=tmp_path)
   assert py_res.returncode == 0, py_res.stdout + py_res.stderr
+
+
+def test_nmp100_counts_lists_tables_headings_and_blockquotes(tmp_path):
+  doc = tmp_path / "doc.md"
+  doc.write_text(
+    "# First sentence. Second sentence.\n\n"
+    "- One. Two. Three.\n"
+    "- Valid one. Valid two.\n\n"
+    "| Col A | Col B |\n"
+    "| --- | --- |\n"
+    "| One. Two. Three. Four. Five. | Short. |\n\n"
+    "> Quote one. Quote two. Quote three. Quote four. Quote five.\n",
+    encoding="utf-8",
+  )
+  res = run(str(doc), cwd=tmp_path)
+  assert res.returncode == 1, res.stderr
+  heading_msg = nemoize.describe_finding(
+    {"rule": "NMP100", "count": 2, "cap": 1, "kind": "heading"}
+  )
+  list_msg = nemoize.describe_finding(
+    {"rule": "NMP100", "count": 3, "cap": 2, "kind": "list"}
+  )
+  table_msg = nemoize.describe_finding(
+    {"rule": "NMP100", "count": 5, "cap": 4, "kind": "table"}
+  )
+  quote_msg = nemoize.describe_finding(
+    {"rule": "NMP100", "count": 5, "cap": 4, "kind": "blockquote"}
+  )
+  assert f"[NMP100] (advisory-free) {heading_msg}" in res.stdout
+  assert f"[NMP100] (advisory-free) {list_msg}" in res.stdout
+  assert f"[NMP100] (advisory-free) {table_msg}" in res.stdout
+  assert f"[NMP100] (advisory) {quote_msg} (manual review)" in res.stdout
+
+  quote_only = tmp_path / "quote.md"
+  quote_only.write_text(
+    "# Single sentence heading\n\n"
+    "- Item one. Item two.\n\n"
+    "> One. Two. Three. Four. Five.\n",
+    encoding="utf-8",
+  )
+  quote_res = run(str(quote_only), cwd=tmp_path)
+  assert quote_res.returncode == 0, quote_res.stderr
+  assert f"[NMP100] (advisory) {quote_msg} (manual review)" in quote_res.stdout
+  audit_res = run("--audit", str(quote_only), cwd=tmp_path)
+  assert audit_res.returncode == 0, audit_res.stderr
+  assert f"[NMP100] (advisory) {quote_msg} (manual review)" in audit_res.stdout
