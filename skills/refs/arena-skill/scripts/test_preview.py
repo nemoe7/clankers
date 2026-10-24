@@ -1753,7 +1753,7 @@ def test_http_boundaries():
       )
       # A rule separates the tasks toolbar from the finished div, and details collapse.
       assert re.search(
-        r"\.tasks-layout>\.row\.tight\{[^}]*align-items:end;"
+        r"\.tasks-layout>\.row\.tight\{[^}]*padding-top:4px;[^}]*align-items:end;"
         r"border-bottom:1px solid var\(--border\);padding-bottom:12px",
         page,
       )

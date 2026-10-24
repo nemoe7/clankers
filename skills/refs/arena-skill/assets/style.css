@@ -435,7 +435,7 @@ mark code { color: var(--text); }
 .answer[data-highlight="true"] { color: var(--text); }
 /* Details sit under the title in the muted face as a real list, and repeat in the row hover. */
 .tasks-layout > .row.tight {
-  position: sticky; top: 0; z-index: 2; background: var(--bg);
+  position: sticky; top: 0; z-index: 2; background: var(--bg); padding-top: 4px;
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end;
   border-bottom: 1px solid var(--border); padding-bottom: 12px;
 }
