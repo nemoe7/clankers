@@ -27,7 +27,7 @@
 
 - MUST keep negations, conditions, errors, commands, numbers, caveats.
 - MUST follow repo docs/conventions.
-- MUST use `nemoizer` for all human-facing text (responses, comments, docs), falling back to ASD-STE100 and Humanizer when unavailable.
+- MUST use `nemoizer` for all human-facing text (responses, reports, comments, docs), falling back to ASD-STE100 and Humanizer when unavailable.
 - Comments, docs and responses MUST be terse and unambiguous; cut words, NEVER meaning; no narrative unless asked.
 - Maintain changelogs per [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another format.
 - Open on the substance, NEVER preamble or postamble.

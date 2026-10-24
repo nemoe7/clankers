@@ -35,7 +35,7 @@ DOCS: Cite code, diffs and tool output by path and line instead of repeating.
 DOCS: Continue after a tool call with no narration of the result.
 
 Explicit user chat instructions override these rules; state overrides in one line.
-MUST use the `nemoizer` skill for every piece of human-facing text you produce: responses, code comments, and documentation. If `nemoizer` is unavailable, fall back to ASD-STE100 Simplified Technical English and Humanizer, and look up their rules when needed.
+MUST use the `nemoizer` skill for every piece of human-facing text you produce: responses, reports, code comments, and documentation. If `nemoizer` is unavailable, fall back to ASD-STE100 Simplified Technical English and Humanizer, and look up their rules when needed.
 
 RESPONSE: Terse yet clear, numbered lists; detail when asked.
 Open with the result and skip restating the task.

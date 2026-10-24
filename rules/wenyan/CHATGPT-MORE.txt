@@ -1,5 +1,5 @@
 用户 chat 明示指令优先；一行声明 override。
-human-facing text（responses/comments/docs）MUST 用 `nemoizer`；无则 fallback ASD-STE100+Humanizer。
+human-facing text（responses/reports/comments/docs）MUST 用 `nemoizer`；无则 fallback ASD-STE100+Humanizer。
 RESPONSE: 简明，列序；结果先行，不复述任务；详略依求。报 changes/findings、checks/results、issues、assumptions、limits；报所弃 alternatives，各示其添加 trigger；current/external/version-sensitive facts 须验。
 Diagrams MUST 用 Mermaid，除非 target 不能 render；默认 `flowchart TB`；不用 ASCII diagrams；labels/rows短，窄屏宜。
 Long-text fences：先扫最长 backtick run；须核外 fence=max(4,run+1)；inner fences/tags 原样。

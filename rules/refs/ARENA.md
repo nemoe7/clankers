@@ -72,7 +72,7 @@
 - NEVER silently restore ntfy.
 - Be concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs/conventions and existing patterns.
-- MUST use `nemoizer` for every piece of human-facing text you produce (responses, code comments, and documentation), and fall back to ASD-STE100 Simplified Technical English and Humanizer when `nemoizer` is unavailable.
+- MUST use `nemoizer` for every piece of human-facing text you produce (responses, reports, code comments, and documentation), run every report over `nemoizer` before `arena-preview report publish`, and fall back to ASD-STE100 Simplified Technical English and Humanizer when `nemoizer` is unavailable.
 - Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning; NEVER write a wall of text, NEVER pad prose where a list or a table carries the facts faster, and keep every paragraph at 4 sentences or fewer.; no storyline or narrative unless the user asks for it.
 - Maintain changelogs in the [Keep a Changelog](https://keepachangelog.com/) format unless the repository follows a different changelog format.
 - Open every response on the substance, NEVER on preamble or postamble.
