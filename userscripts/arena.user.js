@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.80
+// @name         Arena.ai | NemoUtils | v1.10.81
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.80
+// @version      1.10.81
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -5076,6 +5076,7 @@
     var HOURGLASS_EMOJI = "\u23F3";
     var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
     var POLL_RE = /\b(?:arena-)?preview(?:\.py)?\s+poll\b/;
+    var POLL_GATE_RUNNING_RE = /(?:^|\n)\s*run\s+[a-z0-9._-]+\s+(?:running\s+\d+s\b|progress:)/i;
 
     function repoFromLink(link) {
       if (!link) {
@@ -5275,12 +5276,54 @@
       return ACTION_FALLBACK;
     }
 
-    function rowCommand(row) {
-      if (!row || typeof row.querySelector !== "function") {
-        return "";
+    function rowPres(row) {
+      if (!row) {
+        return [];
       }
-      var panel = row.querySelector("pre");
-      return panel ? String(panel.textContent || "") : "";
+      if (typeof row.querySelectorAll === "function") {
+        var list = row.querySelectorAll("pre");
+        if (list && list.length) {
+          return list;
+        }
+      }
+      if (typeof row.querySelector === "function") {
+        var panel = row.querySelector("pre");
+        if (panel) {
+          return [panel];
+        }
+      }
+      return [];
+    }
+
+    function rowCommand(row) {
+      var pres = rowPres(row);
+      var i;
+      for (i = pres.length - 1; i >= 0; i -= 1) {
+        var text = String(pres[i].textContent || "");
+        if (/^\s*\$/.test(text) || POLL_RE.test(text.toLowerCase())) {
+          return text;
+        }
+      }
+      return pres.length ? String(pres[0].textContent || "") : "";
+    }
+
+    function pollWaitsOnGate(row) {
+      var pres = rowPres(row);
+      var cmdIndex = 0;
+      var i;
+      for (i = pres.length - 1; i >= 0; i -= 1) {
+        var text = String(pres[i].textContent || "");
+        if (/^\s*\$/.test(text) || POLL_RE.test(text.toLowerCase())) {
+          cmdIndex = i;
+          break;
+        }
+      }
+      for (i = cmdIndex; i < pres.length; i += 1) {
+        if (POLL_GATE_RUNNING_RE.test(String(pres[i].textContent || ""))) {
+          return true;
+        }
+      }
+      return false;
     }
 
     function emojiForRow(row) {
@@ -5298,6 +5341,10 @@
         return REASONING_EMOJI;
       }
       if (POLL_RE.test(rowCommand(row).toLowerCase())) {
+        if (pollWaitsOnGate(row)) {
+          titleRowKind = "action";
+          return BASH_EMOJI;
+        }
         titleRowKind = "poll";
         return WAITING_EMOJI;
       }
