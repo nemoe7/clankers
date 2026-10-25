@@ -33,6 +33,7 @@ VIOLATION_NOTES="type NOT IN ('', 'survey', 'state-backup')"
 PENDING_SUBMISSIONS='acknowledged_at IS NULL AND seq IN (SELECT MAX(seq) FROM submissions GROUP BY report_id)'
 REPLY_REFERENCE=re.compile('^RE:\\s*([a-zA-Z0-9_-]{1,80}(?:/[a-zA-Z0-9_-]{1,80})?)(?:\\s|$)',re.IGNORECASE)
 MAX_REPORT=2000000
+MAX_FIELDS=24
 WS_TICK_SECONDS=.25
 WS_HEARTBEAT_SECONDS=10
 WS_IDLE_SECONDS=35
@@ -3258,7 +3259,7 @@ class Store:
 			return dict(row,submission_format=json.loads(row['submission_format'])if row['submission_format']else None)
 	@staticmethod
 	def validate_fields(fields):
-		if not 1<=len(fields)<=50:raise ValueError('A report holds 1–50 fields')
+		if not 1<=len(fields)<=MAX_FIELDS:raise ValueError(f"A report holds 1–{MAX_FIELDS} fields")
 		seen=set()
 		for field in fields:
 			field_id=field['id'];identifier(field_id)

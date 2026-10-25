@@ -58,6 +58,7 @@ REPLY_REFERENCE = re.compile(
   r"^RE:\s*([a-zA-Z0-9_-]{1,80}(?:/[a-zA-Z0-9_-]{1,80})?)(?:\s|$)", re.IGNORECASE
 )
 MAX_REPORT = 2_000_000
+MAX_FIELDS = 24
 WS_TICK_SECONDS = 0.25
 WS_HEARTBEAT_SECONDS = 10
 WS_IDLE_SECONDS = 35
@@ -9723,8 +9724,8 @@ class Store:
 
   @staticmethod
   def validate_fields(fields):
-    if not 1 <= len(fields) <= 50:
-      raise ValueError("A report holds 1–50 fields")
+    if not 1 <= len(fields) <= MAX_FIELDS:
+      raise ValueError(f"A report holds 1–{MAX_FIELDS} fields")
     seen = set()
     for field in fields:
       field_id = field["id"]

@@ -2188,18 +2188,18 @@ def test_http_boundaries():
       wide = root / "wide-http.md"
       wide.write_text(
         "# Wide\n\n"
-        + "\n".join(f"Question {index}: ___" for index in range(50))
+        + "\n".join(f"Question {index}: ___" for index in range(24))
         + "\n",
         encoding="utf-8",
       )
       store.publish("wide", "Wide report", wide)
       _, wide_questions = preview.render_report(wide.read_text(encoding="utf-8"))
-      assert len(wide_questions) == 50
+      assert len(wide_questions) == 24
       full = json.dumps(
         {
           "id": "sub-wide",
           "revision": store.report("wide")["updated_at"],
-          "answers": {q["id"]: "x" * 2000 for q in wide_questions},
+          "answers": {q["id"]: "x" * 4200 for q in wide_questions},
         }
       )
       assert len(full) > 96_000, "the case has to exceed the limit it is testing"
@@ -5031,21 +5031,21 @@ def test_task_amend():
 def test_wide_report_fields():
   with tempfile.TemporaryDirectory() as wide_dir:
     wide_store = preview.Store(wide_dir, create=True)
-    # The widest report the field rules allow: 50 text fields, each answered in full.
+    # The widest report the field rules allow: 24 text fields, each answered in full.
     wide = Path(wide_dir) / "wide.md"
     wide.write_text(
-      "# Wide\n\n" + "\n".join(f"Question {index}: ___" for index in range(50)) + "\n",
+      "# Wide\n\n" + "\n".join(f"Question {index}: ___" for index in range(24)) + "\n",
       encoding="utf-8",
     )
     wide_store.publish("wide", "Wide report", wide)
     _, questions = preview.render_report(wide.read_text(encoding="utf-8"))
-    assert len(questions) == 50
-    answers = {question["id"]: "x" * 2000 for question in questions}
+    assert len(questions) == 24
+    answers = {question["id"]: "x" * 4200 for question in questions}
     record = wide_store.submit_report(
       "wide", "note-wide", answers, wide_store.report("wide")["updated_at"]
     )
     assert len(record["text"]) > 100_000
-    assert record["text"].count("x" * 2000) == 50
+    assert record["text"].count("x" * 4200) == 24
     stored = [item for item in wide_store.submissions() if item["id"] == "note-wide"]
     assert stored and stored[0]["text"] == record["text"]
     oversized = "z" * 150_001
