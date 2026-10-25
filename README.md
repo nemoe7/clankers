@@ -47,11 +47,11 @@ Latest measurements as of 2026-10-25. `maintenance/check.py --update` rebuilds t
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 284 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 279 `tok` |
 | [`skills/amending-violations/SKILL.md`](skills/amending-violations/SKILL.md) | `o200k_base` | 1,607 `tok` |
-| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 713,831 `B` |
+| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 713,598 `B` |
 | [`skills/arena-skill/references/reference.md`](skills/arena-skill/references/reference.md) | `o200k_base` | 267 `tok` |
 | [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,675 `tok` |
 | [`skills/nemoizer/SKILL.md`](skills/nemoizer/SKILL.md) | `o200k_base` | 1,324 `tok` |
-| [`skills/nuu/SKILL.md`](skills/nuu/SKILL.md) | `o200k_base` | 2,649 `tok` |
+| [`skills/nuu/SKILL.md`](skills/nuu/SKILL.md) | `o200k_base` | 2,630 `tok` |
 | [`skills/squash/SKILL.md`](skills/squash/SKILL.md) | `o200k_base` | 1,377 `tok` |
 | [`system-prompts/NEMOGPT.md`](system-prompts/NEMOGPT.md) | `o200k_base` | 3,438 `tok` |
 | [`system-prompts/wenyan/NEMOGPT.md`](system-prompts/wenyan/NEMOGPT.md) | `o200k_base` | 3,407 `tok` |

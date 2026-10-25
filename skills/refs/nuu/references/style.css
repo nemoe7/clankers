@@ -19,8 +19,7 @@
   --warn: #8a5a00;
   --ok: #1c7a3f;
   --focus: #2b53d6;
-  --scrollbar-thumb: #8e877e;
-  --scrollbar-thumb-hover: #8a8379;
+  --scrollbar-thumb: #302e2c;
 
   /* Type: one family, three weights, a short ramp */
   --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -451,9 +450,9 @@ body {
   border-radius: var(--space-2);
 }
 
-::-webkit-scrollbar-thumb:hover,
-::-webkit-scrollbar-thumb:active {
-  background: var(--scrollbar-thumb-hover);
+:root[data-keyboard-nav="true"] ::-webkit-scrollbar-thumb:hover,
+:root[data-keyboard-nav="true"] ::-webkit-scrollbar-thumb:active {
+  background: var(--focus);
 }
 
 ::-webkit-scrollbar-button {

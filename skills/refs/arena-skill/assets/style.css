@@ -60,8 +60,6 @@
   --token-kw: #ff7b72;
   --token-fn: #79c0ff;
   --token-prop: #d2a8ff;
-  --scrollbar-thumb: #6e685f;
-  --scrollbar-thumb-hover: #8a8379;
   --font-sans: "Basel Grotesk", system-ui, sans-serif;
   --font-mono: "Basel Grotesk Mono", ui-monospace, monospace;
   font-family: var(--font-sans);
@@ -90,18 +88,13 @@
   --token-fn: #0550ae;
   --token-prop: #6639ba;
   --mark-link: #cfe8ff;
-  --scrollbar-thumb: #8e877e;
-  --scrollbar-thumb-hover: #8a8379;
 }
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-color: #302e2c var(--bg); scrollbar-width: thin; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background: var(--scrollbar-thumb-hover); }
-::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-@supports not selector(::-webkit-scrollbar) {
-  * { scrollbar-color: var(--scrollbar-thumb) var(--bg); scrollbar-width: thin; }
-}
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: #302e2c; border-radius: 8px; }
+:root[data-keyboard-nav="true"] ::-webkit-scrollbar-thumb:hover,
+:root[data-keyboard-nav="true"] ::-webkit-scrollbar-thumb:active { background: var(--focus); }
 :is(#history, [role="tabpanel"], #staged-files, .draft-preview, #modal-fields):focus,
 :is(#history, [role="tabpanel"], #staged-files, .draft-preview, #modal-fields):focus-visible { outline: 0; }
 [hidden] { display: none !important; }
