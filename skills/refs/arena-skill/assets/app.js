@@ -2311,11 +2311,7 @@ setInterval(showClock, 1000);
       return;
     }
     if (event.data.type === 'clankers:board-wake') {
-      void request('/api/skip-poll', {
-        method: 'POST',
-        headers: writeHeaders('application/json'),
-        body: JSON.stringify({}),
-      }).catch(() => {});
+      void sendBoardAction({ action: 'wake', target: event.data.session_id || 'all-polling' }, false);
       return;
     }
     if (event.data.type !== 'clankers:userscript-ready') return;
@@ -3866,12 +3862,29 @@ function showBoardPanel() {
   }
   renderBoard();
 }
+function syncBoardHeartbeat(state) {
+  if (!userscriptForceSave || !state || !state.board || !state.board.session_id) return;
+  if (typeof window === 'undefined' || !window.parent || window.parent === window || typeof window.parent.postMessage !== 'function') return;
+  const sid = String(state.board.session_id);
+  const selfRow = Array.isArray(state.board.sessions)
+    ? state.board.sessions.find(row => row && row.session_id === sid)
+    : null;
+  const isPolling = selfRow ? Boolean(selfRow.polling) : Boolean(state.polling);
+  try {
+    window.parent.postMessage({
+      type: 'clankers:board-action',
+      action: {
+        action: 'heartbeat',
+        session_id: sid,
+        repo: String(state.repo || state.board.repo || ''),
+        branch: String(state.board.branch || ''),
+        status: isPolling ? 'polling' : 'active',
+        polling: isPolling,
+      },
+    }, parentTargetOrigin());
+  } catch {}
+}
 async function sendBoardAction(action, forwardToParent = true) {
-  if (forwardToParent && typeof window !== 'undefined' && window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
-    try {
-      window.parent.postMessage({ type: 'clankers:board-action', action }, parentTargetOrigin());
-    } catch {}
-  }
   try {
     const res = await request('/api/board', {
       method: 'POST',
@@ -3881,7 +3894,24 @@ async function sendBoardAction(action, forwardToParent = true) {
     const nextBoard = await res.json();
     if (lastState && nextBoard && typeof nextBoard === 'object') {
       lastState.board = nextBoard;
+      if (action && action.action === 'wake') {
+        const selfRow = Array.isArray(nextBoard.sessions)
+          ? nextBoard.sessions.find(row => row.session_id === nextBoard.session_id)
+          : null;
+        if (selfRow && !selfRow.polling) {
+          lastState.polling = false;
+          paintConnection();
+        }
+      }
       renderBoard();
+    }
+    if (forwardToParent && typeof window !== 'undefined' && window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
+      try {
+        window.parent.postMessage({ type: 'clankers:board-action', action }, parentTargetOrigin());
+      } catch {}
+    }
+    if (action && action.action === 'wake') {
+      void refreshState();
     }
     return nextBoard;
   } catch {

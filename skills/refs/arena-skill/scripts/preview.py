@@ -5351,6 +5351,15 @@ def poll_inbox(store, sleeper=None):
         return 0
       # A message, unblocked task, or live detached run outranks a skip so its verdict arrives first.
       # The skip stays armed until the run ends. It ends the turn only then.
+      if store.take_board_wake():
+        clear_poll_repeat(store)
+        print(
+          "BOARD WAKE: session woken from the multi-session board."
+          " Read board entries and continue work before polling again.",
+          flush=True,
+        )
+        print(format_read(listing), flush=True)
+        return 0
       if skip_poll_ready(store):
         store.take_skip_poll()
         # The skip ends the turn here, so the header learns the turn is over.
@@ -5489,6 +5498,15 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
   main_sid = board_session_id(data.get("main_session_id") or "")
   if main_sid and main_sid not in allowed:
     main_sid = ""
+  wakes = (
+    {
+      board_session_id(k): v
+      for k, v in data.get("wakes", {}).items()
+      if board_session_id(k) and isinstance(v, (int, float, str))
+    }
+    if isinstance(data.get("wakes"), dict)
+    else {}
+  )
   sessions = []
   seen_sids = set()
   for row in data.get("sessions") if isinstance(data.get("sessions"), list) else []:
@@ -5499,17 +5517,19 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       continue
     seen_sids.add(row_sid)
     is_self = bool(sid and row_sid == sid)
+    wake_pending = row_sid in allowed and bool(wakes.get(row_sid))
+    row_polling = (
+      bool(polling)
+      if is_self
+      else bool(row.get("polling") or row.get("status") == "polling")
+    ) and not wake_pending
     sessions.append(
       {
         "session_id": row_sid,
         "repo": str(row.get("repo") or (repo if is_self else "")),
         "branch": str(row.get("branch") or (branch if is_self else f"arena/{row_sid}")),
-        "status": "polling"
-        if (polling if is_self else row.get("status") == "polling")
-        else "active",
-        "polling": bool(
-          polling if is_self else (row.get("polling") or row.get("status") == "polling")
-        ),
+        "status": "polling" if row_polling else "active",
+        "polling": row_polling,
         "updated_at": str(row.get("updated_at") or clip_stamp(now())),
         "allowed": row_sid in allowed,
         "role": "main"
@@ -5518,14 +5538,16 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       }
     )
   if sid and sid not in seen_sids:
+    seen_sids.add(sid)
+    self_polling = bool(polling) and not (sid in allowed and bool(wakes.get(sid)))
     sessions.insert(
       0,
       {
         "session_id": sid,
         "repo": str(repo or ""),
         "branch": str(branch or f"arena/{sid}"),
-        "status": "polling" if polling else "active",
-        "polling": bool(polling),
+        "status": "polling" if self_polling else "active",
+        "polling": self_polling,
         "updated_at": clip_stamp(now()),
         "allowed": sid in allowed,
         "role": "main"
@@ -5533,6 +5555,21 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
         else ("worker" if sid in allowed else "blocked"),
       },
     )
+  for allowed_sid in allowed:
+    if allowed_sid not in seen_sids:
+      seen_sids.add(allowed_sid)
+      sessions.append(
+        {
+          "session_id": allowed_sid,
+          "repo": str(repo or ""),
+          "branch": f"arena/{allowed_sid}",
+          "status": "active",
+          "polling": False,
+          "updated_at": clip_stamp(now()),
+          "allowed": True,
+          "role": "main" if (main_sid == allowed_sid or not main_sid) else "worker",
+        }
+      )
   entries = []
   for item in (
     data.get("entries")[-MAX_BOARD_ENTRIES:]
@@ -5556,15 +5593,6 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
         "file": item.get("file") if isinstance(item.get("file"), dict) else None,
       }
     )
-  wakes = (
-    {
-      board_session_id(k): v
-      for k, v in data.get("wakes", {}).items()
-      if board_session_id(k) and isinstance(v, (int, float, str))
-    }
-    if isinstance(data.get("wakes"), dict)
-    else {}
-  )
   is_main = not main_sid or main_sid == sid
   return {
     "version": 1,
@@ -7201,11 +7229,68 @@ class Store:
       raw, session_id=sid, repo=repo, branch=branch, polling=is_polling
     )
 
+  def take_board_wake(self):
+    raw_text = self.meta_value(BOARD_STATE_META)
+    if not raw_text:
+      return None
+    try:
+      raw = json.loads(raw_text)
+    except Exception:
+      return None
+    if not isinstance(raw, dict):
+      return None
+    wakes = raw.get("wakes")
+    if not isinstance(wakes, dict) or not wakes:
+      return None
+    sid = board_session_id(workspace_branch(self.repository_root()))
+    allowed = {
+      board_session_id(item)
+      for item in (
+        raw.get("allowed_sessions")
+        if isinstance(raw.get("allowed_sessions"), list)
+        else []
+      )
+      if board_session_id(item)
+    }
+    if not sid or sid not in allowed or not wakes.get(sid):
+      return None
+    stamp = wakes.pop(sid, None)
+    raw["wakes"] = wakes
+    ack_wakes = (
+      dict(raw.get("ack_wakes")) if isinstance(raw.get("ack_wakes"), dict) else {}
+    )
+    ack_wakes[sid] = stamp
+    raw["ack_wakes"] = ack_wakes
+    if isinstance(raw.get("sessions"), list):
+      for row in raw["sessions"]:
+        if (
+          isinstance(row, dict)
+          and board_session_id(row.get("session_id") or row.get("branch") or "") == sid
+        ):
+          row["polling"] = False
+          row["status"] = "active"
+    with self.transaction(autosave=False) as db:
+      db.execute(
+        "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+        (BOARD_STATE_META, json.dumps(raw, ensure_ascii=False)),
+      )
+    return str(stamp)
+
   def board_action(self, payload):
     if not isinstance(payload, dict):
       raise TypeError("Board payload must be an object")
     action_type = (
       str(payload.get("action") or payload.get("type") or "").strip().lower()
+    )
+    raw_text = self.meta_value(BOARD_STATE_META)
+    try:
+      raw_stored = json.loads(raw_text) if raw_text else {}
+    except Exception:
+      raw_stored = {}
+    ack_wakes = (
+      dict(raw_stored.get("ack_wakes"))
+      if isinstance(raw_stored, dict) and isinstance(raw_stored.get("ack_wakes"), dict)
+      else {}
     )
     state = self.board_state()
     sid = state["session_id"]
@@ -7226,18 +7311,42 @@ class Store:
         branch=state["branch"],
         polling=any(r["session_id"] == sid and r.get("polling") for r in sessions),
       )
-      allowed = list(merged["allowed_sessions"])
-      main_sid = merged["main_session_id"]
-      sessions = [dict(row) for row in merged["sessions"]]
-      entries = []
-      for item in merged["entries"]:
+      if merged["allowed_sessions"] or not allowed:
+        for item in merged["allowed_sessions"]:
+          if item not in allowed:
+            allowed.append(item)
+      if merged["main_session_id"]:
+        main_sid = merged["main_session_id"]
+      by_sid = {row["session_id"]: dict(row) for row in sessions}
+      for row in merged["sessions"]:
+        row_sid = row["session_id"]
+        if row_sid == sid and row_sid in by_sid:
+          continue
+        by_sid[row_sid] = dict(row)
+      sessions = list(by_sid.values())
+      seen_entry_ids = set()
+      merged_entries = []
+      for item in [*entries, *merged["entries"]]:
         row = dict(item)
-        if isinstance(row.get("file"), dict):
+        eid = str(row.get("id") or "")
+        if eid and eid in seen_entry_ids:
+          continue
+        if eid:
+          seen_entry_ids.add(eid)
+        if isinstance(row.get("file"), dict) and "content" in row["file"]:
           row["file"] = stage_board_file(
             self.path.parent, row["session_id"], row["file"]
           )
-        entries.append(row)
-      wakes = dict(merged["wakes"])
+        merged_entries.append(row)
+      entries = merged_entries
+      for k, v in merged["wakes"].items():
+        if k == sid and ack_wakes.get(sid) == v:
+          continue
+        wakes[k] = v
+      for row in sessions:
+        if row["session_id"] in allowed and wakes.get(row["session_id"]):
+          row["polling"] = False
+          row["status"] = "active"
     elif action_type == "allow":
       target = board_session_id(payload.get("session_id") or sid)
       if not target:
@@ -7315,15 +7424,24 @@ class Store:
       )
     elif action_type == "wake":
       target = str(payload.get("target") or payload.get("session_id") or "").strip()
-      stamp = clip_stamp(now())
+      stamp = f"{clip_stamp(now())}-{uuid.uuid4().hex[:6]}"
       if target == "all-polling":
         for row in sessions:
           if row["session_id"] in allowed and row.get("polling"):
+            row["polling"] = False
+            row["status"] = "active"
             wakes[row["session_id"]] = stamp
+            ack_wakes.pop(row["session_id"], None)
       else:
         norm_target = board_session_id(target)
         if norm_target:
-          wakes[norm_target] = stamp
+          for row in sessions:
+            if row["session_id"] == norm_target and norm_target in allowed:
+              row["polling"] = False
+              row["status"] = "active"
+          if norm_target in allowed:
+            wakes[norm_target] = stamp
+            ack_wakes.pop(norm_target, None)
     elif action_type == "clear":
       entries = []
     else:
@@ -7337,6 +7455,7 @@ class Store:
       "sessions": sessions,
       "entries": entries,
       "wakes": wakes,
+      "ack_wakes": ack_wakes,
     }
     encoded = json.dumps(stored, ensure_ascii=False)
     while len(encoded.encode("utf-8")) > MAX_BOARD_BYTES and entries:
@@ -7988,6 +8107,9 @@ class Store:
     text = payload.get("text")
     if not isinstance(text, str) or not text.strip():
       raise ValueError("Backup offer text must be a nonblank string")
+    board = self.board_state()
+    if board.get("main_session_id") and board.get("board_role") == "worker":
+      return {"offered": False, "duplicate": False, "worker": True}
     records = parse_state_import(text)
     raw_name = payload.get("name")
     name = upload_name(
@@ -8022,15 +8144,26 @@ class Store:
           "SELECT id FROM notes WHERE type = 'state-backup' AND acknowledged_at IS NULL"
           " ORDER BY at DESC, seq DESC LIMIT 1"
         ).fetchone()
-        if pending is not None and offered and offered[0] == mismatch_key:
-          upload = db.execute(
-            "SELECT * FROM uploads WHERE note_id = ? ORDER BY seq LIMIT 1",
-            (pending["id"],),
-          ).fetchone()
+        if offered and offered[0] == mismatch_key:
+          last_note = (
+            pending
+            or db.execute(
+              "SELECT id FROM notes WHERE type = 'state-backup'"
+              " ORDER BY at DESC, seq DESC LIMIT 1"
+            ).fetchone()
+          )
+          upload = (
+            db.execute(
+              "SELECT * FROM uploads WHERE note_id = ? ORDER BY seq LIMIT 1",
+              (last_note["id"],),
+            ).fetchone()
+            if last_note is not None
+            else None
+          )
           return {
             "offered": True,
             "duplicate": True,
-            "note_id": pending["id"],
+            "note_id": last_note["id"] if last_note is not None else None,
             "path": upload_row(upload, self.path.parent)["path"] if upload else None,
           }
         for _ in range(MINT_ATTEMPTS):

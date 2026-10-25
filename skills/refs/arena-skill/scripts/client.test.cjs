@@ -5688,6 +5688,11 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(htmlSource, /id="board-tab"/);
   assert.match(htmlSource, /id="board-panel"/);
   assert.match(appSource, /showBoardPanel/);
+  assert.doesNotMatch(
+    appSource,
+    /clankers:board-wake[\s\S]{0,160}\/api\/skip-poll/,
+    'board wake never calls /api/skip-poll'
+  );
   assert.match(styleSource, /#copy-state\s*\{\s*display:\s*none;\s*\}/);
   assert.match(appSource, /updateReportTocActive/);
   assert.match(appSource, /querySelectorAll\?\.\('h2, h3'\)/);

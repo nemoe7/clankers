@@ -15166,6 +15166,11 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
 
   assert preview.board_session_id("arena/293da56c-clankers") == "293da56c-clankers"
   assert preview.board_session_id("b14c09a2-clankers") == "b14c09a2-clankers"
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda *_a: "arena/293da56c-clankers"
+  )
+  preview.run_notices(hygiene_dir)
+  capsys.readouterr()
   with pytest.raises(ValueError):
     preview.stage_board_file(
       hygiene_dir,
@@ -15218,11 +15223,35 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert (
     hygiene_dir / "board-files" / "b14c09a2-clankers" / "src" / "demo.txt"
   ).read_text(encoding="utf-8") == "demo-bytes"
+  hygiene_store.stamp_polling()
+  assert hygiene_store.polling() is True
+  woken_board = hygiene_store.board_action({"action": "wake", "target": "all-polling"})
+  assert hygiene_store.skip_poll_requested() is False
+  self_row = next(
+    row
+    for row in woken_board["sessions"]
+    if row["session_id"] == woken_board["session_id"]
+  )
+  assert self_row["polling"] is False
+  assert hygiene_store.take_board_wake() is not None
+  assert hygiene_store.take_board_wake() is None
+  hygiene_store.stamp_polling()
+  hygiene_store.board_action({"action": "wake", "target": woken_board["session_id"]})
+  assert hygiene_store.skip_poll_requested() is False
+  assert preview.poll_once(hygiene_store, sleeper=lambda _: None) == 0
+  assert "BOARD WAKE:" in capsys.readouterr().out
+  assert hygiene_store.polling() is False
+  assert hygiene_store.skip_poll_requested() is False
   gate_msg = preview.board_main_session_warning(
     hygiene_dir, "git push origin arena/293da56c-clankers"
   )
   assert gate_msg is not None
   assert "MAIN SESSION GATE" in gate_msg
+  worker_offer = hygiene_store.offer_userscript_backup(
+    {"name": "worker.ndjson", "text": backup_ndjson}
+  )
+  assert worker_offer["offered"] is False
+  assert worker_offer.get("worker") is True
   style_css = (
     preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
