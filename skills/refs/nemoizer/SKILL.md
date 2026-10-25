@@ -64,7 +64,7 @@ and the new one.
 - Use any comment syntax for `nonemo: <id>`; the scanner reads text, not syntax.
 - Apply an exclusion only to a known matching rule ID.
 - Print every nonemo marker with its path, line, rule ID, scope, and text when `nemoizer collect` or `--ignores` is used, and print every `nonemo` marker and manual-review finding when `nemoizer audit` or `--audit` is used.
-- Format audit reports with the [audit report template](references/audit-report.md) using one section per file (`Rule | Before | After | Verdict | Reason`), show the rule applied in `After` even when `Verdict` is `keep`, omit empty sections, and state 0 in Counts.
+- Review target prose manually against the Prose rules alongside `nemoizer audit` output, format audit reports with the [audit report template](references/audit-report.md) using one section per file (`Rule | Before | After | Verdict | Reason`), show the rule applied in `After` even when `Verdict` is `keep`, omit empty sections, and state 0 in Counts.
 
 ```bash
 python skills/nemoizer/scripts/nemoizer collect .
@@ -113,7 +113,7 @@ Delete a marker when the line no longer needs it.
 - Put one instruction in each sentence unless simultaneous actions require a single sentence.
 - Rewrite noun clusters longer than three words when the rewrite preserves the technical term and its meaning.
 - Keep one topic per paragraph within four sentences or the stricter project limit.
-- Use the serial (Oxford) comma in lists of three or more items.
+- Use the serial (Oxford) comma in lists of three or more items, and keep list separators consistent instead of mixing `/` and `or` in the same series.
 - Use a list for three or more steps or conditions while preserving their order and grouping.
 - Define an uncommon technical term when needed, and use that term consistently.
 - Prefer simple tenses unless a compound form carries confidence or current relevance that must survive.

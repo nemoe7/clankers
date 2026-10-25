@@ -30,6 +30,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Ship default `references/nuu.toml` font and renderer settings (`Basel Grotesk` and `Basel Grotesk Mono`) and update `_chromium_render_png` in `scripts/annotate.py` to locate `playwright-core` and `@sparticuz/chromium` across workspace `node_modules` paths.
 - Exempt `NUL003` when custom focus rings exist, check ancestor repository directories for `NUL004` `docs/**/design.md`, and skip scrolled-out elements in `NUA308`. Preserve element `bounds` in `measure.py` and `browser.cjs`, and add `crop="auto"` and callout repositioning in `scripts/annotate.py`.
 
+#### nemoizer
+
+- Extend `NMO003` in `scripts/nemoize.py` and `references/nmo003.md` to flag mixed `/` and `or` series separators, and update `nuu`'s `references/audit-report.md`. Require manual prose review alongside `nemoizer audit` output in `SKILL.md` and `references/audit-report.md`.
+
 ## 2026-10-24
 
 ### Added

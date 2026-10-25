@@ -1432,3 +1432,19 @@ def test_workflow_name_spans_identifier_boundaries_and_mixed_determiner_lists(tm
   mixed_res = run(str(mixed_py), cwd=tmp_path)
   assert mixed_res.returncode == 0, mixed_res.stderr
   assert "NMO902" not in mixed_res.stdout
+
+  slash_or = tmp_path / "slash_or.md"
+  slash_or.write_text(
+    "| Component / Property or Recipe | Reason |\n"
+    "| --- | --- |\n"
+    "| Button or Input / Select | Validated |\n"
+    "| Component, Property, or Recipe | Consistent |\n"
+    "| Component / Property / Recipe | Consistent |\n",
+    encoding="utf-8",
+  )
+  slash_res = run(str(slash_or), cwd=tmp_path)
+  assert slash_res.returncode == 1, slash_res.stderr
+  assert f"{slash_or.name}:1: [NMO003]" in slash_res.stdout
+  assert f"{slash_or.name}:3: [NMO003]" in slash_res.stdout
+  assert f"{slash_or.name}:4:" not in slash_res.stdout
+  assert f"{slash_or.name}:5:" not in slash_res.stdout
