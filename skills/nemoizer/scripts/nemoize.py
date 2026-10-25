@@ -84,6 +84,7 @@ from prose import (
   comment_blocks,
   is_code_file,
   is_env_file,
+  is_jinja_file,
   is_workflow_yaml,
   prose_spans,
   slash_comments,
@@ -98,12 +99,27 @@ EXCEPTIONS = {
   "repositories": "repos",
   "pull request": "PR",
   "pull requests": "PRs",
+  "names": "specifies",
+  "named": "specified",
+  "naming": "specifying",
 }
 NEMOIZER_MODIFIED_NOUNS = (
   r"rules?|lists?|linters?|prose|skills?|configs?|checks?|scripts?|"
   r"parsers?|suites?|tests?|plugins?|domains?|targets?|markers?"
 )
 KEEP_LOWER = {"nemoizer"}
+NAME_VERB_PATTERN = (
+  r"(?:"
+  r"(?:(?<=^)|(?<=\n)|(?<=^- )|(?<=\* )|(?<=\. )|(?<=, and )"
+  r"|(?<=, or )|(?<=\bto )|(?<=\bmust )|(?<=\bcan )|(?<=\bmay )|(?<=\bwill ))"
+  r"name(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their)\s+(?!few\b)[A-Za-z]+)"
+  r"|"
+  r"(?:(?<=\bit )|(?<=\bthat )|(?<=\bwhich )|(?<=\bwho )|(?<=\bsheet )"
+  r"|(?<=\bcontrol )|(?<=\btable )|(?<=\brule )|(?<=\bclause )|(?<=\breport )"
+  r"|(?<=\bconfig )|(?<=\bscript )|(?<=\bcheck )|(?<=\btool )|(?<=\bpage )|(?<=, and ))"
+  r"names(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their|[A-Z])[A-Za-z]*)"
+  r")"
+)
 ROTATIONS = (
   (
     "pick",
@@ -126,6 +142,7 @@ ROTATIONS = (
     "repo",
   ),
   ("pull request", r"(?<![A-Za-z0-9])pull[ \t]+requests?(?![A-Za-z0-9])", "PR"),
+  ("name", NAME_VERB_PATTERN, "specify"),
   (
     "nemoizer",
     (
@@ -141,6 +158,7 @@ RULE_IDS = {
   "kind": "NMO100",
   "repository": "NMO901",
   "pull request": "NMO901",
+  "name": "NMO901",
   "nemoizer": "NMO100",
 }
 ADVISORY_RULE_IDS = {
@@ -751,7 +769,7 @@ def scan(targets, ignores):
         (number, "\n".join(parts)) for number, parts in comment_map.items()
       )
     elif (
-      suffix_lower in {".sql", ".dbml", ".j2", ".jinja", ".jinja2"} or is_env_file(path)
+      suffix_lower in {".sql", ".dbml"} or is_jinja_file(path) or is_env_file(path)
     ) and prose_map is not None:
       line_pairs = sorted(prose_map.items())
     else:

@@ -1483,12 +1483,19 @@ def test_sql_dbml_env_and_jinja_comment_extractors_and_ste903_guard(tmp_path):
     "<div>{{ item.kind }}; {{ item.repository }}</div>\n",
     encoding="utf-8",
   )
+  template_jinja_html = tmp_path / "card.jinja.html"
+  template_jinja_html.write_text(
+    "{# Name the source in the summary. #}\n"
+    "<div>{{ item.kind }}; {{ item.name }}</div>\n",
+    encoding="utf-8",
+  )
   res = run(
     "--no-config",
     str(schema_sql),
     str(schema_dbml),
     str(env_example),
     str(template_jinja),
+    str(template_jinja_html),
     cwd=tmp_path,
   )
   assert res.returncode == 1, res.stderr
@@ -1500,6 +1507,13 @@ def test_sql_dbml_env_and_jinja_comment_extractors_and_ste903_guard(tmp_path):
   assert f"{env_example}:3:" not in res.stdout
   assert f"{template_jinja}:2: [STE100]" in res.stdout
   assert f"{template_jinja}:3:" not in res.stdout
+  assert f"{template_jinja_html}:1: [NMO901]" in res.stdout
+  assert f"{template_jinja_html}:2:" not in res.stdout
   assert "STE903" not in res.stdout
   assert "NMO100" not in res.stdout
-  assert "NMO901" not in res.stdout
+  assert (
+    nemoize.rotate(
+      "- Name a relationship and the sheet names the single size, keeping role names."
+    )
+    == "- Specify a relationship and the sheet specifies the single size, keeping role names."
+  )

@@ -62,10 +62,10 @@ Limit sentences to 20 words for unclassified prose, 25 for explicit description 
 - Replace prose dashes unless the requested writing sample uses them, preserving each clause relation.
 - Remove redundant qualifiers only if confidence, scope, and every safety or legal condition survive.
 - Remove unsupported importance or future-success claims, retaining concrete facts and stated plans.
-- Name relationships only when the source states them, otherwise retain their uncertainty.
+- Specify relationships only when the source states them, otherwise retain their uncertainty.
 - Keep an attached explanatory phrase only when the source supports its claim.
 - Replace unsupported quality claims with supported measurements, or remove only unsupported claims.
-- Name the source and its claim when available, otherwise remove only unsupported appeals to authority.
+- Specify the source and its claim when available, otherwise remove only unsupported appeals to authority.
 - Use is, are, or has only if it preserves the longer verb phrase's relation.
 - Remove bold labels only if they add no information or necessary structure.
 - Use straight quotation marks (`"` and `'`) instead of curly quotation marks, and avoid `→` arrows and consecutive emojis in Markdown prose.

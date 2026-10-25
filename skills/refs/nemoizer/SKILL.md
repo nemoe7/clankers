@@ -98,10 +98,10 @@ Delete a marker when the line no longer needs it.
 - Replace prose dashes unless the requested writing sample uses them, preserving each clause relation.
 - Remove a redundant qualifier only when the remaining wording preserves confidence, scope, and every safety or legal condition.
 - Remove unsupported claims of importance or future success while preserving concrete facts and stated plans.
-- Name a relationship only when the source states it, otherwise retain its uncertainty.
+- Specify a relationship only when the source states it, otherwise retain its uncertainty.
 - Keep an attached explanatory phrase only when the source supports its claim.
 - Replace an unsupported quality claim with a supported measurement, or remove only the unsupported claim.
-- Name the source and its claim when available, otherwise remove only unsupported appeals to authority.
+- Specify the source and its claim when available, otherwise remove only unsupported appeals to authority.
 - Use is, are, or has only when it preserves the relation expressed by a longer verb phrase.
 - Remove bold labels only when the labels add no information or necessary structure.
 - Use straight quotation marks (`"` and `'`) instead of curly quotation marks, and avoid `→` arrows and consecutive emojis in Markdown prose.
