@@ -2346,6 +2346,9 @@ class Store:
 			if existing:
 				if existing['text']!=text or answer_data is not None and json.loads(existing['answer_data']or'null')!=answer_data:raise ValueError('This message ID already belongs to different text')
 				self.release_report_tasks(db,report_id);return message_row(existing)
+			if at is None and acknowledged_at is None:
+				latest=db.execute('SELECT * FROM submissions WHERE report_id = ? ORDER BY seq DESC LIMIT 1',(report_id,)).fetchone()
+				if latest is not None and latest['text']==text and(answer_data is None or latest['answer_data']is None or json.loads(latest['answer_data']or'null')==answer_data):self.release_report_tasks(db,report_id);return message_row(latest)
 			db.execute('INSERT INTO submissions (id, report_id, text, at, acknowledged_at, ack_type, ack_text, ack_edited_at, seen_at, task_id, replies, ack_edited_seen_count, answer_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(submission_id,report_id,text,at or now(),*receipt,when(seen_at)if seen_at is not None else None,task_id,more,seen_reply_count,json.dumps(answer_data,ensure_ascii=False)if answer_data is not None else None));self.release_report_tasks(db,report_id);reset_poll_count(db);clear_skip_poll(db);return message_row(db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone())
 	def submissions(self):
 		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM submissions ORDER BY at, seq')]

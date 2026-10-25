@@ -5046,6 +5046,12 @@ def test_wide_report_fields():
     )
     assert len(record["text"]) > 100_000
     assert record["text"].count("x" * 4200) == 24
+    wide_store.acknowledge(["note-wide"], "received")
+    repeated = wide_store.submit_report(
+      "wide", "note-wide-2", answers, wide_store.report("wide")["updated_at"]
+    )
+    assert repeated["id"] == "note-wide"
+    assert not wide_store.read()["pending"]
     stored = [item for item in wide_store.submissions() if item["id"] == "note-wide"]
     assert stored and stored[0]["text"] == record["text"]
     oversized = "z" * 150_001

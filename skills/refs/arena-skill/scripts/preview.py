@@ -6736,6 +6736,22 @@ class Store:
           raise ValueError("This message ID already belongs to different text")
         self.release_report_tasks(db, report_id)
         return message_row(existing)
+      if at is None and acknowledged_at is None:
+        latest = db.execute(
+          "SELECT * FROM submissions WHERE report_id = ? ORDER BY seq DESC LIMIT 1",
+          (report_id,),
+        ).fetchone()
+        if (
+          latest is not None
+          and latest["text"] == text
+          and (
+            answer_data is None
+            or latest["answer_data"] is None
+            or json.loads(latest["answer_data"] or "null") == answer_data
+          )
+        ):
+          self.release_report_tasks(db, report_id)
+          return message_row(latest)
       db.execute(
         "INSERT INTO submissions"
         " (id, report_id, text, at, acknowledged_at, ack_type, ack_text, ack_edited_at, seen_at,"
