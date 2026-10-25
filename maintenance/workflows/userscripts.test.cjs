@@ -1640,10 +1640,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(panel(), null);
     tick();
     await respond("GET", "/api/userscript-autosave", 502, null);
-    assert.ok(panel());
+    assert.equal(panel(), null);
     tick();
     await respond("GET", "/api/userscript-autosave", 200, healthy);
-    assert.equal(panel(), null, "a healthy cycle clears the earlier fetch failure");
+    assert.equal(panel(), null);
 
     const writes = [];
     const writeAttempts = [];
@@ -1668,16 +1668,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     iframe.src = "https://new-preview.example/";
     tick();
     await respond("GET", "/api/userscript-autosave", 200, changed);
-    assert.ok(panel(), "a moved or different state asks before writing");
-    assert.match(panel().children[0].textContent, /State:/);
-    assert.doesNotMatch(panel().children[0].textContent, /https?:\/\//);
+    assert.equal(panel(), null);
     assert.deepEqual(writes, []);
-    const overwritePanel = panel();
-    panel().children[1].children.find(button => button.textContent === "Overwrite").listeners.click();
-    assert.ok(panel(), "Force save shows progress before the GET returns");
-    assert.notEqual(panel(), overwritePanel);
-    assert.equal(panel().getAttribute("data-action"), String(false));
-    assert.equal(panel().children[0].textContent, "Forcing save...");
+    menus.get("State - force save")();
+    assert.equal(panel(), null);
     await respond("GET", "/api/userscript-autosave", 200, changed);
     assert.equal(writes.length, 1, "the accepted move writes the server state");
     assert.equal(requests.at(-1).url.endsWith("/userscript-autosave"), true, "no compare request");
@@ -1732,7 +1726,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       assert.deepEqual(writeAttempts, blockedAttempts);
       assert.deepEqual(writes, beforeWrites);
       assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
-      assert.ok(panel());
+      assert.equal(panel(), null);
 
       fileText = validText;
       const ahead = { ...synced, lastsave: "ahead", beforelastsave: synced.lastsave };
@@ -1741,20 +1735,19 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       assert.deepEqual(writeAttempts, blockedAttempts);
       assert.deepEqual(writes, beforeWrites);
       assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
-      assert.ok(panel());
+      assert.equal(panel(), null);
     }
     fileText = changed.text;
 
     const stale = { ...changed, save_id: "stale", stamp: "t9", lastsave: "t9", beforelastsave: "t2" };
     tick();
     await respond("GET", "/api/userscript-autosave", 200, stale);
-    assert.ok(panel(), "a pair mismatch blocks the automatic save");
-    assert.equal(panel().children[0].textContent, "State mismatch (notes 0, tasks 0).");
+    assert.equal(panel(), null);
     assert.equal(writes.length, 1);
     const refusal = logs.map(args => args[1]).filter(data => data && data.code === "autosave-compare").at(-1);
     assert.equal(refusal.detail, "saved t2/t1 server t9/t2 n1 t0 dn0 dt0", "the refusal names both stamp pairs");
-    panel().children[1].children.find(button => button.textContent === "Force save").listeners.click();
-    assert.equal(panel().children[0].textContent, "Forcing save...", "the click shows progress at once");
+    menus.get("State - force save")();
+    assert.equal(panel(), null);
     await respond("GET", "/api/userscript-autosave", 200, stale);
     assert.equal(writes.length, 2, "the overwrite button runs force save");
     await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: stale.save_id, digest: stale.digest });
@@ -1769,11 +1762,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const diverged = { ...stale, save_id: "diverged", stamp: "t11", lastsave: "t8", beforelastsave: "t7" };
     tick();
     await respond("GET", "/api/userscript-autosave", 200, diverged);
-    assert.ok(panel(), "an unrelated save pair still blocks the automatic save");
-    assert.match(panel().children[0].textContent, /^State mismatch \(notes 0, tasks 0\)\.$/);
-    assert.equal(
-      panel().children[1].children.some(button => button.textContent === "Force save"), true,
-      "a mismatch offers Force save as an explicit action");
+    assert.equal(panel(), null);
     assert.equal(writes.length, 2);
 
     failWrite = true;
@@ -1795,7 +1784,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     download.onerror({ error: "blocked" });
     await settle();
     assert.equal(linkClicks.length, 2);
-    assert.ok(panel(), "a download failure remains visible after link fallback");
+    assert.equal(panel(), null);
 
     menus.get("State - force save")();
     await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "manager-complete" });
@@ -1804,7 +1793,6 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: "manager-complete", digest: stale.digest });
     assert.equal(saved.get(receiptKey).save_id, "manager-complete");
 
-    // Force save on a fresh unlisted repository offers Choose file / Cancel instead of a download.
     saved.delete("clankers-arena-state-scope-o.r");
     saved.delete(receiptKey);
     saved.delete(pendingKey);
@@ -1816,23 +1804,19 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     context.showSaveFilePicker = () => pickerPromise;
     tick();
     await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-1", lastsave: null, beforelastsave: null });
-    assert.ok(panel(), "an unlisted repo without a branch warns before saving");
-    assert.equal(panel().children[0].textContent, "Missing branch.");
-    panel().children[1].children.find(button => button.textContent === "Force save").listeners.click();
+    assert.equal(panel(), null);
+    menus.get("State - force save")();
     await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-1", lastsave: null, beforelastsave: null });
     assert.equal(linkClicks.length, downloadsBeforeUnlisted, "Force save does not fall back to browser download when the file picker is available");
-    assert.ok(panel(), "Force save prompts for a file on a fresh unlisted repo");
-    assert.equal(panel().children[0].textContent, "No file selected.");
-    assert.deepEqual(panel().children[1].children.map(button => button.textContent), ["Choose file", "Cancel"]);
+    assert.equal(panel(), null);
 
     tick();
     await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-2", lastsave: null, beforelastsave: null });
-    assert.equal(panel().children[0].textContent, "Missing branch.");
+    assert.equal(panel(), null);
     pickerPromise = Promise.reject(Object.assign(new Error("cancelled"), { name: "AbortError" }));
     menus.get("State - choose the file")();
     await settle();
-    assert.ok(panel(), "cancelling Choose file keeps the missing-branch warning");
-    assert.equal(panel().children[0].textContent, "Missing branch.");
+    assert.equal(panel(), null);
 
     fileText = "";
     availableHandle = handle;
@@ -2248,8 +2232,7 @@ for raw in sys.stdin:
       tick();
       await drain();
       assert.equal(writes.length, 2, "diverged server stamps block automatic overwrite");
-      assert.ok(panel());
-      assert.equal(panel().children[0].textContent, "State mismatch (notes +1, tasks 0).");
+      assert.equal(panel(), null);
       const divergedServer = await callPy({ op: "inspect" });
       assert.equal(divergedServer.backup_notes.length, 1, "mismatch auto-uploads backup once to inbox");
       assert.equal(divergedServer.backup_notes[0].quiet, 1, "backup note is non-user-visible");
@@ -2264,7 +2247,7 @@ for raw in sys.stdin:
       const divergedAgain = await callPy({ op: "inspect" });
       assert.equal(divergedAgain.backup_notes.length, 1, "repeated ticks on same mismatch do not re-upload");
 
-      panel().children[1].children.find(button => button.textContent === "Force save").listeners.click();
+      menus.get("State - force save")();
       await drain();
       assert.equal(writes.length, 3, "Force save writes and re-synchronizes after divergence");
       assert.equal(panel(), null);

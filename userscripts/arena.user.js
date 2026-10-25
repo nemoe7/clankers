@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.82
+// @name         Arena.ai | NemoUtils | v1.10.83
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.82
+// @version      1.10.83
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2412,19 +2412,6 @@
       );
       addDependentSectionItem(
         "State",
-        "State toast duration (s)",
-        buildNumberRow(
-          "State toast duration (s)",
-          STATE_PANEL_KEY,
-          Math.round(statePanelMs() / 1000),
-          1,
-          60,
-          1000,
-        ),
-        "state-download",
-      );
-      addDependentSectionItem(
-        "State",
         "reset-window overwrite",
         buildCheckboxRow(
           "reset-window overwrite",
@@ -4478,52 +4465,8 @@
       }
     }
 
-    function statePanel(message, actionLabel, action, autoHide) {
-      try {
-        if (typeof document === "undefined" || typeof document.createElement !== "function" || !document.body) return;
-        removeStatePanel();
-        var card = document.createElement("div");
-        card.id = STATE_PANEL_ID;
-        card.setAttribute("role", "status");
-        card.setAttribute("data-action", String(Boolean(actionLabel && typeof action === "function")));
-        card.setAttribute("data-auto-hide", String(Boolean(autoHide)));
-        card.style.cssText =
-          "position:fixed;right:16px;top:16px;z-index:2147483647;max-width:320px;" +
-          "padding:12px 14px;border-radius:10px;background:#2c2b28;color:#f0ede8;" +
-          "font:13px/1.45 system-ui,-apple-system,sans-serif;" +
-          "box-shadow:0 6px 24px rgba(0,0,0,.35);border:1px solid #56504a";
-        var text = document.createElement("div");
-        text.textContent = message;
-        card.appendChild(text);
-        var row = document.createElement("div");
-        row.style.cssText = "display:flex;gap:8px;margin-top:10px";
-        if (actionLabel && typeof action === "function") {
-          var go = document.createElement("button");
-          go.type = "button";
-          go.textContent = actionLabel;
-          go.style.cssText =
-            "cursor:pointer;border:1px solid #56504a;border-radius:6px;padding:5px 10px;" +
-            "background:#2c2b28;color:#f0ede8;font:inherit";
-          go.addEventListener("click", function () {
-            removeStatePanel();
-            action();
-          });
-          row.appendChild(go);
-        }
-        var close = document.createElement("button");
-        close.type = "button";
-        close.textContent = actionLabel === "Choose file" ? "Cancel" : "Dismiss";
-        close.style.cssText =
-          "cursor:pointer;border:1px solid #56504a;border-radius:6px;padding:5px 10px;" +
-          "background:transparent;color:inherit;font:inherit";
-        close.addEventListener("click", removeStatePanel);
-        row.appendChild(close);
-        card.appendChild(row);
-        document.body.appendChild(card);
-        if (autoHide) setTimeout(removeStatePanel, statePanelMs());
-      } catch (err) {
-        return;
-      }
+    function statePanel() {
+      return;
     }
 
     function stateError(line, actionLabel, action, code, status, showPanel, detail) {
