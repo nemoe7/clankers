@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.83
+// @name         Arena.ai | NemoUtils | v1.10.84
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.83
+// @version      1.10.84
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1635,6 +1635,65 @@
       return true;
     }
 
+    var PREVIEW_DRAWER_SELECTOR =
+      "body > div:nth-child(4) > div > main > div > div > div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip > div";
+    var PREVIEW_DRAWER_FALLBACK_SELECTOR =
+      "main div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip > div";
+    var PREVIEW_DRAWER_WIDTH = "1398px";
+    var PREVIEW_DRAWER_STYLE_ID = "clankers-preview-drawer-style";
+
+    function findPreviewDrawer(doc) {
+      if (!doc || typeof doc.querySelector !== "function") {
+        return null;
+      }
+      return (
+        doc.querySelector(PREVIEW_DRAWER_SELECTOR) ||
+        doc.querySelector(PREVIEW_DRAWER_FALLBACK_SELECTOR) ||
+        null
+      );
+    }
+
+    function enforcePreviewDrawerWidth(doc) {
+      var drawer = findPreviewDrawer(doc);
+      if (!drawer || !drawer.style) {
+        return false;
+      }
+      if (
+        typeof drawer.style.getPropertyValue === "function" &&
+        typeof drawer.style.setProperty === "function"
+      ) {
+        if (
+          drawer.style.getPropertyValue("width") === PREVIEW_DRAWER_WIDTH &&
+          drawer.style.getPropertyPriority("width") === "important"
+        ) {
+          return false;
+        }
+        drawer.style.setProperty("width", PREVIEW_DRAWER_WIDTH, "important");
+        return true;
+      }
+      if (drawer.style.width === PREVIEW_DRAWER_WIDTH) {
+        return false;
+      }
+      drawer.style.width = PREVIEW_DRAWER_WIDTH;
+      return true;
+    }
+
+    function ensurePreviewDrawerStyle() {
+      if (!document.head || typeof document.createElement !== "function") return;
+      if (typeof document.getElementById === "function" && document.getElementById(PREVIEW_DRAWER_STYLE_ID)) return;
+      var style = document.createElement("style");
+      style.id = PREVIEW_DRAWER_STYLE_ID;
+      style.setAttribute("id", PREVIEW_DRAWER_STYLE_ID);
+      style.textContent =
+        PREVIEW_DRAWER_SELECTOR +
+        "," +
+        PREVIEW_DRAWER_FALLBACK_SELECTOR +
+        "{width:" +
+        PREVIEW_DRAWER_WIDTH +
+        " !important}";
+      document.head.appendChild(style);
+    }
+
     if (exposeChecks("openSteering", {
       isSessionUrl: isSessionUrl,
       slugFromOwnerRepo: slugFromOwnerRepo,
@@ -1646,6 +1705,10 @@
       steeringLabelViolation: steeringLabelViolation,
       interruptPayloadForSteering: interruptPayloadForSteering,
       flagSteeringLabelViolation: flagSteeringLabelViolation,
+      findPreviewDrawer: findPreviewDrawer,
+      enforcePreviewDrawerWidth: enforcePreviewDrawerWidth,
+      PREVIEW_DRAWER_SELECTOR: PREVIEW_DRAWER_SELECTOR,
+      PREVIEW_DRAWER_WIDTH: PREVIEW_DRAWER_WIDTH,
       resetFlaggedSteering: function () {
         flaggedSteeringKey = null;
         flaggingSteeringKey = null;
@@ -1748,6 +1811,8 @@
         clearClickTimer();
         return;
       }
+      ensurePreviewDrawerStyle();
+      enforcePreviewDrawerWidth(document);
       var slug = previewUiRepo || readSlug(document) || recalledSlug();
       flagSteeringLabelViolation(document, slug);
       if (clickedPath === location.pathname) {
@@ -1774,7 +1839,7 @@
       childList: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ["src", "title"],
+      attributeFilter: ["src", "title", "style"],
     });
     window.addEventListener("popstate", sync);
     sync();
@@ -1782,6 +1847,13 @@
       observer.disconnect();
       window.removeEventListener("popstate", sync);
       clearClickTimer();
+      if (typeof document.getElementById === "function") {
+        var styleNode = document.getElementById(PREVIEW_DRAWER_STYLE_ID);
+        if (styleNode) {
+          if (typeof styleNode.remove === "function") styleNode.remove();
+          else if (styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        }
+      }
     };
   });
 

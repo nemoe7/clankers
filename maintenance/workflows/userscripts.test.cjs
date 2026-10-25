@@ -2774,6 +2774,39 @@ for raw in sys.stdin:
       ),
       checks.tabTitle.BASH_EMOJI
     );
+    assert.equal(
+      checks.openSteering.PREVIEW_DRAWER_SELECTOR,
+      "body > div:nth-child(4) > div > main > div > div > div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip > div"
+    );
+    assert.equal(checks.openSteering.PREVIEW_DRAWER_WIDTH, "1398px");
+    let drawerWidth = "720px";
+    let drawerPriority = "";
+    const drawerNode = {
+      style: {
+        getPropertyValue(prop) {
+          return prop === "width" ? drawerWidth : "";
+        },
+        getPropertyPriority(prop) {
+          return prop === "width" ? drawerPriority : "";
+        },
+        setProperty(prop, val, priority) {
+          if (prop === "width") {
+            drawerWidth = val;
+            drawerPriority = priority || "";
+          }
+        },
+      },
+    };
+    const drawerDoc = {
+      querySelector(sel) {
+        return sel === checks.openSteering.PREVIEW_DRAWER_SELECTOR ? drawerNode : null;
+      },
+    };
+    assert.equal(checks.openSteering.findPreviewDrawer(drawerDoc), drawerNode);
+    assert.equal(checks.openSteering.enforcePreviewDrawerWidth(drawerDoc), true);
+    assert.equal(drawerWidth, "1398px");
+    assert.equal(drawerPriority, "important");
+    assert.equal(checks.openSteering.enforcePreviewDrawerWidth(drawerDoc), false);
   });
 }
 
