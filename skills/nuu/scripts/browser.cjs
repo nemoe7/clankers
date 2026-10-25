@@ -633,11 +633,18 @@ function validateFlow(steps) {
   }
 }
 
-async function flow(page, context, steps, output, timeout) {
+async function flow(page, context, steps, output, timeout, viewportMeta = {}) {
   const results = [];
   let assertions = 0;
   for (const [index, step] of steps.entries()) {
-    const row = {index, action: step.action, selector: step.selector, status: 'not_run'};
+    const row = {
+      index,
+      action: step.action,
+      selector: step.selector,
+      ...(viewportMeta.width ? {width: viewportMeta.width} : {}),
+      ...(viewportMeta.scheme ? {scheme: viewportMeta.scheme} : {}),
+      status: 'not_run',
+    };
     results.push(row);
     try {
       const target = step.selector ? page.locator(step.selector) : null;
@@ -685,8 +692,40 @@ async function flow(page, context, steps, output, timeout) {
     } catch (error) {
       row.status = 'failed';
       row.error = String(error.message);
-      return {status: 'failed', assertions, steps: results,
-        remaining: steps.length - results.length};
+      if (step.selector) {
+        try {
+          const state = await page.evaluate(sel => {
+            const el = document.querySelector(sel);
+            if (!el) return {matched: 0, visible: false};
+            const cs = getComputedStyle(el);
+            const r = el.getBoundingClientRect();
+            const vis =
+              cs.display !== 'none' &&
+              cs.visibility !== 'hidden' &&
+              Number(cs.opacity) !== 0 &&
+              r.width > 0 &&
+              r.height > 0;
+            return {
+              matched: document.querySelectorAll(sel).length,
+              visible: vis,
+              hiddenAttr: Boolean(el.hidden),
+              display: cs.display,
+              visibility: cs.visibility,
+            };
+          }, step.selector);
+          row.visible = state.visible;
+          row.selectorState = state;
+        } catch {}
+      }
+      return {
+        status: 'failed',
+        ...(viewportMeta.width ? {width: viewportMeta.width} : {}),
+        ...(viewportMeta.scheme ? {scheme: viewportMeta.scheme} : {}),
+        failedStep: row,
+        assertions,
+        steps: results,
+        remaining: steps.length - results.length,
+      };
     }
   }
   return {status: assertions ? 'passed' : steps.length ? 'actions_run' : 'not_run',
@@ -828,9 +867,10 @@ async function run() {
   const output = fs.mkdtempSync(path.join(artifactRoot, 'capture-'));
   const captures = [];
   const timeout = request.timeout * 1000;
+  const HOUSE_HEIGHTS = {1920: 957, 1080: 2437, 958: 958, 411: 799, 855: 325};
   try {
     for (const width of request.widths) {
-      const height = Number(request.height || 900);
+      const height = Number(request.height || HOUSE_HEIGHTS[width] || 900);
       const touch = width <= 768 || height <= 480;
       for (const scheme of ['dark', 'light']) {
         for (const motion of ['no-preference', 'reduce']) {
@@ -843,7 +883,7 @@ async function run() {
           page.on('console', message => {
             if (message.type() === 'error') errors.push({type: 'console', message: message.text()});
           });
-          const row = {width, touch, scheme, motion, status: 'not_checked', errors,
+          const row = {width, height, touch, scheme, motion, status: 'not_checked', errors,
             flow: {status: 'not_run'}, edit: {status: 'not_run'}};
           captures.push(row);
           try {
@@ -855,7 +895,7 @@ async function run() {
             }
             row.measurements = await metrics(page, request.selector);
             if (captures.length === 1) {
-              row.flow = await flow(page, context, request.flow || [], output, timeout);
+              row.flow = await flow(page, context, request.flow || [], output, timeout, {width, scheme, motion});
               if (request.edit) {
                 const edit = request.edit;
                 const node = page.locator(edit.selector);

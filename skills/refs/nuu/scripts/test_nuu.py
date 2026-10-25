@@ -176,10 +176,10 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   )
   assert sheet_extract.returncode == 0
   assert [row["value"] for row in json.loads(sheet_extract.stdout)["breakpoints"]] == [
-    "75em",
+    "68em",
     "60em",
-    "40em",
     "30em",
+    "24em",
   ]
   measured = tmp_path / "measured.json"
   measured.write_text(
@@ -373,7 +373,7 @@ byId('retry').addEventListener('click',submit);
     try:
       report = run("flow", "--flow", str(flow_file))
       captures = report["captures"]
-      required_widths = {360, 1280}
+      required_widths = set(nuu.WIDTHS)
       assert {row["width"] for row in captures} >= required_widths
       assert {row["scheme"] for row in captures} == {"light", "dark"}
       assert {row["motion"] for row in captures} == {"no-preference", "reduce"}
@@ -1259,14 +1259,15 @@ def test_design_boards_and_html_typography(tmp_path):
   assert default_nuu_toml.is_file()
   default_cfg = annotate.load_nuu_config(config_path=default_nuu_toml)
   assert default_cfg["path"] == str(default_nuu_toml)
-  assert "Basel Grotesk" in default_cfg["config"]["fonts"]["sans"]
-  assert "Basel Grotesk Mono" in default_cfg["config"]["fonts"]["mono"]
+  assert "Inter" in default_cfg["config"]["fonts"]["sans"]
+  assert "Monaspace Neon" in default_cfg["config"]["fonts"]["mono"]
+  assert default_cfg["config"]["audit"]["widths"] == [1920, 1080, 958, 855, 411]
 
   bare_proj = tmp_path / "BareNoCssProject"
   bare_proj.mkdir()
   bare_typo = annotate.resolve_project_typography(bare_proj)
-  assert "Basel Grotesk" in bare_typo["font_sans"]
-  assert "Basel Grotesk Mono" in bare_typo["font_mono"]
+  assert "Inter" in bare_typo["font_sans"]
+  assert "Monaspace Neon" in bare_typo["font_mono"]
 
   chromium_env_nm = SCRIPT.parents[3] / "arena-state" / "chromium-env" / "node_modules"
   if chromium_env_nm.is_dir():
@@ -1303,6 +1304,8 @@ def test_design_boards_and_html_typography(tmp_path):
 
   (toml_proj / "dev.css").write_text(
     "/* nuu-deviation: compact-toolbar: single-row 34px controls */\n"
+    "/* nuu-deviation: dense-log-header-row */\n"
+    "/* nuu-deviation: keep 30px height on inline filter pills */\n"
     ".toolbar { height: 34px; outline: none; }\n",
     encoding="utf-8",
   )
@@ -1311,6 +1314,31 @@ def test_design_boards_and_html_typography(tmp_path):
     d["id"] == "compact-toolbar" and "34px" in d["reason"]
     for d in dev_lint["deviations"]
   )
+  assert any(
+    d["id"] == "" and "30px height" in d["reason"] for d in dev_lint["deviations"]
+  )
+  sheet_tokens = measure.parse_sheet(
+    (SCRIPT.parent.parent / "references" / "style.css").read_text(encoding="utf-8")
+  )
+  spacing_report = {
+    "width": 1920,
+    "elements": [
+      {
+        "selector": "a.nav-link",
+        "values": {
+          "width": "127.656px",
+          "height": "18.5px",
+          "line-height": "16.5px",
+          "outline-width": "3px",
+          "padding-top": "8px",
+          "padding-left": "6px",
+        },
+      }
+    ],
+  }
+  spacing_findings = measure.check(spacing_report, sheet_tokens)
+  assert len(spacing_findings) == 1
+  assert "padding-left" in spacing_findings[0]
   assert all(
     isinstance(f.get("rule_description"), str) and f["rule_description"]
     for f in dev_lint["findings"]

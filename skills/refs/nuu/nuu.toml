@@ -1,13 +1,13 @@
-# Dedicated nuu configuration so nuu boards and reports use nuu's own house stylesheet
-# rather than the repository's arena-skill preview styling.
+# Dedicated nuu skill configuration (skills/refs/nuu/nuu.toml).
+# Uses nuu's own house stylesheet and tokens (references/style.css).
 
-stylesheet = "references/style.css"
+[design]
+path = "SKILL.md"
 
 [fonts]
 sans = '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif'
 mono = '"Monaspace Neon", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace'
 files = []
-prefer_project_css = false
 
 [annotate]
 scale = 2
@@ -20,5 +20,5 @@ scale = 2
 wireframe = false
 
 [audit]
-widths = [1920, 1080, 958, 411, 855]
+widths = [1920, 1080, 958, 855, 411]
 wireframe = false

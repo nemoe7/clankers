@@ -82,20 +82,14 @@ SPACING_PROPERTIES = ("padding", "margin", "gap", "row-gap", "column-gap")
 
 
 def off_scale(name: str, value: str, tokens: dict[str, str], scale: float) -> bool:
-  """True when a px value is neither zero, on the scale, nor a size the sheet names for it.
-
-  A spacing property reads the scale alone. A type size names a font size, and never
-  excuses a padding. Any other property may also take a layout size the sheet names.
-  """
+  """True when a spacing px value is neither zero nor on the scale."""
+  if not name.startswith(SPACING_PROPERTIES):
+    return False
   match = PX.match(value.strip())
   if not match:
     return False
   number = float(match.group(1))
-  if number == 0 or on_scale(number, scale):
-    return False
-  if name.startswith(SPACING_PROPERTIES):
-    return True
-  return number not in named_sizes(tokens, ramp=name in TYPE_PROPERTIES)
+  return number != 0 and not on_scale(number, scale)
 
 
 def check(
@@ -322,7 +316,8 @@ def main(argv: list[str] | None = None) -> int:
   )
 
   density_command = commands.add_parser(
-    "density", help="Check row/card ink ratio, sibling gaps, and control width caps"
+    "density",
+    help="Check row/card ink ratio, sibling gaps, and form inputs that leave row space unused",
   )
   density_command.add_argument("report", type=Path)
   density_command.add_argument(

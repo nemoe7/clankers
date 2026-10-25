@@ -29,8 +29,10 @@ COLORS = {
 }
 
 DEFAULT_NUU_TOML = Path(__file__).resolve().parent.parent / "references" / "nuu.toml"
-DEFAULT_FONT_SANS = '"Basel Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif'
-DEFAULT_FONT_MONO = '"Basel Grotesk Mono", ui-monospace, "SFMono-Regular", monospace'
+DEFAULT_FONT_SANS = '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif'
+DEFAULT_FONT_MONO = (
+  '"Monaspace Neon", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace'
+)
 SKIP_DIRS = {
   ".git",
   ".agents",
@@ -1976,25 +1978,31 @@ def build_design_boards(
           bitmap_shots.append((str(f_lbl or shot_name), sw, sh, srgba))
         elif "html" in frame:
           h_val = str(frame["html"])
-          frag_path = resolve_rel(h_val)
-          if frag_path.is_file():
-            frag = frag_path.read_text(encoding="utf-8").strip()
-          elif "<" in h_val and ">" in h_val:
+          if "<" in h_val and ">" in h_val:
             frag = h_val
           else:
-            return {
-              "status": "failed",
-              "output": str(dst),
-              "boards": board_entries,
-              "findings": [
-                {
-                  "id": "NUB104",
-                  "severity": "error",
-                  "message": f"missing HTML fragment: {h_val}",
-                }
-              ],
-              "writes": writes,
-            }
+            try:
+              frag_path = resolve_rel(h_val)
+              is_frag_file = frag_path.is_file()
+            except OSError:
+              frag_path = None
+              is_frag_file = False
+            if is_frag_file and frag_path is not None:
+              frag = frag_path.read_text(encoding="utf-8").strip()
+            else:
+              return {
+                "status": "failed",
+                "output": str(dst),
+                "boards": board_entries,
+                "findings": [
+                  {
+                    "id": "NUB104",
+                    "severity": "error",
+                    "message": f"missing HTML fragment: {h_val}",
+                  }
+                ],
+                "writes": writes,
+              }
           if frame.get("bare") or re.match(
             r'^<div\b[^>]*\bclass=["\'][^"\']*\bframe\b', frag
           ):
