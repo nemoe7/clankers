@@ -330,6 +330,7 @@ mark a, a mark { color: var(--mark-link); }
 .report ul, .report ol { margin: 8px 0; padding-left: 28px; }
 /* Lists in message text sit flush like log lists and the composer, including the report ack thread. */
 .message-text ul, .message-text ol { margin: 8px 0; padding-left: 0; list-style-position: inside; }
+.message-text li > p:first-child, #history li li > p:first-child { display: inline; margin: 0; }
 .report li { margin: 2px 0; }
 /* Message blockquotes take the reply's bar and padding but keep the message's font size. */
 .message-text blockquote { margin: 8px 0; padding-left: 12px; color: var(--muted); border-left: 2px solid rgb(199, 194, 188); }

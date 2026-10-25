@@ -1834,6 +1834,10 @@ def test_http_boundaries():
         r"padding-left:0;list-style-position:inside",
         page,
       ), "message text lists sit flush"
+      assert re.search(
+        r"\.message-text li>p:first-child[^{}]*\{display:inline;margin:0;?\}",
+        page,
+      ), "loose list items keep first paragraph inline with inside marker"
       report_list = re.search(
         r"\.report (?:ul,\.report ol|ol,\.report ul)\{([^}]+)\}", page
       )

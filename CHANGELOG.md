@@ -26,6 +26,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Clamp mobile `body` height to `min(100%, var(--app-height, 100svh))` and resync `--app-height` on `DOMContentLoaded` and `load` (`assets/style.css`, `assets/app.js`), and remove the report submission hint footer from `assets/index.html`.
 - Require installing `nuu` (`pip install -e`) via `arena-preview run start` during Arena setup when `nuu` is present in `rules/refs/ARENA.md`, `skills/refs/arena-skill/SKILL.md`, and live mirrors.
 - Rewrite relative local `.gif`, `.png`, `.jpg`, `.jpeg`, and `.webp` Markdown image paths to `/api/report-image?path=...` in `scripts/preview.py` (`render_image`, `sized_image`) and `assets/message-markdown.js` (`renderMessageMarkdown`).
+- Keep `.message-text li > p:first-child` and `#history li li > p:first-child` inline (`display: inline; margin: 0`) in `assets/style.css` so loose ordered and unordered list items do not break onto a new line below `list-style-position: inside` markers.
 
 #### userscripts
 
