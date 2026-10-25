@@ -3201,7 +3201,9 @@ class Store:
 		if source.suffix.lower()!='.md':raise ValueError('Publish a UTF-8 .md source file')
 		with source.open('rb')as stream:data=stream.read(MAX_REPORT+1)
 		if len(data)>MAX_REPORT:raise ValueError('Report exceeds the 2 MB limit; split it into reports')
-		text=data.decode('utf-8');text=embed_report_images(text,source.resolve().parent);fields=parse_fields(text)[1];metadata=validate_submission_format(submission_format,fields)
+		text=data.decode('utf-8');text=embed_report_images(text,source.resolve().parent)
+		if len(text.encode('utf-8'))>MAX_REPORT:raise ValueError('Report exceeds the 2 MB limit; split it into reports')
+		fields=parse_fields(text)[1];metadata=validate_submission_format(submission_format,fields)
 		if not allow_unparsed_markers:
 			warnings=report_marker_warnings(text)
 			if warnings:lines=[f"{source}:{warning['line']}: Error: possible unparsed {warning['marker']} marker. Keep spaces outside the markers, or pass -u / --allow-unparsed-markers if literal marker text is intentional."for warning in warnings];raise ValueError('\n'.join(lines))
@@ -3548,7 +3550,10 @@ def handler(store):
 						if survey_state['results']is not None and checked_at and(not survey_state['answered_at']or checked_at>survey_state['answered_at']):survey_state['answered_at']=checked_at;survey_state['requested']=False
 						body=json.dumps({'results':survey_state['results'],'answered_at':survey_state['answered_at']})
 					self.reply(200,body);return
-				if path=='/api/userscript-autosave':self.reply(200,json.dumps(store.userscript_snapshot(),ensure_ascii=False));return
+				if path=='/api/userscript-autosave':
+					try:snapshot=store.userscript_snapshot()
+					except(ValueError,TypeError)as error:self.problem(400,error);return
+					self.reply(200,json.dumps(snapshot,ensure_ascii=False));return
 				if path=='/api/state':
 					header_tz=(self.headers.get('X-Timezone')or'').strip()
 					if header_tz and zone_exists(header_tz)and store.meta_value(TIMEZONE_META)!=header_tz:store.set_display_timezone(header_tz)

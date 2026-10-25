@@ -5052,6 +5052,14 @@ def test_wide_report_fields():
     )
     assert repeated["id"] == "note-wide"
     assert not wide_store.read()["pending"]
+    with (
+      patch(
+        "preview.embed_report_images",
+        return_value="x" * (preview.MAX_REPORT + 1),
+      ),
+      pytest.raises(ValueError),
+    ):
+      wide_store.publish("wide-over", "Wide over", wide)
     stored = [item for item in wide_store.submissions() if item["id"] == "note-wide"]
     assert stored and stored[0]["text"] == record["text"]
     oversized = "z" * 150_001

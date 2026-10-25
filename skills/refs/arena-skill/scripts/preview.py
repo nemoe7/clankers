@@ -9546,6 +9546,8 @@ class Store:
     # Embedding runs here, at publication, so the stored text carries every local
     # image and the renderer later reads no file.
     text = embed_report_images(text, source.resolve().parent)
+    if len(text.encode("utf-8")) > MAX_REPORT:
+      raise ValueError("Report exceeds the 2 MB limit; split it into reports")
     # Reject invalid fields before publication so the error names the field and preserves the report and connection.
     fields = parse_fields(text)[1]
     metadata = validate_submission_format(submission_format, fields)
@@ -10640,7 +10642,12 @@ def handler(store):
           self.reply(200, body)
           return
         if path == "/api/userscript-autosave":
-          self.reply(200, json.dumps(store.userscript_snapshot(), ensure_ascii=False))
+          try:
+            snapshot = store.userscript_snapshot()
+          except (ValueError, TypeError) as error:
+            self.problem(400, error)
+            return
+          self.reply(200, json.dumps(snapshot, ensure_ascii=False))
           return
         if path == "/api/state":
           header_tz = (self.headers.get("X-Timezone") or "").strip()
