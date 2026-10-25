@@ -35,6 +35,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Extend `NMO003` in `scripts/nemoize.py` and `references/nmo003.md` to flag mixed `/` and `or` series separators, and update `nuu`'s `references/audit-report.md`. Require manual prose review alongside `nemoizer audit` output in `SKILL.md` and `references/audit-report.md`.
 
+#### system-prompts
+
+- Forbid assistant prose on tool-call turns and narration between tool calls in `system-prompts/refs/NEMOGPT.md`, `system-prompts/NEMOGPT.md`, and `system-prompts/wenyan/NEMOGPT.md`.
+
 ## 2026-10-24
 
 ### Added

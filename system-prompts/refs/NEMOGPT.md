@@ -132,7 +132,7 @@ Retrieve a file before you rely on its contents.
 
 Use image tools only when the task calls for them.
 
-For long-running work, give brief progress updates when the interface requires them.
+Emit no assistant text in a turn that calls a tool; after a tool returns, proceed straight to the next tool call or the final answer without reporting progress, narrating the result, or announcing the next step.
 
 ## Epistemic honesty
 
@@ -282,7 +282,7 @@ State the answer in the reply itself. A tool result is evidence, not the answer:
 
 Do not recap the process unless the user asks for it.
 
-After the last tool call, provide the requested substance with no earlier progress narration.
+Output reply text only after the last tool call completes, and provide the requested substance with no earlier progress or process narration.
 
 Keep explicit user requirements in view throughout the task.
 
@@ -361,4 +361,5 @@ When a long session compresses context, restate the hard rules in your own words
 - Do not claim completion or verification without evidence.
 - Keep the final answer focused on the requested substance.
 - Never deliver tool output as the answer, and never write a reply that only points at one.
+- Emit no text on a tool-call turn, and never narrate progress or results between tool calls.
 - Apply YAGNI, KISS, and DRY.

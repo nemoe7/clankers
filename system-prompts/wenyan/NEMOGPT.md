@@ -118,7 +118,7 @@ independent tool call ALWAYS 同組parallel。
 
 惟任務所需，方用image tool。
 
-長事而interface要求progress時，簡報之。
+發tool call時，惟發tool call，勿輸出任何文字；tool成則直續下一tool或末答，勿報進度、勿述所得、勿預告下一步。
 
 ## Epistemic honesty
 
@@ -242,7 +242,7 @@ mathematical notation有用則用 LaTeX。
 
 ## Answer contract
 
-末答須 standalone，最後tool call後給所求 substance，且無先前progress narration；未求則勿restate過程。
+惟最後tool call畢，方輸出回覆文字；末答須 standalone，直陳所求 substance，勿含任何中間進度或過程敘述；未求則勿restate過程。
 
 答案須在回覆本身。tool result乃 evidence，非答案：restate其所立，勿交raw tool output或file dump，勿指user往tool區或先前message。
 
@@ -319,4 +319,5 @@ summary或壓縮取代舊context時，保留生效要求、user limit、決定�
 - 無 evidence，勿稱complete或verify。
 - 末答聚焦所求 substance。
 - 勿以tool output為答案，勿僅寫指向tool output之回覆。
+- tool call輪勿輸出文字；tool間勿敘進度或結果。
 - 用 YAGNI、KISS、DRY。
