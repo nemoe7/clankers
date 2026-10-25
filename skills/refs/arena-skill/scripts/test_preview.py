@@ -1690,6 +1690,7 @@ def test_http_boundaries():
       coarse_rules = coarse_block[1]
       assert ".topbar-row{flex-wrap:nowrap;" in coarse_rules
       assert "#clock,#theme{display:none;}" in coarse_rules
+      assert "#copy-state{display:none;}" in coarse_rules
       assert "nav{flex:1;" in coarse_rules
       assert "nav button{padding:7px 3px;font-size:13px;}" in coarse_rules
       assert "#send{margin-left:auto;}" in coarse_rules
@@ -9816,7 +9817,7 @@ def test_note_reread_prints_every_match():
         [sys.executable, preview.__file__, *argv],
         capture_output=True,
         text=True,
-        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(root)},
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(root), "TZ": ""},
         check=False,
       )
 
@@ -13926,10 +13927,8 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
     "{ max-width: 100%; height: auto; }" in style_css
   )
   assert "@media (min-width: 75em)" in style_css
-  assert (
-    "grid-template-columns: minmax(180px, 1fr) minmax(0, 900px) minmax(200px, 1fr);"
-    in style_css
-  )
+  assert "right: calc(50vw + 466px);" in style_css
+  assert "left: calc(50vw + 466px);" in style_css
   assert 'id="report-toc"' in index_html
   assert 'id="report-rail"' in index_html
   assert 'id="report-submit-float"' in index_html
@@ -14462,7 +14461,15 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert slash_nemo_collect is not None
   assert slash_nemo_collect["mode"] == "query"
   assert ".agents" in preview.NEMOIZER_COLLECT_IGNORES
-  slash_nemo_collect_all = preview.resolve_slash_command("/nemoizer collect")
+  collect_root = tmp_path / "nemo-collect-root"
+  (collect_root / "skills").mkdir(parents=True, exist_ok=True)
+  (collect_root / "skills" / "nemoizer").symlink_to(
+    Path(preview.resolve_repo_root()) / "skills" / "nemoizer"
+  )
+  (collect_root / "README.md").write_text("# Demo\n\nShort text.\n", encoding="utf-8")
+  slash_nemo_collect_all = preview.resolve_slash_command(
+    "/nemoizer collect", root=collect_root
+  )
   assert slash_nemo_collect_all is not None
   assert slash_nemo_collect_all["mode"] == "query"
   assert slash_nemo_collect_all["title"] == "nemoizer collect · Audit Findings"
@@ -15150,3 +15157,67 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert (hygiene_dir / "keep-img.png").exists()
   assert (hygiene_dir / "active-rep.md").exists()
   assert (hygiene_dir / "pr-body.md").exists()
+
+  assert preview.board_session_id("arena/293da56c-clankers") == "293da56c-clankers"
+  assert preview.board_session_id("b14c09a2-clankers") == "b14c09a2-clankers"
+  with pytest.raises(ValueError):
+    preview.stage_board_file(
+      hygiene_dir,
+      "arena/293da56c-clankers",
+      {"name": "../bad.txt", "encoding": "utf-8", "content": "x"},
+    )
+  with pytest.raises(ValueError):
+    preview.stage_board_file(
+      hygiene_dir,
+      "arena/293da56c-clankers",
+      {
+        "name": "huge.bin",
+        "encoding": "utf-8",
+        "content": "x" * (preview.MAX_BOARD_FILE_BYTES + 1),
+      },
+    )
+  with pytest.raises(ValueError):
+    hygiene_store.board_action(
+      {
+        "action": "post",
+        "session_id": "arena/b14c09a2-clankers",
+        "payload": {"tag": "patch"},
+      }
+    )
+  board_after_allow = hygiene_store.board_action(
+    {"action": "allow", "session_id": "arena/293da56c-clankers"}
+  )
+  assert "293da56c-clankers" in board_after_allow["allowed_sessions"]
+  hygiene_store.board_action(
+    {"action": "allow", "session_id": "arena/b14c09a2-clankers"}
+  )
+  hygiene_store.board_action(
+    {"action": "set-main", "session_id": "arena/b14c09a2-clankers"}
+  )
+  posted = hygiene_store.board_action(
+    {
+      "action": "post",
+      "session_id": "arena/b14c09a2-clankers",
+      "to": "293da56c-clankers",
+      "payload": {"tag": "patch"},
+      "file": {
+        "name": "src/demo.txt",
+        "encoding": "utf-8",
+        "content": "demo-bytes",
+      },
+    }
+  )
+  assert len(posted["entries"]) == 1
+  assert posted["entries"][0]["file"]["size"] == 10
+  assert (
+    hygiene_dir / "board-files" / "b14c09a2-clankers" / "src" / "demo.txt"
+  ).read_text(encoding="utf-8") == "demo-bytes"
+  gate_msg = preview.board_main_session_warning(
+    hygiene_dir, "git push origin arena/293da56c-clankers"
+  )
+  assert gate_msg is not None
+  assert "MAIN SESSION GATE" in gate_msg
+  style_css = (
+    preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
+  ).read_text(encoding="utf-8")
+  assert style_css.count("#copy-state { display: none; }") >= 2

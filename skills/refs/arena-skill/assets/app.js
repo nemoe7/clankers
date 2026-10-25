@@ -1551,6 +1551,7 @@ async function readState() {
       void pumpFetchQueue();
     }
   }
+  renderBoard();
 }
 $('#form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -2191,7 +2192,20 @@ setInterval(showClock, 1000);
     }
   }
   window.addEventListener('message', event => {
-    if (!event || !event.data || event.data.type !== 'clankers:userscript-ready') return;
+    if (!event || !event.data) return;
+    if (event.data.type === 'clankers:board-sync' && event.data.board && typeof event.data.board === 'object') {
+      void sendBoardAction({ action: 'sync', board: event.data.board }, false);
+      return;
+    }
+    if (event.data.type === 'clankers:board-wake') {
+      void request('/api/skip-poll', {
+        method: 'POST',
+        headers: writeHeaders('application/json'),
+        body: JSON.stringify({}),
+      }).catch(() => {});
+      return;
+    }
+    if (event.data.type !== 'clankers:userscript-ready') return;
     const newlyEnabled = enableUserscriptForceSave();
     if (lastAnnouncedRepo && (newlyEnabled || lastUserscriptAnnouncedRepo !== lastAnnouncedRepo)) {
       lastUserscriptAnnouncedRepo = lastAnnouncedRepo;
@@ -3672,12 +3686,20 @@ const TAB_TITLES = {
 };
 function syncDocumentTitle() {
   const repo = getState()?.repo || String(document.title || '').split(' - Steering')[0].trim() || 'Workspace';
+  if ($('#board-tab')?.getAttribute('aria-pressed') === 'true') {
+    document.title = `${repo} - Steering | Board`;
+    return;
+  }
   const active = tabs.find(item => item.getAttribute('aria-selected') === 'true') || tabs[0];
   const label = TAB_TITLES[active?.id] || 'Messages';
   document.title = `${repo} - Steering${label === 'Messages' ? '' : ` | ${label}`}`;
 }
 function showTab(tab) {
   clearJumpHighlight();
+  const boardTab = $('#board-tab');
+  const boardPanel = $('#board-panel');
+  if (boardTab) boardTab.setAttribute('aria-pressed', 'false');
+  if (boardPanel) boardPanel.hidden = true;
   const alreadySelected = tab.getAttribute('aria-selected') === 'true';
   const left = tab === tabs[1] ? null : shownReportId();
   for (const item of tabs) {
@@ -3703,6 +3725,172 @@ function showTab(tab) {
     releaseHeldReport(null);
   }
 }
+function showBoardPanel() {
+  const boardTab = $('#board-tab');
+  const boardPanel = $('#board-panel');
+  if (!boardTab || !boardPanel) return;
+  clearJumpHighlight();
+  const left = shownReportId();
+  if (left) void markReportViewed(left, false);
+  releaseHeldReport(null);
+  for (const item of tabs) {
+    item.setAttribute('aria-selected', 'false');
+    item.tabIndex = item.id === 'downloads-tab' ? 0 : -1;
+    const panel = $('#' + item.getAttribute('aria-controls'));
+    if (panel) panel.hidden = true;
+  }
+  boardTab.setAttribute('aria-pressed', 'true');
+  boardPanel.hidden = false;
+  syncDocumentTitle();
+  if (typeof window !== 'undefined' && window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
+    try {
+      window.parent.postMessage({
+        type: 'clankers:board-request',
+        repo: getState()?.repo || '',
+        branch: getState()?.board?.branch || '',
+        session_id: getState()?.board?.session_id || '',
+        polling: Boolean(getState()?.polling),
+      }, '*');
+    } catch {}
+  }
+  renderBoard();
+}
+async function sendBoardAction(action, forwardToParent = true) {
+  if (forwardToParent && typeof window !== 'undefined' && window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
+    try {
+      window.parent.postMessage({ type: 'clankers:board-action', action }, '*');
+    } catch {}
+  }
+  try {
+    const res = await request('/api/board', {
+      method: 'POST',
+      headers: writeHeaders('application/json'),
+      body: JSON.stringify(action),
+    });
+    const nextBoard = await res.json();
+    if (lastState && nextBoard && typeof nextBoard === 'object') {
+      lastState.board = nextBoard;
+      renderBoard();
+    }
+    return nextBoard;
+  } catch {
+    return null;
+  }
+}
+function renderBoard() {
+  const board = getState()?.board;
+  const sessionsEl = $('#board-sessions');
+  const entriesEl = $('#board-entries');
+  const pip = $('#board-pip');
+  const wakePollingBtn = $('#board-wake-polling');
+  if (!sessionsEl || !entriesEl) return;
+  const entries = Array.isArray(board?.entries) ? board.entries : [];
+  if (pip) {
+    pip.hidden = entries.length === 0;
+    const pipText = entries.length ? `${entries.length} board post${entries.length === 1 ? '' : 's'}` : 'No unread board posts';
+    pip.setAttribute('aria-label', pipText);
+    pip.title = pipText;
+  }
+  const sessions = Array.isArray(board?.sessions) ? board.sessions : [];
+  const allowed = new Set(Array.isArray(board?.allowed_sessions) ? board.allowed_sessions : []);
+  const mainSid = board?.main_session_id || '';
+  const pollingAllowed = sessions.filter(row => allowed.has(row.session_id) && row.polling);
+  if (wakePollingBtn) {
+    wakePollingBtn.textContent = `Wake polling (${pollingAllowed.length})`;
+    wakePollingBtn.disabled = pollingAllowed.length === 0;
+  }
+  sessionsEl.replaceChildren();
+  for (const row of sessions) {
+    const item = document.createElement('div');
+    item.className = 'board-row';
+    const info = document.createElement('div');
+    info.className = 'row tight';
+    const code = document.createElement('code');
+    code.textContent = row.session_id;
+    const badge = document.createElement('span');
+    badge.className = 'board-badge';
+    const isAllowed = allowed.has(row.session_id);
+    const isMain = isAllowed && (!mainSid || mainSid === row.session_id);
+    badge.dataset.role = isMain ? 'main' : (isAllowed ? 'worker' : 'blocked');
+    badge.textContent = isMain ? 'Main · Push & PR' : (isAllowed ? 'Worker · Push/PR off' : 'Not on allowlist');
+    const meta = document.createElement('span');
+    meta.className = 'muted';
+    meta.textContent = `${row.repo || getState()?.repo || 'repo'} · ${row.polling ? 'polling' : 'active'}`;
+    info.append(code, badge, meta);
+    const actions = document.createElement('div');
+    actions.className = 'row tight';
+    if (isAllowed) {
+      if (row.polling) {
+        const wakeBtn = document.createElement('button');
+        wakeBtn.type = 'button';
+        wakeBtn.textContent = 'Wake';
+        wakeBtn.addEventListener('click', () => { void sendBoardAction({ action: 'wake', target: row.session_id }); });
+        actions.append(wakeBtn);
+      }
+      if (mainSid !== row.session_id) {
+        const setMainBtn = document.createElement('button');
+        setMainBtn.type = 'button';
+        setMainBtn.textContent = 'Set Main';
+        setMainBtn.addEventListener('click', () => { void sendBoardAction({ action: 'set-main', session_id: row.session_id }); });
+        actions.append(setMainBtn);
+      }
+      const revokeBtn = document.createElement('button');
+      revokeBtn.type = 'button';
+      revokeBtn.textContent = 'Revoke';
+      revokeBtn.addEventListener('click', () => { void sendBoardAction({ action: 'revoke', session_id: row.session_id }); });
+      actions.append(revokeBtn);
+    } else {
+      const allowBtn = document.createElement('button');
+      allowBtn.type = 'button';
+      allowBtn.textContent = 'Opt in';
+      allowBtn.addEventListener('click', () => { void sendBoardAction({ action: 'allow', session_id: row.session_id }); });
+      actions.append(allowBtn);
+    }
+    item.append(info, actions);
+    sessionsEl.append(item);
+  }
+  entriesEl.replaceChildren();
+  if (!entries.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No shared board entries yet.';
+    entriesEl.append(empty);
+    return;
+  }
+  for (const entry of entries.slice().reverse()) {
+    const card = document.createElement('div');
+    card.className = 'board-entry';
+    const head = document.createElement('div');
+    head.className = 'row';
+    const route = document.createElement('span');
+    route.className = 'row tight';
+    const fromCode = document.createElement('code');
+    fromCode.textContent = entry.session_id;
+    const toSpan = document.createElement('span');
+    toSpan.className = 'muted';
+    toSpan.textContent = `to ${entry.to || '*'}`;
+    route.append(fromCode, toSpan);
+    const stamp = document.createElement('span');
+    stamp.className = 'muted';
+    stamp.textContent = entry.at || '';
+    head.append(route, stamp);
+    card.append(head);
+    if (entry.file && typeof entry.file === 'object') {
+      const fileLine = document.createElement('div');
+      fileLine.className = 'muted';
+      const kb = ((Number(entry.file.size) || 0) / 1024).toFixed(1);
+      fileLine.textContent = `File: ${entry.file.name} (${kb} KB / 512 KB · sha256 ${(entry.file.sha256 || '').slice(0, 8)})`;
+      card.append(fileLine);
+    }
+    const pre = document.createElement('pre');
+    pre.textContent = JSON.stringify(entry.payload || {}, null, 2);
+    card.append(pre);
+    entriesEl.append(card);
+  }
+}
+$('#board-tab')?.addEventListener('click', () => { showBoardPanel(); });
+$('#board-wake-polling')?.addEventListener('click', () => { void sendBoardAction({ action: 'wake', target: 'all-polling' }); });
+$('#board-clear')?.addEventListener('click', () => { void sendBoardAction({ action: 'clear' }); });
 // Highlight a task or answer reached by a jump. Clear the mark after a short delay or a tab change.
 // Keep the row, its data, and its order unchanged.
 let jumpHighlightRow = null;

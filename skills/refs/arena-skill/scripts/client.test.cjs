@@ -5676,5 +5676,9 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(renderedSizedGif, /src="\/api\/report-image\?path=clause8\.gif" alt="motion" width="320" height="180"/);
   const renderedDataGif = context.renderMessageMarkdown('![motion](data:image/gif;base64,R0lGODlhAQABAAAAACw=)');
   assert.match(renderedDataGif, /src="data:image\/gif;base64,R0lGODlhAQABAAAAACw="/);
+  assert.match(htmlSource, /id="board-tab"/);
+  assert.match(htmlSource, /id="board-panel"/);
+  assert.match(appSource, /showBoardPanel/);
+  assert.match(styleSource, /#copy-state\s*\{\s*display:\s*none;\s*\}/);
 });
 

@@ -5410,10 +5410,199 @@ AUTOSAVE_HISTORY = "userscript-autosave-history"
 AUTOSAVE_RECEIPTS = "userscript-autosave-receipts"
 AUTOSAVE_OFFER_META = "userscript-autosave-offered"
 FORCE_SAVE_META = "userscript-force-save"
+BOARD_STATE_META = "board-state"
+MAX_BOARD_FILE_BYTES = 524_288
+MAX_BOARD_BYTES = 2_097_152
+MAX_BOARD_ENTRIES = 100
 CLEARED_META = "state-explicitly-cleared"
 BACKUP_DIR = "backups"
 LATEST_BACKUP = "state-latest.ndjson"
 PREVIOUS_BACKUP = "state-previous.ndjson"
+
+
+def board_session_id(branch_or_root=None):
+  if isinstance(branch_or_root, Path) or branch_or_root is None:
+    raw = workspace_branch(branch_or_root or Path.cwd())
+  else:
+    raw = str(branch_or_root)
+  clean = raw.strip()
+  return clean.removeprefix("arena/")
+
+
+def stage_board_file(state_dir, sender_id, file_obj):
+  if not isinstance(file_obj, dict):
+    raise TypeError("Board file must be an object")
+  raw_name = str(file_obj.get("name") or "").strip().replace("\\", "/")
+  parts = [part for part in raw_name.split("/") if part and part != "."]
+  if not parts or any(part == ".." for part in parts) or raw_name.startswith("/"):
+    raise ValueError("Invalid board file name")
+  clean_name = "/".join(parts)
+  encoding = str(file_obj.get("encoding") or "utf-8").strip().lower()
+  if encoding not in {"utf-8", "base64"}:
+    raise ValueError("Board file encoding must be utf-8 or base64")
+  content = str(file_obj.get("content") or "")
+  try:
+    raw_bytes = (
+      base64.b64decode(content, validate=True)
+      if encoding == "base64"
+      else content.encode("utf-8")
+    )
+  except Exception as error:
+    raise ValueError("Invalid board file content") from error
+  if len(raw_bytes) > MAX_BOARD_FILE_BYTES:
+    raise ValueError("Board file exceeds 512 KB limit")
+  digest = hashlib.sha256(raw_bytes).hexdigest()
+  expected = str(file_obj.get("sha256") or "").strip().lower()
+  if expected and expected != digest:
+    raise ValueError("Board file SHA-256 mismatch")
+  safe_sender = (
+    re.sub(
+      r"[^A-Za-z0-9._-]+", "-", board_session_id(sender_id or "session") or "session"
+    ).strip("-")
+    or "session"
+  )
+  target = Path(state_dir) / "board-files" / safe_sender / clean_name
+  target.parent.mkdir(parents=True, exist_ok=True)
+  target.write_bytes(raw_bytes)
+  return {
+    "name": clean_name,
+    "encoding": encoding,
+    "content": content,
+    "size": len(raw_bytes),
+    "sha256": digest,
+    "staged_path": str(target.relative_to(Path(state_dir))),
+  }
+
+
+def normalize_board_state(raw, session_id="", repo="", branch="", polling=False):
+  data = raw if isinstance(raw, dict) else {}
+  sid = board_session_id(session_id or branch)
+  allowed = []
+  for item in (
+    data.get("allowed_sessions")
+    if isinstance(data.get("allowed_sessions"), list)
+    else []
+  ):
+    norm = board_session_id(item)
+    if norm and norm not in allowed:
+      allowed.append(norm)
+  main_sid = board_session_id(data.get("main_session_id") or "")
+  if main_sid and main_sid not in allowed:
+    main_sid = ""
+  sessions = []
+  seen_sids = set()
+  for row in data.get("sessions") if isinstance(data.get("sessions"), list) else []:
+    if not isinstance(row, dict):
+      continue
+    row_sid = board_session_id(row.get("session_id") or row.get("branch") or "")
+    if not row_sid or row_sid in seen_sids:
+      continue
+    seen_sids.add(row_sid)
+    is_self = bool(sid and row_sid == sid)
+    sessions.append(
+      {
+        "session_id": row_sid,
+        "repo": str(row.get("repo") or (repo if is_self else "")),
+        "branch": str(row.get("branch") or (branch if is_self else f"arena/{row_sid}")),
+        "status": "polling"
+        if (polling if is_self else row.get("status") == "polling")
+        else "active",
+        "polling": bool(
+          polling if is_self else (row.get("polling") or row.get("status") == "polling")
+        ),
+        "updated_at": str(row.get("updated_at") or clip_stamp(now())),
+        "allowed": row_sid in allowed,
+        "role": "main"
+        if (main_sid == row_sid or (not main_sid and row_sid in allowed))
+        else ("worker" if row_sid in allowed else "blocked"),
+      }
+    )
+  if sid and sid not in seen_sids:
+    sessions.insert(
+      0,
+      {
+        "session_id": sid,
+        "repo": str(repo or ""),
+        "branch": str(branch or f"arena/{sid}"),
+        "status": "polling" if polling else "active",
+        "polling": bool(polling),
+        "updated_at": clip_stamp(now()),
+        "allowed": sid in allowed,
+        "role": "main"
+        if (main_sid == sid or (not main_sid and sid in allowed))
+        else ("worker" if sid in allowed else "blocked"),
+      },
+    )
+  entries = []
+  for item in (
+    data.get("entries")[-MAX_BOARD_ENTRIES:]
+    if isinstance(data.get("entries"), list)
+    else []
+  ):
+    if not isinstance(item, dict):
+      continue
+    from_sid = board_session_id(item.get("session_id") or item.get("branch") or "")
+    if not from_sid:
+      continue
+    entries.append(
+      {
+        "id": str(item.get("id") or f"b-{uuid.uuid4().hex[:6]}"),
+        "session_id": from_sid,
+        "to": str(item.get("to") or "*"),
+        "repo": str(item.get("repo") or ""),
+        "branch": str(item.get("branch") or f"arena/{from_sid}"),
+        "at": str(item.get("at") or clip_stamp(now())),
+        "payload": item.get("payload") if isinstance(item.get("payload"), dict) else {},
+        "file": item.get("file") if isinstance(item.get("file"), dict) else None,
+      }
+    )
+  wakes = (
+    {
+      board_session_id(k): v
+      for k, v in data.get("wakes", {}).items()
+      if board_session_id(k) and isinstance(v, (int, float, str))
+    }
+    if isinstance(data.get("wakes"), dict)
+    else {}
+  )
+  is_main = not main_sid or main_sid == sid
+  return {
+    "version": 1,
+    "session_id": sid,
+    "repo": str(repo or ""),
+    "branch": str(branch or ""),
+    "allowed_sessions": allowed,
+    "main_session_id": main_sid,
+    "board_role": "main" if is_main else "worker",
+    "can_push_or_pr": bool(is_main),
+    "sessions": sessions,
+    "entries": entries,
+    "wakes": wakes,
+  }
+
+
+def board_main_session_warning(state_dir, command):
+  if not isinstance(command, str) or not command.strip():
+    return None
+  if not re.search(
+    r"(?:^|[;&|()\s])(?:git\s+(?:-\S+\s+)*push\b|gh\s+pr\s+(?:create|edit|merge|close|ready|reopen)\b)",
+    command,
+  ):
+    return None
+  if not state_file(state_dir).is_file():
+    return None
+  try:
+    board = Store(state_dir, create=False).board_state()
+  except Exception:
+    return None
+  main_sid = board.get("main_session_id") or ""
+  if main_sid and board.get("board_role") == "worker":
+    return (
+      f"MAIN SESSION GATE: session {board.get('session_id')!r} is a worker session while "
+      f"{main_sid!r} is the Main Session. Only the Main Session may run git push or mutate "
+      "pull requests. Send files or patches to the Main Session via the multi-session board."
+    )
+  return None
 
 
 def autosave_core_and_stamp(records):
@@ -5732,6 +5921,7 @@ NEMOIZER_COLLECT_IGNORES = (
   "LICENSE.md",
   "skills/arena-skill",
   "skills/refs/arena-skill/assets/markdown-it.min.js",
+  "skills/refs/arena-skill/assets/gsap.LICENSE",
   "skills/amending-violations/LICENSE.txt",
   "skills/refs/amending-violations/LICENSE.txt",
   "skills/squash/LICENSE.txt",
@@ -6146,7 +6336,7 @@ def resolve_slash_command(text, root=None):
         cwd=str(repo_root),
         capture_output=True,
         text=True,
-        timeout=25,
+        timeout=60,
         check=False,
       )
       out = (proc.stdout or proc.stderr or "").strip()
@@ -6989,7 +7179,177 @@ class Store:
         "display_tz": meta.get(TIMEZONE_META),
         "repo": self.repository_root().name,
         "force_save_id": meta.get(FORCE_SAVE_META),
+        "board": self.board_state(meta=meta, polling=polling),
       }
+
+  def board_state(self, meta=None, polling=None):
+    root = self.repository_root()
+    branch = workspace_branch(root)
+    repo = root.name
+    sid = board_session_id(branch)
+    raw_text = (
+      meta.get(BOARD_STATE_META)
+      if isinstance(meta, dict)
+      else self.meta_value(BOARD_STATE_META)
+    )
+    try:
+      raw = json.loads(raw_text) if raw_text else {}
+    except Exception:
+      raw = {}
+    is_polling = self.polling() if polling is None else bool(polling)
+    return normalize_board_state(
+      raw, session_id=sid, repo=repo, branch=branch, polling=is_polling
+    )
+
+  def board_action(self, payload):
+    if not isinstance(payload, dict):
+      raise TypeError("Board payload must be an object")
+    action_type = (
+      str(payload.get("action") or payload.get("type") or "").strip().lower()
+    )
+    state = self.board_state()
+    sid = state["session_id"]
+    allowed = list(state["allowed_sessions"])
+    main_sid = state["main_session_id"]
+    sessions = [dict(row) for row in state["sessions"]]
+    entries = [dict(row) for row in state["entries"]]
+    wakes = dict(state["wakes"])
+
+    if action_type == "sync":
+      incoming = (
+        payload.get("board") if isinstance(payload.get("board"), dict) else payload
+      )
+      merged = normalize_board_state(
+        incoming,
+        session_id=sid,
+        repo=state["repo"],
+        branch=state["branch"],
+        polling=any(r["session_id"] == sid and r.get("polling") for r in sessions),
+      )
+      allowed = list(merged["allowed_sessions"])
+      main_sid = merged["main_session_id"]
+      sessions = [dict(row) for row in merged["sessions"]]
+      entries = []
+      for item in merged["entries"]:
+        row = dict(item)
+        if isinstance(row.get("file"), dict):
+          row["file"] = stage_board_file(
+            self.path.parent, row["session_id"], row["file"]
+          )
+        entries.append(row)
+      wakes = dict(merged["wakes"])
+    elif action_type == "allow":
+      target = board_session_id(payload.get("session_id") or sid)
+      if not target:
+        raise ValueError("Missing session_id")
+      if target not in allowed:
+        allowed.append(target)
+      if not any(row["session_id"] == target for row in sessions):
+        sessions.append(
+          {
+            "session_id": target,
+            "repo": state["repo"],
+            "branch": f"arena/{target}",
+            "status": "active",
+            "polling": False,
+            "updated_at": clip_stamp(now()),
+          }
+        )
+    elif action_type == "revoke":
+      target = board_session_id(payload.get("session_id") or "")
+      allowed = [item for item in allowed if item != target]
+      if main_sid == target:
+        main_sid = ""
+    elif action_type == "set-main":
+      target = board_session_id(payload.get("session_id") or "")
+      if target and target not in allowed:
+        allowed.append(target)
+      main_sid = target
+    elif action_type == "heartbeat":
+      target = board_session_id(payload.get("session_id") or sid)
+      if target:
+        is_poll = bool(payload.get("polling") or payload.get("status") == "polling")
+        updated = False
+        for row in sessions:
+          if row["session_id"] == target:
+            row["repo"] = str(payload.get("repo") or row.get("repo") or state["repo"])
+            row["branch"] = str(
+              payload.get("branch") or row.get("branch") or f"arena/{target}"
+            )
+            row["status"] = "polling" if is_poll else "active"
+            row["polling"] = is_poll
+            row["updated_at"] = clip_stamp(now())
+            updated = True
+        if not updated:
+          sessions.append(
+            {
+              "session_id": target,
+              "repo": str(payload.get("repo") or state["repo"]),
+              "branch": str(payload.get("branch") or f"arena/{target}"),
+              "status": "polling" if is_poll else "active",
+              "polling": is_poll,
+              "updated_at": clip_stamp(now()),
+            }
+          )
+    elif action_type == "post":
+      sender = board_session_id(payload.get("session_id") or sid)
+      if not sender or sender not in allowed:
+        raise ValueError("Session is not on the board allowlist")
+      staged_file = None
+      if payload.get("file") is not None:
+        staged_file = stage_board_file(self.path.parent, sender, payload.get("file"))
+      body = payload.get("payload")
+      if not isinstance(body, dict):
+        body = {"text": str(body)} if body is not None else {}
+      entries.append(
+        {
+          "id": str(payload.get("id") or f"b-{uuid.uuid4().hex[:6]}"),
+          "session_id": sender,
+          "to": str(payload.get("to") or "*"),
+          "repo": str(payload.get("repo") or state["repo"]),
+          "branch": str(payload.get("branch") or f"arena/{sender}"),
+          "at": clip_stamp(now()),
+          "payload": body,
+          "file": staged_file,
+        }
+      )
+    elif action_type == "wake":
+      target = str(payload.get("target") or payload.get("session_id") or "").strip()
+      stamp = clip_stamp(now())
+      if target == "all-polling":
+        for row in sessions:
+          if row["session_id"] in allowed and row.get("polling"):
+            wakes[row["session_id"]] = stamp
+      else:
+        norm_target = board_session_id(target)
+        if norm_target:
+          wakes[norm_target] = stamp
+    elif action_type == "clear":
+      entries = []
+    else:
+      raise ValueError(f"Unknown board action: {action_type}")
+
+    entries = entries[-MAX_BOARD_ENTRIES:]
+    stored = {
+      "version": 1,
+      "allowed_sessions": allowed,
+      "main_session_id": main_sid,
+      "sessions": sessions,
+      "entries": entries,
+      "wakes": wakes,
+    }
+    encoded = json.dumps(stored, ensure_ascii=False)
+    while len(encoded.encode("utf-8")) > MAX_BOARD_BYTES and entries:
+      entries.pop(0)
+      stored["entries"] = entries
+      encoded = json.dumps(stored, ensure_ascii=False)
+    if len(encoded.encode("utf-8")) > MAX_BOARD_BYTES:
+      raise ValueError("Board storage exceeds 2 MB limit")
+    with self.transaction(autosave=False) as db:
+      db.execute(
+        "INSERT OR REPLACE INTO meta VALUES (?, ?)", (BOARD_STATE_META, encoded)
+      )
+    return self.board_state()
 
   def tasks(self):
     """Return ordered task records for both page divs. Return None when no task exists.
@@ -10890,6 +11250,9 @@ def handler(store, reload_event=None):
             return
           self.reply(200, json.dumps(snapshot, ensure_ascii=False))
           return
+        if path == "/api/board":
+          self.reply(200, json.dumps(store.board_state(), ensure_ascii=False))
+          return
         if path == "/api/state":
           header_tz = (self.headers.get("X-Timezone") or "").strip()
           if (
@@ -11065,6 +11428,7 @@ def handler(store, reload_event=None):
           "/api/fetch-jobs/claim",
           "/api/survey",
           "/api/survey/request",
+          "/api/board",
         }
         and not report_submit
         and not report_seen
@@ -11168,6 +11532,9 @@ def handler(store, reload_event=None):
         payload = json.loads(data)
         if not isinstance(payload, dict):
           self.problem(400, "Expected a JSON object")
+          return
+        if path == "/api/board":
+          self.reply(200, json.dumps(store.board_action(payload), ensure_ascii=False))
           return
         if path == "/api/survey/request":
           if payload:
@@ -12567,6 +12934,10 @@ def gate_verdict(state_dir, push, line, out=None):
   stale = main_ancestor_warning() if push else ""
   if stale:
     print(stale, file=out, flush=True)
+    return 1
+  board_gate = board_main_session_warning(state_dir, line)
+  if board_gate:
+    print(board_gate, file=out, flush=True)
     return 1
   return 0
 

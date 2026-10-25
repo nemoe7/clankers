@@ -1969,10 +1969,61 @@ AUTOSAVE_HISTORY='userscript-autosave-history'
 AUTOSAVE_RECEIPTS='userscript-autosave-receipts'
 AUTOSAVE_OFFER_META='userscript-autosave-offered'
 FORCE_SAVE_META='userscript-force-save'
+BOARD_STATE_META='board-state'
+MAX_BOARD_FILE_BYTES=524288
+MAX_BOARD_BYTES=2097152
+MAX_BOARD_ENTRIES=100
 CLEARED_META='state-explicitly-cleared'
 BACKUP_DIR='backups'
 LATEST_BACKUP='state-latest.ndjson'
 PREVIOUS_BACKUP='state-previous.ndjson'
+def board_session_id(branch_or_root=None):
+	if isinstance(branch_or_root,Path)or branch_or_root is None:raw=workspace_branch(branch_or_root or Path.cwd())
+	else:raw=str(branch_or_root)
+	clean=raw.strip();return clean.removeprefix('arena/')
+def stage_board_file(state_dir,sender_id,file_obj):
+	if not isinstance(file_obj,dict):raise TypeError('Board file must be an object')
+	raw_name=str(file_obj.get('name')or'').strip().replace('\\','/');parts=[part for part in raw_name.split('/')if part and part!='.']
+	if not parts or any(part=='..'for part in parts)or raw_name.startswith('/'):raise ValueError('Invalid board file name')
+	clean_name='/'.join(parts);encoding=str(file_obj.get('encoding')or'utf-8').strip().lower()
+	if encoding not in{'utf-8','base64'}:raise ValueError('Board file encoding must be utf-8 or base64')
+	content=str(file_obj.get('content')or'')
+	try:raw_bytes=base64.b64decode(content,validate=True)if encoding=='base64'else content.encode('utf-8')
+	except Exception as error:raise ValueError('Invalid board file content')from error
+	if len(raw_bytes)>MAX_BOARD_FILE_BYTES:raise ValueError('Board file exceeds 512 KB limit')
+	digest=hashlib.sha256(raw_bytes).hexdigest();expected=str(file_obj.get('sha256')or'').strip().lower()
+	if expected and expected!=digest:raise ValueError('Board file SHA-256 mismatch')
+	safe_sender=re.sub('[^A-Za-z0-9._-]+','-',board_session_id(sender_id or'session')or'session').strip('-')or'session';target=Path(state_dir)/'board-files'/safe_sender/clean_name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw_bytes);return{'name':clean_name,'encoding':encoding,'content':content,'size':len(raw_bytes),'sha256':digest,'staged_path':str(target.relative_to(Path(state_dir)))}
+def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
+	data=raw if isinstance(raw,dict)else{};sid=board_session_id(session_id or branch);allowed=[]
+	for item in data.get('allowed_sessions')if isinstance(data.get('allowed_sessions'),list)else[]:
+		norm=board_session_id(item)
+		if norm and norm not in allowed:allowed.append(norm)
+	main_sid=board_session_id(data.get('main_session_id')or'')
+	if main_sid and main_sid not in allowed:main_sid=''
+	sessions=[];seen_sids=set()
+	for row in data.get('sessions')if isinstance(data.get('sessions'),list)else[]:
+		if not isinstance(row,dict):continue
+		row_sid=board_session_id(row.get('session_id')or row.get('branch')or'')
+		if not row_sid or row_sid in seen_sids:continue
+		seen_sids.add(row_sid);is_self=bool(sid and row_sid==sid);sessions.append({'session_id':row_sid,'repo':str(row.get('repo')or(repo if is_self else'')),'branch':str(row.get('branch')or(branch if is_self else f"arena/{row_sid}")),'status':'polling'if(polling if is_self else row.get('status')=='polling')else'active','polling':bool(polling if is_self else row.get('polling')or row.get('status')=='polling'),'updated_at':str(row.get('updated_at')or clip_stamp(now())),'allowed':row_sid in allowed,'role':'main'if main_sid==row_sid or not main_sid and row_sid in allowed else'worker'if row_sid in allowed else'blocked'})
+	if sid and sid not in seen_sids:sessions.insert(0,{'session_id':sid,'repo':str(repo or''),'branch':str(branch or f"arena/{sid}"),'status':'polling'if polling else'active','polling':bool(polling),'updated_at':clip_stamp(now()),'allowed':sid in allowed,'role':'main'if main_sid==sid or not main_sid and sid in allowed else'worker'if sid in allowed else'blocked'})
+	entries=[]
+	for item in data.get('entries')[-MAX_BOARD_ENTRIES:]if isinstance(data.get('entries'),list)else[]:
+		if not isinstance(item,dict):continue
+		from_sid=board_session_id(item.get('session_id')or item.get('branch')or'')
+		if not from_sid:continue
+		entries.append({'id':str(item.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':from_sid,'to':str(item.get('to')or'*'),'repo':str(item.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'payload':item.get('payload')if isinstance(item.get('payload'),dict)else{},'file':item.get('file')if isinstance(item.get('file'),dict)else None})
+	wakes={board_session_id(k):v for(k,v)in data.get('wakes',{}).items()if board_session_id(k)and isinstance(v,(int,float,str))}if isinstance(data.get('wakes'),dict)else{};is_main=not main_sid or main_sid==sid;return{'version':1,'session_id':sid,'repo':str(repo or''),'branch':str(branch or''),'allowed_sessions':allowed,'main_session_id':main_sid,'board_role':'main'if is_main else'worker','can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
+def board_main_session_warning(state_dir,command):
+	if not isinstance(command,str)or not command.strip():return None
+	if not re.search('(?:^|[;&|()\\s])(?:git\\s+(?:-\\S+\\s+)*push\\b|gh\\s+pr\\s+(?:create|edit|merge|close|ready|reopen)\\b)',command):return None
+	if not state_file(state_dir).is_file():return None
+	try:board=Store(state_dir,create=False).board_state()
+	except Exception:return None
+	main_sid=board.get('main_session_id')or''
+	if main_sid and board.get('board_role')=='worker':return f"MAIN SESSION GATE: session {board.get('session_id')!r} is a worker session while {main_sid!r} is the Main Session. Only the Main Session may run git push or mutate pull requests. Send files or patches to the Main Session via the multi-session board."
+	return None
 def autosave_core_and_stamp(records):
 	if not isinstance(records,list)or not all(isinstance(row,dict)for row in records):raise TypeError('Autosave core must be an array of records')
 	if any(row.get('type')=='userscript-autosave'for row in records):raise ValueError('Autosave core cannot contain history')
@@ -2084,7 +2135,7 @@ def render_report(markdown,title=None):
 	if isinstance(title,str)and title.strip()and not re.match('^\\s*<h1\\b',rendered,re.IGNORECASE):rendered=f"<h1>{html.escape(title.strip())}</h1>\n{rendered}"
 	return rendered,questions
 SLASH_COMMAND_RE=re.compile('^/(nuu|nemoizer)(?:\\s+([\\s\\S]*))?$',re.IGNORECASE)
-NEMOIZER_COLLECT_IGNORES='arena-state','.agents','.git','node_modules','LICENSE.md','skills/arena-skill','skills/refs/arena-skill/assets/markdown-it.min.js','skills/amending-violations/LICENSE.txt','skills/refs/amending-violations/LICENSE.txt','skills/squash/LICENSE.txt','skills/refs/squash/LICENSE.txt','skills/refs/arena-skill/assets/lucide.LICENSE','skills/refs/arena-skill/assets/markdown-it.LICENSE','skills/refs/arena-skill/assets/sortable.LICENSE','skills/nuu/data/vendor','skills/refs/nuu/data/vendor'
+NEMOIZER_COLLECT_IGNORES='arena-state','.agents','.git','node_modules','LICENSE.md','skills/arena-skill','skills/refs/arena-skill/assets/markdown-it.min.js','skills/refs/arena-skill/assets/gsap.LICENSE','skills/amending-violations/LICENSE.txt','skills/refs/amending-violations/LICENSE.txt','skills/squash/LICENSE.txt','skills/refs/squash/LICENSE.txt','skills/refs/arena-skill/assets/lucide.LICENSE','skills/refs/arena-skill/assets/markdown-it.LICENSE','skills/refs/arena-skill/assets/sortable.LICENSE','skills/nuu/data/vendor','skills/refs/nuu/data/vendor'
 def _find_skill_dir(root,name):
 	roots=[Path(root)];here=Path(__file__).resolve();roots.extend(here.parents);cwd=Path.cwd().resolve();roots.append(cwd);roots.extend(cwd.parents)
 	for base in roots:
@@ -2203,7 +2254,7 @@ def resolve_slash_command(text,root=None):
 		ignore_args=[]
 		if not target_args:
 			for item in NEMOIZER_COLLECT_IGNORES:ignore_args.extend(['--ignore',item])
-		try:proc=subprocess.run([sys.executable,str(nemo_dir/'scripts'/'nemoize.py'),'--audit',*ignore_args,*target_args],cwd=str(repo_root),capture_output=True,text=True,timeout=25,check=False);out=(proc.stdout or proc.stderr or'').strip()
+		try:proc=subprocess.run([sys.executable,str(nemo_dir/'scripts'/'nemoize.py'),'--audit',*ignore_args,*target_args],cwd=str(repo_root),capture_output=True,text=True,timeout=60,check=False);out=(proc.stdout or proc.stderr or'').strip()
 		except subprocess.TimeoutExpired:return{'mode':'query','command':f"/nemoizer {sub}",'title':'nemoizer collect · Timeout','markdown':'Scan timed out. Pass a narrower path (e.g. `/nemoizer collect docs/ README.md`).'}
 		finding_lines=[line for line in out.splitlines()if line.strip()];summary=f"Found **{len(finding_lines)}** output line(s).\n\n```text\n{out}\n```"if finding_lines else'No findings.';return{'mode':'query','command':f"/nemoizer {sub}"+(f" {arg}"if arg else''),'title':'nemoizer collect · Audit Findings','markdown':summary}
 	if sub=='audit':
@@ -2393,7 +2444,64 @@ class Store:
 			if tasks is not None:
 				for item in tasks['finished']+tasks['upcoming']:item['updated_at']=clip_stamp(item['updated_at'])
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
-			polling=self.polling();runs=live_runs(self.path.parent)if polling else[];return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(state_dir=self.path.parent),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_FLAG_META)),'read_set':read_set_files(self.repository_root()),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META)),'gate_threshold':GATE_THRESHOLD,'display_tz':meta.get(TIMEZONE_META),'repo':self.repository_root().name,'force_save_id':meta.get(FORCE_SAVE_META)}
+			polling=self.polling();runs=live_runs(self.path.parent)if polling else[];return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(state_dir=self.path.parent),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_FLAG_META)),'read_set':read_set_files(self.repository_root()),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META)),'gate_threshold':GATE_THRESHOLD,'display_tz':meta.get(TIMEZONE_META),'repo':self.repository_root().name,'force_save_id':meta.get(FORCE_SAVE_META),'board':self.board_state(meta=meta,polling=polling)}
+	def board_state(self,meta=None,polling=None):
+		root=self.repository_root();branch=workspace_branch(root);repo=root.name;sid=board_session_id(branch);raw_text=meta.get(BOARD_STATE_META)if isinstance(meta,dict)else self.meta_value(BOARD_STATE_META)
+		try:raw=json.loads(raw_text)if raw_text else{}
+		except Exception:raw={}
+		is_polling=self.polling()if polling is None else bool(polling);return normalize_board_state(raw,session_id=sid,repo=repo,branch=branch,polling=is_polling)
+	def board_action(self,payload):
+		if not isinstance(payload,dict):raise TypeError('Board payload must be an object')
+		action_type=str(payload.get('action')or payload.get('type')or'').strip().lower();state=self.board_state();sid=state['session_id'];allowed=list(state['allowed_sessions']);main_sid=state['main_session_id'];sessions=[dict(row)for row in state['sessions']];entries=[dict(row)for row in state['entries']];wakes=dict(state['wakes'])
+		if action_type=='sync':
+			incoming=payload.get('board')if isinstance(payload.get('board'),dict)else payload;merged=normalize_board_state(incoming,session_id=sid,repo=state['repo'],branch=state['branch'],polling=any(r['session_id']==sid and r.get('polling')for r in sessions));allowed=list(merged['allowed_sessions']);main_sid=merged['main_session_id'];sessions=[dict(row)for row in merged['sessions']];entries=[]
+			for item in merged['entries']:
+				row=dict(item)
+				if isinstance(row.get('file'),dict):row['file']=stage_board_file(self.path.parent,row['session_id'],row['file'])
+				entries.append(row)
+			wakes=dict(merged['wakes'])
+		elif action_type=='allow':
+			target=board_session_id(payload.get('session_id')or sid)
+			if not target:raise ValueError('Missing session_id')
+			if target not in allowed:allowed.append(target)
+			if not any(row['session_id']==target for row in sessions):sessions.append({'session_id':target,'repo':state['repo'],'branch':f"arena/{target}",'status':'active','polling':False,'updated_at':clip_stamp(now())})
+		elif action_type=='revoke':
+			target=board_session_id(payload.get('session_id')or'');allowed=[item for item in allowed if item!=target]
+			if main_sid==target:main_sid=''
+		elif action_type=='set-main':
+			target=board_session_id(payload.get('session_id')or'')
+			if target and target not in allowed:allowed.append(target)
+			main_sid=target
+		elif action_type=='heartbeat':
+			target=board_session_id(payload.get('session_id')or sid)
+			if target:
+				is_poll=bool(payload.get('polling')or payload.get('status')=='polling');updated=False
+				for row in sessions:
+					if row['session_id']==target:row['repo']=str(payload.get('repo')or row.get('repo')or state['repo']);row['branch']=str(payload.get('branch')or row.get('branch')or f"arena/{target}");row['status']='polling'if is_poll else'active';row['polling']=is_poll;row['updated_at']=clip_stamp(now());updated=True
+				if not updated:sessions.append({'session_id':target,'repo':str(payload.get('repo')or state['repo']),'branch':str(payload.get('branch')or f"arena/{target}"),'status':'polling'if is_poll else'active','polling':is_poll,'updated_at':clip_stamp(now())})
+		elif action_type=='post':
+			sender=board_session_id(payload.get('session_id')or sid)
+			if not sender or sender not in allowed:raise ValueError('Session is not on the board allowlist')
+			staged_file=None
+			if payload.get('file')is not None:staged_file=stage_board_file(self.path.parent,sender,payload.get('file'))
+			body=payload.get('payload')
+			if not isinstance(body,dict):body={'text':str(body)}if body is not None else{}
+			entries.append({'id':str(payload.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':sender,'to':str(payload.get('to')or'*'),'repo':str(payload.get('repo')or state['repo']),'branch':str(payload.get('branch')or f"arena/{sender}"),'at':clip_stamp(now()),'payload':body,'file':staged_file})
+		elif action_type=='wake':
+			target=str(payload.get('target')or payload.get('session_id')or'').strip();stamp=clip_stamp(now())
+			if target=='all-polling':
+				for row in sessions:
+					if row['session_id']in allowed and row.get('polling'):wakes[row['session_id']]=stamp
+			else:
+				norm_target=board_session_id(target)
+				if norm_target:wakes[norm_target]=stamp
+		elif action_type=='clear':entries=[]
+		else:raise ValueError(f"Unknown board action: {action_type}")
+		entries=entries[-MAX_BOARD_ENTRIES:];stored={'version':1,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes};encoded=json.dumps(stored,ensure_ascii=False)
+		while len(encoded.encode('utf-8'))>MAX_BOARD_BYTES and entries:entries.pop(0);stored['entries']=entries;encoded=json.dumps(stored,ensure_ascii=False)
+		if len(encoded.encode('utf-8'))>MAX_BOARD_BYTES:raise ValueError('Board storage exceeds 2 MB limit')
+		with self.transaction(autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,encoded))
+		return self.board_state()
 	def tasks(self):
 		with closing(self.connect())as db:
 			rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall();records=attach_blockers(db,[task_row(row)for row in rows])
@@ -3643,6 +3751,7 @@ def handler(store,reload_event=None):
 					try:snapshot=store.userscript_snapshot()
 					except(ValueError,TypeError)as error:self.problem(400,error);return
 					self.reply(200,json.dumps(snapshot,ensure_ascii=False));return
+				if path=='/api/board':self.reply(200,json.dumps(store.board_state(),ensure_ascii=False));return
 				if path=='/api/state':
 					header_tz=(self.headers.get('X-Timezone')or'').strip()
 					if header_tz and zone_exists(header_tz)and store.meta_value(TIMEZONE_META)!=header_tz:store.set_display_timezone(header_tz)
@@ -3676,7 +3785,7 @@ def handler(store,reload_event=None):
 			except(OSError,sqlite_api().Error,RuntimeError)as error:self.problem(503,error)
 		def do_POST(self):
 			path=urlsplit(self.path).path;autosave_post=path in{'/api/userscript-autosave','/api/userscript-autosave/compare','/api/userscript-autosave/offer'};report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);report_ack_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/ack-seen',path);report_view=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/view',path);message_replies_seen=re.fullmatch('/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny|drop)',path);note_upload=path=='/api/notes/with-file';staged_upload=path=='/api/uploads';upload_drop=re.fullmatch('/api/uploads/([a-zA-Z0-9_-]{1,80})/drop',path);agent_key_post=path=='/api/key';timezone_post=path=='/api/timezone';skip_poll_post=path=='/api/skip-poll';interrupt_post=path=='/api/agent-interrupt';task_order_post=path=='/api/tasks/order';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
-			if path not in{'/api/notes','/api/markdown','/api/slash','/api/fetch-jobs','/api/fetch-jobs/claim','/api/survey','/api/survey/request'}and not report_submit and not report_seen and not report_ack_seen and not report_view and not message_replies_seen and not report_unpublish and not note_upload and not staged_upload and not upload_drop and not fetch_post and not agent_key_post and not timezone_post and not skip_poll_post and not interrupt_post and not task_order_post and not autosave_post:self.problem(404,'Not found');return
+			if path not in{'/api/notes','/api/markdown','/api/slash','/api/fetch-jobs','/api/fetch-jobs/claim','/api/survey','/api/survey/request','/api/board'}and not report_submit and not report_seen and not report_ack_seen and not report_view and not message_replies_seen and not report_unpublish and not note_upload and not staged_upload and not upload_drop and not fetch_post and not agent_key_post and not timezone_post and not skip_poll_post and not interrupt_post and not task_order_post and not autosave_post:self.problem(404,'Not found');return
 			content_type=self.headers.get('Content-Type','')
 			if note_upload or staged_upload:
 				if not content_type.lower().startswith('multipart/form-data;'):self.problem(415,'Expected multipart/form-data');return
@@ -3712,6 +3821,7 @@ def handler(store,reload_event=None):
 					self.reply(200,json.dumps({'ok':True}));return
 				payload=json.loads(data)
 				if not isinstance(payload,dict):self.problem(400,'Expected a JSON object');return
+				if path=='/api/board':self.reply(200,json.dumps(store.board_action(payload),ensure_ascii=False));return
 				if path=='/api/survey/request':
 					if payload:raise ValueError('Survey request requires an empty object')
 					with survey_lock:
@@ -4080,6 +4190,8 @@ def gate_verdict(state_dir,push,line,out=None):
 	if push and main_identical():print('HEAD equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',file=out,flush=True);return 1
 	stale=main_ancestor_warning()if push else''
 	if stale:print(stale,file=out,flush=True);return 1
+	board_gate=board_main_session_warning(state_dir,line)
+	if board_gate:print(board_gate,file=out,flush=True);return 1
 	return 0
 PRE_STEPS='interrupt','read-set','remind','main-local','main-fresh','bare','proxy','gate'
 GATED_SHELLS=frozenset({'bash','sh','dash','ksh','zsh'})
