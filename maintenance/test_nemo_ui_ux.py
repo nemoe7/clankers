@@ -121,3 +121,43 @@ def test_the_ruler_names_each_axis():
   assert gap["axes"] == {"x": True, "y": True}
   gap = measure.ruler((0, 0), (16, 25), scale=8)
   assert gap["axes"] == {"x": True, "y": False}
+
+
+def test_nuu_loads_version_and_rule_descriptions_from_docs_and_skips_agents(
+  tmp_path: Path,
+):
+  import sys
+
+  import tomllib
+
+  scripts_dir = MEASURE.parent
+  if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
+  spec = importlib.util.spec_from_file_location("nemo_nuu", scripts_dir / "nuu.py")
+  assert spec is not None and spec.loader is not None
+  nuu_mod = importlib.util.module_from_spec(spec)
+  spec.loader.exec_module(nuu_mod)
+
+  pyproject = tomllib.loads(
+    (scripts_dir.parent / "pyproject.toml").read_text(encoding="utf-8")
+  )
+  assert nuu_mod.VERSION == pyproject["project"]["version"]
+  for code in nuu_mod.KNOWN_NUU_RULES:
+    assert code in nuu_mod.RULE_DESCRIPTIONS
+    assert nuu_mod.RULE_DESCRIPTIONS[code]
+
+  (tmp_path / "docs").mkdir()
+  (tmp_path / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
+  (tmp_path / "index.html").write_text(
+    '<!doctype html><img src="a.png" alt="ok">', encoding="utf-8"
+  )
+  agents_dir = tmp_path / ".agents" / "skills" / "demo"
+  agents_dir.mkdir(parents=True)
+  (agents_dir / "bad.html").write_text('<img src="missing.png">', encoding="utf-8")
+  (agents_dir / "bad.css").write_text(":root { --leak: 8px; }", encoding="utf-8")
+
+  lint_res = nuu_mod.lint(tmp_path)
+  assert lint_res["findings"] == []
+  assert not any(".agents" in item["path"] for item in lint_res["coverage"])
+  extract_res = nuu_mod.extract(tmp_path)
+  assert not any(".agents" in item["path"] for item in extract_res["tokens"])
