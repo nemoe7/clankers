@@ -2866,6 +2866,30 @@ for raw in sys.stdin:
       wakes: {},
     });
     assert.equal(afterWakeConsumed.wakes["bdf20cf5-clankers"], undefined);
+    const wokenFromMainServer = checks.board.mergePreviewBoard(afterWakeConsumed, {
+      session_id: "293da56c-clankers",
+      repo: "clankers",
+      branch: "arena/293da56c-clankers",
+      allowed_sessions: ["bdf20cf5-clankers", "293da56c-clankers"],
+      main_session_id: "293da56c-clankers",
+      sessions: [
+        {
+          session_id: "bdf20cf5-clankers",
+          repo: "clankers",
+          branch: "arena/bdf20cf5-clankers",
+          status: "polling",
+          polling: true,
+          updated_at: "2026-10-25T15:00:07Z",
+        },
+      ],
+      entries: [],
+      wakes: { "bdf20cf5-clankers": "2026-10-25T15:00:08Z" },
+    });
+    assert.equal(wokenFromMainServer.wakes["bdf20cf5-clankers"], "2026-10-25T15:00:08Z");
+    assert.equal(
+      wokenFromMainServer.sessions.find((r) => r.session_id === "bdf20cf5-clankers").polling,
+      false,
+    );
     checks.board.writeGlobalBoard(afterWakeConsumed);
     assert.deepEqual(
       JSON.parse(

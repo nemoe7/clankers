@@ -4822,6 +4822,9 @@
           force = true;
         }
         var activeBoard = readGlobalBoard();
+        if (activeBoard.allowed_sessions.length > 0) {
+          syncPreviewBoard(base);
+        }
         var sessionSid = boardSessionId(scope.branch || previewUiSessionId || "");
         if (!force && !manual && sessionSid && activeBoard.main_session_id &&
             activeBoard.allowed_sessions.indexOf(sessionSid) !== -1 &&
@@ -5859,6 +5862,15 @@
       mergedEntries.push(item);
     });
     next.entries = mergedEntries.slice(-MAX_BOARD_ENTRIES);
+    Object.keys(incoming.wakes).forEach(function (wakeK) {
+      if (wakeK !== previewSid && incoming.wakes[wakeK]) {
+        next.wakes[wakeK] = incoming.wakes[wakeK];
+        if (bySid[wakeK]) {
+          bySid[wakeK].polling = false;
+          bySid[wakeK].status = "active";
+        }
+      }
+    });
     if (previewSid && next.wakes[previewSid] && (!previewBoard.wakes || !previewBoard.wakes[previewSid])) {
       delete next.wakes[previewSid];
     }
