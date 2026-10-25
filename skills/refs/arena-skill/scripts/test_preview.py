@@ -1232,7 +1232,7 @@ def test_http_boundaries():
       assert re.search(r"\.report-scroll-frame\s*\{[^}]*position:\s*relative", page)
       assert 'aria-label="Scroll to bottom"' in page
       assert (
-        '<svg class="lucide lucide-arrow-down" width="14" height="14" viewBox="0 0 24 24"'
+        '<svg class="lucide lucide-arrow-down" width="16" height="16" viewBox="0 0 24 24"'
         in page
       )
       assert "↓ Latest message" not in page
@@ -1316,7 +1316,7 @@ def test_http_boundaries():
         for item in static_icons
       )
       arrow = jump.group(1)
-      assert 'width="14" height="14"' in arrow
+      assert 'width="16" height="16"' in arrow
       assert 'stroke="currentColor"' in arrow and 'stroke-width="2"' in arrow
       assert 'class="lucide lucide-arrow-down"' in arrow
       # The search box says what it does without a visible label: the placeholder names the

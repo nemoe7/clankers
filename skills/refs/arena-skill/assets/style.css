@@ -1,3 +1,4 @@
+/* nuu-deviation: arena-fonts: Arena Steering Preview uses its embedded Basel Grotesk and Basel Grotesk Mono brand fonts per docs/arena-skill/design.md. */
 @font-face {
   font-family: "Basel Grotesk";
   src: url("/assets/Basel_Grotesk_Book.woff2") format("woff2");
@@ -33,6 +34,7 @@
   font-style: normal;
   font-display: block;
 }
+/* nuu-deviation: arena-palette: Arena Steering Preview uses its warm dark-mode palette (#252523, #2c2b28, #e5bb8b) per docs/arena-skill/design.md. */
 :root {
   color-scheme: dark;
   --bg: #252523;
@@ -144,6 +146,7 @@ main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > se
 .notes-layout > .composer-footer { flex: none; align-items: center; text-align: center; padding-inline: 18px; position: relative; z-index: 2; }
 .notes-layout:has(#compose[data-expanded]) .log-card { display: none; }
 #form { min-height: 0; }
+/* nuu-deviation: arena-compact-density: Compact 11px-12px metadata, 30x30px secondary icon buttons, and 6px control gaps are intentional per docs/arena-skill/design.md. */
 .composer-shell { position: relative; display: grid; grid-template-columns: 30px 30px minmax(0, 1fr) 30px; grid-template-areas: "attach preview input send"; gap: 8px; align-items: center; }
 .card.compose:focus-within { border-color: var(--focus); }
 #note, #draft-preview, #note-backdrop { grid-area: input; min-width: 0; }
@@ -614,7 +617,7 @@ mark code { color: var(--text); }
 #modal[data-read-only="true"] button:not(.modal-close, .copy-code, .preview-code-md) { min-height: 44px; touch-action: manipulation; }
 #survey-again { display: inline-flex; align-items: center; gap: 6px; }
 #modal[data-read-only="true"] button:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
-:root:not([data-keyboard-nav="true"]) :focus-visible { outline: 0; }
+:root:not([data-keyboard-nav="true"]) :focus-visible { outline: 0 !important; }
 #modal:not([data-keyboard-nav="true"]) :focus-visible { outline: 0; border-color: var(--border); }
 #survey-open { touch-action: manipulation; }
 #image-modal { width: 100vw; max-width: 100vw; height: var(--app-height, 100dvh); max-height: var(--app-height, 100dvh); margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); overflow: hidden; touch-action: none; }

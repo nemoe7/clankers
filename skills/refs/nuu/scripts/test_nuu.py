@@ -1302,3 +1302,64 @@ def test_design_boards_and_html_typography(tmp_path):
     d["id"] == "compact-toolbar" and "34px" in d["reason"]
     for d in collect_dev_payload["deviations"]
   )
+
+  custom_focus_proj = tmp_path / "custom-focus-repo"
+  (custom_focus_proj / ".git").mkdir(parents=True)
+  (custom_focus_proj / "docs" / "sub").mkdir(parents=True)
+  (custom_focus_proj / "docs" / "sub" / "design.md").write_text(
+    "# Sub Design\n", encoding="utf-8"
+  )
+  sub_assets = custom_focus_proj / "skills" / "assets"
+  sub_assets.mkdir(parents=True)
+  (sub_assets / "style.css").write_text(
+    ":focus-visible { outline: 2px solid #e5bb8b; border-color: #524d47; }\n"
+    ".shell:focus-within { border-color: #524d47; }\n"
+    ".shell textarea { outline: none; }\n"
+    ":root:not([data-keyboard-nav='true']) :focus-visible { outline: 0; }\n",
+    encoding="utf-8",
+  )
+  sub_lint = nuu.lint(sub_assets)
+  assert not sub_lint["findings"], sub_lint["findings"]
+
+  bounded_findings = measure.check_density(
+    {
+      "width": 640,
+      "elements": [
+        {
+          "selector": "#log-search",
+          "tag": "input",
+          "inputType": "search",
+          "bounds": {"x": 16, "y": 95, "width": 566, "height": 34},
+          "values": {"width": "566px", "height": "34px"},
+        }
+      ],
+    }
+  )
+  assert len(bounded_findings) == 1
+  assert bounded_findings[0]["rule"] == "NUM207"
+  assert bounded_findings[0]["bounds"] == {
+    "x": 16.0,
+    "y": 95.0,
+    "width": 566.0,
+    "height": 34.0,
+  }
+
+  auto_src = toml_proj / "auto-src.png"
+  auto_src.write_bytes(
+    annotate.encode_png(200, 140, bytearray([24, 24, 28, 255] * (200 * 140)))
+  )
+  auto_dst = toml_proj / "auto-cropped.png"
+  auto_ann = annotate.annotate_image(
+    auto_src,
+    auto_dst,
+    boxes=["20,16,120,36,amber"],
+    callouts=["28,24,1,Search input width,amber"],
+    crop="auto",
+    project=toml_proj,
+    renderer="bitmap",
+  )
+  assert auto_ann["width"] >= 120
+  assert auto_ann["height"] >= 60
+  assert auto_ann["crop"][0] <= 20
+  assert auto_ann["crop"][1] <= 16
+  assert auto_ann["crop"][0] + auto_ann["crop"][2] >= 140
