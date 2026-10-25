@@ -20,7 +20,7 @@
 
 ## Audit Coverage (`NUL001`–`NUA308`)
 
-Suppress a source-lint finding on a line with `nonuu: <ID>` (for example, `<!-- nonuu: NUL001 -->` or `/* nonuu: NUL003 */`). Record an approved house-style deviation with `nuu-deviation: <id>: <reason>`. Agents MUST NEVER add `nuu-deviation:` automatically and ALWAYS require explicit user approval.
+Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved house-style deviation note for maintainers (without a rule ID) with `nuu-deviation: <reason>`. Agents MUST NEVER add `nuu-deviation:` automatically and ALWAYS require explicit user approval.
 
 | Code | Pass | Condition |
 | --- | --- | --- |

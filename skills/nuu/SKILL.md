@@ -1,6 +1,6 @@
 ---
 name: nuu
-description: Build and revise web pages in a settled house style. Use when a task adds or changes a page, dialog, table, form, theme, empty or error state, or any UI that needs icons, colour roles, light and dark schemes, type, spacing, breakpoints, motion, states, optimistic writes, a design document, or measured values at 1280 and 360 px.
+description: Build and revise web pages in a settled house style. Use for pages, dialogs, tables, forms, themes, states, icons, colour roles, type, spacing, motion, design records, and house breakpoints (1920, 1080, 958, and 411 px).
 license: MIT
 ---
 
@@ -8,9 +8,9 @@ license: MIT
 
 ## Shared workflow
 
-- Install this skill's package with `pip install -e <skill>` or `uv pip install -e <skill>` (`uv tool install -e <skill>`) and run `nuu` directly; preserve an existing design record (`docs/design.md`), or use `references/style.css` (`-P house`).
-- Search the catalog (`nuu search`), verify assets (`nuu assets`), and run static checks (`nuu lint`, `nuu extract`). Run rendered checks (`nuu inspect`, `flow`, `walk`, `a11y`, `audit`, `live`) and `nuu walk` walkthroughs at project widths plus `1280` and `360` px.
-- Retain screenshots, measurements (`measure.py`), flow results, and annotated composite boards (`nuu annotate` / `nuu board`), audit the page against every applicable recipe in `references/recipes/*.md`, separating automated findings (including missing `docs/design.md`) from visual judgment, naming each UI or recipe deviation from `nuu` with its reason, and naming unrun checks. Mark an accepted deviation with `nuu-deviation: <id>: <reason>` ONLY after explicit user approval, NEVER automatically.
+- Install this skill before the first audit so the nuu CLI is on PATH: uv pip install -e <path-to-nuu-skill> (or pip install -e <path-to-nuu-skill>).
+- ALWAYS run nuu audit <target> --screenshots <dir> (1920x957, 1080x2437, 958x958, 411x799, and 855x325, in dark and light) and inspect every screenshot.
+- Retain screenshots, measurements (measure.py), flow results, and annotated composite boards (nuu annotate and nuu board). Audit against applicable recipes in references/recipes/*.md, separate automated findings from visual judgment, and specify deviations and unrun checks. Keep nonuu: <ID> for rule-ID exceptions, and mark an approved maintainer note with nuu-deviation: <reason> ONLY after explicit user approval.
 - Keep live edits read-only unless authorized (`-Z`), repair only the requested scope, and update `docs/design.md` with linked visual references in the same change.
 - Format audit and verification reports with [references/audit-report.md](references/audit-report.md) (`Status`, `Counts`, `Unrun Checks`, numbered `Automated Findings` with rule text and one cropped image each, numbered `Visual Judgments` with one cropped image each, `Deviations`, then `Captures`), omit empty Unrun Checks and report sections, state 0 in Counts, and use `-W` (`--wireframe`) for agent inspection only and NEVER commit wireframe files (`*-wireframe.png`) or embed them in reports.
 
@@ -31,7 +31,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 2. Every glyph on a surface takes the single size the sheet names.
 
-3. A component asks the sheet for a role. Nobody writes a colour literal into a component.
+3. A component asks the sheet for a baseline role, and may define extra semantic role tokens in :root (light and dark) when needed. Nobody writes a colour literal into a component.
 
 4. The roles resolve in light and in dark. The theme control names System, Light, and Dark, so the page can follow the machine.
 
@@ -39,7 +39,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 6. Every gap lands on the 4 px scale, or the 8 px scale when opted in. Rows are 32 px (40 px on 8 px), and panels take a 6 px radius (10 px on 8 px) with no shadow. Icon-only buttons are symmetric, and a touch target is at least 44 px.
 
-7. The sheet names 75em, 60em, and 40em for width, plus 30em for short-height landscape. Choose each breakpoint where the content breaks. A dimension outside the list gets no behaviour of its own.
+7. The sheet specifies 68em (1088 px), 60em (960 px), and 30em (480 px) for width, plus 24em (384 px) for short-height landscape. Choose each breakpoint where the content breaks.
 
 8. Every transition shares one curve over 160 to 220 ms; for animations, vendor [GSAP](https://github.com/greensock/GSAP) into the project as the go-to library. Reduced motion turns animation off.
 
@@ -49,11 +49,11 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 11. Record settled calls in the authoritative design record.
 
-12. Read padding, margin, gap, and size per element from the rendered page, compare each with the sheet, and check 1280 and 360.
+12. Read padding, margin, gap, and size per element from the rendered page, and compare each with the sheet. Check the house subset (1920, 1080, 958, and 411 px, plus 855x325 landscape).
 
-13. When a page needs a pattern the sheet lacks, the change adds the entry, both widths, and the screenshots, in one pull request.
+13. When a page needs a new pattern, add the entry, the house subset (1920, 1080, 958, and 411 px), and screenshots in one PR.
 
-14. Enable touch input (`hasTouch` and `isMobile`) when auditing or inspecting mobile viewports (`width <= 768` px or `height <= 480` px) so `@media (pointer: coarse)` rules apply.
+14. Enable touch input (hasTouch and isMobile) on mobile viewports (width <= 480 px or height <= 400 px) so @media (pointer: coarse) rules apply.
 
 15. Place a borderless, transparent Lucide `x` exit button at the top right of a container, aligned to the title baseline and content edge with a negative-margin hit box inside container padding, that shows a surface background and text-color shift on hover and active, and place other action buttons at the bottom right.
 
@@ -72,14 +72,14 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 ## Go-to libraries
 
 - For draggable and reorderable lists, vendor only the required part of [SortableJS](https://github.com/SortableJS/Sortable) with its MIT license instead of writing custom drag-and-drop handlers.
-- For animations and scroll-driven motion, vendor [GSAP](https://github.com/greensock/GSAP) into the project as the go-to library and respect `prefers-reduced-motion: reduce`.
+- For animations and scroll-driven motion, ALWAYS use [GSAP](https://github.com/greensock/GSAP) (vendored into the project) and respect prefers-reduced-motion: reduce.
 
 ## Order of work
 
 1. Read the authoritative design record, or create docs/design.md from references/design-document.md if none exists.
 2. Copy the declarations the page needs from `references/style.css`. Keep the role names, and change only the values that the repository settles.
 3. Read `references/examples.md` when the change touches a clause, so the correct and incorrect forms are both in view.
-4. Make only authorized page changes, then measure both widths and fix every value the check names.
+4. Make only authorized page changes, then measure the house subset (1920, 1080, 958, and 411 px) and fix every value the check specifies.
 5. Update the authoritative design record in the same change as a settled design decision.
 
 ## Measuring

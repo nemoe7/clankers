@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | `search` | Search vendored design catalogs | `<query>`, `-d, --dataset <name>`, `-s, --stack <name>`, `-n, --limit <n>`, `-j, --json` |
 | `system` | Generate a five-part design system proposal | `<query>`, `-p, --project <name>`, `-s, --stack <name>`, `-w, --write [path]`, `-f, --force`, `-j, --json` |
-| `record` | Initialize or check `docs/design.md` | `<init\|check>`, `-r, --root <path>`, `-p, --path <rel>`, `-t, --title <text>`, `-s, --status <state>`, `-f, --force`, `-j, --json` |
+| `record` | Initialize or check the design record (`docs/design.md` or `[design].path` in `nuu.toml`) | `<init\|check>`, `-r, --root <path>`, `-p, --path <rel>`, `-t, --title <text>`, `-s, --status <state>`, `-f, --force`, `-j, --json` |
 | `asset` | Fetch, verify, or record licensed assets | `<fetch\|verify\|record>`, `-r, --root <path>`, `-u, --url <https-url>`, `-o, --output <rel>`, `-s, --sha256 <hex>`, `-l, --license <spdx>`, `-a, --attribution <text>`, `-p, --purpose <text>`, `-d, --design-doc <rel>`, `-f, --force`, `-j, --json` |
 | `extract` | Extract candidate tokens from source or measure JSON | `-r, --root <path>`, `-m, --measure <path>`, `-o, --output <rel>`, `-f, --force`, `-j, --json` |
 | `check` | Check computed-style measure JSON against the sheet | `<report>`, `-s, --sheet <path>`, `-g, --scale <px>`, `-d, --density`, `-j, --json` |
@@ -20,12 +20,12 @@
 
 ## Audit Coverage (`NUL001`–`NUA308`)
 
-Suppress a source-lint finding on a line with `nonuu: <ID>` (for example, `<!-- nonuu: NUL001 -->` or `/* nonuu: NUL003 */`). Record an approved house-style deviation with `nuu-deviation: <id>: <reason>`. Agents MUST NEVER add `nuu-deviation:` automatically and ALWAYS require explicit user approval.
+Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved house-style deviation note for maintainers (without a rule ID) with `nuu-deviation: <reason>`. Agents MUST NEVER add `nuu-deviation:` automatically and ALWAYS require explicit user approval.
 
 | Code | Pass | Condition |
 | --- | --- | --- |
 | `NUL001`–`NUL004` | Source (`lint`) | Missing image `alt` (`NUL001`), missing control naming evidence (`NUL002`), `outline: none` / `0` (`NUL003`), or missing `docs/design.md` (`NUL004`) |
-| `NUB101`–`NUB103` | Browser (`inspect`, `flow`) | Horizontal overflow (`NUB101`), runtime console/page error (`NUB102`), or failed interaction flow (`NUB103`) |
+| `NUB101`–`NUB103` | Browser (`inspect`, `flow`) | Horizontal overflow (`NUB101`), uncaught `pageerror` or `console.error` during load, resize, or flow (`NUB102`), or flow step timeout, missing selector, or failed assertion (`NUB103`) |
 | `NUB104` | Browser (`--ready`) | Declared `--ready SELECTOR` did not match a visible element within the timeout |
 | `NUM201`–`NUM204` | Measure (`--measure`) | Off-scale spacing, off-ramp typography, unapproved border radius, or text contrast below 4.5:1 (`3:1` large text) |
 | `NUM205`–`NUM208` | Density (`density`, `--density`) | Row/card ink ratio below `0.75` at `>= 900` px excluding header and toolbar bars (`NUM205`), sibling horizontal gap `> 320` px and `> 40%` width (`NUM206`), form control width `> 480` px (`NUM207`), or non-symmetric icon-only button (`NUM208`) |
@@ -33,7 +33,7 @@ Suppress a source-lint finding on a line with `nonuu: <ID>` (for example, `<!-- 
 | `NUA301` | Rendered `a11y` | Landmarks (`<main>` or `[role="main"]`) and skip-link target missing or broken |
 | `NUA302` | Rendered `a11y` | Visible interactive control without an accessible name or with `aria-hidden="true"` while focusable |
 | `NUA303` | Rendered `a11y` | Visible interactive control with bounding box smaller than `24x24` CSS px |
-| `NUA304` | Rendered `a11y` | Interactive control whose `:focus-visible` ring is clipped or identical to its unfocused outline/box-shadow |
+| `NUA304` | Rendered `a11y` | Interactive control whose `:focus-visible` ring clips or matches its unfocused outline/box-shadow (instead of a 2 px solid `var(--focus)` ring with `>= 3:1` contrast) |
 | `NUA305` | Rendered `a11y` | Invalid `role`, missing required ARIA state (`aria-checked`, `aria-expanded`, `aria-selected`), or broken `aria-labelledby` / `aria-describedby` / `aria-controls` ID target |
 | `NUA306` | Rendered `a11y` | Stylesheet animation or transition without a `@media (prefers-reduced-motion: reduce)` rule |
 | `NUA307` | Rendered `a11y` | Interactive control that renders a visible focus outline on pointer focus before keyboard navigation |
