@@ -134,9 +134,9 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; wid
 main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 .report-scroll-frame > section[role="tabpanel"], main > section[role="tabpanel"] { padding-inline: 5vw; }
 .report-scroll-frame { position: relative; display: flex; flex-direction: column; }
-#notes-panel { display: flex; flex-direction: column; overflow: clip; }
+#notes-panel { overflow: clip; display: flex; flex-direction: column; }
 #reports-panel, #tasks-panel, #downloads-panel { overflow-y: auto; }
-.notes-layout { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
+.notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; flex: 1 1 auto; min-height: 0; max-width: 900px; width: 100%; margin: auto; }
 /* The message log fills remaining height above the composer so the panel itself never scrolls. */
 .log-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-block: 12px 0; }
 /* The log header wraps into four short lines on a narrow width, and the row's 12px wrap gap
