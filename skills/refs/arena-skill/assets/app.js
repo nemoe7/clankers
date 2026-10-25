@@ -2390,7 +2390,7 @@ function renderFlowchartSvg(lines, header, config) {
     const line = rawLine.trim().replace(/;$/, '');
     if (!line || line.startsWith('%%') || /^subgraph\b/i.test(line) || /^end$/i.test(line) || /^direction\s+(?:TD|TB|BT|LR|RL)$/i.test(line)) continue;
     if (/^(?:click|callback)\b/i.test(line)) throw new Error('Interactive directives are disabled in strict mode');
-    const edgeMatch = /^(.+?)\s*(?:--\s*([^>-][^>]*?)\s*-->|-\.\s*(.*?)\s*\.->|==\s*(.*?)\s*==>|<--+>|<-+\.->|<==+>|--+>|\.-+>|==+>|---+)\s*(?:\|([^|]*)\|\s*)?(.+)$/.exec(line);
+    const edgeMatch = /^(.+?)\s*(?:--\s*([^>-][^>]*?)\s*-->|-\.\s*(.*?)\s*\.->|==\s*(.*?)\s*==>|<--+>|<-+\.->|<==+>|--+>|-+\.+-+>|\.-+>|==+>|---+)\s*(?:\|([^|]*)\|\s*)?(.+)$/.exec(line);
     if (edgeMatch) {
       const fromId = parseFlowNodeToken(edgeMatch[1], nodes);
       const toId = parseFlowNodeToken(edgeMatch[6], nodes);

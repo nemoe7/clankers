@@ -5166,10 +5166,12 @@ test('preview client', async (t) => {
     assert.match(renderedFlow, /<pre><code class="language-mermaid">/);
     assert.ok(renderedFlow.lastIndexOf('class="mermaid-node"') < renderedFlow.indexOf('class="mermaid-edge-label"'));
 
-    const subFlow = '<div class="code-block"><button class="preview-code-mermaid" aria-pressed="false"></button><button class="copy-code"></button><pre><code class="language-mermaid">flowchart LR\n  subgraph S1["Tab_1"]\n    U1["arena.user.js&lt;br/&gt;repo: nemoe7/clankers"]\n    IDB[("IndexedDB&lt;br/&gt;peers_by_repo")]\n    U1 &lt;--&gt; IDB\n  end</code></pre></div>';
+    const subFlow = '<div class="code-block"><button class="preview-code-mermaid" aria-pressed="false"></button><button class="copy-code"></button><pre><code class="language-mermaid">flowchart LR\n  subgraph S1["Tab_1"]\n    U1["arena.user.js&lt;br/&gt;repo: nemoe7/clankers"]\n    IDB[("IndexedDB&lt;br/&gt;peers_by_repo")]\n    U1 &lt;--&gt; IDB\n    BLK["Blocked Session"] -.->|dropped by filter| IDB\n  end</code></pre></div>';
     const renderedSubFlow = await context.renderMermaidBlocks(subFlow);
     assert.match(renderedSubFlow, /data-mermaid-state="rendered"/);
     assert.match(renderedSubFlow, /data-node-id="IDB"/);
+    assert.match(renderedSubFlow, /data-node-id="BLK"/);
+    assert.match(renderedSubFlow, /stroke-dasharray="4 3"/);
     assert.equal((renderedSubFlow.match(/class="preview-code-mermaid"/g) || []).length, 1);
 
     const toggleBlock = new Element('div');
