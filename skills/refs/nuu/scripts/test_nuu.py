@@ -1221,3 +1221,35 @@ def test_design_boards_and_html_typography(tmp_path):
   )
   assert set(views) == {"dashboard", "signed-out"}
   walk.clear_steps()
+
+  default_nuu_toml = SCRIPT.parent.parent / "references" / "nuu.toml"
+  assert default_nuu_toml.is_file()
+  default_cfg = annotate.load_nuu_config(config_path=default_nuu_toml)
+  assert default_cfg["path"] == str(default_nuu_toml)
+  assert "Basel Grotesk" in default_cfg["config"]["fonts"]["sans"]
+  assert "Basel Grotesk Mono" in default_cfg["config"]["fonts"]["mono"]
+
+  bare_proj = tmp_path / "BareNoCssProject"
+  bare_proj.mkdir()
+  bare_typo = annotate.resolve_project_typography(bare_proj)
+  assert "Basel Grotesk" in bare_typo["font_sans"]
+  assert "Basel Grotesk Mono" in bare_typo["font_mono"]
+
+  chromium_env_nm = SCRIPT.parents[3] / "arena-state" / "chromium-env" / "node_modules"
+  if chromium_env_nm.is_dir():
+    chr_src = toml_proj / "chr-shot.png"
+    chr_src.write_bytes(
+      annotate.encode_png(120, 80, bytearray([20, 24, 32, 255] * (120 * 80)))
+    )
+    chr_dst = toml_proj / "chr-shot-ann.png"
+    chr_ann = annotate.annotate_image(
+      chr_src,
+      chr_dst,
+      boxes=["8,8,40,30,red"],
+      labels=["8,44,Header gap,amber"],
+      callouts=["60,24,1,Overflow,red"],
+      project=toml_proj,
+      renderer="auto",
+    )
+    assert chr_ann["renderer"] == "chromium"
+    assert chr_ann["font_family"].startswith('"Custom Toml Sans"')

@@ -21,6 +21,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Show the bash emoji (`BASH_EMOJI`) in `userscripts/arena.user.js` when a running `arena-preview poll` row reports an active gate in `stderr` (`run <name> running <N>s`). Keep the waiting emoji (`WAITING_EMOJI`) for idle polls.
 
+#### nuu
+
+- Ship default `references/nuu.toml` font and renderer settings (`Basel Grotesk` and `Basel Grotesk Mono`) and update `_chromium_render_png` in `scripts/annotate.py` to locate `playwright-core` and `@sparticuz/chromium` across workspace `node_modules` paths.
+
 ## 2026-10-24
 
 ### Added
