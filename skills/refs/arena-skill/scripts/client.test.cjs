@@ -5430,6 +5430,24 @@ test('preview client', async (t) => {
     assert.equal(lastVisibleTab.getAttribute('aria-selected'), 'true', 'swiping left on the last visible tab does not wrap around');
     get('#notes-tab').events.click();
 
+    // Switching from the Reports tab to the Board tab hides #reports-scroll-frame, #report-top, and #report-submit-float.
+    get('#reports-tab').events.click();
+    get('#reports-panel').scrollHeight = 1200;
+    get('#reports-panel').clientHeight = 400;
+    get('#reports-panel').scrollTop = 100;
+    get('#report-submit').hidden = false;
+    get('#reports-panel').events.scroll();
+    assert.equal(get('#reports-scroll-frame').hidden, false);
+    assert.equal(get('#report-top').hidden, false);
+    assert.equal(get('#report-submit-float').hidden, false);
+    get('#board-tab').events.click();
+    assert.equal(get('#board-panel').hidden, false);
+    assert.equal(get('#reports-panel').hidden, true);
+    assert.equal(get('#reports-scroll-frame').hidden, true, 'Board tab hides #reports-scroll-frame');
+    assert.equal(get('#report-top').hidden, true, 'Board tab hides #report-top');
+    assert.equal(get('#report-submit-float').hidden, true, 'Board tab hides #report-submit-float');
+    get('#notes-tab').events.click();
+
     // Mobile virtual keyboard hides .composer-footer only when the viewport shrinks, not when #note stays focused with keyboard closed.
     const prevCoarse = coarsePointer;
     const prevInnerHeight = context.window.innerHeight;

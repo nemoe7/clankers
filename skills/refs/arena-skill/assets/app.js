@@ -3878,6 +3878,7 @@ function showBoardPanel() {
   const boardPanel = $('#board-panel');
   if (!boardTab || !boardPanel) return;
   clearJumpHighlight();
+  const alreadyOpen = boardTab.getAttribute('aria-pressed') === 'true' && !boardPanel.hidden;
   const left = shownReportId();
   if (left) void markReportViewed(left, false);
   releaseHeldReport(null);
@@ -3887,8 +3888,10 @@ function showBoardPanel() {
     const panel = $('#' + item.getAttribute('aria-controls'));
     if (panel) panel.hidden = true;
   }
+  updateReportTop();
   boardTab.setAttribute('aria-pressed', 'true');
   boardPanel.hidden = false;
+  if (!alreadyOpen) gsap.fromTo(boardPanel, { opacity: 0 }, { opacity: 1, duration: 0.16, ease: 'power1.out' });
   syncDocumentTitle();
   if (typeof window !== 'undefined' && window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
     try {
