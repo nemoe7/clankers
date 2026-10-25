@@ -30,7 +30,7 @@ DEFAULT_SHEET = Path(__file__).resolve().parent.parent / "references" / "style.c
 DEFAULT_SCALE = 4
 MIN_INK_RATIO = 0.75
 MAX_SIBLING_GAP = 320.0
-MAX_CONTROL_WIDTH = 480.0
+MAX_ROW_SLACK = 24.0
 TOOLBAR_TAGS = {"header", "nav", "footer"}
 TOOLBAR_ROLES = {"banner", "toolbar", "navigation", "menubar", "tablist"}
 TOOLBAR_NAME_RE = re.compile(
@@ -195,16 +195,15 @@ def check_density(report: dict) -> list[dict]:
     input_type = str(
       element.get("input_type") or element.get("inputType") or "text"
     ).lower()
+    slack = float(element.get("row_slack", element.get("rowSlack", 0)) or 0)
     if (
       tag == "select" or (tag == "input" and input_type not in STRETCH_EXEMPT_INPUTS)
-    ) and width > MAX_CONTROL_WIDTH:
+    ) and slack > MAX_ROW_SLACK:
       findings.append(
         {
           "rule": "NUM207",
           "selector": selector,
-          "evidence": (
-            f"{selector}: control width is {width:g} px (> {MAX_CONTROL_WIDTH:g} px)"
-          ),
+          "evidence": (f"{selector}: input ends {slack:g} px before its row edge"),
           **b_extra,
         }
       )

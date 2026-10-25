@@ -12,7 +12,7 @@
 | `asset` | Fetch, verify, or record licensed assets | `<fetch\|verify\|record>`, `-r, --root <path>`, `-u, --url <https-url>`, `-o, --output <rel>`, `-s, --sha256 <hex>`, `-l, --license <spdx>`, `-a, --attribution <text>`, `-p, --purpose <text>`, `-d, --design-doc <rel>`, `-f, --force`, `-j, --json` |
 | `extract` | Extract candidate tokens from source or measure JSON | `-r, --root <path>`, `-m, --measure <path>`, `-o, --output <rel>`, `-f, --force`, `-j, --json` |
 | `check` | Check computed-style measure JSON against the sheet | `<report>`, `-s, --sheet <path>`, `-g, --scale <px>`, `-d, --density`, `-j, --json` |
-| `density` | Check row/card ink ratio (`NUM205`), sibling gaps (`NUM206`), form inputs stretching to fill the row (`NUM207`), and symmetric icon buttons (`NUM208`) | `<report>` |
+| `density` | Check row/card ink ratio (`NUM205`), sibling gaps (`NUM206`), form inputs that leave row space unused (`NUM207`), and symmetric icon buttons (`NUM208`) | `<report>` |
 | `ruler` | Measure pixel distance between two `x,y` guides | `-f, --from <x,y>`, `-t, --to <x,y>`, `-g, --scale <px>`, `-j, --json` |
 | `annotate`, `board` | Render boxes, arrows, labels, callouts, crops (`--crop`), and multi-panel comparison boards with the project's default text font in dark mode by default | `-i, --input <png>`, `-o, --output <png>`, `-b, --box <spec>`, `-l, --label <spec>`, `-a, --arrow <spec>`, `-c, --callout <spec>`, `-C, --crop <x,y,w,h>`, `-t, --title <text>`, `-p, --panel <spec>`, `-s, --spec <json>`, `-S, --scale <1-6>`, `-W, --wireframe` |
 | `walk` | Run deterministic dark-mode browser walk steps or capture named view PNGs for `nuu board` | `[target]`, `-s, --script <py>`, `-V, --views`, `-o, --out <dir>` |
@@ -28,7 +28,7 @@ Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved hous
 | `NUB101`–`NUB103` | Browser (`inspect`, `flow`) | Horizontal overflow (`NUB101`), uncaught `pageerror` or `console.error` during load, resize, or flow (`NUB102`), or flow step timeout, missing selector, or failed assertion (`NUB103`) |
 | `NUB104` | Browser (`--ready`) | Declared `--ready SELECTOR` did not match a visible element within the timeout |
 | `NUM201`–`NUM204` | Measure (`--measure`) | Off-scale spacing (`4/8/12/16/24/32/48 px` or `8 px` scale) (`NUM201`), off-ramp typography (`11/12/14/16/18/22/28 px`, weights `400-700`) (`NUM202`), unapproved border radius (`0/4/6/10/9999 px`) (`NUM203`), or text contrast below 4.5:1 (`3:1` large text) (`NUM204`) |
-| `NUM205`–`NUM208` | Density (`density`, `--density`) | Row ink ratio below 0.75 (`NUM205`), sibling gap > 320 px (`NUM206`), form input not stretching to fill the rest of the row when possible (`NUM207`), or non-symmetric icon button (`NUM208`) |
+| `NUM205`–`NUM208` | Density (`density`, `--density`) | Row ink ratio below 0.75 (`NUM205`), sibling gap > 320 px (`NUM206`), form input ending more than 24 px before its row edge with no control after it (`NUM207`), or non-symmetric icon button (`NUM208`) |
 | `NUM209`–`NUM210` | Density (`-C`, `-O`) | Non-scrolling container clipping child content (`NUM209`) or unintended sibling box overlap (`NUM210`) |
 | `NUA301` | Rendered `a11y` | Landmarks (`<main>` or `[role="main"]`) and skip-link target missing or broken |
 | `NUA302` | Rendered `a11y` | Visible interactive control without an accessible name or with `aria-hidden="true"` while focusable |

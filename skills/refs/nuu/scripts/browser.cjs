@@ -179,6 +179,26 @@ async function metrics(page, selector) {
       const tag = element.tagName.toLowerCase();
       const role = element.getAttribute('role');
       const inputType = tag === 'input' ? (element.getAttribute('type') || 'text').toLowerCase() : null;
+      let rowSlack = 0;
+      if ((tag === 'input' || tag === 'select') && element.parentElement && box.width > 0 && box.height > 0) {
+        const parent = element.parentElement;
+        const parentStyle = getComputedStyle(parent);
+        const parentBox = parent.getBoundingClientRect();
+        const padRight = parseFloat(parentStyle.getPropertyValue('padding-right')) || 0;
+        const rowRight = parentBox.x + parentBox.width - padRight;
+        const hasTrailingSibling = [...(parent.children || [])].some(sib => {
+          if (sib === element) return false;
+          const cs = getComputedStyle(sib);
+          if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+          const r = sib.getBoundingClientRect();
+          if (r.width <= 0 || r.height <= 0) return false;
+          const verticalOverlap = Math.min(box.y + box.height, r.y + r.height) - Math.max(box.y, r.y);
+          return verticalOverlap > 0 && r.x >= box.x + box.width - 2;
+        });
+        if (!hasTrailingSibling && rowRight > box.x + box.width) {
+          rowSlack = Number((rowRight - (box.x + box.width)).toFixed(2));
+        }
+      }
       const classAndId = `${element.id || ''} ${typeof element.className === 'string' ? element.className : ''}`;
       const toolbarExempt = ['header', 'nav', 'footer'].includes(tag) ||
         ['banner', 'toolbar', 'navigation', 'menubar', 'tablist'].includes((role || '').toLowerCase()) ||
@@ -195,6 +215,8 @@ async function metrics(page, selector) {
         bounds: {x: box.x, y: box.y, width: box.width, height: box.height},
         ...(inkRatio !== null ? {inkWidth: Number(inkWidth.toFixed(2)), inkRatio} : {}),
         maxSiblingGap,
+        row_slack: rowSlack,
+        rowSlack,
         values: Object.fromEntries(properties.map(name => [name, style.getPropertyValue(name)]))};
     });
     return {width: innerWidth, height: innerHeight, elements,

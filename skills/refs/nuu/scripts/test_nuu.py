@@ -846,6 +846,7 @@ module.exports = {
         "selector": "#branch-select",
         "tag": "select",
         "bounds": {"width": 560, "height": 40},
+        "row_slack": 320,
         "values": {"height": "40px"},
       },
       {
@@ -1361,6 +1362,7 @@ def test_design_boards_and_html_typography(tmp_path):
           "selector": "#log-search",
           "tag": "input",
           "inputType": "search",
+          "row_slack": 58,
           "bounds": {"x": 16, "y": 95, "width": 566, "height": 34},
           "values": {"width": "566px", "height": "34px"},
         }
@@ -1375,6 +1377,79 @@ def test_design_boards_and_html_typography(tmp_path):
     "width": 566.0,
     "height": 34.0,
   }
+  assert (
+    measure.check_density(
+      {
+        "width": 1280,
+        "elements": [
+          {
+            "selector": "#full-url",
+            "tag": "input",
+            "inputType": "text",
+            "row_slack": 0,
+            "bounds": {"x": 0, "y": 0, "width": 1280, "height": 40},
+            "values": {"width": "1280px", "height": "40px"},
+          }
+        ],
+      }
+    )
+    == []
+  )
+  slack_findings = measure.check_density(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "#short-filter",
+          "tag": "input",
+          "inputType": "text",
+          "row_slack": 400,
+          "bounds": {"x": 0, "y": 0, "width": 320, "height": 40},
+          "values": {"width": "320px", "height": "40px"},
+        }
+      ],
+    }
+  )
+  assert len(slack_findings) == 1
+  assert slack_findings[0]["rule"] == "NUM207"
+  assert "400 px" in slack_findings[0]["evidence"]
+  assert (
+    measure.check_density(
+      {
+        "width": 1280,
+        "elements": [
+          {
+            "selector": "#paired-input",
+            "tag": "input",
+            "inputType": "text",
+            "row_slack": 0,
+            "bounds": {"x": 0, "y": 0, "width": 320, "height": 40},
+            "values": {"width": "320px", "height": "40px"},
+          }
+        ],
+      }
+    )
+    == []
+  )
+  for exempt_type in ("checkbox", "button"):
+    assert (
+      measure.check_density(
+        {
+          "width": 1280,
+          "elements": [
+            {
+              "selector": f"#exempt-{exempt_type}",
+              "tag": "input",
+              "inputType": exempt_type,
+              "row_slack": 400,
+              "bounds": {"x": 0, "y": 0, "width": 24, "height": 24},
+              "values": {"width": "24px", "height": "24px"},
+            }
+          ],
+        }
+      )
+      == []
+    )
 
   auto_src = toml_proj / "auto-src.png"
   auto_src.write_bytes(
