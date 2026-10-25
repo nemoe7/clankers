@@ -2276,14 +2276,18 @@ setInterval(showClock, 1000);
   var lastAnnouncedRepo = '';
   var lastUserscriptAnnouncedRepo = '';
   var parentWindowOrigin = '';
+  const forwardedBoardWakes = new Map();
   function parentTargetOrigin() {
     if (parentWindowOrigin) return parentWindowOrigin;
     try {
       if (typeof document !== 'undefined' && document.referrer) {
-        return new URL(document.referrer).origin;
+        const refOrigin = new URL(document.referrer).origin;
+        if (refOrigin && refOrigin !== window.location?.origin) return refOrigin;
       }
     } catch {}
-    return window.location?.origin || 'https://arena.ai';
+    const locOrigin = window.location?.origin || '';
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(locOrigin)) return locOrigin;
+    return 'https://arena.ai';
   }
   function enableUserscriptForceSave() {
     if (userscriptForceSave) return false;
@@ -2303,7 +2307,8 @@ setInterval(showClock, 1000);
   }
   window.addEventListener('message', event => {
     if (!event || !event.data) return;
-    if (typeof event.origin === 'string' && /^https?:\/\//i.test(event.origin)) {
+    if (typeof event.origin === 'string' && /^https?:\/\//i.test(event.origin) &&
+        (event.origin !== window.location?.origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(event.origin))) {
       parentWindowOrigin = event.origin;
     }
     if (event.data.type === 'clankers:board-sync' && event.data.board && typeof event.data.board === 'object') {
@@ -3870,6 +3875,7 @@ function syncBoardHeartbeat(state) {
     ? state.board.sessions.find(row => row && row.session_id === sid)
     : null;
   const isPolling = selfRow ? Boolean(selfRow.polling) : Boolean(state.polling);
+  const targetOrigin = parentTargetOrigin();
   try {
     window.parent.postMessage({
       type: 'clankers:board-action',
@@ -3881,7 +3887,18 @@ function syncBoardHeartbeat(state) {
         status: isPolling ? 'polling' : 'active',
         polling: isPolling,
       },
-    }, parentTargetOrigin());
+    }, targetOrigin);
+    if (state.board.wakes && typeof state.board.wakes === 'object') {
+      for (const [targetSid, stamp] of Object.entries(state.board.wakes)) {
+        if (!targetSid || targetSid === sid || !stamp) continue;
+        if (forwardedBoardWakes.get(targetSid) === stamp) continue;
+        forwardedBoardWakes.set(targetSid, stamp);
+        window.parent.postMessage({
+          type: 'clankers:board-action',
+          action: { action: 'wake', target: targetSid },
+        }, targetOrigin);
+      }
+    }
   } catch {}
 }
 async function sendBoardAction(action, forwardToParent = true) {

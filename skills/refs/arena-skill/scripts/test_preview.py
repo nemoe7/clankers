@@ -15239,9 +15239,39 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   hygiene_store.board_action({"action": "wake", "target": woken_board["session_id"]})
   assert hygiene_store.skip_poll_requested() is False
   assert preview.poll_once(hygiene_store, sleeper=lambda _: None) == 0
-  assert "BOARD WAKE:" in capsys.readouterr().out
+  wake_out = capsys.readouterr().out
+  assert "BOARD WAKE:" in wake_out
+  assert '"tag": "patch"' in wake_out
   assert hygiene_store.polling() is False
   assert hygiene_store.skip_poll_requested() is False
+  hygiene_store.stamp_polling()
+  synced_wake = hygiene_store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": woken_board["allowed_sessions"],
+        "main_session_id": woken_board["main_session_id"],
+        "sessions": woken_board["sessions"],
+        "entries": [
+          *woken_board["entries"],
+          {
+            "id": "b-sync-99",
+            "session_id": "b14c09a2-clankers",
+            "to": woken_board["session_id"],
+            "repo": "clankers",
+            "branch": "arena/b14c09a2-clankers",
+            "at": "2026-10-25T15:30:00",
+            "payload": {"tag": "reply", "text": "pong"},
+            "file": None,
+          },
+        ],
+        "wakes": {},
+      },
+    }
+  )
+  assert synced_wake["wakes"].get(woken_board["session_id"]) == "b-sync-99"
+  assert preview.poll_once(hygiene_store, sleeper=lambda _: None) == 0
+  assert "b-sync-99" in capsys.readouterr().out
   gate_msg = preview.board_main_session_warning(
     hygiene_dir, "git push origin arena/293da56c-clankers"
   )

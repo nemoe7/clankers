@@ -5693,6 +5693,11 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
     /clankers:board-wake[\s\S]{0,160}\/api\/skip-poll/,
     'board wake never calls /api/skip-poll'
   );
+  assert.doesNotMatch(
+    appSource,
+    /return\s+window\.location\?\.origin\s*\|\|\s*'https:\/\/arena\.ai'/,
+    'parentTargetOrigin never falls back to the preview iframe origin on .arena.site'
+  );
   assert.match(styleSource, /#copy-state\s*\{\s*display:\s*none;\s*\}/);
   assert.match(appSource, /updateReportTocActive/);
   assert.match(appSource, /querySelectorAll\?\.\('h2, h3'\)/);

@@ -5358,6 +5358,18 @@ def poll_inbox(store, sleeper=None):
           " Read board entries and continue work before polling again.",
           flush=True,
         )
+        board_now = store.board_state()
+        for entry in board_now.get("entries") or []:
+          payload = entry.get("payload")
+          body_text = (
+            json.dumps(payload, ensure_ascii=False)
+            if isinstance(payload, dict)
+            else str(payload or "")
+          )
+          print(
+            f"[board {entry.get('id', '')}] {entry.get('session_id', '')} -> {entry.get('to', '*')}: {body_text}",
+            flush=True,
+          )
         print(format_read(listing), flush=True)
         return 0
       if skip_poll_ready(store):
@@ -7324,6 +7336,9 @@ class Store:
           continue
         by_sid[row_sid] = dict(row)
       sessions = list(by_sid.values())
+      existing_entry_ids = {
+        str(item.get("id") or "") for item in entries if item.get("id")
+      }
       seen_entry_ids = set()
       merged_entries = []
       for item in [*entries, *merged["entries"]]:
@@ -7338,6 +7353,15 @@ class Store:
             self.path.parent, row["session_id"], row["file"]
           )
         merged_entries.append(row)
+        if (
+          eid
+          and eid not in existing_entry_ids
+          and row.get("session_id") != sid
+          and row.get("to") in ("*", sid, "", None)
+          and sid in allowed
+          and ack_wakes.get(sid) != eid
+        ):
+          wakes[sid] = eid
       entries = merged_entries
       for k, v in merged["wakes"].items():
         if k == sid and ack_wakes.get(sid) == v:
