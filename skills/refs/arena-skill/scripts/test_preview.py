@@ -13931,7 +13931,10 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
   assert "right: calc(50vw + 466px);" in style_css
   assert "left: calc(50vw + 466px);" in style_css
   assert "calc(50vw - 458px)" in style_css
-  assert ".report-toc-link.active" in style_css
+  assert (
+    '.report-toc-link.active, .report-toc-link[aria-current="true"] '
+    "{ color: var(--text);" in style_css
+  )
   assert 'id="report-toc"' in index_html
   assert 'id="report-rail"' in index_html
   assert 'id="report-submit-float"' in index_html
