@@ -54,7 +54,7 @@ def test_a_line_marker_skips_that_line_and_a_head_marker_skips_the_file():
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     (root / "marked.py").write_text(
-      "value = 'kind'  # nonemo: NMO100\npicked = 1\n", encoding="utf-8"
+      "value = 'kind'  # nonemo: NMO100\n# picked one\n", encoding="utf-8"
     )
     (root / "whole.md").write_text(
       "<!-- nonemo: NMO100 -->\nkind and picked stay\n", encoding="utf-8"
@@ -102,21 +102,21 @@ def test_a_picker_is_a_rotation_and_a_marked_pickle_is_not():
     root = Path(directory)
     ui = root / "ui.js"
     ui.write_text(
-      "const picker = 1\nconst var_pick = 2\nconst repick = 3\n"
-      "const jar = pickle  // nonemo: NMO901\n",
+      "// picker widget\nconst var_pick = 2\n// repick item\n"
+      "// pickle jar  nonemo: NMO901\n",
       encoding="utf-8",
     )
     result = run(cwd=directory)
     assert result.returncode == 0
     assert "ui.js:1: [NMO901] (advisory) picker -> select" in result.stdout
-    assert "ui.js:2: [NMO901] (advisory) pick -> select" in result.stdout
+    assert "ui.js:2" not in result.stdout
     assert "ui.js:3" not in result.stdout
     assert "ui.js:4" not in result.stdout
     formatted = run("--format", cwd=directory)
     assert formatted.returncode == 0, formatted.stderr
     assert ui.read_text(encoding="utf-8") == (
-      "const selector = 1\nconst var_select = 2\nconst repick = 3\n"
-      "const jar = pickle  // nonemo: NMO901\n"
+      "// selector widget\nconst var_pick = 2\n// repick item\n"
+      "// pickle jar  nonemo: NMO901\n"
     )
 
 
@@ -1359,3 +1359,76 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
     "prose",
     "markers",
   }
+
+
+def test_workflow_name_spans_identifier_boundaries_and_mixed_determiner_lists(tmp_path):
+  wf_dir = tmp_path / ".github" / "workflows"
+  wf_dir.mkdir(parents=True)
+  wf = wf_dir / "ci.yml"
+  wf.write_text(
+    "name: Build the image\n"
+    "on: push\n"
+    "jobs:\n"
+    "  deploy:\n"
+    "    name: Deploy the release\n"
+    "    runs-on: ubuntu-latest\n"
+    "    environment: { name: github-pages }\n"
+    "    env:\n"
+    "      name: the-env-var\n"
+    "      repo_ref: ${{ github.repository }}\n"
+    "    steps:\n"
+    "      - name: Checkout the code\n"
+    "        uses: actions/checkout@v4\n"
+    "        with:\n"
+    "          name: the-artifact\n"
+    "          repository: ${{ github.repository }}\n"
+    "      - name: build-slug\n"
+    "        run: echo ok\n",
+    encoding="utf-8",
+  )
+  wf_res = run(str(wf), cwd=tmp_path)
+  assert wf_res.returncode == 0, wf_res.stderr
+  for hit_ln in (1, 5, 12):
+    assert f"{wf.name}:{hit_ln}: [NMO902]" in wf_res.stdout
+  assert "NMO901" not in wf_res.stdout
+  for skipped_ln in (7, 9, 10, 15, 16, 17):
+    assert f"ci.yml:{skipped_ln}:" not in wf_res.stdout
+
+  py_file = tmp_path / "mod.py"
+  py_file.write_text(
+    '""" Process items.\n\n'
+    ":param repository: Target repo.\n"
+    ":param picker: Widget selector.\n"
+    '"""\n'
+    "def run_task(user_repository, pick_mode):\n"
+    '  url = "https://example.com/repository/pick"\n'
+    "  picked = pick_mode  # Pick a file from the repository.\n"
+    "  return picked, user_repository, url\n",
+    encoding="utf-8",
+  )
+  md_file = tmp_path / "doc.md"
+  md_file.write_text(
+    "Use `pick_mode` and `github.repository` or `/repository/pick` in `user_repository`.\n"
+    "Also skip snake_pick, $pick, cherry-pick, and ${{ github.repository }}.\n"
+    "Pick a file from the repository.\n",
+    encoding="utf-8",
+  )
+  id_res = run(str(py_file), str(md_file), cwd=tmp_path)
+  assert id_res.returncode == 0, id_res.stderr
+  assert f"{py_file}:8: [NMO901]" in id_res.stdout
+  for safe_py_ln in (1, 3, 4, 6, 7, 9):
+    assert f"{py_file}:{safe_py_ln}: [NMO901]" not in id_res.stdout
+  assert f"{md_file}:3: [NMO901]" in id_res.stdout
+  assert f"{md_file}:1: [NMO901]" not in id_res.stdout
+  assert f"{md_file}:2: [NMO901]" not in id_res.stdout
+
+  mixed_py = tmp_path / "mixed.py"
+  mixed_py.write_text(
+    "# The image ships the package, its config, the hooks, and the lock.\n"
+    "# Keep the output in the cache directory after each build pass.\n"
+    "x = 1\n",
+    encoding="utf-8",
+  )
+  mixed_res = run(str(mixed_py), cwd=tmp_path)
+  assert mixed_res.returncode == 0, mixed_res.stderr
+  assert "NMO902" not in mixed_res.stdout

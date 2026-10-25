@@ -450,6 +450,116 @@ def comment_blocks(path: Path, source: str) -> list[tuple[int, int]]:
   return blocks
 
 
+WORKFLOW_SKIP_PARENTS = {
+  "with",
+  "env",
+  "environment",
+  "inputs",
+  "outputs",
+  "secrets",
+  "matrix",
+  "strategy",
+  "permissions",
+  "concurrency",
+  "defaults",
+  "services",
+  "container",
+}
+
+
+def is_workflow_yaml(path: Path, source: str = "") -> bool:
+  """Return True when path is a GitHub Actions workflow YAML file."""
+  if path.suffix.lower() not in {".yml", ".yaml"}:
+    return False
+  posix = path.as_posix().replace("\\", "/")
+  if (
+    ".github/workflows/" in posix
+    or "workflows" in path.parts
+    or "workflow" in path.stem.lower()
+  ):
+    return True
+  return bool(source and re.search(r"(?m)^(?:on|jobs|steps)\s*:", source))
+
+
+def _strip_yaml_comment(line: str) -> str:
+  quote = ""
+  escaped = False
+  for index, char in enumerate(line):
+    if quote:
+      if escaped:
+        escaped = False
+      elif char == "\\":
+        escaped = True
+      elif char == quote:
+        quote = ""
+      continue
+    if char in "'\"":
+      quote = char
+      continue
+    if char == "#" and (index == 0 or line[index - 1].isspace()):
+      return line[:index]
+  return line
+
+
+def workflow_name_spans(source: str) -> list[tuple[str, int, int]]:
+  """Extract root, job, and step prose name: scalars from workflow YAML."""
+  spans: list[tuple[str, int, int]] = []
+  stack: list[tuple[int, str]] = []
+  block_indent: int | None = None
+  for number, raw_line in enumerate(source.splitlines(), start=1):
+    clean = _strip_yaml_comment(raw_line)
+    if not clean.strip():
+      continue
+    indent = len(raw_line) - len(raw_line.lstrip(" "))
+    if block_indent is not None:
+      if indent > block_indent:
+        continue
+      block_indent = None
+    match = re.match(r"^(\s*)(-\s+)?([A-Za-z0-9_.-]+)\s*:\s*(.*)$", clean)
+    if not match:
+      continue
+    lead, dash, key, rest = match.groups()
+    base_indent = len(lead)
+    key_indent = base_indent + (len(dash) if dash else 0)
+    if dash:
+      while stack and (
+        stack[-1][0] > base_indent
+        or (stack[-1][0] == base_indent and stack[-1][1] != "steps")
+      ):
+        stack.pop()
+    else:
+      while stack and stack[-1][0] >= key_indent:
+        stack.pop()
+    val = rest.strip()
+    if re.match(r"^[|>][-+]?\s*$", val):
+      block_indent = base_indent
+      stack.append((key_indent, key))
+      continue
+    if not val:
+      stack.append((key_indent, key))
+      continue
+    if key != "name":
+      continue
+    parents = [parent_key for _, parent_key in stack]
+    if any(parent in WORKFLOW_SKIP_PARENTS for parent in parents):
+      continue
+    is_root = not parents and not dash
+    is_job = len(parents) == 2 and parents[0] == "jobs" and not dash
+    is_step = "steps" in parents
+    if not (is_root or is_job or is_step):
+      continue
+    if val.startswith(("{", "[")):
+      continue
+    if len(val) >= 2 and val[0] == val[-1] and val[0] in "'\"":
+      val = val[1:-1]
+    val = re.sub(r"\$\{\{.*?\}\}", " ", val)
+    val = " ".join(val.split()).strip()
+    if " " not in val or len(re.findall(r"[A-Za-z]{2,}", val)) < 2:
+      continue
+    spans.append((val, number, number))
+  return spans
+
+
 def prose_spans(path: Path, source: str) -> list[tuple[str, int, int]]:
   """Extract prose with source lines, joining adjacent comment lines."""
   if path.suffix == ".py":
@@ -460,7 +570,12 @@ def prose_spans(path: Path, source: str) -> list[tuple[str, int, int]]:
       if not source.splitlines()[row[1] - 1].startswith("#!")
     ]
   else:
-    docs = html_visible_prose(source) if path.suffix == ".html" else []
+    if path.suffix == ".html":
+      docs = html_visible_prose(source)
+    elif is_workflow_yaml(path, source):
+      docs = workflow_name_spans(source)
+    else:
+      docs = []
     comments = span_comments(path, source, skip_shebang=True) or []
   grouped = []
   source_lines = source.splitlines()
