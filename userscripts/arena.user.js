@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.86
+// @name         Arena.ai | NemoUtils | v1.10.87
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.86
+// @version      1.10.87
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -363,6 +363,14 @@
   var restartStateWatchHook = null;
   var syncPreviewProxyHook = null;
   var previewUiRepo = "";
+  var previewUiSessionId = "";
+
+  function setPreviewUiSessionId(sid) {
+    var nextSid = boardSessionId(sid || "");
+    if (!nextSid || nextSid === previewUiSessionId) return;
+    previewUiSessionId = nextSid;
+    if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
+  }
   var syncProxySettingsHook = null;
   var postKeyNowHook = null;
   var applyTrimKeepHook = null;
@@ -791,7 +799,7 @@
       return { byName: nextByName, invalidated: invalidated };
     }
 
-    function discoverPreviews(doc, reportedRepo) {
+    function discoverPreviews(doc, reportedRepo, reportedSessionId) {
       if (!doc || typeof doc.querySelectorAll !== "function") return [];
       var rawHeader = previewHeaderRaw(doc);
       if (isUnavailablePreviewName(rawHeader)) return [];
@@ -799,6 +807,19 @@
       var uiRepo = String(
         reportedRepo !== undefined ? reportedRepo : previewUiRepo || "",
       ).trim();
+      var sid = boardSessionId(
+        reportedSessionId !== undefined
+          ? reportedSessionId
+          : (previewUiSessionId || stateBranch(doc) || ""),
+      );
+      var board = readGlobalBoard();
+      var hasMain = Boolean(board && board.main_session_id);
+      var isWorker = Boolean(
+        hasMain &&
+        sid &&
+        board.allowed_sessions.indexOf(sid) !== -1 &&
+        boardRoleFor(board, sid) === "worker",
+      );
       var steeringBase = previewBase(doc);
       var steeringRoot = steeringBase ? steeringBase + "/" : "";
       var frames = doc.querySelectorAll("iframe");
@@ -834,10 +855,13 @@
         root = match[1] + "/";
         if (seen[root]) continue;
         seen[root] = true;
-        resolvedName =
-          uiRepo && (!steeringRoot || root === steeringRoot)
-            ? uiRepo + " - Steering"
-            : domName;
+        var isSteeringFrame = Boolean(uiRepo && (!steeringRoot || root === steeringRoot));
+        if (isSteeringFrame && hasMain && !sid && reportedSessionId === undefined) {
+          continue;
+        }
+        resolvedName = isSteeringFrame
+          ? uiRepo + " - Steering" + (isWorker ? " (" + sid.slice(0, 6) + ")" : "")
+          : domName;
         if (!resolvedName || isUnavailablePreviewName(resolvedName)) continue;
         found.push({ url: root, name: resolvedName });
       }
@@ -4211,11 +4235,13 @@
   }
 
   function stateBranch(doc) {
+    if (!doc || typeof doc.querySelector !== "function") return "";
     var bar = doc.querySelector(BAR_SELECTOR);
-    if (!bar) return "";
+    if (!bar || typeof bar.querySelectorAll !== "function") return "";
     var links = bar.querySelectorAll("a, [title]");
     var i;
     for (i = 0; i < links.length; i += 1) {
+      if (!links[i] || typeof links[i].getAttribute !== "function") continue;
       var href = String(links[i].getAttribute("href") || "");
       var match = /\/tree\/([^?#]+)/.exec(href);
       if (match) {
@@ -4782,8 +4808,25 @@
           return;
         }
         clearErrorPanel();
+        if (body.scope && typeof body.scope.branch === "string" && body.scope.branch.trim()) {
+          setPreviewUiSessionId(body.scope.branch);
+          if (!scope.branch) {
+            scope = {
+              repo: scope.repo || String(body.scope.repo || ""),
+              branch: String(body.scope.branch).trim(),
+            };
+            storeKey = stateScopeKey(scope.repo, scope.branch);
+          }
+        }
         if (body.force === true) {
           force = true;
+        }
+        var activeBoard = readGlobalBoard();
+        var sessionSid = boardSessionId(scope.branch || previewUiSessionId || "");
+        if (!force && !manual && sessionSid && activeBoard.main_session_id &&
+            activeBoard.allowed_sessions.indexOf(sessionSid) !== -1 &&
+            boardRoleFor(activeBoard, sessionSid) === "worker") {
+          return;
         }
         if (force) statePanel("Forcing save...");
         var rememberedBase = GM_getValue(baseKey(lastScope || storeKey), "");
@@ -4969,13 +5012,27 @@
       } else if (event.data.type === "clankers:board-request") {
         var currentBoard = readGlobalBoard();
         if (base) {
-          stateJson(base + "/api/board", { action: "sync", board: currentBoard });
+          stateJson(base + "/api/board", { action: "sync", board: currentBoard }).then(function (answer) {
+            if (answer && answer.status === 200 && answer.body) {
+              if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
+              writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body));
+            }
+          });
         }
       } else if (event.data.type === "clankers:board-action" && event.data.action) {
+        if ((event.data.action.action === "heartbeat" || event.data.action.type === "heartbeat") &&
+            event.data.action.session_id) {
+          setPreviewUiSessionId(event.data.action.session_id);
+        }
         var outcome = applyBoardAction(readGlobalBoard(), event.data.action);
         if (outcome.ok) writeGlobalBoard(outcome.board);
         if (outcome.ok && base) {
-          stateJson(base + "/api/board", { action: "sync", board: outcome.board });
+          stateJson(base + "/api/board", { action: "sync", board: outcome.board }).then(function (answer) {
+            if (answer && answer.status === 200 && answer.body) {
+              if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
+              writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body));
+            }
+          });
         }
       }
     }
@@ -5715,7 +5772,39 @@
     }
     var mainId = boardSessionId(data.main_session_id || "");
     if (mainId && !seenAllowed[mainId]) mainId = "";
-    var sessions = Array.isArray(data.sessions) ? data.sessions.slice(0, 64) : [];
+    var rawSessions = Array.isArray(data.sessions) ? data.sessions.slice(0, 64) : [];
+    var sessions = [];
+    var seenSessions = {};
+    for (var j = 0; j < rawSessions.length; j += 1) {
+      var row = rawSessions[j];
+      if (!row || typeof row !== "object") continue;
+      var rowSid = boardSessionId(row.session_id || row.branch || "");
+      if (!rowSid || seenSessions[rowSid]) continue;
+      seenSessions[rowSid] = true;
+      var isPoll = Boolean(row.polling || row.status === "polling");
+      sessions.push({
+        session_id: rowSid,
+        repo: String(row.repo || ""),
+        branch: String(row.branch || ("arena/" + rowSid)),
+        status: isPoll ? "polling" : "active",
+        polling: isPoll,
+        updated_at: String(row.updated_at || ""),
+      });
+    }
+    for (var k = 0; k < uniqueAllowed.length; k += 1) {
+      var allowedSid = uniqueAllowed[k];
+      if (!seenSessions[allowedSid]) {
+        seenSessions[allowedSid] = true;
+        sessions.push({
+          session_id: allowedSid,
+          repo: "",
+          branch: "arena/" + allowedSid,
+          status: "active",
+          polling: false,
+          updated_at: "",
+        });
+      }
+    }
     var entries = Array.isArray(data.entries) ? data.entries.slice(-MAX_BOARD_ENTRIES) : [];
     var wakes = data.wakes && typeof data.wakes === "object" && !Array.isArray(data.wakes)
       ? Object.assign({}, data.wakes)
@@ -5727,6 +5816,53 @@
       entries: entries,
       wakes: wakes,
     };
+  }
+
+  function mergePreviewBoard(globalBoard, previewBoard) {
+    var next = normalizeBoard(globalBoard);
+    if (!previewBoard || typeof previewBoard !== "object") return next;
+    var previewSid = boardSessionId(previewBoard.session_id || previewBoard.branch || "");
+    var incoming = normalizeBoard(previewBoard);
+    incoming.allowed_sessions.forEach(function (sid) {
+      if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
+    });
+    if (!next.main_session_id && incoming.main_session_id) {
+      next.main_session_id = incoming.main_session_id;
+    }
+    var bySid = {};
+    next.sessions.forEach(function (row) {
+      var rowSid = boardSessionId(row.session_id || row.branch);
+      if (rowSid) bySid[rowSid] = Object.assign({}, row, { session_id: rowSid });
+    });
+    incoming.sessions.forEach(function (row) {
+      var rowSid = boardSessionId(row.session_id || row.branch);
+      if (!rowSid) return;
+      if (rowSid === previewSid || !bySid[rowSid]) {
+        bySid[rowSid] = {
+          session_id: rowSid,
+          repo: String(row.repo || (bySid[rowSid] && bySid[rowSid].repo) || previewBoard.repo || ""),
+          branch: String(row.branch || (bySid[rowSid] && bySid[rowSid].branch) || ("arena/" + rowSid)),
+          status: row.polling || row.status === "polling" ? "polling" : "active",
+          polling: Boolean(row.polling || row.status === "polling"),
+          updated_at: String(row.updated_at || new Date().toISOString()),
+        };
+      }
+    });
+    next.sessions = Object.keys(bySid).map(function (k) { return bySid[k]; });
+    var seenIds = {};
+    var mergedEntries = [];
+    next.entries.concat(incoming.entries).forEach(function (item) {
+      if (!item || typeof item !== "object") return;
+      var id = String(item.id || "");
+      if (id && seenIds[id]) return;
+      if (id) seenIds[id] = true;
+      mergedEntries.push(item);
+    });
+    next.entries = mergedEntries.slice(-MAX_BOARD_ENTRIES);
+    if (previewSid && next.wakes[previewSid] && (!previewBoard.wakes || !previewBoard.wakes[previewSid])) {
+      delete next.wakes[previewSid];
+    }
+    return normalizeBoard(next);
   }
 
   function readGlobalBoard() {
@@ -5805,22 +5941,22 @@
     if (actionType === "allow") {
       if (!sid) return { ok: false, error: "missing-session-id", board: next };
       if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
-      return { ok: true, board: next };
+      return { ok: true, board: normalizeBoard(next) };
     }
     if (actionType === "revoke") {
       if (!sid) return { ok: false, error: "missing-session-id", board: next };
       next.allowed_sessions = next.allowed_sessions.filter(function (item) { return item !== sid; });
       if (next.main_session_id === sid) next.main_session_id = "";
-      return { ok: true, board: next };
+      return { ok: true, board: normalizeBoard(next) };
     }
     if (actionType === "set-main") {
       if (!sid) {
         next.main_session_id = "";
-        return { ok: true, board: next };
+        return { ok: true, board: normalizeBoard(next) };
       }
       if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
       next.main_session_id = sid;
-      return { ok: true, board: next };
+      return { ok: true, board: normalizeBoard(next) };
     }
     if (actionType === "heartbeat") {
       if (!sid) return { ok: false, error: "missing-session-id", board: next };
@@ -5880,6 +6016,9 @@
           var rowId = boardSessionId(row.session_id || row.branch);
           if (row.polling && next.allowed_sessions.indexOf(rowId) !== -1) {
             next.wakes[rowId] = nowIso;
+            row.polling = false;
+            row.status = "active";
+            row.updated_at = nowIso;
           }
         });
       } else {
@@ -5888,6 +6027,13 @@
           return { ok: false, error: "target-not-allowed", board: next };
         }
         next.wakes[targetId] = nowIso;
+        next.sessions.forEach(function (row) {
+          if (boardSessionId(row.session_id || row.branch) === targetId) {
+            row.polling = false;
+            row.status = "active";
+            row.updated_at = nowIso;
+          }
+        });
       }
       return { ok: true, board: next };
     }
@@ -5904,6 +6050,7 @@
     MAX_BOARD_BYTES: MAX_BOARD_BYTES,
     boardSessionId: boardSessionId,
     normalizeBoard: normalizeBoard,
+    mergePreviewBoard: mergePreviewBoard,
     readGlobalBoard: readGlobalBoard,
     writeGlobalBoard: writeGlobalBoard,
     boardRoleFor: boardRoleFor,

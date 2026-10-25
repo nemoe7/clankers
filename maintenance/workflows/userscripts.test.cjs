@@ -2283,11 +2283,12 @@ for raw in sys.stdin:
   const { test } = require("node:test");
   test("configurable timers, dropped stale inner VERSION, and draggable Lucide settings modal", () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+    const checkSaved = new Map();
     const checkContext = {
       console,
       URL,
-      GM_getValue: (_k, fallback) => fallback,
-      GM_setValue() {},
+      GM_getValue: (k, fallback) => (checkSaved.has(k) ? checkSaved.get(k) : fallback),
+      GM_setValue(k, v) { checkSaved.set(k, v); },
       setTimeout: () => 0,
       clearTimeout() {},
       setInterval: () => 0,
@@ -2807,6 +2808,103 @@ for raw in sys.stdin:
     assert.equal(drawerWidth, "1398px");
     assert.equal(drawerPriority, "important");
     assert.equal(checks.openSteering.enforcePreviewDrawerWidth(drawerDoc), false);
+
+    const allowedBoard = checks.board.applyBoardAction(null, {
+      action: "allow",
+      session_id: "arena/bdf20cf5-clankers",
+    }).board;
+    assert.equal(allowedBoard.sessions.length, 1);
+    assert.equal(allowedBoard.sessions[0].session_id, "bdf20cf5-clankers");
+    const syncedWorker = checks.board.mergePreviewBoard(allowedBoard, {
+      session_id: "bdf20cf5-clankers",
+      repo: "clankers",
+      branch: "arena/bdf20cf5-clankers",
+      allowed_sessions: ["bdf20cf5-clankers", "293da56c-clankers"],
+      main_session_id: "293da56c-clankers",
+      sessions: [
+        {
+          session_id: "bdf20cf5-clankers",
+          repo: "clankers",
+          branch: "arena/bdf20cf5-clankers",
+          status: "polling",
+          polling: true,
+          updated_at: "2026-10-25T15:00:00Z",
+        },
+      ],
+      entries: [],
+      wakes: {},
+    });
+    const workerRow = syncedWorker.sessions.find((r) => r.session_id === "bdf20cf5-clankers");
+    assert.equal(workerRow.polling, true);
+    const wokenAll = checks.board.applyBoardAction(syncedWorker, {
+      action: "wake",
+      target: "all-polling",
+      at: "2026-10-25T15:00:05Z",
+    }).board;
+    assert.equal(wokenAll.wakes["bdf20cf5-clankers"], "2026-10-25T15:00:05Z");
+    assert.equal(
+      wokenAll.sessions.find((r) => r.session_id === "bdf20cf5-clankers").polling,
+      false,
+    );
+    const afterWakeConsumed = checks.board.mergePreviewBoard(wokenAll, {
+      session_id: "bdf20cf5-clankers",
+      repo: "clankers",
+      branch: "arena/bdf20cf5-clankers",
+      allowed_sessions: ["bdf20cf5-clankers", "293da56c-clankers"],
+      main_session_id: "293da56c-clankers",
+      sessions: [
+        {
+          session_id: "bdf20cf5-clankers",
+          repo: "clankers",
+          branch: "arena/bdf20cf5-clankers",
+          status: "active",
+          polling: false,
+          updated_at: "2026-10-25T15:00:06Z",
+        },
+      ],
+      entries: [],
+      wakes: {},
+    });
+    assert.equal(afterWakeConsumed.wakes["bdf20cf5-clankers"], undefined);
+    checks.board.writeGlobalBoard(afterWakeConsumed);
+    assert.deepEqual(
+      JSON.parse(
+        JSON.stringify(
+          checks.promptFill.discoverPreviews(
+            steeringAndDemoDoc,
+            "clankers",
+            "bdf20cf5-clankers",
+          ),
+        ),
+      ),
+      [
+        {
+          url: "https://sbx-steering8000.arena.site/",
+          name: "clankers - Steering (bdf20c)",
+        },
+        { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
+      ],
+      "worker session steering preview carries short session suffix to prevent proxy URL collisions",
+    );
+    assert.deepEqual(
+      JSON.parse(
+        JSON.stringify(
+          checks.promptFill.discoverPreviews(
+            steeringAndDemoDoc,
+            "clankers",
+            "293da56c-clankers",
+          ),
+        ),
+      ),
+      [
+        {
+          url: "https://sbx-steering8000.arena.site/",
+          name: "clankers - Steering",
+        },
+        { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
+      ],
+      "main session steering preview keeps the canonical repo - Steering label",
+    );
   });
 }
 
