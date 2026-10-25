@@ -14,6 +14,22 @@ let pending = null;
 let stateBusy = null;
 let stateAgain = false;
 let reportRequest = 0;
+let draftPreviewCache = { text: null, html: '' };
+const reportHtmlCache = new Map();
+const reportSourceCache = new Map();
+function setReportCache(cache, id, key, value) {
+  for (const existing of cache.keys()) {
+    if (existing.startsWith(`${id}:`) && existing !== key) cache.delete(existing);
+  }
+  cache.set(key, value);
+}
+function evictReportCache(id) {
+  for (const cache of [reportHtmlCache, reportSourceCache]) {
+    for (const existing of cache.keys()) {
+      if (existing.startsWith(`${id}:`)) cache.delete(existing);
+    }
+  }
+}
 let listSignature = '';
 let lastState = null;
 // Pending writes project over the latest poll, without changing its trusted server records.
@@ -945,6 +961,7 @@ function clockTime(value) {
   return `${parts.month} ${parts.day}${year}, ${parts.hour}:${parts.minute}`;
 }
 let unreadEdits = [];
+const pendingReplySeen = new Map();
 // SQLite stores the number of reply blocks the page marked as viewed. Counts distinguish two
 // replies with the same second-level timestamp, and survive a page reload.
 function updateEdits(notes) {
@@ -955,6 +972,58 @@ function updateEdits(notes) {
   if (!unreadEdits.length) delete button.dataset.error;
   button.textContent = button.dataset.error ? 'Not saved' : unreadEdits.length > 1 ? `New replies (${unreadEdits.length})` : 'New reply';
   label(button, button.dataset.error || button.textContent);
+}
+async function markReplySeen(item, replyCount = (item.replies || []).length, onOptimistic = null) {
+  if (!item || (pendingReplySeen.get(item.id) || 0) >= replyCount) return;
+  pendingReplySeen.set(item.id, replyCount);
+  const apply = (state, receipt) => {
+    const message = state.notes.find(note => note.id === item.id);
+    if (message) message.ack_edited_seen_count = Math.max(
+      Number(message.ack_edited_seen_count || 0), receipt?.ack_edited_seen_count ?? replyCount);
+  };
+  try {
+    const write = optimisticWrite(apply, async () => {
+      const response = await request(`/api/messages/${encodeURIComponent(item.id)}/replies/seen`, {
+        method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({count: replyCount})
+      });
+      const receipt = await response.json();
+      if (receipt.id !== item.id || !Number.isInteger(receipt.ack_edited_seen_count)) {
+        throw new Error('The viewed-reply receipt was invalid');
+      }
+      return receipt;
+    }, apply, (state, receipt) => {
+      const message = state.notes.find(note => note.id === item.id);
+      return !message || Number(message.ack_edited_seen_count || 0) >= receipt.ack_edited_seen_count;
+    });
+    if (onOptimistic) onOptimistic();
+    await write;
+  } catch (error) {
+    const button = $('#log-edited');
+    button.dataset.error = `Could not save reply status: ${error.message}`;
+    updateEdits(getState().notes);
+  } finally {
+    if (pendingReplySeen.get(item.id) === replyCount) pendingReplySeen.delete(item.id);
+  }
+}
+function checkVisibleRepliesSeen() {
+  const history = $('#history');
+  if (!unreadEdits.length || $('#notes-panel').hidden || document.hidden) return;
+  if (typeof history.getBoundingClientRect !== 'function' || !(history.clientHeight > 0)) return;
+  const historyRect = history.getBoundingClientRect();
+  if (!(historyRect.height > 0)) return;
+  for (const item of [...unreadEdits]) {
+    const replyCount = (item.replies || []).length;
+    if ((pendingReplySeen.get(item.id) || 0) >= replyCount) continue;
+    const row = messageNodes.get(item.id);
+    if (!row || row.hidden || !history.contains(row)) continue;
+    const answer = row.children[1];
+    const target = answer?.lastElementChild || answer;
+    if (!target || typeof target.getBoundingClientRect !== 'function') continue;
+    const rect = target.getBoundingClientRect();
+    if (rect.height > 0 && rect.bottom > historyRect.top && rect.top < historyRect.bottom) {
+      void markReplySeen(item, replyCount);
+    }
+  }
 }
 const ACK_REFERENCE_PANELS = {note: 'notes-panel', report: 'reports-panel', task: 'tasks-panel'};
 function referenceTypes(state) {
@@ -1004,32 +1073,10 @@ $('#log-edited').addEventListener('click', async () => {
   answer.focus({preventScroll: true});
   markJumpHighlight(answer);
   const replyCount = (item.replies || []).length;
-  const apply = (state, receipt) => {
-    const message = state.notes.find(note => note.id === item.id);
-    if (message) message.ack_edited_seen_count = Math.max(
-      Number(message.ack_edited_seen_count || 0), receipt?.ack_edited_seen_count ?? replyCount);
-  };
-  try {
-    const write = optimisticWrite(apply, async () => {
-      const response = await request(`/api/messages/${encodeURIComponent(item.id)}/replies/seen`, {
-        method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({count: replyCount})
-      });
-      const receipt = await response.json();
-      if (receipt.id !== item.id || !Number.isInteger(receipt.ack_edited_seen_count)) {
-        throw new Error('The viewed-reply receipt was invalid');
-      }
-      return receipt;
-    }, apply, (state, receipt) => {
-      const message = state.notes.find(note => note.id === item.id);
-      return !message || Number(message.ack_edited_seen_count || 0) >= receipt.ack_edited_seen_count;
-    });
+  await markReplySeen(item, replyCount, () => {
     // Render the optimistic receipt first so its history refresh cannot cancel the animation.
     answer.scrollIntoView({block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
-    await write;
-  } catch (error) {
-    button.dataset.error = `Could not save reply status: ${error.message}`;
-    updateEdits(getState().notes);
-  }
+  });
 });
 function showHistory(notes) {
   const signature = JSON.stringify(notes);
@@ -1157,6 +1204,7 @@ function showHistory(notes) {
     history.scrollTop = logPinned ? history.scrollHeight : place;
   }
   updateLogJump();
+  checkVisibleRepliesSeen();
 }
 
 // The window shows the newest `historyShown` messages. Scrolling up adds older rows above the viewport.
@@ -1192,6 +1240,7 @@ $('#history').addEventListener('scroll', () => {
   logPinned = historyAtEnd(history);
   if (history.scrollTop < 80) loadOlderMessages();
   updateLogJump();
+  checkVisibleRepliesSeen();
 });
 // Show the jump bar only when a nonempty log extends beyond its panel and the owner scrolls away from the end.
 // The jump returns to that end. An empty log has no destination.
@@ -1674,7 +1723,8 @@ function writeMode() {
 }
 $('#preview-note').addEventListener('click', async () => {
   if (note.hidden) { writeMode(); note.focus(); return; }
-  if (!note.value.trim()) {
+  const draftText = note.value;
+  if (!draftText.trim()) {
     const button = $('#preview-note');
     clearTimeout(previewTooltipTimer);
     label(button, 'Write something first');
@@ -1688,15 +1738,20 @@ $('#preview-note').addEventListener('click', async () => {
   const panel = $('#draft-preview');
   panel.hidden = false;
   grow();
-  panel.textContent = 'Rendering draft…';
   setPreviewIcon($('#preview-note'));
   $('#preview-note').setAttribute('aria-pressed', 'true');
+  if (draftPreviewCache.text === draftText) {
+    panel.innerHTML = draftPreviewCache.html;
+    return;
+  }
+  panel.textContent = 'Rendering draft…';
   try {
     const rendered = await (await request('/api/markdown', {
       method: 'POST',
       headers: writeHeaders('application/json'),
-      body: JSON.stringify({ text: note.value })
+      body: JSON.stringify({ text: draftText })
     })).text();
+    draftPreviewCache = { text: draftText, html: rendered };
     if (sequence === draftPreviewSequence) panel.innerHTML = rendered;
   } catch (error) {
     if (sequence === draftPreviewSequence) panel.textContent = `Preview unavailable: ${error.message}. Use Write to continue; sending still works.`;
@@ -2066,8 +2121,14 @@ setInterval(showClock, 1000);
 $('#copy-report').addEventListener('click', async () => {
   const id = $('#report-select').value;
   if (!id) return copyFrom($('#copy-report'), null, 'report');
+  const revision = getState()?.reports.find(report => report.id === id)?.updated_at || '';
+  const cacheKey = revision ? `${id}:${revision}` : '';
   try {
-    const source = await (await request(`/api/reports/${encodeURIComponent(id)}/source`)).text();
+    let source = cacheKey ? reportSourceCache.get(cacheKey) : undefined;
+    if (source === undefined) {
+      source = await (await request(`/api/reports/${encodeURIComponent(id)}/source`)).text();
+      if (cacheKey) setReportCache(reportSourceCache, id, cacheKey, source);
+    }
     copyFrom($('#copy-report'), source, 'report');
   } catch {
     copyFrom($('#copy-report'), null, 'report');
@@ -2599,15 +2660,30 @@ async function loadReport(force = false) {
     return;
   }
   save('report', id);
-  panel.dataset.loading = 'true';
-  panel.setAttribute('aria-busy', 'true');
-  $('#report-status').textContent = 'Loading report…';
+  const cacheKey = revision ? `${id}:${revision}` : '';
+  const cached = !force && cacheKey ? reportHtmlCache.get(cacheKey) : null;
+  if (!cached) {
+    panel.dataset.loading = 'true';
+    panel.setAttribute('aria-busy', 'true');
+    $('#report-status').textContent = 'Loading report…';
+  }
   try {
-    const result = await (await request(`/api/reports/${encodeURIComponent(id)}/html`)).json();
-    if (sequence !== reportRequest || keepEntries()) return;
-    const rawReportHtml = typeof ensureCodeBlockHeaders === 'function' ? ensureCodeBlockHeaders(result.html) : result.html;
-    const html = await renderMermaidBlocks(rawReportHtml, sequence);
-    if (sequence !== reportRequest || keepEntries()) return;
+    let result;
+    let html;
+    if (cached) {
+      if (stateBusy) {
+        try { await stateBusy; } catch {}
+      }
+      ({ result, html } = await Promise.resolve(cached));
+      if (sequence !== reportRequest || keepEntries()) return;
+    } else {
+      result = await (await request(`/api/reports/${encodeURIComponent(id)}/html`)).json();
+      if (sequence !== reportRequest || keepEntries()) return;
+      const rawReportHtml = typeof ensureCodeBlockHeaders === 'function' ? ensureCodeBlockHeaders(result.html) : result.html;
+      html = await renderMermaidBlocks(rawReportHtml, sequence);
+      if (sequence !== reportRequest || keepEntries()) return;
+      if (cacheKey) setReportCache(reportHtmlCache, id, cacheKey, { result, html });
+    }
     reportDirty = false;
     if ($('#report-status') && $('#report-form')) $('#report-form').insertBefore?.($('#report-status'), $('#report'));
     $('#report').innerHTML = html;
@@ -3384,6 +3460,7 @@ document.addEventListener('visibilitychange', () => {
     if (shown) void markReportViewed(shown, false);
   } else {
     checkReportRead();
+    checkVisibleRepliesSeen();
   }
 });
 const TAB_TITLES = {
@@ -3411,7 +3488,10 @@ function showTab(tab) {
     if (selected && !alreadySelected) gsap.fromTo(panel, { opacity: 0 }, { opacity: 1, duration: 0.16, ease: 'power1.out' });
   }
   syncDocumentTitle();
-  if (tab === tabs[0]) grow();
+  if (tab === tabs[0]) {
+    grow();
+    checkVisibleRepliesSeen();
+  }
   updateReportTop();
   if (tab === tabs[1]) {
     // Record the tab visit before the poll recomputes its pip so the marker clears during this visit.
@@ -3982,6 +4062,7 @@ function releaseHeldReport(nextId) {
   if (!heldReport || heldReport.id === nextId) return;
   const id = heldReport.id;
   heldReport = null;
+  evictReportCache(id);
   const select = $('#report-select');
   const keep = [...select.children].filter(item => item.value !== id);
   const wasSelected = select.value === id;
@@ -3998,6 +4079,7 @@ function releaseHeldReport(nextId) {
 function clearReportPanel(id) {
   if ($('#report').dataset.reportId !== id && $('#report-select').value !== id) return;
   if (heldReport?.id === id) heldReport = null;
+  evictReportCache(id);
   clearReportBody();
   delete $('#report').dataset.reportId;
   delete $('#report').dataset.updatedAt;

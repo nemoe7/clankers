@@ -4277,6 +4277,80 @@ test('preview client', async (t) => {
     }
   });
 
+  await t.test('Visible appended replies auto-mark seen and report HTML and source cache by revision', async () => {
+    const keptNotesForAutoSeen = state.notes;
+    const keptReportsForCache = state.reports;
+    const historyNode = get('#history');
+    try {
+      state.notes = [{
+        id: 'visible-reply-note',
+        text: 'Visible question',
+        at: '2026-10-13T04:00:00',
+        acknowledged_at: '2026-10-13T04:01:00',
+        ack_type: 'reply',
+        ack_text: 'Initial reply',
+        ack_edited_at: '2026-10-13T04:02:00',
+        ack_edited_seen_count: 0,
+        replies: [{ type: 'reply', text: 'Appended visible reply', at: '2026-10-13T04:02:00' }],
+      }];
+      get('#log-search').value = '';
+      get('#log-search').events.input();
+      await refresh();
+      assert.equal(get('#log-edited').hidden, false, 'reply remains unread before viewport rect measurement is available');
+      const mountedRow = historyNode.children.find(item => item.children[2].children[0].dataset.full === 'visible-reply-note');
+      const latestBlock = mountedRow.children[1].lastElementChild;
+      historyNode.clientHeight = 320;
+      historyNode.getBoundingClientRect = () => ({ top: 100, bottom: 420, height: 320 });
+      latestBlock.getBoundingClientRect = () => ({ top: 180, bottom: 240, height: 60 });
+      const seenCallsBefore = replySeenCalls.length;
+      historyNode.events.scroll();
+      await tick(); await tick();
+      assert.equal(replySeenCalls.length, seenCallsBefore + 1, 'visible appended reply automatically posts /replies/seen');
+      assert.equal(get('#log-edited').hidden, true, 'auto-marked visible reply clears #log-edited');
+      assert.equal(get('#notes-pip').hidden, true, 'auto-marked visible reply clears #notes-pip');
+
+      state.reports = [
+        { id: 'cache-a', title: 'Cache A', updated_at: '2026-10-13T05:00:00', seen_at: '2026-10-13T05:00:01' },
+        { id: 'cache-b', title: 'Cache B', updated_at: '2026-10-13T05:00:00', seen_at: '2026-10-13T05:00:01' },
+      ];
+      await refresh();
+      get('#report-select').value = 'cache-a';
+      get('#reports-tab').events.click();
+      await tick(); await tick();
+      const countCalls = suffix => context.fetch.mock.calls.filter(call => String(call.arguments[0]).endsWith(suffix)).length;
+      const htmlBefore = countCalls('/api/reports/cache-a/html');
+      get('#report-select').value = 'cache-b';
+      get('#report-select').events.change();
+      await tick(); await tick();
+      get('#report-select').value = 'cache-a';
+      get('#report-select').events.change();
+      await tick(); await tick();
+      assert.equal(countCalls('/api/reports/cache-a/html'), htmlBefore, 'switching back to an unchanged report reuses cached HTML');
+      await get('#refresh-report').events.click();
+      await tick(); await tick();
+      assert.equal(countCalls('/api/reports/cache-a/html'), htmlBefore + 1, 'explicit refresh bypasses the report HTML cache');
+
+      const sourceBefore = countCalls('/api/reports/cache-a/source');
+      await get('#copy-report').events.click();
+      await tick();
+      assert.equal(countCalls('/api/reports/cache-a/source'), sourceBefore + 1, 'first report source copy fetches /source');
+      await get('#copy-report').events.click();
+      await tick();
+      assert.equal(countCalls('/api/reports/cache-a/source'), sourceBefore + 1, 'second report source copy on same revision reuses cached source');
+      state.reports[0].updated_at = '2026-10-13T05:05:00';
+      await refresh(); await tick();
+      await get('#copy-report').events.click();
+      await tick();
+      assert.equal(countCalls('/api/reports/cache-a/source'), sourceBefore + 2, 'updated report revision invalidates cached source');
+    } finally {
+      delete historyNode.getBoundingClientRect;
+      state.notes = keptNotesForAutoSeen;
+      state.reports = keptReportsForCache;
+      get('#notes-tab').events.click();
+      await refresh();
+    }
+  });
+
   await t.test('Acknowledgement IDs link to matching messages, reports, and tasks', async () => {
     state = {
       notes: [

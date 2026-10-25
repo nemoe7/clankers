@@ -20,6 +20,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Standardize inline SVG icon dimensions to `16x16` in `assets/index.html`, suppress pointer-focus outlines before keyboard navigation on ID-targeted controls in `assets/style.css`, and record three `nuu-deviation:` design markers.
 - State that pull-request checks are priority 1 ahead of queued tasks in `rules/refs/ARENA.md`, `skills/refs/arena-skill/SKILL.md`, and live mirrors, and sort `pr-checks` first in `scripts/preview.py`.
 - Refuse `arena-preview poll` in `scripts/preview.py` while a survey request is unacknowledged or the preview server has no survey submission.
+- Auto-mark appended replies seen when their `.reply-block` is visible inside `#history` in `assets/app.js`. Cache rendered report HTML, report Markdown source, and draft previews by revision in memory.
 
 #### userscripts
 
