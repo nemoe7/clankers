@@ -2206,6 +2206,7 @@ WEB_CHANNELS = {
   "textContent",
 }
 CLIENT_CALLS = {"get", "post", "put", "patch", "delete", "open", "walk", "guest"}
+BARE_CLIENT_CALLS = {"open", "walk", "guest"}
 TAINT_SOURCES = (WEB_CHANNELS - CHANNELS - {"readouterr"}) | CLIENT_CALLS
 ASSERT_METHODS = {"assertEqual", "assertNotEqual", "assertIn", "assertNotIn"}
 NODE_TIMEOUT = 10
@@ -2236,17 +2237,21 @@ const WEB_CHANNELS = new Set([
   'inner_text', 'text_content', 'innerHTML', 'textContent',
 ]);
 const CLIENT_CALLS = new Set(['get', 'post', 'put', 'patch', 'delete', 'open', 'walk', 'guest']);
+const BARE_CLIENT_CALLS = new Set(['open', 'walk', 'guest']);
 const TAINT_SOURCES = new Set([
   'body', 'html', 'text', 'data', 'content',
   'get_data', 'decode', 'inner_text', 'text_content', 'innerHTML', 'textContent',
   ...CLIENT_CALLS,
 ]);
+const TAINT_RECEIVERS = new Set(['response', 'res', 'resp', 'page', 'result', 'proc', 'client', 'app']);
 const tainted = new Set();
 function isTaintRhs(name) {
   if (!name || name === '<expression>' || name.startsWith('len(')) return false;
   const parts = name.split('.').map(p => p.split('(')[0]);
-  if (tainted.has(parts[0]) || CLIENT_CALLS.has(parts[0])) return true;
-  return parts.slice(1).some(p => TAINT_SOURCES.has(p));
+  if (parts[0] === '<expression>') return false;
+  if (tainted.has(parts[0]) || BARE_CLIENT_CALLS.has(parts[0])) return true;
+  if (parts.length > 1 && CLIENT_CALLS.has(parts[1])) return true;
+  return TAINT_RECEIVERS.has(parts[0]) && parts.slice(1).some(p => TAINT_SOURCES.has(p));
 }
 function collectTargets(pattern, out) {
   if (!pattern || typeof pattern !== 'object') return;
@@ -2283,7 +2288,7 @@ function pair(left, right, node, operator) {
     if (expected?.type === 'Literal' && ['string','number'].includes(typeof expected.value)) {
       const column = Array.from(lines[node.loc.start.line - 1].slice(0, node.loc.start.column)).length + 1;
       const actShape = shape(actual);
-      pairs.push({actual:actShape, value:expected.value, operator,
+      pairs.push({actual:actShape, value:expected.value, operator, lang:'js',
         web_taint:isTaintRhs(actShape), tainted:[...tainted],
         line:node.loc.start.line, column});
     }
@@ -2341,16 +2346,27 @@ def _is_taint_rhs(name, tainted=frozenset()):
   if not name or name == "<expression>" or name.startswith("len("):
     return False
   parts = [part.split("(")[0] for part in name.split(".")]
-  if parts[0] in tainted or parts[0] in CLIENT_CALLS:
+  if parts[0] == "<expression>":
+    return False
+  if parts[0] in tainted or parts[0] in BARE_CLIENT_CALLS:
     return True
   return len(parts) > 1 and any(part in TAINT_SOURCES for part in parts[1:])
 
 
+def _iter_scope_nodes(scope_node):
+  for child in ast.iter_child_nodes(scope_node):
+    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+      continue
+    yield child
+    yield from _iter_scope_nodes(child)
+
+
 def _collect_scope_taint(scope_node):
   tainted = set()
+  nodes = list(_iter_scope_nodes(scope_node))
   for _ in range(3):
     changed = False
-    for node in ast.walk(scope_node):
+    for node in nodes:
       if isinstance(node, ast.Assign) and _is_taint_rhs(shape(node.value), tainted):
         for target in node.targets:
           for sub in ast.walk(target):
@@ -2483,13 +2499,17 @@ def python_pairs(text):
   return {"pairs": pairs}
 
 
-def output_channel(name, tainted=()):
+def output_channel(name, tainted=(), lang="py", web_taint=False):
   if not name or name == "<expression>" or name.startswith("len("):
     return False
   taint_set = set(tainted)
   parts = [part.split("(")[0] for part in name.split(".")]
-  if parts[0] in taint_set or parts[0] in CHANNELS or parts[0] in CLIENT_CALLS:
+  if parts[0] == "<expression>":
+    return False
+  if parts[0] in taint_set or parts[0] in CHANNELS or parts[0] in BARE_CLIENT_CALLS:
     return True
+  if lang == "js" and not web_taint:
+    return any(part in CHANNELS for part in parts)
   return len(parts) > 1 and any(
     part in (WEB_CHANNELS | CLIENT_CALLS) for part in parts[1:]
   )
@@ -2499,11 +2519,15 @@ def category(pair):
   value, actual = pair["value"], pair["actual"]
   raw_val = pair.get("raw_value", value)
   tainted = pair.get("tainted", ())
-  if isinstance(raw_val, (str, bytes)) and output_channel(actual, tainted):
+  lang = pair.get("lang", "py")
+  web_taint = bool(pair.get("web_taint"))
+  if isinstance(raw_val, (str, bytes)) and output_channel(
+    actual, tainted, lang=lang, web_taint=web_taint
+  ):
     candidate = extract_prose_candidate(raw_val)
     if candidate is not None:
       words = re.findall(r"(?<![A-Za-z0-9_-])[A-Za-z']+(?![A-Za-z0-9_-])", candidate)
-      if pair.get("web_taint") or len(words) >= 3:
+      if web_taint or len(words) >= 3:
         return "output_text"
   if (
     type(value) in (int, float)
