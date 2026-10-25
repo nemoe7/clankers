@@ -5131,6 +5131,11 @@ test('preview client', async (t) => {
     assert.equal(socket.sent.length, before, 'binary bodies keep HTTP');
     socket.emit({type: 'heartbeat'});
     assert.equal(socket.sent.at(-1).type, 'pong');
+    let reloaded = 0;
+    context.window.location.reload = () => { reloaded += 1; };
+    socket.emit({type: 'reload'});
+    await tick(); await tick();
+    assert.equal(reloaded, 1);
     const lost = context.request('/api/markdown', {retryOnFailure: false});
     context.WebSocket = undefined;
     socket.close();

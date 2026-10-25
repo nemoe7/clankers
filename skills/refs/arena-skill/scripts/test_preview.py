@@ -15053,3 +15053,42 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert f'src="data:image/gif;base64,{gif_b64}"' in preview.render(
     f"![anim](data:image/gif;base64,{gif_b64})"
   )
+
+  fake_assets = tmp_path / "hot-assets"
+  fake_assets.mkdir()
+  for name in (
+    "index.html",
+    "style.css",
+    "app.js",
+    "message-markdown.js",
+    "markdown-it.min.js",
+  ):
+    (fake_assets / name).write_text("v1", encoding="utf-8")
+  sig1 = preview.assets_signature(fake_assets)
+  (fake_assets / "app.js").write_text("v2-longer", encoding="utf-8")
+  assert preview.assets_signature(fake_assets) != sig1
+
+  fake_scripts = tmp_path / "hot-scripts"
+  fake_scripts.mkdir()
+  for name in ("preview.py", "survey.py"):
+    (fake_scripts / name).write_text("s1", encoding="utf-8")
+  reload_evt = threading.Event()
+  stop_evt = threading.Event()
+  shut_down = []
+
+  class DummyServer:
+    def shutdown(self):
+      shut_down.append(True)
+
+  watcher = threading.Thread(
+    target=preview.watch_hot_reload,
+    args=(DummyServer(), reload_evt, stop_evt, 0.02, fake_scripts),
+    daemon=True,
+  )
+  watcher.start()
+  time.sleep(0.03)
+  (fake_scripts / "preview.py").write_text("s2-updated", encoding="utf-8")
+  watcher.join(timeout=1.0)
+  stop_evt.set()
+  assert reload_evt.is_set()
+  assert shut_down == [True]

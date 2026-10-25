@@ -771,7 +771,20 @@ let socketRetry = null;
 let pollTimer = null;
 let lastSocketMessage = 0;
 let socketSequence = 0;
+let reloadPending = false;
 const socketCalls = new Map();
+async function reloadPreviewPage() {
+  if (reloadPending) return;
+  reloadPending = true;
+  for (let attemptIndex = 0; attemptIndex < 20; attemptIndex++) {
+    try {
+      const res = await fetch('/', { cache: 'no-store' });
+      if (res && res.ok) break;
+    } catch {}
+    await new Promise(done => setTimeout(done, 150));
+  }
+  window.location.reload?.();
+}
 function startPolling() {
   if (pollTimer === null) pollTimer = setInterval(refreshState, 3000);
 }
@@ -805,6 +818,7 @@ function connectSocket() {
       lastSocketMessage = Date.now();
       if (value.type === 'heartbeat') { socket.send(JSON.stringify({type: 'pong'})); return; }
       if (value.type === 'change') { socketRefresh(); return; }
+      if (value.type === 'reload') { void reloadPreviewPage(); return; }
       if (value.type !== 'response') throw new Error('Unknown WebSocket message');
       const pending = socketCalls.get(value.id);
       if (!pending) return;

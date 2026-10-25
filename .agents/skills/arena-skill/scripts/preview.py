@@ -3455,7 +3455,16 @@ def render(markdown,breaks=False):
 	try:from markdown_it import MarkdownIt;from markdown_it.common.normalize_url import validateLink
 	except ImportError as error:raise RuntimeError("Markdown rendering needs markdown-it-py. Install it in the preview's venv and restart the server with that venv's Python; steering still works.")from error
 	parser=MarkdownIt('commonmark',{'html':False,'breaks':breaks}).enable(['table','strikethrough']);highlight_markdown(parser);parser.add_render_rule('link_open',open_link);parser.add_render_rule('image',render_image);tagged,images=hold_out(strip_fenced_md_comments(markdown),SIZED_IMAGE,lambda match:sized_image(match,validateLink),'image');rendered=drop_paragraph_breaks(parser.render(unescape_fences(tagged)));return add_copy_buttons(put_back(rendered,images,'image'))
-def handler(store):
+def file_signature(paths):
+	entries=[]
+	for path in paths:
+		target=Path(path)
+		try:stat=target.stat();entries.append((str(target),stat.st_mtime_ns,stat.st_size))
+		except OSError:entries.append((str(target),None,None))
+	return tuple(entries)
+def assets_signature(assets_dir=None):base=Path(assets_dir)if assets_dir is not None else ASSETS;return file_signature(base/name for name in('index.html','style.css','app.js','message-markdown.js','markdown-it.min.js'))
+def scripts_signature(scripts_dir=None):base=Path(scripts_dir)if scripts_dir is not None else Path(__file__).resolve().parent;return file_signature(base/name for name in('preview.py','survey.py'))
+def handler(store,reload_event=None):
 	from http.server import BaseHTTPRequestHandler;survey_state={'results':None,'answered_at':None,'requested':False};survey_lock=threading.Lock()
 	class Handler(BaseHTTPRequestHandler):
 		def setup(self):super().setup();self.connection.settimeout(15)
@@ -3494,7 +3503,7 @@ def handler(store):
 			self.protocol_version='HTTP/1.1';self.send_response(101);self.send_header('Upgrade','websocket');self.send_header('Connection','Upgrade');self.send_header('Sec-WebSocket-Accept',base64.b64encode(hashlib.sha1((key+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').encode(),usedforsecurity=False).digest()).decode());self.end_headers();self.close_connection=True;self.connection.settimeout(WS_TICK_SECONDS);buffer,message=bytearray(),bytearray();fragmented=False;last_seen=last_heartbeat=time.monotonic()
 			try:
 				with closing(store.connect())as db:
-					version=db.execute('PRAGMA data_version').fetchone()[0];self.ws_send(1,b'{"type":"change"}')
+					version=db.execute('PRAGMA data_version').fetchone()[0];asset_ver=assets_signature();script_ver=scripts_signature();self.ws_send(1,b'{"type":"change"}')
 					while True:
 						try:
 							chunk=self.connection.recv(65536)
@@ -3529,6 +3538,10 @@ def handler(store):
 							if final:self.ws_dispatch(json.loads(message.decode('utf-8')));message.clear()
 						current=db.execute('PRAGMA data_version').fetchone()[0]
 						if current!=version:version=current;self.ws_send(1,b'{"type":"change"}')
+						current_assets=assets_signature();current_scripts=scripts_signature()
+						if current_assets!=asset_ver or current_scripts!=script_ver or reload_event is not None and reload_event.is_set():
+							asset_ver=current_assets;script_ver=current_scripts;self.ws_send(1,b'{"type":"reload"}')
+							if reload_event is not None and reload_event.is_set():return
 						now=time.monotonic()
 						if now-last_seen>WS_IDLE_SECONDS:self.ws_send(8,(1001).to_bytes(2,'big'));return
 						if now-last_heartbeat>=WS_HEARTBEAT_SECONDS:self.ws_send(1,b'{"type":"heartbeat"}');last_heartbeat=now
@@ -4139,6 +4152,15 @@ def watch_call_group(store,stop=None,interval=1.,signal_group=os.killpg):
 					store.set_meta(CALL_GROUP_META,'')
 		if stop is None:time.sleep(interval)
 		elif stop.wait(interval):return
+def watch_hot_reload(server,reload_event,stop=None,interval=1.,scripts_dir=None):
+	baseline=scripts_signature(scripts_dir)
+	while(stop is None or not stop.is_set())and not reload_event.is_set():
+		if stop is None:time.sleep(interval)
+		elif stop.wait(interval):return
+		if scripts_signature(scripts_dir)!=baseline:
+			reload_event.set()
+			if stop is None:time.sleep(WS_TICK_SECONDS*1.5)
+			server.shutdown();return
 class PreviewArgumentParser(argparse.ArgumentParser):
 	def print_usage(self,file=None):pass
 	def exit(self,status=0,message=None):super().exit(status,message.removeprefix('arena-preview: ')if message else message)
@@ -4212,8 +4234,9 @@ def main():
 			if reminder:print(reminder,file=sys.stderr,flush=True)
 		if args.command!='serve'and not read_only:store.touch_agent()
 		if args.command=='serve':
-			from http.server import ThreadingHTTPServer;require_renderer()
-			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store))as server:store.set_meta('port',str(server.server_port));threading.Thread(target=watch_call_group,args=(store,),daemon=True).start();print(f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever()
+			from http.server import ThreadingHTTPServer;require_renderer();reload_event=threading.Event();stop_event=threading.Event();ThreadingHTTPServer.allow_reuse_address=True
+			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store,reload_event=reload_event))as server:server.daemon_threads=True;store.set_meta('port',str(server.server_port));threading.Thread(target=watch_call_group,args=(store,stop_event),daemon=True).start();threading.Thread(target=watch_hot_reload,args=(server,reload_event,stop_event),daemon=True).start();print(f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever();stop_event.set()
+			if reload_event.is_set():print('Hot-reloading preview server...',flush=True);os.execv(sys.executable,[sys.executable,*sys.argv])
 		elif args.command=='read':require_server(store);store.notice_expired_key();print_read(store)
 		elif args.command=='note-list':
 			ids,total=store.list_note_ids(args.page,args.page_size);pages=max(1,(total+args.page_size-1)//args.page_size)

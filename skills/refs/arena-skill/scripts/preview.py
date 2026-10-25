@@ -10330,7 +10330,43 @@ def render(markdown, breaks=False):
   return add_copy_buttons(put_back(rendered, images, "image"))
 
 
-def handler(store):
+def file_signature(paths):
+  """Return a tuple of path, mtime_ns and size for each target file."""
+  entries = []
+  for path in paths:
+    target = Path(path)
+    try:
+      stat = target.stat()
+      entries.append((str(target), stat.st_mtime_ns, stat.st_size))
+    except OSError:
+      entries.append((str(target), None, None))
+  return tuple(entries)
+
+
+def assets_signature(assets_dir=None):
+  """Return the hot-reload signature for bundled preview assets."""
+  base = Path(assets_dir) if assets_dir is not None else ASSETS
+  return file_signature(
+    base / name
+    for name in (
+      "index.html",
+      "style.css",
+      "app.js",
+      "message-markdown.js",
+      "markdown-it.min.js",
+    )
+  )
+
+
+def scripts_signature(scripts_dir=None):
+  """Return the hot-reload signature for preview Python scripts."""
+  base = (
+    Path(scripts_dir) if scripts_dir is not None else Path(__file__).resolve().parent
+  )
+  return file_signature(base / name for name in ("preview.py", "survey.py"))
+
+
+def handler(store, reload_event=None):
   from http.server import BaseHTTPRequestHandler
 
   survey_state = {"results": None, "answered_at": None, "requested": False}
@@ -10487,6 +10523,8 @@ def handler(store):
       try:
         with closing(store.connect()) as db:
           version = db.execute("PRAGMA data_version").fetchone()[0]
+          asset_ver = assets_signature()
+          script_ver = scripts_signature()
           self.ws_send(1, b'{"type":"change"}')
           while True:
             try:
@@ -10570,6 +10608,18 @@ def handler(store):
             if current != version:
               version = current
               self.ws_send(1, b'{"type":"change"}')
+            current_assets = assets_signature()
+            current_scripts = scripts_signature()
+            if (
+              current_assets != asset_ver
+              or current_scripts != script_ver
+              or (reload_event is not None and reload_event.is_set())
+            ):
+              asset_ver = current_assets
+              script_ver = current_scripts
+              self.ws_send(1, b'{"type":"reload"}')
+              if reload_event is not None and reload_event.is_set():
+                return
             now = time.monotonic()
             if now - last_seen > WS_IDLE_SECONDS:
               self.ws_send(8, (1001).to_bytes(2, "big"))
@@ -12704,6 +12754,28 @@ def watch_call_group(store, stop=None, interval=1.0, signal_group=os.killpg):
       return
 
 
+def watch_hot_reload(
+  server,
+  reload_event,
+  stop=None,
+  interval=1.0,
+  scripts_dir=None,
+):
+  """Watch preview Python scripts and shut down the server for in-place re-exec on change."""
+  baseline = scripts_signature(scripts_dir)
+  while (stop is None or not stop.is_set()) and not reload_event.is_set():
+    if stop is None:
+      time.sleep(interval)
+    elif stop.wait(interval):
+      return
+    if scripts_signature(scripts_dir) != baseline:
+      reload_event.set()
+      if stop is None:
+        time.sleep(WS_TICK_SECONDS * 1.5)
+      server.shutdown()
+      return
+
+
 class PreviewArgumentParser(argparse.ArgumentParser):
   def print_usage(self, file=None):
     pass
@@ -13338,14 +13410,31 @@ def main():
       from http.server import ThreadingHTTPServer
 
       require_renderer()
-      with ThreadingHTTPServer(("0.0.0.0", args.port), handler(store)) as server:
+      reload_event = threading.Event()
+      stop_event = threading.Event()
+      ThreadingHTTPServer.allow_reuse_address = True
+      with ThreadingHTTPServer(
+        ("0.0.0.0", args.port), handler(store, reload_event=reload_event)
+      ) as server:
+        server.daemon_threads = True
         store.set_meta("port", str(server.server_port))
-        threading.Thread(target=watch_call_group, args=(store,), daemon=True).start()
+        threading.Thread(
+          target=watch_call_group, args=(store, stop_event), daemon=True
+        ).start()
+        threading.Thread(
+          target=watch_hot_reload,
+          args=(server, reload_event, stop_event),
+          daemon=True,
+        ).start()
         print(
           f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",
           flush=True,
         )
         server.serve_forever()
+        stop_event.set()
+      if reload_event.is_set():
+        print("Hot-reloading preview server...", flush=True)
+        os.execv(sys.executable, [sys.executable, *sys.argv])
     elif args.command == "read":
       require_server(store)
       store.notice_expired_key()
