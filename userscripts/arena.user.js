@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.89
+// @name         Arena.ai | NemoUtils | v1.10.90
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.89
+// @version      1.10.90
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -922,8 +922,15 @@
       );
     }
 
+    function notedKeyFor(base) {
+      return base ? NOTED_KEY + "::" + base : NOTED_KEY;
+    }
+
     function noteKey(key, host, type) {
-      if (GM_getValue(NOTED_KEY, "") === key) return;
+      var base = previewBase(document);
+      var scopedKey = notedKeyFor(base);
+      if (GM_getValue(scopedKey, "") === key) return;
+      GM_setValue(scopedKey, key);
       GM_setValue(NOTED_KEY, key);
       postKeyNote(keyNote(type, key, new Date().toISOString(), host));
     }
@@ -1317,6 +1324,7 @@
             rotationDueAt(Date.now(), 0, ROTATE_MIN_SECONDS),
           );
           heldKey = body.key;
+          GM_setValue(notedKeyFor(previewBase(document)), body.key);
           GM_setValue(NOTED_KEY, body.key);
           postAgentKey(body.key, pair.host);
           postKeyNote(
@@ -4441,6 +4449,7 @@
       previewFrame: previewFrame,
       previewBase: previewBase,
       notifyPreviewReady: notifyPreviewReady,
+      isWorkerSession: isWorkerSession,
       STATE_WATCH_MS: STATE_WATCH_MS,
     })) {
       return function () {};
@@ -4466,8 +4475,28 @@
     function overwriteKey(scopeKey) {
       return "clankers-arena-state-ask-" + scopeKey;
     }
+    function isWorkerSession(board, sessionSid, body) {
+      if (body && body.board && body.board.role === "worker") return true;
+      var active = board || readGlobalBoard();
+      var sid = boardSessionId(
+        sessionSid ||
+          (body && body.scope && body.scope.branch) ||
+          previewUiSessionId ||
+          "",
+      );
+      if (!sid || !active || !active.main_session_id) return false;
+      return boardRoleFor(active, sid) === "worker";
+    }
     function rememberState(scope, storeKey, base, branch, stamp, stamps) {
-      GM_setValue(lastScopeKey(scope.repo), storeKey);
+      if (
+        !isWorkerSession(
+          readGlobalBoard(),
+          branch || (scope && scope.branch) || previewUiSessionId || "",
+          null,
+        )
+      ) {
+        GM_setValue(lastScopeKey(scope.repo), storeKey);
+      }
       GM_setValue(baseKey(storeKey), base);
       GM_setValue(branchKey(storeKey), branch);
       GM_setValue(overwriteKey(storeKey), false);
@@ -4916,12 +4945,22 @@
       var base = previewBase(document);
       if (!base || stateBusy) return;
       stateBusy = true;
-      if (force) statePanel("Forcing save...");
       try {
         var scope = stateScope(document);
-        var lastScope = GM_getValue(lastScopeKey(scope.repo), "");
+        var initialBoard = readGlobalBoard();
+        if (initialBoard.allowed_sessions.length > 0) {
+          syncPreviewBoard(base);
+        }
+        var initialSid = boardSessionId(scope.branch || previewUiSessionId || "");
+        if (!manual && isWorkerSession(initialBoard, initialSid, null)) {
+          return;
+        }
+        if (force) statePanel("Forcing save...");
+        var lastScope = isWorkerSession(initialBoard, initialSid, null)
+          ? ""
+          : GM_getValue(lastScopeKey(scope.repo), "");
         var storeKey = scope.branch ? stateScopeKey(scope.repo, scope.branch) : lastScope || stateScopeKey(scope.repo, "");
-        var pending = GM_getValue(pendingKey(storeKey), null);
+        var pending = scope.branch ? GM_getValue(pendingKey(storeKey), null) : null;
         if (pending) {
           await confirmPending(base, storeKey, pending);
           return;
@@ -4945,18 +4984,24 @@
             storeKey = stateScopeKey(scope.repo, scope.branch);
           }
         }
+        var activeBoard = readGlobalBoard();
+        var sessionSid = boardSessionId(scope.branch || previewUiSessionId || "");
+        if (!manual && isWorkerSession(activeBoard, sessionSid, body)) {
+          removeStatePanel(true);
+          return;
+        }
+        if (isWorkerSession(activeBoard, sessionSid, body)) {
+          lastScope = "";
+        }
+        if (!pending) {
+          pending = GM_getValue(pendingKey(storeKey), null);
+          if (pending) {
+            await confirmPending(base, storeKey, pending);
+            return;
+          }
+        }
         if (body.force === true) {
           force = true;
-        }
-        var activeBoard = readGlobalBoard();
-        if (activeBoard.allowed_sessions.length > 0) {
-          syncPreviewBoard(base);
-        }
-        var sessionSid = boardSessionId(scope.branch || previewUiSessionId || "");
-        if (!force && !manual && sessionSid && activeBoard.main_session_id &&
-            activeBoard.allowed_sessions.indexOf(sessionSid) !== -1 &&
-            boardRoleFor(activeBoard, sessionSid) === "worker") {
-          return;
         }
         if (force) statePanel("Forcing save...");
         var rememberedBase = GM_getValue(baseKey(lastScope || storeKey), "");
@@ -5150,7 +5195,7 @@
         notifyPreviewReady(document, !event.data.repo);
         syncPreviewBoard(base);
       } else if (event.data.type === "clankers:force-save") {
-        fetchStateFile(true, true);
+        fetchStateFile(!event.data.save_id, true);
       } else if (event.data.type === "clankers:board-request") {
         syncPreviewBoard(base);
       } else if (event.data.type === "clankers:board-action" && event.data.action) {

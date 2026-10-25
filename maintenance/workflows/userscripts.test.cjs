@@ -2967,27 +2967,63 @@ for raw in sys.stdin:
       ],
       "worker session steering preview carries short session suffix to prevent proxy URL collisions",
     );
-    assert.deepEqual(
-      JSON.parse(
-        JSON.stringify(
-          checks.promptFill.discoverPreviews(
-            steeringAndDemoDoc,
-            "clankers",
-            "293da56c-clankers",
+      assert.deepEqual(
+        JSON.parse(
+          JSON.stringify(
+            checks.promptFill.discoverPreviews(
+              steeringAndDemoDoc,
+              "clankers",
+              "293da56c-clankers",
+            ),
           ),
         ),
-      ),
-      [
-        {
-          url: "https://sbx-steering8000.arena.site/",
-          name: "clankers - Steering",
-        },
-        { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
-      ],
-      "main session steering preview keeps the canonical repo - Steering label",
-    );
-  });
-}
+        [
+          {
+            url: "https://sbx-steering8000.arena.site/",
+            name: "clankers - Steering",
+          },
+          { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
+        ],
+        "main session steering preview keeps the canonical repo - Steering label",
+      );
+      assert.equal(
+        checks.stateDownload.isWorkerSession(
+          afterWakeConsumed,
+          "bdf20cf5-clankers",
+          null,
+        ),
+        true,
+        "worker session on board is identified as worker even when not checking allowed_sessions or force",
+      );
+      assert.equal(
+        checks.stateDownload.isWorkerSession(
+          afterWakeConsumed,
+          "unlisted-worker-clankers",
+          null,
+        ),
+        true,
+        "non-main session when main_session_id is set is identified as worker",
+      );
+      assert.equal(
+        checks.stateDownload.isWorkerSession(
+          { main_session_id: "", allowed_sessions: [] },
+          "bdf20cf5-clankers",
+          { board: { role: "worker" } },
+        ),
+        true,
+        "autosave payload reporting board.role === worker is identified as worker",
+      );
+      assert.equal(
+        checks.stateDownload.isWorkerSession(
+          afterWakeConsumed,
+          "293da56c-clankers",
+          null,
+        ),
+        false,
+        "main session on board is not identified as worker",
+      );
+    });
+  }
 
 
 
