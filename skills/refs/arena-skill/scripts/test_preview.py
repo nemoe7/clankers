@@ -1146,9 +1146,11 @@ def test_http_boundaries():
       return sides
 
     assert re.search(r"(?:^|;)appearance:none(?:;|$)", select[1])
-    # Every select draws the same CSS chevron, so no markup needs a caret element.
-    assert select[1].count("linear-gradient(") == 2
-    assert "var(--muted)" in select[1]
+    assert "linear-gradient(" not in select[1]
+    assert (
+      ".select-chevron{position:absolute;right:8px;bottom:9px;pointer-events:none;color:var(--muted)"
+      in css
+    )
     assert css_padding(select[1])[1] >= 24
     # The page and client script have no report-receipt flash.
     # Keep the report acknowledgement element.
@@ -1806,8 +1808,8 @@ def test_http_boundaries():
         "the search box shares the form controls' border and radius"
       )
       assert "#log-filter" not in page and ".filter-wrap" not in page
-      assert re.search(r"select\{[^}]*linear-gradient\(", compact(page)), (
-        "the report select draws its caret in CSS, not a blocked data image"
+      assert "lucide-chevron-down select-chevron" in page, (
+        "every select uses an inline Lucide chevron-down SVG instead of a CSS gradient or data image"
       )
       assert "data:image/svg+xml" not in page, "the preview CSP blocks data images"
       # The collapse button is gone, its closed state with it, and the strip can no longer push

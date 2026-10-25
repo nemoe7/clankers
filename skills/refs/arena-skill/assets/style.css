@@ -195,16 +195,13 @@ button:disabled { opacity: .55; cursor: wait; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--focus); }
 textarea { width: 100%; padding: 10px 12px; line-height: 1.6; resize: none; min-height: 72px; overflow: hidden; }
 textarea::placeholder { color: var(--muted); opacity: 0.5; }
-/* Every select draws the same chevron in CSS, so no markup adds a caret or a data image. */
+/* Every select pairs with an inline Lucide chevron-down SVG instead of a CSS gradient or data image. */
 select {
   max-width: 100%; height: 34px; min-height: 0; padding: 0 26px 0 8px; width: 100%;
-  appearance: none; background-color: var(--panel); background-repeat: no-repeat;
-  background-image:
-    linear-gradient(to top right, transparent 38%, var(--muted) 38%, var(--muted) 62%, transparent 62%),
-    linear-gradient(to bottom right, transparent 38%, var(--muted) 38%, var(--muted) 62%, transparent 62%);
-  background-position: right 16px center, right 12px center;
-  background-size: 4px 4px, 4px 4px;
+  appearance: none; background-color: var(--panel);
 }
+.select-wrap, #modal .field:has(> select) { position: relative; }
+.select-chevron { position: absolute; right: 8px; bottom: 9px; pointer-events: none; color: var(--muted); }
 small, .muted, #last-check, #report-status { color: var(--muted); font-size: 13px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
 #send-status, #connection { font-size: 14px; overflow-wrap: anywhere; }

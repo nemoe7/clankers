@@ -113,6 +113,20 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
     "NUI003",
   }
   assert all(row["blocking"] is False for row in icon_audit["icons"]["findings"])
+  css_icon = root / "select-icon.css"
+  css_icon.write_text(
+    "select { background-image: linear-gradient(to top right, transparent 38%, currentColor 38%); }\n"
+    ".custom-icon { mask-image: url('data:image/svg+xml;utf8,<svg/>'); }\n",
+    encoding="utf-8",
+  )
+  css_icon_audit = run("audit", expected=3)
+  css_nui002 = [
+    row
+    for row in css_icon_audit["icons"]["findings"]
+    if row["rule"] == "NUI002" and row["path"].endswith("select-icon.css")
+  ]
+  assert len(css_nui002) == 2
+  css_icon.unlink()
   page.write_text('<img src="art.svg"> <!-- nonuu: NUL001 -->\n', encoding="utf-8")
   before[page] = page.read_bytes()
   manifest = tmp_path / "assets.json"

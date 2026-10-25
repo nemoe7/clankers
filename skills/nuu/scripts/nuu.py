@@ -690,6 +690,59 @@ def check_icons(root):
       ignored = set(re.findall(r"\bnonuu:\s*([A-Za-z0-9_-]+)", line))
       if finding["rule"] not in ignored:
         findings.append(finding)
+  for path in files(root, {".css"}):
+    text = path.read_text(encoding="utf-8")
+    clean = re.sub(
+      r"/\*[\s\S]*?\*/",
+      lambda m: "\n" * m.group(0).count("\n"),
+      text,
+    )
+    lines = text.splitlines()
+    for rule_match in re.finditer(r"([^{};]+)\{([^}]*)\}", clean):
+      selector = rule_match[1].strip()
+      body = rule_match[2]
+      is_control = bool(
+        re.search(
+          r"(?:^|[\s,>+~:])(?:select|button|input|summary)\b|\[role=",
+          selector,
+          re.IGNORECASE,
+        )
+      )
+      prop_match = re.search(
+        r"\b(?:background(?:-image)?\s*:[^;]*(?:(?:linear|radial|conic)-gradient|url)\s*\(|(?:-webkit-)?mask(?:-image)?\s*:[^;]*url\s*\()",
+        body,
+        re.IGNORECASE,
+      )
+      if not prop_match:
+        continue
+      if not is_control and not re.search(
+        r"(?:-webkit-)?mask(?:-image)?\s*:[^;]*url\s*\(",
+        prop_match.group(0),
+        re.IGNORECASE,
+      ):
+        continue
+      line_no = clean.count("\n", 0, rule_match.start(2) + prop_match.start()) + 1
+      rule_line = clean.count("\n", 0, rule_match.start(1)) + 1
+      ignored = set()
+      for check_ln in range(max(1, rule_line), min(len(lines), line_no) + 1):
+        ignored.update(re.findall(r"\bnonuu:\s*([A-Za-z0-9_-]+)", lines[check_ln - 1]))
+      counts["custom"] += 1
+      if "NUI002" not in ignored:
+        findings.append(
+          {
+            "rule": "NUI002",
+            "path": str(path),
+            "line": line_no,
+            "column": 1,
+            "severity": "advisory",
+            "blocking": False,
+            "evidence": (
+              "CSS background-image/mask-image control icon outside the "
+              "Lucide -> Simple Icons -> Phosphor ladder"
+            ),
+            "criterion": "clause-1",
+          }
+        )
   if sum(counts.values()) > 0 and not license_files:
     findings.append(
       {

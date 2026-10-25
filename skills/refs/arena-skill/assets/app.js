@@ -113,6 +113,7 @@ const ICONS = {
   'minimize-2': [['path', { d: 'm14 10 7-7' }], ['path', { d: 'M20 10h-6V4' }], ['path', { d: 'm3 21 7-7' }], ['path', { d: 'M4 14h6v6' }]],
   'maximize-2': [['path', { d: 'M15 3h6v6' }], ['path', { d: 'm21 3-7 7' }], ['path', { d: 'm3 21 7-7' }], ['path', { d: 'M9 21H3v-6' }]],
   'arrow-up': [['path', { d: 'm5 12 7-7 7 7' }], ['path', { d: 'M12 19V5' }]],
+  'chevron-down': [['path', { d: 'm6 9 6 6 6-6' }]],
   'arrow-left': [['path', { d: 'm12 19-7-7 7-7' }], ['path', { d: 'M19 12H5' }]],
   'arrow-right': [['path', { d: 'M5 12h14' }], ['path', { d: 'm12 5 7 7-7 7' }]],
   sun: [['circle', { cx: '12', cy: '12', r: '4' }], ['path', { d: 'M12 2v2' }],
@@ -4448,7 +4449,9 @@ function modalField(field) {
     select.name = field.name;
     for (const [value, text] of field.options) select.add(new Option(text, value));
     if (field.value) select.value = field.value;
-    wrapper.append(select);
+    const chevron = icon('chevron-down', 16);
+    chevron.setAttribute('class', 'lucide lucide-chevron-down select-chevron');
+    wrapper.append(select, chevron);
   } else {
     const input = document.createElement(field.type === 'textarea' ? 'textarea' : 'input');
     if (field.type !== 'textarea') input.type = 'text';
