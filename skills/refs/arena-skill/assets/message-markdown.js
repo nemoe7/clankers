@@ -322,8 +322,11 @@ function renderMessageMarkdown(source) {
     const mdButton = /^<code\s+class="language-(?:markdown|md)"\s*>/i.test(inner.trim())
       ? `<button type="button" class="preview-code-md" aria-label="Preview Markdown" title="Preview Markdown" aria-pressed="false" data-code="${payload}">${icon('markdown', 14).outerHTML}</button>`
       : '';
+    const mermaidButton = /^<code\s+class="language-mermaid"\s*>/i.test(inner.trim())
+      ? `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${payload}">${icon('braces', 14).outerHTML}</button>`
+      : '';
     const button = `<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" data-code="${payload}">${icon('copy', 14).outerHTML}</button>`;
     const header = `<div class="code-block-header"><span class="code-block-lang">${icon('braces', 14).outerHTML}<span>${attribute(formatCodeLanguage(inner))}</span></span></div>`;
-    return `<div class="code-block">${mdButton}${button}${header}<pre>${highlightCodeInner(inner)}</pre></div>`;
+    return `<div class="code-block">${mdButton}${mermaidButton}${button}${header}<pre>${highlightCodeInner(inner)}</pre></div>`;
   });
 }

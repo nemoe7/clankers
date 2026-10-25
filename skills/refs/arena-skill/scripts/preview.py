@@ -9940,6 +9940,7 @@ ICON_BRACES = (
 MARKDOWN_CODE_TAG = re.compile(
   r'^<code\s+class="language-(?:markdown|md)"\s*>', re.IGNORECASE
 )
+MERMAID_CODE_TAG = re.compile(r'^<code\s+class="language-mermaid"\s*>', re.IGNORECASE)
 CODE_LANG_TAG = re.compile(r'^<code\s+class="language-([^\s"]+)"', re.IGNORECASE)
 CODE_LANG_NAMES = {
   "bash": "Bash",
@@ -10008,6 +10009,12 @@ def add_copy_buttons(rendered):
       if MARKDOWN_CODE_TAG.match(inner.strip())
       else ""
     )
+    mermaid_button = (
+      f'<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" '
+      f'title="Show Mermaid code" aria-pressed="false" data-code="{payload}">{ICON_BRACES}</button>'
+      if MERMAID_CODE_TAG.match(inner.strip())
+      else ""
+    )
     button = (
       f'<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" '
       f'data-code="{payload}">{ICON_COPY}</button>'
@@ -10017,9 +10024,7 @@ def add_copy_buttons(rendered):
       f'<div class="code-block-header"><span class="code-block-lang">'
       f"{ICON_BRACES}<span>{lang}</span></span></div>"
     )
-    return (
-      f'<div class="code-block">{md_button}{button}{header}<pre>{inner}</pre></div>'
-    )
+    return f'<div class="code-block">{md_button}{mermaid_button}{button}{header}<pre>{inner}</pre></div>'
 
   return CODE_BLOCK.sub(replace, rendered)
 

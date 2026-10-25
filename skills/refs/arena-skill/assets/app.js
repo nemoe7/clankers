@@ -1102,7 +1102,10 @@ function showHistory(notes) {
     const text = node.children[0];
     text.className = item.html === undefined ? 'raw-message' : 'message-text';
     if (item.html === undefined) text.textContent = item.text.replace(/\\n/g, '\n');
-    else text.innerHTML = typeof ensureCodeBlockHeaders === 'function' ? ensureCodeBlockHeaders(item.html) : item.html;
+    else {
+      const withHeaders = typeof ensureCodeBlockHeaders === 'function' ? ensureCodeBlockHeaders(item.html) : item.html;
+      text.innerHTML = withHeaders.includes('language-mermaid') ? renderMermaidBlocksSync(withHeaders) : withHeaders;
+    }
     const receipt = node.children[2];
     receipt.className = 'receipt';
     const receiptId = document.createElement('code');
@@ -1749,11 +1752,12 @@ $('#preview-note').addEventListener('click', async () => {
   }
   panel.textContent = 'Rendering draft…';
   try {
-    const rendered = await (await request('/api/markdown', {
+    let rendered = await (await request('/api/markdown', {
       method: 'POST',
       headers: writeHeaders('application/json'),
       body: JSON.stringify({ text: draftText })
     })).text();
+    if (rendered.includes('language-mermaid')) rendered = await renderMermaidBlocks(rendered);
     draftPreviewCache = { text: draftText, html: rendered };
     if (sequence === draftPreviewSequence) panel.innerHTML = rendered;
   } catch (error) {
@@ -1883,7 +1887,8 @@ async function toggleCodeMarkdown(button) {
     rendered.className = 'code-md-preview';
     const text = button.dataset.code || '';
     if (typeof renderMessageMarkdown === 'function') {
-      rendered.innerHTML = renderMessageMarkdown(text);
+      const mdHtml = renderMessageMarkdown(text);
+      rendered.innerHTML = mdHtml.includes('language-mermaid') ? await renderMermaidBlocks(mdHtml) : mdHtml;
     } else {
       try {
         const reply = await request('/api/markdown', {
@@ -1891,7 +1896,8 @@ async function toggleCodeMarkdown(button) {
           headers: writeHeaders('application/json'),
           body: JSON.stringify({ text }),
         });
-        rendered.innerHTML = await reply.text();
+        const mdHtml = await reply.text();
+        rendered.innerHTML = mdHtml.includes('language-mermaid') ? await renderMermaidBlocks(mdHtml) : mdHtml;
       } catch {
         rendered.textContent = text;
       }
@@ -1903,6 +1909,22 @@ async function toggleCodeMarkdown(button) {
   button.setAttribute('aria-pressed', 'true');
   label(button, 'Show Markdown source');
   button.title = 'Show Markdown source';
+}
+function toggleCodeMermaid(button) {
+  const block = button.closest?.('.code-block') || button.parentElement;
+  if (!block || !block.dataset.mermaidState || block.dataset.mermaidState === 'fallback') return;
+  const showingCode = block.dataset.mermaidState === 'code';
+  if (showingCode) {
+    block.dataset.mermaidState = 'rendered';
+    button.setAttribute('aria-pressed', 'false');
+    label(button, 'Show Mermaid code');
+    button.title = 'Show Mermaid code';
+    return;
+  }
+  block.dataset.mermaidState = 'code';
+  button.setAttribute('aria-pressed', 'true');
+  label(button, 'Show Mermaid diagram');
+  button.title = 'Show Mermaid diagram';
 }
 // A click inserts `RE: <shortid>`, moves the caret after it, preserves the draft below a blank line, and replaces an existing quote prefix. The same gesture serves phones and desktops without Ctrl or a separate copy action.
 // Reveal the composer's tab, restore write mode, and regrow the textarea after changes because hidden panels collapse its height and preview mode hides the quote.
@@ -2028,7 +2050,7 @@ document.addEventListener('click', event => {
     return;
   }
   const parent = event.target?.parentElement;
-  const target = event.target?.closest?.('.copy-code, .preview-code-md, .note-id, .task-title, .question-id') ||
+  const target = event.target?.closest?.('.copy-code, .preview-code-md, .preview-code-mermaid, .note-id, .task-title, .question-id') ||
     (typeof parent?.className === 'string' && parent.className.split(' ').includes('question-id')
       ? parent : event.target);
   const reference = target?.closest?.('a.ack-reference') ||
@@ -2043,6 +2065,7 @@ document.addEventListener('click', event => {
   const classes = target.className.split(' ');
   if (classes.includes('copy-code')) copyCode(target);
   else if (classes.includes('preview-code-md')) toggleCodeMarkdown(target);
+  else if (classes.includes('preview-code-mermaid')) toggleCodeMermaid(target);
   // An ID takes one gesture on every device: a click quotes it, with or without a modifier.
   else if (classes.includes('note-id')) quoteNoteId(target);
   else if (classes.includes('task-title')) quoteTaskId(target);
@@ -2312,21 +2335,26 @@ function sanitizeMermaidSvg(svgText) {
 function parseFlowNodeToken(token, nodes) {
   const clean = token.trim();
   if (!clean) return null;
-  const match = /^([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)(?:\[\[(.*?)\]\]|\(\((.*?)\)\)|\(\[(.*?)\]\)|\[(.*?)\]|\((.*?)\)|\{(.*?)\})?$/.exec(clean);
+  const match = /^([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)(?:\[\[(.*?)\]\]|\[\((.*?)\)\]|\(\((.*?)\)\)|\(\[(.*?)\]\)|\[(.*?)\]|\((.*?)\)|\{(.*?)\})?$/.exec(clean);
   if (!match) return null;
   const id = match[1];
-  const rawLabel = match[2] ?? match[3] ?? match[4] ?? match[5] ?? match[6] ?? match[7];
-  const shape = match[3] !== undefined ? 'circle' : match[7] !== undefined ? 'diamond' : match[4] !== undefined || match[6] !== undefined ? 'round' : 'rect';
+  const rawLabel = match[2] ?? match[3] ?? match[4] ?? match[5] ?? match[6] ?? match[7] ?? match[8];
+  const shape = match[4] !== undefined ? 'circle' : match[8] !== undefined ? 'diamond' : match[3] !== undefined || match[5] !== undefined || match[7] !== undefined ? 'round' : 'rect';
   const existing = nodes.get(id);
-  const label = rawLabel !== undefined ? rawLabel.replace(/^"(.*)"$/, '$1').trim() : (existing?.label || id);
-  if (/<[a-z!/][^>]*>/i.test(label)) throw new Error('HTML labels are disabled in strict mode');
-  const record = { id, label, shape: rawLabel !== undefined ? shape : (existing?.shape || 'rect') };
+  const normalizedLabel = rawLabel !== undefined
+    ? rawLabel.replace(/^"(.*)"$/, '$1').replace(/<br\s*\/?>/gi, '\n').trim()
+    : (existing?.label || id);
+  if (/<[a-z!/][^>]*>/i.test(normalizedLabel)) throw new Error('HTML labels are disabled in strict mode');
+  const record = { id, label: normalizedLabel, shape: rawLabel !== undefined ? shape : (existing?.shape || 'rect') };
   nodes.set(id, record);
   return id;
 }
 function wrapMermaidLabel(label, maxChars = 24) {
   const text = String(label || '').trim();
   if (!text) return [''];
+  if (text.includes('\n')) {
+    return text.split('\n').flatMap(segment => wrapMermaidLabel(segment, maxChars));
+  }
   if (text.length <= maxChars) return [text];
   const tokens = text.split(/\s+/).flatMap(word => {
     if (word.length <= maxChars) return [word];
@@ -2362,16 +2390,23 @@ function renderFlowchartSvg(lines, header, config) {
     const line = rawLine.trim().replace(/;$/, '');
     if (!line || line.startsWith('%%') || /^subgraph\b/i.test(line) || /^end$/i.test(line) || /^direction\s+(?:TD|TB|BT|LR|RL)$/i.test(line)) continue;
     if (/^(?:click|callback)\b/i.test(line)) throw new Error('Interactive directives are disabled in strict mode');
-    const edgeMatch = /^(.+?)\s*(?:--\s*([^>-][^>]*?)\s*-->|-\.\s*(.*?)\s*\.->|==\s*(.*?)\s*==>|--+>|\.-+>|==+>|---+)\s*(?:\|([^|]*)\|\s*)?(.+)$/.exec(line);
+    const edgeMatch = /^(.+?)\s*(?:--\s*([^>-][^>]*?)\s*-->|-\.\s*(.*?)\s*\.->|==\s*(.*?)\s*==>|<--+>|<-+\.->|<==+>|--+>|\.-+>|==+>|---+)\s*(?:\|([^|]*)\|\s*)?(.+)$/.exec(line);
     if (edgeMatch) {
       const fromId = parseFlowNodeToken(edgeMatch[1], nodes);
       const toId = parseFlowNodeToken(edgeMatch[6], nodes);
       if (!fromId || !toId) throw new Error(`Invalid flowchart edge: ${line}`);
-      const edgeLabel = (edgeMatch[2] ?? edgeMatch[3] ?? edgeMatch[4] ?? edgeMatch[5] ?? '').trim();
+      const edgeLabel = (edgeMatch[2] ?? edgeMatch[3] ?? edgeMatch[4] ?? edgeMatch[5] ?? '')
+        .replace(/^"(.*)"$/, '$1')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .trim();
       if (/<[a-z!/][^>]*>/i.test(edgeLabel)) throw new Error('HTML labels are disabled in strict mode');
       const dotted = line.includes('-.');
       const open = /---+$/.test(line.slice(edgeMatch[1].length, line.length - edgeMatch[6].length).trim());
-      edges.push({ from: fromId, to: toId, label: edgeLabel, dotted, open });
+      const labelLines = edgeLabel ? wrapMermaidLabel(edgeLabel, 22) : [];
+      const longestLabel = labelLines.length ? Math.max(4, ...labelLines.map(l => l.length)) : 0;
+      const pillW = labelLines.length ? Math.round(longestLabel * 6.8 + 14) : 0;
+      const pillH = labelLines.length ? labelLines.length * 15 + 6 : 0;
+      edges.push({ from: fromId, to: toId, label: edgeLabel, labelLines, pillW, pillH, dotted, open });
       if (edges.length > config.maxEdges) throw new Error('Mermaid edge limit exceeded');
       continue;
     }
@@ -2407,7 +2442,11 @@ function renderFlowchartSvg(lines, header, config) {
   const boxW = Math.max(148, ...ordered.map(n => n.w));
   const boxH = Math.max(44, ...ordered.map(n => n.h));
   const hasEdgeLabels = edges.some(e => Boolean(e.label));
-  const mainGap = hasEdgeLabels ? 74 : 56;
+  const maxPillW = Math.max(0, ...edges.map(e => e.pillW || 0));
+  const maxPillH = Math.max(0, ...edges.map(e => e.pillH || 0));
+  const mainGap = hasEdgeLabels
+    ? (horizontal ? Math.max(96, maxPillW + 28) : Math.max(76, maxPillH + 28))
+    : 56;
   const crossGap = 44;
   const pad = 24;
   const spanW = maxBreadth * boxW + (maxBreadth - 1) * crossGap;
@@ -2423,7 +2462,7 @@ function renderFlowchartSvg(lines, header, config) {
       const y = horizontal
         ? pad + Math.round((spanH - layerH) / 2) + slotIdx * (boxH + crossGap)
         : pad + layerIdx * (boxH + mainGap);
-      coords.set(node.id, { x, y, cx: x + boxW / 2, cy: y + boxH / 2 });
+      coords.set(node.id, { x, y, cx: x + boxW / 2, cy: y + boxH / 2, layerIdx });
     });
   });
   const width = horizontal
@@ -2442,6 +2481,20 @@ function renderFlowchartSvg(lines, header, config) {
     if (!pairGroups.has(key)) pairGroups.set(key, []);
     pairGroups.get(key).push(idx);
   });
+  const edgeLineParts = [];
+  const edgeLabelParts = [];
+  const overlapsAnyNode = (lx, ly, pw, ph) => {
+    const left = lx - pw / 2;
+    const right = lx + pw / 2;
+    const top = ly - ph / 2;
+    const bottom = ly + ph / 2;
+    for (const pos of coords.values()) {
+      if (right > pos.x - 4 && left < pos.x + boxW + 4 && bottom > pos.y - 4 && top < pos.y + boxH + 4) {
+        return true;
+      }
+    }
+    return false;
+  };
   edges.forEach((edge, idx) => {
     const a = coords.get(edge.from);
     const b = coords.get(edge.to);
@@ -2455,16 +2508,37 @@ function renderFlowchartSvg(lines, header, config) {
     const y2 = (horizontal ? b.cy : (a.cy <= b.cy ? b.y : b.y + boxH)) + (horizontal ? shift : 0);
     const dash = edge.dotted ? ' stroke-dasharray="4 3"' : '';
     const marker = edge.open ? '' : ' marker-end="url(#mermaid-arrow)"';
-    parts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
-    if (edge.label) {
-      const labelVerticalShift = siblings.length > 1 ? Math.round((slot - (siblings.length - 1) / 2) * 16) : -6;
-      const mx = Math.round((x1 + x2) / 2);
-      const my = Math.round((y1 + y2) / 2) + labelVerticalShift;
-      const pillW = Math.round(edge.label.length * 6.8 + 12);
-      parts.push(`<rect x="${Math.round(mx - pillW / 2)}" y="${my - 11}" width="${pillW}" height="16" rx="4" fill="var(--panel)" />`);
-      parts.push(`<text class="mermaid-edge-label" x="${mx}" y="${my}" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeSvgText(edge.label)}</text>`);
+    edgeLineParts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
+    if (edge.label && edge.labelLines.length) {
+      const labelVerticalShift = siblings.length > 1 ? Math.round((slot - (siblings.length - 1) / 2) * 16) : 0;
+      let mx = Math.round((x1 + x2) / 2);
+      let my = Math.round((y1 + y2) / 2) + labelVerticalShift;
+      if (overlapsAnyNode(mx, my, edge.pillW, edge.pillH)) {
+        if (horizontal && x2 !== x1) {
+          const gapX = a.cx <= b.cx ? Math.round(a.x + boxW + mainGap / 2) : Math.round(a.x - mainGap / 2);
+          const t = Math.max(0.15, Math.min(0.85, (gapX - x1) / (x2 - x1)));
+          mx = Math.round(x1 + (x2 - x1) * t);
+          my = Math.round(y1 + (y2 - y1) * t) + labelVerticalShift;
+        } else if (!horizontal && y2 !== y1) {
+          const gapY = a.cy <= b.cy ? Math.round(a.y + boxH + mainGap / 2) : Math.round(a.y - mainGap / 2);
+          const t = Math.max(0.15, Math.min(0.85, (gapY - y1) / (y2 - y1)));
+          mx = Math.round(x1 + (x2 - x1) * t);
+          my = Math.round(y1 + (y2 - y1) * t) + labelVerticalShift;
+        }
+      }
+      const rectX = Math.round(mx - edge.pillW / 2);
+      const rectY = Math.round(my - edge.pillH / 2);
+      edgeLabelParts.push(`<rect x="${rectX}" y="${rectY}" width="${edge.pillW}" height="${edge.pillH}" rx="4" fill="var(--bg)" stroke="var(--border)" stroke-width="1" />`);
+      if (edge.labelLines.length === 1) {
+        edgeLabelParts.push(`<text class="mermaid-edge-label" x="${mx}" y="${my + 4}" text-anchor="middle" fill="var(--text)" font-size="12">${escapeSvgText(edge.labelLines[0])}</text>`);
+      } else {
+        const startY = Math.round(my + 4 - ((edge.labelLines.length - 1) * 15) / 2);
+        const tspans = edge.labelLines.map((ln, lIdx) => `<tspan x="${mx}" dy="${lIdx === 0 ? 0 : 15}">${escapeSvgText(ln)}</tspan>`).join('');
+        edgeLabelParts.push(`<text class="mermaid-edge-label" x="${mx}" y="${startY}" text-anchor="middle" fill="var(--text)" font-size="12">${tspans}</text>`);
+      }
     }
   });
+  parts.push(...edgeLineParts);
   for (const node of ordered) {
     const pos = coords.get(node.id);
     const rx = node.shape === 'round' ? 12 : node.shape === 'circle' ? 22 : 6;
@@ -2483,6 +2557,7 @@ function renderFlowchartSvg(lines, header, config) {
       parts.push(`<text x="${pos.cx}" y="${startY}" text-anchor="middle" fill="var(--text)" font-size="13">${tspans}</text></g>`);
     }
   }
+  parts.push(...edgeLabelParts);
   parts.push('</svg>');
   return parts.join('');
 }
@@ -2613,7 +2688,41 @@ const mermaidRuntime = {
   sanitizeSvg: sanitizeMermaidSvg,
 };
 globalThis.mermaid = mermaidRuntime;
-const MERMAID_BLOCK_RE = /<div class="code-block">(\s*<button\b[^>]*class="copy-code"[\s\S]*?<\/button>)?(\s*<div class="code-block-header">[\s\S]*?<\/div>)?\s*<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>\s*<\/div>/g;
+const MERMAID_BLOCK_RE = /<div class="code-block">((?:\s*<button\b[^>]*class="(?:preview-code-mermaid|copy-code)"[\s\S]*?<\/button>)*)(\s*<div class="code-block-header">[\s\S]*?<\/div>)?\s*<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>\s*<\/div>/g;
+function formatMermaidBlockHtml(buttons, header, escapedSource, rawSource, safeSvg) {
+  if (safeSvg) {
+    const payload = escapeSvgText(rawSource).replace(/\n/g, '&#10;');
+    const toggleBtn = buttons.includes('preview-code-mermaid')
+      ? ''
+      : `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${payload}">${icon('braces', 14).outerHTML}</button>`;
+    return `<div class="code-block" data-mermaid-state="rendered">${toggleBtn}${buttons}${header}<div class="mermaid-diagram" role="figure" aria-label="Mermaid diagram">${safeSvg}</div><pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
+  }
+  const fallbackButtons = buttons.replace(/<button\b[^>]*class="preview-code-mermaid"[\s\S]*?<\/button>/g, '');
+  return `<div class="code-block" data-mermaid-state="fallback">${fallbackButtons}${header}<pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
+}
+function renderMermaidBlocksSync(html) {
+  if (typeof html !== 'string' || !html.includes('language-mermaid')) return html;
+  const matches = [...html.matchAll(MERMAID_BLOCK_RE)];
+  if (!matches.length) return html;
+  let cursor = 0;
+  let out = '';
+  for (const match of matches) {
+    const [full, buttons = '', header = '', escapedSource = ''] = match;
+    out += html.slice(cursor, match.index);
+    cursor = match.index + full.length;
+    const rawSource = unescapeHtmlEntities(escapedSource);
+    let safeSvg = null;
+    try {
+      const { svg } = parseAndRenderMermaid(rawSource, globalThis.mermaid?.config || MERMAID_STRICT_CONFIG);
+      safeSvg = sanitizeMermaidSvg(svg);
+    } catch {
+      safeSvg = null;
+    }
+    out += formatMermaidBlockHtml(buttons, header, escapedSource, rawSource, safeSvg);
+  }
+  out += html.slice(cursor);
+  return out;
+}
 async function renderMermaidBlocks(html, sequence) {
   if (typeof html !== 'string' || !html.includes('language-mermaid')) return html;
   const matches = [...html.matchAll(MERMAID_BLOCK_RE)];
@@ -2623,7 +2732,7 @@ async function renderMermaidBlocks(html, sequence) {
   let index = 0;
   for (const match of matches) {
     if (sequence !== undefined && sequence !== reportRequest) return html;
-    const [full, copyBtn = '', header = '', escapedSource = ''] = match;
+    const [full, buttons = '', header = '', escapedSource = ''] = match;
     out += html.slice(cursor, match.index);
     cursor = match.index + full.length;
     const rawSource = unescapeHtmlEntities(escapedSource);
@@ -2634,11 +2743,7 @@ async function renderMermaidBlocks(html, sequence) {
     } catch {
       safeSvg = null;
     }
-    if (safeSvg) {
-      out += `<div class="code-block" data-mermaid-state="rendered">${copyBtn}${header}<div class="mermaid-diagram" role="figure" aria-label="Mermaid diagram">${safeSvg}</div><pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
-    } else {
-      out += `<div class="code-block" data-mermaid-state="fallback">${copyBtn}${header}<pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
-    }
+    out += formatMermaidBlockHtml(buttons, header, escapedSource, rawSource, safeSvg);
   }
   out += html.slice(cursor);
   return out;

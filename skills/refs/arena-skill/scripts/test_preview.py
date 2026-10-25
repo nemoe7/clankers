@@ -14370,8 +14370,14 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   md_rendered = preview.add_copy_buttons(preview.render("```markdown\n# Title\n```"))
   assert 'class="preview-code-md"' in md_rendered
   assert 'aria-pressed="false"' in md_rendered
+  mermaid_rendered = preview.add_copy_buttons(
+    preview.render("```mermaid\nflowchart LR\n  A --> B\n```")
+  )
+  assert 'class="preview-code-mermaid"' in mermaid_rendered
+  assert 'aria-pressed="false"' in mermaid_rendered
   py_rendered = preview.add_copy_buttons(preview.render("```python\nprint(1)\n```"))
   assert 'class="preview-code-md"' not in py_rendered
+  assert 'class="preview-code-mermaid"' not in py_rendered
   cp_note = store.schedule_read_set_note(manual=True, root=tmp_path)
   assert cp_note is not None
   store.acknowledge([cp_note["id"]], "Bible texts in context.")

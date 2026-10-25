@@ -5161,8 +5161,31 @@ test('preview client', async (t) => {
     assert.match(renderedFlow, /data-mermaid-state="rendered"/);
     assert.match(renderedFlow, /<svg class="mermaid-svg"[^>]*data-diagram-type="flowchart"/);
     assert.match(renderedFlow, /data-node-id="A"/);
+    assert.match(renderedFlow, /class="preview-code-mermaid"/);
     assert.match(renderedFlow, /class="copy-code"/);
     assert.match(renderedFlow, /<pre><code class="language-mermaid">/);
+    assert.ok(renderedFlow.lastIndexOf('class="mermaid-node"') < renderedFlow.indexOf('class="mermaid-edge-label"'));
+
+    const subFlow = '<div class="code-block"><button class="preview-code-mermaid" aria-pressed="false"></button><button class="copy-code"></button><pre><code class="language-mermaid">flowchart LR\n  subgraph S1["Tab_1"]\n    U1["arena.user.js&lt;br/&gt;repo: nemoe7/clankers"]\n    IDB[("IndexedDB&lt;br/&gt;peers_by_repo")]\n    U1 &lt;--&gt; IDB\n  end</code></pre></div>';
+    const renderedSubFlow = await context.renderMermaidBlocks(subFlow);
+    assert.match(renderedSubFlow, /data-mermaid-state="rendered"/);
+    assert.match(renderedSubFlow, /data-node-id="IDB"/);
+    assert.equal((renderedSubFlow.match(/class="preview-code-mermaid"/g) || []).length, 1);
+
+    const toggleBlock = new Element('div');
+    toggleBlock.className = 'code-block';
+    toggleBlock.dataset.mermaidState = 'rendered';
+    const toggleBtn = new Element('button');
+    toggleBtn.className = 'preview-code-mermaid';
+    toggleBtn.setAttribute('aria-pressed', 'false');
+    toggleBtn.parentElement = toggleBlock;
+    toggleBlock.append(toggleBtn);
+    context.toggleCodeMermaid(toggleBtn);
+    assert.equal(toggleBlock.dataset.mermaidState, 'code');
+    assert.equal(toggleBtn.getAttribute('aria-pressed'), 'true');
+    context.toggleCodeMermaid(toggleBtn);
+    assert.equal(toggleBlock.dataset.mermaidState, 'rendered');
+    assert.equal(toggleBtn.getAttribute('aria-pressed'), 'false');
 
     const longFlow = '<div class="code-block"><pre><code class="language-mermaid">flowchart TD\n  A["Write arena-state/backups/state-latest.ndjson and rotate 10 snapshots"] -->|state-latest.ndjson| B[Restore]\n  A -->|saved-state.ndjson| B</code></pre></div>';
     const renderedLong = await context.renderMermaidBlocks(longFlow);
