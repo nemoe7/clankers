@@ -760,6 +760,13 @@ module.exports = {
   }
   code_ok, ready_ok = run_driver({**base_req, "ready": "#app-ready"}, mode="clean")
   assert code_ok == 0 and ready_ok["status"] == "captured"
+  assert ready_ok["captures"][0]["scheme"] == "dark"
+  assert 'colorScheme: "dark"' in annotate.Path(annotate.__file__).read_text(
+    encoding="utf-8"
+  )
+  assert 'color_scheme="dark"' in (SCRIPT.parent / "walk.py").read_text(
+    encoding="utf-8"
+  )
 
   code_timeout, ready_timeout = run_driver(
     {**base_req, "ready": "#missing-ready"}, mode="clean"
