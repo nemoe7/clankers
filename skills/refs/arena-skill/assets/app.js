@@ -2275,6 +2275,16 @@ setInterval(showClock, 1000);
   var lastForceSaveId = null;
   var lastAnnouncedRepo = '';
   var lastUserscriptAnnouncedRepo = '';
+  var parentWindowOrigin = '';
+  function parentTargetOrigin() {
+    if (parentWindowOrigin) return parentWindowOrigin;
+    try {
+      if (typeof document !== 'undefined' && document.referrer) {
+        return new URL(document.referrer).origin;
+      }
+    } catch {}
+    return window.location?.origin || 'https://arena.ai';
+  }
   function enableUserscriptForceSave() {
     if (userscriptForceSave) return false;
     userscriptForceSave = true;
@@ -2293,6 +2303,9 @@ setInterval(showClock, 1000);
   }
   window.addEventListener('message', event => {
     if (!event || !event.data) return;
+    if (typeof event.origin === 'string' && /^https?:\/\//i.test(event.origin)) {
+      parentWindowOrigin = event.origin;
+    }
     if (event.data.type === 'clankers:board-sync' && event.data.board && typeof event.data.board === 'object') {
       void sendBoardAction({ action: 'sync', board: event.data.board }, false);
       return;
@@ -3848,13 +3861,7 @@ function showBoardPanel() {
   syncDocumentTitle();
   if (typeof window !== 'undefined' && window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
     try {
-      window.parent.postMessage({
-        type: 'clankers:board-request',
-        repo: getState()?.repo || '',
-        branch: getState()?.board?.branch || '',
-        session_id: getState()?.board?.session_id || '',
-        polling: Boolean(getState()?.polling),
-      }, '*');
+      window.parent.postMessage({ type: 'clankers:board-request' }, parentTargetOrigin());
     } catch {}
   }
   renderBoard();
@@ -3862,7 +3869,7 @@ function showBoardPanel() {
 async function sendBoardAction(action, forwardToParent = true) {
   if (forwardToParent && typeof window !== 'undefined' && window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
     try {
-      window.parent.postMessage({ type: 'clankers:board-action', action }, '*');
+      window.parent.postMessage({ type: 'clankers:board-action', action }, parentTargetOrigin());
     } catch {}
   }
   try {
