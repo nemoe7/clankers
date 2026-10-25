@@ -5625,5 +5625,11 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.doesNotMatch(swipeArrowRule[1], /border-radius:\s*50%/, '.tab-swipe-arrow is not circular');
   assert.match(swipeArrowRule[1], /color:\s*#fff\b/, '.tab-swipe-arrow icon color is white');
   assert.match(swipeArrowRule[1], /color-mix\(in srgb,\s*var\(--panel\)\s*60%,\s*transparent\)/, '.tab-swipe-arrow background is translucent');
+  const renderedGifPath = context.renderMessageMarkdown('![motion](arena-state/clause8.gif)');
+  assert.match(renderedGifPath, /src="\/api\/report-image\?path=arena-state%2Fclause8\.gif"/);
+  const renderedSizedGif = context.renderMessageMarkdown('![motion](clause8.gif =320x180)');
+  assert.match(renderedSizedGif, /src="\/api\/report-image\?path=clause8\.gif" alt="motion" width="320" height="180"/);
+  const renderedDataGif = context.renderMessageMarkdown('![motion](data:image/gif;base64,R0lGODlhAQABAAAAACw=)');
+  assert.match(renderedDataGif, /src="data:image\/gif;base64,R0lGODlhAQABAAAAACw="/);
 });
 

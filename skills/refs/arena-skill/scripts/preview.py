@@ -9852,8 +9852,32 @@ def open_link(renderer, tokens, index, options, env):
   return renderer.renderToken(tokens, index, options, env)
 
 
+LOCAL_MARKDOWN_IMAGE = re.compile(r"\.(?:gif|png|jpe?g|webp)$", re.IGNORECASE)
+WIREFRAME_IMAGE = re.compile(r"-wireframe\.(?:png|gif|jpe?g|webp)$", re.IGNORECASE)
+
+
+def normalize_markdown_image_src(source):
+  """Rewrite a relative local image path (`.gif`, `.png`, `.jpg`, `.jpeg`, `.webp`) to `/api/report-image?path=...`."""
+  clean = str(source or "").strip()
+  if (
+    not clean
+    or clean.startswith(("/", "#", "//"))
+    or re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", clean)
+  ):
+    return source
+  target = clean.split("?", 1)[0].split("#", 1)[0]
+  if LOCAL_MARKDOWN_IMAGE.search(target):
+    from urllib.parse import quote
+
+    return f"/api/report-image?path={quote(target, safe='')}"
+  return source
+
+
 def render_image(renderer, tokens, index, options, env):
-  """Retain image alt text before the default renderer runs."""
+  """Retain image alt text and rewrite relative local image paths before the default renderer runs."""
+  src = tokens[index].attrGet("src")
+  if src:
+    tokens[index].attrSet("src", normalize_markdown_image_src(src))
   pending = list(tokens[index].children or [])
   while pending:
     token = pending.pop()
@@ -10127,6 +10151,7 @@ def sized_image(match, validate):
   """Build an escaped `<img>` for a sized image. CommonMark has no size syntax, so this function handles
   `![alt](src =320x200)`. Return None when the renderer rejects it."""
   alt, source, width, height = match.groups()
+  source = normalize_markdown_image_src(source)
   if not validate(source):
     return None
   size = f' width="{width}"' + (f' height="{height}"' if height else "")
@@ -12037,9 +12062,9 @@ def resolve_report_image(path_arg, root=None):
   clean = str(path_arg or "").strip()
   if not clean:
     raise ValueError("Report image path is required")
-  if clean.lower().endswith("-wireframe.png"):
+  if WIREFRAME_IMAGE.search(clean):
     raise ValueError(
-      f"Wireframe image {clean} (*-wireframe.png) is for agent inspection only and cannot be served in reports"
+      f"Wireframe image {clean} (*-wireframe.*) is for agent inspection only and cannot be served in reports"
     )
   start = Path(root).resolve() if root is not None else _outline_repo_root()
   base = next(
@@ -12113,11 +12138,9 @@ def embed_report_images(markdown, report_dir):
     path = Path(source)
     if not path.is_absolute():
       path = report_dir / path
-    if path.name.lower().endswith("-wireframe.png") or source.lower().endswith(
-      "-wireframe.png"
-    ):
+    if WIREFRAME_IMAGE.search(path.name) or WIREFRAME_IMAGE.search(source):
       raise ValueError(
-        f"Wireframe image {source} (*-wireframe.png) is for agent inspection only and cannot be embedded in reports"
+        f"Wireframe image {source} (*-wireframe.*) is for agent inspection only and cannot be embedded in reports"
       )
     try:
       mime, encoded = image_payload(path)

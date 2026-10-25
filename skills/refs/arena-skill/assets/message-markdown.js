@@ -62,8 +62,20 @@ messageMarkdown.renderer.rules.link_open = (tokens, index, options, env, rendere
   }
   return renderer.renderToken(tokens, index, options, env);
 };
+function normalizeMessageImageSrc(url) {
+  if (typeof url !== 'string') return url;
+  const clean = url.trim();
+  if (!clean || /^(?:\/|#|\/\/|[a-zA-Z][a-zA-Z0-9+.-]*:)/.test(clean)) return url;
+  const target = clean.split(/[?#]/)[0];
+  if (/\.(?:gif|png|jpe?g|webp)$/i.test(target)) {
+    return `/api/report-image?path=${encodeURIComponent(target)}`;
+  }
+  return url;
+}
 const renderMessageImage = messageMarkdown.renderer.rules.image;
 messageMarkdown.renderer.rules.image = (tokens, index, options, env, renderer) => {
+  const src = tokens[index].attrGet('src');
+  if (src) tokens[index].attrSet('src', normalizeMessageImageSrc(src));
   const pending = (tokens[index].children || []).slice();
   while (pending.length) {
     const token = pending.pop();
@@ -294,8 +306,9 @@ function renderMessageMarkdown(source) {
   const images = [];
   const imagePrefix = 'previewimage' + crypto.randomUUID().replaceAll('-', '');
   const tagged = source.replace(/!\[([^\]\n]*)\]\((\S+?)\s+=(\p{Nd}+)x(\p{Nd}*)\)/gu, (match, alt, url, width, height) => {
-    if (!messageMarkdown.validateLink(url)) return match;
-    images.push(`<img src="${attribute(url)}" alt="${attribute(alt)}" width="${width}"${height ? ` height="${height}"` : ''} />`);
+    const resolvedUrl = normalizeMessageImageSrc(url);
+    if (!messageMarkdown.validateLink(resolvedUrl)) return match;
+    images.push(`<img src="${attribute(resolvedUrl)}" alt="${attribute(alt)}" width="${width}"${height ? ` height="${height}"` : ''} />`);
     return ` ${imagePrefix}${images.length - 1}x `;
   });
   let rendered = messageMarkdown.render(unescapeMessageMarkdown(tagged));

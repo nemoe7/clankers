@@ -25,6 +25,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Reject `arena-preview report publish` when a local image path in a report is missing or invalid in `scripts/preview.py`, and deduplicate `clankers:userscript-ready` / `clankers:preview-ready` `postMessage` handshakes in `assets/app.js`.
 - Clamp mobile `body` height to `min(100%, var(--app-height, 100svh))` and resync `--app-height` on `DOMContentLoaded` and `load` (`assets/style.css`, `assets/app.js`), and remove the report submission hint footer from `assets/index.html`.
 - Require installing `nuu` (`pip install -e`) via `arena-preview run start` during Arena setup when `nuu` is present in `rules/refs/ARENA.md`, `skills/refs/arena-skill/SKILL.md`, and live mirrors.
+- Rewrite relative local `.gif`, `.png`, `.jpg`, `.jpeg`, and `.webp` Markdown image paths to `/api/report-image?path=...` in `scripts/preview.py` (`render_image`, `sized_image`) and `assets/message-markdown.js` (`renderMessageMarkdown`).
 
 #### userscripts
 

@@ -362,7 +362,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--pan
 .copy-code[data-state="bad"] { color: #ef4444; }
 .report code { font-family: var(--font-mono); font-size: .9em; }
 /* Images keep their specified size, and wider images shrink to fit the panel. */
-.report img, .message-text img { max-width: 100%; }
+.report img, .message-text img, .code-md-preview img, #draft-preview img { max-width: 100%; }
 .report img { cursor: zoom-in; }
 /* Inline code shares the message background.
    Receipt IDs opt out by class. */

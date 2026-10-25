@@ -15010,3 +15010,22 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   finally:
     survey_srv.shutdown()
     survey_srv.server_close()
+
+  sample_gif = (
+    b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff"
+    b"!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+  )
+  (tmp_path / "motion.gif").write_bytes(sample_gif)
+  gif_mime, gif_raw, gif_b64 = preview.resolve_report_image("motion.gif", root=tmp_path)
+  assert gif_mime == "image/gif"
+  assert gif_raw == sample_gif
+  assert 'src="/api/report-image?path=arena-state%2Fmotion.gif"' in preview.render(
+    "![anim](arena-state/motion.gif)"
+  )
+  assert (
+    'src="/api/report-image?path=motion.gif" alt="anim" width="320" height="180"'
+    in preview.render("![anim](motion.gif =320x180)")
+  )
+  assert f'src="data:image/gif;base64,{gif_b64}"' in preview.render(
+    f"![anim](data:image/gif;base64,{gif_b64})"
+  )
