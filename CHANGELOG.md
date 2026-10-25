@@ -42,6 +42,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Make the `4 px` compact scale (`--row: 32px`, `--radius: 6px`) the default in `SKILL.md`, `references/style.css`, and `scripts/measure.py`, with `:root[data-scale="8"]` as an opt-in preset.
 - Load `RULE_DESCRIPTIONS` from `references/nuu.md` and `SKILL.md`, read `VERSION` from `pyproject.toml`, and skip `.agents` in `scripts/nuu.py`.
 - Style `.close-button` as a borderless `32x32 px` button (`8 px` padding, `-8 px` margin) in `SKILL.md`, `references/recipes/modal-manager.md`, and `references/style.css`, and require `nuu walk` walkthroughs during audits in `SKILL.md` and `references/walk.md`.
+- Allow configuring the design record path in `nuu.toml` (`[design].path`, `[audit].design_doc`, or `design_doc`) before falling back to `docs/design.md` for `NUL004` in `scripts/nuu.py`.
 
 #### nemoizer
 

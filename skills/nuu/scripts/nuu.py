@@ -449,17 +449,45 @@ def _has_custom_focus_ring(clean_css: str) -> bool:
   return False
 
 
-def _has_design_doc(root: Path) -> bool:
+def _resolve_design_doc_rel(root: Path) -> str:
+  try:
+    cfg = load_nuu_config(root).get("config") or {}
+  except Exception:
+    cfg = {}
+  if isinstance(cfg, dict):
+    design_tbl = cfg.get("design") if isinstance(cfg.get("design"), dict) else {}
+    audit_tbl = cfg.get("audit") if isinstance(cfg.get("audit"), dict) else {}
+    for candidate in (
+      design_tbl.get("path"),
+      design_tbl.get("doc"),
+      design_tbl.get("file"),
+      audit_tbl.get("design_doc"),
+      audit_tbl.get("design_path"),
+      cfg.get("design_doc"),
+      cfg.get("design_path"),
+    ):
+      if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
+  return "docs/design.md"
+
+
+def _has_design_doc(root: Path, design_doc_rel: str | None = None) -> bool:
+  rel = (design_doc_rel or _resolve_design_doc_rel(root)).strip() or "docs/design.md"
+  rel_path = Path(rel)
+  if rel_path.is_absolute():
+    return rel_path.is_file()
   cur = Path(root).resolve()
   if cur.is_file():
     cur = cur.parent
   while True:
-    docs_dir = cur / "docs"
-    if (docs_dir / "design.md").is_file() or (
-      docs_dir.is_dir()
-      and any(p.is_file() and not p.is_symlink() for p in docs_dir.rglob("design.md"))
-    ):
+    if (cur / rel).is_file():
       return True
+    if rel == "docs/design.md":
+      docs_dir = cur / "docs"
+      if docs_dir.is_dir() and any(
+        p.is_file() and not p.is_symlink() for p in docs_dir.rglob("design.md")
+      ):
+        return True
     if (
       (cur / ".git").exists()
       or cur.parent == cur
@@ -548,17 +576,22 @@ def lint(root):
       ignored = file_ids | (line_ids[ln - 1] if 0 < ln <= len(line_ids) else set())
       if finding["rule"] not in ignored:
         findings.append(finding)
-  docs_dir = root / "docs"
-  if not _has_design_doc(root):
+  design_doc_rel = _resolve_design_doc_rel(root)
+  design_doc_path = (
+    Path(design_doc_rel)
+    if Path(design_doc_rel).is_absolute()
+    else (root / design_doc_rel)
+  )
+  if not _has_design_doc(root, design_doc_rel):
     findings.append(
       {
         "rule": "NUL004",
-        "path": str(docs_dir / "design.md"),
+        "path": str(design_doc_path),
         "line": 1,
         "column": 1,
         "severity": "review",
         "status": "source_candidate",
-        "evidence": "Missing docs/design.md",
+        "evidence": f"Missing {design_doc_rel}",
         "criterion": "clause-11",
       }
     )

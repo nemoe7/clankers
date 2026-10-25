@@ -53,6 +53,17 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"NUL004"}
   missing_doc_audit = run("audit", expected=1)
   assert {row["rule"] for row in missing_doc_audit["findings"]} == {"NUL004"}
+  nuu_toml = root / "nuu.toml"
+  nuu_toml.write_text('[design]\npath = "specs/ui-design.md"\n', encoding="utf-8")
+  custom_missing = run("lint", expected=1)["findings"]
+  assert len(custom_missing) == 1 and custom_missing[0]["rule"] == "NUL004"
+  assert custom_missing[0]["evidence"] == "Missing specs/ui-design.md"
+  custom_doc = root / "specs" / "ui-design.md"
+  custom_doc.parent.mkdir(exist_ok=True)
+  custom_doc.write_text("# Custom Design\n", encoding="utf-8")
+  assert not run("lint")["findings"]
+  nuu_toml.unlink()
+  custom_doc.unlink()
   design_doc = root / "docs" / "design.md"
   design_doc.parent.mkdir(exist_ok=True)
   design_doc.write_text("# Design\n", encoding="utf-8")
