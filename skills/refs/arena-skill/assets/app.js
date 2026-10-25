@@ -362,9 +362,9 @@ function syncViewport() {
   const vv = window.visualViewport;
   const vvHeight = vv?.height || 0;
   const innerHeight = window.innerHeight || 0;
-  const nextHeight = Math.round(
-    vvHeight && innerHeight ? Math.min(vvHeight, innerHeight) : vvHeight || innerHeight
-  );
+  const docHeight = document.documentElement?.clientHeight || 0;
+  const heights = [vvHeight, innerHeight, docHeight].filter(h => h > 0);
+  const nextHeight = heights.length ? Math.round(Math.min(...heights)) : 0;
   if (!nextHeight) return;
   const history = $('#history');
   const priorHistoryHeight = history.clientHeight;
@@ -384,6 +384,8 @@ function syncViewport() {
 touchPointer?.addEventListener?.('change', syncKeyboardFooter);
 document.addEventListener('focusin', syncKeyboardFooter);
 document.addEventListener('focusout', event => setTimeout(() => syncKeyboardFooter(event), 0));
+window.addEventListener('DOMContentLoaded', () => { syncViewport(); grow(); });
+window.addEventListener('load', () => { syncViewport(); grow(); });
 window.addEventListener('resize', () => { syncViewport(); if (stagedFiles.length) renderStagedFiles(); else grow(); });
 window.addEventListener('pageshow', () => { syncViewport(); grow(); });
 window.visualViewport?.addEventListener?.('resize', syncViewport);

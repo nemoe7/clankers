@@ -5614,6 +5614,8 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
     'read-only modal min-height rule excludes .copy-code so it stays symmetric'
   );
   assert.match(styleSource, /body\s*\{[^}]*height:\s*var\(--app-height,\s*100dvh\)/);
+  assert.match(styleSource, /body\s*\{[^}]*max-height:\s*min\(100%,\s*var\(--app-height,\s*100svh\)\)/, 'body clamps height to min(100%, var(--app-height, 100svh)) before load');
+  assert.match(styleSource, /#notes-panel\s*\{[^}]*display:\s*flex;\s*flex-direction:\s*column/, '#notes-panel is a column flex container so .notes-layout never overflows before load');
   assert.doesNotMatch(styleSource, /#compose:has\(#note\[data-slash="true"\]\)/);
   assert.match(appSource, /notifyParentPreviewReady\(state\.repo\)/);
   const swipeArrowRule = styleSource.match(/\.tab-swipe-arrow\s*\{([^}]*)\}/);

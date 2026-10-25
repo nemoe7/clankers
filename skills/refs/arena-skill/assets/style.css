@@ -99,7 +99,7 @@
 /* The document never scrolls: each panel owns its own scrolling, and a touch drag on the page
    behind them bounces nothing. */
 html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
-body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: var(--app-height, 100dvh); overflow: hidden; }
+body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: var(--app-height, 100dvh); max-height: min(100%, var(--app-height, 100svh)); overflow: hidden; }
 /* Headings use browser default sizes (32, 24, 18.72, 16, 13.28, and 10.72px) so h2 stays distinct from h3. */
 h1 { letter-spacing: -.035em; margin: 4px 0; }
 h2 { margin: 0 0 8px; }
@@ -134,9 +134,9 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; wid
 main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 .report-scroll-frame > section[role="tabpanel"], main > section[role="tabpanel"] { padding-inline: 5vw; }
 .report-scroll-frame { position: relative; display: flex; flex-direction: column; }
-#notes-panel { overflow: clip; }
+#notes-panel { display: flex; flex-direction: column; overflow: clip; }
 #reports-panel, #tasks-panel, #downloads-panel { overflow-y: auto; }
-.notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
+.notes-layout { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
 /* The message log fills remaining height above the composer so the panel itself never scrolls. */
 .log-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-block: 12px 0; }
 /* The log header wraps into four short lines on a narrow width, and the row's 12px wrap gap
