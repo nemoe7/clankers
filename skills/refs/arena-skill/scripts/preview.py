@@ -125,7 +125,51 @@ def read_set_files(root=None):
   return list(files)
 
 
-def workspace_usage(root=None):
+def state_dir_usage(state_dir=None):
+  """Bytes, file count, and category breakdown for the arena-state directory."""
+  root = Path(state_dir if state_dir is not None else resolve_state_dir())
+  categories = {
+    "database": {"bytes": 0, "files": 0},
+    "backups": {"bytes": 0, "files": 0},
+    "uploads": {"bytes": 0, "files": 0},
+    "downloads": {"bytes": 0, "files": 0},
+    "runs": {"bytes": 0, "files": 0},
+    "reports": {"bytes": 0, "files": 0},
+    "other": {"bytes": 0, "files": 0},
+  }
+  total_bytes = 0
+  total_files = 0
+  if not root.is_dir():
+    return {"bytes": 0, "files": 0, "categories": categories}
+  for dirpath, _, filenames in os.walk(root, followlinks=False):
+    rel_parts = Path(dirpath).relative_to(root).parts
+    top = rel_parts[0] if rel_parts else ""
+    for name in filenames:
+      target = Path(dirpath) / name
+      try:
+        size = target.stat().st_size
+      except OSError:
+        continue
+      total_bytes += size
+      total_files += 1
+      if not top and (name.startswith("state.sqlite3") or name == "display_tz"):
+        bucket = "database"
+      elif top in {"backups", "uploads", "downloads", "runs"}:
+        bucket = top
+      elif not top and name.endswith(".md"):
+        bucket = "reports"
+      else:
+        bucket = "other"
+      categories[bucket]["bytes"] += size
+      categories[bucket]["files"] += 1
+  return {
+    "bytes": total_bytes,
+    "files": total_files,
+    "categories": categories,
+  }
+
+
+def workspace_usage(root=None, state_dir=None):
   """Bytes and files under root, skipping snapshot-excluded directories."""
   root = Path(root or Path.cwd())
   total = 0
@@ -138,11 +182,13 @@ def workspace_usage(root=None):
       except OSError:
         continue
       count += 1
+  target_state = Path(state_dir) if state_dir is not None else (root / "arena-state")
   return {
     "bytes": total,
     "files": count,
     "documented_cap_bytes": SNAPSHOT_CAP_BYTES,
     "download_cap_bytes": None,
+    "arena_state": state_dir_usage(target_state),
   }
 
 
@@ -2794,6 +2840,28 @@ def format_import_receipt(receipt):
 def format_clear_state(counts):
   parts = [f"{k} {v}" for k, v in counts.items()]
   return "Cleared " + ", ".join(parts) if parts else "Cleared"
+
+
+def format_state_usage(usage):
+  total = f"State usage: {usage['bytes']} bytes in {usage['files']} files"
+  cats = usage.get("categories") or {}
+  details = [
+    f"  {name}: {info['bytes']} bytes ({info['files']} files)"
+    for name, info in cats.items()
+    if info.get("files")
+  ]
+  return "\n".join([total, *details])
+
+
+def format_clean_state(receipt):
+  prefix = "Would remove" if receipt.get("dry_run") else "Removed"
+  head = (
+    f"{prefix} {receipt['removed_files']} file(s) "
+    f"({receipt['removed_bytes']} bytes); "
+    f"remaining {receipt['usage']['bytes']} bytes in {receipt['usage']['files']} files"
+  )
+  paths = [f"  {path}" for path in receipt.get("paths") or ()]
+  return "\n".join([head, *paths])
 
 
 def _state_record_category(record):
@@ -6889,7 +6957,7 @@ class Store:
         "tasks": tasks,
         "uploads": uploads,
         "fetch_jobs": fetch_jobs,
-        "workspace": workspace_usage(),
+        "workspace": workspace_usage(state_dir=self.path.parent),
         "last_check": clip_stamp(meta.get("last_check")),
         "polling": polling,
         "waiting_for_gates": bool(runs),
@@ -9673,6 +9741,129 @@ class Store:
       )
     return counts
 
+  def state_usage(self):
+    """Return file and byte usage breakdown for this store's arena-state directory."""
+    return state_dir_usage(self.path.parent)
+
+  def clean_state(self, dry_run=False):
+    """Remove unreferenced uploads, downloads, finished runs, and scratch files in arena-state."""
+    state_root = self.path.parent.resolve()
+    keep_files = {
+      (state_root / "state.sqlite3").resolve(),
+      (state_root / "state.sqlite3-wal").resolve(),
+      (state_root / "state.sqlite3-shm").resolve(),
+      (state_root / "display_tz").resolve(),
+      (state_root / "pr-body.md").resolve(),
+    }
+    repo_root = self.repository_root().resolve()
+    with closing(self.connect()) as db:
+      report_rows = db.execute("SELECT id, markdown FROM reports").fetchall()
+      upload_rows = db.execute(
+        "SELECT u.file, u.name, u.note_id, n.acknowledged_at "
+        "FROM uploads u LEFT JOIN notes n ON n.id = u.note_id"
+      ).fetchall()
+      download_rows = db.execute(
+        "SELECT file FROM fetch_jobs WHERE file IS NOT NULL"
+      ).fetchall()
+    for row in report_rows:
+      keep_files.add((state_root / f"{row['id']}.md").resolve())
+      for match in re.finditer(r"!\[[^\]]*\]\(([^)\s]+)", row["markdown"] or ""):
+        raw_url = (match.group(1) or "").strip()
+        if not raw_url or raw_url.startswith(("http://", "https://", "data:", "/")):
+          continue
+        for base in (state_root, repo_root):
+          candidate = (base / raw_url).resolve()
+          if candidate.exists():
+            keep_files.add(candidate)
+    for md_file in state_root.glob("*.md"):
+      keep_files.add(md_file.resolve())
+      try:
+        md_text = md_file.read_text(encoding="utf-8")
+      except OSError:
+        continue
+      for match in re.finditer(r"!\[[^\]]*\]\(([^)\s]+)", md_text):
+        raw_url = (match.group(1) or "").strip()
+        if not raw_url or raw_url.startswith(("http://", "https://", "data:", "/")):
+          continue
+        for base in (state_root, repo_root):
+          candidate = (base / raw_url).resolve()
+          if candidate.exists():
+            keep_files.add(candidate)
+    for row in upload_rows:
+      if (
+        row["note_id"] is not None
+        and row["acknowledged_at"] is not None
+        and (row["name"] or "").lower().endswith(".ndjson")
+      ):
+        continue
+      if row["file"]:
+        keep_files.add((state_root / "uploads" / row["file"]).resolve())
+    for row in download_rows:
+      if row["file"]:
+        keep_files.add((state_root / "downloads" / row["file"]).resolve())
+    active_runs = set(live_runs(state_root))
+    runs_root = state_root / "runs"
+    if runs_root.is_dir():
+      for record_file in runs_root.glob("*.json"):
+        run_name = record_file.stem
+        try:
+          record = json.loads(record_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+          record = {}
+        if not isinstance(record, dict):
+          record = {}
+        if (
+          run_name in active_runs
+          or record.get("exit") is None
+          or not record.get("noticed")
+        ):
+          keep_files.add(record_file.resolve())
+          keep_files.add((runs_root / f"{run_name}.log").resolve())
+    worktrees_root = state_root / "worktrees"
+    if worktrees_root.is_dir():
+      for wt_file in worktrees_root.glob("*.json"):
+        try:
+          wt_record = json.loads(wt_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+          wt_record = {}
+        wt_path = wt_record.get("worktree") if isinstance(wt_record, dict) else None
+        if wt_path and Path(wt_path).exists():
+          keep_files.add(wt_file.resolve())
+    removed_files = 0
+    removed_bytes = 0
+    removed_paths = []
+    for dirpath, _, filenames in os.walk(state_root, followlinks=False):
+      rel_parts = Path(dirpath).relative_to(state_root).parts
+      top = rel_parts[0] if rel_parts else ""
+      if top == "backups":
+        continue
+      for name in sorted(filenames):
+        if not top and name.endswith("-pr-body.md"):
+          continue
+        target = (Path(dirpath) / name).resolve()
+        if target in keep_files:
+          continue
+        try:
+          size = target.stat().st_size
+        except OSError:
+          continue
+        rel_name = target.relative_to(state_root).as_posix()
+        if not dry_run:
+          try:
+            target.unlink()
+          except OSError:
+            continue
+        removed_files += 1
+        removed_bytes += size
+        removed_paths.append(rel_name)
+    return {
+      "removed_files": removed_files,
+      "removed_bytes": removed_bytes,
+      "paths": removed_paths,
+      "dry_run": bool(dry_run),
+      "usage": state_dir_usage(state_root),
+    }
+
   def mark_report_seen(self, report_id):
     """Store the first completed report view. Keep that stamp when another browser opens the report. Clear it on
     republish. Keep `ever_seen` so the tab dot waits for a first view."""
@@ -10971,6 +11162,7 @@ def handler(store, reload_event=None):
             survey_state["results"] = results
             survey_state["answered_at"] = now()
             survey_state["requested"] = False
+            store.set_meta("survey_state_json", json.dumps(survey_state))
           self.reply(200, json.dumps({"ok": True}))
           return
         payload = json.loads(data)
@@ -13205,6 +13397,20 @@ def main():
     "clear",
     help="Empty all state tables in place; keep agent key record",
   )
+  state_verbs.add_parser(
+    "status",
+    help="Print arena-state file and byte usage by category",
+  )
+  state_clean = state_verbs.add_parser(
+    "clean",
+    help="Prune unreferenced uploads, downloads, finished runs, and scratch files",
+  )
+  state_clean.add_argument(
+    "-n",
+    "--dry-run",
+    action="store_true",
+    help="List files that would be removed without deleting them",
+  )
   args = parser.parse_args()
   if args.command == "serve" and args.port != DEFAULT_PORT:
     serve.error(f"--port must be {DEFAULT_PORT}")
@@ -13232,6 +13438,8 @@ def main():
     ("state", "save"): "save-state",
     ("state", "restore"): "restore-state",
     ("state", "clear"): "clear-state",
+    ("state", "status"): "status-state",
+    ("state", "clean"): "clean-state",
   }
   args.command = grouped_commands.get((args.command, verb), args.command)
   if args.command == "route":
@@ -13434,6 +13642,8 @@ def main():
         stop_event.set()
       if reload_event.is_set():
         print("Hot-reloading preview server...", flush=True)
+        store.set_meta("hot_reload_at", now())
+        os.environ["ARENA_PREVIEW_HOT_RELOAD"] = "1"
         os.execv(sys.executable, [sys.executable, *sys.argv])
     elif args.command == "read":
       require_server(store)
@@ -13755,6 +13965,10 @@ def main():
       print(format_import_receipt(store.restore_state(previous=args.previous)))
     elif args.command == "clear-state":
       print(format_clear_state(store.clear_state()))
+    elif args.command == "status-state":
+      print(format_state_usage(store.state_usage()))
+    elif args.command == "clean-state":
+      print(format_clean_state(store.clean_state(dry_run=args.dry_run)))
     elif args.command == "init":
       if args.tz:
         if not zone_exists(args.tz):

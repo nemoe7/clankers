@@ -15092,3 +15092,39 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   stop_evt.set()
   assert reload_evt.is_set()
   assert shut_down == [True]
+
+  hygiene_dir = tmp_path / "hygiene-state"
+  hygiene_store = preview.Store(hygiene_dir, create=True)
+  (hygiene_dir / "keep-img.png").write_bytes(sample_gif)
+  (hygiene_dir / "scratch.tmp").write_text("scratch", encoding="utf-8")
+  (hygiene_dir / "pr-body.md").write_text("## Summary\n\nBody.\n", encoding="utf-8")
+  rep_md = hygiene_dir / "active-rep.md"
+  rep_md.write_text("# Rep\n\n![img](keep-img.png)\n", encoding="utf-8")
+  hygiene_store.publish("active-rep", "Active Rep", rep_md)
+  (hygiene_dir / "runs").mkdir(exist_ok=True)
+  preview.write_run_record(
+    hygiene_dir / "runs" / "done-gate.json",
+    {"name": "done-gate", "argv": ["pytest"], "exit": 0, "noticed": True},
+  )
+  (hygiene_dir / "runs" / "done-gate.log").write_text("ok", encoding="utf-8")
+  preview.write_run_record(
+    hygiene_dir / "runs" / "unnoticed-gate.json",
+    {"name": "unnoticed-gate", "argv": ["pytest"], "exit": 0, "noticed": False},
+  )
+  (hygiene_dir / "runs" / "unnoticed-gate.log").write_text("pending", encoding="utf-8")
+  usage_before = hygiene_store.state_usage()
+  assert usage_before["categories"]["database"]["files"] >= 1
+  assert usage_before["categories"]["runs"]["files"] == 4
+  dry_receipt = hygiene_store.clean_state(dry_run=True)
+  assert dry_receipt["dry_run"] is True
+  assert "scratch.tmp" in dry_receipt["paths"]
+  assert "runs/done-gate.log" in dry_receipt["paths"]
+  assert (hygiene_dir / "scratch.tmp").exists()
+  clean_receipt = hygiene_store.clean_state(dry_run=False)
+  assert clean_receipt["dry_run"] is False
+  assert not (hygiene_dir / "scratch.tmp").exists()
+  assert not (hygiene_dir / "runs" / "done-gate.log").exists()
+  assert (hygiene_dir / "runs" / "unnoticed-gate.log").exists()
+  assert (hygiene_dir / "keep-img.png").exists()
+  assert (hygiene_dir / "active-rep.md").exists()
+  assert (hygiene_dir / "pr-body.md").exists()

@@ -912,7 +912,10 @@ function showWorkspace(usage) {
     node.textContent = 'Workspace file use is unavailable.';
     return;
   }
-  node.textContent = `Workspace files: ${bytes(usage.bytes)} in ${usage.files.toLocaleString()} files. Documented snapshot cap: ${bytes(usage.documented_cap_bytes)}.`;
+  const statePart = usage.arena_state && Number.isFinite(usage.arena_state.bytes)
+    ? ` State dir: ${bytes(usage.arena_state.bytes)} in ${usage.arena_state.files.toLocaleString()} files.`
+    : '';
+  node.textContent = `Workspace files: ${bytes(usage.bytes)} in ${usage.files.toLocaleString()} files.${statePart} Documented snapshot cap: ${bytes(usage.documented_cap_bytes)}.`;
 }
 function bytes(value) {
   if (value < 1000) return `${value} B`;
