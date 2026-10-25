@@ -29,6 +29,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Ship default `references/nuu.toml` font and renderer settings (`Basel Grotesk` and `Basel Grotesk Mono`) and update `_chromium_render_png` in `scripts/annotate.py` to locate `playwright-core` and `@sparticuz/chromium` across workspace `node_modules` paths.
 - Exempt `NUL003` when custom focus rings exist, check ancestor repository directories for `NUL004` `docs/**/design.md`, and skip scrolled-out elements in `NUA308`. Preserve element `bounds` in `measure.py` and `browser.cjs`, and add `crop="auto"` and callout repositioning in `scripts/annotate.py`.
+- Add fixed-slot spinner and pulsing-dot loading options for buttons and compact controls awaiting a fetch to `SKILL.md` and `references/recipes/loading-bar.md`.
 
 #### nemoizer
 
