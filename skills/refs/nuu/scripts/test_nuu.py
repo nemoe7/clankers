@@ -1470,3 +1470,10 @@ def test_design_boards_and_html_typography(tmp_path):
   assert auto_ann["crop"][0] <= 20
   assert auto_ann["crop"][1] <= 16
   assert auto_ann["crop"][0] + auto_ann["crop"][2] >= 140
+
+  nuu_skill_dir = SCRIPT.resolve().parent.parent
+  nuu_typo = annotate.resolve_project_typography(nuu_skill_dir)
+  assert "Inter" in nuu_typo["font_sans"]
+  assert "Basel Grotesk" not in nuu_typo["font_sans"]
+  assert nuu_typo["embedded_fonts"] == 0
+  assert nuu_typo["config_path"] == str(nuu_skill_dir / "nuu.toml")
