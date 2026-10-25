@@ -52,7 +52,7 @@ Omit survey answers and answer-key details from summaries and handoffs.
 - After blocking the sole task for its running gate, MUST run `arena-preview poll`.
 - NEVER run `arena-preview poll` as a gate wait unless the sole remaining task is blocked for that gate.
 - When several queued tasks each edit files, ALWAYS declare each task's path glob, then start the root gate before any of that file work.
-- While a local root gate runs, use `arena-preview worktree start` before unrelated file edits; work on non-overlapping task paths there without waiting read-only. A remote PR CI watch alone does not require a worktree.
+- While a local root gate runs, use `arena-preview worktree start` before unrelated file edits. Work on non-overlapping task paths there without waiting read-only. A remote PR CI watch alone does not require a worktree, and PR checks are ALWAYS priority 1.
 - Declare nonoverlapping paths before you start the worktree.
 - NEVER start a gate, commit or push in the detached worktree.
 - Collect the worktree diff only after the root gate passes.

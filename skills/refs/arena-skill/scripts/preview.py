@@ -4287,6 +4287,12 @@ def run_notices(state_dir, show_running=False, out=None):
     record = json_record(path)
     if record is not None:
       records.append((path, reconcile_routed_record(path, record)))
+  records.sort(
+    key=lambda item: (
+      not remote_watch_run(state_dir, item[1].get("name") or item[0].stem),
+      item[0].name,
+    )
+  )
   for path, record in records:
     if record.get("exit") is None or record.get("announced"):
       continue
@@ -5212,18 +5218,18 @@ def poll_inbox(store, sleeper=None):
       if violation or listing["pending"]:
         print_read(store)
         return 0
-      # A finished gate run ends this poll, so a separate closing poll still ends the turn.
-      if run_notices(store.path.parent):
-        # The finished gate ends this poll, so the required closing poll is not spam.
-        clear_poll_repeat(store)
-        print("DO NOT END TURN. POLL AGAIN.", flush=True)
-        return 0
       # A failed check on the branch pull request ends the wait, so the turn fixes it now.
       if failures and "pr-checks" not in live_runs(store.path.parent):
         print(
           f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",
           flush=True,
         )
+        return 0
+      # A finished gate run ends this poll, so a separate closing poll still ends the turn.
+      if run_notices(store.path.parent):
+        # The finished gate ends this poll, so the required closing poll is not spam.
+        clear_poll_repeat(store)
+        print("DO NOT END TURN. POLL AGAIN.", flush=True)
         return 0
       open_tasks = [
         item

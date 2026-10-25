@@ -82,7 +82,7 @@
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order NEVER decides it and a large task NEVER blocks a small one.
 - Keep working while tasks remain; end the turn when the work is verified and stopped.
 - Before ending a turn with a pushed branch, check the open PR's CI.
-- A failing check is unfinished work.
+- A failing check is unfinished work, and PR checks are ALWAYS priority 1 ahead of queued tasks.
 - Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) detached, NEVER inline.
 - Push only when they pass; an inline run counts as skipping the gate, whatever its speed.
 - Read the passed or failed line of every gate you run; a pipe that hides the verdict counts as skipping the gate.

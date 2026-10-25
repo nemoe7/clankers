@@ -14945,3 +14945,30 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   listed_text = preview.format_task_list(obs_store.list_tasks())
   assert listed_text.index("active-two") < listed_text.index("blocked-rep-task")
+  preview.write_run_record(
+    preview.run_record_path(obs_state, "alpha-check"),
+    {
+      "name": "alpha-check",
+      "argv": ["pytest"],
+      "exit": 0,
+      "seconds": "1.0",
+      "verdict": "ok",
+    },
+  )
+  preview.write_run_record(
+    preview.run_record_path(obs_state, "pr-checks"),
+    {
+      "name": "pr-checks",
+      "argv": ["gh", "pr", "checks", "1", "--watch"],
+      "exit": 1,
+      "seconds": "2.0",
+      "verdict": "Failed: CI",
+    },
+  )
+  capsys.readouterr()
+  assert preview.run_notices(obs_state) == 1
+  first_notice = capsys.readouterr().out
+  assert "run pr-checks done: exit 1" in first_notice  # nonemo: NMT100
+  assert preview.run_notices(obs_state) == 1
+  second_notice = capsys.readouterr().out
+  assert "run alpha-check done: exit 0" in second_notice  # nonemo: NMT100

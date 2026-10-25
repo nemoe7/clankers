@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Unblock `--status finished` when a task's report has an answer or a remote CI watch run is active (`scripts/preview.py`). Let explicit `--order` outrank blocked report tasks and skip mandatory regates for `.agents/skills/**`-only diffs on `origin/main`.
 
 - Standardize inline SVG icon dimensions to `16x16` in `assets/index.html`, suppress pointer-focus outlines before keyboard navigation on ID-targeted controls in `assets/style.css`, and record three `nuu-deviation:` design markers.
+- State that pull-request checks are priority 1 ahead of queued tasks in `rules/refs/ARENA.md`, `skills/refs/arena-skill/SKILL.md`, and live mirrors, and sort `pr-checks` first in `scripts/preview.py`.
 
 #### userscripts
 

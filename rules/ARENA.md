@@ -81,7 +81,7 @@
 - After pushing, watch latest PR head to conclusion via `gh pr checks <PR> --watch`; replace superseded watches, keep working, read latest verdict before turn end.
 - Fresh-push check list may stay empty ≤30s: wait once briefly, then watch; NEVER hand-poll.
 - Stop and report HTTP 401 or any other command/API error; pending checks are not command errors.
-- An empty or absent list proves nothing; failed checks keep work open.
+- Empty/absent list proves nothing; failed checks = open work; PR checks = ALWAYS priority 1 over queued tasks.
 - Before turn end with a pushed branch, check open PR CI.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
 - Report changes, findings, checks, results, useful files, decisions, open issues, assumptions, limitations. Open with result; skip task restatement; prefer numbered lists; skipped work + add-when in ≤3 short lines.

@@ -1565,6 +1565,7 @@ def run_notices(state_dir,show_running=False,out=None):
 	for path in sorted(runs.glob('*.json')):
 		record=json_record(path)
 		if record is not None:records.append((path,reconcile_routed_record(path,record)))
+	records.sort(key=lambda item:(not remote_watch_run(state_dir,item[1].get('name')or item[0].stem),item[0].name))
 	for(path,record)in records:
 		if record.get('exit')is None or record.get('announced'):continue
 		print(f"run {record.get('name')} done: exit {record.get('exit')} {record.get('seconds')}s {record.get('verdict')}",file=out,flush=True);record['announced']=True;write_run_record(path,record);return 1
@@ -1906,8 +1907,8 @@ def poll_inbox(store,sleeper=None):
 			if time.monotonic()>=deadline:break
 			violation=store.pending_violation_note();listing=store.read(include_quiet=False)
 			if violation or listing['pending']:print_read(store);return 0
-			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
 			if failures and'pr-checks'not in live_runs(store.path.parent):print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);return 0
+			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
 			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: UNBLOCKED TASK {names}. Start a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
 			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);return 0
