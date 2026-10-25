@@ -1979,6 +1979,59 @@ function clearReportBody() {
   const form = $('#report-form');
   if (status && report && form) form.insertBefore?.(status, report);
   report.replaceChildren();
+  const toc = $('#report-toc');
+  if (toc) {
+    toc.replaceChildren();
+    toc.hidden = true;
+  }
+}
+function renderReportToc(html = '') {
+  const toc = $('#report-toc');
+  const report = $('#report');
+  if (!toc || !report) return;
+  const domHeadings = [...(report.querySelectorAll?.('h1, h2, h3') || [])];
+  const items = [];
+  if (domHeadings.length) {
+    domHeadings.forEach((heading, index) => {
+      const text = (heading.textContent || '').trim();
+      if (!text) return;
+      const id = heading.id || `report-heading-${index + 1}`;
+      heading.id = id;
+      items.push({ id, level: Number(String(heading.tagName || 'H1').slice(1)) || 1, text, node: heading });
+    });
+  } else if (typeof html === 'string' && html) {
+    let index = 0;
+    for (const match of html.matchAll(/<h([1-3])\b([^>]*)>([\s\S]*?)<\/h\1>/gi)) {
+      const text = unescapeHtmlEntities(match[3].replace(/<[^>]+>/g, '')).trim();
+      if (!text) continue;
+      const idMatch = /\bid="([^"]+)"/i.exec(match[2] || '');
+      const id = idMatch ? idMatch[1] : `report-heading-${++index}`;
+      items.push({ id, level: Number(match[1]) || 1, text, node: null });
+    }
+  }
+  if (!items.length) {
+    toc.replaceChildren();
+    toc.hidden = true;
+    return;
+  }
+  const title = document.createElement('p');
+  title.className = 'report-toc-title';
+  title.textContent = 'Contents';
+  const links = items.map(item => {
+    const link = document.createElement('a');
+    link.className = 'report-toc-link';
+    link.href = `#${item.id}`;
+    link.dataset.level = String(item.level);
+    link.textContent = item.text;
+    link.addEventListener('click', event => {
+      event.preventDefault();
+      const target = item.node || report.querySelector?.(`#${item.id}`);
+      target?.scrollIntoView?.({ behavior: reducedMotion.matches ? 'auto' : 'smooth', block: 'start' });
+    });
+    return link;
+  });
+  toc.replaceChildren(title, ...links);
+  toc.hidden = false;
 }
 function reportStatusLine(text, id, answerId = null) {
   const status = $('#report-status');
@@ -2300,6 +2353,14 @@ function updateReportTop() {
   const panel = $('#reports-panel');
   $('#reports-scroll-frame').hidden = panel.hidden;
   $('#report-top').hidden = panel.hidden || panel.scrollTop <= 0;
+  const submitFloat = $('#report-submit-float');
+  if (submitFloat) {
+    const submit = $('#report-submit');
+    const maxScroll = Math.max(0, (panel.scrollHeight || 0) - (panel.clientHeight || 0));
+    const atEnd = maxScroll <= 4 || (panel.scrollTop || 0) >= maxScroll - 8;
+    submitFloat.hidden = Boolean(panel.hidden || !submit || submit.hidden || atEnd);
+    submitFloat.disabled = Boolean(submit?.disabled);
+  }
 }
 $('#report-top').addEventListener('click', () => {
   scrollJump($('#reports-panel'), 0);
@@ -2784,6 +2845,7 @@ async function loadReport(force = false) {
   if (!updating || !id) {
     clearReportBody();
     $('#report-submit').hidden = true;
+    updateReportTop();
   }
   if (!id) {
     delete panel.dataset.loading;
@@ -2820,12 +2882,13 @@ async function loadReport(force = false) {
     if ($('#report-status') && $('#report-form')) $('#report-form').insertBefore?.($('#report-status'), $('#report'));
     $('#report').innerHTML = html;
     placeReportStatus();
+    renderReportToc(html);
     $('#report').dataset.reportId = id;
     $('#report').dataset.updatedAt = revision;
     $('#report').dataset.revision = result.revision;
     panel.scrollTop = updating ? place : 0;
-    updateReportTop();
     $('#report-submit').hidden = !result.fields;
+    updateReportTop();
     const saved = result.fields ? savedAnswers(id) : null;
     if (saved && saved.answers) {
       applyAnswers($('#report'), saved.answers);
@@ -2849,8 +2912,8 @@ async function loadReport(force = false) {
     }
   }
 }
-$('#report-form').addEventListener('submit', async event => {
-  event.preventDefault();
+async function submitReportForm(event) {
+  event?.preventDefault?.();
   const id = $('#report').dataset.reportId;
   if (!id || id !== $('#report-select').value) return;
   const revision = $('#report').dataset.revision;
@@ -2859,6 +2922,7 @@ $('#report-form').addEventListener('submit', async event => {
   if (button.disabled) return;
   reportDirty = true;
   button.disabled = true;
+  updateReportTop();
   $('#report-status').textContent = 'Sending…';
   const answer = { id: newId(), answers, revision };
   const original = getState()?.reports.find(report => report.id === id)?.updated_at;
@@ -2892,8 +2956,13 @@ $('#report-form').addEventListener('submit', async event => {
         id,
       );
     }
-  } finally { button.disabled = false; }
-});
+  } finally {
+    button.disabled = false;
+    updateReportTop();
+  }
+}
+$('#report-form').addEventListener('submit', submitReportForm);
+$('#report-submit-float').addEventListener('click', submitReportForm);
 // The CLI writes task status, and the Tasks tab reads it on the state poll.
 // Build rows with textContent so hostile titles remain text.
 function taskFilterType(task) {

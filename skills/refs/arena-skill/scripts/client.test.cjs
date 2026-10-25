@@ -3346,6 +3346,21 @@ test('preview client', async (t) => {
       const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
       assert.match(html, /id="report-top"[^>]*class="log-newest"/);
       assert.match(html, /<section id="reports-panel"[\s\S]*?<\/section>\s*<button id="report-top"/);
+      assert.match(html, /id="report-submit-float"/);
+      assert.doesNotMatch(html, /<label for="report-select">/);
+      assert.equal(get('#report-toc').hidden, false);
+      assert.ok(get('#report-toc').children.length >= 2);
+      get('#report-submit').hidden = false;
+      panel.scrollHeight = 1000;
+      panel.clientHeight = 200;
+      panel.scrollTop = 100;
+      panel.events.scroll();
+      assert.equal(get('#report-submit-float').hidden, false);
+      panel.scrollTop = 800;
+      panel.events.scroll();
+      assert.equal(get('#report-submit-float').hidden, true);
+      get('#report-submit').hidden = true;
+      panel.events.scroll();
     } finally {
       get('#notes-tab').events.click();
       state.reports = keptReports;

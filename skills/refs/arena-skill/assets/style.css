@@ -443,6 +443,44 @@ mark code { color: var(--text); }
 .option textarea { flex: 1; width: auto; min-width: 0; min-height: 0; padding: 4px 8px; }
 #report-submit { margin-top: 16px; margin-left: auto; display: block; }
 #report-form { min-width: 0; margin-top: 12px; }
+.report-toc { display: none; }
+.report-main { min-width: 0; }
+.report-submit-float { position: absolute; right: 24px; bottom: 24px; z-index: 3; box-shadow: 0 4px 12px rgb(0 0 0 / 28%); }
+@media (min-width: 75em) {
+  #reports-panel > .card {
+    width: min(1440px, 94vw); max-width: 1440px;
+    margin-left: max(0px, calc((100vw - min(1440px, 94vw)) / 2 - 5vw));
+    display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 900px) minmax(200px, 1fr);
+    gap: 24px; align-items: start;
+  }
+  .report-toc {
+    grid-column: 1; grid-row: 1; position: sticky; top: 16px;
+    display: flex; flex-direction: column; gap: 4px; padding: 12px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+    max-height: calc(100dvh - 120px); overflow-y: auto;
+  }
+  .report-toc[hidden] { display: none; }
+  .report-toc-title { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .report-toc-link {
+    display: block; padding: 4px 8px; border-radius: 4px;
+    font-size: 14px; line-height: 1.4; color: var(--muted); text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+  .report-toc-link[data-level="2"] { padding-left: 12px; }
+  .report-toc-link[data-level="3"] { padding-left: 24px; font-size: 12px; }
+  .report-toc-link:hover { color: var(--text); background: var(--panel-2); }
+  .report-main { grid-column: 2; grid-row: 1; min-width: 0; }
+  .report-main > #report-form { margin-top: 0; }
+  .report-rail {
+    grid-column: 3; grid-row: 1; position: sticky; top: 16px;
+    display: flex; flex-direction: column; gap: 8px; padding: 12px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+    max-height: calc(100dvh - 120px); overflow-y: auto;
+  }
+  .report-rail .report-toolbar { border-bottom: 0; padding-bottom: 0; }
+  .report-rail .select-wrap { flex: 1 1 100%; width: 100%; }
+  .report-rail #report-ack-history { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--border); }
+}
 /* The Tasks tab is three divs the agent writes: current, upcoming, then finished. */
 .tasks-layout { display: flex; flex-direction: column; gap: 18px; }
 .task-div { min-width: 0; overflow-wrap: anywhere; }

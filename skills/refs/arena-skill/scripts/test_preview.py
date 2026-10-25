@@ -13925,6 +13925,15 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
     ".report img, .message-text img, .code-md-preview img, #draft-preview img "
     "{ max-width: 100%; height: auto; }" in style_css
   )
+  assert "@media (min-width: 75em)" in style_css
+  assert (
+    "grid-template-columns: minmax(180px, 1fr) minmax(0, 900px) minmax(200px, 1fr);"
+    in style_css
+  )
+  assert 'id="report-toc"' in index_html
+  assert 'id="report-rail"' in index_html
+  assert 'id="report-submit-float"' in index_html
+  assert '<label for="report-select">' not in index_html
 
   mermaid_md = "# Flow\n\n```mermaid\nflowchart TD\n  A[One] --> B[Two]\n```\n"
   mermaid_html, mermaid_fields = preview.render_report(mermaid_md)
