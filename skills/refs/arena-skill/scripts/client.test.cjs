@@ -5417,6 +5417,7 @@ test('the composer keeps Send inside and status lines outside its panel', () => 
   for (const identity of ['agent-key', 'send-status']) {
     assert.equal(locations.get(identity), false, `${identity} remains outside the panel`);
   }
+  assert.doesNotMatch(html, /Answers reach the agent inbox as one submission/, 'Reports panel omits the submission hint footer');
   const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
   assert.match(css, /\.notes-layout\s*>\s*\.composer-footer\s*\{[^}]*align-items:\s*center;[^}]*text-align:\s*center;/);
 });
