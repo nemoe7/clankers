@@ -5253,6 +5253,19 @@ test('preview client', async (t) => {
     documentEvents.touchend({});
     assert.equal(swipeArrow.hidden, true);
     assert.equal(get('#notes-tab').getAttribute('aria-selected'), 'true');
+
+    // Mobile virtual keyboard or mobile input focus hides .composer-footer so only the composer sits above the keyboard.
+    const prevCoarse = coarsePointer;
+    coarsePointer = true;
+    context.document.activeElement = get('#note');
+    get('#note').events.focus?.({ type: 'focus', target: get('#note') });
+    assert.equal(root.dataset.keyboardOpen, 'true', 'mobile input focus sets data-keyboard-open=true');
+    assert.equal(get('.composer-footer').hidden, true, 'mobile input focus hides .composer-footer');
+    context.document.activeElement = null;
+    get('#note').events.blur?.({ type: 'blur', target: get('#note') });
+    assert.equal(root.dataset.keyboardOpen, undefined, 'mobile input blur clears data-keyboard-open');
+    assert.equal(get('.composer-footer').hidden, false, 'mobile input blur restores .composer-footer');
+    coarsePointer = prevCoarse;
   });
 
 });

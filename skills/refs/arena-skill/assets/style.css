@@ -410,7 +410,10 @@ mark code { color: var(--text); }
   nav button { padding: 7px 3px; font-size: 13px; }
   #send { margin-left: auto; }
   .card.compose { padding: 6px; }
+  .notes-layout:has(#compose:focus-within) > .composer-footer,
+  .notes-layout:has(input:focus, textarea:focus) > .composer-footer { display: none; }
 }
+:root[data-keyboard-open="true"] .notes-layout > .composer-footer { display: none; }
 
 #send-status { margin: 0; }
 #send-status:empty { display: none; }

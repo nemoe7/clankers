@@ -310,8 +310,39 @@ expandComposer.addEventListener('click', () => {
   grow();
   (note.hidden ? $('#draft-preview') : note).focus();
 });
+const touchPointer = window.matchMedia?.('(pointer: coarse)');
 let lastViewportHeight = 0;
+let maxViewportHeight = 0;
+function syncKeyboardFooter(event) {
+  const vv = window.visualViewport;
+  const vvHeight = vv?.height || 0;
+  const innerHeight = window.innerHeight || 0;
+  const currentHeight = vvHeight && innerHeight ? Math.min(vvHeight, innerHeight) : vvHeight || innerHeight;
+  if (currentHeight > maxViewportHeight) maxViewportHeight = currentHeight;
+  const active = event?.type === 'blur' || event?.type === 'focusout'
+    ? null
+    : (document.activeElement || event?.target || (event?.type === 'focus' ? note : null));
+  const tag = String(active?.tagName || '').toLowerCase();
+  const inputFocused = active === note || active === $('#log-search') || active === $('#task-search') || active === $('#fetch-url')
+    || tag === 'textarea' || Boolean(active?.isContentEditable)
+    || (tag === 'input' && !['button', 'checkbox', 'radio', 'submit', 'reset', 'file', 'image', 'range', 'color', 'hidden'].includes(String(active.type || 'text').toLowerCase()));
+  const viewportShrunk = Boolean(
+    (vvHeight && innerHeight && innerHeight - vvHeight > 80)
+    || (maxViewportHeight && currentHeight && maxViewportHeight - currentHeight > 80)
+  );
+  const mobile = Boolean(touchPointer?.matches || (window.innerWidth && window.innerWidth <= 720) || viewportShrunk);
+  const keyboardOpen = Boolean((mobile && inputFocused) || viewportShrunk);
+  const footer = $('.composer-footer');
+  if (keyboardOpen) {
+    document.documentElement.dataset.keyboardOpen = 'true';
+    if (footer) footer.hidden = true;
+  } else {
+    delete document.documentElement.dataset.keyboardOpen;
+    if (footer) footer.hidden = false;
+  }
+}
 function syncViewport() {
+  syncKeyboardFooter();
   const vv = window.visualViewport;
   const vvHeight = vv?.height || 0;
   const innerHeight = window.innerHeight || 0;
@@ -334,6 +365,9 @@ function syncViewport() {
     updateLogJump();
   }
 }
+touchPointer?.addEventListener?.('change', syncKeyboardFooter);
+document.addEventListener('focusin', syncKeyboardFooter);
+document.addEventListener('focusout', event => setTimeout(() => syncKeyboardFooter(event), 0));
 window.addEventListener('resize', () => { syncViewport(); if (stagedFiles.length) renderStagedFiles(); else grow(); });
 window.addEventListener('pageshow', () => { syncViewport(); grow(); });
 window.visualViewport?.addEventListener?.('resize', syncViewport);
@@ -479,7 +513,8 @@ note.addEventListener('input', () => {
   updateSlashMenu();
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
-note.addEventListener('blur', () => setTimeout(hideSlashMenu, 120));
+note.addEventListener('focus', syncKeyboardFooter);
+note.addEventListener('blur', event => { syncKeyboardFooter(event); setTimeout(hideSlashMenu, 120); });
 note.addEventListener('scroll', () => {
   const backdrop = $('#note-backdrop');
   if (backdrop && !backdrop.hidden) backdrop.scrollTop = note.scrollTop;
@@ -1573,7 +1608,6 @@ $('#form').addEventListener('submit', async event => {
 });
 // A touch keyboard offers no Shift key, so there the Return key writes the newline and the Send
 // button sends.
-const touchPointer = window.matchMedia?.('(pointer: coarse)');
 note.addEventListener('keydown', event => {
   if (event.key === 'Backspace' && !event.ctrlKey && !event.metaKey && !event.altKey && note.dataset.slash === 'true') {
     const prefix = recognizedSlashPrefix(note.value);
