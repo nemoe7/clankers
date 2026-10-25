@@ -19,7 +19,8 @@
   --warn: #8a5a00;
   --ok: #1c7a3f;
   --focus: #2b53d6;
-  --scrollbar-thumb: #c8c8d0;
+  --scrollbar-thumb: #8e877e;
+  --scrollbar-thumb-hover: #8a8379;
 
   /* Type: one family, three weights, a short ramp */
   --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -81,7 +82,8 @@
     --warn: #f0bb4a;
     --ok: #6fd08c;
     --focus: #8fa8ff;
-    --scrollbar-thumb: #302e2c;
+    --scrollbar-thumb: #6e685f;
+    --scrollbar-thumb-hover: #8a8379;
   }
 }
 
@@ -102,7 +104,8 @@
   --warn: #8a5a00;
   --ok: #1c7a3f;
   --focus: #2b53d6;
-  --scrollbar-thumb: #c8c8d0;
+  --scrollbar-thumb: #8e877e;
+  --scrollbar-thumb-hover: #8a8379;
 }
 
 :root[data-theme="dark"] {
@@ -121,7 +124,8 @@
   --warn: #f0bb4a;
   --ok: #6fd08c;
   --focus: #8fa8ff;
-  --scrollbar-thumb: #302e2c;
+  --scrollbar-thumb: #6e685f;
+  --scrollbar-thumb-hover: #8a8379;
 }
 
 *,
@@ -444,7 +448,12 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: var(--space-1);
+  border-radius: var(--space-2);
+}
+
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-hover);
 }
 
 ::-webkit-scrollbar-button {
