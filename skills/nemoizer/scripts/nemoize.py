@@ -1957,6 +1957,65 @@ def prose_review(path, text, context, paragraph_cap, min_the_override=None):
   return findings
 
 
+MD_LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
+
+
+def docs_drift_findings(path, text, root=None):
+  """Check Markdown files for broken local relative links during audits."""
+  if path.suffix.lower() not in {".md", ".mdx"}:
+    return []
+  findings = []
+  fence = None
+  lines = text.splitlines()
+  for number, line in enumerate(lines, 1):
+    marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+    if marker:
+      if fence is None:
+        fence = marker[1]
+      elif (
+        marker[1][0] == fence[0]
+        and len(marker[1]) >= len(fence)
+        and not line[marker.end() :].strip()
+      ):
+        fence = None
+      continue
+    if fence is not None:
+      continue
+    visible = re.sub(
+      r"(`+)(?:(?!\1).)+?\1",
+      lambda match: " " * len(match.group(0)),
+      blank_inline_comments(line),
+    )
+    for match in MD_LINK_RE.finditer(visible):
+      raw_target = match.group(1).strip()
+      if not raw_target or raw_target.startswith("<"):
+        continue
+      target = raw_target.split()[0].split("#", 1)[0].split("?", 1)[0].strip()
+      if (
+        not target
+        or "://" in target
+        or target.startswith(("#", "mailto:", "data:", "javascript:", "/"))
+        or "<" in target
+        or ">" in target
+      ):
+        continue
+      candidates = [path.parent / target]
+      if root is not None:
+        candidates.append(Path(root) / target)
+      if not any(candidate.exists() for candidate in candidates):
+        findings.append(
+          format_finding(
+            str(path),
+            number,
+            "docs-drift",
+            f"missing link target: {target}",
+            line,
+            status="manual_review",
+          )
+        )
+  return findings
+
+
 def source_prose(path, text, context, paragraph_cap):
   """Check extracted code prose while retaining physical source locations."""
   if context == "unknown" and (
@@ -2558,6 +2617,8 @@ def main(argv=None):
       )
       for row in rows
     )
+    if arguments.audit:
+      findings.extend(docs_drift_findings(path, text, ACTIVE_CONFIG.get("root")))
   if arguments.audit:
     print("\n".join(audit_lines(marks, findings, ADVISORY_RULE_IDS)))
     if errors:

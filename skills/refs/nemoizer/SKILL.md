@@ -64,7 +64,7 @@ and the new one.
 - Use any comment syntax for `nonemo: <id>`; the scanner reads text, not syntax.
 - Apply an exclusion only to a known matching rule ID.
 - Print every nonemo marker with its path, line, rule ID, scope, and text when `nemoizer collect` or `--ignores` is used, and print every `nonemo` marker and manual-review finding when `nemoizer audit` or `--audit` is used.
-- Review target prose manually against the Prose rules alongside `nemoizer audit` output, format audit reports with the [audit report template](references/audit-report.md) using one section per file (`Rule | Before | After | Verdict | Reason`), show the rule applied in `After` even when `Verdict` is `keep`, omit empty sections, and state 0 in Counts.
+- Review target prose manually against the Prose rules and check documentation against code, CLI flags, configs, and paths for docs drift alongside `nemoizer audit` output, format audit reports with the [audit report template](references/audit-report.md) using one section per file (`Rule | Before | After | Verdict | Reason`), show the rule applied in `After` even when `Verdict` is `keep`, omit empty sections, and state 0 in Counts.
 
 ```bash
 python skills/nemoizer/scripts/nemoizer collect .

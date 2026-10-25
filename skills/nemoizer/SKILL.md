@@ -41,7 +41,7 @@ Do not rewrite exclusion markers or the rotation table; apply only unsuppressed 
 - Use any comment syntax for `nonemo: <id>`; scanning reads text, not syntax.
 - Apply an exclusion only to a known matching rule ID.
 - With `nemoizer collect` or `--ignores`, print every nonemo marker: path, line, rule ID, scope, and text; with `nemoizer audit` or `--audit`, print every `nonemo` marker and manual-review finding.
-- Review target prose manually against the Prose rules alongside `nemoizer audit`, and format audit reports with [references/audit-report.md](references/audit-report.md), one section per file (`Rule | Before | After | Verdict | Reason`), rule-applied `After` even when `Verdict` is `keep`, no empty sections, and 0 in Counts.
+- Review target prose manually against the Prose rules and check docs against code, CLI flags, configs, and paths for docs drift alongside `nemoizer audit`, and format audit reports with [references/audit-report.md](references/audit-report.md), one section per file (`Rule | Before | After | Verdict | Reason`), rule-applied `After` even when `Verdict` is `keep`, no empty sections, and 0 in Counts.
 
 
 Run rotations and serial-comma checks (`NMO`), semicolon/sentence/nominalization/manual-review style checks (`STE`), human-prose checks (`HMN`), paragraph checks (`NMP`), and test reviews (`NMT`) by default.

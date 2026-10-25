@@ -1517,3 +1517,28 @@ def test_sql_dbml_env_and_jinja_comment_extractors_and_ste903_guard(tmp_path):
     )
     == "- Specify a relationship and the sheet specifies the single size, keeping role names."
   )
+
+
+def test_audit_includes_docs_drift(tmp_path):
+  refs_dir = SCRIPT.parent.parent / "references"
+  audit_template = (refs_dir / "audit-report.md").read_text(encoding="utf-8")
+  skill_md = (SCRIPT.parent.parent / "SKILL.md").read_text(encoding="utf-8")
+  assert "docs drift" in audit_template
+  assert "docs-drift" in audit_template
+  assert "docs drift" in skill_md
+
+  existing = tmp_path / "existing.md"
+  existing.write_text("# Existing\n", encoding="utf-8")
+  doc = tmp_path / "README.md"
+  doc.write_text(
+    "Read [existing](existing.md), [anchor](#top), and [site](https://example.com).\n"
+    "Read [missing](missing-guide.md).\n"
+    "```markdown\n[ignored](not-a-real-file.md)\n```\n",
+    encoding="utf-8",
+  )
+  audit_res = run("--audit", str(doc), cwd=tmp_path)
+  assert audit_res.returncode == 0, audit_res.stderr
+  assert "[docs-drift]" in audit_res.stdout
+  assert "missing-guide.md" in audit_res.stdout
+  assert "existing.md" not in audit_res.stdout
+  assert "not-a-real-file.md" not in audit_res.stdout
