@@ -3515,8 +3515,9 @@ for (const tab of tabs) {
     next.focus();
   });
 }
-const TAB_SWIPE_MIN = 12;
-const TAB_SWIPE_THRESHOLD = 48;
+const TAB_SWIPE_MIN = 8;
+const TAB_SWIPE_MAX = 72;
+const TAB_SWIPE_OFFSCREEN = 48;
 let tabSwipeState = null;
 function isSwipeInputFocused() {
   const active = document.activeElement;
@@ -3594,8 +3595,8 @@ document.addEventListener('touchmove', event => {
     }
   }
   if (absDx > tabSwipeState.maxAbsDx) tabSwipeState.maxAbsDx = absDx;
-  const swipedBack = (tabSwipeState.maxAbsDx >= TAB_SWIPE_THRESHOLD && absDx < TAB_SWIPE_THRESHOLD)
-    || (tabSwipeState.maxAbsDx - absDx > 16 && absDx < TAB_SWIPE_THRESHOLD);
+  const swipedBack = (tabSwipeState.maxAbsDx >= TAB_SWIPE_MAX && absDx < TAB_SWIPE_MAX - 16)
+    || (tabSwipeState.maxAbsDx - absDx > 24 && absDx < TAB_SWIPE_MAX / 2);
   const arrow = $('#tab-swipe-arrow');
   if (absDx >= TAB_SWIPE_MIN && !swipedBack) {
     const visibleTabs = tabs.filter(item => item && !item.hidden);
@@ -3606,10 +3607,15 @@ document.addEventListener('touchmove', event => {
     }
     const activeIndex = Math.max(0, visibleTabs.findIndex(item => item.getAttribute('aria-selected') === 'true'));
     const step = dx < 0 ? 1 : -1;
-    const nextTab = visibleTabs[(activeIndex + step + visibleTabs.length) % visibleTabs.length];
-    const progress = Math.min(1, absDx / TAB_SWIPE_THRESHOLD);
-    const pull = Math.min(1, Math.max(0, (absDx - TAB_SWIPE_MIN) / (96 - TAB_SWIPE_MIN)));
-    const armed = absDx >= TAB_SWIPE_THRESHOLD;
+    const nextIndex = activeIndex + step;
+    if (nextIndex < 0 || nextIndex >= visibleTabs.length) {
+      tabSwipeState.targetTab = null;
+      hideTabSwipeArrow();
+      return;
+    }
+    const nextTab = visibleTabs[nextIndex];
+    const progress = Math.min(1, Math.max(0, (absDx - TAB_SWIPE_MIN) / (TAB_SWIPE_MAX - TAB_SWIPE_MIN)));
+    const armed = progress >= 1;
     tabSwipeState.targetTab = armed ? nextTab : null;
     tabSwipeState.y = touch.clientY;
     if (arrow) {
@@ -3622,15 +3628,16 @@ document.addEventListener('touchmove', event => {
       arrow.dataset.progress = progress.toFixed(2);
       if (armed) arrow.dataset.armed = 'true';
       else delete arrow.dataset.armed;
-      const shiftPx = Math.round((side === 'right' ? 1 : -1) * (14 - pull * 22));
-      const scale = (0.82 + 0.18 * progress).toFixed(3);
-      const opacity = (0.25 + 0.53 * progress).toFixed(3);
+      const shiftVal = Number(((side === 'right' ? 1 : -1) * (1 - progress) * TAB_SWIPE_OFFSCREEN).toFixed(2));
+      const shiftPx = `${shiftVal}px`;
+      const scale = (0.85 + 0.15 * progress).toFixed(3);
+      const opacity = (0.2 + 0.58 * progress).toFixed(3);
       arrow.style.setProperty?.('--swipe-progress', progress.toFixed(3));
-      arrow.style.setProperty?.('--swipe-shift', `${shiftPx}px`);
+      arrow.style.setProperty?.('--swipe-shift', shiftPx);
       arrow.style.setProperty?.('--swipe-scale', scale);
       arrow.style.setProperty?.('--swipe-opacity', opacity);
       arrow.style.opacity = opacity;
-      arrow.style.transform = `translate3d(${shiftPx}px, -50%, 0) scale(${scale})`;
+      arrow.style.transform = `translate3d(${shiftPx}, -50%, 0) scale(${scale})`;
       const vh = Number(window.innerHeight) || 0;
       const clampedY = vh > 96 ? Math.min(vh - 32, Math.max(64, Math.round(touch.clientY))) : Math.round(touch.clientY);
       arrow.style.top = `${clampedY}px`;
