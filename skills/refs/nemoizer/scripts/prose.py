@@ -12,7 +12,7 @@ from pathlib import Path
 
 COMMENT_BLOCK_CAP = 2
 DIRECTIVE_MARKER = re.compile(
-  r"^\s*(?:#|//)\s*(?:arena-preview-[\w-]+|case:\s*[\w-]+|shellcheck\s+disable=\S+|"
+  r"^\s*(?:#|//|--)\s*(?:arena-preview-[\w-]+|case:\s*[\w-]+|shellcheck\s+disable=\S+|"
   r"nonemo:\s*[A-Za-z0-9_-]+|noqa(?::.*)?|type:\s*ignore(?:\[.*\])?|pragma:\s*no cover|region|endregion)\s*$",
   re.IGNORECASE,
 )
@@ -25,23 +25,46 @@ COMMENT_SUFFIXES = {
   ".cmd",
   ".cjs",
   ".css",
+  ".dbml",
+  ".env",
   ".html",
   ".ini",
+  ".j2",
+  ".jinja",
+  ".jinja2",
   ".js",
   ".mjs",
   ".jsonc",
   ".py",
   ".sh",
+  ".sql",
   ".svg",
   ".toml",
   ".yml",
   ".yaml",
 }
 JAVASCRIPT_SUFFIXES = {".cjs", ".js", ".mjs"}
-SLASH_SUFFIXES = {".css", ".jsonc"}
+SLASH_SUFFIXES = {".css", ".dbml", ".jsonc"}
+SQL_SUFFIXES = {".sql"}
+JINJA_SUFFIXES = {".j2", ".jinja", ".jinja2"}
 HTML_SUFFIXES = {".html", ".svg"}
-HASH_SUFFIXES = {".ini", ".sh", ".toml", ".yml", ".yaml"}
-SPECIAL_CODE_NAMES = {"Dockerfile", "arena-preview"}
+HASH_SUFFIXES = {".env", ".ini", ".sh", ".toml", ".yml", ".yaml"}
+SPECIAL_CODE_NAMES = {"Dockerfile", "arena-preview", ".env"}
+
+
+def is_env_file(path: Path) -> bool:
+  """Return whether path is a dotenv file such as .env or .env.example."""
+  name = path.name.lower()
+  return name == ".env" or name.startswith(".env.") or path.suffix.lower() == ".env"
+
+
+def is_code_file(path: Path) -> bool:
+  """Return whether path uses comment extraction rather than full-file prose scanning."""
+  return (
+    path.suffix.lower() in COMMENT_SUFFIXES
+    or path.name in SPECIAL_CODE_NAMES
+    or is_env_file(path)
+  )
 
 
 def python_comments(source: str) -> list[tuple[str, int, int]]:
@@ -327,6 +350,78 @@ def html_visible_prose(source: str) -> list[tuple[str, int, int]]:
   return extractor.spans
 
 
+def sql_comments(source: str) -> list[tuple[str, int, int]]:
+  """Collect SQL -- line comments and /* ... */ block comments with their source line spans."""
+  comments: list[tuple[str, int, int]] = []
+  state = "code"
+  quote = ""
+  buffer = ""
+  line = 1
+  start_line = 1
+  index = 0
+  while index < len(source):
+    char = source[index]
+    next_char = source[index + 1] if index + 1 < len(source) else ""
+    consumed = 1
+    if state == "string":
+      if char == quote and next_char == quote or char == "\\":
+        consumed = 2
+      elif char == quote:
+        state = "code"
+    elif state == "line-comment":
+      if char == "\n":
+        comments.append((clean_comment(buffer), start_line, line))
+        buffer = ""
+        state = "code"
+      else:
+        buffer += char
+    elif state == "block-comment":
+      if char == "*" and next_char == "/":
+        comments.append((clean_comment(buffer), start_line, line))
+        buffer = ""
+        state = "code"
+        consumed = 2
+      else:
+        buffer += char
+    elif char in "'\"":
+      state = "string"
+      quote = char
+    elif char == "-" and next_char == "-":
+      state = "line-comment"
+      start_line = line
+      buffer = ""
+      consumed = 2
+    elif char == "/" and next_char == "*":
+      state = "block-comment"
+      start_line = line
+      buffer = ""
+      consumed = 2
+    line += source[index : index + consumed].count("\n")
+    index += consumed
+  if state == "line-comment":
+    comments.append((clean_comment(buffer), start_line, line))
+  return comments
+
+
+def jinja_comments(source: str) -> list[tuple[str, int, int]]:
+  """Collect Jinja {# ... #} and HTML <!-- ... --> comment blocks with their source line spans."""
+  comments: list[tuple[str, int, int]] = list(html_comments(source))
+  cursor = 0
+  while True:
+    start = source.find("{#", cursor)
+    if start < 0:
+      break
+    end = source.find("#}", start + 2)
+    if end < 0:
+      break
+    first = source.count("\n", 0, start) + 1
+    last = source.count("\n", 0, end) + 1
+    inner = source[start + 2 : end].lstrip("-").rstrip("-").strip()
+    comments.append((inner, first, last))
+    cursor = end + 2
+  return sorted(comments, key=lambda row: row[1])
+
+
 def batch_comments(source: str) -> list[tuple[str, int, int]]:
   """Collect batch REM and double-colon comments with their source line spans."""
   comments: list[tuple[str, int, int]] = []
@@ -346,15 +441,20 @@ def span_comments(
   path: Path, source: str, skip_shebang: bool = False
 ) -> list[tuple[str, int, int]] | None:
   """Return the comment spans for one code path, or None when no scanner covers it."""
-  if path.suffix in JAVASCRIPT_SUFFIXES:
+  suffix = path.suffix.lower()
+  if suffix in JAVASCRIPT_SUFFIXES:
     return list(javascript_comments(source, path.name.endswith(USERSCRIPT_SUFFIX)))
-  if path.suffix in SLASH_SUFFIXES:
+  if suffix in SLASH_SUFFIXES:
     return slash_comments(source)
-  if path.suffix in HTML_SUFFIXES:
+  if suffix in SQL_SUFFIXES:
+    return sql_comments(source)
+  if suffix in JINJA_SUFFIXES:
+    return jinja_comments(source)
+  if suffix in HTML_SUFFIXES:
     return html_comments(source)
-  if path.suffix in HASH_SUFFIXES or path.name in SPECIAL_CODE_NAMES:
-    return hash_comments(source, path.suffix, skip_shebang)
-  if path.suffix in {".bat", ".cmd"}:
+  if suffix in HASH_SUFFIXES or path.name in SPECIAL_CODE_NAMES or is_env_file(path):
+    return hash_comments(source, suffix, skip_shebang)
+  if suffix in {".bat", ".cmd"}:
     return batch_comments(source)
   return None
 

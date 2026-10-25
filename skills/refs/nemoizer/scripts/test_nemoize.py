@@ -1448,3 +1448,58 @@ def test_workflow_name_spans_identifier_boundaries_and_mixed_determiner_lists(tm
   assert f"{slash_or.name}:3: [NMO003]" in slash_res.stdout
   assert f"{slash_or.name}:4:" not in slash_res.stdout
   assert f"{slash_or.name}:5:" not in slash_res.stdout
+
+
+def test_sql_dbml_env_and_jinja_comment_extractors_and_ste903_guard(tmp_path):
+  schema_sql = tmp_path / "schema.sql"
+  schema_sql.write_text(
+    "-- The service reads and writes rows.\n"
+    "-- Start; stop.\n"
+    "CREATE TABLE items (id INTEGER PRIMARY KEY, kind TEXT, repository TEXT);\n",
+    encoding="utf-8",
+  )
+  schema_dbml = tmp_path / "schema.dbml"
+  schema_dbml.write_text(
+    "// The table is disabled and locked.\n"
+    "// First clause; second clause.\n"
+    "Table items {\n"
+    "  id int [pk]\n"
+    "  kind varchar\n"
+    "}\n",
+    encoding="utf-8",
+  )
+  env_example = tmp_path / ".env.example"
+  env_example.write_text(
+    "# Keep one token per line.\n"
+    "# First token; second token.\n"
+    "KIND=production\n"
+    "REPOSITORY_URL=https://example.com\n",
+    encoding="utf-8",
+  )
+  template_jinja = tmp_path / "view.jinja"
+  template_jinja.write_text(
+    "{# Render the card header. #}\n"
+    "{# First part; second part. #}\n"
+    "<div>{{ item.kind }}; {{ item.repository }}</div>\n",
+    encoding="utf-8",
+  )
+  res = run(
+    "--no-config",
+    str(schema_sql),
+    str(schema_dbml),
+    str(env_example),
+    str(template_jinja),
+    cwd=tmp_path,
+  )
+  assert res.returncode == 1, res.stderr
+  assert f"{schema_sql}:2: [STE100]" in res.stdout
+  assert f"{schema_sql}:3:" not in res.stdout
+  assert f"{schema_dbml}:2: [STE100]" in res.stdout
+  assert f"{schema_dbml}:5:" not in res.stdout
+  assert f"{env_example}:2: [STE100]" in res.stdout
+  assert f"{env_example}:3:" not in res.stdout
+  assert f"{template_jinja}:2: [STE100]" in res.stdout
+  assert f"{template_jinja}:3:" not in res.stdout
+  assert "STE903" not in res.stdout
+  assert "NMO100" not in res.stdout
+  assert "NMO901" not in res.stdout

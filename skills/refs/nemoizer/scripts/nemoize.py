@@ -81,9 +81,9 @@ except ImportError:
 
 from prose import (
   COMMENT_BLOCK_CAP,
-  COMMENT_SUFFIXES,
-  SPECIAL_CODE_NAMES,
   comment_blocks,
+  is_code_file,
+  is_env_file,
   is_workflow_yaml,
   prose_spans,
   slash_comments,
@@ -739,9 +739,10 @@ def scan(targets, ignores):
     lines = text.splitlines()
     file_ids, line_ids, found = exclusions(path, lines)
     marks.extend(found)
-    is_code = path.suffix.lower() in COMMENT_SUFFIXES or path.name in SPECIAL_CODE_NAMES
+    is_code = is_code_file(path)
     prose_map = _prose_line_map(path, text) if is_code else None
-    if path.suffix.lower() == ".jsonc":
+    suffix_lower = path.suffix.lower()
+    if suffix_lower == ".jsonc":
       comment_map = {}
       for comment_text, first, _ in slash_comments(text):
         for offset, comment_line in enumerate(comment_text.splitlines()):
@@ -749,6 +750,10 @@ def scan(targets, ignores):
       line_pairs = sorted(
         (number, "\n".join(parts)) for number, parts in comment_map.items()
       )
+    elif (
+      suffix_lower in {".sql", ".dbml", ".j2", ".jinja", ".jinja2"} or is_env_file(path)
+    ) and prose_map is not None:
+      line_pairs = sorted(prose_map.items())
     else:
       line_pairs = list(enumerate(lines, 1))
     for number, line in line_pairs:
@@ -793,7 +798,7 @@ def format_paths(targets, ignores, out=None):
       continue
     lines = text.split("\n")
     file_ids, line_ids, _ = exclusions(path, lines)
-    is_code = path.suffix.lower() in COMMENT_SUFFIXES or path.name in SPECIAL_CODE_NAMES
+    is_code = is_code_file(path)
     prose_map = _prose_line_map(path, text) if is_code else None
     the_cap = ACTIVE_CONFIG.get("the_density_cap", THE_DENSITY_CAP)
     min_the = ACTIVE_CONFIG.get("min_the_count", MIN_THE_COUNT)
@@ -1248,7 +1253,7 @@ PHRASAL_VERB_RE = re.compile(
 )
 ELLIPSIS_RE = re.compile(
   r",\s+(?:and|or)\s+(?:is|are|was|were|has|have|had)\b|"
-  r"\b(?:the|a|an)\s+[a-z]{3,}\s+is\s+[a-z]{3,}ed\s+and\s+[a-z]{3,}ed\b",
+  r"\b(?:the|a|an|this|that|these|those|its|their|our|your)\s+[a-z]{3,}\s+is\s+([a-z]{3,}ed)\s+and\s+([a-z]{3,}ed)\b",
   re.IGNORECASE,
 )
 SERIAL_COMMA_RE = re.compile(
@@ -1351,7 +1356,21 @@ def prose_phrasal_verbs(text):
 
 
 def prose_ellipsis(text):
-  return prose_block_matches(text, lambda clean: list(ELLIPSIS_RE.finditer(clean)))
+  return prose_block_matches(
+    text,
+    lambda clean: [
+      match
+      for match in ELLIPSIS_RE.finditer(clean)
+      if not (
+        match.group(1)
+        and match.group(2)
+        and (
+          match.group(1).lower() in PASSIVE_STATE_ADJECTIVES
+          or match.group(2).lower() in PASSIVE_STATE_ADJECTIVES
+        )
+      )
+    ],
+  )
 
 
 def _serial_comma_hits(clean):
@@ -1926,7 +1945,8 @@ def source_prose(path, text, context, paragraph_cap):
     path.name in {"README.md", "CHANGELOG.md", "INSTALL.md"} or "docs" in path.parts
   ):
     context = "description"
-  if path.suffix in COMMENT_SUFFIXES or path.name in SPECIAL_CODE_NAMES:
+  code_file = is_code_file(path)
+  if code_file:
     spans = prose_spans(path, text)
   elif path.suffix in {".json", ".webmanifest", ".csv", ".lock"}:
     spans = []
@@ -1940,7 +1960,7 @@ def source_prose(path, text, context, paragraph_cap):
   lines = text.splitlines()
   file_ids, line_ids, _ = exclusions(path, lines)
   findings = []
-  if path.suffix in COMMENT_SUFFIXES or path.name in SPECIAL_CODE_NAMES:
+  if code_file:
     code = PROSE_RULE_IDS["comment_block"]
     comment_cap = ACTIVE_CONFIG.get("comment_block_cap", COMMENT_BLOCK_CAP)
     if not suppressed(code, file_ids):
