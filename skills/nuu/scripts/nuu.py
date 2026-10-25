@@ -933,7 +933,13 @@ def browser(args):
       }
       result.setdefault("findings", []).extend(
         {
-          "rule": "NUM201",
+          "rule": (
+            "NUM202"
+            if ": font-size is " in finding or ": letter-spacing is " in finding
+            else "NUM203"
+            if ": border-radius" in finding
+            else "NUM201"
+          ),
           "severity": "review",
           "evidence": finding,
           "location": location,

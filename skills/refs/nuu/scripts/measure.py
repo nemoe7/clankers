@@ -48,7 +48,10 @@ STRETCH_EXEMPT_INPUTS = {
 }
 PX = re.compile(r"^(-?\d+(?:\.\d+)?)px$")
 CUSTOM_PROPERTY = re.compile(r"--([a-z0-9-]+)\s*:\s*([^;]+);")
-TYPE_PROPERTIES = ("font-size", "line-height", "letter-spacing")
+TYPE_PROPERTIES = ("font-size", "letter-spacing")
+SPACING_PROPERTIES = ("padding", "margin", "gap", "row-gap", "column-gap")
+LAYOUT_PROPERTIES = ("border-radius",)
+RADIUS_SIZES = {4.0, 6.0, 10.0, 9999.0}
 
 
 def parse_sheet(text: str) -> dict[str, str]:
@@ -78,18 +81,26 @@ def on_scale(value: float, scale: float) -> bool:
   return math.isclose(value / scale, round(value / scale), abs_tol=1e-9)
 
 
-SPACING_PROPERTIES = ("padding", "margin", "gap", "row-gap", "column-gap")
-
-
 def off_scale(name: str, value: str, tokens: dict[str, str], scale: float) -> bool:
-  """True when a spacing px value is neither zero nor on the scale."""
-  if not name.startswith(SPACING_PROPERTIES):
-    return False
+  """True when a px value is neither zero, on the scale, nor a size the sheet names for it.
+
+  A spacing property reads the scale alone. A type size names a font size, and never
+  excuses a padding. A layout property such as border-radius may take a size the sheet names.
+  Fluid box dimensions (width, height, line-height, outline-width) are not scale tokens.
+  """
   match = PX.match(value.strip())
   if not match:
     return False
   number = float(match.group(1))
-  return number != 0 and not on_scale(number, scale)
+  if number == 0 or on_scale(number, scale):
+    return False
+  if name.startswith(SPACING_PROPERTIES):
+    return True
+  if name in TYPE_PROPERTIES:
+    return number not in named_sizes(tokens, ramp=True)
+  if name.startswith(LAYOUT_PROPERTIES):
+    return number not in (named_sizes(tokens, ramp=False) | RADIUS_SIZES)
+  return False
 
 
 def check(
