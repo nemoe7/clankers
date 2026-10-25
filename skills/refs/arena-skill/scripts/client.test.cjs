@@ -5264,17 +5264,29 @@ test('preview client', async (t) => {
     assert.equal(swipeArrow.hidden, true);
     assert.equal(get('#notes-tab').getAttribute('aria-selected'), 'true');
 
-    // Mobile virtual keyboard or mobile input focus hides .composer-footer so only the composer sits above the keyboard.
+    // Mobile virtual keyboard hides .composer-footer only when the viewport shrinks, not when #note stays focused with keyboard closed.
     const prevCoarse = coarsePointer;
+    const prevInnerHeight = context.window.innerHeight;
+    const prevVV = context.window.visualViewport;
     coarsePointer = true;
+    context.window.innerHeight = 800;
+    context.window.visualViewport = { height: 800, offsetTop: 0 };
+    windowEvents.resize();
     context.document.activeElement = get('#note');
     get('#note').events.focus?.({ type: 'focus', target: get('#note') });
-    assert.equal(root.dataset.keyboardOpen, 'true', 'mobile input focus sets data-keyboard-open=true');
-    assert.equal(get('.composer-footer').hidden, true, 'mobile input focus hides .composer-footer');
+    assert.equal(root.dataset.keyboardOpen, undefined, 'focused #note with closed keyboard does not set data-keyboard-open');
+    assert.equal(get('.composer-footer').hidden, false, 'focused #note with closed keyboard keeps .composer-footer visible');
+    context.window.visualViewport.height = 460;
+    windowEvents.resize();
+    assert.equal(root.dataset.keyboardOpen, 'true', 'shrunk viewport from open mobile keyboard sets data-keyboard-open=true');
+    assert.equal(get('.composer-footer').hidden, true, 'open mobile keyboard hides .composer-footer');
+    context.window.visualViewport.height = 800;
+    windowEvents.resize();
+    assert.equal(root.dataset.keyboardOpen, undefined, 'closing keyboard while #note stays focused clears data-keyboard-open');
+    assert.equal(get('.composer-footer').hidden, false, 'closing keyboard while #note stays focused restores .composer-footer');
     context.document.activeElement = null;
-    get('#note').events.blur?.({ type: 'blur', target: get('#note') });
-    assert.equal(root.dataset.keyboardOpen, undefined, 'mobile input blur clears data-keyboard-open');
-    assert.equal(get('.composer-footer').hidden, false, 'mobile input blur restores .composer-footer');
+    context.window.innerHeight = prevInnerHeight;
+    context.window.visualViewport = prevVV;
     coarsePointer = prevCoarse;
   });
 

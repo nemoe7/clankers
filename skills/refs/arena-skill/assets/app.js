@@ -331,7 +331,7 @@ function syncKeyboardFooter(event) {
     || (maxViewportHeight && currentHeight && maxViewportHeight - currentHeight > 80)
   );
   const mobile = Boolean(touchPointer?.matches || (window.innerWidth && window.innerWidth <= 720) || viewportShrunk);
-  const keyboardOpen = Boolean((mobile && inputFocused) || viewportShrunk);
+  const keyboardOpen = Boolean(mobile && viewportShrunk && (inputFocused || event?.type !== 'blur'));
   const footer = $('.composer-footer');
   if (keyboardOpen) {
     document.documentElement.dataset.keyboardOpen = 'true';
