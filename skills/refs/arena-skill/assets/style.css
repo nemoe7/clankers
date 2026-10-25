@@ -467,7 +467,8 @@ mark code { color: var(--text); }
   }
   .report-toc-link[data-level="2"] { padding-left: 12px; }
   .report-toc-link[data-level="3"] { padding-left: 24px; font-size: 12px; }
-  .report-toc-link:hover { color: var(--text); background: var(--panel-2); }
+  .report-toc-link:hover { color: var(--text); background: var(--hover); }
+  .report-toc-link.active, .report-toc-link[aria-current="true"] { color: var(--accent); background: var(--bubble); font-weight: 500; }
   .report-main > #report-form { margin-top: 0; }
   .report-rail {
     position: fixed; top: 76px;
@@ -619,6 +620,13 @@ mark code { color: var(--text); }
       animation: panel-enter var(--motion-duration) ease-out, edge-start linear both, edge-end linear both;
       animation-timeline: auto, scroll(self), scroll(self);
       animation-range: normal, 0px var(--edge-ramp), calc(100% - var(--edge-ramp)) 100%;
+    }
+    @media (min-width: 75em) {
+      #reports-panel[role="tabpanel"] {
+        mask-image:
+          linear-gradient(to bottom, transparent, black var(--edge-start), black calc(100% - var(--edge-end)), transparent),
+          linear-gradient(to right, black calc(50vw - 458px), transparent calc(50vw - 458px), transparent calc(50vw + 458px), black calc(50vw + 458px));
+      }
     }
     #tasks-panel[role="tabpanel"] {
       mask-image: linear-gradient(to bottom, black, black calc(100% - var(--edge-end)), transparent);

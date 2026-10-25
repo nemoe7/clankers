@@ -11224,6 +11224,7 @@ def test_the_tz_env_beats_the_stored_zone(tmp_path, monkeypatch):
 def test_cli_stamps_print_in_the_display_zone_while_storage_stays_utc(monkeypatch):
   from zoneinfo import ZoneInfo
 
+  monkeypatch.setattr(preview, "DISPLAY_ZONE", None)
   stamp = "2026-10-15T00:39:00+00:00"
   assert preview.local_stamp(stamp) == stamp, "no zone keeps the stored UTC stamp"
   monkeypatch.setattr(preview, "DISPLAY_ZONE", ZoneInfo("Asia/Manila"))
@@ -13929,6 +13930,8 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
   assert "@media (min-width: 75em)" in style_css
   assert "right: calc(50vw + 466px);" in style_css
   assert "left: calc(50vw + 466px);" in style_css
+  assert "calc(50vw - 458px)" in style_css
+  assert ".report-toc-link.active" in style_css
   assert 'id="report-toc"' in index_html
   assert 'id="report-rail"' in index_html
   assert 'id="report-submit-float"' in index_html

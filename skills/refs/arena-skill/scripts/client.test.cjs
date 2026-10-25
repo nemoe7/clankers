@@ -3350,6 +3350,14 @@ test('preview client', async (t) => {
       assert.doesNotMatch(html, /<label for="report-select">/);
       assert.equal(get('#report-toc').hidden, false);
       assert.ok(get('#report-toc').children.length >= 2);
+      context.renderReportToc('<h1 id="sec-1">First</h1><h2 id="sec-2">Second</h2>');
+      const tocLinks = get('#report-toc').children.slice(1);
+      assert.equal(tocLinks.length, 2);
+      assert.equal(tocLinks[0].dataset.active, 'true');
+      assert.equal(tocLinks[0].getAttribute('aria-current'), 'true');
+      tocLinks[1].events.click(event({}));
+      assert.equal(tocLinks[1].dataset.active, 'true');
+      assert.equal(tocLinks[0].dataset.active, undefined);
       get('#report-submit').hidden = false;
       panel.scrollHeight = 1000;
       panel.clientHeight = 200;
@@ -5680,5 +5688,8 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(htmlSource, /id="board-panel"/);
   assert.match(appSource, /showBoardPanel/);
   assert.match(styleSource, /#copy-state\s*\{\s*display:\s*none;\s*\}/);
+  assert.match(appSource, /updateReportTocActive/);
+  assert.match(styleSource, /\.report-toc-link\.active/);
+  assert.match(styleSource, /calc\(50vw - 458px\)/);
 });
 

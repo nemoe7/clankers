@@ -1974,12 +1974,77 @@ function placeReportStatus() {
   if (heading?.parentNode) heading.parentNode.insertBefore(status, heading.nextSibling);
   else form.insertBefore?.(status, report);
 }
+let reportTocItems = [];
+let tocLockedId = null;
+let tocLockUntil = 0;
+let tocLockedScrollTop = null;
+function setActiveReportTocLink(activeId) {
+  const toc = $('#report-toc');
+  for (const item of reportTocItems) {
+    const isActive = item.id === activeId;
+    item.link.className = isActive ? 'report-toc-link active' : 'report-toc-link';
+    if (isActive) {
+      item.link.setAttribute('aria-current', 'true');
+      item.link.dataset.active = 'true';
+      if (toc && typeof toc.getBoundingClientRect === 'function' && typeof item.link.getBoundingClientRect === 'function') {
+        const tocRect = toc.getBoundingClientRect();
+        const linkRect = item.link.getBoundingClientRect();
+        if (tocRect.height > 0 && linkRect.height > 0) {
+          if (linkRect.top < tocRect.top + 8) toc.scrollTop += linkRect.top - tocRect.top - 8;
+          else if (linkRect.bottom > tocRect.bottom - 8) toc.scrollTop += linkRect.bottom - tocRect.bottom + 8;
+        }
+      }
+    } else {
+      if (typeof item.link.removeAttribute === 'function') item.link.removeAttribute('aria-current');
+      else if (item.link.attributes) delete item.link.attributes['aria-current'];
+      delete item.link.dataset.active;
+    }
+  }
+}
+function updateReportTocActive() {
+  if (!reportTocItems.length) return;
+  const panel = $('#reports-panel');
+  const currentScrollTop = Number(panel?.scrollTop) || 0;
+  if (tocLockedId) {
+    if (Date.now() < tocLockUntil || (tocLockedScrollTop !== null && Math.abs(currentScrollTop - tocLockedScrollTop) <= 8)) {
+      setActiveReportTocLink(tocLockedId);
+      return;
+    }
+    tocLockedId = null;
+    tocLockedScrollTop = null;
+  }
+  const report = $('#report');
+  let activeId = reportTocItems[0].id;
+  const panelRect = typeof panel?.getBoundingClientRect === 'function' ? panel.getBoundingClientRect() : null;
+  if (panelRect && panelRect.height > 0) {
+    for (const item of reportTocItems) {
+      const target = item.node || report?.querySelector?.(`#${item.id}`);
+      const rect = typeof target?.getBoundingClientRect === 'function' ? target.getBoundingClientRect() : null;
+      if (!rect) continue;
+      if (rect.top - panelRect.top <= 64) activeId = item.id;
+      else break;
+    }
+  } else {
+    for (const item of reportTocItems) {
+      const target = item.node || report?.querySelector?.(`#${item.id}`);
+      if (typeof target?.offsetTop === 'number') {
+        if (target.offsetTop - currentScrollTop <= 64) activeId = item.id;
+        else break;
+      }
+    }
+  }
+  setActiveReportTocLink(activeId);
+}
 function clearReportBody() {
   const status = $('#report-status');
   const report = $('#report');
   const form = $('#report-form');
   if (status && report && form) form.insertBefore?.(status, report);
   report.replaceChildren();
+  reportTocItems = [];
+  tocLockedId = null;
+  tocLockUntil = 0;
+  tocLockedScrollTop = null;
   const toc = $('#report-toc');
   if (toc) {
     toc.replaceChildren();
@@ -2011,6 +2076,10 @@ function renderReportToc(html = '') {
     }
   }
   if (!items.length) {
+    reportTocItems = [];
+    tocLockedId = null;
+    tocLockUntil = 0;
+    tocLockedScrollTop = null;
     toc.replaceChildren();
     toc.hidden = true;
     return;
@@ -2026,13 +2095,44 @@ function renderReportToc(html = '') {
     link.textContent = item.text;
     link.addEventListener('click', event => {
       event.preventDefault();
+      const panel = $('#reports-panel');
       const target = item.node || report.querySelector?.(`#${item.id}`);
-      target?.scrollIntoView?.({ behavior: reducedMotion.matches ? 'auto' : 'smooth', block: 'start' });
+      const reduce = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+      let nextTop = null;
+      if (panel && target && typeof panel.getBoundingClientRect === 'function' && typeof target.getBoundingClientRect === 'function') {
+        const panelRect = panel.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        if (panelRect && targetRect && (panelRect.height > 0 || targetRect.top !== 0 || targetRect.bottom !== 0)) {
+          const maxScroll = Math.max(0, (panel.scrollHeight || 0) - (panel.clientHeight || 0));
+          const rawTop = (panel.scrollTop || 0) + (targetRect.top - panelRect.top) - 12;
+          nextTop = maxScroll > 0 ? Math.max(0, Math.min(maxScroll, Math.round(rawTop))) : Math.max(0, Math.round(rawTop));
+        }
+      }
+      if (nextTop === null && typeof target?.offsetTop === 'number') {
+        nextTop = Math.max(0, target.offsetTop - 12);
+      }
+      tocLockedId = item.id;
+      tocLockUntil = Date.now() + (reduce ? 0 : 500);
+      tocLockedScrollTop = nextTop;
+      setActiveReportTocLink(item.id);
+      if (panel && nextTop !== null && typeof panel.scrollTo === 'function') {
+        scrollJump(panel, nextTop);
+      } else if (target?.scrollIntoView) {
+        target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      } else if (panel && nextTop !== null) {
+        panel.scrollTop = nextTop;
+      }
+      updateReportTop();
     });
     return link;
   });
+  reportTocItems = items.map((item, index) => ({ ...item, link: links[index] }));
+  tocLockedId = null;
+  tocLockUntil = 0;
+  tocLockedScrollTop = null;
   toc.replaceChildren(title, ...links);
   toc.hidden = false;
+  updateReportTocActive();
 }
 function reportStatusLine(text, id, answerId = null) {
   const status = $('#report-status');
@@ -2375,8 +2475,12 @@ function updateReportTop() {
     submitFloat.hidden = Boolean(panel.hidden || !submit || submit.hidden || atEnd);
     submitFloat.disabled = Boolean(submit?.disabled);
   }
+  updateReportTocActive();
 }
 $('#report-top').addEventListener('click', () => {
+  tocLockedId = null;
+  tocLockUntil = 0;
+  tocLockedScrollTop = null;
   scrollJump($('#reports-panel'), 0);
   updateReportTop();
 });
