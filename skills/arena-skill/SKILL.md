@@ -96,7 +96,7 @@ ALWAYS report a workaround or bypass through a preview report when it bypasses a
 ALWAYS report reproducible skill defects or unresolved skill failures through a preview report with evidence and a suggested fix; corrected routine command-input validation errors get a brief notice, not a separate report or rule proposal.
 
 - Run `task list` at turn start.
-- Before implementation, record approved work: `task set <kebab-title-id> "<title>" [details ...] --type <type>`; set current task first with `--order 1`; update status (`upcoming` or `finished` only) and details as work changes; put task ID in backticks in every ack to link it.
+- Before implementation, break larger tasks into smaller ones and NEVER combine tasks unless they share the same scope. Record approved work: `task set <kebab-title-id> "<title>" [details ...] --type <type>`; update status (`upcoming` or `finished` only) and details as work changes; put task ID in backticks in every ack to link it.
 - Create tasks with explicit `--type`: `report`, `code`, `docs`, `ops`, or `misc`; no default. Keep stored type if an update omits it.
 - For a task from a note or report answer, use `--msg-id <full-message-id>`; queue and acknowledge it in the same tool block.
 - The task marker does not replace `ack`.

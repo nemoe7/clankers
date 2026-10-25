@@ -74,7 +74,7 @@
 - Cite code, diffs and tool output by path and line instead of repeating.
 - Continue after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
-- ALWAYS take the smallest open task; a user-stated priority outranks size. Re-sort on arrivals; NEVER use arrival order.
+- Break larger tasks into smaller ones, and NEVER combine tasks unless they share the exact same scope. ALWAYS take the smallest open task; a user-stated priority outranks size. Re-sort on arrivals; NEVER use arrival order.
 - Work while tasks remain; end when verified and stopped.
 - Before each push, run repo checks detached, NEVER inline; push only on pass; inline = skipped gate at any speed.
 - Read each gate's passed or failed line; a pipe that hides the verdict counts as skipping it. The wait scopes the next task.

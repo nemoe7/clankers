@@ -79,7 +79,7 @@
 - Cite code, diffs, file contents and tool output by path and line instead of repeating them.
 - Continue straight to the next step after a tool call succeeds, with no narration of the result.
 - Batch independent tool calls into one block whenever the surface permits.
-- When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order NEVER decides it and a large task NEVER blocks a small one.
+- Break larger tasks into smaller ones, and NEVER combine tasks unless they share the exact same scope. When several tasks are open, ALWAYS take the smallest remaining task unless the user states a priority. Re-sort the queue when a task arrives so arrival order NEVER decides it and a large task NEVER blocks a small one.
 - Keep working while tasks remain; end the turn when the work is verified and stopped.
 - Before ending a turn with a pushed branch, check the open PR's CI.
 - A failing check is unfinished work, and PR checks are ALWAYS priority 1 ahead of queued tasks.

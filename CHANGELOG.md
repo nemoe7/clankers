@@ -32,6 +32,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Exempt `NUL003` when custom focus rings exist, check ancestor repository directories for `NUL004` `docs/**/design.md`, and skip scrolled-out elements in `NUA308`. Preserve element `bounds` in `measure.py` and `browser.cjs`, and add `crop="auto"` and callout repositioning in `scripts/annotate.py`.
 - Add fixed-slot spinner and pulsing-dot loading options for buttons and compact controls awaiting a fetch to `SKILL.md` and `references/recipes/loading-bar.md`.
 - Unify Clause 10 with `references/recipes/page-memory.md` for version-keyed in-memory view caching and optimistic write reconciliation, and require auditing pages against applicable recipes in `SKILL.md` and `references/nuu.md`.
+- Add non-distributed `AGENTS.md` files in `skills/refs/nuu/` and `skills/nuu/` requiring before-and-after sample renders and option ranges for value changes, and exclude `AGENTS.md` in `.github/actions/distribute-sync/sync.sh`.
 
 #### nemoizer
 
