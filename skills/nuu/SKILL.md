@@ -55,7 +55,7 @@ Apply this skill to a page, a component, or an interface change. The sheet is th
 
 14. Enable touch input (`hasTouch` and `isMobile`) when auditing or inspecting mobile viewports (`width <= 768` px or `height <= 480` px) so `@media (pointer: coarse)` rules apply.
 
-15. Place a Lucide `x` exit button at the top right of a container, and place other action buttons at the bottom right.
+15. Place a borderless, transparent Lucide `x` exit button at the top right of a container, aligned to the title baseline and content edge with a negative-margin hit box inside container padding, that shows a surface background and text-color shift on hover and active, and place other action buttons at the bottom right.
 
 16. Combine min/max range sliders onto one shared track, and set discrete integer step snap points on integer sliders.
 

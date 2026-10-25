@@ -251,6 +251,42 @@ body {
   transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
 
+.close-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--row);
+  height: var(--row);
+  padding: var(--space-2);
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.close-button::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .close-button:hover {
+    border-color: var(--line);
+    background: var(--surface-2);
+    color: var(--text);
+  }
+}
+
+.close-button:active {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
 .button--accent {
   border-color: var(--accent-fill);
   background: var(--accent-fill);
