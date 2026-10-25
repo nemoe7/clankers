@@ -55,7 +55,7 @@
 - Each Markdown file under `references/` is supplementary: read or grep the file a question needs, and no end-to-end read is required; the gate and read cadence mechanics live in `references/commands.md` and `references/cadence.md`. A template copy kept for installation is supplementary too.
 - After any change to a path in the bible, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear.
 - In saved context, state the applicable start sequence and the duty to read missing-context paths in the bible in full before queued work; no verbatim ARENA.md copy is required.
-- Before the first non-setup tool call, complete the initial start sequence and wait for the visibility answer, start repository tooling installs via `arena-preview run start` and any demo or presentation server via `start_process` as the final setup step, then use `arena-preview poll` as the first inbox call.
+- Before the first non-setup tool call, complete the initial start sequence and wait for the visibility answer. Start repo tooling installs (MUST include `pip install -e` on `nuu` when present) via `arena-preview run start`. Start any demo or presentation server via `start_process` as the final setup step, then use `arena-preview poll` first.
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
 
 ## General
