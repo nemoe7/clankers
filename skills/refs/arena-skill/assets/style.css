@@ -622,4 +622,7 @@ mark code { color: var(--text); }
 #image-modal-close { position: fixed; top: 16px; right: 16px; z-index: 2; width: 40px; height: 40px; border-radius: 8px; background: var(--panel); color: var(--text); border: 1px solid var(--border); }
 #image-modal-img { max-width: 92vw; max-height: 90dvh; object-fit: contain; transform-origin: center center; user-select: none; -webkit-user-drag: none; touch-action: none; cursor: grab; }
 #image-modal-img[data-dragging="true"] { cursor: grabbing; }
+.tab-swipe-arrow { position: fixed; z-index: 6; width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--panel); color: var(--accent); border: 1px solid var(--focus); box-shadow: 0 4px 10px rgb(0 0 0 / 35%); pointer-events: none; transform: translateY(-50%); }
+.tab-swipe-arrow[data-side="left"] { left: 12px; }
+.tab-swipe-arrow[data-side="right"] { right: 12px; }
 

@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Switch visible top-level tabs on mobile horizontal swipes (`assets/app.js`, `assets/index.html`, `assets/style.css`). Show a touch-aligned directional arrow on drag past threshold, switch on release, cancel on swipe-back, and ignore swipes when inputs or modals are active.
 - Auto-append `-2`, `-3`, ... when `arena-preview run start <name>` reuses an existing run name (`scripts/preview.py`). Add `arena-preview worktree forget <name>`, auto-prune missing worktrees, and retain pytest tracebacks in routed gate tails.
 - Unblock `--status finished` when a task's report has an answer or a remote CI watch run is active (`scripts/preview.py`). Let explicit `--order` outrank blocked report tasks and skip mandatory regates for `.agents/skills/**`-only diffs on `origin/main`.
 

@@ -97,6 +97,8 @@ const ICONS = {
   'minimize-2': [['path', { d: 'm14 10 7-7' }], ['path', { d: 'M20 10h-6V4' }], ['path', { d: 'm3 21 7-7' }], ['path', { d: 'M4 14h6v6' }]],
   'maximize-2': [['path', { d: 'M15 3h6v6' }], ['path', { d: 'm21 3-7 7' }], ['path', { d: 'm3 21 7-7' }], ['path', { d: 'M9 21H3v-6' }]],
   'arrow-up': [['path', { d: 'm5 12 7-7 7 7' }], ['path', { d: 'M12 19V5' }]],
+  'arrow-left': [['path', { d: 'm12 19-7-7 7-7' }], ['path', { d: 'M19 12H5' }]],
+  'arrow-right': [['path', { d: 'M5 12h14' }], ['path', { d: 'm12 5 7 7-7 7' }]],
   sun: [['circle', { cx: '12', cy: '12', r: '4' }], ['path', { d: 'M12 2v2' }],
     ['path', { d: 'M12 20v2' }], ['path', { d: 'm4.93 4.93 1.41 1.41' }],
     ['path', { d: 'm17.66 17.66 1.41 1.41' }], ['path', { d: 'M2 12h2' }],
@@ -3479,6 +3481,106 @@ for (const tab of tabs) {
     next.focus();
   });
 }
+const TAB_SWIPE_THRESHOLD = 48;
+let tabSwipeState = null;
+function isSwipeInputFocused() {
+  const active = document.activeElement;
+  if (!active) return false;
+  if (active === note || active === $('#log-search') || active === $('#task-search') || active === $('#fetch-url')) return true;
+  const tag = String(active.tagName || '').toLowerCase();
+  if (tag === 'textarea' || active.isContentEditable) return true;
+  if (tag === 'input') {
+    const inputType = String(active.type || 'text').toLowerCase();
+    return !['button', 'checkbox', 'radio', 'submit', 'reset', 'file', 'image', 'range', 'color', 'hidden'].includes(inputType);
+  }
+  return false;
+}
+function isSwipeModalOpen() {
+  return Boolean($('#modal')?.open || $('#image-modal')?.open);
+}
+function hideTabSwipeArrow() {
+  const arrow = $('#tab-swipe-arrow');
+  if (!arrow) return;
+  arrow.hidden = true;
+  delete arrow.dataset.side;
+  delete arrow.dataset.targetTab;
+}
+document.addEventListener('touchstart', event => {
+  hideTabSwipeArrow();
+  tabSwipeState = null;
+  if (isSwipeInputFocused() || isSwipeModalOpen()) return;
+  const touches = event?.touches;
+  if (!touches || touches.length !== 1) return;
+  if (event.target?.closest?.('input, textarea, select, dialog, pre, .code-block, table')) return;
+  const touch = touches[0];
+  if (!touch || !Number.isFinite(touch.clientX) || !Number.isFinite(touch.clientY)) return;
+  tabSwipeState = {
+    startX: touch.clientX,
+    startY: touch.clientY,
+    y: touch.clientY,
+    targetTab: null,
+  };
+}, { passive: true });
+document.addEventListener('touchmove', event => {
+  if (!tabSwipeState) return;
+  if (isSwipeInputFocused() || isSwipeModalOpen()) {
+    tabSwipeState = null;
+    hideTabSwipeArrow();
+    return;
+  }
+  const touches = event?.touches;
+  if (!touches || touches.length !== 1) {
+    tabSwipeState = null;
+    hideTabSwipeArrow();
+    return;
+  }
+  const touch = touches[0];
+  if (!touch || !Number.isFinite(touch.clientX) || !Number.isFinite(touch.clientY)) return;
+  const dx = touch.clientX - tabSwipeState.startX;
+  const dy = touch.clientY - tabSwipeState.startY;
+  const arrow = $('#tab-swipe-arrow');
+  if (Math.abs(dx) >= TAB_SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5) {
+    const visibleTabs = tabs.filter(item => item && !item.hidden);
+    if (visibleTabs.length < 2) {
+      tabSwipeState.targetTab = null;
+      hideTabSwipeArrow();
+      return;
+    }
+    const activeIndex = Math.max(0, visibleTabs.findIndex(item => item.getAttribute('aria-selected') === 'true'));
+    const step = dx < 0 ? 1 : -1;
+    const nextTab = visibleTabs[(activeIndex + step + visibleTabs.length) % visibleTabs.length];
+    tabSwipeState.targetTab = nextTab;
+    tabSwipeState.y = touch.clientY;
+    if (arrow) {
+      const side = dx < 0 ? 'right' : 'left';
+      if (arrow.dataset.side !== side) {
+        setIcon(arrow, side === 'right' ? 'arrow-right' : 'arrow-left', 16);
+        arrow.dataset.side = side;
+      }
+      arrow.dataset.targetTab = nextTab.id;
+      const vh = Number(window.innerHeight) || 0;
+      const clampedY = vh > 96 ? Math.min(vh - 32, Math.max(64, Math.round(touch.clientY))) : Math.round(touch.clientY);
+      arrow.style.top = `${clampedY}px`;
+      arrow.hidden = false;
+    }
+  } else {
+    tabSwipeState.targetTab = null;
+    hideTabSwipeArrow();
+  }
+}, { passive: true });
+document.addEventListener('touchend', () => {
+  if (!tabSwipeState) return;
+  const nextTab = tabSwipeState.targetTab;
+  const arrow = $('#tab-swipe-arrow');
+  const armed = Boolean(nextTab && (!arrow || !arrow.hidden) && !isSwipeInputFocused() && !isSwipeModalOpen());
+  tabSwipeState = null;
+  hideTabSwipeArrow();
+  if (armed) showTab(nextTab);
+});
+document.addEventListener('touchcancel', () => {
+  tabSwipeState = null;
+  hideTabSwipeArrow();
+});
 // The server queues URLs, claims work, and stores bytes. Only the owner's browser contacts remote sites.
 // Store the proxy choice per job. It supplies no global preference or automatic fallback.
 function downloadName(url) {

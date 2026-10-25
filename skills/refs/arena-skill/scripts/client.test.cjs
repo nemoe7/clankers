@@ -5200,6 +5200,59 @@ test('preview client', async (t) => {
     historyEl.clientHeight = prevClientHeight;
     historyEl.scrollHeight = prevScrollHeight;
     historyEl.scrollTop = prevScrollTop;
+
+    // Mobile horizontal swipe tab switching with live arrow preview, cancel-on-swipe-back, and focus/modal guards.
+    get('#notes-tab').events.click();
+    assert.equal(get('#notes-tab').getAttribute('aria-selected'), 'true');
+    const swipeArrow = get('#tab-swipe-arrow');
+    assert.equal(typeof documentEvents.touchstart, 'function');
+    assert.equal(typeof documentEvents.touchmove, 'function');
+    assert.equal(typeof documentEvents.touchend, 'function');
+    documentEvents.touchstart({ touches: [{ clientX: 260, clientY: 320 }], target: get('#notes-panel') });
+    documentEvents.touchmove({ touches: [{ clientX: 180, clientY: 322 }] });
+    assert.equal(swipeArrow.hidden, false);
+    assert.equal(swipeArrow.dataset.side, 'right');
+    assert.equal(swipeArrow.style.top, '322px');
+    documentEvents.touchend({});
+    assert.equal(swipeArrow.hidden, true);
+    assert.equal(get('#reports-tab').getAttribute('aria-selected'), 'true');
+
+    // Swipe back before release hides the arrow and does not change tabs.
+    documentEvents.touchstart({ touches: [{ clientX: 260, clientY: 280 }], target: get('#reports-panel') });
+    documentEvents.touchmove({ touches: [{ clientX: 180, clientY: 284 }] });
+    assert.equal(swipeArrow.hidden, false);
+    documentEvents.touchmove({ touches: [{ clientX: 245, clientY: 284 }] });
+    assert.equal(swipeArrow.hidden, true);
+    documentEvents.touchend({});
+    assert.equal(get('#reports-tab').getAttribute('aria-selected'), 'true');
+
+    // Focused text input or textarea blocks tab swipe.
+    context.document.activeElement = get('#note');
+    documentEvents.touchstart({ touches: [{ clientX: 260, clientY: 250 }], target: get('#reports-panel') });
+    documentEvents.touchmove({ touches: [{ clientX: 170, clientY: 250 }] });
+    assert.equal(swipeArrow.hidden, true);
+    documentEvents.touchend({});
+    assert.equal(get('#reports-tab').getAttribute('aria-selected'), 'true');
+    context.document.activeElement = null;
+
+    // Open modal blocks tab swipe.
+    get('#modal').open = true;
+    documentEvents.touchstart({ touches: [{ clientX: 260, clientY: 250 }], target: get('#reports-panel') });
+    documentEvents.touchmove({ touches: [{ clientX: 170, clientY: 250 }] });
+    assert.equal(swipeArrow.hidden, true);
+    documentEvents.touchend({});
+    assert.equal(get('#reports-tab').getAttribute('aria-selected'), 'true');
+    get('#modal').open = false;
+
+    // Swiping right moves to the previous tab with a left-side arrow at the swipe Y coordinate.
+    documentEvents.touchstart({ touches: [{ clientX: 80, clientY: 210 }], target: get('#reports-panel') });
+    documentEvents.touchmove({ touches: [{ clientX: 160, clientY: 215 }] });
+    assert.equal(swipeArrow.hidden, false);
+    assert.equal(swipeArrow.dataset.side, 'left');
+    assert.equal(swipeArrow.style.top, '215px');
+    documentEvents.touchend({});
+    assert.equal(swipeArrow.hidden, true);
+    assert.equal(get('#notes-tab').getAttribute('aria-selected'), 'true');
   });
 
 });
