@@ -3515,6 +3515,7 @@ for (const tab of tabs) {
     next.focus();
   });
 }
+const TAB_SWIPE_MIN = 12;
 const TAB_SWIPE_THRESHOLD = 48;
 let tabSwipeState = null;
 function isSwipeInputFocused() {
@@ -3538,6 +3539,10 @@ function hideTabSwipeArrow() {
   arrow.hidden = true;
   delete arrow.dataset.side;
   delete arrow.dataset.targetTab;
+  delete arrow.dataset.armed;
+  delete arrow.dataset.progress;
+  delete arrow.style.opacity;
+  delete arrow.style.transform;
 }
 document.addEventListener('touchstart', event => {
   hideTabSwipeArrow();
@@ -3552,6 +3557,7 @@ document.addEventListener('touchstart', event => {
     startX: touch.clientX,
     startY: touch.clientY,
     y: touch.clientY,
+    maxAbsDx: 0,
     targetTab: null,
   };
 }, { passive: true });
@@ -3572,8 +3578,13 @@ document.addEventListener('touchmove', event => {
   if (!touch || !Number.isFinite(touch.clientX) || !Number.isFinite(touch.clientY)) return;
   const dx = touch.clientX - tabSwipeState.startX;
   const dy = touch.clientY - tabSwipeState.startY;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+  if (absDx > tabSwipeState.maxAbsDx) tabSwipeState.maxAbsDx = absDx;
+  const swipedBack = (tabSwipeState.maxAbsDx >= TAB_SWIPE_THRESHOLD && absDx < TAB_SWIPE_THRESHOLD)
+    || (tabSwipeState.maxAbsDx - absDx > 16 && absDx < TAB_SWIPE_THRESHOLD);
   const arrow = $('#tab-swipe-arrow');
-  if (Math.abs(dx) >= TAB_SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5) {
+  if (absDx >= TAB_SWIPE_MIN && absDx > absDy * 1.5 && !swipedBack) {
     const visibleTabs = tabs.filter(item => item && !item.hidden);
     if (visibleTabs.length < 2) {
       tabSwipeState.targetTab = null;
@@ -3583,7 +3594,10 @@ document.addEventListener('touchmove', event => {
     const activeIndex = Math.max(0, visibleTabs.findIndex(item => item.getAttribute('aria-selected') === 'true'));
     const step = dx < 0 ? 1 : -1;
     const nextTab = visibleTabs[(activeIndex + step + visibleTabs.length) % visibleTabs.length];
-    tabSwipeState.targetTab = nextTab;
+    const progress = Math.min(1, absDx / TAB_SWIPE_THRESHOLD);
+    const pull = Math.min(1, Math.max(0, (absDx - TAB_SWIPE_MIN) / (96 - TAB_SWIPE_MIN)));
+    const armed = absDx >= TAB_SWIPE_THRESHOLD;
+    tabSwipeState.targetTab = armed ? nextTab : null;
     tabSwipeState.y = touch.clientY;
     if (arrow) {
       const side = dx < 0 ? 'right' : 'left';
@@ -3592,6 +3606,18 @@ document.addEventListener('touchmove', event => {
         arrow.dataset.side = side;
       }
       arrow.dataset.targetTab = nextTab.id;
+      arrow.dataset.progress = progress.toFixed(2);
+      if (armed) arrow.dataset.armed = 'true';
+      else delete arrow.dataset.armed;
+      const shiftPx = Math.round((side === 'right' ? 1 : -1) * (14 - pull * 22));
+      const scale = (0.82 + 0.18 * progress).toFixed(3);
+      const opacity = (0.25 + 0.53 * progress).toFixed(3);
+      arrow.style.setProperty?.('--swipe-progress', progress.toFixed(3));
+      arrow.style.setProperty?.('--swipe-shift', `${shiftPx}px`);
+      arrow.style.setProperty?.('--swipe-scale', scale);
+      arrow.style.setProperty?.('--swipe-opacity', opacity);
+      arrow.style.opacity = opacity;
+      arrow.style.transform = `translate3d(${shiftPx}px, -50%, 0) scale(${scale})`;
       const vh = Number(window.innerHeight) || 0;
       const clampedY = vh > 96 ? Math.min(vh - 32, Math.max(64, Math.round(touch.clientY))) : Math.round(touch.clientY);
       arrow.style.top = `${clampedY}px`;

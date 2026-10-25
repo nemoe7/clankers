@@ -5201,7 +5201,7 @@ test('preview client', async (t) => {
     historyEl.scrollHeight = prevScrollHeight;
     historyEl.scrollTop = prevScrollTop;
 
-    // Mobile horizontal swipe tab switching with live arrow preview, cancel-on-swipe-back, and focus/modal guards.
+    // Mobile horizontal swipe tab switching with live arrow preview, distance animation, cancel-on-swipe-back, and focus/modal guards.
     get('#notes-tab').events.click();
     assert.equal(get('#notes-tab').getAttribute('aria-selected'), 'true');
     const swipeArrow = get('#tab-swipe-arrow');
@@ -5209,9 +5209,19 @@ test('preview client', async (t) => {
     assert.equal(typeof documentEvents.touchmove, 'function');
     assert.equal(typeof documentEvents.touchend, 'function');
     documentEvents.touchstart({ touches: [{ clientX: 260, clientY: 320 }], target: get('#notes-panel') });
+    documentEvents.touchmove({ touches: [{ clientX: 236, clientY: 321 }] });
+    assert.equal(swipeArrow.hidden, false, 'partial swipe shows arrow early');
+    assert.equal(swipeArrow.dataset.armed, undefined, 'partial swipe below threshold is not armed yet');
+    const partialOpacity = Number(swipeArrow.style.opacity);
+    const partialTransform = swipeArrow.style.transform;
+    assert.ok(partialOpacity > 0 && partialOpacity < 1, 'partial swipe scales opacity with distance');
     documentEvents.touchmove({ touches: [{ clientX: 180, clientY: 322 }] });
     assert.equal(swipeArrow.hidden, false);
     assert.equal(swipeArrow.dataset.side, 'right');
+    assert.equal(swipeArrow.dataset.armed, 'true', 'swipe past threshold arms tab switch');
+    const fullOpacity = Number(swipeArrow.style.opacity);
+    assert.ok(fullOpacity > partialOpacity && fullOpacity < 1, 'full swipe increases opacity while staying translucent');
+    assert.notEqual(swipeArrow.style.transform, partialTransform, 'transform animates with swipe distance');
     assert.equal(swipeArrow.style.top, '322px');
     documentEvents.touchend({});
     assert.equal(swipeArrow.hidden, true);
@@ -5486,5 +5496,11 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(styleSource, /body\s*\{[^}]*height:\s*var\(--app-height,\s*100dvh\)/);
   assert.doesNotMatch(styleSource, /#compose:has\(#note\[data-slash="true"\]\)/);
   assert.match(appSource, /notifyParentPreviewReady\(state\.repo\)/);
+  const swipeArrowRule = styleSource.match(/\.tab-swipe-arrow\s*\{([^}]*)\}/);
+  assert.ok(swipeArrowRule, '.tab-swipe-arrow rule exists');
+  assert.match(swipeArrowRule[1], /border-radius:\s*6px/, '.tab-swipe-arrow is a square matching the theme');
+  assert.doesNotMatch(swipeArrowRule[1], /border-radius:\s*50%/, '.tab-swipe-arrow is not circular');
+  assert.match(swipeArrowRule[1], /color:\s*#fff\b/, '.tab-swipe-arrow icon color is white');
+  assert.match(swipeArrowRule[1], /color-mix\(in srgb,\s*var\(--panel\)\s*60%,\s*transparent\)/, '.tab-swipe-arrow background is translucent');
 });
 
