@@ -1253,3 +1253,52 @@ def test_design_boards_and_html_typography(tmp_path):
     )
     assert chr_ann["renderer"] == "chromium"
     assert chr_ann["font_family"].startswith('"Custom Toml Sans"')
+
+  crop_dst = toml_proj / "shot-cropped.png"
+  crop_ann = annotate.annotate_image(
+    toml_src,
+    crop_dst,
+    boxes=["4,4,20,20,red"],
+    crop="4,4,30,20",
+    project=toml_proj,
+    renderer="bitmap",
+  )
+  assert crop_ann["width"] == 30
+  assert crop_ann["height"] == 20
+  cw_dec, ch_dec, _ = annotate.decode_png(crop_dst.read_bytes())
+  assert (cw_dec, ch_dec) == (30, 20)
+
+  (toml_proj / "dev.css").write_text(
+    "/* nuu-deviation: compact-toolbar: single-row 34px controls */\n"
+    ".toolbar { height: 34px; outline: none; }\n",
+    encoding="utf-8",
+  )
+  dev_lint = nuu.lint(toml_proj)
+  assert any(
+    d["id"] == "compact-toolbar" and "34px" in d["reason"]
+    for d in dev_lint["deviations"]
+  )
+  assert all(
+    isinstance(f.get("rule_description"), str) and f["rule_description"]
+    for f in dev_lint["findings"]
+  )
+  collect_dev = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "collect",
+      "--project",
+      str(toml_proj),
+      "--deviations",
+    ],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert collect_dev.returncode == 0, collect_dev.stdout + collect_dev.stderr
+  collect_dev_payload = json.loads(collect_dev.stdout)
+  assert collect_dev_payload["status"] == "checked"
+  assert any(
+    d["id"] == "compact-toolbar" and "34px" in d["reason"]
+    for d in collect_dev_payload["deviations"]
+  )

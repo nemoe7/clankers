@@ -967,6 +967,19 @@ def _overlay_svg_and_nodes(
   return "".join(parts)
 
 
+def parse_crop(spec) -> tuple[int, int, int, int]:
+  if isinstance(spec, (tuple, list)) and len(spec) == 4:
+    cx, cy, cw, ch = (int(v) for v in spec)
+  else:
+    parts = [p.strip() for p in str(spec).split(",") if p.strip()]
+    if len(parts) != 4:
+      raise ValueError(f"crop requires x,y,w,h: {spec}")
+    cx, cy, cw, ch = (int(p) for p in parts)
+  if cw <= 0 or ch <= 0:
+    raise ValueError("crop width and height must be positive")
+  return cx, cy, cw, ch
+
+
 def annotate_image(
   input_path: Path,
   output_path: Path,
@@ -978,6 +991,7 @@ def annotate_image(
   scale: int | None = None,
   project: Path | None = None,
   renderer: str = "auto",
+  crop=None,
 ):
   src = Path(input_path).resolve()
   dst = Path(output_path).resolve()
@@ -1018,7 +1032,9 @@ def annotate_image(
   all_callouts = [
     parse_callout(item) for item in [*(spec.get("callouts") or []), *(callouts or [])]
   ]
-  if not (all_boxes or all_labels or all_arrows or all_callouts):
+  raw_crop = crop if crop is not None else spec.get("crop")
+  resolved_crop = parse_crop(raw_crop) if raw_crop is not None else None
+  if not (all_boxes or all_labels or all_arrows or all_callouts or resolved_crop):
     raise ValueError("annotate requires at least one box, label, arrow, or callout")
   raw_bytes = src.read_bytes()
   width, height, rgba = decode_png(raw_bytes)
@@ -1043,6 +1059,10 @@ def annotate_image(
     )
     if _chromium_render_png(html_doc, width, height, dst):
       used_renderer = "chromium"
+      if resolved_crop is not None:
+        cw_in, ch_in, c_rgba = decode_png(dst.read_bytes())
+        width, height, c_rgba = crop_rgba(cw_in, ch_in, c_rgba, *resolved_crop)
+        dst.write_bytes(encode_png(width, height, c_rgba))
   if used_renderer == "bitmap":
     for x, y, w, h, color in all_boxes:
       draw_box(rgba, width, height, x, y, w, h, color, thickness=max(2, resolved_scale))
@@ -1054,6 +1074,8 @@ def annotate_image(
       draw_callout(
         rgba, width, height, x, y, number, color, label, scale=resolved_scale
       )
+    if resolved_crop is not None:
+      width, height, rgba = crop_rgba(width, height, rgba, *resolved_crop)
     encoded = encode_png(width, height, rgba)
     with dst.open("xb") as stream:
       stream.write(encoded)
@@ -1063,6 +1085,7 @@ def annotate_image(
     "output": str(dst),
     "width": width,
     "height": height,
+    "crop": list(resolved_crop) if resolved_crop is not None else None,
     "scale": resolved_scale,
     "renderer": used_renderer,
     "font_family": typography["font_sans"],
@@ -1986,6 +2009,7 @@ def main(argv: list[str] | None = None) -> int:
   parser.add_argument("-l", "--label", action="append", default=[])
   parser.add_argument("-a", "--arrow", action="append", default=[])
   parser.add_argument("-c", "--callout", action="append", default=[])
+  parser.add_argument("-C", "--crop")
   parser.add_argument("-s", "--spec", type=Path)
   parser.add_argument("-S", "--scale", type=int)
   parser.add_argument("-p", "--project", type=Path)
@@ -2001,6 +2025,7 @@ def main(argv: list[str] | None = None) -> int:
       spec_path=args.spec,
       scale=args.scale,
       project=args.project,
+      crop=args.crop,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
