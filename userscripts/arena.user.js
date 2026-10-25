@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.87
+// @name         Arena.ai | NemoUtils | v1.10.89
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.87
+// @version      1.10.89
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1663,6 +1663,15 @@
       "body > div:nth-child(4) > div > main > div > div > div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip > div";
     var PREVIEW_DRAWER_FALLBACK_SELECTOR =
       "main div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip > div";
+    var PREVIEW_MAIN_SELECTOR =
+      "body > div:nth-child(4) > div > main > div > div > div.relative.flex.min-w-0.flex-1.flex-col";
+    var PREVIEW_MAIN_FALLBACK_SELECTOR =
+      "main div.relative.flex.min-w-0.flex-1.flex-col";
+    var PREVIEW_HEADER_OFFSET_SELECTOR = "div.absolute.start-0.top-0.z-20";
+    var PREVIEW_TRANSCRIPT_LOG_SELECTOR =
+      '[data-perf-target="transcript"] > div[role="log"], div[data-custom-scrollbar="true"][role="log"]';
+    var PREVIEW_COMPOSER_WRAP_SELECTOR =
+      "div.flex.min-h-0.flex-1.flex-col > div.shrink-0";
     var PREVIEW_DRAWER_WIDTH = "1398px";
     var PREVIEW_DRAWER_STYLE_ID = "clankers-preview-drawer-style";
 
@@ -1677,29 +1686,129 @@
       );
     }
 
-    function enforcePreviewDrawerWidth(doc) {
-      var drawer = findPreviewDrawer(doc);
-      if (!drawer || !drawer.style) {
-        return false;
+    function findPreviewMain(doc) {
+      if (!doc || typeof doc.querySelector !== "function") {
+        return null;
       }
+      return (
+        doc.querySelector(PREVIEW_MAIN_SELECTOR) ||
+        doc.querySelector(PREVIEW_MAIN_FALLBACK_SELECTOR) ||
+        null
+      );
+    }
+
+    function readStyleProp(node, prop) {
+      if (!node || !node.style) return "";
+      if (typeof node.style.getPropertyValue === "function") {
+        return String(node.style.getPropertyValue(prop) || "");
+      }
+      var camel = prop.replace(/-([a-z])/g, function (_, c) {
+        return c.toUpperCase();
+      });
+      return String(node.style[camel] || node.style[prop] || "");
+    }
+
+    function applyImportantStyle(node, prop, value) {
+      if (!node || !node.style) return false;
+      var camel = prop.replace(/-([a-z])/g, function (_, c) {
+        return c.toUpperCase();
+      });
       if (
-        typeof drawer.style.getPropertyValue === "function" &&
-        typeof drawer.style.setProperty === "function"
+        typeof node.style.getPropertyValue === "function" &&
+        typeof node.style.setProperty === "function"
       ) {
         if (
-          drawer.style.getPropertyValue("width") === PREVIEW_DRAWER_WIDTH &&
-          drawer.style.getPropertyPriority("width") === "important"
+          node.style.getPropertyValue(prop) === value &&
+          (typeof node.style.getPropertyPriority !== "function" ||
+            node.style.getPropertyPriority(prop) === "important")
         ) {
           return false;
         }
-        drawer.style.setProperty("width", PREVIEW_DRAWER_WIDTH, "important");
+        node.style.setProperty(prop, value, "important");
         return true;
       }
-      if (drawer.style.width === PREVIEW_DRAWER_WIDTH) {
+      if (node.style[camel] === value) {
         return false;
       }
-      drawer.style.width = PREVIEW_DRAWER_WIDTH;
+      node.style[camel] = value;
       return true;
+    }
+
+    function clearForcedStyle(node, prop) {
+      if (!node || !node.style) return false;
+      var current = readStyleProp(node, prop).trim();
+      if (current !== PREVIEW_DRAWER_WIDTH) return false;
+      var camel = prop.replace(/-([a-z])/g, function (_, c) {
+        return c.toUpperCase();
+      });
+      if (typeof node.style.setProperty === "function") {
+        node.style.setProperty(prop, "0px", "");
+        return true;
+      }
+      node.style[camel] = "0px";
+      return true;
+    }
+
+    function isPreviewDrawerOpen(doc, drawer, mainCol) {
+      if (!drawer || !drawer.style) return false;
+      if (typeof drawer.getAttribute === "function" && drawer.getAttribute("aria-hidden") === "true") {
+        return false;
+      }
+      if (
+        drawer.parentElement &&
+        typeof drawer.parentElement.getAttribute === "function" &&
+        drawer.parentElement.getAttribute("aria-hidden") === "true"
+      ) {
+        return false;
+      }
+      if (mainCol && typeof mainCol.querySelector === "function") {
+        if (mainCol.querySelector('button[aria-label="Collapse workspace sidebar"]')) {
+          return true;
+        }
+        if (
+          mainCol.querySelector(
+            'button[aria-label="Expand workspace sidebar"], button[aria-label="Open workspace"]',
+          )
+        ) {
+          return false;
+        }
+      }
+      var rawWidth = readStyleProp(drawer, "width").trim();
+      if (rawWidth && /^0(px|%|rem|em)?$/i.test(rawWidth)) {
+        return false;
+      }
+      return true;
+    }
+
+    function enforcePreviewDrawerWidth(doc) {
+      var drawer = findPreviewDrawer(doc);
+      var mainCol = findPreviewMain(doc);
+      var header =
+        mainCol && typeof mainCol.querySelector === "function"
+          ? mainCol.querySelector(PREVIEW_HEADER_OFFSET_SELECTOR)
+          : null;
+      var transcript =
+        mainCol && typeof mainCol.querySelector === "function"
+          ? mainCol.querySelector(PREVIEW_TRANSCRIPT_LOG_SELECTOR)
+          : null;
+      var composer =
+        mainCol && typeof mainCol.querySelector === "function"
+          ? mainCol.querySelector(PREVIEW_COMPOSER_WRAP_SELECTOR)
+          : null;
+      if (!isPreviewDrawerOpen(doc, drawer, mainCol)) {
+        var cleared = false;
+        if (clearForcedStyle(drawer, "width")) cleared = true;
+        if (clearForcedStyle(header, "right")) cleared = true;
+        if (clearForcedStyle(transcript, "padding-right")) cleared = true;
+        if (clearForcedStyle(composer, "padding-right")) cleared = true;
+        return cleared;
+      }
+      var changed = false;
+      if (applyImportantStyle(drawer, "width", PREVIEW_DRAWER_WIDTH)) changed = true;
+      if (applyImportantStyle(header, "right", PREVIEW_DRAWER_WIDTH)) changed = true;
+      if (applyImportantStyle(transcript, "padding-right", PREVIEW_DRAWER_WIDTH)) changed = true;
+      if (applyImportantStyle(composer, "padding-right", PREVIEW_DRAWER_WIDTH)) changed = true;
+      return changed;
     }
 
     function ensurePreviewDrawerStyle() {
@@ -1708,11 +1817,26 @@
       var style = document.createElement("style");
       style.id = PREVIEW_DRAWER_STYLE_ID;
       style.setAttribute("id", PREVIEW_DRAWER_STYLE_ID);
+      var openScope = 'main:has(button[aria-label="Collapse workspace sidebar"]) ';
       style.textContent =
-        PREVIEW_DRAWER_SELECTOR +
-        "," +
-        PREVIEW_DRAWER_FALLBACK_SELECTOR +
-        "{width:" +
+        openScope +
+        "div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip > div{width:" +
+        PREVIEW_DRAWER_WIDTH +
+        " !important}" +
+        openScope +
+        "div.relative.flex.min-w-0.flex-1.flex-col > " +
+        PREVIEW_HEADER_OFFSET_SELECTOR +
+        "{right:" +
+        PREVIEW_DRAWER_WIDTH +
+        " !important}" +
+        openScope +
+        'div.relative.flex.min-w-0.flex-1.flex-col [data-perf-target="transcript"] > div[role="log"]{padding-right:' +
+        PREVIEW_DRAWER_WIDTH +
+        " !important}" +
+        openScope +
+        "div.relative.flex.min-w-0.flex-1.flex-col > " +
+        PREVIEW_COMPOSER_WRAP_SELECTOR +
+        "{padding-right:" +
         PREVIEW_DRAWER_WIDTH +
         " !important}";
       document.head.appendChild(style);
@@ -1730,8 +1854,11 @@
       interruptPayloadForSteering: interruptPayloadForSteering,
       flagSteeringLabelViolation: flagSteeringLabelViolation,
       findPreviewDrawer: findPreviewDrawer,
+      findPreviewMain: findPreviewMain,
+      isPreviewDrawerOpen: isPreviewDrawerOpen,
       enforcePreviewDrawerWidth: enforcePreviewDrawerWidth,
       PREVIEW_DRAWER_SELECTOR: PREVIEW_DRAWER_SELECTOR,
+      PREVIEW_MAIN_SELECTOR: PREVIEW_MAIN_SELECTOR,
       PREVIEW_DRAWER_WIDTH: PREVIEW_DRAWER_WIDTH,
       resetFlaggedSteering: function () {
         flaggedSteeringKey = null;
@@ -1863,7 +1990,7 @@
       childList: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ["src", "title", "style"],
+      attributeFilter: ["src", "title", "style", "aria-label", "aria-hidden"],
     });
     window.addEventListener("popstate", sync);
     sync();
@@ -4991,6 +5118,17 @@
       ),
     );
 
+    function syncPreviewBoard(base) {
+      if (!base) return Promise.resolve(null);
+      return stateJson(base + "/api/board", { action: "sync", board: readGlobalBoard() }).then(function (answer) {
+        if (answer && answer.status === 200 && answer.body) {
+          if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
+          writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body));
+        }
+        return answer;
+      });
+    }
+
     function onPreviewMessage(event) {
       if (!event || !event.data || typeof event.data !== "object") return;
       var frame = previewFrame(document);
@@ -5010,18 +5148,11 @@
           }
         }
         notifyPreviewReady(document, !event.data.repo);
+        syncPreviewBoard(base);
       } else if (event.data.type === "clankers:force-save") {
         fetchStateFile(true, true);
       } else if (event.data.type === "clankers:board-request") {
-        var currentBoard = readGlobalBoard();
-        if (base) {
-          stateJson(base + "/api/board", { action: "sync", board: currentBoard }).then(function (answer) {
-            if (answer && answer.status === 200 && answer.body) {
-              if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
-              writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body));
-            }
-          });
-        }
+        syncPreviewBoard(base);
       } else if (event.data.type === "clankers:board-action" && event.data.action) {
         if ((event.data.action.action === "heartbeat" || event.data.action.type === "heartbeat") &&
             event.data.action.session_id) {
@@ -5030,12 +5161,7 @@
         var outcome = applyBoardAction(readGlobalBoard(), event.data.action);
         if (outcome.ok) writeGlobalBoard(outcome.board);
         if (outcome.ok && base) {
-          stateJson(base + "/api/board", { action: "sync", board: outcome.board }).then(function (answer) {
-            if (answer && answer.status === 200 && answer.body) {
-              if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
-              writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body));
-            }
-          });
+          syncPreviewBoard(base);
         }
       }
     }

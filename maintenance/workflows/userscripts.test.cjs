@@ -2809,6 +2809,63 @@ for raw in sys.stdin:
     assert.equal(drawerPriority, "important");
     assert.equal(checks.openSteering.enforcePreviewDrawerWidth(drawerDoc), false);
 
+    function makeStyleBox(initialProp, initialVal) {
+      const props = new Map([[initialProp, { val: initialVal, priority: "" }]]);
+      return {
+        props,
+        style: {
+          getPropertyValue(prop) {
+            return props.has(prop) ? props.get(prop).val : "";
+          },
+          getPropertyPriority(prop) {
+            return props.has(prop) ? props.get(prop).priority : "";
+          },
+          setProperty(prop, val, priority) {
+            props.set(prop, { val: String(val || ""), priority: String(priority || "") });
+          },
+        },
+      };
+    }
+    let drawerOpen = true;
+    const fullDrawer = makeStyleBox("width", "680px");
+    const headerBox = makeStyleBox("right", "680px");
+    const transcriptBox = makeStyleBox("padding-right", "680px");
+    const composerBox = makeStyleBox("padding-right", "680px");
+    const mainColNode = {
+      querySelector(sel) {
+        if (sel.includes("Collapse workspace sidebar")) {
+          return drawerOpen ? {} : null;
+        }
+        if (sel.includes("Expand workspace sidebar") || sel.includes("Open workspace")) {
+          return drawerOpen ? null : {};
+        }
+        if (sel === "div.absolute.start-0.top-0.z-20") return headerBox;
+        if (sel.includes('[data-perf-target="transcript"]')) return transcriptBox;
+        if (sel === "div.flex.min-h-0.flex-1.flex-col > div.shrink-0") return composerBox;
+        return null;
+      },
+    };
+    const fullDoc = {
+      querySelector(sel) {
+        if (sel === checks.openSteering.PREVIEW_DRAWER_SELECTOR) return fullDrawer;
+        if (sel === checks.openSteering.PREVIEW_MAIN_SELECTOR) return mainColNode;
+        return null;
+      },
+    };
+    assert.equal(checks.openSteering.enforcePreviewDrawerWidth(fullDoc), true);
+    assert.equal(fullDrawer.style.getPropertyValue("width"), "1398px");
+    assert.equal(headerBox.style.getPropertyValue("right"), "1398px");
+    assert.equal(transcriptBox.style.getPropertyValue("padding-right"), "1398px");
+    assert.equal(composerBox.style.getPropertyValue("padding-right"), "1398px");
+    assert.equal(checks.openSteering.enforcePreviewDrawerWidth(fullDoc), false);
+    drawerOpen = false;
+    assert.equal(checks.openSteering.enforcePreviewDrawerWidth(fullDoc), true);
+    assert.equal(fullDrawer.style.getPropertyValue("width"), "0px");
+    assert.equal(headerBox.style.getPropertyValue("right"), "0px");
+    assert.equal(transcriptBox.style.getPropertyValue("padding-right"), "0px");
+    assert.equal(composerBox.style.getPropertyValue("padding-right"), "0px");
+    assert.equal(checks.openSteering.enforcePreviewDrawerWidth(fullDoc), false);
+
     const allowedBoard = checks.board.applyBoardAction(null, {
       action: "allow",
       session_id: "arena/bdf20cf5-clankers",
