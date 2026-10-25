@@ -36,10 +36,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add fixed-slot spinner and pulsing-dot loading options for buttons and compact controls awaiting a fetch to `SKILL.md` and `references/recipes/loading-bar.md`.
 - Unify Clause 10 with `references/recipes/page-memory.md` for version-keyed in-memory view caching and optimistic write reconciliation, and require auditing pages against applicable recipes in `SKILL.md` and `references/nuu.md`.
 - Add non-distributed `AGENTS.md` files in `skills/refs/nuu/` and `skills/nuu/` requiring before-and-after sample renders and option ranges for value changes, and exclude `AGENTS.md` in `.github/actions/distribute-sync/sync.sh`.
+- Make the `4 px` compact scale (`--row: 32px`, `--radius: 6px`) the default in `SKILL.md`, `references/style.css`, and `scripts/measure.py`, with `:root[data-scale="8"]` as an opt-in preset.
+- Load `RULE_DESCRIPTIONS` from `references/nuu.md` and `SKILL.md`, read `VERSION` from `pyproject.toml`, and skip `.agents` in `scripts/nuu.py`.
+- Style `.close-button` as a borderless `32x32 px` button (`8 px` padding, `-8 px` margin) in `SKILL.md`, `references/recipes/modal-manager.md`, and `references/style.css`, and require `nuu walk` walkthroughs during audits in `SKILL.md` and `references/walk.md`.
 
 #### nemoizer
 
 - Extend `NMO003` in `scripts/nemoize.py` and `references/nmo003.md` to flag mixed `/` and `or` series separators, and update `nuu`'s `references/audit-report.md`. Require manual prose review alongside `nemoizer audit` output in `SKILL.md` and `references/audit-report.md`.
+- Add `.sql`, `.dbml`, `.env*`, and `.jinja` comment extractors in `scripts/prose.py` and `scripts/nemoize.py`, and exempt passive state adjectives from `STE903`.
 
 #### system-prompts
 
