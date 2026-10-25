@@ -2055,7 +2055,7 @@ function renderReportToc(html = '') {
   const toc = $('#report-toc');
   const report = $('#report');
   if (!toc || !report) return;
-  const domHeadings = [...(report.querySelectorAll?.('h1, h2, h3') || [])];
+  const domHeadings = [...(report.querySelectorAll?.('h2, h3') || [])];
   const items = [];
   if (domHeadings.length) {
     domHeadings.forEach((heading, index) => {
@@ -2063,16 +2063,16 @@ function renderReportToc(html = '') {
       if (!text) return;
       const id = heading.id || `report-heading-${index + 1}`;
       heading.id = id;
-      items.push({ id, level: Number(String(heading.tagName || 'H1').slice(1)) || 1, text, node: heading });
+      items.push({ id, level: Number(String(heading.tagName || 'H2').slice(1)) || 2, text, node: heading });
     });
   } else if (typeof html === 'string' && html) {
     let index = 0;
-    for (const match of html.matchAll(/<h([1-3])\b([^>]*)>([\s\S]*?)<\/h\1>/gi)) {
+    for (const match of html.matchAll(/<h([2-3])\b([^>]*)>([\s\S]*?)<\/h\1>/gi)) {
       const text = unescapeHtmlEntities(match[3].replace(/<[^>]+>/g, '')).trim();
       if (!text) continue;
       const idMatch = /\bid="([^"]+)"/i.exec(match[2] || '');
       const id = idMatch ? idMatch[1] : `report-heading-${++index}`;
-      items.push({ id, level: Number(match[1]) || 1, text, node: null });
+      items.push({ id, level: Number(match[1]) || 2, text, node: null });
     }
   }
   if (!items.length) {

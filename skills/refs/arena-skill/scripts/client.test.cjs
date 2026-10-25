@@ -3348,11 +3348,12 @@ test('preview client', async (t) => {
       assert.match(html, /<section id="reports-panel"[\s\S]*?<\/section>\s*<button id="report-top"/);
       assert.match(html, /id="report-submit-float"/);
       assert.doesNotMatch(html, /<label for="report-select">/);
+      assert.equal(get('#report-toc').hidden, true, 'h1 report title alone is omitted from the TOC');
+      context.renderReportToc('<h1 id="title">Report</h1><h2 id="sec-1">First</h2><h3 id="sec-2">Second</h3>');
       assert.equal(get('#report-toc').hidden, false);
-      assert.ok(get('#report-toc').children.length >= 2);
-      context.renderReportToc('<h1 id="sec-1">First</h1><h2 id="sec-2">Second</h2>');
       const tocLinks = get('#report-toc').children.slice(1);
       assert.equal(tocLinks.length, 2);
+      assert.equal(tocLinks[0].textContent, 'First');
       assert.equal(tocLinks[0].dataset.active, 'true');
       assert.equal(tocLinks[0].getAttribute('aria-current'), 'true');
       tocLinks[1].events.click(event({}));
@@ -5689,6 +5690,7 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /showBoardPanel/);
   assert.match(styleSource, /#copy-state\s*\{\s*display:\s*none;\s*\}/);
   assert.match(appSource, /updateReportTocActive/);
+  assert.match(appSource, /querySelectorAll\?\.\('h2, h3'\)/);
   assert.match(styleSource, /\.report-toc-link\.active/);
   assert.match(styleSource, /calc\(50vw - 458px\)/);
 });

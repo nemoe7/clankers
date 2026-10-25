@@ -465,8 +465,7 @@ mark code { color: var(--text); }
     font-size: 14px; line-height: 1.4; color: var(--muted); text-decoration: none;
     overflow-wrap: anywhere;
   }
-  .report-toc-link[data-level="2"] { padding-left: 12px; }
-  .report-toc-link[data-level="3"] { padding-left: 24px; font-size: 12px; }
+  .report-toc-link[data-level="3"] { padding-left: 20px; font-size: 12px; }
   .report-toc-link:hover { color: var(--text); background: var(--hover); }
   .report-toc-link.active, .report-toc-link[aria-current="true"] { color: var(--text); background: var(--bubble); font-weight: 500; }
   .report-main > #report-form { margin-top: 0; }
