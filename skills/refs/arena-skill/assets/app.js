@@ -419,6 +419,7 @@ let slashCommands = [
   { cmd: '/nuu recipe offline-fonts', desc: 'Send agent note: apply offline-fonts recipe' },
   { cmd: '/nuu recipe overflow-and-clipping', desc: 'Send agent note: apply overflow-and-clipping recipe' },
   { cmd: '/nuu recipe page-memory', desc: 'Send agent note: apply page-memory recipe' },
+  { cmd: '/nuu recipe range-sliders', desc: 'Send agent note: apply range-sliders recipe' },
   { cmd: '/nuu recipe relative-timestamps', desc: 'Send agent note: apply relative-timestamps recipe' },
   { cmd: '/nuu recipe scroll-edge-fade', desc: 'Send agent note: apply scroll-edge-fade recipe' },
   { cmd: '/nuu recipe scrollbars', desc: 'Send agent note: apply scrollbars recipe' },
