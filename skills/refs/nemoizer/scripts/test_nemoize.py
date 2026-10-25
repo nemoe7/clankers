@@ -1542,3 +1542,86 @@ def test_audit_includes_docs_drift(tmp_path):
   assert "missing-guide.md" in audit_res.stdout
   assert "existing.md" not in audit_res.stdout
   assert "not-a-real-file.md" not in audit_res.stdout
+
+
+def test_nmt100_taint_html_bytes_and_audit(tmp_path):
+  # Acceptance test 1: HTML response variable binding
+  t1 = tmp_path / "test_case1.py"
+  t1.write_text(
+    "def test_one(client):\n"
+    '  opened = client.get("/?selected=1").data.decode()\n'
+    '  assert "Back to the list" in opened\n',
+    encoding="utf-8",
+  )
+  r1 = run(str(t1), cwd=tmp_path)
+  assert r1.returncode == 1
+  assert "[NMT100]" in r1.stdout
+
+  t1_ok = tmp_path / "test_case1_ok.py"
+  t1_ok.write_text(
+    "def test_one_ok(client):\n"
+    '  opened = client.get("/?selected=1").data.decode()\n'
+    "  assert 'class=\"back-to-list\"' in opened\n",
+    encoding="utf-8",
+  )
+  assert run(str(t1_ok), cwd=tmp_path).returncode == 0
+
+  # Acceptance test 2: HTML-wrapped UI subtitle
+  t2 = tmp_path / "test_case2.py"
+  t2.write_text(
+    "def test_two(admin):\n"
+    '  body = admin.get("/settings").data.decode()\n'
+    "  assert '<span class=\"set-sub\">System follows your device</span>' in body\n",
+    encoding="utf-8",
+  )
+  r2 = run(str(t2), cwd=tmp_path)
+  assert r2.returncode == 1
+  assert "[NMT100]" in r2.stdout
+
+  t2_ok = tmp_path / "test_case2_ok.py"
+  t2_ok.write_text(
+    "def test_two_ok(admin):\n"
+    '  body = admin.get("/settings").data.decode()\n'
+    "  assert 'aria-label=\"Theme\"' in body\n",
+    encoding="utf-8",
+  )
+  assert run(str(t2_ok), cwd=tmp_path).returncode == 0
+
+  # Acceptance test 3: Tuple-unpacked E2E response and bytes flash
+  t3 = tmp_path / "test_case3.py"
+  t3.write_text(
+    "def test_three(guest, link, saved):\n"
+    "  status, _, body = guest(link)\n"
+    '  assert "This link no longer works" in body\n'
+    '  assert b"Username saved." in saved.data\n',
+    encoding="utf-8",
+  )
+  r3 = run(str(t3), cwd=tmp_path)
+  assert r3.returncode == 1
+  assert r3.stdout.count("[NMT100]") == 2
+
+  # Acceptance test 4: Domain-model state and CSS rules
+  t4 = tmp_path / "test_case4.py"
+  t4.write_text(
+    "def test_four(loaded, css):\n"
+    '  assert loaded.title == "Fix the tap"\n'
+    '  assert "grid-template-columns: minmax(0, 1fr);" in css\n',
+    encoding="utf-8",
+  )
+  r4 = run(str(t4), cwd=tmp_path)
+  assert r4.returncode == 0
+  assert r4.stdout.strip() == ""
+
+  # Piece 2: --audit reports NMT100 and per-file-ignores rejects NMT100 on test globs
+  audit_t3 = run("--audit", str(t3), cwd=tmp_path)
+  assert audit_t3.returncode == 0
+  assert "[NMT100]" in audit_t3.stdout
+
+  bad_cfg = tmp_path / "nemoizer.toml"
+  bad_cfg.write_text(
+    '[lint.per-file-ignores]\n"tests/**" = ["NMT100"]\n',
+    encoding="utf-8",
+  )
+  bad_res = run("--config", str(bad_cfg), str(t4), cwd=tmp_path)
+  assert bad_res.returncode == 2
+  assert "NMT100" in bad_res.stderr

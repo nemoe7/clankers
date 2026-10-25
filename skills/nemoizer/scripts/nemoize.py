@@ -477,6 +477,13 @@ def load_config(targets=(), config_path=None, no_config=False):
       config["ignore"] = tuple(str(item) for item in lint["ignore"])
     per_file = lint.get("per-file-ignores", {})
     if isinstance(per_file, dict):
+      for pattern, rules in per_file.items():
+        pat_lower = str(pattern).lower()
+        rule_tuple = tuple(str(rule) for rule in rules)
+        if "test" in pat_lower and _match_selectors("NMT100", rule_tuple):
+          raise ValueError(
+            f"per-file-ignores cannot suppress NMT100 on test pattern: {pattern}"
+          )
       config["per_file_ignores"] = {
         str(pattern): tuple(str(rule) for rule in rules)
         for pattern, rules in per_file.items()
@@ -2179,6 +2186,27 @@ MEASUREMENTS = {
   "timeout_seconds",
 }
 CHANNELS = {"stdout", "stderr", "output", "out", "err"}
+WEB_CHANNELS = {
+  "stdout",
+  "stderr",
+  "output",
+  "out",
+  "err",
+  "body",
+  "html",
+  "text",
+  "data",
+  "content",
+  "get_data",
+  "decode",
+  "readouterr",
+  "inner_text",
+  "text_content",
+  "innerHTML",
+  "textContent",
+}
+CLIENT_CALLS = {"get", "post", "put", "patch", "delete", "open", "walk", "guest"}
+TAINT_SOURCES = (WEB_CHANNELS - CHANNELS - {"readouterr"}) | CLIENT_CALLS
 ASSERT_METHODS = {"assertEqual", "assertNotEqual", "assertIn", "assertNotIn"}
 NODE_TIMEOUT = 10
 JS_REVIEW = r"""
@@ -2200,6 +2228,53 @@ function shape(node) {
   if (node?.type === 'CallExpression') return `${shape(node.callee)}(${node.arguments.map(shape).join(',')})`;
   return '<expression>';
 }
+const CHANNELS = new Set(['stdout', 'stderr', 'output', 'out', 'err']);
+const WEB_CHANNELS = new Set([
+  'stdout', 'stderr', 'output', 'out', 'err',
+  'body', 'html', 'text', 'data', 'content',
+  'get_data', 'decode', 'readouterr',
+  'inner_text', 'text_content', 'innerHTML', 'textContent',
+]);
+const CLIENT_CALLS = new Set(['get', 'post', 'put', 'patch', 'delete', 'open', 'walk', 'guest']);
+const TAINT_SOURCES = new Set([
+  'body', 'html', 'text', 'data', 'content',
+  'get_data', 'decode', 'inner_text', 'text_content', 'innerHTML', 'textContent',
+  ...CLIENT_CALLS,
+]);
+const tainted = new Set();
+function isTaintRhs(name) {
+  if (!name || name === '<expression>' || name.startsWith('len(')) return false;
+  const parts = name.split('.').map(p => p.split('(')[0]);
+  if (tainted.has(parts[0]) || CLIENT_CALLS.has(parts[0])) return true;
+  return parts.slice(1).some(p => TAINT_SOURCES.has(p));
+}
+function collectTargets(pattern, out) {
+  if (!pattern || typeof pattern !== 'object') return;
+  if (pattern.type === 'Identifier') out.push(pattern.name);
+  else if (pattern.type === 'ArrayPattern') pattern.elements.forEach(el => collectTargets(el, out));
+  else if (pattern.type === 'ObjectPattern') {
+    pattern.properties.forEach(p => collectTargets(p.value || p.argument, out));
+  }
+  else if (pattern.type === 'RestElement') collectTargets(pattern.argument, out);
+  else if (pattern.type === 'AssignmentPattern') collectTargets(pattern.left, out);
+}
+function taintPass(node) {
+  if (!node || typeof node !== 'object') return;
+  if (node.type === 'VariableDeclarator' && node.init && isTaintRhs(shape(node.init))) {
+    const names = [];
+    collectTargets(node.id, names);
+    names.forEach(n => tainted.add(n));
+  } else if (node.type === 'AssignmentExpression' && isTaintRhs(shape(node.right))) {
+    const names = [];
+    collectTargets(node.left, names);
+    names.forEach(n => tainted.add(n));
+  }
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) value.forEach(taintPass);
+    else if (value && typeof value === 'object') taintPass(value);
+  }
+}
+for (let i = 0; i < 3; i++) taintPass(tree);
 const pairs = [];
 let testScope = false;
 const lines = text.split("\n");
@@ -2207,7 +2282,9 @@ function pair(left, right, node, operator) {
   for (const [actual, expected] of [[left,right],[right,left]]) {
     if (expected?.type === 'Literal' && ['string','number'].includes(typeof expected.value)) {
       const column = Array.from(lines[node.loc.start.line - 1].slice(0, node.loc.start.column)).length + 1;
-      pairs.push({actual:shape(actual), value:expected.value, operator,
+      const actShape = shape(actual);
+      pairs.push({actual:actShape, value:expected.value, operator,
+        web_taint:isTaintRhs(actShape), tainted:[...tainted],
         line:node.loc.start.line, column});
     }
   }
@@ -2260,21 +2337,100 @@ def shape(node):
   return "<expression>"
 
 
+def _is_taint_rhs(name, tainted=frozenset()):
+  if not name or name == "<expression>" or name.startswith("len("):
+    return False
+  parts = [part.split("(")[0] for part in name.split(".")]
+  if parts[0] in tainted or parts[0] in CLIENT_CALLS:
+    return True
+  return len(parts) > 1 and any(part in TAINT_SOURCES for part in parts[1:])
+
+
+def _collect_scope_taint(scope_node):
+  tainted = set()
+  for _ in range(3):
+    changed = False
+    for node in ast.walk(scope_node):
+      if isinstance(node, ast.Assign) and _is_taint_rhs(shape(node.value), tainted):
+        for target in node.targets:
+          for sub in ast.walk(target):
+            if isinstance(sub, ast.Name) and sub.id not in tainted:
+              tainted.add(sub.id)
+              changed = True
+      elif (
+        isinstance(node, ast.AnnAssign)
+        and node.value is not None
+        and _is_taint_rhs(shape(node.value), tainted)
+      ):
+        for sub in ast.walk(node.target):
+          if isinstance(sub, ast.Name) and sub.id not in tainted:
+            tainted.add(sub.id)
+            changed = True
+    if not changed:
+      break
+  return tainted
+
+
+def extract_prose_candidate(raw):
+  """Extract a plain prose candidate from str or bytes after stripping HTML tags."""
+  text = raw.decode("utf-8", "ignore") if isinstance(raw, bytes) else raw
+  if not isinstance(text, str) or "{" in text or "}" in text or "\n" in text:
+    return None
+  has_html = bool(
+    re.search(r"</[A-Za-z][A-Za-z0-9-]*>|<[A-Za-z][A-Za-z0-9-]*\s+[^>]*>", text)
+  )
+  stripped = re.sub(r"<[^>]+>", " ", text).strip() if has_html else text.strip()
+  if (
+    not stripped
+    or re.search(r"[<>{}=\\/;]", stripped)
+    or stripped.startswith((".", "#", "@", "/", "http://", "https://"))
+  ):
+    return None
+  words = re.findall(r"(?<![A-Za-z0-9_-])[A-Za-z']+(?![A-Za-z0-9_-])", stripped)
+  if len(words) >= 3 and not stripped.isupper() and re.search(r"\s", stripped):
+    return stripped
+  if (
+    len(words) >= 2
+    and stripped[-1] in ".?!"
+    and stripped[0].isupper()
+    and not stripped.isupper()
+  ):
+    return stripped
+  return None
+
+
 def python_pairs(text):
   pairs = []
   lines = text.splitlines()
+  tree = ast.parse(text)
+  module_tainted = _collect_scope_taint(tree)
+  func_taint = {
+    id(node): _collect_scope_taint(node)
+    for node in ast.walk(tree)
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+  }
 
-  def pair(left, right, node, operator):
+  def pair(left, right, node, operator, tainted):
     for actual, expected in ((left, right), (right, left)):
       if isinstance(expected, ast.Constant) and type(expected.value) in (
         str,
+        bytes,
         int,
         float,
       ):
+        act_shape = shape(actual)
+        raw_val = expected.value
+        val = (
+          raw_val.decode("utf-8", "ignore") if isinstance(raw_val, bytes) else raw_val
+        )
         pairs.append(
           {
-            "actual": shape(actual),
-            "value": expected.value,
+            "actual": act_shape,
+            "value": val,
+            "raw_value": raw_val,
+            "tainted": sorted(tainted),
+            "web_taint": _is_taint_rhs(act_shape, tainted)
+            or isinstance(raw_val, bytes),
             "operator": operator,
             "line": node.lineno,
             "column": len(
@@ -2284,55 +2440,71 @@ def python_pairs(text):
           }
         )
 
-  for node in ast.walk(ast.parse(text)):
-    if isinstance(node, ast.Assert):
-      for expression in ast.walk(node.test):
-        if isinstance(expression, ast.Compare):
-          left = expression.left
-          for operator, right in zip(expression.ops, expression.comparators):
-            if isinstance(operator, (ast.Eq, ast.NotEq, ast.In, ast.NotIn)):
-              pair(
-                left,
-                right,
-                expression,
-                "equality"
-                if isinstance(operator, (ast.Eq, ast.NotEq))
-                else "membership",
-              )
-            left = right
-    if (
-      isinstance(node, ast.Call)
-      and isinstance(node.func, ast.Attribute)
-      and shape(node.func.value) in ("self", "cls")
-      and node.func.attr in ASSERT_METHODS
-      and len(node.args) >= 2
-    ):
-      pair(
-        node.args[0],
-        node.args[1],
-        node,
-        "membership" if node.func.attr in {"assertIn", "assertNotIn"} else "equality",
-      )
+  def walk_scope(scope_node, active_taint):
+    for child in ast.iter_child_nodes(scope_node):
+      if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        walk_scope(child, active_taint | func_taint.get(id(child), set()))
+        continue
+      if isinstance(child, ast.Assert):
+        for expression in ast.walk(child.test):
+          if isinstance(expression, ast.Compare):
+            left = expression.left
+            for operator, right in zip(expression.ops, expression.comparators):
+              if isinstance(operator, (ast.Eq, ast.NotEq, ast.In, ast.NotIn)):
+                pair(
+                  left,
+                  right,
+                  expression,
+                  "equality"
+                  if isinstance(operator, (ast.Eq, ast.NotEq))
+                  else "membership",
+                  active_taint,
+                )
+              left = right
+      if (
+        isinstance(child, ast.Call)
+        and isinstance(child.func, ast.Attribute)
+        and shape(child.func.value) in ("self", "cls")
+        and child.func.attr in ASSERT_METHODS
+        and len(child.args) >= 2
+      ):
+        pair(
+          child.args[0],
+          child.args[1],
+          child,
+          "membership"
+          if child.func.attr in {"assertIn", "assertNotIn"}
+          else "equality",
+          active_taint,
+        )
+      walk_scope(child, active_taint)
+
+  walk_scope(tree, module_tainted)
   return {"pairs": pairs}
 
 
-def output_channel(name):
-  return not name.startswith("len(") and any(
-    part.split("(")[0] in CHANNELS for part in name.split(".")
+def output_channel(name, tainted=()):
+  if not name or name == "<expression>" or name.startswith("len("):
+    return False
+  taint_set = set(tainted)
+  parts = [part.split("(")[0] for part in name.split(".")]
+  if parts[0] in taint_set or parts[0] in CHANNELS or parts[0] in CLIENT_CALLS:
+    return True
+  return len(parts) > 1 and any(
+    part in (WEB_CHANNELS | CLIENT_CALLS) for part in parts[1:]
   )
 
 
 def category(pair):
   value, actual = pair["value"], pair["actual"]
-  if (
-    isinstance(value, str)
-    and output_channel(actual)
-    and len(re.findall(r"[A-Za-z]+", value)) >= 3
-    and not value.isupper()
-    and re.search(r"\s", value)
-    and not re.search(r"[<>{}=\\/\n]", value)
-  ):
-    return "output_text"
+  raw_val = pair.get("raw_value", value)
+  tainted = pair.get("tainted", ())
+  if isinstance(raw_val, (str, bytes)) and output_channel(actual, tainted):
+    candidate = extract_prose_candidate(raw_val)
+    if candidate is not None:
+      words = re.findall(r"(?<![A-Za-z0-9_-])[A-Za-z']+(?![A-Za-z0-9_-])", candidate)
+      if pair.get("web_taint") or len(words) >= 3:
+        return "output_text"
   if (
     type(value) in (int, float)
     and value > 0
@@ -2588,7 +2760,7 @@ def main(argv=None):
   for path in walk([*targets, *test_helpers], arguments.ignore):
     text = text_file(path)
     try:
-      if not arguments.audit and is_test_file(path, text or "", helpers):
+      if is_test_file(path, text or "", helpers):
         tests.append(str(path))
       if text is None:
         continue
@@ -2619,12 +2791,6 @@ def main(argv=None):
     )
     if arguments.audit:
       findings.extend(docs_drift_findings(path, text, ACTIVE_CONFIG.get("root")))
-  if arguments.audit:
-    print("\n".join(audit_lines(marks, findings, ADVISORY_RULE_IDS)))
-    if errors:
-      print("\n".join(errors), file=sys.stderr)
-      return 2
-    return 0
   result = review_tests(tests)
   for row in result["findings"]:
     test_lines = (text_file(Path(row["path"])) or "").splitlines()
@@ -2641,6 +2807,16 @@ def main(argv=None):
     if row["status"] != "checked":
       errors.append(f"{row['path']}: tests not checked: {row['reason']}")
   errors.extend(f"{row['path']}: {row['type']}" for row in result["errors"])
+  if arguments.audit:
+    print(
+      "\n".join(
+        audit_lines(marks, findings, {*ADVISORY_RULE_IDS, *TEST_RULE_IDS.values()})
+      )
+    )
+    if errors:
+      print("\n".join(errors), file=sys.stderr)
+      return 2
+    return 0
   if tests:
     print(
       "Test scope: static paths and declarations. Dynamic helpers may be unresolved.",
