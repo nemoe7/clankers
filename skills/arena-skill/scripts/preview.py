@@ -3931,7 +3931,7 @@ def embed_report_images(markdown,report_dir):
 		if not path.is_absolute():path=report_dir/path
 		if path.name.lower().endswith('-wireframe.png')or source.lower().endswith('-wireframe.png'):raise ValueError(f"Wireframe image {source} (*-wireframe.png) is for agent inspection only and cannot be embedded in reports")
 		try:mime,encoded=image_payload(path)
-		except ValueError as error:return f"Publication skips local image {source}: {error}. Run arena-preview image-data-uri for the helper."
+		except ValueError as error:raise ValueError(f"Publication skips local image {source}: {error}. Run arena-preview image-data-uri for the helper.")from error
 		return f"![{alt}](data:{mime};base64,{encoded}{suffix})"
 	return IMAGE_IN_MARKDOWN.sub(swap,markdown)
 def check_report_nemoizer(source,markdown,repo_root=None):

@@ -2076,10 +2076,13 @@ setInterval(showClock, 1000);
   let userscriptForceSave = false;
   var lastForceSaveId = null;
   var lastAnnouncedRepo = '';
+  var lastUserscriptAnnouncedRepo = '';
   function enableUserscriptForceSave() {
+    if (userscriptForceSave) return false;
     userscriptForceSave = true;
     setIcon(copyStateButton, 'save', 16);
     label(copyStateButton, 'Force save state');
+    return true;
   }
   function notifyParentPreviewReady(repo = lastAnnouncedRepo) {
     if (typeof window !== 'undefined' && window.parent && window.parent !== window &&
@@ -2092,8 +2095,11 @@ setInterval(showClock, 1000);
   }
   window.addEventListener('message', event => {
     if (!event || !event.data || event.data.type !== 'clankers:userscript-ready') return;
-    enableUserscriptForceSave();
-    if (lastAnnouncedRepo) notifyParentPreviewReady(lastAnnouncedRepo);
+    const newlyEnabled = enableUserscriptForceSave();
+    if (lastAnnouncedRepo && (newlyEnabled || lastUserscriptAnnouncedRepo !== lastAnnouncedRepo)) {
+      lastUserscriptAnnouncedRepo = lastAnnouncedRepo;
+      notifyParentPreviewReady(lastAnnouncedRepo);
+    }
   });
   notifyParentPreviewReady();
   copyStateButton.addEventListener('click', async () => {

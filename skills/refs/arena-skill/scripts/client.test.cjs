@@ -5198,6 +5198,7 @@ test('preview client', async (t) => {
       },
     };
     windowEvents.message({ data: { type: 'clankers:userscript-ready' } });
+    windowEvents.message({ data: { type: 'clankers:userscript-ready' } });
     const copyBtn = get('#copy-state');
     assert.equal(copyBtn.getAttribute('aria-label'), 'Force save state');
     assert.equal(copyBtn.title, 'Force save state');

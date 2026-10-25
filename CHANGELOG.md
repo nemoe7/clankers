@@ -21,10 +21,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - State that pull-request checks are priority 1 ahead of queued tasks in `rules/refs/ARENA.md`, `skills/refs/arena-skill/SKILL.md`, and live mirrors, and sort `pr-checks` first in `scripts/preview.py`.
 - Refuse `arena-preview poll` in `scripts/preview.py` while a survey request is unacknowledged or the preview server has no survey submission.
 - Auto-mark appended replies seen when their `.reply-block` is visible inside `#history` in `assets/app.js`. Cache rendered report HTML, report Markdown source, and draft previews by revision in memory.
+- Require breaking larger tasks into smaller ones and forbid combining tasks across different scopes in `rules/refs/ARENA.md`, `skills/refs/arena-skill/SKILL.md`, and live mirrors.
+- Reject `arena-preview report publish` when a local image path in a report is missing or invalid in `scripts/preview.py`, and deduplicate `clankers:userscript-ready` / `clankers:preview-ready` `postMessage` handshakes in `assets/app.js`.
 
 #### userscripts
 
 - Show the bash emoji (`BASH_EMOJI`) in `userscripts/arena.user.js` when a running `arena-preview poll` row reports an active gate in `stderr` (`run <name> running <N>s`). Keep the waiting emoji (`WAITING_EMOJI`) for idle polls.
+- Deduplicate `notifyPreviewReady` in `userscripts/arena.user.js` per preview iframe and target URL unless forced on iframe load or initial boot to break the `postMessage` loop.
 
 #### nuu
 

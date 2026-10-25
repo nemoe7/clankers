@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.81
+// @name         Arena.ai | NemoUtils | v1.10.82
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.81
+// @version      1.10.82
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -4283,24 +4283,36 @@
       return frame ? frame.src.replace(/\/+$/, "") : null;
     }
 
-    function notifyPreviewReady(doc) {
+    var lastNotifiedPreviewFrame = null;
+    var lastNotifiedPreviewTarget = "";
+
+    function notifyPreviewReady(doc, force) {
       var frame = previewFrame(doc);
       if (!frame || !frame.contentWindow || typeof frame.contentWindow.postMessage !== "function") {
+        lastNotifiedPreviewFrame = null;
+        lastNotifiedPreviewTarget = "";
         return false;
       }
       if (typeof frame.addEventListener === "function" && !frame.getAttribute("data-clankers-preview-bound")) {
         frame.setAttribute("data-clankers-preview-bound", "true");
         frame.addEventListener("load", function () {
-          notifyPreviewReady(doc);
+          notifyPreviewReady(doc, true);
         });
       }
       var target = frame.src ? frame.src.replace(/\/+$/, "") : "*";
+      if (!force && frame === lastNotifiedPreviewFrame && target === lastNotifiedPreviewTarget) {
+        return false;
+      }
       try {
         frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, target);
+        lastNotifiedPreviewFrame = frame;
+        lastNotifiedPreviewTarget = target;
         return true;
       } catch (err) {
         try {
           frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, "*");
+          lastNotifiedPreviewFrame = frame;
+          lastNotifiedPreviewTarget = target;
           return true;
         } catch (fallbackErr) {
           return false;
@@ -4936,7 +4948,7 @@
             if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
           }
         }
-        notifyPreviewReady(document);
+        notifyPreviewReady(document, !event.data.repo);
       } else if (event.data.type === "clankers:force-save") {
         fetchStateFile(true, true);
       }

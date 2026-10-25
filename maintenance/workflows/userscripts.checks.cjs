@@ -2855,25 +2855,26 @@ function checkStateDownload(api, session, logging) {
   );
   assert.equal(stateBranch(docWith([repoLink])), "", "A repository link alone names no branch");
   var posted = [];
+  var previewFrameNode = {
+    src: "https://sbx-test.arena.site/",
+    getAttribute: function (name) {
+      return name === "title" ? "App preview on port 8000" : "";
+    },
+    contentWindow: {
+      postMessage: function (payload, target) {
+        posted.push([payload, target]);
+      },
+    },
+  };
   var previewDoc = {
     querySelectorAll: function () {
-      return [
-        {
-          src: "https://sbx-test.arena.site/",
-          getAttribute: function (name) {
-            return name === "title" ? "App preview on port 8000" : "";
-          },
-          contentWindow: {
-            postMessage: function (payload, target) {
-              posted.push([payload, target]);
-            },
-          },
-        },
-      ];
+      return [previewFrameNode];
     },
   };
   assert.equal(api.notifyPreviewReady(previewDoc), true);
-  assert.equal(posted.length, 1);
+  assert.equal(api.notifyPreviewReady(previewDoc), false);
+  assert.equal(api.notifyPreviewReady(previewDoc, true), true);
+  assert.equal(posted.length, 2);
   assert.equal(posted[0][0].type, "clankers:userscript-ready");
   assert.equal(posted[0][1], "https://sbx-test.arena.site");
   console.log("ok state download 34");

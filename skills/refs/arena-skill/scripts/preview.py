@@ -12122,10 +12122,10 @@ def embed_report_images(markdown, report_dir):
     try:
       mime, encoded = image_payload(path)
     except ValueError as error:
-      return (
+      raise ValueError(
         f"Publication skips local image {source}: {error}. Run"
         " arena-preview image-data-uri for the helper."
-      )
+      ) from error
     return f"![{alt}](data:{mime};base64,{encoded}{suffix})"
 
   return IMAGE_IN_MARKDOWN.sub(swap, markdown)

@@ -10368,18 +10368,24 @@ def test_publish_rejects_remote_images_and_keeps_links():
 
 
 def test_publish_skips_local_images_that_fail_the_checks():
-  """Publication skips a local image that is missing or wrong, with the helper hint."""
+  """Publication rejects a local image that is missing or wrong, with the helper hint."""
   with tempfile.TemporaryDirectory() as image_dir:
     root = Path(image_dir)
     store = preview.Store(root, create=True)
     (root / "notes.txt").write_text("plain words", encoding="utf-8")
     source = root / "report.md"
-    source.write_text("![gone](missing.png)\n\n![txt](notes.txt)\n", encoding="utf-8")
-    store.publish("skips", "Skips", source)
-    stored = store.report("skips")["markdown"]
-    assert "![gone](" not in stored and "![txt](" not in stored
-    assert "Publication skips local image" in stored
-    assert "image-data-uri" in stored
+    source.write_text("![gone](missing.png)\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Publication skips local image") as error_info:
+      store.publish("skips", "Skips", source)
+    assert "image-data-uri" in str(error_info.value)
+    with pytest.raises(FileNotFoundError):
+      store.report("skips")
+    source.write_text("![txt](notes.txt)\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Publication skips local image") as error_info:
+      store.publish("skips", "Skips", source)
+    assert "image-data-uri" in str(error_info.value)
+    with pytest.raises(FileNotFoundError):
+      store.report("skips")
 
 
 def test_publish_embeds_parent_and_absolute_paths():
