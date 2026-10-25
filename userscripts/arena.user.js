@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.84
+// @name         Arena.ai | NemoUtils | v1.10.85
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.84
+// @version      1.10.85
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -4966,6 +4966,25 @@
         notifyPreviewReady(document, !event.data.repo);
       } else if (event.data.type === "clankers:force-save") {
         fetchStateFile(true, true);
+      } else if (event.data.type === "clankers:board-request") {
+        var currentBoard = readGlobalBoard();
+        if (frame && frame.contentWindow && typeof frame.contentWindow.postMessage === "function") {
+          frame.contentWindow.postMessage({ type: "clankers:board-state", board: currentBoard }, "*");
+        }
+      } else if (event.data.type === "clankers:board-action" && event.data.action) {
+        var outcome = applyBoardAction(readGlobalBoard(), event.data.action);
+        if (outcome.ok) writeGlobalBoard(outcome.board);
+        if (frame && frame.contentWindow && typeof frame.contentWindow.postMessage === "function") {
+          frame.contentWindow.postMessage({
+            type: "clankers:board-state",
+            board: outcome.board,
+            ok: outcome.ok,
+            error: outcome.error || "",
+          }, "*");
+        }
+        if (outcome.ok && base) {
+          stateJson(base + "/api/board", { action: "sync", board: outcome.board });
+        }
       }
     }
 
@@ -5675,6 +5694,231 @@
     };
   });
 
+  var BOARD_KEY = "clankers_global_board_v1";
+  var MAX_BOARD_FILE_BYTES = 524288;
+  var MAX_BOARD_BYTES = 2097152;
+  var MAX_BOARD_ENTRIES = 100;
+
+  function boardSessionId(branch) {
+    var clean = String(branch || "").trim();
+    return clean.indexOf("arena/") === 0 ? clean.slice(6) : clean;
+  }
+
+  function normalizeBoard(raw) {
+    var data = raw;
+    if (typeof data === "string") {
+      try { data = JSON.parse(data); } catch (err) { data = null; }
+    }
+    if (!data || typeof data !== "object") data = {};
+    var allowed = Array.isArray(data.allowed_sessions)
+      ? data.allowed_sessions.map(boardSessionId).filter(Boolean)
+      : [];
+    var seenAllowed = {};
+    var uniqueAllowed = [];
+    for (var i = 0; i < allowed.length; i += 1) {
+      if (!seenAllowed[allowed[i]]) {
+        seenAllowed[allowed[i]] = true;
+        uniqueAllowed.push(allowed[i]);
+      }
+    }
+    var mainId = boardSessionId(data.main_session_id || "");
+    if (mainId && !seenAllowed[mainId]) mainId = "";
+    var sessions = Array.isArray(data.sessions) ? data.sessions.slice(0, 64) : [];
+    var entries = Array.isArray(data.entries) ? data.entries.slice(-MAX_BOARD_ENTRIES) : [];
+    var wakes = data.wakes && typeof data.wakes === "object" && !Array.isArray(data.wakes)
+      ? Object.assign({}, data.wakes)
+      : {};
+    return {
+      allowed_sessions: uniqueAllowed,
+      main_session_id: mainId,
+      sessions: sessions,
+      entries: entries,
+      wakes: wakes,
+    };
+  }
+
+  function readGlobalBoard() {
+    try {
+      return normalizeBoard(GM_getValue(BOARD_KEY, null));
+    } catch (err) {
+      return normalizeBoard(null);
+    }
+  }
+
+  function writeGlobalBoard(board) {
+    var next = normalizeBoard(board);
+    while (next.entries.length > 1 && JSON.stringify(next).length > MAX_BOARD_BYTES) {
+      next.entries.shift();
+    }
+    try {
+      GM_setValue(BOARD_KEY, next);
+    } catch (err) {}
+    return next;
+  }
+
+  function boardRoleFor(board, sessionId) {
+    var normalized = normalizeBoard(board);
+    var sid = boardSessionId(sessionId);
+    if (!normalized.main_session_id || normalized.main_session_id === sid) return "main";
+    return "worker";
+  }
+
+  function canPushOrPr(board, sessionId) {
+    return boardRoleFor(board, sessionId) === "main";
+  }
+
+  function validateBoardFile(file) {
+    if (!file || typeof file !== "object") return { ok: true, file: null };
+    var name = String(file.name || "").trim().replace(/\\/g, "/");
+    if (!name || name.indexOf("..") !== -1 || name.indexOf("/") === 0) {
+      return { ok: false, error: "invalid-file-name" };
+    }
+    var encoding = file.encoding === "base64" ? "base64" : "utf-8";
+    var content = typeof file.content === "string" ? file.content : "";
+    var byteSize = 0;
+    if (encoding === "base64") {
+      var stripped = content.replace(/\s+/g, "");
+      var padding = stripped.slice(-2) === "==" ? 2 : stripped.slice(-1) === "=" ? 1 : 0;
+      byteSize = Math.max(0, Math.floor((stripped.length * 3) / 4) - padding);
+    } else {
+      byteSize = typeof Buffer !== "undefined"
+        ? Buffer.byteLength(content, "utf8")
+        : unescape(encodeURIComponent(content)).length;
+    }
+    if (byteSize > MAX_BOARD_FILE_BYTES) {
+      return { ok: false, error: "file-too-large" };
+    }
+    var sha256 = String(file.sha256 || "").trim().toLowerCase();
+    if (sha256 && !/^[0-9a-f]{64}$/.test(sha256)) {
+      return { ok: false, error: "invalid-file-sha256" };
+    }
+    return {
+      ok: true,
+      file: {
+        name: name,
+        encoding: encoding,
+        content: content,
+        size: byteSize,
+        sha256: sha256,
+      },
+    };
+  }
+
+  function applyBoardAction(board, action) {
+    var next = normalizeBoard(board);
+    if (!action || typeof action !== "object") return { ok: false, error: "invalid-action", board: next };
+    var actionType = String(action.type || action.action || "");
+    var sid = boardSessionId(action.session_id || action.branch || "");
+    var nowIso = action.at || new Date().toISOString();
+    if (actionType === "allow") {
+      if (!sid) return { ok: false, error: "missing-session-id", board: next };
+      if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
+      return { ok: true, board: next };
+    }
+    if (actionType === "revoke") {
+      if (!sid) return { ok: false, error: "missing-session-id", board: next };
+      next.allowed_sessions = next.allowed_sessions.filter(function (item) { return item !== sid; });
+      if (next.main_session_id === sid) next.main_session_id = "";
+      return { ok: true, board: next };
+    }
+    if (actionType === "set-main") {
+      if (!sid) {
+        next.main_session_id = "";
+        return { ok: true, board: next };
+      }
+      if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
+      next.main_session_id = sid;
+      return { ok: true, board: next };
+    }
+    if (actionType === "heartbeat") {
+      if (!sid) return { ok: false, error: "missing-session-id", board: next };
+      var found = false;
+      next.sessions = next.sessions.map(function (row) {
+        if (boardSessionId(row.session_id || row.branch) !== sid) return row;
+        found = true;
+        return {
+          session_id: sid,
+          repo: String(action.repo || row.repo || ""),
+          branch: String(action.branch || row.branch || ("arena/" + sid)),
+          status: String(action.status || row.status || "active"),
+          polling: Boolean(action.polling),
+          updated_at: nowIso,
+        };
+      });
+      if (!found) {
+        next.sessions.push({
+          session_id: sid,
+          repo: String(action.repo || ""),
+          branch: String(action.branch || ("arena/" + sid)),
+          status: String(action.status || "active"),
+          polling: Boolean(action.polling),
+          updated_at: nowIso,
+        });
+      }
+      return { ok: true, board: next };
+    }
+    if (actionType === "post") {
+      if (!sid || next.allowed_sessions.indexOf(sid) === -1) {
+        return { ok: false, error: "not-allowed", board: next };
+      }
+      var checkedFile = validateBoardFile(action.file);
+      if (!checkedFile.ok) return { ok: false, error: checkedFile.error, board: next };
+      next.entries.push({
+        id: String(action.id || ("b-" + Date.now())),
+        session_id: sid,
+        to: boardSessionId(action.to || ""),
+        repo: String(action.repo || ""),
+        branch: String(action.branch || ("arena/" + sid)),
+        at: nowIso,
+        payload: action.payload === undefined ? null : action.payload,
+        file: checkedFile.file,
+      });
+      if (next.entries.length > MAX_BOARD_ENTRIES) {
+        next.entries = next.entries.slice(-MAX_BOARD_ENTRIES);
+      }
+      return { ok: true, board: next };
+    }
+    if (actionType === "wake") {
+      if (sid && next.allowed_sessions.indexOf(sid) === -1) {
+        return { ok: false, error: "not-allowed", board: next };
+      }
+      var target = String(action.target || "");
+      if (target === "all-polling") {
+        next.sessions.forEach(function (row) {
+          var rowId = boardSessionId(row.session_id || row.branch);
+          if (row.polling && next.allowed_sessions.indexOf(rowId) !== -1) {
+            next.wakes[rowId] = nowIso;
+          }
+        });
+      } else {
+        var targetId = boardSessionId(target);
+        if (!targetId || next.allowed_sessions.indexOf(targetId) === -1) {
+          return { ok: false, error: "target-not-allowed", board: next };
+        }
+        next.wakes[targetId] = nowIso;
+      }
+      return { ok: true, board: next };
+    }
+    if (actionType === "clear") {
+      next.entries = [];
+      return { ok: true, board: next };
+    }
+    return { ok: false, error: "unknown-action", board: next };
+  }
+
+  exposeChecks("board", {
+    BOARD_KEY: BOARD_KEY,
+    MAX_BOARD_FILE_BYTES: MAX_BOARD_FILE_BYTES,
+    MAX_BOARD_BYTES: MAX_BOARD_BYTES,
+    boardSessionId: boardSessionId,
+    normalizeBoard: normalizeBoard,
+    readGlobalBoard: readGlobalBoard,
+    writeGlobalBoard: writeGlobalBoard,
+    boardRoleFor: boardRoleFor,
+    canPushOrPr: canPushOrPr,
+    validateBoardFile: validateBoardFile,
+    applyBoardAction: applyBoardAction,
+  });
   exposeChecks("pause", { PAUSE_KEY: PAUSE_KEY, pauseLabel: pauseLabel });
   exposeChecks("menus", {
     menuRank: menuRank,
