@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.85
+// @name         Arena.ai | NemoUtils | v1.10.86
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.85
+// @version      1.10.86
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -4968,20 +4968,12 @@
         fetchStateFile(true, true);
       } else if (event.data.type === "clankers:board-request") {
         var currentBoard = readGlobalBoard();
-        if (frame && frame.contentWindow && typeof frame.contentWindow.postMessage === "function") {
-          frame.contentWindow.postMessage({ type: "clankers:board-state", board: currentBoard }, "*");
+        if (base) {
+          stateJson(base + "/api/board", { action: "sync", board: currentBoard });
         }
       } else if (event.data.type === "clankers:board-action" && event.data.action) {
         var outcome = applyBoardAction(readGlobalBoard(), event.data.action);
         if (outcome.ok) writeGlobalBoard(outcome.board);
-        if (frame && frame.contentWindow && typeof frame.contentWindow.postMessage === "function") {
-          frame.contentWindow.postMessage({
-            type: "clankers:board-state",
-            board: outcome.board,
-            ok: outcome.ok,
-            error: outcome.error || "",
-          }, "*");
-        }
         if (outcome.ok && base) {
           stateJson(base + "/api/board", { action: "sync", board: outcome.board });
         }
