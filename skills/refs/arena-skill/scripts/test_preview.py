@@ -13921,6 +13921,10 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
   assert "#history { padding-left: max(16px, calc((100vw - 900px) / 2)); }" in style_css
   assert "#history { padding-left: max(12px, calc((100vw - 900px) / 2)); }" in style_css
   assert ".log-card > .row > .row.tight { justify-content: flex-end; }" in style_css
+  assert (
+    ".report img, .message-text img, .code-md-preview img, #draft-preview img "
+    "{ max-width: 100%; height: auto; }" in style_css
+  )
 
   mermaid_md = "# Flow\n\n```mermaid\nflowchart TD\n  A[One] --> B[Two]\n```\n"
   mermaid_html, mermaid_fields = preview.render_report(mermaid_md)
