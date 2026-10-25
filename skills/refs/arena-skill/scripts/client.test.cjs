@@ -3349,13 +3349,17 @@ test('preview client', async (t) => {
       assert.match(html, /id="report-submit-float"/);
       assert.doesNotMatch(html, /<label for="report-select">/);
       assert.equal(get('#report-toc').hidden, true, 'h1 report title alone is omitted from the TOC');
-      context.renderReportToc('<h1 id="title">Report</h1><h2 id="sec-1">First</h2><h3 id="sec-2">Second</h3>');
+      context.renderReportToc(
+        '<h1 id="title">Report</h1><h2 id="sec-1">First</h2><div class="question" data-field="decision-1" data-type="choice"><small class="question-id">Question ID: <code>decision-1</code></small><textarea class="answer-text" aria-label="Decision on line"></textarea></div><h3 id="sec-2">Second</h3>'
+      );
       assert.equal(get('#report-toc').hidden, false);
       const tocLinks = get('#report-toc').children.slice(1);
-      assert.equal(tocLinks.length, 2);
+      assert.equal(tocLinks.length, 3);
       assert.equal(tocLinks[0].textContent, 'First');
       assert.equal(tocLinks[0].dataset.active, 'true');
       assert.equal(tocLinks[0].getAttribute('aria-current'), 'true');
+      assert.equal(tocLinks[1].textContent, '? Decision on line (decision-1)');
+      assert.equal(tocLinks[1].dataset.question, 'true');
       tocLinks[1].events.click(event({}));
       assert.equal(tocLinks[1].dataset.active, 'true');
       assert.equal(tocLinks[0].dataset.active, undefined);
@@ -5700,7 +5704,7 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   );
   assert.match(styleSource, /#copy-state\s*\{\s*display:\s*none;\s*\}/);
   assert.match(appSource, /updateReportTocActive/);
-  assert.match(appSource, /querySelectorAll\?\.\('h2, h3'\)/);
+  assert.match(appSource, /querySelectorAll\?\.\('h2, h3, \.question\[data-field\]'\)/);
   assert.match(styleSource, /\.report-toc-link\.active/);
   assert.match(styleSource, /calc\(50vw - 458px\)/);
 });

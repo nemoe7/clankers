@@ -2059,7 +2059,7 @@ def render_inline(markdown):
 def field_html(question):
   prompt = html.escape(question["prompt"], quote=True)
   name = html.escape(question["id"], quote=True)
-  body = f'<div class="question" data-field="{name}"'
+  body = f'<div class="question" id="report-question-{name}" data-field="{name}"'
   body += f' data-type="{question["type"]}">'
   body += f'<small class="question-id">Question ID: <code>{name}</code></small>'
   if question["type"] == "text":

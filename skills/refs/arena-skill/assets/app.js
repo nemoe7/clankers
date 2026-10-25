@@ -2055,24 +2055,53 @@ function renderReportToc(html = '') {
   const toc = $('#report-toc');
   const report = $('#report');
   if (!toc || !report) return;
-  const domHeadings = [...(report.querySelectorAll?.('h2, h3') || [])];
+  const domNodes = [...(report.querySelectorAll?.('h2, h3, .question[data-field]') || [])];
   const items = [];
-  if (domHeadings.length) {
-    domHeadings.forEach((heading, index) => {
-      const text = (heading.textContent || '').trim();
+  if (domNodes.length) {
+    let headingIndex = 0;
+    let questionIndex = 0;
+    domNodes.forEach(node => {
+      const fieldId = node.dataset?.field || node.getAttribute?.('data-field') || '';
+      if (fieldId || node.classList?.contains?.('question')) {
+        questionIndex += 1;
+        const promptNode = node.querySelector?.('.options[aria-label], textarea.answer-text[aria-label]');
+        const promptText = (promptNode?.getAttribute?.('aria-label') || '').trim();
+        const labelText = promptText && fieldId && promptText.toLowerCase() !== fieldId.replace(/-/g, ' ').toLowerCase()
+          ? `? ${promptText} (${fieldId})`
+          : `? ${promptText || fieldId || `Question ${questionIndex}`}`;
+        const id = node.id || `report-question-${fieldId || questionIndex}`;
+        node.id = id;
+        items.push({ id, level: 3, text: labelText, node, question: true });
+        return;
+      }
+      const text = (node.textContent || '').trim();
       if (!text) return;
-      const id = heading.id || `report-heading-${index + 1}`;
-      heading.id = id;
-      items.push({ id, level: Number(String(heading.tagName || 'H2').slice(1)) || 2, text, node: heading });
+      headingIndex += 1;
+      const id = node.id || `report-heading-${headingIndex}`;
+      node.id = id;
+      items.push({ id, level: Number(String(node.tagName || 'H2').slice(1)) || 2, text, node });
     });
   } else if (typeof html === 'string' && html) {
-    let index = 0;
-    for (const match of html.matchAll(/<h([2-3])\b([^>]*)>([\s\S]*?)<\/h\1>/gi)) {
-      const text = unescapeHtmlEntities(match[3].replace(/<[^>]+>/g, '')).trim();
-      if (!text) continue;
-      const idMatch = /\bid="([^"]+)"/i.exec(match[2] || '');
-      const id = idMatch ? idMatch[1] : `report-heading-${++index}`;
-      items.push({ id, level: Number(match[1]) || 2, text, node: null });
+    let headingIndex = 0;
+    let questionIndex = 0;
+    const pattern = /<h([2-3])\b([^>]*)>([\s\S]*?)<\/h\1>|<div\b[^>]*\bclass="question"[^>]*\bdata-field="([^"]+)"[^>]*>([\s\S]*?)<\/div>/gi;
+    for (const match of html.matchAll(pattern)) {
+      if (match[1]) {
+        const text = unescapeHtmlEntities(match[3].replace(/<[^>]+>/g, '')).trim();
+        if (!text) continue;
+        const idMatch = /\bid="([^"]+)"/i.exec(match[2] || '');
+        const id = idMatch ? idMatch[1] : `report-heading-${++headingIndex}`;
+        items.push({ id, level: Number(match[1]) || 2, text, node: null });
+      } else if (match[4]) {
+        questionIndex += 1;
+        const fieldId = unescapeHtmlEntities(match[4]).trim();
+        const ariaMatch = /\baria-label="([^"]+)"/i.exec(match[5] || '');
+        const promptText = ariaMatch ? unescapeHtmlEntities(ariaMatch[1]).trim() : '';
+        const labelText = promptText && fieldId && promptText.toLowerCase() !== fieldId.replace(/-/g, ' ').toLowerCase()
+          ? `? ${promptText} (${fieldId})`
+          : `? ${promptText || fieldId || `Question ${questionIndex}`}`;
+        items.push({ id: `report-question-${fieldId || questionIndex}`, level: 3, text: labelText, node: null, question: true });
+      }
     }
   }
   if (!items.length) {
@@ -2092,6 +2121,7 @@ function renderReportToc(html = '') {
     link.className = 'report-toc-link';
     link.href = `#${item.id}`;
     link.dataset.level = String(item.level);
+    if (item.question) link.dataset.question = 'true';
     link.textContent = item.text;
     link.addEventListener('click', event => {
       event.preventDefault();
