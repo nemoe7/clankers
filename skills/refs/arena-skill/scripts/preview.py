@@ -2882,6 +2882,38 @@ def require_server(store):
   raise ValueError(f"Preview down. Before polling: arena-preview serve --port {port}")
 
 
+def require_survey(store):
+  """Refuse polling while a survey request awaits acknowledgement or the server has no survey submission."""
+  with closing(store.connect()) as db:
+    pending = db.execute(
+      "SELECT id FROM notes WHERE type = 'survey' AND acknowledged_at IS NULL LIMIT 1"
+    ).fetchone()
+  if pending is not None:
+    raise ValueError(
+      "Survey unanswered. Read and acknowledge the survey note, "
+      "then run `arena-preview survey '<json>'` before polling."
+    )
+  port = store.meta_value("port")
+  if not port:
+    return
+  from http.client import HTTPConnection, HTTPException
+
+  try:
+    with closing(HTTPConnection("127.0.0.1", int(port), timeout=2)) as client:
+      client.request("GET", "/api/survey")
+      response = client.getresponse()
+      body = response.read()
+      if response.status != 200:
+        return
+      payload = json.loads(body.decode("utf-8"))
+  except (HTTPException, OSError, UnicodeDecodeError, ValueError):
+    return
+  if isinstance(payload, dict) and payload.get("results") is None:
+    raise ValueError(
+      "Survey unanswered. Run `arena-preview survey '<json>'` before polling."
+    )
+
+
 def print_read(store):
   """Print pending entries, then mark delivered IDs as seen. A failed print leaves each entry pending.
   Seen nonquiet entries still need acknowledgement."""
@@ -9168,7 +9200,7 @@ class Store:
     quiet_filter = (
       " AND (quiet = 0 OR blocking = 1 OR seen_at IS NULL)"
       if include_quiet
-      else " AND (quiet = 0 OR (type = 'state-backup' AND blocking = 1))"
+      else " AND (quiet = 0 OR (type IN ('state-backup', 'survey') AND blocking = 1))"
     )
     with self.transaction(autosave=False) as db:
       pending = [
@@ -13302,6 +13334,7 @@ def main():
       print(format_key(record))
     elif args.command == "poll":
       require_server(store)
+      require_survey(store)
       store.notice_expired_key()
       refusal = poll_repeat(store)
       if refusal:

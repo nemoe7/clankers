@@ -14972,3 +14972,35 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert preview.run_notices(obs_state) == 1
   second_notice = capsys.readouterr().out
   assert "run alpha-check done: exit 0" in second_notice  # nonemo: NMT100
+  survey_srv = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(obs_store))
+  obs_store.set_meta("port", str(survey_srv.server_port))
+  threading.Thread(target=survey_srv.serve_forever, daemon=True).start()
+  try:
+    with pytest.raises(ValueError, match="Survey unanswered"):
+      preview.require_survey(obs_store)
+    monkeypatch.setattr(preview, "resolve_state_dir", lambda: str(obs_state))
+    monkeypatch.setattr(sys, "argv", ["arena-preview", "poll"])
+    assert preview.main() == 1
+    assert "Survey unanswered" in capsys.readouterr().err
+    import survey
+
+    valid_answers = json.dumps(survey.template())
+    monkeypatch.setattr(sys, "argv", ["arena-preview", "survey", valid_answers])
+    assert preview.main() == 0
+    capsys.readouterr()
+    preview.require_survey(obs_store)
+    obs_store.note(
+      "pending-survey",
+      "Acknowledge survey",
+      quiet=True,
+      blocking=True,
+      type="survey",
+    )
+    with pytest.raises(ValueError, match="Survey unanswered"):
+      preview.require_survey(obs_store)
+    monkeypatch.setattr(sys, "argv", ["arena-preview", "poll"])
+    assert preview.main() == 1
+    assert "Survey unanswered" in capsys.readouterr().err
+  finally:
+    survey_srv.shutdown()
+    survey_srv.server_close()
