@@ -3558,6 +3558,7 @@ document.addEventListener('touchstart', event => {
     startY: touch.clientY,
     y: touch.clientY,
     maxAbsDx: 0,
+    active: false,
     targetTab: null,
   };
 }, { passive: true });
@@ -3580,11 +3581,23 @@ document.addEventListener('touchmove', event => {
   const dy = touch.clientY - tabSwipeState.startY;
   const absDx = Math.abs(dx);
   const absDy = Math.abs(dy);
+  if (!tabSwipeState.active) {
+    if (absDy >= TAB_SWIPE_MIN && absDy > absDx * 1.5) {
+      tabSwipeState = null;
+      hideTabSwipeArrow();
+      return;
+    }
+    if (absDx >= TAB_SWIPE_MIN && absDx > absDy * 1.5) {
+      tabSwipeState.active = true;
+    } else {
+      return;
+    }
+  }
   if (absDx > tabSwipeState.maxAbsDx) tabSwipeState.maxAbsDx = absDx;
   const swipedBack = (tabSwipeState.maxAbsDx >= TAB_SWIPE_THRESHOLD && absDx < TAB_SWIPE_THRESHOLD)
     || (tabSwipeState.maxAbsDx - absDx > 16 && absDx < TAB_SWIPE_THRESHOLD);
   const arrow = $('#tab-swipe-arrow');
-  if (absDx >= TAB_SWIPE_MIN && absDx > absDy * 1.5 && !swipedBack) {
+  if (absDx >= TAB_SWIPE_MIN && !swipedBack) {
     const visibleTabs = tabs.filter(item => item && !item.hidden);
     if (visibleTabs.length < 2) {
       tabSwipeState.targetTab = null;

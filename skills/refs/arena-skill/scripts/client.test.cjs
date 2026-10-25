@@ -5223,6 +5223,10 @@ test('preview client', async (t) => {
     assert.ok(fullOpacity > partialOpacity && fullOpacity < 1, 'full swipe increases opacity while staying translucent');
     assert.notEqual(swipeArrow.style.transform, partialTransform, 'transform animates with swipe distance');
     assert.equal(swipeArrow.style.top, '322px');
+    documentEvents.touchmove({ touches: [{ clientX: 180, clientY: 500 }] });
+    assert.equal(swipeArrow.hidden, false, 'dragging vertically while arrow is shown keeps the arrow visible');
+    assert.equal(swipeArrow.dataset.armed, 'true', 'vertical drag while holding preserves armed state');
+    assert.equal(swipeArrow.style.top, '500px', 'vertical drag updates arrow Y position');
     documentEvents.touchend({});
     assert.equal(swipeArrow.hidden, true);
     assert.equal(get('#reports-tab').getAttribute('aria-selected'), 'true');
