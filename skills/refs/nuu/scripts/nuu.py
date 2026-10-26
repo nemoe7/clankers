@@ -58,7 +58,6 @@ SKIP = {
   "node_modules",
   "dist",
   "build",
-  "arena-state",
   "__pycache__",
   ".pytest_cache",
   ".ruff_cache",

@@ -1031,7 +1031,10 @@ def test_design_boards_and_html_typography(tmp_path):
   _, _, trans_rgba = annotate.decode_png(trans_dst.read_bytes())
   assert trans_rgba[3] == 0
   inside_idx = (5 * 20 + 5) * 4
-  assert trans_rgba[inside_idx] == 225 and trans_rgba[inside_idx + 3] == 32
+  assert trans_rgba[inside_idx + 3] == 0
+  border_idx = (2 * 20 + 2) * 4
+  assert trans_rgba[border_idx] == 225 and trans_rgba[border_idx + 3] == 255
+  assert not hasattr(annotate, "GLYPHS")
 
   shots_dir = html_font_proj / "shots"
   shots_dir.mkdir()
@@ -1288,8 +1291,8 @@ def test_design_boards_and_html_typography(tmp_path):
   assert "Inter" in bare_typo["font_sans"]
   assert "Monaspace Neon" in bare_typo["font_mono"]
 
-  chromium_env_nm = SCRIPT.parents[3] / "arena-state" / "chromium-env" / "node_modules"
-  if chromium_env_nm.is_dir():
+  chromium_bin = annotate.os.environ.get("CHROMIUM_PATH") or ""
+  if chromium_bin and Path(chromium_bin).is_file():
     chr_src = toml_proj / "chr-shot.png"
     chr_src.write_bytes(
       annotate.encode_png(120, 80, bytearray([20, 24, 32, 255] * (120 * 80)))
