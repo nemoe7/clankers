@@ -3388,12 +3388,16 @@ for raw in sys.stdin:
               repo: "clankers",
               updated_at: "2026-10-26T20:00:00Z",
               survey: { answered: true, total: 5, correct: 4 },
+              polling_since: "2026-10-26T20:00:00Z",
+              calls_since_message: 1,
+              gate_threshold: 5,
             },
             {
               session_id: "91a01582-clankers",
               repo: "clankers",
               updated_at: "2020-01-01T00:00:00Z",
               survey: { answered: true, total: 5, correct: 3 },
+              waiting_for_gates: true,
             },
           ],
           entries: [{ id: "p00001", session_id: "293da56c-clankers", at: "2026-10-26T20:01:00Z", payload: { text: "first" } }],
@@ -3418,6 +3422,16 @@ for raw in sys.stdin:
         healedSplitBrain.sessions.find((s) => s.session_id === "91a01582-clankers").survey.correct,
         3,
         "mergePreviewBoard preserves session survey evaluation on session rows",
+      );
+      assert.equal(
+        healedSplitBrain.sessions.find((s) => s.session_id === "293da56c-clankers").polling_since,
+        "2026-10-26T20:00:00Z",
+        "mergePreviewBoard preserves polling_since on session rows",
+      );
+      assert.equal(
+        healedSplitBrain.sessions.find((s) => s.session_id === "91a01582-clankers").waiting_for_gates,
+        true,
+        "mergePreviewBoard preserves waiting_for_gates on peer session rows",
       );
       const discOut = checks.board.applyBoardAction(healedSplitBrain, {
         type: "disconnect-session",
