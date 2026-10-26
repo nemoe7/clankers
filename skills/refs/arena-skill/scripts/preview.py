@@ -1591,13 +1591,26 @@ def clause_ack_error(text, root=None):
     # A store outside a repository has no bible of its own, so the session's applies.
     base = Path.cwd()
     files = read_set_files(base, worker=True)
-  paths = {Path(path).name: base / path for path in files}
   for match in CLAUSE_ACK.finditer(text or ""):
-    path = paths.get(Path(match.group(1)).name)
-    if path is None or not path.is_file():
-      continue
-    if int(match.group(2)) <= len(path.read_text(encoding="utf-8").splitlines()):
-      return ""
+    cited = match.group(1).lstrip("./")
+    cited_name = Path(cited).name
+    line_no = int(match.group(2))
+    candidates = [
+      base / path
+      for path in files
+      if (
+        path == cited or path.endswith(f"/{cited}")
+        if "/" in cited
+        else Path(path).name == cited_name
+      )
+    ]
+    for path in candidates:
+      if (
+        line_no > 0
+        and path.is_file()
+        and line_no <= len(path.read_text(encoding="utf-8").splitlines())
+      ):
+        return ""
   return (
     "An ack of a violation note must name the clause as `file:ln: clause`, for"
     " example `ARENA.md:41: MUST read the bible`. The note stays pending."

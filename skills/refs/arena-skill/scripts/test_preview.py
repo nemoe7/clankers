@@ -15672,3 +15672,24 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     ".report-submit-row > #report-submit { margin-top: 0; visibility: hidden; pointer-events: none; }"
     in style_css
   )
+
+
+def test_clause_ack_error_keeps_root_agents_when_nested_agents_is_shorter(tmp_path):
+  (tmp_path / "ARENA.md").write_text("# ARENA\n", encoding="utf-8")
+  (tmp_path / "AGENTS.md").write_text("line\n" * 120, encoding="utf-8")
+  nested = tmp_path / "userscripts"
+  nested.mkdir()
+  (nested / "AGENTS.md").write_text("line\n" * 20, encoding="utf-8")
+  preview.READ_SET_CACHE.clear()
+  assert (
+    preview.clause_ack_error(
+      "AGENTS.md:103: Code changes need no proposal; keep them lean.", tmp_path
+    )
+    == ""
+  )
+  assert (
+    preview.clause_ack_error(
+      "userscripts/AGENTS.md:103: Out of range in nested file.", tmp_path
+    )
+    != ""
+  )
