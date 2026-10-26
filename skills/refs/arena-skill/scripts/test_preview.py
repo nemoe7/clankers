@@ -15572,10 +15572,10 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   ).read_text(encoding="utf-8")
   assert style_css.count("#copy-state { display: none; }") >= 2
   demo_script = (
-    preview.Path(__file__).resolve().parents[4] / "maintenance" / "demo_preview.py"
+    (collect_root / "skills" / "nemoizer").resolve().parents[1]
+    / "maintenance"
+    / "demo_preview.py"
   )
-  if not demo_script.is_file():
-    demo_script = preview.Path.cwd() / "maintenance" / "demo_preview.py"
   assert demo_script.is_file()
   demo_dir = tmp_path / "demo-preview-state"
   demo_proc = subprocess.run(
