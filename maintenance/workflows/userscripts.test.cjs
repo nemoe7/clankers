@@ -2524,6 +2524,8 @@ for raw in sys.stdin:
       "clankers-arena-trim-interval-ms",
       "clankers-arena-title-interval-ms",
       "clankers-arena-state-reset-window",
+      "clankers-arena-preview-drawer-lock",
+      "clankers-arena-preview-drawer-width-px",
       "clankers-arena-log-level",
       "clankers-arena-userscript-paused",
       "clankers-arena-show-settings-button",
@@ -2533,6 +2535,32 @@ for raw in sys.stdin:
         `settings modal exposes setting ${key}`,
       );
     }
+    const drawerLockInput = allInputs.find(
+      (el) => el.attrs["data-setting-key"] === "clankers-arena-preview-drawer-lock",
+    );
+    const drawerWidthInput = allInputs.find(
+      (el) => el.attrs["data-setting-key"] === "clankers-arena-preview-drawer-width-px",
+    );
+    assert.ok(drawerLockInput, "settings modal exposes preview drawer width lock toggle");
+    assert.equal(drawerLockInput.type, "checkbox", "preview drawer width lock uses a checkbox toggle");
+    assert.equal(drawerLockInput.checked, true, "preview drawer width lock defaults to enabled");
+    assert.ok(drawerWidthInput, "settings modal exposes preview drawer width slider");
+    assert.equal(drawerWidthInput.type, "range", "preview drawer width uses a range slider");
+    assert.equal(drawerWidthInput.value, "1398", "preview drawer width slider defaults to 1398 px");
+    drawerWidthInput.value = "1240";
+    drawerWidthInput.listeners.change();
+    assert.equal(
+      saved.get("clankers-arena-preview-drawer-width-px"),
+      1240,
+      "changing preview drawer width slider persists pixel width",
+    );
+    drawerLockInput.checked = false;
+    drawerLockInput.listeners.change();
+    assert.equal(
+      saved.get("clankers-arena-preview-drawer-lock"),
+      false,
+      "toggling preview drawer width lock checkbox persists boolean",
+    );
     const wakeMinInput = allInputs.find(
       (el) => el.attrs["data-setting-key"] === "clankers-arena-wake-delay-min-ms",
     );
@@ -2865,6 +2893,96 @@ for raw in sys.stdin:
     assert.equal(transcriptBox.style.getPropertyValue("padding-right"), "0px");
     assert.equal(composerBox.style.getPropertyValue("padding-right"), "0px");
     assert.equal(checks.openSteering.enforcePreviewDrawerWidth(fullDoc), false);
+
+    let previewOpenInSidebar = true;
+    const outerDrawerBox = makeStyleBox("width", "1153px");
+    const innerDrawerBox = makeStyleBox("width", "1153px");
+    innerDrawerBox.parentElement = outerDrawerBox;
+    innerDrawerBox.querySelector = function (sel) {
+      if (sel.includes("Close preview") || sel.includes("App preview")) {
+        return previewOpenInSidebar ? {} : null;
+      }
+      if (sel.includes("Workspace card views")) {
+        return previewOpenInSidebar ? null : {};
+      }
+      return null;
+    };
+    const transcriptMsgCol = {
+      classList: {
+        contains(cls) {
+          return cls === "max-w-3xl" || cls === "shrink-0";
+        },
+      },
+      parentElement: {
+        getAttribute(attr) {
+          return attr === "role" ? "log" : "";
+        },
+      },
+      style: {
+        val: "1398px",
+        priority: "important",
+        getPropertyValue(prop) {
+          return prop === "padding-right" ? this.val : "";
+        },
+        getPropertyPriority(prop) {
+          return prop === "padding-right" ? this.priority : "";
+        },
+        setProperty(prop, v, p) {
+          if (prop === "padding-right") {
+            this.val = v;
+            this.priority = p || "";
+          }
+        },
+        removeProperty(prop) {
+          if (prop === "padding-right") {
+            this.val = "";
+            this.priority = "";
+          }
+        },
+      },
+    };
+    const realHeaderBox = makeStyleBox("right", "1153px");
+    const realTranscriptBox = makeStyleBox("padding-right", "1153px");
+    const realComposerBox = makeStyleBox("padding-right", "1153px");
+    const realMainCol = {
+      querySelector(sel) {
+        if (sel.includes("Collapse workspace sidebar")) return {};
+        if (sel === "div.absolute.start-0.top-0.z-20") return realHeaderBox;
+        if (sel.includes('[data-perf-target="transcript"]')) return realTranscriptBox;
+        return null;
+      },
+      querySelectorAll(sel) {
+        if (sel === "div.flex.min-h-0.flex-1.flex-col > div.shrink-0") {
+          return [transcriptMsgCol, realComposerBox];
+        }
+        return [];
+      },
+    };
+    const realDoc = {
+      querySelector(sel) {
+        if (sel === checks.openSteering.PREVIEW_DRAWER_SELECTOR) return innerDrawerBox;
+        if (sel === checks.openSteering.PREVIEW_MAIN_SELECTOR) return realMainCol;
+        return null;
+      },
+    };
+    assert.equal(checks.openSteering.enforcePreviewDrawerWidth(realDoc), true);
+    assert.equal(outerDrawerBox.style.getPropertyValue("width"), "1398px");
+    assert.equal(innerDrawerBox.style.getPropertyValue("width"), "1398px");
+    assert.equal(realHeaderBox.style.getPropertyValue("right"), "1398px");
+    assert.equal(realTranscriptBox.style.getPropertyValue("padding-right"), "1398px");
+    assert.equal(realComposerBox.style.getPropertyValue("padding-right"), "1398px");
+    assert.equal(
+      transcriptMsgCol.style.getPropertyValue("padding-right"),
+      "",
+      "transcript messages column (max-w-3xl) must never receive drawer padding-right",
+    );
+    previewOpenInSidebar = false;
+    assert.equal(checks.openSteering.enforcePreviewDrawerWidth(realDoc), true);
+    assert.equal(outerDrawerBox.style.getPropertyValue("width"), "256px");
+    assert.equal(innerDrawerBox.style.getPropertyValue("width"), "256px");
+    assert.equal(realHeaderBox.style.getPropertyValue("right"), "256px");
+    assert.equal(realTranscriptBox.style.getPropertyValue("padding-right"), "256px");
+    assert.equal(realComposerBox.style.getPropertyValue("padding-right"), "256px");
 
     const allowedBoard = checks.board.applyBoardAction(null, {
       action: "allow",

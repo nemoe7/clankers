@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.90
+// @name         Arena.ai | NemoUtils | v1.10.91
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.90
+// @version      1.10.91
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -359,11 +359,33 @@
   var KEEP_WORKING_DELAY_MIN_KEY = "clankers-arena-keep-working-delay-min-ms";
   var KEEP_WORKING_DELAY_MS = 5000;
   var KEEP_WORKING_DELAY_KEY = "clankers-arena-keep-working-delay-ms";
+  var PREVIEW_DRAWER_LOCK_KEY = "clankers-arena-preview-drawer-lock";
+  var PREVIEW_DRAWER_WIDTH_KEY = "clankers-arena-preview-drawer-width-px";
+  var PREVIEW_DRAWER_DEFAULT_PX = 1398;
+  var PREVIEW_DRAWER_MIN_PX = 600;
+  var PREVIEW_DRAWER_MAX_PX = 2400;
   var featureRegistry = [];
   var restartStateWatchHook = null;
   var syncPreviewProxyHook = null;
+  var syncPreviewDrawerLockHook = null;
   var previewUiRepo = "";
   var previewUiSessionId = "";
+
+  function previewDrawerLockOn() {
+    if (typeof GM_getValue !== "function") return true;
+    return GM_getValue(PREVIEW_DRAWER_LOCK_KEY, true) !== false;
+  }
+
+  function previewDrawerWidthPx() {
+    if (typeof GM_getValue !== "function") return PREVIEW_DRAWER_DEFAULT_PX;
+    var px = Number(GM_getValue(PREVIEW_DRAWER_WIDTH_KEY, PREVIEW_DRAWER_DEFAULT_PX));
+    if (!isFinite(px) || px < PREVIEW_DRAWER_MIN_PX) return PREVIEW_DRAWER_DEFAULT_PX;
+    return Math.min(Math.round(px), PREVIEW_DRAWER_MAX_PX);
+  }
+
+  function previewDrawerWidthCss() {
+    return previewDrawerWidthPx() + "px";
+  }
 
   function setPreviewUiSessionId(sid) {
     var nextSid = boardSessionId(sid || "");
@@ -1667,6 +1689,10 @@
       return true;
     }
 
+    var PREVIEW_DRAWER_OUTER_SELECTOR =
+      "body > div:nth-child(4) > div > main > div > div > div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip";
+    var PREVIEW_DRAWER_OUTER_FALLBACK_SELECTOR =
+      "main div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip";
     var PREVIEW_DRAWER_SELECTOR =
       "body > div:nth-child(4) > div > main > div > div > div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip > div";
     var PREVIEW_DRAWER_FALLBACK_SELECTOR =
@@ -1680,6 +1706,9 @@
       '[data-perf-target="transcript"] > div[role="log"], div[data-custom-scrollbar="true"][role="log"]';
     var PREVIEW_COMPOSER_WRAP_SELECTOR =
       "div.flex.min-h-0.flex-1.flex-col > div.shrink-0";
+    var PREVIEW_OPEN_CONTENT_SELECTOR =
+      'button[aria-label="Close preview"], button[aria-label="Reload preview"], iframe[title^="App preview"], input[aria-label^="Preview path"]';
+    var WORKSPACE_CARDS_SELECTOR = '[aria-label="Workspace card views"]';
     var PREVIEW_DRAWER_WIDTH = "1398px";
     var PREVIEW_DRAWER_STYLE_ID = "clankers-preview-drawer-style";
 
@@ -1690,6 +1719,20 @@
       return (
         doc.querySelector(PREVIEW_DRAWER_SELECTOR) ||
         doc.querySelector(PREVIEW_DRAWER_FALLBACK_SELECTOR) ||
+        null
+      );
+    }
+
+    function findPreviewDrawerOuter(doc, drawer) {
+      if (drawer && drawer.parentElement && drawer.parentElement.style) {
+        return drawer.parentElement;
+      }
+      if (!doc || typeof doc.querySelector !== "function") {
+        return null;
+      }
+      return (
+        doc.querySelector(PREVIEW_DRAWER_OUTER_SELECTOR) ||
+        doc.querySelector(PREVIEW_DRAWER_OUTER_FALLBACK_SELECTOR) ||
         null
       );
     }
@@ -1742,19 +1785,121 @@
       return true;
     }
 
-    function clearForcedStyle(node, prop) {
+    function clearForcedStyle(node, prop, fallbackValue) {
       if (!node || !node.style) return false;
       var current = readStyleProp(node, prop).trim();
-      if (current !== PREVIEW_DRAWER_WIDTH) return false;
+      var priority =
+        typeof node.style.getPropertyPriority === "function"
+          ? String(node.style.getPropertyPriority(prop) || "")
+          : "";
+      if (
+        priority !== "important" &&
+        current !== PREVIEW_DRAWER_WIDTH &&
+        current !== previewDrawerWidthCss()
+      ) {
+        return false;
+      }
+      var target = fallbackValue || "0px";
       var camel = prop.replace(/-([a-z])/g, function (_, c) {
         return c.toUpperCase();
       });
       if (typeof node.style.setProperty === "function") {
-        node.style.setProperty(prop, "0px", "");
+        node.style.setProperty(prop, target, "");
         return true;
       }
-      node.style[camel] = "0px";
+      node.style[camel] = target;
       return true;
+    }
+
+    function isInsideTranscriptLog(node) {
+      var cur = node;
+      while (cur) {
+        if (
+          cur.classList &&
+          typeof cur.classList.contains === "function" &&
+          cur.classList.contains("max-w-3xl")
+        ) {
+          return true;
+        }
+        if (typeof cur.getAttribute === "function") {
+          var role = cur.getAttribute("role");
+          var perf = cur.getAttribute("data-perf-target");
+          if (role === "log" || perf === "transcript") {
+            return true;
+          }
+          var styleAttr = String(cur.getAttribute("style") || "");
+          if (/height\s*:\s*24px/i.test(styleAttr)) {
+            return true;
+          }
+        }
+        cur = cur.parentElement || cur.parentNode || null;
+      }
+      return false;
+    }
+
+    function clearTranscriptColumnPadding(mainCol) {
+      if (!mainCol || typeof mainCol.querySelectorAll !== "function") return;
+      var candidates = mainCol.querySelectorAll(PREVIEW_COMPOSER_WRAP_SELECTOR);
+      for (var i = 0; i < candidates.length; i += 1) {
+        var node = candidates[i];
+        if (!isInsideTranscriptLog(node) || !node.style) continue;
+        var current = readStyleProp(node, "padding-right").trim();
+        var priority =
+          typeof node.style.getPropertyPriority === "function"
+            ? String(node.style.getPropertyPriority("padding-right") || "")
+            : "";
+        if (
+          priority === "important" ||
+          current === PREVIEW_DRAWER_WIDTH ||
+          current === previewDrawerWidthCss()
+        ) {
+          if (typeof node.style.removeProperty === "function") {
+            node.style.removeProperty("padding-right");
+          } else if (typeof node.style.setProperty === "function") {
+            node.style.setProperty("padding-right", "", "");
+          } else {
+            node.style.paddingRight = "";
+          }
+        }
+      }
+    }
+
+    function findPreviewComposerWrap(mainCol) {
+      if (!mainCol) return null;
+      if (typeof mainCol.querySelectorAll === "function") {
+        var candidates = mainCol.querySelectorAll(PREVIEW_COMPOSER_WRAP_SELECTOR);
+        for (var i = 0; i < candidates.length; i += 1) {
+          if (!isInsideTranscriptLog(candidates[i])) {
+            return candidates[i];
+          }
+        }
+        return null;
+      }
+      if (typeof mainCol.querySelector === "function") {
+        var single = mainCol.querySelector(PREVIEW_COMPOSER_WRAP_SELECTOR);
+        return single && !isInsideTranscriptLog(single) ? single : null;
+      }
+      return null;
+    }
+
+    function isWorkspaceCardsDrawer(doc, drawer) {
+      if (drawer && typeof drawer.querySelector === "function") {
+        if (drawer.querySelector(PREVIEW_OPEN_CONTENT_SELECTOR)) {
+          return false;
+        }
+        if (drawer.querySelector(WORKSPACE_CARDS_SELECTOR)) {
+          return true;
+        }
+      }
+      if (doc && typeof doc.querySelector === "function") {
+        if (doc.querySelector(PREVIEW_OPEN_CONTENT_SELECTOR)) {
+          return false;
+        }
+        if (doc.querySelector(WORKSPACE_CARDS_SELECTOR)) {
+          return true;
+        }
+      }
+      return false;
     }
 
     function isPreviewDrawerOpen(doc, drawer, mainCol) {
@@ -1769,8 +1914,22 @@
       ) {
         return false;
       }
+      if (isWorkspaceCardsDrawer(doc, drawer)) {
+        return false;
+      }
+      if (
+        drawer &&
+        typeof drawer.querySelector === "function" &&
+        drawer.querySelector(PREVIEW_OPEN_CONTENT_SELECTOR)
+      ) {
+        return true;
+      }
+      var rawWidth = readStyleProp(drawer, "width").trim();
       if (mainCol && typeof mainCol.querySelector === "function") {
         if (mainCol.querySelector('button[aria-label="Collapse workspace sidebar"]')) {
+          if (rawWidth && /^(0(px|%|rem|em)?|256px)$/i.test(rawWidth)) {
+            return false;
+          }
           return true;
         }
         if (
@@ -1781,8 +1940,7 @@
           return false;
         }
       }
-      var rawWidth = readStyleProp(drawer, "width").trim();
-      if (rawWidth && /^0(px|%|rem|em)?$/i.test(rawWidth)) {
+      if (rawWidth && /^(0(px|%|rem|em)?|256px)$/i.test(rawWidth)) {
         return false;
       }
       return true;
@@ -1790,7 +1948,9 @@
 
     function enforcePreviewDrawerWidth(doc) {
       var drawer = findPreviewDrawer(doc);
+      var outerDrawer = findPreviewDrawerOuter(doc, drawer);
       var mainCol = findPreviewMain(doc);
+      clearTranscriptColumnPadding(mainCol);
       var header =
         mainCol && typeof mainCol.querySelector === "function"
           ? mainCol.querySelector(PREVIEW_HEADER_OFFSET_SELECTOR)
@@ -1799,55 +1959,76 @@
         mainCol && typeof mainCol.querySelector === "function"
           ? mainCol.querySelector(PREVIEW_TRANSCRIPT_LOG_SELECTOR)
           : null;
-      var composer =
-        mainCol && typeof mainCol.querySelector === "function"
-          ? mainCol.querySelector(PREVIEW_COMPOSER_WRAP_SELECTOR)
-          : null;
-      if (!isPreviewDrawerOpen(doc, drawer, mainCol)) {
+      var composer = findPreviewComposerWrap(mainCol);
+      var open = isPreviewDrawerOpen(doc, drawer, mainCol);
+      if (!open || !previewDrawerLockOn()) {
+        var fallback = !open
+          ? isWorkspaceCardsDrawer(doc, drawer)
+            ? "256px"
+            : "0px"
+          : previewDrawerWidthCss();
         var cleared = false;
-        if (clearForcedStyle(drawer, "width")) cleared = true;
-        if (clearForcedStyle(header, "right")) cleared = true;
-        if (clearForcedStyle(transcript, "padding-right")) cleared = true;
-        if (clearForcedStyle(composer, "padding-right")) cleared = true;
+        if (clearForcedStyle(outerDrawer, "width", fallback)) cleared = true;
+        if (clearForcedStyle(drawer, "width", fallback)) cleared = true;
+        if (clearForcedStyle(header, "right", fallback)) cleared = true;
+        if (clearForcedStyle(transcript, "padding-right", fallback)) cleared = true;
+        if (clearForcedStyle(composer, "padding-right", fallback)) cleared = true;
         return cleared;
       }
+      var targetWidth = previewDrawerWidthCss();
       var changed = false;
-      if (applyImportantStyle(drawer, "width", PREVIEW_DRAWER_WIDTH)) changed = true;
-      if (applyImportantStyle(header, "right", PREVIEW_DRAWER_WIDTH)) changed = true;
-      if (applyImportantStyle(transcript, "padding-right", PREVIEW_DRAWER_WIDTH)) changed = true;
-      if (applyImportantStyle(composer, "padding-right", PREVIEW_DRAWER_WIDTH)) changed = true;
+      if (applyImportantStyle(outerDrawer, "width", targetWidth)) changed = true;
+      if (applyImportantStyle(drawer, "width", targetWidth)) changed = true;
+      if (applyImportantStyle(header, "right", targetWidth)) changed = true;
+      if (applyImportantStyle(transcript, "padding-right", targetWidth)) changed = true;
+      if (applyImportantStyle(composer, "padding-right", targetWidth)) changed = true;
       return changed;
     }
 
     function ensurePreviewDrawerStyle() {
       if (!document.head || typeof document.createElement !== "function") return;
-      if (typeof document.getElementById === "function" && document.getElementById(PREVIEW_DRAWER_STYLE_ID)) return;
-      var style = document.createElement("style");
+      var existing =
+        typeof document.getElementById === "function"
+          ? document.getElementById(PREVIEW_DRAWER_STYLE_ID)
+          : null;
+      if (!previewDrawerLockOn()) {
+        if (existing) {
+          if (typeof existing.remove === "function") existing.remove();
+          else if (existing.parentNode) existing.parentNode.removeChild(existing);
+        }
+        return;
+      }
+      var style = existing || document.createElement("style");
       style.id = PREVIEW_DRAWER_STYLE_ID;
       style.setAttribute("id", PREVIEW_DRAWER_STYLE_ID);
-      var openScope = 'main:has(button[aria-label="Collapse workspace sidebar"]) ';
+      var widthCss = previewDrawerWidthCss();
+      var openScope = 'main:has(button[aria-label="Close preview"], iframe[title^="App preview"]) ';
       style.textContent =
         openScope +
+        "div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip{width:" +
+        widthCss +
+        " !important}" +
+        openScope +
         "div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip > div{width:" +
-        PREVIEW_DRAWER_WIDTH +
+        widthCss +
         " !important}" +
         openScope +
         "div.relative.flex.min-w-0.flex-1.flex-col > " +
         PREVIEW_HEADER_OFFSET_SELECTOR +
         "{right:" +
-        PREVIEW_DRAWER_WIDTH +
+        widthCss +
         " !important}" +
         openScope +
         'div.relative.flex.min-w-0.flex-1.flex-col [data-perf-target="transcript"] > div[role="log"]{padding-right:' +
-        PREVIEW_DRAWER_WIDTH +
+        widthCss +
         " !important}" +
         openScope +
-        "div.relative.flex.min-w-0.flex-1.flex-col > " +
-        PREVIEW_COMPOSER_WRAP_SELECTOR +
-        "{padding-right:" +
-        PREVIEW_DRAWER_WIDTH +
+        "div.relative.flex.min-w-0.flex-1.flex-col > div.flex.min-h-0.flex-1.flex-col > div.shrink-0:not(.max-w-3xl){padding-right:" +
+        widthCss +
         " !important}";
-      document.head.appendChild(style);
+      if (!existing) {
+        document.head.appendChild(style);
+      }
     }
 
     if (exposeChecks("openSteering", {
@@ -1862,12 +2043,17 @@
       interruptPayloadForSteering: interruptPayloadForSteering,
       flagSteeringLabelViolation: flagSteeringLabelViolation,
       findPreviewDrawer: findPreviewDrawer,
+      findPreviewDrawerOuter: findPreviewDrawerOuter,
       findPreviewMain: findPreviewMain,
+      findPreviewComposerWrap: findPreviewComposerWrap,
       isPreviewDrawerOpen: isPreviewDrawerOpen,
       enforcePreviewDrawerWidth: enforcePreviewDrawerWidth,
+      PREVIEW_DRAWER_OUTER_SELECTOR: PREVIEW_DRAWER_OUTER_SELECTOR,
       PREVIEW_DRAWER_SELECTOR: PREVIEW_DRAWER_SELECTOR,
       PREVIEW_MAIN_SELECTOR: PREVIEW_MAIN_SELECTOR,
       PREVIEW_DRAWER_WIDTH: PREVIEW_DRAWER_WIDTH,
+      PREVIEW_DRAWER_LOCK_KEY: PREVIEW_DRAWER_LOCK_KEY,
+      PREVIEW_DRAWER_WIDTH_KEY: PREVIEW_DRAWER_WIDTH_KEY,
       resetFlaggedSteering: function () {
         flaggedSteeringKey = null;
         flaggingSteeringKey = null;
@@ -1992,6 +2178,11 @@
       }, CLICK_DELAY_MS);
     }
 
+    syncPreviewDrawerLockHook = function () {
+      ensurePreviewDrawerStyle();
+      enforcePreviewDrawerWidth(document);
+    };
+
     var observer = new MutationObserver(sync);
     observer.observe(document.documentElement, {
       subtree: true,
@@ -2003,6 +2194,7 @@
     window.addEventListener("popstate", sync);
     sync();
     return function () {
+      if (syncPreviewDrawerLockHook) syncPreviewDrawerLockHook = null;
       observer.disconnect();
       window.removeEventListener("popstate", sync);
       clearClickTimer();
@@ -2504,6 +2696,73 @@
         return box;
       }
 
+      function buildSingleRangeRow(labelText, key, curVal, minVal, maxVal, stepVal, unitLabel, onSaved) {
+        var box = document.createElement("div");
+        box.style.cssText = "display:flex;flex-direction:column;gap:4px";
+        var topRow = document.createElement("div");
+        topRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px";
+        var span = document.createElement("span");
+        span.textContent = labelText;
+        var readout = document.createElement("span");
+        readout.style.cssText = "font-variant-numeric:tabular-nums;color:#b8b2a8";
+        topRow.appendChild(span);
+        topRow.appendChild(readout);
+
+        var track = document.createElement("div");
+        track.setAttribute("data-dual-slider", "true");
+        track.style.cssText = "position:relative;height:20px;display:flex;align-items:center";
+        var rail = document.createElement("div");
+        rail.setAttribute("data-slider-rail", "true");
+        rail.style.cssText =
+          "position:absolute;left:0;right:0;height:6px;border-radius:999px;" +
+          "background:#2c2b28;border:1px solid #56504a;overflow:hidden;pointer-events:none";
+        var fill = document.createElement("div");
+        fill.setAttribute("data-slider-fill", "true");
+        fill.style.cssText =
+          "position:absolute;top:0;bottom:0;left:0;background:#d97757;border-radius:999px";
+        rail.appendChild(fill);
+
+        var input = document.createElement("input");
+        input.type = "range";
+        input.min = String(minVal);
+        input.max = String(maxVal);
+        input.step = String(stepVal || 1);
+        input.value = String(curVal);
+        input.setAttribute("data-setting-key", key);
+        input.setAttribute("aria-label", labelText);
+        input.style.cssText =
+          "position:absolute;left:0;top:0;width:100%;height:100%;margin:0;background:transparent;" +
+          "pointer-events:none;accent-color:#d97757;z-index:2";
+
+        function updateReadout(val) {
+          readout.textContent = val + (unitLabel ? " " + unitLabel : "");
+          var spanRange = Math.max(1, maxVal - minVal);
+          var pct = Math.min(100, Math.max(0, ((val - minVal) / spanRange) * 100));
+          fill.style.width = pct + "%";
+        }
+        updateReadout(curVal);
+
+        function applyVal() {
+          var raw = Number(String(input.value).trim());
+          if (!isFinite(raw)) return;
+          var clamped = Math.min(Math.max(Math.round(raw), minVal), maxVal);
+          input.value = String(clamped);
+          GM_setValue(key, clamped);
+          updateReadout(clamped);
+          menuRefresh();
+          if (typeof onSaved === "function") onSaved(clamped);
+        }
+
+        input.addEventListener("input", applyVal);
+        input.addEventListener("change", applyVal);
+
+        track.appendChild(rail);
+        track.appendChild(input);
+        box.appendChild(topRow);
+        box.appendChild(track);
+        return box;
+      }
+
       var dependentNodes = [];
       function addDependentSectionItem(sectionName, sortLabel, node, depKey) {
         if (depKey) {
@@ -2514,6 +2773,9 @@
       }
 
       function featureStoredOn(key) {
+        if (key === PREVIEW_DRAWER_LOCK_KEY) {
+          return featureStoredOn("open-steering") && previewDrawerLockOn();
+        }
         for (var f = 0; f < featureRegistry.length; f += 1) {
           if (featureRegistry[f].key === key) return featureRegistry[f].storedOn();
         }
@@ -2674,6 +2936,43 @@
           if (typeof forceSaveStateHook === "function") forceSaveStateHook();
         }),
         "state-download",
+      );
+      addDependentSectionItem(
+        "Steering",
+        "Lock drawer width",
+        buildCheckboxRow(
+          "Lock drawer width",
+          PREVIEW_DRAWER_LOCK_KEY,
+          previewDrawerLockOn(),
+          function (next) {
+            GM_setValue(PREVIEW_DRAWER_LOCK_KEY, Boolean(next));
+            if (typeof syncPreviewDrawerLockHook === "function") {
+              syncPreviewDrawerLockHook();
+            }
+            syncDependentVisibility();
+            menuRefresh();
+          },
+        ),
+        "open-steering",
+      );
+      addDependentSectionItem(
+        "Steering",
+        "Drawer width (px)",
+        buildSingleRangeRow(
+          "Drawer width (px)",
+          PREVIEW_DRAWER_WIDTH_KEY,
+          previewDrawerWidthPx(),
+          PREVIEW_DRAWER_MIN_PX,
+          PREVIEW_DRAWER_MAX_PX,
+          1,
+          "px",
+          function () {
+            if (typeof syncPreviewDrawerLockHook === "function") {
+              syncPreviewDrawerLockHook();
+            }
+          },
+        ),
+        PREVIEW_DRAWER_LOCK_KEY,
       );
       addDependentSectionItem(
         "Proxy",
