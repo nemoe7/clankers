@@ -15533,6 +15533,38 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     r["id"] == "worker-rep"
     for r in unpublished_rep_board["worker_reports"][woken_board["session_id"]]
   )
+  pruned_board = hygiene_store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        **unpublished_rep_board,
+        "sessions": [
+          *unpublished_rep_board["sessions"],
+          {
+            "session_id": "probe-verify-clankers",
+            "repo": "clankers",
+            "branch": "arena/probe-verify-clankers",
+            "status": "active",
+            "polling": False,
+            "updated_at": "2020-01-01T00:00:00",
+          },
+          {
+            "session_id": "closed-worker-clankers",
+            "repo": "clankers",
+            "branch": "arena/closed-worker-clankers",
+            "status": "active",
+            "polling": False,
+            "updated_at": "2020-01-01T00:00:00",
+          },
+        ],
+      },
+    }
+  )
+  pruned_sids = {row["session_id"] for row in pruned_board["sessions"]}
+  assert "probe-verify-clankers" not in pruned_sids
+  assert "closed-worker-clankers" not in pruned_sids
+  assert "probe-verify-clankers" in pruned_board["removed_sessions"]
+  assert "closed-worker-clankers" in pruned_board["removed_sessions"]
   style_css = (
     preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")

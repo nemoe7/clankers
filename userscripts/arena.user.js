@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.98
+// @name         Arena.ai | NemoUtils | v1.10.99
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.98
+// @version      1.10.99
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -4885,6 +4885,14 @@
   if (typeof document !== "undefined" && !pauseStored()) {
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
       window.addEventListener("message", onPreviewMessage);
+      window.addEventListener("pagehide", function () {
+        if (!previewUiSessionId) return;
+        var closeRes = applyBoardAction(readGlobalBoard(), {
+          type: "remove-session",
+          session_id: previewUiSessionId,
+        });
+        if (closeRes.ok) writeGlobalBoard(closeRes.board);
+      });
     }
     notifyPreviewReadyHook = function () {
       notifyPreviewReady(document);
@@ -6421,6 +6429,17 @@
     return clean;
   }
 
+  var BOARD_SESSION_TTL_MS = 180000;
+
+  function parseBoardStampMs(value) {
+    var text = String(value || "").trim();
+    if (!text) return NaN;
+    var match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)/.exec(text);
+    if (match) text = match[1];
+    var normalized = text.indexOf("Z") !== -1 || /[+-]\d{2}:\d{2}$/.test(text) ? text : (text + "Z");
+    return Date.parse(normalized);
+  }
+
   function normalizeBoard(raw) {
     var data = raw;
     if (typeof data === "string") {
@@ -6428,12 +6447,23 @@
     }
     if (!data || typeof data !== "object") data = {};
     var multiRepo = Boolean(data.multi_repo);
+    var removedList = [];
+    var removedSet = {};
+    if (Array.isArray(data.removed_sessions)) {
+      data.removed_sessions.forEach(function (item) {
+        var normRem = boardSessionId(item);
+        if (normRem && !removedSet[normRem]) {
+          removedSet[normRem] = true;
+          removedList.push(normRem);
+        }
+      });
+    }
     var workerIds = {};
     if (data.worker_ids && typeof data.worker_ids === "object" && !Array.isArray(data.worker_ids)) {
       Object.keys(data.worker_ids).forEach(function (key) {
         var normK = boardSessionId(key);
         var cleanV = cleanWorkerId(data.worker_ids[key]);
-        if (normK && cleanV) workerIds[normK] = cleanV;
+        if (normK && !removedSet[normK] && cleanV) workerIds[normK] = cleanV;
       });
     }
     var allowed = Array.isArray(data.allowed_sessions)
@@ -6442,21 +6472,47 @@
     var seenAllowed = {};
     var uniqueAllowed = [];
     for (var i = 0; i < allowed.length; i += 1) {
-      if (!seenAllowed[allowed[i]]) {
+      if (!removedSet[allowed[i]] && !seenAllowed[allowed[i]]) {
         seenAllowed[allowed[i]] = true;
         uniqueAllowed.push(allowed[i]);
       }
     }
-    var mainId = boardSessionId(data.main_session_id || "");
-    if (mainId && !seenAllowed[mainId]) mainId = "";
     var rawSessions = Array.isArray(data.sessions) ? data.sessions.slice(0, 64) : [];
+    var maxStampMs = NaN;
+    var rowStamps = {};
+    for (var sIdx = 0; sIdx < rawSessions.length; sIdx += 1) {
+      var sRow = rawSessions[sIdx];
+      if (!sRow || typeof sRow !== "object") continue;
+      var sSid = boardSessionId(sRow.session_id || sRow.branch || "");
+      if (!sSid || removedSet[sSid]) continue;
+      var ms = parseBoardStampMs(sRow.updated_at);
+      if (!isNaN(ms)) {
+        rowStamps[sSid] = ms;
+        if (isNaN(maxStampMs) || ms > maxStampMs) maxStampMs = ms;
+      }
+    }
+    Object.keys(rowStamps).forEach(function (sSid) {
+      var isProbe = sSid.indexOf("probe-") === 0 && !seenAllowed[sSid];
+      var isStale = !isNaN(maxStampMs) && (maxStampMs - rowStamps[sSid]) > BOARD_SESSION_TTL_MS;
+      if (isProbe || isStale) {
+        if (!removedSet[sSid]) {
+          removedSet[sSid] = true;
+          removedList.push(sSid);
+        }
+        delete seenAllowed[sSid];
+        delete workerIds[sSid];
+      }
+    });
+    uniqueAllowed = uniqueAllowed.filter(function (sidItem) { return !removedSet[sidItem]; });
+    var mainId = boardSessionId(data.main_session_id || "");
+    if (mainId && (!seenAllowed[mainId] || removedSet[mainId])) mainId = "";
     var sessions = [];
     var seenSessions = {};
     for (var j = 0; j < rawSessions.length; j += 1) {
       var row = rawSessions[j];
       if (!row || typeof row !== "object") continue;
       var rowSid = boardSessionId(row.session_id || row.branch || "");
-      if (!rowSid || seenSessions[rowSid]) continue;
+      if (!rowSid || seenSessions[rowSid] || removedSet[rowSid] || (rowSid.indexOf("probe-") === 0 && !seenAllowed[rowSid])) continue;
       seenSessions[rowSid] = true;
       if (row.worker_id && !workerIds[rowSid]) {
         var delegated = cleanWorkerId(row.worker_id);
@@ -6506,7 +6562,7 @@
     if (data.worker_tasks && typeof data.worker_tasks === "object" && !Array.isArray(data.worker_tasks)) {
       Object.keys(data.worker_tasks).forEach(function (key) {
         var normK = boardSessionId(key);
-        if (normK && Array.isArray(data.worker_tasks[key])) {
+        if (normK && !removedSet[normK] && Array.isArray(data.worker_tasks[key])) {
           workerTasks[normK] = data.worker_tasks[key].slice();
         }
       });
@@ -6515,16 +6571,21 @@
     if (data.worker_reports && typeof data.worker_reports === "object" && !Array.isArray(data.worker_reports)) {
       Object.keys(data.worker_reports).forEach(function (key) {
         var normK = boardSessionId(key);
-        if (normK && Array.isArray(data.worker_reports[key])) {
+        if (normK && !removedSet[normK] && Array.isArray(data.worker_reports[key])) {
           workerReports[normK] = data.worker_reports[key].slice();
         }
       });
     }
-    var wakes = data.wakes && typeof data.wakes === "object" && !Array.isArray(data.wakes)
-      ? Object.assign({}, data.wakes)
-      : {};
+    var wakes = {};
+    if (data.wakes && typeof data.wakes === "object" && !Array.isArray(data.wakes)) {
+      Object.keys(data.wakes).forEach(function (wakeK) {
+        var normWakeK = boardSessionId(wakeK);
+        if (normWakeK && !removedSet[normWakeK]) wakes[normWakeK] = data.wakes[wakeK];
+      });
+    }
     return {
       multi_repo: multiRepo,
+      removed_sessions: removedList.slice(-MAX_BOARD_ENTRIES),
       worker_ids: workerIds,
       worker_tasks: workerTasks,
       task_ops: taskOps,
@@ -6544,16 +6605,26 @@
     var previewSid = boardSessionId(previewBoard.session_id || previewBoard.branch || "");
     var incoming = normalizeBoard(previewBoard);
     if (previewBoard.multi_repo !== undefined) next.multi_repo = Boolean(previewBoard.multi_repo);
+    var removedSet = {};
+    (next.removed_sessions || []).forEach(function (sid) {
+      if (sid && sid !== previewSid) removedSet[sid] = true;
+    });
+    (incoming.removed_sessions || []).forEach(function (sid) {
+      if (sid && sid !== previewSid) removedSet[sid] = true;
+    });
+    next.removed_sessions = Object.keys(removedSet);
+    next.allowed_sessions = next.allowed_sessions.filter(function (sid) { return !removedSet[sid]; });
+    next.sessions = next.sessions.filter(function (row) { return !removedSet[boardSessionId(row.session_id || row.branch)]; });
     Object.keys(incoming.worker_ids || {}).forEach(function (sid) {
-      next.worker_ids[sid] = incoming.worker_ids[sid];
+      if (!removedSet[sid]) next.worker_ids[sid] = incoming.worker_ids[sid];
     });
     Object.keys(incoming.worker_tasks || {}).forEach(function (sid) {
-      if (sid === previewSid || !next.worker_tasks[sid]) {
+      if (!removedSet[sid] && (sid === previewSid || !next.worker_tasks[sid])) {
         next.worker_tasks[sid] = incoming.worker_tasks[sid];
       }
     });
     Object.keys(incoming.worker_reports || {}).forEach(function (sid) {
-      if (sid === previewSid || !next.worker_reports[sid]) {
+      if (!removedSet[sid] && (sid === previewSid || !next.worker_reports[sid])) {
         next.worker_reports[sid] = incoming.worker_reports[sid];
       }
     });
@@ -6578,19 +6649,22 @@
     });
     next.report_ops = mergedReportOps.slice(-MAX_BOARD_ENTRIES);
     incoming.allowed_sessions.forEach(function (sid) {
-      if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
+      if (!removedSet[sid] && next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
     });
-    if (!next.main_session_id && incoming.main_session_id) {
+    if (!next.main_session_id && incoming.main_session_id && !removedSet[incoming.main_session_id]) {
       next.main_session_id = incoming.main_session_id;
+    } else if (next.main_session_id && removedSet[next.main_session_id]) {
+      next.main_session_id = "";
     }
     var bySid = {};
     next.sessions.forEach(function (row) {
       var rowSid = boardSessionId(row.session_id || row.branch);
-      if (rowSid) bySid[rowSid] = Object.assign({}, row, { session_id: rowSid });
+      if (rowSid && !removedSet[rowSid]) bySid[rowSid] = Object.assign({}, row, { session_id: rowSid });
     });
+    var syncNowIso = new Date().toISOString();
     incoming.sessions.forEach(function (row) {
       var rowSid = boardSessionId(row.session_id || row.branch);
-      if (!rowSid) return;
+      if (!rowSid || removedSet[rowSid]) return;
       if (rowSid === previewSid || !bySid[rowSid]) {
         bySid[rowSid] = {
           session_id: rowSid,
@@ -6598,7 +6672,7 @@
           branch: String(row.branch || (bySid[rowSid] && bySid[rowSid].branch) || ("arena/" + rowSid)),
           status: row.polling || row.status === "polling" ? "polling" : "active",
           polling: Boolean(row.polling || row.status === "polling"),
-          updated_at: String(row.updated_at || new Date().toISOString()),
+          updated_at: rowSid === previewSid ? syncNowIso : String(row.updated_at || syncNowIso),
         };
       }
     });
@@ -6703,6 +6777,7 @@
     var nowIso = action.at || new Date().toISOString();
     if (actionType === "allow") {
       if (!sid) return { ok: false, error: "missing-session-id", board: next };
+      next.removed_sessions = (next.removed_sessions || []).filter(function (item) { return item !== sid; });
       var rawWid = action.worker_id !== undefined ? action.worker_id : action.identifier;
       if (rawWid !== undefined) {
         var cleanWid = cleanWorkerId(rawWid);
@@ -6797,9 +6872,17 @@
       }
       return { ok: true, board: normalizeBoard(next) };
     }
-    if (actionType === "revoke") {
+    if (actionType === "revoke" || actionType === "remove-session" || actionType === "dismiss") {
       if (!sid) return { ok: false, error: "missing-session-id", board: next };
+      if ((next.removed_sessions || []).indexOf(sid) === -1) {
+        next.removed_sessions = (next.removed_sessions || []).concat([sid]);
+      }
       next.allowed_sessions = next.allowed_sessions.filter(function (item) { return item !== sid; });
+      next.sessions = next.sessions.filter(function (row) { return boardSessionId(row.session_id || row.branch) !== sid; });
+      delete next.wakes[sid];
+      delete next.worker_ids[sid];
+      delete next.worker_tasks[sid];
+      delete next.worker_reports[sid];
       if (next.main_session_id === sid) next.main_session_id = "";
       return { ok: true, board: normalizeBoard(next) };
     }
@@ -6808,6 +6891,7 @@
         next.main_session_id = "";
         return { ok: true, board: normalizeBoard(next) };
       }
+      next.removed_sessions = (next.removed_sessions || []).filter(function (item) { return item !== sid; });
       if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
       next.main_session_id = sid;
       return { ok: true, board: normalizeBoard(next) };
@@ -6815,6 +6899,7 @@
     if (actionType === "heartbeat") {
       var hbSid = boardSessionId(action.session_id || action.branch || "");
       if (!hbSid) return { ok: false, error: "missing-session-id", board: next };
+      next.removed_sessions = (next.removed_sessions || []).filter(function (item) { return item !== hbSid; });
       var found = false;
       next.sessions = next.sessions.map(function (row) {
         if (boardSessionId(row.session_id || row.branch) !== hbSid) return row;

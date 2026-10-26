@@ -5720,10 +5720,43 @@ def apply_report_op_to_list(report_list, op):
   return items
 
 
+BOARD_SESSION_TTL_SECONDS = 180
+
+
+def board_stamp_epoch(value):
+  text = str(value or "").strip()
+  if not text:
+    return None
+  m = re.match(
+    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)", text
+  )
+  if m:
+    text = m.group(1)
+  try:
+    if text.endswith("Z"):
+      text = text[:-1] + "+00:00"
+    dt = datetime.fromisoformat(text)
+    if dt.tzinfo is not None:
+      dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.replace(tzinfo=timezone.utc).timestamp()
+  except Exception:
+    return None
+
+
 def normalize_board_state(raw, session_id="", repo="", branch="", polling=False):
   data = raw if isinstance(raw, dict) else {}
   sid = board_session_id(session_id or branch)
   multi_repo = bool(data.get("multi_repo"))
+  removed_sessions = []
+  for item in (
+    data.get("removed_sessions")
+    if isinstance(data.get("removed_sessions"), list)
+    else []
+  ):
+    norm_rem = board_session_id(item)
+    if norm_rem and norm_rem != sid and norm_rem not in removed_sessions:
+      removed_sessions.append(norm_rem)
+  removed_set = set(removed_sessions)
   raw_worker_ids = (
     data.get("worker_ids") if isinstance(data.get("worker_ids"), dict) else {}
   )
@@ -5734,7 +5767,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       clean_v = clean_worker_id(v)
     except ValueError:
       clean_v = ""
-    if norm_k and clean_v:
+    if norm_k and norm_k not in removed_set and clean_v:
       worker_ids[norm_k] = clean_v
   raw_worker_tasks = (
     data.get("worker_tasks") if isinstance(data.get("worker_tasks"), dict) else {}
@@ -5742,7 +5775,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
   worker_tasks = {}
   for k, v in raw_worker_tasks.items():
     norm_k = board_session_id(k)
-    if norm_k and isinstance(v, list):
+    if norm_k and norm_k not in removed_set and isinstance(v, list):
       worker_tasks[norm_k] = [
         dict(row) for row in v if isinstance(row, dict) and row.get("id")
       ]
@@ -5762,7 +5795,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
   worker_reports = {}
   for k, v in raw_worker_reports.items():
     norm_k = board_session_id(k)
-    if norm_k and isinstance(v, list):
+    if norm_k and norm_k not in removed_set and isinstance(v, list):
       worker_reports[norm_k] = [
         dict(row) for row in v if isinstance(row, dict) and row.get("id")
       ]
@@ -5783,27 +5816,68 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     else []
   ):
     norm = board_session_id(item)
-    if norm and norm not in allowed:
+    if norm and norm not in removed_set and norm not in allowed:
       allowed.append(norm)
+  raw_sessions_list = (
+    data.get("sessions") if isinstance(data.get("sessions"), list) else []
+  )
+  now_stamp = clip_stamp(now())
+  session_epochs = {}
+  max_epoch = board_stamp_epoch(now_stamp) if sid else None
+  for row in raw_sessions_list:
+    if not isinstance(row, dict):
+      continue
+    row_sid = board_session_id(row.get("session_id") or row.get("branch") or "")
+    if not row_sid or row_sid in removed_set:
+      continue
+    ep = (
+      board_stamp_epoch(now_stamp)
+      if (sid and row_sid == sid)
+      else board_stamp_epoch(row.get("updated_at"))
+    )
+    if ep is not None:
+      session_epochs[row_sid] = ep
+      if max_epoch is None or ep > max_epoch:
+        max_epoch = ep
+  for row_sid, ep in list(session_epochs.items()):
+    if sid and row_sid == sid:
+      continue
+    is_probe = row_sid.startswith("probe-") and row_sid not in allowed
+    is_stale = max_epoch is not None and (max_epoch - ep) > BOARD_SESSION_TTL_SECONDS
+    if is_probe or is_stale:
+      removed_set.add(row_sid)
+      if row_sid not in removed_sessions:
+        removed_sessions.append(row_sid)
+      allowed = [item for item in allowed if item != row_sid]
+      worker_ids.pop(row_sid, None)
+      worker_tasks.pop(row_sid, None)
+      worker_reports.pop(row_sid, None)
   main_sid = board_session_id(data.get("main_session_id") or "")
-  if main_sid and main_sid not in allowed:
+  if main_sid and (main_sid not in allowed or main_sid in removed_set):
     main_sid = ""
   wakes = (
     {
       board_session_id(k): v
       for k, v in data.get("wakes", {}).items()
-      if board_session_id(k) and isinstance(v, (int, float, str))
+      if board_session_id(k)
+      and board_session_id(k) not in removed_set
+      and isinstance(v, (int, float, str))
     }
     if isinstance(data.get("wakes"), dict)
     else {}
   )
   sessions = []
   seen_sids = set()
-  for row in data.get("sessions") if isinstance(data.get("sessions"), list) else []:
+  for row in raw_sessions_list:
     if not isinstance(row, dict):
       continue
     row_sid = board_session_id(row.get("session_id") or row.get("branch") or "")
-    if not row_sid or row_sid in seen_sids:
+    if (
+      not row_sid
+      or row_sid in seen_sids
+      or row_sid in removed_set
+      or (row_sid.startswith("probe-") and row_sid not in allowed)
+    ):
       continue
     seen_sids.add(row_sid)
     if row.get("worker_id") and row_sid not in worker_ids:
@@ -5846,7 +5920,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
         "branch": str(row.get("branch") or (branch if is_self else f"arena/{row_sid}")),
         "status": "polling" if row_polling else "active",
         "polling": row_polling,
-        "updated_at": str(row.get("updated_at") or clip_stamp(now())),
+        "updated_at": now_stamp if is_self else str(row.get("updated_at") or now_stamp),
         "allowed": row_sid in allowed,
         "role": row_role,
       }
@@ -5986,6 +6060,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     "report_ops": report_ops,
     "repo": str(repo or ""),
     "branch": str(branch or ""),
+    "removed_sessions": removed_sessions,
     "allowed_sessions": allowed,
     "main_session_id": main_sid,
     "board_role": self_role,
@@ -6845,6 +6920,8 @@ def sqlite_api():
 class Store:
   def __init__(self, directory, create=False, save_path=None):
     directory = Path(directory).resolve()
+    if directory.name == "state.sqlite3":
+      directory = directory.parent
     self.path = directory / "state.sqlite3"
     # The save file is not the database, and it lands beside it by default: one directory the installer ignores
     # through core.excludesFile carries both, and a sandbox restore keeps a path the repository does not ignore.
@@ -7938,6 +8015,9 @@ class Store:
       if isinstance(v, list)
     }
     report_ops = [dict(row) for row in (state.get("report_ops") or [])]
+    removed_sessions = [
+      str(x) for x in (state.get("removed_sessions") or []) if x and x != sid
+    ]
     allowed = list(state["allowed_sessions"])
     main_sid = state["main_session_id"]
     sessions = [dict(row) for row in state["sessions"]]
@@ -7957,13 +8037,20 @@ class Store:
         branch=state["branch"],
         polling=any(r["session_id"] == sid and r.get("polling") for r in sessions),
       )
+      for rem_sid in merged.get("removed_sessions") or []:
+        if rem_sid and rem_sid != sid and rem_sid not in removed_sessions:
+          removed_sessions.append(rem_sid)
+      removed_set = set(removed_sessions)
+      allowed = [item for item in allowed if item not in removed_set]
+      sessions = [row for row in sessions if row["session_id"] not in removed_set]
       for k, v in (merged.get("worker_ids") or {}).items():
-        worker_ids[k] = v
+        if k not in removed_set:
+          worker_ids[k] = v
       for k, v in (merged.get("worker_tasks") or {}).items():
-        if k != sid:
+        if k != sid and k not in removed_set:
           worker_tasks[k] = [dict(item) for item in v if isinstance(item, dict)]
       for k, v in (merged.get("worker_reports") or {}).items():
-        if k != sid:
+        if k != sid and k not in removed_set:
           worker_reports[k] = [dict(item) for item in v if isinstance(item, dict)]
       seen_op_ids = {str(op.get("id") or "") for op in task_ops if op.get("id")}
       applied_key = f"{sid}:task_ops"
@@ -8011,14 +8098,19 @@ class Store:
       ack_wakes[applied_rep_key] = applied_rep_list[-128:]
       if merged["allowed_sessions"] or not allowed:
         for item in merged["allowed_sessions"]:
-          if item not in allowed:
+          if item not in removed_set and item not in allowed:
             allowed.append(item)
-      if merged["main_session_id"]:
+      if merged["main_session_id"] and merged["main_session_id"] not in removed_set:
         main_sid = merged["main_session_id"]
+      elif main_sid in removed_set:
+        main_sid = ""
       by_sid = {row["session_id"]: dict(row) for row in sessions}
       for row in merged["sessions"]:
         row_sid = row["session_id"]
+        if row_sid in removed_set:
+          continue
         if row_sid == sid and row_sid in by_sid:
+          by_sid[row_sid]["updated_at"] = clip_stamp(now())
           continue
         by_sid[row_sid] = dict(row)
       sessions = list(by_sid.values())
@@ -8216,12 +8308,18 @@ class Store:
       )
       if not target:
         raise ValueError("Missing session_id")
+      removed_sessions = [item for item in removed_sessions if item != target]
       raw_wid = payload.get("worker_id") or payload.get("identifier")
       if raw_wid is not None:
         worker_ids[target] = clean_worker_id(raw_wid, required=True)
       if target not in allowed:
         allowed.append(target)
-      if not any(row["session_id"] == target for row in sessions):
+      found_target = False
+      for row in sessions:
+        if row["session_id"] == target:
+          row["updated_at"] = clip_stamp(now())
+          found_target = True
+      if not found_target:
         sessions.append(
           {
             "session_id": target,
@@ -8253,23 +8351,41 @@ class Store:
       worker_ids[target] = clean_worker_id(raw_wid, required=True)
     elif action_type == "set-multi-repo":
       multi_repo = bool(payload.get("multi_repo") or payload.get("enabled"))
-    elif action_type == "revoke":
+    elif action_type in {"revoke", "remove-session", "dismiss"}:
       target = resolve_board_target(
-        payload.get("session_id") or "", sessions, allowed=allowed, main_sid=main_sid
+        payload.get("session_id") or payload.get("target") or "",
+        sessions,
+        allowed=allowed,
+        main_sid=main_sid,
       )
-      allowed = [item for item in allowed if item != target]
-      if main_sid == target:
-        main_sid = ""
+      if target:
+        if target != sid and target not in removed_sessions:
+          removed_sessions.append(target)
+        allowed = [item for item in allowed if item != target]
+        if action_type in {"remove-session", "dismiss"} or target != sid:
+          sessions = [row for row in sessions if row["session_id"] != target]
+          wakes.pop(target, None)
+          worker_ids.pop(target, None)
+          worker_tasks.pop(target, None)
+          worker_reports.pop(target, None)
+        if main_sid == target:
+          main_sid = ""
     elif action_type == "set-main":
       target = resolve_board_target(
         payload.get("session_id") or "", sessions, allowed=allowed, main_sid=main_sid
       )
-      if target and target not in allowed:
-        allowed.append(target)
+      if target:
+        removed_sessions = [item for item in removed_sessions if item != target]
+        if target not in allowed:
+          allowed.append(target)
+        for row in sessions:
+          if row["session_id"] == target:
+            row["updated_at"] = clip_stamp(now())
       main_sid = target
     elif action_type == "heartbeat":
       target = board_session_id(payload.get("session_id") or sid)
       if target:
+        removed_sessions = [item for item in removed_sessions if item != target]
         is_poll = bool(payload.get("polling") or payload.get("status") == "polling")
         updated = False
         for row in sessions:
@@ -8374,6 +8490,7 @@ class Store:
     stored = {
       "version": 1,
       "multi_repo": multi_repo,
+      "removed_sessions": removed_sessions[-MAX_BOARD_ENTRIES:],
       "worker_ids": worker_ids,
       "worker_tasks": worker_tasks,
       "task_ops": task_ops,

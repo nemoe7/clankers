@@ -4061,7 +4061,11 @@ function renderBoard() {
       allowBtn.type = 'button';
       allowBtn.textContent = 'Opt in';
       allowBtn.addEventListener('click', () => { void sendBoardAction({ action: 'allow', session_id: row.session_id }); });
-      actions.append(allowBtn);
+      const dismissBtn = document.createElement('button');
+      dismissBtn.type = 'button';
+      dismissBtn.textContent = 'Dismiss';
+      dismissBtn.addEventListener('click', () => { void sendBoardAction({ action: 'remove-session', session_id: row.session_id }); });
+      actions.append(allowBtn, dismissBtn);
     }
     item.append(info, actions);
     sessionsEl.append(item);
