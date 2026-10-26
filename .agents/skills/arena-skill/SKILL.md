@@ -120,6 +120,8 @@ Republish the same ID after each source update; if answers exist, use a new ID. 
 
 `read` lists report submissions as `kind: report`. Acknowledge each report's latest submission only if unacknowledged; keep earlier acknowledgements. Publishing a report never acknowledges a submission. <!-- nonemo: NMO100 -->
 
+- Prose diffs use `~~strikethrough~~` and `==highlight==` in a single `Diff` column, not `Before` and `After` columns.
+
 ## Files and downloads
 
 For each note's `attachments[]`, the read carries each file's size; an image MUST be read before acknowledging that note once, and read a text file with caution. If `present` is false or bytes are missing, report the loss.
@@ -138,6 +140,7 @@ Coordinate allowlisted sessions across tabs through `GET /api/board` and `POST /
 
 - Only allowlisted sessions can post entries, stage file attachments under `board-files/<session_id>/`, or update heartbeats.
 - When `main_session_id` names a main session, non-main worker sessions hand off findings through the board instead of committing or pushing.
+- Worker sessions load WORKER.md in their bible.
 - A wake stamp or a new board entry wakes `arena-preview poll` (`BOARD WAKE`) without arming `skip_poll`.
 
 ## Proxy access

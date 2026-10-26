@@ -47,6 +47,7 @@ MEDIA_BREAKPOINT_RE = re.compile(
 HOME = Path(__file__).resolve().parent.parent
 CATALOG = HOME / "data" / "vendor" / "ui-ux-pro-max"
 WIDTHS = (1920, 1080, 958, 855, 411)
+REPORT_WIDTHS = (1920, 411)
 SKIP = {
   ".agents",
   ".git",
@@ -57,7 +58,6 @@ SKIP = {
   "node_modules",
   "dist",
   "build",
-  "arena-state",
   "__pycache__",
   ".pytest_cache",
   ".ruff_cache",
@@ -925,6 +925,14 @@ def browser(args):
   )
   cfg_widths = cfg_audit.get("widths") or cfg_info["config"].get("widths") or []
   configured_widths = [w for w in cfg_widths if isinstance(w, int) and w > 0]
+  cfg_report_widths = (
+    cfg_audit.get("report_widths") or cfg_info["config"].get("report_widths") or []
+  )
+  report_widths = sorted(
+    {int(w) for w in cfg_report_widths if isinstance(w, int) and w > 0}
+    or REPORT_WIDTHS,
+    reverse=True,
+  )
   selected_widths = (
     sorted({int(w) for w in args.widths if w > 0})
     if args.widths
@@ -936,6 +944,7 @@ def browser(args):
     "url": args.url,
     "output": str(Path(args.artifacts).resolve()),
     "widths": selected_widths,
+    "report_widths": report_widths,
     "selector": args.selector,
     "ready": getattr(args, "ready", None),
     "a11y": bool(getattr(args, "a11y", False) or args.command in {"a11y", "audit"}),
