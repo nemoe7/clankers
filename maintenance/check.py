@@ -19,11 +19,11 @@ from markdown_it import MarkdownIt
 
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
+DOCS = ROOT / "docs"
 SKILLS = ROOT / "skills"
 # Vendored agent-facing skills live only under `.agents/skills/`, which this script deliberately never
 # reads: they are not owner skills, so they are neither checked here nor listed in `skills/README.md`.
 RULES = ROOT / "rules"
-WORKFLOWS = ROOT / "workflows"
 
 EXPECTED_SKILL_FIELDS = {
   "name",
@@ -555,7 +555,8 @@ def check_internal_links(
     candidate = (path.parent / target).resolve()
 
     if not candidate.exists():
-      errors.append(f"{path.relative_to(ROOT)}: broken internal link {target}")
+      label = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+      errors.append(f"{label}: broken internal link {target}")
 
 
 def strip_jsonc_comments(text: str) -> str:
@@ -827,7 +828,7 @@ def check_root_copies(errors: list[str]) -> None:
       )
 
 
-def validate(errors: list[str]) -> tuple[int, int]:
+def validate(errors: list[str]) -> int:
   skills = sorted(
     path
     for path in SKILLS.iterdir()
@@ -907,50 +908,11 @@ def validate(errors: list[str]) -> tuple[int, int]:
     if len(text.splitlines()) > 500:
       errors.append(f"{path.relative_to(ROOT)}: SKILL.md exceeds 500 lines")
 
-  workflows_present = WORKFLOWS.exists()
-  workflows = sorted(
-    path
-    for path in (WORKFLOWS.iterdir() if workflows_present else ())
-    if path.suffix == ".md" and path.name != "README.md"
-  )
-
-  workflows_readme_path = WORKFLOWS / "README.md"
-
-  if not workflows_readme_path.is_file():
-    if workflows_present:
-      errors.append("workflows/README.md is missing")
-  else:
-    workflows_readme = workflows_readme_path.read_text(encoding="utf-8")
-
-    documented_workflows = set(
-      re.findall(
-        r"\[([a-z0-9-]+)\]\([a-z0-9-]+\.md\)",
-        workflows_readme,
-      )
-    )
-    actual_workflows = {path.stem for path in workflows}
-
-    if documented_workflows != actual_workflows:
-      errors.append(
-        "workflows/README.md list mismatch: "
-        f"documented={sorted(documented_workflows)} "
-        f"actual={sorted(actual_workflows)}"
-      )
-
-  for workflow in workflows:
-    if not NAME_RE.fullmatch(workflow.stem):
-      errors.append(f"{workflow.relative_to(ROOT)}: invalid workflow filename")
-
-    text = workflow.read_text(encoding="utf-8")
-
-    if not workflow_description(text):
-      errors.append(f"{workflow.relative_to(ROOT)}: missing frontmatter description")
-
   for path in (
     README,
-    SKILLS / "README.md",
     RULES / "README.md",
-    WORKFLOWS / "README.md",
+    *(sorted(DOCS.rglob("*.md")) if DOCS.is_dir() else ()),
+    *(sorted(SKILLS.rglob("README.md")) if SKILLS.is_dir() else ()),
   ):
     if path.is_file():
       check_internal_links(path, errors)
@@ -1016,7 +978,7 @@ def validate(errors: list[str]) -> tuple[int, int]:
   check_system_prompt_parity(errors)
   check_root_copies(errors)
 
-  return len(skills), len(workflows)
+  return len(skills)
 
 
 def run_check(name: str, errors: list[str], check: Callable[[], Any]) -> Any:
@@ -1062,7 +1024,7 @@ def main() -> int:
       f"STE lint passed in {time.perf_counter() - started:.2f}s: {len(STE_DOCS)} files."
     )
     return 0
-  skills, workflows = run_check("repository", errors, lambda: validate(errors))
+  skills = run_check("repository", errors, lambda: validate(errors))
   run_check("STE lint", errors, lambda: check_ste(errors))
   run_check(
     "Nemoizer domains",  # nonemo: NMO100
@@ -1082,7 +1044,7 @@ def main() -> int:
     return 1
 
   print(
-    f"Validation passed in {span:.2f}s: {skills} skills, {workflows} workflows, "
+    f"Validation passed in {span:.2f}s: {skills} skills, "
     "README measurements, the markdownlint scope, refs/live parity, the prose "
     f"lint, the {PARAGRAPH_SENTENCE_CAP}-sentence paragraph cap and the root "
     "ARENA.md copy checked."

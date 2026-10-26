@@ -108,7 +108,7 @@ The checker reports every problem it finds in:
 
 - Skill discovery metadata, required `SKILL.md` files, and the Agent Skills naming and frontmatter limits.
 - Workflow listing and frontmatter descriptions.
-- Internal links, README skill and workflow coverage, and recorded measurements.
+- Internal links, README skill coverage, and recorded measurements.
 - Both ChatGPT custom-instruction character limits.
 - A license declaration on every skill that records `metadata.upstream`, and the `LICENSE.txt` file that the declaration points at.
 - The markdownlint scope, recomputed from `.markdownlint-cli2.jsonc` and compared with the counts this repository documents.

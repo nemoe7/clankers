@@ -92,7 +92,7 @@ Rule: push after each verified commit, and keep the ndjson backup current. After
 
 No surface gives the agent a remaining-token counter, warning, or injected message. A claim about impending exhaustion infers it from conversation length, and one such claim ended a turn. Compaction does occur: a system block can replace earlier conversation with condensed memory. Nothing exposes a remaining count or a refill.
 
-[rules/ARENA.md](../../rules/ARENA.md) ends turns after it verifies and stops the work, never for a stated budget limit.
+[rules/ARENA.md](../rules/ARENA.md) ends turns after it verifies and stops the work, never for a stated budget limit.
 
 ## Steering messages
 
@@ -102,7 +102,7 @@ No surface gives the agent a remaining-token counter, warning, or injected messa
 
 Ask rather than assume.
 
-2026-09-22: an in-turn retry reported but did not clear the dead token, and the next turn restored it. [rules/ARENA.md](../../rules/ARENA.md) now requires blocking through the question tool, which exposes the failure and leaves the turn, instead of a silent end.
+2026-09-22: an in-turn retry reported but did not clear the dead token, and the next turn restored it. [rules/ARENA.md](../rules/ARENA.md) now requires blocking through the question tool, which exposes the failure and leaves the turn, instead of a silent end.
 
 Context exhaustion is worse: `This conversation is too long for this model. Please start a new chat.` prevented the documented exit and lost every unpushed commit. Push after each commit.
 
