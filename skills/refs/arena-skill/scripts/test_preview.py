@@ -15594,3 +15594,4 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert "#board-panel > .card, #downloads-panel > .card" in style_css
   assert ".answer { margin-top: 0; }" in style_css
   assert ".message-text > :last-child { margin-bottom: 0; }" in style_css
+  assert "? ${promptText} (${fieldId})" not in app_js_text

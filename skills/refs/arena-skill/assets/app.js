@@ -2069,9 +2069,7 @@ function renderReportToc(html = '') {
         questionIndex += 1;
         const promptNode = node.querySelector?.('.options[aria-label], textarea.answer-text[aria-label]');
         const promptText = (promptNode?.getAttribute?.('aria-label') || '').trim();
-        const labelText = promptText && fieldId && promptText.toLowerCase() !== fieldId.replace(/-/g, ' ').toLowerCase()
-          ? `? ${promptText} (${fieldId})`
-          : `? ${promptText || fieldId || `Question ${questionIndex}`}`;
+        const labelText = `? ${promptText || fieldId || `Question ${questionIndex}`}`;
         const id = node.id || `report-question-${fieldId || questionIndex}`;
         node.id = id;
         items.push({ id, level: 3, text: labelText, node, question: true });
@@ -2100,9 +2098,7 @@ function renderReportToc(html = '') {
         const fieldId = unescapeHtmlEntities(match[4]).trim();
         const ariaMatch = /\baria-label="([^"]+)"/i.exec(match[5] || '');
         const promptText = ariaMatch ? unescapeHtmlEntities(ariaMatch[1]).trim() : '';
-        const labelText = promptText && fieldId && promptText.toLowerCase() !== fieldId.replace(/-/g, ' ').toLowerCase()
-          ? `? ${promptText} (${fieldId})`
-          : `? ${promptText || fieldId || `Question ${questionIndex}`}`;
+        const labelText = `? ${promptText || fieldId || `Question ${questionIndex}`}`;
         items.push({ id: `report-question-${fieldId || questionIndex}`, level: 3, text: labelText, node: null, question: true });
       }
     }

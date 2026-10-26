@@ -3358,7 +3358,7 @@ test('preview client', async (t) => {
       assert.equal(tocLinks[0].textContent, 'First');
       assert.equal(tocLinks[0].dataset.active, 'true');
       assert.equal(tocLinks[0].getAttribute('aria-current'), 'true');
-      assert.equal(tocLinks[1].textContent, '? Decision on line (decision-1)');
+      assert.equal(tocLinks[1].textContent, '? Decision on line');
       assert.equal(tocLinks[1].dataset.question, 'true');
       tocLinks[1].events.click(event({}));
       assert.equal(tocLinks[1].dataset.active, 'true');
