@@ -26,7 +26,7 @@ flowchart TB
 
 ## Instruction budgets
 
-Latest measurements as of 2026-10-25. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and the arena-skill clause files, one row each, plus one row for all non-clause arena-skill files. Skill refs stay out.
+Latest measurements as of 2026-10-26. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and the arena-skill clause files, one row each, plus one row for all non-clause arena-skill files. Skill refs stay out.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -36,7 +36,7 @@ Latest measurements as of 2026-10-25. `maintenance/check.py --update` rebuilds t
 | [`gpt-plugins/skills/gpt-planning/SKILL.md`](gpt-plugins/skills/gpt-planning/SKILL.md) | `o200k_base` | 359 `tok` |
 | [`gpt-plugins/skills/gpt-question/SKILL.md`](gpt-plugins/skills/gpt-question/SKILL.md) | `o200k_base` | 157 `tok` |
 | [`gpt-plugins/skills/gpt-quirks/SKILL.md`](gpt-plugins/skills/gpt-quirks/SKILL.md) | `o200k_base` | 134 `tok` |
-| [`rules/ARENA.md`](rules/ARENA.md) | `o200k_base` | 4,800 `tok` |
+| [`rules/ARENA.md`](rules/ARENA.md) | `o200k_base` | 4,829 `tok` |
 | [`rules/CHATGPT-CUSTOM.txt`](rules/CHATGPT-CUSTOM.txt) | `Unicode chars` | 1,490 `chars` |
 | [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 1,403 `chars` |
 | [`rules/CLINE.md`](rules/CLINE.md) | `o200k_base` | 335 `tok` |

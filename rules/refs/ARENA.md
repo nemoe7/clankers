@@ -19,7 +19,7 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
-- Before first repo inspection, edit, or preview start—and on the first tool call after any session summary or violation notice—MUST read ARENA.md, all AGENTS.md, and arena-skill SKILL.md in full via read_file; a session summary NEVER counts as full text in context.
+- Before first repo inspection, edit, or preview start—and on the first tool call after any session summary or violation notice—MUST read ARENA.md, root AGENTS.md, and arena-skill SKILL.md in full via read_file; read nested AGENTS.md files via `arena-preview agents <path>` only when working in their directory; a session summary NEVER counts as full text in context.
 - For a corrected routine slip with no impact, give one short receipt line.
 - Suggest an amendment only when an identified rule gap contributed.
 - Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
@@ -41,13 +41,13 @@
 
 - The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
 - An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
-- At session start, read the bible, then make `10-4: ARENA.md loaded` the first action after that read; find and read nested AGENTS.md files, run the installer, start the preview, then ask the visibility question.
-- On a resumed or next turn, check whether the preview runs, restart it if needed, read paths in the bible whose current full text is absent from context, find nested AGENTS.md files and read missing or changed instructions, then continue an open task or poll if none.
+- At session start, read the bible, then make `10-4: ARENA.md loaded` the first action after that read; run the installer, start the preview, then ask the visibility question.
+- On a resumed or next turn, check whether the preview runs, restart it if needed, read paths in the bible whose current full text is absent from context, then continue an open task or poll if none.
 - Load the named skill for Arena work: `arena-skill` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
-- Use "bible" or "the bible", NEVER "bible files" or "required bible files", to mean ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md, and nothing else.
+- Use "bible" or "the bible", NEVER "bible files" or "required bible files", to mean ARENA.md, the root AGENTS.md, and the `arena-skill` SKILL.md, plus any nested AGENTS.md in a directory you work in (found via `arena-preview agents <path>`).
 - MUST use the read tool, NEVER Bash, to read every required path in the bible in full.
 - After compaction, summary, or context replacement within a turn, read every path in the bible whose current full text is absent from context end-to-end before other tool calls. For a resumed or next turn, use the resumed start sequence.
-- Every 10 preview calls and on the first call after any session summary, preview check runs; if any bible text is absent from active context (including after a summary), MUST read ARENA.md, all AGENTS.md, and arena-skill SKILL.md in full via read_file before acting.
+- Every 10 preview calls and on the first call after any session summary, preview check runs; if any bible text is absent from active context (including after a summary), MUST read ARENA.md, root AGENTS.md, and arena-skill SKILL.md in full via read_file before acting, and read nested AGENTS.md files only when working in their directory.
 - NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a path in the bible.
 - MUST batch required bible reads into one call, splitting only where the harness output cap cuts the text.
 - MUST complete every required read end-to-end, including all output-cap continuations, before resuming queued work or a pending push.
