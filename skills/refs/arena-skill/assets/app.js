@@ -4014,6 +4014,7 @@ function renderBoard() {
     wakePollingBtn.textContent = `Wake polling (${pollingAllowed.length})`;
     wakePollingBtn.disabled = pollingAllowed.length === 0;
   }
+  const boardIdBySid = new Map(sessions.map(row => [row.session_id, row.board_id || row.session_id]));
   sessionsEl.replaceChildren();
   for (const row of sessions) {
     const item = document.createElement('div');
@@ -4021,7 +4022,8 @@ function renderBoard() {
     const info = document.createElement('div');
     info.className = 'row tight';
     const code = document.createElement('code');
-    code.textContent = row.session_id;
+    code.textContent = row.board_id || row.session_id;
+    code.title = row.session_id;
     const badge = document.createElement('span');
     badge.className = 'board-badge';
     const isAllowed = allowed.has(row.session_id);
@@ -4080,10 +4082,12 @@ function renderBoard() {
     const route = document.createElement('span');
     route.className = 'row tight';
     const fromCode = document.createElement('code');
-    fromCode.textContent = entry.session_id;
+    fromCode.textContent = boardIdBySid.get(entry.session_id) || entry.session_id;
+    fromCode.title = entry.session_id;
     const toSpan = document.createElement('span');
     toSpan.className = 'muted';
-    toSpan.textContent = `to ${entry.to || '*'}`;
+    const toLabel = (!entry.to || entry.to === '*') ? '*' : (boardIdBySid.get(entry.to) || entry.to);
+    toSpan.textContent = `to ${toLabel}`;
     route.append(fromCode, toSpan);
     const stamp = document.createElement('span');
     stamp.className = 'muted';

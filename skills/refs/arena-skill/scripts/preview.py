@@ -5553,9 +5553,82 @@ def stage_board_file(state_dir, sender_id, file_obj):
   }
 
 
+WORKER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,6}$")
+
+
+def clean_worker_id(raw_value, *, required=False):
+  text = str(raw_value or "").strip()
+  if text.lower().startswith("worker-"):
+    text = text[7:].strip()
+  if not text:
+    if required:
+      raise ValueError("Worker identifier must be 1 to 6 characters")
+    return ""
+  if not WORKER_ID_RE.match(text):
+    raise ValueError("Worker identifier must be 1 to 6 characters")
+  return text
+
+
+def default_worker_id(session_id, repo=""):
+  sid = board_session_id(session_id)
+  if repo and sid.endswith(f"-{repo}") and len(sid) > len(repo) + 1:
+    sid = sid[: -(len(repo) + 1)]
+  token = re.sub(r"[^A-Za-z0-9]+", "", sid.split("-")[0] if "-" in sid else sid)[:6]
+  return token or "w1"
+
+
+def format_board_role_id(
+  role, repo="", worker_id="", multi_repo=False, fallback_sid=""
+):
+  clean_repo = str(repo or "").strip()
+  if role == "main":
+    return f"main-{clean_repo}" if (multi_repo and clean_repo) else "main"
+  if role == "worker":
+    wid = (
+      clean_worker_id(worker_id)
+      if worker_id
+      else default_worker_id(fallback_sid, clean_repo)
+    )
+    return (
+      f"worker-{wid}-{clean_repo}" if (multi_repo and clean_repo) else f"worker-{wid}"
+    )
+  return str(fallback_sid or "")
+
+
+def resolve_board_target(target, sessions, allowed=(), main_sid=""):
+  clean = board_session_id(target)
+  if not clean:
+    return ""
+  for row in sessions or ():
+    if row.get("session_id") == clean or row.get("board_id") == clean:
+      return row["session_id"]
+    wid = row.get("worker_id") or ""
+    if wid and clean in {f"worker-{wid}", wid}:
+      return row["session_id"]
+  if clean == "main" or clean.startswith("main-"):
+    if main_sid:
+      return main_sid
+    if allowed:
+      return allowed[0]
+  return clean
+
+
 def normalize_board_state(raw, session_id="", repo="", branch="", polling=False):
   data = raw if isinstance(raw, dict) else {}
   sid = board_session_id(session_id or branch)
+  multi_repo = bool(data.get("multi_repo"))
+  raw_worker_ids = (
+    data.get("worker_ids") if isinstance(data.get("worker_ids"), dict) else {}
+  )
+  worker_ids = {}
+  for k, v in raw_worker_ids.items():
+    norm_k = board_session_id(k)
+    try:
+      clean_v = clean_worker_id(v)
+    except ValueError:
+      clean_v = ""
+    if norm_k and clean_v:
+      worker_ids[norm_k] = clean_v
   allowed = []
   for item in (
     data.get("allowed_sessions")
@@ -5586,6 +5659,13 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     if not row_sid or row_sid in seen_sids:
       continue
     seen_sids.add(row_sid)
+    if row.get("worker_id") and row_sid not in worker_ids:
+      try:
+        delegated = clean_worker_id(row.get("worker_id"))
+        if delegated:
+          worker_ids[row_sid] = delegated
+      except ValueError:
+        pass
     is_self = bool(sid and row_sid == sid)
     wake_pending = row_sid in allowed and bool(wakes.get(row_sid))
     row_polling = (
@@ -5593,51 +5673,100 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       if is_self
       else bool(row.get("polling") or row.get("status") == "polling")
     ) and not wake_pending
+    row_repo = str(row.get("repo") or (repo if is_self else ""))
+    row_role = (
+      "main"
+      if (main_sid == row_sid or (not main_sid and row_sid in allowed))
+      else ("worker" if row_sid in allowed else "blocked")
+    )
+    row_wid = (
+      worker_ids.get(row_sid) or default_worker_id(row_sid, row_repo)
+      if row_role == "worker"
+      else ""
+    )
     sessions.append(
       {
         "session_id": row_sid,
-        "repo": str(row.get("repo") or (repo if is_self else "")),
+        "board_id": format_board_role_id(
+          row_role,
+          repo=row_repo,
+          worker_id=row_wid,
+          multi_repo=multi_repo,
+          fallback_sid=row_sid,
+        ),
+        "worker_id": row_wid,
+        "repo": row_repo,
         "branch": str(row.get("branch") or (branch if is_self else f"arena/{row_sid}")),
         "status": "polling" if row_polling else "active",
         "polling": row_polling,
         "updated_at": str(row.get("updated_at") or clip_stamp(now())),
         "allowed": row_sid in allowed,
-        "role": "main"
-        if (main_sid == row_sid or (not main_sid and row_sid in allowed))
-        else ("worker" if row_sid in allowed else "blocked"),
+        "role": row_role,
       }
     )
   if sid and sid not in seen_sids:
     seen_sids.add(sid)
     self_polling = bool(polling) and not (sid in allowed and bool(wakes.get(sid)))
+    self_repo = str(repo or "")
+    self_role = (
+      "main"
+      if (main_sid == sid or (not main_sid and sid in allowed))
+      else ("worker" if sid in allowed else "blocked")
+    )
+    self_wid = (
+      worker_ids.get(sid) or default_worker_id(sid, self_repo)
+      if self_role == "worker"
+      else ""
+    )
     sessions.insert(
       0,
       {
         "session_id": sid,
-        "repo": str(repo or ""),
+        "board_id": format_board_role_id(
+          self_role,
+          repo=self_repo,
+          worker_id=self_wid,
+          multi_repo=multi_repo,
+          fallback_sid=sid,
+        ),
+        "worker_id": self_wid,
+        "repo": self_repo,
         "branch": str(branch or f"arena/{sid}"),
         "status": "polling" if self_polling else "active",
         "polling": self_polling,
         "updated_at": clip_stamp(now()),
         "allowed": sid in allowed,
-        "role": "main"
-        if (main_sid == sid or (not main_sid and sid in allowed))
-        else ("worker" if sid in allowed else "blocked"),
+        "role": self_role,
       },
     )
   for allowed_sid in allowed:
     if allowed_sid not in seen_sids:
       seen_sids.add(allowed_sid)
+      allowed_repo = str(repo or "")
+      allowed_role = "main" if (main_sid == allowed_sid or not main_sid) else "worker"
+      allowed_wid = (
+        worker_ids.get(allowed_sid) or default_worker_id(allowed_sid, allowed_repo)
+        if allowed_role == "worker"
+        else ""
+      )
       sessions.append(
         {
           "session_id": allowed_sid,
-          "repo": str(repo or ""),
+          "board_id": format_board_role_id(
+            allowed_role,
+            repo=allowed_repo,
+            worker_id=allowed_wid,
+            multi_repo=multi_repo,
+            fallback_sid=allowed_sid,
+          ),
+          "worker_id": allowed_wid,
+          "repo": allowed_repo,
           "branch": f"arena/{allowed_sid}",
           "status": "active",
           "polling": False,
           "updated_at": clip_stamp(now()),
           "allowed": True,
-          "role": "main" if (main_sid == allowed_sid or not main_sid) else "worker",
+          "role": allowed_role,
         }
       )
   entries = []
@@ -5648,9 +5777,20 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
   ):
     if not isinstance(item, dict):
       continue
-    from_sid = board_session_id(item.get("session_id") or item.get("branch") or "")
+    from_sid = resolve_board_target(
+      item.get("session_id") or item.get("branch") or "",
+      sessions,
+      allowed=allowed,
+      main_sid=main_sid,
+    )
     if not from_sid:
       continue
+    raw_to = str(item.get("to") or "*")
+    resolved_to = (
+      "*"
+      if raw_to == "*"
+      else resolve_board_target(raw_to, sessions, allowed=allowed, main_sid=main_sid)
+    )
     item_payload = (
       dict(item.get("payload")) if isinstance(item.get("payload"), dict) else {}
     )
@@ -5661,7 +5801,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       {
         "id": str(item.get("id") or f"b-{uuid.uuid4().hex[:6]}"),
         "session_id": from_sid,
-        "to": str(item.get("to") or "*"),
+        "to": resolved_to or "*",
         "repo": str(item.get("repo") or ""),
         "branch": str(item.get("branch") or f"arena/{from_sid}"),
         "at": str(item.get("at") or clip_stamp(now())),
@@ -5672,14 +5812,32 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       }
     )
   is_main = not main_sid or main_sid == sid
+  self_role = "main" if is_main else "worker"
+  self_wid = (
+    worker_ids.get(sid) or default_worker_id(sid, str(repo or ""))
+    if self_role == "worker" and sid
+    else ""
+  )
   return {
     "version": 1,
     "session_id": sid,
+    "board_id": format_board_role_id(
+      self_role,
+      repo=str(repo or ""),
+      worker_id=self_wid,
+      multi_repo=multi_repo,
+      fallback_sid=sid,
+    )
+    if sid
+    else "",
+    "worker_id": self_wid,
+    "multi_repo": multi_repo,
+    "worker_ids": worker_ids,
     "repo": str(repo or ""),
     "branch": str(branch or ""),
     "allowed_sessions": allowed,
     "main_session_id": main_sid,
-    "board_role": "main" if is_main else "worker",
+    "board_role": self_role,
     "can_push_or_pr": bool(is_main),
     "sessions": sessions,
     "entries": entries,
@@ -7432,6 +7590,8 @@ class Store:
     )
     state = self.board_state()
     sid = state["session_id"]
+    multi_repo = bool(state.get("multi_repo"))
+    worker_ids = dict(state.get("worker_ids") or {})
     allowed = list(state["allowed_sessions"])
     main_sid = state["main_session_id"]
     sessions = [dict(row) for row in state["sessions"]]
@@ -7442,6 +7602,8 @@ class Store:
       incoming = (
         payload.get("board") if isinstance(payload.get("board"), dict) else payload
       )
+      if isinstance(incoming, dict) and "multi_repo" in incoming:
+        multi_repo = bool(incoming.get("multi_repo"))
       merged = normalize_board_state(
         incoming,
         session_id=sid,
@@ -7449,6 +7611,8 @@ class Store:
         branch=state["branch"],
         polling=any(r["session_id"] == sid and r.get("polling") for r in sessions),
       )
+      for k, v in (merged.get("worker_ids") or {}).items():
+        worker_ids[k] = v
       if merged["allowed_sessions"] or not allowed:
         for item in merged["allowed_sessions"]:
           if item not in allowed:
@@ -7508,9 +7672,14 @@ class Store:
           row["polling"] = False
           row["status"] = "active"
     elif action_type == "allow":
-      target = board_session_id(payload.get("session_id") or sid)
+      target = resolve_board_target(
+        payload.get("session_id") or sid, sessions, allowed=allowed, main_sid=main_sid
+      )
       if not target:
         raise ValueError("Missing session_id")
+      raw_wid = payload.get("worker_id") or payload.get("identifier")
+      if raw_wid is not None:
+        worker_ids[target] = clean_worker_id(raw_wid, required=True)
       if target not in allowed:
         allowed.append(target)
       if not any(row["session_id"] == target for row in sessions):
@@ -7524,13 +7693,38 @@ class Store:
             "updated_at": clip_stamp(now()),
           }
         )
+    elif action_type in {"delegate-id", "set-worker-id"}:
+      target = resolve_board_target(
+        payload.get("session_id") or payload.get("target") or "",
+        sessions,
+        allowed=allowed,
+        main_sid=main_sid,
+      )
+      if not target:
+        raise ValueError("Missing session_id")
+      raw_wid = (
+        payload.get("worker_id")
+        if payload.get("worker_id") is not None
+        else (
+          payload.get("identifier")
+          if payload.get("identifier") is not None
+          else payload.get("id")
+        )
+      )
+      worker_ids[target] = clean_worker_id(raw_wid, required=True)
+    elif action_type == "set-multi-repo":
+      multi_repo = bool(payload.get("multi_repo") or payload.get("enabled"))
     elif action_type == "revoke":
-      target = board_session_id(payload.get("session_id") or "")
+      target = resolve_board_target(
+        payload.get("session_id") or "", sessions, allowed=allowed, main_sid=main_sid
+      )
       allowed = [item for item in allowed if item != target]
       if main_sid == target:
         main_sid = ""
     elif action_type == "set-main":
-      target = board_session_id(payload.get("session_id") or "")
+      target = resolve_board_target(
+        payload.get("session_id") or "", sessions, allowed=allowed, main_sid=main_sid
+      )
       if target and target not in allowed:
         allowed.append(target)
       main_sid = target
@@ -7561,7 +7755,9 @@ class Store:
             }
           )
     elif action_type == "post":
-      sender = board_session_id(payload.get("session_id") or sid)
+      sender = resolve_board_target(
+        payload.get("session_id") or sid, sessions, allowed=allowed, main_sid=main_sid
+      )
       if not sender or sender not in allowed:
         raise ValueError("Session is not on the board allowlist")
       staged_file = None
@@ -7588,11 +7784,17 @@ class Store:
             "file",
           }
         }
+      raw_to = str(payload.get("to") or "*")
+      resolved_to = (
+        "*"
+        if raw_to == "*"
+        else resolve_board_target(raw_to, sessions, allowed=allowed, main_sid=main_sid)
+      )
       entries.append(
         {
           "id": str(payload.get("id") or f"b-{uuid.uuid4().hex[:6]}"),
           "session_id": sender,
-          "to": str(payload.get("to") or "*"),
+          "to": resolved_to or "*",
           "repo": str(payload.get("repo") or state["repo"]),
           "branch": str(payload.get("branch") or f"arena/{sender}"),
           "at": clip_stamp(now()),
@@ -7611,7 +7813,9 @@ class Store:
             wakes[row["session_id"]] = stamp
             ack_wakes.pop(row["session_id"], None)
       else:
-        norm_target = board_session_id(target)
+        norm_target = resolve_board_target(
+          target, sessions, allowed=allowed, main_sid=main_sid
+        )
         if norm_target:
           for row in sessions:
             if row["session_id"] == norm_target and norm_target in allowed:
@@ -7628,6 +7832,8 @@ class Store:
     entries = entries[-MAX_BOARD_ENTRIES:]
     stored = {
       "version": 1,
+      "multi_repo": multi_repo,
+      "worker_ids": worker_ids,
       "allowed_sessions": allowed,
       "main_session_id": main_sid,
       "sessions": sessions,

@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.95
+// @name         Arena.ai | NemoUtils | v1.10.96
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.95
+// @version      1.10.96
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -6373,12 +6373,69 @@
     return clean.indexOf("arena/") === 0 ? clean.slice(6) : clean;
   }
 
+  function cleanWorkerId(rawValue) {
+    var text = String(rawValue || "").trim();
+    if (text.toLowerCase().indexOf("worker-") === 0) text = text.slice(7).trim();
+    if (!text) return "";
+    return /^[A-Za-z0-9_-]{1,6}$/.test(text) ? text : null;
+  }
+
+  function defaultWorkerId(sessionId, repo) {
+    var sid = boardSessionId(sessionId);
+    var cleanRepo = String(repo || "").trim();
+    if (cleanRepo && sid.length > cleanRepo.length + 1 && sid.slice(-(cleanRepo.length + 1)) === "-" + cleanRepo) {
+      sid = sid.slice(0, -(cleanRepo.length + 1));
+    }
+    var head = sid.indexOf("-") !== -1 ? sid.split("-")[0] : sid;
+    var token = head.replace(/[^A-Za-z0-9]+/g, "").slice(0, 6);
+    return token || "w1";
+  }
+
+  function formatBoardRoleId(role, repo, workerId, multiRepo, fallbackSid) {
+    var cleanRepo = String(repo || "").trim();
+    if (role === "main") {
+      return multiRepo && cleanRepo ? "main-" + cleanRepo : "main";
+    }
+    if (role === "worker") {
+      var wid = cleanWorkerId(workerId) || defaultWorkerId(fallbackSid, cleanRepo);
+      return multiRepo && cleanRepo ? "worker-" + wid + "-" + cleanRepo : "worker-" + wid;
+    }
+    return String(fallbackSid || "");
+  }
+
+  function resolveBoardTarget(target, sessions, allowed, mainSid) {
+    var clean = boardSessionId(target);
+    if (!clean) return "";
+    var list = Array.isArray(sessions) ? sessions : [];
+    for (var i = 0; i < list.length; i += 1) {
+      var row = list[i];
+      if (!row) continue;
+      if (row.session_id === clean || row.board_id === clean) return row.session_id;
+      var wid = row.worker_id || "";
+      if (wid && (clean === "worker-" + wid || clean === wid)) return row.session_id;
+    }
+    if (clean === "main" || clean.indexOf("main-") === 0) {
+      if (mainSid) return mainSid;
+      if (Array.isArray(allowed) && allowed.length) return allowed[0];
+    }
+    return clean;
+  }
+
   function normalizeBoard(raw) {
     var data = raw;
     if (typeof data === "string") {
       try { data = JSON.parse(data); } catch (err) { data = null; }
     }
     if (!data || typeof data !== "object") data = {};
+    var multiRepo = Boolean(data.multi_repo);
+    var workerIds = {};
+    if (data.worker_ids && typeof data.worker_ids === "object" && !Array.isArray(data.worker_ids)) {
+      Object.keys(data.worker_ids).forEach(function (key) {
+        var normK = boardSessionId(key);
+        var cleanV = cleanWorkerId(data.worker_ids[key]);
+        if (normK && cleanV) workerIds[normK] = cleanV;
+      });
+    }
     var allowed = Array.isArray(data.allowed_sessions)
       ? data.allowed_sessions.map(boardSessionId).filter(Boolean)
       : [];
@@ -6401,10 +6458,22 @@
       var rowSid = boardSessionId(row.session_id || row.branch || "");
       if (!rowSid || seenSessions[rowSid]) continue;
       seenSessions[rowSid] = true;
+      if (row.worker_id && !workerIds[rowSid]) {
+        var delegated = cleanWorkerId(row.worker_id);
+        if (delegated) workerIds[rowSid] = delegated;
+      }
       var isPoll = Boolean(row.polling || row.status === "polling");
+      var rowRepo = String(row.repo || "");
+      var rowRole = seenAllowed[rowSid]
+        ? (!mainId || mainId === rowSid ? "main" : "worker")
+        : "blocked";
+      var rowWid = rowRole === "worker" ? (workerIds[rowSid] || defaultWorkerId(rowSid, rowRepo)) : "";
       sessions.push({
         session_id: rowSid,
-        repo: String(row.repo || ""),
+        board_id: formatBoardRoleId(rowRole, rowRepo, rowWid, multiRepo, rowSid),
+        worker_id: rowWid,
+        role: rowRole,
+        repo: rowRepo,
         branch: String(row.branch || ("arena/" + rowSid)),
         status: isPoll ? "polling" : "active",
         polling: isPoll,
@@ -6415,8 +6484,13 @@
       var allowedSid = uniqueAllowed[k];
       if (!seenSessions[allowedSid]) {
         seenSessions[allowedSid] = true;
+        var allowedRole = !mainId || mainId === allowedSid ? "main" : "worker";
+        var allowedWid = allowedRole === "worker" ? (workerIds[allowedSid] || defaultWorkerId(allowedSid, "")) : "";
         sessions.push({
           session_id: allowedSid,
+          board_id: formatBoardRoleId(allowedRole, "", allowedWid, multiRepo, allowedSid),
+          worker_id: allowedWid,
+          role: allowedRole,
           repo: "",
           branch: "arena/" + allowedSid,
           status: "active",
@@ -6430,6 +6504,8 @@
       ? Object.assign({}, data.wakes)
       : {};
     return {
+      multi_repo: multiRepo,
+      worker_ids: workerIds,
       allowed_sessions: uniqueAllowed,
       main_session_id: mainId,
       sessions: sessions,
@@ -6443,6 +6519,10 @@
     if (!previewBoard || typeof previewBoard !== "object") return next;
     var previewSid = boardSessionId(previewBoard.session_id || previewBoard.branch || "");
     var incoming = normalizeBoard(previewBoard);
+    if (previewBoard.multi_repo !== undefined) next.multi_repo = Boolean(previewBoard.multi_repo);
+    Object.keys(incoming.worker_ids || {}).forEach(function (sid) {
+      next.worker_ids[sid] = incoming.worker_ids[sid];
+    });
     incoming.allowed_sessions.forEach(function (sid) {
       if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
     });
@@ -6565,11 +6645,30 @@
     var next = normalizeBoard(board);
     if (!action || typeof action !== "object") return { ok: false, error: "invalid-action", board: next };
     var actionType = String(action.type || action.action || "");
-    var sid = boardSessionId(action.session_id || action.branch || "");
+    var sid = resolveBoardTarget(action.session_id || action.branch || "", next.sessions, next.allowed_sessions, next.main_session_id);
     var nowIso = action.at || new Date().toISOString();
     if (actionType === "allow") {
       if (!sid) return { ok: false, error: "missing-session-id", board: next };
+      var rawWid = action.worker_id !== undefined ? action.worker_id : action.identifier;
+      if (rawWid !== undefined) {
+        var cleanWid = cleanWorkerId(rawWid);
+        if (!cleanWid) return { ok: false, error: "invalid-worker-id", board: next };
+        next.worker_ids[sid] = cleanWid;
+      }
       if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
+      return { ok: true, board: normalizeBoard(next) };
+    }
+    if (actionType === "delegate-id" || actionType === "set-worker-id") {
+      var targetSid = resolveBoardTarget(action.session_id || action.target || "", next.sessions, next.allowed_sessions, next.main_session_id);
+      if (!targetSid) return { ok: false, error: "missing-session-id", board: next };
+      var rawId = action.worker_id !== undefined ? action.worker_id : (action.identifier !== undefined ? action.identifier : action.id);
+      var cleanId = cleanWorkerId(rawId);
+      if (!cleanId) return { ok: false, error: "invalid-worker-id", board: next };
+      next.worker_ids[targetSid] = cleanId;
+      return { ok: true, board: normalizeBoard(next) };
+    }
+    if (actionType === "set-multi-repo") {
+      next.multi_repo = Boolean(action.multi_repo !== undefined ? action.multi_repo : action.enabled);
       return { ok: true, board: normalizeBoard(next) };
     }
     if (actionType === "revoke") {
@@ -6588,15 +6687,16 @@
       return { ok: true, board: normalizeBoard(next) };
     }
     if (actionType === "heartbeat") {
-      if (!sid) return { ok: false, error: "missing-session-id", board: next };
+      var hbSid = boardSessionId(action.session_id || action.branch || "");
+      if (!hbSid) return { ok: false, error: "missing-session-id", board: next };
       var found = false;
       next.sessions = next.sessions.map(function (row) {
-        if (boardSessionId(row.session_id || row.branch) !== sid) return row;
+        if (boardSessionId(row.session_id || row.branch) !== hbSid) return row;
         found = true;
         return {
-          session_id: sid,
+          session_id: hbSid,
           repo: String(action.repo || row.repo || ""),
-          branch: String(action.branch || row.branch || ("arena/" + sid)),
+          branch: String(action.branch || row.branch || ("arena/" + hbSid)),
           status: String(action.status || row.status || "active"),
           polling: Boolean(action.polling),
           updated_at: nowIso,
@@ -6604,15 +6704,15 @@
       });
       if (!found) {
         next.sessions.push({
-          session_id: sid,
+          session_id: hbSid,
           repo: String(action.repo || ""),
-          branch: String(action.branch || ("arena/" + sid)),
+          branch: String(action.branch || ("arena/" + hbSid)),
           status: String(action.status || "active"),
           polling: Boolean(action.polling),
           updated_at: nowIso,
         });
       }
-      return { ok: true, board: next };
+      return { ok: true, board: normalizeBoard(next) };
     }
     if (actionType === "post") {
       if (!sid || next.allowed_sessions.indexOf(sid) === -1) {
@@ -6620,10 +6720,14 @@
       }
       var checkedFile = validateBoardFile(action.file);
       if (!checkedFile.ok) return { ok: false, error: checkedFile.error, board: next };
+      var rawTo = String(action.to || "");
+      var resolvedTo = rawTo === "*" || !rawTo
+        ? rawTo
+        : resolveBoardTarget(rawTo, next.sessions, next.allowed_sessions, next.main_session_id);
       next.entries.push({
         id: String(action.id || ("b-" + Date.now())),
         session_id: sid,
-        to: boardSessionId(action.to || ""),
+        to: resolvedTo,
         repo: String(action.repo || ""),
         branch: String(action.branch || ("arena/" + sid)),
         at: nowIso,
@@ -6651,7 +6755,7 @@
           }
         });
       } else {
-        var targetId = boardSessionId(target);
+        var targetId = resolveBoardTarget(target, next.sessions, next.allowed_sessions, next.main_session_id);
         if (!targetId || next.allowed_sessions.indexOf(targetId) === -1) {
           return { ok: false, error: "target-not-allowed", board: next };
         }
@@ -6678,6 +6782,10 @@
     MAX_BOARD_FILE_BYTES: MAX_BOARD_FILE_BYTES,
     MAX_BOARD_BYTES: MAX_BOARD_BYTES,
     boardSessionId: boardSessionId,
+    cleanWorkerId: cleanWorkerId,
+    defaultWorkerId: defaultWorkerId,
+    formatBoardRoleId: formatBoardRoleId,
+    resolveBoardTarget: resolveBoardTarget,
     normalizeBoard: normalizeBoard,
     mergePreviewBoard: mergePreviewBoard,
     readGlobalBoard: readGlobalBoard,

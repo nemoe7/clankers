@@ -15397,6 +15397,39 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   assert push_checks == []
   assert "commit/s unpushed" not in hygiene_store.reminder(routine=True)
+  role_state = hygiene_store.board_action(
+    {
+      "action": "delegate-id",
+      "session_id": woken_board["session_id"],
+      "worker_id": "ui",
+    }
+  )
+  assert role_state["board_id"] == "worker-ui"
+  assert role_state["worker_id"] == "ui"
+  main_row = next(
+    row for row in role_state["sessions"] if row["session_id"] == "b14c09a2-clankers"
+  )
+  assert main_row["board_id"] == "main"
+  multi_state = hygiene_store.board_action(
+    {"action": "set-multi-repo", "multi_repo": True}
+  )
+  assert multi_state["board_id"] == f"worker-ui-{multi_state['repo']}"
+  main_multi_row = next(
+    row for row in multi_state["sessions"] if row["session_id"] == "b14c09a2-clankers"
+  )
+  assert main_multi_row["board_id"] == f"main-{main_multi_row['repo']}"
+  hygiene_store.board_action({"action": "set-multi-repo", "multi_repo": False})
+  try:
+    hygiene_store.board_action(
+      {
+        "action": "delegate-id",
+        "session_id": woken_board["session_id"],
+        "worker_id": "toolongid",
+      }
+    )
+    raise AssertionError("expected ValueError for > 6 char worker_id")
+  except ValueError:
+    pass
   style_css = (
     preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
