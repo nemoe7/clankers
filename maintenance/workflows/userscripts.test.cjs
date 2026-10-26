@@ -3205,14 +3205,8 @@ for raw in sys.stdin:
           ),
         ),
       ),
-      [
-        {
-          url: "https://sbx-steering8000.arena.site/",
-          name: "clankers - Steering (bdf20c)",
-        },
-        { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
-      ],
-      "worker session steering preview carries short session suffix to prevent proxy URL collisions",
+      [],
+      "worker session does not post preview URLs to the preview proxy",
     );
       assert.deepEqual(
         JSON.parse(
@@ -3233,6 +3227,66 @@ for raw in sys.stdin:
         ],
         "main session steering preview keeps the canonical repo - Steering label",
       );
+      assert.deepEqual(
+        JSON.parse(
+          JSON.stringify(
+            checks.promptFill.discoverPreviews(
+              steeringAndDemoDoc,
+              "otherrepo",
+              "11111111-otherrepo",
+            ),
+          ),
+        ),
+        [
+          {
+            url: "https://sbx-steering8000.arena.site/",
+            name: "otherrepo - Steering",
+          },
+          { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
+        ],
+        "independent main session for another repo posts its own repo - Steering preview",
+      );
+      var syncedAck = checks.board.mergePreviewBoard(
+        {
+          allowed_sessions: ["293da56c-clankers", "bdf20cf5-clankers"],
+          main_session_id: "293da56c-clankers",
+          entries: [
+            {
+              id: "p1a2b3",
+              session_id: "293da56c-clankers",
+              to: "bdf20cf5-clankers",
+              text: "Please check nuu\n@beta",
+              seen_at: null,
+              acknowledged_at: null,
+              ack_text: null,
+              replies: [],
+            },
+          ],
+        },
+        {
+          session_id: "bdf20cf5-clankers",
+          allowed_sessions: ["293da56c-clankers", "bdf20cf5-clankers"],
+          main_session_id: "293da56c-clankers",
+          entries: [
+            {
+              id: "p1a2b3",
+              session_id: "293da56c-clankers",
+              to: "bdf20cf5-clankers",
+              text: "Please check nuu\n@beta",
+              seen_at: "2026-10-26T18:50:00Z",
+              acknowledged_at: "2026-10-26T18:50:05Z",
+              ack_type: "reply",
+              ack_text: "Acknowledged, checking nuu now.",
+              ack_edited_at: "2026-10-26T18:50:10Z",
+              replies: [{ type: "reply", text: "Follow-up reply", at: "2026-10-26T18:50:10Z" }],
+            },
+          ],
+        },
+      );
+      assert.equal(syncedAck.entries[0].seen_at, "2026-10-26T18:50:00Z");
+      assert.equal(syncedAck.entries[0].acknowledged_at, "2026-10-26T18:50:05Z");
+      assert.equal(syncedAck.entries[0].ack_text, "Acknowledged, checking nuu now.");
+      assert.equal(syncedAck.entries[0].replies.length, 1);
       assert.equal(
         checks.stateDownload.isWorkerSession(
           afterWakeConsumed,

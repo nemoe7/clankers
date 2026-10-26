@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.99
+// @name         Arena.ai | NemoUtils | v1.11.0
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.99
+// @version      1.11.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -841,12 +841,9 @@
       );
       var board = readGlobalBoard();
       var hasMain = Boolean(board && board.main_session_id);
-      var isWorker = Boolean(
-        hasMain &&
-        sid &&
-        board.allowed_sessions.indexOf(sid) !== -1 &&
-        boardRoleFor(board, sid) === "worker",
-      );
+      if (sid && hasMain && boardRoleFor(board, sid) === "worker") {
+        return [];
+      }
       var steeringBase = previewBase(doc);
       var steeringRoot = steeringBase ? steeringBase + "/" : "";
       var frames = doc.querySelectorAll("iframe");
@@ -882,12 +879,16 @@
         root = match[1] + "/";
         if (seen[root]) continue;
         seen[root] = true;
-        var isSteeringFrame = Boolean(uiRepo && (!steeringRoot || root === steeringRoot));
+        var isSteeringFrame = Boolean(
+          (uiRepo && (!steeringRoot || root === steeringRoot)) ||
+          (steeringRoot && root === steeringRoot) ||
+          /\s-\sSteering$/i.test(domName),
+        );
         if (isSteeringFrame && hasMain && !sid && reportedSessionId === undefined) {
           continue;
         }
-        resolvedName = isSteeringFrame
-          ? uiRepo + " - Steering" + (isWorker ? " (" + sid.slice(0, 6) + ")" : "")
+        resolvedName = isSteeringFrame && uiRepo
+          ? uiRepo + " - Steering"
           : domName;
         if (!resolvedName || isUnavailablePreviewName(resolvedName)) continue;
         found.push({ url: root, name: resolvedName });
@@ -6388,6 +6389,17 @@
     return /^[A-Za-z0-9_-]{1,6}$/.test(text) ? text : null;
   }
 
+  function cleanBoardRepo(rawValue, fallbackSid) {
+    var text = String(rawValue || "").trim();
+    if (text.indexOf("/") !== -1) text = text.split("/").pop();
+    if (!text && fallbackSid) {
+      var sid = boardSessionId(fallbackSid);
+      var m = /^[0-9a-f]{6,16}-([A-Za-z0-9._-]+)$/i.exec(sid);
+      if (m) text = m[1];
+    }
+    return text.toLowerCase();
+  }
+
   function defaultWorkerId(sessionId, repo) {
     var sid = boardSessionId(sessionId);
     var cleanRepo = String(repo || "").trim();
@@ -6519,16 +6531,12 @@
         if (delegated) workerIds[rowSid] = delegated;
       }
       var isPoll = Boolean(row.polling || row.status === "polling");
-      var rowRepo = String(row.repo || "");
-      var rowRole = seenAllowed[rowSid]
-        ? (!mainId || mainId === rowSid ? "main" : "worker")
-        : "blocked";
-      var rowWid = rowRole === "worker" ? (workerIds[rowSid] || defaultWorkerId(rowSid, rowRepo)) : "";
+      var rowRepo = cleanBoardRepo(row.repo, rowSid);
       sessions.push({
         session_id: rowSid,
-        board_id: formatBoardRoleId(rowRole, rowRepo, rowWid, multiRepo, rowSid),
-        worker_id: rowWid,
-        role: rowRole,
+        board_id: "",
+        worker_id: "",
+        role: seenAllowed[rowSid] ? "worker" : "blocked",
         repo: rowRepo,
         branch: String(row.branch || ("arena/" + rowSid)),
         status: isPoll ? "polling" : "active",
@@ -6540,20 +6548,60 @@
       var allowedSid = uniqueAllowed[k];
       if (!seenSessions[allowedSid]) {
         seenSessions[allowedSid] = true;
-        var allowedRole = !mainId || mainId === allowedSid ? "main" : "worker";
-        var allowedWid = allowedRole === "worker" ? (workerIds[allowedSid] || defaultWorkerId(allowedSid, "")) : "";
+        var allowedRepo = cleanBoardRepo("", allowedSid);
         sessions.push({
           session_id: allowedSid,
-          board_id: formatBoardRoleId(allowedRole, "", allowedWid, multiRepo, allowedSid),
-          worker_id: allowedWid,
-          role: allowedRole,
-          repo: "",
+          board_id: "",
+          worker_id: "",
+          role: "worker",
+          repo: allowedRepo,
           branch: "arena/" + allowedSid,
           status: "active",
           polling: false,
           updated_at: "",
         });
       }
+    }
+    var repoHasMain = {};
+    for (var m1 = 0; m1 < sessions.length; m1 += 1) {
+      if (sessions[m1].role !== "blocked" && mainId && sessions[m1].session_id === mainId) {
+        sessions[m1].role = "main";
+        repoHasMain[sessions[m1].repo] = sessions[m1].session_id;
+      }
+    }
+    for (var m2 = 0; m2 < sessions.length; m2 += 1) {
+      if (sessions[m2].role === "blocked") continue;
+      var sRepo = sessions[m2].repo;
+      if (!repoHasMain[sRepo]) {
+        sessions[m2].role = "main";
+        repoHasMain[sRepo] = sessions[m2].session_id;
+      } else if (repoHasMain[sRepo] !== sessions[m2].session_id) {
+        sessions[m2].role = "worker";
+      }
+    }
+    for (var m3 = 0; m3 < sessions.length; m3 += 1) {
+      var curRow = sessions[m3];
+      curRow.worker_id = curRow.role === "worker"
+        ? (workerIds[curRow.session_id] || defaultWorkerId(curRow.session_id, curRow.repo))
+        : "";
+      curRow.board_id = formatBoardRoleId(
+        curRow.role,
+        curRow.repo,
+        curRow.worker_id,
+        multiRepo,
+        curRow.session_id,
+      );
+    }
+    var linkedRepos = [];
+    var seenLinked = {};
+    if (Array.isArray(data.linked_repos)) {
+      data.linked_repos.forEach(function (item) {
+        var slug = cleanBoardRepo(item, "");
+        if (slug && !seenLinked[slug]) {
+          seenLinked[slug] = true;
+          linkedRepos.push(slug);
+        }
+      });
     }
     var entries = Array.isArray(data.entries) ? data.entries.slice(-MAX_BOARD_ENTRIES) : [];
     var taskOps = Array.isArray(data.task_ops) ? data.task_ops.slice(-MAX_BOARD_ENTRIES) : [];
@@ -6585,6 +6633,7 @@
     }
     return {
       multi_repo: multiRepo,
+      linked_repos: linkedRepos,
       removed_sessions: removedList.slice(-MAX_BOARD_ENTRIES),
       worker_ids: workerIds,
       worker_tasks: workerTasks,
@@ -6605,6 +6654,7 @@
     var previewSid = boardSessionId(previewBoard.session_id || previewBoard.branch || "");
     var incoming = normalizeBoard(previewBoard);
     if (previewBoard.multi_repo !== undefined) next.multi_repo = Boolean(previewBoard.multi_repo);
+    if (Array.isArray(previewBoard.linked_repos)) next.linked_repos = incoming.linked_repos.slice();
     var removedSet = {};
     (next.removed_sessions || []).forEach(function (sid) {
       if (sid && sid !== previewSid) removedSet[sid] = true;
@@ -6677,14 +6727,27 @@
       }
     });
     next.sessions = Object.keys(bySid).map(function (k) { return bySid[k]; });
-    var seenIds = {};
+    var entryById = {};
     var mergedEntries = [];
     next.entries.concat(incoming.entries).forEach(function (item) {
       if (!item || typeof item !== "object") return;
-      var id = String(item.id || "");
-      if (id && seenIds[id]) return;
-      if (id) seenIds[id] = true;
-      mergedEntries.push(item);
+      var copy = Object.assign({}, item);
+      var id = String(copy.id || "");
+      if (id && entryById[id]) {
+        var prev = entryById[id];
+        ["seen_at", "acknowledged_at", "ack_type", "ack_text", "ack_edited_at", "task_id"].forEach(function (field) {
+          if (copy[field] && !prev[field]) prev[field] = copy[field];
+        });
+        if (copy.ack_edited_at && (!prev.ack_edited_at || String(copy.ack_edited_at) > String(prev.ack_edited_at))) {
+          prev.ack_edited_at = copy.ack_edited_at;
+        }
+        if (Array.isArray(copy.replies) && copy.replies.length > (Array.isArray(prev.replies) ? prev.replies.length : 0)) {
+          prev.replies = copy.replies.slice();
+        }
+        return;
+      }
+      if (id) entryById[id] = copy;
+      mergedEntries.push(copy);
     });
     next.entries = mergedEntries.slice(-MAX_BOARD_ENTRIES);
     Object.keys(incoming.wakes).forEach(function (wakeK) {
@@ -6724,7 +6787,25 @@
   function boardRoleFor(board, sessionId) {
     var normalized = normalizeBoard(board);
     var sid = boardSessionId(sessionId);
+    if (!sid) return "main";
+    for (var i = 0; i < normalized.sessions.length; i += 1) {
+      if (normalized.sessions[i].session_id === sid && normalized.sessions[i].role !== "blocked") {
+        return normalized.sessions[i].role;
+      }
+    }
+    var sidRepo = cleanBoardRepo("", sid);
+    if (sidRepo) {
+      for (var j = 0; j < normalized.sessions.length; j += 1) {
+        var sRow = normalized.sessions[j];
+        if (sRow.repo === sidRepo && sRow.role === "main") {
+          return sRow.session_id === sid ? "main" : "worker";
+        }
+      }
+    }
     if (!normalized.main_session_id || normalized.main_session_id === sid) return "main";
+    if (sidRepo && cleanBoardRepo("", normalized.main_session_id) && sidRepo !== cleanBoardRepo("", normalized.main_session_id)) {
+      return "main";
+    }
     return "worker";
   }
 
