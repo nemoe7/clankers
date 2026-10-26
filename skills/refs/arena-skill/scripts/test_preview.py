@@ -15693,3 +15693,36 @@ def test_clause_ack_error_keeps_root_agents_when_nested_agents_is_shorter(tmp_pa
     )
     != ""
   )
+
+
+def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, capsys):
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda *_a, **_kw: "arena/293da56c-clankers"
+  )
+  monkeypatch.setattr(preview, "resolve_repo_root", lambda *_a, **_kw: tmp_path)
+  (tmp_path / "ARENA.md").write_text("# ARENA\n", encoding="utf-8")
+  (tmp_path / "AGENTS.md").write_text("# AGENTS\n", encoding="utf-8")
+  skill_dir = tmp_path / ".agents" / "skills" / "arena-skill"
+  skill_dir.mkdir(parents=True)
+  (skill_dir / "SKILL.md").write_text("# SKILL\n", encoding="utf-8")
+  (skill_dir / "WORKER.md").write_text("# WORKER\n", encoding="utf-8")
+  state_dir = tmp_path / "arena-state"
+  store = preview.Store(state_dir, create=True)
+  store.board_action({"action": "allow", "session_id": "293da56c-clankers"})
+  store.board_action({"action": "allow", "session_id": "b14c09a2-clankers"})
+  store.board_action({"action": "set-main", "session_id": "b14c09a2-clankers"})
+  notices = store.take_board_notifications()
+  joined_text = "\n".join(notices)
+  assert "BOARD SESSION JOINED:" in joined_text
+  assert "b14c09a2-clankers" in joined_text
+  assert "alpha" in joined_text
+  assert "WORKER ROLE ASSIGNED:" in joined_text
+  assert "beta" in joined_text
+  assert ".agents/skills/arena-skill/WORKER.md" in joined_text
+  assert store.take_board_notifications() == []
+  store.board_action({"action": "allow", "session_id": "c77a11b0-clankers"})
+  assert preview.poll_once(store, sleeper=lambda _: None) == 0
+  poll_out = capsys.readouterr().out
+  assert "BOARD SESSION JOINED:" in poll_out
+  assert "c77a11b0-clankers" in poll_out
+  assert "gamma" in poll_out

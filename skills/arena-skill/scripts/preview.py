@@ -1092,6 +1092,7 @@ def require_survey(store):
 	except(HTTPException,OSError,UnicodeDecodeError,ValueError):return
 	if isinstance(payload,dict)and payload.get('results')is None:raise ValueError("Survey unanswered. Run `arena-preview survey '<json>'` before polling.")
 def print_read(store):
+	for notice in store.take_board_notifications():print(notice,flush=True)
 	listing=store.read();print(format_read(listing),flush=True)
 	if listing['pending']:store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']])
 POLL_INTERVAL=1
@@ -1969,8 +1970,10 @@ def poll_inbox(store,sleeper=None):
 			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
 			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: UNBLOCKED TASK {names}. Start a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
-			if store.take_board_wake():
+			board_woken=bool(store.take_board_wake());board_notices=store.take_board_notifications()
+			if board_woken or board_notices:
 				clear_poll_repeat(store);print('BOARD WAKE: session woken from the multi-session board. Read board entries and continue work before polling again.',flush=True)
+				for notice in board_notices:print(notice,flush=True)
 				for entry in store.take_unseen_board_entries():payload=entry.get('payload');body_text=json.dumps(payload,ensure_ascii=False)if isinstance(payload,dict)else str(payload or'');file_obj=entry.get('file')if isinstance(entry.get('file'),dict)else None;file_path=file_obj.get('staged_path')or file_obj.get('name')or''if file_obj else'';file_suffix=f" [file: {file_path}]"if file_path else'';head=f"[board {entry.get('id','')}] {entry.get('session_id','')} -> {entry.get('to','*')}";print(f"{head}: {body_text}{file_suffix}",flush=True)
 				print(format_read(listing),flush=True);return 0
 			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);return 0
@@ -2800,6 +2803,41 @@ class Store:
 		ack_wakes[entries_key]=seen_list[-128:];raw['ack_wakes']=ack_wakes
 		with self.transaction(autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,json.dumps(raw,ensure_ascii=False)))
 		return unseen
+	def take_board_notifications(self):
+		raw_text=self.meta_value(BOARD_STATE_META)
+		if not raw_text:return[]
+		try:raw=json.loads(raw_text)
+		except Exception:return[]
+		if not isinstance(raw,dict):return[]
+		board_now=self.board_state();sid=str(board_now.get('session_id')or'');allowed=set(board_now.get('allowed_sessions')or[])
+		if not sid or sid not in allowed:return[]
+		ack_wakes=dict(raw.get('ack_wakes'))if isinstance(raw.get('ack_wakes'),dict)else{};joined_key=f"{sid}:joined_sessions";raw_joined=ack_wakes.get(joined_key);seen_joined={str(k):str(v)for(k,v)in raw_joined.items()if k}if isinstance(raw_joined,dict)else{};multi_repo=bool(board_now.get('multi_repo'));notices=[];changed=False;active_other_sids=set()
+		for row in board_now.get('sessions')or[]:
+			if not isinstance(row,dict)or not row.get('allowed'):continue
+			other_sid=str(row.get('session_id')or'')
+			if not other_sid or other_sid==sid:continue
+			active_other_sids.add(other_sid);other_board_id=str(row.get('board_id')or other_sid);other_role=str(row.get('role')or'worker');short_id='alpha'if other_role=='main'else str(row.get('worker_id')or other_board_id);ident_label=other_board_id if multi_repo or short_id==other_board_id else f"{short_id} ({other_board_id})";prev_board_id=seen_joined.get(other_sid)
+			if prev_board_id!=other_board_id:
+				if prev_board_id is None:notices.append(f"BOARD SESSION JOINED: session {other_sid} joined the board with identifier {ident_label} ({other_role}).")
+				else:notices.append(f"BOARD SESSION UPDATED: session {other_sid} now uses identifier {ident_label} ({other_role}).")
+				seen_joined[other_sid]=other_board_id;changed=True
+		for stale_sid in[item for item in seen_joined if item not in active_other_sids]:seen_joined.pop(stale_sid,None);changed=True
+		ack_wakes[joined_key]=seen_joined;worker_key=f"{sid}:worker_role_notified"
+		if board_now.get('board_role')=='worker':
+			self_board_id=str(board_now.get('board_id')or sid);self_short_id=str(board_now.get('worker_id')or self_board_id);self_ident=self_board_id if multi_repo or self_short_id==self_board_id else f"{self_short_id} ({self_board_id})"
+			if ack_wakes.get(worker_key)!=self_board_id:
+				root=self.repository_root();worker_md='.agents/skills/arena-skill/WORKER.md'
+				for candidate in('.agents/skills/arena-skill/WORKER.md','skills/arena-skill/WORKER.md'):
+					if(root/candidate).is_file():worker_md=candidate;break
+				notices.append(f"WORKER ROLE ASSIGNED: you are assigned the worker role with identifier {self_ident}. Read {worker_md} before continuing work.");ack_wakes[worker_key]=self_board_id;changed=True
+		elif worker_key in ack_wakes:ack_wakes.pop(worker_key,None);changed=True
+		if changed:
+			raw['ack_wakes']=ack_wakes
+			if notices and isinstance(raw.get('sessions'),list):
+				for row in raw['sessions']:
+					if isinstance(row,dict)and board_session_id(row.get('session_id')or row.get('branch')or'')==sid:row['polling']=False;row['status']='active'
+			with self.transaction(autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,json.dumps(raw,ensure_ascii=False)))
+		return notices
 	def board_action(self,payload):
 		if not isinstance(payload,dict):raise TypeError('Board payload must be an object')
 		action_type=str(payload.get('action')or payload.get('type')or'').strip().lower();raw_text=self.meta_value(BOARD_STATE_META)
@@ -4703,7 +4741,11 @@ def check_report_nemoizer(source,markdown,repo_root=None):
 def gate_verdict(state_dir,push,line,out=None):
 	out=sys.stdout if out is None else out;run_notices(state_dir,out=out)
 	if poll_timeout_line(line):print('TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`. Set the Bash tool timeout to 1800 seconds; the poll returns within its 1799-second wait.',file=out,flush=True);return 1
-	try:gate_store=Store(state_dir);allowed=gate_store.gate(pending_only=push);blocked_calls=gate_store.calls_since_message()if not allowed and not push else None
+	try:
+		gate_store=Store(state_dir)
+		if not push:
+			for notice in gate_store.take_board_notifications():print(notice,file=out,flush=True)
+		allowed=gate_store.gate(pending_only=push);blocked_calls=gate_store.calls_since_message()if not allowed and not push else None
 	except FileNotFoundError:allowed=True;blocked_calls=None
 	except Exception:return 2
 	if not allowed:
