@@ -59,6 +59,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Add `WORKER.md` in `skills/refs/arena-skill/` and `skills/arena-skill/` for board worker session rules and point worker sessions to `WORKER.md` in `SKILL.md`.
 - Sync board entries across sessions, wake a polling agent on board wakes or incoming entries, and format `key_output` timestamps with `local_stamp` in `scripts/test_preview.py`.
 - Document `/api/board` actions (`sync`, `allow`, `revoke`, `set-main`, `heartbeat`, `post`, `wake`, and `clear`) in `SKILL.md` and `references/commands.md`.
 
