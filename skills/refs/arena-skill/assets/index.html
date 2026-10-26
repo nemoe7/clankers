@@ -92,9 +92,11 @@
             <form id="report-form">
               <p id="report-status" role="status" aria-live="polite">No report published yet.</p>
               <article id="report" class="report" aria-label="Selected report"></article>
-              <button id="report-submit" type="submit" hidden>Submit</button>
+              <div class="report-submit-row">
+                <p id="report-agent-ack-footer" class="receipt" hidden></p>
+                <button id="report-submit" type="submit" hidden>Submit</button>
+              </div>
             </form>
-            <p id="report-agent-ack-footer" class="receipt" hidden></p>
           </div>
         </div>
       </section>

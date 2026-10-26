@@ -2517,7 +2517,13 @@ function updateReportTop() {
     const submit = $('#report-submit');
     const maxScroll = Math.max(0, (panel.scrollHeight || 0) - (panel.clientHeight || 0));
     const atEnd = maxScroll <= 4 || (panel.scrollTop || 0) >= maxScroll - 8;
-    submitFloat.hidden = Boolean(panel.hidden || !submit || submit.hidden || atEnd);
+    const panelRect = panel.getBoundingClientRect?.();
+    const submitRect = submit?.getBoundingClientRect?.();
+    const submitInView = Boolean(
+      panelRect && submitRect && panelRect.height > 0 && submitRect.height > 0 &&
+      submitRect.top < panelRect.bottom - 4 && submitRect.bottom > panelRect.top
+    );
+    submitFloat.hidden = Boolean(panel.hidden || !submit || submit.hidden || atEnd || submitInView);
     submitFloat.disabled = Boolean(submit?.disabled);
   }
   updateReportTocActive();

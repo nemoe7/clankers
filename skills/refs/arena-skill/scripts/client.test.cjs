@@ -5731,5 +5731,8 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /function\s+restoreLastTab\(/);
   assert.match(styleSource, /\.report-toc\s*\{[\s\S]*?border:\s*0;\s*background:\s*transparent;/);
   assert.match(styleSource, /\.report-rail\s*\{[\s\S]*?border:\s*0;\s*background:\s*transparent;/);
+  assert.match(styleSource, /\.report-submit-row\s*\{\s*display:\s*flex;\s*align-items:\s*flex-start;/);
+  assert.match(styleSource, /\.report-submit-float\s*\{[^}]*right:\s*max\(5vw,\s*calc\(\(100vw\s*-\s*900px\)\s*\/\s*2\)\)/);
+  assert.match(htmlSource, /<div class="report-submit-row">\s*<p id="report-agent-ack-footer"/);
 });
 

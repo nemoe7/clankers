@@ -443,11 +443,14 @@ mark code { color: var(--text); }
 .option { display: flex; align-items: baseline; gap: 8px; font-weight: 400; margin: 0; }
 .option > span { flex: 1; min-width: 0; }
 .option textarea { flex: 1; width: auto; min-width: 0; min-height: 0; padding: 4px 8px; }
-#report-submit { margin-top: 16px; margin-left: auto; display: block; }
+.report-submit-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.report-submit-row > #report-agent-ack-footer { margin: 0; }
+#report-submit { margin: 0 0 0 auto; display: block; }
 #report-form { min-width: 0; margin-top: 12px; }
 .report-toc { display: none; }
 .report-main { min-width: 0; }
-.report-submit-float { position: absolute; right: 24px; bottom: 24px; z-index: 3; box-shadow: 0 4px 12px rgb(0 0 0 / 28%); }
+.report-submit-float { position: absolute; right: max(5vw, calc((100vw - 900px) / 2)); bottom: 24px; z-index: 3; box-shadow: 0 4px 12px rgb(0 0 0 / 28%); }
+:root[data-keyboard-open="true"] .report-submit-float { display: none; }
 @media (min-width: 75em) {
   .report-toc {
     position: fixed; top: 76px;
