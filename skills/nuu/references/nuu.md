@@ -50,7 +50,7 @@ Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved hous
 - [references/recipes/page-memory.md](recipes/page-memory.md): optimistic writes, content-versioned view cache, and URL/`localStorage` state persistence.
 - [references/recipes/modal-manager.md](recipes/modal-manager.md): shared `<dialog>` modal manager with top-right `.close-button` (`-8 px` margin, focus/hover `--text` shift) and delete confirmation.
 - [references/recipes/range-sliders.md](recipes/range-sliders.md): `<input type="range">` with `step` ticks, min/max endpoint labels, and live `<output>` bubble.
-- [references/recipes/relative-timestamps.md](recipes/relative-timestamps.md): tabular relative timestamps (`just now`, `Xmin ago`, `yesterday`).
+- [references/recipes/relative-timestamps.md](recipes/relative-timestamps.md): relative timestamps (`just now`, `Xmin ago`, `yesterday`), full or abbreviated by width.
 - [references/recipes/loading-bar.md](recipes/loading-bar.md): 200 ms delayed 2 px edge bar and fixed-slot inline control loading.
 - [references/recipes/live-dot.md](recipes/live-dot.md): `8x8 px` pulsing `.dot` (`NUA309`, `NUL005`) inside a fixed `16x16 px` slot.
 - [references/recipes/scroll-edge-fade.md](recipes/scroll-edge-fade.md): scroll-driven CSS edge-fade mask (`@supports (animation-timeline: scroll(self))`).
