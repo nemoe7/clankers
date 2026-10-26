@@ -410,12 +410,41 @@ def meta_number(db, key):
   return int(value) if value.isdigit() else 0
 
 
+def pending_board_entries_for_db(db, session_id=""):
+  """Return unacknowledged @-mentioned board entries targeting the current session."""
+  row = db.execute(
+    "SELECT value FROM meta WHERE key = ?", (BOARD_STATE_META,)
+  ).fetchone()
+  if not row or not row[0]:
+    return []
+  try:
+    raw = json.loads(str(row[0]))
+  except Exception:
+    return []
+  if not isinstance(raw, dict):
+    return []
+  sid = board_session_id(
+    session_id or raw.get("local_session_id") or workspace_branch()
+  )
+  if not sid:
+    return []
+  norm = normalize_board_state(raw, session_id=sid)
+  return [
+    entry
+    for entry in (norm.get("entries") or [])
+    if isinstance(entry, dict)
+    and entry.get("mention_target") == sid
+    and not entry.get("acknowledged_at")
+  ]
+
+
 def gate_pending_count(db):
   """The unacknowledged items that hold a non-inbox Bash call."""
-  return db.execute(
+  base = db.execute(
     "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1)"
     f" + (SELECT count(*) FROM submissions WHERE {PENDING_SUBMISSIONS})"
   ).fetchone()[0]
+  return base + len(pending_board_entries_for_db(db))
 
 
 def pr_state_warning(line):
@@ -2629,9 +2658,12 @@ def format_pending_record(item):
   display_type = "answer" if type == "report" else type
   # A short ID names the record, and a short ID acks it, so the full ID costs nothing here.
   # The ticks hold the citation together across any renderer between this line and its reader.
-  header = "`" + str(item.get("id", ""))[:6] + "`"
+  raw_id = str(item.get("id", ""))
+  header = "`" + (raw_id if type == "board" else raw_id[:6]) + "`"
   if display_type != "note":
     header += f" {display_type}"
+  if type == "board" and item.get("board_id"):
+    header += f" ({item['board_id']})"
   if item.get("quiet") and not item.get("blocking"):
     header += " quiet (no ack required)"
   if item.get("report_id"):
@@ -6093,6 +6125,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     else:
       row["worker_id"] = ""
       row["board_id"] = row["session_id"]
+  session_by_id = {row["session_id"]: row for row in sessions}
   entries = []
   for item in (
     data.get("entries")[-MAX_BOARD_ENTRIES:]
@@ -6121,16 +6154,60 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     for k in ("tag", "text"):
       if item.get(k) and k not in item_payload:
         item_payload[k] = str(item.get(k))
+    entry_text = str(
+      item.get("text") or item_payload.get("text") or item_payload.get("summary") or ""
+    )
+    mention_target = ""
+    raw_mention = str(item.get("mention_target") or "").strip()
+    if raw_mention:
+      mention_target = resolve_board_target(
+        raw_mention, sessions, allowed=allowed, main_sid=main_sid
+      )
+    if not mention_target and entry_text:
+      for token in re.findall(r"(?:^|(?<=\s))@([A-Za-z0-9_-]{1,32})\b", entry_text):
+        cand = resolve_board_target(token, sessions, allowed=allowed, main_sid=main_sid)
+        if cand and cand in allowed and cand != from_sid:
+          mention_target = cand
+          break
+    if mention_target and resolved_to == "*":
+      resolved_to = mention_target
+    sender_row = session_by_id.get(from_sid) or {}
+    raw_replies = item.get("replies")
+    replies = (
+      [dict(r) for r in raw_replies if isinstance(r, dict)]
+      if isinstance(raw_replies, list)
+      else []
+    )
     entries.append(
       {
         "id": str(item.get("id") or f"b-{uuid.uuid4().hex[:6]}"),
         "session_id": from_sid,
+        "board_id": str(item.get("board_id") or sender_row.get("board_id") or from_sid),
+        "from_owner": bool(item.get("from_owner")),
+        "note_id": str(item.get("note_id") or ""),
         "to": resolved_to or "*",
-        "repo": str(item.get("repo") or ""),
+        "mention_target": mention_target,
+        "repo": str(item.get("repo") or sender_row.get("repo") or ""),
         "branch": str(item.get("branch") or f"arena/{from_sid}"),
         "at": str(item.get("at") or clip_stamp(now())),
         "tag": str(item.get("tag") or item_payload.get("tag") or ""),
-        "text": str(item.get("text") or item_payload.get("text") or ""),
+        "text": entry_text,
+        "seen_at": clip_stamp(item.get("seen_at")) if item.get("seen_at") else None,
+        "acknowledged_at": (
+          clip_stamp(item.get("acknowledged_at"))
+          if item.get("acknowledged_at")
+          else None
+        ),
+        "ack_type": (
+          str(item.get("ack_type") or "reply") if item.get("acknowledged_at") else None
+        ),
+        "ack_text": (
+          str(item.get("ack_text") or "") if item.get("ack_text") is not None else None
+        ),
+        "ack_edited_at": (
+          clip_stamp(item.get("ack_edited_at")) if item.get("ack_edited_at") else None
+        ),
+        "replies": replies,
         "payload": item_payload,
         "file": item.get("file") if isinstance(item.get("file"), dict) else None,
       }
@@ -8262,15 +8339,31 @@ class Store:
         seen_wake_set.update(str(x) for x in prev_ack if x)
       elif prev_ack:
         seen_wake_set.add(str(prev_ack))
-      seen_entry_ids = set()
+      entry_by_id = {}
       merged_entries = []
       for item in [*entries, *merged["entries"]]:
         row = dict(item)
         eid = str(row.get("id") or "")
-        if eid and eid in seen_entry_ids:
+        if eid and eid in entry_by_id:
+          prev_entry = entry_by_id[eid]
+          for field in (
+            "seen_at",
+            "acknowledged_at",
+            "ack_type",
+            "ack_text",
+            "ack_edited_at",
+          ):
+            if row.get(field) and not prev_entry.get(field):
+              prev_entry[field] = row[field]
+          if isinstance(row.get("replies"), list) and len(row["replies"]) > len(
+            prev_entry.get("replies") or []
+          ):
+            prev_entry["replies"] = row["replies"]
+            if row.get("ack_edited_at"):
+              prev_entry["ack_edited_at"] = row["ack_edited_at"]
           continue
         if eid:
-          seen_entry_ids.add(eid)
+          entry_by_id[eid] = row
         if isinstance(row.get("file"), dict) and "content" in row["file"]:
           row["file"] = stage_board_file(
             self.path.parent, row["session_id"], row["file"]
@@ -8567,32 +8660,95 @@ class Store:
             "type",
             "id",
             "session_id",
+            "board_id",
+            "from_owner",
+            "note_id",
+            "mention_target",
             "to",
             "repo",
             "branch",
             "at",
+            "seen_at",
+            "acknowledged_at",
+            "ack_type",
+            "ack_text",
+            "ack_edited_at",
+            "replies",
             "payload",
             "file",
           }
         }
+      entry_text = str(
+        payload.get("text") or body.get("text") or body.get("summary") or ""
+      )
+      if entry_text and "text" not in body and not body.get("tag"):
+        body["text"] = entry_text
       raw_to = str(payload.get("to") or "*")
       resolved_to = (
         "*"
         if raw_to == "*"
         else resolve_board_target(raw_to, sessions, allowed=allowed, main_sid=main_sid)
       )
+      mention_target = ""
+      raw_mention = str(payload.get("mention_target") or "").strip()
+      if raw_mention:
+        mention_target = resolve_board_target(
+          raw_mention, sessions, allowed=allowed, main_sid=main_sid
+        )
+      if not mention_target and entry_text:
+        for token in re.findall(r"(?:^|(?<=\s))@([A-Za-z0-9_-]{1,32})\b", entry_text):
+          cand = resolve_board_target(
+            token, sessions, allowed=allowed, main_sid=main_sid
+          )
+          if cand and cand in allowed and cand != sender:
+            mention_target = cand
+            break
+      if mention_target and resolved_to == "*":
+        resolved_to = mention_target
+      entry_id = str(payload.get("id") or f"b-{uuid.uuid4().hex[:6]}")
+      sender_row = next((r for r in sessions if r["session_id"] == sender), {})
+      from_owner = bool(payload.get("from_owner"))
       entries.append(
         {
-          "id": str(payload.get("id") or f"b-{uuid.uuid4().hex[:6]}"),
+          "id": entry_id,
           "session_id": sender,
+          "board_id": str(
+            payload.get("board_id") or sender_row.get("board_id") or sender
+          ),
+          "from_owner": from_owner,
+          "note_id": str(payload.get("note_id") or ""),
           "to": resolved_to or "*",
-          "repo": str(payload.get("repo") or state["repo"]),
+          "mention_target": mention_target,
+          "repo": str(payload.get("repo") or sender_row.get("repo") or state["repo"]),
           "branch": str(payload.get("branch") or f"arena/{sender}"),
           "at": clip_stamp(now()),
+          "tag": str(payload.get("tag") or body.get("tag") or ""),
+          "text": entry_text,
+          "seen_at": None,
+          "acknowledged_at": None,
+          "ack_type": None,
+          "ack_text": None,
+          "ack_edited_at": None,
+          "replies": [],
           "payload": body,
           "file": staged_file,
         }
       )
+      if mention_target and mention_target in allowed:
+        for row in sessions:
+          if row["session_id"] == mention_target:
+            row["polling"] = False
+            row["status"] = "active"
+        wakes[mention_target] = entry_id
+        ack_wakes.pop(mention_target, None)
+      elif from_owner and (resolved_to or "*") == "*":
+        for row in sessions:
+          target_sid = row["session_id"]
+          if target_sid in allowed and target_sid != sender:
+            row["polling"] = False
+            row["status"] = "active"
+            wakes[target_sid] = entry_id
+            ack_wakes.pop(target_sid, None)
     elif action_type == "wake":
       target = str(payload.get("target") or payload.get("session_id") or "").strip()
       stamp = f"{clip_stamp(now())}-{uuid.uuid4().hex[:6]}"
@@ -8625,6 +8781,7 @@ class Store:
     report_ops = report_ops[-MAX_BOARD_ENTRIES:]
     stored = {
       "version": 1,
+      "local_session_id": sid,
       "multi_repo": multi_repo,
       "removed_sessions": removed_sessions[-MAX_BOARD_ENTRIES:],
       "worker_ids": worker_ids,
@@ -10882,6 +11039,7 @@ class Store:
       reports = db.execute(
         f"SELECT count(*) FROM submissions WHERE {PENDING_SUBMISSIONS}"
       ).fetchone()[0]
+      board_mentions = len(pending_board_entries_for_db(db))
       # Unfinished tasks feed the rotation's task-count line.
       remaining = db.execute(
         "SELECT count(*) FROM tasks WHERE status <> 'finished'"
@@ -10894,7 +11052,7 @@ class Store:
       # A new user item resets the count. An idle poll clears it. Reading does not.
       polls = (
         0
-        if advance and not (notes + reports + uploads)
+        if advance and not (notes + reports + uploads + board_mentions)
         else meta_number(db, POLLS_SINCE_MESSAGE) + (1 if advance else 0)
       )
       blocked = bool(gate_pending_count(db)) and polls >= GATE_THRESHOLD
@@ -10909,7 +11067,12 @@ class Store:
         )
     counts = [
       f"{count} {type}{'s' if count != 1 else ''}"
-      for count, type in ((notes, "note"), (reports, "answer"), (uploads, "upload"))
+      for count, type in (
+        (notes, "note"),
+        (reports, "answer"),
+        (uploads, "upload"),
+        (board_mentions, "board post"),
+      )
       if count
     ]
     # The label keeps the pending tally apart from the call count, so a reader never takes
@@ -10985,6 +11148,22 @@ class Store:
           f"SELECT * FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at, seq"
         )
       ]
+      for b_entry in pending_board_entries_for_db(
+        db, session_id=board_session_id(workspace_branch(self.repository_root()))
+      ):
+        pending.append(
+          {
+            "id": str(b_entry.get("id") or ""),
+            "type": "board",
+            "session_id": str(b_entry.get("session_id") or ""),
+            "board_id": str(b_entry.get("board_id") or b_entry.get("session_id") or ""),
+            "text": str(b_entry.get("text") or ""),
+            "at": str(b_entry.get("at") or now()),
+            "seen_at": b_entry.get("seen_at"),
+            "acknowledged_at": b_entry.get("acknowledged_at"),
+            "ack_edited_at": b_entry.get("ack_edited_at"),
+          }
+        )
       notes = {}
       for table in ("notes", "submissions"):
         for row in db.execute(f"SELECT * FROM {table} ORDER BY at, seq"):
@@ -11040,7 +11219,32 @@ class Store:
           if cursor.rowcount:
             break
         else:
-          raise ValueError(f"Unknown note: {record_id}; no Seen receipts written")
+          b_row = db.execute(
+            "SELECT value FROM meta WHERE key = ?", (BOARD_STATE_META,)
+          ).fetchone()
+          b_raw = None
+          if b_row and b_row[0]:
+            try:
+              b_raw = json.loads(str(b_row[0]))
+            except Exception:
+              b_raw = None
+          matched_board = False
+          if isinstance(b_raw, dict) and isinstance(b_raw.get("entries"), list):
+            for entry in b_raw["entries"]:
+              if isinstance(entry, dict) and (
+                entry.get("id") == record_id
+                or str(entry.get("id") or "")[:6] == record_id
+              ):
+                entry["seen_at"] = entry.get("seen_at") or clip_stamp(stamp)
+                matched_board = True
+                break
+          if matched_board:
+            db.execute(
+              "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+              (BOARD_STATE_META, json.dumps(b_raw, ensure_ascii=False)),
+            )
+          else:
+            raise ValueError(f"Unknown note: {record_id}; no Seen receipts written")
 
   def mark_reports_agent_seen(self, report_ids):
     """Stamp the parent report when a read or an ack delivers its answer.
@@ -11141,11 +11345,24 @@ class Store:
     the way to answer either one.
     """
     with self.connect() as db:
-      rows = db.execute(
-        "SELECT id, at FROM notes WHERE acknowledged_at IS NULL AND blocking = 1"
-        f" UNION ALL SELECT id, at FROM submissions WHERE {PENDING_SUBMISSIONS}"
-        " ORDER BY at"
-      ).fetchall()
+      rows = [
+        {"id": row["id"], "at": str(row["at"] or "")}
+        for row in db.execute(
+          "SELECT id, at FROM notes WHERE acknowledged_at IS NULL AND blocking = 1"
+          f" UNION ALL SELECT id, at FROM submissions WHERE {PENDING_SUBMISSIONS}"
+          " ORDER BY at"
+        ).fetchall()
+      ]
+      for b_entry in pending_board_entries_for_db(
+        db, session_id=board_session_id(workspace_branch(self.repository_root()))
+      ):
+        rows.append(
+          {
+            "id": str(b_entry.get("id") or ""),
+            "at": str(b_entry.get("at") or ""),
+          }
+        )
+    rows.sort(key=lambda r: r["at"])
     if not rows:
       raise ValueError("No pending note or answer to acknowledge")
     if len(rows) > 1:
@@ -11172,7 +11389,18 @@ class Store:
           error = clause_ack_error(text, self.repository_root())
           if error:
             raise ValueError(error)
+      b_row = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (BOARD_STATE_META,)
+      ).fetchone()
+      b_raw = None
+      if b_row and b_row[0]:
+        try:
+          b_raw = json.loads(str(b_row[0]))
+        except Exception:
+          b_raw = None
+      board_dirty = False
       for record_id in ids:
+        matched_db = False
         for table in ("notes", "submissions"):
           cols = (
             "acknowledged_at, replies, quiet, blocking, type"
@@ -11214,9 +11442,54 @@ class Store:
               " WHERE id = (SELECT report_id FROM submissions WHERE id = ?)",
               (stamp, record_id),
             )
+          matched_db = True
           break
-        else:
+        if isinstance(b_raw, dict) and isinstance(b_raw.get("entries"), list):
+          for entry in b_raw["entries"]:
+            if not isinstance(entry, dict):
+              continue
+            eid = str(entry.get("id") or "")
+            nid = str(entry.get("note_id") or "")
+            if (
+              eid == record_id
+              or eid[:6] == record_id
+              or (nid and (nid == record_id or nid[:6] == record_id))
+            ):
+              if not entry.get("acknowledged_at"):
+                entry["acknowledged_at"] = clip_stamp(stamp)
+                entry["ack_type"] = "reply"
+                entry["ack_text"] = text
+                entry["seen_at"] = entry.get("seen_at") or clip_stamp(stamp)
+              else:
+                replies = (
+                  list(entry["replies"])
+                  if isinstance(entry.get("replies"), list)
+                  else []
+                )
+                replies.append({"type": "reply", "text": text, "at": clip_stamp(stamp)})
+                entry["replies"] = replies
+                entry["ack_edited_at"] = clip_stamp(stamp)
+              sender_sid = str(entry.get("session_id") or "")
+              local_sid = board_session_id(
+                b_raw.get("local_session_id")
+                or workspace_branch(self.repository_root())
+              )
+              if sender_sid and sender_sid != local_sid:
+                wakes = (
+                  dict(b_raw["wakes"]) if isinstance(b_raw.get("wakes"), dict) else {}
+                )
+                wakes[sender_sid] = f"{eid}-ack"
+                b_raw["wakes"] = wakes
+              board_dirty = True
+              matched_db = True
+              break
+        if not matched_db:
           raise ValueError(f"Unknown note: {record_id}; no receipts written")
+      if board_dirty and isinstance(b_raw, dict):
+        db.execute(
+          "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+          (BOARD_STATE_META, json.dumps(b_raw, ensure_ascii=False)),
+        )
       if not db.execute(
         f"SELECT 1 FROM notes WHERE {VIOLATION_NOTES} AND acknowledged_at IS NULL"
       ).fetchone():
@@ -12582,9 +12855,13 @@ def handler(store, reload_event=None):
           state = store.state()
           state["slash_commands"] = discover_slash_commands()
           try:
-            for item in state["notes"] + [
-              ack for report in state["reports"] for ack in report["acknowledgements"]
-            ]:
+            for item in (
+              state["notes"]
+              + [
+                ack for report in state["reports"] for ack in report["acknowledgements"]
+              ]
+              + ((state.get("board") or {}).get("entries") or [])
+            ):
               # No `breaks`: the log sets `white-space: pre-wrap`, so the newline the source carries is the line break.
               # A `<br>` would add a second break beside each source newline.
               if "text" in item:

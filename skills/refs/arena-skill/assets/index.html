@@ -23,7 +23,7 @@
         <span id="clock" class="muted" title="Local time">--:--</span>
         <button id="agent-interrupt" aria-pressed="false" aria-busy="false" class="icon-button" type="button" aria-label="Ask the agent to read files missing from context" title="Ask the agent to read files missing from context"><svg class="lucide lucide-flag" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"></path></svg></button>
         <button id="downloads-tab" aria-controls="downloads-panel" aria-selected="false" class="icon-button" type="button" aria-label="Downloads" title="Downloads"><svg class="lucide lucide-download" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg><span id="downloads-pip" role="img" aria-label="No downloads awaiting approval" title="No downloads awaiting approval" hidden></span></button>
-        <button id="board-tab" aria-controls="board-panel" aria-pressed="false" class="icon-button" type="button" aria-label="Board" title="Board"><svg class="lucide lucide-network" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><rect x="16" y="16" width="6" height="6" rx="1"></rect><rect x="2" y="16" width="6" height="6" rx="1"></rect><rect x="9" y="2" width="6" height="6" rx="1"></rect><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"></path><path d="M12 12V8"></path></svg><span id="board-pip" role="img" aria-label="No unread board posts" title="No unread board posts" hidden></span></button>
+        <button id="board-tab" aria-controls="board-panel" aria-pressed="false" data-board-role="inactive" class="icon-button" type="button" aria-label="Board" title="Board"><svg class="lucide lucide-network" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><rect x="16" y="16" width="6" height="6" rx="1"></rect><rect x="2" y="16" width="6" height="6" rx="1"></rect><rect x="9" y="2" width="6" height="6" rx="1"></rect><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"></path><path d="M12 12V8"></path></svg></button>
         <button id="theme" class="icon-button" type="button" aria-label="Switch to light mode" title="Switch to light mode"><svg class="lucide lucide-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></button>
         <button id="copy-state" class="icon-button" type="button" aria-label="Copy the log, answers and tasks to the clipboard as NDJSON" title="Copy the log, answers and tasks to the clipboard as NDJSON"><svg class="lucide lucide-copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button>
       </span>
@@ -164,17 +164,12 @@
             <p id="board-status" class="muted" role="status">Allowlist opt-in controls board access. Only the Main session can run git push or update PRs.</p>
           </div>
           <span class="row tight">
-            <button id="board-wake-polling" type="button" disabled>Wake polling (0)</button>
             <button id="board-clear" type="button">Clear board</button>
           </span>
         </div>
         <section class="board-section" aria-labelledby="board-sessions-title">
           <h3 id="board-sessions-title">Sessions · allowlist &amp; Main session role</h3>
           <div id="board-sessions" class="board-list"></div>
-        </section>
-        <section class="board-section" aria-labelledby="board-feed-title">
-          <h3 id="board-feed-title">Shared feed &amp; file transfers · 512 KB per-file limit</h3>
-          <div id="board-entries" class="board-list"></div>
         </section>
       </div>
     </section>

@@ -5735,5 +5735,13 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(styleSource, /\.report-submit-row\s*\{\s*display:\s*flex;\s*align-items:\s*flex-start;/);
   assert.match(styleSource, /\.report-submit-float\s*\{[^}]*right:\s*max\(5vw,\s*calc\(\(100vw\s*-\s*900px\)\s*\/\s*2\)\)/);
   assert.match(htmlSource, /<div class="report-submit-row">\s*<button id="report-submit"/);
+  assert.doesNotMatch(htmlSource, /id="board-pip"/);
+  assert.doesNotMatch(htmlSource, /id="board-wake-polling"/);
+  assert.doesNotMatch(htmlSource, /id="board-entries"/);
+  assert.match(styleSource, /#board-tab\[data-board-role="main"\]\s*\{\s*color:\s*var\(--good\);\s*\}/);
+  assert.match(styleSource, /#board-tab\[data-board-role="worker"\]\s*\{\s*color:\s*var\(--accent\);\s*\}/);
+  assert.match(styleSource, /\.board-sender\b/);
+  assert.match(appSource, /function\s+combinedHistoryItems\(/);
+  assert.match(appSource, /from_owner:\s*true/);
 });
 

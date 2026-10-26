@@ -1072,10 +1072,50 @@ function linkReferences(html, references) {
     return `<a class="ack-reference" href="#${panel}" data-reference-type="${type}" data-reference-id="${id}"><code>${id}</code></a>`;
   });
 }
+function combinedHistoryItems(notes, board = getState()?.board) {
+  const baseNotes = Array.isArray(notes) ? notes : [];
+  const entriesRaw = Array.isArray(board?.entries) ? board.entries : [];
+  if (!entriesRaw.length) return baseNotes;
+  const noteIds = new Set(baseNotes.map(n => n.id));
+  const allowed = new Set(Array.isArray(board?.allowed_sessions) ? board.allowed_sessions : []);
+  const sessions = Array.isArray(board?.sessions) ? board.sessions : [];
+  const boardBySid = new Map(sessions.map(row => [row.session_id, row]));
+  const currentRepo = String(board?.repo || getState()?.repo || '').trim().split('/').pop();
+  const boardItems = [];
+  for (const entry of entriesRaw) {
+    if (!entry || !entry.id) continue;
+    if (noteIds.has(entry.id) || (entry.note_id && noteIds.has(entry.note_id))) continue;
+    if (allowed.size && entry.session_id && !allowed.has(entry.session_id)) continue;
+    const senderRow = boardBySid.get(entry.session_id);
+    const entryRepo = String(entry.repo || senderRow?.repo || '').trim().split('/').pop();
+    if (!board?.multi_repo && currentRepo && entryRepo && entryRepo !== currentRepo) continue;
+    const rawSenderId = entry.board_id || senderRow?.board_id || entry.session_id || '';
+    const senderLabel = entry.from_owner
+      ? ''
+      : displayBoardId(rawSenderId, board, entryRepo || currentRepo);
+    const rawText = String(
+      entry.text
+      || entry.payload?.text
+      || entry.payload?.summary
+      || (entry.payload && Object.keys(entry.payload).length ? JSON.stringify(entry.payload) : '')
+      || ''
+    );
+    boardItems.push({
+      ...entry,
+      is_board: true,
+      board_sender: senderLabel,
+      text: rawText,
+      html: entry.html !== undefined ? entry.html : renderMessageMarkdown(rawText),
+      ...(entry.file?.name ? { attachment_name: entry.file.name } : {}),
+    });
+  }
+  if (!boardItems.length) return baseNotes;
+  return [...baseNotes, ...boardItems].sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
+}
 function revealMessage(id) {
   const row = messageNodes.get(id);
   if (!row || $('#history').contains(row)) return row;
-  const notes = (getState()?.notes || []).filter(item => !item.quiet);
+  const notes = combinedHistoryItems((getState()?.notes || []).filter(item => !item.quiet));
   const index = notes.findIndex(item => item.id === id);
   if (index < 0) return;
   historyShown = Math.max(historyShown, notes.length - index);
@@ -1101,7 +1141,8 @@ $('#log-edited').addEventListener('click', async () => {
     answer.scrollIntoView({block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
   });
 });
-function showHistory(notes) {
+function showHistory(rawNotes) {
+  const notes = combinedHistoryItems(rawNotes);
   const signature = JSON.stringify(notes);
   if (signature === historySignature) return;
   historySignature = signature;
@@ -1119,12 +1160,21 @@ function showHistory(notes) {
       node.append(text, document.createElement('div'), document.createElement('div'));
       messageNodes.set(item.id, node);
     }
+    if (item.is_board) node.dataset.board = 'true';
+    else delete node.dataset.board;
     const text = node.children[0];
     text.className = item.html === undefined ? 'raw-message' : 'message-text';
-    if (item.html === undefined) text.textContent = item.text.replace(/\\n/g, '\n');
-    else {
+    if (item.html === undefined) {
+      text.textContent = item.text.replace(/\\n/g, '\n');
+    } else {
       const withHeaders = typeof ensureCodeBlockHeaders === 'function' ? ensureCodeBlockHeaders(item.html) : item.html;
       text.innerHTML = withHeaders.includes('language-mermaid') ? renderMermaidBlocksSync(withHeaders) : withHeaders;
+    }
+    if (item.board_sender) {
+      const senderEl = document.createElement('div');
+      senderEl.className = 'board-sender';
+      senderEl.textContent = item.board_sender;
+      text.prepend(senderEl);
     }
     const receipt = node.children[2];
     receipt.className = 'receipt';
@@ -1251,7 +1301,7 @@ function renderHistoryWindow(notes) {
 
 function loadOlderMessages() {
   const state = getState();
-  const notes = ((state && state.notes) || []).filter(item => !item.quiet);
+  const notes = combinedHistoryItems(((state && state.notes) || []).filter(item => !item.quiet));
   if (notes.length <= historyShown) return;
   const history = $('#history');
   const before = history.scrollHeight;
@@ -1667,6 +1717,17 @@ $('#form').addEventListener('submit', async event => {
     pending = null;
     save('pending', 'null');
     clearStagedFiles();
+    const activeBoard = getState()?.board;
+    if (Array.isArray(activeBoard?.allowed_sessions) && activeBoard.allowed_sessions.length > 0) {
+      void sendBoardAction({
+        action: 'post',
+        id: result.id,
+        note_id: result.id,
+        from_owner: true,
+        to: '*',
+        text: result.text,
+      });
+    }
     refreshState();
   } catch (error) {
     if (draftVersion === submittedVersion && !note.value) {
@@ -3974,6 +4035,7 @@ async function sendBoardAction(action, forwardToParent = true) {
         }
       }
       renderBoard();
+      showHistory(((lastState && lastState.notes) || []).filter(item => !item.quiet));
     }
     if (forwardToParent && typeof window !== 'undefined' && window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
       try {
@@ -3997,31 +4059,32 @@ function displayBoardId(rawId, board = getState()?.board, rowRepo = '') {
   }
   return text;
 }
+function formatBoardEntryStamp(entry, stamp) {
+  stamp.textContent = entry.at ? time(entry.at) : '';
+  if (entry.at) stamp.title = clockTime(entry.at);
+}
 function renderBoard() {
   const board = getState()?.board;
+  const boardTab = $('#board-tab');
   const sessionsEl = $('#board-sessions');
-  const entriesEl = $('#board-entries');
-  const pip = $('#board-pip');
-  const wakePollingBtn = $('#board-wake-polling');
-  if (!sessionsEl || !entriesEl) return;
-  const entries = Array.isArray(board?.entries) ? board.entries : [];
-  if (pip) {
-    pip.hidden = entries.length === 0;
-    const pipText = entries.length ? `${entries.length} board post${entries.length === 1 ? '' : 's'}` : 'No unread board posts';
-    pip.setAttribute('aria-label', pipText);
-    pip.title = pipText;
-  }
   const sessions = Array.isArray(board?.sessions) ? board.sessions : [];
   const allowed = new Set(Array.isArray(board?.allowed_sessions) ? board.allowed_sessions : []);
   const mainSid = board?.main_session_id || '';
-  const pollingAllowed = sessions.filter(row => allowed.has(row.session_id) && row.polling);
-  if (wakePollingBtn) {
-    wakePollingBtn.textContent = `Wake polling (${pollingAllowed.length})`;
-    wakePollingBtn.disabled = pollingAllowed.length === 0;
+  const selfSid = board?.session_id || '';
+  const isBoardActive = Boolean(selfSid && allowed.has(selfSid));
+  const isMainRole = isBoardActive && (board?.board_role === 'main' || !mainSid || mainSid === selfSid);
+  if (boardTab) {
+    boardTab.dataset.boardRole = !isBoardActive ? 'inactive' : (isMainRole ? 'main' : 'worker');
   }
-  const boardIdBySid = new Map(sessions.map(row => [row.session_id, displayBoardId(row.board_id || row.session_id, board, row.repo)]));
+  if (!sessionsEl) return;
+  const currentRepo = String(board?.repo || getState()?.repo || '').trim().split('/').pop();
+  const visibleSessions = sessions.filter(row => {
+    if (board?.multi_repo || !currentRepo) return true;
+    const rowRepo = String(row.repo || currentRepo).trim().split('/').pop();
+    return !rowRepo || rowRepo === currentRepo;
+  });
   sessionsEl.replaceChildren();
-  for (const row of sessions) {
+  for (const row of visibleSessions) {
     const item = document.createElement('div');
     item.className = 'board-row';
     const info = document.createElement('div');
@@ -4032,7 +4095,7 @@ function renderBoard() {
     const badge = document.createElement('span');
     badge.className = 'board-badge';
     const isAllowed = allowed.has(row.session_id);
-    const isMain = isAllowed && (!mainSid || mainSid === row.session_id);
+    const isMain = isAllowed && (row.role ? row.role === 'main' : (!mainSid || mainSid === row.session_id));
     badge.dataset.role = isMain ? 'main' : (isAllowed ? 'worker' : 'blocked');
     badge.textContent = isMain ? 'Main · Push & PR' : (isAllowed ? 'Worker · Push/PR off' : 'Not on allowlist');
     const meta = document.createElement('span');
@@ -4042,14 +4105,7 @@ function renderBoard() {
     const actions = document.createElement('div');
     actions.className = 'row tight';
     if (isAllowed) {
-      if (row.polling) {
-        const wakeBtn = document.createElement('button');
-        wakeBtn.type = 'button';
-        wakeBtn.textContent = 'Wake';
-        wakeBtn.addEventListener('click', () => { void sendBoardAction({ action: 'wake', target: row.session_id }); });
-        actions.append(wakeBtn);
-      }
-      if (mainSid !== row.session_id) {
+      if (!isMain) {
         const setMainBtn = document.createElement('button');
         setMainBtn.type = 'button';
         setMainBtn.textContent = 'Set Main';
@@ -4075,50 +4131,8 @@ function renderBoard() {
     item.append(info, actions);
     sessionsEl.append(item);
   }
-  entriesEl.replaceChildren();
-  if (!entries.length) {
-    const empty = document.createElement('p');
-    empty.className = 'muted';
-    empty.textContent = 'No shared board entries yet.';
-    entriesEl.append(empty);
-    return;
-  }
-  for (const entry of entries.slice().reverse()) {
-    const card = document.createElement('div');
-    card.className = 'board-entry';
-    const head = document.createElement('div');
-    head.className = 'row';
-    const route = document.createElement('span');
-    route.className = 'row tight';
-    const fromCode = document.createElement('code');
-    fromCode.textContent = boardIdBySid.get(entry.session_id) || entry.session_id;
-    fromCode.title = entry.session_id;
-    const toSpan = document.createElement('span');
-    toSpan.className = 'muted';
-    const toLabel = (!entry.to || entry.to === '*') ? '*' : (boardIdBySid.get(entry.to) || entry.to);
-    toSpan.textContent = `to ${toLabel}`;
-    route.append(fromCode, toSpan);
-    const stamp = document.createElement('span');
-    stamp.className = 'muted';
-    stamp.textContent = entry.at ? time(entry.at) : '';
-    if (entry.at) stamp.title = clockTime(entry.at);
-    head.append(route, stamp);
-    card.append(head);
-    if (entry.file && typeof entry.file === 'object') {
-      const fileLine = document.createElement('div');
-      fileLine.className = 'muted';
-      const kb = ((Number(entry.file.size) || 0) / 1024).toFixed(1);
-      fileLine.textContent = `File: ${entry.file.name} (${kb} KB / 512 KB · sha256 ${(entry.file.sha256 || '').slice(0, 8)})`;
-      card.append(fileLine);
-    }
-    const pre = document.createElement('pre');
-    pre.textContent = JSON.stringify(entry.payload || {}, null, 2);
-    card.append(pre);
-    entriesEl.append(card);
-  }
 }
 $('#board-tab')?.addEventListener('click', () => { showBoardPanel(); });
-$('#board-wake-polling')?.addEventListener('click', () => { void sendBoardAction({ action: 'wake', target: 'all-polling' }); });
 $('#board-clear')?.addEventListener('click', () => { void sendBoardAction({ action: 'clear' }); });
 // Highlight a task or answer reached by a jump. Clear the mark after a short delay or a tab change.
 // Keep the row, its data, and its order unchanged.

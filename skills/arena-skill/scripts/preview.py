@@ -152,7 +152,16 @@ def clear_skip_poll(db):db.execute('DELETE FROM meta WHERE key = ?',(SKIP_POLL_M
 def reset_poll_count(db):
 	if gate_pending_count(db)==1:db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
 def meta_number(db,key):row=db.execute('SELECT value FROM meta WHERE key = ?',(key,)).fetchone();value=str(row[0])if row else'';return int(value)if value.isdigit()else 0
-def gate_pending_count(db):return db.execute(f"SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1) + (SELECT count(*) FROM submissions WHERE {PENDING_SUBMISSIONS})").fetchone()[0]
+def pending_board_entries_for_db(db,session_id=''):
+	row=db.execute('SELECT value FROM meta WHERE key = ?',(BOARD_STATE_META,)).fetchone()
+	if not row or not row[0]:return[]
+	try:raw=json.loads(str(row[0]))
+	except Exception:return[]
+	if not isinstance(raw,dict):return[]
+	sid=board_session_id(session_id or raw.get('local_session_id')or workspace_branch())
+	if not sid:return[]
+	norm=normalize_board_state(raw,session_id=sid);return[entry for entry in norm.get('entries')or[]if isinstance(entry,dict)and entry.get('mention_target')==sid and not entry.get('acknowledged_at')]
+def gate_pending_count(db):base=db.execute(f"SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1) + (SELECT count(*) FROM submissions WHERE {PENDING_SUBMISSIONS})").fetchone()[0];return base+len(pending_board_entries_for_db(db))
 def pr_state_warning(line):
 	def payload(text):
 		if text.startswith('@'):
@@ -958,8 +967,9 @@ def attachment_line(record):
 	if not record.get('present'):return line+' (missing)'
 	size=record.get('size');return line+(f" ({format_size(size)})"if isinstance(size,int)else'')
 def format_pending_record(item):
-	type=item.get('type')or'note';display_type='answer'if type=='report'else type;header='`'+str(item.get('id',''))[:6]+'`'
+	type=item.get('type')or'note';display_type='answer'if type=='report'else type;raw_id=str(item.get('id',''));header='`'+(raw_id if type=='board'else raw_id[:6])+'`'
 	if display_type!='note':header+=f" {display_type}"
+	if type=='board'and item.get('board_id'):header+=f" ({item['board_id']})"
 	if item.get('quiet')and not item.get('blocking'):header+=' quiet (no ack required)'
 	if item.get('report_id'):header+=f" report {item['report_id']}"
 	lines=[header];text=item.get('text')or''
@@ -2201,7 +2211,7 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 				used.add(wid)
 			row['worker_id']=wid;row['board_id']=format_board_role_id('worker',repo=row_repo,worker_id=wid,multi_repo=multi_repo,fallback_sid=row['session_id'])
 		else:row['worker_id']='';row['board_id']=row['session_id']
-	entries=[]
+	session_by_id={row['session_id']:row for row in sessions};entries=[]
 	for item in data.get('entries')[-MAX_BOARD_ENTRIES:]if isinstance(data.get('entries'),list)else[]:
 		if not isinstance(item,dict):continue
 		from_sid=resolve_board_target(item.get('session_id')or item.get('branch')or'',sessions,allowed=allowed,main_sid=main_sid)
@@ -2209,7 +2219,14 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 		raw_to=str(item.get('to')or'*');resolved_to='*'if raw_to=='*'else resolve_board_target(raw_to,sessions,allowed=allowed,main_sid=main_sid);item_payload=dict(item.get('payload'))if isinstance(item.get('payload'),dict)else{}
 		for k in('tag','text'):
 			if item.get(k)and k not in item_payload:item_payload[k]=str(item.get(k))
-		entries.append({'id':str(item.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':from_sid,'to':resolved_to or'*','repo':str(item.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'tag':str(item.get('tag')or item_payload.get('tag')or''),'text':str(item.get('text')or item_payload.get('text')or''),'payload':item_payload,'file':item.get('file')if isinstance(item.get('file'),dict)else None})
+		entry_text=str(item.get('text')or item_payload.get('text')or item_payload.get('summary')or'');mention_target='';raw_mention=str(item.get('mention_target')or'').strip()
+		if raw_mention:mention_target=resolve_board_target(raw_mention,sessions,allowed=allowed,main_sid=main_sid)
+		if not mention_target and entry_text:
+			for token in re.findall('(?:^|(?<=\\s))@([A-Za-z0-9_-]{1,32})\\b',entry_text):
+				cand=resolve_board_target(token,sessions,allowed=allowed,main_sid=main_sid)
+				if cand and cand in allowed and cand!=from_sid:mention_target=cand;break
+		if mention_target and resolved_to=='*':resolved_to=mention_target
+		sender_row=session_by_id.get(from_sid)or{};raw_replies=item.get('replies');replies=[dict(r)for r in raw_replies if isinstance(r,dict)]if isinstance(raw_replies,list)else[];entries.append({'id':str(item.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':from_sid,'board_id':str(item.get('board_id')or sender_row.get('board_id')or from_sid),'from_owner':bool(item.get('from_owner')),'note_id':str(item.get('note_id')or''),'to':resolved_to or'*','mention_target':mention_target,'repo':str(item.get('repo')or sender_row.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'tag':str(item.get('tag')or item_payload.get('tag')or''),'text':entry_text,'seen_at':clip_stamp(item.get('seen_at'))if item.get('seen_at')else None,'acknowledged_at':clip_stamp(item.get('acknowledged_at'))if item.get('acknowledged_at')else None,'ack_type':str(item.get('ack_type')or'reply')if item.get('acknowledged_at')else None,'ack_text':str(item.get('ack_text')or'')if item.get('ack_text')is not None else None,'ack_edited_at':clip_stamp(item.get('ack_edited_at'))if item.get('ack_edited_at')else None,'replies':replies,'payload':item_payload,'file':item.get('file')if isinstance(item.get('file'),dict)else None})
 	self_row=next((r for r in sessions if r['session_id']==sid),None)if sid else None;is_main=self_row['role']=='main'if self_row and self_row.get('allowed')else not main_sid or main_sid==sid;self_role='main'if is_main else'worker';self_wid=(self_row['worker_id']if self_row and self_row.get('worker_id')else worker_ids.get(sid)or default_worker_id(sid,str(repo or'')))if self_role=='worker'and sid else'';self_board_id=self_row['board_id']if self_row and self_row.get('board_id')and self_row.get('allowed')else format_board_role_id(self_role,repo=str(repo or''),worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid)if sid else'';return{'version':1,'session_id':sid,'board_id':self_board_id,'worker_id':self_wid,'multi_repo':multi_repo,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'repo':str(repo or''),'branch':str(branch or''),'removed_sessions':removed_sessions,'allowed_sessions':allowed,'main_session_id':main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
 def board_main_session_warning(state_dir,command):
 	if not isinstance(command,str)or not command.strip():return None
@@ -2821,11 +2838,18 @@ class Store:
 			sessions=list(by_sid.values());existing_entry_ids={str(item.get('id')or'')for item in entries if item.get('id')};seen_wakes=ack_wakes.get(f"{sid}:history");seen_wake_set={str(x)for x in seen_wakes if x}if isinstance(seen_wakes,list)else set();prev_ack=ack_wakes.get(sid)
 			if isinstance(prev_ack,list):seen_wake_set.update(str(x)for x in prev_ack if x)
 			elif prev_ack:seen_wake_set.add(str(prev_ack))
-			seen_entry_ids=set();merged_entries=[]
+			entry_by_id={};merged_entries=[]
 			for item in[*entries,*merged['entries']]:
 				row=dict(item);eid=str(row.get('id')or'')
-				if eid and eid in seen_entry_ids:continue
-				if eid:seen_entry_ids.add(eid)
+				if eid and eid in entry_by_id:
+					prev_entry=entry_by_id[eid]
+					for field in('seen_at','acknowledged_at','ack_type','ack_text','ack_edited_at'):
+						if row.get(field)and not prev_entry.get(field):prev_entry[field]=row[field]
+					if isinstance(row.get('replies'),list)and len(row['replies'])>len(prev_entry.get('replies')or[]):
+						prev_entry['replies']=row['replies']
+						if row.get('ack_edited_at'):prev_entry['ack_edited_at']=row['ack_edited_at']
+					continue
+				if eid:entry_by_id[eid]=row
 				if isinstance(row.get('file'),dict)and'content'in row['file']:row['file']=stage_board_file(self.path.parent,row['session_id'],row['file'])
 				merged_entries.append(row)
 				if eid and eid not in existing_entry_ids and row.get('session_id')!=sid and row.get('to')in('*',sid,'',None)and sid in allowed and eid not in seen_wake_set:wakes[sid]=eid
@@ -2911,8 +2935,25 @@ class Store:
 			if payload.get('file')is not None:staged_file=stage_board_file(self.path.parent,sender,payload.get('file'))
 			body=payload.get('payload')
 			if not isinstance(body,dict):body={'text':str(body)}if body is not None else{}
-			if not body:body={k:v for(k,v)in payload.items()if k not in{'action','type','id','session_id','to','repo','branch','at','payload','file'}}
-			raw_to=str(payload.get('to')or'*');resolved_to='*'if raw_to=='*'else resolve_board_target(raw_to,sessions,allowed=allowed,main_sid=main_sid);entries.append({'id':str(payload.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':sender,'to':resolved_to or'*','repo':str(payload.get('repo')or state['repo']),'branch':str(payload.get('branch')or f"arena/{sender}"),'at':clip_stamp(now()),'payload':body,'file':staged_file})
+			if not body:body={k:v for(k,v)in payload.items()if k not in{'action','type','id','session_id','board_id','from_owner','note_id','mention_target','to','repo','branch','at','seen_at','acknowledged_at','ack_type','ack_text','ack_edited_at','replies','payload','file'}}
+			entry_text=str(payload.get('text')or body.get('text')or body.get('summary')or'')
+			if entry_text and'text'not in body and not body.get('tag'):body['text']=entry_text
+			raw_to=str(payload.get('to')or'*');resolved_to='*'if raw_to=='*'else resolve_board_target(raw_to,sessions,allowed=allowed,main_sid=main_sid);mention_target='';raw_mention=str(payload.get('mention_target')or'').strip()
+			if raw_mention:mention_target=resolve_board_target(raw_mention,sessions,allowed=allowed,main_sid=main_sid)
+			if not mention_target and entry_text:
+				for token in re.findall('(?:^|(?<=\\s))@([A-Za-z0-9_-]{1,32})\\b',entry_text):
+					cand=resolve_board_target(token,sessions,allowed=allowed,main_sid=main_sid)
+					if cand and cand in allowed and cand!=sender:mention_target=cand;break
+			if mention_target and resolved_to=='*':resolved_to=mention_target
+			entry_id=str(payload.get('id')or f"b-{uuid.uuid4().hex[:6]}");sender_row=next((r for r in sessions if r['session_id']==sender),{});from_owner=bool(payload.get('from_owner'));entries.append({'id':entry_id,'session_id':sender,'board_id':str(payload.get('board_id')or sender_row.get('board_id')or sender),'from_owner':from_owner,'note_id':str(payload.get('note_id')or''),'to':resolved_to or'*','mention_target':mention_target,'repo':str(payload.get('repo')or sender_row.get('repo')or state['repo']),'branch':str(payload.get('branch')or f"arena/{sender}"),'at':clip_stamp(now()),'tag':str(payload.get('tag')or body.get('tag')or''),'text':entry_text,'seen_at':None,'acknowledged_at':None,'ack_type':None,'ack_text':None,'ack_edited_at':None,'replies':[],'payload':body,'file':staged_file})
+			if mention_target and mention_target in allowed:
+				for row in sessions:
+					if row['session_id']==mention_target:row['polling']=False;row['status']='active'
+				wakes[mention_target]=entry_id;ack_wakes.pop(mention_target,None)
+			elif from_owner and(resolved_to or'*')=='*':
+				for row in sessions:
+					target_sid=row['session_id']
+					if target_sid in allowed and target_sid!=sender:row['polling']=False;row['status']='active';wakes[target_sid]=entry_id;ack_wakes.pop(target_sid,None)
 		elif action_type=='wake':
 			target=str(payload.get('target')or payload.get('session_id')or'').strip();stamp=f"{clip_stamp(now())}-{uuid.uuid4().hex[:6]}"
 			if target=='all-polling':
@@ -2926,7 +2967,7 @@ class Store:
 					if norm_target in allowed:wakes[norm_target]=stamp;ack_wakes.pop(norm_target,None)
 		elif action_type=='clear':entries=[]
 		else:raise ValueError(f"Unknown board action: {action_type}")
-		entries=entries[-MAX_BOARD_ENTRIES:];task_ops=task_ops[-MAX_BOARD_ENTRIES:];report_ops=report_ops[-MAX_BOARD_ENTRIES:];stored={'version':1,'multi_repo':multi_repo,'removed_sessions':removed_sessions[-MAX_BOARD_ENTRIES:],'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
+		entries=entries[-MAX_BOARD_ENTRIES:];task_ops=task_ops[-MAX_BOARD_ENTRIES:];report_ops=report_ops[-MAX_BOARD_ENTRIES:];stored={'version':1,'local_session_id':sid,'multi_repo':multi_repo,'removed_sessions':removed_sessions[-MAX_BOARD_ENTRIES:],'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
 		while len(encoded.encode('utf-8'))>MAX_BOARD_BYTES and entries:entries.pop(0);stored['entries']=entries;encoded=json.dumps(stored,ensure_ascii=False)
 		if len(encoded.encode('utf-8'))>MAX_BOARD_BYTES:raise ValueError('Board storage exceeds 2 MB limit')
 		if encoded!=raw_text:
@@ -3631,10 +3672,10 @@ class Store:
 		order_notice=False
 		with closing(self.connect())as db,db:
 			if advance and meta_number(db,TASK_ORDER_PENDING_META):order_notice=True;db.execute('DELETE FROM meta WHERE key = ?',(TASK_ORDER_PENDING_META,))
-			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL AND blocking = 1').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1').fetchone()[0]-uploads;reports=db.execute(f"SELECT count(*) FROM submissions WHERE {PENDING_SUBMISSIONS}").fetchone()[0];remaining=db.execute("SELECT count(*) FROM tasks WHERE status <> 'finished'").fetchone()[0];published=db.execute('SELECT count(*) FROM reports WHERE published_at IS NOT NULL').fetchone()[0];stale=self.stale_report_ids(db)if published>=STALE_REPORT_THRESHOLD else[];cursor=meta_number(db,REMINDER_CURSOR);polls=0 if advance and not notes+reports+uploads else meta_number(db,POLLS_SINCE_MESSAGE)+(1 if advance else 0);blocked=bool(gate_pending_count(db))and polls>=GATE_THRESHOLD
+			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL AND blocking = 1').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1').fetchone()[0]-uploads;reports=db.execute(f"SELECT count(*) FROM submissions WHERE {PENDING_SUBMISSIONS}").fetchone()[0];board_mentions=len(pending_board_entries_for_db(db));remaining=db.execute("SELECT count(*) FROM tasks WHERE status <> 'finished'").fetchone()[0];published=db.execute('SELECT count(*) FROM reports WHERE published_at IS NOT NULL').fetchone()[0];stale=self.stale_report_ids(db)if published>=STALE_REPORT_THRESHOLD else[];cursor=meta_number(db,REMINDER_CURSOR);polls=0 if advance and not notes+reports+uploads+board_mentions else meta_number(db,POLLS_SINCE_MESSAGE)+(1 if advance else 0);blocked=bool(gate_pending_count(db))and polls>=GATE_THRESHOLD
 			if routine:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMINDER_CURSOR,str(cursor+1)))
 			if advance:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(POLLS_SINCE_MESSAGE,str(polls)))
-		counts=[f"{count} {type}{'s'if count!=1 else''}"for(count,type)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[]
+		counts=[f"{count} {type}{'s'if count!=1 else''}"for(count,type)in((notes,'note'),(reports,'answer'),(uploads,'upload'),(board_mentions,'board post'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[]
 		if blocked:head=['blocked']
 		elif polls and counts:
 			if polls>GATE_THRESHOLD//2:head=[f"bash blocked in {GATE_THRESHOLD-polls}"]
@@ -3654,7 +3695,9 @@ class Store:
 	def read(self,include_quiet=True):
 		quiet_filter=' AND (quiet = 0 OR blocking = 1 OR seen_at IS NULL)'if include_quiet else" AND (quiet = 0 OR (type IN ('state-backup', 'survey') AND blocking = 1))"
 		with self.transaction(autosave=False)as db:
-			pending=[message_row(row)|{'type':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'type':'report'}for row in db.execute(f"SELECT * FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at, seq")];notes={}
+			pending=[message_row(row)|{'type':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'type':'report'}for row in db.execute(f"SELECT * FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at, seq")]
+			for b_entry in pending_board_entries_for_db(db,session_id=board_session_id(workspace_branch(self.repository_root()))):pending.append({'id':str(b_entry.get('id')or''),'type':'board','session_id':str(b_entry.get('session_id')or''),'board_id':str(b_entry.get('board_id')or b_entry.get('session_id')or''),'text':str(b_entry.get('text')or''),'at':str(b_entry.get('at')or now()),'seen_at':b_entry.get('seen_at'),'acknowledged_at':b_entry.get('acknowledged_at'),'ack_edited_at':b_entry.get('ack_edited_at')})
+			notes={}
 			for table in('notes','submissions'):
 				for row in db.execute(f"SELECT * FROM {table} ORDER BY at, seq"):record=message_row(row);notes[record['id']]=record
 			for row in db.execute('SELECT id, source FROM reports'):notes[row['id']]=dict(row)|{'type':'report','text':''}
@@ -3676,7 +3719,17 @@ class Store:
 				for table in('notes','submissions'):
 					cursor=db.execute(f"UPDATE {table} SET seen_at = COALESCE(seen_at, ?) WHERE id = ?",(stamp,record_id))
 					if cursor.rowcount:break
-				else:raise ValueError(f"Unknown note: {record_id}; no Seen receipts written")
+				else:
+					b_row=db.execute('SELECT value FROM meta WHERE key = ?',(BOARD_STATE_META,)).fetchone();b_raw=None
+					if b_row and b_row[0]:
+						try:b_raw=json.loads(str(b_row[0]))
+						except Exception:b_raw=None
+					matched_board=False
+					if isinstance(b_raw,dict)and isinstance(b_raw.get('entries'),list):
+						for entry in b_raw['entries']:
+							if isinstance(entry,dict)and(entry.get('id')==record_id or str(entry.get('id')or'')[:6]==record_id):entry['seen_at']=entry.get('seen_at')or clip_stamp(stamp);matched_board=True;break
+					if matched_board:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,json.dumps(b_raw,ensure_ascii=False)))
+					else:raise ValueError(f"Unknown note: {record_id}; no Seen receipts written")
 	def mark_reports_agent_seen(self,report_ids):
 		stamp=now()
 		with self.transaction()as db:
@@ -3715,7 +3768,10 @@ class Store:
 					return
 		raise ValueError(f"Unknown note: {record_id}; no task marker written")
 	def pending_ack(self):
-		with self.connect()as db:rows=db.execute(f"SELECT id, at FROM notes WHERE acknowledged_at IS NULL AND blocking = 1 UNION ALL SELECT id, at FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at").fetchall()
+		with self.connect()as db:
+			rows=[{'id':row['id'],'at':str(row['at']or'')}for row in db.execute(f"SELECT id, at FROM notes WHERE acknowledged_at IS NULL AND blocking = 1 UNION ALL SELECT id, at FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at").fetchall()]
+			for b_entry in pending_board_entries_for_db(db,session_id=board_session_id(workspace_branch(self.repository_root()))):rows.append({'id':str(b_entry.get('id')or''),'at':str(b_entry.get('at')or'')})
+		rows.sort(key=lambda r:r['at'])
 		if not rows:raise ValueError('No pending note or answer to acknowledge')
 		if len(rows)>1:listed=', '.join(row['id']for row in rows);raise ValueError(f"{len(rows)} items are pending: {listed}. Name the ID to answer one")
 		return rows[0]['id']
@@ -3728,7 +3784,13 @@ class Store:
 				if row is not None:
 					error=clause_ack_error(text,self.repository_root())
 					if error:raise ValueError(error)
+			b_row=db.execute('SELECT value FROM meta WHERE key = ?',(BOARD_STATE_META,)).fetchone();b_raw=None
+			if b_row and b_row[0]:
+				try:b_raw=json.loads(str(b_row[0]))
+				except Exception:b_raw=None
+			board_dirty=False
 			for record_id in ids:
+				matched_db=False
 				for table in('notes','submissions'):
 					cols='acknowledged_at, replies, quiet, blocking, type'if table=='notes'else'acknowledged_at, replies';row=db.execute(f"SELECT {cols} FROM {table} WHERE id = ?",(record_id,)).fetchone()
 					if row is None:continue
@@ -3737,8 +3799,19 @@ class Store:
 						if table=='notes'and row['quiet']and row['blocking']and row['type']=='':db.execute("INSERT OR REPLACE INTO meta VALUES ('survey_checked_at', ?)",(stamp,))
 					else:more=replies_list(row['replies'])+[{'type':'reply','text':text,'at':stamp}];db.execute(f"UPDATE {table} SET replies = ?, ack_edited_at = ? WHERE id = ?",(json.dumps(more,ensure_ascii=False),stamp,record_id))
 					if table=='submissions':db.execute('UPDATE reports SET agent_seen_at = ? WHERE id = (SELECT report_id FROM submissions WHERE id = ?)',(stamp,record_id))
-					break
-				else:raise ValueError(f"Unknown note: {record_id}; no receipts written")
+					matched_db=True;break
+				if isinstance(b_raw,dict)and isinstance(b_raw.get('entries'),list):
+					for entry in b_raw['entries']:
+						if not isinstance(entry,dict):continue
+						eid=str(entry.get('id')or'');nid=str(entry.get('note_id')or'')
+						if eid==record_id or eid[:6]==record_id or nid and(nid==record_id or nid[:6]==record_id):
+							if not entry.get('acknowledged_at'):entry['acknowledged_at']=clip_stamp(stamp);entry['ack_type']='reply';entry['ack_text']=text;entry['seen_at']=entry.get('seen_at')or clip_stamp(stamp)
+							else:replies=list(entry['replies'])if isinstance(entry.get('replies'),list)else[];replies.append({'type':'reply','text':text,'at':clip_stamp(stamp)});entry['replies']=replies;entry['ack_edited_at']=clip_stamp(stamp)
+							sender_sid=str(entry.get('session_id')or'');local_sid=board_session_id(b_raw.get('local_session_id')or workspace_branch(self.repository_root()))
+							if sender_sid and sender_sid!=local_sid:wakes=dict(b_raw['wakes'])if isinstance(b_raw.get('wakes'),dict)else{};wakes[sender_sid]=f"{eid}-ack";b_raw['wakes']=wakes
+							board_dirty=True;matched_db=True;break
+				if not matched_db:raise ValueError(f"Unknown note: {record_id}; no receipts written")
+			if board_dirty and isinstance(b_raw,dict):db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,json.dumps(b_raw,ensure_ascii=False)))
 			if not db.execute(f"SELECT 1 FROM notes WHERE {VIOLATION_NOTES} AND acknowledged_at IS NULL").fetchone():db.execute('DELETE FROM meta WHERE key = ?',(AGENT_INTERRUPT_FLAG_META,))
 			db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(stamp,))
 			if not gate_pending_count(db):db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
@@ -4188,7 +4261,7 @@ def handler(store,reload_event=None):
 					if header_tz and zone_exists(header_tz)and store.meta_value(TIMEZONE_META)!=header_tz:store.set_display_timezone(header_tz)
 					state=store.state();state['slash_commands']=discover_slash_commands()
 					try:
-						for item in state['notes']+[ack for report in state['reports']for ack in report['acknowledgements']]:
+						for item in state['notes']+[ack for report in state['reports']for ack in report['acknowledgements']]+((state.get('board')or{}).get('entries')or[]):
 							if'text'in item:item['html']=render(item['text'])
 							if item.get('ack_type')=='reply'and item.get('ack_text'):item['ack_html']=render(item['ack_text'].replace('\\n','\n'))
 							for reply in item.get('replies')or[]:

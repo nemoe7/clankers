@@ -15457,6 +15457,32 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert by_sid["22222222-otherrepo"]["board_id"] == "otherrepo-beta"
   assert by_sid["22222222-otherrepo"]["role"] == "worker"
   hygiene_store.board_action({"action": "set-multi-repo", "multi_repo": False})
+  mention_post = hygiene_store.board_action(
+    {
+      "action": "post",
+      "id": "b-mention-1",
+      "session_id": "b14c09a2-clankers",
+      "text": "Audit mobile viewport.\n@ui",
+    }
+  )
+  mention_entry = mention_post["entries"][-1]
+  assert mention_entry["mention_target"] == woken_board["session_id"]
+  assert mention_entry["to"] == woken_board["session_id"]
+  assert any(
+    item["id"] == "b-mention-1" and item["type"] == "board"
+    for item in hygiene_store.read()["pending"]
+  )
+  hygiene_store.mark_seen(["b-mention-1"])
+  hygiene_store.acknowledge(["b-mention-1"], "Completed mobile viewport audit.")
+  acked_board = hygiene_store.board_state()
+  acked_entry = next(
+    row for row in acked_board["entries"] if row["id"] == "b-mention-1"
+  )
+  assert acked_entry["acknowledged_at"] is not None
+  assert acked_entry["ack_text"] == "Completed mobile viewport audit."
+  assert not any(
+    item["id"] == "b-mention-1" for item in hygiene_store.read()["pending"]
+  )
   try:
     hygiene_store.board_action(
       {
