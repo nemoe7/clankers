@@ -15322,6 +15322,19 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert synced_wake["wakes"].get(woken_board["session_id"]) == "b-sync-99"
   assert preview.poll_once(hygiene_store, sleeper=lambda _: None) == 0
   assert "b-sync-99" in capsys.readouterr().out
+  top_post = hygiene_store.board_action(
+    {
+      "action": "post",
+      "session_id": woken_board["session_id"],
+      "to": "b14c09a2-clankers",
+      "tag": "flat",
+      "text": "top-level fields",
+    }
+  )
+  assert top_post["entries"][-1]["payload"] == {
+    "tag": "flat",
+    "text": "top-level fields",
+  }
   gate_msg = preview.board_main_session_warning(
     hygiene_dir, "git push origin arena/293da56c-clankers"
   )

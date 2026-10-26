@@ -7308,7 +7308,15 @@ class Store:
     ack_wakes = (
       dict(raw.get("ack_wakes")) if isinstance(raw.get("ack_wakes"), dict) else {}
     )
-    ack_wakes[sid] = stamp
+    seen = ack_wakes.get(sid)
+    seen_list = (
+      [str(x) for x in seen if x]
+      if isinstance(seen, list)
+      else ([str(seen)] if seen else [])
+    )
+    if stamp and str(stamp) not in seen_list:
+      seen_list.append(str(stamp))
+    ack_wakes[sid] = seen_list[-64:]
     raw["ack_wakes"] = ack_wakes
     if isinstance(raw.get("sessions"), list):
       for row in raw["sessions"]:
@@ -7472,6 +7480,24 @@ class Store:
       body = payload.get("payload")
       if not isinstance(body, dict):
         body = {"text": str(body)} if body is not None else {}
+      if not body:
+        body = {
+          k: v
+          for k, v in payload.items()
+          if k
+          not in {
+            "action",
+            "type",
+            "id",
+            "session_id",
+            "to",
+            "repo",
+            "branch",
+            "at",
+            "payload",
+            "file",
+          }
+        }
       entries.append(
         {
           "id": str(payload.get("id") or f"b-{uuid.uuid4().hex[:6]}"),

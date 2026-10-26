@@ -2474,7 +2474,9 @@ class Store:
 		if not isinstance(wakes,dict)or not wakes:return None
 		sid=board_session_id(workspace_branch(self.repository_root()));allowed={board_session_id(item)for item in(raw.get('allowed_sessions')if isinstance(raw.get('allowed_sessions'),list)else[])if board_session_id(item)}
 		if not sid or sid not in allowed or not wakes.get(sid):return None
-		stamp=wakes.pop(sid,None);raw['wakes']=wakes;ack_wakes=dict(raw.get('ack_wakes'))if isinstance(raw.get('ack_wakes'),dict)else{};ack_wakes[sid]=stamp;raw['ack_wakes']=ack_wakes
+		stamp=wakes.pop(sid,None);raw['wakes']=wakes;ack_wakes=dict(raw.get('ack_wakes'))if isinstance(raw.get('ack_wakes'),dict)else{};seen=ack_wakes.get(sid);seen_list=[str(x)for x in seen if x]if isinstance(seen,list)else[str(seen)]if seen else[]
+		if stamp and str(stamp)not in seen_list:seen_list.append(str(stamp))
+		ack_wakes[sid]=seen_list[-64:];raw['ack_wakes']=ack_wakes
 		if isinstance(raw.get('sessions'),list):
 			for row in raw['sessions']:
 				if isinstance(row,dict)and board_session_id(row.get('session_id')or row.get('branch')or'')==sid:row['polling']=False;row['status']='active'
@@ -2537,6 +2539,7 @@ class Store:
 			if payload.get('file')is not None:staged_file=stage_board_file(self.path.parent,sender,payload.get('file'))
 			body=payload.get('payload')
 			if not isinstance(body,dict):body={'text':str(body)}if body is not None else{}
+			if not body:body={k:v for(k,v)in payload.items()if k not in{'action','type','id','session_id','to','repo','branch','at','payload','file'}}
 			entries.append({'id':str(payload.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':sender,'to':str(payload.get('to')or'*'),'repo':str(payload.get('repo')or state['repo']),'branch':str(payload.get('branch')or f"arena/{sender}"),'at':clip_stamp(now()),'payload':body,'file':staged_file})
 		elif action_type=='wake':
 			target=str(payload.get('target')or payload.get('session_id')or'').strip();stamp=f"{clip_stamp(now())}-{uuid.uuid4().hex[:6]}"
