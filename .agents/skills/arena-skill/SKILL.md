@@ -21,7 +21,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
 6. After a preview restart or context replacement, finish required reads and pending inbox acks. Read references/survey.json and submit fresh answers via arena-preview survey '<json>' before queued work.
 
-- On the first tool call after any session summary or preview restart—and at every 10-call checkpoint—if any bible file's full text is absent from active context (a session summary NEVER counts), MUST read ARENA.md, root AGENTS.md, and this SKILL.md in full via read_file before any other tool call; read nested AGENTS.md files via `arena-preview agents <path>` only when working in their directory.
+- On the first tool call after any session summary or preview restart—and at every 10-call checkpoint—if any bible file's full text is absent from active context (a session summary NEVER counts), MUST read ARENA.md, all AGENTS.md, and this SKILL.md in full via read_file before any other tool call.
 
 ## Survey
 
