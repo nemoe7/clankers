@@ -33,6 +33,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### nuu
 
 - Apply a `0.04` main ink-share floor to `NUM205` (`scripts/nuu.py`).
+- Keep the surrounding text face in `references/recipes/relative-timestamps.md` and scope `tabular-nums` to stacked columns (`references/recipes/relative-timestamps.md`, `references/nuu.md`, `SKILL.md`, `references/examples/relative-timestamps.png`).
 
 #### userscripts
 
