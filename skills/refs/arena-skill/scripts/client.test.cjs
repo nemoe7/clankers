@@ -3371,9 +3371,10 @@ test('preview client', async (t) => {
       assert.equal(get('#report-submit-float').hidden, false);
       panel.scrollTop = 800;
       panel.events.scroll();
-      assert.equal(get('#report-submit-float').hidden, true);
+      assert.equal(get('#report-submit-float').hidden, false);
       get('#report-submit').hidden = true;
       panel.events.scroll();
+      assert.equal(get('#report-submit-float').hidden, true);
     } finally {
       get('#notes-tab').events.click();
       state.reports = keptReports;

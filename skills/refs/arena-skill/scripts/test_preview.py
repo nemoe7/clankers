@@ -15595,3 +15595,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert ".answer { margin-top: 0; }" in style_css
   assert ".message-text > :last-child { margin-bottom: 0; }" in style_css
   assert "? ${promptText} (${fieldId})" not in app_js_text
+  assert (
+    ".report-submit-row > #report-submit { margin-top: 0; visibility: hidden; pointer-events: none; }"
+    in style_css
+  )

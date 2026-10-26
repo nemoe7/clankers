@@ -447,7 +447,7 @@ mark code { color: var(--text); }
 #report-submit { margin-top: 16px; margin-left: auto; display: block; }
 .report-submit-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: 16px; }
 .report-submit-row > #report-agent-ack-footer { order: -1; margin: 0; }
-.report-submit-row > #report-submit { margin-top: 0; }
+.report-submit-row > #report-submit { margin-top: 0; visibility: hidden; pointer-events: none; }
 #report-form { min-width: 0; margin-top: 12px; }
 .report-toc { display: none; }
 .report-main { min-width: 0; }
