@@ -55,6 +55,25 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Forbid assistant prose on tool-call turns and narration between tool calls in `system-prompts/refs/NEMOGPT.md`, `system-prompts/NEMOGPT.md`, and `system-prompts/wenyan/NEMOGPT.md`.
 
+### Fixed
+
+#### arena-skill
+
+- Sync board entries across sessions, wake a polling agent on board wakes or incoming entries, and format `key_output` timestamps with `local_stamp` in `scripts/test_preview.py`.
+- Document `/api/board` actions (`sync`, `allow`, `revoke`, `set-main`, `heartbeat`, `post`, `wake`, and `clear`) in `SKILL.md` and `references/commands.md`.
+
+#### userscripts
+
+- Resolve state save scope from `previewSessionKey()` before `rememberedSessionId()`, allow manual `Save to file` in worker sessions, and bind `chosen` file handles in `fetchStateFile` (`userscripts/arena.user.js`).
+
+#### nuu
+
+- Flag raw ISO-8601 (`YYYY-MM-DDTHH:MM`) and unadjusted `UTC`/`GMT`/`+00:00` timestamps in visible UI text in `scripts/uiux.py`, and document local-timezone UI timestamp formatting in `SKILL.md` and `references/nuu.md`.
+
+#### maintenance
+
+- Widen `check_internal_links` in `maintenance/check.py` to cover `docs/**/*.md` and `skills/**/README.md`, fix broken links in `docs/arena-quirks.md` and `skills/nuu/README.md`, and remove dead `workflows/` checks.
+
 ## 2026-10-24
 
 ### Added

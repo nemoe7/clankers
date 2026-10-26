@@ -41,6 +41,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `report state` | Print publication, owner view stamp, staleness and answer visibility for one report or all |
 | `rename <id> <new-id>` | Rename one stored note, report answer, report or task in place, so its answers, order and stamps survive |
 | `state clear` | Empty every state table in place; preserve the agent key, refresh the save file to match, and keep a running server's recorded port |
+| `GET / POST /api/board` | Read or update the multi-session board (`action`: `sync`, `allow`, `revoke`, `set-main`, `heartbeat`, `post`, `wake`, or `clear`) |
 
 - Every command except `init` and `serve` breaks with a restart line while no preview answers, so the agent starts the server first.
 - Use complete IDs in CLI calls; cite their first six characters in prose.
@@ -57,3 +58,17 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 Refer to a note in prose by the first six characters of its ID. Use the full ID in CLI calls. Check a note reference against the ID returned by `read` before sending it.
 
 When an acknowledgement refers to a report or task, use `ack` and put its exact full ID in inline backticks; the six-character shortening applies to note IDs only. Use IDs unique across notes, reports and tasks so the client can link them; `publish` and `task` refuse an ID the other holds.
+
+## Multi-session board (`/api/board`)
+
+`GET /api/board` returns the current `allowlist`, `main_session_id`, `sessions`, `entries`, and `wake_stamps`. `POST /api/board` accepts JSON with `action` set to `sync`, `allow`, `revoke`, `set-main`, `heartbeat`, `post`, `wake`, or `clear`.
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/board \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"post","session_id":"<sid>","to":"<target>","payload":{"text":"hi"}}'
+```
+
+- Only allowlisted sessions can post entries, send file attachments, or update heartbeats (`allow` and `revoke` manage the allowlist).
+- `set-main` designates the main session (`main_session_id`); worker sessions hand off findings to the main session instead of committing or pushing.
+- `wake` records a wake stamp for the target session or all polling sessions, which wakes `arena-preview poll` (`BOARD WAKE`) without arming `skip_poll`.

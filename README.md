@@ -49,7 +49,7 @@ Latest measurements as of 2026-10-26. `maintenance/check.py --update` rebuilds t
 | [`skills/amending-violations/SKILL.md`](skills/amending-violations/SKILL.md) | `o200k_base` | 1,607 `tok` |
 | [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 759,662 `B` |
 | [`skills/arena-skill/references/reference.md`](skills/arena-skill/references/reference.md) | `o200k_base` | 267 `tok` |
-| [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,685 `tok` |
+| [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,841 `tok` |
 | [`skills/nemoizer/SKILL.md`](skills/nemoizer/SKILL.md) | `o200k_base` | 1,340 `tok` |
 | [`skills/nuu/SKILL.md`](skills/nuu/SKILL.md) | `o200k_base` | 2,566 `tok` |
 | [`skills/squash/SKILL.md`](skills/squash/SKILL.md) | `o200k_base` | 1,377 `tok` |
