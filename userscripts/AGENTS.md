@@ -1,5 +1,6 @@
 # userscripts Agent Rules
 
+- Record newly discovered userscript bugs, DOM selector hazards, and dead ends in `userscripts/AGENTS.md` whenever a fix lands so other agents NEVER repeat them.
 - Bump `@version` and the version suffix in `@name` on every edit to `userscripts/*.user.js`.
 - Add controls in `openSettingsModal()` (`#clankers-settings-modal`) for every new feature, toggle, and configurable parameter.
 - Keep the 26 Tampermonkey menu command labels (`GM_registerMenuCommand`) unchanged unless explicitly instructed to change them.
