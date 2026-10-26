@@ -15726,3 +15726,7 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
   assert "BOARD SESSION JOINED:" in poll_out
   assert "c77a11b0-clankers" in poll_out
   assert "gamma" in poll_out
+  demo_mod_path = (
+    preview.Path(__file__).resolve().parents[4] / "maintenance" / "demo_preview.py"
+  )
+  assert "sys.path.insert(0, scripts_dir)" in demo_mod_path.read_text(encoding="utf-8")

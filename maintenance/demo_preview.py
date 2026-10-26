@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import sys
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,6 +18,9 @@ PREVIEW_SCRIPT = ROOT / "skills" / "refs" / "arena-skill" / "scripts" / "preview
 
 
 def load_preview_module():
+  scripts_dir = str(PREVIEW_SCRIPT.parent)
+  if scripts_dir not in sys.path:
+    sys.path.insert(0, scripts_dir)
   spec = importlib.util.spec_from_file_location("arena_preview_demo", PREVIEW_SCRIPT)
   if spec is None or spec.loader is None:
     raise RuntimeError(f"Unable to load preview module from {PREVIEW_SCRIPT}")
