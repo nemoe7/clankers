@@ -32,5 +32,5 @@
 
 ## Captures (Dark Theme, Light on Request Only)
 
-- **Desktop and tablet (`1920x957`, `1080x2437`, `958x958`):** dark-themed captures at each house viewport.
-- **Mobile (`411x799` portrait, `855x325` landscape):** dark-themed captures with `hasTouch` and `isMobile`.
+- **Desktop maximized (`1920x957`):** dark-themed capture at the desktop maximized viewport.
+- **Phone portrait (`411x799`):** dark-themed capture with `hasTouch` and `isMobile`.

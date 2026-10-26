@@ -14507,6 +14507,8 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert "60em" in slash_nuu_audit["text"]
   assert "30em" in slash_nuu_audit["text"]
   assert "24em" in slash_nuu_audit["text"]
+  assert "1920x957" in slash_nuu_audit["text"]
+  assert "411x799" in slash_nuu_audit["text"]
   assert "audit-report.md" in slash_nuu_audit["text"]
   assert slash_nuu_audit["text"].endswith("#compose")
   app_js_text = (

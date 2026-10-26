@@ -6688,8 +6688,9 @@ def resolve_slash_command(text, root=None):
       bp_list = ", ".join(f"`{bp}`" for bp in _extract_nuu_breakpoints(nuu_dir))
       note_text = (
         f"Run a full `nuu` UI/UX audit (breakpoints {bp_list}; `a11y`, "
-        "`density`, and `annotate`) and publish the audit report using "
-        "`skills/refs/nuu/references/audit-report.md`."
+        "`density`, and `annotate`; report shots for `1920x957` desktop "
+        "maximized and `411x799` phone portrait only) and publish the audit "
+        "report using `skills/refs/nuu/references/audit-report.md`."
       )
       if trailing:
         note_text = f"{note_text}\n\n{trailing}"

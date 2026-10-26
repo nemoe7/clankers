@@ -1262,6 +1262,14 @@ def test_design_boards_and_html_typography(tmp_path):
   assert "Inter" in default_cfg["config"]["fonts"]["sans"]
   assert "Monaspace Neon" in default_cfg["config"]["fonts"]["mono"]
   assert default_cfg["config"]["audit"]["widths"] == [1920, 1080, 958, 855, 411]
+  assert default_cfg["config"]["audit"]["report_widths"] == [1920, 411]
+  assert nuu.REPORT_WIDTHS == (1920, 411)
+  audit_report_md = (SCRIPT.parent.parent / "references" / "audit-report.md").read_text(
+    encoding="utf-8"
+  )
+  assert "Desktop maximized (`1920x957`)" in audit_report_md
+  assert "Phone portrait (`411x799`)" in audit_report_md
+  assert "1080x2437" not in audit_report_md
 
   bare_proj = tmp_path / "BareNoCssProject"
   bare_proj.mkdir()
