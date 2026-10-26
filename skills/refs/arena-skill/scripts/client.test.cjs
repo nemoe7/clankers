@@ -128,8 +128,9 @@ test('preview client', async (t) => {
   get('#upload-file').files = [];
   // The dialog form owns the field container, so its FormData sees the controls.
   get('#survey-again').hidden = true;
+  get('#modal-close').hidden = true;
   get('#modal-actions').append(get('#survey-again'), get('#modal-cancel'), get('#modal-confirm'));
-  get('#modal-form').append(get('#modal-fields'), get('#modal-actions'));
+  get('#modal-form').append(get('#modal-close'), get('#modal-fields'), get('#modal-actions'));
   get('#image-modal').append(get('#image-modal-close'), get('#image-modal-img'));
   get('#note').placeholder = 'What should happen next?';
   get('#send').textContent = 'Send';
@@ -5447,6 +5448,31 @@ test('preview client', async (t) => {
     assert.equal(get('#reports-scroll-frame').hidden, true, 'Board tab hides #reports-scroll-frame');
     assert.equal(get('#report-top').hidden, true, 'Board tab hides #report-top');
     assert.equal(get('#report-submit-float').hidden, true, 'Board tab hides #report-submit-float');
+    const mockBoard = {
+      repo: 'clankers',
+      multi_repo: false,
+      main_session_id: '293da56c-clankers',
+      allowed_sessions: ['293da56c-clankers', '91a01582-clankers'],
+      sessions: [
+        { session_id: '293da56c-clankers', board_id: 'clankers-alpha', role: 'main', repo: 'clankers', branch: 'arena/293da56c-clankers' },
+        { session_id: '91a01582-clankers', board_id: 'clankers-beta', worker_id: 'beta', role: 'worker', repo: 'clankers', branch: 'arena/91a01582-clankers' },
+      ],
+    };
+    assert.equal(context.displayBoardId('91a01582-clankers', mockBoard, 'clankers'), 'beta');
+    assert.equal(context.displayBoardId('arena/293da56c-clankers', mockBoard, 'clankers'), 'alpha');
+    assert.equal(
+      context.resolveBoardMentions('Ready for review.\n@91a01582-clankers and @arena/293da56c-clankers', mockBoard, 'clankers'),
+      'Ready for review.\n@beta and @alpha',
+    );
+    assert.equal(
+      context.resolveBoardAckSender(
+        'clankers-alpha',
+        { session_id: '293da56c-clankers', board_sender: 'alpha', to: '91a01582-clankers' },
+        mockBoard,
+        'clankers',
+      ),
+      'beta',
+    );
     get('#notes-tab').events.click();
 
     // Mobile virtual keyboard hides .composer-footer only when the viewport shrinks, not when #note stays focused with keyboard closed.
@@ -5740,9 +5766,18 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.doesNotMatch(htmlSource, /id="board-entries"/);
   assert.match(styleSource, /#board-tab\[data-board-role="main"\]\s*\{\s*color:\s*#22c55e;\s*\}/);
   assert.match(styleSource, /#board-tab\[data-board-role="worker"\]\s*\{\s*color:\s*#3b82f6;\s*\}/);
+  assert.match(styleSource, /font-family:\s*"Basel Grotesk Fallback"[\s\S]*?size-adjust:\s*91\.81%/);
+  assert.match(styleSource, /font-family:\s*"Basel Grotesk Mono Fallback"[\s\S]*?size-adjust:\s*99\.66%/);
+  assert.match(styleSource, /--badge-code-fg:\s*#93c5fd;\s*--badge-code-bg:\s*#17253b;\s*--badge-code-border:\s*#233d63;/);
+  assert.match(styleSource, /:root\[data-theme="light"\][\s\S]*?--badge-main-fg:\s*#14532d;\s*--badge-main-bg:\s*#dcfce7;\s*--badge-main-border:\s*#86efac;/);
+  assert.match(styleSource, /\.board-badge\s*\{[^}]*padding:\s*2px\s+8px;\s*border:\s*1px\s+solid\s+var\(--badge-misc-border\);\s*border-radius:\s*8px;/);
+  assert.match(styleSource, /\.board-badge\[data-role="worker"\]\s*\{\s*color:\s*var\(--badge-code-fg\);/);
+  assert.match(appSource, /badge\.textContent\s*=\s*isMain\s*\?\s*'Main'\s*:\s*\(isAllowed\s*\?\s*'Worker'\s*:\s*'Not on allowlist'\)/);
+  assert.match(appSource, /Boolean\(closeBtn\s*&&\s*!closeBtn\.hidden\)/);
+  assert.match(styleSource, /\.report-submit-float\[data-at-end="true"\]\s*\{\s*opacity:\s*0;\s*pointer-events:\s*none;\s*\}/);
+  assert.match(appSource, /document\.documentElement\.dataset\.reportInputActive\s*=\s*'true'/);
   assert.match(styleSource, /\.board-sender\b/);
   assert.match(appSource, /function\s+combinedHistoryItems\(/);
-  assert.match(appSource, /from_owner:\s*true/);
   assert.match(htmlSource, /id="board-repo-links"/);
   assert.match(appSource, /action:\s*isLinked\s*\?\s*'unlink-repo'\s*:\s*'link-repo'/);
   assert.match(styleSource, /\.board-sender\s*\{\s*font:\s*400\s+12px\/1\.333333\s+var\(--font-sans\);/);
@@ -5754,5 +5789,8 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.doesNotMatch(styleSource, /^\.answer\.reply\s*\{[^}]*border-top:/m);
   assert.match(appSource, /const\s+ackSenderEl\s*=\s*document\.createElement\('div'\)/);
   assert.match(appSource, /row\.acknowledged_at\s*\|\|\s*''/);
+  assert.match(appSource, /function\s+sessionStatusInfo\(/);
+  assert.match(appSource, /statusSpan\.className\s*=\s*'board-status-text'/);
+  assert.match(styleSource, /\.board-status-text\s*\{[^}]*font-size:\s*14px/);
 });
 

@@ -15613,6 +15613,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
       "action": "sync",
       "board": {
         **unpublished_rep_board,
+        "removed_sessions": ["closed-worker-clankers"],
         "sessions": [
           *unpublished_rep_board["sessions"],
           {
@@ -15781,12 +15782,134 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
   assert unopted_cross["board_role"] == "main"
   assert unopted_cross["can_push_or_pr"] is True
   assert unopted_cross["main_session_id"] == ""
-  store.acknowledge([posted_id], "acknowledged on board")
+  store.acknowledge([posted_id], "acknowledged on board @alpha")
+  store.acknowledge([posted_id], "second reply on board @alpha")
+  seen_board_reply = store.mark_replies_seen(posted_id, 1)
+  assert seen_board_reply == {"id": posted_id, "ack_edited_seen_count": 1}
   acked_state = store.board_state()
   acked_entry = next(e for e in acked_state["entries"] if e["id"] == posted_id)
   assert acked_entry["acknowledged_at"] is not None
-  assert acked_entry["ack_sender"] == acked_state["board_id"]
+  assert acked_entry["ack_sender"] == acked_state["session_id"]
+  assert acked_entry["ack_edited_seen_count"] == 1
+  assert "@b14c09a2-clankers" in acked_entry["ack_text"]
+  drifted_norm = preview.normalize_board_state(
+    {
+      "main_session_id": "293da56c-clankers",
+      "allowed_sessions": ["293da56c-clankers", "91a01582-clankers"],
+      "sessions": [
+        {"session_id": "293da56c-clankers", "repo": "clankers", "status": "active"},
+        {
+          "session_id": "91a01582-clankers",
+          "repo": "clankers",
+          "status": "polling",
+          "polling": True,
+          "polling_since": "2026-10-26T14:00:00Z",
+          "waiting_for_gates": False,
+          "checking_pr": False,
+          "calls_since_message": 2,
+          "gate_threshold": 5,
+        },
+      ],
+      "entries": [
+        {
+          "id": "pa8e29",
+          "session_id": "293da56c-clankers",
+          "board_id": "clankers-alpha",
+          "to": "91a01582-clankers",
+          "text": "Assigned NMU100 task.\n@beta",
+          "acknowledged_at": "2026-10-26T14:01:00Z",
+          "ack_type": "reply",
+          "ack_text": "Claiming NMU100.\n@clankers-alpha",
+          "ack_sender": "clankers-alpha",
+        }
+      ],
+    },
+    session_id="293da56c-clankers",
+    repo="clankers",
+  )
+  drifted_entry = drifted_norm["entries"][0]
+  assert drifted_entry["text"] == "Assigned NMU100 task.\n@91a01582-clankers"
+  assert drifted_entry["ack_text"] == "Claiming NMU100.\n@293da56c-clankers"
+  assert drifted_entry["ack_sender"] == "91a01582-clankers"
+  worker_row_status = next(
+    r for r in drifted_norm["sessions"] if r["session_id"] == "91a01582-clankers"
+  )
+  assert worker_row_status["polling_since"] == "2026-10-26T14:00:00Z"
+  assert worker_row_status["calls_since_message"] == 2
+  assert worker_row_status["gate_threshold"] == 5
   assert any(
     op.get("op") == "entry-ack" and op.get("entry_id") == posted_id
     for op in acked_state["report_ops"]
+  )
+  main_store = preview.Store(
+    tmp_path / "main-mirror-state" / "state.sqlite3", create=True
+  )
+  monkeypatch.setattr(main_store, "repository_root", lambda: tmp_path / "clankers")
+  main_sid = main_store.board_state()["session_id"]
+  worker_sid = "91a01582-clankers"
+  main_store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "main_session_id": main_sid,
+        "allowed_sessions": [main_sid, worker_sid],
+        "sessions": [
+          {"session_id": main_sid, "repo": "clankers", "status": "active"},
+          {"session_id": worker_sid, "repo": "clankers", "status": "active"},
+        ],
+        "worker_reports": {
+          worker_sid: [
+            {
+              "id": "worker-prop",
+              "title": "Worker Proposal",
+              "markdown": "# Worker Proposal\n\nDecision:\n- (x) Ship (Recommended)\n- ( ) Hold\n",
+              "updated_at": "2026-10-26T12:00:00Z",
+              "published_at": "2026-10-26T12:00:00Z",
+              "needs_answer": True,
+              "answered": False,
+              "owner_requested": True,
+            }
+          ]
+        },
+      },
+    }
+  )
+  mirrored_list = main_store.state()["reports"]
+  assert len(mirrored_list) == 1
+  assert mirrored_list[0]["id"] == "worker-prop"
+  assert mirrored_list[0]["title"] == "Worker Proposal"
+  assert mirrored_list[0]["needs_answer"] is True
+  fetched_mirror = main_store.report("worker-prop")
+  assert "Ship (Recommended)" in fetched_mirror["markdown"]
+  seen_mirror = main_store.mark_report_seen("worker-prop")
+  assert seen_mirror["seen_at"] is not None
+  assert main_store.mark_report_viewed("worker-prop", True)["viewed_at"] is not None
+  sub_res = main_store.submit_report(
+    "worker-prop",
+    "sub001",
+    {"decision": "Ship (Recommended)"},
+    revision=fetched_mirror["updated_at"],
+  )
+  assert sub_res["forwarded_to_worker"] == worker_sid
+  main_store.acknowledge(["sub001"], "Acknowledged worker report submission.")
+  mirrored_after_sub = main_store.state()["reports"]
+  assert mirrored_after_sub[0]["latest_answer_id"] == "sub001"
+  assert mirrored_after_sub[0]["needs_answer"] is False
+  assert mirrored_after_sub[0]["seen_at"] is not None
+  assert mirrored_after_sub[0]["agent_seen_at"] is not None
+  assert mirrored_after_sub[0]["latest_answer_acknowledged_at"] is not None
+  after_sub_board = main_store.board_state()
+  assert any(
+    op.get("op") == "answer"
+    and op.get("target") == worker_sid
+    and op.get("report_id") == "worker-prop"
+    for op in after_sub_board["report_ops"]
+  )
+  assert main_store.unpublish("worker-prop", dismissed_by_owner=True) is True
+  assert main_store.state()["reports"] == []
+  assert any(
+    op.get("op") == "unpublish"
+    and op.get("target") == worker_sid
+    and op.get("report_id") == "worker-prop"
+    for op in main_store.board_state()["report_ops"]
   )
