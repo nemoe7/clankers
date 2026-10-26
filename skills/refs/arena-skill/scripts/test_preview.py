@@ -15399,6 +15399,18 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   assert push_checks == []
   assert "commit/s unpushed" not in hygiene_store.reminder(routine=True)
+  assert (
+    preview.unpushed_reminder_text(2, private=False)
+    == "2 commit/s unpushed. ALWAYS push. NEVER delay for batch."
+  )
+  assert (
+    preview.unpushed_reminder_text(2, private=True)
+    == "2 commit/s unpushed. Private repo: push small batches (<=3), and never starve pushes."
+  )
+  assert (
+    preview.unpushed_reminder_text(3, private=True)
+    == "3 commit/s unpushed. Batch cap (3) reached, so push now."
+  )
   default_greek_state = hygiene_store.board_state()
   assert default_greek_state["worker_id"] == "beta"
   assert default_greek_state["board_id"] == f"{default_greek_state['repo']}-beta"

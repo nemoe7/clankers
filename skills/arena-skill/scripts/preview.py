@@ -94,12 +94,21 @@ TASK_REMINDER='{remaining} tasks left.'
 def fill_reminder(tail,remaining):
 	if'{remaining}'in tail and remaining==0:return None
 	count=f"{remaining} task"if remaining==1 else f"{remaining} tasks";return tail.replace('{remaining} tasks',count)
-def reminder_tail(cursor,remaining,stale=0,unpushed=0):
+PRIVATE_BATCH_CAP=3
+REPO_PRIVATE_META='repo_private'
+def unpushed_reminder_text(unpushed,private=False):
+	if not unpushed:return''
+	prefix=f"{unpushed} commit/s unpushed."
+	if private:
+		if unpushed>=PRIVATE_BATCH_CAP:return f"{prefix} Batch cap ({PRIVATE_BATCH_CAP}) reached, so push now."
+		return f"{prefix} Private repo: push small batches (<={PRIVATE_BATCH_CAP}), and never starve pushes."
+	return f"{prefix} ALWAYS push. NEVER delay for batch."
+def reminder_tail(cursor,remaining,stale=0,unpushed=0,private=False):
 	for step in range(len(REMINDERS)):
 		tail=fill_reminder(REMINDERS[(cursor+step)%len(REMINDERS)],remaining)
 		if tail:
 			if tail=='Unpublish stale reports.'and stale:return f"Unpublish {stale} stale report{'s'if stale!=1 else''}."
-			if tail=='Always push.'and unpushed:return f"{unpushed} commit/s unpushed. ALWAYS push. NEVER delay for batch."
+			if tail=='Always push.'and unpushed:return unpushed_reminder_text(unpushed,private=private)
 			return tail
 	return REMINDERS[cursor%len(REMINDERS)]
 REMINDER_CHAR_CAP=88
@@ -1594,6 +1603,25 @@ def guard_task_runs(state_dir,task_id=None,action='change'):
 	if not held:return
 	labels='; '.join(f"{identifier}: {', '.join(names)}"for(identifier,names)in sorted(held));raise ValueError(f"Cannot {action}; live task run(s): {labels}")
 PUSH_GUARDED_TASK_TYPES='code','docs'
+def is_private_repo(repo_root,store=None):
+	if store is not None:
+		try:cached=store.meta_value(REPO_PRIVATE_META)
+		except Exception:cached=None
+		if cached in('0','1'):return cached=='1'
+	if repo_root is None:return False
+	root=Path(repo_root)
+	if not(root/'.git').exists():return False
+	origin_proc=subprocess.run(['git','config','--get','remote.origin.url'],cwd=root,capture_output=True,text=True,check=False);origin_url=origin_proc.stdout.strip()if origin_proc.returncode==0 else''
+	if'github.com'not in origin_url:return False
+	try:gh_proc=subprocess.run(['gh','repo','view','--json','isPrivate','--jq','.isPrivate'],cwd=root,capture_output=True,text=True,timeout=3,check=False)
+	except(OSError,subprocess.SubprocessError):return False
+	verdict=gh_proc.stdout.strip().lower()if gh_proc.returncode==0 else''
+	if verdict not in('true','false'):return False
+	private=verdict=='true'
+	if store is not None:
+		try:store.set_meta(REPO_PRIVATE_META,'1'if private else'0')
+		except Exception:pass
+	return private
 def unpushed_commit_count(repo_root):
 	if repo_root is None:return 0
 	root=Path(repo_root)
@@ -1615,7 +1643,9 @@ def guard_task_push(repo_root,task_id,task_type):
 	branch_proc=subprocess.run(['git','rev-parse','--abbrev-ref','HEAD'],cwd=root,capture_output=True,text=True,check=False);branch=branch_proc.stdout.strip()if branch_proc.returncode==0 else''
 	if not branch or branch=='HEAD':return
 	remote_proc=subprocess.run(['git','rev-parse','--verify',f"refs/remotes/origin/{branch}"],cwd=root,capture_output=True,text=True,check=False);head_proc=subprocess.run(['git','rev-parse','--verify','HEAD'],cwd=root,capture_output=True,text=True,check=False)
-	if remote_proc.returncode==0 and head_proc.returncode==0 and remote_proc.stdout.strip()!=head_proc.stdout.strip():raise ValueError(f"FINISH BLOCKED: commit and push verified changes before marking {task_id} finished.")
+	if remote_proc.returncode==0 and head_proc.returncode==0 and remote_proc.stdout.strip()!=head_proc.stdout.strip():
+		if is_private_repo(root)and unpushed_commit_count(root)<PRIVATE_BATCH_CAP:return
+		raise ValueError(f"FINISH BLOCKED: commit and push verified changes before marking {task_id} finished.")
 def skip_poll_ready(store):return store.skip_poll_requested()and not live_runs(store.path.parent)
 def run_notices(state_dir,show_running=False,out=None):
 	out=sys.stdout if out is None else out;runs=Path(state_dir)/'runs'
@@ -3898,9 +3928,9 @@ class Store:
 			if polls>GATE_THRESHOLD//2:head=[f"bash blocked in {GATE_THRESHOLD-polls}"]
 			else:head=[f"calls {polls}"]
 		else:head=[]
-		is_worker=self.board_state().get('board_role')=='worker';unpushed=unpushed_commit_count(self.repository_root())if routine and not is_worker else 0;tail=reminder_tail(cursor,remaining,len(stale),unpushed)if routine else'';parts=[' '.join([*head,*unacked]).strip()]
+		is_worker=self.board_state().get('board_role')=='worker';repo_root=self.repository_root()if routine and not is_worker else None;unpushed=unpushed_commit_count(repo_root)if repo_root else 0;private=is_private_repo(repo_root,store=self)if unpushed else False;tail=reminder_tail(cursor,remaining,len(stale),unpushed,private=private)if routine else'';parts=[' '.join([*head,*unacked]).strip()]
 		if order_notice:parts.append(TASK_ORDER_NOTICE)
-		unpushed_notice=f"{unpushed} commit/s unpushed. ALWAYS push. NEVER delay for batch."if unpushed else''
+		unpushed_notice=unpushed_reminder_text(unpushed,private=private)if unpushed else''
 		if unpushed_notice and unpushed_notice!=tail:parts.append(unpushed_notice)
 		parts.append(tail);return' | '.join(parts).strip(' |')
 	def calls_since_message(self):
@@ -5050,7 +5080,10 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 	if not routed and'read-set'not in finished and state_file(state_dir).is_file():
 		mark('read-set');tick_store=Store(state_dir)
 		if preview_server_available(tick_store):read_set_tick(tick_store,line,moment=datetime.now(resolve_display_zone(tick_store)),root=root)
-	if'commit-remind'not in finished and'git commit'in command:mark('commit-remind');report('ALWAYS push. NEVER delay for batch.')
+	if'commit-remind'not in finished and'git commit'in command:
+		mark('commit-remind');gate_store=Store(state_dir)if state_file(state_dir).is_file()else None
+		if is_private_repo(root,store=gate_store):report('Private repo: batch at most 3 verified commits, and never starve pushes.')
+		else:report('ALWAYS push. NEVER delay for batch.')
 	if'remind'not in finished and any(word in command for word in('git commit','git push','gh pr checks')):mark('remind');report('Task done? Run arena-preview task <id> --status finished.')
 	if'git commit'in command and'main-local'not in finished:
 		mark('main-local');warning=main_drift_warning(Path.cwd(),fresh=False)

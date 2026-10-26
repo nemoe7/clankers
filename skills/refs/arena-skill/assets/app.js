@@ -1183,14 +1183,15 @@ function combinedHistoryItems(notes, board = getState()?.board) {
     const senderLabel = entry.from_owner
       ? ''
       : displayBoardId(rawSenderId, board, entryRepo || currentRepo);
+    const origText = String(
+      entry.text
+      || entry.payload?.text
+      || entry.payload?.summary
+      || (entry.payload && Object.keys(entry.payload).length ? JSON.stringify(entry.payload) : '')
+      || ''
+    );
     const rawText = resolveBoardMentions(
-      String(
-        entry.text
-        || entry.payload?.text
-        || entry.payload?.summary
-        || (entry.payload && Object.keys(entry.payload).length ? JSON.stringify(entry.payload) : '')
-        || ''
-      ),
+      origText,
       board,
       entryRepo || currentRepo,
       entry,
@@ -1202,6 +1203,14 @@ function combinedHistoryItems(notes, board = getState()?.board) {
     const resolvedAckText = entry.ack_text
       ? resolveBoardMentions(entry.ack_text, board, entryRepo || currentRepo, replyEntryCtx)
       : entry.ack_text;
+    const html = entry.html !== undefined && rawText === origText
+      ? entry.html
+      : renderMessageMarkdown(rawText);
+    const ackHtml = resolvedAckText
+      ? (entry.ack_html !== undefined && resolvedAckText === entry.ack_text
+        ? entry.ack_html
+        : renderMessageMarkdown(resolvedAckText))
+      : entry.ack_html;
     boardItems.push({
       ...entry,
       is_board: true,
@@ -1209,13 +1218,14 @@ function combinedHistoryItems(notes, board = getState()?.board) {
       board_sender: senderLabel,
       text: rawText,
       ack_text: resolvedAckText,
-      html: entry.html !== undefined ? entry.html : renderMessageMarkdown(rawText),
-      ...(resolvedAckText && entry.ack_html === undefined ? { ack_html: renderMessageMarkdown(resolvedAckText) } : {}),
+      html,
+      ...(ackHtml !== undefined ? { ack_html: ackHtml } : {}),
       ...(Array.isArray(entry.replies) && entry.replies.length ? {
         replies: entry.replies.map(r => {
           if (!r || !r.text) return r;
           const rText = resolveBoardMentions(r.text, board, entryRepo || currentRepo, replyEntryCtx);
-          return r.html === undefined ? { ...r, text: rText, html: renderMessageMarkdown(rText) } : { ...r, text: rText };
+          const rHtml = r.html !== undefined && rText === r.text ? r.html : renderMessageMarkdown(rText);
+          return { ...r, text: rText, html: rHtml };
         }),
       } : {}),
       ...(entry.file?.name ? { attachment_name: entry.file.name } : {}),
@@ -2700,18 +2710,20 @@ function updateReportTop() {
   const panel = $('#reports-panel');
   $('#reports-scroll-frame').hidden = panel.hidden;
   $('#report-top').hidden = panel.hidden || panel.scrollTop <= 0;
+  const atReportEnd = !panel.hidden && (
+    panel.scrollHeight <= panel.clientHeight
+    || panel.scrollHeight - panel.scrollTop - panel.clientHeight <= 24
+  );
+  if (atReportEnd) {
+    panel.dataset.atEnd = 'true';
+  } else {
+    delete panel.dataset.atEnd;
+  }
   const submitFloat = $('#report-submit-float');
   if (submitFloat) {
     const submit = $('#report-submit');
     submitFloat.hidden = Boolean(panel.hidden || !submit || submit.hidden);
     submitFloat.disabled = Boolean(submit?.disabled);
-    const atReportEnd = !panel.hidden && panel.scrollHeight > panel.clientHeight
-      && panel.scrollHeight - panel.scrollTop - panel.clientHeight <= 24;
-    if (atReportEnd) {
-      submitFloat.dataset.atEnd = 'true';
-    } else {
-      delete submitFloat.dataset.atEnd;
-    }
   }
   updateReportTocActive();
 }
@@ -5390,7 +5402,7 @@ async function openLocalSurvey() {
   surveyView.textContent = 'Loading survey…';
   if (surveyAnswered) surveyRequested = false;
   void openModal({ title: 'Survey', content: surveyView, readOnly: true, hideTitle: true });
-  ($('#modal-close') || $('#modal-cancel')).focus();
+  ((!$('#modal-close')?.hidden && $('#modal-close')) || $('#modal-cancel')).focus();
   await refreshSurvey();
 }
 async function showSessionSurvey(row, selfSid = getState()?.board?.session_id || '') {
@@ -5402,7 +5414,7 @@ async function showSessionSurvey(row, selfSid = getState()?.board?.session_id ||
   const peerView = document.createElement('section');
   surveyView = null;
   void openModal({ title: 'Survey', content: peerView, readOnly: true, hideTitle: true });
-  $('#modal-cancel').focus();
+  ((!$('#modal-close')?.hidden && $('#modal-close')) || $('#modal-cancel')).focus();
   const sData = row.survey;
   if (sData && Array.isArray(sData.results)) {
     renderSurvey(peerView, sData.results, sData.answered_at || '');

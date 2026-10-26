@@ -36,7 +36,7 @@ Latest measurements as of 2026-10-26. `maintenance/check.py --update` rebuilds t
 | [`gpt-plugins/skills/gpt-planning/SKILL.md`](gpt-plugins/skills/gpt-planning/SKILL.md) | `o200k_base` | 359 `tok` |
 | [`gpt-plugins/skills/gpt-question/SKILL.md`](gpt-plugins/skills/gpt-question/SKILL.md) | `o200k_base` | 157 `tok` |
 | [`gpt-plugins/skills/gpt-quirks/SKILL.md`](gpt-plugins/skills/gpt-quirks/SKILL.md) | `o200k_base` | 134 `tok` |
-| [`rules/ARENA.md`](rules/ARENA.md) | `o200k_base` | 4,829 `tok` |
+| [`rules/ARENA.md`](rules/ARENA.md) | `o200k_base` | 4,834 `tok` |
 | [`rules/CHATGPT-CUSTOM.txt`](rules/CHATGPT-CUSTOM.txt) | `Unicode chars` | 1,490 `chars` |
 | [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 1,403 `chars` |
 | [`rules/CLINE.md`](rules/CLINE.md) | `o200k_base` | 335 `tok` |
@@ -47,7 +47,7 @@ Latest measurements as of 2026-10-26. `maintenance/check.py --update` rebuilds t
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 284 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 279 `tok` |
 | [`skills/amending-violations/SKILL.md`](skills/amending-violations/SKILL.md) | `o200k_base` | 1,607 `tok` |
-| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 841,303 `B` |
+| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 843,504 `B` |
 | [`skills/arena-skill/references/reference.md`](skills/arena-skill/references/reference.md) | `o200k_base` | 267 `tok` |
 | [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,927 `tok` |
 | [`skills/nemoizer/SKILL.md`](skills/nemoizer/SKILL.md) | `o200k_base` | 1,340 `tok` |
