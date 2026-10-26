@@ -1867,6 +1867,24 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: "unlisted-saved", digest: healthy.digest });
     assert.equal(panel(), null, "a completed Choose file save clears the missing-branch warning");
     assert.equal(saved.get("clankers-arena-state-scope-o.r"), "o.r");
+
+    menus.get("State - force save")();
+    await respond("GET", "/api/userscript-autosave", 200, {
+      ...healthy,
+      scope: { repo: "o/r", branch: "arena/293da56c-clankers" },
+      save_id: "unlisted-force-with-server-branch",
+    });
+    await settle();
+    await respond("POST", "/api/userscript-autosave", 201, {
+      confirmed: true,
+      save_id: "unlisted-force-with-server-branch",
+      digest: healthy.digest,
+    });
+    assert.equal(
+      panel(),
+      null,
+      "Force save reuses the chosen repo handle when DOM branch is empty",
+    );
   });
 }
 
@@ -3226,6 +3244,120 @@ for raw in sys.stdin:
         ),
         false,
         "main session on board is not identified as worker",
+      );
+
+      // Verify board sync works with state-download off or stateBusy true.
+      const boardReqs = [];
+      const postedToFrame = [];
+      const winListeners = new Map();
+      const boardSaved = new Map([
+        ["state-download", false],
+        [
+          "clankers_global_board_v1",
+          {
+            allowed_sessions: ["293da56c-clankers", "bdf20cf5-clankers"],
+            main_session_id: "293da56c-clankers",
+            sessions: [],
+            entries: [],
+            wakes: {},
+          },
+        ],
+      ]);
+      const frameObj = {
+        src: "https://8000-sbx.e2b.app/",
+        getAttribute(name) {
+          return name === "title" ? "App preview on port 8000" : null;
+        },
+        setAttribute() {},
+        addEventListener() {},
+        contentWindow: {
+          postMessage(msg, origin) {
+            postedToFrame.push({ msg, origin });
+          },
+        },
+      };
+      const boardDoc = {
+        documentElement: {},
+        title: "Arena",
+        location: { href: "https://arena.ai/c/1", pathname: "/c/1" },
+        querySelector() {
+          return null;
+        },
+        querySelectorAll(sel) {
+          return sel === "iframe[title]" ? [frameObj] : [];
+        },
+      };
+      const boardIntervals = [];
+      const boardCtx = {
+        console: { log() {}, warn() {}, error() {}, debug() {}, info() {} },
+        URL,
+        Math: Object.assign(Object.create(Math), { random: () => 0 }),
+        Date,
+        location: { href: "https://arena.ai/c/1", pathname: "/c/1", origin: "https://arena.ai", host: "arena.ai" },
+        document: boardDoc,
+        window: {
+          addEventListener(name, fn) {
+            winListeners.set(name, fn);
+          },
+          removeEventListener() {},
+        },
+        MutationObserver: class {
+          observe() {}
+          disconnect() {}
+        },
+        setInterval(fn, ms) {
+          boardIntervals.push({ fn, ms });
+          return boardIntervals.length;
+        },
+        clearInterval() {},
+        setTimeout(fn) {
+          fn();
+          return 1;
+        },
+        clearTimeout() {},
+        GM_getValue(k, fb) {
+          return boardSaved.has(k) ? boardSaved.get(k) : fb;
+        },
+        GM_setValue(k, v) {
+          boardSaved.set(k, v);
+        },
+        GM_registerMenuCommand() {
+          return 1;
+        },
+        GM_unregisterMenuCommand() {},
+        GM_xmlhttpRequest(opts) {
+          boardReqs.push(opts);
+        },
+      };
+      boardCtx.self = boardCtx.window;
+      vm.runInNewContext(source, boardCtx, { filename: "arena.user.js" });
+      assert.ok(
+        winListeners.has("message"),
+        "window message listener for board sync registers with state-download off",
+      );
+      winListeners.get("message")({
+        origin: "https://8000-sbx.e2b.app",
+        source: frameObj.contentWindow,
+        data: { type: "clankers:preview-ready", repo: "clankers" },
+      });
+      assert.ok(
+        postedToFrame.some((p) => p.msg && p.msg.type === "clankers:userscript-ready"),
+        "preview-ready notifies iframe with userscript-ready with state-download off",
+      );
+      assert.ok(
+        boardReqs.some((r) => r.url === "https://8000-sbx.e2b.app/api/board"),
+        "preview-ready triggers POST /api/board with state-download off",
+      );
+      const countBeforeKeyWatch = boardReqs.filter(
+        (r) => r.url === "https://8000-sbx.e2b.app/api/board",
+      ).length;
+      const keyWatchInterval = boardIntervals.find((entry) => entry.ms === 60000);
+      assert.ok(keyWatchInterval, "script registers key watch interval");
+      keyWatchInterval.fn();
+      assert.equal(
+        boardReqs.filter((r) => r.url === "https://8000-sbx.e2b.app/api/board").length,
+        countBeforeKeyWatch + 1,
+        "key watch interval syncs /api/board with state-download off",
       );
     });
   }

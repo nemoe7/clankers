@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.93
+// @name         Arena.ai | NemoUtils | v1.10.94
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.93
+// @version      1.10.94
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -364,9 +364,14 @@
   var PREVIEW_DRAWER_DEFAULT_PX = 1398;
   var PREVIEW_DRAWER_MIN_PX = 600;
   var PREVIEW_DRAWER_MAX_PX = 2400;
+  var BOARD_KEY = "clankers_global_board_v1";
+  var MAX_BOARD_FILE_BYTES = 524288;
+  var MAX_BOARD_BYTES = 2097152;
+  var MAX_BOARD_ENTRIES = 100;
   var featureRegistry = [];
   var restartStateWatchHook = null;
   var syncPreviewProxyHook = null;
+  var syncPreviewBoardHook = null;
   var syncPreviewDrawerLockHook = null;
   var previewUiRepo = "";
   var previewUiSessionId = "";
@@ -1403,6 +1408,13 @@
 
     var stopKeyWatch = jitteredTimer(function () {
       if (captchaSignal(document)) return;
+      if (
+        GM_getValue("state-download", true) === false &&
+        typeof syncPreviewBoardHook === "function" &&
+        readGlobalBoard().allowed_sessions.length > 0
+      ) {
+        syncPreviewBoardHook(previewBase(document));
+      }
       postRecentPreviews(document, false);
       var pair = settings();
       if (!pair.host || !pair.master) return;
@@ -4725,6 +4737,146 @@
     return { repo: stateRepo(doc), branch: stateBranch(doc) };
   }
 
+  function previewFrame(doc) {
+    if (!doc || typeof doc.querySelectorAll !== "function") return null;
+    var frames = doc.querySelectorAll("iframe[title]");
+    var i;
+    for (i = 0; i < frames.length; i += 1) {
+      var title = frames[i].getAttribute("title") || "";
+      if (title.indexOf("App preview on port 8000") === 0 && frames[i].src) {
+        return frames[i];
+      }
+    }
+    return null;
+  }
+
+  function previewBase(doc) {
+    var frame = previewFrame(doc);
+    return frame ? frame.src.replace(/\/+$/, "") : null;
+  }
+
+  var lastNotifiedPreviewFrame = null;
+  var lastNotifiedPreviewTarget = "";
+
+  function notifyPreviewReady(doc, force) {
+    var frame = previewFrame(doc);
+    if (!frame || !frame.contentWindow || typeof frame.contentWindow.postMessage !== "function") {
+      lastNotifiedPreviewFrame = null;
+      lastNotifiedPreviewTarget = "";
+      return false;
+    }
+    if (typeof frame.addEventListener === "function" && !frame.getAttribute("data-clankers-preview-bound")) {
+      frame.setAttribute("data-clankers-preview-bound", "true");
+      frame.addEventListener("load", function () {
+        notifyPreviewReady(doc, true);
+      });
+    }
+    var target = frame.src ? frame.src.replace(/\/+$/, "") : "*";
+    if (!force && frame === lastNotifiedPreviewFrame && target === lastNotifiedPreviewTarget) {
+      return false;
+    }
+    try {
+      frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, target);
+      lastNotifiedPreviewFrame = frame;
+      lastNotifiedPreviewTarget = target;
+      return true;
+    } catch (err) {
+      try {
+        frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, "*");
+        lastNotifiedPreviewFrame = frame;
+        lastNotifiedPreviewTarget = target;
+        return true;
+      } catch (fallbackErr) {
+        return false;
+      }
+    }
+  }
+
+  function stateJson(url, payload) {
+    return new Promise(function (resolve) {
+      if (typeof GM_xmlhttpRequest !== "function") {
+        resolve({ status: 0, body: null, failure: "unavailable" });
+        return;
+      }
+      GM_xmlhttpRequest({
+        method: payload === undefined ? "GET" : "POST",
+        url: url,
+        headers: payload === undefined ? {} : { "Content-Type": "application/json" },
+        data: payload === undefined ? undefined : JSON.stringify(payload),
+        timeout: 15000,
+        onload: function (answer) {
+          var body = null;
+          var failure = null;
+          try { body = JSON.parse(answer.responseText); } catch (err) { failure = "parse"; }
+          resolve({ status: answer.status, body: body, failure: failure });
+        },
+        onerror: function () { resolve({ status: 0, body: null, failure: "error" }); },
+        ontimeout: function () { resolve({ status: 0, body: null, failure: "timeout" }); },
+      });
+    });
+  }
+
+  function syncPreviewBoard(base) {
+    if (!base) return Promise.resolve(null);
+    return stateJson(base + "/api/board", { action: "sync", board: readGlobalBoard() }).then(function (answer) {
+      if (answer && answer.status === 200 && answer.body) {
+        if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
+        writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body));
+      }
+      return answer;
+    });
+  }
+
+  function onPreviewMessage(event) {
+    if (!event || !event.data || typeof event.data !== "object") return;
+    var frame = previewFrame(document);
+    var base = previewBase(document);
+    if (base && event.origin && base.indexOf(event.origin) !== 0) {
+      return;
+    }
+    if (!event.origin && frame && frame.contentWindow && event.source && event.source !== frame.contentWindow) {
+      return;
+    }
+    if (event.data.type === "clankers:preview-ready") {
+      if (typeof event.data.repo === "string" && event.data.repo.trim()) {
+        var nextRepo = event.data.repo.trim();
+        if (nextRepo !== previewUiRepo) {
+          previewUiRepo = nextRepo;
+          if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
+        }
+      }
+      notifyPreviewReady(document, !event.data.repo);
+      syncPreviewBoard(base);
+    } else if (event.data.type === "clankers:force-save") {
+      if (typeof forceSaveStateHook === "function") {
+        forceSaveStateHook(!event.data.save_id);
+      }
+    } else if (event.data.type === "clankers:board-request") {
+      syncPreviewBoard(base);
+    } else if (event.data.type === "clankers:board-action" && event.data.action) {
+      if ((event.data.action.action === "heartbeat" || event.data.action.type === "heartbeat") &&
+          event.data.action.session_id) {
+        setPreviewUiSessionId(event.data.action.session_id);
+      }
+      var outcome = applyBoardAction(readGlobalBoard(), event.data.action);
+      if (outcome.ok) writeGlobalBoard(outcome.board);
+      if (outcome.ok && base) {
+        syncPreviewBoard(base);
+      }
+    }
+  }
+
+  syncPreviewBoardHook = syncPreviewBoard;
+  if (typeof document !== "undefined" && !pauseStored()) {
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("message", onPreviewMessage);
+    }
+    notifyPreviewReadyHook = function () {
+      notifyPreviewReady(document);
+    };
+    notifyPreviewReady(document);
+  }
+
   runFeature("state-download", "State - download", function () {
     var STATE_PANEL_ID = "clankers-state-panel";
     var STATE_PANEL_MS = 6000;
@@ -4828,85 +4980,6 @@
     var stateBusy = false;
     var selected = null;
     var selectedKey = null;
-
-    function previewFrame(doc) {
-      if (!doc || typeof doc.querySelectorAll !== "function") return null;
-      var frames = doc.querySelectorAll("iframe[title]");
-      var i;
-      for (i = 0; i < frames.length; i += 1) {
-        var title = frames[i].getAttribute("title") || "";
-        if (title.indexOf("App preview on port 8000") === 0 && frames[i].src) {
-          return frames[i];
-        }
-      }
-      return null;
-    }
-
-    function previewBase(doc) {
-      var frame = previewFrame(doc);
-      return frame ? frame.src.replace(/\/+$/, "") : null;
-    }
-
-    var lastNotifiedPreviewFrame = null;
-    var lastNotifiedPreviewTarget = "";
-
-    function notifyPreviewReady(doc, force) {
-      var frame = previewFrame(doc);
-      if (!frame || !frame.contentWindow || typeof frame.contentWindow.postMessage !== "function") {
-        lastNotifiedPreviewFrame = null;
-        lastNotifiedPreviewTarget = "";
-        return false;
-      }
-      if (typeof frame.addEventListener === "function" && !frame.getAttribute("data-clankers-preview-bound")) {
-        frame.setAttribute("data-clankers-preview-bound", "true");
-        frame.addEventListener("load", function () {
-          notifyPreviewReady(doc, true);
-        });
-      }
-      var target = frame.src ? frame.src.replace(/\/+$/, "") : "*";
-      if (!force && frame === lastNotifiedPreviewFrame && target === lastNotifiedPreviewTarget) {
-        return false;
-      }
-      try {
-        frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, target);
-        lastNotifiedPreviewFrame = frame;
-        lastNotifiedPreviewTarget = target;
-        return true;
-      } catch (err) {
-        try {
-          frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, "*");
-          lastNotifiedPreviewFrame = frame;
-          lastNotifiedPreviewTarget = target;
-          return true;
-        } catch (fallbackErr) {
-          return false;
-        }
-      }
-    }
-
-    function stateJson(url, payload) {
-      return new Promise(function (resolve) {
-        if (typeof GM_xmlhttpRequest !== "function") {
-          resolve({ status: 0, body: null, failure: "unavailable" });
-          return;
-        }
-        GM_xmlhttpRequest({
-          method: payload === undefined ? "GET" : "POST",
-          url: url,
-          headers: payload === undefined ? {} : { "Content-Type": "application/json" },
-          data: payload === undefined ? undefined : JSON.stringify(payload),
-          timeout: 15000,
-          onload: function (answer) {
-            var body = null;
-            var failure = null;
-            try { body = JSON.parse(answer.responseText); } catch (err) { failure = "parse"; }
-            resolve({ status: answer.status, body: body, failure: failure });
-          },
-          onerror: function () { resolve({ status: 0, body: null, failure: "error" }); },
-          ontimeout: function () { resolve({ status: 0, body: null, failure: "timeout" }); },
-        });
-      });
-    }
 
     function receiptKey(storeKey) { return "clankers-arena-state-receipt-" + storeKey; }
     function pendingKey(storeKey) { return "clankers-arena-state-pending-" + storeKey; }
@@ -5311,14 +5384,15 @@
     async function fetchStateFile(manual, force) {
       notifyPreviewReady(document);
       var base = previewBase(document);
-      if (!base || stateBusy) return;
+      if (!base) return;
+      var initialBoard = readGlobalBoard();
+      if (initialBoard.allowed_sessions.length > 0) {
+        syncPreviewBoard(base);
+      }
+      if (stateBusy) return;
       stateBusy = true;
       try {
         var scope = stateScope(document);
-        var initialBoard = readGlobalBoard();
-        if (initialBoard.allowed_sessions.length > 0) {
-          syncPreviewBoard(base);
-        }
         var initialSid = boardSessionId(scope.branch || previewUiSessionId || "");
         if (!manual && isWorkerSession(initialBoard, initialSid, null)) {
           return;
@@ -5344,13 +5418,6 @@
         clearErrorPanel();
         if (body.scope && typeof body.scope.branch === "string" && body.scope.branch.trim()) {
           setPreviewUiSessionId(body.scope.branch);
-          if (!scope.branch) {
-            scope = {
-              repo: scope.repo || String(body.scope.repo || ""),
-              branch: String(body.scope.branch).trim(),
-            };
-            storeKey = stateScopeKey(scope.repo, scope.branch);
-          }
         }
         var activeBoard = readGlobalBoard();
         var sessionSid = boardSessionId(scope.branch || previewUiSessionId || "");
@@ -5375,11 +5442,22 @@
         var rememberedBase = GM_getValue(baseKey(lastScope || storeKey), "");
         var rememberedBranch = GM_getValue(branchKey(lastScope || storeKey), "");
         var handle = selectedKey === storeKey && selected ? selected : await stateHandle(fileKey(storeKey));
+        if (!handle && lastScope && lastScope !== storeKey) {
+          handle = selectedKey === lastScope && selected ? selected : await stateHandle(fileKey(lastScope));
+        }
+        var repoOnlyKey = scope.repo ? stateScopeKey(scope.repo, "") : "";
+        if (!handle && repoOnlyKey && repoOnlyKey !== storeKey && repoOnlyKey !== lastScope) {
+          handle = selectedKey === repoOnlyKey && selected ? selected : await stateHandle(fileKey(repoOnlyKey));
+        }
         if (!scope.branch && !lastScope && !force && !handle) {
           stateError(STATE_LINES.noBranch, "Force save", function () { fetchStateFile(true, true); }, "missing-branch");
           return;
         }
-        if (handle && !handleMatchesScope(handle, scope.repo, scope.branch)) {
+        var matchesScope = handle && (
+          handleMatchesScope(handle, scope.repo, scope.branch) ||
+          (rememberedBranch && handleMatchesScope(handle, scope.repo, rememberedBranch))
+        );
+        if (handle && !matchesScope) {
           stateError(handle.name + " does not match this " + handleMismatchScope(handle, scope.repo, scope.branch) + ".",
             "Choose file", chooseStateFile, "wrong-file");
           return;
@@ -5504,8 +5582,8 @@
 
     var menus = [];
     chooseStateFileHook = chooseStateFile;
-    forceSaveStateHook = function () {
-      fetchStateFile(true, true);
+    forceSaveStateHook = function (manual) {
+      fetchStateFile(manual !== false, true);
     };
     setResetWindowHook = function (next) {
       GM_setValue(RESET_WINDOW_KEY, Boolean(next));
@@ -5533,60 +5611,6 @@
       ),
     );
 
-    function syncPreviewBoard(base) {
-      if (!base) return Promise.resolve(null);
-      return stateJson(base + "/api/board", { action: "sync", board: readGlobalBoard() }).then(function (answer) {
-        if (answer && answer.status === 200 && answer.body) {
-          if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
-          writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body));
-        }
-        return answer;
-      });
-    }
-
-    function onPreviewMessage(event) {
-      if (!event || !event.data || typeof event.data !== "object") return;
-      var frame = previewFrame(document);
-      var base = previewBase(document);
-      if (base && event.origin && base.indexOf(event.origin) !== 0) {
-        return;
-      }
-      if (!event.origin && frame && frame.contentWindow && event.source && event.source !== frame.contentWindow) {
-        return;
-      }
-      if (event.data.type === "clankers:preview-ready") {
-        if (typeof event.data.repo === "string" && event.data.repo.trim()) {
-          var nextRepo = event.data.repo.trim();
-          if (nextRepo !== previewUiRepo) {
-            previewUiRepo = nextRepo;
-            if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
-          }
-        }
-        notifyPreviewReady(document, !event.data.repo);
-        syncPreviewBoard(base);
-      } else if (event.data.type === "clankers:force-save") {
-        fetchStateFile(!event.data.save_id, true);
-      } else if (event.data.type === "clankers:board-request") {
-        syncPreviewBoard(base);
-      } else if (event.data.type === "clankers:board-action" && event.data.action) {
-        if ((event.data.action.action === "heartbeat" || event.data.action.type === "heartbeat") &&
-            event.data.action.session_id) {
-          setPreviewUiSessionId(event.data.action.session_id);
-        }
-        var outcome = applyBoardAction(readGlobalBoard(), event.data.action);
-        if (outcome.ok) writeGlobalBoard(outcome.board);
-        if (outcome.ok && base) {
-          syncPreviewBoard(base);
-        }
-      }
-    }
-
-    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-      window.addEventListener("message", onPreviewMessage);
-    }
-    notifyPreviewReadyHook = function () {
-      notifyPreviewReady(document);
-    };
     notifyPreviewReady(document);
     fetchStateFile(false);
     var stopStateWatch = jitteredTimer(function () {
@@ -5599,10 +5623,8 @@
       }, stateWatchMs(), HTTP_JITTER_MS);
     };
     return function () {
-      notifyPreviewReadyHook = null;
-      if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
-        window.removeEventListener("message", onPreviewMessage);
-      }
+      chooseStateFileHook = null;
+      forceSaveStateHook = null;
       restartStateWatchHook = null;
       stopStateWatch();
       menus.forEach(menuDrop);
@@ -6286,11 +6308,6 @@
       appliedTitle = null;
     };
   });
-
-  var BOARD_KEY = "clankers_global_board_v1";
-  var MAX_BOARD_FILE_BYTES = 524288;
-  var MAX_BOARD_BYTES = 2097152;
-  var MAX_BOARD_ENTRIES = 100;
 
   function boardSessionId(branch) {
     var clean = String(branch || "").trim();

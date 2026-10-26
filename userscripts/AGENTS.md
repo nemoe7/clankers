@@ -9,6 +9,7 @@
 - Detect open preview drawers by preview-specific controls (`button[aria-label="Close preview"]`, `iframe[title^="App preview"]`), NEVER by `button[aria-label="Collapse workspace sidebar"]` alone (`256px` `Workspace card views` sidebar keeps that button when the preview is closed).
 - Lock width on both the outer (`div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip`) and inner (`> div`) preview drawer containers.
 - NEVER fall back to timestamped downloads when a quiet state save fails; show `#clankers-state-panel` specifying the error and offering `Choose file`.
-- Keep `syncPreviewBoard` independent of `stateBusy` so state-save waits NEVER block multi-session board synchronization.
+- Keep `storeKey` in `fetchStateFile` aligned with `stateScope(document)` instead of overwriting it with `body.scope.branch`, and fall back to `lastScope` handles.
+- Initialize `BOARD_KEY`, `onPreviewMessage`, `notifyPreviewReady`, and `syncPreviewBoard` above `runFeature` calls and keep `syncPreviewBoard` independent of `stateBusy`.
 - NEVER put en-dashes (`\u2013`) or em-dashes (`\u2014`) in `userscripts/*.user.js` or `userscripts/README.md`.
 - Run both `node --test maintenance/workflows/userscripts.test.cjs` and `node --test maintenance/workflows/userscripts.checks.cjs` via `arena-preview run start` before pushing `userscripts/` changes.
