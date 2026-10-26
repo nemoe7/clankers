@@ -454,8 +454,8 @@ mark code { color: var(--text); }
     right: calc(50vw + 466px);
     width: min(216px, calc(50vw - 478px));
     z-index: 2;
-    display: flex; flex-direction: column; gap: 4px; padding: 8px;
-    border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+    display: flex; flex-direction: column; gap: 4px; padding: 0;
+    border: 0; background: transparent;
     max-height: calc(100dvh - 96px); overflow-y: auto;
   }
   .report-toc[hidden] { display: none; }
@@ -474,8 +474,8 @@ mark code { color: var(--text); }
     left: calc(50vw + 466px);
     width: min(216px, calc(50vw - 478px));
     z-index: 2;
-    display: flex; flex-direction: column; gap: 8px; padding: 8px;
-    border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+    display: flex; flex-direction: column; gap: 8px; padding: 0;
+    border: 0; background: transparent;
     max-height: calc(100dvh - 96px); overflow-y: auto;
   }
   .report-rail .report-toolbar { border-bottom: 0; padding-bottom: 0; gap: 4px; }

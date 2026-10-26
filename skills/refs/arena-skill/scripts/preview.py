@@ -5821,20 +5821,15 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
   raw_sessions_list = (
     data.get("sessions") if isinstance(data.get("sessions"), list) else []
   )
-  now_stamp = clip_stamp(now())
   session_epochs = {}
-  max_epoch = board_stamp_epoch(now_stamp) if sid else None
+  max_epoch = None
   for row in raw_sessions_list:
     if not isinstance(row, dict):
       continue
     row_sid = board_session_id(row.get("session_id") or row.get("branch") or "")
     if not row_sid or row_sid in removed_set:
       continue
-    ep = (
-      board_stamp_epoch(now_stamp)
-      if (sid and row_sid == sid)
-      else board_stamp_epoch(row.get("updated_at"))
-    )
+    ep = board_stamp_epoch(row.get("updated_at"))
     if ep is not None:
       session_epochs[row_sid] = ep
       if max_epoch is None or ep > max_epoch:
@@ -5920,7 +5915,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
         "branch": str(row.get("branch") or (branch if is_self else f"arena/{row_sid}")),
         "status": "polling" if row_polling else "active",
         "polling": row_polling,
-        "updated_at": now_stamp if is_self else str(row.get("updated_at") or now_stamp),
+        "updated_at": str(row.get("updated_at") or clip_stamp(now())),
         "allowed": row_sid in allowed,
         "role": row_role,
       }
@@ -8026,8 +8021,22 @@ class Store:
 
     if action_type == "sync":
       incoming = (
-        payload.get("board") if isinstance(payload.get("board"), dict) else payload
+        dict(payload.get("board"))
+        if isinstance(payload.get("board"), dict)
+        else dict(payload)
       )
+      if isinstance(incoming.get("sessions"), list) and sid:
+        now_sync = clip_stamp(now())
+        updated_incoming_sessions = []
+        for s_row in incoming["sessions"]:
+          if (
+            isinstance(s_row, dict)
+            and board_session_id(s_row.get("session_id") or s_row.get("branch") or "")
+            == sid
+          ):
+            s_row = {**s_row, "updated_at": now_sync}
+          updated_incoming_sessions.append(s_row)
+        incoming["sessions"] = updated_incoming_sessions
       if isinstance(incoming, dict) and "multi_repo" in incoming:
         multi_repo = bool(incoming.get("multi_repo"))
       merged = normalize_board_state(
