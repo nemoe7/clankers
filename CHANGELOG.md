@@ -16,6 +16,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### arena
+
+- Allow small verified commit batches (`<=3` commits) on private repos while requiring pushes after each task on public repos (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+
 #### arena-skill
 
 - Align `.task-type`, `.board-badge`, and `#board-tab` tokens with Arena's green palette, and match `.board-badge` to `.task-type` chips (`assets/style.css`, `assets/app.js`).
@@ -23,7 +27,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Require main sessions to question worker behavior, code, and claims (`SKILL.md`).
 - Mirror worker reports into the main Reports tab, forward owner submissions via `report_ops`, and strip report bodies from `/api/state` (`scripts/preview.py`).
 - Show session survey pips and status text in `#board-sessions`, store branch slugs in `ack_sender` and `@` mentions, and resolve board labels (`scripts/preview.py`, `assets/app.js`, `assets/style.css`).
-- Suppress the report bottom fade while a report input has focus, and fade out `#report-submit-float` at report end (`assets/app.js`, `assets/style.css`).
+- Suppress the report bottom fade when a report input has focus or at report end (`150ms`), and keep `#report-submit-float` visible (`assets/app.js`, `assets/style.css`).
+- Show small-batch (`<=3` commits) commit and unpushed reminders on private repos (`scripts/preview.py`).
 
 #### nuu
 

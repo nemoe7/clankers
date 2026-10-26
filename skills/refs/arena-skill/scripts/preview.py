@@ -236,7 +236,23 @@ def fill_reminder(tail, remaining):
   return tail.replace("{remaining} tasks", count)
 
 
-def reminder_tail(cursor, remaining, stale=0, unpushed=0):
+PRIVATE_BATCH_CAP = 3
+REPO_PRIVATE_META = "repo_private"
+
+
+def unpushed_reminder_text(unpushed, private=False):
+  """Return the unpushed-commit notice for public or private repos."""
+  if not unpushed:
+    return ""
+  prefix = f"{unpushed} commit/s unpushed."
+  if private:
+    if unpushed >= PRIVATE_BATCH_CAP:
+      return f"{prefix} Batch cap ({PRIVATE_BATCH_CAP}) reached, so push now."
+    return f"{prefix} Private repo: push small batches (<={PRIVATE_BATCH_CAP}), and never starve pushes."
+  return f"{prefix} ALWAYS push. NEVER delay for batch."
+
+
+def reminder_tail(cursor, remaining, stale=0, unpushed=0, private=False):
   """Return the rotating tail at the cursor. A hidden entry yields the next one."""
   for step in range(len(REMINDERS)):
     tail = fill_reminder(REMINDERS[(cursor + step) % len(REMINDERS)], remaining)
@@ -244,7 +260,7 @@ def reminder_tail(cursor, remaining, stale=0, unpushed=0):
       if tail == "Unpublish stale reports." and stale:
         return f"Unpublish {stale} stale report{'s' if stale != 1 else ''}."
       if tail == "Always push." and unpushed:
-        return f"{unpushed} commit/s unpushed. ALWAYS push. NEVER delay for batch."
+        return unpushed_reminder_text(unpushed, private=private)
       return tail
   return REMINDERS[cursor % len(REMINDERS)]
 
@@ -4383,6 +4399,53 @@ def guard_task_runs(state_dir, task_id=None, action="change"):
 PUSH_GUARDED_TASK_TYPES = ("code", "docs")
 
 
+def is_private_repo(repo_root, store=None):
+  """Return True when the repository is private on GitHub, caching the result in SQLite meta."""
+  if store is not None:
+    try:
+      cached = store.meta_value(REPO_PRIVATE_META)
+    except Exception:
+      cached = None
+    if cached in ("0", "1"):
+      return cached == "1"
+  if repo_root is None:
+    return False
+  root = Path(repo_root)
+  if not (root / ".git").exists():
+    return False
+  origin_proc = subprocess.run(
+    ["git", "config", "--get", "remote.origin.url"],
+    cwd=root,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  origin_url = origin_proc.stdout.strip() if origin_proc.returncode == 0 else ""
+  if "github.com" not in origin_url:
+    return False
+  try:
+    gh_proc = subprocess.run(
+      ["gh", "repo", "view", "--json", "isPrivate", "--jq", ".isPrivate"],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      timeout=3,
+      check=False,
+    )
+  except (OSError, subprocess.SubprocessError):
+    return False
+  verdict = gh_proc.stdout.strip().lower() if gh_proc.returncode == 0 else ""
+  if verdict not in ("true", "false"):
+    return False
+  private = verdict == "true"
+  if store is not None:
+    try:
+      store.set_meta(REPO_PRIVATE_META, "1" if private else "0")
+    except Exception:
+      pass
+  return private
+
+
 def unpushed_commit_count(repo_root):
   """Return the count of local commits on HEAD not yet pushed to origin."""
   if repo_root is None:
@@ -4463,6 +4526,8 @@ def guard_task_push(repo_root, task_id, task_type):
     and head_proc.returncode == 0
     and remote_proc.stdout.strip() != head_proc.stdout.strip()
   ):
+    if is_private_repo(root) and unpushed_commit_count(root) < PRIVATE_BATCH_CAP:
+      return
     raise ValueError(
       f"FINISH BLOCKED: commit and push verified changes before marking {task_id} finished."
     )
@@ -11958,19 +12023,19 @@ class Store:
     else:
       head = []
     is_worker = self.board_state().get("board_role") == "worker"
-    unpushed = (
-      unpushed_commit_count(self.repository_root())
-      if (routine and not is_worker)
-      else 0
+    repo_root = self.repository_root() if (routine and not is_worker) else None
+    unpushed = unpushed_commit_count(repo_root) if repo_root else 0
+    private = is_private_repo(repo_root, store=self) if unpushed else False
+    tail = (
+      reminder_tail(cursor, remaining, len(stale), unpushed, private=private)
+      if routine
+      else ""
     )
-    tail = reminder_tail(cursor, remaining, len(stale), unpushed) if routine else ""
     parts = [" ".join([*head, *unacked]).strip()]
     if order_notice:
       parts.append(TASK_ORDER_NOTICE)
     unpushed_notice = (
-      f"{unpushed} commit/s unpushed. ALWAYS push. NEVER delay for batch."
-      if unpushed
-      else ""
+      unpushed_reminder_text(unpushed, private=private) if unpushed else ""
     )
     if unpushed_notice and unpushed_notice != tail:
       parts.append(unpushed_notice)
@@ -15871,7 +15936,11 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
   # case: task-reminder
   if "commit-remind" not in finished and "git commit" in command:
     mark("commit-remind")
-    report("ALWAYS push. NEVER delay for batch.")
+    gate_store = Store(state_dir) if state_file(state_dir).is_file() else None
+    if is_private_repo(root, store=gate_store):
+      report("Private repo: batch at most 3 verified commits, and never starve pushes.")
+    else:
+      report("ALWAYS push. NEVER delay for batch.")
   if "remind" not in finished and any(
     word in command for word in ("git commit", "git push", "gh pr checks")
   ):

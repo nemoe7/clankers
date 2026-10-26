@@ -5774,7 +5774,9 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(styleSource, /\.board-badge\[data-role="worker"\]\s*\{\s*color:\s*var\(--badge-code-fg\);/);
   assert.match(appSource, /badge\.textContent\s*=\s*isMain\s*\?\s*'Main'\s*:\s*\(isAllowed\s*\?\s*'Worker'\s*:\s*'Not on allowlist'\)/);
   assert.match(appSource, /Boolean\(closeBtn\s*&&\s*!closeBtn\.hidden\)/);
-  assert.match(styleSource, /\.report-submit-float\[data-at-end="true"\]\s*\{\s*opacity:\s*0;\s*pointer-events:\s*none;\s*\}/);
+  assert.match(styleSource, /#reports-panel\[role="tabpanel"\]\[data-at-end="true"\]/);
+  assert.match(styleSource, /transition-property:\s*--edge-start,\s*--edge-end;\s*transition-duration:\s*150ms;/);
+  assert.match(styleSource, /:root\[data-keyboard-open="true"\]\s+\.report-submit-row\s*>\s*#report-submit\s*\{\s*visibility:\s*visible;/);
   assert.match(appSource, /document\.documentElement\.dataset\.reportInputActive\s*=\s*'true'/);
   assert.match(styleSource, /\.board-sender\b/);
   assert.match(appSource, /function\s+combinedHistoryItems\(/);
