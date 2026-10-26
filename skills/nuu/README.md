@@ -14,7 +14,7 @@ The project supplies its page, running application, and browser. Tools capture p
 
 1. Read the project's design record, or start from [the template](references/design-document.md).
 2. Preserve the product system, or select the house [sheet](references/style.css) and [examples](references/examples.md).
-3. Change the page and inspect rendered states at `75em` (`1200`), `60em` (`960`), `40em` (`640`), and `30em` (`480`) breakpoints.
+3. Change the page and inspect rendered states at `68em` (`1088`), `60em` (`960`), `30em` (`480`), and `24em` (`384`) breakpoints.
 4. Collect computed values with [the browser snippet](references/measure.md), check them, and retain the reports and screenshots.
 5. Update the project design record with settled decisions and evidence.
 
@@ -33,7 +33,7 @@ python skills\nuu\scripts\measure.py ruler --from 120,340 --to 264,340
 
 `check` uses sheet rules. `ruler` uses only the scale. Exit status is 0 for a pass and 1 for findings.
 
-Defaults: the bundled sheet and an 8-pixel scale.
+Defaults: the bundled sheet and a 4-pixel scale.
 
 Global options precede the command:
 
@@ -62,8 +62,8 @@ python %UI% doctor
 python %UI% search "dashboard accessibility" --dataset ux-guidelines
 python %UI% lint --project path\to\product
 python %UI% extract --url https://example.com --artifacts evidence
-python %UI% annotate --screenshot evidence\1200-light-no-preference.png --findings findings.json --output annotated.png
-python %UI% board --artifacts evidence --type design --output board.png
+python %UI% annotate -i evidence\1920-dark-no-preference.png -s findings.json -o annotated.png
+python %UI% board -p "Desktop=annotated.png" -o board.png
 python %UI% inspect --url https://example.com --artifacts evidence --output inspect.json
 python %UI% flow --url https://example.com --flow flow.json
 python %UI% a11y --url https://example.com --output a11y.json

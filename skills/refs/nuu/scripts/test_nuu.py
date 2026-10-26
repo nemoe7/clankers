@@ -1555,3 +1555,14 @@ def test_design_boards_and_html_typography(tmp_path):
     encoding="utf-8",
   )
   assert nuu.lint(ts_proj)["findings"] == []
+
+  assert nuu.resolve_named_breakpoints(nuu_skill_dir) == (
+    "68em",
+    "60em",
+    "30em",
+    "24em",
+  )
+  walk_parsed = walk.build_parser().parse_args(
+    ["-x", "/custom/chromium", "http://127.0.0.1:8000"]
+  )
+  assert walk_parsed.executable == "/custom/chromium"
