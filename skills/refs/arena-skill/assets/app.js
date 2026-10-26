@@ -1115,6 +1115,10 @@ function combinedHistoryItems(notes, board = getState()?.board) {
       board_sender: senderLabel,
       text: rawText,
       html: entry.html !== undefined ? entry.html : renderMessageMarkdown(rawText),
+      ...(entry.ack_text && entry.ack_html === undefined ? { ack_html: renderMessageMarkdown(entry.ack_text) } : {}),
+      ...(Array.isArray(entry.replies) && entry.replies.length ? {
+        replies: entry.replies.map(r => (r && r.text && r.html === undefined ? { ...r, html: renderMessageMarkdown(r.text) } : r)),
+      } : {}),
       ...(entry.file?.name ? { attachment_name: entry.file.name } : {}),
     });
   }
@@ -1185,7 +1189,7 @@ function showHistory(rawNotes) {
       const senderEl = document.createElement('div');
       senderEl.className = 'board-sender';
       senderEl.textContent = item.board_sender;
-      text.prepend(senderEl);
+      text.insertBefore(senderEl, text.children?.[0] || text.firstChild || null);
     }
     const receipt = node.children[2];
     receipt.className = 'receipt';
@@ -1252,6 +1256,10 @@ function showHistory(rawNotes) {
     if (item.ack_text) {
       answer.className = item.ack_type === 'reply' ? 'answer reply message-text' : 'answer reply';
       answer.hidden = false;
+      const activeBoard = getState()?.board;
+      const boardEnabled = Array.isArray(activeBoard?.allowed_sessions) && activeBoard.allowed_sessions.length > 0;
+      const currentRepo = String(activeBoard?.repo || getState()?.repo || '').trim().split('/').pop();
+      const defaultAckSender = activeBoard?.board_id || 'alpha';
       const blocks = (item.replies || []).map(reply => {
         const block = document.createElement('div');
         block.className = 'reply-block';
@@ -1264,6 +1272,15 @@ function showHistory(rawNotes) {
           plain.textContent = reply.text.replace(/\\n/g, '\n');
           block.replaceChildren(plain);
         }
+        if (boardEnabled) {
+          const replySenderLabel = displayBoardId(reply.sender || item.ack_sender || defaultAckSender, activeBoard, currentRepo);
+          if (replySenderLabel) {
+            const replySenderEl = document.createElement('div');
+            replySenderEl.className = 'board-sender';
+            replySenderEl.textContent = replySenderLabel;
+            block.insertBefore(replySenderEl, block.children?.[0] || block.firstChild || null);
+          }
+        }
         return block;
       });
       if (item.ack_html === undefined) {
@@ -1273,6 +1290,15 @@ function showHistory(rawNotes) {
       } else {
         answer.innerHTML = linkReferences(item.ack_html, references);
         answer.append(...blocks);
+      }
+      if (boardEnabled) {
+        const ackSenderLabel = displayBoardId(item.ack_sender || defaultAckSender, activeBoard, currentRepo);
+        if (ackSenderLabel) {
+          const ackSenderEl = document.createElement('div');
+          ackSenderEl.className = 'board-sender';
+          ackSenderEl.textContent = ackSenderLabel;
+          answer.insertBefore(ackSenderEl, answer.children?.[0] || answer.firstChild || null);
+        }
       }
     } else {
       answer.className = 'answer';
@@ -4000,7 +4026,9 @@ function syncBoardHeartbeat(state) {
   const branch = String(state.board.branch || '');
   const hbKey = `${sid}|${repo}|${branch}|${isPolling ? '1' : '0'}`;
   const entries = Array.isArray(state.board.entries) ? state.board.entries : [];
-  const entriesKey = entries.map(row => row && row.id ? String(row.id) : '').join(',');
+  const entriesKey = entries.map(row => row && row.id
+    ? `${row.id}:${row.seen_at || ''}:${row.acknowledged_at || ''}:${row.ack_edited_at || ''}:${Array.isArray(row.replies) ? row.replies.length : 0}:${row.task_id || ''}`
+    : '').join(',');
   const targetOrigin = parentTargetOrigin();
   try {
     if (hbKey !== lastBoardHeartbeatKey) {

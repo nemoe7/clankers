@@ -5750,5 +5750,9 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(styleSource, /\.message\[data-board-author="agent"\]\s*>\s*:is\(\.message-text,\s*\.raw-message\)/);
   assert.match(styleSource, /body\[data-board-role="worker"\]\s*:is\(#notes-tab,/);
   assert.match(appSource, /document\.body\.dataset\.boardRole\s*=\s*'worker'/);
+  assert.match(styleSource, /\.message\[data-board-author="agent"\]\s*>\s*\.answer\.reply::before\s*\{[^}]*border-top:\s*1px\s+solid\s+var\(--border\)/);
+  assert.doesNotMatch(styleSource, /^\.answer\.reply\s*\{[^}]*border-top:/m);
+  assert.match(appSource, /const\s+ackSenderEl\s*=\s*document\.createElement\('div'\)/);
+  assert.match(appSource, /row\.acknowledged_at\s*\|\|\s*''/);
 });
 

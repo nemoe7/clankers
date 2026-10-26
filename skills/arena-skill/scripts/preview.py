@@ -2236,15 +2236,17 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 				cand=resolve_board_target(token,sessions,allowed=allowed,main_sid=main_sid)
 				if cand and cand in allowed and cand!=from_sid:mention_target=cand;break
 		if mention_target and resolved_to=='*':resolved_to=mention_target
-		sender_row=session_by_id.get(from_sid)or{};raw_replies=item.get('replies');replies=[dict(r)for r in raw_replies if isinstance(r,dict)]if isinstance(raw_replies,list)else[];entries.append({'id':str(item.get('id')or f"p{uuid.uuid4().hex[:5]}"),'session_id':from_sid,'board_id':str(sender_row.get('board_id')or item.get('board_id')or from_sid),'from_owner':bool(item.get('from_owner')),'note_id':str(item.get('note_id')or''),'to':resolved_to or'*','mention_target':mention_target,'repo':str(item.get('repo')or sender_row.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'tag':str(item.get('tag')or item_payload.get('tag')or''),'text':entry_text,'seen_at':clip_stamp(item.get('seen_at'))if item.get('seen_at')else None,'acknowledged_at':clip_stamp(item.get('acknowledged_at'))if item.get('acknowledged_at')else None,'ack_type':str(item.get('ack_type')or'reply')if item.get('acknowledged_at')else None,'ack_text':str(item.get('ack_text')or'')if item.get('ack_text')is not None else None,'ack_edited_at':clip_stamp(item.get('ack_edited_at'))if item.get('ack_edited_at')else None,'replies':replies,'payload':item_payload,'file':item.get('file')if isinstance(item.get('file'),dict)else None})
-	self_row=next((r for r in sessions if r['session_id']==sid),None)if sid else None;is_main=self_row['role']=='main'if self_row and self_row.get('allowed')else not main_sid or main_sid==sid;self_role='main'if is_main else'worker';self_wid=(self_row['worker_id']if self_row and self_row.get('worker_id')else worker_ids.get(sid)or default_worker_id(sid,str(repo or'')))if self_role=='worker'and sid else'';self_board_id=self_row['board_id']if self_row and self_row.get('board_id')and self_row.get('allowed')else format_board_role_id(self_role,repo=str(repo or''),worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid)if sid else'';known_repos=[];base_repo_slug=clean_board_repo(repo)
+		sender_row=session_by_id.get(from_sid)or{};raw_replies=item.get('replies');replies=[dict(r)for r in raw_replies if isinstance(r,dict)]if isinstance(raw_replies,list)else[];entries.append({'id':str(item.get('id')or f"p{uuid.uuid4().hex[:5]}"),'session_id':from_sid,'board_id':str(sender_row.get('board_id')or item.get('board_id')or from_sid),'from_owner':bool(item.get('from_owner')),'note_id':str(item.get('note_id')or''),'to':resolved_to or'*','mention_target':mention_target,'repo':str(item.get('repo')or sender_row.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'tag':str(item.get('tag')or item_payload.get('tag')or''),'text':entry_text,'seen_at':clip_stamp(item.get('seen_at'))if item.get('seen_at')else None,'acknowledged_at':clip_stamp(item.get('acknowledged_at'))if item.get('acknowledged_at')else None,'ack_type':str(item.get('ack_type')or'reply')if item.get('acknowledged_at')else None,'ack_text':str(item.get('ack_text')or'')if item.get('ack_text')is not None else None,'ack_sender':str(item.get('ack_sender')or'')if item.get('ack_sender')else None,'ack_edited_at':clip_stamp(item.get('ack_edited_at'))if item.get('ack_edited_at')else None,'task_id':str(item.get('task_id')or'')if item.get('task_id')else None,'replies':replies,'payload':item_payload,'file':item.get('file')if isinstance(item.get('file'),dict)else None})
+	self_row=next((r for r in sessions if r['session_id']==sid),None)if sid else None;is_worker=bool(self_row and self_row.get('allowed')and self_row.get('role')=='worker');is_main=not is_worker;self_role='worker'if is_worker else'main';self_wid=(self_row['worker_id']if self_row and self_row.get('worker_id')else worker_ids.get(sid)or default_worker_id(sid,str(repo or'')))if self_role=='worker'and sid else'';self_board_id=self_row['board_id']if self_row and self_row.get('board_id')and self_row.get('allowed')else format_board_role_id(self_role,repo=str(repo or''),worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid)if sid else'';known_repos=[];base_repo_slug=clean_board_repo(repo,sid)
 	if base_repo_slug:known_repos.append(base_repo_slug)
 	for row in sessions:
 		r_slug=clean_board_repo(row.get('repo')or'',row.get('session_id')or'')
 		if r_slug and r_slug not in known_repos:known_repos.append(r_slug)
 	for r_slug in linked_repos:
 		if r_slug not in known_repos:known_repos.append(r_slug)
-	return{'version':1,'session_id':sid,'board_id':self_board_id,'worker_id':self_wid,'multi_repo':multi_repo,'linked_repos':linked_repos,'known_repos':known_repos,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'repo':str(repo or''),'branch':str(branch or''),'removed_sessions':removed_sessions,'allowed_sessions':allowed,'main_session_id':main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
+	effective_main_sid=repo_has_main.get(base_repo_slug,'')if base_repo_slug else main_sid
+	if sid and sid not in allowed and not effective_main_sid:effective_main_sid=''
+	return{'version':1,'session_id':sid,'board_id':self_board_id,'worker_id':self_wid,'multi_repo':multi_repo,'linked_repos':linked_repos,'known_repos':known_repos,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'repo':str(repo or''),'branch':str(branch or''),'removed_sessions':removed_sessions,'allowed_sessions':allowed,'main_session_id':effective_main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
 def board_main_session_warning(state_dir,command):
 	if not isinstance(command,str)or not command.strip():return None
 	if not re.search('(?:^|[;&|()\\s])(?:git\\s+(?:-\\S+\\s+)*push\\b|gh\\s+pr\\s+(?:create|edit|merge|close|ready|reopen)\\b)',command):return None
@@ -2830,11 +2832,13 @@ class Store:
 		if not isinstance(raw,dict):return[]
 		board_now=self.board_state();sid=str(board_now.get('session_id')or'');allowed=set(board_now.get('allowed_sessions')or[])
 		if not sid or sid not in allowed:return[]
-		ack_wakes=dict(raw.get('ack_wakes'))if isinstance(raw.get('ack_wakes'),dict)else{};joined_key=f"{sid}:joined_sessions";raw_joined=ack_wakes.get(joined_key);seen_joined={str(k):str(v)for(k,v)in raw_joined.items()if k}if isinstance(raw_joined,dict)else{};multi_repo=bool(board_now.get('multi_repo'));notices=[];changed=False;active_other_sids=set()
+		ack_wakes=dict(raw.get('ack_wakes'))if isinstance(raw.get('ack_wakes'),dict)else{};joined_key=f"{sid}:joined_sessions";raw_joined=ack_wakes.get(joined_key);seen_joined={str(k):str(v)for(k,v)in raw_joined.items()if k}if isinstance(raw_joined,dict)else{};multi_repo=bool(board_now.get('multi_repo'));current_repo=clean_board_repo(board_now.get('repo')or'',sid);active_repos={current_repo,*(board_now.get('linked_repos')or[])};active_repos.discard('');notices=[];changed=False;active_other_sids=set()
 		for row in board_now.get('sessions')or[]:
 			if not isinstance(row,dict)or not row.get('allowed'):continue
 			other_sid=str(row.get('session_id')or'')
 			if not other_sid or other_sid==sid:continue
+			other_repo=clean_board_repo(row.get('repo')or'',other_sid)
+			if active_repos and other_repo and other_repo not in active_repos:continue
 			active_other_sids.add(other_sid);other_board_id=str(row.get('board_id')or other_sid);other_role=str(row.get('role')or'worker');short_id='alpha'if other_role=='main'else str(row.get('worker_id')or other_board_id);ident_label=other_board_id if multi_repo or short_id==other_board_id else f"{short_id} ({other_board_id})";prev_board_id=seen_joined.get(other_sid)
 			if prev_board_id!=other_board_id:
 				if prev_board_id is None:notices.append(f"BOARD SESSION JOINED: session {other_sid} joined the board with identifier {ident_label} ({other_role}).")
@@ -2897,6 +2901,7 @@ class Store:
 			for op in merged.get('report_ops')or[]:
 				op_id=str(op.get('id')or'')
 				if op_id and op_id not in seen_rep_op_ids:seen_rep_op_ids.add(op_id);report_ops.append(dict(op))
+				if str(op.get('op')or'')=='entry-ack':continue
 				target_sid=resolve_board_target(op.get('target')or'',sessions,allowed=allowed,main_sid=main_sid)
 				if op_id and target_sid==sid and op_id not in applied_rep_set:applied_rep_set.add(op_id);applied_rep_list.append(op_id);self.apply_board_report_op(op);wakes[sid]=op_id
 			ack_wakes[applied_rep_key]=applied_rep_list[-128:]
@@ -2904,7 +2909,7 @@ class Store:
 				for item in merged['allowed_sessions']:
 					if item not in removed_set and item not in allowed:allowed.append(item)
 			if merged['main_session_id']and merged['main_session_id']not in removed_set:main_sid=merged['main_session_id']
-			elif main_sid in removed_set:main_sid=''
+			elif not merged['main_session_id']or main_sid in removed_set:main_sid=''
 			by_sid={row['session_id']:dict(row)for row in sessions}
 			for row in merged['sessions']:
 				row_sid=row['session_id']
@@ -2919,7 +2924,7 @@ class Store:
 				row=dict(item);eid=str(row.get('id')or'')
 				if eid and eid in entry_by_id:
 					prev_entry=entry_by_id[eid]
-					for field in('seen_at','acknowledged_at','ack_type','ack_text','ack_edited_at'):
+					for field in('seen_at','acknowledged_at','ack_type','ack_text','ack_sender','ack_edited_at','task_id'):
 						if row.get(field)and not prev_entry.get(field):prev_entry[field]=row[field]
 					if isinstance(row.get('replies'),list)and len(row['replies'])>len(prev_entry.get('replies')or[]):
 						prev_entry['replies']=row['replies']
@@ -2928,6 +2933,18 @@ class Store:
 				if eid:entry_by_id[eid]=row
 				if isinstance(row.get('file'),dict)and'content'in row['file']:row['file']=stage_board_file(self.path.parent,row['session_id'],row['file'])
 				merged_entries.append(row)
+			for op in report_ops:
+				if str(op.get('op')or'')!='entry-ack':continue
+				target_eid=str(op.get('entry_id')or'')
+				if not target_eid or target_eid not in entry_by_id:continue
+				target_entry=entry_by_id[target_eid]
+				for field in('seen_at','acknowledged_at','ack_type','ack_text','ack_sender','ack_edited_at','task_id'):
+					if op.get(field)and not target_entry.get(field):target_entry[field]=op[field]
+				if isinstance(op.get('replies'),list)and len(op['replies'])>len(target_entry.get('replies')or[]):
+					target_entry['replies']=op['replies']
+					if op.get('ack_edited_at'):target_entry['ack_edited_at']=op['ack_edited_at']
+			for row in merged_entries:
+				eid=str(row.get('id')or'')
 				if eid and eid not in existing_entry_ids and row.get('session_id')!=sid and row.get('to')in('*',sid,'',None)and sid in allowed and eid not in seen_wake_set:wakes[sid]=eid
 			entries=merged_entries
 			with closing(self.connect())as db:
@@ -2970,8 +2987,8 @@ class Store:
 			report_id=str(payload.get('report_id')or payload.get('report')or'').strip()
 			if not report_id:raise ValueError('Missing report_id')
 			if op_name in{'answer','submit'}and not payload.get('from_owner'):
-				target_rep=next((r for r in worker_reports.get(target)or[]if isinstance(r,dict)and r.get('id')==report_id),None);sent_via_entry=any(e.get('session_id')==target and(report_id in str(e.get('text')or'')or str((e.get('payload')or{}).get('report_id')or'')==report_id)for e in entries if isinstance(e,dict));is_sent_to_main=bool(sent_via_entry or target_rep and target_rep.get('sent_to_main'));is_owner_requested=bool(target_rep and target_rep.get('owner_requested')or payload.get('owner_requested'));has_worker_entries=any(isinstance(e,dict)and e.get('session_id')==target for e in entries)
-				if is_owner_requested or has_worker_entries and not is_sent_to_main:raise ValueError(f"Report {report_id!r} was not sent to main; owner-requested reports must be presented to the owner")
+				target_rep=next((r for r in worker_reports.get(target)or[]if isinstance(r,dict)and r.get('id')==report_id),None);sent_via_entry=any(e.get('session_id')==target and(report_id in str(e.get('text')or'')or str((e.get('payload')or{}).get('report_id')or'')==report_id)for e in entries if isinstance(e,dict));is_sent_to_main=bool(sent_via_entry or target_rep and target_rep.get('sent_to_main'));is_owner_requested=bool(target_rep and target_rep.get('owner_requested')or payload.get('owner_requested'));has_explicit_report_entries=any(isinstance(e,dict)and e.get('session_id')==target and str((e.get('payload')or{}).get('report_id')or'')for e in entries)
+				if is_owner_requested or has_explicit_report_entries and not is_sent_to_main:raise ValueError(f"Report {report_id!r} was not sent to main; owner-requested reports must be presented to the owner")
 			rep_op={'id':str(payload.get('id')or f"rop-{uuid.uuid4().hex[:8]}"),'target':target,'op':op_name,'report_id':report_id,'answers':payload.get('answers')if isinstance(payload.get('answers'),dict)else{},'submission_id':payload.get('submission_id')or payload.get('note_id'),'at':clip_stamp(now())};report_ops.append(rep_op);worker_reports[target]=apply_report_op_to_list(worker_reports.get(target)or[],rep_op)
 			if target==sid:
 				applied_rep_key=f"{sid}:report_ops";applied_rep_list=[str(x)for x in ack_wakes.get(applied_rep_key)if x]if isinstance(ack_wakes.get(applied_rep_key),list)else[]
@@ -3902,9 +3919,10 @@ class Store:
 						if not isinstance(entry,dict):continue
 						eid=str(entry.get('id')or'');nid=str(entry.get('note_id')or'');alt_id=f"p{eid[2:7]}"if re.match('^b-[0-9a-f]{5,}',eid,re.IGNORECASE)else''
 						if eid==record_id or eid[:6]==record_id or alt_id and(alt_id==record_id or alt_id[:6]==record_id)or nid and(nid==record_id or nid[:6]==record_id):
-							if not entry.get('acknowledged_at'):entry['acknowledged_at']=clip_stamp(stamp);entry['ack_type']='reply';entry['ack_text']=text;entry['seen_at']=entry.get('seen_at')or clip_stamp(stamp)
-							else:replies=list(entry['replies'])if isinstance(entry.get('replies'),list)else[];replies.append({'type':'reply','text':text,'at':clip_stamp(stamp)});entry['replies']=replies;entry['ack_edited_at']=clip_stamp(stamp)
-							sender_sid=str(entry.get('session_id')or'');local_sid=board_session_id(b_raw.get('local_session_id')or workspace_branch(self.repository_root()))
+							local_sid=board_session_id(b_raw.get('local_session_id')or workspace_branch(self.repository_root()));norm_b=normalize_board_state(b_raw,session_id=local_sid,repo=self.repository_root().name,branch=workspace_branch(self.repository_root()));ack_sender_id=str(norm_b.get('board_id')or local_sid)
+							if not entry.get('acknowledged_at'):entry['acknowledged_at']=clip_stamp(stamp);entry['ack_type']='reply';entry['ack_text']=text;entry['ack_sender']=ack_sender_id;entry['seen_at']=entry.get('seen_at')or clip_stamp(stamp)
+							else:replies=list(entry['replies'])if isinstance(entry.get('replies'),list)else[];replies.append({'type':'reply','text':text,'at':clip_stamp(stamp),'sender':ack_sender_id});entry['replies']=replies;entry['ack_edited_at']=clip_stamp(stamp)
+							rep_ops=list(b_raw['report_ops'])if isinstance(b_raw.get('report_ops'),list)else[];rep_ops.append({'id':f"eack-{eid}-{uuid.uuid4().hex[:6]}",'target':'*','op':'entry-ack','entry_id':eid,'seen_at':entry.get('seen_at'),'acknowledged_at':entry.get('acknowledged_at'),'ack_type':entry.get('ack_type'),'ack_text':entry.get('ack_text'),'ack_sender':entry.get('ack_sender'),'ack_edited_at':entry.get('ack_edited_at'),'replies':entry.get('replies'),'at':clip_stamp(stamp)});b_raw['report_ops']=rep_ops[-MAX_BOARD_ENTRIES:];sender_sid=str(entry.get('session_id')or'')
 							if sender_sid and sender_sid!=local_sid:wakes=dict(b_raw['wakes'])if isinstance(b_raw.get('wakes'),dict)else{};wakes[sender_sid]=f"{eid}-ack";b_raw['wakes']=wakes
 							board_dirty=True;matched_db=True;break
 				if not matched_db:raise ValueError(f"Unknown note: {record_id}; no receipts written")

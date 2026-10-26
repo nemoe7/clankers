@@ -291,7 +291,10 @@ code.note-id { font-family: var(--font-mono); font-size: 1em; background: none; 
 .state-dot[data-state="said"] { background: var(--dot-said); }
 .answer { margin-top: 0; }
 /* Only replies use the bar, muted color, and smaller font size to save log space. Messages stay plain. */
-.answer.reply { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }
+.answer.reply { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; margin-top: 4px; }
+.message[data-board-author="agent"] > .answer.reply { position: relative; margin-top: 9px; }
+.message[data-board-author="agent"] > .answer.reply::before { content: ""; position: absolute; top: -5px; left: -2px; right: 0; border-top: 1px solid var(--border); }
+.answer.reply > :first-child { margin-top: 0; }
 .answer > p:last-child { margin-bottom: 0; }
 /* Each later acknowledgement adds a block below the first answer.
    Keep every earlier block. */

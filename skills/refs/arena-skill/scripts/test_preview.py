@@ -1634,7 +1634,7 @@ def test_http_boundaries():
       assert ".message:last-child{margin-bottom:0" in page
       assert re.search(
         r"\.answer\.reply\{border-left:2px solid (rgb\(199,194,188\)|#c7c2bc);"
-        r"padding-left:12px;color:var\(--muted\);font-size:13px",
+        r"padding-left:12px;color:var\(--muted\);font-size:13px;margin-top:4px",
         page,
       )
       assert re.search(
@@ -15766,3 +15766,27 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
     raise AssertionError("Expected ValueError on owner-requested worker report")
   except ValueError as exc:
     assert "not sent to main" in str(exc)
+  unopted_cross = preview.normalize_board_state(
+    {
+      "main_session_id": "b14c09a2-clankers",
+      "allowed_sessions": ["b14c09a2-clankers", "293da56c-clankers"],
+      "sessions": [
+        {"session_id": "b14c09a2-clankers", "repo": "clankers"},
+        {"session_id": "293da56c-clankers", "repo": "clankers"},
+      ],
+    },
+    session_id="c40a4115-arena-cleanup",
+    repo="arena-cleanup",
+  )
+  assert unopted_cross["board_role"] == "main"
+  assert unopted_cross["can_push_or_pr"] is True
+  assert unopted_cross["main_session_id"] == ""
+  store.acknowledge([posted_id], "acknowledged on board")
+  acked_state = store.board_state()
+  acked_entry = next(e for e in acked_state["entries"] if e["id"] == posted_id)
+  assert acked_entry["acknowledged_at"] is not None
+  assert acked_entry["ack_sender"] == acked_state["board_id"]
+  assert any(
+    op.get("op") == "entry-ack" and op.get("entry_id") == posted_id
+    for op in acked_state["report_ops"]
+  )

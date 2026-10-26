@@ -6245,9 +6245,13 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
         "ack_text": (
           str(item.get("ack_text") or "") if item.get("ack_text") is not None else None
         ),
+        "ack_sender": (
+          str(item.get("ack_sender") or "") if item.get("ack_sender") else None
+        ),
         "ack_edited_at": (
           clip_stamp(item.get("ack_edited_at")) if item.get("ack_edited_at") else None
         ),
+        "task_id": str(item.get("task_id") or "") if item.get("task_id") else None,
         "replies": replies,
         "payload": item_payload,
         "file": item.get("file") if isinstance(item.get("file"), dict) else None,
@@ -6256,12 +6260,11 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
   self_row = (
     next((r for r in sessions if r["session_id"] == sid), None) if sid else None
   )
-  is_main = (
-    self_row["role"] == "main"
-    if self_row and self_row.get("allowed")
-    else (not main_sid or main_sid == sid)
+  is_worker = bool(
+    self_row and self_row.get("allowed") and self_row.get("role") == "worker"
   )
-  self_role = "main" if is_main else "worker"
+  is_main = not is_worker
+  self_role = "worker" if is_worker else "main"
   self_wid = (
     (
       self_row["worker_id"]
@@ -6287,7 +6290,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     )
   )
   known_repos = []
-  base_repo_slug = clean_board_repo(repo)
+  base_repo_slug = clean_board_repo(repo, sid)
   if base_repo_slug:
     known_repos.append(base_repo_slug)
   for row in sessions:
@@ -6297,6 +6300,11 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
   for r_slug in linked_repos:
     if r_slug not in known_repos:
       known_repos.append(r_slug)
+  effective_main_sid = (
+    repo_has_main.get(base_repo_slug, "") if base_repo_slug else main_sid
+  )
+  if sid and sid not in allowed and not effective_main_sid:
+    effective_main_sid = ""
   return {
     "version": 1,
     "session_id": sid,
@@ -6314,7 +6322,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     "branch": str(branch or ""),
     "removed_sessions": removed_sessions,
     "allowed_sessions": allowed,
-    "main_session_id": main_sid,
+    "main_session_id": effective_main_sid,
     "board_role": self_role,
     "can_push_or_pr": bool(is_main),
     "sessions": sessions,
@@ -8316,6 +8324,9 @@ class Store:
       else {}
     )
     multi_repo = bool(board_now.get("multi_repo"))
+    current_repo = clean_board_repo(board_now.get("repo") or "", sid)
+    active_repos = {current_repo, *(board_now.get("linked_repos") or [])}
+    active_repos.discard("")
     notices = []
     changed = False
     active_other_sids = set()
@@ -8324,6 +8335,9 @@ class Store:
         continue
       other_sid = str(row.get("session_id") or "")
       if not other_sid or other_sid == sid:
+        continue
+      other_repo = clean_board_repo(row.get("repo") or "", other_sid)
+      if active_repos and other_repo and other_repo not in active_repos:
         continue
       active_other_sids.add(other_sid)
       other_board_id = str(row.get("board_id") or other_sid)
@@ -8523,6 +8537,8 @@ class Store:
         if op_id and op_id not in seen_rep_op_ids:
           seen_rep_op_ids.add(op_id)
           report_ops.append(dict(op))
+        if str(op.get("op") or "") == "entry-ack":
+          continue
         target_sid = resolve_board_target(
           op.get("target") or "", sessions, allowed=allowed, main_sid=main_sid
         )
@@ -8538,7 +8554,7 @@ class Store:
             allowed.append(item)
       if merged["main_session_id"] and merged["main_session_id"] not in removed_set:
         main_sid = merged["main_session_id"]
-      elif main_sid in removed_set:
+      elif not merged["main_session_id"] or main_sid in removed_set:
         main_sid = ""
       by_sid = {row["session_id"]: dict(row) for row in sessions}
       for row in merged["sessions"]:
@@ -8574,7 +8590,9 @@ class Store:
             "acknowledged_at",
             "ack_type",
             "ack_text",
+            "ack_sender",
             "ack_edited_at",
+            "task_id",
           ):
             if row.get(field) and not prev_entry.get(field):
               prev_entry[field] = row[field]
@@ -8592,6 +8610,32 @@ class Store:
             self.path.parent, row["session_id"], row["file"]
           )
         merged_entries.append(row)
+      for op in report_ops:
+        if str(op.get("op") or "") != "entry-ack":
+          continue
+        target_eid = str(op.get("entry_id") or "")
+        if not target_eid or target_eid not in entry_by_id:
+          continue
+        target_entry = entry_by_id[target_eid]
+        for field in (
+          "seen_at",
+          "acknowledged_at",
+          "ack_type",
+          "ack_text",
+          "ack_sender",
+          "ack_edited_at",
+          "task_id",
+        ):
+          if op.get(field) and not target_entry.get(field):
+            target_entry[field] = op[field]
+        if isinstance(op.get("replies"), list) and len(op["replies"]) > len(
+          target_entry.get("replies") or []
+        ):
+          target_entry["replies"] = op["replies"]
+          if op.get("ack_edited_at"):
+            target_entry["ack_edited_at"] = op["ack_edited_at"]
+      for row in merged_entries:
+        eid = str(row.get("id") or "")
         if (
           eid
           and eid not in existing_entry_ids
@@ -8783,10 +8827,13 @@ class Store:
           (target_rep and target_rep.get("owner_requested"))
           or payload.get("owner_requested")
         )
-        has_worker_entries = any(
-          isinstance(e, dict) and e.get("session_id") == target for e in entries
+        has_explicit_report_entries = any(
+          isinstance(e, dict)
+          and e.get("session_id") == target
+          and str((e.get("payload") or {}).get("report_id") or "")
+          for e in entries
         )
-        if is_owner_requested or (has_worker_entries and not is_sent_to_main):
+        if is_owner_requested or (has_explicit_report_entries and not is_sent_to_main):
           raise ValueError(
             f"Report {report_id!r} was not sent to main; owner-requested reports must be presented to the owner"
           )
@@ -11765,10 +11812,22 @@ class Store:
               or (alt_id and (alt_id == record_id or alt_id[:6] == record_id))
               or (nid and (nid == record_id or nid[:6] == record_id))
             ):
+              local_sid = board_session_id(
+                b_raw.get("local_session_id")
+                or workspace_branch(self.repository_root())
+              )
+              norm_b = normalize_board_state(
+                b_raw,
+                session_id=local_sid,
+                repo=self.repository_root().name,
+                branch=workspace_branch(self.repository_root()),
+              )
+              ack_sender_id = str(norm_b.get("board_id") or local_sid)
               if not entry.get("acknowledged_at"):
                 entry["acknowledged_at"] = clip_stamp(stamp)
                 entry["ack_type"] = "reply"
                 entry["ack_text"] = text
+                entry["ack_sender"] = ack_sender_id
                 entry["seen_at"] = entry.get("seen_at") or clip_stamp(stamp)
               else:
                 replies = (
@@ -11776,14 +11835,39 @@ class Store:
                   if isinstance(entry.get("replies"), list)
                   else []
                 )
-                replies.append({"type": "reply", "text": text, "at": clip_stamp(stamp)})
+                replies.append(
+                  {
+                    "type": "reply",
+                    "text": text,
+                    "at": clip_stamp(stamp),
+                    "sender": ack_sender_id,
+                  }
+                )
                 entry["replies"] = replies
                 entry["ack_edited_at"] = clip_stamp(stamp)
-              sender_sid = str(entry.get("session_id") or "")
-              local_sid = board_session_id(
-                b_raw.get("local_session_id")
-                or workspace_branch(self.repository_root())
+              rep_ops = (
+                list(b_raw["report_ops"])
+                if isinstance(b_raw.get("report_ops"), list)
+                else []
               )
+              rep_ops.append(
+                {
+                  "id": f"eack-{eid}-{uuid.uuid4().hex[:6]}",
+                  "target": "*",
+                  "op": "entry-ack",
+                  "entry_id": eid,
+                  "seen_at": entry.get("seen_at"),
+                  "acknowledged_at": entry.get("acknowledged_at"),
+                  "ack_type": entry.get("ack_type"),
+                  "ack_text": entry.get("ack_text"),
+                  "ack_sender": entry.get("ack_sender"),
+                  "ack_edited_at": entry.get("ack_edited_at"),
+                  "replies": entry.get("replies"),
+                  "at": clip_stamp(stamp),
+                }
+              )
+              b_raw["report_ops"] = rep_ops[-MAX_BOARD_ENTRIES:]
+              sender_sid = str(entry.get("session_id") or "")
               if sender_sid and sender_sid != local_sid:
                 wakes = (
                   dict(b_raw["wakes"]) if isinstance(b_raw.get("wakes"), dict) else {}

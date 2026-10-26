@@ -3323,6 +3323,45 @@ for raw in sys.stdin:
         false,
         "main session on board is not identified as worker",
       );
+      assert.equal(
+        checks.board.boardRoleFor(afterWakeConsumed, "c40a4115-arena-cleanup"),
+        "main",
+        "unopted or cross-repo session is never assigned worker role",
+      );
+      assert.equal(
+        checks.board.scopeBoardForTarget(
+          afterWakeConsumed,
+          "c40a4115-arena-cleanup",
+          "arena-cleanup",
+        ).main_session_id,
+        "",
+        "scopeBoardForTarget clears main_session_id for unopted cross-repo session",
+      );
+      const mergedAckSender = checks.board.mergePreviewBoard(
+        {
+          allowed_sessions: ["293da56c-clankers"],
+          main_session_id: "293da56c-clankers",
+          entries: [{ id: "pe4a3b", session_id: "bdf20cf5-clankers", payload: { text: "hi" } }],
+        },
+        {
+          session_id: "293da56c-clankers",
+          entries: [
+            {
+              id: "pe4a3b",
+              session_id: "bdf20cf5-clankers",
+              payload: { text: "hi" },
+              acknowledged_at: "2026-10-26T12:00:00Z",
+              ack_text: "done",
+              ack_sender: "alpha",
+            },
+          ],
+        },
+      );
+      assert.equal(
+        mergedAckSender.entries[0].ack_sender,
+        "alpha",
+        "mergePreviewBoard merges ack_sender onto existing board entry",
+      );
 
       // Verify board sync works with state-download off or stateBusy true.
       const boardReqs = [];
