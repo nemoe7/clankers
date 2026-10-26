@@ -15322,6 +15322,17 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert synced_wake["wakes"].get(woken_board["session_id"]) == "b-sync-99"
   assert preview.poll_once(hygiene_store, sleeper=lambda _: None) == 0
   assert "b-sync-99" in capsys.readouterr().out
+  # Re-syncing an already-consumed wake stamp must not wake poll_once again.
+  hygiene_store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        **hygiene_store.board_state(),
+        "wakes": {woken_board["session_id"]: "b-sync-99"},
+      },
+    }
+  )
+  assert hygiene_store.take_board_wake() is None
   top_post = hygiene_store.board_action(
     {
       "action": "post",

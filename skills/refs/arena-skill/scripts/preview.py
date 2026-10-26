@@ -7308,15 +7308,21 @@ class Store:
     ack_wakes = (
       dict(raw.get("ack_wakes")) if isinstance(raw.get("ack_wakes"), dict) else {}
     )
-    seen = ack_wakes.get(sid)
-    seen_list = (
-      [str(x) for x in seen if x]
-      if isinstance(seen, list)
-      else ([str(seen)] if seen else [])
-    )
-    if stamp and str(stamp) not in seen_list:
+    hist_key = f"{sid}:history"
+    seen = ack_wakes.get(hist_key)
+    seen_list = [str(x) for x in seen if x] if isinstance(seen, list) else []
+    prev_single = ack_wakes.get(sid)
+    if isinstance(prev_single, list):
+      for item in prev_single:
+        if item and str(item) not in seen_list:
+          seen_list.append(str(item))
+    elif prev_single and str(prev_single) not in seen_list:
+      seen_list.append(str(prev_single))
+    already_seen = bool(stamp and str(stamp) in seen_list)
+    if stamp and not already_seen:
       seen_list.append(str(stamp))
-    ack_wakes[sid] = seen_list[-64:]
+    ack_wakes[sid] = str(stamp) if stamp else ""
+    ack_wakes[hist_key] = seen_list[-64:]
     raw["ack_wakes"] = ack_wakes
     if isinstance(raw.get("sessions"), list):
       for row in raw["sessions"]:
@@ -7331,7 +7337,7 @@ class Store:
         "INSERT OR REPLACE INTO meta VALUES (?, ?)",
         (BOARD_STATE_META, json.dumps(raw, ensure_ascii=False)),
       )
-    return str(stamp)
+    return None if already_seen else str(stamp)
 
   def board_action(self, payload):
     if not isinstance(payload, dict):
@@ -7384,6 +7390,15 @@ class Store:
       existing_entry_ids = {
         str(item.get("id") or "") for item in entries if item.get("id")
       }
+      seen_wakes = ack_wakes.get(f"{sid}:history")
+      seen_wake_set = (
+        {str(x) for x in seen_wakes if x} if isinstance(seen_wakes, list) else set()
+      )
+      prev_ack = ack_wakes.get(sid)
+      if isinstance(prev_ack, list):
+        seen_wake_set.update(str(x) for x in prev_ack if x)
+      elif prev_ack:
+        seen_wake_set.add(str(prev_ack))
       seen_entry_ids = set()
       merged_entries = []
       for item in [*entries, *merged["entries"]]:
@@ -7404,12 +7419,12 @@ class Store:
           and row.get("session_id") != sid
           and row.get("to") in ("*", sid, "", None)
           and sid in allowed
-          and ack_wakes.get(sid) != eid
+          and eid not in seen_wake_set
         ):
           wakes[sid] = eid
       entries = merged_entries
       for k, v in merged["wakes"].items():
-        if k == sid and ack_wakes.get(sid) == v:
+        if k == sid and str(v) in seen_wake_set:
           continue
         if not wakes.get(k) or str(v) >= str(wakes[k]):
           wakes[k] = v

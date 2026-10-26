@@ -2474,14 +2474,19 @@ class Store:
 		if not isinstance(wakes,dict)or not wakes:return None
 		sid=board_session_id(workspace_branch(self.repository_root()));allowed={board_session_id(item)for item in(raw.get('allowed_sessions')if isinstance(raw.get('allowed_sessions'),list)else[])if board_session_id(item)}
 		if not sid or sid not in allowed or not wakes.get(sid):return None
-		stamp=wakes.pop(sid,None);raw['wakes']=wakes;ack_wakes=dict(raw.get('ack_wakes'))if isinstance(raw.get('ack_wakes'),dict)else{};seen=ack_wakes.get(sid);seen_list=[str(x)for x in seen if x]if isinstance(seen,list)else[str(seen)]if seen else[]
-		if stamp and str(stamp)not in seen_list:seen_list.append(str(stamp))
-		ack_wakes[sid]=seen_list[-64:];raw['ack_wakes']=ack_wakes
+		stamp=wakes.pop(sid,None);raw['wakes']=wakes;ack_wakes=dict(raw.get('ack_wakes'))if isinstance(raw.get('ack_wakes'),dict)else{};hist_key=f"{sid}:history";seen=ack_wakes.get(hist_key);seen_list=[str(x)for x in seen if x]if isinstance(seen,list)else[];prev_single=ack_wakes.get(sid)
+		if isinstance(prev_single,list):
+			for item in prev_single:
+				if item and str(item)not in seen_list:seen_list.append(str(item))
+		elif prev_single and str(prev_single)not in seen_list:seen_list.append(str(prev_single))
+		already_seen=bool(stamp and str(stamp)in seen_list)
+		if stamp and not already_seen:seen_list.append(str(stamp))
+		ack_wakes[sid]=str(stamp)if stamp else'';ack_wakes[hist_key]=seen_list[-64:];raw['ack_wakes']=ack_wakes
 		if isinstance(raw.get('sessions'),list):
 			for row in raw['sessions']:
 				if isinstance(row,dict)and board_session_id(row.get('session_id')or row.get('branch')or'')==sid:row['polling']=False;row['status']='active'
 		with self.transaction(autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,json.dumps(raw,ensure_ascii=False)))
-		return str(stamp)
+		return None if already_seen else str(stamp)
 	def board_action(self,payload):
 		if not isinstance(payload,dict):raise TypeError('Board payload must be an object')
 		action_type=str(payload.get('action')or payload.get('type')or'').strip().lower();raw_text=self.meta_value(BOARD_STATE_META)
@@ -2499,17 +2504,20 @@ class Store:
 				row_sid=row['session_id']
 				if row_sid==sid and row_sid in by_sid:continue
 				by_sid[row_sid]=dict(row)
-			sessions=list(by_sid.values());existing_entry_ids={str(item.get('id')or'')for item in entries if item.get('id')};seen_entry_ids=set();merged_entries=[]
+			sessions=list(by_sid.values());existing_entry_ids={str(item.get('id')or'')for item in entries if item.get('id')};seen_wakes=ack_wakes.get(f"{sid}:history");seen_wake_set={str(x)for x in seen_wakes if x}if isinstance(seen_wakes,list)else set();prev_ack=ack_wakes.get(sid)
+			if isinstance(prev_ack,list):seen_wake_set.update(str(x)for x in prev_ack if x)
+			elif prev_ack:seen_wake_set.add(str(prev_ack))
+			seen_entry_ids=set();merged_entries=[]
 			for item in[*entries,*merged['entries']]:
 				row=dict(item);eid=str(row.get('id')or'')
 				if eid and eid in seen_entry_ids:continue
 				if eid:seen_entry_ids.add(eid)
 				if isinstance(row.get('file'),dict)and'content'in row['file']:row['file']=stage_board_file(self.path.parent,row['session_id'],row['file'])
 				merged_entries.append(row)
-				if eid and eid not in existing_entry_ids and row.get('session_id')!=sid and row.get('to')in('*',sid,'',None)and sid in allowed and ack_wakes.get(sid)!=eid:wakes[sid]=eid
+				if eid and eid not in existing_entry_ids and row.get('session_id')!=sid and row.get('to')in('*',sid,'',None)and sid in allowed and eid not in seen_wake_set:wakes[sid]=eid
 			entries=merged_entries
 			for(k,v)in merged['wakes'].items():
-				if k==sid and ack_wakes.get(sid)==v:continue
+				if k==sid and str(v)in seen_wake_set:continue
 				if not wakes.get(k)or str(v)>=str(wakes[k]):wakes[k]=v
 			for row in sessions:
 				if row['session_id']in allowed and wakes.get(row['session_id']):row['polling']=False;row['status']='active'
