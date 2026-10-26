@@ -15292,6 +15292,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   wake_out = capsys.readouterr().out
   assert "BOARD WAKE:" in wake_out
   assert '"tag": "patch"' in wake_out
+  assert "[file: board-files/b14c09a2-clankers/src/demo.txt]" in wake_out
   assert hygiene_store.polling() is False
   assert hygiene_store.skip_poll_requested() is False
   hygiene_store.stamp_polling()
@@ -15321,7 +15322,9 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   assert synced_wake["wakes"].get(woken_board["session_id"]) == "b-sync-99"
   assert preview.poll_once(hygiene_store, sleeper=lambda _: None) == 0
-  assert "b-sync-99" in capsys.readouterr().out
+  second_wake_out = capsys.readouterr().out
+  assert "b-sync-99" in second_wake_out
+  assert '"tag": "patch"' not in second_wake_out
   # Re-syncing an already-consumed wake stamp must not wake poll_once again.
   hygiene_store.board_action(
     {

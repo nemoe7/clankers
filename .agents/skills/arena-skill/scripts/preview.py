@@ -1952,8 +1952,8 @@ def poll_inbox(store,sleeper=None):
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
 			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: UNBLOCKED TASK {names}. Start a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
 			if store.take_board_wake():
-				clear_poll_repeat(store);print('BOARD WAKE: session woken from the multi-session board. Read board entries and continue work before polling again.',flush=True);board_now=store.board_state()
-				for entry in board_now.get('entries')or[]:payload=entry.get('payload');body_text=json.dumps(payload,ensure_ascii=False)if isinstance(payload,dict)else str(payload or'');print(f"[board {entry.get('id','')}] {entry.get('session_id','')} -> {entry.get('to','*')}: {body_text}",flush=True)
+				clear_poll_repeat(store);print('BOARD WAKE: session woken from the multi-session board. Read board entries and continue work before polling again.',flush=True)
+				for entry in store.take_unseen_board_entries():payload=entry.get('payload');body_text=json.dumps(payload,ensure_ascii=False)if isinstance(payload,dict)else str(payload or'');file_obj=entry.get('file')if isinstance(entry.get('file'),dict)else None;file_path=file_obj.get('staged_path')or file_obj.get('name')or''if file_obj else'';file_suffix=f" [file: {file_path}]"if file_path else'';head=f"[board {entry.get('id','')}] {entry.get('session_id','')} -> {entry.get('to','*')}";print(f"{head}: {body_text}{file_suffix}",flush=True)
 				print(format_read(listing),flush=True);return 0
 			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);return 0
 			if not announced_running:announced_running=True;run_notices(store.path.parent,show_running=True)
@@ -2027,7 +2027,10 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 		if not isinstance(item,dict):continue
 		from_sid=board_session_id(item.get('session_id')or item.get('branch')or'')
 		if not from_sid:continue
-		entries.append({'id':str(item.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':from_sid,'to':str(item.get('to')or'*'),'repo':str(item.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'payload':item.get('payload')if isinstance(item.get('payload'),dict)else{},'file':item.get('file')if isinstance(item.get('file'),dict)else None})
+		item_payload=dict(item.get('payload'))if isinstance(item.get('payload'),dict)else{}
+		for k in('tag','text'):
+			if item.get(k)and k not in item_payload:item_payload[k]=str(item.get(k))
+		entries.append({'id':str(item.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':from_sid,'to':str(item.get('to')or'*'),'repo':str(item.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'tag':str(item.get('tag')or item_payload.get('tag')or''),'text':str(item.get('text')or item_payload.get('text')or''),'payload':item_payload,'file':item.get('file')if isinstance(item.get('file'),dict)else None})
 	is_main=not main_sid or main_sid==sid;return{'version':1,'session_id':sid,'repo':str(repo or''),'branch':str(branch or''),'allowed_sessions':allowed,'main_session_id':main_sid,'board_role':'main'if is_main else'worker','can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
 def board_main_session_warning(state_dir,command):
 	if not isinstance(command,str)or not command.strip():return None
@@ -2487,6 +2490,23 @@ class Store:
 				if isinstance(row,dict)and board_session_id(row.get('session_id')or row.get('branch')or'')==sid:row['polling']=False;row['status']='active'
 		with self.transaction(autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,json.dumps(raw,ensure_ascii=False)))
 		return None if already_seen else str(stamp)
+	def take_unseen_board_entries(self):
+		board_now=self.board_state();sid=board_session_id(workspace_branch(self.repository_root()));entries=board_now.get('entries')if isinstance(board_now.get('entries'),list)else[]
+		if not sid or not entries:return[]
+		raw_text=self.meta_value(BOARD_STATE_META)
+		try:raw=json.loads(raw_text)if raw_text else{}
+		except Exception:raw={}
+		if not isinstance(raw,dict):raw={}
+		ack_wakes=dict(raw.get('ack_wakes'))if isinstance(raw.get('ack_wakes'),dict)else{};entries_key=f"{sid}:entries";seen_raw=ack_wakes.get(entries_key);seen_list=[str(x)for x in seen_raw if x]if isinstance(seen_raw,list)else[];seen_set=set(seen_list);unseen=[]
+		for entry in entries:
+			if not isinstance(entry,dict):continue
+			entry_id=str(entry.get('id')or'')
+			if entry_id and entry_id not in seen_set:
+				seen_set.add(entry_id);seen_list.append(entry_id)
+				if entry.get('session_id')!=sid and entry.get('to')in('*',sid,'',None):unseen.append(entry)
+		ack_wakes[entries_key]=seen_list[-128:];raw['ack_wakes']=ack_wakes
+		with self.transaction(autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,json.dumps(raw,ensure_ascii=False)))
+		return unseen
 	def board_action(self,payload):
 		if not isinstance(payload,dict):raise TypeError('Board payload must be an object')
 		action_type=str(payload.get('action')or payload.get('type')or'').strip().lower();raw_text=self.meta_value(BOARD_STATE_META)

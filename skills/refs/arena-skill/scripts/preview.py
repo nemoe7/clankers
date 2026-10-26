@@ -5395,18 +5395,22 @@ def poll_inbox(store, sleeper=None):
           " Read board entries and continue work before polling again.",
           flush=True,
         )
-        board_now = store.board_state()
-        for entry in board_now.get("entries") or []:
+        for entry in store.take_unseen_board_entries():
           payload = entry.get("payload")
           body_text = (
             json.dumps(payload, ensure_ascii=False)
             if isinstance(payload, dict)
             else str(payload or "")
           )
-          print(
-            f"[board {entry.get('id', '')}] {entry.get('session_id', '')} -> {entry.get('to', '*')}: {body_text}",
-            flush=True,
+          file_obj = entry.get("file") if isinstance(entry.get("file"), dict) else None
+          file_path = (
+            (file_obj.get("staged_path") or file_obj.get("name") or "")
+            if file_obj
+            else ""
           )
+          file_suffix = f" [file: {file_path}]" if file_path else ""
+          head = f"[board {entry.get('id', '')}] {entry.get('session_id', '')} -> {entry.get('to', '*')}"
+          print(f"{head}: {body_text}{file_suffix}", flush=True)
         print(format_read(listing), flush=True)
         return 0
       if skip_poll_ready(store):
@@ -5630,6 +5634,12 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     from_sid = board_session_id(item.get("session_id") or item.get("branch") or "")
     if not from_sid:
       continue
+    item_payload = (
+      dict(item.get("payload")) if isinstance(item.get("payload"), dict) else {}
+    )
+    for k in ("tag", "text"):
+      if item.get(k) and k not in item_payload:
+        item_payload[k] = str(item.get(k))
     entries.append(
       {
         "id": str(item.get("id") or f"b-{uuid.uuid4().hex[:6]}"),
@@ -5638,7 +5648,9 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
         "repo": str(item.get("repo") or ""),
         "branch": str(item.get("branch") or f"arena/{from_sid}"),
         "at": str(item.get("at") or clip_stamp(now())),
-        "payload": item.get("payload") if isinstance(item.get("payload"), dict) else {},
+        "tag": str(item.get("tag") or item_payload.get("tag") or ""),
+        "text": str(item.get("text") or item_payload.get("text") or ""),
+        "payload": item_payload,
         "file": item.get("file") if isinstance(item.get("file"), dict) else None,
       }
     )
@@ -7338,6 +7350,47 @@ class Store:
         (BOARD_STATE_META, json.dumps(raw, ensure_ascii=False)),
       )
     return None if already_seen else str(stamp)
+
+  def take_unseen_board_entries(self):
+    board_now = self.board_state()
+    sid = board_session_id(workspace_branch(self.repository_root()))
+    entries = (
+      board_now.get("entries") if isinstance(board_now.get("entries"), list) else []
+    )
+    if not sid or not entries:
+      return []
+    raw_text = self.meta_value(BOARD_STATE_META)
+    try:
+      raw = json.loads(raw_text) if raw_text else {}
+    except Exception:
+      raw = {}
+    if not isinstance(raw, dict):
+      raw = {}
+    ack_wakes = (
+      dict(raw.get("ack_wakes")) if isinstance(raw.get("ack_wakes"), dict) else {}
+    )
+    entries_key = f"{sid}:entries"
+    seen_raw = ack_wakes.get(entries_key)
+    seen_list = [str(x) for x in seen_raw if x] if isinstance(seen_raw, list) else []
+    seen_set = set(seen_list)
+    unseen = []
+    for entry in entries:
+      if not isinstance(entry, dict):
+        continue
+      entry_id = str(entry.get("id") or "")
+      if entry_id and entry_id not in seen_set:
+        seen_set.add(entry_id)
+        seen_list.append(entry_id)
+        if entry.get("session_id") != sid and entry.get("to") in ("*", sid, "", None):
+          unseen.append(entry)
+    ack_wakes[entries_key] = seen_list[-128:]
+    raw["ack_wakes"] = ack_wakes
+    with self.transaction(autosave=False) as db:
+      db.execute(
+        "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+        (BOARD_STATE_META, json.dumps(raw, ensure_ascii=False)),
+      )
+    return unseen
 
   def board_action(self, payload):
     if not isinstance(payload, dict):
