@@ -817,6 +817,62 @@ module.exports = {
   sheet = measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8"))
   assert sheet["font-mono"].startswith('"Monaspace Neon"')
   assert measure.MIN_INK_RATIO == 0.75
+  assert measure.MAIN_MIN_INK_RATIO == 0.40
+  for vp_w, main_pass_ratio in ((1920, 0.47), (1080, 0.83), (958, 0.94)):
+    main_ok = measure.check_density(
+      {
+        "width": vp_w,
+        "elements": [
+          {
+            "selector": "main#content",
+            "tag": "main",
+            "bounds": {"width": vp_w, "height": 640},
+            "inkRatio": main_pass_ratio,
+          },
+          {
+            "selector": "#app-root",
+            "tag": "div",
+            "role": "main",
+            "bounds": {"width": vp_w, "height": 640},
+            "inkRatio": 0.40,
+          },
+        ],
+      }
+    )
+    assert main_ok == []
+  main_sparse = measure.check_density(
+    {
+      "width": 1920,
+      "elements": [
+        {
+          "selector": "main#content",
+          "tag": "main",
+          "bounds": {"width": 1920, "height": 640},
+          "inkRatio": 0.31,
+        }
+      ],
+    }
+  )
+  assert len(main_sparse) == 1
+  assert main_sparse[0]["rule"] == "NUM205"
+  assert "< 0.40" in main_sparse[0]["evidence"]
+  for narrow_w in (855, 411):
+    assert (
+      measure.check_density(
+        {
+          "width": narrow_w,
+          "elements": [
+            {
+              "selector": "main#content",
+              "tag": "main",
+              "bounds": {"width": narrow_w, "height": 640},
+              "inkRatio": 0.25,
+            }
+          ],
+        }
+      )
+      == []
+    )
   density_report = {
     "width": 1280,
     "elements": [
