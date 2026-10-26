@@ -1551,6 +1551,7 @@ async function readState() {
       void pumpFetchQueue();
     }
   }
+  syncBoardHeartbeat(lastState);
   renderBoard();
 }
 $('#form').addEventListener('submit', async event => {
@@ -3900,6 +3901,8 @@ function showBoardPanel() {
   }
   renderBoard();
 }
+let lastBoardHeartbeatKey = '';
+let lastBoardEntriesKey = '';
 function syncBoardHeartbeat(state) {
   if (!userscriptForceSave || !state || !state.board || !state.board.session_id) return;
   if (typeof window === 'undefined' || !window.parent || window.parent === window || typeof window.parent.postMessage !== 'function') return;
@@ -3908,19 +3911,31 @@ function syncBoardHeartbeat(state) {
     ? state.board.sessions.find(row => row && row.session_id === sid)
     : null;
   const isPolling = selfRow ? Boolean(selfRow.polling) : Boolean(state.polling);
+  const repo = String(state.repo || state.board.repo || '');
+  const branch = String(state.board.branch || '');
+  const hbKey = `${sid}|${repo}|${branch}|${isPolling ? '1' : '0'}`;
+  const entries = Array.isArray(state.board.entries) ? state.board.entries : [];
+  const entriesKey = entries.map(row => row && row.id ? String(row.id) : '').join(',');
   const targetOrigin = parentTargetOrigin();
   try {
-    window.parent.postMessage({
-      type: 'clankers:board-action',
-      action: {
-        action: 'heartbeat',
-        session_id: sid,
-        repo: String(state.repo || state.board.repo || ''),
-        branch: String(state.board.branch || ''),
-        status: isPolling ? 'polling' : 'active',
-        polling: isPolling,
-      },
-    }, targetOrigin);
+    if (hbKey !== lastBoardHeartbeatKey) {
+      lastBoardHeartbeatKey = hbKey;
+      window.parent.postMessage({
+        type: 'clankers:board-action',
+        action: {
+          action: 'heartbeat',
+          session_id: sid,
+          repo,
+          branch,
+          status: isPolling ? 'polling' : 'active',
+          polling: isPolling,
+        },
+      }, targetOrigin);
+    }
+    if (entriesKey !== lastBoardEntriesKey) {
+      lastBoardEntriesKey = entriesKey;
+      window.parent.postMessage({ type: 'clankers:board-request' }, targetOrigin);
+    }
     if (state.board.wakes && typeof state.board.wakes === 'object') {
       for (const [targetSid, stamp] of Object.entries(state.board.wakes)) {
         if (!targetSid || targetSid === sid || !stamp) continue;
@@ -3928,7 +3943,7 @@ function syncBoardHeartbeat(state) {
         forwardedBoardWakes.set(targetSid, stamp);
         window.parent.postMessage({
           type: 'clankers:board-action',
-          action: { action: 'wake', target: targetSid },
+          action: { action: 'wake', session_id: sid, target: targetSid, at: String(stamp) },
         }, targetOrigin);
       }
     }
@@ -4063,7 +4078,8 @@ function renderBoard() {
     route.append(fromCode, toSpan);
     const stamp = document.createElement('span');
     stamp.className = 'muted';
-    stamp.textContent = entry.at || '';
+    stamp.textContent = entry.at ? time(entry.at) : '';
+    if (entry.at) stamp.title = clockTime(entry.at);
     head.append(route, stamp);
     card.append(head);
     if (entry.file && typeof entry.file === 'object') {

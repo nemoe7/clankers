@@ -1505,3 +1505,31 @@ def test_design_boards_and_html_typography(tmp_path):
   assert "Basel Grotesk" not in nuu_typo["font_sans"]
   assert nuu_typo["embedded_fonts"] == 0
   assert nuu_typo["config_path"] == str(nuu_skill_dir / "nuu.toml")
+
+  ts_proj = tmp_path / "ts-proj"
+  (ts_proj / "docs").mkdir(parents=True)
+  (ts_proj / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
+  (ts_proj / "index.html").write_text(
+    "<div><span>2026-10-26T02:20:06</span>"
+    "<p>Updated 2026-10-26 02:20:06 UTC</p>"
+    "<code>2026-10-26T02:20:06</code></div>\n",
+    encoding="utf-8",
+  )
+  (ts_proj / "app.js").write_text(
+    "stamp.textContent = entry.at || '';\n"
+    "const fmt = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC' });\n"
+    "clock.textContent = `${clockTime(now.toISOString())}`;\n",
+    encoding="utf-8",
+  )
+  ts_res = nuu.lint(ts_proj)
+  ts_findings = [row for row in ts_res["findings"] if row["rule"] == "NUL006"]
+  assert len(ts_findings) == 4
+  (ts_proj / "index.html").write_text(
+    "<div><span>5min ago</span><code>2026-10-26T02:20:06</code></div>\n",
+    encoding="utf-8",
+  )
+  (ts_proj / "app.js").write_text(
+    "stamp.textContent = entry.at ? time(entry.at) : '';\n",
+    encoding="utf-8",
+  )
+  assert nuu.lint(ts_proj)["findings"] == []

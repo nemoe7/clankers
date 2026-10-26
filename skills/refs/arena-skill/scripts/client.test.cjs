@@ -5725,5 +5725,7 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /querySelectorAll\?\.\('h2, h3, \.question\[data-field\]'\)/);
   assert.match(styleSource, /\.report-toc-link\.active/);
   assert.match(styleSource, /calc\(50vw - 458px\)/);
+  assert.match(appSource, /stamp\.textContent\s*=\s*entry\.at\s*\?\s*time\(entry\.at\)\s*:\s*''/);
+  assert.match(appSource, /stamp\.title\s*=\s*clockTime\(entry\.at\)/);
 });
 
