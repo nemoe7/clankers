@@ -10154,7 +10154,7 @@ def test_key_output_names_fetch_page_over_bash():
   assert lines[1] == "host https://proxy.example"
   assert "fetch_page" in lines[2] and "never bash" in lines[2]
   assert "https://proxy.example/v1/" in lines[2]
-  assert lines[3] == "at 2026-10-10T09:00Z"
+  assert lines[3] == f"at {preview.local_stamp('2026-10-10T09:00Z')}"
 
   # No host means no route to name, so the line stays out.
   bare = preview.format_key({"key": "a-key"}).splitlines()
