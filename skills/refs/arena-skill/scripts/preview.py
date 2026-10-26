@@ -1592,7 +1592,7 @@ def clause_ack_error(text, root=None):
     base = Path.cwd()
     files = read_set_files(base, worker=True)
   for match in CLAUSE_ACK.finditer(text or ""):
-    cited = match.group(1).lstrip("./")
+    cited = re.sub(r"^(?:\./)+", "", match.group(1))
     cited_name = Path(cited).name
     line_no = int(match.group(2))
     candidates = [
@@ -6709,22 +6709,36 @@ def _extract_clauses(skill_md):
 
 
 def _extract_nuu_breakpoints(nuu_dir):
-  uiux_py = nuu_dir / "scripts" / "uiux.py"
-  if uiux_py.is_file():
-    match = re.search(
-      r"NAMED_BREAKPOINTS\s*=\s*\(([^)]+)\)", uiux_py.read_text(encoding="utf-8")
-    )
-    if match:
-      items = re.findall(r'["\']([^"\']+)["\']', match.group(1))
-      if items:
-        return tuple(items)
+  for toml_candidate in (
+    nuu_dir / "nuu.toml",
+    nuu_dir / "references" / "nuu.toml",
+  ):
+    if toml_candidate.is_file():
+      match = re.search(
+        r"named_breakpoints\s*=\s*\[([^\]]+)\]",
+        toml_candidate.read_text(encoding="utf-8"),
+      )
+      if match:
+        items = re.findall(r'["\']([^"\']+)["\']', match.group(1))
+        if items:
+          return tuple(items)
+  for script_name in ("nuu.py", "uiux.py"):
+    script_py = nuu_dir / "scripts" / script_name
+    if script_py.is_file():
+      match = re.search(
+        r"NAMED_BREAKPOINTS\s*=\s*\(([^)]+)\)", script_py.read_text(encoding="utf-8")
+      )
+      if match:
+        items = re.findall(r'["\']([^"\']+)["\']', match.group(1))
+        if items:
+          return tuple(items)
   clauses = _extract_clauses(nuu_dir / "SKILL.md")
   for line in clauses.splitlines():
     if line.startswith("7."):
       items = re.findall(r"\b[0-9.]+(?:em|rem|px)\b", line)
       if items:
         return tuple(items)
-  return ("75em", "60em", "40em", "30em")
+  return ("68em", "60em", "30em", "24em")
 
 
 def _recipe_summary_line(content):
@@ -7434,6 +7448,32 @@ class Store:
           f"SELECT * FROM {table} WHERE id = ? OR id LIKE ?", (token, like)
         ).fetchall()
         found.extend((label, dict(row)) for row in rows)
+      b_row = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (BOARD_STATE_META,)
+      ).fetchone()
+      if b_row and b_row[0]:
+        try:
+          b_raw = json.loads(str(b_row[0]))
+        except Exception:
+          b_raw = None
+        if isinstance(b_raw, dict) and isinstance(b_raw.get("entries"), list):
+          existing_ids = {str(r.get("id") or "") for _, r in found}
+          for entry in b_raw["entries"]:
+            if not isinstance(entry, dict):
+              continue
+            eid = str(entry.get("id") or "")
+            if not eid or eid in existing_ids:
+              continue
+            alt_id = (
+              f"p{eid[2:7]}" if re.match(r"^b-[0-9a-f]{5,}", eid, re.IGNORECASE) else ""
+            )
+            if (
+              eid == token
+              or eid.startswith(token)
+              or (alt_id and (alt_id == token or alt_id.startswith(token)))
+            ):
+              existing_ids.add(eid)
+              found.append(("note", {"id": eid, "at": str(entry.get("at") or "")}))
     return found
 
   def resolve_id(self, token):
@@ -7971,7 +8011,9 @@ class Store:
         with closing(self.connect()) as db:
           rep_rows = db.execute(
             "SELECT id, title, markdown, updated_at, published_at, EXISTS("
-            "SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered "
+            "SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered, "
+            "EXISTS(SELECT 1 FROM tasks JOIN notes ON notes.task_id = tasks.id "
+            "WHERE tasks.report_id = reports.id AND notes.quiet = 0) AS owner_requested "
             "FROM reports WHERE published_at IS NOT NULL ORDER BY seq, id"
           ).fetchall()
         rep_list = []
@@ -7981,14 +8023,26 @@ class Store:
           except Exception:
             fields = []
           answered_flag = bool(r_row["answered"])
+          rid = r_row["id"]
+          sent_flag = any(
+            e.get("session_id") == sid
+            and (
+              rid in str(e.get("text") or "")
+              or str((e.get("payload") or {}).get("report_id") or "") == rid
+            )
+            for e in out.get("entries") or []
+            if isinstance(e, dict)
+          )
           rep_list.append(
             {
-              "id": r_row["id"],
+              "id": rid,
               "title": r_row["title"],
               "markdown": r_row["markdown"],
               "fields": fields,
               "answered": answered_flag,
               "needs_answer": bool(fields) and not answered_flag,
+              "owner_requested": bool(r_row["owner_requested"]),
+              "sent_to_main": sent_flag,
               "updated_at": clip_stamp(r_row["updated_at"]),
               "published_at": clip_stamp(r_row["published_at"]),
             }
@@ -8548,6 +8602,43 @@ class Store:
         ):
           wakes[sid] = eid
       entries = merged_entries
+      with closing(self.connect()) as db:
+        for b_entry in entries:
+          note_ref = str(b_entry.get("note_id") or b_entry.get("id") or "")
+          if not note_ref:
+            continue
+          n_row = db.execute(
+            "SELECT seen_at, acknowledged_at, ack_type, ack_text, ack_edited_at,"
+            " replies, task_id FROM notes WHERE id = ?",
+            (note_ref,),
+          ).fetchone()
+          if n_row is None:
+            continue
+          for n_field in (
+            "seen_at",
+            "acknowledged_at",
+            "ack_type",
+            "ack_text",
+            "ack_edited_at",
+            "task_id",
+          ):
+            if n_row[n_field] and not b_entry.get(n_field):
+              b_entry[n_field] = (
+                clip_stamp(n_row[n_field])
+                if n_field.endswith("_at")
+                else n_row[n_field]
+              )
+          n_replies = replies_list(n_row["replies"])
+          if len(n_replies) > len(b_entry.get("replies") or []):
+            b_entry["replies"] = [
+              {
+                "type": r.get("type") or "reply",
+                "text": r.get("text") or "",
+                "at": clip_stamp(r.get("at")),
+              }
+              for r in n_replies
+              if isinstance(r, dict)
+            ]
       for k, v in merged["wakes"].items():
         if k == sid and str(v) in seen_wake_set:
           continue
@@ -8667,6 +8758,38 @@ class Store:
       report_id = str(payload.get("report_id") or payload.get("report") or "").strip()
       if not report_id:
         raise ValueError("Missing report_id")
+      if op_name in {"answer", "submit"} and not payload.get("from_owner"):
+        target_rep = next(
+          (
+            r
+            for r in (worker_reports.get(target) or [])
+            if isinstance(r, dict) and r.get("id") == report_id
+          ),
+          None,
+        )
+        sent_via_entry = any(
+          e.get("session_id") == target
+          and (
+            report_id in str(e.get("text") or "")
+            or str((e.get("payload") or {}).get("report_id") or "") == report_id
+          )
+          for e in entries
+          if isinstance(e, dict)
+        )
+        is_sent_to_main = bool(
+          sent_via_entry or (target_rep and target_rep.get("sent_to_main"))
+        )
+        is_owner_requested = bool(
+          (target_rep and target_rep.get("owner_requested"))
+          or payload.get("owner_requested")
+        )
+        has_worker_entries = any(
+          isinstance(e, dict) and e.get("session_id") == target for e in entries
+        )
+        if is_owner_requested or (has_worker_entries and not is_sent_to_main):
+          raise ValueError(
+            f"Report {report_id!r} was not sent to main; owner-requested reports must be presented to the owner"
+          )
       rep_op = {
         "id": str(payload.get("id") or f"rop-{uuid.uuid4().hex[:8]}"),
         "target": target,
@@ -11633,9 +11756,13 @@ class Store:
               continue
             eid = str(entry.get("id") or "")
             nid = str(entry.get("note_id") or "")
+            alt_id = (
+              f"p{eid[2:7]}" if re.match(r"^b-[0-9a-f]{5,}", eid, re.IGNORECASE) else ""
+            )
             if (
               eid == record_id
               or eid[:6] == record_id
+              or (alt_id and (alt_id == record_id or alt_id[:6] == record_id))
               or (nid and (nid == record_id or nid[:6] == record_id))
             ):
               if not entry.get("acknowledged_at"):

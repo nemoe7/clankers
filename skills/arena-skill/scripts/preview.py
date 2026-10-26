@@ -550,7 +550,7 @@ def clause_ack_error(text,root=None):
 	base=Path(root or Path.cwd());files=read_set_files(base,worker=True)
 	if not files:base=Path.cwd();files=read_set_files(base,worker=True)
 	for match in CLAUSE_ACK.finditer(text or''):
-		cited=match.group(1).lstrip('./');cited_name=Path(cited).name;line_no=int(match.group(2));candidates=[base/path for path in files if(path==cited or path.endswith(f"/{cited}")if'/'in cited else Path(path).name==cited_name)]
+		cited=re.sub('^(?:\\./)+','',match.group(1));cited_name=Path(cited).name;line_no=int(match.group(2));candidates=[base/path for path in files if(path==cited or path.endswith(f"/{cited}")if'/'in cited else Path(path).name==cited_name)]
 		for path in candidates:
 			if line_no>0 and path.is_file()and line_no<=len(path.read_text(encoding='utf-8').splitlines()):return''
 	return'An ack of a violation note must name the clause as `file:ln: clause`, for example `ARENA.md:41: MUST read the bible`. The note stays pending.'
@@ -2378,18 +2378,25 @@ def _extract_clauses(skill_md):
 	if'## Clauses'not in text:return''
 	after=text.split('## Clauses',1)[1];section=after.split('\n## ',1)[0].strip();lines=[line.strip()for line in section.splitlines()if re.match('^\\d+\\.',line.strip())];return'\n'.join(lines)
 def _extract_nuu_breakpoints(nuu_dir):
-	uiux_py=nuu_dir/'scripts'/'uiux.py'
-	if uiux_py.is_file():
-		match=re.search('NAMED_BREAKPOINTS\\s*=\\s*\\(([^)]+)\\)',uiux_py.read_text(encoding='utf-8'))
-		if match:
-			items=re.findall('["\\\']([^"\\\']+)["\\\']',match.group(1))
-			if items:return tuple(items)
+	for toml_candidate in(nuu_dir/'nuu.toml',nuu_dir/'references'/'nuu.toml'):
+		if toml_candidate.is_file():
+			match=re.search('named_breakpoints\\s*=\\s*\\[([^\\]]+)\\]',toml_candidate.read_text(encoding='utf-8'))
+			if match:
+				items=re.findall('["\\\']([^"\\\']+)["\\\']',match.group(1))
+				if items:return tuple(items)
+	for script_name in('nuu.py','uiux.py'):
+		script_py=nuu_dir/'scripts'/script_name
+		if script_py.is_file():
+			match=re.search('NAMED_BREAKPOINTS\\s*=\\s*\\(([^)]+)\\)',script_py.read_text(encoding='utf-8'))
+			if match:
+				items=re.findall('["\\\']([^"\\\']+)["\\\']',match.group(1))
+				if items:return tuple(items)
 	clauses=_extract_clauses(nuu_dir/'SKILL.md')
 	for line in clauses.splitlines():
 		if line.startswith('7.'):
 			items=re.findall('\\b[0-9.]+(?:em|rem|px)\\b',line)
 			if items:return tuple(items)
-	return'75em','60em','40em','30em'
+	return'68em','60em','30em','24em'
 def _recipe_summary_line(content):
 	for raw in content.splitlines():
 		line=raw.strip()
@@ -2572,6 +2579,18 @@ class Store:
 		token=bare_id(token);like=f"{token}%";found=[]
 		with closing(self.connect())as db:
 			for(table,label)in(('notes','note'),('submissions','answer'),('reports','report'),('tasks','task')):rows=db.execute(f"SELECT * FROM {table} WHERE id = ? OR id LIKE ?",(token,like)).fetchall();found.extend((label,dict(row))for row in rows)
+			b_row=db.execute('SELECT value FROM meta WHERE key = ?',(BOARD_STATE_META,)).fetchone()
+			if b_row and b_row[0]:
+				try:b_raw=json.loads(str(b_row[0]))
+				except Exception:b_raw=None
+				if isinstance(b_raw,dict)and isinstance(b_raw.get('entries'),list):
+					existing_ids={str(r.get('id')or'')for(_,r)in found}
+					for entry in b_raw['entries']:
+						if not isinstance(entry,dict):continue
+						eid=str(entry.get('id')or'')
+						if not eid or eid in existing_ids:continue
+						alt_id=f"p{eid[2:7]}"if re.match('^b-[0-9a-f]{5,}',eid,re.IGNORECASE)else''
+						if eid==token or eid.startswith(token)or alt_id and(alt_id==token or alt_id.startswith(token)):existing_ids.add(eid);found.append(('note',{'id':eid,'at':str(entry.get('at')or'')}))
 		return found
 	def resolve_id(self,token):
 		token=bare_id(token);matches=self.id_matches(token);exact=[item for item in matches if item[1]['id']==token]
@@ -2686,12 +2705,12 @@ class Store:
 			try:out['worker_tasks'][sid]=[{'id':row['id'],'title':row['title'],'status':row['status'],'type':row.get('type')or'code','details':list(row.get('details')or[]),'order':row.get('order'),'report_id':row.get('report_id'),'updated_at':clip_stamp(row.get('updated_at'))}for row in self.list_tasks()]
 			except Exception:pass
 			try:
-				with closing(self.connect())as db:rep_rows=db.execute('SELECT id, title, markdown, updated_at, published_at, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered FROM reports WHERE published_at IS NOT NULL ORDER BY seq, id').fetchall()
+				with closing(self.connect())as db:rep_rows=db.execute('SELECT id, title, markdown, updated_at, published_at, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered, EXISTS(SELECT 1 FROM tasks JOIN notes ON notes.task_id = tasks.id WHERE tasks.report_id = reports.id AND notes.quiet = 0) AS owner_requested FROM reports WHERE published_at IS NOT NULL ORDER BY seq, id').fetchall()
 				rep_list=[]
 				for r_row in rep_rows:
 					try:fields=parse_fields(r_row['markdown'])[1]
 					except Exception:fields=[]
-					answered_flag=bool(r_row['answered']);rep_list.append({'id':r_row['id'],'title':r_row['title'],'markdown':r_row['markdown'],'fields':fields,'answered':answered_flag,'needs_answer':bool(fields)and not answered_flag,'updated_at':clip_stamp(r_row['updated_at']),'published_at':clip_stamp(r_row['published_at'])})
+					answered_flag=bool(r_row['answered']);rid=r_row['id'];sent_flag=any(e.get('session_id')==sid and(rid in str(e.get('text')or'')or str((e.get('payload')or{}).get('report_id')or'')==rid)for e in out.get('entries')or[]if isinstance(e,dict));rep_list.append({'id':rid,'title':r_row['title'],'markdown':r_row['markdown'],'fields':fields,'answered':answered_flag,'needs_answer':bool(fields)and not answered_flag,'owner_requested':bool(r_row['owner_requested']),'sent_to_main':sent_flag,'updated_at':clip_stamp(r_row['updated_at']),'published_at':clip_stamp(r_row['published_at'])})
 				out['worker_reports'][sid]=rep_list
 			except Exception:pass
 		return out
@@ -2911,6 +2930,16 @@ class Store:
 				merged_entries.append(row)
 				if eid and eid not in existing_entry_ids and row.get('session_id')!=sid and row.get('to')in('*',sid,'',None)and sid in allowed and eid not in seen_wake_set:wakes[sid]=eid
 			entries=merged_entries
+			with closing(self.connect())as db:
+				for b_entry in entries:
+					note_ref=str(b_entry.get('note_id')or b_entry.get('id')or'')
+					if not note_ref:continue
+					n_row=db.execute('SELECT seen_at, acknowledged_at, ack_type, ack_text, ack_edited_at, replies, task_id FROM notes WHERE id = ?',(note_ref,)).fetchone()
+					if n_row is None:continue
+					for n_field in('seen_at','acknowledged_at','ack_type','ack_text','ack_edited_at','task_id'):
+						if n_row[n_field]and not b_entry.get(n_field):b_entry[n_field]=clip_stamp(n_row[n_field])if n_field.endswith('_at')else n_row[n_field]
+					n_replies=replies_list(n_row['replies'])
+					if len(n_replies)>len(b_entry.get('replies')or[]):b_entry['replies']=[{'type':r.get('type')or'reply','text':r.get('text')or'','at':clip_stamp(r.get('at'))}for r in n_replies if isinstance(r,dict)]
 			for(k,v)in merged['wakes'].items():
 				if k==sid and str(v)in seen_wake_set:continue
 				if not wakes.get(k)or str(v)>=str(wakes[k]):wakes[k]=v
@@ -2940,6 +2969,9 @@ class Store:
 			if op_name not in{'answer','submit','unpublish','remove','delete'}:raise ValueError(f"Unsupported worker report operation: {op_name}")
 			report_id=str(payload.get('report_id')or payload.get('report')or'').strip()
 			if not report_id:raise ValueError('Missing report_id')
+			if op_name in{'answer','submit'}and not payload.get('from_owner'):
+				target_rep=next((r for r in worker_reports.get(target)or[]if isinstance(r,dict)and r.get('id')==report_id),None);sent_via_entry=any(e.get('session_id')==target and(report_id in str(e.get('text')or'')or str((e.get('payload')or{}).get('report_id')or'')==report_id)for e in entries if isinstance(e,dict));is_sent_to_main=bool(sent_via_entry or target_rep and target_rep.get('sent_to_main'));is_owner_requested=bool(target_rep and target_rep.get('owner_requested')or payload.get('owner_requested'));has_worker_entries=any(isinstance(e,dict)and e.get('session_id')==target for e in entries)
+				if is_owner_requested or has_worker_entries and not is_sent_to_main:raise ValueError(f"Report {report_id!r} was not sent to main; owner-requested reports must be presented to the owner")
 			rep_op={'id':str(payload.get('id')or f"rop-{uuid.uuid4().hex[:8]}"),'target':target,'op':op_name,'report_id':report_id,'answers':payload.get('answers')if isinstance(payload.get('answers'),dict)else{},'submission_id':payload.get('submission_id')or payload.get('note_id'),'at':clip_stamp(now())};report_ops.append(rep_op);worker_reports[target]=apply_report_op_to_list(worker_reports.get(target)or[],rep_op)
 			if target==sid:
 				applied_rep_key=f"{sid}:report_ops";applied_rep_list=[str(x)for x in ack_wakes.get(applied_rep_key)if x]if isinstance(ack_wakes.get(applied_rep_key),list)else[]
@@ -3868,8 +3900,8 @@ class Store:
 				if isinstance(b_raw,dict)and isinstance(b_raw.get('entries'),list):
 					for entry in b_raw['entries']:
 						if not isinstance(entry,dict):continue
-						eid=str(entry.get('id')or'');nid=str(entry.get('note_id')or'')
-						if eid==record_id or eid[:6]==record_id or nid and(nid==record_id or nid[:6]==record_id):
+						eid=str(entry.get('id')or'');nid=str(entry.get('note_id')or'');alt_id=f"p{eid[2:7]}"if re.match('^b-[0-9a-f]{5,}',eid,re.IGNORECASE)else''
+						if eid==record_id or eid[:6]==record_id or alt_id and(alt_id==record_id or alt_id[:6]==record_id)or nid and(nid==record_id or nid[:6]==record_id):
 							if not entry.get('acknowledged_at'):entry['acknowledged_at']=clip_stamp(stamp);entry['ack_type']='reply';entry['ack_text']=text;entry['seen_at']=entry.get('seen_at')or clip_stamp(stamp)
 							else:replies=list(entry['replies'])if isinstance(entry.get('replies'),list)else[];replies.append({'type':'reply','text':text,'at':clip_stamp(stamp)});entry['replies']=replies;entry['ack_edited_at']=clip_stamp(stamp)
 							sender_sid=str(entry.get('session_id')or'');local_sid=board_session_id(b_raw.get('local_session_id')or workspace_branch(self.repository_root()))

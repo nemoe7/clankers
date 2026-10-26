@@ -5748,5 +5748,7 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(styleSource, /\.board-sender\s*\{\s*font:\s*400\s+12px\/1\.333333\s+var\(--font-sans\);/);
   assert.match(styleSource, /\.report\s+code,\s*\.message-text\s+code\s*\{\s*font-family:\s*var\(--font-mono\);\s*font-size:\s*\.9em;\s*\}/);
   assert.match(styleSource, /\.message\[data-board-author="agent"\]\s*>\s*:is\(\.message-text,\s*\.raw-message\)/);
+  assert.match(styleSource, /body\[data-board-role="worker"\]\s*:is\(#notes-tab,/);
+  assert.match(appSource, /document\.body\.dataset\.boardRole\s*=\s*'worker'/);
 });
 

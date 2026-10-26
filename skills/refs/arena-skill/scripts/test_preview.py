@@ -15734,4 +15734,35 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
   auto_posted = store.board_action(
     {"action": "post", "session_id": "293da56c-clankers", "text": "status update"}
   )
-  assert preview.re.fullmatch(r"p[0-9a-f]{5}", auto_posted["entries"][-1]["id"])
+  posted_id = auto_posted["entries"][-1]["id"]
+  assert preview.re.fullmatch(r"p[0-9a-f]{5}", posted_id)
+  assert store.resolve_id(posted_id) == posted_id
+  repo_cwd = preview.Path.cwd()
+  if (repo_cwd / ".agents" / "skills" / "arena-skill" / "SKILL.md").is_file():
+    assert (
+      preview.clause_ack_error(
+        ".agents/skills/arena-skill/SKILL.md:1: name: arena-skill",
+        repo_cwd,
+      )
+      == ""
+    )
+  assert preview._extract_nuu_breakpoints(
+    repo_cwd / "skills" / "refs" / "arena-skill"
+    if (repo_cwd / "skills" / "refs" / "arena-skill").is_dir()
+    else preview.Path(__file__).resolve().parent.parent
+  ) == ("68em", "60em", "30em", "24em")
+  try:
+    store.board_action(
+      {
+        "action": "worker-report",
+        "session_id": "b14c09a2-clankers",
+        "target": "293da56c-clankers",
+        "op": "answer",
+        "report_id": "owner-only-rep",
+        "owner_requested": True,
+        "answers": {"q": "a"},
+      }
+    )
+    raise AssertionError("Expected ValueError on owner-requested worker report")
+  except ValueError as exc:
+    assert "not sent to main" in str(exc)

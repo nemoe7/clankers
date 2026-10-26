@@ -3917,6 +3917,10 @@ function syncDocumentTitle() {
   document.title = `${repo} - Steering${label === 'Messages' ? '' : ` | ${label}`}`;
 }
 function showTab(tab, { persist = true, initial = false } = {}) {
+  if (typeof document !== 'undefined' && document.body?.dataset?.boardRole === 'worker') {
+    showBoardPanel({ persist: false });
+    return;
+  }
   clearJumpHighlight();
   const boardTab = $('#board-tab');
   const boardPanel = $('#board-panel');
@@ -4088,8 +4092,20 @@ function renderBoard() {
   const selfSid = board?.session_id || '';
   const isBoardActive = Boolean(selfSid && allowed.has(selfSid));
   const isMainRole = isBoardActive && (board?.board_role === 'main' || !mainSid || mainSid === selfSid);
+  const isWorkerRole = isBoardActive && !isMainRole;
   if (boardTab) {
     boardTab.dataset.boardRole = !isBoardActive ? 'inactive' : (isMainRole ? 'main' : 'worker');
+  }
+  if (typeof document !== 'undefined' && document.body?.dataset) {
+    if (isWorkerRole) {
+      document.body.dataset.boardRole = 'worker';
+      if (boardTab?.getAttribute('aria-pressed') !== 'true' || $('#board-panel')?.hidden) {
+        showBoardPanel({ persist: false });
+        return;
+      }
+    } else {
+      delete document.body.dataset.boardRole;
+    }
   }
   if (!sessionsEl) return;
   const currentRepo = String(board?.repo || getState()?.repo || '').trim().split('/').pop();
