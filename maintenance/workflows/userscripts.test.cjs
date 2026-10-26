@@ -3433,6 +3433,52 @@ for raw in sys.stdin:
         true,
         "mergePreviewBoard preserves waiting_for_gates on peer session rows",
       );
+      const healedAckBoard = checks.board.mergePreviewBoard(
+        {
+          main_session_id: "a1111111-clankers",
+          allowed_sessions: ["a1111111-clankers", "b2222222-clankers"],
+          sessions: [
+            { session_id: "a1111111-clankers", repo: "clankers" },
+            { session_id: "b2222222-clankers", repo: "clankers" },
+          ],
+          entries: [
+            {
+              id: "p00099",
+              session_id: "b2222222-clankers",
+              to: "clankers-alpha",
+              at: "2026-10-26T20:05:00Z",
+              acknowledged_at: "2026-10-26T20:06:00Z",
+              ack_sender: "b2222222-clankers",
+              replies: [{ type: "reply", text: "ok", at: "2026-10-26T20:07:00Z", sender: "b2222222-clankers" }],
+            },
+          ],
+        },
+        {
+          session_id: "a1111111-clankers",
+          repo: "clankers",
+          main_session_id: "a1111111-clankers",
+          allowed_sessions: ["a1111111-clankers", "b2222222-clankers"],
+          entries: [
+            {
+              id: "p00099",
+              session_id: "b2222222-clankers",
+              to: "a1111111-clankers",
+              at: "2026-10-26T20:05:00Z",
+              acknowledged_at: "2026-10-26T20:06:00Z",
+              ack_sender: "a1111111-clankers",
+              replies: [{ type: "reply", text: "ok", at: "2026-10-26T20:07:00Z", sender: "a1111111-clankers" }],
+            },
+          ],
+          report_ops: [
+            { id: "erseen-p00099-1", target: "*", op: "entry-ack", entry_id: "p00099", ack_edited_seen_count: 1 },
+          ],
+        },
+      );
+      const healedEntry = healedAckBoard.entries.find((e) => e.id === "p00099");
+      assert.equal(healedEntry.to, "a1111111-clankers");
+      assert.equal(healedEntry.ack_sender, "a1111111-clankers");
+      assert.equal(healedEntry.replies[0].sender, "a1111111-clankers");
+      assert.equal(healedEntry.ack_edited_seen_count, 1);
       const discOut = checks.board.applyBoardAction(healedSplitBrain, {
         type: "disconnect-session",
         session_id: "91a01582-clankers",
