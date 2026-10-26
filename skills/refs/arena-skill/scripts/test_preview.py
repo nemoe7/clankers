@@ -15571,3 +15571,19 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
   assert style_css.count("#copy-state { display: none; }") >= 2
+  demo_script = (
+    preview.Path(__file__).resolve().parents[4] / "maintenance" / "demo_preview.py"
+  )
+  assert demo_script.is_file()
+  demo_dir = tmp_path / "demo-preview-state"
+  demo_proc = subprocess.run(
+    [sys.executable, str(demo_script), "-d", str(demo_dir), "-S"],
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  demo_summary = json.loads(demo_proc.stdout)
+  assert demo_summary["notes"] >= 2
+  assert demo_summary["reports"] >= 2
+  assert demo_summary["tasks"] >= 2
+  assert demo_summary["board_entries"] >= 2
