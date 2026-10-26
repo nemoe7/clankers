@@ -3988,6 +3988,15 @@ async function sendBoardAction(action, forwardToParent = true) {
     return null;
   }
 }
+function displayBoardId(rawId, board = getState()?.board, rowRepo = '') {
+  const text = String(rawId || '').trim();
+  if (!text || board?.multi_repo) return text;
+  const repo = String(rowRepo || board?.repo || getState()?.repo || '').trim().split('/').pop();
+  if (repo && text.startsWith(`${repo}-`) && text.length > repo.length + 1) {
+    return text.slice(repo.length + 1);
+  }
+  return text;
+}
 function renderBoard() {
   const board = getState()?.board;
   const sessionsEl = $('#board-sessions');
@@ -4010,7 +4019,7 @@ function renderBoard() {
     wakePollingBtn.textContent = `Wake polling (${pollingAllowed.length})`;
     wakePollingBtn.disabled = pollingAllowed.length === 0;
   }
-  const boardIdBySid = new Map(sessions.map(row => [row.session_id, row.board_id || row.session_id]));
+  const boardIdBySid = new Map(sessions.map(row => [row.session_id, displayBoardId(row.board_id || row.session_id, board, row.repo)]));
   sessionsEl.replaceChildren();
   for (const row of sessions) {
     const item = document.createElement('div');
@@ -4018,8 +4027,8 @@ function renderBoard() {
     const info = document.createElement('div');
     info.className = 'row tight';
     const code = document.createElement('code');
-    code.textContent = row.board_id || row.session_id;
-    code.title = row.session_id;
+    code.textContent = displayBoardId(row.board_id || row.session_id, board, row.repo);
+    code.title = row.board_id ? `${row.board_id} (${row.session_id})` : row.session_id;
     const badge = document.createElement('span');
     badge.className = 'board-badge';
     const isAllowed = allowed.has(row.session_id);

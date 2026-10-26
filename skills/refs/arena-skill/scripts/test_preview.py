@@ -15399,6 +15399,15 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   assert push_checks == []
   assert "commit/s unpushed" not in hygiene_store.reminder(routine=True)
+  default_greek_state = hygiene_store.board_state()
+  assert default_greek_state["worker_id"] == "beta"
+  assert default_greek_state["board_id"] == f"{default_greek_state['repo']}-beta"
+  default_main_row = next(
+    row
+    for row in default_greek_state["sessions"]
+    if row["session_id"] == "b14c09a2-clankers"
+  )
+  assert default_main_row["board_id"] == f"{default_main_row['repo']}-alpha"
   role_state = hygiene_store.board_action(
     {
       "action": "delegate-id",
@@ -15406,20 +15415,47 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
       "worker_id": "ui",
     }
   )
-  assert role_state["board_id"] == "worker-ui"
+  assert role_state["board_id"] == f"{role_state['repo']}-ui"
   assert role_state["worker_id"] == "ui"
   main_row = next(
     row for row in role_state["sessions"] if row["session_id"] == "b14c09a2-clankers"
   )
-  assert main_row["board_id"] == "main"
+  assert main_row["board_id"] == f"{main_row['repo']}-alpha"
   multi_state = hygiene_store.board_action(
     {"action": "set-multi-repo", "multi_repo": True}
   )
-  assert multi_state["board_id"] == f"worker-ui-{multi_state['repo']}"
+  assert multi_state["board_id"] == f"{multi_state['repo']}-ui"
   main_multi_row = next(
     row for row in multi_state["sessions"] if row["session_id"] == "b14c09a2-clankers"
   )
-  assert main_multi_row["board_id"] == f"main-{main_multi_row['repo']}"
+  assert main_multi_row["board_id"] == f"{main_multi_row['repo']}-alpha"
+  cross_repo_norm = preview.normalize_board_state(
+    {
+      "multi_repo": True,
+      "main_session_id": "b14c09a2-clankers",
+      "allowed_sessions": [
+        "b14c09a2-clankers",
+        "293da56c-clankers",
+        "11111111-otherrepo",
+        "22222222-otherrepo",
+      ],
+      "sessions": [
+        {"session_id": "b14c09a2-clankers", "repo": "clankers"},
+        {"session_id": "293da56c-clankers", "repo": "clankers"},
+        {"session_id": "11111111-otherrepo", "repo": "otherrepo"},
+        {"session_id": "22222222-otherrepo", "repo": "otherrepo"},
+      ],
+    },
+    session_id="293da56c-clankers",
+    repo="clankers",
+  )
+  by_sid = {row["session_id"]: row for row in cross_repo_norm["sessions"]}
+  assert by_sid["b14c09a2-clankers"]["board_id"] == "clankers-alpha"
+  assert by_sid["293da56c-clankers"]["board_id"] == "clankers-beta"
+  assert by_sid["11111111-otherrepo"]["board_id"] == "otherrepo-alpha"
+  assert by_sid["11111111-otherrepo"]["role"] == "main"
+  assert by_sid["22222222-otherrepo"]["board_id"] == "otherrepo-beta"
+  assert by_sid["22222222-otherrepo"]["role"] == "worker"
   hygiene_store.board_action({"action": "set-multi-repo", "multi_repo": False})
   try:
     hygiene_store.board_action(

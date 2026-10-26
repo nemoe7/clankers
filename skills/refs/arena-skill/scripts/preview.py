@@ -5553,7 +5553,47 @@ def stage_board_file(state_dir, sender_id, file_obj):
   }
 
 
+GREEK_LETTERS = (
+  "alpha",
+  "beta",
+  "gamma",
+  "delta",
+  "epsilon",
+  "zeta",
+  "eta",
+  "theta",
+  "iota",
+  "kappa",
+  "lambda",
+  "mu",
+  "nu",
+  "xi",
+  "omicron",
+  "pi",
+  "rho",
+  "sigma",
+  "tau",
+  "upsilon",
+  "phi",
+  "chi",
+  "psi",
+  "omega",
+)
 WORKER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,6}$")
+
+
+def clean_board_repo(repo="", fallback_sid=""):
+  text = str(repo or "").strip()
+  if "/" in text:
+    text = text.rsplit("/", 1)[-1].strip()
+  if text:
+    return text
+  sid = board_session_id(fallback_sid)
+  if "-" in sid:
+    tail = sid.split("-", 1)[1].strip()
+    if tail:
+      return tail
+  return ""
 
 
 def clean_worker_id(raw_value, *, required=False):
@@ -5564,34 +5604,37 @@ def clean_worker_id(raw_value, *, required=False):
     if required:
       raise ValueError("Worker identifier must be 1 to 6 characters")
     return ""
+  if text in GREEK_LETTERS:
+    return text
   if not WORKER_ID_RE.match(text):
     raise ValueError("Worker identifier must be 1 to 6 characters")
   return text
 
 
-def default_worker_id(session_id, repo=""):
+def default_worker_id(session_id, repo="", index=1):
+  if 1 <= index < len(GREEK_LETTERS):
+    return GREEK_LETTERS[index]
   sid = board_session_id(session_id)
   if repo and sid.endswith(f"-{repo}") and len(sid) > len(repo) + 1:
     sid = sid[: -(len(repo) + 1)]
   token = re.sub(r"[^A-Za-z0-9]+", "", sid.split("-")[0] if "-" in sid else sid)[:6]
-  return token or "w1"
+  return token or "beta"
 
 
 def format_board_role_id(
   role, repo="", worker_id="", multi_repo=False, fallback_sid=""
 ):
-  clean_repo = str(repo or "").strip()
+  _ = multi_repo
+  clean_repo = clean_board_repo(repo, fallback_sid)
   if role == "main":
-    return f"main-{clean_repo}" if (multi_repo and clean_repo) else "main"
+    return f"{clean_repo}-alpha" if clean_repo else "alpha"
   if role == "worker":
     wid = (
       clean_worker_id(worker_id)
       if worker_id
       else default_worker_id(fallback_sid, clean_repo)
     )
-    return (
-      f"worker-{wid}-{clean_repo}" if (multi_repo and clean_repo) else f"worker-{wid}"
-    )
+    return f"{clean_repo}-{wid}" if clean_repo else wid
   return str(fallback_sid or "")
 
 
@@ -5602,10 +5645,24 @@ def resolve_board_target(target, sessions, allowed=(), main_sid=""):
   for row in sessions or ():
     if row.get("session_id") == clean or row.get("board_id") == clean:
       return row["session_id"]
+  for row in sessions or ():
     wid = row.get("worker_id") or ""
-    if wid and clean in {f"worker-{wid}", wid}:
+    row_repo = clean_board_repo(row.get("repo") or "", row.get("session_id") or "")
+    if wid and clean in {
+      wid,
+      f"worker-{wid}",
+      f"{row_repo}-{wid}" if row_repo else wid,
+      f"worker-{wid}-{row_repo}" if row_repo else f"worker-{wid}",
+    }:
       return row["session_id"]
-  if clean == "main" or clean.startswith("main-"):
+    if row.get("role") == "main" and clean in {
+      f"{row_repo}-alpha" if row_repo else "alpha",
+      f"main-{row_repo}" if row_repo else "main",
+    }:
+      return row["session_id"]
+  if (
+    clean in {"alpha", "main"} or clean.startswith("main-") or clean.endswith("-alpha")
+  ):
     if main_sid:
       return main_sid
     if allowed:
@@ -5958,23 +6015,13 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
   for allowed_sid in allowed:
     if allowed_sid not in seen_sids:
       seen_sids.add(allowed_sid)
-      allowed_repo = str(repo or "")
+      allowed_repo = clean_board_repo("", allowed_sid) or str(repo or "")
       allowed_role = "main" if (main_sid == allowed_sid or not main_sid) else "worker"
-      allowed_wid = (
-        worker_ids.get(allowed_sid) or default_worker_id(allowed_sid, allowed_repo)
-        if allowed_role == "worker"
-        else ""
-      )
+      allowed_wid = worker_ids.get(allowed_sid, "") if allowed_role == "worker" else ""
       sessions.append(
         {
           "session_id": allowed_sid,
-          "board_id": format_board_role_id(
-            allowed_role,
-            repo=allowed_repo,
-            worker_id=allowed_wid,
-            multi_repo=multi_repo,
-            fallback_sid=allowed_sid,
-          ),
+          "board_id": "",
           "worker_id": allowed_wid,
           "repo": allowed_repo,
           "branch": f"arena/{allowed_sid}",
@@ -5985,6 +6032,67 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
           "role": allowed_role,
         }
       )
+  repo_has_main = {}
+  for row in sessions:
+    row_repo = clean_board_repo(row.get("repo") or "", row["session_id"]) or str(
+      repo or ""
+    )
+    row["repo"] = row_repo
+    if not row.get("allowed"):
+      row["role"] = "blocked"
+      continue
+    if main_sid and row["session_id"] == main_sid:
+      row["role"] = "main"
+      repo_has_main[row_repo] = row["session_id"]
+  for row in sessions:
+    if not row.get("allowed"):
+      continue
+    row_repo = row["repo"]
+    if row_repo not in repo_has_main:
+      row["role"] = "main"
+      repo_has_main[row_repo] = row["session_id"]
+    elif repo_has_main[row_repo] != row["session_id"]:
+      row["role"] = "worker"
+  used_by_repo = {}
+  for row in sessions:
+    row_repo = row["repo"]
+    used = used_by_repo.setdefault(row_repo, {"alpha"})
+    if row["role"] == "worker":
+      explicit_wid = worker_ids.get(row["session_id"])
+      if explicit_wid:
+        used.add(explicit_wid)
+  for row in sessions:
+    row_repo = row["repo"]
+    if row["role"] == "main":
+      row["worker_id"] = ""
+      row["board_id"] = format_board_role_id(
+        "main",
+        repo=row_repo,
+        multi_repo=multi_repo,
+        fallback_sid=row["session_id"],
+      )
+    elif row["role"] == "worker":
+      wid = worker_ids.get(row["session_id"]) or ""
+      if not wid:
+        used = used_by_repo.setdefault(row_repo, {"alpha"})
+        for letter in GREEK_LETTERS[1:]:
+          if letter not in used:
+            wid = letter
+            break
+        if not wid:
+          wid = default_worker_id(row["session_id"], row_repo)
+        used.add(wid)
+      row["worker_id"] = wid
+      row["board_id"] = format_board_role_id(
+        "worker",
+        repo=row_repo,
+        worker_id=wid,
+        multi_repo=multi_repo,
+        fallback_sid=row["session_id"],
+      )
+    else:
+      row["worker_id"] = ""
+      row["board_id"] = row["session_id"]
   entries = []
   for item in (
     data.get("entries")[-MAX_BOARD_ENTRIES:]
@@ -6027,25 +6135,43 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
         "file": item.get("file") if isinstance(item.get("file"), dict) else None,
       }
     )
-  is_main = not main_sid or main_sid == sid
+  self_row = (
+    next((r for r in sessions if r["session_id"] == sid), None) if sid else None
+  )
+  is_main = (
+    self_row["role"] == "main"
+    if self_row and self_row.get("allowed")
+    else (not main_sid or main_sid == sid)
+  )
   self_role = "main" if is_main else "worker"
   self_wid = (
-    worker_ids.get(sid) or default_worker_id(sid, str(repo or ""))
+    (
+      self_row["worker_id"]
+      if self_row and self_row.get("worker_id")
+      else (worker_ids.get(sid) or default_worker_id(sid, str(repo or "")))
+    )
     if self_role == "worker" and sid
     else ""
+  )
+  self_board_id = (
+    self_row["board_id"]
+    if self_row and self_row.get("board_id") and self_row.get("allowed")
+    else (
+      format_board_role_id(
+        self_role,
+        repo=str(repo or ""),
+        worker_id=self_wid,
+        multi_repo=multi_repo,
+        fallback_sid=sid,
+      )
+      if sid
+      else ""
+    )
   )
   return {
     "version": 1,
     "session_id": sid,
-    "board_id": format_board_role_id(
-      self_role,
-      repo=str(repo or ""),
-      worker_id=self_wid,
-      multi_repo=multi_repo,
-      fallback_sid=sid,
-    )
-    if sid
-    else "",
+    "board_id": self_board_id,
     "worker_id": self_wid,
     "multi_repo": multi_repo,
     "worker_ids": worker_ids,

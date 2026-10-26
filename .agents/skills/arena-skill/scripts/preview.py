@@ -2015,32 +2015,46 @@ def stage_board_file(state_dir,sender_id,file_obj):
 	digest=hashlib.sha256(raw_bytes).hexdigest();expected=str(file_obj.get('sha256')or'').strip().lower()
 	if expected and expected!=digest:raise ValueError('Board file SHA-256 mismatch')
 	safe_sender=re.sub('[^A-Za-z0-9._-]+','-',board_session_id(sender_id or'session')or'session').strip('-')or'session';target=Path(state_dir)/'board-files'/safe_sender/clean_name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw_bytes);return{'name':clean_name,'encoding':encoding,'content':content,'size':len(raw_bytes),'sha256':digest,'staged_path':str(target.relative_to(Path(state_dir)))}
+GREEK_LETTERS='alpha','beta','gamma','delta','epsilon','zeta','eta','theta','iota','kappa','lambda','mu','nu','xi','omicron','pi','rho','sigma','tau','upsilon','phi','chi','psi','omega'
 WORKER_ID_RE=re.compile('^[A-Za-z0-9_-]{1,6}$')
+def clean_board_repo(repo='',fallback_sid=''):
+	text=str(repo or'').strip()
+	if'/'in text:text=text.rsplit('/',1)[-1].strip()
+	if text:return text
+	sid=board_session_id(fallback_sid)
+	if'-'in sid:
+		tail=sid.split('-',1)[1].strip()
+		if tail:return tail
+	return''
 def clean_worker_id(raw_value,*,required=False):
 	text=str(raw_value or'').strip()
 	if text.lower().startswith('worker-'):text=text[7:].strip()
 	if not text:
 		if required:raise ValueError('Worker identifier must be 1 to 6 characters')
 		return''
+	if text in GREEK_LETTERS:return text
 	if not WORKER_ID_RE.match(text):raise ValueError('Worker identifier must be 1 to 6 characters')
 	return text
-def default_worker_id(session_id,repo=''):
+def default_worker_id(session_id,repo='',index=1):
+	if 1<=index<len(GREEK_LETTERS):return GREEK_LETTERS[index]
 	sid=board_session_id(session_id)
 	if repo and sid.endswith(f"-{repo}")and len(sid)>len(repo)+1:sid=sid[:-(len(repo)+1)]
-	token=re.sub('[^A-Za-z0-9]+','',sid.split('-')[0]if'-'in sid else sid)[:6];return token or'w1'
+	token=re.sub('[^A-Za-z0-9]+','',sid.split('-')[0]if'-'in sid else sid)[:6];return token or'beta'
 def format_board_role_id(role,repo='',worker_id='',multi_repo=False,fallback_sid=''):
-	clean_repo=str(repo or'').strip()
-	if role=='main':return f"main-{clean_repo}"if multi_repo and clean_repo else'main'
-	if role=='worker':wid=clean_worker_id(worker_id)if worker_id else default_worker_id(fallback_sid,clean_repo);return f"worker-{wid}-{clean_repo}"if multi_repo and clean_repo else f"worker-{wid}"
+	_=multi_repo;clean_repo=clean_board_repo(repo,fallback_sid)
+	if role=='main':return f"{clean_repo}-alpha"if clean_repo else'alpha'
+	if role=='worker':wid=clean_worker_id(worker_id)if worker_id else default_worker_id(fallback_sid,clean_repo);return f"{clean_repo}-{wid}"if clean_repo else wid
 	return str(fallback_sid or'')
 def resolve_board_target(target,sessions,allowed=(),main_sid=''):
 	clean=board_session_id(target)
 	if not clean:return''
 	for row in sessions or():
 		if row.get('session_id')==clean or row.get('board_id')==clean:return row['session_id']
-		wid=row.get('worker_id')or''
-		if wid and clean in{f"worker-{wid}",wid}:return row['session_id']
-	if clean=='main'or clean.startswith('main-'):
+	for row in sessions or():
+		wid=row.get('worker_id')or'';row_repo=clean_board_repo(row.get('repo')or'',row.get('session_id')or'')
+		if wid and clean in{wid,f"worker-{wid}",f"{row_repo}-{wid}"if row_repo else wid,f"worker-{wid}-{row_repo}"if row_repo else f"worker-{wid}"}:return row['session_id']
+		if row.get('role')=='main'and clean in{f"{row_repo}-alpha"if row_repo else'alpha',f"main-{row_repo}"if row_repo else'main'}:return row['session_id']
+	if clean in{'alpha','main'}or clean.startswith('main-')or clean.endswith('-alpha'):
 		if main_sid:return main_sid
 		if allowed:return allowed[0]
 	return clean
@@ -2157,7 +2171,36 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 		is_self=bool(sid and row_sid==sid);wake_pending=row_sid in allowed and bool(wakes.get(row_sid));row_polling=(bool(polling)if is_self else bool(row.get('polling')or row.get('status')=='polling'))and not wake_pending;row_repo=str(row.get('repo')or(repo if is_self else''));row_role='main'if main_sid==row_sid or not main_sid and row_sid in allowed else'worker'if row_sid in allowed else'blocked';row_wid=worker_ids.get(row_sid)or default_worker_id(row_sid,row_repo)if row_role=='worker'else'';sessions.append({'session_id':row_sid,'board_id':format_board_role_id(row_role,repo=row_repo,worker_id=row_wid,multi_repo=multi_repo,fallback_sid=row_sid),'worker_id':row_wid,'repo':row_repo,'branch':str(row.get('branch')or(branch if is_self else f"arena/{row_sid}")),'status':'polling'if row_polling else'active','polling':row_polling,'updated_at':str(row.get('updated_at')or clip_stamp(now())),'allowed':row_sid in allowed,'role':row_role})
 	if sid and sid not in seen_sids:seen_sids.add(sid);self_polling=bool(polling)and not(sid in allowed and bool(wakes.get(sid)));self_repo=str(repo or'');self_role='main'if main_sid==sid or not main_sid and sid in allowed else'worker'if sid in allowed else'blocked';self_wid=worker_ids.get(sid)or default_worker_id(sid,self_repo)if self_role=='worker'else'';sessions.insert(0,{'session_id':sid,'board_id':format_board_role_id(self_role,repo=self_repo,worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid),'worker_id':self_wid,'repo':self_repo,'branch':str(branch or f"arena/{sid}"),'status':'polling'if self_polling else'active','polling':self_polling,'updated_at':clip_stamp(now()),'allowed':sid in allowed,'role':self_role})
 	for allowed_sid in allowed:
-		if allowed_sid not in seen_sids:seen_sids.add(allowed_sid);allowed_repo=str(repo or'');allowed_role='main'if main_sid==allowed_sid or not main_sid else'worker';allowed_wid=worker_ids.get(allowed_sid)or default_worker_id(allowed_sid,allowed_repo)if allowed_role=='worker'else'';sessions.append({'session_id':allowed_sid,'board_id':format_board_role_id(allowed_role,repo=allowed_repo,worker_id=allowed_wid,multi_repo=multi_repo,fallback_sid=allowed_sid),'worker_id':allowed_wid,'repo':allowed_repo,'branch':f"arena/{allowed_sid}",'status':'active','polling':False,'updated_at':clip_stamp(now()),'allowed':True,'role':allowed_role})
+		if allowed_sid not in seen_sids:seen_sids.add(allowed_sid);allowed_repo=clean_board_repo('',allowed_sid)or str(repo or'');allowed_role='main'if main_sid==allowed_sid or not main_sid else'worker';allowed_wid=worker_ids.get(allowed_sid,'')if allowed_role=='worker'else'';sessions.append({'session_id':allowed_sid,'board_id':'','worker_id':allowed_wid,'repo':allowed_repo,'branch':f"arena/{allowed_sid}",'status':'active','polling':False,'updated_at':clip_stamp(now()),'allowed':True,'role':allowed_role})
+	repo_has_main={}
+	for row in sessions:
+		row_repo=clean_board_repo(row.get('repo')or'',row['session_id'])or str(repo or'');row['repo']=row_repo
+		if not row.get('allowed'):row['role']='blocked';continue
+		if main_sid and row['session_id']==main_sid:row['role']='main';repo_has_main[row_repo]=row['session_id']
+	for row in sessions:
+		if not row.get('allowed'):continue
+		row_repo=row['repo']
+		if row_repo not in repo_has_main:row['role']='main';repo_has_main[row_repo]=row['session_id']
+		elif repo_has_main[row_repo]!=row['session_id']:row['role']='worker'
+	used_by_repo={}
+	for row in sessions:
+		row_repo=row['repo'];used=used_by_repo.setdefault(row_repo,{'alpha'})
+		if row['role']=='worker':
+			explicit_wid=worker_ids.get(row['session_id'])
+			if explicit_wid:used.add(explicit_wid)
+	for row in sessions:
+		row_repo=row['repo']
+		if row['role']=='main':row['worker_id']='';row['board_id']=format_board_role_id('main',repo=row_repo,multi_repo=multi_repo,fallback_sid=row['session_id'])
+		elif row['role']=='worker':
+			wid=worker_ids.get(row['session_id'])or''
+			if not wid:
+				used=used_by_repo.setdefault(row_repo,{'alpha'})
+				for letter in GREEK_LETTERS[1:]:
+					if letter not in used:wid=letter;break
+				if not wid:wid=default_worker_id(row['session_id'],row_repo)
+				used.add(wid)
+			row['worker_id']=wid;row['board_id']=format_board_role_id('worker',repo=row_repo,worker_id=wid,multi_repo=multi_repo,fallback_sid=row['session_id'])
+		else:row['worker_id']='';row['board_id']=row['session_id']
 	entries=[]
 	for item in data.get('entries')[-MAX_BOARD_ENTRIES:]if isinstance(data.get('entries'),list)else[]:
 		if not isinstance(item,dict):continue
@@ -2167,7 +2210,7 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 		for k in('tag','text'):
 			if item.get(k)and k not in item_payload:item_payload[k]=str(item.get(k))
 		entries.append({'id':str(item.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':from_sid,'to':resolved_to or'*','repo':str(item.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'tag':str(item.get('tag')or item_payload.get('tag')or''),'text':str(item.get('text')or item_payload.get('text')or''),'payload':item_payload,'file':item.get('file')if isinstance(item.get('file'),dict)else None})
-	is_main=not main_sid or main_sid==sid;self_role='main'if is_main else'worker';self_wid=worker_ids.get(sid)or default_worker_id(sid,str(repo or''))if self_role=='worker'and sid else'';return{'version':1,'session_id':sid,'board_id':format_board_role_id(self_role,repo=str(repo or''),worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid)if sid else'','worker_id':self_wid,'multi_repo':multi_repo,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'repo':str(repo or''),'branch':str(branch or''),'removed_sessions':removed_sessions,'allowed_sessions':allowed,'main_session_id':main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
+	self_row=next((r for r in sessions if r['session_id']==sid),None)if sid else None;is_main=self_row['role']=='main'if self_row and self_row.get('allowed')else not main_sid or main_sid==sid;self_role='main'if is_main else'worker';self_wid=(self_row['worker_id']if self_row and self_row.get('worker_id')else worker_ids.get(sid)or default_worker_id(sid,str(repo or'')))if self_role=='worker'and sid else'';self_board_id=self_row['board_id']if self_row and self_row.get('board_id')and self_row.get('allowed')else format_board_role_id(self_role,repo=str(repo or''),worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid)if sid else'';return{'version':1,'session_id':sid,'board_id':self_board_id,'worker_id':self_wid,'multi_repo':multi_repo,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'repo':str(repo or''),'branch':str(branch or''),'removed_sessions':removed_sessions,'allowed_sessions':allowed,'main_session_id':main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
 def board_main_session_warning(state_dir,command):
 	if not isinstance(command,str)or not command.strip():return None
 	if not re.search('(?:^|[;&|()\\s])(?:git\\s+(?:-\\S+\\s+)*push\\b|gh\\s+pr\\s+(?:create|edit|merge|close|ready|reopen)\\b)',command):return None
