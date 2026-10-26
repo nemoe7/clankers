@@ -1,7 +1,9 @@
 # Worker Session Rules
 
-- In a board worker session, this file is part of the bible and wins over ARENA.md.
-- NEVER commit, push, or open or update a PR in a worker session.
-- Attach a git diff patch file and hand off verified findings to the main session through POST /api/board.
-- The main session manages worker tasks and reports, reviews worker changes, and asks the user before landing.
-- Mark a worker task finished after its local gates pass and you post its board handoff.
+- NEVER run git commit, git push, gh pr, or gh release in a worker session; the main session owns all commits, pushes, and pull requests.
+- Hand off findings, verification outputs, and patches to the main session through POST /api/board (`action: "post"` or `action: "wake"`).
+- Attach a git diff patch file and hand off verified findings to the main session on the board instead of committing or pushing.
+- Skip unpushed-commit and pull-request checks that apply only to the main session, and keep the working tree scoped to the assigned task.
+- Wait on `arena-preview poll` (`timeout: 1800`) after posting a handoff so the main session can wake this worker with follow-up work.
+- Inform the main session through POST /api/board when open PR checks fail.
+- ALWAYS check whether the main session branch moved and rebase onto it before auditing or building a patch.
