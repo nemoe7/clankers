@@ -6886,7 +6886,16 @@
         ["seen_at", "acknowledged_at", "ack_type", "ack_text", "ack_sender", "ack_edited_at", "task_id"].forEach(function (field) {
           if (copy[field] && !prev[field]) prev[field] = copy[field];
         });
-        if (copy.ack_sender && prev.to && prev.to !== "*" && prev.to !== prev.session_id && copy.ack_sender === prev.to) {
+        if (copy.to && copy.to !== "*" && prev.to && prev.to !== copy.to && next.allowed_sessions.indexOf(copy.to) !== -1) {
+          prev.to = copy.to;
+        }
+        if (
+          copy.ack_sender &&
+          prev.to &&
+          prev.to !== "*" &&
+          prev.to !== prev.session_id &&
+          (copy.ack_sender === prev.to || (prev.ack_sender === prev.session_id && copy.ack_sender !== prev.session_id))
+        ) {
           prev.ack_sender = copy.ack_sender;
         }
         if (copy.ack_edited_at && (!prev.ack_edited_at || String(copy.ack_edited_at) > String(prev.ack_edited_at))) {
@@ -6895,8 +6904,20 @@
         if ((Number(copy.ack_edited_seen_count) || 0) > (Number(prev.ack_edited_seen_count) || 0)) {
           prev.ack_edited_seen_count = Number(copy.ack_edited_seen_count) || 0;
         }
-        if (Array.isArray(copy.replies) && copy.replies.length > (Array.isArray(prev.replies) ? prev.replies.length : 0)) {
-          prev.replies = copy.replies.slice();
+        if (Array.isArray(copy.replies)) {
+          var prevReplies = Array.isArray(prev.replies) ? prev.replies : [];
+          if (copy.replies.length > prevReplies.length) {
+            prev.replies = copy.replies.slice();
+          } else if (copy.replies.length === prevReplies.length && prev.to && prev.to !== "*" && prev.to !== prev.session_id) {
+            prev.replies = prevReplies.map(function (r, idx) {
+              var cr = copy.replies[idx];
+              if (!r || !cr) return r;
+              if (cr.sender && (cr.sender === prev.to || (r.sender === prev.session_id && cr.sender !== prev.session_id))) {
+                return Object.assign({}, r, { sender: cr.sender });
+              }
+              return r;
+            });
+          }
         }
         return;
       }
