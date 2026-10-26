@@ -377,9 +377,9 @@ mark code { color: var(--text); }
 @media (max-width: 60em) {
   .topbar { padding: 10px 16px; }
   main { padding: 14px 0 16px; }
-  main > section[role="tabpanel"], .report-scroll-frame > section[role="tabpanel"] { padding-inline: 16px; }
-  #reports-panel, #tasks-panel, #downloads-panel { padding-right: 0; }
-  #downloads-panel > .card, #reports-panel > .card, #tasks-panel > .card { width: min(900px, calc(100vw - 32px)); margin-left: max(0px, calc((100vw - 900px) / 2 - 16px)); }
+  main > section[role="tabpanel"], #board-panel, .report-scroll-frame > section[role="tabpanel"] { padding-inline: 16px; }
+  #board-panel, #reports-panel, #tasks-panel, #downloads-panel { padding-right: 0; }
+  #board-panel > .card, #downloads-panel > .card, #reports-panel > .card, #tasks-panel > .card { width: min(900px, calc(100vw - 32px)); margin-left: max(0px, calc((100vw - 900px) / 2 - 16px)); }
   #history { padding-left: max(16px, calc((100vw - 900px) / 2)); }
   .message { width: min(900px, calc(100vw - 32px)); }
   .card { padding: 18px; }

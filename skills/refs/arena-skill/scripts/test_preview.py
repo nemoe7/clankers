@@ -15589,3 +15589,6 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert demo_summary["reports"] >= 2
   assert demo_summary["tasks"] >= 2
   assert demo_summary["board_entries"] >= 2
+  assert "const vvScale = vv?.scale > 0 ? vv.scale : 1;" in app_js_text
+  assert "const vvHeight = (vv?.height || 0) * vvScale;" in app_js_text
+  assert "#board-panel > .card, #downloads-panel > .card" in style_css

@@ -332,7 +332,8 @@ let lastViewportHeight = 0;
 let maxViewportHeight = 0;
 function syncKeyboardFooter(event) {
   const vv = window.visualViewport;
-  const vvHeight = vv?.height || 0;
+  const vvScale = vv?.scale > 0 ? vv.scale : 1;
+  const vvHeight = (vv?.height || 0) * vvScale;
   const innerHeight = window.innerHeight || 0;
   const currentHeight = vvHeight && innerHeight ? Math.min(vvHeight, innerHeight) : vvHeight || innerHeight;
   if (currentHeight > maxViewportHeight) maxViewportHeight = currentHeight;
@@ -361,7 +362,8 @@ function syncKeyboardFooter(event) {
 function syncViewport() {
   syncKeyboardFooter();
   const vv = window.visualViewport;
-  const vvHeight = vv?.height || 0;
+  const vvScale = vv?.scale > 0 ? vv.scale : 1;
+  const vvHeight = (vv?.height || 0) * vvScale;
   const innerHeight = window.innerHeight || 0;
   const docHeight = document.documentElement?.clientHeight || 0;
   const heights = [vvHeight, innerHeight, docHeight].filter(h => h > 0);
@@ -373,7 +375,7 @@ function syncViewport() {
     lastViewportHeight = nextHeight;
     document.documentElement.style?.setProperty?.('--app-height', `${nextHeight}px`);
   }
-  if ((vv?.offsetTop || window.scrollY) && typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+  if (((vvScale <= 1.01 && vv?.offsetTop) || window.scrollY) && typeof window.scrollTo === 'function') window.scrollTo(0, 0);
   const nextHistoryHeight = history.clientHeight;
   if (priorHistoryHeight > nextHistoryHeight && !compose.dataset.expanded) {
     history.scrollTop = logPinned
