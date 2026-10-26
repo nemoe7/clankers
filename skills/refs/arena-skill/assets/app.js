@@ -1072,6 +1072,14 @@ function linkReferences(html, references) {
     return `<a class="ack-reference" href="#${panel}" data-reference-type="${type}" data-reference-id="${id}"><code>${id}</code></a>`;
   });
 }
+function isRepoVisibleOnBoard(rowRepo, board = getState()?.board) {
+  const currentRepo = String(board?.repo || getState()?.repo || '').trim().split('/').pop();
+  const slug = String(rowRepo || currentRepo).trim().split('/').pop();
+  if (!currentRepo || !slug || slug === currentRepo) return true;
+  const linked = Array.isArray(board?.linked_repos) ? board.linked_repos : [];
+  if (linked.length) return linked.includes(slug);
+  return Boolean(board?.multi_repo);
+}
 function combinedHistoryItems(notes, board = getState()?.board) {
   const baseNotes = Array.isArray(notes) ? notes : [];
   const entriesRaw = Array.isArray(board?.entries) ? board.entries : [];
@@ -1088,7 +1096,7 @@ function combinedHistoryItems(notes, board = getState()?.board) {
     if (allowed.size && entry.session_id && !allowed.has(entry.session_id)) continue;
     const senderRow = boardBySid.get(entry.session_id);
     const entryRepo = String(entry.repo || senderRow?.repo || '').trim().split('/').pop();
-    if (!board?.multi_repo && currentRepo && entryRepo && entryRepo !== currentRepo) continue;
+    if (!isRepoVisibleOnBoard(entryRepo, board)) continue;
     const rawSenderId = entry.board_id || senderRow?.board_id || entry.session_id || '';
     const senderLabel = entry.from_owner
       ? ''
@@ -1558,6 +1566,7 @@ function renderState() {
   updateReportTop();
   renderReportAcknowledgement();
   checkReportRead();
+  renderBoard();
 }
 async function refreshState() {
   // A caller that arrives during a read joins it, so a fresh state always precedes its render.
@@ -4078,11 +4087,30 @@ function renderBoard() {
   }
   if (!sessionsEl) return;
   const currentRepo = String(board?.repo || getState()?.repo || '').trim().split('/').pop();
-  const visibleSessions = sessions.filter(row => {
-    if (board?.multi_repo || !currentRepo) return true;
-    const rowRepo = String(row.repo || currentRepo).trim().split('/').pop();
-    return !rowRepo || rowRepo === currentRepo;
-  });
+  const repoLinksEl = $('#board-repo-links');
+  if (repoLinksEl) {
+    repoLinksEl.replaceChildren();
+    const linkedSet = new Set(Array.isArray(board?.linked_repos) ? board.linked_repos : []);
+    const knownRepos = Array.isArray(board?.known_repos) && board.known_repos.length
+      ? board.known_repos
+      : Array.from(new Set(sessions.map(row => String(row.repo || '').trim().split('/').pop()).filter(Boolean)));
+    for (const peerRepo of knownRepos) {
+      if (!peerRepo || peerRepo === currentRepo) continue;
+      const isLinked = linkedSet.has(peerRepo) || (Boolean(board?.multi_repo) && linkedSet.size === 0);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'board-repo-link-btn';
+      btn.dataset.repo = peerRepo;
+      btn.dataset.linked = isLinked ? 'true' : 'false';
+      btn.setAttribute('aria-pressed', isLinked ? 'true' : 'false');
+      btn.textContent = isLinked ? `Unlink ${peerRepo}` : `Link ${peerRepo}`;
+      btn.addEventListener('click', () => {
+        void sendBoardAction({ action: isLinked ? 'unlink-repo' : 'link-repo', repo: peerRepo });
+      });
+      repoLinksEl.append(btn);
+    }
+  }
+  const visibleSessions = sessions.filter(row => isRepoVisibleOnBoard(row.repo, board));
   sessionsEl.replaceChildren();
   for (const row of visibleSessions) {
     const item = document.createElement('div');

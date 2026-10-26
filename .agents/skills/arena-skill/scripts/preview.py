@@ -2045,6 +2045,10 @@ def clean_worker_id(raw_value,*,required=False):
 	if text in GREEK_LETTERS:return text
 	if not WORKER_ID_RE.match(text):raise ValueError('Worker identifier must be 1 to 6 characters')
 	return text
+def is_legacy_hex_worker_id(session_id,worker_id):
+	wid=str(worker_id or'').strip().lower()
+	if not wid or wid in GREEK_LETTERS:return False
+	sid=board_session_id(session_id);head=sid.split('-')[0]if'-'in sid else sid;token=re.sub('[^A-Za-z0-9]+','',head)[:6].lower();return bool(token and wid==token)
 def default_worker_id(session_id,repo='',index=1):
 	if 1<=index<len(GREEK_LETTERS):return GREEK_LETTERS[index]
 	sid=board_session_id(session_id)
@@ -2127,7 +2131,11 @@ def board_stamp_epoch(value):
 		return dt.replace(tzinfo=timezone.utc).timestamp()
 	except Exception:return None
 def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
-	data=raw if isinstance(raw,dict)else{};sid=board_session_id(session_id or branch);multi_repo=bool(data.get('multi_repo'));removed_sessions=[]
+	data=raw if isinstance(raw,dict)else{};sid=board_session_id(session_id or branch);linked_repos=[]
+	for item in data.get('linked_repos')if isinstance(data.get('linked_repos'),list)else[]:
+		slug=clean_board_repo(item)
+		if slug and slug not in linked_repos:linked_repos.append(slug)
+	multi_repo=bool(data.get('multi_repo')or linked_repos);removed_sessions=[]
 	for item in data.get('removed_sessions')if isinstance(data.get('removed_sessions'),list)else[]:
 		norm_rem=board_session_id(item)
 		if norm_rem and norm_rem!=sid and norm_rem not in removed_sessions:removed_sessions.append(norm_rem)
@@ -2136,7 +2144,7 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 		norm_k=board_session_id(k)
 		try:clean_v=clean_worker_id(v)
 		except ValueError:clean_v=''
-		if norm_k and norm_k not in removed_set and clean_v:worker_ids[norm_k]=clean_v
+		if norm_k and norm_k not in removed_set and clean_v and not is_legacy_hex_worker_id(norm_k,clean_v):worker_ids[norm_k]=clean_v
 	raw_worker_tasks=data.get('worker_tasks')if isinstance(data.get('worker_tasks'),dict)else{};worker_tasks={}
 	for(k,v)in raw_worker_tasks.items():
 		norm_k=board_session_id(k)
@@ -2176,7 +2184,7 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 		if row.get('worker_id')and row_sid not in worker_ids:
 			try:
 				delegated=clean_worker_id(row.get('worker_id'))
-				if delegated:worker_ids[row_sid]=delegated
+				if delegated and not is_legacy_hex_worker_id(row_sid,delegated):worker_ids[row_sid]=delegated
 			except ValueError:pass
 		is_self=bool(sid and row_sid==sid);wake_pending=row_sid in allowed and bool(wakes.get(row_sid));row_polling=(bool(polling)if is_self else bool(row.get('polling')or row.get('status')=='polling'))and not wake_pending;row_repo=str(row.get('repo')or(repo if is_self else''));row_role='main'if main_sid==row_sid or not main_sid and row_sid in allowed else'worker'if row_sid in allowed else'blocked';row_wid=worker_ids.get(row_sid)or default_worker_id(row_sid,row_repo)if row_role=='worker'else'';sessions.append({'session_id':row_sid,'board_id':format_board_role_id(row_role,repo=row_repo,worker_id=row_wid,multi_repo=multi_repo,fallback_sid=row_sid),'worker_id':row_wid,'repo':row_repo,'branch':str(row.get('branch')or(branch if is_self else f"arena/{row_sid}")),'status':'polling'if row_polling else'active','polling':row_polling,'updated_at':str(row.get('updated_at')or clip_stamp(now())),'allowed':row_sid in allowed,'role':row_role})
 	if sid and sid not in seen_sids:seen_sids.add(sid);self_polling=bool(polling)and not(sid in allowed and bool(wakes.get(sid)));self_repo=str(repo or'');self_role='main'if main_sid==sid or not main_sid and sid in allowed else'worker'if sid in allowed else'blocked';self_wid=worker_ids.get(sid)or default_worker_id(sid,self_repo)if self_role=='worker'else'';sessions.insert(0,{'session_id':sid,'board_id':format_board_role_id(self_role,repo=self_repo,worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid),'worker_id':self_wid,'repo':self_repo,'branch':str(branch or f"arena/{sid}"),'status':'polling'if self_polling else'active','polling':self_polling,'updated_at':clip_stamp(now()),'allowed':sid in allowed,'role':self_role})
@@ -2226,8 +2234,15 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 				cand=resolve_board_target(token,sessions,allowed=allowed,main_sid=main_sid)
 				if cand and cand in allowed and cand!=from_sid:mention_target=cand;break
 		if mention_target and resolved_to=='*':resolved_to=mention_target
-		sender_row=session_by_id.get(from_sid)or{};raw_replies=item.get('replies');replies=[dict(r)for r in raw_replies if isinstance(r,dict)]if isinstance(raw_replies,list)else[];entries.append({'id':str(item.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':from_sid,'board_id':str(item.get('board_id')or sender_row.get('board_id')or from_sid),'from_owner':bool(item.get('from_owner')),'note_id':str(item.get('note_id')or''),'to':resolved_to or'*','mention_target':mention_target,'repo':str(item.get('repo')or sender_row.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'tag':str(item.get('tag')or item_payload.get('tag')or''),'text':entry_text,'seen_at':clip_stamp(item.get('seen_at'))if item.get('seen_at')else None,'acknowledged_at':clip_stamp(item.get('acknowledged_at'))if item.get('acknowledged_at')else None,'ack_type':str(item.get('ack_type')or'reply')if item.get('acknowledged_at')else None,'ack_text':str(item.get('ack_text')or'')if item.get('ack_text')is not None else None,'ack_edited_at':clip_stamp(item.get('ack_edited_at'))if item.get('ack_edited_at')else None,'replies':replies,'payload':item_payload,'file':item.get('file')if isinstance(item.get('file'),dict)else None})
-	self_row=next((r for r in sessions if r['session_id']==sid),None)if sid else None;is_main=self_row['role']=='main'if self_row and self_row.get('allowed')else not main_sid or main_sid==sid;self_role='main'if is_main else'worker';self_wid=(self_row['worker_id']if self_row and self_row.get('worker_id')else worker_ids.get(sid)or default_worker_id(sid,str(repo or'')))if self_role=='worker'and sid else'';self_board_id=self_row['board_id']if self_row and self_row.get('board_id')and self_row.get('allowed')else format_board_role_id(self_role,repo=str(repo or''),worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid)if sid else'';return{'version':1,'session_id':sid,'board_id':self_board_id,'worker_id':self_wid,'multi_repo':multi_repo,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'repo':str(repo or''),'branch':str(branch or''),'removed_sessions':removed_sessions,'allowed_sessions':allowed,'main_session_id':main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
+		sender_row=session_by_id.get(from_sid)or{};raw_replies=item.get('replies');replies=[dict(r)for r in raw_replies if isinstance(r,dict)]if isinstance(raw_replies,list)else[];entries.append({'id':str(item.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':from_sid,'board_id':str(sender_row.get('board_id')or item.get('board_id')or from_sid),'from_owner':bool(item.get('from_owner')),'note_id':str(item.get('note_id')or''),'to':resolved_to or'*','mention_target':mention_target,'repo':str(item.get('repo')or sender_row.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'tag':str(item.get('tag')or item_payload.get('tag')or''),'text':entry_text,'seen_at':clip_stamp(item.get('seen_at'))if item.get('seen_at')else None,'acknowledged_at':clip_stamp(item.get('acknowledged_at'))if item.get('acknowledged_at')else None,'ack_type':str(item.get('ack_type')or'reply')if item.get('acknowledged_at')else None,'ack_text':str(item.get('ack_text')or'')if item.get('ack_text')is not None else None,'ack_edited_at':clip_stamp(item.get('ack_edited_at'))if item.get('ack_edited_at')else None,'replies':replies,'payload':item_payload,'file':item.get('file')if isinstance(item.get('file'),dict)else None})
+	self_row=next((r for r in sessions if r['session_id']==sid),None)if sid else None;is_main=self_row['role']=='main'if self_row and self_row.get('allowed')else not main_sid or main_sid==sid;self_role='main'if is_main else'worker';self_wid=(self_row['worker_id']if self_row and self_row.get('worker_id')else worker_ids.get(sid)or default_worker_id(sid,str(repo or'')))if self_role=='worker'and sid else'';self_board_id=self_row['board_id']if self_row and self_row.get('board_id')and self_row.get('allowed')else format_board_role_id(self_role,repo=str(repo or''),worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid)if sid else'';known_repos=[];base_repo_slug=clean_board_repo(repo)
+	if base_repo_slug:known_repos.append(base_repo_slug)
+	for row in sessions:
+		r_slug=clean_board_repo(row.get('repo')or'',row.get('session_id')or'')
+		if r_slug and r_slug not in known_repos:known_repos.append(r_slug)
+	for r_slug in linked_repos:
+		if r_slug not in known_repos:known_repos.append(r_slug)
+	return{'version':1,'session_id':sid,'board_id':self_board_id,'worker_id':self_wid,'multi_repo':multi_repo,'linked_repos':linked_repos,'known_repos':known_repos,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'repo':str(repo or''),'branch':str(branch or''),'removed_sessions':removed_sessions,'allowed_sessions':allowed,'main_session_id':main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
 def board_main_session_warning(state_dir,command):
 	if not isinstance(command,str)or not command.strip():return None
 	if not re.search('(?:^|[;&|()\\s])(?:git\\s+(?:-\\S+\\s+)*push\\b|gh\\s+pr\\s+(?:create|edit|merge|close|ready|reopen)\\b)',command):return None
@@ -2791,7 +2806,7 @@ class Store:
 		action_type=str(payload.get('action')or payload.get('type')or'').strip().lower();raw_text=self.meta_value(BOARD_STATE_META)
 		try:raw_stored=json.loads(raw_text)if raw_text else{}
 		except Exception:raw_stored={}
-		ack_wakes=dict(raw_stored.get('ack_wakes'))if isinstance(raw_stored,dict)and isinstance(raw_stored.get('ack_wakes'),dict)else{};state=self.board_state();sid=state['session_id'];multi_repo=bool(state.get('multi_repo'));worker_ids=dict(state.get('worker_ids')or{});worker_tasks={k:[dict(item)for item in v if isinstance(item,dict)]for(k,v)in(state.get('worker_tasks')or{}).items()if isinstance(v,list)};task_ops=[dict(row)for row in state.get('task_ops')or[]];worker_reports={k:[dict(item)for item in v if isinstance(item,dict)]for(k,v)in(state.get('worker_reports')or{}).items()if isinstance(v,list)};report_ops=[dict(row)for row in state.get('report_ops')or[]];removed_sessions=[str(x)for x in state.get('removed_sessions')or[]if x and x!=sid];allowed=list(state['allowed_sessions']);main_sid=state['main_session_id'];sessions=[dict(row)for row in state['sessions']];entries=[dict(row)for row in state['entries']];wakes=dict(state['wakes'])
+		ack_wakes=dict(raw_stored.get('ack_wakes'))if isinstance(raw_stored,dict)and isinstance(raw_stored.get('ack_wakes'),dict)else{};state=self.board_state();sid=state['session_id'];linked_repos=[str(x)for x in state.get('linked_repos')or[]if x];multi_repo=bool(state.get('multi_repo')or linked_repos);worker_ids=dict(state.get('worker_ids')or{});worker_tasks={k:[dict(item)for item in v if isinstance(item,dict)]for(k,v)in(state.get('worker_tasks')or{}).items()if isinstance(v,list)};task_ops=[dict(row)for row in state.get('task_ops')or[]];worker_reports={k:[dict(item)for item in v if isinstance(item,dict)]for(k,v)in(state.get('worker_reports')or{}).items()if isinstance(v,list)};report_ops=[dict(row)for row in state.get('report_ops')or[]];removed_sessions=[str(x)for x in state.get('removed_sessions')or[]if x and x!=sid];allowed=list(state['allowed_sessions']);main_sid=state['main_session_id'];sessions=[dict(row)for row in state['sessions']];entries=[dict(row)for row in state['entries']];wakes=dict(state['wakes'])
 		if action_type=='sync':
 			incoming=dict(payload.get('board'))if isinstance(payload.get('board'),dict)else dict(payload)
 			if isinstance(incoming.get('sessions'),list)and sid:
@@ -2800,7 +2815,12 @@ class Store:
 					if isinstance(s_row,dict)and board_session_id(s_row.get('session_id')or s_row.get('branch')or'')==sid:s_row={**s_row,'updated_at':now_sync}
 					updated_incoming_sessions.append(s_row)
 				incoming['sessions']=updated_incoming_sessions
-			if isinstance(incoming,dict)and'multi_repo'in incoming:multi_repo=bool(incoming.get('multi_repo'))
+			if isinstance(incoming,dict)and isinstance(incoming.get('linked_repos'),list):
+				linked_repos=[]
+				for item in incoming['linked_repos']:
+					slug=clean_board_repo(item)
+					if slug and slug not in linked_repos:linked_repos.append(slug)
+			if isinstance(incoming,dict)and'multi_repo'in incoming:multi_repo=bool(incoming.get('multi_repo')or linked_repos)
 			merged=normalize_board_state(incoming,session_id=sid,repo=state['repo'],branch=state['branch'],polling=any(r['session_id']==sid and r.get('polling')for r in sessions))
 			for rem_sid in merged.get('removed_sessions')or[]:
 				if rem_sid and rem_sid!=sid and rem_sid not in removed_sessions:removed_sessions.append(rem_sid)
@@ -2905,7 +2925,15 @@ class Store:
 			target=resolve_board_target(payload.get('session_id')or payload.get('target')or'',sessions,allowed=allowed,main_sid=main_sid)
 			if not target:raise ValueError('Missing session_id')
 			raw_wid=payload.get('worker_id')if payload.get('worker_id')is not None else payload.get('identifier')if payload.get('identifier')is not None else payload.get('id');worker_ids[target]=clean_worker_id(raw_wid,required=True)
-		elif action_type=='set-multi-repo':multi_repo=bool(payload.get('multi_repo')or payload.get('enabled'))
+		elif action_type=='set-multi-repo':
+			multi_repo=bool(payload.get('multi_repo')or payload.get('enabled'))
+			if not multi_repo:linked_repos=[]
+		elif action_type=='link-repo':
+			slug=clean_board_repo(payload.get('repo')or payload.get('target')or'')
+			if not slug:raise ValueError('Missing repo')
+			if slug not in linked_repos:linked_repos.append(slug)
+			multi_repo=bool(linked_repos)
+		elif action_type=='unlink-repo':slug=clean_board_repo(payload.get('repo')or payload.get('target')or'');linked_repos=[item for item in linked_repos if item!=slug];multi_repo=bool(linked_repos)
 		elif action_type in{'revoke','remove-session','dismiss'}:
 			target=resolve_board_target(payload.get('session_id')or payload.get('target')or'',sessions,allowed=allowed,main_sid=main_sid)
 			if target:
@@ -2967,7 +2995,7 @@ class Store:
 					if norm_target in allowed:wakes[norm_target]=stamp;ack_wakes.pop(norm_target,None)
 		elif action_type=='clear':entries=[]
 		else:raise ValueError(f"Unknown board action: {action_type}")
-		entries=entries[-MAX_BOARD_ENTRIES:];task_ops=task_ops[-MAX_BOARD_ENTRIES:];report_ops=report_ops[-MAX_BOARD_ENTRIES:];stored={'version':1,'local_session_id':sid,'multi_repo':multi_repo,'removed_sessions':removed_sessions[-MAX_BOARD_ENTRIES:],'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
+		entries=entries[-MAX_BOARD_ENTRIES:];task_ops=task_ops[-MAX_BOARD_ENTRIES:];report_ops=report_ops[-MAX_BOARD_ENTRIES:];stored={'version':1,'local_session_id':sid,'multi_repo':multi_repo,'linked_repos':linked_repos,'removed_sessions':removed_sessions[-MAX_BOARD_ENTRIES:],'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
 		while len(encoded.encode('utf-8'))>MAX_BOARD_BYTES and entries:entries.pop(0);stored['entries']=entries;encoded=json.dumps(stored,ensure_ascii=False)
 		if len(encoded.encode('utf-8'))>MAX_BOARD_BYTES:raise ValueError('Board storage exceeds 2 MB limit')
 		if encoded!=raw_text:

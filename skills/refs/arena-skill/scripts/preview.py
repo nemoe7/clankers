@@ -5643,6 +5643,16 @@ def clean_worker_id(raw_value, *, required=False):
   return text
 
 
+def is_legacy_hex_worker_id(session_id, worker_id):
+  wid = str(worker_id or "").strip().lower()
+  if not wid or wid in GREEK_LETTERS:
+    return False
+  sid = board_session_id(session_id)
+  head = sid.split("-")[0] if "-" in sid else sid
+  token = re.sub(r"[^A-Za-z0-9]+", "", head)[:6].lower()
+  return bool(token and wid == token)
+
+
 def default_worker_id(session_id, repo="", index=1):
   if 1 <= index < len(GREEK_LETTERS):
     return GREEK_LETTERS[index]
@@ -5835,7 +5845,14 @@ def board_stamp_epoch(value):
 def normalize_board_state(raw, session_id="", repo="", branch="", polling=False):
   data = raw if isinstance(raw, dict) else {}
   sid = board_session_id(session_id or branch)
-  multi_repo = bool(data.get("multi_repo"))
+  linked_repos = []
+  for item in (
+    data.get("linked_repos") if isinstance(data.get("linked_repos"), list) else []
+  ):
+    slug = clean_board_repo(item)
+    if slug and slug not in linked_repos:
+      linked_repos.append(slug)
+  multi_repo = bool(data.get("multi_repo") or linked_repos)
   removed_sessions = []
   for item in (
     data.get("removed_sessions")
@@ -5856,7 +5873,12 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       clean_v = clean_worker_id(v)
     except ValueError:
       clean_v = ""
-    if norm_k and norm_k not in removed_set and clean_v:
+    if (
+      norm_k
+      and norm_k not in removed_set
+      and clean_v
+      and not is_legacy_hex_worker_id(norm_k, clean_v)
+    ):
       worker_ids[norm_k] = clean_v
   raw_worker_tasks = (
     data.get("worker_tasks") if isinstance(data.get("worker_tasks"), dict) else {}
@@ -5967,7 +5989,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     if row.get("worker_id") and row_sid not in worker_ids:
       try:
         delegated = clean_worker_id(row.get("worker_id"))
-        if delegated:
+        if delegated and not is_legacy_hex_worker_id(row_sid, delegated):
           worker_ids[row_sid] = delegated
       except ValueError:
         pass
@@ -6182,7 +6204,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       {
         "id": str(item.get("id") or f"b-{uuid.uuid4().hex[:6]}"),
         "session_id": from_sid,
-        "board_id": str(item.get("board_id") or sender_row.get("board_id") or from_sid),
+        "board_id": str(sender_row.get("board_id") or item.get("board_id") or from_sid),
         "from_owner": bool(item.get("from_owner")),
         "note_id": str(item.get("note_id") or ""),
         "to": resolved_to or "*",
@@ -6245,12 +6267,25 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       else ""
     )
   )
+  known_repos = []
+  base_repo_slug = clean_board_repo(repo)
+  if base_repo_slug:
+    known_repos.append(base_repo_slug)
+  for row in sessions:
+    r_slug = clean_board_repo(row.get("repo") or "", row.get("session_id") or "")
+    if r_slug and r_slug not in known_repos:
+      known_repos.append(r_slug)
+  for r_slug in linked_repos:
+    if r_slug not in known_repos:
+      known_repos.append(r_slug)
   return {
     "version": 1,
     "session_id": sid,
     "board_id": self_board_id,
     "worker_id": self_wid,
     "multi_repo": multi_repo,
+    "linked_repos": linked_repos,
+    "known_repos": known_repos,
     "worker_ids": worker_ids,
     "worker_tasks": worker_tasks,
     "task_ops": task_ops,
@@ -8200,7 +8235,8 @@ class Store:
     )
     state = self.board_state()
     sid = state["session_id"]
-    multi_repo = bool(state.get("multi_repo"))
+    linked_repos = [str(x) for x in (state.get("linked_repos") or []) if x]
+    multi_repo = bool(state.get("multi_repo") or linked_repos)
     worker_ids = dict(state.get("worker_ids") or {})
     worker_tasks = {
       k: [dict(item) for item in v if isinstance(item, dict)]
@@ -8241,8 +8277,14 @@ class Store:
             s_row = {**s_row, "updated_at": now_sync}
           updated_incoming_sessions.append(s_row)
         incoming["sessions"] = updated_incoming_sessions
+      if isinstance(incoming, dict) and isinstance(incoming.get("linked_repos"), list):
+        linked_repos = []
+        for item in incoming["linked_repos"]:
+          slug = clean_board_repo(item)
+          if slug and slug not in linked_repos:
+            linked_repos.append(slug)
       if isinstance(incoming, dict) and "multi_repo" in incoming:
-        multi_repo = bool(incoming.get("multi_repo"))
+        multi_repo = bool(incoming.get("multi_repo") or linked_repos)
       merged = normalize_board_state(
         incoming,
         session_id=sid,
@@ -8580,6 +8622,19 @@ class Store:
       worker_ids[target] = clean_worker_id(raw_wid, required=True)
     elif action_type == "set-multi-repo":
       multi_repo = bool(payload.get("multi_repo") or payload.get("enabled"))
+      if not multi_repo:
+        linked_repos = []
+    elif action_type == "link-repo":
+      slug = clean_board_repo(payload.get("repo") or payload.get("target") or "")
+      if not slug:
+        raise ValueError("Missing repo")
+      if slug not in linked_repos:
+        linked_repos.append(slug)
+      multi_repo = bool(linked_repos)
+    elif action_type == "unlink-repo":
+      slug = clean_board_repo(payload.get("repo") or payload.get("target") or "")
+      linked_repos = [item for item in linked_repos if item != slug]
+      multi_repo = bool(linked_repos)
     elif action_type in {"revoke", "remove-session", "dismiss"}:
       target = resolve_board_target(
         payload.get("session_id") or payload.get("target") or "",
@@ -8783,6 +8838,7 @@ class Store:
       "version": 1,
       "local_session_id": sid,
       "multi_repo": multi_repo,
+      "linked_repos": linked_repos,
       "removed_sessions": removed_sessions[-MAX_BOARD_ENTRIES:],
       "worker_ids": worker_ids,
       "worker_tasks": worker_tasks,

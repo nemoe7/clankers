@@ -5738,10 +5738,12 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.doesNotMatch(htmlSource, /id="board-pip"/);
   assert.doesNotMatch(htmlSource, /id="board-wake-polling"/);
   assert.doesNotMatch(htmlSource, /id="board-entries"/);
-  assert.match(styleSource, /#board-tab\[data-board-role="main"\]\s*\{\s*color:\s*var\(--good\);\s*\}/);
-  assert.match(styleSource, /#board-tab\[data-board-role="worker"\]\s*\{\s*color:\s*var\(--accent\);\s*\}/);
+  assert.match(styleSource, /#board-tab\[data-board-role="main"\]\s*\{\s*color:\s*#22c55e;\s*\}/);
+  assert.match(styleSource, /#board-tab\[data-board-role="worker"\]\s*\{\s*color:\s*#3b82f6;\s*\}/);
   assert.match(styleSource, /\.board-sender\b/);
   assert.match(appSource, /function\s+combinedHistoryItems\(/);
   assert.match(appSource, /from_owner:\s*true/);
+  assert.match(htmlSource, /id="board-repo-links"/);
+  assert.match(appSource, /action:\s*isLinked\s*\?\s*'unlink-repo'\s*:\s*'link-repo'/);
 });
 

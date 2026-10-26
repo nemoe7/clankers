@@ -15457,6 +15457,17 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert by_sid["22222222-otherrepo"]["board_id"] == "otherrepo-beta"
   assert by_sid["22222222-otherrepo"]["role"] == "worker"
   hygiene_store.board_action({"action": "set-multi-repo", "multi_repo": False})
+  linked_board = hygiene_store.board_action(
+    {"action": "link-repo", "repo": "otherrepo"}
+  )
+  assert linked_board["multi_repo"] is True
+  assert "otherrepo" in linked_board["linked_repos"]
+  assert "otherrepo" in linked_board["known_repos"]
+  unlinked_board = hygiene_store.board_action(
+    {"action": "unlink-repo", "repo": "otherrepo"}
+  )
+  assert unlinked_board["multi_repo"] is False
+  assert "otherrepo" not in unlinked_board["linked_repos"]
   mention_post = hygiene_store.board_action(
     {
       "action": "post",
