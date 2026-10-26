@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.94
+// @name         Arena.ai | NemoUtils | v1.10.95
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.94
+// @version      1.10.95
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1413,7 +1413,7 @@
         typeof syncPreviewBoardHook === "function" &&
         readGlobalBoard().allowed_sessions.length > 0
       ) {
-        syncPreviewBoardHook(previewBase(document));
+        syncPreviewBoardHook(previewBase(document) || lastPreviewBase);
       }
       postRecentPreviews(document, false);
       var pair = settings();
@@ -4677,7 +4677,7 @@
         repo = repo || hit;
       }
     }
-    if (hits === 1) return repo || branch;
+    if (hits === 1) return repo;
     if (hits === 2 && repo && branch) return repo;
     return "";
   }
@@ -4757,6 +4757,13 @@
 
   var lastNotifiedPreviewFrame = null;
   var lastNotifiedPreviewTarget = "";
+  var lastPreviewBase = "";
+
+  function activePreviewBase(doc) {
+    var current = previewBase(doc);
+    if (current) lastPreviewBase = current;
+    return current || lastPreviewBase || null;
+  }
 
   function notifyPreviewReady(doc, force) {
     var frame = previewFrame(doc);
@@ -4837,6 +4844,14 @@
     if (!event.origin && frame && frame.contentWindow && event.source && event.source !== frame.contentWindow) {
       return;
     }
+    if (base) {
+      lastPreviewBase = base;
+    } else if (event.origin && typeof event.data.type === "string" && event.data.type.indexOf("clankers:") === 0) {
+      lastPreviewBase = event.origin.replace(/\/+$/, "");
+      base = lastPreviewBase;
+    } else {
+      base = lastPreviewBase || null;
+    }
     if (event.data.type === "clankers:preview-ready") {
       if (typeof event.data.repo === "string" && event.data.repo.trim()) {
         var nextRepo = event.data.repo.trim();
@@ -4845,7 +4860,7 @@
           if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
         }
       }
-      notifyPreviewReady(document, !event.data.repo);
+      notifyPreviewReady(document, true);
       syncPreviewBoard(base);
     } else if (event.data.type === "clankers:force-save") {
       if (typeof forceSaveStateHook === "function") {
@@ -4991,6 +5006,9 @@
       var body = answer.body;
       if ((answer.status !== 200 && answer.status !== 201) || !body ||
           body.confirmed !== true || body.save_id !== receipt.save_id || body.digest !== receipt.digest) {
+        if (answer.status === 400) {
+          GM_setValue(pendingKey(storeKey), null);
+        }
         stateError("Failed to confirm. File saved.",
           null, null, "save-receipt", answer.status, undefined,
           (answer.status === 200 || answer.status === 201 ? "body" : "status" + (answer.failure ? ":" + answer.failure : "")));
@@ -5381,9 +5399,9 @@
       });
     }
 
-    async function fetchStateFile(manual, force) {
+    async function fetchStateFile(manual, force, chosen) {
       notifyPreviewReady(document);
-      var base = previewBase(document);
+      var base = activePreviewBase(document);
       if (!base) return;
       var initialBoard = readGlobalBoard();
       if (initialBoard.allowed_sessions.length > 0) {
@@ -5416,11 +5434,22 @@
           return;
         }
         clearErrorPanel();
-        if (body.scope && typeof body.scope.branch === "string" && body.scope.branch.trim()) {
-          setPreviewUiSessionId(body.scope.branch);
+        var serverRepo = body.scope && typeof body.scope.repo === "string" ? body.scope.repo.trim() : "";
+        var serverBranch = body.scope && typeof body.scope.branch === "string" ? body.scope.branch.trim() : "";
+        if (serverBranch) {
+          setPreviewUiSessionId(serverBranch);
+        }
+        if (!scope.repo && (serverRepo || previewUiRepo)) {
+          scope = { repo: serverRepo || previewUiRepo, branch: scope.branch };
+          if (!lastScope) {
+            lastScope = isWorkerSession(initialBoard, initialSid, body)
+              ? ""
+              : GM_getValue(lastScopeKey(scope.repo), "");
+          }
+          storeKey = scope.branch ? stateScopeKey(scope.repo, scope.branch) : lastScope || stateScopeKey(scope.repo, "");
         }
         var activeBoard = readGlobalBoard();
-        var sessionSid = boardSessionId(scope.branch || previewUiSessionId || "");
+        var sessionSid = boardSessionId(scope.branch || serverBranch || previewUiSessionId || "");
         if (!manual && isWorkerSession(activeBoard, sessionSid, body)) {
           removeStatePanel(true);
           return;
@@ -5441,13 +5470,23 @@
         if (force) statePanel("Forcing save...");
         var rememberedBase = GM_getValue(baseKey(lastScope || storeKey), "");
         var rememberedBranch = GM_getValue(branchKey(lastScope || storeKey), "");
-        var handle = selectedKey === storeKey && selected ? selected : await stateHandle(fileKey(storeKey));
-        if (!handle && lastScope && lastScope !== storeKey) {
-          handle = selectedKey === lastScope && selected ? selected : await stateHandle(fileKey(lastScope));
-        }
         var repoOnlyKey = scope.repo ? stateScopeKey(scope.repo, "") : "";
+        var serverStoreKey = scope.repo && serverBranch ? stateScopeKey(scope.repo, serverBranch) : "";
+        var handle = null;
+        if (selected && (selectedKey === storeKey || selectedKey === lastScope || selectedKey === repoOnlyKey || selectedKey === serverStoreKey)) {
+          handle = selected;
+        }
+        if (!handle) {
+          handle = await stateHandle(fileKey(storeKey));
+        }
+        if (!handle && lastScope && lastScope !== storeKey) {
+          handle = await stateHandle(fileKey(lastScope));
+        }
+        if (!handle && serverStoreKey && serverStoreKey !== storeKey && serverStoreKey !== lastScope) {
+          handle = await stateHandle(fileKey(serverStoreKey));
+        }
         if (!handle && repoOnlyKey && repoOnlyKey !== storeKey && repoOnlyKey !== lastScope) {
-          handle = selectedKey === repoOnlyKey && selected ? selected : await stateHandle(fileKey(repoOnlyKey));
+          handle = await stateHandle(fileKey(repoOnlyKey));
         }
         if (!scope.branch && !lastScope && !force && !handle) {
           stateError(STATE_LINES.noBranch, "Force save", function () { fetchStateFile(true, true); }, "missing-branch");
@@ -5455,7 +5494,11 @@
         }
         var matchesScope = handle && (
           handleMatchesScope(handle, scope.repo, scope.branch) ||
-          (rememberedBranch && handleMatchesScope(handle, scope.repo, rememberedBranch))
+          (!scope.branch && handleMatchesScope(handle, scope.repo, "")) ||
+          (serverBranch && handleMatchesScope(handle, scope.repo, serverBranch)) ||
+          (rememberedBranch && handleMatchesScope(handle, scope.repo, rememberedBranch)) ||
+          (serverRepo && handleMatchesScope(handle, serverRepo, scope.branch || serverBranch)) ||
+          (serverRepo && !scope.branch && handleMatchesScope(handle, serverRepo, ""))
         );
         if (handle && !matchesScope) {
           stateError(handle.name + " does not match this " + handleMismatchScope(handle, scope.repo, scope.branch) + ".",
@@ -5482,13 +5525,18 @@
           backupText = text;
           initialFile = !text.trim() && !baseline;
           if (text.trim()) {
-            baseline = Object.assign({}, baseline || {}, { core: fileCore(text) });
+            try {
+              baseline = Object.assign({}, baseline || {}, { core: fileCore(text) });
+            } catch (parseErr) {
+              if (!chosen) throw parseErr;
+              baseline = null;
+            }
           } else if (baseline) {
             baseline = Object.assign({}, baseline, { core: [] });
           }
         }
         var inSync = sameSaves(baseline, body);
-        if (!force && !inSync && !(initialFile && !baseline)) {
+        if (!force && !chosen && !inSync && !(initialFile && !baseline)) {
           var mismatchLine = stateMismatchLine(baseline, body);
           stateError(mismatchLine, "Force save",
             function () { fetchStateFile(true, true); }, "autosave-compare",
@@ -5506,10 +5554,11 @@
           return;
         }
         if (!force && inSync && body.digest === (baseline && baseline.digest)) return;
+        var effectiveBranch = scope.branch || rememberedBranch || serverBranch || "";
         var plan = { type: "download", name: stateFileName(scope.repo, scope.branch, body.stamp, body.counts) };
         var moved = saveMoved(scope.branch, rememberedBase, base, lastScope, rememberedBranch);
-        var asks = overwriteAsk(moved, plan, Boolean(handle) && !initialFile, force);
-        var accepted = asks && resetWindowAccepts(new Date(), resetWindowOn(), scope.branch, rememberedBase, base, rememberedBranch);
+        var asks = overwriteAsk(moved, plan, Boolean(handle) && !initialFile, force || Boolean(chosen));
+        var accepted = asks && resetWindowAccepts(new Date(), resetWindowOn(), effectiveBranch, rememberedBase, base, rememberedBranch);
         if (asks && !accepted) {
           askOverwrite(handle, storeKey, manual, {
             branch: scope.branch, rememberedBranch: rememberedBranch, lastScope: lastScope,
@@ -5534,7 +5583,7 @@
             lastsave: body.stamp, beforelastsave: body.lastsave,
           },
           counts: body.counts,
-          scope: scope, base: base, branch: scope.branch || rememberedBranch, stamp: body.stamp,
+          scope: scope, base: base, branch: effectiveBranch, stamp: body.stamp,
           stamps: body.stamps, name: name, force: Boolean(force),
         };
         GM_setValue(pendingKey(storeKey), pending);
@@ -5555,7 +5604,7 @@
       select({
         suggestedName: (function () {
           var scope = stateScope(document);
-          return stateFileName(scope.repo, scope.branch, "", null);
+          return stateFileName(scope.repo || previewUiRepo || "", scope.branch, "", null);
         })(),
         types: [
           {
@@ -5566,13 +5615,23 @@
       })
         .then(function (handle) {
           var scope = stateScope(document);
-          var storeKey = stateScopeKey(scope.repo, scope.branch);
+          var repo = scope.repo || previewUiRepo || "";
+          var storeKey = stateScopeKey(repo, scope.branch);
+          var activeLastScope = repo ? GM_getValue(lastScopeKey(repo), "") : "";
           return saveStateHandle(handle, fileKey(storeKey)).then(function () {
+            if (activeLastScope && activeLastScope !== storeKey) {
+              saveStateHandle(handle, fileKey(activeLastScope));
+            }
             selected = handle;
             selectedKey = storeKey;
             GM_setValue(stampKey(storeKey), "");
+            GM_setValue(pendingKey(storeKey), null);
+            if (activeLastScope && activeLastScope !== storeKey) {
+              GM_setValue(stampKey(activeLastScope), "");
+              GM_setValue(pendingKey(activeLastScope), null);
+            }
             GM_setValue(STATE_HINT_KEY, false);
-            fetchStateFile(true);
+            fetchStateFile(true, false, true);
           });
         })
         .catch(function () {

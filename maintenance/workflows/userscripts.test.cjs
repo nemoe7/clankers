@@ -1885,6 +1885,30 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       null,
       "Force save reuses the chosen repo handle when DOM branch is empty",
     );
+
+    fileText = "existing-diverged-content\n";
+    pickerPromise = Promise.resolve(handle);
+    menus.get("State - choose the file")();
+    await settle();
+    await settle();
+    await respond("GET", "/api/userscript-autosave", 200, {
+      ...changed,
+      scope: { repo: "o/r", branch: "arena/293da56c-clankers" },
+      save_id: "choose-file-overwrites-existing",
+      lastsave: "other-stamp",
+      beforelastsave: "older-stamp",
+    });
+    await settle();
+    await respond("POST", "/api/userscript-autosave", 201, {
+      confirmed: true,
+      save_id: "choose-file-overwrites-existing",
+      digest: changed.digest,
+    });
+    assert.equal(
+      fileText,
+      changed.text,
+      "Choose file force-writes immediately even when the selected file has diverged content",
+    );
   });
 }
 
