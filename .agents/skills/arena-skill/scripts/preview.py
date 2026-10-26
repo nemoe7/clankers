@@ -2044,6 +2044,44 @@ def resolve_board_target(target,sessions,allowed=(),main_sid=''):
 		if main_sid:return main_sid
 		if allowed:return allowed[0]
 	return clean
+def apply_task_op_to_list(task_list,op):
+	items=[dict(row)for row in task_list or[]if isinstance(row,dict)];op_name=str(op.get('op')or op.get('operation')or'set').strip().lower()
+	if op_name=='clear':return[]
+	if op_name=='replace':raw_tasks=op.get('tasks')if isinstance(op.get('tasks'),list)else[];return[dict(row)for row in raw_tasks if isinstance(row,dict)and row.get('id')]
+	if op_name in{'remove','delete'}:target_id=str(op.get('task_id')or op.get('id')or'').strip();return[row for row in items if str(row.get('id')or'')!=target_id]
+	if op_name=='reorder':
+		order_ids=op.get('order_ids')
+		if isinstance(order_ids,list)and order_ids:
+			by_id={str(row.get('id')or''):row for row in items if row.get('id')};reordered=[]
+			for(idx,tid)in enumerate(order_ids,start=1):
+				key=str(tid or'')
+				if key in by_id:entry=dict(by_id.pop(key));entry['order']=idx;reordered.append(entry)
+			for entry in items:
+				key=str(entry.get('id')or'')
+				if key in by_id:copy=dict(by_id.pop(key));copy['order']=len(reordered)+1;reordered.append(copy)
+			return reordered
+		target_id=str(op.get('task_id')or op.get('id')or'').strip();target_order=int(op.get('order')or 1);chosen=next((row for row in items if str(row.get('id')or'')==target_id),None)
+		if chosen is None:return items
+		rest=[row for row in items if str(row.get('id')or'')!=target_id];idx=max(0,min(len(rest),target_order-1));rest.insert(idx,dict(chosen))
+		for(i,row)in enumerate(rest,start=1):row['order']=i
+		return rest
+	target_id=str(op.get('task_id')or op.get('id')or'').strip()
+	if not target_id:return items
+	status='finished'if op_name=='finish'else str(op.get('status')or'').strip().lower();existing=next((row for row in items if str(row.get('id')or'')==target_id),None);details_in=op.get('details')
+	if isinstance(details_in,str):details_in=[details_in]
+	elif not isinstance(details_in,list):details_in=None
+	if existing is None:record={'id':target_id,'title':str(op.get('title')or target_id),'status':status if status in{'upcoming','finished'}else'upcoming','type':str(op.get('task_type')or op.get('type')or'code'),'details':[str(x)for x in details_in or[]],'order':int(op.get('order')or len(items)+1),'report_id':op.get('report_id'),'updated_at':str(op.get('at')or clip_stamp(now()))};items.append(record)
+	else:
+		if op.get('title'):existing['title']=str(op.get('title'))
+		if status in{'upcoming','finished'}:existing['status']=status
+		if op.get('task_type')or op.get('type'):existing['type']=str(op.get('task_type')or op.get('type'))
+		if details_in is not None:
+			if op.get('append'):existing['details']=[*(existing.get('details')or[]),*[str(x)for x in details_in]]
+			else:existing['details']=[str(x)for x in details_in]
+		if op.get('order')is not None:existing['order']=int(op.get('order'))
+		if'report_id'in op:existing['report_id']=op.get('report_id')
+		existing['updated_at']=str(op.get('at')or clip_stamp(now()))
+	return items
 def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 	data=raw if isinstance(raw,dict)else{};sid=board_session_id(session_id or branch);multi_repo=bool(data.get('multi_repo'));raw_worker_ids=data.get('worker_ids')if isinstance(data.get('worker_ids'),dict)else{};worker_ids={}
 	for(k,v)in raw_worker_ids.items():
@@ -2051,7 +2089,11 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 		try:clean_v=clean_worker_id(v)
 		except ValueError:clean_v=''
 		if norm_k and clean_v:worker_ids[norm_k]=clean_v
-	allowed=[]
+	raw_worker_tasks=data.get('worker_tasks')if isinstance(data.get('worker_tasks'),dict)else{};worker_tasks={}
+	for(k,v)in raw_worker_tasks.items():
+		norm_k=board_session_id(k)
+		if norm_k and isinstance(v,list):worker_tasks[norm_k]=[dict(row)for row in v if isinstance(row,dict)and row.get('id')]
+	raw_task_ops=data.get('task_ops')[-MAX_BOARD_ENTRIES:]if isinstance(data.get('task_ops'),list)else[];task_ops=[dict(row)for row in raw_task_ops if isinstance(row,dict)and row.get('id')and row.get('target')];allowed=[]
 	for item in data.get('allowed_sessions')if isinstance(data.get('allowed_sessions'),list)else[]:
 		norm=board_session_id(item)
 		if norm and norm not in allowed:allowed.append(norm)
@@ -2081,7 +2123,7 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 		for k in('tag','text'):
 			if item.get(k)and k not in item_payload:item_payload[k]=str(item.get(k))
 		entries.append({'id':str(item.get('id')or f"b-{uuid.uuid4().hex[:6]}"),'session_id':from_sid,'to':resolved_to or'*','repo':str(item.get('repo')or''),'branch':str(item.get('branch')or f"arena/{from_sid}"),'at':str(item.get('at')or clip_stamp(now())),'tag':str(item.get('tag')or item_payload.get('tag')or''),'text':str(item.get('text')or item_payload.get('text')or''),'payload':item_payload,'file':item.get('file')if isinstance(item.get('file'),dict)else None})
-	is_main=not main_sid or main_sid==sid;self_role='main'if is_main else'worker';self_wid=worker_ids.get(sid)or default_worker_id(sid,str(repo or''))if self_role=='worker'and sid else'';return{'version':1,'session_id':sid,'board_id':format_board_role_id(self_role,repo=str(repo or''),worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid)if sid else'','worker_id':self_wid,'multi_repo':multi_repo,'worker_ids':worker_ids,'repo':str(repo or''),'branch':str(branch or''),'allowed_sessions':allowed,'main_session_id':main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
+	is_main=not main_sid or main_sid==sid;self_role='main'if is_main else'worker';self_wid=worker_ids.get(sid)or default_worker_id(sid,str(repo or''))if self_role=='worker'and sid else'';return{'version':1,'session_id':sid,'board_id':format_board_role_id(self_role,repo=str(repo or''),worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid)if sid else'','worker_id':self_wid,'multi_repo':multi_repo,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'repo':str(repo or''),'branch':str(branch or''),'allowed_sessions':allowed,'main_session_id':main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
 def board_main_session_warning(state_dir,command):
 	if not isinstance(command,str)or not command.strip():return None
 	if not re.search('(?:^|[;&|()\\s])(?:git\\s+(?:-\\S+\\s+)*push\\b|gh\\s+pr\\s+(?:create|edit|merge|close|ready|reopen)\\b)',command):return None
@@ -2516,7 +2558,57 @@ class Store:
 		root=self.repository_root();branch=workspace_branch(root);repo=root.name;sid=board_session_id(branch);raw_text=meta.get(BOARD_STATE_META)if isinstance(meta,dict)else self.meta_value(BOARD_STATE_META)
 		try:raw=json.loads(raw_text)if raw_text else{}
 		except Exception:raw={}
-		is_polling=self.polling()if polling is None else bool(polling);return normalize_board_state(raw,session_id=sid,repo=repo,branch=branch,polling=is_polling)
+		is_polling=self.polling()if polling is None else bool(polling);out=normalize_board_state(raw,session_id=sid,repo=repo,branch=branch,polling=is_polling)
+		if sid:
+			try:out['worker_tasks'][sid]=[{'id':row['id'],'title':row['title'],'status':row['status'],'type':row.get('type')or'code','details':list(row.get('details')or[]),'order':row.get('order'),'report_id':row.get('report_id'),'updated_at':clip_stamp(row.get('updated_at'))}for row in self.list_tasks()]
+			except Exception:pass
+		return out
+	def apply_board_task_op(self,op):
+		if not isinstance(op,dict):return
+		op_name=str(op.get('op')or op.get('operation')or'set').strip().lower()
+		if op_name=='clear':
+			for item in list(self.list_tasks()):
+				try:self.remove_task(item['id'])
+				except Exception:pass
+			return
+		if op_name=='replace':
+			for item in list(self.list_tasks()):
+				try:self.remove_task(item['id'])
+				except Exception:pass
+			for item in op.get('tasks')if isinstance(op.get('tasks'),list)else[]:
+				if not isinstance(item,dict)or not item.get('id'):continue
+				details=item.get('details')
+				if isinstance(details,str):details=[details]
+				elif not isinstance(details,list):details=['Scope: .']
+				self.write_task(str(item['id']),title=str(item.get('title')or item['id']),details=[str(x)for x in details],status=str(item.get('status')or'upcoming'),task_type=str(item.get('type')or item.get('task_type')or'code'),order=item.get('order'),report_id=item.get('report_id'))
+			return
+		if op_name in{'remove','delete'}:
+			target_id=str(op.get('task_id')or op.get('id')or'').strip()
+			if target_id:
+				try:self.remove_task(target_id)
+				except Exception:pass
+			return
+		if op_name=='reorder':
+			order_ids=op.get('order_ids')
+			if isinstance(order_ids,list)and order_ids:
+				for(idx,tid)in enumerate(order_ids,start=1):
+					if tid:
+						try:self.write_task(str(tid),order=idx)
+						except Exception:pass
+				return
+			target_id=str(op.get('task_id')or op.get('id')or'').strip()
+			if target_id and op.get('order')is not None:self.write_task(target_id,order=int(op.get('order')))
+			return
+		target_id=str(op.get('task_id')or op.get('id')or'').strip()
+		if not target_id:raise ValueError('Missing task_id')
+		status='finished'if op_name=='finish'else op.get('status');details=op.get('details')
+		if isinstance(details,str):details=[details]
+		elif isinstance(details,list):details=[str(x)for x in details]
+		else:details=None
+		existing={row['id']:row for row in self.list_tasks()}.get(target_id)
+		if existing is None and not details:scope_val=str(op.get('scope')or'.').strip();details=[f"Scope: {scope_val}"]
+		elif details is not None and op.get('scope')and not any(str(line).startswith('Scope:')for line in details):details=[f"Scope: {str(op.get('scope')).strip()}",*details]
+		self.write_task(target_id,title=op.get('title')or(existing['title']if existing else target_id),details=details,status=status,order=op.get('order'),append_details=bool(op.get('append')or op.get('append_details')),report_id=op.get('report_id'),task_type=op.get('task_type')or op.get('type')or(existing.get('type')if existing else'code'))
 	def take_board_wake(self):
 		raw_text=self.meta_value(BOARD_STATE_META)
 		if not raw_text:return None
@@ -2562,12 +2654,21 @@ class Store:
 		action_type=str(payload.get('action')or payload.get('type')or'').strip().lower();raw_text=self.meta_value(BOARD_STATE_META)
 		try:raw_stored=json.loads(raw_text)if raw_text else{}
 		except Exception:raw_stored={}
-		ack_wakes=dict(raw_stored.get('ack_wakes'))if isinstance(raw_stored,dict)and isinstance(raw_stored.get('ack_wakes'),dict)else{};state=self.board_state();sid=state['session_id'];multi_repo=bool(state.get('multi_repo'));worker_ids=dict(state.get('worker_ids')or{});allowed=list(state['allowed_sessions']);main_sid=state['main_session_id'];sessions=[dict(row)for row in state['sessions']];entries=[dict(row)for row in state['entries']];wakes=dict(state['wakes'])
+		ack_wakes=dict(raw_stored.get('ack_wakes'))if isinstance(raw_stored,dict)and isinstance(raw_stored.get('ack_wakes'),dict)else{};state=self.board_state();sid=state['session_id'];multi_repo=bool(state.get('multi_repo'));worker_ids=dict(state.get('worker_ids')or{});worker_tasks={k:[dict(item)for item in v if isinstance(item,dict)]for(k,v)in(state.get('worker_tasks')or{}).items()if isinstance(v,list)};task_ops=[dict(row)for row in state.get('task_ops')or[]];allowed=list(state['allowed_sessions']);main_sid=state['main_session_id'];sessions=[dict(row)for row in state['sessions']];entries=[dict(row)for row in state['entries']];wakes=dict(state['wakes'])
 		if action_type=='sync':
 			incoming=payload.get('board')if isinstance(payload.get('board'),dict)else payload
 			if isinstance(incoming,dict)and'multi_repo'in incoming:multi_repo=bool(incoming.get('multi_repo'))
 			merged=normalize_board_state(incoming,session_id=sid,repo=state['repo'],branch=state['branch'],polling=any(r['session_id']==sid and r.get('polling')for r in sessions))
 			for(k,v)in(merged.get('worker_ids')or{}).items():worker_ids[k]=v
+			for(k,v)in(merged.get('worker_tasks')or{}).items():
+				if k!=sid:worker_tasks[k]=[dict(item)for item in v if isinstance(item,dict)]
+			seen_op_ids={str(op.get('id')or'')for op in task_ops if op.get('id')};applied_key=f"{sid}:task_ops";applied_list=[str(x)for x in ack_wakes.get(applied_key)if x]if isinstance(ack_wakes.get(applied_key),list)else[];applied_set=set(applied_list)
+			for op in merged.get('task_ops')or[]:
+				op_id=str(op.get('id')or'')
+				if op_id and op_id not in seen_op_ids:seen_op_ids.add(op_id);task_ops.append(dict(op))
+				target_sid=resolve_board_target(op.get('target')or'',sessions,allowed=allowed,main_sid=main_sid)
+				if op_id and target_sid==sid and op_id not in applied_set:applied_set.add(op_id);applied_list.append(op_id);self.apply_board_task_op(op);wakes[sid]=op_id
+			ack_wakes[applied_key]=applied_list[-128:]
 			if merged['allowed_sessions']or not allowed:
 				for item in merged['allowed_sessions']:
 					if item not in allowed:allowed.append(item)
@@ -2594,6 +2695,21 @@ class Store:
 				if not wakes.get(k)or str(v)>=str(wakes[k]):wakes[k]=v
 			for row in sessions:
 				if row['session_id']in allowed and wakes.get(row['session_id']):row['polling']=False;row['status']='active'
+		elif action_type in{'worker-task','manage-worker-tasks'}:
+			sender=resolve_board_target(payload.get('session_id')or sid,sessions,allowed=allowed,main_sid=main_sid)
+			if main_sid and sender and sender!=main_sid:raise ValueError('Only the main session can manage worker tasks')
+			target=resolve_board_target(payload.get('target')or payload.get('worker')or payload.get('target_session_id')or'',sessions,allowed=allowed,main_sid=main_sid)
+			if not target:raise ValueError('Missing worker target')
+			op_name=str(payload.get('op')or payload.get('operation')or payload.get('subaction')or'set').strip().lower()
+			if op_name not in{'set','create','update','finish','reorder','remove','delete','clear','replace'}:raise ValueError(f"Unsupported worker task operation: {op_name}")
+			op_record={'id':str(payload.get('id')or f"top-{uuid.uuid4().hex[:8]}"),'target':target,'op':op_name,'task_id':str(payload.get('task_id')or payload.get('task')or''),'title':payload.get('title'),'details':payload.get('details'),'scope':payload.get('scope'),'status':payload.get('status'),'task_type':payload.get('task_type')or payload.get('type'),'order':payload.get('order'),'order_ids':payload.get('order_ids'),'append':bool(payload.get('append')),'report_id':payload.get('report_id'),'tasks':payload.get('tasks'),'at':clip_stamp(now())};task_ops.append(op_record);worker_tasks[target]=apply_task_op_to_list(worker_tasks.get(target)or[],op_record)
+			if target==sid:
+				applied_key=f"{sid}:task_ops";applied_list=[str(x)for x in ack_wakes.get(applied_key)if x]if isinstance(ack_wakes.get(applied_key),list)else[]
+				if op_record['id']not in applied_list:applied_list.append(op_record['id']);ack_wakes[applied_key]=applied_list[-128:];self.apply_board_task_op(op_record)
+			if target in allowed:
+				wakes[target]=op_record['id'];ack_wakes.pop(target,None)
+				for row in sessions:
+					if row['session_id']==target:row['polling']=False;row['status']='active'
 		elif action_type=='allow':
 			target=resolve_board_target(payload.get('session_id')or sid,sessions,allowed=allowed,main_sid=main_sid)
 			if not target:raise ValueError('Missing session_id')
@@ -2642,7 +2758,7 @@ class Store:
 					if norm_target in allowed:wakes[norm_target]=stamp;ack_wakes.pop(norm_target,None)
 		elif action_type=='clear':entries=[]
 		else:raise ValueError(f"Unknown board action: {action_type}")
-		entries=entries[-MAX_BOARD_ENTRIES:];stored={'version':1,'multi_repo':multi_repo,'worker_ids':worker_ids,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
+		entries=entries[-MAX_BOARD_ENTRIES:];task_ops=task_ops[-MAX_BOARD_ENTRIES:];stored={'version':1,'multi_repo':multi_repo,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
 		while len(encoded.encode('utf-8'))>MAX_BOARD_BYTES and entries:entries.pop(0);stored['entries']=entries;encoded=json.dumps(stored,ensure_ascii=False)
 		if len(encoded.encode('utf-8'))>MAX_BOARD_BYTES:raise ValueError('Board storage exceeds 2 MB limit')
 		if encoded!=raw_text:

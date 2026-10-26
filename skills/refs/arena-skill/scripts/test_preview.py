@@ -15430,6 +15430,59 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     raise AssertionError("expected ValueError for > 6 char worker_id")
   except ValueError:
     pass
+  task_op_create = hygiene_store.board_action(
+    {
+      "action": "worker-task",
+      "session_id": "b14c09a2-clankers",
+      "target": "worker-ui",
+      "op": "set",
+      "task_id": "delegated-task",
+      "title": "Delegated worker task",
+      "scope": "skills/refs/arena-skill/",
+      "details": ["Scope: skills/refs/arena-skill/", "Run audit"],
+      "task_type": "code",
+    }
+  )
+  assert any(row["id"] == "delegated-task" for row in hygiene_store.list_tasks())
+  assert any(
+    row["id"] == "delegated-task"
+    for row in task_op_create["worker_tasks"][woken_board["session_id"]]
+  )
+  hygiene_store.board_action(
+    {
+      "action": "worker-task",
+      "session_id": "b14c09a2-clankers",
+      "target": "worker-ui",
+      "op": "reorder",
+      "task_id": "delegated-task",
+      "order": 1,
+    }
+  )
+  hygiene_store.board_action(
+    {
+      "action": "worker-task",
+      "session_id": "b14c09a2-clankers",
+      "target": "worker-ui",
+      "op": "finish",
+      "task_id": "delegated-task",
+      "details": ["Done"],
+      "append": True,
+    }
+  )
+  finished_delegated = {row["id"]: row for row in hygiene_store.list_tasks()}[
+    "delegated-task"
+  ]
+  assert finished_delegated["status"] == "finished"
+  hygiene_store.board_action(
+    {
+      "action": "worker-task",
+      "session_id": "b14c09a2-clankers",
+      "target": "worker-ui",
+      "op": "remove",
+      "task_id": "delegated-task",
+    }
+  )
+  assert not any(row["id"] == "delegated-task" for row in hygiene_store.list_tasks())
   style_css = (
     preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")

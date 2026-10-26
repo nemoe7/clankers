@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.96
+// @name         Arena.ai | NemoUtils | v1.10.97
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.96
+// @version      1.10.97
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -6500,12 +6500,24 @@
       }
     }
     var entries = Array.isArray(data.entries) ? data.entries.slice(-MAX_BOARD_ENTRIES) : [];
+    var taskOps = Array.isArray(data.task_ops) ? data.task_ops.slice(-MAX_BOARD_ENTRIES) : [];
+    var workerTasks = {};
+    if (data.worker_tasks && typeof data.worker_tasks === "object" && !Array.isArray(data.worker_tasks)) {
+      Object.keys(data.worker_tasks).forEach(function (key) {
+        var normK = boardSessionId(key);
+        if (normK && Array.isArray(data.worker_tasks[key])) {
+          workerTasks[normK] = data.worker_tasks[key].slice();
+        }
+      });
+    }
     var wakes = data.wakes && typeof data.wakes === "object" && !Array.isArray(data.wakes)
       ? Object.assign({}, data.wakes)
       : {};
     return {
       multi_repo: multiRepo,
       worker_ids: workerIds,
+      worker_tasks: workerTasks,
+      task_ops: taskOps,
       allowed_sessions: uniqueAllowed,
       main_session_id: mainId,
       sessions: sessions,
@@ -6523,6 +6535,21 @@
     Object.keys(incoming.worker_ids || {}).forEach(function (sid) {
       next.worker_ids[sid] = incoming.worker_ids[sid];
     });
+    Object.keys(incoming.worker_tasks || {}).forEach(function (sid) {
+      if (sid === previewSid || !next.worker_tasks[sid]) {
+        next.worker_tasks[sid] = incoming.worker_tasks[sid];
+      }
+    });
+    var seenTaskOpIds = {};
+    var mergedTaskOps = [];
+    next.task_ops.concat(incoming.task_ops || []).forEach(function (op) {
+      if (!op || typeof op !== "object") return;
+      var opId = String(op.id || "");
+      if (opId && seenTaskOpIds[opId]) return;
+      if (opId) seenTaskOpIds[opId] = true;
+      mergedTaskOps.push(op);
+    });
+    next.task_ops = mergedTaskOps.slice(-MAX_BOARD_ENTRIES);
     incoming.allowed_sessions.forEach(function (sid) {
       if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
     });
@@ -6669,6 +6696,45 @@
     }
     if (actionType === "set-multi-repo") {
       next.multi_repo = Boolean(action.multi_repo !== undefined ? action.multi_repo : action.enabled);
+      return { ok: true, board: normalizeBoard(next) };
+    }
+    if (actionType === "worker-task" || actionType === "manage-worker-tasks") {
+      if (next.main_session_id && sid && sid !== next.main_session_id) {
+        return { ok: false, error: "only-main-session", board: next };
+      }
+      var targetWorker = resolveBoardTarget(
+        action.target || action.worker || action.target_session_id || "",
+        next.sessions,
+        next.allowed_sessions,
+        next.main_session_id
+      );
+      if (!targetWorker) return { ok: false, error: "missing-worker-target", board: next };
+      var opName = String(action.op || action.operation || action.subaction || "set").trim().toLowerCase();
+      var opId = String(action.id || ("top-" + Date.now()));
+      var opRecord = {
+        id: opId,
+        target: targetWorker,
+        op: opName,
+        task_id: String(action.task_id || action.task || ""),
+        title: action.title,
+        details: action.details,
+        scope: action.scope,
+        status: action.status,
+        task_type: action.task_type || action.type,
+        order: action.order,
+        order_ids: action.order_ids,
+        append: Boolean(action.append),
+        report_id: action.report_id,
+        tasks: action.tasks,
+        at: nowIso,
+      };
+      next.task_ops.push(opRecord);
+      if (next.task_ops.length > MAX_BOARD_ENTRIES) {
+        next.task_ops = next.task_ops.slice(-MAX_BOARD_ENTRIES);
+      }
+      if (next.allowed_sessions.indexOf(targetWorker) !== -1) {
+        next.wakes[targetWorker] = opId;
+      }
       return { ok: true, board: normalizeBoard(next) };
     }
     if (actionType === "revoke") {
