@@ -1269,7 +1269,11 @@ def test_design_boards_and_html_typography(tmp_path):
   )
   assert "Desktop maximized (`1920x957`)" in audit_report_md
   assert "Phone portrait (`411x799`)" in audit_report_md
+  assert "`1920x957` / `411x799`" in audit_report_md
+  assert "| Location | Width | Before | After |" in audit_report_md
+  assert "| Area | Before | After | Action / Disposition |" in audit_report_md
   assert "1080x2437" not in audit_report_md
+  assert "`1280` / `360`" not in audit_report_md
   assert "finding-1-before-after-board.png" in audit_report_md
   assert "visual-1-before-after-board.png" in audit_report_md
   assert (

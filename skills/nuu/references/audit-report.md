@@ -8,9 +8,9 @@
 
 ### 1. `<Rule ID>` — `<Rule Statement>`
 
-| Location | Rule ID & Statement | Width | Finding | Fix |
-| --- | --- | --- | --- | --- |
-| `selector` or `path:line` | `NUA301`: `<rule statement>` | `1280` / `360` | Violation description | Repair applied or needed |
+| Location | Width | Before | After |
+| --- | --- | --- | --- |
+| `selector` or `path:line` | `1920x957` / `411x799` | Violation description | Repair applied or needed |
 
 ![Finding 1 Before vs After](<finding-1-before-after-board.png> =720x)
 
@@ -18,9 +18,9 @@
 
 ### 1. `<Component>` — `<Visual Observation>`
 
-| Area | Observation | Disposition | Before | After | Action |
-| --- | --- | --- | --- | --- | --- |
-| `<component>` | Visual layout or hierarchy issue | `fix` or `keep` | Before | After | Adjustment or reason |
+| Area | Before | After | Action / Disposition |
+| --- | --- | --- | --- |
+| `<component>` | Visual layout or hierarchy issue | Replacement visual state | `fix`: adjustment / `keep`: reason |
 
 ![Visual Judgment 1 Before vs After](<visual-1-before-after-board.png> =720x)
 
