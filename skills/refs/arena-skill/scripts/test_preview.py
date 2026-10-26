@@ -15483,6 +15483,56 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     }
   )
   assert not any(row["id"] == "delegated-task" for row in hygiene_store.list_tasks())
+  worker_rep_src = tmp_path / "worker-report.md"
+  worker_rep_src.write_text(
+    "Worker findings.\n\nNext step:\n\n- (x) ship\n- ( ) revise\n- ( ) custom: ___\n",
+    encoding="utf-8",
+  )
+  hygiene_store.publish("worker-rep", "Worker Report", worker_rep_src)
+  hygiene_store.write_task(
+    "blocked-on-worker-rep",
+    "Blocked worker task",
+    ["Scope: skills/refs/arena-skill/"],
+    blocked=True,
+    report_id="worker-rep",
+    task_type="code",
+  )
+  board_with_rep = hygiene_store.board_state()
+  assert any(
+    r["id"] == "worker-rep" and r["needs_answer"] is True
+    for r in board_with_rep["worker_reports"][woken_board["session_id"]]
+  )
+  answered_rep_board = hygiene_store.board_action(
+    {
+      "action": "worker-report",
+      "session_id": "b14c09a2-clankers",
+      "target": "worker-ui",
+      "op": "answer",
+      "report_id": "worker-rep",
+      "answers": {"next-step": {"choice": "ship"}},
+    }
+  )
+  assert any(
+    r["id"] == "worker-rep" and r["answered"] is True and r["needs_answer"] is False
+    for r in answered_rep_board["worker_reports"][woken_board["session_id"]]
+  )
+  unblocked_task = {row["id"]: row for row in hygiene_store.list_tasks()}[
+    "blocked-on-worker-rep"
+  ]
+  assert not unblocked_task["blocked"]
+  unpublished_rep_board = hygiene_store.board_action(
+    {
+      "action": "worker-report",
+      "session_id": "b14c09a2-clankers",
+      "target": "worker-ui",
+      "op": "unpublish",
+      "report_id": "worker-rep",
+    }
+  )
+  assert not any(
+    r["id"] == "worker-rep"
+    for r in unpublished_rep_board["worker_reports"][woken_board["session_id"]]
+  )
   style_css = (
     preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")

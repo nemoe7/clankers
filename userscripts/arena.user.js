@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.97
+// @name         Arena.ai | NemoUtils | v1.10.98
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.97
+// @version      1.10.98
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -6501,12 +6501,22 @@
     }
     var entries = Array.isArray(data.entries) ? data.entries.slice(-MAX_BOARD_ENTRIES) : [];
     var taskOps = Array.isArray(data.task_ops) ? data.task_ops.slice(-MAX_BOARD_ENTRIES) : [];
+    var reportOps = Array.isArray(data.report_ops) ? data.report_ops.slice(-MAX_BOARD_ENTRIES) : [];
     var workerTasks = {};
     if (data.worker_tasks && typeof data.worker_tasks === "object" && !Array.isArray(data.worker_tasks)) {
       Object.keys(data.worker_tasks).forEach(function (key) {
         var normK = boardSessionId(key);
         if (normK && Array.isArray(data.worker_tasks[key])) {
           workerTasks[normK] = data.worker_tasks[key].slice();
+        }
+      });
+    }
+    var workerReports = {};
+    if (data.worker_reports && typeof data.worker_reports === "object" && !Array.isArray(data.worker_reports)) {
+      Object.keys(data.worker_reports).forEach(function (key) {
+        var normK = boardSessionId(key);
+        if (normK && Array.isArray(data.worker_reports[key])) {
+          workerReports[normK] = data.worker_reports[key].slice();
         }
       });
     }
@@ -6518,6 +6528,8 @@
       worker_ids: workerIds,
       worker_tasks: workerTasks,
       task_ops: taskOps,
+      worker_reports: workerReports,
+      report_ops: reportOps,
       allowed_sessions: uniqueAllowed,
       main_session_id: mainId,
       sessions: sessions,
@@ -6540,6 +6552,11 @@
         next.worker_tasks[sid] = incoming.worker_tasks[sid];
       }
     });
+    Object.keys(incoming.worker_reports || {}).forEach(function (sid) {
+      if (sid === previewSid || !next.worker_reports[sid]) {
+        next.worker_reports[sid] = incoming.worker_reports[sid];
+      }
+    });
     var seenTaskOpIds = {};
     var mergedTaskOps = [];
     next.task_ops.concat(incoming.task_ops || []).forEach(function (op) {
@@ -6550,6 +6567,16 @@
       mergedTaskOps.push(op);
     });
     next.task_ops = mergedTaskOps.slice(-MAX_BOARD_ENTRIES);
+    var seenReportOpIds = {};
+    var mergedReportOps = [];
+    next.report_ops.concat(incoming.report_ops || []).forEach(function (op) {
+      if (!op || typeof op !== "object") return;
+      var opId = String(op.id || "");
+      if (opId && seenReportOpIds[opId]) return;
+      if (opId) seenReportOpIds[opId] = true;
+      mergedReportOps.push(op);
+    });
+    next.report_ops = mergedReportOps.slice(-MAX_BOARD_ENTRIES);
     incoming.allowed_sessions.forEach(function (sid) {
       if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
     });
@@ -6734,6 +6761,39 @@
       }
       if (next.allowed_sessions.indexOf(targetWorker) !== -1) {
         next.wakes[targetWorker] = opId;
+      }
+      return { ok: true, board: normalizeBoard(next) };
+    }
+    if (actionType === "worker-report" || actionType === "manage-worker-reports") {
+      if (next.main_session_id && sid && sid !== next.main_session_id) {
+        return { ok: false, error: "only-main-session", board: next };
+      }
+      var targetReportWorker = resolveBoardTarget(
+        action.target || action.worker || action.target_session_id || "",
+        next.sessions,
+        next.allowed_sessions,
+        next.main_session_id
+      );
+      if (!targetReportWorker) return { ok: false, error: "missing-worker-target", board: next };
+      var reportId = String(action.report_id || action.report || "").trim();
+      if (!reportId) return { ok: false, error: "missing-report-id", board: next };
+      var repOpName = String(action.op || action.operation || action.subaction || "answer").trim().toLowerCase();
+      var repOpId = String(action.id || ("rop-" + Date.now()));
+      var repOpRecord = {
+        id: repOpId,
+        target: targetReportWorker,
+        op: repOpName,
+        report_id: reportId,
+        answers: action.answers && typeof action.answers === "object" ? action.answers : {},
+        submission_id: action.submission_id || action.note_id,
+        at: nowIso,
+      };
+      next.report_ops.push(repOpRecord);
+      if (next.report_ops.length > MAX_BOARD_ENTRIES) {
+        next.report_ops = next.report_ops.slice(-MAX_BOARD_ENTRIES);
+      }
+      if (next.allowed_sessions.indexOf(targetReportWorker) !== -1) {
+        next.wakes[targetReportWorker] = repOpId;
       }
       return { ok: true, board: normalizeBoard(next) };
     }

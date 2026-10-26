@@ -5700,6 +5700,26 @@ def apply_task_op_to_list(task_list, op):
   return items
 
 
+def apply_report_op_to_list(report_list, op):
+  items = [dict(row) for row in (report_list or []) if isinstance(row, dict)]
+  op_name = str(op.get("op") or op.get("operation") or "answer").strip().lower()
+  target_id = str(op.get("report_id") or op.get("id") or "").strip()
+  if not target_id:
+    return items
+  if op_name in {"unpublish", "remove", "delete"}:
+    return [row for row in items if str(row.get("id") or "") != target_id]
+  if op_name in {"answer", "submit"}:
+    for row in items:
+      if str(row.get("id") or "") == target_id:
+        row["answered"] = True
+        row["needs_answer"] = False
+        row["latest_answers"] = (
+          dict(op.get("answers")) if isinstance(op.get("answers"), dict) else {}
+        )
+        row["updated_at"] = str(op.get("at") or clip_stamp(now()))
+  return items
+
+
 def normalize_board_state(raw, session_id="", repo="", branch="", polling=False):
   data = raw if isinstance(raw, dict) else {}
   sid = board_session_id(session_id or branch)
@@ -5734,6 +5754,26 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
   task_ops = [
     dict(row)
     for row in raw_task_ops
+    if isinstance(row, dict) and row.get("id") and row.get("target")
+  ]
+  raw_worker_reports = (
+    data.get("worker_reports") if isinstance(data.get("worker_reports"), dict) else {}
+  )
+  worker_reports = {}
+  for k, v in raw_worker_reports.items():
+    norm_k = board_session_id(k)
+    if norm_k and isinstance(v, list):
+      worker_reports[norm_k] = [
+        dict(row) for row in v if isinstance(row, dict) and row.get("id")
+      ]
+  raw_report_ops = (
+    data.get("report_ops")[-MAX_BOARD_ENTRIES:]
+    if isinstance(data.get("report_ops"), list)
+    else []
+  )
+  report_ops = [
+    dict(row)
+    for row in raw_report_ops
     if isinstance(row, dict) and row.get("id") and row.get("target")
   ]
   allowed = []
@@ -5942,6 +5982,8 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     "worker_ids": worker_ids,
     "worker_tasks": worker_tasks,
     "task_ops": task_ops,
+    "worker_reports": worker_reports,
+    "report_ops": report_ops,
     "repo": str(repo or ""),
     "branch": str(branch or ""),
     "allowed_sessions": allowed,
@@ -7595,7 +7637,81 @@ class Store:
         ]
       except Exception:
         pass
+      try:
+        with closing(self.connect()) as db:
+          rep_rows = db.execute(
+            "SELECT id, title, markdown, updated_at, published_at, EXISTS("
+            "SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered "
+            "FROM reports WHERE published_at IS NOT NULL ORDER BY seq, id"
+          ).fetchall()
+        rep_list = []
+        for r_row in rep_rows:
+          try:
+            fields = parse_fields(r_row["markdown"])[1]
+          except Exception:
+            fields = []
+          answered_flag = bool(r_row["answered"])
+          rep_list.append(
+            {
+              "id": r_row["id"],
+              "title": r_row["title"],
+              "markdown": r_row["markdown"],
+              "fields": fields,
+              "answered": answered_flag,
+              "needs_answer": bool(fields) and not answered_flag,
+              "updated_at": clip_stamp(r_row["updated_at"]),
+              "published_at": clip_stamp(r_row["published_at"]),
+            }
+          )
+        out["worker_reports"][sid] = rep_list
+      except Exception:
+        pass
     return out
+
+  def apply_board_report_op(self, op):
+    if not isinstance(op, dict):
+      return
+    op_name = str(op.get("op") or op.get("operation") or "answer").strip().lower()
+    report_id = str(op.get("report_id") or op.get("id") or "").strip()
+    if not report_id:
+      raise ValueError("Missing report_id")
+    if op_name in {"unpublish", "remove", "delete"}:
+      try:
+        self.unpublish(report_id, dismissed_by_owner=True)
+      except FileNotFoundError:
+        pass
+      return
+    if op_name in {"answer", "submit"}:
+      answers = op.get("answers")
+      if not isinstance(answers, dict):
+        raise ValueError("Report answers must be an object")
+      normalized_answers = {}
+      for field_key, raw_ans in answers.items():
+        if isinstance(raw_ans, dict) and "choice" in raw_ans and "value" not in raw_ans:
+          normalized_answers[field_key] = raw_ans["choice"]
+        else:
+          normalized_answers[field_key] = raw_ans
+      note_id = str(
+        op.get("submission_id") or op.get("note_id") or uuid.uuid4().hex[:6]
+      )
+      with self.transaction() as db:
+        db.execute("BEGIN IMMEDIATE")
+        report = self.report(report_id, shared=db)
+        fields = parse_fields(report["markdown"])[1]
+        if not fields:
+          raise ValueError("This report has no fields to answer")
+        self.submit(
+          report_id,
+          report["title"],
+          fields,
+          note_id,
+          normalized_answers,
+          shared=db,
+          submission_format=report["submission_format"],
+          revision=report["updated_at"],
+        )
+      return
+    raise ValueError(f"Unsupported worker report operation: {op_name}")
 
   def apply_board_task_op(self, op):
     if not isinstance(op, dict):
@@ -7816,6 +7932,12 @@ class Store:
       if isinstance(v, list)
     }
     task_ops = [dict(row) for row in (state.get("task_ops") or [])]
+    worker_reports = {
+      k: [dict(item) for item in v if isinstance(item, dict)]
+      for k, v in (state.get("worker_reports") or {}).items()
+      if isinstance(v, list)
+    }
+    report_ops = [dict(row) for row in (state.get("report_ops") or [])]
     allowed = list(state["allowed_sessions"])
     main_sid = state["main_session_id"]
     sessions = [dict(row) for row in state["sessions"]]
@@ -7840,6 +7962,9 @@ class Store:
       for k, v in (merged.get("worker_tasks") or {}).items():
         if k != sid:
           worker_tasks[k] = [dict(item) for item in v if isinstance(item, dict)]
+      for k, v in (merged.get("worker_reports") or {}).items():
+        if k != sid:
+          worker_reports[k] = [dict(item) for item in v if isinstance(item, dict)]
       seen_op_ids = {str(op.get("id") or "") for op in task_ops if op.get("id")}
       applied_key = f"{sid}:task_ops"
       applied_list = (
@@ -7862,6 +7987,28 @@ class Store:
           self.apply_board_task_op(op)
           wakes[sid] = op_id
       ack_wakes[applied_key] = applied_list[-128:]
+      seen_rep_op_ids = {str(op.get("id") or "") for op in report_ops if op.get("id")}
+      applied_rep_key = f"{sid}:report_ops"
+      applied_rep_list = (
+        [str(x) for x in ack_wakes.get(applied_rep_key) if x]
+        if isinstance(ack_wakes.get(applied_rep_key), list)
+        else []
+      )
+      applied_rep_set = set(applied_rep_list)
+      for op in merged.get("report_ops") or []:
+        op_id = str(op.get("id") or "")
+        if op_id and op_id not in seen_rep_op_ids:
+          seen_rep_op_ids.add(op_id)
+          report_ops.append(dict(op))
+        target_sid = resolve_board_target(
+          op.get("target") or "", sessions, allowed=allowed, main_sid=main_sid
+        )
+        if op_id and target_sid == sid and op_id not in applied_rep_set:
+          applied_rep_set.add(op_id)
+          applied_rep_list.append(op_id)
+          self.apply_board_report_op(op)
+          wakes[sid] = op_id
+      ack_wakes[applied_rep_key] = applied_rep_list[-128:]
       if merged["allowed_sessions"] or not allowed:
         for item in merged["allowed_sessions"]:
           if item not in allowed:
@@ -7993,6 +8140,71 @@ class Store:
           self.apply_board_task_op(op_record)
       if target in allowed:
         wakes[target] = op_record["id"]
+        ack_wakes.pop(target, None)
+        for row in sessions:
+          if row["session_id"] == target:
+            row["polling"] = False
+            row["status"] = "active"
+    elif action_type in {"worker-report", "manage-worker-reports"}:
+      sender = resolve_board_target(
+        payload.get("session_id") or sid, sessions, allowed=allowed, main_sid=main_sid
+      )
+      if main_sid and sender and sender != main_sid:
+        raise ValueError("Only the main session can manage worker reports")
+      target = resolve_board_target(
+        payload.get("target")
+        or payload.get("worker")
+        or payload.get("target_session_id")
+        or "",
+        sessions,
+        allowed=allowed,
+        main_sid=main_sid,
+      )
+      if not target:
+        raise ValueError("Missing worker target")
+      op_name = (
+        str(
+          payload.get("op")
+          or payload.get("operation")
+          or payload.get("subaction")
+          or "answer"
+        )
+        .strip()
+        .lower()
+      )
+      if op_name not in {"answer", "submit", "unpublish", "remove", "delete"}:
+        raise ValueError(f"Unsupported worker report operation: {op_name}")
+      report_id = str(payload.get("report_id") or payload.get("report") or "").strip()
+      if not report_id:
+        raise ValueError("Missing report_id")
+      rep_op = {
+        "id": str(payload.get("id") or f"rop-{uuid.uuid4().hex[:8]}"),
+        "target": target,
+        "op": op_name,
+        "report_id": report_id,
+        "answers": payload.get("answers")
+        if isinstance(payload.get("answers"), dict)
+        else {},
+        "submission_id": payload.get("submission_id") or payload.get("note_id"),
+        "at": clip_stamp(now()),
+      }
+      report_ops.append(rep_op)
+      worker_reports[target] = apply_report_op_to_list(
+        worker_reports.get(target) or [], rep_op
+      )
+      if target == sid:
+        applied_rep_key = f"{sid}:report_ops"
+        applied_rep_list = (
+          [str(x) for x in ack_wakes.get(applied_rep_key) if x]
+          if isinstance(ack_wakes.get(applied_rep_key), list)
+          else []
+        )
+        if rep_op["id"] not in applied_rep_list:
+          applied_rep_list.append(rep_op["id"])
+          ack_wakes[applied_rep_key] = applied_rep_list[-128:]
+          self.apply_board_report_op(rep_op)
+      if target in allowed:
+        wakes[target] = rep_op["id"]
         ack_wakes.pop(target, None)
         for row in sessions:
           if row["session_id"] == target:
@@ -8158,12 +8370,15 @@ class Store:
 
     entries = entries[-MAX_BOARD_ENTRIES:]
     task_ops = task_ops[-MAX_BOARD_ENTRIES:]
+    report_ops = report_ops[-MAX_BOARD_ENTRIES:]
     stored = {
       "version": 1,
       "multi_repo": multi_repo,
       "worker_ids": worker_ids,
       "worker_tasks": worker_tasks,
       "task_ops": task_ops,
+      "worker_reports": worker_reports,
+      "report_ops": report_ops,
       "allowed_sessions": allowed,
       "main_session_id": main_sid,
       "sessions": sessions,
