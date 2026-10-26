@@ -289,7 +289,7 @@ code.note-id { font-family: var(--font-mono); font-size: 1em; background: none; 
 .state-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dot-sent); }
 .state-dot[data-state="seen"] { background: var(--dot-seen); }
 .state-dot[data-state="said"] { background: var(--dot-said); }
-.answer { margin-top: 8px; }
+.answer { margin-top: 0; }
 /* Only replies use the bar, muted color, and smaller font size to save log space. Messages stay plain. */
 .answer.reply { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }
 .answer > p:last-child { margin-bottom: 0; }
@@ -324,6 +324,7 @@ mark a, a mark { color: var(--mark-link); }
 .report, .message-text { overflow-wrap: anywhere; overflow-x: auto; }
 .report :is(h1, h2, h3, h4, h5, h6), .message-text :is(h1, h2, h3, h4, h5, h6) { margin: 10px 0 6px; }
 .report > :first-child, .message-text > :first-child { margin-top: 0; }
+.message-text > :last-child { margin-bottom: 0; }
 .report > h1:first-child { margin-bottom: 2px; }
 /* Use an 8px paragraph gap to match the heading rhythm. */
 .report p, .message-text p { margin: 8px 0; }
