@@ -1111,6 +1111,7 @@ function combinedHistoryItems(notes, board = getState()?.board) {
     boardItems.push({
       ...entry,
       is_board: true,
+      is_agent_board: !entry.from_owner,
       board_sender: senderLabel,
       text: rawText,
       html: entry.html !== undefined ? entry.html : renderMessageMarkdown(rawText),
@@ -1170,6 +1171,8 @@ function showHistory(rawNotes) {
     }
     if (item.is_board) node.dataset.board = 'true';
     else delete node.dataset.board;
+    if (item.is_agent_board) node.dataset.boardAuthor = 'agent';
+    else delete node.dataset.boardAuthor;
     const text = node.children[0];
     text.className = item.html === undefined ? 'raw-message' : 'message-text';
     if (item.html === undefined) {
@@ -1188,7 +1191,10 @@ function showHistory(rawNotes) {
     receipt.className = 'receipt';
     const receiptId = document.createElement('code');
     receiptId.className = 'note-id';
-    receiptId.textContent = item.id.slice(0, 6);
+    const displayId = item.is_board && /^b-[0-9a-f]{5,}/i.test(item.id)
+      ? `p${item.id.slice(2, 7)}`
+      : item.id.slice(0, 6);
+    receiptId.textContent = displayId;
     receiptId.title = item.id;
     receiptId.dataset.full = item.id;
     // The dot shows Sent until the agent records seen_at, Seen after that receipt, and Said after an answer.

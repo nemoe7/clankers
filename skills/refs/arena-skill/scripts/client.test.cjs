@@ -5745,5 +5745,8 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /from_owner:\s*true/);
   assert.match(htmlSource, /id="board-repo-links"/);
   assert.match(appSource, /action:\s*isLinked\s*\?\s*'unlink-repo'\s*:\s*'link-repo'/);
+  assert.match(styleSource, /\.board-sender\s*\{\s*font:\s*400\s+12px\/1\.333333\s+var\(--font-sans\);/);
+  assert.match(styleSource, /\.report\s+code,\s*\.message-text\s+code\s*\{\s*font-family:\s*var\(--font-mono\);\s*font-size:\s*\.9em;\s*\}/);
+  assert.match(styleSource, /\.message\[data-board-author="agent"\]\s*>\s*:is\(\.message-text,\s*\.raw-message\)/);
 });
 

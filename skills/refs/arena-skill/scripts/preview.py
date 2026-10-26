@@ -6221,7 +6221,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     )
     entries.append(
       {
-        "id": str(item.get("id") or f"b-{uuid.uuid4().hex[:6]}"),
+        "id": str(item.get("id") or f"p{uuid.uuid4().hex[:5]}"),
         "session_id": from_sid,
         "board_id": str(sender_row.get("board_id") or item.get("board_id") or from_sid),
         "from_owner": bool(item.get("from_owner")),
@@ -8887,7 +8887,7 @@ class Store:
             break
       if mention_target and resolved_to == "*":
         resolved_to = mention_target
-      entry_id = str(payload.get("id") or f"b-{uuid.uuid4().hex[:6]}")
+      entry_id = str(payload.get("id") or f"p{uuid.uuid4().hex[:5]}")
       sender_row = next((r for r in sessions if r["session_id"] == sender), {})
       from_owner = bool(payload.get("from_owner"))
       entries.append(

@@ -15730,3 +15730,7 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
     preview.Path(__file__).resolve().parents[4] / "maintenance" / "demo_preview.py"
   )
   assert "sys.path.insert(0, scripts_dir)" in demo_mod_path.read_text(encoding="utf-8")
+  auto_posted = store.board_action(
+    {"action": "post", "session_id": "293da56c-clankers", "text": "status update"}
+  )
+  assert preview.re.fullmatch(r"p[0-9a-f]{5}", auto_posted["entries"][-1]["id"])
