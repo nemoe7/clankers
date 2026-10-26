@@ -8569,10 +8569,31 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     assert [str(path) for path in preview.read_set_paths(root)] == [
       str(root / "ARENA.md"),
       str(root / "AGENTS.md"),
-      str(nested),
       str(skill),
     ]
+    assert str(nested) not in checkpoint["text"]
     assert all(str(path) in checkpoint["text"] for path in preview.read_set_paths(root))
+    sub = root / "src" / "sub"
+    sub.mkdir()
+    sub_agents = sub / "AGENTS.md"
+    sub_agents.write_text("sub agents\n", encoding="utf-8")
+    assert [str(path) for path in preview.agents_paths(sub, root=root)] == [
+      str(root / "AGENTS.md"),
+      str(nested),
+      str(sub_agents),
+    ]
+    cli_agents = subprocess.run(
+      [sys.executable, str(preview.__file__), "agents", str(sub)],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=True,
+    )
+    assert cli_agents.stdout.strip().splitlines() == [
+      "AGENTS.md",
+      "src/AGENTS.md",
+      "src/sub/AGENTS.md",
+    ]
     assert "quiet (no ack required)" not in preview.format_read(store.read())
     assert store.pending_ack() == checkpoint["id"]
     assert store.reminder().startswith("unacked 1 note | ")

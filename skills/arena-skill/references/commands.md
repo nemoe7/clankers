@@ -11,6 +11,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `read` | List every pending note and report answer; mark only delivered IDs Seen, and stamp the parent report read by the agent |
 | `survey [-i, --smallest-image] [<json>]` | Show the instructions, questions, and ordered JSON schema, or print the smallest repo image path with `-i, --smallest-image`. Supply JSON to submit answers. The receipt has no verdict. Results stay in server RAM and appear through the connection-dot dialog |
 | `skills` | List installed and repository skill names, full descriptions, and paths; prefer installed duplicates; do not load skills |
+| `agents [<path>]` | List `AGENTS.md` paths from the repository root through the target directory or file path |
 | `note list [-p, --page N] [-s, --page-size N]` | List stored note IDs, including acknowledged and quiet notes, newest first; default page 1, 20 IDs per page, maximum 100; leave receipts and exports unchanged |
 | `note show <id>` | Reread a stored note by its six or full characters; a short ID that matches several notes prints every match |
 | `key` | Print the recorded agent key, host and stamp; breaks while the preview server is not up, and a later session recovers the key after acknowledging the quiet note |

@@ -242,7 +242,7 @@ def reminder_tail(cursor, remaining, stale=0, unpushed=0):
 
 REMINDER_CHAR_CAP = 88
 REMINDERS = (
-  "Bible absent? MUST read ARENA.md, all AGENTS.md, arena-skill SKILL.md fully first.",
+  "Bible absent? MUST read ARENA.md, root AGENTS.md, arena-skill SKILL.md fully first.",
   "`task list` first; update as work changes.",
   "Smallest open task next.",
   "Always push.",
@@ -3033,15 +3033,46 @@ def read_set_slot(moment=None):
 def read_set_paths(root=None):
   """Existing files in the required bible, in stable reading order."""
   root = Path(root or resolve_repo_root()).resolve()
-  agents = []
-  for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-    dirnames[:] = sorted(name for name in dirnames if name not in WORKSPACE_SKIP)
-    if "AGENTS.md" in filenames:
-      agents.append(Path(dirpath) / "AGENTS.md")
   skill = root / ".agents" / "skills" / "arena-skill" / "SKILL.md"
   return [
-    path for path in [root / "ARENA.md", *sorted(agents), skill] if path.is_file()
+    path for path in (root / "ARENA.md", root / "AGENTS.md", skill) if path.is_file()
   ]
+
+
+def resolve_agents_chain(target=None, root=None):
+  """Return (root_path, [AGENTS.md paths from root_path through target])."""
+  default_root = Path(root or resolve_repo_root()).resolve()
+  raw = Path(target) if target is not None else default_root
+  resolved = (raw if raw.is_absolute() else (default_root / raw)).resolve()
+  if not resolved.is_dir() and (resolved.is_file() or resolved.suffix):
+    resolved = resolved.parent
+  base = default_root
+  if root is None and not resolved.is_relative_to(default_root):
+    for candidate in reversed([resolved, *resolved.parents]):
+      if any(
+        (candidate / marker).exists() for marker in (".git", "ARENA.md", "AGENTS.md")
+      ):
+        base = candidate
+        break
+  try:
+    rel = resolved.relative_to(base)
+  except ValueError as error:
+    raise ValueError("Target path must be inside the repository root") from error
+  current = base
+  chain = [current]
+  for part in rel.parts:
+    current = current / part
+    chain.append(current)
+  return base, [
+    directory / "AGENTS.md"
+    for directory in chain
+    if (directory / "AGENTS.md").is_file()
+  ]
+
+
+def agents_paths(target=None, root=None):
+  """Return existing AGENTS.md paths from the repository root through target."""
+  return resolve_agents_chain(target=target, root=root)[1]
 
 
 INERT_COMMANDS = (
@@ -3514,9 +3545,15 @@ def read_set_input_warning(line, root=None, cwd=None):
   def paths(words):
     nonlocal protected
     if protected is None:
+      skill = base / ".agents" / "skills" / "arena-skill" / "SKILL.md"
+      candidates = [
+        *(base / rel for rel in read_set_files(base)),
+        *([skill] if skill.is_file() else []),
+      ]
       protected = {
         path.resolve(): path.relative_to(base).as_posix()
-        for path in read_set_paths(base)
+        for path in candidates
+        if path.is_file()
       }
     found = set()
     for word in words:
@@ -13561,6 +13598,17 @@ def main():
     "skills",
     help="List skill names, full descriptions, and paths without loading skills",
   )
+  agents_parser = commands.add_parser(
+    "agents",
+    help="List AGENTS.md files from the repository root through the target directory",
+  )
+  agents_parser.add_argument(
+    "path",
+    nargs="?",
+    default=".",
+    type=Path,
+    help="Target directory or file path (default: current directory)",
+  )
   note_group = commands.add_parser("note", help="Read stored notes")
   note_verbs = note_group.add_subparsers(dest="verb", required=True)
   note_list = note_verbs.add_parser(
@@ -14029,6 +14077,15 @@ def main():
       )
     if args.command == "skills":
       print_skills()
+      return 0
+    if args.command == "agents":
+      try:
+        base, found = resolve_agents_chain(args.path)
+        for item in found:
+          print(item.relative_to(base).as_posix())
+      except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
       return 0
     if args.command == "image-data-uri":
       try:
