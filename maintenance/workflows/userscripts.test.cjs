@@ -3362,6 +3362,76 @@ for raw in sys.stdin:
         "alpha",
         "mergePreviewBoard merges ack_sender onto existing board entry",
       );
+      const healedSplitBrain = checks.board.mergePreviewBoard(
+        {
+          removed_sessions: ["293da56c-clankers", "91a01582-clankers"],
+          allowed_sessions: ["91a01582-clankers"],
+          main_session_id: "91a01582-clankers",
+          worker_ids: { "91a01582-clankers": "beta" },
+          sessions: [
+            {
+              session_id: "91a01582-clankers",
+              repo: "clankers",
+              updated_at: "2020-01-01T00:00:00Z",
+            },
+          ],
+          entries: [{ id: "p00002", session_id: "91a01582-clankers", at: "2026-10-26T20:05:00Z", payload: { text: "second" } }],
+        },
+        {
+          session_id: "293da56c-clankers",
+          allowed_sessions: ["293da56c-clankers", "91a01582-clankers"],
+          main_session_id: "293da56c-clankers",
+          worker_ids: { "91a01582-clankers": "beta" },
+          sessions: [
+            {
+              session_id: "293da56c-clankers",
+              repo: "clankers",
+              updated_at: "2026-10-26T20:00:00Z",
+              survey: { answered: true, total: 5, correct: 4 },
+            },
+            {
+              session_id: "91a01582-clankers",
+              repo: "clankers",
+              updated_at: "2020-01-01T00:00:00Z",
+              survey: { answered: true, total: 5, correct: 3 },
+            },
+          ],
+          entries: [{ id: "p00001", session_id: "293da56c-clankers", at: "2026-10-26T20:01:00Z", payload: { text: "first" } }],
+        },
+      );
+      assert.deepEqual(
+        Array.from(healedSplitBrain.allowed_sessions),
+        ["293da56c-clankers", "91a01582-clankers"],
+        "mergePreviewBoard heals stale removed_sessions when sessions are in incoming.allowed_sessions and does not TTL-evict older updated_at",
+      );
+      assert.equal(
+        healedSplitBrain.main_session_id,
+        "293da56c-clankers",
+        "mergePreviewBoard elects non-worker main_session_id over worker session",
+      );
+      assert.deepEqual(
+        Array.from(healedSplitBrain.entries, (e) => e.id),
+        ["p00001", "p00002"],
+        "mergePreviewBoard sorts entries chronologically by at",
+      );
+      assert.equal(
+        healedSplitBrain.sessions.find((s) => s.session_id === "91a01582-clankers").survey.correct,
+        3,
+        "mergePreviewBoard preserves session survey evaluation on session rows",
+      );
+      const discOut = checks.board.applyBoardAction(healedSplitBrain, {
+        type: "disconnect-session",
+        session_id: "91a01582-clankers",
+      });
+      assert.equal(
+        discOut.board.sessions.find((s) => s.session_id === "91a01582-clankers").disconnected,
+        true,
+        "disconnect-session marks session disconnected without removing from allowed_sessions",
+      );
+      assert.ok(
+        discOut.board.allowed_sessions.includes("91a01582-clankers"),
+        "disconnect-session keeps session in allowed_sessions",
+      );
 
       // Verify board sync works with state-download off or stateBusy true.
       const boardReqs = [];

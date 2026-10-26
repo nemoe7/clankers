@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.11.1
+// @name         Arena.ai | NemoUtils | v1.11.2
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.11.1
+// @version      1.11.2
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -366,7 +366,7 @@
   var PREVIEW_DRAWER_MAX_PX = 2400;
   var BOARD_KEY = "clankers_global_board_v1";
   var MAX_BOARD_FILE_BYTES = 524288;
-  var MAX_BOARD_BYTES = 2097152;
+  var MAX_BOARD_BYTES = 8388608;
   var MAX_BOARD_ENTRIES = 100;
   var featureRegistry = [];
   var restartStateWatchHook = null;
@@ -4830,10 +4830,21 @@
     var targetSid = boardSessionId(targetSidHint || previewUiSessionId || docScope.branch || "");
     var targetRepo = cleanBoardRepo(targetRepoHint || previewUiRepo || docScope.repo || "", targetSid);
     var scopedBoard = scopeBoardForTarget(readGlobalBoard(), targetSid, targetRepo);
+    if (targetSid && Array.isArray(scopedBoard.removed_sessions)) {
+      scopedBoard.removed_sessions = scopedBoard.removed_sessions.filter(function (sid) {
+        return sid !== targetSid && scopedBoard.allowed_sessions.indexOf(sid) === -1;
+      });
+    }
     return stateJson(base + "/api/board", { action: "sync", board: scopedBoard }).then(function (answer) {
       if (answer && answer.status === 200 && answer.body) {
         if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
         writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body));
+      } else if (targetSid && (!answer || answer.status === 0 || answer.status >= 500)) {
+        var discRes = applyBoardAction(readGlobalBoard(), {
+          type: "disconnect-session",
+          session_id: targetSid,
+        });
+        if (discRes.ok) writeGlobalBoard(discRes.board);
       }
       return answer;
     });
@@ -4898,7 +4909,7 @@
       window.addEventListener("pagehide", function () {
         if (!previewUiSessionId) return;
         var closeRes = applyBoardAction(readGlobalBoard(), {
-          type: "remove-session",
+          type: "disconnect-session",
           session_id: previewUiSessionId,
         });
         if (closeRes.ok) writeGlobalBoard(closeRes.board);
@@ -6450,8 +6461,6 @@
     return clean;
   }
 
-  var BOARD_SESSION_TTL_MS = 180000;
-
   function parseBoardStampMs(value) {
     var text = String(value || "").trim();
     if (!text) return NaN;
@@ -6499,34 +6508,32 @@
       }
     }
     var rawSessions = Array.isArray(data.sessions) ? data.sessions.slice(0, 64) : [];
-    var maxStampMs = NaN;
-    var rowStamps = {};
     for (var sIdx = 0; sIdx < rawSessions.length; sIdx += 1) {
       var sRow = rawSessions[sIdx];
       if (!sRow || typeof sRow !== "object") continue;
       var sSid = boardSessionId(sRow.session_id || sRow.branch || "");
       if (!sSid || removedSet[sSid]) continue;
-      var ms = parseBoardStampMs(sRow.updated_at);
-      if (!isNaN(ms)) {
-        rowStamps[sSid] = ms;
-        if (isNaN(maxStampMs) || ms > maxStampMs) maxStampMs = ms;
-      }
-    }
-    Object.keys(rowStamps).forEach(function (sSid) {
-      var isProbe = sSid.indexOf("probe-") === 0 && !seenAllowed[sSid];
-      var isStale = !isNaN(maxStampMs) && (maxStampMs - rowStamps[sSid]) > BOARD_SESSION_TTL_MS;
-      if (isProbe || isStale) {
-        if (!removedSet[sSid]) {
-          removedSet[sSid] = true;
-          removedList.push(sSid);
-        }
+      if (sSid.indexOf("probe-") === 0 && !seenAllowed[sSid]) {
+        removedSet[sSid] = true;
+        removedList.push(sSid);
         delete seenAllowed[sSid];
         delete workerIds[sSid];
       }
-    });
+    }
     uniqueAllowed = uniqueAllowed.filter(function (sidItem) { return !removedSet[sidItem]; });
     var mainId = boardSessionId(data.main_session_id || "");
     if (mainId && (!seenAllowed[mainId] || removedSet[mainId])) mainId = "";
+    if (mainId && workerIds[mainId]) {
+      var mainRepoSlug = cleanBoardRepo("", mainId);
+      for (var uIdx = 0; uIdx < uniqueAllowed.length; uIdx += 1) {
+        var candSid = uniqueAllowed[uIdx];
+        if (!workerIds[candSid] && cleanBoardRepo("", candSid) === mainRepoSlug) {
+          mainId = candSid;
+          break;
+        }
+      }
+    }
+    if (mainId) delete workerIds[mainId];
     var sessions = [];
     var seenSessions = {};
     for (var j = 0; j < rawSessions.length; j += 1) {
@@ -6535,23 +6542,29 @@
       var rowSid = boardSessionId(row.session_id || row.branch || "");
       if (!rowSid || seenSessions[rowSid] || removedSet[rowSid] || (rowSid.indexOf("probe-") === 0 && !seenAllowed[rowSid])) continue;
       seenSessions[rowSid] = true;
-      if (row.worker_id && !workerIds[rowSid]) {
+      if (row.worker_id && !workerIds[rowSid] && rowSid !== mainId) {
         var delegated = cleanWorkerId(row.worker_id);
         if (delegated) workerIds[rowSid] = delegated;
       }
       var isPoll = Boolean(row.polling || row.status === "polling");
+      var isDisc = Boolean(row.disconnected || row.status === "disconnected");
       var rowRepo = cleanBoardRepo(row.repo, rowSid);
-      sessions.push({
+      var rowOut = {
         session_id: rowSid,
         board_id: "",
         worker_id: "",
         role: seenAllowed[rowSid] ? "worker" : "blocked",
         repo: rowRepo,
         branch: String(row.branch || ("arena/" + rowSid)),
-        status: isPoll ? "polling" : "active",
+        status: isDisc ? "disconnected" : (isPoll ? "polling" : "active"),
         polling: isPoll,
+        disconnected: isDisc,
         updated_at: String(row.updated_at || ""),
-      });
+      };
+      if (row.survey && typeof row.survey === "object") {
+        rowOut.survey = row.survey;
+      }
+      sessions.push(rowOut);
     }
     for (var k = 0; k < uniqueAllowed.length; k += 1) {
       var allowedSid = uniqueAllowed[k];
@@ -6567,6 +6580,7 @@
           branch: "arena/" + allowedSid,
           status: "active",
           polling: false,
+          disconnected: false,
           updated_at: "",
         });
       }
@@ -6581,11 +6595,19 @@
     for (var m2 = 0; m2 < sessions.length; m2 += 1) {
       if (sessions[m2].role === "blocked") continue;
       var sRepo = sessions[m2].repo;
-      if (!repoHasMain[sRepo]) {
+      if (!repoHasMain[sRepo] && !workerIds[sessions[m2].session_id]) {
         sessions[m2].role = "main";
         repoHasMain[sRepo] = sessions[m2].session_id;
-      } else if (repoHasMain[sRepo] !== sessions[m2].session_id) {
-        sessions[m2].role = "worker";
+      }
+    }
+    for (var m2b = 0; m2b < sessions.length; m2b += 1) {
+      if (sessions[m2b].role === "blocked") continue;
+      var sRepoB = sessions[m2b].repo;
+      if (!repoHasMain[sRepoB]) {
+        sessions[m2b].role = "main";
+        repoHasMain[sRepoB] = sessions[m2b].session_id;
+      } else if (repoHasMain[sRepoB] !== sessions[m2b].session_id) {
+        sessions[m2b].role = "worker";
       }
     }
     for (var m3 = 0; m3 < sessions.length; m3 += 1) {
@@ -6664,12 +6686,16 @@
     var incoming = normalizeBoard(previewBoard);
     if (previewBoard.multi_repo !== undefined) next.multi_repo = Boolean(previewBoard.multi_repo);
     if (Array.isArray(previewBoard.linked_repos)) next.linked_repos = incoming.linked_repos.slice();
+    var incomingAllowedSet = {};
+    (incoming.allowed_sessions || []).forEach(function (sid) {
+      if (sid) incomingAllowedSet[sid] = true;
+    });
     var removedSet = {};
     (next.removed_sessions || []).forEach(function (sid) {
-      if (sid && sid !== previewSid) removedSet[sid] = true;
+      if (sid && sid !== previewSid && !incomingAllowedSet[sid]) removedSet[sid] = true;
     });
     (incoming.removed_sessions || []).forEach(function (sid) {
-      if (sid && sid !== previewSid) removedSet[sid] = true;
+      if (sid && sid !== previewSid && !incomingAllowedSet[sid]) removedSet[sid] = true;
     });
     next.removed_sessions = Object.keys(removedSet);
     next.allowed_sessions = next.allowed_sessions.filter(function (sid) { return !removedSet[sid]; });
@@ -6710,7 +6736,11 @@
     incoming.allowed_sessions.forEach(function (sid) {
       if (!removedSet[sid] && next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
     });
-    if (!next.main_session_id && incoming.main_session_id && !removedSet[incoming.main_session_id]) {
+    if (
+      incoming.main_session_id &&
+      !removedSet[incoming.main_session_id] &&
+      (!next.main_session_id || (next.worker_ids[next.main_session_id] && !next.worker_ids[incoming.main_session_id]))
+    ) {
       next.main_session_id = incoming.main_session_id;
     } else if (next.main_session_id && removedSet[next.main_session_id]) {
       next.main_session_id = "";
@@ -6725,14 +6755,24 @@
       var rowSid = boardSessionId(row.session_id || row.branch);
       if (!rowSid || removedSet[rowSid]) return;
       if (rowSid === previewSid || !bySid[rowSid]) {
-        bySid[rowSid] = {
+        var nextRow = {
           session_id: rowSid,
           repo: String(row.repo || (bySid[rowSid] && bySid[rowSid].repo) || previewBoard.repo || ""),
           branch: String(row.branch || (bySid[rowSid] && bySid[rowSid].branch) || ("arena/" + rowSid)),
-          status: row.polling || row.status === "polling" ? "polling" : "active",
+          status: rowSid === previewSid
+            ? (row.polling || row.status === "polling" ? "polling" : "active")
+            : (row.disconnected || row.status === "disconnected" ? "disconnected" : (row.polling || row.status === "polling" ? "polling" : "active")),
           polling: Boolean(row.polling || row.status === "polling"),
+          disconnected: rowSid === previewSid ? false : Boolean(row.disconnected || row.status === "disconnected"),
           updated_at: rowSid === previewSid ? syncNowIso : String(row.updated_at || syncNowIso),
         };
+        var rowSurvey = (row.survey && typeof row.survey === "object")
+          ? row.survey
+          : (bySid[rowSid] && bySid[rowSid].survey ? bySid[rowSid].survey : null);
+        if (rowSurvey) nextRow.survey = rowSurvey;
+        bySid[rowSid] = nextRow;
+      } else if (row.survey && typeof row.survey === "object") {
+        bySid[rowSid].survey = row.survey;
       }
     });
     next.sessions = Object.keys(bySid).map(function (k) { return bySid[k]; });
@@ -6757,6 +6797,12 @@
       }
       if (id) entryById[id] = copy;
       mergedEntries.push(copy);
+    });
+    mergedEntries.sort(function (a, b) {
+      var ta = parseBoardStampMs(a && a.at);
+      var tb = parseBoardStampMs(b && b.at);
+      if (isNaN(ta) || isNaN(tb)) return 0;
+      return ta - tb;
     });
     next.entries = mergedEntries.slice(-MAX_BOARD_ENTRIES);
     Object.keys(incoming.wakes).forEach(function (wakeK) {
@@ -6987,6 +7033,14 @@
       }
       return { ok: true, board: normalizeBoard(next) };
     }
+    if (actionType === "disconnect-session") {
+      if (!sid) return { ok: false, error: "missing-session-id", board: next };
+      next.sessions = next.sessions.map(function (row) {
+        if (boardSessionId(row.session_id || row.branch) !== sid) return row;
+        return Object.assign({}, row, { status: "disconnected", disconnected: true, polling: false });
+      });
+      return { ok: true, board: normalizeBoard(next) };
+    }
     if (actionType === "revoke" || actionType === "remove-session" || actionType === "dismiss") {
       if (!sid) return { ok: false, error: "missing-session-id", board: next };
       if ((next.removed_sessions || []).indexOf(sid) === -1) {
@@ -7007,6 +7061,7 @@
         return { ok: true, board: normalizeBoard(next) };
       }
       next.removed_sessions = (next.removed_sessions || []).filter(function (item) { return item !== sid; });
+      delete next.worker_ids[sid];
       if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
       next.main_session_id = sid;
       return { ok: true, board: normalizeBoard(next) };
