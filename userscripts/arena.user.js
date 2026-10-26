@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.91
+// @name         Arena.ai | NemoUtils | v1.10.92
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.91
+// @version      1.10.92
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1787,11 +1787,15 @@
 
     function clearForcedStyle(node, prop, fallbackValue) {
       if (!node || !node.style) return false;
+      var target = fallbackValue || "0px";
       var current = readStyleProp(node, prop).trim();
       var priority =
         typeof node.style.getPropertyPriority === "function"
           ? String(node.style.getPropertyPriority(prop) || "")
           : "";
+      if (current === target && priority !== "important") {
+        return false;
+      }
       if (
         priority !== "important" &&
         current !== PREVIEW_DRAWER_WIDTH &&
@@ -1799,7 +1803,6 @@
       ) {
         return false;
       }
-      var target = fallbackValue || "0px";
       var camel = prop.replace(/-([a-z])/g, function (_, c) {
         return c.toUpperCase();
       });
@@ -1844,6 +1847,7 @@
         var node = candidates[i];
         if (!isInsideTranscriptLog(node) || !node.style) continue;
         var current = readStyleProp(node, "padding-right").trim();
+        if (!current) continue;
         var priority =
           typeof node.style.getPropertyPriority === "function"
             ? String(node.style.getPropertyPriority("padding-right") || "")
@@ -1985,11 +1989,12 @@
       return changed;
     }
 
-    function ensurePreviewDrawerStyle() {
-      if (!document.head || typeof document.createElement !== "function") return;
+    function ensurePreviewDrawerStyle(doc) {
+      var targetDoc = doc || (typeof document !== "undefined" ? document : null);
+      if (!targetDoc || !targetDoc.head || typeof targetDoc.createElement !== "function") return;
       var existing =
-        typeof document.getElementById === "function"
-          ? document.getElementById(PREVIEW_DRAWER_STYLE_ID)
+        typeof targetDoc.getElementById === "function"
+          ? targetDoc.getElementById(PREVIEW_DRAWER_STYLE_ID)
           : null;
       if (!previewDrawerLockOn()) {
         if (existing) {
@@ -1998,12 +2003,9 @@
         }
         return;
       }
-      var style = existing || document.createElement("style");
-      style.id = PREVIEW_DRAWER_STYLE_ID;
-      style.setAttribute("id", PREVIEW_DRAWER_STYLE_ID);
       var widthCss = previewDrawerWidthCss();
       var openScope = 'main:has(button[aria-label="Close preview"], iframe[title^="App preview"]) ';
-      style.textContent =
+      var nextCss =
         openScope +
         "div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip{width:" +
         widthCss +
@@ -2026,9 +2028,17 @@
         "div.relative.flex.min-w-0.flex-1.flex-col > div.flex.min-h-0.flex-1.flex-col > div.shrink-0:not(.max-w-3xl){padding-right:" +
         widthCss +
         " !important}";
-      if (!existing) {
-        document.head.appendChild(style);
+      if (existing) {
+        if (existing.textContent !== nextCss) {
+          existing.textContent = nextCss;
+        }
+        return;
       }
+      var style = targetDoc.createElement("style");
+      style.id = PREVIEW_DRAWER_STYLE_ID;
+      style.setAttribute("id", PREVIEW_DRAWER_STYLE_ID);
+      style.textContent = nextCss;
+      targetDoc.head.appendChild(style);
     }
 
     if (exposeChecks("openSteering", {
@@ -2048,6 +2058,7 @@
       findPreviewComposerWrap: findPreviewComposerWrap,
       isPreviewDrawerOpen: isPreviewDrawerOpen,
       enforcePreviewDrawerWidth: enforcePreviewDrawerWidth,
+      ensurePreviewDrawerStyle: ensurePreviewDrawerStyle,
       PREVIEW_DRAWER_OUTER_SELECTOR: PREVIEW_DRAWER_OUTER_SELECTOR,
       PREVIEW_DRAWER_SELECTOR: PREVIEW_DRAWER_SELECTOR,
       PREVIEW_MAIN_SELECTOR: PREVIEW_MAIN_SELECTOR,

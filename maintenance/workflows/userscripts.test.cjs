@@ -2983,6 +2983,66 @@ for raw in sys.stdin:
     assert.equal(realHeaderBox.style.getPropertyValue("right"), "256px");
     assert.equal(realTranscriptBox.style.getPropertyValue("padding-right"), "256px");
     assert.equal(realComposerBox.style.getPropertyValue("padding-right"), "256px");
+    assert.equal(
+      checks.openSteering.enforcePreviewDrawerWidth(realDoc),
+      false,
+      "second closed-drawer pass must not mutate styles again",
+    );
+    previewOpenInSidebar = true;
+    assert.equal(checks.openSteering.enforcePreviewDrawerWidth(realDoc), true);
+    checkContext.GM_setValue("clankers-arena-preview-drawer-lock", false);
+    assert.equal(checks.openSteering.enforcePreviewDrawerWidth(realDoc), true);
+    assert.equal(
+      checks.openSteering.enforcePreviewDrawerWidth(realDoc),
+      false,
+      "second unlocked-drawer pass must not mutate styles again (prevents MutationObserver loop)",
+    );
+    checkContext.GM_setValue("clankers-arena-preview-drawer-lock", true);
+
+    let styleTextWrites = 0;
+    let styleAttrWrites = 0;
+    let storedCss = "";
+    const styleEl = {
+      id: "",
+      setAttribute() {
+        styleAttrWrites += 1;
+      },
+      get textContent() {
+        return storedCss;
+      },
+      set textContent(val) {
+        styleTextWrites += 1;
+        storedCss = String(val || "");
+      },
+    };
+    let headStyle = null;
+    const styleDoc = {
+      head: {
+        appendChild(node) {
+          headStyle = node;
+        },
+      },
+      createElement() {
+        return styleEl;
+      },
+      getElementById(id) {
+        return id === "clankers-preview-drawer-style" ? headStyle : null;
+      },
+    };
+    assert.equal(typeof checks.openSteering.ensurePreviewDrawerStyle, "function");
+    checks.openSteering.ensurePreviewDrawerStyle(styleDoc);
+    assert.equal(styleTextWrites, 1, "first ensurePreviewDrawerStyle writes CSS once");
+    checks.openSteering.ensurePreviewDrawerStyle(styleDoc);
+    assert.equal(
+      styleTextWrites,
+      1,
+      "second ensurePreviewDrawerStyle must not rewrite textContent when CSS is unchanged",
+    );
+    assert.equal(
+      styleAttrWrites,
+      1,
+      "second ensurePreviewDrawerStyle must not rewrite attributes when style node already exists",
+    );
 
     const allowedBoard = checks.board.applyBoardAction(null, {
       action: "allow",
