@@ -701,3 +701,12 @@ def test_shared_runner_uses_uv_cache_before_workflow_installs():
             assert line.strip().startswith("uv pip install --system "), (path, line)
             installs.append(line)
   assert installs
+
+
+def test_push_workflows_ignore_synced_agents_directory():
+  for name in ("ci.yml", "codeql.yml", "secret-scan.yml"):
+    document = yaml.safe_load((gate_workflows.WORKFLOW_DIR / name).read_text())
+    triggers = gate_workflows.triggers_of(document)
+    push = triggers.get("push") or {}
+    ignored = push.get("paths-ignore") or []
+    assert ".agents/**" in ignored, name
