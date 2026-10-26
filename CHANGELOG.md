@@ -6,6 +6,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-26
+
+### Added
+
+#### nemoizer
+
+- Add blocking rule `NMU100` (`nmu100_max_words = 6`) for padded UI labels on `title`, `aria-label`, `placeholder`, and `label` in HTML and JavaScript (`scripts/prose.py`, `scripts/nemoize.py`).
+
+### Changed
+
+#### arena-skill
+
+- Align `.task-type`, `.board-badge`, and `#board-tab` tokens with Arena's green palette, and match `.board-badge` to `.task-type` chips (`assets/style.css`, `assets/app.js`).
+- Add metric-matched `@font-face` fallbacks and hide `#modal-cancel` when `#modal-close` is active (`assets/style.css`, `assets/app.js`).
+- Require main sessions to question worker behavior, code, and claims (`SKILL.md`).
+- Mirror worker reports into the main Reports tab, forward owner submissions via `report_ops`, and strip report bodies from `/api/state` (`scripts/preview.py`).
+- Show session survey pips and status text in `#board-sessions`, store branch slugs in `ack_sender` and `@` mentions, and resolve board labels (`scripts/preview.py`, `assets/app.js`, `assets/style.css`).
+- Suppress the report bottom fade while a report input has focus, and fade out `#report-submit-float` at report end (`assets/app.js`, `assets/style.css`).
+
+#### nuu
+
+- Apply a `0.04` main ink-share floor to `NUM205` (`scripts/nuu.py`).
+
+#### userscripts
+
+- Preserve session survey and polling or gate status fields across board syncs (`userscripts/arena.user.js`).
+
 ## 2026-10-25
 
 ### Changed

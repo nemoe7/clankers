@@ -258,10 +258,79 @@ function duration(ms) {
   const seconds = total % 60;
   return minutes ? `${minutes}m ${String(seconds).padStart(2, '0')}s` : `${seconds}s`;
 }
+function sessionStatusInfo(row, selfSid = getState()?.board?.session_id || '') {
+  if (!row || typeof row !== 'object') {
+    return { dotState: 'ok', statusWord: 'Connected', statusText: 'Connected' };
+  }
+  const isDisc = Boolean(row.disconnected || row.status === 'disconnected');
+  if (isDisc) {
+    return { dotState: 'down', statusWord: 'Disconnected', statusText: 'Disconnected' };
+  }
+  if (row.session_id && row.session_id === selfSid) {
+    const selfDot = $('#connection-dot')?.dataset?.state || (row.polling ? 'polling' : (agentIdle() ? 'idle' : 'ok'));
+    return {
+      dotState: selfDot,
+      statusWord: selfDot === 'polling' ? 'Polling' : connectionLabel(selfDot),
+      statusText: connectionText(),
+    };
+  }
+  const rPollSince = row.polling ? stampMs(row.polling_since || row.updated_at) : null;
+  const rAgentSeenAt = stampMs(row.agent_seen_at || row.updated_at);
+  const rTurnEndedAt = stampMs(row.turn_ended_at);
+  const rCallEndStamp = row.agent_call_ended_at || null;
+  const rIdle = rPollSince === null && (
+    rTurnEndedAt !== null
+      ? Date.now() - rTurnEndedAt > AGENT_QUIET_MS
+      : (rAgentSeenAt !== null && Date.now() - rAgentSeenAt > AGENT_CALL_MS)
+  );
+  const calls = Number(row.calls_since_message || 0);
+  const threshold = Number(row.gate_threshold || 10);
+  const shown = calls <= Math.floor(threshold / 2) ? calls : threshold - calls;
+  const rTally = calls
+    ? (calls >= threshold ? ' · Blocked' : ` · ${shown} call${shown === 1 ? '' : 's'}`)
+    : '';
+  const tail = rIdle ? ' · Agent 404' : '';
+  if (row.polling) {
+    const label = row.checking_pr ? 'PR checks...'
+      : row.waiting_for_gates ? 'Running gates...' : 'Polling…';
+    const statusText = rPollSince !== null
+      ? `${label} ${duration(Date.now() - rPollSince)}${tail}${rTally}`
+      : `${label}${tail}${rTally}`;
+    return { dotState: 'polling', statusWord: 'Polling', statusText };
+  }
+  if (rCallEndStamp !== null) {
+    const dotState = rIdle ? 'idle' : 'ok';
+    return {
+      dotState,
+      statusWord: connectionLabel(dotState),
+      statusText: `Bash ${time(rCallEndStamp)}${tail}${rTally}`,
+    };
+  }
+  if (rIdle) {
+    return { dotState: 'idle', statusWord: 'No agent', statusText: `Agent 404${rTally}` };
+  }
+  return {
+    dotState: 'ok',
+    statusWord: 'Connected',
+    statusText: `${row.updated_at ? `Active ${time(row.updated_at)}` : 'Connected'}${rTally}`,
+  };
+}
 function paintConnection() {
   if (pollSince !== null || agentInCall()) $('#connection-text').textContent = connectionText();
   else if (agentIdle() && $('#connection-dot').dataset.state !== 'down') {
     setConnection('idle', connectionText());
+  }
+  const board = getState()?.board;
+  const sessionsEl = $('#board-sessions');
+  if (board && Array.isArray(board.sessions) && sessionsEl && !$('#board-panel')?.hidden) {
+    const selfSid = board.session_id || '';
+    for (const child of sessionsEl.children || []) {
+      const statusEl = child.children?.[0]?.children?.find?.(el => el.className === 'board-status-text');
+      const sid = statusEl?.dataset?.sessionId;
+      if (!sid) continue;
+      const row = board.sessions.find(item => item && item.session_id === sid);
+      if (row) statusEl.textContent = sessionStatusInfo(row, selfSid).statusText;
+    }
   }
 }
 // The composer stays open and has no closed state.
@@ -350,6 +419,14 @@ function syncKeyboardFooter(event) {
   );
   const mobile = Boolean(touchPointer?.matches || (window.innerWidth && window.innerWidth <= 720) || viewportShrunk);
   const keyboardOpen = Boolean(mobile && viewportShrunk && (inputFocused || event?.type !== 'blur'));
+  const reportInputFocused = Boolean(
+    inputFocused && active && $('#reports-panel')?.contains?.(active)
+  );
+  if (keyboardOpen || reportInputFocused) {
+    document.documentElement.dataset.reportInputActive = 'true';
+  } else {
+    delete document.documentElement.dataset.reportInputActive;
+  }
   const footer = $('.composer-footer');
   if (keyboardOpen) {
     document.documentElement.dataset.keyboardOpen = 'true';
@@ -1000,9 +1077,13 @@ async function markReplySeen(item, replyCount = (item.replies || []).length, onO
   if (!item || (pendingReplySeen.get(item.id) || 0) >= replyCount) return;
   pendingReplySeen.set(item.id, replyCount);
   const apply = (state, receipt) => {
-    const message = state.notes.find(note => note.id === item.id);
+    const nextCount = receipt?.ack_edited_seen_count ?? replyCount;
+    const message = state.notes?.find(note => note.id === item.id);
     if (message) message.ack_edited_seen_count = Math.max(
-      Number(message.ack_edited_seen_count || 0), receipt?.ack_edited_seen_count ?? replyCount);
+      Number(message.ack_edited_seen_count || 0), nextCount);
+    const boardEntry = state.board?.entries?.find(entry => entry && entry.id === item.id);
+    if (boardEntry) boardEntry.ack_edited_seen_count = Math.max(
+      Number(boardEntry.ack_edited_seen_count || 0), nextCount);
   };
   try {
     const write = optimisticWrite(apply, async () => {
@@ -1015,7 +1096,8 @@ async function markReplySeen(item, replyCount = (item.replies || []).length, onO
       }
       return receipt;
     }, apply, (state, receipt) => {
-      const message = state.notes.find(note => note.id === item.id);
+      const message = state.notes?.find(note => note.id === item.id)
+        || state.board?.entries?.find(entry => entry && entry.id === item.id);
       return !message || Number(message.ack_edited_seen_count || 0) >= receipt.ack_edited_seen_count;
     });
     if (onOptimistic) onOptimistic();
@@ -1023,7 +1105,7 @@ async function markReplySeen(item, replyCount = (item.replies || []).length, onO
   } catch (error) {
     const button = $('#log-edited');
     button.dataset.error = `Could not save reply status: ${error.message}`;
-    updateEdits(getState().notes);
+    updateEdits(combinedHistoryItems((getState()?.notes || []).filter(n => !n.quiet)));
   } finally {
     if (pendingReplySeen.get(item.id) === replyCount) pendingReplySeen.delete(item.id);
   }
@@ -1091,33 +1173,50 @@ function combinedHistoryItems(notes, board = getState()?.board) {
   const currentRepo = String(board?.repo || getState()?.repo || '').trim().split('/').pop();
   const boardItems = [];
   for (const entry of entriesRaw) {
-    if (!entry || !entry.id) continue;
+    if (!entry || !entry.id || entry.from_owner) continue;
     if (noteIds.has(entry.id) || (entry.note_id && noteIds.has(entry.note_id))) continue;
     if (allowed.size && entry.session_id && !allowed.has(entry.session_id)) continue;
     const senderRow = boardBySid.get(entry.session_id);
     const entryRepo = String(entry.repo || senderRow?.repo || '').trim().split('/').pop();
     if (!isRepoVisibleOnBoard(entryRepo, board)) continue;
-    const rawSenderId = entry.board_id || senderRow?.board_id || entry.session_id || '';
+    const rawSenderId = entry.session_id || senderRow?.board_id || entry.board_id || '';
     const senderLabel = entry.from_owner
       ? ''
       : displayBoardId(rawSenderId, board, entryRepo || currentRepo);
-    const rawText = String(
-      entry.text
-      || entry.payload?.text
-      || entry.payload?.summary
-      || (entry.payload && Object.keys(entry.payload).length ? JSON.stringify(entry.payload) : '')
-      || ''
+    const rawText = resolveBoardMentions(
+      String(
+        entry.text
+        || entry.payload?.text
+        || entry.payload?.summary
+        || (entry.payload && Object.keys(entry.payload).length ? JSON.stringify(entry.payload) : '')
+        || ''
+      ),
+      board,
+      entryRepo || currentRepo,
+      entry,
     );
+    const replyEntryCtx = {
+      session_id: entry.to && entry.to !== '*' ? entry.to : '',
+      to: entry.session_id || '',
+    };
+    const resolvedAckText = entry.ack_text
+      ? resolveBoardMentions(entry.ack_text, board, entryRepo || currentRepo, replyEntryCtx)
+      : entry.ack_text;
     boardItems.push({
       ...entry,
       is_board: true,
       is_agent_board: !entry.from_owner,
       board_sender: senderLabel,
       text: rawText,
+      ack_text: resolvedAckText,
       html: entry.html !== undefined ? entry.html : renderMessageMarkdown(rawText),
-      ...(entry.ack_text && entry.ack_html === undefined ? { ack_html: renderMessageMarkdown(entry.ack_text) } : {}),
+      ...(resolvedAckText && entry.ack_html === undefined ? { ack_html: renderMessageMarkdown(resolvedAckText) } : {}),
       ...(Array.isArray(entry.replies) && entry.replies.length ? {
-        replies: entry.replies.map(r => (r && r.text && r.html === undefined ? { ...r, html: renderMessageMarkdown(r.text) } : r)),
+        replies: entry.replies.map(r => {
+          if (!r || !r.text) return r;
+          const rText = resolveBoardMentions(r.text, board, entryRepo || currentRepo, replyEntryCtx);
+          return r.html === undefined ? { ...r, text: rText, html: renderMessageMarkdown(rText) } : { ...r, text: rText };
+        }),
       } : {}),
       ...(entry.file?.name ? { attachment_name: entry.file.name } : {}),
     });
@@ -1272,8 +1371,8 @@ function showHistory(rawNotes) {
           plain.textContent = reply.text.replace(/\\n/g, '\n');
           block.replaceChildren(plain);
         }
-        if (boardEnabled) {
-          const replySenderLabel = displayBoardId(reply.sender || item.ack_sender || defaultAckSender, activeBoard, currentRepo);
+        if (item.is_agent_board && boardEnabled) {
+          const replySenderLabel = resolveBoardAckSender(reply.sender || item.ack_sender || defaultAckSender, item, activeBoard, currentRepo);
           if (replySenderLabel) {
             const replySenderEl = document.createElement('div');
             replySenderEl.className = 'board-sender';
@@ -1291,8 +1390,8 @@ function showHistory(rawNotes) {
         answer.innerHTML = linkReferences(item.ack_html, references);
         answer.append(...blocks);
       }
-      if (boardEnabled) {
-        const ackSenderLabel = displayBoardId(item.ack_sender || defaultAckSender, activeBoard, currentRepo);
+      if (item.is_agent_board && boardEnabled) {
+        const ackSenderLabel = resolveBoardAckSender(item.ack_sender || defaultAckSender, item, activeBoard, currentRepo);
         if (ackSenderLabel) {
           const ackSenderEl = document.createElement('div');
           ackSenderEl.className = 'board-sender';
@@ -1758,17 +1857,6 @@ $('#form').addEventListener('submit', async event => {
     pending = null;
     save('pending', 'null');
     clearStagedFiles();
-    const activeBoard = getState()?.board;
-    if (Array.isArray(activeBoard?.allowed_sessions) && activeBoard.allowed_sessions.length > 0) {
-      void sendBoardAction({
-        action: 'post',
-        id: result.id,
-        note_id: result.id,
-        from_owner: true,
-        to: '*',
-        text: result.text,
-      });
-    }
     refreshState();
   } catch (error) {
     if (draftVersion === submittedVersion && !note.value) {
@@ -2617,6 +2705,13 @@ function updateReportTop() {
     const submit = $('#report-submit');
     submitFloat.hidden = Boolean(panel.hidden || !submit || submit.hidden);
     submitFloat.disabled = Boolean(submit?.disabled);
+    const atReportEnd = !panel.hidden && panel.scrollHeight > panel.clientHeight
+      && panel.scrollHeight - panel.scrollTop - panel.clientHeight <= 24;
+    if (atReportEnd) {
+      submitFloat.dataset.atEnd = 'true';
+    } else {
+      delete submitFloat.dataset.atEnd;
+    }
   }
   updateReportTocActive();
 }
@@ -4026,9 +4121,11 @@ function syncBoardHeartbeat(state) {
   const branch = String(state.board.branch || '');
   const hbKey = `${sid}|${repo}|${branch}|${isPolling ? '1' : '0'}`;
   const entries = Array.isArray(state.board.entries) ? state.board.entries : [];
-  const entriesKey = entries.map(row => row && row.id
-    ? `${row.id}:${row.seen_at || ''}:${row.acknowledged_at || ''}:${row.ack_edited_at || ''}:${Array.isArray(row.replies) ? row.replies.length : 0}:${row.task_id || ''}`
-    : '').join(',');
+  const reportOps = Array.isArray(state.board.report_ops) ? state.board.report_ops : [];
+  const taskOps = Array.isArray(state.board.task_ops) ? state.board.task_ops : [];
+  const entriesKey = `${entries.map(row => row && row.id
+    ? `${row.id}:${row.seen_at || ''}:${row.acknowledged_at || ''}:${row.ack_edited_at || ''}:${row.ack_edited_seen_count || 0}:${Array.isArray(row.replies) ? row.replies.length : 0}:${row.task_id || ''}`
+    : '').join(',')}|${reportOps.map(op => op?.id || '').join(',')}|${taskOps.map(op => op?.id || '').join(',')}`;
   const targetOrigin = parentTargetOrigin();
   try {
     if (hbKey !== lastBoardHeartbeatKey) {
@@ -4098,13 +4195,58 @@ async function sendBoardAction(action, forwardToParent = true) {
   }
 }
 function displayBoardId(rawId, board = getState()?.board, rowRepo = '') {
-  const text = String(rawId || '').trim();
+  const raw = String(rawId || '').trim();
+  if (!raw) return '';
+  const cleanSid = raw.replace(/^arena\//, '');
+  const sessions = Array.isArray(board?.sessions) ? board.sessions : [];
+  const matched = sessions.find(row => row && (
+    row.session_id === cleanSid
+    || row.branch === raw
+    || row.branch === `arena/${cleanSid}`
+    || row.board_id === cleanSid
+  ));
+  const text = String(matched?.board_id || cleanSid).trim();
   if (!text || board?.multi_repo) return text;
-  const repo = String(rowRepo || board?.repo || getState()?.repo || '').trim().split('/').pop();
+  const repo = String(matched?.repo || rowRepo || board?.repo || getState()?.repo || '').trim().split('/').pop();
   if (repo && text.startsWith(`${repo}-`) && text.length > repo.length + 1) {
     return text.slice(repo.length + 1);
   }
   return text;
+}
+function resolveBoardAckSender(rawSender, item, board = getState()?.board, rowRepo = '') {
+  const toTarget = (item?.to && item.to !== '*' && item.to !== item.session_id) ? String(item.to) : '';
+  const fallback = toTarget || board?.session_id || board?.board_id || 'alpha';
+  const candidate = displayBoardId(rawSender || fallback, board, rowRepo);
+  if (candidate && item?.board_sender && candidate === item.board_sender && toTarget) {
+    const recipientLabel = displayBoardId(toTarget, board, rowRepo);
+    if (recipientLabel && recipientLabel !== item.board_sender) return recipientLabel;
+  }
+  return candidate;
+}
+function resolveBoardMentions(text, board = getState()?.board, rowRepo = '', entry = null) {
+  const raw = String(text || '');
+  if (!raw || !raw.includes('@')) return raw;
+  const sessions = Array.isArray(board?.sessions) ? board.sessions : [];
+  if (!sessions.length) return raw;
+  const fromSid = String(entry?.session_id || '').replace(/^arena\//, '');
+  const toSid = String(entry?.to || '').replace(/^arena\//, '');
+  return raw.replace(/(^|(?<=\s))@([A-Za-z0-9_/-]{1,64})\b/g, (full, prefix, token) => {
+    const clean = String(token || '').replace(/^arena\//, '');
+    let matched = sessions.find(row => row && (
+      row.session_id === clean
+      || row.branch === token
+      || row.branch === `arena/${clean}`
+      || row.board_id === clean
+      || row.worker_id === clean
+    ));
+    if (matched && fromSid && matched.session_id === fromSid && toSid && toSid !== '*' && toSid !== fromSid) {
+      const targetRow = sessions.find(row => row && row.session_id === toSid);
+      if (targetRow) matched = targetRow;
+    }
+    if (!matched) return full;
+    const labelText = displayBoardId(matched.session_id || matched.board_id, board, matched.repo || rowRepo);
+    return labelText ? `${prefix}@${labelText}` : full;
+  });
 }
 function formatBoardEntryStamp(entry, stamp) {
   stamp.textContent = entry.at ? time(entry.at) : '';
@@ -4175,11 +4317,31 @@ function renderBoard() {
     const isAllowed = allowed.has(row.session_id);
     const isMain = isAllowed && (row.role ? row.role === 'main' : (!mainSid || mainSid === row.session_id));
     badge.dataset.role = isMain ? 'main' : (isAllowed ? 'worker' : 'blocked');
-    badge.textContent = isMain ? 'Main · Push & PR' : (isAllowed ? 'Worker · Push/PR off' : 'Not on allowlist');
+    badge.textContent = isMain ? 'Main' : (isAllowed ? 'Worker' : 'Not on allowlist');
     const meta = document.createElement('span');
     meta.className = 'muted';
-    meta.textContent = `${row.repo || getState()?.repo || 'repo'} · ${row.polling ? 'polling' : 'active'}`;
-    info.append(code, badge, meta);
+    meta.textContent = row.session_id || row.repo || getState()?.repo || 'repo';
+    const surveyBtn = document.createElement('button');
+    surveyBtn.type = 'button';
+    surveyBtn.className = 'board-survey-open';
+    const { dotState, statusWord, statusText } = sessionStatusInfo(row, selfSid);
+    const dotLabel = `Open survey results (${statusWord})`;
+    surveyBtn.setAttribute('aria-label', dotLabel);
+    surveyBtn.title = dotLabel;
+    const dot = document.createElement('span');
+    dot.className = 'dot pip';
+    dot.dataset.state = dotState;
+    dot.setAttribute('role', 'img');
+    dot.setAttribute('aria-label', statusWord);
+    surveyBtn.append(dot);
+    surveyBtn.addEventListener('click', () => {
+      void showSessionSurvey(row, selfSid);
+    });
+    const statusSpan = document.createElement('span');
+    statusSpan.className = 'board-status-text';
+    statusSpan.dataset.sessionId = row.session_id || '';
+    statusSpan.textContent = statusText;
+    info.append(code, badge, meta, surveyBtn, statusSpan);
     const actions = document.createElement('div');
     actions.className = 'row tight';
     if (isAllowed) {
@@ -5049,9 +5211,11 @@ function openModal(config) {
     $('#modal-title').hidden = !!config.hideTitle;
     $('#modal-fields').replaceChildren(...nodes);
     $('#modal-error').hidden = true;
+    const closeBtn = $('#modal-close');
+    if (closeBtn && config.hideClose !== undefined) closeBtn.hidden = !!config.hideClose;
     $('#modal-confirm').textContent = config.confirm || 'Submit';
     $('#modal-confirm').hidden = !!config.readOnly;
-    $('#modal-cancel').hidden = !!config.readOnly;
+    $('#modal-cancel').hidden = !!config.readOnly || Boolean(closeBtn && !closeBtn.hidden);
     $('#survey-again').hidden = true;
     modal.dataset.readOnly = String(!!config.readOnly);
     modal.dataset.wide = String(!!config.wide);
@@ -5220,15 +5384,35 @@ $('#survey-again').addEventListener('click', async () => {
     }
   } finally { again.disabled = surveyRequested; }
 });
-$('#survey-open').addEventListener('click', async () => {
+async function openLocalSurvey() {
   if (modal.open) return;
   surveyView = document.createElement('section');
   surveyView.textContent = 'Loading survey…';
   if (surveyAnswered) surveyRequested = false;
   void openModal({ title: 'Survey', content: surveyView, readOnly: true, hideTitle: true });
-  $('#modal-cancel').focus();
+  ($('#modal-close') || $('#modal-cancel')).focus();
   await refreshSurvey();
-});
+}
+async function showSessionSurvey(row, selfSid = getState()?.board?.session_id || '') {
+  if (!row || !row.session_id || row.session_id === selfSid) {
+    await openLocalSurvey();
+    return;
+  }
+  if (modal.open) return;
+  const peerView = document.createElement('section');
+  surveyView = null;
+  void openModal({ title: 'Survey', content: peerView, readOnly: true, hideTitle: true });
+  $('#modal-cancel').focus();
+  const sData = row.survey;
+  if (sData && Array.isArray(sData.results)) {
+    renderSurvey(peerView, sData.results, sData.answered_at || '');
+    $('#survey-again').hidden = true;
+  } else {
+    $('#survey-again').hidden = true;
+    peerView.textContent = 'No survey submission synced for this session yet.';
+  }
+}
+$('#survey-open').addEventListener('click', () => openLocalSurvey());
 void refreshSurvey();
 setInterval(refreshSurvey, SURVEY_REFRESH_MS);
 
