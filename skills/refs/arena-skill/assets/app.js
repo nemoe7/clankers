@@ -3827,6 +3827,7 @@ document.addEventListener('visibilitychange', () => {
     checkVisibleRepliesSeen();
   }
 });
+const ACTIVE_TAB_KEY = 'arena-preview-active-tab';
 const TAB_TITLES = {
   'notes-tab': 'Messages',
   'reports-tab': 'Reports',
@@ -3843,12 +3844,15 @@ function syncDocumentTitle() {
   const label = TAB_TITLES[active?.id] || 'Messages';
   document.title = `${repo} - Steering${label === 'Messages' ? '' : ` | ${label}`}`;
 }
-function showTab(tab) {
+function showTab(tab, { persist = true, initial = false } = {}) {
   clearJumpHighlight();
   const boardTab = $('#board-tab');
   const boardPanel = $('#board-panel');
   if (boardTab) boardTab.setAttribute('aria-pressed', 'false');
   if (boardPanel) boardPanel.hidden = true;
+  if (persist && tab?.id) {
+    try { localStorage.setItem(ACTIVE_TAB_KEY, tab.id); } catch {}
+  }
   const alreadySelected = tab.getAttribute('aria-selected') === 'true';
   const left = tab === tabs[1] ? null : shownReportId();
   for (const item of tabs) {
@@ -3866,19 +3870,24 @@ function showTab(tab) {
   }
   updateReportTop();
   if (tab === tabs[1]) {
-    // Record the tab visit before the poll recomputes its pip so the marker clears during this visit.
-    refreshState();
-    loadReport();
+    if (!initial) {
+      // Record the tab visit before the poll recomputes its pip so the marker clears during this visit.
+      refreshState();
+      loadReport();
+    }
   } else {
     if (left) void markReportViewed(left, false);
     releaseHeldReport(null);
   }
 }
-function showBoardPanel() {
+function showBoardPanel({ persist = true } = {}) {
   const boardTab = $('#board-tab');
   const boardPanel = $('#board-panel');
   if (!boardTab || !boardPanel) return;
   clearJumpHighlight();
+  if (persist) {
+    try { localStorage.setItem(ACTIVE_TAB_KEY, 'board-tab'); } catch {}
+  }
   const alreadyOpen = boardTab.getAttribute('aria-pressed') === 'true' && !boardPanel.hidden;
   const left = shownReportId();
   if (left) void markReportViewed(left, false);
@@ -5230,6 +5239,18 @@ $('#skip-poll').addEventListener('click', async () => {
   }
   finally { button.disabled = false; }
 });
+function restoreLastTab() {
+  let saved = null;
+  try { saved = localStorage.getItem(ACTIVE_TAB_KEY); } catch {}
+  if (!saved || saved === 'notes-tab') return;
+  if (saved === 'board-tab') {
+    showBoardPanel({ persist: false });
+    return;
+  }
+  const target = tabs.find(item => item.id === saved);
+  if (target) showTab(target, { persist: false, initial: true });
+}
+restoreLastTab();
 refreshState();
 startPolling();
 connectSocket();

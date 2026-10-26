@@ -5727,5 +5727,7 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(styleSource, /calc\(50vw - 458px\)/);
   assert.match(appSource, /stamp\.textContent\s*=\s*entry\.at\s*\?\s*time\(entry\.at\)\s*:\s*''/);
   assert.match(appSource, /stamp\.title\s*=\s*clockTime\(entry\.at\)/);
+  assert.match(appSource, /const\s+ACTIVE_TAB_KEY\s*=\s*'arena-preview-active-tab'/);
+  assert.match(appSource, /function\s+restoreLastTab\(/);
 });
 
