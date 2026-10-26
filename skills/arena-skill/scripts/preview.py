@@ -44,8 +44,8 @@ WORKSPACE_SKIP={'.arena','.cache','.git','.local','.mypy_cache','.next','.nox','
 FETCH_LEASE=timedelta(minutes=5)
 UPLOAD_DIR='uploads'
 FETCH_DIR='downloads'
-def read_set_files(root=None):
-	base=Path(root or Path.cwd()).resolve();cached=READ_SET_CACHE.get(base)
+def read_set_files(root=None,worker=False):
+	base=Path(root or Path.cwd()).resolve();cache_key=base,bool(worker);cached=READ_SET_CACHE.get(cache_key)
 	if cached is not None:return list(cached)
 	files=[]
 	if(base/'ARENA.md').is_file():files.append('ARENA.md')
@@ -54,7 +54,10 @@ def read_set_files(root=None):
 		if'AGENTS.md'in filenames:files.append((Path(dirpath)/'AGENTS.md').relative_to(base).as_posix())
 	for name in('.agents/skills/arena-skill/SKILL.md','skills/arena-skill/SKILL.md'):
 		if(base/name).is_file():files.append(name);break
-	READ_SET_CACHE[base]=tuple(files);return list(files)
+	if worker:
+		for name in('.agents/skills/arena-skill/WORKER.md','skills/arena-skill/WORKER.md'):
+			if(base/name).is_file():files.append(name);break
+	READ_SET_CACHE[cache_key]=tuple(files);return list(files)
 def state_dir_usage(state_dir=None):
 	root=Path(state_dir if state_dir is not None else resolve_state_dir());categories={'database':{'bytes':0,'files':0},'backups':{'bytes':0,'files':0},'uploads':{'bytes':0,'files':0},'downloads':{'bytes':0,'files':0},'runs':{'bytes':0,'files':0},'reports':{'bytes':0,'files':0},'other':{'bytes':0,'files':0}};total_bytes=0;total_files=0
 	if not root.is_dir():return{'bytes':0,'files':0,'categories':categories}
@@ -535,8 +538,8 @@ def note_text(text):
 	return text
 CLAUSE_ACK=re.compile('([\\w./-]+\\.md):([0-9]+):\\s*\\S')
 def clause_ack_error(text,root=None):
-	base=Path(root or Path.cwd());files=read_set_files(base)
-	if not files:base=Path.cwd();files=read_set_files(base)
+	base=Path(root or Path.cwd());files=read_set_files(base,worker=True)
+	if not files:base=Path.cwd();files=read_set_files(base,worker=True)
 	paths={Path(path).name:base/path for path in files}
 	for match in CLAUSE_ACK.finditer(text or''):
 		path=paths.get(Path(match.group(1)).name)
@@ -1100,7 +1103,13 @@ def read_set_slot(moment=None):
 	moment=moment or datetime.now(DISPLAY_ZONE or timezone.utc)
 	if moment.tzinfo is None:moment=moment.replace(tzinfo=timezone.utc)
 	minute=moment.minute//READ_SET_INTERVAL_MINUTES*READ_SET_INTERVAL_MINUTES;return moment.replace(minute=minute,second=0,microsecond=0).isoformat()
-def read_set_paths(root=None):root=Path(root or resolve_repo_root()).resolve();skill=root/'.agents'/'skills'/'arena-skill'/'SKILL.md';return[path for path in(root/'ARENA.md',root/'AGENTS.md',skill)if path.is_file()]
+def read_set_paths(root=None,worker=False):
+	root=Path(root or resolve_repo_root()).resolve();skill=root/'.agents'/'skills'/'arena-skill'/'SKILL.md';candidates=[root/'ARENA.md',root/'AGENTS.md',skill]
+	if worker:
+		for rel in('.agents/skills/arena-skill/WORKER.md','skills/arena-skill/WORKER.md'):
+			candidate=root/rel
+			if candidate.is_file():candidates.append(candidate);break
+	return[path for path in candidates if path.is_file()]
 def resolve_agents_chain(target=None,root=None):
 	default_root=Path(root or resolve_repo_root()).resolve();raw=Path(target)if target is not None else default_root;resolved=(raw if raw.is_absolute()else default_root/raw).resolve()
 	if not resolved.is_dir()and(resolved.is_file()or resolved.suffix):resolved=resolved.parent
@@ -2397,7 +2406,7 @@ class Store:
 	def schedule_read_set_note(self,moment=None,root=None,manual=False):
 		moment=moment or datetime.now(DISPLAY_ZONE or timezone.utc)
 		if moment.tzinfo is None:moment=moment.replace(tzinfo=timezone.utc)
-		slot=read_set_slot(moment);paths=read_set_paths(root or self.repository_root())
+		slot=read_set_slot(moment);is_worker=self.board_state().get('board_role')=='worker';paths=read_set_paths(root or self.repository_root(),worker=is_worker)
 		with closing(self.connect())as db,db:
 			db.execute('BEGIN IMMEDIATE')
 			if not manual:
@@ -2461,7 +2470,7 @@ class Store:
 			if tasks is not None:
 				for item in tasks['finished']+tasks['upcoming']:item['updated_at']=clip_stamp(item['updated_at'])
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
-			polling=self.polling();runs=live_runs(self.path.parent)if polling else[];return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(state_dir=self.path.parent),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_FLAG_META)),'read_set':read_set_files(self.repository_root()),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META)),'gate_threshold':GATE_THRESHOLD,'display_tz':meta.get(TIMEZONE_META),'repo':self.repository_root().name,'force_save_id':meta.get(FORCE_SAVE_META),'board':self.board_state(meta=meta,polling=polling)}
+			polling=self.polling();runs=live_runs(self.path.parent)if polling else[];return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(state_dir=self.path.parent),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_FLAG_META)),'read_set':read_set_files(self.repository_root(),worker=self.board_state(meta=meta,polling=polling).get('board_role')=='worker'),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META)),'gate_threshold':GATE_THRESHOLD,'display_tz':meta.get(TIMEZONE_META),'repo':self.repository_root().name,'force_save_id':meta.get(FORCE_SAVE_META),'board':self.board_state(meta=meta,polling=polling)}
 	def board_state(self,meta=None,polling=None):
 		root=self.repository_root();branch=workspace_branch(root);repo=root.name;sid=board_session_id(branch);raw_text=meta.get(BOARD_STATE_META)if isinstance(meta,dict)else self.meta_value(BOARD_STATE_META)
 		try:raw=json.loads(raw_text)if raw_text else{}
@@ -2699,7 +2708,7 @@ class Store:
 				if report is not None and not parse_fields(report['markdown'])[1]:raise ValueError('A blocked task needs a report with answer fields')
 			if status=='finished':
 				guard_task_runs(self.path.parent,task_id,'finish task')
-				if not restoring and(status_arg=='finished'or not stored or stored['status']!='finished'):guard_task_push(self.repository_root(),task_id,task_type)
+				if not restoring and self.board_state(polling=False).get('board_role')!='worker'and(status_arg=='finished'or not stored or stored['status']!='finished'):guard_task_push(self.repository_root(),task_id,task_type)
 			if status=='finished'and blocked:raise ValueError(f"Task {task_id} is blocked; clear the report wait with --unblocked first")
 			siblings=[task_row(item)for item in db.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE status = ? AND id != ? ORDER BY position, id",(status,task_id)).fetchall()]
 			if not restoring and order is not None and not blocked and status=='upcoming':siblings=[item for item in siblings if not(item.get('blocked')and item.get('report_id'))]+[item for item in siblings if item.get('blocked')and item.get('report_id')]
@@ -3177,7 +3186,7 @@ class Store:
 		if not armed:self.clear_meta(AGENT_INTERRUPT_FLAG_META);self.take_interrupt();return{'agent_interrupt_pending':False}
 		if not isinstance(tab,str)or tab not in{'notes','reports','tasks','downloads'}:raise ValueError('tab must name a preview tab')
 		if reason is not None and reason not in VIOLATION_TYPES[tab]:raise ValueError('reason must name a violation type for this tab')
-		if clause_file not in(None,'')and clause_file not in read_set_files(self.repository_root()):raise ValueError('clause_file must name a path in the bible')
+		if clause_file not in(None,'')and clause_file not in read_set_files(self.repository_root(),worker=self.board_state().get('board_role')=='worker'):raise ValueError('clause_file must name a path in the bible')
 		if note is not None and not isinstance(note,str):raise ValueError('note must be text')
 		cited=' '.join((note or'').split());evidence=[]
 		if reason is not None:
@@ -3296,7 +3305,7 @@ class Store:
 			if polls>GATE_THRESHOLD//2:head=[f"bash blocked in {GATE_THRESHOLD-polls}"]
 			else:head=[f"calls {polls}"]
 		else:head=[]
-		unpushed=unpushed_commit_count(self.repository_root())if routine else 0;tail=reminder_tail(cursor,remaining,len(stale),unpushed)if routine else'';parts=[' '.join([*head,*unacked]).strip()]
+		is_worker=self.board_state().get('board_role')=='worker';unpushed=unpushed_commit_count(self.repository_root())if routine and not is_worker else 0;tail=reminder_tail(cursor,remaining,len(stale),unpushed)if routine else'';parts=[' '.join([*head,*unacked]).strip()]
 		if order_notice:parts.append(TASK_ORDER_NOTICE)
 		unpushed_notice=f"{unpushed} commit/s unpushed. ALWAYS push. NEVER delay for batch."if unpushed else''
 		if unpushed_notice and unpushed_notice!=tail:parts.append(unpushed_notice)

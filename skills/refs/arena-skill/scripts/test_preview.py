@@ -15359,6 +15359,44 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   assert worker_offer["offered"] is False
   assert worker_offer.get("worker") is True
+  worker_root = tmp_path / "worker-bible-root"
+  worker_root.mkdir()
+  (worker_root / "ARENA.md").write_text("# Arena\n", encoding="utf-8")
+  (worker_root / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
+  worker_skill_dir = worker_root / ".agents" / "skills" / "arena-skill"
+  worker_skill_dir.mkdir(parents=True)
+  (worker_skill_dir / "SKILL.md").write_text("# Skill\n", encoding="utf-8")
+  (worker_skill_dir / "WORKER.md").write_text("# Worker\n", encoding="utf-8")
+  assert ".agents/skills/arena-skill/WORKER.md" not in preview.read_set_files(
+    worker_root
+  )
+  assert ".agents/skills/arena-skill/WORKER.md" in preview.read_set_files(
+    worker_root, worker=True
+  )
+  assert (worker_skill_dir / "WORKER.md") not in preview.read_set_paths(worker_root)
+  assert (worker_skill_dir / "WORKER.md") in preview.read_set_paths(
+    worker_root, worker=True
+  )
+  push_checks = []
+  monkeypatch.setattr(
+    preview, "guard_task_push", lambda *args: push_checks.append(args)
+  )
+  monkeypatch.setattr(preview, "unpushed_commit_count", lambda _root: 2)
+  hygiene_store.write_task(
+    "worker-task",
+    "Worker task",
+    ["Scope: skills/refs/arena-skill/"],
+    task_type="code",
+  )
+  hygiene_store.write_task(
+    "worker-task",
+    "Worker task",
+    ["Scope: skills/refs/arena-skill/", "Done"],
+    status="finished",
+    task_type="code",
+  )
+  assert push_checks == []
+  assert "commit/s unpushed" not in hygiene_store.reminder(routine=True)
   style_css = (
     preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")

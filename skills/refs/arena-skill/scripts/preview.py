@@ -100,14 +100,15 @@ UPLOAD_DIR = "uploads"
 FETCH_DIR = "downloads"
 
 
-def read_set_files(root=None):
+def read_set_files(root=None, worker=False):
   """Return the clause files an Arena session reads in this repository.
 
   ARENA.md comes first, then every AGENTS.md under the root, then the arena-skill entry point.
   A repository without them yields the empty list, so the flag form simply offers none.
   """
   base = Path(root or Path.cwd()).resolve()
-  cached = READ_SET_CACHE.get(base)
+  cache_key = (base, bool(worker))
+  cached = READ_SET_CACHE.get(cache_key)
   if cached is not None:
     return list(cached)
   files = []
@@ -121,7 +122,15 @@ def read_set_files(root=None):
     if (base / name).is_file():
       files.append(name)
       break
-  READ_SET_CACHE[base] = tuple(files)
+  if worker:
+    for name in (
+      ".agents/skills/arena-skill/WORKER.md",
+      "skills/arena-skill/WORKER.md",
+    ):
+      if (base / name).is_file():
+        files.append(name)
+        break
+  READ_SET_CACHE[cache_key] = tuple(files)
   return list(files)
 
 
@@ -1548,11 +1557,11 @@ def clause_ack_error(text, root=None):
   The line number alone does not name a clause, so it does not clear the note.
   """
   base = Path(root or Path.cwd())
-  files = read_set_files(base)
+  files = read_set_files(base, worker=True)
   if not files:
     # A store outside a repository has no bible of its own, so the session's applies.
     base = Path.cwd()
-    files = read_set_files(base)
+    files = read_set_files(base, worker=True)
   paths = {Path(path).name: base / path for path in files}
   for match in CLAUSE_ACK.finditer(text or ""):
     path = paths.get(Path(match.group(1)).name)
@@ -3030,13 +3039,21 @@ def read_set_slot(moment=None):
   return moment.replace(minute=minute, second=0, microsecond=0).isoformat()
 
 
-def read_set_paths(root=None):
+def read_set_paths(root=None, worker=False):
   """Existing files in the required bible, in stable reading order."""
   root = Path(root or resolve_repo_root()).resolve()
   skill = root / ".agents" / "skills" / "arena-skill" / "SKILL.md"
-  return [
-    path for path in (root / "ARENA.md", root / "AGENTS.md", skill) if path.is_file()
-  ]
+  candidates = [root / "ARENA.md", root / "AGENTS.md", skill]
+  if worker:
+    for rel in (
+      ".agents/skills/arena-skill/WORKER.md",
+      "skills/arena-skill/WORKER.md",
+    ):
+      candidate = root / rel
+      if candidate.is_file():
+        candidates.append(candidate)
+        break
+  return [path for path in candidates if path.is_file()]
 
 
 def resolve_agents_chain(target=None, root=None):
@@ -6946,7 +6963,8 @@ class Store:
     if moment.tzinfo is None:
       moment = moment.replace(tzinfo=timezone.utc)
     slot = read_set_slot(moment)
-    paths = read_set_paths(root or self.repository_root())
+    is_worker = self.board_state().get("board_role") == "worker"
+    paths = read_set_paths(root or self.repository_root(), worker=is_worker)
     with closing(self.connect()) as db, db:
       db.execute("BEGIN IMMEDIATE")
       if not manual:
@@ -7250,7 +7268,11 @@ class Store:
         "skip_poll": clip_stamp(meta.get(SKIP_POLL_META)),
         "agent_interrupt_pending": bool(meta.get(AGENT_INTERRUPT_FLAG_META)),
         # The flag modal lists this repository's clause files. The server owns the list.
-        "read_set": read_set_files(self.repository_root()),
+        "read_set": read_set_files(
+          self.repository_root(),
+          worker=self.board_state(meta=meta, polling=polling).get("board_role")
+          == "worker",
+        ),
         # The message log header names the bash calls since the owner's last message.
         "calls_since_message": meta_number(db, POLLS_SINCE_MESSAGE),
         # The Downloads tab shows the key the userscript holds.
@@ -7910,8 +7932,10 @@ class Store:
           raise ValueError("A blocked task needs a report with answer fields")
       if status == "finished":
         guard_task_runs(self.path.parent, task_id, "finish task")
-        if not restoring and (
-          status_arg == "finished" or not stored or stored["status"] != "finished"
+        if (
+          not restoring
+          and self.board_state(polling=False).get("board_role") != "worker"
+          and (status_arg == "finished" or not stored or stored["status"] != "finished")
         ):
           guard_task_push(self.repository_root(), task_id, task_type)
       if status == "finished" and blocked:
@@ -9503,7 +9527,8 @@ class Store:
     if reason is not None and reason not in VIOLATION_TYPES[tab]:
       raise ValueError("reason must name a violation type for this tab")
     if clause_file not in (None, "") and clause_file not in read_set_files(
-      self.repository_root()
+      self.repository_root(),
+      worker=self.board_state().get("board_role") == "worker",
     ):
       raise ValueError("clause_file must name a path in the bible")
     if note is not None and not isinstance(note, str):
@@ -9896,7 +9921,12 @@ class Store:
         head = [f"calls {polls}"]
     else:
       head = []
-    unpushed = unpushed_commit_count(self.repository_root()) if routine else 0
+    is_worker = self.board_state().get("board_role") == "worker"
+    unpushed = (
+      unpushed_commit_count(self.repository_root())
+      if (routine and not is_worker)
+      else 0
+    )
     tail = reminder_tail(cursor, remaining, len(stale), unpushed) if routine else ""
     parts = [" ".join([*head, *unacked]).strip()]
     if order_notice:
