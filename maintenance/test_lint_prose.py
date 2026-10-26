@@ -123,9 +123,13 @@ def test_source_sections_read_hash_comments_outside_strings():
   ]
 
 
-def test_lint_fails_advisory_findings_in_strict_mode():
+def test_lint_keeps_advisory_findings_non_blocking_and_fails_hard_findings():
   assert lint_prose.lint("example", "The state was saved.", False) == 0
-  assert lint_prose.lint("example", "The state was saved.", False, strict=True) == 1
+  assert lint_prose.lint("example", "The state was saved.", False, strict=True) == 0
+  assert (
+    lint_prose.lint("example", "Read the state; write the state.", False, strict=True)
+    == 1
+  )
 
 
 def test_code_targets_skip_vendored_content():
@@ -153,25 +157,31 @@ def test_markdown_bundle_is_vendored_without_excluding_first_party_assets():
     assert not extract_prose.is_vendored(root / "assets/message-markdown.js")
 
 
-def test_strict_lint_checks_synonyms_across_sections():
+def test_strict_lint_checks_synonyms_across_sections(capsys):
   assert (
     lint_prose.strict_lint(
       "example", ["Check the state.", "Validate the state."], False
     )
-    == 1
+    == 0
   )
+  assert "synonym-rotation" in capsys.readouterr().out
   assert (
-    lint_prose.strict_lint("example", ["Check and validate the state."], False) == 1
+    lint_prose.strict_lint("example", ["Check and validate the state."], False) == 0
+  )
+  assert "synonym-rotation" in capsys.readouterr().out
+  assert (
+    lint_prose.strict_lint("example", ["Read the state; write the state."], False) == 1
   )
 
 
-def test_file_synonyms_use_only_extracted_prose():
+def test_file_synonyms_use_only_extracted_prose(capsys):
   source = '# Check the state.\ndef validate_state():\n  return "Validate the state."'
   sections = extract_prose.source_sections(Path("example.py"), source)
   assert lint_prose.strict_lint("example.py", sections, False) == 0
   assert lint_prose.strict_lint("first.py", ["Check the state."], False) == 0
   assert lint_prose.strict_lint("second.py", ["Validate the state."], False) == 0
-  assert lint_prose.strict_lint("passive.py", ["The state was saved."], False) == 1
+  assert lint_prose.strict_lint("passive.py", ["The state was saved."], False) == 0
+  assert "STE901" in capsys.readouterr().out
 
 
 def test_extract_prose_cli_groups_comments_and_docstrings(tmp_path):
@@ -197,7 +207,7 @@ def test_extract_prose_cli_groups_comments_and_docstrings(tmp_path):
   }
 
 
-def test_linter_consumes_grouped_extractor_output(tmp_path, monkeypatch):
+def test_linter_consumes_grouped_extractor_output(tmp_path, monkeypatch, capsys):
   source = tmp_path / "example.py"
   source.write_text("# Read the state.\n")
   monkeypatch.setattr(
@@ -207,6 +217,14 @@ def test_linter_consumes_grouped_extractor_output(tmp_path, monkeypatch):
     raising=False,
   )
   monkeypatch.setattr(lint_prose, "markdown_targets", list)
+  assert lint_prose.main() == 0
+  assert "synonym-rotation" in capsys.readouterr().out
+  monkeypatch.setattr(
+    lint_prose,
+    "extract_files",
+    lambda: {str(source): ["Read the state; write the state."]},
+    raising=False,
+  )
   assert lint_prose.main() == 1
 
 

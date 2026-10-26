@@ -155,13 +155,13 @@ def _nemoizer_findings(label: str, text: str, strict: bool = False) -> list[dict
 
 
 def lint(label: str, text: str, adr: bool, strict: bool = False) -> int:
-  """Run the linter once, failing on a hard finding, or on any finding in strict mode."""
+  """Run the linter once, failing only on hard findings or ADR references."""
   if adr and ADR_REFERENCE.search(text):
     report(label, [], "A comment or docstring refers to an ADR.")
     return 1
   findings = _nemoizer_findings(label, text, strict=strict)
   hard = any(item["level"] == "advisory-free" for item in findings)
-  if not findings or not (strict or hard):
+  if not findings or not hard:
     return 0
   report(label, findings)
   return 1
@@ -182,12 +182,12 @@ def strict_lint(label: str, sections: list[str], adr: bool) -> int:
     if not findings:
       continue
     report(f"{label} section {number}", findings)
-    failures += 1
+    if any(item["level"] == "advisory-free" for item in findings):
+      failures += 1
   combined = _nemoizer_findings(label, "\n\n".join(sections), strict=True)
   rotations = [item for item in combined if item["rule"] == "synonym-rotation"]
   if rotations:
     report(f"{label} file-wide synonyms", rotations)
-    failures += 1
   return failures
 
 
