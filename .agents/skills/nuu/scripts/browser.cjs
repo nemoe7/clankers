@@ -426,13 +426,29 @@ async function a11yChecks(page) {
 
     const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
     const checkedElements = new Set();
+    const checkedTimestampElements = new Set();
+    const rawUiTimestampRe = /\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?|\s+\d{2}:\d{2}(?::\d{2})?(?:\s*(?:UTC|GMT|[+-]\d{2}:?\d{2}))?)\b|\b\d{2}:\d{2}(?::\d{2})?\s*(?:UTC|GMT)\b/;
     let textNode;
     while ((textNode = walker.nextNode())) {
       if (!textNode.nodeValue || !textNode.nodeValue.trim()) continue;
       const parent = textNode.parentElement;
-      if (!parent || checkedElements.has(parent) || ['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(parent.tagName)) continue;
-      checkedElements.add(parent);
+      if (!parent || ['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(parent.tagName)) continue;
       if (!isVisible(parent)) continue;
+      if (!checkedTimestampElements.has(parent) && !parent.closest('code, pre, textarea')) {
+        const tsMatch = rawUiTimestampRe.exec(textNode.nodeValue);
+        if (tsMatch) {
+          checkedTimestampElements.add(parent);
+          findings.push({
+            rule: 'NUA310',
+            severity: 'review',
+            criterion: 'relative-timestamps',
+            selector: selectorFor(parent),
+            evidence: `Visible raw or unadjusted timestamp in UI text: ${tsMatch[0]}`,
+          });
+        }
+      }
+      if (checkedElements.has(parent)) continue;
+      checkedElements.add(parent);
       const style = getComputedStyle(parent);
       const fgRaw = parseRgba(style.color);
       if (!fgRaw || fgRaw[3] <= 0) continue;

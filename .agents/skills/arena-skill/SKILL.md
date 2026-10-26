@@ -132,6 +132,14 @@ To ask for a file, run `download-request <url>`: it queues a pending job and doe
 
 Keep `state.sqlite3`, `saved-state.ndjson`, report sources and saved file bytes in the ignored state directory. After a restore, rerun the installer and follow the [restore steps](references/restore.md). Never call an unconfirmed save successful. If the preview fails, report the failure and use `ask_user` to ask how to continue; do not silently switch channels or commit reports. Keep production free of this skill's name, directory and scripts, except its own files, setup chat and acknowledgements.
 
+## Multi-session board
+
+Coordinate allowlisted sessions across tabs through `GET /api/board` and `POST /api/board` (`action`: `sync`, `allow`, `revoke`, `set-main`, `heartbeat`, `post`, `wake`, or `clear`); see [board commands](references/commands.md#multi-session-board-apiboard).
+
+- Only allowlisted sessions can post entries, stage file attachments under `board-files/<session_id>/`, or update heartbeats.
+- When `main_session_id` names a main session, non-main worker sessions hand off findings through the board instead of committing or pushing.
+- A wake stamp or a new board entry wakes `arena-preview poll` (`BOARD WAKE`) without arming `skip_poll`.
+
 ## Proxy access
 
 The backend answers over one public HTTPS URL. An Arena session reads it through `fetch_page`, with a key in the URL. To read a GitHub Actions job log without triggering the proxy-HTTP gate, run `arena-preview job-log -j <job-id>` (or `-r <run-id>`) and pass the printed URL to `fetch_page`.
