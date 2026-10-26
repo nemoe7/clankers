@@ -1717,6 +1717,17 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       assert.deepEqual(writes, beforeWrites);
       assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
       assert.equal(saved.get(pendingKey), null);
+      assert.ok(panel(), "a failed quiet save shows an error toast");
+      assert.equal(
+        panel().children[0].textContent,
+        "The file could not be saved (Error). Choose the file again to retry.",
+      );
+      assert.deepEqual(
+        panel().children[1].children.map(button => button.textContent),
+        ["Choose file", "Cancel"],
+      );
+      panel().children[1].children[1].listeners.click();
+      assert.equal(panel(), null);
       failWrite = false;
 
       fileText = "{invalid";
@@ -1769,29 +1780,41 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     menus.get("State - force save")();
     await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "failed-write" });
     assert.equal(saved.get(pendingKey), null, "a failed write does not create a pending receipt");
+    assert.ok(panel(), "a failed save shows the error toast offering Choose file");
+    assert.equal(
+      panel().children[0].textContent,
+      "The file could not be saved (Error). Choose the file again to retry.",
+    );
+    assert.deepEqual(
+      panel().children[1].children.map(button => button.textContent),
+      ["Choose file", "Cancel"],
+    );
+    panel().children[1].children[1].listeners.click();
+    assert.equal(panel(), null);
     failWrite = false;
 
     availableHandle = null;
     menus.get("State - force save")();
     await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "link-only" });
-    assert.equal(linkClicks.length, 1);
+    assert.equal(linkClicks.length, 0, "never falls back to regular timestamped link downloads");
     assert.equal(saved.get(pendingKey), null);
+    assert.ok(panel(), "missing handle shows toast offering Choose file instead of timestamped download");
+    assert.equal(panel().children[0].textContent, "No file selected.");
+    assert.deepEqual(
+      panel().children[1].children.map(button => button.textContent),
+      ["Choose file", "Cancel"],
+    );
+    panel().children[1].children[1].listeners.click();
 
-    let download;
-    context.GM_download = options => { download = options; };
+    let downloadCalled = false;
+    context.GM_download = () => { downloadCalled = true; };
     menus.get("State - force save")();
-    await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "manager-failed" });
-    download.onerror({ error: "blocked" });
+    await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "manager-disabled" });
     await settle();
-    assert.equal(linkClicks.length, 2);
-    assert.equal(panel(), null);
-
-    menus.get("State - force save")();
-    await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "manager-complete" });
-    download.onload();
-    await settle();
-    await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: "manager-complete", digest: stale.digest });
-    assert.equal(saved.get(receiptKey).save_id, "manager-complete");
+    assert.equal(downloadCalled, false, "never falls back to GM_download timestamped downloads");
+    assert.equal(linkClicks.length, 0);
+    assert.ok(panel(), "still offers Choose file when handle is missing");
+    panel().children[1].children[1].listeners.click();
 
     saved.delete("clankers-arena-state-scope-o.r");
     saved.delete(receiptKey);
@@ -1808,7 +1831,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     menus.get("State - force save")();
     await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-1", lastsave: null, beforelastsave: null });
     assert.equal(linkClicks.length, downloadsBeforeUnlisted, "Force save does not fall back to browser download when the file picker is available");
-    assert.equal(panel(), null);
+    assert.ok(panel(), "Force save prompts for a file on a fresh unlisted repo");
+    assert.equal(panel().children[0].textContent, "No file selected.");
+    assert.deepEqual(panel().children[1].children.map(button => button.textContent), ["Choose file", "Cancel"]);
+    panel().children[1].children[1].listeners.click();
 
     tick();
     await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-2", lastsave: null, beforelastsave: null });
@@ -2523,6 +2549,7 @@ for raw in sys.stdin:
       "clankers-arena-trim-cap",
       "clankers-arena-trim-interval-ms",
       "clankers-arena-title-interval-ms",
+      "clankers-arena-state-panel-ms",
       "clankers-arena-state-reset-window",
       "clankers-arena-preview-drawer-lock",
       "clankers-arena-preview-drawer-width-px",

@@ -131,9 +131,9 @@ A stamp-pair mismatch stops automatic replacement and uploads the `.ndjson` back
 
 A new empty selected file can receive its first save. `State - force save` keeps the explicit override. Its successful completion receipt sets the pair that later automatic saves use.
 
-Only a successful file close or download-manager callback permits the completion receipt, sent to `POST /api/userscript-autosave`. Failed receipts retry without another file write. Browser-link downloads have no completion callback and do not advance the saved baseline.
+Only a successful file close permits the completion receipt, sent to `POST /api/userscript-autosave`. Failed receipts retry without another file write.
 
-Failed saves keep their notices. A successful file close or download-manager callback clears persistent notices. Temporary success messages keep their timeout.
+Saves never fall back to regular timestamped downloads. When a quiet or forced save fails, or when no file handle is selected, the script shows a toast naming the error and offering `Choose file`. A successful file close clears persistent notices.
 
 The preview retains two saved core states with completion receipts per repository and branch. New save files include flat, versioned history. Manual Copy state stays core-only.
 
