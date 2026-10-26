@@ -15149,6 +15149,35 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert reload_evt.is_set()
   assert shut_down == [True]
 
+  hot_state = preview.Store(tmp_path / "hot-state", create=True)
+  initial_handler = object()
+
+  class InPlaceServer:
+    RequestHandlerClass = initial_handler
+
+    def shutdown(self):
+      shut_down.append("unexpected-shutdown")
+
+  inplace_srv = InPlaceServer()
+  inplace_reload = threading.Event()
+  inplace_stop = threading.Event()
+  inplace_watcher = threading.Thread(
+    target=preview.watch_hot_reload,
+    args=(inplace_srv, inplace_reload, inplace_stop, 0.02, fake_scripts, hot_state),
+    daemon=True,
+  )
+  inplace_watcher.start()
+  time.sleep(0.03)
+  (fake_scripts / "preview.py").write_text("s3-inplace", encoding="utf-8")
+  for _ in range(40):
+    if inplace_srv.RequestHandlerClass is not initial_handler:
+      break
+    time.sleep(0.02)
+  inplace_stop.set()
+  inplace_watcher.join(timeout=1.0)
+  assert inplace_srv.RequestHandlerClass is not initial_handler
+  assert shut_down == [True]
+
   hygiene_dir = tmp_path / "hygiene-state"
   hygiene_store = preview.Store(hygiene_dir, create=True)
   (hygiene_dir / "keep-img.png").write_bytes(sample_gif)

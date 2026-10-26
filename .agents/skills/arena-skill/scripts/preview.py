@@ -2508,7 +2508,7 @@ class Store:
 			entries=merged_entries
 			for(k,v)in merged['wakes'].items():
 				if k==sid and ack_wakes.get(sid)==v:continue
-				wakes[k]=v
+				if not wakes.get(k)or str(v)>=str(wakes[k]):wakes[k]=v
 			for row in sessions:
 				if row['session_id']in allowed and wakes.get(row['session_id']):row['polling']=False;row['status']='active'
 		elif action_type=='allow':
@@ -2554,7 +2554,8 @@ class Store:
 		entries=entries[-MAX_BOARD_ENTRIES:];stored={'version':1,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
 		while len(encoded.encode('utf-8'))>MAX_BOARD_BYTES and entries:entries.pop(0);stored['entries']=entries;encoded=json.dumps(stored,ensure_ascii=False)
 		if len(encoded.encode('utf-8'))>MAX_BOARD_BYTES:raise ValueError('Board storage exceeds 2 MB limit')
-		with self.transaction(autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,encoded))
+		if encoded!=raw_text:
+			with self.transaction(autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,encoded))
 		return self.board_state()
 	def tasks(self):
 		with closing(self.connect())as db:
@@ -3743,7 +3744,7 @@ def handler(store,reload_event=None):
 			self.protocol_version='HTTP/1.1';self.send_response(101);self.send_header('Upgrade','websocket');self.send_header('Connection','Upgrade');self.send_header('Sec-WebSocket-Accept',base64.b64encode(hashlib.sha1((key+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').encode(),usedforsecurity=False).digest()).decode());self.end_headers();self.close_connection=True;self.connection.settimeout(WS_TICK_SECONDS);buffer,message=bytearray(),bytearray();fragmented=False;last_seen=last_heartbeat=time.monotonic()
 			try:
 				with closing(store.connect())as db:
-					version=db.execute('PRAGMA data_version').fetchone()[0];asset_ver=assets_signature();script_ver=scripts_signature();self.ws_send(1,b'{"type":"change"}')
+					version=db.execute('PRAGMA data_version').fetchone()[0];asset_ver=assets_signature();self.ws_send(1,b'{"type":"change"}')
 					while True:
 						try:
 							chunk=self.connection.recv(65536)
@@ -3778,10 +3779,9 @@ def handler(store,reload_event=None):
 							if final:self.ws_dispatch(json.loads(message.decode('utf-8')));message.clear()
 						current=db.execute('PRAGMA data_version').fetchone()[0]
 						if current!=version:version=current;self.ws_send(1,b'{"type":"change"}')
-						current_assets=assets_signature();current_scripts=scripts_signature()
-						if current_assets!=asset_ver or current_scripts!=script_ver or reload_event is not None and reload_event.is_set():
-							asset_ver=current_assets;script_ver=current_scripts;self.ws_send(1,b'{"type":"reload"}')
-							if reload_event is not None and reload_event.is_set():return
+						current_assets=assets_signature()
+						if current_assets!=asset_ver:asset_ver=current_assets;self.ws_send(1,b'{"type":"reload"}')
+						if reload_event is not None and reload_event.is_set():self.ws_send(8,(1012).to_bytes(2,'big'));return
 						now=time.monotonic()
 						if now-last_seen>WS_IDLE_SECONDS:self.ws_send(8,(1001).to_bytes(2,'big'));return
 						if now-last_heartbeat>=WS_HEARTBEAT_SECONDS:self.ws_send(1,b'{"type":"heartbeat"}');last_heartbeat=now
@@ -4396,15 +4396,30 @@ def watch_call_group(store,stop=None,interval=1.,signal_group=os.killpg):
 					store.set_meta(CALL_GROUP_META,'')
 		if stop is None:time.sleep(interval)
 		elif stop.wait(interval):return
-def watch_hot_reload(server,reload_event,stop=None,interval=1.,scripts_dir=None):
+def watch_hot_reload(server,reload_event,stop=None,interval=1.,scripts_dir=None,store=None):
 	baseline=scripts_signature(scripts_dir)
-	while(stop is None or not stop.is_set())and not reload_event.is_set():
+	while stop is None or not stop.is_set():
 		if stop is None:time.sleep(interval)
 		elif stop.wait(interval):return
-		if scripts_signature(scripts_dir)!=baseline:
-			reload_event.set()
-			if stop is None:time.sleep(WS_TICK_SECONDS*1.5)
-			server.shutdown();return
+		current=scripts_signature(scripts_dir)
+		if current!=baseline:
+			baseline=current
+			if hasattr(server,'RequestHandlerClass')and store is not None:
+				try:
+					import importlib;import importlib.util
+					if'survey'in sys.modules:importlib.reload(sys.modules['survey'])
+					spec=importlib.util.spec_from_file_location('_preview_hot',Path(__file__).resolve())
+					if spec is not None and spec.loader is not None:mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod);state_root=store.path.parent if getattr(store,'path',None)is not None and store.path.name=='state.sqlite3'else getattr(store,'path',Path('arena-state'));new_store=mod.Store(state_root,create=False);server.RequestHandlerClass=mod.handler(new_store,reload_event=reload_event);store.set_meta('hot_reload_at',now());print('Hot-reloaded preview handler in-process.',flush=True)
+				except Exception as error:print(f"Hot-reload skipped: {error}",file=sys.stderr,flush=True)
+				reload_event.set()
+				if stop is None:time.sleep(WS_TICK_SECONDS*1.5)
+				elif stop.wait(WS_TICK_SECONDS*1.5):reload_event.clear();return
+				reload_event.clear()
+			else:
+				reload_event.set()
+				if stop is None:time.sleep(WS_TICK_SECONDS*1.5)
+				if hasattr(server,'shutdown'):server.shutdown()
+				return
 class PreviewArgumentParser(argparse.ArgumentParser):
 	def print_usage(self,file=None):pass
 	def exit(self,status=0,message=None):super().exit(status,message.removeprefix('arena-preview: ')if message else message)
@@ -4485,8 +4500,7 @@ def main():
 		if args.command!='serve'and not read_only:store.touch_agent()
 		if args.command=='serve':
 			from http.server import ThreadingHTTPServer;require_renderer();reload_event=threading.Event();stop_event=threading.Event();ThreadingHTTPServer.allow_reuse_address=True
-			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store,reload_event=reload_event))as server:server.daemon_threads=True;store.set_meta('port',str(server.server_port));threading.Thread(target=watch_call_group,args=(store,stop_event),daemon=True).start();threading.Thread(target=watch_hot_reload,args=(server,reload_event,stop_event),daemon=True).start();print(f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever();stop_event.set()
-			if reload_event.is_set():print('Hot-reloading preview server...',flush=True);store.set_meta('hot_reload_at',now());os.environ['ARENA_PREVIEW_HOT_RELOAD']='1';os.execv(sys.executable,[sys.executable,*sys.argv])
+			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store,reload_event=reload_event))as server:server.daemon_threads=True;store.set_meta('port',str(server.server_port));threading.Thread(target=watch_call_group,args=(store,stop_event),daemon=True).start();threading.Thread(target=watch_hot_reload,args=(server,reload_event,stop_event,1.,None,store),daemon=True).start();print(f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever();stop_event.set()
 		elif args.command=='read':require_server(store);store.notice_expired_key();print_read(store)
 		elif args.command=='note-list':
 			ids,total=store.list_note_ids(args.page,args.page_size);pages=max(1,(total+args.page_size-1)//args.page_size)
