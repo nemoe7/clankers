@@ -7022,8 +7022,6 @@ NEMOIZER_COLLECT_IGNORES = (
   "skills/arena-skill",
   "skills/refs/arena-skill/assets/markdown-it.min.js",
   "skills/refs/arena-skill/assets/gsap.LICENSE",
-  "skills/amending-violations/LICENSE.txt",
-  "skills/refs/amending-violations/LICENSE.txt",
   "skills/squash/LICENSE.txt",
   "skills/refs/squash/LICENSE.txt",
   "skills/refs/arena-skill/assets/lucide.LICENSE",

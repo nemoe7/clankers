@@ -161,8 +161,6 @@ def test_rotation_gate_preserves_scanner_findings_and_errors(monkeypatch, status
   assert command[-1] == "."
   assert "review-tests" not in command and "prose" not in command
   for path in (
-    "skills/amending-violations/LICENSE.txt",
-    "skills/refs/amending-violations/LICENSE.txt",
     "skills/arena-skill/assets/markdown-it.LICENSE",
     "skills/refs/arena-skill/assets/markdown-it.LICENSE",
     "skills/arena-skill/assets/sortable.LICENSE",

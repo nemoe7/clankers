@@ -174,7 +174,7 @@ For a handoff or maintainer handoff, read the target source offsets first and ou
 
 When the user reports undesirable behavior, check whether an instruction here causes or contributes to it.
 
-If one is a likely cause, follow the amending-violations skill.
+If one is a likely cause, propose an amendment with the changed line, reason, and expected effect.
 
 On a prompt audit, inspect for instructions that cause undesirable behavior and propose amendments.
 

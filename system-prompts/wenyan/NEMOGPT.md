@@ -170,7 +170,7 @@ user未求，勿 push、publish、merge。
 
 user報 undesirable behavior，查此處instruction是否致之或助之。
 
-instruction或為其因，從 amending-violations skill。
+instruction或為其因，提修訂：改動行、理由、預期效。
 
 audit prompt，查致 undesirable behavior之instruction，提修訂。
 

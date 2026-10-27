@@ -51,12 +51,19 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nemogpt
 
+- Replace the `amending-violations` pointer with a direct request for the changed line, reason, and expected effect (`system-prompts/refs/NEMOGPT.md`, `system-prompts/NEMOGPT.md`, `system-prompts/wenyan/NEMOGPT.md`).
 - Require remaining `next_offset` chunk reads, narrower size-capped retries, preserved caps, and copyable defect briefs (`system-prompts/refs/NEMOGPT.md`, `system-prompts/NEMOGPT.md`).
 
 #### userscripts
 
 - Offload cross-session board storage and file blobs from `GM_setValue` to `arena-egress-proxy` master-key routes (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Add Greek board symbols (`α`..`ω`, or custom worker IDs) to allowlisted session tab titles and prepend `* ` on non-worker sessions with published reports awaiting submission (`userscripts/arena.user.js`, `userscripts/README.md`).
+
+### Removed
+
+#### skills
+
+- Remove `amending-violations`, its budget and table rows, and its `nemoizer` ignore entries (`skills/refs/amending-violations/`, `skills/amending-violations/`, `skills/README.md`, `README.md`, `maintenance/check.py`, `skills/refs/arena-skill/scripts/preview.py`).
 
 ### Fixed
 

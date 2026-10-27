@@ -46,15 +46,14 @@ Latest measurements as of 2026-10-27. `maintenance/check.py --update` rebuilds t
 | [`rules/kilo/code.md`](rules/kilo/code.md) | `o200k_base` | 235 `tok` |
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 284 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 279 `tok` |
-| [`skills/amending-violations/SKILL.md`](skills/amending-violations/SKILL.md) | `o200k_base` | 1,607 `tok` |
-| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 859,920 `B` |
+| [`skills/arena-skill`](skills/arena-skill) | `UTF-8 file size` | 859,833 `B` |
 | [`skills/arena-skill/references/reference.md`](skills/arena-skill/references/reference.md) | `o200k_base` | 267 `tok` |
 | [`skills/arena-skill/SKILL.md`](skills/arena-skill/SKILL.md) | `o200k_base` | 4,955 `tok` |
 | [`skills/nemoizer/SKILL.md`](skills/nemoizer/SKILL.md) | `o200k_base` | 1,340 `tok` |
 | [`skills/nuu/SKILL.md`](skills/nuu/SKILL.md) | `o200k_base` | 2,570 `tok` |
 | [`skills/squash/SKILL.md`](skills/squash/SKILL.md) | `o200k_base` | 1,377 `tok` |
-| [`system-prompts/NEMOGPT.md`](system-prompts/NEMOGPT.md) | `o200k_base` | 3,599 `tok` |
-| [`system-prompts/wenyan/NEMOGPT.md`](system-prompts/wenyan/NEMOGPT.md) | `o200k_base` | 3,407 `tok` |
+| [`system-prompts/NEMOGPT.md`](system-prompts/NEMOGPT.md) | `o200k_base` | 3,604 `tok` |
+| [`system-prompts/wenyan/NEMOGPT.md`](system-prompts/wenyan/NEMOGPT.md) | `o200k_base` | 3,413 `tok` |
 | [`userscripts/arena-prompt-fill.txt`](userscripts/arena-prompt-fill.txt) | `o200k_base` | 798 `tok` |
 
 `rules/ARENA.md` and the shipped preview assets and scripts measure by UTF-8 file size, the two ChatGPT fields by Unicode characters, and every other file by `o200k_base` tokens. `maintenance/minify/minify.py` builds the minified files from readable refs, and their recorded sizes are their budgets. Measurements cover complete files, including whitespace and markup.
