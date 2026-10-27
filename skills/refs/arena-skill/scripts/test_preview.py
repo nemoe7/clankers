@@ -11106,6 +11106,29 @@ def test_idle_tick_blocks_a_sleep_beside_a_preview_call():
     assert "SLEEP BLOCKED" in logged.stderr, logged.stderr
     reading = cli("tail -f /tmp/preview.log")
     assert reading.returncode == 0, reading.stderr
+    long_idle = cli("sleep 150; echo waited")
+    assert long_idle.returncode == 130, long_idle.stdout
+    assert "SLEEP BLOCKED" in long_idle.stderr, long_idle.stderr
+    runs = Path(directory) / "runs"
+    runs.mkdir(parents=True, exist_ok=True)
+    (runs / "gate-live.json").write_text(
+      json.dumps(
+        {
+          "run_id": "live1",
+          "name": "gate-live",
+          "argv": ["pytest"],
+          "exit": None,
+          "detached": True,
+          "pid": os.getpid(),
+          "pid_started_at": preview.process_start_identity(os.getpid()),
+        }
+      ),
+      encoding="utf-8",
+    )
+    during_gate = cli("sleep 5; echo waited")
+    assert during_gate.returncode == 130, during_gate.stdout
+    assert "SLEEP BLOCKED" in during_gate.stderr, during_gate.stderr
+    assert "gate-live" in during_gate.stderr, during_gate.stderr
 
 
 def test_pre_runs_every_rule_and_names_the_finished_steps():

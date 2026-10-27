@@ -1231,11 +1231,32 @@ def piece_head(piece):
 	tokens,index=piece_tokens(piece,keywords=True)
 	if index>=len(tokens):return''
 	return tokens[index].rsplit('/',1)[-1].strip('"\'')
-def idle_wait(line):
-	heads=[head for head in map(piece_head,command_pieces(agent_line(line)))if head]
+SLEEP_IDLE_CAP_SECONDS=60
+def max_sleep_seconds(pieces):
+	multipliers={'s':1.,'m':6e1,'h':36e2,'d':864e2};longest=.0
+	for piece in pieces:
+		tokens,index=piece_tokens(piece,keywords=True)
+		if index>=len(tokens):continue
+		if tokens[index].rsplit('/',1)[-1].strip('"\'')!='sleep':continue
+		total=.0
+		for arg in tokens[index+1:]:
+			clean=arg.strip('"\'')
+			if not clean or clean.startswith('-'):continue
+			unit=clean[-1].lower();scale=multipliers.get(unit,1.);number_text=clean[:-1]if unit in multipliers else clean
+			try:value=float(number_text)
+			except ValueError:continue
+			if value>0:total+=value*scale
+		longest=max(longest,total)
+	return longest
+def idle_wait(line,state_dir=None):
+	pieces=command_pieces(agent_line(line));heads=[head for head in map(piece_head,pieces)if head]
 	if'sleep'not in heads:return None
 	if any(head in('arena-preview','preview.py')for head in heads):return'WAIT BLOCKED: a sleep beside a preview call holds the turn. Take the next queued task, or read the run on a later call. A routed run keeps its verdict, and `arena-preview poll` waits when the queue is empty.'
-	if any(token.strip('"\'').endswith('.log')for piece in command_pieces(agent_line(line))for token in piece.split()):return'SLEEP BLOCKED: a sleep beside a .log read holds the turn. Use `arena-preview poll` to wait, and `arena-preview logs <name>` to read a run.'
+	if any(token.strip('"\'').endswith('.log')for piece in pieces for token in piece.split()):return'SLEEP BLOCKED: a sleep beside a .log read holds the turn. Use `arena-preview poll` to wait, and `arena-preview logs <name>` to read a run.'
+	if state_dir:
+		running=live_runs(state_dir)
+		if running:names=', '.join(running);return f"SLEEP BLOCKED: background run ({names}) is live. Never sleep during a background gate. Delegate independent queued tasks to idle board workers, work in a worktree (`arena-preview worktree start`), or run `arena-preview poll` when only the gate's blocked task remains."
+	if max_sleep_seconds(pieces)>=SLEEP_IDLE_CAP_SECONDS:return'SLEEP BLOCKED: a long sleep holds the turn instead of working or polling. Use `arena-preview run start` for long commands and `arena-preview poll` to wait when no unblocked tasks remain.'
 	return None
 def quiet_inbox_line(line):return first_blocking_piece(line)is None
 EXEMPT_BASH_WORDS='preview','profile','bashrc','arena-state','git commit','--help'
@@ -5169,7 +5190,7 @@ def pre_command(state_dir,line,command,root,done='',shell=''):
 	warning=inbox_pipeline_warning(line)or read_set_input_warning(line,root)
 	if warning:report(warning);return finish(130)
 	if routed:return finish(0)
-	warning=idle_wait(line)
+	warning=idle_wait(line,state_dir=state_dir)
 	if warning:report(warning);return finish(130)
 	status=pr_check_wait(state_dir,line,command)
 	if status==PR_CHECK_RUNS:return finish(2)

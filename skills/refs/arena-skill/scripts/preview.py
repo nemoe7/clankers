@@ -3412,13 +3412,41 @@ def piece_head(piece):
   return tokens[index].rsplit("/", 1)[-1].strip("\"'")
 
 
-def idle_wait(line):
-  """Name a sleep beside a preview call or a log read, so the gate stops it before it runs.
+SLEEP_IDLE_CAP_SECONDS = 60
 
-  A sleep on its own runs, because the line holds nothing else. The gate reads the
-  shell's own command line, so the login wrapper comes off first.
-  """
-  heads = [head for head in map(piece_head, command_pieces(agent_line(line))) if head]
+
+def max_sleep_seconds(pieces):
+  """Return the longest sleep duration in seconds named across command pieces."""
+  multipliers = {"s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0}
+  longest = 0.0
+  for piece in pieces:
+    tokens, index = piece_tokens(piece, keywords=True)
+    if index >= len(tokens):
+      continue
+    if tokens[index].rsplit("/", 1)[-1].strip("\"'") != "sleep":
+      continue
+    total = 0.0
+    for arg in tokens[index + 1 :]:
+      clean = arg.strip("\"'")
+      if not clean or clean.startswith("-"):
+        continue
+      unit = clean[-1].lower()
+      scale = multipliers.get(unit, 1.0)
+      number_text = clean[:-1] if unit in multipliers else clean
+      try:
+        value = float(number_text)
+      except ValueError:
+        continue
+      if value > 0:
+        total += value * scale
+    longest = max(longest, total)
+  return longest
+
+
+def idle_wait(line, state_dir=None):
+  """Name a disallowed sleep so the pre gate blocks it before execution."""
+  pieces = command_pieces(agent_line(line))
+  heads = [head for head in map(piece_head, pieces) if head]
   if "sleep" not in heads:
     return None
   if any(head in ("arena-preview", "preview.py") for head in heads):
@@ -3428,13 +3456,27 @@ def idle_wait(line):
       " `arena-preview poll` waits when the queue is empty."
     )
   if any(
-    token.strip("\"'").endswith(".log")
-    for piece in command_pieces(agent_line(line))
-    for token in piece.split()
+    token.strip("\"'").endswith(".log") for piece in pieces for token in piece.split()
   ):
     return (
       "SLEEP BLOCKED: a sleep beside a .log read holds the turn. Use"
       " `arena-preview poll` to wait, and `arena-preview logs <name>` to read a run."
+    )
+  if state_dir:
+    running = live_runs(state_dir)
+    if running:
+      names = ", ".join(running)
+      return (
+        f"SLEEP BLOCKED: background run ({names}) is live. Never sleep during a"
+        " background gate. Delegate independent queued tasks to idle board workers,"
+        " work in a worktree (`arena-preview worktree start`), or run"
+        " `arena-preview poll` when only the gate's blocked task remains."
+      )
+  if max_sleep_seconds(pieces) >= SLEEP_IDLE_CAP_SECONDS:
+    return (
+      "SLEEP BLOCKED: a long sleep holds the turn instead of working or polling."
+      " Use `arena-preview run start` for long commands and `arena-preview poll`"
+      " to wait when no unblocked tasks remain."
     )
   return None
 
@@ -16246,7 +16288,7 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
   if routed:
     return finish(0)
   # case: idle-wait
-  warning = idle_wait(line)
+  warning = idle_wait(line, state_dir=state_dir)
   if warning:
     report(warning)
     return finish(130)
