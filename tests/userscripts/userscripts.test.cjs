@@ -1949,7 +1949,7 @@ spec = importlib.util.spec_from_file_location("preview_mod", root / "skills/refs
 preview = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(preview)
 
-sys.path.insert(0, str(root / "skills/refs/arena-skill/arena-egress-proxy/scripts"))
+sys.path.insert(0, str(root / "skills/arena-skill/arena-egress-proxy/scripts"))
 proxy_core = importlib.import_module("arena_proxy.core")
 proxy_transfers = importlib.import_module("arena_proxy.transfers")
 

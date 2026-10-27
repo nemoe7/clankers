@@ -17,7 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[3]
-SCRIPTS = ROOT / "skills/refs/arena-skill/arena-egress-proxy/scripts"
+SCRIPTS = ROOT / "skills/arena-skill/arena-egress-proxy/scripts"
 KEY = "test-agent-key-0123456789"
 MASTER = "test-master-key-0123456789"
 TOKEN = "test-provider-token"
