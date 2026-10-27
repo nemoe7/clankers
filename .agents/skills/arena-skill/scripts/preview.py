@@ -2037,6 +2037,7 @@ MAX_BOARD_FILE_BYTES=524288
 MAX_BOARD_BYTES=8388608
 MAX_BOARD_ENTRIES=100
 CLEARED_META='state-explicitly-cleared'
+CLEARED_AT_META='state-cleared-at'
 BACKUP_DIR='backups'
 LATEST_BACKUP='state-latest.ndjson'
 PREVIOUS_BACKUP='state-previous.ndjson'
@@ -2844,13 +2845,13 @@ class Store:
 			except Exception:pass
 		return out
 	def apply_board_report_op(self,op):
-		if not isinstance(op,dict):return
+		if not isinstance(op,dict):return False
 		op_name=str(op.get('op')or op.get('operation')or'answer').strip().lower();report_id=str(op.get('report_id')or op.get('id')or'').strip()
 		if not report_id:raise ValueError('Missing report_id')
 		if op_name in{'unpublish','remove','delete'}:
 			try:self.unpublish(report_id,dismissed_by_owner=True)
-			except FileNotFoundError:pass
-			return
+			except FileNotFoundError:return False
+			return True
 		if op_name in{'answer','submit'}:
 			answers=op.get('answers')
 			if not isinstance(answers,dict):raise ValueError('Report answers must be an object')
@@ -2860,10 +2861,13 @@ class Store:
 				else:normalized_answers[field_key]=raw_ans
 			note_id=str(op.get('submission_id')or op.get('note_id')or uuid.uuid4().hex[:6])
 			with self.transaction()as db:
-				db.execute('BEGIN IMMEDIATE');report=self.report(report_id,shared=db);fields=parse_fields(report['markdown'])[1]
+				db.execute('BEGIN IMMEDIATE')
+				try:report=self.report(report_id,shared=db)
+				except FileNotFoundError:return False
+				fields=parse_fields(report['markdown'])[1]
 				if not fields:raise ValueError('This report has no fields to answer')
 				self.submit(report_id,report['title'],fields,note_id,normalized_answers,shared=db,submission_format=report['submission_format'],revision=report['updated_at'])
-			return
+			return True
 		raise ValueError(f"Unsupported worker report operation: {op_name}")
 	def apply_board_task_op(self,op):
 		if not isinstance(op,dict):return
@@ -3016,19 +3020,23 @@ class Store:
 				if k!=sid and k not in removed_set:worker_tasks[k]=[dict(item)for item in v if isinstance(item,dict)]
 			for(k,v)in(merged.get('worker_reports')or{}).items():
 				if k!=sid and k not in removed_set:worker_reports[k]=[dict(item)for item in v if isinstance(item,dict)]
-			seen_op_ids={str(op.get('id')or'')for op in task_ops if op.get('id')};applied_key=f"{sid}:task_ops";applied_list=[str(x)for x in ack_wakes.get(applied_key)if x]if isinstance(ack_wakes.get(applied_key),list)else[];applied_set=set(applied_list)
+			seen_op_ids={str(op.get('id')or'')for op in task_ops if op.get('id')};applied_key=f"{sid}:task_ops";applied_list=[str(x)for x in ack_wakes.get(applied_key)if x]if isinstance(ack_wakes.get(applied_key),list)else[];applied_set=set(applied_list);cleared_at=str(self.meta_value(CLEARED_AT_META)or'')
 			for op in merged.get('task_ops')or[]:
 				op_id=str(op.get('id')or'')
 				if op_id and op_id not in seen_op_ids:seen_op_ids.add(op_id);task_ops.append(dict(op))
 				target_sid=resolve_board_target(op.get('target')or'',sessions,allowed=allowed,main_sid=main_sid)
-				if op_id and target_sid==sid and op_id not in applied_set:applied_set.add(op_id);applied_list.append(op_id);self.apply_board_task_op(op);wakes[sid]=op_id
+				if op_id and target_sid==sid and op_id not in applied_set:
+					applied_set.add(op_id);applied_list.append(op_id);op_at=str(op.get('at')or'')
+					if not(cleared_at and op_at and op_at<=cleared_at):self.apply_board_task_op(op);wakes[sid]=op_id
 			ack_wakes[applied_key]=applied_list[-128:];seen_rep_op_ids={str(op.get('id')or'')for op in report_ops if op.get('id')};applied_rep_key=f"{sid}:report_ops";applied_rep_list=[str(x)for x in ack_wakes.get(applied_rep_key)if x]if isinstance(ack_wakes.get(applied_rep_key),list)else[];applied_rep_set=set(applied_rep_list)
 			for op in merged.get('report_ops')or[]:
 				op_id=str(op.get('id')or'')
 				if op_id and op_id not in seen_rep_op_ids:seen_rep_op_ids.add(op_id);report_ops.append(dict(op))
 				if str(op.get('op')or'')=='entry-ack':continue
 				target_sid=resolve_board_target(op.get('target')or'',sessions,allowed=allowed,main_sid=main_sid)
-				if op_id and target_sid==sid and op_id not in applied_rep_set:applied_rep_set.add(op_id);applied_rep_list.append(op_id);self.apply_board_report_op(op);wakes[sid]=op_id
+				if op_id and target_sid==sid and op_id not in applied_rep_set:
+					applied_rep_set.add(op_id);applied_rep_list.append(op_id);op_at=str(op.get('at')or'')
+					if not(cleared_at and op_at and op_at<=cleared_at)and self.apply_board_report_op(op):wakes[sid]=op_id
 			ack_wakes[applied_rep_key]=applied_rep_list[-128:]
 			if merged['allowed_sessions']or not allowed:
 				for item in merged['allowed_sessions']:
@@ -4142,7 +4150,7 @@ class Store:
 			for table in('notes','reports','submissions','tasks','uploads','fetch_jobs'):counts[table]=db.execute(f"SELECT count(*) FROM {table}").fetchone()[0];db.execute(f"DELETE FROM {table}")
 			kept=db.execute('SELECT key, value FROM meta WHERE key IN (?, ?)',(AGENT_KEY_META,'port')).fetchall();db.execute('DELETE FROM meta')
 			for(key,value)in kept:db.execute('INSERT INTO meta VALUES (?, ?)',(key,value))
-			db.execute("INSERT OR REPLACE INTO meta VALUES (?, '1')",(CLEARED_META,));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(FORCE_SAVE_META,str(uuid.uuid4())))
+			db.execute("INSERT OR REPLACE INTO meta VALUES (?, '1')",(CLEARED_META,));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(CLEARED_AT_META,clip_stamp(now())));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(FORCE_SAVE_META,str(uuid.uuid4())))
 		return counts
 	def state_usage(self):return state_dir_usage(self.path.parent)
 	def clean_state(self,dry_run=False):

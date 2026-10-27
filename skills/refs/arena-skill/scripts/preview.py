@@ -5610,6 +5610,7 @@ MAX_BOARD_FILE_BYTES = 524_288
 MAX_BOARD_BYTES = 8_388_608
 MAX_BOARD_ENTRIES = 100
 CLEARED_META = "state-explicitly-cleared"
+CLEARED_AT_META = "state-cleared-at"
 BACKUP_DIR = "backups"
 LATEST_BACKUP = "state-latest.ndjson"
 PREVIOUS_BACKUP = "state-previous.ndjson"
@@ -8576,7 +8577,7 @@ class Store:
 
   def apply_board_report_op(self, op):
     if not isinstance(op, dict):
-      return
+      return False
     op_name = str(op.get("op") or op.get("operation") or "answer").strip().lower()
     report_id = str(op.get("report_id") or op.get("id") or "").strip()
     if not report_id:
@@ -8585,8 +8586,8 @@ class Store:
       try:
         self.unpublish(report_id, dismissed_by_owner=True)
       except FileNotFoundError:
-        pass
-      return
+        return False
+      return True
     if op_name in {"answer", "submit"}:
       answers = op.get("answers")
       if not isinstance(answers, dict):
@@ -8602,7 +8603,10 @@ class Store:
       )
       with self.transaction() as db:
         db.execute("BEGIN IMMEDIATE")
-        report = self.report(report_id, shared=db)
+        try:
+          report = self.report(report_id, shared=db)
+        except FileNotFoundError:
+          return False
         fields = parse_fields(report["markdown"])[1]
         if not fields:
           raise ValueError("This report has no fields to answer")
@@ -8616,7 +8620,7 @@ class Store:
           submission_format=report["submission_format"],
           revision=report["updated_at"],
         )
-      return
+      return True
     raise ValueError(f"Unsupported worker report operation: {op_name}")
 
   def apply_board_task_op(self, op):
@@ -9040,6 +9044,7 @@ class Store:
         else []
       )
       applied_set = set(applied_list)
+      cleared_at = str(self.meta_value(CLEARED_AT_META) or "")
       for op in merged.get("task_ops") or []:
         op_id = str(op.get("id") or "")
         if op_id and op_id not in seen_op_ids:
@@ -9051,8 +9056,10 @@ class Store:
         if op_id and target_sid == sid and op_id not in applied_set:
           applied_set.add(op_id)
           applied_list.append(op_id)
-          self.apply_board_task_op(op)
-          wakes[sid] = op_id
+          op_at = str(op.get("at") or "")
+          if not (cleared_at and op_at and op_at <= cleared_at):
+            self.apply_board_task_op(op)
+            wakes[sid] = op_id
       ack_wakes[applied_key] = applied_list[-128:]
       seen_rep_op_ids = {str(op.get("id") or "") for op in report_ops if op.get("id")}
       applied_rep_key = f"{sid}:report_ops"
@@ -9075,8 +9082,11 @@ class Store:
         if op_id and target_sid == sid and op_id not in applied_rep_set:
           applied_rep_set.add(op_id)
           applied_rep_list.append(op_id)
-          self.apply_board_report_op(op)
-          wakes[sid] = op_id
+          op_at = str(op.get("at") or "")
+          if not (
+            cleared_at and op_at and op_at <= cleared_at
+          ) and self.apply_board_report_op(op):
+            wakes[sid] = op_id
       ack_wakes[applied_rep_key] = applied_rep_list[-128:]
       if merged["allowed_sessions"] or not allowed:
         for item in merged["allowed_sessions"]:
@@ -12770,6 +12780,10 @@ class Store:
       for key, value in kept:
         db.execute("INSERT INTO meta VALUES (?, ?)", (key, value))
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, '1')", (CLEARED_META,))
+      db.execute(
+        "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+        (CLEARED_AT_META, clip_stamp(now())),
+      )
       db.execute(
         "INSERT OR REPLACE INTO meta VALUES (?, ?)",
         (FORCE_SAVE_META, str(uuid.uuid4())),

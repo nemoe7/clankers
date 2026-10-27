@@ -15925,3 +15925,81 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
     and op.get("report_id") == "worker-prop"
     for op in main_store.board_state()["report_ops"]
   )
+
+
+def test_board_sync_skips_missing_reports_and_pre_clear_ops(tmp_path, monkeypatch):
+  worker_repo = tmp_path / "clankers"
+  worker_repo.mkdir()
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: "arena/beta2222-clankers"
+  )
+  monkeypatch.setattr(preview, "guard_task_runs", lambda *_a, **_kw: None)
+  worker_store = preview.Store(
+    worker_repo / "arena-state" / "state.sqlite3", create=True
+  )
+  monkeypatch.setattr(worker_store, "repository_root", lambda: worker_repo)
+  worker_sid = worker_store.board_state()["session_id"]
+  assert worker_sid == "beta2222-clankers"
+
+  worker_store.clear_state()
+  cleared_at = worker_store.meta_value(preview.CLEARED_AT_META)
+  assert cleared_at
+
+  synced = worker_store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "main_session_id": "alpha111-clankers",
+        "allowed_sessions": ["alpha111-clankers", worker_sid],
+        "sessions": [
+          {"session_id": "alpha111-clankers", "repo": "clankers", "status": "active"},
+          {"session_id": worker_sid, "repo": "clankers", "status": "active"},
+        ],
+        "task_ops": [
+          {
+            "id": "top-before-clear",
+            "at": "2020-01-01T00:00:00Z",
+            "sender": "alpha111-clankers",
+            "target": worker_sid,
+            "op": "set",
+            "task_id": "stale-task",
+            "title": "Stale pre-clear task",
+            "details": ["Scope: ."],
+          }
+        ],
+        "report_ops": [
+          {
+            "id": "rop-before-clear",
+            "at": "2020-01-01T00:00:00Z",
+            "sender": "alpha111-clankers",
+            "target": worker_sid,
+            "op": "answer",
+            "report_id": "cleared-report",
+            "submission_id": "sub100",
+            "answers": {"decision": "approve"},
+          },
+          {
+            "id": "rop-missing-after-clear",
+            "at": "2999-01-01T00:00:00Z",
+            "sender": "alpha111-clankers",
+            "target": worker_sid,
+            "op": "answer",
+            "report_id": "missing-report",
+            "submission_id": "sub101",
+            "answers": {"decision": "approve"},
+          },
+        ],
+      },
+    }
+  )
+  assert worker_store.list_tasks() == []
+  assert worker_store.state()["notes"] == []
+  assert worker_store.state()["reports"] == []
+  stored_board = preview.json.loads(worker_store.meta_value(preview.BOARD_STATE_META))
+  assert worker_sid not in stored_board["wakes"]
+  assert stored_board["ack_wakes"][f"{worker_sid}:task_ops"] == ["top-before-clear"]
+  assert stored_board["ack_wakes"][f"{worker_sid}:report_ops"] == [
+    "rop-before-clear",
+    "rop-missing-after-clear",
+  ]
+  assert synced["session_id"] == worker_sid

@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-27
+
+### Fixed
+
+#### arena-skill
+
+- Skip missing reports and pre-clear operations during board sync after `state clear` instead of failing with HTTP `404` (`scripts/preview.py`).
+
 ## 2026-10-26
 
 ### Added
