@@ -1945,7 +1945,7 @@ test('preview client', async (t) => {
     documentEvents.click({ target: denied });
     await tick();
     assert.equal(shapeOf(denied).getAttribute('d'), 'M18 6 6 18');
-    assert.equal(denied.title, 'Clipboard blocked; select the code and copy it');
+    assert.equal(denied.title, 'Clipboard blocked. Select the code and copy it');
     assert.equal(denied.dataset.state, 'bad');
     clipboardFails = false;
   });
@@ -1999,6 +1999,7 @@ test('preview client', async (t) => {
     assert.equal(log.children.at(-1).children[2].children[0].textContent, 'three');
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
+    assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     assert.equal(get('#connection-text').textContent, '3 messages saved');
     stateFails = true;
     await refresh();
@@ -2012,7 +2013,7 @@ test('preview client', async (t) => {
     // A proxy that answers plain text keeps one short line of it, folded to 120 characters.
     stateGatewayBody = `proxy refused\n${'x'.repeat(200)}`;
     await refresh();
-    assert.equal(get('#connection-text').textContent, `Connection failed: proxy refused ${'x'.repeat(106)}. Draft kept; history may be stale.`);
+    assert.equal(get('#connection-text').textContent, `Connection failed: proxy refused ${'x'.repeat(106)}. Draft kept, though history may be stale.`);
     stateGatewayBody = null;
     stateFails = false;
     await refresh();

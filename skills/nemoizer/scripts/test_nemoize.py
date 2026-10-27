@@ -1741,3 +1741,25 @@ def test_nmu100_padded_ui_labels_and_cap_config(tmp_path):
     }
   )
   assert f"[NMU100] (advisory-free) {expected_cap}" in r4.stdout
+
+
+def test_js_ui_prose_checks_run_beyond_nmu100_word_cap(tmp_path):
+  ui_js = tmp_path / "ui.js"
+  ui_js.write_text(
+    'status.textContent = "Draft retained; check the log before resending.";\n'
+    "panel.textContent = `Preview failed: ${error.message}; sending still works.`;\n"
+    'btn.title = "Clipboard blocked; select code and copy it";\n',
+    encoding="utf-8",
+  )
+  bad = run(str(ui_js), cwd=tmp_path)
+  assert bad.returncode == 1, bad.stderr
+  assert bad.stdout.count("[STE100]") == 3
+
+  ui_js.write_text(
+    'status.textContent = "Draft retained. Check the log before resending.";\n'
+    "panel.textContent = `Preview failed: ${error.message}. Sending still works.`;\n"
+    'btn.title = "Clipboard blocked. Select code and copy it";\n',
+    encoding="utf-8",
+  )
+  clean = run(str(ui_js), cwd=tmp_path)
+  assert clean.returncode == 0, clean.stderr

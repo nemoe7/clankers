@@ -480,7 +480,7 @@ paintSend(false);
 note.value = stored('draft') || '';
 grow();
 try { pending = JSON.parse(stored('pending') || 'null'); }
-catch { status.textContent = 'Stored retry data is invalid. Draft retained; check the log before resending.'; }
+catch { status.textContent = 'Stored retry data is invalid. Draft retained. Check the log before resending.'; }
 let previewTooltipTimer = null;
 function clearPreviewTooltip() {
   clearTimeout(previewTooltipTimer);
@@ -1579,7 +1579,7 @@ function applyLogSearch() {
     : 'Messages, oldest first');
   const empty = $('#log-empty');
   empty.hidden = shown > 0 || total === 0;
-  empty.textContent = `Nothing here matches "${logQuery.trim()}"; ${total} message`
+  empty.textContent = `Nothing here matches "${logQuery.trim()}". ${total} message`
     + `${total === 1 ? '' : 's'} saved, and the copy button still carries all of them.`;
   if (logPinned) $('#history').scrollTop = $('#history').scrollHeight;
   updateLogJump();
@@ -1628,7 +1628,7 @@ function renderState() {
   connectionBase = saved;
   setConnection(state.polling ? 'polling' : agentIdle() ? 'idle' : 'ok', connectionText());
   if (state.rendering_error) {
-    connectionBase += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
+    connectionBase += ` · Markdown log unavailable, showing raw text: ${state.rendering_error}`;
     paintConnection();
   }
   // The ack writes the same stamp as a read does, so the label is true.
@@ -1753,7 +1753,7 @@ async function readState() {
     queueReady = true;
   } catch (error) {
     pollSince = null;
-    setConnection('down', /^HTTP 502\b/.test(error.message) ? 'HTTP 502: Bad Gateway' : `Connection failed: ${error.message}. Draft kept; history may be stale.`);
+    setConnection('down', /^HTTP 502\b/.test(error.message) ? 'HTTP 502: Bad Gateway' : `Connection failed: ${error.message}. Draft kept, though history may be stale.`);
   }
   finally {
     stateBusy = null;
@@ -1995,7 +1995,7 @@ $('#preview-note').addEventListener('click', async () => {
     draftPreviewCache = { text: draftText, html: rendered };
     if (sequence === draftPreviewSequence) panel.innerHTML = rendered;
   } catch (error) {
-    if (sequence === draftPreviewSequence) panel.textContent = `Preview unavailable: ${error.message}. Use Write to continue; sending still works.`;
+    if (sequence === draftPreviewSequence) panel.textContent = `Preview unavailable: ${error.message}. Use Write to continue, as sending still works.`;
   }
 });
 function collect(root) {
@@ -2094,7 +2094,7 @@ async function copyText(text) {
 }
 async function copyCode(button) {
   const words = await copyText(button.dataset.code || '');
-  const blocked = 'Clipboard blocked; select the code and copy it';
+  const blocked = 'Clipboard blocked. Select the code and copy it';
   setIcon(button, words ? 'check' : 'x', 14);
   label(button, words || blocked);
   button.title = words || blocked;
@@ -2424,7 +2424,7 @@ async function copyFrom(button, text, what, glyph = 'copy', failure = null) {
   const before = button.title;
   const words = text === null ? null : await copyText(text);
   const message = words || failure || (text === null ? `There is no ${what} to copy`
-    : `Clipboard blocked; select the ${what} and copy it`);
+    : `Clipboard blocked. Select the ${what} and copy it`);
   clearTimeout(copyTimers.get(button));
   setIcon(button, words ? 'check' : 'x', 15);
   label(button, message);
@@ -2605,7 +2605,7 @@ setInterval(showClock, 1000);
     try { payload = await (await request('/api/copy-state')).json(); }
     catch { payload = null; }
     if (!payload || !payload.text) {
-      return copyFrom(copyStateButton, null, 'state', 'copy', 'The state route did not answer; nothing is copied.');
+      return copyFrom(copyStateButton, null, 'state', 'copy', 'The state route did not answer, so nothing was copied.');
     }
     await copyFrom(copyStateButton, payload.text, 'state');
   });
@@ -3479,7 +3479,7 @@ async function submitReportForm(event) {
   } catch (error) {
     if ($('#report').dataset.reportId === id) {
       reportStatusLine(
-        `Submission not confirmed: ${error.message}. Entries are kept; resending creates a new answer.`,
+        `Submission not confirmed: ${error.message}. Entries are kept, and resending creates a new answer.`,
         id,
       );
     }
@@ -4144,7 +4144,7 @@ $('#mark-report-acks-seen').addEventListener('click', async () => {
     const saved = await Promise.all(unread.map(report => markAckSeen(report.id)));
     $('#report-status').textContent = saved.every(Boolean)
       ? 'Report acknowledgements marked seen.'
-      : 'Some acknowledgements could not be marked seen; try again.';
+      : 'Some acknowledgements could not be marked seen. Try again.';
   } finally {
     ackBatchPending = false;
     updateReportPip(getState()?.reports || []);
@@ -4844,7 +4844,7 @@ function downloadRow(item) {
     const where = document.createElement('span');
     where.className = item.present ? 'fetch-meta' : 'upload-gone';
     where.textContent = item.present ? `downloads/${item.file}`
-      : 'The bytes are gone; the record survived a restore.';
+      : 'The bytes are gone, though the record survived a restore.';
     row.append(where);
   }
   // The owner's ✕ drops a record and the bytes it staged. It arms on the first click the way
@@ -4909,8 +4909,8 @@ function approvalRow(item) {
           method: 'POST', headers: writeHeaders('application/json'), body: '{}', retryOnFailure: false
         })).json());
         $('#fetch-status').textContent = action === 'approve'
-          ? `Approved ${item.url}; queued for browser download.`
-          : `Denied ${item.url}; this request will not be downloaded.`;
+          ? `Approved ${item.url} and queued it for browser download.`
+          : `Denied ${item.url}, so this request will not download.`;
       } catch (error) {
         $('#fetch-status').textContent = `Decision not confirmed: ${error.message}. Check the list before trying again.`;
       } finally {
@@ -5794,7 +5794,7 @@ function paintSkipPoll(skipPoll) {
   button.setAttribute('aria-pressed', armed ? 'true' : 'false');
   button.dataset.state = button.dataset.error ? 'bad' : armed ? 'good' : '';
   label(button, button.dataset.error || (armed
-    ? `Skip poll armed ${time(skipPoll)}; the agent ends its wait`
+    ? `Skip poll armed ${time(skipPoll)}, ending the agent wait`
     : 'Ask the agent to end its wait now'));
 }
 $('#skip-poll').addEventListener('click', async () => {
