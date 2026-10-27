@@ -3,7 +3,12 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const VERSION = '0.1.4';
+const VERSION = '0.1.5';
+const INTERACTIVE_SELECTOR = [
+  'button', 'a[href]', 'input:not([type="hidden"])', 'select', 'textarea',
+  '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="radio"]',
+  '[role="switch"]', '[role="tab"]', '[role="menuitem"]', '[role="combobox"]', '[role="textbox"]',
+].join(',');
 const request = JSON.parse(fs.readFileSync(0, 'utf8'));
 
 function emit(value) {
@@ -115,15 +120,59 @@ async function overlaps(page, selector) {
 async function metrics(page, selector) {
   return page.evaluate(selector => {
     const properties = ['height', 'width', 'padding-top', 'padding-right', 'padding-bottom',
-      'padding-left', 'margin-top', 'margin-bottom', 'gap', 'font-size', 'font-weight',
+      'padding-left', 'padding-inline-start', 'margin-top', 'margin-bottom', 'gap', 'font-size', 'font-weight',
       'line-height', 'border-radius', 'color', 'background-color', 'outline-style',
-      'outline-width', 'transition-duration', 'animation-duration'];
+      'outline-width', 'transition-duration', 'animation-duration', '--indent',
+      'list-style-position', 'list-style-type', 'overflow', 'overflow-x', 'overflow-y',
+      'text-overflow', 'white-space'];
     function selectorFor(element) {
       if (element.id) return `#${CSS.escape(element.id)}`;
       const parent = element.parentElement;
       if (!parent) return element.tagName.toLowerCase();
       const siblings = [...parent.children].filter(node => node.tagName === element.tagName);
       return `${selectorFor(parent)} > ${element.tagName.toLowerCase()}:nth-of-type(${siblings.indexOf(element) + 1})`;
+    }
+    function listLineStarts(item) {
+      const direction = getComputedStyle(item).direction;
+      const positions = new Map();
+      const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        if (!node.nodeValue?.trim() || node.parentElement?.closest('li') !== item) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const rect of range.getClientRects()) {
+          if (rect.width <= 0 || rect.height <= 0) continue;
+          const line = Number(rect.y.toFixed(2));
+          const start = direction === 'rtl' ? rect.right : rect.left;
+          const previous = positions.get(line);
+          positions.set(line, previous === undefined
+            ? start : direction === 'rtl' ? Math.max(previous, start) : Math.min(previous, start));
+        }
+      }
+      return [...positions.entries()].sort((a, b) => a[0] - b[0])
+        .map(([, start]) => Number(start.toFixed(2)));
+    }
+    function listIndentFor(element, style) {
+      if (!['OL', 'UL'].includes(element.tagName)) return undefined;
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      let chPx = null;
+      if (context) {
+        context.font = style.font;
+        const width = context.measureText('0').width;
+        if (Number.isFinite(width) && width > 0) chPx = Number(width.toFixed(2));
+      }
+      return {
+        indent: style.getPropertyValue('--indent').trim(),
+        ch_px: chPx,
+        padding_inline_start: Number.parseFloat(style.getPropertyValue('padding-inline-start')),
+        list_style_position: style.getPropertyValue('list-style-position'),
+        direction: style.direction,
+        items: [...element.children]
+          .filter(child => child.tagName === 'LI')
+          .map(item => ({selector: selectorFor(item), line_starts: listLineStarts(item)})),
+      };
     }
     const elements = [...document.querySelectorAll(selector)].map(element => {
       const style = getComputedStyle(element);
@@ -213,11 +262,14 @@ async function metrics(page, selector) {
         labels: element.labels ? [...element.labels].map(label => label.textContent) : [],
         text: ['INPUT', 'TEXTAREA'].includes(element.tagName) ? null : element.textContent.slice(0, 200),
         bounds: {x: box.x, y: box.y, width: box.width, height: box.height},
+        scroll_width: element.scrollWidth,
+        client_width: element.clientWidth,
         ...(inkRatio !== null ? {inkWidth: Number(inkWidth.toFixed(2)), inkRatio} : {}),
         maxSiblingGap,
         row_slack: rowSlack,
         rowSlack,
-        values: Object.fromEntries(properties.map(name => [name, style.getPropertyValue(name)]))};
+        values: Object.fromEntries(properties.map(name => [name, style.getPropertyValue(name)])),
+        list_indent: listIndentFor(element, style)};
     });
     return {width: innerWidth, height: innerHeight, elements,
       overflow: document.documentElement.scrollWidth > innerWidth,
@@ -230,7 +282,7 @@ async function metrics(page, selector) {
 }
 
 async function a11yChecks(page) {
-  return page.evaluate(() => {
+  return page.evaluate(interactiveSelector => {
     function selectorFor(element) {
       if (element.id) return `#${CSS.escape(element.id)}`;
       const parent = element.parentElement;
@@ -326,11 +378,6 @@ async function a11yChecks(page) {
     }
 
     const findings = [];
-    const interactiveSelector = [
-      'button', 'a[href]', 'input:not([type="hidden"])', 'select', 'textarea',
-      '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="radio"]',
-      '[role="switch"]', '[role="tab"]', '[role="menuitem"]', '[role="combobox"]', '[role="textbox"]',
-    ].join(',');
 
     for (const control of document.querySelectorAll(interactiveSelector)) {
       if (!isVisible(control)) continue;
@@ -618,7 +665,7 @@ async function a11yChecks(page) {
     } catch {}
 
     return {status: 'checked', findings};
-  });
+  }, INTERACTIVE_SELECTOR);
 }
 
 function validateFlow(steps) {
@@ -649,6 +696,21 @@ function validateFlow(steps) {
   }
 }
 
+async function interactiveBounds(locator) {
+  if (!locator) return null;
+  try {
+    return await locator.evaluate((element, selector) => {
+      if (!element.matches(selector)) return null;
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0
+        ? {x: rect.x, y: rect.y, width: rect.width, height: rect.height}
+        : null;
+    }, INTERACTIVE_SELECTOR);
+  } catch {
+    return null;
+  }
+}
+
 async function flow(page, context, steps, output, timeout, viewportMeta = {}) {
   const results = [];
   let assertions = 0;
@@ -664,6 +726,7 @@ async function flow(page, context, steps, output, timeout, viewportMeta = {}) {
     results.push(row);
     try {
       const target = step.selector ? page.locator(step.selector) : null;
+      const beforeDimensions = await interactiveBounds(target);
       if (step.action === 'goto') await page.goto(url(step.url), {timeout});
       if (step.action === 'click') await target.click({timeout});
       if (step.action === 'fill') await target.fill(String(step.value), {timeout});
@@ -703,6 +766,15 @@ async function flow(page, context, steps, output, timeout, viewportMeta = {}) {
       if (step.action === 'screenshot') {
         row.path = path.join(output, `flow-${index}.png`);
         await page.screenshot({path: row.path, fullPage: true, timeout});
+      }
+      if (beforeDimensions) {
+        const afterDimensions = await interactiveBounds(target);
+        if (afterDimensions && (
+          Math.abs(afterDimensions.width - beforeDimensions.width) > 0.5 ||
+          Math.abs(afterDimensions.height - beforeDimensions.height) > 0.5
+        )) {
+          row.dimensionShift = {before: beforeDimensions, after: afterDimensions};
+        }
       }
       row.status = 'passed';
     } catch (error) {

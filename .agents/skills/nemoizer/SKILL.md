@@ -92,3 +92,8 @@ Limit sentences to 20 words for unclassified prose, 25 for explicit description 
 - Prefer named constants for expected contract values.
 - Assert pixel/config/implementation measurements through growth/presence/absence.
 - Keep exact expected text only for executable/protocol/verbatim-data contracts.
+
+## Learn
+
+- On `/nemoizer learn`, survey repo prose patterns, cite target rules, and publish a maintainer handoff.
+

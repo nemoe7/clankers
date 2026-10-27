@@ -170,10 +170,10 @@ def load_rule_descriptions(home: Path = HOME) -> dict[str, str]:
 VERSION = _load_version()
 RULE_DESCRIPTIONS = load_rule_descriptions()
 KNOWN_NUU_RULES = {
-  *(f"NUL00{i}" for i in range(1, 7)),
+  *(f"NUL00{i}" for i in range(1, 8)),
   *(f"NUI00{i}" for i in range(1, 4)),
   *(f"NUB10{i}" for i in range(1, 5)),
-  *(f"NUM{i}" for i in range(201, 211)),
+  *(f"NUM{i}" for i in range(201, 212) if i != 204),
   *(f"NUA{i}" for i in range(301, 311)),
   *RULE_DESCRIPTIONS,
 }
@@ -543,10 +543,14 @@ def _has_design_doc(root: Path, design_doc_rel: str | None = None) -> bool:
 
 def lint(root):
   findings, coverage, marks, suppressions, deviations = [], [], [], [], []
+  nonuu_by_path = {}
+  list_rules = []
+  list_reset = {"indent": False, "padding": False, "position": False}
   for path in files(root, {".html", ".css", ".js", ".jsx", ".ts", ".tsx"}):
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
     file_ids, line_ids, file_marks, file_supps = collect_nonuu_markers(path, lines)
+    nonuu_by_path[path] = (file_ids, line_ids)
     marks.extend(file_marks)
     suppressions.extend(file_supps)
     deviations.extend(collect_deviation_markers(path, lines))
@@ -572,6 +576,84 @@ def lint(root):
         text,
         flags=re.DOTALL,
       )
+      list_selector = re.compile(
+        r"(?:^|[\s>+~,:()])(?:ul|ol|li)(?=$|[\s.#:\[>+~),])", re.IGNORECASE
+      )
+      list_container = re.compile(
+        r"(?:^|[\s>+~,:()])(?:ul|ol)(?=$|[\s.#:\[>+~),])", re.IGNORECASE
+      )
+      for list_match in re.finditer(r"([^{}@]+)\{([^{}]*)\}", clean):
+        selector_text = list_match[1]
+        if not list_selector.search(selector_text):
+          continue
+        declarations = {}
+        for declaration in list_match[2].split(";"):
+          if ":" not in declaration:
+            continue
+          name, value = declaration.split(":", 1)
+          declarations[name.strip().lower()] = re.sub(
+            r"\s*!important\s*$", "", value.strip(), flags=re.IGNORECASE
+          ).lower()
+        list_properties = {
+          "list-style",
+          "list-style-position",
+          "list-style-type",
+          "padding",
+          "padding-inline-start",
+          "padding-left",
+          "padding-right",
+          "--indent",
+        }
+        if not list_properties.intersection(declarations):
+          continue
+        rule_line = text.count("\n", 0, list_match.start(1)) + 1
+        list_rules.append((path, rule_line))
+        if list_container.search(selector_text):
+          list_reset["indent"] |= declarations.get("--indent") == "2ch"
+          list_reset["padding"] |= declarations.get("padding-inline-start") == "2ch"
+          list_reset["position"] |= declarations.get("list-style-position") == "outside"
+        inside_match = re.search(
+          r"(?:list-style-position\s*:\s*inside\b|list-style\s*:[^;}]*\binside\b)",
+          list_match[2],
+          re.IGNORECASE,
+        )
+        if inside_match:
+          line = text.count("\n", 0, list_match.start(2) + inside_match.start()) + 1
+          current.append(
+            {
+              "rule": "NUL007",
+              "path": str(path),
+              "line": line,
+              "column": 1,
+              "severity": "review",
+              "status": "source_candidate",
+              "evidence": "list-style-position: inside",
+              "criterion": "clause-15",
+            }
+          )
+        for indent_match in re.finditer(
+          r"(?<![\w-])(--indent|padding-inline-start)\s*:\s*([^;}]+)",
+          list_match[2],
+          re.IGNORECASE,
+        ):
+          value = re.sub(
+            r"\s*!important\s*$", "", indent_match[2].strip(), flags=re.IGNORECASE
+          ).lower()
+          if value == "2ch":
+            continue
+          line = text.count("\n", 0, list_match.start(2) + indent_match.start(1)) + 1
+          current.append(
+            {
+              "rule": "NUL007",
+              "path": str(path),
+              "line": line,
+              "column": 1,
+              "severity": "review",
+              "status": "source_candidate",
+              "evidence": f"{indent_match[1]}: {indent_match[2].strip()}",
+              "criterion": "clause-15",
+            }
+          )
       if not _has_custom_focus_ring(clean):
         for match in re.finditer(
           r"outline\s*:\s*(?:none|0(?:px)?)\s*(?:!important\s*)?[;}]", clean
@@ -641,6 +723,35 @@ def lint(root):
       ignored = file_ids | (line_ids[ln - 1] if 0 < ln <= len(line_ids) else set())
       if finding["rule"] not in ignored:
         findings.append(finding)
+  if list_rules and not all(list_reset.values()):
+    reported_paths = {
+      finding["path"] for finding in findings if finding.get("rule") == "NUL007"
+    }
+    for list_path, list_line in list_rules:
+      if str(list_path) in reported_paths:
+        continue
+      file_ids, line_ids = nonuu_by_path[list_path]
+      ignored = file_ids | (
+        line_ids[list_line - 1] if 0 < list_line <= len(line_ids) else set()
+      )
+      if "NUL007" in ignored:
+        continue
+      findings.append(
+        {
+          "rule": "NUL007",
+          "path": str(list_path),
+          "line": list_line,
+          "column": 1,
+          "severity": "review",
+          "status": "source_candidate",
+          "evidence": (
+            "List CSS lacks --indent: 2ch, padding-inline-start: 2ch, "
+            "or list-style-position: outside"
+          ),
+          "criterion": "clause-15",
+        }
+      )
+      break
   design_doc_rel = _resolve_design_doc_rel(root)
   design_doc_path = (
     Path(design_doc_rel)
@@ -1027,7 +1138,9 @@ def browser(args):
       capture["house_measurements"] = check_measurements(
         capture.get("measurements", {}), sheet
       )
-      capture["density_findings"] = check_density(capture.get("measurements", {}))
+      density_report = dict(capture.get("measurements") or {})
+      density_report["overlaps"] = capture.get("overlaps")
+      capture["density_findings"] = check_density(density_report)
       location = {
         "width": capture["width"],
         "scheme": capture["scheme"],
