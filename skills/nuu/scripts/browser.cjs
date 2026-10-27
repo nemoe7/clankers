@@ -150,6 +150,24 @@ async function metrics(page, selector) {
       }
       return tops.length || undefined;
     }
+    function cardFontSizesFor(element) {
+      const role = (element.getAttribute('role') || '').toLowerCase();
+      const isCardOrDialog = element.tagName === 'DIALOG' ||
+        role === 'dialog' || role === 'alertdialog' ||
+        Boolean(element.classList?.contains('card'));
+      if (!isCardOrDialog) return undefined;
+      const sizes = new Set();
+      for (const child of element.querySelectorAll('*')) {
+        if (child.closest('.card, dialog, [role="dialog"], [role="alertdialog"]') !== element) continue;
+        const hasDirectText = [...child.childNodes].some(n => n.nodeType === Node.TEXT_NODE && n.nodeValue?.trim());
+        if (!hasDirectText) continue;
+        const cs = getComputedStyle(child);
+        if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+        const fs = cs.getPropertyValue('font-size').trim();
+        if (fs) sizes.add(fs);
+      }
+      return [...sizes];
+    }
     function selectorFor(element) {
       if (element.id) return `#${CSS.escape(element.id)}`;
       const parent = element.parentElement;
@@ -296,6 +314,7 @@ async function metrics(page, selector) {
         line_count: lineCountFor(element),
         ch_px: chPxFor(style),
         in_card_or_dialog: Boolean(element.closest && element.closest('.card, dialog, [role="dialog"], [role="alertdialog"], aside, nav, table')),
+        card_font_sizes: cardFontSizesFor(element),
         values: Object.fromEntries(properties.map(name => [name, style.getPropertyValue(name)])),
         list_indent: listIndentFor(element, style)};
     });

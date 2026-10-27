@@ -102,6 +102,12 @@ Pass: multi-line prose and its standalone container sized within `50` to `75ch` 
 
 ![Clause 19](examples/body-text-width.png)
 
+## 20. Card and dialog font-size hierarchy
+
+Pass: at most `3` ramp font sizes per card or dialog, varying font-weight and `--muted` before introducing new sizes. Fail: `4` or more distinct font sizes inside one card (`NUM216`).
+
+![Clause 20](examples/font-size-hierarchy.png)
+
 ## Recipe and Audit-Rule Examples
 
 - **Modal `.close-button` and confirmation (`recipes/modal-manager.md`):**

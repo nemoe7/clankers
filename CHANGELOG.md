@@ -33,6 +33,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nuu
 
+- Cap cards and dialogs at `3` distinct ramp font sizes (`NUM216`, `SKILL.md`, `references/nuu.md`, `scripts/measure.py`).
 - Cap multi-line prose and standalone prose containers within `50` to `75ch` (`65ch` default) without exempting `NUM205` (`NUM215`, `SKILL.md`, `references/nuu.md`, `references/style.css`, `scripts/measure.py`).
 - Enforce left-aligned prose over `3` lines and forbid justified text (`NUM214`, `SKILL.md`, `references/nuu.md`, `references/style.css`, `scripts/measure.py`).
 - Enforce heading (`-0.005em` to `-0.02em`) and non-heading (`0`) letter-spacing (`NUM213`, `SKILL.md`, `references/nuu.md`, `references/style.css`, `scripts/measure.py`).

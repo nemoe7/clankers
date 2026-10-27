@@ -413,13 +413,58 @@ def _body_width_finding(element: dict, report_width: float) -> str | None:
   return None
 
 
+def _is_card_or_dialog(element: dict) -> bool:
+  tag = str(element.get("tag") or "").strip().lower()
+  role = str(element.get("role") or "").strip().lower()
+  classes = element.get("classes") or []
+  selector = str(element.get("selector") or "")
+  return (
+    tag == "dialog"
+    or role in {"dialog", "alertdialog"}
+    or "card" in classes
+    or bool(re.search(r"\.(?:card|dialog)\b|^dialog\b", selector, re.IGNORECASE))
+  )
+
+
+def _card_font_hierarchy_finding(element: dict, all_elements: list[dict]) -> str | None:
+  explicit = element.get("card_font_sizes", element.get("cardFontSizes"))
+  if explicit is None and not _is_card_or_dialog(element):
+    return None
+  selector = str(element.get("selector") or "?")
+  sizes: set[float] = set()
+  if isinstance(explicit, list):
+    for item in explicit:
+      val = float(item) if isinstance(item, (int, float)) else _numeric_value(str(item))
+      if val is not None and val > 0:
+        sizes.add(round(val, 2))
+  else:
+    prefix_space = f"{selector} "
+    prefix_child = f"{selector}>"
+    prefix_child_sp = f"{selector} >"
+    for other in all_elements:
+      other_sel = str(other.get("selector") or "")
+      if not other_sel.startswith((prefix_space, prefix_child, prefix_child_sp)):
+        continue
+      fs = _numeric_value(str((other.get("values") or {}).get("font-size") or ""))
+      if fs is not None and fs > 0:
+        sizes.add(round(fs, 2))
+  if len(sizes) > 3:
+    ordered = ", ".join(f"{val:g}px" for val in sorted(sizes))
+    return (
+      f"NUM216 {selector}: card or dialog mixes {len(sizes)} font sizes "
+      f"({ordered}, at most 3 allowed)"
+    )
+  return None
+
+
 def check(
   report: dict, tokens: dict[str, str], scale: float = DEFAULT_SCALE
 ) -> list[str]:
   """Return off-scale values and measured list-indent and typography findings."""
   findings = []
   report_width = float(report.get("width") or 0)
-  for element in report.get("elements", []):
+  elements = report.get("elements", [])
+  for element in elements:
     selector = element.get("selector", "?")
     list_status = _list_indent_status(element)
     if list_status and list_status[1]:
@@ -429,6 +474,7 @@ def check(
       _letter_spacing_finding(element),
       _text_alignment_finding(element),
       _body_width_finding(element, report_width),
+      _card_font_hierarchy_finding(element, elements),
     ):
       if extra:
         findings.append(extra)

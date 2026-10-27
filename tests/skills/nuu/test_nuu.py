@@ -1933,3 +1933,33 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     tokens,
   )
   assert len([f for f in width_bad if f.startswith("NUM215 ")]) == 2
+  hier_ok = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "section.card",
+          "tag": "section",
+          "card_font_sizes": ["16px", "14px", "12px"],
+          "values": {},
+        }
+      ],
+    },
+    tokens,
+  )
+  assert hier_ok == []
+  hier_bad = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "dialog#settings",
+          "tag": "dialog",
+          "card_font_sizes": ["20px", "16px", "14px", "12px"],
+          "values": {},
+        }
+      ],
+    },
+    tokens,
+  )
+  assert len([f for f in hier_bad if f.startswith("NUM216 ")]) == 1
