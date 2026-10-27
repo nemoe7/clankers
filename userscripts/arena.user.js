@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.0
+// @name         Arena.ai | NemoUtils | v1.13.1
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.0
+// @version      1.13.1
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -27,7 +27,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.0";
+  var USERSCRIPT_VERSION = "1.13.1";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
 
   function userscriptVersion() {
@@ -5122,8 +5122,11 @@
         });
       }
       if (Array.isArray(scopedBoard.removed_sessions)) {
+        var targetIsScopedAllowed = scopedBoard.allowed_sessions.indexOf(targetSid) !== -1;
         scopedBoard.removed_sessions = scopedBoard.removed_sessions.filter(function (sid) {
-          return sid !== targetSid && scopedBoard.allowed_sessions.indexOf(sid) === -1;
+          if (scopedBoard.allowed_sessions.indexOf(sid) !== -1) return false;
+          if (sid === targetSid && targetIsScopedAllowed) return false;
+          return true;
         });
       }
       return scopedBoard;
@@ -5297,6 +5300,12 @@
       if (isHeartbeatAction && event.data.action.session_id) {
         setPreviewUiSessionId(event.data.action.session_id);
       }
+      var syncActionSid = isHeartbeatAction
+        ? (event.data.action.session_id || event.data.action.branch || "")
+        : (previewUiSessionId || "");
+      var syncActionRepo = isHeartbeatAction
+        ? (event.data.action.repo || "")
+        : (previewUiRepo || event.data.action.repo || "");
       if (boardProxyConfig()) {
         proxyBoardJson("/v1/board", {
           action: "apply",
@@ -5311,8 +5320,8 @@
             if (base) {
               syncPreviewBoard(
                 base,
-                event.data.action.session_id || event.data.action.branch || "",
-                event.data.action.repo || "",
+                syncActionSid,
+                syncActionRepo,
                 { passive: isHeartbeatAction, skipProxyPull: true }
               );
             }
@@ -5324,8 +5333,8 @@
         if (outcome.ok && base) {
           syncPreviewBoard(
             base,
-            event.data.action.session_id || event.data.action.branch || "",
-            event.data.action.repo || "",
+            syncActionSid,
+            syncActionRepo,
             { passive: isHeartbeatAction }
           );
         }
@@ -7309,9 +7318,25 @@
       "agent_call_ended_at"
     ];
     var syncNowIso = new Date().toISOString();
+    var isSplitBrainHeal = Boolean(
+      previewSid &&
+      previewSid === incoming.main_session_id &&
+      !incoming.worker_ids[previewSid] &&
+      (!next.main_session_id
+        ? (next.allowed_sessions.length > 0 && next.allowed_sessions.every(function (s) { return Boolean(next.worker_ids[s]); }))
+        : Boolean(next.worker_ids[next.main_session_id]))
+    );
+    var globalAllowedSet = {};
+    (next.allowed_sessions || []).forEach(function (sid) {
+      if (sid) globalAllowedSet[sid] = true;
+    });
+    var globalRemovedSet = {};
+    (next.removed_sessions || []).forEach(function (sid) {
+      if (sid && !globalAllowedSet[sid]) globalRemovedSet[sid] = true;
+    });
     var previewIsAllowed = !previewSid ||
-      next.allowed_sessions.indexOf(previewSid) !== -1 ||
-      incoming.allowed_sessions.indexOf(previewSid) !== -1;
+      Boolean(globalAllowedSet[previewSid]) ||
+      ((isSplitBrainHeal || !globalRemovedSet[previewSid]) && incoming.allowed_sessions.indexOf(previewSid) !== -1);
     if (!previewIsAllowed) {
       if (next.removed_sessions.indexOf(previewSid) !== -1) return next;
       if (incoming.worker_reports && Array.isArray(incoming.worker_reports[previewSid])) {
@@ -7360,12 +7385,7 @@
     var canAuthorRepoLinks =
       !next.main_session_id ||
       previewSid === next.main_session_id ||
-      Boolean(
-        previewSid &&
-        previewSid === incoming.main_session_id &&
-        next.worker_ids[next.main_session_id] &&
-        !incoming.worker_ids[previewSid]
-      );
+      isSplitBrainHeal;
     if (previewBoard.multi_repo !== undefined && (canAuthorRepoLinks || Boolean(previewBoard.multi_repo))) {
       next.multi_repo = Boolean(previewBoard.multi_repo);
     }
@@ -7377,15 +7397,19 @@
       if (sid) incomingAllowedSet[sid] = true;
     });
     var protectedAllowedSet = {};
-    (next.allowed_sessions || []).forEach(function (sid) {
-      if (sid) protectedAllowedSet[sid] = true;
-    });
-    Object.keys(incomingAllowedSet).forEach(function (sid) {
+    Object.keys(globalAllowedSet).forEach(function (sid) {
       protectedAllowedSet[sid] = true;
     });
+    if (isSplitBrainHeal) {
+      Object.keys(incomingAllowedSet).forEach(function (sid) {
+        protectedAllowedSet[sid] = true;
+      });
+    }
     var removedSet = {};
     (next.removed_sessions || []).forEach(function (sid) {
-      if (sid && sid !== previewSid && !protectedAllowedSet[sid]) removedSet[sid] = true;
+      if (sid && (isSplitBrainHeal || sid !== previewSid || globalRemovedSet[sid]) && !protectedAllowedSet[sid]) {
+        removedSet[sid] = true;
+      }
     });
     (incoming.removed_sessions || []).forEach(function (sid) {
       if (!sid || sid === previewSid) return;
@@ -7393,7 +7417,7 @@
         removedSet[sid] = true;
         return;
       }
-      if (!protectedAllowedSet[sid]) removedSet[sid] = true;
+      if (!globalAllowedSet[sid] && !incomingAllowedSet[sid]) removedSet[sid] = true;
     });
     next.removed_sessions = Object.keys(removedSet);
     next.allowed_sessions = next.allowed_sessions.filter(function (sid) { return !removedSet[sid]; });

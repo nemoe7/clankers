@@ -511,7 +511,7 @@ def scope_board_for_target(board, session_id="", repo_hint=""):
       wakes={},
     )
     out["removed_sessions"] = [
-      rem for rem in out["removed_sessions"] if rem != sid and rem not in allowed_set
+      rem for rem in out["removed_sessions"] if rem not in allowed_set
     ]
     return out
   out = dict(
@@ -540,10 +540,32 @@ def merge_preview_board(global_board, preview_board, passive=False):
   )
   incoming = normalize_board(preview_board)
   sync_iso = now_iso()
+  is_split_brain_heal = bool(
+    preview_sid
+    and preview_sid == incoming["main_session_id"]
+    and preview_sid not in incoming["worker_ids"]
+    and (
+      (
+        bool(next_board["allowed_sessions"])
+        and all(s in next_board["worker_ids"] for s in next_board["allowed_sessions"])
+      )
+      if not next_board["main_session_id"]
+      else (next_board["main_session_id"] in next_board["worker_ids"])
+    )
+  )
+  global_allowed_set = set(next_board["allowed_sessions"])
+  global_removed_set = {
+    rem
+    for rem in next_board["removed_sessions"]
+    if rem and rem not in global_allowed_set
+  }
   preview_is_allowed = (
     not preview_sid
-    or preview_sid in next_board["allowed_sessions"]
-    or preview_sid in incoming["allowed_sessions"]
+    or preview_sid in global_allowed_set
+    or (
+      (is_split_brain_heal or preview_sid not in global_removed_set)
+      and preview_sid in incoming["allowed_sessions"]
+    )
   )
   if not preview_is_allowed:
     if preview_sid in next_board["removed_sessions"]:
@@ -627,18 +649,24 @@ def merge_preview_board(global_board, preview_board, passive=False):
     next_board["linked_repos"] = list(incoming["linked_repos"])
 
   incoming_allowed_set = set(incoming["allowed_sessions"])
-  protected_allowed = set(next_board["allowed_sessions"]) | incoming_allowed_set
+  protected_allowed = (
+    global_allowed_set | incoming_allowed_set
+    if is_split_brain_heal
+    else global_allowed_set
+  )
   removed_set = {
     sid
     for sid in next_board["removed_sessions"]
-    if sid and sid != preview_sid and sid not in protected_allowed
+    if sid
+    and (is_split_brain_heal or sid != preview_sid or sid in global_removed_set)
+    and sid not in protected_allowed
   }
   for sid in incoming["removed_sessions"]:
     if not sid or sid == preview_sid:
       continue
-    if (
-      can_author_links and sid not in incoming_allowed_set
-    ) or sid not in protected_allowed:
+    if (can_author_links and sid not in incoming_allowed_set) or (
+      sid not in global_allowed_set and sid not in incoming_allowed_set
+    ):
       removed_set.add(sid)
   next_board["removed_sessions"] = list(removed_set)
   next_board["allowed_sessions"] = [

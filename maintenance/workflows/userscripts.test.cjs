@@ -4285,6 +4285,58 @@ for raw in sys.stdin:
         false,
         "main session answered overlay clears stale '* ' indicator immediately",
       );
+
+      // Revoking a session is not undone by a stale peer worker sync or the revoked tab's own sync:
+      const revokedRes = boardApi.applyBoardAction(
+        {
+          allowed_sessions: ["alpha111-clankers", "delta444-clankers", "beta2222-clankers"],
+          main_session_id: "alpha111-clankers",
+          worker_ids: { "delta444-clankers": "delta", "beta2222-clankers": "beta" },
+          sessions: [
+            { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T06:00:00Z" },
+            { session_id: "delta444-clankers", repo: "clankers", updated_at: "2026-10-27T06:00:00Z" },
+            { session_id: "beta2222-clankers", repo: "clankers", updated_at: "2026-10-27T06:00:00Z" },
+          ],
+        },
+        { action: "revoke", session_id: "beta2222-clankers" },
+      );
+      assert.equal(revokedRes.ok, true);
+      assert.ok(!revokedRes.board.allowed_sessions.includes("beta2222-clankers"));
+      assert.ok(revokedRes.board.removed_sessions.includes("beta2222-clankers"));
+
+      const afterStaleWorkerSync = boardApi.mergePreviewBoard(revokedRes.board, {
+        session_id: "delta444-clankers",
+        repo: "clankers",
+        allowed_sessions: ["alpha111-clankers", "delta444-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        worker_ids: { "delta444-clankers": "delta", "beta2222-clankers": "beta" },
+        sessions: [
+          { session_id: "delta444-clankers", repo: "clankers", updated_at: "2026-10-27T06:01:00Z" },
+          { session_id: "beta2222-clankers", repo: "clankers", updated_at: "2026-10-27T06:00:00Z" },
+        ],
+      });
+      assert.ok(
+        !afterStaleWorkerSync.allowed_sessions.includes("beta2222-clankers"),
+        "stale worker allowed_sessions does not resurrect revoked session",
+      );
+      assert.ok(
+        afterStaleWorkerSync.removed_sessions.includes("beta2222-clankers"),
+        "revoked session stays in removed_sessions across peer syncs",
+      );
+
+      const afterRevokedSelfSync = boardApi.mergePreviewBoard(afterStaleWorkerSync, {
+        session_id: "beta2222-clankers",
+        repo: "clankers",
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          { session_id: "beta2222-clankers", repo: "clankers", updated_at: "2026-10-27T06:02:00Z" },
+        ],
+      });
+      assert.ok(
+        !afterRevokedSelfSync.allowed_sessions.includes("beta2222-clankers"),
+        "revoked session cannot re-allow itself via stale local allowed_sessions",
+      );
     });
   }
 

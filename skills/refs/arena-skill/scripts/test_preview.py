@@ -16553,3 +16553,51 @@ def test_userscript_version_header_records_in_state_and_key_output(tmp_path):
   finally:
     srv.shutdown()
     srv.server_close()
+
+
+def test_board_sync_honors_revoked_sessions_for_peers_and_self(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  sid = store.board_state()["session_id"]
+  peer = "beta2222-clankers"
+  store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": [sid, peer],
+        "main_session_id": sid,
+        "sessions": [
+          {"session_id": sid, "repo": "clankers"},
+          {"session_id": peer, "repo": "clankers"},
+        ],
+      },
+    }
+  )
+  assert peer in store.board_state()["allowed_sessions"]
+
+  after_peer_revoke = store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": [sid],
+        "removed_sessions": [peer],
+        "main_session_id": sid,
+        "sessions": [{"session_id": sid, "repo": "clankers"}],
+      },
+    }
+  )
+  assert peer not in after_peer_revoke["allowed_sessions"]
+  assert peer in after_peer_revoke["removed_sessions"]
+
+  after_self_revoke = store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": [],
+        "removed_sessions": [sid, peer],
+        "main_session_id": "",
+        "sessions": [],
+      },
+    }
+  )
+  assert sid not in after_self_revoke["allowed_sessions"]
+  assert after_self_revoke["main_session_id"] == ""

@@ -3083,11 +3083,17 @@ class Store:
 					slug=clean_board_repo(item)
 					if slug and slug not in linked_repos:linked_repos.append(slug)
 			if isinstance(incoming,dict)and'multi_repo'in incoming:multi_repo=bool(incoming.get('multi_repo')or linked_repos)
-			merged=normalize_board_state(incoming,session_id=sid,repo=state['repo'],branch=state['branch'],polling=any(r['session_id']==sid and r.get('polling')for r in sessions));protected_allowed_set=set(allowed)|set(merged.get('allowed_sessions')or[])
+			merged=normalize_board_state(incoming,session_id=sid,repo=state['repo'],branch=state['branch'],polling=any(r['session_id']==sid and r.get('polling')for r in sessions));incoming_has_allow=isinstance(incoming,dict)and('allowed_sessions'in incoming or'removed_sessions'in incoming);merged_allowed_set=set(merged.get('allowed_sessions')or[]);protected_allowed_set=merged_allowed_set if incoming_has_allow else set(allowed)|merged_allowed_set;self_revoked=False
 			for rem_sid in merged.get('removed_sessions')or[]:
-				if rem_sid and rem_sid!=sid and rem_sid not in protected_allowed_set and rem_sid not in removed_sessions:removed_sessions.append(rem_sid)
+				if not rem_sid or rem_sid in protected_allowed_set:continue
+				if rem_sid==sid:self_revoked=True;continue
+				if rem_sid not in removed_sessions:removed_sessions.append(rem_sid)
 			if protected_allowed_set:removed_sessions=[r_sid for r_sid in removed_sessions if r_sid not in protected_allowed_set]
-			removed_set=set(removed_sessions);allowed=[item for item in allowed if item not in removed_set];sessions=[row for row in sessions if row['session_id']not in removed_set]
+			removed_set=set(removed_sessions)
+			if self_revoked:
+				allowed=[item for item in allowed if item!=sid]
+				if main_sid==sid:main_sid=''
+			allowed=[item for item in allowed if item not in removed_set];sessions=[row for row in sessions if row['session_id']not in removed_set]
 			for(k,v)in(merged.get('worker_ids')or{}).items():
 				if k not in removed_set:worker_ids[k]=v
 			for(k,v)in(merged.get('worker_tasks')or{}).items():

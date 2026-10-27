@@ -1088,3 +1088,58 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
     assert snap["revision"] >= 2
     assert len(snap["scoped_board"]["entries"]) == 1
     assert snap["scoped_board"]["main_session_id"] == alpha
+
+    # Revoking a worker persists across stale peer syncs and revoked self-syncs:
+    beta = "beta2222-clankers"
+    st, opt_res, _ = post_json(
+      restarted.port,
+      "/v1/board",
+      {"action": "apply", "board_action": {"action": "allow", "session_id": beta}},
+      headers,
+    )
+    assert st == 200 and beta in opt_res["board"]["allowed_sessions"]
+    st, rev_res, _ = post_json(
+      restarted.port,
+      "/v1/board",
+      {"action": "apply", "board_action": {"action": "revoke", "session_id": beta}},
+      headers,
+    )
+    assert st == 200 and beta not in rev_res["board"]["allowed_sessions"]
+    assert beta in rev_res["board"]["removed_sessions"]
+    st, peer_sync, _ = post_json(
+      restarted.port,
+      "/v1/board",
+      {
+        "action": "sync",
+        "session_id": delta,
+        "repo": "clankers",
+        "board": {
+          "session_id": delta,
+          "repo": "clankers",
+          "allowed_sessions": [alpha, delta, beta],
+          "main_session_id": alpha,
+          "sessions": [{"session_id": delta, "repo": "clankers"}],
+        },
+      },
+      headers,
+    )
+    assert st == 200 and beta not in peer_sync["board"]["allowed_sessions"]
+    assert beta in peer_sync["board"]["removed_sessions"]
+    st, self_sync, _ = post_json(
+      restarted.port,
+      "/v1/board",
+      {
+        "action": "sync",
+        "session_id": beta,
+        "repo": "clankers",
+        "board": {
+          "session_id": beta,
+          "repo": "clankers",
+          "allowed_sessions": [alpha, beta],
+          "main_session_id": alpha,
+          "sessions": [{"session_id": beta, "repo": "clankers"}],
+        },
+      },
+      headers,
+    )
+    assert st == 200 and beta not in self_sync["board"]["allowed_sessions"]

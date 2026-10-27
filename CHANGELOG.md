@@ -59,6 +59,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Preserve `removed_sessions` revocations across `arena_proxy/board.py` and `preview.py` syncs so stale peer `allowed_sessions` never resurrect a revoked session (`arena-egress-proxy/scripts/arena_proxy/`, `scripts/preview.py`, `scripts/test_preview.py`, `maintenance/workflows/test_arena_proxy.py`).
 - Allow explicit `--order 1` updates on upcoming tasks after a preview UI reorder while rejecting non-`1` `--order` overrides (`scripts/preview.py`, `scripts/test_preview.py`).
 - Block `sleep` commands during live background gates and standalone multi-second idle sleeps (`>=60s`) in the pre-execution hook (`scripts/preview.py`, `scripts/test_preview.py`).
 - Refresh peer session status rows when `updated_at` advances and ignore superseded `turn_ended_at` stamps so active peers do not show `Agent 404` (`assets/app.js`, `scripts/preview.py`, `scripts/client.test.cjs`, `scripts/test_preview.py`).
@@ -68,6 +69,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Pass `previewUiSessionId` instead of target `action.session_id` to post-action `syncPreviewBoard` and preserve global `removed_sessions` revocations across peer and self syncs (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Observe `document.body` for tab-title updates and suppress duplicate `[NemoUtils][title]` logs when the current emoji and base title hold across external `<title>` resets (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Send `sync` and `apply` actions to `POST /v1/board`, pass `session_id` and `name` with `sha256` on `GET /v1/board/files`, and omit live `body.digest` from `mismatchOfferId` (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Preserve worker-report `answer` and `unpublish` ops against `entry-ack` eviction and overlay main-session answered state onto `worker_reports` so answered reports clear `* ` immediately (`userscripts/arena.user.js`, `skills/refs/arena-skill/scripts/preview.py`, `maintenance/workflows/userscripts.test.cjs`, `skills/refs/arena-skill/scripts/test_preview.py`).
