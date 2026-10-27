@@ -1297,7 +1297,7 @@ function showHistory(rawNotes) {
     if (item.board_sender) {
       const senderEl = document.createElement('div');
       senderEl.className = 'board-sender';
-      senderEl.textContent = item.board_sender;
+      senderEl.textContent = formatBoardSenderLabel(item.board_sender);
       text.insertBefore(senderEl, text.children?.[0] || text.firstChild || null);
     }
     const receipt = node.children[2];
@@ -1386,7 +1386,7 @@ function showHistory(rawNotes) {
           if (replySenderLabel) {
             const replySenderEl = document.createElement('div');
             replySenderEl.className = 'board-sender';
-            replySenderEl.textContent = replySenderLabel;
+            replySenderEl.textContent = formatBoardSenderLabel(replySenderLabel);
             block.insertBefore(replySenderEl, block.children?.[0] || block.firstChild || null);
           }
         }
@@ -1405,7 +1405,7 @@ function showHistory(rawNotes) {
         if (ackSenderLabel) {
           const ackSenderEl = document.createElement('div');
           ackSenderEl.className = 'board-sender';
-          ackSenderEl.textContent = ackSenderLabel;
+          ackSenderEl.textContent = formatBoardSenderLabel(ackSenderLabel);
           answer.insertBefore(ackSenderEl, answer.children?.[0] || answer.firstChild || null);
         }
       }
@@ -4227,6 +4227,10 @@ function displayBoardId(rawId, board = getState()?.board, rowRepo = '') {
     return text.slice(repo.length + 1);
   }
   return text;
+}
+function formatBoardSenderLabel(label) {
+  const clean = String(label || '').trim().replace(/^@+/, '').replace(/:+$/, '');
+  return clean ? `@${clean}:` : '';
 }
 function resolveBoardAckSender(rawSender, item, board = getState()?.board, rowRepo = '') {
   const toTarget = (item?.to && item.to !== '*' && item.to !== item.session_id) ? String(item.to) : '';

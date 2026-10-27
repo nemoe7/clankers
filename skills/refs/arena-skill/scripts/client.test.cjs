@@ -5460,6 +5460,9 @@ test('preview client', async (t) => {
     };
     assert.equal(context.displayBoardId('91a01582-clankers', mockBoard, 'clankers'), 'beta');
     assert.equal(context.displayBoardId('arena/293da56c-clankers', mockBoard, 'clankers'), 'alpha');
+    assert.equal(context.formatBoardSenderLabel('alpha'), '@alpha:');
+    assert.equal(context.formatBoardSenderLabel('beta'), '@beta:');
+    assert.equal(context.formatBoardSenderLabel('@alpha:'), '@alpha:');
     assert.equal(
       context.resolveBoardMentions('Ready for review.\n@91a01582-clankers and @arena/293da56c-clankers', mockBoard, 'clankers'),
       'Ready for review.\n@beta and @alpha',
@@ -5782,7 +5785,9 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /function\s+combinedHistoryItems\(/);
   assert.match(htmlSource, /id="board-repo-links"/);
   assert.match(appSource, /action:\s*isLinked\s*\?\s*'unlink-repo'\s*:\s*'link-repo'/);
-  assert.match(styleSource, /\.board-sender\s*\{\s*font:\s*400\s+12px\/1\.333333\s+var\(--font-sans\);/);
+  assert.match(styleSource, /\.board-sender\s*\{\s*font:\s*400\s+12px\/1\.333333\s+var\(--font-sans\);\s*color:\s*var\(--muted\);\s*margin-bottom:\s*4px;\s*\}/);
+  assert.match(styleSource, /:is\(\.message-text,\s*\.answer,\s*\.reply-block\)\s*>\s*\.board-sender\s*\+\s*\*\s*\{\s*margin-top:\s*0;\s*\}/);
+  assert.match(appSource, /function\s+formatBoardSenderLabel\(/);
   assert.match(styleSource, /\.report\s+code,\s*\.message-text\s+code\s*\{\s*font-family:\s*var\(--font-mono\);\s*font-size:\s*\.9em;\s*\}/);
   assert.match(styleSource, /\.message\[data-board-author="agent"\]\s*>\s*:is\(\.message-text,\s*\.raw-message\)/);
   assert.match(styleSource, /body\[data-board-role="worker"\]\s*:is\(#notes-tab,/);

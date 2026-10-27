@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Halve the vertical gap under `.board-sender` and format rendered board sender labels as `@name:` (`assets/style.css`, `assets/app.js`, `scripts/client.test.cjs`).
 - Require Python `3.11+` and adopt `datetime.UTC` and native `"Z"` timestamp parsing under Ruff `0.17.3` (`SKILL.md`, `scripts/preview.py`, `scripts/test_preview.py`).
 - Require main sessions to offload independent queued tasks to idle board workers and list idle workers in gate hints (`SKILL.md`, `scripts/preview.py`).
 

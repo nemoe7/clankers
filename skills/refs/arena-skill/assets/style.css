@@ -743,8 +743,8 @@ mark code { color: var(--text); }
 #board-tab[data-board-role="main"] { color: #22c55e; }
 #board-tab[data-board-role="worker"] { color: #3b82f6; }
 #board-tab[aria-pressed="true"] { background: var(--bubble); border-color: var(--tab-border); }
-.board-sender { font: 400 12px/1.333333 var(--font-sans); color: var(--muted); margin-bottom: 1px; }
-.board-sender + * { margin-top: 0; }
+.board-sender { font: 400 12px/1.333333 var(--font-sans); color: var(--muted); margin-bottom: 4px; }
+:is(.message-text, .answer, .reply-block) > .board-sender + * { margin-top: 0; }
 .message[data-board-author="agent"] > :is(.message-text, .raw-message) { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }
 body[data-board-role="worker"] :is(#notes-tab, #tasks-tab, #reports-tab, #downloads-tab, #copy-state, #force-save, #survey-test, #notes-panel, #tasks-panel, #reports-panel, #downloads-panel, #reports-scroll-frame, #report-submit-float) { display: none !important; }
 #board-panel { flex: 1 1 auto; min-height: 0; width: 100%; overflow-y: auto; padding-inline: 5vw; }
