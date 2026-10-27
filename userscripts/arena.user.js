@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.11.4
+// @name         Arena.ai | NemoUtils | v1.11.5
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.11.4
+// @version      1.11.5
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -262,7 +262,7 @@
     'button[aria-haspopup="dialog"] span.truncate, button[aria-haspopup="menu"] span.truncate';
   var SESSION_BRANCH_RE = /^arena\/[0-9a-f]{8}-/;
   var SLUG_KEY = "clankers-arena-agent-slug";
-  var STATE_TITLE_RE = /^Arena \| (\S+)/;
+  var STATE_TITLE_RE = /^(?:\* )?Arena \| (\S+)/;
 
   function arenaUrl(urlString) {
     var url;
@@ -368,6 +368,38 @@
   var MAX_BOARD_FILE_BYTES = 524288;
   var MAX_BOARD_BYTES = 8388608;
   var MAX_BOARD_ENTRIES = 100;
+  var GREEK_LETTER_NAMES = [
+    "alpha", "beta", "gamma", "delta", "epsilon", "zeta",
+    "eta", "theta", "iota", "kappa", "lambda", "mu",
+    "nu", "xi", "omicron", "pi", "rho", "sigma",
+    "tau", "upsilon", "phi", "chi", "psi", "omega"
+  ];
+  var GREEK_LETTER_SYMBOLS = {
+    alpha: "\u03B1",
+    beta: "\u03B2",
+    gamma: "\u03B3",
+    delta: "\u03B4",
+    epsilon: "\u03B5",
+    zeta: "\u03B6",
+    eta: "\u03B7",
+    theta: "\u03B8",
+    iota: "\u03B9",
+    kappa: "\u03BA",
+    lambda: "\u03BB",
+    mu: "\u03BC",
+    nu: "\u03BD",
+    xi: "\u03BE",
+    omicron: "\u03BF",
+    pi: "\u03C0",
+    rho: "\u03C1",
+    sigma: "\u03C3",
+    tau: "\u03C4",
+    upsilon: "\u03C5",
+    phi: "\u03C6",
+    chi: "\u03C7",
+    psi: "\u03C8",
+    omega: "\u03C9"
+  };
   var featureRegistry = [];
   var restartStateWatchHook = null;
   var syncPreviewProxyHook = null;
@@ -375,6 +407,7 @@
   var syncPreviewDrawerLockHook = null;
   var previewUiRepo = "";
   var previewUiSessionId = "";
+  var localSessionReportsBySid = {};
 
   function previewDrawerLockOn() {
     if (typeof GM_getValue !== "function") return true;
@@ -397,7 +430,9 @@
     if (!nextSid || nextSid === previewUiSessionId) return;
     previewUiSessionId = nextSid;
     if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
+    if (typeof syncTitleNowHook === "function") syncTitleNowHook();
   }
+  var syncTitleNowHook = null;
   var syncProxySettingsHook = null;
   var postKeyNowHook = null;
   var applyTrimKeepHook = null;
@@ -4848,6 +4883,10 @@
     }
     return stateJson(base + "/api/board", { action: "sync", board: scopedBoard }).then(function (answer) {
       if (answer && answer.status === 200 && answer.body) {
+        var answerSid = boardSessionId(answer.body.session_id || targetSid || "");
+        if (answerSid && answer.body.worker_reports && Array.isArray(answer.body.worker_reports[answerSid])) {
+          localSessionReportsBySid[answerSid] = answer.body.worker_reports[answerSid].slice();
+        }
         if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
         var srvAllowed = Array.isArray(answer.body.allowed_sessions) ? answer.body.allowed_sessions : [];
         var missingAllowed = (scopedBoard.allowed_sessions || []).filter(function (sid) {
@@ -4882,6 +4921,10 @@
             return stateJson(base + "/api/board", { action: "sync", board: scopedBoard });
           }).then(function (healed) {
             if (healed && healed.status === 200 && healed.body) {
+              var healedSid = boardSessionId(healed.body.session_id || targetSid || "");
+              if (healedSid && healed.body.worker_reports && Array.isArray(healed.body.worker_reports[healedSid])) {
+                localSessionReportsBySid[healedSid] = healed.body.worker_reports[healedSid].slice();
+              }
               writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), healed.body));
               return healed;
             }
@@ -6267,10 +6310,14 @@
       if (!name) {
         return null;
       }
+      var board = readGlobalBoard();
+      var sid = boardSessionId(previewUiSessionId || stateBranch(doc) || "");
+      var greek = sid ? boardGreekSymbolFor(board, sid) : "";
+      var star = sid && boardHasWaitingReportFor(board, sid) ? "* " : "";
       var emoji = heldEmojiFor(doc);
       titleEmoji = emoji || "";
-      var base = TITLE_PREFIX + name;
-      return emoji ? base + " " + emoji : base;
+      var base = greek ? TITLE_PREFIX + name + " " + greek : TITLE_PREFIX + name;
+      return star + (emoji ? base + " " + emoji : base);
     }
 
     var titleEmoji = "";
@@ -6428,6 +6475,9 @@
       restartTitleTimer();
       registerTitleInterval();
     };
+    syncTitleNowHook = function () {
+      syncTitle(document);
+    };
     function onRoute() {
       lastRepo = null;
       lastPath = null;
@@ -6436,6 +6486,7 @@
     window.addEventListener("popstate", onRoute);
     return function () {
       restartTitleTimerHook = null;
+      syncTitleNowHook = null;
       clearInterval(titleTimer);
       if (titleEntry !== null) {
         menuDrop(titleEntry);
@@ -6457,7 +6508,50 @@
     var text = String(rawValue || "").trim();
     if (text.toLowerCase().indexOf("worker-") === 0) text = text.slice(7).trim();
     if (!text) return "";
+    var lower = text.toLowerCase();
+    if (GREEK_LETTER_SYMBOLS[lower]) return lower;
     return /^[A-Za-z0-9_-]{1,6}$/.test(text) ? text : null;
+  }
+
+  function isLegacyHexWorkerId(sessionId, workerId) {
+    var wid = String(workerId || "").trim().toLowerCase();
+    if (!wid || GREEK_LETTER_SYMBOLS[wid]) return false;
+    var sid = boardSessionId(sessionId);
+    var head = sid.indexOf("-") !== -1 ? sid.split("-")[0] : sid;
+    var token = head.replace(/[^A-Za-z0-9]+/g, "").slice(0, 6).toLowerCase();
+    return Boolean(token && wid === token);
+  }
+
+  function boardGreekSymbolFor(board, sessionId) {
+    var sid = boardSessionId(sessionId);
+    if (!sid) return "";
+    var normalized = normalizeBoard(board);
+    if (normalized.allowed_sessions.indexOf(sid) === -1) return "";
+    if (boardRoleFor(normalized, sid) === "main") {
+      return GREEK_LETTER_SYMBOLS.alpha;
+    }
+    var explicit = normalized.worker_ids && normalized.worker_ids[sid]
+      ? String(normalized.worker_ids[sid]).trim()
+      : "";
+    if (explicit && !isLegacyHexWorkerId(sid, explicit)) {
+      var lowerExp = explicit.toLowerCase();
+      return GREEK_LETTER_SYMBOLS[lowerExp] || explicit;
+    }
+    var targetRepo = cleanBoardRepo("", sid);
+    var workerRank = 0;
+    for (var i = 0; i < normalized.allowed_sessions.length; i += 1) {
+      var candSid = normalized.allowed_sessions[i];
+      if (targetRepo && cleanBoardRepo("", candSid) !== targetRepo) continue;
+      if (boardRoleFor(normalized, candSid) === "main") continue;
+      workerRank += 1;
+      if (candSid === sid) {
+        var greekName = workerRank < GREEK_LETTER_NAMES.length
+          ? GREEK_LETTER_NAMES[workerRank]
+          : "";
+        return (greekName && GREEK_LETTER_SYMBOLS[greekName]) || explicit || defaultWorkerId(sid, targetRepo);
+      }
+    }
+    return GREEK_LETTER_SYMBOLS.beta;
   }
 
   function cleanBoardRepo(rawValue, fallbackSid) {
@@ -6970,6 +7064,7 @@
     try {
       GM_setValue(BOARD_KEY, next);
     } catch (err) {}
+    if (typeof syncTitleNowHook === "function") syncTitleNowHook();
     return next;
   }
 
@@ -7029,6 +7124,95 @@
 
   function canPushOrPr(board, sessionId) {
     return boardRoleFor(board, sessionId) === "main";
+  }
+
+  function isBoardWorkerSession(board, sessionId) {
+    var normalized = normalizeBoard(board);
+    var sid = boardSessionId(sessionId);
+    if (!sid) return false;
+    if (normalized.allowed_sessions.indexOf(sid) === -1) return false;
+    return boardRoleFor(normalized, sid) === "worker";
+  }
+
+  function reportWaitingOnSubmission(report, reportOps, ownerSid) {
+    if (!report || typeof report !== "object") return false;
+    var rid = String(report.id || "").trim();
+    if (!rid) return false;
+    if (Array.isArray(reportOps) && ownerSid) {
+      for (var i = 0; i < reportOps.length; i += 1) {
+        var op = reportOps[i];
+        if (!op || typeof op !== "object") continue;
+        if (boardSessionId(op.target || "") !== ownerSid) continue;
+        if (String(op.report_id || op.id || "").trim() !== rid) continue;
+        var opKind = String(op.op || op.operation || "").trim().toLowerCase();
+        if (
+          opKind === "answer" ||
+          opKind === "submit" ||
+          opKind === "unpublish" ||
+          opKind === "remove" ||
+          opKind === "delete"
+        ) {
+          return false;
+        }
+      }
+    }
+    if (
+      report.answered ||
+      report.latest_answer_id ||
+      report.latest_answer_at ||
+      report.latest_answer_acknowledged_at
+    ) {
+      return false;
+    }
+    if (typeof report.needs_answer === "boolean") return report.needs_answer;
+    if (Array.isArray(report.fields)) return report.fields.length > 0;
+    if (typeof report.fields === "number") return report.fields > 0;
+    return false;
+  }
+
+  function boardHasWaitingReportFor(board, sessionId, localReportsMap) {
+    var normalized = normalizeBoard(board);
+    var sid = boardSessionId(sessionId);
+    if (!sid || isBoardWorkerSession(normalized, sid)) return false;
+    var map = localReportsMap && typeof localReportsMap === "object" ? localReportsMap : localSessionReportsBySid;
+    var ownReports = Array.isArray(map[sid])
+      ? map[sid]
+      : (normalized.worker_reports && Array.isArray(normalized.worker_reports[sid]) ? normalized.worker_reports[sid] : []);
+    for (var i = 0; i < ownReports.length; i += 1) {
+      if (reportWaitingOnSubmission(ownReports[i], normalized.report_ops, sid)) return true;
+    }
+    var isMain = normalized.allowed_sessions.indexOf(sid) !== -1 && boardRoleFor(normalized, sid) === "main";
+    if (!isMain || !normalized.worker_reports) return false;
+    var mainRepo = cleanBoardRepo("", sid);
+    for (var s = 0; s < normalized.sessions.length; s += 1) {
+      if (normalized.sessions[s].session_id === sid && normalized.sessions[s].repo) {
+        mainRepo = normalized.sessions[s].repo;
+        break;
+      }
+    }
+    var linkedSet = {};
+    if (mainRepo) linkedSet[mainRepo] = true;
+    (normalized.linked_repos || []).forEach(function (slug) { linkedSet[slug] = true; });
+    var workerSids = Object.keys(normalized.worker_reports);
+    for (var w = 0; w < workerSids.length; w += 1) {
+      var wSid = workerSids[w];
+      if (!wSid || wSid === sid || normalized.allowed_sessions.indexOf(wSid) === -1) continue;
+      var wRepo = cleanBoardRepo("", wSid);
+      for (var sr = 0; sr < normalized.sessions.length; sr += 1) {
+        if (normalized.sessions[sr].session_id === wSid && normalized.sessions[sr].repo) {
+          wRepo = normalized.sessions[sr].repo;
+          break;
+        }
+      }
+      var repoVisible = !mainRepo || !wRepo || wRepo === mainRepo ||
+        (normalized.linked_repos.length > 0 ? Boolean(linkedSet[wRepo]) : Boolean(normalized.multi_repo));
+      if (!repoVisible) continue;
+      var wList = normalized.worker_reports[wSid] || [];
+      for (var r = 0; r < wList.length; r += 1) {
+        if (reportWaitingOnSubmission(wList[r], normalized.report_ops, wSid)) return true;
+      }
+    }
+    return false;
   }
 
   function validateBoardFile(file) {
@@ -7311,6 +7495,11 @@
     writeGlobalBoard: writeGlobalBoard,
     scopeBoardForTarget: scopeBoardForTarget,
     boardRoleFor: boardRoleFor,
+    boardGreekSymbolFor: boardGreekSymbolFor,
+    isBoardWorkerSession: isBoardWorkerSession,
+    reportWaitingOnSubmission: reportWaitingOnSubmission,
+    boardHasWaitingReportFor: boardHasWaitingReportFor,
+    GREEK_LETTER_SYMBOLS: GREEK_LETTER_SYMBOLS,
     canPushOrPr: canPushOrPr,
     validateBoardFile: validateBoardFile,
     applyBoardAction: applyBoardAction,

@@ -3609,5 +3609,241 @@ for raw in sys.stdin:
     });
   }
 
+  {
+    const { test } = require("node:test");
+    test("tab title inserts Greek symbol when board is enabled on session", () => {
+      const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+      const checkBox = { globalThis: {} };
+      checkBox.globalThis = checkBox;
+      vm.runInNewContext(source, checkBox, { filename: "arena.user.js" });
+      const boardApi = checkBox.CLANKERS_CHECKS.board;
+      const sampleBoard = boardApi.normalizeBoard({
+        main_session_id: "91a01582-clankers",
+        allowed_sessions: [
+          "91a01582-clankers",
+          "0735d422-clankers",
+          "aa11bb22-clankers",
+          "cc33dd44-clankers",
+          "ee55ff66-clankers",
+        ],
+        worker_ids: {
+          "cc33dd44-clankers": "epsilon",
+          "ee55ff66-clankers": "fix1",
+        },
+        sessions: [
+          { session_id: "91a01582-clankers", repo: "clankers" },
+          { session_id: "0735d422-clankers", repo: "clankers" },
+          { session_id: "aa11bb22-clankers", repo: "clankers" },
+          { session_id: "cc33dd44-clankers", repo: "clankers" },
+          { session_id: "ee55ff66-clankers", repo: "clankers" },
+        ],
+      });
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "91a01582-clankers"), "\u03B1");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "0735d422-clankers"), "\u03B2");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "aa11bb22-clankers"), "\u03B3");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "cc33dd44-clankers"), "\u03B5");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "ee55ff66-clankers"), "fix1");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "99999999-clankers"), "");
+
+      const saved = new Map([["clankers-arena-show-settings-button", false]]);
+      const page = { title: "" };
+      const intervals = [];
+      let branchHref = "https://github.com/nemoe7/clankers/tree/arena/91a01582-clankers";
+      let stop = true;
+      const barLink = {
+        getAttribute(attr) {
+          return attr === "href" ? branchHref : null;
+        },
+      };
+      const bar = {
+        textContent: "nemoe7/clankers",
+        querySelectorAll(sel) {
+          if (sel === "span.truncate") return [{ textContent: "nemoe7/clankers" }];
+          if (sel === "a, [title]") return [barLink];
+          return [];
+        },
+      };
+      const repoLink = {
+        getAttribute(name) {
+          if (name === "href") return "https://github.com/nemoe7/clankers";
+          if (name === "aria-label") return "Open nemoe7/clankers on GitHub";
+          return null;
+        },
+      };
+      const stopButton = {
+        getAttribute: (name) => (name === "aria-label" ? "Stop generating" : null),
+        closest: () => null,
+        parentElement: null,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      };
+      const span = {
+        tagName: "SPAN",
+        className: "text-text-secondary body-sm",
+        textContent: "Bash",
+        attrs: {},
+        children: [],
+        getAttribute() { return null; },
+        querySelector() { return null; },
+        querySelectorAll() { return []; },
+      };
+      const btn = {
+        tagName: "BUTTON",
+        className: "flex w-full",
+        textContent: "Bash",
+        attrs: { "aria-label": "Collapse" },
+        children: [span],
+        getAttribute(n) { return this.attrs[n] || null; },
+        querySelector(s) { return s === "span.text-text-secondary" ? span : null; },
+        querySelectorAll(s) { return s === "span.text-text-secondary" ? [span] : []; },
+      };
+      const row = {
+        tagName: "DIV",
+        className: "",
+        children: [btn],
+        attrs: {},
+        getAttribute() { return null; },
+        querySelector(s) { return s === "button" ? btn : btn.querySelector(s); },
+        querySelectorAll(s) { return s === "button" ? [btn] : btn.querySelectorAll(s); },
+      };
+      const container = { tagName: "DIV", className: "flex flex-col gap-2", children: [row], attrs: {}, firstElementChild: row, querySelectorAll() { return []; }, querySelector() { return null; } };
+      const inner = { tagName: "DIV", className: "px-3 pb-3", children: [container], attrs: {}, firstElementChild: container, querySelectorAll() { return []; }, querySelector() { return null; } };
+      const outer = { tagName: "DIV", className: "relative overflow-hidden bg-surface-primary rounded-xl border w-full border-transparent", children: [inner], attrs: {}, firstElementChild: inner, querySelectorAll() { return []; }, querySelector() { return null; } };
+      const rootNode = {
+        tagName: "DIV",
+        className: "",
+        children: [outer],
+        attrs: { "data-agent-transcript-message": "true" },
+        firstElementChild: outer,
+        getAttribute(n) { return this.attrs[n] || null; },
+        querySelector() { return null; },
+        querySelectorAll() { return []; },
+      };
+      const ctx = {
+        console: { log() {}, info() {}, debug() {}, warn() {}, error() {} },
+        URL,
+        location: { href: "https://arena.ai/c/one", pathname: "/c/one", origin: "https://arena.ai" },
+        document: {
+          documentElement: {},
+          execCommand() { return true; },
+          createRange() { return { selectNodeContents() {} }; },
+          querySelector(selector) {
+            if (selector.indexOf("div.relative.z-10") === 0) return bar;
+            if (selector.indexOf('a[aria-label^="Open "]') === 0) return repoLink;
+            return null;
+          },
+          querySelectorAll(selector) {
+            if (selector === "[data-agent-transcript-message]") return [rootNode];
+            if (selector === "button[aria-label]") return stop ? [stopButton] : [];
+            return [];
+          },
+          get title() { return page.title; },
+          set title(value) { page.title = value; },
+        },
+        window: { addEventListener() {}, removeEventListener() {} },
+        getComputedStyle() { return { overflowY: "auto" }; },
+        MutationObserver: class { observe() {} disconnect() {} },
+        ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+        requestAnimationFrame() { return 1; },
+        cancelAnimationFrame() {},
+        setInterval(fn, ms) { intervals.push({ ms, fn }); return intervals.length; },
+        clearInterval() {},
+        setTimeout() { return 1; },
+        clearTimeout() {},
+        fetch() { return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}), text: () => Promise.resolve("") }); },
+        sessionStorage: { getItem() { return null; }, setItem() {} },
+        prompt() { return null; },
+        GM_getValue(k, fb) { return saved.has(k) ? saved.get(k) : fb; },
+        GM_setValue(k, v) { saved.set(k, v); },
+        GM_registerMenuCommand() { return "m"; },
+        GM_unregisterMenuCommand() {},
+        GM_xmlhttpRequest() {},
+      };
+      vm.runInNewContext(source, ctx, { filename: "arena.user.js" });
+      const sync = () => intervals.forEach((item) => item.fn());
+
+      sync();
+      assert.equal(page.title, "Arena | clankers \uD83D\uDDA5\uFE0F");
+
+      saved.set(boardApi.BOARD_KEY, sampleBoard);
+      sync();
+      assert.equal(page.title, "Arena | clankers \u03B1 \uD83D\uDDA5\uFE0F");
+
+      stop = false;
+      sync();
+      assert.equal(page.title, "Arena | clankers \u03B1");
+
+      branchHref = "https://github.com/nemoe7/clankers/tree/arena/0735d422-clankers";
+      stop = true;
+      sync();
+      assert.equal(page.title, "Arena | clankers \u03B2 \uD83D\uDDA5\uFE0F");
+
+      // Unanswered report prefix '* ': prepends for main and standalone sessions waiting on submission,
+      // never for worker sessions, 0-field reports, or answered reports with unseen acknowledgements.
+      const boardWithWorkerWaiting = boardApi.normalizeBoard(
+        Object.assign({}, sampleBoard, {
+          worker_reports: {
+            "91a01582-clankers": [
+              { id: "info-only", fields: [], answered: false, needs_answer: false },
+              {
+                id: "answered-unseen-ack",
+                fields: [{ id: "q1" }],
+                answered: true,
+                needs_answer: false,
+                latest_answer_id: "sub1",
+                latest_answer_at: "2026-10-27T01:00:00Z",
+                latest_answer_acknowledged_at: "2026-10-27T01:01:00Z",
+                ack_seen_at: null,
+              },
+            ],
+            "0735d422-clankers": [
+              { id: "worker-proposal", fields: [{ id: "approve" }], answered: false, needs_answer: true },
+            ],
+          },
+        }),
+      );
+      saved.set(boardApi.BOARD_KEY, boardWithWorkerWaiting);
+      // Worker session 0735d422-clankers must NOT get '* ' even though its own report awaits submission.
+      sync();
+      assert.equal(page.title, "Arena | clankers \u03B2 \uD83D\uDDA5\uFE0F");
+
+      // Main session 91a01582-clankers mirrors allowlisted worker reports awaiting submission -> gets '* '.
+      branchHref = "https://github.com/nemoe7/clankers/tree/arena/91a01582-clankers";
+      sync();
+      assert.equal(page.title, "* Arena | clankers \u03B1 \uD83D\uDDA5\uFE0F");
+
+      stop = false;
+      sync();
+      assert.equal(page.title, "* Arena | clankers \u03B1");
+
+      // Once a report_op answers or unpublishes worker-proposal, only info-only + answered-unseen-ack remain -> no '* '.
+      const boardAfterSubmit = boardApi.normalizeBoard(
+        Object.assign({}, boardWithWorkerWaiting, {
+          report_ops: [
+            { id: "rop1", op: "answer", target: "0735d422-clankers", report_id: "worker-proposal", at: "2026-10-27T01:05:00Z" },
+          ],
+        }),
+      );
+      saved.set(boardApi.BOARD_KEY, boardAfterSubmit);
+      sync();
+      assert.equal(page.title, "Arena | clankers \u03B1");
+
+      // Standalone unopted session (99999999-clankers) with a report awaiting submission gets '* ' without Greek symbol.
+      const boardWithStandalone = boardApi.normalizeBoard(
+        Object.assign({}, boardAfterSubmit, {
+          worker_reports: Object.assign({}, boardAfterSubmit.worker_reports, {
+            "99999999-clankers": [
+              { id: "standalone-q", fields: [{ id: "choice" }], answered: false, needs_answer: true },
+            ],
+          }),
+        }),
+      );
+      saved.set(boardApi.BOARD_KEY, boardWithStandalone);
+      branchHref = "https://github.com/nemoe7/clankers/tree/arena/99999999-clankers";
+      sync();
+      assert.equal(page.title, "* Arena | clankers");
+    });
+  }
+
 
 

@@ -151,6 +151,8 @@ A preview URL change skips the overwrite prompt within 150 seconds of 02:00, 08:
 
 On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. If the link is absent, it reads a valid repository name before ` read ` in the session title button. State-file naming uses the same fallback before a stale tab title.
 
+Allowlisted board sessions add their Greek symbol (`α`..`ω`, or custom ID) as `Arena | <repository> <symbol> <emoji>`. Non-worker sessions prepend `* ` when published reports await owner submission, ignoring worker sessions and unseen reply acknowledgements.
+
 While the agent works, the title reads the newest row of the last message root. It finds the body after a message header and keeps the previous lookup as a fallback.
 
 The row type selects the mark, and an action row's status label names its emoji, such as `Arena | clankers 🖥️`. A running row answers with its shimmer, and a buttonless row read takes its `body-sm` span, with a fetch URL's anchor text dropped.

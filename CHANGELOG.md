@@ -36,6 +36,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Require remaining `next_offset` chunk reads, narrower size-capped retries, preserved caps, and copyable defect briefs (`system-prompts/refs/NEMOGPT.md`, `system-prompts/NEMOGPT.md`).
 
+#### userscripts
+
+- Add Greek board symbols (`α`..`ω`, or custom worker IDs) to allowlisted session tab titles and prepend `* ` on non-worker sessions with published reports awaiting submission (`userscripts/arena.user.js`, `userscripts/README.md`).
+
 ### Fixed
 
 #### arena-skill
