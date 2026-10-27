@@ -1841,6 +1841,18 @@ def test_http_boundaries():
         r"\.message-text li>p:first-child[^{}]*\{display:inline;margin:0;?\}",
         page,
       ), "loose list items keep first paragraph inline with inside marker"
+      board_ack_list = re.search(
+        r":is\(#history,#reports-panel,#board-panel\)\s*:is\(\.answer,"
+        r"\.message\[data-board-author=\"?agent\"?\]\s*>\s*\.message-text,"
+        r"\.board-entry \.message-text\)\s*:is\(ul,ol\)\{([^}]+)\}",
+        page,
+      )
+      assert board_ack_list is not None
+      assert css_px(board_ack_list[1], "margin") == 5
+      assert (
+        r'list-style-type:"\25E6\2004"' in page or 'list-style-type:"◦\u2004"' in page
+      )
+      assert ".report .answer li{margin:1px 0" in page
       report_list = re.search(
         r"\.report (?:ul,\.report ol|ol,\.report ul)\{([^}]+)\}", page
       )

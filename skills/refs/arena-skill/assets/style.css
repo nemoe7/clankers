@@ -746,6 +746,14 @@ mark code { color: var(--text); }
 .board-sender { font: 400 12px/1.333333 var(--font-sans); color: var(--muted); margin-bottom: 4px; }
 :is(.message-text, .answer, .reply-block) > .board-sender + * { margin-top: 0; }
 .message[data-board-author="agent"] > :is(.message-text, .raw-message) { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }
+:is(#history, #reports-panel, #board-panel) :is(.answer, .message[data-board-author="agent"] > .message-text, .board-entry .message-text) :is(ul, ol) { margin: 5px 0; }
+:is(#history, #reports-panel, #board-panel) :is(.answer, .message[data-board-author="agent"] > .message-text, .board-entry .message-text) p:has(+ ul, + ol) { margin-bottom: 5px; }
+:is(#history, #reports-panel, #board-panel) :is(.answer, .message[data-board-author="agent"] > .message-text, .board-entry .message-text) :is(ul, ol) + p { margin-top: 5px; }
+:is(#history, #reports-panel, #board-panel) :is(.answer, .answer .reply-block, .message[data-board-author="agent"] > .message-text, .board-entry .message-text) > :last-child { margin-bottom: 0; }
+:is(.answer, .message[data-board-author="agent"] > .message-text, .board-entry .message-text) ul { list-style-type: "\2022\2002"; }
+#history :is(.answer, .message[data-board-author="agent"] > .message-text) ul, :is(.answer, .board-entry .message-text) ul ul { list-style-type: "\25E6\2004"; }
+.report .answer li { margin: 1px 0; }
+:is(#history, #reports-panel, #board-panel) :is(.answer, .message[data-board-author="agent"] > .message-text, .board-entry .message-text) li > p:not(:first-child) { margin: 5px 0; }
 body[data-board-role="worker"] :is(#notes-tab, #tasks-tab, #reports-tab, #downloads-tab, #copy-state, #force-save, #survey-test, #notes-panel, #tasks-panel, #reports-panel, #downloads-panel, #reports-scroll-frame, #report-submit-float) { display: none !important; }
 #board-panel { flex: 1 1 auto; min-height: 0; width: 100%; overflow-y: auto; padding-inline: 5vw; }
 #board-panel > .card { background: transparent; border: 0; padding-inline: 0; padding-top: 0; width: min(900px, 90vw); max-width: 900px; margin-left: max(0px, calc((100vw - 900px) / 2 - 5vw)); margin-right: 0; }
