@@ -33,6 +33,7 @@ Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved hous
 | `NUM205`–`NUM208` | Density (`density`, `--density`) | Main-layout (`<main>`, `[role="main"]`) ink ratio < 0.40 or other row ink ratio < 0.75 (`NUM205`), sibling gap > 320 px (`NUM206`), form input ending more than 24 px before its row edge with no control after it (`NUM207`), or non-symmetric icon button (`NUM208`) |
 | `NUM209`–`NUM210` | Density (`-C`, `-O`) | Non-scrolling container clips child content (`NUM209`) or sibling boxes overlap (`NUM210`) |
 | `NUM211` | Measure (`--measure`) | List markers sit outside in a `2ch` hanging-indent slot, and wrapped lines align with the first line |
+| `NUM212` | Measure (`--measure`) | Heading (h1-h6) line-height outside 1.1-1.3x font-size or non-heading line-height outside 1.3-1.5x |
 | `NUA301` | Rendered `a11y` | Visible interactive control without an accessible name |
 | `NUA302` | Rendered `a11y` | Broken `aria-labelledby`, `aria-describedby`, `aria-controls`, or `aria-owns` ID target |
 | `NUA303` | Rendered `a11y` | Interactive control nested inside another interactive control |

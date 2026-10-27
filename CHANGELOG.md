@@ -31,6 +31,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Document verb-only `name` to `specify` rotation in `SKILL.md` and `NMO901` references and cover it in `test_nemoize.py` (`SKILL.md`, `references/rules.md`, `references/nmo901.md`, `scripts/test_nemoize.py`).
 
+#### nuu
+
+- Enforce heading (`1.1` to `1.3x`) and non-heading (`1.3` to `1.5x`) line-height bands (`NUM212`, `SKILL.md`, `references/nuu.md`, `references/style.css`, `scripts/measure.py`).
+
 #### userscripts
 
 - Add randomized jitter across userscript HTTP requests (`requestJson`, `stateJson`, `sendSteeringInterrupt`) and board sync timers targeting `sbx-*.arena.site` (`userscripts/arena.user.js`, `maintenance/workflows/userscripts.test.cjs`).

@@ -199,16 +199,92 @@ def _verified_list_padding(element: dict, name: str, value: str, status) -> bool
   )
 
 
+HEADING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
+HEADING_SELECTOR_RE = re.compile(
+  r"(?:^|[\s>+~])h[1-6](?:$|[.#\[:])|\.(?:title|panel-title)(?:$|[.#\[:\s])",
+  re.IGNORECASE,
+)
+COMPACT_LINE_HEIGHT_TAGS = {
+  "button",
+  "input",
+  "select",
+  "svg",
+  "path",
+  "circle",
+  "rect",
+  "line",
+  "polyline",
+  "polygon",
+  "img",
+  "hr",
+  "br",
+}
+
+
+def is_heading_element(element: dict) -> bool:
+  """Return whether an element represents a heading (h1 to h6)."""
+  tag = str(element.get("tag") or "").strip().lower()
+  if tag in HEADING_TAGS:
+    return True
+  if str(element.get("role") or "").strip().lower() == "heading":
+    return True
+  selector = str(element.get("selector") or "").strip()
+  return bool(HEADING_SELECTOR_RE.search(selector))
+
+
+def _line_height_finding(element: dict) -> str | None:
+  values = element.get("values") or {}
+  raw_lh = str(values.get("line-height") or "").strip().lower()
+  raw_fs = str(values.get("font-size") or "").strip().lower()
+  if not raw_lh or raw_lh == "normal" or not raw_fs:
+    return None
+  tag = str(element.get("tag") or "").strip().lower()
+  if tag in COMPACT_LINE_HEIGHT_TAGS or bool(
+    element.get("icon_only", element.get("iconOnly"))
+  ):
+    return None
+  text = element.get("text")
+  if isinstance(text, str) and not text.strip():
+    return None
+  selector = str(element.get("selector") or "?")
+  if re.search(r"\b(?:icon-button|close-button|badge|pill)\b", selector, re.IGNORECASE):
+    return None
+  fs_px = _numeric_value(raw_fs)
+  if fs_px is None or fs_px <= 0:
+    return None
+  if raw_lh.endswith("px"):
+    lh_px = _numeric_value(raw_lh)
+    if lh_px is None:
+      return None
+    ratio = lh_px / fs_px
+  else:
+    ratio = _numeric_value(raw_lh)
+    if ratio is None:
+      return None
+  heading = is_heading_element(element)
+  low, high = (1.1, 1.3) if heading else (1.3, 1.5)
+  if ratio < low - 1e-6 or ratio > high + 1e-6:
+    band = "1.1-1.3x" if heading else "1.3-1.5x"
+    return (
+      f"NUM212 {selector}: line-height {values['line-height']} ({ratio:.2f}x) "
+      f"is outside {band}"
+    )
+  return None
+
+
 def check(
   report: dict, tokens: dict[str, str], scale: float = DEFAULT_SCALE
 ) -> list[str]:
-  """Return off-scale values and measured list-indent findings."""
+  """Return off-scale values and measured list-indent and typography findings."""
   findings = []
   for element in report.get("elements", []):
     selector = element.get("selector", "?")
     list_status = _list_indent_status(element)
     if list_status and list_status[1]:
       findings.append(f"NUM211 {selector}: {'; '.join(list_status[1])}")
+    lh_finding = _line_height_finding(element)
+    if lh_finding:
+      findings.append(lh_finding)
     for name, value in element.get("values", {}).items():
       if _verified_list_padding(element, name, str(value), list_status):
         continue

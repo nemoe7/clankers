@@ -78,6 +78,12 @@ Pass: `docs/design.md` entry, recipe, and all five house viewport screenshots in
 
 ![Clause 13](examples/new-pattern-entry-and-shot.png)
 
+## 16. Heading and body line-height bands
+
+Pass: headings (`h1` to `h6`) within `1.1` to `1.3x` font-size (`1.2x` default) and non-heading prose within `1.3` to `1.5x`. Fail: loose `1.65x` heading or cramped `1.05x` body copy (`NUM212`).
+
+![Clause 16](examples/line-height-bands.png)
+
 ## Recipe and Audit-Rule Examples
 
 - **Modal `.close-button` and confirmation (`recipes/modal-manager.md`):**

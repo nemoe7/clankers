@@ -173,7 +173,7 @@ KNOWN_NUU_RULES = {
   *(f"NUL00{i}" for i in range(1, 8)),
   *(f"NUI00{i}" for i in range(1, 4)),
   *(f"NUB10{i}" for i in range(1, 5)),
-  *(f"NUM{i}" for i in range(201, 212) if i != 204),
+  *(f"NUM{i}" for i in range(201, 213) if i != 204),
   *(f"NUA{i}" for i in range(301, 311)),
   *RULE_DESCRIPTIONS,
 }
@@ -1149,7 +1149,9 @@ def browser(args):
       result.setdefault("findings", []).extend(
         {
           "rule": (
-            "NUM202"
+            finding.split()[0]
+            if re.match(r"^NUM2\d\d\b", finding)
+            else "NUM202"
             if ": font-size is " in finding or ": letter-spacing is " in finding
             else "NUM203"
             if ": border-radius" in finding

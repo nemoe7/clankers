@@ -1763,3 +1763,45 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     }
   )
   assert [finding["rule"] for finding in overlap_findings] == ["NUM210"]
+
+  tokens = measure.parse_sheet(
+    (SCRIPT.parent.parent / "references" / "style.css").read_text(encoding="utf-8")
+  )
+  lh_ok = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "h2",
+          "tag": "h2",
+          "values": {"font-size": "20px", "line-height": "24px"},
+        },
+        {
+          "selector": "p",
+          "tag": "p",
+          "values": {"font-size": "14px", "line-height": "20.3px"},
+        },
+      ],
+    },
+    tokens,
+  )
+  assert lh_ok == []
+  lh_bad = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "h2",
+          "tag": "h2",
+          "values": {"font-size": "20px", "line-height": "32px"},
+        },
+        {
+          "selector": "p",
+          "tag": "p",
+          "values": {"font-size": "14px", "line-height": "15.4px"},
+        },
+      ],
+    },
+    tokens,
+  )
+  assert len([f for f in lh_bad if f.startswith("NUM212 ")]) == 2
