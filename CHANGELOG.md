@@ -30,6 +30,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Bump pinned Ruff to `0.17.3` and apply `py311` `UP017` and `I001` updates across maintenance and skill scripts (`pyproject.toml`, `requirements.txt`, `maintenance/`, `skills/`).
 
+#### nemogpt
+
+- Require remaining `next_offset` chunk reads, narrower size-capped retries, preserved caps, and copyable defect briefs (`system-prompts/refs/NEMOGPT.md`, `system-prompts/NEMOGPT.md`).
+
 ### Fixed
 
 #### arena-skill
