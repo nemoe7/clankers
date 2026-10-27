@@ -457,6 +457,41 @@ def _card_font_hierarchy_finding(element: dict, all_elements: list[dict]) -> str
   return None
 
 
+def _proximity_spacing_finding(element: dict) -> str | None:
+  prox = element.get("group_proximity", element.get("groupProximity"))
+  inter_px: float | None = None
+  intra_px: float | None = None
+  if isinstance(prox, dict):
+    raw_inter = prox.get("inter_px", prox.get("interPx"))
+    raw_intra = prox.get("intra_px", prox.get("intraPx"))
+    if isinstance(raw_inter, (int, float)) and isinstance(raw_intra, (int, float)):
+      inter_px, intra_px = float(raw_inter), float(raw_intra)
+  else:
+    raw_inter = element.get("inter_group_gap", element.get("interGroupGap"))
+    raw_intra = element.get("intra_group_gap", element.get("intraGroupGap"))
+    if raw_inter is not None and raw_intra is not None:
+      inter_px = (
+        float(raw_inter)
+        if isinstance(raw_inter, (int, float))
+        else _numeric_value(str(raw_inter))
+      )
+      intra_px = (
+        float(raw_intra)
+        if isinstance(raw_intra, (int, float))
+        else _numeric_value(str(raw_intra))
+      )
+  if inter_px is None or intra_px is None or intra_px <= 0:
+    return None
+  selector = str(element.get("selector") or "?")
+  if inter_px + 1e-6 < 1.5 * intra_px:
+    ratio = inter_px / intra_px
+    return (
+      f"NUM217 {selector}: inter-group gap {inter_px:g}px is {ratio:.2f}x "
+      f"intra-group gap {intra_px:g}px (at least 1.5x required)"
+    )
+  return None
+
+
 def check(
   report: dict, tokens: dict[str, str], scale: float = DEFAULT_SCALE
 ) -> list[str]:
@@ -475,6 +510,7 @@ def check(
       _text_alignment_finding(element),
       _body_width_finding(element, report_width),
       _card_font_hierarchy_finding(element, elements),
+      _proximity_spacing_finding(element),
     ):
       if extra:
         findings.append(extra)

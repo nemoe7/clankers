@@ -108,6 +108,12 @@ Pass: at most `3` ramp font sizes per card or dialog, varying font-weight and `-
 
 ![Clause 20](examples/font-size-hierarchy.png)
 
+## 21. Proximity spacing between and within groups
+
+Pass: inter-group gaps at least `1.5x` intra-group gaps while both snap to the Clause 6 spacing scale (`4 px` intra, `16 px` inter = `4.0x`). Fail: `12 px` label-to-input gap exceeding an `8 px` field-group gap (`NUM217`).
+
+![Clause 21](examples/proximity-spacing.png)
+
 ## Recipe and Audit-Rule Examples
 
 - **Modal `.close-button` and confirmation (`recipes/modal-manager.md`):**

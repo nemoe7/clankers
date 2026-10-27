@@ -1963,3 +1963,33 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     tokens,
   )
   assert len([f for f in hier_bad if f.startswith("NUM216 ")]) == 1
+  prox_ok = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "form.stack",
+          "tag": "form",
+          "group_proximity": {"inter_px": 16.0, "intra_px": 8.0},
+          "values": {"gap": "16px"},
+        }
+      ],
+    },
+    tokens,
+  )
+  assert prox_ok == []
+  prox_bad = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "form.stack",
+          "tag": "form",
+          "group_proximity": {"inter_px": 8.0, "intra_px": 8.0},
+          "values": {"gap": "8px"},
+        }
+      ],
+    },
+    tokens,
+  )
+  assert len([f for f in prox_bad if f.startswith("NUM217 ")]) == 1

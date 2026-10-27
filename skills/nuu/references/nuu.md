@@ -38,6 +38,7 @@ Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved hous
 | `NUM214` | Measure (`--measure`) | Centered prose over 3 lines or justified text alignment |
 | `NUM215` | Measure (`--measure`) | Multi-line prose or standalone prose container outside 50 to 75ch on desktop |
 | `NUM216` | Measure (`--measure`) | Card or dialog mixes more than 3 distinct font sizes |
+| `NUM217` | Measure (`--measure`) | Inter-group gap is smaller than 1.5x the adjacent intra-group gap |
 | `NUA301` | Rendered `a11y` | Visible interactive control without an accessible name |
 | `NUA302` | Rendered `a11y` | Broken `aria-labelledby`, `aria-describedby`, `aria-controls`, or `aria-owns` ID target |
 | `NUA303` | Rendered `a11y` | Interactive control nested inside another interactive control |

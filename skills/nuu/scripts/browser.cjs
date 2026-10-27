@@ -168,6 +168,28 @@ async function metrics(page, selector) {
       }
       return [...sizes];
     }
+    function groupProximityFor(element, style) {
+      const inter = Number.parseFloat(style.getPropertyValue('gap')) ||
+        Number.parseFloat(style.getPropertyValue('row-gap')) ||
+        Number.parseFloat(style.getPropertyValue('column-gap'));
+      if (!Number.isFinite(inter) || inter <= 0) return undefined;
+      const groupChildren = [...element.children].filter(child =>
+        child.tagName === 'FIELDSET' || child.tagName === 'LABEL' ||
+        (child.getAttribute('role') || '').toLowerCase() === 'group' ||
+        Boolean(child.classList?.contains('field'))
+      );
+      if (groupChildren.length < 2) return undefined;
+      let maxIntra = 0;
+      for (const child of groupChildren) {
+        const cs = getComputedStyle(child);
+        const intra = Number.parseFloat(cs.getPropertyValue('gap')) ||
+          Number.parseFloat(cs.getPropertyValue('row-gap')) ||
+          Number.parseFloat(cs.getPropertyValue('column-gap')) || 0;
+        if (Number.isFinite(intra) && intra > maxIntra) maxIntra = intra;
+      }
+      if (maxIntra <= 0) return undefined;
+      return {inter_px: Number(inter.toFixed(2)), intra_px: Number(maxIntra.toFixed(2))};
+    }
     function selectorFor(element) {
       if (element.id) return `#${CSS.escape(element.id)}`;
       const parent = element.parentElement;
@@ -315,6 +337,7 @@ async function metrics(page, selector) {
         ch_px: chPxFor(style),
         in_card_or_dialog: Boolean(element.closest && element.closest('.card, dialog, [role="dialog"], [role="alertdialog"], aside, nav, table')),
         card_font_sizes: cardFontSizesFor(element),
+        group_proximity: groupProximityFor(element, style),
         values: Object.fromEntries(properties.map(name => [name, style.getPropertyValue(name)])),
         list_indent: listIndentFor(element, style)};
     });
