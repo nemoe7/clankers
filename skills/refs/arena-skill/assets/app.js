@@ -4135,7 +4135,10 @@ function syncBoardHeartbeat(state) {
   const entries = Array.isArray(state.board.entries) ? state.board.entries : [];
   const reportOps = Array.isArray(state.board.report_ops) ? state.board.report_ops : [];
   const taskOps = Array.isArray(state.board.task_ops) ? state.board.task_ops : [];
-  const entriesKey = `${entries.map(row => row && row.id
+  const wakesSig = state.board.wakes && typeof state.board.wakes === 'object'
+    ? Object.entries(state.board.wakes).map(([k, v]) => `${k}:${v || ''}`).sort().join(',')
+    : '';
+  const entriesKey = `${selfRow?.agent_seen_at || ''}|${selfRow?.agent_call_ended_at || ''}|${wakesSig}|${entries.map(row => row && row.id
     ? `${row.id}:${row.seen_at || ''}:${row.acknowledged_at || ''}:${row.ack_edited_at || ''}:${row.ack_edited_seen_count || 0}:${Array.isArray(row.replies) ? row.replies.length : 0}:${row.task_id || ''}`
     : '').join(',')}|${reportOps.map(op => op?.id || '').join(',')}|${taskOps.map(op => op?.id || '').join(',')}`;
   const targetOrigin = parentTargetOrigin();
@@ -4165,7 +4168,7 @@ function syncBoardHeartbeat(state) {
         forwardedBoardWakes.set(targetSid, stamp);
         window.parent.postMessage({
           type: 'clankers:board-action',
-          action: { action: 'wake', session_id: sid, target: targetSid, at: String(stamp) },
+          action: { action: 'wake', session_id: sid, target: targetSid, wake_id: String(stamp) },
         }, targetOrigin);
       }
     }

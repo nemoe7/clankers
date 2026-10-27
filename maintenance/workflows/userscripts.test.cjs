@@ -3843,6 +3843,102 @@ for raw in sys.stdin:
       sync();
       assert.equal(page.title, "* Arena | clankers");
     });
+
+    test("unopted cross-repo board sync isolates global board state and wake_id keeps ISO updated_at", () => {
+      const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+      const checkBox = { globalThis: {} };
+      checkBox.globalThis = checkBox;
+      vm.runInNewContext(source, checkBox, { filename: "arena.user.js" });
+      const boardApi = checkBox.CLANKERS_CHECKS.board;
+      const baseBoard = boardApi.normalizeBoard({
+        multi_repo: true,
+        linked_repos: ["other-repo"],
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        worker_ids: { "beta2222-clankers": "beta" },
+        sessions: [
+          {
+            session_id: "alpha111-clankers",
+            repo: "clankers",
+            branch: "arena/alpha111-clankers",
+            status: "active",
+            polling: false,
+            updated_at: "2026-10-27T02:00:00Z",
+            agent_seen_at: "2026-10-27T02:00:00Z",
+          },
+          {
+            session_id: "beta2222-clankers",
+            repo: "clankers",
+            branch: "arena/beta2222-clankers",
+            status: "polling",
+            polling: true,
+            updated_at: "top-corrupted-wake-id",
+            polling_since: "2026-10-27T01:59:00Z",
+          },
+        ],
+        entries: [
+          {
+            id: "p11111",
+            session_id: "alpha111-clankers",
+            to: "beta2222-clankers",
+            at: "2026-10-27T02:01:00Z",
+            payload: { text: "hello beta" },
+          },
+        ],
+        wakes: { "beta2222-clankers": "p11111" },
+      });
+
+      const betaBefore = baseBoard.sessions.find(s => s.session_id === "beta2222-clankers");
+      assert.equal(betaBefore.updated_at, "", "corrupted non-ISO updated_at string is stripped by normalizeBoard");
+
+      // Sync response from an unallowlisted session (unopt333-daedalus) with empty multi_repo/linked_repos/entries/wakes:
+      const mergedAfterDaedalus = boardApi.mergePreviewBoard(baseBoard, {
+        session_id: "unopt333-daedalus",
+        repo: "daedalus",
+        branch: "arena/unopt333-daedalus",
+        multi_repo: false,
+        linked_repos: [],
+        allowed_sessions: [],
+        main_session_id: "",
+        sessions: [
+          {
+            session_id: "unopt333-daedalus",
+            repo: "daedalus",
+            branch: "arena/unopt333-daedalus",
+            status: "active",
+            polling: false,
+          },
+        ],
+        entries: [],
+        wakes: {},
+      });
+
+      assert.equal(mergedAfterDaedalus.multi_repo, true);
+      assert.deepEqual(Array.from(mergedAfterDaedalus.linked_repos), ["other-repo"]);
+      assert.equal(mergedAfterDaedalus.main_session_id, "alpha111-clankers");
+      assert.equal(mergedAfterDaedalus.entries.length, 1);
+      assert.equal(mergedAfterDaedalus.wakes["beta2222-clankers"], "p11111");
+      const alphaAfter = mergedAfterDaedalus.sessions.find(s => s.session_id === "alpha111-clankers");
+      const betaAfter = mergedAfterDaedalus.sessions.find(s => s.session_id === "beta2222-clankers");
+      const daedalusAfter = mergedAfterDaedalus.sessions.find(s => s.session_id === "unopt333-daedalus");
+      assert.equal(alphaAfter.agent_seen_at, "2026-10-27T02:00:00Z");
+      assert.equal(betaAfter.polling, true, "beta keeps polling=true until beta itself consumes its wake");
+      assert.equal(daedalusAfter.allowed, false, "unopted cross-repo session still registers for discovery");
+      assert.equal(daedalusAfter.repo, "daedalus");
+
+      // Wake action with wake_id preserves ISO updated_at instead of writing wake_id into updated_at:
+      const wokenOutcome = boardApi.applyBoardAction(mergedAfterDaedalus, {
+        action: "wake",
+        session_id: "alpha111-clankers",
+        target: "beta2222-clankers",
+        wake_id: "top-deadbeef",
+      });
+      assert.equal(wokenOutcome.ok, true);
+      assert.equal(wokenOutcome.board.wakes["beta2222-clankers"], "top-deadbeef");
+      const betaWoken = wokenOutcome.board.sessions.find(s => s.session_id === "beta2222-clankers");
+      assert.equal(Number.isNaN(Date.parse(betaWoken.updated_at)), false);
+      assert.notEqual(betaWoken.updated_at, "top-deadbeef");
+    });
   }
 
 

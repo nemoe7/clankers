@@ -6205,7 +6205,12 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       else ("polling" if row_polling else "active"),
       "polling": row_polling,
       "disconnected": row_disc,
-      "updated_at": str(row.get("updated_at") or clip_stamp(now())),
+      "updated_at": (
+        str(row.get("updated_at"))
+        if isinstance(row.get("updated_at"), str)
+        and re.match(r"^\d{4}-\d{2}-\d{2}T", row["updated_at"])
+        else clip_stamp(now())
+      ),
       "allowed": row_sid in allowed,
       "role": row_role,
     }
@@ -9152,12 +9157,29 @@ class Store:
           continue
         if row_sid == sid and row_sid in by_sid:
           continue
-        prev_survey = by_sid.get(row_sid, {}).get("survey")
+        prev_existing = by_sid.get(row_sid, {})
+        prev_survey = prev_existing.get("survey")
         by_sid[row_sid] = dict(row)
         if not isinstance(by_sid[row_sid].get("survey"), dict) and isinstance(
           prev_survey, dict
         ):
           by_sid[row_sid]["survey"] = prev_survey
+        for status_key in (
+          "polling_since",
+          "waiting_for_gates",
+          "checking_pr",
+          "calls_since_message",
+          "gate_threshold",
+          "agent_seen_at",
+          "turn_ended_at",
+          "agent_call_ended_at",
+        ):
+          if (
+            status_key not in by_sid[row_sid]
+            and status_key in prev_existing
+            and prev_existing[status_key] is not None
+          ):
+            by_sid[row_sid][status_key] = prev_existing[status_key]
       sessions = list(by_sid.values())
       existing_entry_ids = {
         str(item.get("id") or "") for item in entries if item.get("id")

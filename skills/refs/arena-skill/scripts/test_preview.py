@@ -16104,3 +16104,69 @@ def test_idle_board_workers_surface_in_gate_and_poll_hints(
     }
   )
   assert preview.idle_board_workers(main_dir) == []
+
+
+def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
+  tmp_path, monkeypatch
+):
+  main_repo = tmp_path / "clankers"
+  main_repo.mkdir()
+  monkeypatch.setattr(preview, "resolve_repo_root", lambda _cwd=None: main_repo)
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: "arena/alpha111-clankers"
+  )
+  main_dir = main_repo / "arena-state"
+  main_dir.mkdir()
+  store = preview.Store(main_dir, create=True)
+  monkeypatch.setattr(store, "repository_root", lambda: main_repo)
+  main_sid = store.board_state()["session_id"]
+  worker_sid = "beta2222-clankers"
+  store.board_action({"action": "allow", "session_id": main_sid})
+  store.board_action({"action": "set-main", "session_id": main_sid})
+  store.board_action({"action": "allow", "session_id": worker_sid, "worker_id": "beta"})
+  store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        **store.board_state(),
+        "sessions": [
+          {
+            "session_id": worker_sid,
+            "repo": "clankers",
+            "branch": f"arena/{worker_sid}",
+            "status": "active",
+            "polling": False,
+            "updated_at": "top-deadbeef",
+            "agent_seen_at": "2026-10-27T02:55:00",
+          }
+        ],
+      },
+    }
+  )
+  first = next(
+    row for row in store.board_state()["sessions"] if row["session_id"] == worker_sid
+  )
+  assert first["updated_at"].startswith("20")
+  assert first["agent_seen_at"] == "2026-10-27T02:55:00"
+
+  # A subsequent sync payload omitting peer agent_seen_at preserves the recorded stamp.
+  synced = store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        **store.board_state(),
+        "sessions": [
+          {
+            "session_id": worker_sid,
+            "repo": "clankers",
+            "branch": f"arena/{worker_sid}",
+            "status": "active",
+            "polling": False,
+            "updated_at": "2026-10-27T02:56:00",
+          }
+        ],
+      },
+    }
+  )
+  second = next(row for row in synced["sessions"] if row["session_id"] == worker_sid)
+  assert second["agent_seen_at"] == "2026-10-27T02:55:00"

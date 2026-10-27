@@ -5794,5 +5794,7 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /function\s+sessionStatusInfo\(/);
   assert.match(appSource, /statusSpan\.className\s*=\s*'board-status-text'/);
   assert.match(styleSource, /\.board-status-text\s*\{[^}]*font-size:\s*14px/);
+  assert.match(appSource, /selfRow\?\.agent_seen_at\s*\|\|\s*''/);
+  assert.match(appSource, /wake_id:\s*String\(stamp\)/);
 });
 
