@@ -171,7 +171,7 @@ def pending_board_entries_for_db(db,session_id=''):
 	if not sid:return[]
 	norm=normalize_board_state(raw,session_id=sid)
 	if sid not in set(norm.get('allowed_sessions')or[]):return[]
-	return[entry for entry in norm.get('entries')or[]if isinstance(entry,dict)and entry.get('session_id')!=sid and(entry.get('mention_target')==sid or entry.get('to')==sid)and not entry.get('acknowledged_at')]
+	return[entry for entry in norm.get('entries')or[]if isinstance(entry,dict)and entry.get('session_id')!=sid and(entry.get('mention_target')==sid or entry.get('to')==sid and not entry.get('tag')and bool(str(entry.get('text')or'').strip()))and not entry.get('acknowledged_at')]
 def gate_pending_count(db):base=db.execute(f"SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1) + (SELECT count(*) FROM submissions WHERE {PENDING_SUBMISSIONS})").fetchone()[0];return base+len(pending_board_entries_for_db(db))
 def pr_state_warning(line):
 	def payload(text):
@@ -2852,7 +2852,7 @@ class Store:
 		root=self.repository_root();branch=workspace_branch(root);repo=root.name;sid=board_session_id(branch);raw_text=meta.get(BOARD_STATE_META)if isinstance(meta,dict)else self.meta_value(BOARD_STATE_META)
 		try:raw=json.loads(raw_text)if raw_text else{}
 		except Exception:raw={}
-		is_polling=self.polling()if polling is None else bool(polling);out=normalize_board_state(raw,session_id=sid,repo=repo,branch=branch,polling=is_polling);allowed_set=set(out.get('allowed_sessions')or[]);is_self_allowed=bool(sid and sid in allowed_set);out['worker_tasks']={k:v for(k,v)in(out.get('worker_tasks')or{}).items()if k in allowed_set}if is_self_allowed else{};out['worker_reports']={k:v for(k,v)in(out.get('worker_reports')or{}).items()if k in allowed_set}if is_self_allowed else{}
+		is_polling=self.polling()if polling is None else bool(polling);out=normalize_board_state(raw,session_id=sid,repo=repo,branch=branch,polling=is_polling);allowed_set=set(out.get('allowed_sessions')or[]);is_self_allowed=not sid or sid in allowed_set;out['worker_tasks']={k:v for(k,v)in(out.get('worker_tasks')or{}).items()if k in allowed_set}if is_self_allowed else{};out['worker_reports']={k:v for(k,v)in(out.get('worker_reports')or{}).items()if k in allowed_set}if is_self_allowed else{}
 		if not is_self_allowed:out['entries']=[];out['wakes']={}
 		if sid:
 			try:

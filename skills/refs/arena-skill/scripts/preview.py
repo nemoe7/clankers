@@ -452,7 +452,14 @@ def pending_board_entries_for_db(db, session_id=""):
     for entry in (norm.get("entries") or [])
     if isinstance(entry, dict)
     and entry.get("session_id") != sid
-    and (entry.get("mention_target") == sid or entry.get("to") == sid)
+    and (
+      entry.get("mention_target") == sid
+      or (
+        entry.get("to") == sid
+        and not entry.get("tag")
+        and bool(str(entry.get("text") or "").strip())
+      )
+    )
     and not entry.get("acknowledged_at")
   ]
 
@@ -8549,7 +8556,7 @@ class Store:
       raw, session_id=sid, repo=repo, branch=branch, polling=is_polling
     )
     allowed_set = set(out.get("allowed_sessions") or [])
-    is_self_allowed = bool(sid and sid in allowed_set)
+    is_self_allowed = (not sid) or (sid in allowed_set)
     out["worker_tasks"] = (
       {k: v for k, v in (out.get("worker_tasks") or {}).items() if k in allowed_set}
       if is_self_allowed
