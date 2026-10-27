@@ -5761,9 +5761,6 @@ AUTOSAVE_RECEIPTS = "userscript-autosave-receipts"
 AUTOSAVE_OFFER_META = "userscript-autosave-offered"
 FORCE_SAVE_META = "userscript-force-save"
 BOARD_STATE_META = "board-state"
-MAX_BOARD_FILE_BYTES = 524_288
-MAX_BOARD_BYTES = 8_388_608
-MAX_BOARD_ENTRIES = 100
 CLEARED_META = "state-explicitly-cleared"
 CLEARED_AT_META = "state-cleared-at"
 BACKUP_DIR = "backups"
@@ -5800,8 +5797,6 @@ def stage_board_file(state_dir, sender_id, file_obj):
     )
   except Exception as error:
     raise ValueError("Invalid board file content") from error
-  if len(raw_bytes) > MAX_BOARD_FILE_BYTES:
-    raise ValueError("Board file exceeds 512 KB limit")
   digest = hashlib.sha256(raw_bytes).hexdigest()
   expected = str(file_obj.get("sha256") or "").strip().lower()
   if expected and expected != digest:
@@ -6148,13 +6143,7 @@ def trim_report_ops(ops):
     if isinstance(row, dict) and row.get("id") and row.get("target")
   ]
   valid.sort(key=lambda item: str(item.get("at") or ""))
-  decisions = [row for row in valid if str(row.get("op") or "") != "entry-ack"]
-  entry_acks = [row for row in valid if str(row.get("op") or "") == "entry-ack"]
-  kept_decisions = decisions[-MAX_BOARD_ENTRIES:]
-  ack_budget = max(0, MAX_BOARD_ENTRIES - len(kept_decisions))
-  combined = [*kept_decisions, *(entry_acks[-ack_budget:] if ack_budget else [])]
-  combined.sort(key=lambda item: str(item.get("at") or ""))
-  return combined
+  return valid
 
 
 def board_survey(survey, allowed):
@@ -6265,11 +6254,7 @@ def normalize_board_state(
       worker_tasks[norm_k] = [
         dict(row) for row in v if isinstance(row, dict) and row.get("id")
       ]
-  raw_task_ops = (
-    data.get("task_ops")[-MAX_BOARD_ENTRIES:]
-    if isinstance(data.get("task_ops"), list)
-    else []
-  )
+  raw_task_ops = data.get("task_ops") if isinstance(data.get("task_ops"), list) else []
   task_ops = [
     dict(row)
     for row in raw_task_ops
@@ -6541,11 +6526,7 @@ def normalize_board_state(
       row["board_id"] = row["session_id"]
   session_by_id = {row["session_id"]: row for row in sessions}
   entries = []
-  for item in (
-    data.get("entries")[-MAX_BOARD_ENTRIES:]
-    if isinstance(data.get("entries"), list)
-    else []
-  ):
+  for item in data.get("entries") if isinstance(data.get("entries"), list) else []:
     if not isinstance(item, dict):
       continue
     from_sid = resolve_board_target(
@@ -10058,8 +10039,6 @@ class Store:
     else:
       raise ValueError(f"Unknown board action: {action_type}")
 
-    entries = entries[-MAX_BOARD_ENTRIES:]
-    task_ops = task_ops[-MAX_BOARD_ENTRIES:]
     report_ops = trim_report_ops(report_ops)
     stored = {
       "version": 1,
@@ -10067,7 +10046,7 @@ class Store:
       "multi_repo": multi_repo,
       "linked_repos": linked_repos,
       "known_repos": known_repos,
-      "removed_sessions": removed_sessions[-MAX_BOARD_ENTRIES:],
+      "removed_sessions": removed_sessions,
       "worker_ids": worker_ids,
       "worker_tasks": worker_tasks,
       "task_ops": task_ops,
@@ -10081,12 +10060,6 @@ class Store:
       "ack_wakes": ack_wakes,
     }
     encoded = json.dumps(stored, ensure_ascii=False)
-    while len(encoded.encode("utf-8")) > MAX_BOARD_BYTES and entries:
-      entries.pop(0)
-      stored["entries"] = entries
-      encoded = json.dumps(stored, ensure_ascii=False)
-    if len(encoded.encode("utf-8")) > MAX_BOARD_BYTES:
-      raise ValueError("Board storage exceeds 2 MB limit")
     if encoded != raw_text:
       with self.transaction(autosave=False) as db:
         db.execute(
@@ -12699,7 +12672,7 @@ class Store:
                   "at": clip_stamp(now()),
                 }
               )
-              b_raw["report_ops"] = rep_ops[-MAX_BOARD_ENTRIES:]
+              b_raw["report_ops"] = rep_ops
               db.execute(
                 "INSERT OR REPLACE INTO meta VALUES (?, ?)",
                 (BOARD_STATE_META, json.dumps(b_raw, ensure_ascii=False)),
@@ -12942,7 +12915,7 @@ class Store:
                   "at": clip_stamp(stamp),
                 }
               )
-              b_raw["report_ops"] = rep_ops[-MAX_BOARD_ENTRIES:]
+              b_raw["report_ops"] = rep_ops
               sender_sid = str(entry.get("session_id") or "")
               if sender_sid and sender_sid != local_sid:
                 wakes = (
@@ -17169,7 +17142,7 @@ def main():
     "--file",
     type=Path,
     default=None,
-    help="Optional file attachment (<= 512 KiB)",
+    help="Optional file attachment",
   )
   board_post_cmd.add_argument(
     "text",
@@ -17567,8 +17540,6 @@ def main():
         if not file_path.is_file():
           raise ValueError(f"No such board attachment file: {file_path}")
         raw_bytes = file_path.read_bytes()
-        if len(raw_bytes) > MAX_BOARD_FILE_BYTES:
-          raise ValueError("Board file exceeds 512 KB limit")
         try:
           content = raw_bytes.decode("utf-8")
           encoding = "utf-8"

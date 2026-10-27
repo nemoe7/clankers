@@ -15450,16 +15450,16 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
       "arena/293da56c-clankers",
       {"name": "../bad.txt", "encoding": "utf-8", "content": "x"},
     )
-  with pytest.raises(ValueError):
-    preview.stage_board_file(
-      hygiene_dir,
-      "arena/293da56c-clankers",
-      {
-        "name": "huge.bin",
-        "encoding": "utf-8",
-        "content": "x" * (preview.MAX_BOARD_FILE_BYTES + 1),
-      },
-    )
+  large_file = preview.stage_board_file(
+    hygiene_dir,
+    "arena/293da56c-clankers",
+    {
+      "name": "huge.bin",
+      "encoding": "utf-8",
+      "content": "x" * 600_000,
+    },
+  )
+  assert large_file["size"] == 600_000
   with pytest.raises(ValueError):
     hygiene_store.board_action(
       {
@@ -16678,7 +16678,7 @@ def test_board_report_ops_preserve_decisions_under_entry_ack_flood(
   )
   kept_ids = {op["id"] for op in synced["report_ops"]}
   assert "rop-keep-answer" in kept_ids
-  assert len(synced["report_ops"]) <= preview.MAX_BOARD_ENTRIES
+  assert len(synced["report_ops"]) == len(ack_flood) + 1
 
 
 def test_userscript_version_header_records_in_state_and_key_output(tmp_path):
