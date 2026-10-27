@@ -34,7 +34,7 @@ let listSignature = '';
 let lastState = null;
 // Pending writes project over the latest poll, without changing its trusted server records.
 const optimisticState = new Map();
-let pollCommits = null;
+const activePollCommits = new Set();
 function getState() {
   if (!lastState || !optimisticState.size) return lastState;
   const state = JSON.parse(JSON.stringify(lastState));
@@ -49,7 +49,7 @@ async function optimisticWrite(apply, write, commit = apply, echo = null) {
     renderState();
     const result = await write();
     if (lastState) commit(lastState, result);
-    if (pollCommits) pollCommits.push(state => commit(state, result));
+    for (const bucket of activePollCommits) bucket.push(state => commit(state, result));
     if (echo) {
       entry.apply = state => commit(state, result);
       entry.echo = state => echo(state, result);
@@ -1732,7 +1732,8 @@ function browserTimezone() {
 }
 async function readState() {
   let queueReady = false;
-  pollCommits = [];
+  const commits = [];
+  activePollCommits.add(commits);
   try {
     const tz = browserTimezone();
     const stateHeaders = {};
@@ -1744,7 +1745,7 @@ async function readState() {
       syncSlashComposerStyle();
     }
     for (const [key, entry] of optimisticState) if (entry.echo?.(state)) optimisticState.delete(key);
-    for (const commit of pollCommits) commit(state);
+    for (const commit of commits) commit(state);
     lastState = state;
     renderState();
     queueReady = true;
@@ -1754,7 +1755,7 @@ async function readState() {
   }
   finally {
     stateBusy = null;
-    pollCommits = null;
+    activePollCommits.delete(commits);
     if (stateAgain) { stateAgain = false; socketRefresh(); }
     if (queueReady && (lastState?.fetch_jobs || []).some(item => item.approval === 'approved'
       && (item.status === 'queued'
@@ -2574,7 +2575,7 @@ setInterval(showClock, 1000);
       if (/^[0-9A-Za-z._+-]{1,32}$/.test(nextVer) && nextVer !== connectedUserscriptVersion) {
         connectedUserscriptVersion = nextVer;
         if (lastState) renderAgentKey(lastState.agent_key, lastState.repo, lastState.userscript_version || connectedUserscriptVersion);
-        void readState();
+        socketRefresh();
       }
     }
     const newlyEnabled = enableUserscriptForceSave();

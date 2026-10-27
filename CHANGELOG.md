@@ -1,5 +1,6 @@
 <!-- nonemo: NMP100 -->
 <!-- nonemo: NMO100 -->
+
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). This repository uses `YYYY-MM-DD` dates as versions instead of [Semantic Versioning](https://semver.org/).
@@ -81,6 +82,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Serialize `clankers:userscript-ready` state refreshes through `socketRefresh()` and isolate per-call `commits` in `readState()` (`assets/app.js`, `scripts/client.test.cjs`).
 - Print `arena-preview serve --port 8000` instead of `--serve` in `install.sh` (`scripts/install.sh`, `scripts/test_preview.py`, `scripts/client.test.cjs`).
 - Render state markers and sequence notes, separate Mermaid edges and labels, and open diagrams in the image zoom viewer (`assets/app.js`, `assets/style.css`, `scripts/client.test.cjs`).
 - Preserve `removed_sessions` revocations across `arena_proxy/board.py` and `preview.py` syncs so stale peer `allowed_sessions` never resurrect a revoked session (`arena-egress-proxy/scripts/arena_proxy/`, `scripts/preview.py`, `scripts/test_preview.py`, `maintenance/workflows/test_arena_proxy.py`).
@@ -1467,6 +1469,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Task detail updates accept an append flag. Replacement remains the default, and existing limits still apply.
 
 #### skills
+
 - The run-log route takes failed=1 and answers only the step blocks that carry an error marker, so an error hunt skips the passing steps.
 
 - The gpt-question skill gives every choice group its own Custom answer option and free-text input. The always-visible form-level field retires, and the mixed example enforces one, two, and one-or-more selections.
@@ -1707,7 +1710,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- Session title and state-file detection now use the repository name before ` read ` when the normal repository controls are absent.
+- Session title and state-file detection now use the repository name before `read` when the normal repository controls are absent.
 
 - The README now describes repeated logs, logged data, and the trim action-removal condition.
 - The Arena tab title finds rows after a message header and keeps the previous row lookup as a fallback.
@@ -1814,6 +1817,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The Arena bundle keeps the screen awake while a turn runs. It asks for a Screen Wake Lock, and a menu switch turns the feature off.
+
 ### Changed
 
 #### preview

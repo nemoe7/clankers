@@ -5518,6 +5518,74 @@ test('preview client', async (t) => {
     delete context.window.parent;
   });
 
+  await t.test('clankers:userscript-ready queues via socketRefresh and overlapping readState calls isolate commits', async () => {
+    const localWindowEvents = {};
+    const subCtx = {
+      ...context,
+      window: {
+        ...context.window,
+        addEventListener: (name, callback) => { localWindowEvents[name] = callback; },
+      },
+    };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), subCtx);
+    await tick();
+    await subCtx.refreshState();
+
+    let releaseFirst;
+    stateResponseWait = new Promise(resolve => { releaseFirst = resolve; });
+    const firstRefresh = subCtx.refreshState();
+    const stateCallsDuringFlight = () =>
+      context.fetch.mock.calls.filter(call => call.arguments[0] === '/api/state').length;
+    const baselineCalls = stateCallsDuringFlight();
+    localWindowEvents.message({ data: { type: 'clankers:userscript-ready', version: '9.9.9' } });
+    assert.equal(
+      stateCallsDuringFlight(),
+      baselineCalls,
+      'userscript-ready queues behind stateBusy instead of calling readState directly'
+    );
+    stateResponseWait = null;
+    releaseFirst();
+    await firstRefresh;
+    await tick();
+    assert.equal(
+      stateCallsDuringFlight(),
+      baselineCalls + 1,
+      'queued socketRefresh fires once the in-flight state read settles'
+    );
+
+    const originalSubFetch = subCtx.fetch;
+    let resolveSlow;
+    let resolveFast;
+    let stateCallNum = 0;
+    subCtx.fetch = async (url, options) => {
+      if (url === '/api/state') {
+        stateCallNum += 1;
+        if (stateCallNum === 1) await new Promise(resolve => { resolveSlow = resolve; });
+        else await new Promise(resolve => { resolveFast = resolve; });
+        return response({ ...state, skip_poll: null });
+      }
+      return originalSubFetch(url, options);
+    };
+    try {
+      const slowRead = subCtx.readState();
+      const fastRead = subCtx.readState();
+      await subCtx.optimisticWrite(
+        next => { next.skip_poll = '2026-10-27T10:00:00'; },
+        async () => ({ skip_poll: '2026-10-27T10:00:00' }),
+        (next, res) => { next.skip_poll = res.skip_poll; }
+      );
+      resolveFast();
+      await fastRead;
+      resolveSlow();
+      await slowRead;
+      assert.notEqual(get('#connection').dataset.state, 'down');
+      assert.equal(subCtx.getState().skip_poll, '2026-10-27T10:00:00');
+    } finally {
+      subCtx.fetch = originalSubFetch;
+      state.skip_poll = null;
+    }
+  });
+
   await t.test('Slash command pills stay inline with other text, reject glued tokens, and unregister on Backspace', async () => {
     const noteEl = get('#note');
     const backdropEl = get('#note-backdrop');
