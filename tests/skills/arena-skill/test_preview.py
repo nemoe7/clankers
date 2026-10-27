@@ -17025,3 +17025,66 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
   )
   assert w_after_clear["polling"] is False
   assert w_after_clear["status"] == "active"
+
+  # Expired unopted disconnected rows prune past TTL and cross-repo rows hide when multi_repo=False:
+  base_dt = datetime(2026, 10, 27, 12, 0, 0, tzinfo=UTC)
+  expired_stamp = (
+    (base_dt - timedelta(seconds=preview.BOARD_SESSION_TTL_SECONDS + 30))
+    .isoformat()
+    .replace("+00:00", "Z")
+  )
+  fresh_stamp = (
+    (base_dt - timedelta(seconds=preview.BOARD_SESSION_TTL_SECONDS // 3))
+    .isoformat()
+    .replace("+00:00", "Z")
+  )
+  raw_mixed = {
+    "multi_repo": False,
+    "linked_repos": [],
+    "allowed_sessions": [main_sid, "11111111-otherrepo"],
+    "main_session_id": main_sid,
+    "sessions": [
+      {"session_id": main_sid, "repo": "clankers", "updated_at": fresh_stamp},
+      {
+        "session_id": "dead9999-daedalus",
+        "repo": "daedalus",
+        "status": "disconnected",
+        "disconnected": True,
+        "updated_at": expired_stamp,
+      },
+      {
+        "session_id": "fresh888-clankers",
+        "repo": "clankers",
+        "status": "disconnected",
+        "disconnected": True,
+        "updated_at": fresh_stamp,
+      },
+      {
+        "session_id": "11111111-otherrepo",
+        "repo": "otherrepo",
+        "status": "disconnected",
+        "disconnected": True,
+        "updated_at": expired_stamp,
+      },
+    ],
+  }
+  scoped_state = preview.normalize_board_state(
+    raw_mixed,
+    session_id=main_sid,
+    repo="clankers",
+    now_epoch=base_dt.timestamp(),
+  )
+  scoped_ids = {r["session_id"] for r in scoped_state["sessions"]}
+  assert "dead9999-daedalus" not in scoped_ids
+  assert "11111111-otherrepo" not in scoped_ids
+  assert "fresh888-clankers" in scoped_ids
+  assert "otherrepo" in scoped_state["known_repos"]
+  assert "daedalus" not in scoped_state["known_repos"]
+  unscoped_state = preview.normalize_board_state(
+    raw_mixed,
+    session_id=main_sid,
+    repo="clankers",
+    scope_repos=False,
+    now_epoch=base_dt.timestamp(),
+  )
+  assert len(scoped_state["sessions"]) < len(unscoped_state["sessions"])

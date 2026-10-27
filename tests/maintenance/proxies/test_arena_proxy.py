@@ -1336,3 +1336,76 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
     )
     assert st == 200
     assert moved_heads["board"]["wakes"].get(delta) == f"main-moved:{sha_2[:12]}"
+
+    # Expired unopted disconnected rows prune past TTL and cross-repo rows hide when multi_repo=False:
+    import time as _time
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+
+    from arena_proxy import board as board_mod
+
+    now_sec = _time.time()
+    expired_iso = (
+      _dt.fromtimestamp(now_sec - (board_mod.BOARD_SESSION_TTL_SECONDS + 30), tz=_UTC)
+      .isoformat()
+      .replace("+00:00", "Z")
+    )
+    fresh_iso = (
+      _dt.fromtimestamp(now_sec - (board_mod.BOARD_SESSION_TTL_SECONDS // 3), tz=_UTC)
+      .isoformat()
+      .replace("+00:00", "Z")
+    )
+    expired_daedalus = "dead1111-daedalus"
+    fresh_clankers_unopted = "fresh222-clankers"
+    opted_otherrepo = "opt33333-otherrepo"
+    norm_pruned = board_mod.normalize_board(
+      {
+        "multi_repo": False,
+        "allowed_sessions": [alpha, opted_otherrepo],
+        "main_session_id": alpha,
+        "sessions": [
+          {"session_id": alpha, "repo": "clankers", "updated_at": fresh_iso},
+          {
+            "session_id": expired_daedalus,
+            "repo": "daedalus",
+            "status": "disconnected",
+            "disconnected": True,
+            "updated_at": expired_iso,
+          },
+          {
+            "session_id": fresh_clankers_unopted,
+            "repo": "clankers",
+            "status": "disconnected",
+            "disconnected": True,
+            "updated_at": fresh_iso,
+          },
+          {
+            "session_id": opted_otherrepo,
+            "repo": "otherrepo",
+            "status": "disconnected",
+            "disconnected": True,
+            "updated_at": expired_iso,
+          },
+        ],
+      }
+    )
+    norm_sids = {row["session_id"] for row in norm_pruned["sessions"]}
+    assert expired_daedalus not in norm_sids
+    assert fresh_clankers_unopted in norm_sids
+    assert opted_otherrepo in norm_sids
+
+    scoped_single = board_mod.scope_board_for_target(
+      norm_pruned, session_id=alpha, repo_hint="clankers"
+    )
+    scoped_sids = {row["session_id"] for row in scoped_single["sessions"]}
+    assert opted_otherrepo not in scoped_sids
+    assert len(scoped_single["sessions"]) < len(norm_pruned["sessions"])
+    assert "otherrepo" in scoped_single["known_repos"]
+    assert "daedalus" not in scoped_single["known_repos"]
+
+    scoped_linked = board_mod.scope_board_for_target(
+      dict(norm_pruned, multi_repo=True, linked_repos=["otherrepo"]),
+      session_id=alpha,
+      repo_hint="clankers",
+    )
+    assert opted_otherrepo in {row["session_id"] for row in scoped_linked["sessions"]}

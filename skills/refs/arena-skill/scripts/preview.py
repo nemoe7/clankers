@@ -6169,8 +6169,41 @@ def board_survey(survey, allowed):
   return result
 
 
-def normalize_board_state(raw, session_id="", repo="", branch="", polling=False):
+def _is_expired_unopted_disconnected_row(row, is_allowed, is_disc, now_epoch):
+  if is_allowed or not is_disc:
+    return False
+  stamp_epoch = board_stamp_epoch(row.get("updated_at"))
+  if stamp_epoch is None:
+    stamps = [
+      ts
+      for key in ("turn_ended_at", "agent_call_ended_at", "agent_seen_at")
+      if (ts := board_stamp_epoch(row.get(key))) is not None
+    ]
+    stamp_epoch = max(stamps) if stamps else None
+  return (
+    stamp_epoch is not None and (now_epoch - stamp_epoch) > BOARD_SESSION_TTL_SECONDS
+  )
+
+
+def _is_repo_visible_on_board(row_repo, base_repo_slug, multi_repo, linked_set):
+  if not base_repo_slug or not row_repo or row_repo == base_repo_slug:
+    return True
+  if linked_set:
+    return row_repo in linked_set
+  return bool(multi_repo)
+
+
+def normalize_board_state(
+  raw,
+  session_id="",
+  repo="",
+  branch="",
+  polling=False,
+  scope_repos=True,
+  now_epoch=None,
+):
   data = raw if isinstance(raw, dict) else {}
+  now_sec = time.time() if now_epoch is None else float(now_epoch)
   sid = board_session_id(session_id or branch)
   linked_repos = []
   for item in (
@@ -6299,6 +6332,17 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       or (row_sid.startswith("probe-") and row_sid not in allowed)
     ):
       continue
+    is_self = bool(sid and row_sid == sid)
+    wake_pending = row_sid in allowed and bool(wakes.get(row_sid))
+    row_disc = (
+      False
+      if is_self
+      else bool(row.get("disconnected") or row.get("status") == "disconnected")
+    )
+    if not is_self and _is_expired_unopted_disconnected_row(
+      row, row_sid in allowed, row_disc, now_sec
+    ):
+      continue
     seen_sids.add(row_sid)
     if (
       row.get("worker_id")
@@ -6312,13 +6356,6 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
           worker_ids[row_sid] = delegated
       except ValueError:
         pass
-    is_self = bool(sid and row_sid == sid)
-    wake_pending = row_sid in allowed and bool(wakes.get(row_sid))
-    row_disc = (
-      False
-      if is_self
-      else bool(row.get("disconnected") or row.get("status") == "disconnected")
-    )
     row_polling = (
       (
         bool(polling)
@@ -6677,13 +6714,35 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
   base_repo_slug = clean_board_repo(repo, sid)
   if base_repo_slug:
     known_repos.append(base_repo_slug)
+  if isinstance(data.get("known_repos"), list):
+    for item in data["known_repos"]:
+      r_slug = clean_board_repo(item, "")
+      if r_slug and r_slug not in known_repos:
+        known_repos.append(r_slug)
   for row in sessions:
     r_slug = clean_board_repo(row.get("repo") or "", row.get("session_id") or "")
-    if r_slug and r_slug not in known_repos:
+    if (
+      r_slug
+      and (row.get("allowed") or r_slug == base_repo_slug)
+      and r_slug not in known_repos
+    ):
       known_repos.append(r_slug)
   for r_slug in linked_repos:
     if r_slug not in known_repos:
       known_repos.append(r_slug)
+  if scope_repos and base_repo_slug:
+    linked_set = set(linked_repos)
+    sessions = [
+      row
+      for row in sessions
+      if row["session_id"] == sid
+      or _is_repo_visible_on_board(
+        clean_board_repo(row.get("repo") or "", row["session_id"]),
+        base_repo_slug,
+        multi_repo,
+        linked_set,
+      )
+    ]
   effective_main_sid = (
     repo_has_main.get(base_repo_slug, "") if base_repo_slug else main_sid
   )
@@ -8477,7 +8536,7 @@ class Store:
     del board_now, local_ids, meta
     return {}
 
-  def board_state(self, meta=None, polling=None):
+  def board_state(self, meta=None, polling=None, _scope_repos=True):
     root = self.repository_root()
     branch = workspace_branch(root)
     repo = root.name
@@ -8493,7 +8552,12 @@ class Store:
       raw = {}
     is_polling = self.polling() if polling is None else bool(polling)
     out = normalize_board_state(
-      raw, session_id=sid, repo=repo, branch=branch, polling=is_polling
+      raw,
+      session_id=sid,
+      repo=repo,
+      branch=branch,
+      polling=is_polling,
+      scope_repos=_scope_repos,
     )
     allowed_set = set(out.get("allowed_sessions") or [])
     is_self_allowed = (not sid) or (sid in allowed_set)
@@ -9132,9 +9196,10 @@ class Store:
       if isinstance(raw_stored, dict) and isinstance(raw_stored.get("ack_wakes"), dict)
       else {}
     )
-    state = self.board_state()
+    state = self.board_state(_scope_repos=False)
     sid = state["session_id"]
     linked_repos = [str(x) for x in (state.get("linked_repos") or []) if x]
+    known_repos = [str(x) for x in (state.get("known_repos") or []) if x]
     multi_repo = bool(state.get("multi_repo") or linked_repos)
     worker_ids = dict(state.get("worker_ids") or {})
     worker_tasks = {
@@ -9178,7 +9243,10 @@ class Store:
         repo=state["repo"],
         branch=state["branch"],
         polling=any(r["session_id"] == sid and r.get("polling") for r in sessions),
+        scope_repos=False,
       )
+      if isinstance(incoming, dict) and isinstance(incoming.get("known_repos"), list):
+        known_repos = list(merged.get("known_repos") or [])
       incoming_has_allow = isinstance(incoming, dict) and (
         "allowed_sessions" in incoming or "removed_sessions" in incoming
       )
@@ -9998,6 +10066,7 @@ class Store:
       "local_session_id": sid,
       "multi_repo": multi_repo,
       "linked_repos": linked_repos,
+      "known_repos": known_repos,
       "removed_sessions": removed_sessions[-MAX_BOARD_ENTRIES:],
       "worker_ids": worker_ids,
       "worker_tasks": worker_tasks,

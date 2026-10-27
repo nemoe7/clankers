@@ -4592,6 +4592,32 @@ for raw in sys.stdin:
       );
       assert.equal(scheduled.length, 0, "non-sbx URLs do not schedule extra skill HTTP jitter");
       assert.equal(wireCalls.length, 1, "non-sbx URL fires immediately");
+
+      const boardCheck = checkBox.CLANKERS_CHECKS.board;
+      const nowEpochMs = Date.now();
+      const expiredIso = new Date(nowEpochMs - (boardCheck.BOARD_SESSION_TTL_SECONDS + 30) * 1000).toISOString();
+      const freshIso = new Date(nowEpochMs - Math.floor(boardCheck.BOARD_SESSION_TTL_SECONDS / 3) * 1000).toISOString();
+      const normalizedMixed = boardCheck.normalizeBoard({
+        multi_repo: false,
+        allowed_sessions: ["alpha111-clankers", "opt33333-otherrepo"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          { session_id: "alpha111-clankers", repo: "clankers", updated_at: freshIso },
+          { session_id: "dead9999-daedalus", repo: "daedalus", status: "disconnected", disconnected: true, updated_at: expiredIso },
+          { session_id: "fresh888-clankers", repo: "clankers", status: "disconnected", disconnected: true, updated_at: freshIso },
+          { session_id: "opt33333-otherrepo", repo: "otherrepo", status: "disconnected", disconnected: true, updated_at: expiredIso },
+        ],
+      });
+      const normIds = normalizedMixed.sessions.map((row) => row.session_id);
+      assert.ok(!normIds.includes("dead9999-daedalus"), "expired unopted disconnected row is pruned");
+      assert.ok(normIds.includes("fresh888-clankers"), "fresh unopted disconnected row stays within TTL");
+      assert.ok(normIds.includes("opt33333-otherrepo"), "opted disconnected row is retained");
+      const scopedClankers = boardCheck.scopeBoardForTarget(normalizedMixed, "alpha111-clankers", "clankers");
+      const scopedIds = scopedClankers.sessions.map((row) => row.session_id);
+      assert.ok(!scopedIds.includes("opt33333-otherrepo"), "unlinked cross-repo row hides when multi_repo is false");
+      assert.ok(scopedClankers.sessions.length < normalizedMixed.sessions.length);
+      assert.ok(scopedClankers.known_repos.includes("otherrepo"));
+      assert.ok(!scopedClankers.known_repos.includes("daedalus"));
     });
   }
 

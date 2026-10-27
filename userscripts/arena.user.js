@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.2
+// @name         Arena.ai | NemoUtils | v1.13.3
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.2
+// @version      1.13.3
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -27,7 +27,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.2";
+  var USERSCRIPT_VERSION = "1.13.3";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
 
   function userscriptVersion() {
@@ -4954,6 +4954,7 @@
   var lastRemoteBoardSyncAtMs = 0;
   var wasListenerSessionAllowed = false;
   var BOARD_HEARTBEAT_WRITE_MS = 15000;
+  var BOARD_SESSION_TTL_SECONDS = 180;
   var BOARD_REMOTE_DEBOUNCE_MS = 500;
   var BOARD_REMOTE_MIN_INTERVAL_MS = 1000;
   var BOARD_PROXY_HOST_KEY = "clankers-arena-proxy-host";
@@ -7182,18 +7183,34 @@
     if (mainId) delete workerIds[mainId];
     var sessions = [];
     var seenSessions = {};
+    var nowMs = Date.now();
     for (var j = 0; j < rawSessions.length; j += 1) {
       var row = rawSessions[j];
       if (!row || typeof row !== "object") continue;
       var rowSid = boardSessionId(row.session_id || row.branch || "");
       if (!rowSid || seenSessions[rowSid] || removedSet[rowSid] || (rowSid.indexOf("probe-") === 0 && !seenAllowed[rowSid])) continue;
+      var isPoll = Boolean(row.polling || row.status === "polling");
+      var isDisc = Boolean(row.disconnected || row.status === "disconnected");
+      if (!seenAllowed[rowSid] && isDisc) {
+        var rowStampMs = parseBoardStampMs(row.updated_at);
+        if (isNaN(rowStampMs)) {
+          var fallbackStamps = ["turn_ended_at", "agent_call_ended_at", "agent_seen_at"];
+          for (var fsIdx = 0; fsIdx < fallbackStamps.length; fsIdx += 1) {
+            var candMs = parseBoardStampMs(row[fallbackStamps[fsIdx]]);
+            if (!isNaN(candMs) && (isNaN(rowStampMs) || candMs > rowStampMs)) {
+              rowStampMs = candMs;
+            }
+          }
+        }
+        if (!isNaN(rowStampMs) && (nowMs - rowStampMs) > BOARD_SESSION_TTL_SECONDS * 1000) {
+          continue;
+        }
+      }
       seenSessions[rowSid] = true;
       if (row.worker_id && !workerIds[rowSid] && rowSid !== mainId) {
         var delegated = cleanWorkerId(row.worker_id);
         if (delegated) workerIds[rowSid] = delegated;
       }
-      var isPoll = Boolean(row.polling || row.status === "polling");
-      var isDisc = Boolean(row.disconnected || row.status === "disconnected");
       var rowRepo = cleanBoardRepo(row.repo, rowSid);
       var rowOut = {
         session_id: rowSid,
@@ -7917,6 +7934,27 @@
     var sid = boardSessionId(sessionId);
     var targetRepo = cleanBoardRepo(repoHint || "", sid);
     var isAllowed = Boolean(sid && normalized.allowed_sessions.indexOf(sid) !== -1);
+    var linkedRepos = Array.isArray(normalized.linked_repos) ? normalized.linked_repos : [];
+    var knownRepos = [];
+    if (targetRepo) knownRepos.push(targetRepo);
+    for (var kr = 0; kr < normalized.sessions.length; kr += 1) {
+      var krSlug = normalized.sessions[kr].repo || "";
+      if (krSlug && (normalized.sessions[kr].allowed || krSlug === targetRepo) && knownRepos.indexOf(krSlug) === -1) {
+        knownRepos.push(krSlug);
+      }
+    }
+    for (var lrIdx = 0; lrIdx < linkedRepos.length; lrIdx += 1) {
+      if (linkedRepos[lrIdx] && knownRepos.indexOf(linkedRepos[lrIdx]) === -1) {
+        knownRepos.push(linkedRepos[lrIdx]);
+      }
+    }
+    var visibleSessions = normalized.sessions.filter(function (row) {
+      if (row.session_id === sid) return true;
+      var rowRepo = row.repo || "";
+      if (!targetRepo || !rowRepo || rowRepo === targetRepo) return true;
+      if (linkedRepos.length) return linkedRepos.indexOf(rowRepo) !== -1;
+      return Boolean(normalized.multi_repo);
+    });
     var scopedMain = "";
     if (targetRepo) {
       for (var i = 0; i < normalized.sessions.length; i += 1) {
@@ -7945,6 +7983,8 @@
       }
       return Object.assign({}, normalized, {
         main_session_id: scopedMain,
+        known_repos: knownRepos,
+        sessions: visibleSessions,
         entries: [],
         worker_tasks: {},
         worker_reports: ownReports,
@@ -7967,6 +8007,8 @@
     });
     return Object.assign({}, normalized, {
       main_session_id: scopedMain,
+      known_repos: knownRepos,
+      sessions: visibleSessions,
       worker_tasks: scopedTasks,
       worker_reports: scopedReports,
     });
@@ -8349,6 +8391,7 @@
     BOARD_KEY: BOARD_KEY,
     BOARD_PROXY_HOST_KEY: BOARD_PROXY_HOST_KEY,
     BOARD_PROXY_MASTER_KEY: BOARD_PROXY_MASTER_KEY,
+    BOARD_SESSION_TTL_SECONDS: BOARD_SESSION_TTL_SECONDS,
     MAX_BOARD_FILE_BYTES: MAX_BOARD_FILE_BYTES,
     MAX_BOARD_BYTES: MAX_BOARD_BYTES,
     boardProxyConfig: boardProxyConfig,

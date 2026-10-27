@@ -13,6 +13,7 @@ from pathlib import Path
 MAX_BOARD_ENTRIES = 200
 MAX_BOARD_BYTES = 2 * 1024 * 1024
 MAX_BOARD_FILE_BYTES = 512 * 1024
+BOARD_SESSION_TTL_SECONDS = 180
 SESSION_SLUG_RE = re.compile(r"^[0-9a-f]{6,16}-([A-Za-z0-9._-]+)$", re.IGNORECASE)
 WORKER_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,5}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -297,6 +298,7 @@ def normalize_board(raw):
     worker_ids.pop(main_id, None)
   sessions = []
   seen_sessions = set()
+  now_ms = int(time.time() * 1000)
   for row in raw_sessions:
     if not isinstance(row, dict):
       continue
@@ -308,21 +310,35 @@ def normalize_board(raw):
       or (row_sid.startswith("probe-") and row_sid not in seen_allowed)
     ):
       continue
+    is_poll = bool(row.get("polling") or row.get("status") == "polling")
+    is_disc = bool(row.get("disconnected") or row.get("status") == "disconnected")
+    is_allowed_row = row_sid in seen_allowed
+    if not is_allowed_row and is_disc:
+      stamp_ms = parse_stamp_ms(row.get("updated_at"))
+      if stamp_ms is None:
+        fallback_ms = [
+          ms
+          for key in ("turn_ended_at", "agent_call_ended_at", "agent_seen_at")
+          if (ms := parse_stamp_ms(row.get(key))) is not None
+        ]
+        stamp_ms = max(fallback_ms) if fallback_ms else None
+      if (
+        stamp_ms is not None and (now_ms - stamp_ms) > BOARD_SESSION_TTL_SECONDS * 1000
+      ):
+        continue
     seen_sessions.add(row_sid)
     if row.get("worker_id") and row_sid not in worker_ids and row_sid != main_id:
       delegated = clean_worker_id(row.get("worker_id"))
       if delegated:
         worker_ids[row_sid] = delegated
-    is_poll = bool(row.get("polling") or row.get("status") == "polling")
-    is_disc = bool(row.get("disconnected") or row.get("status") == "disconnected")
     row_repo = clean_board_repo(row.get("repo"), row_sid)
     updated_at = row.get("updated_at")
     row_out = {
       "session_id": row_sid,
       "board_id": "",
       "worker_id": "",
-      "allowed": row_sid in seen_allowed,
-      "role": "worker" if row_sid in seen_allowed else "blocked",
+      "allowed": is_allowed_row,
+      "role": "worker" if is_allowed_row else "blocked",
       "repo": row_repo,
       "branch": str(row.get("branch") or f"arena/{row_sid}"),
       "status": "disconnected" if is_disc else ("polling" if is_poll else "active"),
@@ -479,6 +495,14 @@ def normalize_board(raw):
   }
 
 
+def _is_repo_visible(row_repo, target_repo, multi_repo, linked_set):
+  if not target_repo or not row_repo or row_repo == target_repo:
+    return True
+  if linked_set:
+    return row_repo in linked_set
+  return bool(multi_repo)
+
+
 def scope_board_for_target(board, session_id="", repo_hint=""):
   """Scope normalized board state for a specific session and repository."""
   normalized = normalize_board(board)
@@ -486,6 +510,29 @@ def scope_board_for_target(board, session_id="", repo_hint=""):
   target_repo = clean_board_repo(repo_hint or "", sid)
   allowed_set = set(normalized["allowed_sessions"])
   is_allowed = bool(sid and sid in allowed_set)
+  linked_set = set(normalized["linked_repos"])
+  known_repos = []
+  if target_repo:
+    known_repos.append(target_repo)
+  for row in normalized["sessions"]:
+    r_slug = row.get("repo") or ""
+    if (
+      r_slug
+      and (row.get("allowed") or r_slug == target_repo)
+      and r_slug not in known_repos
+    ):
+      known_repos.append(r_slug)
+  for r_slug in normalized["linked_repos"]:
+    if r_slug and r_slug not in known_repos:
+      known_repos.append(r_slug)
+  visible_sessions = [
+    dict(row)
+    for row in normalized["sessions"]
+    if row["session_id"] == sid
+    or _is_repo_visible(
+      row.get("repo", ""), target_repo, normalized["multi_repo"], linked_set
+    )
+  ]
   scoped_main = ""
   if target_repo:
     for row in normalized["sessions"]:
@@ -514,6 +561,8 @@ def scope_board_for_target(board, session_id="", repo_hint=""):
     out = dict(
       normalized,
       main_session_id=scoped_main,
+      known_repos=known_repos,
+      sessions=visible_sessions,
       entries=[],
       worker_tasks={},
       worker_reports=own_reports,
@@ -528,6 +577,8 @@ def scope_board_for_target(board, session_id="", repo_hint=""):
   out = dict(
     normalized,
     main_session_id=scoped_main,
+    known_repos=known_repos,
+    sessions=visible_sessions,
     worker_tasks={
       k: list(v) for k, v in normalized["worker_tasks"].items() if k in allowed_set
     },

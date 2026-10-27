@@ -91,6 +91,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Drop unopted `disconnected` board rows past `BOARD_SESSION_TTL_SECONDS` and hide unlinked cross-repo rows when `multi_repo` is `false` (`arena-egress-proxy/scripts/arena_proxy/board.py`, `scripts/preview.py`, `tests/`).
 - Serialize `clankers:userscript-ready` state refreshes through `socketRefresh()` and isolate per-call `commits` in `readState()` (`assets/app.js`, `scripts/client.test.cjs`).
 - Print `arena-preview serve --port 8000` instead of `--serve` in `install.sh` (`scripts/install.sh`, `scripts/test_preview.py`, `scripts/client.test.cjs`).
 - Render state markers and sequence notes, separate Mermaid edges and labels, and open diagrams in the image zoom viewer (`assets/app.js`, `assets/style.css`, `scripts/client.test.cjs`).
@@ -104,6 +105,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Drop unopted `disconnected` board rows past `BOARD_SESSION_TTL_SECONDS` and hide unlinked cross-repo rows when `multi_repo` is `false` (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `tests/userscripts/userscripts.test.cjs`).
 - Clear stale `* ` tab-title prefixes, apply `report_ops` to local report caches, and redact unopted survey answers (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Omit `X-Clankers-Userscript-Version` on `/pwa/recent` posts, fall back `discoverPreviews` repository and Steering base before `clankers:preview-ready`, and set `previewUiSessionId` before syncing preview URLs (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Pass `previewUiSessionId` instead of target `action.session_id` to post-action `syncPreviewBoard` and preserve global `removed_sessions` revocations across peer and self syncs (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
