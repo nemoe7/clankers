@@ -333,7 +333,15 @@ def normalize_board(raw):
       else "",
     }
     if isinstance(row.get("survey"), dict):
-      row_out["survey"] = row["survey"]
+      survey = dict(row["survey"])
+      if row_sid not in seen_allowed and isinstance(survey.get("results"), list):
+        survey["results"] = [
+          {key: value for key, value in result.items() if key != "answer"}
+          if isinstance(result, dict)
+          else result
+          for result in survey["results"]
+        ]
+      row_out["survey"] = survey
     for key in STATUS_KEYS:
       if row.get(key) is not None:
         row_out[key] = row[key]

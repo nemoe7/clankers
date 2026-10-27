@@ -22,6 +22,7 @@ MASTER = "test-master-key-0123456789"
 TOKEN = "test-provider-token"
 BINARY = b"\x89PNG\r\n\x1a\n\x00binary payload"
 sys.path.insert(0, str(SCRIPTS))
+board_module = importlib.import_module("arena_proxy.board")
 core = importlib.import_module("arena_proxy.core")
 github_api = importlib.import_module("arena_proxy.github_api")
 transfers = importlib.import_module("arena_proxy.transfers")
@@ -918,6 +919,63 @@ def test_private_board_routes_stay_hidden_and_require_master_key(tmp_path):
   with backend(tmp_path, master="") as closed:
     status, closed_body = call(closed.port, f"/v1/board?master={MASTER}")
     assert status == 404 and "board" not in closed_body
+
+
+def test_board_normalization_redacts_unallowlisted_survey_answers():
+  allowed = "alpha111-clankers"
+  unopted = "solo999-clankers"
+  answer = {"id": "Q1", "correct": True, "confidence": 1, "answer": {"value": "Secret"}}
+  legacy = {"id": "Q2", "correct": None, "confidence": 0}
+  survey = {"results": [answer, legacy], "answered_at": "2026-01-01T00:00:00Z"}
+  raw = {
+    "allowed_sessions": [allowed],
+    "main_session_id": allowed,
+    "sessions": [
+      {"session_id": allowed, "survey": survey},
+      {"session_id": unopted, "survey": survey},
+    ],
+  }
+
+  normalized = board_module.normalize_board(raw)
+  rows = {row["session_id"]: row for row in normalized["sessions"]}
+  assert rows[allowed]["survey"] == survey
+  assert rows[unopted]["survey"]["results"] == [
+    {"id": "Q1", "correct": True, "confidence": 1},
+    legacy,
+  ]
+  assert raw["sessions"][1]["survey"]["results"][0] == answer
+
+
+def test_board_sync_keeps_unallowlisted_survey_answers_private(tmp_path):
+  allowed = "alpha111-clankers"
+  unopted = "solo999-clankers"
+  answer = {"id": "Q1", "correct": True, "confidence": 1, "answer": {"value": "Secret"}}
+  headers = {"X-Master-Key": MASTER}
+  with backend(tmp_path) as handle:
+    for sid in (allowed, unopted):
+      status, result, _ = post_json(
+        handle.port,
+        "/v1/board",
+        {
+          "action": "sync",
+          "session_id": sid,
+          "repo": "clankers",
+          "board": {
+            "session_id": sid,
+            "allowed_sessions": [allowed],
+            "main_session_id": allowed,
+            "sessions": [{"session_id": sid, "survey": {"results": [answer]}}],
+          },
+        },
+        headers,
+      )
+      assert status == 200
+    for key in ("board", "scoped_board"):
+      rows = {row["session_id"]: row for row in result[key]["sessions"]}
+      assert rows[allowed]["survey"]["results"] == [answer]
+      assert rows[unopted]["survey"]["results"] == [
+        {"id": "Q1", "correct": True, "confidence": 1}
+      ]
 
 
 def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):

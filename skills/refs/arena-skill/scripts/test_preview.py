@@ -135,6 +135,123 @@ def test_survey_transport_keeps_grades_in_server_memory(tmp_path, monkeypatch, c
     app.server_close()
 
 
+def test_board_survey_answers_follow_the_session_allowlist(tmp_path, monkeypatch):
+  repo = tmp_path / "clankers"
+  repo.mkdir()
+  self_sid = "local1111-clankers"
+  peer_sid = "peer2222-clankers"
+  unopted_sid = "unopted3-clankers"
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: f"arena/{self_sid}"
+  )
+  store = preview.Store(repo / "arena-state", create=True)
+  monkeypatch.setattr(store, "repository_root", lambda: repo)
+  local_result = {
+    "id": "LOCAL",
+    "correct": True,
+    "confidence": 1,
+    "answer": {"value": "local"},
+  }
+  peer_result = {
+    "id": "PEER",
+    "correct": False,
+    "confidence": 0.5,
+    "answer": {"value": "peer"},
+  }
+  blocked_result = {
+    "id": "BLOCKED",
+    "correct": None,
+    "confidence": 0,
+    "answer": {"value": "private"},
+  }
+  legacy_result = {"id": "LEGACY", "correct": None, "confidence": 0}
+  local_survey = {"results": [local_result], "answered_at": "2026-01-01T00:00:00Z"}
+  store.set_meta("survey_state_json", json.dumps(local_survey))
+  incoming = {
+    "allowed_sessions": [peer_sid],
+    "main_session_id": peer_sid,
+    "sessions": [
+      {"session_id": peer_sid, "survey": {"results": [peer_result]}},
+      {
+        "session_id": unopted_sid,
+        "survey": {"results": [blocked_result, legacy_result]},
+      },
+    ],
+  }
+
+  board = store.board_action({"action": "sync", "board": incoming})
+  by_sid = {row["session_id"]: row for row in board["sessions"]}
+  assert by_sid[peer_sid]["survey"]["results"] == [peer_result]
+  assert by_sid[unopted_sid]["survey"]["results"] == [
+    {key: value for key, value in blocked_result.items() if key != "answer"},
+    legacy_result,
+  ]
+  assert by_sid[self_sid]["survey"]["results"] == [
+    {key: value for key, value in local_result.items() if key != "answer"}
+  ]
+  assert json.loads(store.meta_value("survey_state_json")) == local_survey
+  assert incoming["sessions"][1]["survey"]["results"][0] == blocked_result
+
+  board = store.board_action({"action": "allow", "session_id": self_sid})
+  self_row = next(row for row in board["sessions"] if row["session_id"] == self_sid)
+  assert self_row["survey"]["results"] == [local_result]
+
+
+def test_survey_http_keeps_local_answers_after_board_revocation(tmp_path, monkeypatch):
+  import survey
+
+  global app
+  repo = tmp_path / "clankers"
+  repo.mkdir()
+  self_sid = "local1111-clankers"
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: f"arena/{self_sid}"
+  )
+  store = preview.Store(repo / "arena-state", create=True)
+  monkeypatch.setattr(store, "repository_root", lambda: repo)
+  submitted = survey.template()
+  submitted[2]["answer"] = {
+    "full_name": "Private Example",
+    "organization": "Example Org",
+    "role": "Example Role",
+  }
+  submitted[2]["confidence"] = 0.5
+  app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+  threading.Thread(target=app.serve_forever, daemon=True).start()
+  try:
+    status, _, _ = request(
+      "POST", "/api/survey", json.dumps(submitted), {"Content-Type": "application/json"}
+    )
+    assert status == 200
+    status, _, body = request("GET", "/api/survey")
+    assert status == 200
+    local = json.loads(body)
+    assert local["results"][2]["answer"] == submitted[2]["answer"]
+
+    store.board_action({"action": "allow", "session_id": self_sid})
+    status, _, body = request("GET", "/api/board")
+    assert status == 200
+    own = next(
+      row for row in json.loads(body)["sessions"] if row["session_id"] == self_sid
+    )
+    assert own["survey"]["results"][2]["answer"] == submitted[2]["answer"]
+
+    store.board_action({"action": "revoke", "session_id": self_sid})
+    status, _, body = request("GET", "/api/board")
+    assert status == 200
+    own = next(
+      row for row in json.loads(body)["sessions"] if row["session_id"] == self_sid
+    )
+    assert "answer" not in own["survey"]["results"][2]
+    status, _, body = request("GET", "/api/survey")
+    assert status == 200 and json.loads(body) == local
+    status, _, body = request("GET", "/api/copy-state")
+    assert status == 200 and "Private Example" not in body
+  finally:
+    app.shutdown()
+    app.server_close()
+
+
 @pytest.mark.parametrize(
   "violation_type", ("self-raised", "bash-violation", "legacy-type")
 )
@@ -14098,11 +14215,27 @@ def test_survey_rejects_null_partial_and_zero_confidence_known_answers():
   }
   lower_conf[2]["confidence"] = 0.4
   graded = survey.grade(json.dumps(lower_conf))
-  assert graded[0] == {"id": "R3S0N", "correct": True, "confidence": 1}
-  assert graded[1] == {"id": "I4M6G", "correct": False, "confidence": 1}
-  assert graded[3] == {"id": "A2P6R", "correct": None, "confidence": 0}
+  assert graded[0] == {
+    "id": "R3S0N",
+    "correct": True,
+    "confidence": 1,
+    "answer": lower_conf[0]["answer"],
+  }
+  assert graded[1] == {
+    "id": "I4M6G",
+    "correct": False,
+    "confidence": 1,
+    "answer": lower_conf[1]["answer"],
+  }
+  assert graded[3] == {
+    "id": "A2P6R",
+    "correct": None,
+    "confidence": 0,
+    "answer": lower_conf[3]["answer"],
+  }
   assert graded[2]["id"] == "S2E5P"
   assert graded[2]["confidence"] == 0.4
+  assert graded[2]["answer"] == lower_conf[2]["answer"]
   assert isinstance(graded[2]["correct"], bool)
 
 

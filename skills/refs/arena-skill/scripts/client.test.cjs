@@ -5091,7 +5091,7 @@ test('preview client', async (t) => {
       'M2A6Y: unknown',
     ]);
     assert.deepEqual(rows.map(row => row.children[1].children[0].value), [1, 0.5, 0]);
-    assert.deepEqual(rows.map(row => row.children[0].children.at(-1).textContent), surveyResults.map(row => row.id));
+    assert.deepEqual(rows.map(row => row.children[0].children.at(-1).children[0].textContent), surveyResults.map(row => row.id));
     assert.equal(content.children.some(node => node.tagName === 'p'), false);
     const footer = content.children.find(node => node.className === 'row');
     const time = footer.children.find(node => node.tagName === 'time');
@@ -5134,6 +5134,71 @@ test('preview client', async (t) => {
     assert.equal(context.fetch.mock.calls.length, reads);
     surveyResults = null;
     surveyAnsweredAt = null;
+  });
+
+  await t.test('Survey answers open on hover, focus, and touch without rendering HTML', () => {
+    const view = context.document.createElement('section');
+    const unsafe = '<img src=x onerror=alert(1)>';
+    context.renderSurvey(view, [
+      { id: 'Q1', correct: true, confidence: 0.5, answer: {
+        full_name: unsafe, reasoning: false, power_capacity_mw: { operator: 'gt', value: 12.5 },
+      } },
+      { id: 'LEGACY', correct: null, confidence: 0 },
+    ], '2026-01-01T00:00:00Z');
+    const rows = view.children[0].children.at(-1).children;
+    const answer = rows[0].children[0].children.find(node => node.className === 'survey-answer');
+    assert.ok(answer);
+    const trigger = answer.children.find(node => node.className === 'survey-answer-trigger');
+    const tooltip = answer.children.find(node => node.className === 'survey-answer-tooltip');
+    assert.equal(trigger.tagName, 'button');
+    assert.equal(trigger.type, 'button');
+    assert.equal(trigger.textContent, 'Q1');
+    assert.equal(trigger.getAttribute('aria-describedby'), tooltip.id);
+    assert.equal(tooltip.getAttribute('role'), 'tooltip');
+    assert.equal(tooltip.hidden, true);
+    assert.ok(tooltip.textContent.includes(unsafe));
+    assert.ok(tooltip.textContent.includes('false'));
+    assert.ok(tooltip.textContent.includes('> 12.5'));
+    assert.equal(tooltip.innerHTML, undefined);
+    context.window.innerHeight = 800;
+    get('#modal').getBoundingClientRect = () => ({ top: 100, bottom: 600 });
+    trigger.getBoundingClientRect = () => ({ top: 300, bottom: 344 });
+    tooltip.clientHeight = 100;
+    tooltip.scrollHeight = 500;
+
+    trigger.events.focus();
+    assert.equal(tooltip.hidden, false);
+    assert.equal(tooltip.style.maxHeight, 'min(240px, 38dvh, 236px)');
+    const down = event({ key: 'ArrowDown' });
+    trigger.events.keydown(down);
+    assert.equal(down.prevented, true);
+    assert.ok(tooltip.scrollTop > 0, 'keyboard input scrolls a long answer');
+    const up = event({ key: 'ArrowUp' });
+    trigger.events.keydown(up);
+    assert.equal(tooltip.scrollTop, 0);
+    const escape = event({ key: 'Escape', stopPropagation() { this.stopped = true; } });
+    trigger.events.keydown(escape);
+    assert.equal(escape.prevented, true);
+    assert.equal(escape.stopped, true);
+    assert.equal(tooltip.hidden, true);
+    trigger.events.blur();
+    answer.events.pointerenter();
+    assert.equal(tooltip.hidden, false);
+    answer.events.pointerleave();
+    assert.equal(tooltip.hidden, true);
+    trigger.events.focus();
+    answer.events.pointerenter();
+    answer.events.pointerleave();
+    assert.equal(tooltip.hidden, false, 'focus keeps the tooltip open after pointer exit');
+    trigger.events.blur();
+    assert.equal(tooltip.hidden, true);
+    trigger.events.click();
+    assert.equal(tooltip.hidden, false);
+    trigger.events.blur();
+    assert.equal(tooltip.hidden, true);
+
+    const legacy = rows[1].children[0].children.find(node => node.className === 'survey-answer');
+    assert.equal(legacy.children.find(node => node.className === 'survey-answer-tooltip').textContent, 'Answer not recorded');
   });
 
   await t.test('WebSockets route JSON, retain binary HTTP, queue changes, and reject lost replies', async () => {
@@ -5715,6 +5780,17 @@ test('the composer keeps Send inside and status lines outside its panel', () => 
   assert.doesNotMatch(html, /Answers reach the agent inbox as one submission/, 'Reports panel omits the submission hint footer');
   const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
   assert.match(css, /\.notes-layout\s*>\s*\.composer-footer\s*\{[^}]*align-items:\s*center;[^}]*text-align:\s*center;/);
+});
+
+test('survey answer panels do not cover question controls', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const rule = css.match(/\.survey-answer-tooltip\s*\{([^}]*)\}/);
+  assert.ok(rule, 'the answer panel has a positioning rule');
+  assert.match(rule[1], /\bleft:\s*100%\s*;/, 'the panel starts beyond its question trigger');
+  assert.match(rule[1], /\bwidth:\s*min\([^;]*100vw/, 'the panel width is constrained by the viewport');
+  const code = css.match(/\.survey-answer-trigger code\s*\{([^}]*)\}/);
+  assert.ok(code, 'survey ID spacing follows the control scale');
+  assert.match(code[1], /\bpadding:\s*0\s+4px\s*;/);
 });
 
 test('a wide table scrolls sideways on its own and keeps its words whole', () => {

@@ -2252,6 +2252,10 @@ def board_stamp_epoch(value):
 		return dt.replace(tzinfo=UTC).timestamp()
 	except Exception:return None
 def trim_report_ops(ops):valid=[dict(row)for row in ops or[]if isinstance(row,dict)and row.get('id')and row.get('target')];valid.sort(key=lambda item:str(item.get('at')or''));decisions=[row for row in valid if str(row.get('op')or'')!='entry-ack'];entry_acks=[row for row in valid if str(row.get('op')or'')=='entry-ack'];kept_decisions=decisions[-MAX_BOARD_ENTRIES:];ack_budget=max(0,MAX_BOARD_ENTRIES-len(kept_decisions));combined=[*kept_decisions,*(entry_acks[-ack_budget:]if ack_budget else[])];combined.sort(key=lambda item:str(item.get('at')or''));return combined
+def board_survey(survey,allowed):
+	result=dict(survey)
+	if not allowed and isinstance(result.get('results'),list):result['results']=[{key:value for(key,value)in row.items()if key!='answer'}if isinstance(row,dict)else row for row in result['results']]
+	return result
 def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 	data=raw if isinstance(raw,dict)else{};sid=board_session_id(session_id or branch);linked_repos=[]
 	for item in data.get('linked_repos')if isinstance(data.get('linked_repos'),list)else[]:
@@ -2303,7 +2307,7 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 				if delegated and not is_legacy_hex_worker_id(row_sid,delegated):worker_ids[row_sid]=delegated
 			except ValueError:pass
 		is_self=bool(sid and row_sid==sid);wake_pending=row_sid in allowed and bool(wakes.get(row_sid));row_disc=False if is_self else bool(row.get('disconnected')or row.get('status')=='disconnected');row_polling=(bool(polling)if is_self else bool(row.get('polling')or row.get('status')=='polling'))and not wake_pending and not row_disc;row_repo=str(row.get('repo')or(repo if is_self else''));row_role='main'if main_sid==row_sid or not main_sid and row_sid in allowed else'worker'if row_sid in allowed else'blocked';row_wid=worker_ids.get(row_sid)or default_worker_id(row_sid,row_repo)if row_role=='worker'else'';s_entry={'session_id':row_sid,'board_id':format_board_role_id(row_role,repo=row_repo,worker_id=row_wid,multi_repo=multi_repo,fallback_sid=row_sid),'worker_id':row_wid,'repo':row_repo,'branch':str(row.get('branch')or(branch if is_self else f"arena/{row_sid}")),'status':'disconnected'if row_disc else'polling'if row_polling else'active','polling':row_polling,'disconnected':row_disc,'updated_at':str(row.get('updated_at'))if isinstance(row.get('updated_at'),str)and re.match('^\\d{4}-\\d{2}-\\d{2}T',row['updated_at'])else clip_stamp(now()),'allowed':row_sid in allowed,'role':row_role}
-		if isinstance(row.get('survey'),dict):s_entry['survey']=dict(row['survey'])
+		if isinstance(row.get('survey'),dict):s_entry['survey']=board_survey(row['survey'],row_sid in allowed)
 		for status_key in('polling_since','waiting_for_gates','checking_pr','calls_since_message','gate_threshold','agent_seen_at','turn_ended_at','agent_call_ended_at'):
 			if status_key in row and row[status_key]is not None:s_entry[status_key]=row[status_key]
 		for sha_key in('remote_head','origin_main_head'):
@@ -2915,7 +2919,7 @@ class Store:
 				with closing(self.connect())as db_conn:calls_count=meta_number(db_conn,POLLS_SINCE_MESSAGE)
 				m_dict=meta if isinstance(meta,dict)else{}
 				def _mval(key):return m_dict.get(key)if key in m_dict else self.meta_value(key)
-				root_dir=self.repository_root();cur_branch=workspace_branch(root_dir);cur_remote_head=workspace_git_ref(root_dir,f"refs/remotes/origin/{cur_branch}")if cur_branch else'';cur_origin_main=workspace_git_ref(root_dir,'refs/remotes/origin/main');self_status_fields={'survey':self_survey,'polling_since':clip_stamp(_mval(POLL_SINCE_META))if is_polling else None,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'calls_since_message':calls_count,'gate_threshold':GATE_THRESHOLD,'agent_seen_at':clip_stamp(_mval(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(_mval(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(_mval(AGENT_CALL_ENDED_META))}
+				root_dir=self.repository_root();cur_branch=workspace_branch(root_dir);cur_remote_head=workspace_git_ref(root_dir,f"refs/remotes/origin/{cur_branch}")if cur_branch else'';cur_origin_main=workspace_git_ref(root_dir,'refs/remotes/origin/main');self_status_fields={'survey':board_survey(self_survey,sid in allowed_set),'polling_since':clip_stamp(_mval(POLL_SINCE_META))if is_polling else None,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'calls_since_message':calls_count,'gate_threshold':GATE_THRESHOLD,'agent_seen_at':clip_stamp(_mval(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(_mval(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(_mval(AGENT_CALL_ENDED_META))}
 				if cur_remote_head:self_status_fields['remote_head']=cur_remote_head
 				if cur_origin_main:self_status_fields['origin_main_head']=cur_origin_main
 				for s_row in out['sessions']:

@@ -6135,6 +6135,18 @@ def trim_report_ops(ops):
   return combined
 
 
+def board_survey(survey, allowed):
+  result = dict(survey)
+  if not allowed and isinstance(result.get("results"), list):
+    result["results"] = [
+      {key: value for key, value in row.items() if key != "answer"}
+      if isinstance(row, dict)
+      else row
+      for row in result["results"]
+    ]
+  return result
+
+
 def normalize_board_state(raw, session_id="", repo="", branch="", polling=False):
   data = raw if isinstance(raw, dict) else {}
   sid = board_session_id(session_id or branch)
@@ -6332,7 +6344,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       "role": row_role,
     }
     if isinstance(row.get("survey"), dict):
-      s_entry["survey"] = dict(row["survey"])
+      s_entry["survey"] = board_survey(row["survey"], row_sid in allowed)
     for status_key in (
       "polling_since",
       "waiting_for_gates",
@@ -8710,7 +8722,7 @@ class Store:
         )
         cur_origin_main = workspace_git_ref(root_dir, "refs/remotes/origin/main")
         self_status_fields = {
-          "survey": self_survey,
+          "survey": board_survey(self_survey, sid in allowed_set),
           "polling_since": clip_stamp(_mval(POLL_SINCE_META)) if is_polling else None,
           "waiting_for_gates": bool(runs),
           "checking_pr": any(

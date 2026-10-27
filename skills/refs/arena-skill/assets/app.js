@@ -5491,6 +5491,75 @@ async function requestSurvey() {
     throw error;
   }
 }
+function surveyAnswerValue(value) {
+  if (value && typeof value === 'object' && 'operator' in value) {
+    const operator = String(value.operator).toLowerCase();
+    if (operator === 'unknown') return 'unknown';
+    const symbol = operator === 'gt' ? '>' : operator === 'lt' ? '<' : operator === 'eq' ? '=' : operator;
+    return `${symbol} ${value.value}`;
+  }
+  return String(value);
+}
+function surveyAnswer(result, index, total) {
+  const wrap = document.createElement('div');
+  wrap.className = 'survey-answer';
+  const trigger = document.createElement('button');
+  trigger.className = 'survey-answer-trigger';
+  trigger.type = 'button';
+  trigger.setAttribute('aria-label', `Answer for ${result.id}`);
+  const code = document.createElement('code');
+  code.textContent = result.id;
+  trigger.append(code);
+  const tooltip = document.createElement('div');
+  tooltip.className = 'survey-answer-tooltip';
+  tooltip.id = `survey-answer-${index}`;
+  tooltip.setAttribute('role', 'tooltip');
+  tooltip.hidden = true;
+  trigger.setAttribute('aria-describedby', tooltip.id);
+  if (result.answer && typeof result.answer === 'object' && !Array.isArray(result.answer)) {
+    for (const [key, value] of Object.entries(result.answer)) {
+      const line = document.createElement('div');
+      const field = document.createElement('strong');
+      field.textContent = `${key.replaceAll('_', ' ').replace(/^./, first => first.toUpperCase())}: `;
+      const answer = document.createElement('span');
+      answer.textContent = surveyAnswerValue(value);
+      line.append(field, answer);
+      tooltip.append(line);
+    }
+  } else {
+    tooltip.textContent = 'Answer not recorded';
+  }
+  let focused = false;
+  const show = () => {
+    tooltip.hidden = false;
+    const anchor = trigger.getBoundingClientRect();
+    const bounds = modal.getBoundingClientRect();
+    const room = index >= total - 2
+      ? anchor.bottom - Math.max(0, bounds.top)
+      : Math.min(window.innerHeight, bounds.bottom) - anchor.top;
+    tooltip.style.maxHeight = `min(240px, 38dvh, ${Math.max(0, room - 8)}px)`;
+  };
+  wrap.addEventListener('pointerenter', show);
+  wrap.addEventListener('pointerleave', () => { if (!focused) tooltip.hidden = true; });
+  trigger.addEventListener('focus', () => { focused = true; show(); });
+  trigger.addEventListener('blur', () => { focused = false; tooltip.hidden = true; });
+  trigger.addEventListener('click', () => { trigger.focus(); show(); });
+  trigger.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !tooltip.hidden) {
+      event.preventDefault();
+      event.stopPropagation();
+      tooltip.hidden = true;
+      return;
+    }
+    if (!tooltip.hidden && tooltip.scrollHeight > tooltip.clientHeight) {
+      const step = event.key === 'ArrowDown' ? 40 : event.key === 'ArrowUp' ? -40
+        : event.key === 'PageDown' ? tooltip.clientHeight : event.key === 'PageUp' ? -tooltip.clientHeight : 0;
+      if (step) { event.preventDefault(); tooltip.scrollTop += step; }
+    }
+  });
+  wrap.append(trigger, tooltip);
+  return wrap;
+}
 function renderSurvey(view, results, answeredAt) {
   const snapshot = JSON.stringify([results, answeredAt]);
   const relative = answeredAt ? time(answeredAt) : '';
@@ -5515,15 +5584,13 @@ function renderSurvey(view, results, answeredAt) {
   }
   header.append(headings);
   const body = document.createElement('tbody');
-  for (const result of results) {
+  for (const [index, result] of results.entries()) {
     const row = document.createElement('tr');
     const id = document.createElement('th');
     id.scope = 'row';
     const state = result.correct === null ? 'unknown' : String(result.correct);
     id.dataset.correct = state;
-    const code = document.createElement('code');
-    code.textContent = result.id;
-    id.append(icon(state === 'true' ? 'check' : state === 'false' ? 'x' : 'circle-question-mark', 16), code);
+    id.append(icon(state === 'true' ? 'check' : state === 'false' ? 'x' : 'circle-question-mark', 16), surveyAnswer(result, index, results.length));
     id.setAttribute('aria-label', `${result.id}: ${state === 'true' ? 'correct' : state === 'false' ? 'incorrect' : 'unknown'}`);
     const confidence = document.createElement('td');
     confidence.className = 'survey-confidence';

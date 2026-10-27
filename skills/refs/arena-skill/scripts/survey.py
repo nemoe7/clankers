@@ -196,19 +196,23 @@ def loads(text):
 
 
 def grade(text):
+  rows = loads(text)
+  submitted = json.loads(text)
   results = []
-  for row in loads(text):
+  for row, original in zip(rows, submitted):
+    result = {
+      "id": row["id"],
+      "correct": None,
+      "confidence": row["confidence"],
+      "answer": original["answer"],
+    }
     if not row["known"]:
-      results.append(
-        {"id": row["id"], "correct": None, "confidence": row["confidence"]}
-      )
+      results.append(result)
       continue
     answer = dict(row["answer"])
     if row["id"] not in HASHES:
-      correct = all(bool(value) for value in answer.values())
-      results.append(
-        {"id": row["id"], "correct": correct, "confidence": row["confidence"]}
-      )
+      result["correct"] = all(bool(value) for value in answer.values())
+      results.append(result)
       continue
     role = answer.pop("role", None)
     canonical = json.dumps(
@@ -225,7 +229,6 @@ def grade(text):
           break
     else:
       correct = prefix.hexdigest() == HASHES[row["id"]]
-    results.append(
-      {"id": row["id"], "correct": correct, "confidence": row["confidence"]}
-    )
+    result["correct"] = correct
+    results.append(result)
   return results

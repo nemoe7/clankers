@@ -4,7 +4,7 @@
 
 The preview supports messages, reports, tasks, and downloads. The survey adds a read-only results view without changing those tasks.
 
-Status: implemented and browser-checked. Acceptance checks cover independent correctness and confidence, hidden requests, session-only results, and keyboard access.
+Status: implemented and browser-checked. Acceptance checks cover correctness, confidence, hidden requests, allowlisted sharing, and keyboard access.
 
 ## Users, tasks, and language
 
@@ -14,7 +14,7 @@ Correctness and reported confidence are separate values. No participant research
 
 ## Journeys and information architecture
 
-Select the connection dot to open the shared dialog. Close or Escape returns to the page.
+Select the connection dot to open the shared dialog. Close or Escape returns to the page. Escape closes an open answer tooltip first.
 
 An empty view requests an answer from the agent. A failed read retries while the view stays open.
 
@@ -44,6 +44,8 @@ Local deviations from the `nuu` house sheet keep compact density at 1280 and 360
 
 Correctness uses an ID, color, an icon, and an accessible label. A native progress element and percentage show reported confidence.
 
+Hover, focus, or tap a question ID to show its submitted answer. Escape or blur closes the tooltip. Arrow keys scroll long answers. Older results show an unavailable message.
+
 ## Accessibility and inclusion
 
 Checks target WCAG keyboard access, focus order, visible focus, status names, and non-color status cues. Native dialog, button, table, and progress semantics remain in use.
@@ -58,9 +60,9 @@ The existing local Lucide check and cross icons retain `assets/lucide.LICENSE`. 
 
 ## Behavior and data
 
-Correctness does not depend on reported confidence. The server stores results and their last-answer timestamp in RAM, outside notes, database state, and exports.
+Correctness does not depend on reported confidence. The server keeps results in memory for local reads and in session metadata for board sync. Only allowlisted board sessions share submitted answers. Exports omit them.
 
-A restart clears results. An unanswered view sends one hidden, ACK-required request through the existing inbox.
+A restart clears local in-memory results. An unanswered view sends one hidden, ACK-required request through the existing inbox.
 
 ## Evidence and handoff
 
@@ -68,13 +70,13 @@ Visual references: [Preview workflow](design-visuals/preview.md), [Shared compon
 
 Automated client checks cover independent results, empty requests, refresh, errors, recovery, and closed-view reads. These checks are not participant studies.
 
-Local evidence: `arena-state/survey-browser-evidence.json` and `arena-state/survey-{360,1280}-{dark,light}.png`. The captures use synthetic results, not real survey answers or verdicts.
+Browser captures use synthetic results, not real survey answers or verdicts.
 
 Chromium checks passed with no page errors. Safari, Firefox, physical devices, and screen readers have not run.
 
-Spacing evidence: `arena-state/survey-spacing-evidence.json` and `arena-state/survey-spacing-{360,1280}-{dark,light}.png`. Checks cover prior layout, touch hit area, focus, and nearby controls.
+Spacing checks cover prior layout, touch hit area, focus, and nearby controls.
 
-Relative-time evidence: `arena-state/survey-relative-browser-evidence.json` and `arena-state/survey-relative-{360,1280}-{dark,light}.png`. Synthetic browser checks cover relative time, the accessible dialog name, hidden request reuse, retry, unchanged-view focus, both themes, and narrow/wide layouts. Relative-time text passes WCAG contrast checks.
+Relative-time checks cover the accessible dialog name, hidden request reuse, retry, unchanged-view focus, both themes, and narrow/wide layouts. Relative-time text passes WCAG contrast checks.
 
 | Usability check | Observed result |
 | --- | --- |

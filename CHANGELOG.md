@@ -16,6 +16,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Show submitted survey answers on hover, focus, or tap, and share answers only for allowlisted board sessions (`assets/app.js`, `assets/style.css`, `scripts/survey.py`, `scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`).
 - Wake opted-in board workers when a main session's remote branch or `origin/main` head advances (`scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`, `scripts/test_preview.py`).
 - Record `X-Clankers-Userscript-Version` headers on preview API requests and display the connected userscript version in `#agent-key` and `arena-preview key` (`assets/app.js`, `scripts/preview.py`, `scripts/client.test.cjs`, `scripts/test_preview.py`).
 

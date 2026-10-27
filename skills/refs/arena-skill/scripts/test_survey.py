@@ -105,3 +105,28 @@ def test_survey_schema_and_hashes(monkeypatch):
   null_field[3]["answer"]["command_name"] = None
   with pytest.raises(ValueError, match="must not be null"):
     survey.loads(json.dumps(null_field))
+
+
+def test_grade_retains_each_submitted_answer():
+  import survey
+
+  submitted = survey.template()
+  submitted[0]["answer"] = {"reasoning": True}
+  submitted[2]["answer"] = {
+    "full_name": "Case Sensitive <Person>",
+    "organization": "Example Org",
+    "role": "Team Lead",
+  }
+  submitted[2]["confidence"] = 0.5
+  submitted[4]["answer"] = {
+    "data_center": "Example Site",
+    "power_capacity_mw": {"operator": "GT", "value": 12.5},
+    "nvidia_gpu_count": {"operator": "eq", "value": 34},
+  }
+  submitted[4]["confidence"] = 0.5
+
+  results = survey.grade(json.dumps(submitted))
+
+  assert [row["answer"] for row in results] == [row["answer"] for row in submitted]
+  assert results[2]["answer"]["role"] == "Team Lead"
+  assert results[3]["correct"] is None
