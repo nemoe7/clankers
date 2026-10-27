@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Add `/nemoizer learn` and `/nuu learn` maintainer-handoff slash workflows and skill clauses (`arena-skill`, `nemoizer`, `nuu`).
 - Add `arena-preview board`, block worker `report publish`, stop auto-forwarding `worker_reports`, and propagate live `poll` state (`SKILL.md`, `WORKER.md`, `references/commands.md`, `scripts/preview.py`, `assets/app.js`, `arena-egress-proxy/scripts/arena_proxy/board.py`).
 - Show submitted survey answers on hover, focus, or tap, and share answers only for allowlisted board sessions (`assets/app.js`, `assets/style.css`, `scripts/survey.py`, `scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`).
 - Wake opted-in board workers when a main session's remote branch or `origin/main` head advances (`scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`, `scripts/test_preview.py`).

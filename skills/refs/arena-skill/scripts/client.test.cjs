@@ -5594,6 +5594,10 @@ test('preview client', async (t) => {
     assert.equal(context.recognizedSlashPrefix('/nemoizer help'), '/nemoizer help');
     assert.equal(context.recognizedSlashPrefix('/nemoizer help\nfollow up'), '/nemoizer help');
     assert.equal(context.recognizedSlashPrefix('/nemoizer audit docs/'), '/nemoizer audit');
+    assert.equal(context.recognizedSlashPrefix('/nemoizer learn'), '/nemoizer learn');
+    assert.equal(context.recognizedSlashPrefix('/nemoizer learntest'), '');
+    assert.equal(context.recognizedSlashPrefix('/nuu learn'), '/nuu learn');
+    assert.equal(context.recognizedSlashPrefix('/nuu learntest'), '');
 
     noteEl.value = '/nemoizer helptest';
     noteEl.events.input();

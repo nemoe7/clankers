@@ -2578,10 +2578,10 @@ def _skill_exists(root,name):
 def discover_slash_commands(root=None):
 	commands=[];nuu_dir=_skill_exists(root,'nuu')
 	if nuu_dir is not None:
-		commands.extend([{'cmd':'/nuu audit','desc':'Send agent note: run a full nuu audit'},{'cmd':'/nuu help','desc':'Show nuu commands and clauses (modal)'},{'cmd':'/nuu recipes','desc':'List nuu UI recipes (modal)'},{'cmd':'/nuu search ','desc':'Search the nuu UI/UX catalog (modal)'}])
+		commands.extend([{'cmd':'/nuu audit','desc':'Send agent note: run a full nuu audit'},{'cmd':'/nuu help','desc':'Show nuu commands and clauses (modal)'},{'cmd':'/nuu learn','desc':'Send agent note: survey repo UI/UX for nuu'},{'cmd':'/nuu recipes','desc':'List nuu UI recipes (modal)'},{'cmd':'/nuu search ','desc':'Search the nuu UI/UX catalog (modal)'}])
 		for name in sorted(_collect_nuu_recipes(nuu_dir)):commands.append({'cmd':f"/nuu recipe {name}",'desc':f"Send agent note: apply {name} recipe"})
 	nemo_dir=_skill_exists(root,'nemoizer')
-	if nemo_dir is not None:commands.extend([{'cmd':'/nemoizer audit','desc':'Send agent note: run a nemoizer audit and report'},{'cmd':'/nemoizer collect','desc':'Scan prose and code for nemoizer findings (modal)'},{'cmd':'/nemoizer help','desc':'Show nemoizer commands and clauses (modal)'},{'cmd':'/nemoizer recipes','desc':'Browse nemoizer templates and references (modal)'},{'cmd':'/nemoizer rules','desc':'Browse nemoizer rules or /nemoizer rules <id> (modal)'}])
+	if nemo_dir is not None:commands.extend([{'cmd':'/nemoizer audit','desc':'Send agent note: run a nemoizer audit and report'},{'cmd':'/nemoizer collect','desc':'Scan prose and code for nemoizer findings (modal)'},{'cmd':'/nemoizer help','desc':'Show nemoizer commands and clauses (modal)'},{'cmd':'/nemoizer learn','desc':'Send agent note: survey repo prose for nemoizer'},{'cmd':'/nemoizer recipes','desc':'Browse nemoizer templates and references (modal)'},{'cmd':'/nemoizer rules','desc':'Browse nemoizer rules or /nemoizer rules <id> (modal)'}])
 	commands.sort(key=lambda item:item['cmd'].strip());return commands
 def resolve_slash_command(text,root=None):
 	if not isinstance(text,str):return None
@@ -2591,7 +2591,7 @@ def resolve_slash_command(text,root=None):
 	if skill=='nuu':
 		nuu_dir=_find_skill_dir(repo_root,'nuu')
 		if sub in{'','help'}:
-			clauses=_extract_clauses(nuu_dir/'SKILL.md');sections=['| Composer Command | Type | Action |\n| --- | --- | --- |\n| `/nuu audit [target]` | Agent note | Run a full `nuu` audit and publish the report |\n| `/nuu help` | Modal | Show `nuu` composer commands and clauses |\n| `/nuu recipe <name> [target]` | Agent note | Apply a `nuu` recipe to the target |\n| `/nuu recipes` | Modal | List available `nuu` recipes and summaries |\n| `/nuu search <query>` | Modal | Search the `nuu` UI/UX catalog |']
+			clauses=_extract_clauses(nuu_dir/'SKILL.md');sections=['| Composer Command | Type | Action |\n| --- | --- | --- |\n| `/nuu audit [target]` | Agent note | Run a full `nuu` audit and publish the report |\n| `/nuu help` | Modal | Show `nuu` composer commands and clauses |\n| `/nuu learn` | Agent note | Survey repo UI/UX practice `nuu` could adopt |\n| `/nuu recipe <name> [target]` | Agent note | Apply a `nuu` recipe to the target |\n| `/nuu recipes` | Modal | List available `nuu` recipes and summaries |\n| `/nuu search <query>` | Modal | Search the `nuu` UI/UX catalog |']
 			if clauses:sections.append(f"### Clauses\n\n{clauses}")
 			return{'mode':'query','command':'/nuu help','title':'nuu · Quick Reference','markdown':'\n\n'.join(sections)}
 		if sub=='recipes'or sub=='recipe'and not arg:
@@ -2607,14 +2607,18 @@ def resolve_slash_command(text,root=None):
 			bp_list=', '.join(f"`{bp}`"for bp in _extract_nuu_breakpoints(nuu_dir));note_text=f"Run a full `nuu` UI/UX audit (breakpoints {bp_list}; `a11y`, `density`, and `annotate`; report shots for `1920x957` desktop maximized and `411x799` phone portrait only) and publish the audit report using `skills/refs/nuu/references/audit-report.md`."
 			if trailing:note_text=f"{note_text}\n\n{trailing}"
 			return{'mode':'note','command':'/nuu audit','text':note_text}
+		if sub=='learn':
+			note_text='Survey this repository for UI/UX practice that `nuu` could adopt, naming the clause or recipe each candidate would extend, and publish a maintainer handoff.'
+			if trailing:note_text=f"{note_text}\n\n{trailing}"
+			return{'mode':'note','command':'/nuu learn','text':note_text}
 		if sub=='recipe':
 			recipe_parts=arg.split(None,1);recipe_name=re.sub('[^a-zA-Z0-9_-]','',recipe_parts[0]).lower();recipe_rest=recipe_parts[1].strip()if len(recipe_parts)>1 else'';recipe_trailing='\n\n'.join(part for part in(recipe_rest,extra_lines)if part).strip();recipe_rel=f"skills/refs/nuu/references/recipes/{recipe_name}.md";note_text=f"Apply the `nuu` recipe `{recipe_name}` (`{recipe_rel}`)."
 			if recipe_trailing:note_text=f"{note_text}\n\n{recipe_trailing}"
 			return{'mode':'note','command':f"/nuu recipe {recipe_name}",'text':note_text}
-		return{'mode':'query','command':f"/nuu {sub}",'title':'nuu · Unknown Command','markdown':f"Unknown `/nuu` subcommand `{sub}`. Try `/nuu help`, `/nuu recipes`, `/nuu search <query>`, `/nuu audit [target]`, or `/nuu recipe <name> [target]`."}
+		return{'mode':'query','command':f"/nuu {sub}",'title':'nuu · Unknown Command','markdown':f"Unknown `/nuu` subcommand `{sub}`. Try `/nuu help`, `/nuu learn`, `/nuu recipes`, `/nuu search <query>`, `/nuu audit [target]`, or `/nuu recipe <name> [target]`."}
 	nemo_dir=_find_skill_dir(repo_root,'nemoizer')
 	if sub in{'','help'}:
-		clauses=_extract_clauses(nemo_dir/'SKILL.md');sections=['| Composer Command | Type | Action |\n| --- | --- | --- |\n| `/nemoizer audit [paths...]` | Agent note | Run a `nemoizer` audit, fix violations, and publish the report |\n| `/nemoizer collect [paths...]` | Modal | Scan prose and code and summarize `nemoizer` findings |\n| `/nemoizer help` | Modal | Show `nemoizer` composer commands and clauses |\n| `/nemoizer recipes` | Modal | List `nemoizer` workflow references and templates |\n| `/nemoizer rules [id]` | Modal | List STE, NMO, NMP, and NMT rules or view a rule summary |']
+		clauses=_extract_clauses(nemo_dir/'SKILL.md');sections=['| Composer Command | Type | Action |\n| --- | --- | --- |\n| `/nemoizer audit [paths...]` | Agent note | Run a `nemoizer` audit, fix violations, and publish the report |\n| `/nemoizer collect [paths...]` | Modal | Scan prose and code and summarize `nemoizer` findings |\n| `/nemoizer help` | Modal | Show `nemoizer` composer commands and clauses |\n| `/nemoizer learn` | Agent note | Survey repo wording and lint practice `nemoizer` could adopt |\n| `/nemoizer recipes` | Modal | List `nemoizer` workflow references and templates |\n| `/nemoizer rules [id]` | Modal | List STE, NMO, NMP, and NMT rules or view a rule summary |']
 		if clauses:sections.append(f"### Clauses\n\n{clauses}")
 		return{'mode':'query','command':'/nemoizer help','title':'nemoizer · Quick Reference','markdown':'\n\n'.join(sections)}
 	if sub in{'recipes','recipe'}:return{'mode':'query','command':'/nemoizer recipes','title':'nemoizer · Templates & Workflows','markdown':'| Reference | Purpose | Composer Command |\n| --- | --- | --- |\n| `references/audit-report.md` | Standalone audit report template | `/nemoizer audit [paths...]` |\n| `references/rules.md` | Index of STE, NMO, NMP, and NMT rules | `/nemoizer rules [id]` |\n| Audit findings scan | Group suppressions, violations, and review items | `/nemoizer collect [paths...]` |'}
@@ -2644,7 +2648,11 @@ def resolve_slash_command(text,root=None):
 		note_text='Run `nemoizer` in audit mode (`python3 skills/nemoizer/scripts/nemoize.py --audit`), fix blocking violations, and publish an audit report using `skills/refs/nemoizer/references/audit-report.md`.'
 		if trailing:note_text=f"{note_text}\n\n{trailing}"
 		return{'mode':'note','command':'/nemoizer audit','text':note_text}
-	return{'mode':'query','command':f"/nemoizer {sub}",'title':'nemoizer · Unknown Command','markdown':f"Unknown `/nemoizer` subcommand `{sub}`. Try `/nemoizer help`, `/nemoizer rules [id]`, `/nemoizer recipes`, `/nemoizer collect [paths...]`, or `/nemoizer audit [paths...]`."}
+	if sub=='learn':
+		note_text="Survey this repository's prose and code comments for wording or lint practice that `nemoizer` could adopt, naming the rule or reference each candidate would extend, and publish a maintainer handoff."
+		if trailing:note_text=f"{note_text}\n\n{trailing}"
+		return{'mode':'note','command':'/nemoizer learn','text':note_text}
+	return{'mode':'query','command':f"/nemoizer {sub}",'title':'nemoizer · Unknown Command','markdown':f"Unknown `/nemoizer` subcommand `{sub}`. Try `/nemoizer help`, `/nemoizer learn`, `/nemoizer rules [id]`, `/nemoizer recipes`, `/nemoizer collect [paths...]`, or `/nemoizer audit [paths...]`."}
 class ReportChanged(ValueError):pass
 class FetchChanged(ValueError):pass
 class ReportHeld(ValueError):pass

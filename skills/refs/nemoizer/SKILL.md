@@ -128,3 +128,8 @@ Delete a marker when the line no longer needs it.
 - Prefer named constants to literals when they define expected contract values.
 - Assert pixel, configuration, and implementation measurements through growth, presence, or absence relations.
 - Keep exact expected text only for executable, protocol, or verbatim-data contracts.
+
+## Learn
+
+- On `/nemoizer learn`, survey repo prose patterns, cite target rules, and publish a maintainer handoff.
+

@@ -70,3 +70,8 @@ Component and interaction patterns live in `references/recipes/`: [modal-manager
 - `references/recipes/floating-overlay-scroll-fade.md`: full-bleed scroll container fade behind floating header and composer overlays (`backdrop-filter: blur()`, `padding-inline`, and `@supports (animation-timeline: scroll(self))`).
 - `references/recipes/scrollbars.md`: thin `10px` rounded-thumb scrollbar (`#302e2c`) on `var(--bg)` without arrow buttons or hover highlights unless keyboard navigation is active.
 - `references/recipes/overflow-and-clipping.md`: anti-clipping and anti-overlap rules (`NUM209`, `NUM210`, `NUA308`) for flex/grid rows, focus rings, sticky headers, and viewport-clamped tooltips.
+
+## Learn
+
+- On `/nuu learn`, survey repo UI patterns, cite target clauses, and publish a maintainer handoff.
+

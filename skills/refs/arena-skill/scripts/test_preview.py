@@ -14725,6 +14725,36 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert slash_nemo_audit["mode"] == "note"
   assert "nemoize.py --audit" in slash_nemo_audit["text"]
   assert slash_nemo_audit["text"].endswith("docs/")
+  assert any(row["cmd"] == "/nuu learn" for row in discovered)
+  assert any(row["cmd"] == "/nemoizer learn" for row in discovered)
+  assert "| `/nuu learn` |" in slash_help["markdown"]
+  assert "| `/nemoizer learn` |" in slash_nemo_help["markdown"]
+  slash_nuu_learn = preview.resolve_slash_command("/nuu learn")
+  assert slash_nuu_learn is not None
+  assert slash_nuu_learn["mode"] == "note"
+  assert slash_nuu_learn["command"] == "/nuu learn"
+  assert "maintainer handoff" in slash_nuu_learn["text"]
+  assert "before editing" not in slash_nuu_learn["text"]
+  slash_nuu_learn_extra = preview.resolve_slash_command("/nuu learn\nfocus on dialogs")
+  assert slash_nuu_learn_extra is not None
+  assert slash_nuu_learn_extra["command"] == "/nuu learn"
+  assert slash_nuu_learn_extra["text"].endswith("focus on dialogs")
+  slash_nemo_learn = preview.resolve_slash_command("/nemoizer learn")
+  assert slash_nemo_learn is not None
+  assert slash_nemo_learn["mode"] == "note"
+  assert slash_nemo_learn["command"] == "/nemoizer learn"
+  assert "maintainer handoff" in slash_nemo_learn["text"]
+  assert "before editing" not in slash_nemo_learn["text"]
+  slash_nemo_learn_extra = preview.resolve_slash_command("/nemoizer learn check docs/")
+  assert slash_nemo_learn_extra is not None
+  assert slash_nemo_learn_extra["command"] == "/nemoizer learn"
+  assert slash_nemo_learn_extra["text"].endswith("check docs/")
+  slash_nuu_unknown = preview.resolve_slash_command("/nuu unknown")
+  assert slash_nuu_unknown is not None
+  assert "`/nuu learn`" in slash_nuu_unknown["markdown"]
+  slash_nemo_unknown = preview.resolve_slash_command("/nemoizer unknown")
+  assert slash_nemo_unknown is not None
+  assert "`/nemoizer learn`" in slash_nemo_unknown["markdown"]
 
   tz_store = preview.Store(tmp_path / "tz-state", create=True)
   assert tz_store.set_display_timezone("Asia/Manila") == "Asia/Manila"

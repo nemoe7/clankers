@@ -7210,6 +7210,10 @@ def discover_slash_commands(root=None):
           "desc": "Show nuu commands and clauses (modal)",
         },
         {
+          "cmd": "/nuu learn",
+          "desc": "Send agent note: survey repo UI/UX for nuu",
+        },
+        {
           "cmd": "/nuu recipes",
           "desc": "List nuu UI recipes (modal)",
         },
@@ -7241,6 +7245,10 @@ def discover_slash_commands(root=None):
         {
           "cmd": "/nemoizer help",
           "desc": "Show nemoizer commands and clauses (modal)",
+        },
+        {
+          "cmd": "/nemoizer learn",
+          "desc": "Send agent note: survey repo prose for nemoizer",
         },
         {
           "cmd": "/nemoizer recipes",
@@ -7284,6 +7292,7 @@ def resolve_slash_command(text, root=None):
           "| --- | --- | --- |\n"
           "| `/nuu audit [target]` | Agent note | Run a full `nuu` audit and publish the report |\n"
           "| `/nuu help` | Modal | Show `nuu` composer commands and clauses |\n"
+          "| `/nuu learn` | Agent note | Survey repo UI/UX practice `nuu` could adopt |\n"
           "| `/nuu recipe <name> [target]` | Agent note | Apply a `nuu` recipe to the target |\n"
           "| `/nuu recipes` | Modal | List available `nuu` recipes and summaries |\n"
           "| `/nuu search <query>` | Modal | Search the `nuu` UI/UX catalog |"
@@ -7356,6 +7365,15 @@ def resolve_slash_command(text, root=None):
       if trailing:
         note_text = f"{note_text}\n\n{trailing}"
       return {"mode": "note", "command": "/nuu audit", "text": note_text}
+    if sub == "learn":
+      note_text = (
+        "Survey this repository for UI/UX practice that `nuu` could adopt, "
+        "naming the clause or recipe each candidate would extend, and publish "
+        "a maintainer handoff."
+      )
+      if trailing:
+        note_text = f"{note_text}\n\n{trailing}"
+      return {"mode": "note", "command": "/nuu learn", "text": note_text}
     if sub == "recipe":
       recipe_parts = arg.split(None, 1)
       recipe_name = re.sub(r"[^a-zA-Z0-9_-]", "", recipe_parts[0]).lower()
@@ -7377,7 +7395,7 @@ def resolve_slash_command(text, root=None):
       "command": f"/nuu {sub}",
       "title": "nuu · Unknown Command",
       "markdown": (
-        f"Unknown `/nuu` subcommand `{sub}`. Try `/nuu help`, `/nuu recipes`, "
+        f"Unknown `/nuu` subcommand `{sub}`. Try `/nuu help`, `/nuu learn`, `/nuu recipes`, "
         "`/nuu search <query>`, `/nuu audit [target]`, or `/nuu recipe <name> [target]`."
       ),
     }
@@ -7395,6 +7413,8 @@ def resolve_slash_command(text, root=None):
         " Scan prose and code and summarize `nemoizer` findings |\n"
         "| `/nemoizer help` | Modal |"
         " Show `nemoizer` composer commands and clauses |\n"
+        "| `/nemoizer learn` | Agent note |"
+        " Survey repo wording and lint practice `nemoizer` could adopt |\n"
         "| `/nemoizer recipes` | Modal |"
         " List `nemoizer` workflow references and templates |\n"
         "| `/nemoizer rules [id]` | Modal |"
@@ -7515,13 +7535,23 @@ def resolve_slash_command(text, root=None):
     if trailing:
       note_text = f"{note_text}\n\n{trailing}"
     return {"mode": "note", "command": "/nemoizer audit", "text": note_text}
+  if sub == "learn":
+    note_text = (
+      "Survey this repository's prose and code comments for wording or lint "
+      "practice that `nemoizer` could adopt, naming the rule or reference "
+      "each candidate would extend, and publish a maintainer handoff."
+    )
+    if trailing:
+      note_text = f"{note_text}\n\n{trailing}"
+    return {"mode": "note", "command": "/nemoizer learn", "text": note_text}
   return {
     "mode": "query",
     "command": f"/nemoizer {sub}",
     "title": "nemoizer · Unknown Command",
     "markdown": (
-      f"Unknown `/nemoizer` subcommand `{sub}`. Try `/nemoizer help`, `/nemoizer rules [id]`, "
-      "`/nemoizer recipes`, `/nemoizer collect [paths...]`, or `/nemoizer audit [paths...]`."
+      f"Unknown `/nemoizer` subcommand `{sub}`. Try `/nemoizer help`, `/nemoizer learn`, "
+      "`/nemoizer rules [id]`, `/nemoizer recipes`, `/nemoizer collect [paths...]`, "
+      "or `/nemoizer audit [paths...]`."
     ),
   }
 
