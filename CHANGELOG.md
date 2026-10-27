@@ -33,6 +33,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nuu
 
+- Enforce left-aligned prose over `3` lines and forbid justified text (`NUM214`, `SKILL.md`, `references/nuu.md`, `references/style.css`, `scripts/measure.py`).
 - Enforce heading (`-0.005em` to `-0.02em`) and non-heading (`0`) letter-spacing (`NUM213`, `SKILL.md`, `references/nuu.md`, `references/style.css`, `scripts/measure.py`).
 - Enforce heading (`1.1` to `1.3x`) and non-heading (`1.3` to `1.5x`) line-height bands (`NUM212`, `SKILL.md`, `references/nuu.md`, `references/style.css`, `scripts/measure.py`).
 

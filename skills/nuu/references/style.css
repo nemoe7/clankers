@@ -168,6 +168,13 @@ h6,
   letter-spacing: -0.015em;
 }
 
+p,
+li,
+blockquote,
+dd {
+  text-align: start;
+}
+
 .eyebrow {
   margin: 0;
   color: var(--muted);

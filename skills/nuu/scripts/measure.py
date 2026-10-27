@@ -319,6 +319,49 @@ def _letter_spacing_finding(element: dict) -> str | None:
   return None
 
 
+def _element_line_count(element: dict) -> int | None:
+  explicit = element.get("line_count", element.get("lineCount"))
+  if isinstance(explicit, (int, float)) and explicit > 0:
+    return round(explicit)
+  values = element.get("values") or {}
+  lh_px = _numeric_value(str(values.get("line-height") or ""))
+  if lh_px is None or lh_px <= 0:
+    return None
+  bounds = element.get("bounds") or {}
+  raw_h = bounds.get("height")
+  h_px = (
+    float(raw_h)
+    if isinstance(raw_h, (int, float))
+    else _numeric_value(str(values.get("height") or ""))
+  )
+  if h_px is None or h_px <= 0:
+    return None
+  pad_top = _numeric_value(str(values.get("padding-top") or "0px")) or 0.0
+  pad_bot = _numeric_value(str(values.get("padding-bottom") or "0px")) or 0.0
+  content_h = max(0.0, h_px - pad_top - pad_bot)
+  return max(1, round(content_h / lh_px)) if content_h > 0 else None
+
+
+def _text_alignment_finding(element: dict) -> str | None:
+  values = element.get("values") or {}
+  align = str(values.get("text-align") or "").strip().lower()
+  if not align:
+    return None
+  selector = str(element.get("selector") or "?")
+  if align == "justify":
+    return f"NUM214 {selector}: text-align justify creates uneven word gaps"
+  if align == "center":
+    tag = str(element.get("tag") or "").strip().lower()
+    if tag in COMPACT_LINE_HEIGHT_TAGS or tag in {"th", "td"}:
+      return None
+    lines = _element_line_count(element)
+    if lines is not None and lines > 3:
+      return (
+        f"NUM214 {selector}: centered prose spans {lines} lines (at most 3 allowed)"
+      )
+  return None
+
+
 def check(
   report: dict, tokens: dict[str, str], scale: float = DEFAULT_SCALE
 ) -> list[str]:
@@ -329,7 +372,11 @@ def check(
     list_status = _list_indent_status(element)
     if list_status and list_status[1]:
       findings.append(f"NUM211 {selector}: {'; '.join(list_status[1])}")
-    for extra in (_line_height_finding(element), _letter_spacing_finding(element)):
+    for extra in (
+      _line_height_finding(element),
+      _letter_spacing_finding(element),
+      _text_alignment_finding(element),
+    ):
       if extra:
         findings.append(extra)
     for name, value in element.get("values", {}).items():

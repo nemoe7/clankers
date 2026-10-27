@@ -90,6 +90,12 @@ Pass: headings (`h1` to `h6`) tracked within `-0.005em` to `-0.02em` (`-0.015em`
 
 ![Clause 17](examples/heading-letter-spacing.png)
 
+## 18. Left-aligned multi-line prose
+
+Pass: left-aligned (`text-align: start`) prose over `3` lines and short centered hero callouts of at most `3` lines. Fail: centered prose over `3` lines or `text-align: justify` (`NUM214`).
+
+![Clause 18](examples/text-alignment.png)
+
 ## Recipe and Audit-Rule Examples
 
 - **Modal `.close-button` and confirmation (`recipes/modal-manager.md`):**

@@ -119,12 +119,37 @@ async function overlaps(page, selector) {
 
 async function metrics(page, selector) {
   return page.evaluate(selector => {
-    const properties = ['height', 'width', 'padding-top', 'padding-right', 'padding-bottom',
+    const properties = ['height', 'width', 'max-width', 'padding-top', 'padding-right', 'padding-bottom',
       'padding-left', 'padding-inline-start', 'margin-top', 'margin-bottom', 'gap', 'font-size', 'font-weight',
-      'line-height', 'letter-spacing', 'border-radius', 'color', 'background-color', 'outline-style',
+      'line-height', 'letter-spacing', 'text-align', 'border-radius', 'color', 'background-color', 'outline-style',
       'outline-width', 'transition-duration', 'animation-duration', '--indent',
       'list-style-position', 'list-style-type', 'overflow', 'overflow-x', 'overflow-y',
       'text-overflow', 'white-space'];
+    const measureCanvas = document.createElement('canvas');
+    const measureCtx = measureCanvas.getContext('2d');
+    function chPxFor(style) {
+      if (!measureCtx) return null;
+      measureCtx.font = style.font;
+      const width = measureCtx.measureText('0').width;
+      return Number.isFinite(width) && width > 0 ? Number(width.toFixed(2)) : null;
+    }
+    function lineCountFor(element) {
+      const proseTags = new Set(['P', 'LI', 'BLOCKQUOTE', 'DD', 'FIGCAPTION', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+      if (!proseTags.has(element.tagName)) return undefined;
+      const tops = [];
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        if (!node.nodeValue?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const rect of range.getClientRects()) {
+          if (rect.width <= 0 || rect.height <= 0) continue;
+          if (!tops.some(y => Math.abs(y - rect.y) < 3)) tops.push(rect.y);
+        }
+      }
+      return tops.length || undefined;
+    }
     function selectorFor(element) {
       if (element.id) return `#${CSS.escape(element.id)}`;
       const parent = element.parentElement;
@@ -268,6 +293,8 @@ async function metrics(page, selector) {
         maxSiblingGap,
         row_slack: rowSlack,
         rowSlack,
+        line_count: lineCountFor(element),
+        ch_px: chPxFor(style),
         values: Object.fromEntries(properties.map(name => [name, style.getPropertyValue(name)])),
         list_indent: listIndentFor(element, style)};
     });
