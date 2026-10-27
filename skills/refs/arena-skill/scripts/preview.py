@@ -6078,6 +6078,23 @@ def board_stamp_epoch(value):
     return None
 
 
+def trim_report_ops(ops):
+  """Sort report ops by timestamp and protect worker-report decisions from entry-ack eviction."""
+  valid = [
+    dict(row)
+    for row in (ops or [])
+    if isinstance(row, dict) and row.get("id") and row.get("target")
+  ]
+  valid.sort(key=lambda item: str(item.get("at") or ""))
+  decisions = [row for row in valid if str(row.get("op") or "") != "entry-ack"]
+  entry_acks = [row for row in valid if str(row.get("op") or "") == "entry-ack"]
+  kept_decisions = decisions[-MAX_BOARD_ENTRIES:]
+  ack_budget = max(0, MAX_BOARD_ENTRIES - len(kept_decisions))
+  combined = [*kept_decisions, *(entry_acks[-ack_budget:] if ack_budget else [])]
+  combined.sort(key=lambda item: str(item.get("at") or ""))
+  return combined
+
+
 def normalize_board_state(raw, session_id="", repo="", branch="", polling=False):
   data = raw if isinstance(raw, dict) else {}
   sid = board_session_id(session_id or branch)
@@ -6161,16 +6178,7 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
       worker_reports[norm_k] = [
         dict(row) for row in v if isinstance(row, dict) and row.get("id")
       ]
-  raw_report_ops = (
-    data.get("report_ops")[-MAX_BOARD_ENTRIES:]
-    if isinstance(data.get("report_ops"), list)
-    else []
-  )
-  report_ops = [
-    dict(row)
-    for row in raw_report_ops
-    if isinstance(row, dict) and row.get("id") and row.get("target")
-  ]
+  report_ops = trim_report_ops(data.get("report_ops"))
   raw_sessions_list = (
     data.get("sessions") if isinstance(data.get("sessions"), list) else []
   )
@@ -8758,6 +8766,19 @@ class Store:
             }
           )
         out["worker_reports"][sid] = rep_list
+        if is_self_allowed and out.get("role") == "main" and latest_by_rep:
+          for w_sid, w_list in list((out.get("worker_reports") or {}).items()):
+            if w_sid == sid or not isinstance(w_list, list):
+              continue
+            for r_item in w_list:
+              if not isinstance(r_item, dict) or r_item.get("answered"):
+                continue
+              sub_hit = latest_by_rep.get(str(r_item.get("id") or ""))
+              if sub_hit:
+                r_item["answered"] = True
+                r_item["needs_answer"] = False
+                r_item["latest_answer_id"] = sub_hit["id"]
+                r_item["latest_answer_at"] = clip_stamp(sub_hit["at"])
       except Exception:
         pass
     return out
@@ -9969,7 +9990,7 @@ class Store:
 
     entries = entries[-MAX_BOARD_ENTRIES:]
     task_ops = task_ops[-MAX_BOARD_ENTRIES:]
-    report_ops = report_ops[-MAX_BOARD_ENTRIES:]
+    report_ops = trim_report_ops(report_ops)
     stored = {
       "version": 1,
       "local_session_id": sid,

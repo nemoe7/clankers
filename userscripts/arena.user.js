@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.12.0
+// @name         Arena.ai | NemoUtils | v1.12.1
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.12.0
+// @version      1.12.1
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -7346,8 +7346,28 @@
       }
     });
     Object.keys(incoming.worker_reports || {}).forEach(function (sid) {
-      if (!removedSet[sid] && (sid === previewSid || !next.worker_reports[sid])) {
+      if (removedSet[sid]) return;
+      if (sid === previewSid || !next.worker_reports[sid]) {
         next.worker_reports[sid] = incoming.worker_reports[sid];
+      } else if (canAuthorRepoLinks && Array.isArray(incoming.worker_reports[sid])) {
+        var incById = {};
+        incoming.worker_reports[sid].forEach(function (r) {
+          if (r && typeof r === "object" && r.id) incById[String(r.id)] = r;
+        });
+        next.worker_reports[sid] = (next.worker_reports[sid] || []).map(function (existingRep) {
+          if (!existingRep || typeof existingRep !== "object") return existingRep;
+          var incRep = incById[String(existingRep.id || "")];
+          if (incRep && incRep.answered && !existingRep.answered) {
+            var updatedRep = Object.assign({}, existingRep, {
+              answered: true,
+              needs_answer: false,
+              latest_answer_at: incRep.latest_answer_at || existingRep.latest_answer_at,
+            });
+            if (incRep.latest_answer_id) updatedRep.latest_answer_id = incRep.latest_answer_id;
+            return updatedRep;
+          }
+          return existingRep;
+        });
       }
     });
     var seenTaskOpIds = {};
@@ -7359,6 +7379,9 @@
       if (opId) seenTaskOpIds[opId] = true;
       mergedTaskOps.push(op);
     });
+    mergedTaskOps.sort(function (a, b) {
+      return (parseBoardStampMs(a && a.at) || 0) - (parseBoardStampMs(b && b.at) || 0);
+    });
     next.task_ops = mergedTaskOps.slice(-MAX_BOARD_ENTRIES);
     var seenReportOpIds = {};
     var mergedReportOps = [];
@@ -7369,7 +7392,22 @@
       if (opId) seenReportOpIds[opId] = true;
       mergedReportOps.push(op);
     });
-    next.report_ops = mergedReportOps.slice(-MAX_BOARD_ENTRIES);
+    mergedReportOps.sort(function (a, b) {
+      return (parseBoardStampMs(a && a.at) || 0) - (parseBoardStampMs(b && b.at) || 0);
+    });
+    var repDecisionOps = mergedReportOps.filter(function (op) {
+      return String(op.op || "") !== "entry-ack";
+    });
+    var repEntryAckOps = mergedReportOps.filter(function (op) {
+      return String(op.op || "") === "entry-ack";
+    });
+    var keptDecisionOps = repDecisionOps.slice(-MAX_BOARD_ENTRIES);
+    var ackOpBudget = Math.max(0, MAX_BOARD_ENTRIES - keptDecisionOps.length);
+    var combinedReportOps = keptDecisionOps.concat(ackOpBudget > 0 ? repEntryAckOps.slice(-ackOpBudget) : []);
+    combinedReportOps.sort(function (a, b) {
+      return (parseBoardStampMs(a && a.at) || 0) - (parseBoardStampMs(b && b.at) || 0);
+    });
+    next.report_ops = combinedReportOps;
     if (canAuthorRepoLinks && incoming.allowed_sessions.length) {
       var orderedAllowed = [];
       incoming.allowed_sessions.concat(next.allowed_sessions).forEach(function (sid) {

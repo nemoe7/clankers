@@ -2225,6 +2225,7 @@ def board_stamp_epoch(value):
 		if dt.tzinfo is not None:dt=dt.astimezone(UTC).replace(tzinfo=None)
 		return dt.replace(tzinfo=UTC).timestamp()
 	except Exception:return None
+def trim_report_ops(ops):valid=[dict(row)for row in ops or[]if isinstance(row,dict)and row.get('id')and row.get('target')];valid.sort(key=lambda item:str(item.get('at')or''));decisions=[row for row in valid if str(row.get('op')or'')!='entry-ack'];entry_acks=[row for row in valid if str(row.get('op')or'')=='entry-ack'];kept_decisions=decisions[-MAX_BOARD_ENTRIES:];ack_budget=max(0,MAX_BOARD_ENTRIES-len(kept_decisions));combined=[*kept_decisions,*(entry_acks[-ack_budget:]if ack_budget else[])];combined.sort(key=lambda item:str(item.get('at')or''));return combined
 def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 	data=raw if isinstance(raw,dict)else{};sid=board_session_id(session_id or branch);linked_repos=[]
 	for item in data.get('linked_repos')if isinstance(data.get('linked_repos'),list)else[]:
@@ -2252,7 +2253,7 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 	for(k,v)in raw_worker_reports.items():
 		norm_k=board_session_id(k)
 		if norm_k and norm_k not in removed_set and isinstance(v,list):worker_reports[norm_k]=[dict(row)for row in v if isinstance(row,dict)and row.get('id')]
-	raw_report_ops=data.get('report_ops')[-MAX_BOARD_ENTRIES:]if isinstance(data.get('report_ops'),list)else[];report_ops=[dict(row)for row in raw_report_ops if isinstance(row,dict)and row.get('id')and row.get('target')];raw_sessions_list=data.get('sessions')if isinstance(data.get('sessions'),list)else[]
+	report_ops=trim_report_ops(data.get('report_ops'));raw_sessions_list=data.get('sessions')if isinstance(data.get('sessions'),list)else[]
 	for row in raw_sessions_list:
 		if not isinstance(row,dict):continue
 		row_sid=board_session_id(row.get('session_id')or row.get('branch')or'')
@@ -2904,6 +2905,13 @@ class Store:
 					except Exception:fields=[]
 					answered_flag=bool(r_row['answered']);rid=r_row['id'];latest_sub=latest_by_rep.get(rid);sent_flag=any(e.get('session_id')==sid and(rid in str(e.get('text')or'')or str((e.get('payload')or{}).get('report_id')or'')==rid)for e in out.get('entries')or[]if isinstance(e,dict));rep_list.append({'id':rid,'title':r_row['title'],'markdown':r_row['markdown'],'fields':fields,'answered':answered_flag,'needs_answer':bool(fields)and not answered_flag,'latest_answer_id':latest_sub['id']if latest_sub else None,'latest_answer_at':clip_stamp(latest_sub['at'])if latest_sub else None,'latest_answer_acknowledged_at':clip_stamp(latest_sub['acknowledged_at'])if latest_sub and latest_sub['acknowledged_at']else None,'agent_seen_at':clip_stamp(r_row['agent_seen_at'])if r_row['agent_seen_at']else None,'ack_seen_at':clip_stamp(r_row['ack_seen_at'])if r_row['ack_seen_at']else None,'acknowledgements':acks_by_rep.get(rid,[]),'owner_requested':bool(r_row['owner_requested']),'sent_to_main':sent_flag,'updated_at':clip_stamp(r_row['updated_at']),'published_at':clip_stamp(r_row['published_at'])})
 				out['worker_reports'][sid]=rep_list
+				if is_self_allowed and out.get('role')=='main'and latest_by_rep:
+					for(w_sid,w_list)in list((out.get('worker_reports')or{}).items()):
+						if w_sid==sid or not isinstance(w_list,list):continue
+						for r_item in w_list:
+							if not isinstance(r_item,dict)or r_item.get('answered'):continue
+							sub_hit=latest_by_rep.get(str(r_item.get('id')or''))
+							if sub_hit:r_item['answered']=True;r_item['needs_answer']=False;r_item['latest_answer_id']=sub_hit['id'];r_item['latest_answer_at']=clip_stamp(sub_hit['at'])
 			except Exception:pass
 		return out
 	def apply_board_report_op(self,op):
@@ -3297,7 +3305,7 @@ class Store:
 					if norm_target in allowed:wakes[norm_target]=stamp;ack_wakes.pop(norm_target,None)
 		elif action_type=='clear':entries=[]
 		else:raise ValueError(f"Unknown board action: {action_type}")
-		entries=entries[-MAX_BOARD_ENTRIES:];task_ops=task_ops[-MAX_BOARD_ENTRIES:];report_ops=report_ops[-MAX_BOARD_ENTRIES:];stored={'version':1,'local_session_id':sid,'multi_repo':multi_repo,'linked_repos':linked_repos,'removed_sessions':removed_sessions[-MAX_BOARD_ENTRIES:],'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
+		entries=entries[-MAX_BOARD_ENTRIES:];task_ops=task_ops[-MAX_BOARD_ENTRIES:];report_ops=trim_report_ops(report_ops);stored={'version':1,'local_session_id':sid,'multi_repo':multi_repo,'linked_repos':linked_repos,'removed_sessions':removed_sessions[-MAX_BOARD_ENTRIES:],'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
 		while len(encoded.encode('utf-8'))>MAX_BOARD_BYTES and entries:entries.pop(0);stored['entries']=entries;encoded=json.dumps(stored,ensure_ascii=False)
 		if len(encoded.encode('utf-8'))>MAX_BOARD_BYTES:raise ValueError('Board storage exceeds 2 MB limit')
 		if encoded!=raw_text:

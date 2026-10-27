@@ -16436,3 +16436,49 @@ def test_board_sync_keeps_allowlisted_session_over_removal(tmp_path, monkeypatch
     }
   )
   assert "gone444-clankers" in pruned["removed_sessions"]
+
+
+def test_board_report_ops_preserve_decisions_under_entry_ack_flood(
+  tmp_path, monkeypatch
+):
+  repo = tmp_path / "clankers"
+  repo.mkdir()
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: "arena/alpha111-clankers"
+  )
+  store = preview.Store(repo / "arena-state" / "state.sqlite3", create=True)
+  monkeypatch.setattr(store, "repository_root", lambda: repo)
+  ack_flood = [
+    {
+      "id": f"ack-{idx}",
+      "target": "delta444-clankers",
+      "op": "entry-ack",
+      "entry_id": f"p-{idx}",
+      "at": "2026-10-26T10:00:00",
+    }
+    for idx in range(240)
+  ]
+  synced = store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "main_session_id": "alpha111-clankers",
+        "allowed_sessions": ["alpha111-clankers", "delta444-clankers"],
+        "worker_ids": {"delta444-clankers": "delta"},
+        "report_ops": [
+          {
+            "id": "rop-keep-answer",
+            "target": "delta444-clankers",
+            "op": "answer",
+            "report_id": "worker-proposal",
+            "answers": {"q1": "approve"},
+            "at": "2026-10-27T05:00:00",
+          },
+          *ack_flood,
+        ],
+      },
+    }
+  )
+  kept_ids = {op["id"] for op in synced["report_ops"]}
+  assert "rop-keep-answer" in kept_ids
+  assert len(synced["report_ops"]) <= preview.MAX_BOARD_ENTRIES

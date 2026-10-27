@@ -4208,6 +4208,62 @@ for raw in sys.stdin:
         true,
         "subsequent sync uses ?since=<revision> conditional poll",
       );
+
+      // Stale '* ' regression: entry-ack flood never evicts answer/unpublish ops and main answered overlay clears worker needs_answer:
+      const ackFlood = Array.from({ length: 120 }, (_, idx) => ({
+        id: `ack-${idx}`,
+        target: "delta444-clankers",
+        op: "entry-ack",
+        entry_id: `p-${idx}`,
+        at: "2026-10-26T12:00:00Z",
+      }));
+      const mergedAfterAnswer = boardApi.mergePreviewBoard(
+        {
+          allowed_sessions: ["alpha111-clankers", "delta444-clankers"],
+          main_session_id: "alpha111-clankers",
+          worker_ids: { "delta444-clankers": "delta" },
+          worker_reports: {
+            "delta444-clankers": [
+              { id: "learn-v2", fields: [{ id: "q1" }], answered: false, needs_answer: true },
+              { id: "nuu-scope", fields: [{ id: "q2" }], answered: false, needs_answer: true },
+            ],
+          },
+          report_ops: [
+            { id: "rop-ans-1", target: "delta444-clankers", op: "answer", report_id: "learn-v2", at: "2026-10-27T05:00:00Z" },
+          ],
+          sessions: [
+            { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T05:00:00Z" },
+            { session_id: "delta444-clankers", repo: "clankers", updated_at: "2026-10-27T05:00:00Z" },
+          ],
+        },
+        {
+          session_id: "alpha111-clankers",
+          repo: "clankers",
+          allowed_sessions: ["alpha111-clankers", "delta444-clankers"],
+          main_session_id: "alpha111-clankers",
+          worker_ids: { "delta444-clankers": "delta" },
+          worker_reports: {
+            "alpha111-clankers": [],
+            "delta444-clankers": [
+              { id: "learn-v2", fields: [{ id: "q1" }], answered: true, needs_answer: false, latest_answer_id: "sub1", latest_answer_at: "2026-10-27T05:00:00" },
+              { id: "nuu-scope", fields: [{ id: "q2" }], answered: true, needs_answer: false, latest_answer_id: "sub2", latest_answer_at: "2026-10-27T05:02:00" },
+            ],
+          },
+          report_ops: ackFlood,
+          sessions: [
+            { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T05:02:00Z" },
+          ],
+        },
+      );
+      assert.ok(
+        mergedAfterAnswer.report_ops.some(op => op.id === "rop-ans-1"),
+        "entry-ack flood does not evict worker-report answer op",
+      );
+      assert.equal(
+        boardApi.boardHasWaitingReportFor(mergedAfterAnswer, "alpha111-clankers", {}),
+        false,
+        "main session answered overlay clears stale '* ' indicator immediately",
+      );
     });
   }
 
