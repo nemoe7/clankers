@@ -3174,6 +3174,7 @@ class Store:
 				for item in merged['allowed_sessions']:
 					if item not in removed_set and item not in allowed:allowed.append(item)
 			allowed_sync_set=set(allowed);worker_tasks={k:v for(k,v)in worker_tasks.items()if k in allowed_sync_set};worker_reports={k:v for(k,v)in worker_reports.items()if k in allowed_sync_set or sid and k==sid}
+			if isinstance(incoming,dict)and'worker_ids'in incoming and merged['main_session_id']and merged['main_session_id']not in(merged.get('worker_ids')or{}):worker_ids.pop(merged['main_session_id'],None)
 			if merged['main_session_id']and merged['main_session_id']not in removed_set and(merged['main_session_id']not in worker_ids or not main_sid or main_sid in worker_ids):main_sid=merged['main_session_id']
 			elif main_sid in removed_set or main_sid and main_sid not in allowed:main_sid=''
 			by_sid={row['session_id']:dict(row)for row in sessions}

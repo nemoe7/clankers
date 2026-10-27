@@ -4199,6 +4199,14 @@ for raw in sys.stdin:
           },
         ],
       };
+      let memberStoredBoard = {
+        session_id: "alpha111-clankers",
+        repo: "clankers",
+        main_session_id: "",
+        allowed_sessions: ["alpha111-clankers"],
+        sessions: [{ session_id: "alpha111-clankers", repo: "clankers", status: "active" }],
+        entries: [],
+      };
       const checkBox = {
         globalThis: {},
         GM_getValue: (key, fallback) => (gmStore.has(key) ? gmStore.get(key) : fallback),
@@ -4213,9 +4221,9 @@ for raw in sys.stdin:
               req.onload({ status: 200, responseText: JSON.stringify({ revision: proxyRev, board: proxyBoardState }) });
               return;
             }
-            const parsed = JSON.parse(req.data);
+            JSON.parse(req.data);
             proxyRev += 1;
-            req.onload({ status: 200, responseText: JSON.stringify({ revision: proxyRev, board: parsed.board || proxyBoardState }) });
+            req.onload({ status: 200, responseText: JSON.stringify({ revision: proxyRev, board: proxyBoardState }) });
             return;
           }
           if (req.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=")) {
@@ -4227,15 +4235,21 @@ for raw in sys.stdin:
             return;
           }
           if (req.url === "https://8000-sandbox.e2b.app/api/board") {
+            if (req.method === "GET") {
+              req.onload({
+                status: 200,
+                responseText: JSON.stringify(memberStoredBoard),
+              });
+              return;
+            }
             const syncPayload = JSON.parse(req.data);
+            memberStoredBoard = Object.assign({}, syncPayload.board, {
+              session_id: "alpha111-clankers",
+              repo: "clankers",
+            });
             req.onload({
               status: 200,
-              responseText: JSON.stringify(
-                Object.assign({}, syncPayload.board, {
-                  session_id: "alpha111-clankers",
-                  repo: "clankers",
-                }),
-              ),
+              responseText: JSON.stringify(memberStoredBoard),
             });
             return;
           }
@@ -4252,11 +4266,17 @@ for raw in sys.stdin:
       await boardApi.syncPreviewBoard("https://8000-sandbox.e2b.app", "alpha111-clankers", "clankers");
       assert.equal(gmWrites.includes(boardApi.BOARD_KEY), false, "proxy mode never writes BOARD_KEY to GM_setValue");
       const proxyCalls = httpCalls.filter(c => c.url.startsWith("https://arena-proxy.example.ts.net/"));
-      assert.ok(proxyCalls.length >= 3, "calls GET /v1/board, GET /v1/board/files, and POST /v1/board");
+      assert.ok(proxyCalls.length >= 3, "calls POST /v1/board, GET /v1/board?since=, and GET /v1/board/files");
       for (const call of proxyCalls) {
         assert.equal(call.headers["X-Master-Key"], "master-secret-token", "every proxy board request sends X-Master-Key");
       }
-      const previewSyncCall = httpCalls.find(c => c.url === "https://8000-sandbox.e2b.app/api/board");
+      const previewCalls = httpCalls.filter(c => c.url === "https://8000-sandbox.e2b.app/api/board");
+      assert.deepEqual(
+        previewCalls.map(c => c.method),
+        ["GET", "POST"],
+        "pure transport pulls member GET /api/board once and posts consolidated board once without set-main/allow healing chains",
+      );
+      const previewSyncCall = previewCalls[1];
       const metaVersionMatch = source.match(/^\/\/\s*@version\s+(\S+)/m);
       assert.ok(metaVersionMatch, "@version header is present in arena.user.js");
       assert.equal(
@@ -4330,6 +4350,21 @@ for raw in sys.stdin:
         httpCalls.some(c => c.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=")),
         true,
         "subsequent sync uses ?since=<revision> conditional poll",
+      );
+
+      httpCalls.length = 0;
+      await boardApi.syncPreviewBoard(
+        "https://8000-sandbox.e2b.app",
+        "alpha111-clankers",
+        "clankers",
+        { passive: true },
+      );
+      assert.deepEqual(
+        httpCalls
+          .filter(c => c.url === "https://8000-sandbox.e2b.app/api/board")
+          .map(c => c.method),
+        ["GET"],
+        "passive sync skips redundant POST /api/board when consolidated state matches member snapshot",
       );
 
       // Stale '* ' regression: entry-ack flood never evicts answer/unpublish ops and main answered overlay clears worker needs_answer:

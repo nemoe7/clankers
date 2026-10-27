@@ -9452,6 +9452,13 @@ class Store:
         if k in allowed_sync_set or (sid and k == sid)
       }
       if (
+        isinstance(incoming, dict)
+        and "worker_ids" in incoming
+        and merged["main_session_id"]
+        and merged["main_session_id"] not in (merged.get("worker_ids") or {})
+      ):
+        worker_ids.pop(merged["main_session_id"], None)
+      if (
         merged["main_session_id"]
         and merged["main_session_id"] not in removed_set
         and (

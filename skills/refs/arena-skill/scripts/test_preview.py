@@ -16807,3 +16807,44 @@ def test_board_wakes_worker_when_main_remote_branch_moves(tmp_path, monkeypatch)
   assert any(sha_b[:8] in item for item in moved_notices)
   assert any(sha_m2[:8] in item for item in moved_notices)
   assert store.take_board_notifications() == []
+
+
+def test_board_sync_promotes_former_worker_to_main_in_single_post(
+  tmp_path, monkeypatch
+):
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: "arena/beta2222-clankers"
+  )
+  repo_root = tmp_path / "clankers"
+  repo_root.mkdir()
+  state_dir = repo_root / "arena-state"
+  state_dir.mkdir()
+  store = preview.Store(state_dir, create=True)
+  monkeypatch.setattr(store, "repository_root", lambda: repo_root)
+  old_main = "alpha111-clankers"
+  promoted = "f6f478b6-clankers"
+  peer_worker = "beta2222-clankers"
+  store.board_action({"action": "allow", "session_id": old_main})
+  store.board_action({"action": "set-main", "session_id": old_main})
+  store.board_action({"action": "allow", "session_id": promoted, "worker_id": "gamma"})
+  store.board_action(
+    {"action": "allow", "session_id": peer_worker, "worker_id": "beta"}
+  )
+
+  synced = store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": [promoted, peer_worker],
+        "removed_sessions": [old_main],
+        "main_session_id": promoted,
+        "worker_ids": {peer_worker: "beta"},
+        "sessions": [
+          {"session_id": promoted, "repo": "clankers"},
+          {"session_id": peer_worker, "repo": "clankers"},
+        ],
+      },
+    }
+  )
+  assert synced["main_session_id"] == promoted
+  assert promoted not in synced["worker_ids"]
