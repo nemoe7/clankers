@@ -58,6 +58,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Allow explicit `--order 1` updates on upcoming tasks after a preview UI reorder while rejecting non-`1` `--order` overrides (`scripts/preview.py`, `scripts/test_preview.py`).
 - Block `sleep` commands during live background gates and standalone multi-second idle sleeps (`>=60s`) in the pre-execution hook (`scripts/preview.py`, `scripts/test_preview.py`).
 - Refresh peer session status rows when `updated_at` advances and ignore superseded `turn_ended_at` stamps so active peers do not show `Agent 404` (`assets/app.js`, `scripts/preview.py`, `scripts/client.test.cjs`, `scripts/test_preview.py`).
 - Skip missing reports and pre-clear operations during board sync after `state clear` instead of failing with HTTP `404` (`scripts/preview.py`).

@@ -10362,11 +10362,12 @@ class Store:
         and stored
         and stored["status"] == status == "upcoming"
         and order is not None
+        and order != 1
         and index + 1 != stored["order"]
         and meta_number(db, TASK_ORDER_OWNED_META)
       ):
         raise ValueError(
-          "Task order belongs to the preview; omit --order for this update"
+          "Task order belongs to the preview; omit --order or pass --order 1"
         )
       siblings.insert(index, record)
       record["order"] = index + 1

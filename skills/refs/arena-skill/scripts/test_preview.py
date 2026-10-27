@@ -12467,7 +12467,7 @@ def test_preview_order_survives_agent_updates_and_notifies_the_next_hook():
     ordered = [task["id"] for task in store.list_tasks()]
     before = store.task_record("third")
     with pytest.raises(ValueError, match="order"):
-      store.write_task("third", title="Must roll back", order=1)
+      store.write_task("third", title="Must roll back", order=3)
     assert store.task_record("third") == before
     store.write_task("third", details=["Updated step"])
     store.write_task("third", order=store.task_record("third")["order"])
@@ -12506,7 +12506,7 @@ def test_preview_order_survives_agent_updates_and_notifies_the_next_hook():
         "set",
         "third",
         "--order",
-        "1",
+        "3",
       ],
       capture_output=True,
       text=True,
@@ -12517,7 +12517,29 @@ def test_preview_order_survives_agent_updates_and_notifies_the_next_hook():
     assert "order" in rejected.stderr.lower()
     assert [task["id"] for task in store.list_tasks()] == ordered + ["new"]
     with pytest.raises(ValueError, match="order"):
-      store.write_task("third", order=1)
+      store.write_task("third", order=3)
+    promoted = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "task",
+        "set",
+        "third",
+        "--order",
+        "1",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert promoted.returncode == 0, promoted.stderr
+    assert [task["id"] for task in store.list_tasks()] == [
+      "third",
+      "first",
+      "second",
+      "new",
+    ]
     store.write_task("third", status="finished", order=1)
     store.write_task("third", status="upcoming")
     store.import_tasks([store.task_record("third") | {"order": 1}])
