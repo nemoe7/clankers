@@ -169,6 +169,33 @@ def test_the_format_mode_replaces_the_word_inside_a_longer_one():
     )
 
 
+def test_name_rotates_only_as_a_verb():
+  import tempfile
+
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    note = root / "note.md"
+    note.write_text(
+      "Name the variable.\nIt names each field.\n"
+      "Use the name of the file.\nRename the file later.\n",
+      encoding="utf-8",
+    )
+    result = run(cwd=directory)
+    for expected in (
+      "note.md:1: [NMO901] (advisory) Name -> specify",
+      "note.md:2: [NMO901] (advisory) names -> specify",
+    ):
+      assert expected in result.stdout
+    for line_number in (3, 4):
+      assert f"note.md:{line_number}: [NMO901]" not in result.stdout
+    result = run("--format", cwd=directory)
+    assert result.returncode == 0, result.stderr
+    assert note.read_text(encoding="utf-8") == (
+      "Specify the variable.\nIt specifies each field.\n"
+      "Use the name of the file.\nRename the file later.\n"
+    )
+
+
 def test_rule_ids_suppress_only_the_named_rotation():
   import tempfile
 

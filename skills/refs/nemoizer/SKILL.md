@@ -21,9 +21,10 @@ run the linter before you hand work over.
 | `transmit` | send |
 | `pick` | select |
 | `kind` | type |
+| `name` | specify |
 | `repository` | repo |
 
-Read references/rules.md for lint IDs and their meanings.
+Read references/rules.md for lint IDs and their meanings. `name` rotates only as a verb.
 
 ## Linter
 

@@ -15,6 +15,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Wake opted-in board workers when a main session's remote branch or `origin/main` head advances (`scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`, `scripts/test_preview.py`).
 - Record `X-Clankers-Userscript-Version` headers on preview API requests and display the connected userscript version in `#agent-key` and `arena-preview key` (`assets/app.js`, `scripts/preview.py`, `scripts/client.test.cjs`, `scripts/test_preview.py`).
 
+#### nemoizer
+
+- Document verb-only `name` to `specify` rotation in `SKILL.md` and `NMO901` references and cover it in `test_nemoize.py` (`SKILL.md`, `references/rules.md`, `references/nmo901.md`, `scripts/test_nemoize.py`).
+
 #### userscripts
 
 - Stamp `main-moved` board wakes for opted-in workers when a main session's remote branch head changes (`userscripts/arena.user.js`, `maintenance/workflows/userscripts.test.cjs`).
