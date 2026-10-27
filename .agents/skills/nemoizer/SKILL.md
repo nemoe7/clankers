@@ -13,9 +13,10 @@ compatibility: Python 3.11+, with Node.js and Acorn for JavaScript checks.
 | `transmit` | send |
 | `pick` | select |
 | `kind` | type |
+| `name` | specify |
 | `repository` | repo |
 
-Read references/rules.md for lint IDs and meanings.
+Read references/rules.md for lint IDs and meanings. `name` rotates only as a verb.
 
 ```bash
 python3 skills/nemoizer/scripts/nemoize.py .
