@@ -362,11 +362,63 @@ def _text_alignment_finding(element: dict) -> str | None:
   return None
 
 
+PROSE_BLOCK_TAGS = {"p", "li", "blockquote", "dd"}
+
+
+def _body_width_finding(element: dict, report_width: float) -> str | None:
+  if report_width < 1024:
+    return None
+  selector = str(element.get("selector") or "?")
+  tag = str(element.get("tag") or "").strip().lower()
+  classes = element.get("classes") or []
+  is_prose_container = (
+    tag == "article"
+    or "prose" in classes
+    or bool(re.search(r"\bprose\b", selector, re.IGNORECASE))
+  )
+  lines = _element_line_count(element)
+  is_multiline_prose = tag in PROSE_BLOCK_TAGS and lines is not None and lines >= 2
+  if not (is_prose_container or is_multiline_prose):
+    return None
+  values = element.get("values") or {}
+  raw_max = str(values.get("max-width") or "").strip().lower()
+  if raw_max.endswith("ch"):
+    max_ch = _numeric_value(raw_max[:-2])
+    if max_ch is not None and (max_ch < 49.5 or max_ch > 75.5):
+      return f"NUM215 {selector}: max-width {values['max-width']} is outside 50 to 75ch"
+  bounds = element.get("bounds") or {}
+  raw_w = bounds.get("width")
+  w_px = (
+    float(raw_w)
+    if isinstance(raw_w, (int, float))
+    else _numeric_value(str(values.get("width") or ""))
+  )
+  if w_px is None or w_px <= 0:
+    return None
+  pad_l = _numeric_value(str(values.get("padding-left") or "0px")) or 0.0
+  pad_r = _numeric_value(str(values.get("padding-right") or "0px")) or 0.0
+  content_w = max(0.0, w_px - pad_l - pad_r)
+  raw_ch = element.get("ch_px")
+  ch_px = float(raw_ch) if isinstance(raw_ch, (int, float)) and raw_ch > 0 else None
+  if ch_px is None:
+    fs_px = _numeric_value(str(values.get("font-size") or ""))
+    if fs_px is not None and fs_px > 0:
+      ch_px = 0.5 * fs_px
+  if ch_px is None or ch_px <= 0:
+    return None
+  ch_width = content_w / ch_px
+  standalone = is_prose_container or not bool(element.get("in_card_or_dialog"))
+  if ch_width > 75.5 or (standalone and ch_width < 49.5):
+    return f"NUM215 {selector}: prose width {ch_width:.1f}ch is outside 50 to 75ch"
+  return None
+
+
 def check(
   report: dict, tokens: dict[str, str], scale: float = DEFAULT_SCALE
 ) -> list[str]:
   """Return off-scale values and measured list-indent and typography findings."""
   findings = []
+  report_width = float(report.get("width") or 0)
   for element in report.get("elements", []):
     selector = element.get("selector", "?")
     list_status = _list_indent_status(element)
@@ -376,6 +428,7 @@ def check(
       _line_height_finding(element),
       _letter_spacing_finding(element),
       _text_alignment_finding(element),
+      _body_width_finding(element, report_width),
     ):
       if extra:
         findings.append(extra)

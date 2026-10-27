@@ -1885,3 +1885,51 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     tokens,
   )
   assert len([f for f in align_bad if f.startswith("NUM214 ")]) == 2
+  width_ok = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "article.prose",
+          "tag": "article",
+          "ch_px": 8.0,
+          "bounds": {"width": 520.0, "height": 80.0},
+          "values": {},
+        },
+        {
+          "selector": "p.lead",
+          "tag": "p",
+          "line_count": 3,
+          "ch_px": 8.0,
+          "bounds": {"width": 520.0, "height": 60.0},
+          "values": {},
+        },
+      ],
+    },
+    tokens,
+  )
+  assert width_ok == []
+  width_bad = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "article.prose",
+          "tag": "article",
+          "ch_px": 8.0,
+          "bounds": {"width": 840.0, "height": 80.0},
+          "values": {},
+        },
+        {
+          "selector": "p.narrow",
+          "tag": "p",
+          "line_count": 3,
+          "ch_px": 8.0,
+          "bounds": {"width": 280.0, "height": 60.0},
+          "values": {},
+        },
+      ],
+    },
+    tokens,
+  )
+  assert len([f for f in width_bad if f.startswith("NUM215 ")]) == 2

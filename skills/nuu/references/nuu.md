@@ -36,6 +36,7 @@ Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved hous
 | `NUM212` | Measure (`--measure`) | Heading (h1-h6) line-height outside 1.1-1.3x font-size or non-heading line-height outside 1.3-1.5x |
 | `NUM213` | Measure (`--measure`) | Heading (h1-h6) letter-spacing outside -0.005em to -0.02em or non-zero letter-spacing on non-headings |
 | `NUM214` | Measure (`--measure`) | Centered prose over 3 lines or justified text alignment |
+| `NUM215` | Measure (`--measure`) | Multi-line prose or standalone prose container outside 50 to 75ch on desktop |
 | `NUA301` | Rendered `a11y` | Visible interactive control without an accessible name |
 | `NUA302` | Rendered `a11y` | Broken `aria-labelledby`, `aria-describedby`, `aria-controls`, or `aria-owns` ID target |
 | `NUA303` | Rendered `a11y` | Interactive control nested inside another interactive control |

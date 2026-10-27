@@ -173,6 +173,12 @@ li,
 blockquote,
 dd {
   text-align: start;
+  max-width: 65ch;
+}
+
+.prose,
+article {
+  width: min(100%, 65ch);
 }
 
 .eyebrow {

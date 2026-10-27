@@ -173,7 +173,7 @@ KNOWN_NUU_RULES = {
   *(f"NUL00{i}" for i in range(1, 8)),
   *(f"NUI00{i}" for i in range(1, 4)),
   *(f"NUB10{i}" for i in range(1, 5)),
-  *(f"NUM{i}" for i in range(201, 215) if i != 204),
+  *(f"NUM{i}" for i in range(201, 216) if i != 204),
   *(f"NUA{i}" for i in range(301, 311)),
   *RULE_DESCRIPTIONS,
 }

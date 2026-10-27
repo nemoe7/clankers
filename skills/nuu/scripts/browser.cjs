@@ -295,6 +295,7 @@ async function metrics(page, selector) {
         rowSlack,
         line_count: lineCountFor(element),
         ch_px: chPxFor(style),
+        in_card_or_dialog: Boolean(element.closest && element.closest('.card, dialog, [role="dialog"], [role="alertdialog"], aside, nav, table')),
         values: Object.fromEntries(properties.map(name => [name, style.getPropertyValue(name)])),
         list_indent: listIndentFor(element, style)};
     });

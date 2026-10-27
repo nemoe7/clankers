@@ -96,6 +96,12 @@ Pass: left-aligned (`text-align: start`) prose over `3` lines and short centered
 
 ![Clause 18](examples/text-alignment.png)
 
+## 19. Standalone prose container and measure width
+
+Pass: multi-line prose and its standalone container sized within `50` to `75ch` (`65ch` default) so `NUM205` ink ratio stays full without exemptions. Fail: `105ch` full-bleed lines or narrow `30ch` standalone prose (`NUM215`).
+
+![Clause 19](examples/body-text-width.png)
+
 ## Recipe and Audit-Rule Examples
 
 - **Modal `.close-button` and confirmation (`recipes/modal-manager.md`):**
