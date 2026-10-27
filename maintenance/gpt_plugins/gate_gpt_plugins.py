@@ -534,8 +534,20 @@ def parse_plugin_version(value: object) -> tuple[int, ...] | None:
   return tuple(int(part) for part in parts)
 
 
+def valid_single_bumps(base_ver: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
+  """Return allowed one-step bumps above base_ver."""
+  return tuple(
+    (
+      *base_ver[:index],
+      base_ver[index] + 1,
+      *(0 for _ in range(len(base_ver) - index - 1)),
+    )
+    for index in range(len(base_ver) - 1, -1, -1)
+  )
+
+
 def check_version_bump(base_path: Path, errors: list[str]) -> None:
-  """Require gpt-plugins/plugin.json version to be greater than the base manifest."""
+  """Require gpt-plugins/plugin.json version to sit one step above the base manifest."""
   if not base_path.is_file():
     errors.append(f"{base_path}: missing base manifest")
     return
@@ -580,12 +592,21 @@ def check_version_bump(base_path: Path, errors: list[str]) -> None:
     errors.append(
       f"gpt-plugins/plugin.json: version {new_raw} must be greater than base {base_raw}"
     )
+    return
+
+  allowed = valid_single_bumps(old)
+  if new not in allowed:
+    expected = ", ".join(".".join(map(str, item)) for item in allowed)
+    errors.append(
+      f"gpt-plugins/plugin.json: version {new_raw} jumps more than one step above base {base_raw} (expected {expected})"
+    )
 
 
 def run_self_check() -> None:
   """Assert version comparison for dotted integer plugin versions."""
   assert parse_plugin_version("1.2.0") == (1, 2, 0)
   assert parse_plugin_version("1.2.1") > parse_plugin_version("1.2.0")
+  assert valid_single_bumps((1, 2, 0)) == ((1, 2, 1), (1, 3, 0), (2, 0, 0))
   assert parse_plugin_version("2.0.0") > parse_plugin_version("1.9.9")
   assert parse_plugin_version("1.10.0") > parse_plugin_version("1.9.0")
   assert parse_plugin_version("") is None

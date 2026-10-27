@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -341,10 +342,22 @@ def test_the_contract_runs_the_version_bump_checks(tmp_path: Path, monkeypatch):
 
 
 def test_the_contract_accepts_a_bumped_userscript(tmp_path: Path, monkeypatch):
-  """A change whose version rises above the base passes the same check."""
+  """A change whose version rises one step above the base passes the check."""
+  live_text = (gate_pr.ROOT / "userscripts" / "arena.user.js").read_text(
+    encoding="utf-8"
+  )
+  match = re.search(r"//\s*@version\s+(\d+)\.(\d+)\.(\d+)", live_text)
+  assert match is not None
+  major, minor, patch = (int(part) for part in match.groups())
+  if patch > 0:
+    base_ver = f"{major}.{minor}.{patch - 1}"
+  elif minor > 0:
+    base_ver = f"{major}.{minor - 1}.0"
+  else:
+    base_ver = f"{max(0, major - 1)}.0.0"
   base = tmp_path / "arena.user.js"
   base.write_text(
-    "// ==UserScript==\n// @name         x | v1.0.0\n// @version      1.0.0\n"
+    f"// ==UserScript==\n// @name         x | v{base_ver}\n// @version      {base_ver}\n"
     "// ==/UserScript==\n",
     encoding="utf-8",
   )
@@ -358,6 +371,27 @@ def test_the_contract_accepts_a_bumped_userscript(tmp_path: Path, monkeypatch):
 
   monkeypatch.setattr(gate_pr, "_git", fake_git)
   assert gate_pr.run_version_checks("base..HEAD") == []
+
+
+def test_the_contract_rejects_multi_step_userscript_bump(tmp_path: Path, monkeypatch):
+  """A change jumping multiple steps above the base fails the check."""
+  base = tmp_path / "arena.user.js"
+  base.write_text(
+    "// ==UserScript==\n// @name         x | v0.0.1\n// @version      0.0.1\n"
+    "// ==/UserScript==\n",
+    encoding="utf-8",
+  )
+
+  def fake_git(*arguments: str) -> str:
+    if arguments[0] == "diff":
+      return "userscripts/arena.user.js\n"
+    if arguments[0] == "show":
+      return base.read_text(encoding="utf-8")
+    raise AssertionError(f"unexpected git call: {arguments}")
+
+  monkeypatch.setattr(gate_pr, "_git", fake_git)
+  failures = gate_pr.run_version_checks("base..HEAD")
+  assert any("one step above base" in str(failure) for failure in failures), failures
 
 
 def test_the_bump_range_skips_a_missing_base():

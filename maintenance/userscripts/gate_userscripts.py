@@ -87,8 +87,20 @@ def check_file(path: Path, errors: list[str]) -> tuple[int, ...] | None:
   return ver
 
 
+def valid_single_bumps(base_ver: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
+  """Return allowed one-step bumps above base_ver."""
+  return tuple(
+    (
+      *base_ver[:index],
+      base_ver[index] + 1,
+      *(0 for _ in range(len(base_ver) - index - 1)),
+    )
+    for index in range(len(base_ver) - 1, -1, -1)
+  )
+
+
 def check_version_bump(base_path: Path, current_path: Path, errors: list[str]) -> None:
-  """Require current version > base version."""
+  """Require current version to sit one step above base version."""
   if not base_path.is_file():
     errors.append(f"{_display_path(base_path)}: missing base file")
     return
@@ -122,6 +134,15 @@ def check_version_bump(base_path: Path, current_path: Path, errors: list[str]) -
     errors.append(
       f"{_display_path(current_path)}: version {cur_raw} must be greater than base {base_raw}"
     )
+    return
+
+  allowed = valid_single_bumps(base_ver)
+  if cur_ver not in allowed:
+    expected = ", ".join(".".join(map(str, item)) for item in allowed)
+    errors.append(
+      f"{_display_path(current_path)}: version {cur_raw} jumps more than one step "
+      f"above base {base_raw} (expected {expected})"
+    )
 
 
 def run_self_check() -> None:
@@ -135,6 +156,7 @@ def run_self_check() -> None:
   assert parse_version_string("1.10.0") > parse_version_string("1.9.0")
   assert parse_version_string("") is None
   assert parse_version_string("1.2.a") is None
+  assert valid_single_bumps((1, 10, 16)) == ((1, 10, 17), (1, 11, 0), (2, 0, 0))
   # version bump
   import tempfile
 
@@ -142,14 +164,19 @@ def run_self_check() -> None:
     base = Path(td) / "base.js"
     cur = Path(td) / "cur.js"
     base.write_text("// @version 1.10.16\n", encoding="utf-8")
-    cur.write_text("// @version 1.10.17\n", encoding="utf-8")
-    errs: list[str] = []
-    check_version_bump(base, cur, errs)
-    assert not errs, f"expected no errors, got {errs}"
+    for candidate in ("1.10.17", "1.11.0", "2.0.0"):
+      cur.write_text(f"// @version {candidate}\n", encoding="utf-8")
+      errs: list[str] = []
+      check_version_bump(base, cur, errs)
+      assert not errs, f"expected no errors for {candidate}, got {errs}"
     cur.write_text("// @version 1.10.16\n", encoding="utf-8")
     errs = []
     check_version_bump(base, cur, errs)
     assert errs, "expected error when version not bumped"
+    cur.write_text("// @version 1.10.18\n", encoding="utf-8")
+    errs = []
+    check_version_bump(base, cur, errs)
+    assert errs, "expected error when version jumps multiple steps"
   print("ok version and bump checks")
 
 

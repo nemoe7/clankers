@@ -131,7 +131,7 @@ Read these first:
 ## Skills
 
 - ChatGPT-related skills ALWAYS go to gpt-plugins.
-- ALWAYS bump a module's respective version numbers after edits.
+- ALWAYS bump each changed module's version one step above main per PR.
 - Skills in `skills/` follow the [Agent Skills specification](https://agentskills.io/specification).
 - Every `SKILL.md` needs YAML frontmatter using only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`.
 - `name` matches its directory.

@@ -1,7 +1,7 @@
 # userscripts Agent Rules
 
 - Record newly discovered userscript bugs, DOM selector hazards, and dead ends in `userscripts/AGENTS.md` whenever a fix lands so other agents NEVER repeat them.
-- Bump `@version` and the version suffix in `@name` on every edit to `userscripts/*.user.js`.
+- Bump `@version` and the version suffix in `@name` one step above `main` per PR when editing `userscripts/*.user.js`.
 - Add controls in `openSettingsModal()` (`#clankers-settings-modal`) for every new feature, toggle, and configurable parameter.
 - Keep the 26 Tampermonkey menu command labels (`GM_registerMenuCommand`) unchanged unless explicitly instructed to change them.
 - Make every `MutationObserver` callback strictly idempotent: compare current `textContent`, attributes, and style value/priority before mutating the DOM, observe `document.body` instead of `<head><title>` for `page-tab-title`, and guard `syncTitle` logs on `currentTitleEmoji(doc.title) !== titleEmoji` (plus preserve `proxyBoardCache` against unseeded `revision === 0` empty pulls) so prefix/symbol updates NEVER trigger repeated emoji churn.
