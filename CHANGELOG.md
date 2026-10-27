@@ -27,6 +27,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Add randomized jitter across userscript HTTP requests (`requestJson`, `stateJson`, `sendSteeringInterrupt`) and board sync timers targeting `sbx-*.arena.site` (`userscripts/arena.user.js`, `maintenance/workflows/userscripts.test.cjs`).
 - Stamp `main-moved` board wakes for opted-in workers when a main session's remote branch head changes (`userscripts/arena.user.js`, `maintenance/workflows/userscripts.test.cjs`).
 - Send `X-Clankers-Userscript-Version` on preview HTTP requests and `version` in `clankers:userscript-ready` messages (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 

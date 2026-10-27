@@ -4522,6 +4522,77 @@ for raw in sys.stdin:
         "advancing main remote_head stamps main-moved wake token for opted-in workers",
       );
     });
+
+    test("skill HTTP calls to sbx-*.arena.site apply randomized jitter while non-skill URLs run immediately", async () => {
+      const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+      const scheduled = [];
+      const wireCalls = [];
+      const gmStore = new Map([["clankers-arena-http-jitter-ms", 15000]]);
+      const checkBox = {
+        globalThis: {},
+        setTimeout: (fn, ms) => {
+          scheduled.push({ fn, ms });
+          return scheduled.length;
+        },
+        clearTimeout: () => {},
+        GM_getValue: (key, fallback) => (gmStore.has(key) ? gmStore.get(key) : fallback),
+        GM_setValue: (key, val) => gmStore.set(key, val),
+        GM_xmlhttpRequest: (req) => {
+          wireCalls.push({ method: req.method, url: req.url });
+          if (req.onload) req.onload({ status: 200, responseText: '{"ok":true}' });
+        },
+      };
+      checkBox.globalThis = checkBox;
+      checkBox.CLANKERS_CHECKS = {};
+      vm.runInNewContext(source, checkBox, { filename: "arena.user.js" });
+
+      const timersApi = checkBox.CLANKERS_CHECKS.timers;
+      assert.equal(timersApi.isSkillPreviewUrl("https://sbx-abc123.arena.site/api/board"), true);
+      assert.equal(timersApi.isSkillPreviewUrl("https://arena-proxy.example.ts.net/v1/board"), false);
+      assert.equal(timersApi.isSkillPreviewUrl("https://preview.example/api/key"), false);
+
+      let keyDoneStatus = null;
+      checkBox.CLANKERS_CHECKS.promptFill.requestJson(
+        "POST",
+        "https://sbx-abc123.arena.site/api/key",
+        { key: "k", host: "h" },
+        (status) => { keyDoneStatus = status; },
+      );
+      const statePromise = timersApi.stateJson("https://sbx-abc123.arena.site/api/board");
+      let interruptDoneStatus = null;
+      checkBox.CLANKERS_CHECKS.openSteering.sendSteeringInterrupt(
+        "https://sbx-abc123.arena.site/api/agent-interrupt",
+        { note: "test" },
+        (status) => { interruptDoneStatus = status; },
+      );
+      assert.equal(wireCalls.length, 0, "sbx-*.arena.site requests wait inside randomized jitter window");
+      assert.equal(scheduled.length, 3, "requestJson, stateJson, and sendSteeringInterrupt each schedule jitter");
+      for (const item of scheduled) {
+        assert.ok(
+          item.ms >= 0 && item.ms <= timersApi.SKILL_HTTP_JITTER_MAX_MS,
+          `expected jitter delay inside 0..${timersApi.SKILL_HTTP_JITTER_MAX_MS}ms, got ${item.ms}`,
+        );
+      }
+      while (scheduled.length) {
+        scheduled.shift().fn();
+      }
+      const stateRes = await statePromise;
+      assert.equal(keyDoneStatus, 200);
+      assert.equal(stateRes.status, 200);
+      assert.equal(interruptDoneStatus, 200);
+      assert.equal(wireCalls.length, 3, "all jittered sbx-*.arena.site requests fire once their timers drain");
+
+      wireCalls.length = 0;
+      checkBox.CLANKERS_CHECKS.promptFill.requestJson(
+        "POST",
+        "https://preview-proxy.example.ts.net/pwa/recent",
+        { url: "https://sbx-abc123.arena.site/", name: "clankers - Steering" },
+        () => {},
+        false,
+      );
+      assert.equal(scheduled.length, 0, "non-sbx URLs do not schedule extra skill HTTP jitter");
+      assert.equal(wireCalls.length, 1, "non-sbx URL fires immediately");
+    });
   }
 
 

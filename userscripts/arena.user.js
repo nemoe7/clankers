@@ -542,6 +542,32 @@
     return r.min + Math.floor(Math.random() * (r.max - r.min + 1));
   }
 
+  var SKILL_HTTP_JITTER_MAX_MS = 400;
+
+  function isSkillPreviewUrl(url) {
+    return /^https:\/\/sbx-[a-z0-9-]+\.arena\.site(?::\d+)?(?:\/|$)/i.test(
+      String(url || "").trim(),
+    );
+  }
+
+  function randomHttpJitterWindowMs() {
+    var span = httpJitterMs();
+    return span > 0 ? Math.floor(Math.random() * (span + 1)) : 0;
+  }
+
+  function randomSkillHttpJitterMs() {
+    var span = Math.min(httpJitterMs(), SKILL_HTTP_JITTER_MAX_MS);
+    return span > 0 ? Math.floor(Math.random() * (span + 1)) : 0;
+  }
+
+  function withSkillHttpJitter(url, send) {
+    if (!isSkillPreviewUrl(url) || typeof setTimeout !== "function") {
+      send();
+      return null;
+    }
+    return setTimeout(send, randomSkillHttpJitterMs());
+  }
+
   function jitteredTimer(run, everyMs, spreadMs) {
     var waiting = null;
     function tick() {
@@ -1056,17 +1082,19 @@
         var reqHeaders = includeVersion === false
           ? (payload ? { "Content-Type": "application/json" } : {})
           : previewHeaders(Boolean(payload));
-        GM_xmlhttpRequest({
-          method: method,
-          url: url,
-          headers: reqHeaders,
-          data: payload ? JSON.stringify(payload) : undefined,
-          onload: function (answer) {
-            finish(answer.responseText, answer.status);
-          },
-          onerror: function () {
-            finish("", 0);
-          },
+        withSkillHttpJitter(url, function () {
+          GM_xmlhttpRequest({
+            method: method,
+            url: url,
+            headers: reqHeaders,
+            data: payload ? JSON.stringify(payload) : undefined,
+            onload: function (answer) {
+              finish(answer.responseText, answer.status);
+            },
+            onerror: function () {
+              finish("", 0);
+            },
+          });
         });
         return;
       }
@@ -1702,32 +1730,36 @@
 
     function sendSteeringInterrupt(url, payload, done) {
       if (typeof GM_xmlhttpRequest === "function") {
-        GM_xmlhttpRequest({
-          method: "POST",
-          url: url,
-          headers: previewHeaders(true),
-          data: JSON.stringify(payload),
-          onload: function (answer) {
-            done(answer && answer.status ? answer.status : 0);
-          },
-          onerror: function () {
-            done(0);
-          },
+        withSkillHttpJitter(url, function () {
+          GM_xmlhttpRequest({
+            method: "POST",
+            url: url,
+            headers: previewHeaders(true),
+            data: JSON.stringify(payload),
+            onload: function (answer) {
+              done(answer && answer.status ? answer.status : 0);
+            },
+            onerror: function () {
+              done(0);
+            },
+          });
         });
         return;
       }
       if (typeof fetch === "function") {
-        fetch(url, {
-          method: "POST",
-          headers: previewHeaders(true),
-          body: JSON.stringify(payload),
-        })
-          .then(function (r) {
-            done(r && r.status ? r.status : 0);
+        withSkillHttpJitter(url, function () {
+          fetch(url, {
+            method: "POST",
+            headers: previewHeaders(true),
+            body: JSON.stringify(payload),
           })
-          .catch(function () {
-            done(0);
-          });
+            .then(function (r) {
+              done(r && r.status ? r.status : 0);
+            })
+            .catch(function () {
+              done(0);
+            });
+        });
         return;
       }
       done(0);
@@ -2130,6 +2162,7 @@
       findSteeringButton: findSteeringButton,
       steeringLabelViolation: steeringLabelViolation,
       interruptPayloadForSteering: interruptPayloadForSteering,
+      sendSteeringInterrupt: sendSteeringInterrupt,
       flagSteeringLabelViolation: flagSteeringLabelViolation,
       findPreviewDrawer: findPreviewDrawer,
       findPreviewDrawerOuter: findPreviewDrawerOuter,
@@ -4894,20 +4927,22 @@
         resolve({ status: 0, body: null, failure: "unavailable" });
         return;
       }
-      GM_xmlhttpRequest({
-        method: payload === undefined ? "GET" : "POST",
-        url: url,
-        headers: previewHeaders(payload !== undefined),
-        data: payload === undefined ? undefined : JSON.stringify(payload),
-        timeout: 15000,
-        onload: function (answer) {
-          var body = null;
-          var failure = null;
-          try { body = JSON.parse(answer.responseText); } catch (err) { failure = "parse"; }
-          resolve({ status: answer.status, body: body, failure: failure });
-        },
-        onerror: function () { resolve({ status: 0, body: null, failure: "error" }); },
-        ontimeout: function () { resolve({ status: 0, body: null, failure: "timeout" }); },
+      withSkillHttpJitter(url, function () {
+        GM_xmlhttpRequest({
+          method: payload === undefined ? "GET" : "POST",
+          url: url,
+          headers: previewHeaders(payload !== undefined),
+          data: payload === undefined ? undefined : JSON.stringify(payload),
+          timeout: 15000,
+          onload: function (answer) {
+            var body = null;
+            var failure = null;
+            try { body = JSON.parse(answer.responseText); } catch (err) { failure = "parse"; }
+            resolve({ status: answer.status, body: body, failure: failure });
+          },
+          onerror: function () { resolve({ status: 0, body: null, failure: "error" }); },
+          ontimeout: function () { resolve({ status: 0, body: null, failure: "timeout" }); },
+        });
       });
     });
   }
@@ -5387,7 +5422,10 @@
         if (!targetBase || remoteBoardSyncPending) return;
         remoteBoardSyncPending = true;
         var elapsed = Date.now() - lastRemoteBoardSyncAtMs;
-        var waitMs = Math.max(BOARD_REMOTE_DEBOUNCE_MS, BOARD_REMOTE_MIN_INTERVAL_MS - elapsed);
+        var waitMs = Math.max(
+          BOARD_REMOTE_DEBOUNCE_MS,
+          BOARD_REMOTE_MIN_INTERVAL_MS - elapsed,
+        ) + randomSkillHttpJitterMs();
         setTimeout(function () {
           remoteBoardSyncPending = false;
           var latestBoard = readGlobalBoard();
@@ -6840,6 +6878,7 @@
 
     var bootBoardSyncDone = false;
     var lastTitleBoardSyncMs = Date.now();
+    var nextTitleBoardSyncDelayMs = 15000;
     function titleStep() {
       observeRoot();
       syncTitle(document);
@@ -6853,9 +6892,11 @@
           if (!bootBoardSyncDone) {
             bootBoardSyncDone = true;
             lastTitleBoardSyncMs = nowTickMs;
+            nextTitleBoardSyncDelayMs = 15000 + randomHttpJitterWindowMs();
             syncPreviewBoardHook(tickBase, selfSidTick, docScopeTick.repo || "", { passive: false });
-          } else if (nowTickMs - lastTitleBoardSyncMs >= 15000) {
+          } else if (nowTickMs - lastTitleBoardSyncMs >= nextTitleBoardSyncDelayMs) {
             lastTitleBoardSyncMs = nowTickMs;
+            nextTitleBoardSyncDelayMs = 15000 + randomHttpJitterWindowMs();
             syncPreviewBoardHook(tickBase, selfSidTick, docScopeTick.repo || "", { passive: true });
           }
         }
@@ -8348,7 +8389,15 @@
     SHOW_SETTINGS_BUTTON_KEY: SHOW_SETTINGS_BUTTON_KEY,
     showSettingsButtonLabel: showSettingsButtonLabel,
   });
-  exposeChecks("timers", { jitteredTimer: jitteredTimer, HTTP_JITTER_MS: HTTP_JITTER_MS });
+  exposeChecks("timers", {
+    jitteredTimer: jitteredTimer,
+    HTTP_JITTER_MS: HTTP_JITTER_MS,
+    SKILL_HTTP_JITTER_MAX_MS: SKILL_HTTP_JITTER_MAX_MS,
+    isSkillPreviewUrl: isSkillPreviewUrl,
+    randomSkillHttpJitterMs: randomSkillHttpJitterMs,
+    withSkillHttpJitter: withSkillHttpJitter,
+    stateJson: stateJson,
+  });
   showPauseMenu();
   showSettingsMenu();
   menuOpen();
