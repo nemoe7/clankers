@@ -80,6 +80,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Print `arena-preview serve --port 8000` instead of `--serve` in `install.sh` (`scripts/install.sh`, `scripts/test_preview.py`, `scripts/client.test.cjs`).
 - Render state markers and sequence notes, separate Mermaid edges and labels, and open diagrams in the image zoom viewer (`assets/app.js`, `assets/style.css`, `scripts/client.test.cjs`).
 - Preserve `removed_sessions` revocations across `arena_proxy/board.py` and `preview.py` syncs so stale peer `allowed_sessions` never resurrect a revoked session (`arena-egress-proxy/scripts/arena_proxy/`, `scripts/preview.py`, `scripts/test_preview.py`, `maintenance/workflows/test_arena_proxy.py`).
 - Allow explicit `--order 1` updates on upcoming tasks after a preview UI reorder while rejecting non-`1` `--order` overrides (`scripts/preview.py`, `scripts/test_preview.py`).

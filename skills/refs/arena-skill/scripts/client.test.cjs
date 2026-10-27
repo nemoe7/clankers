@@ -5837,8 +5837,8 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   vm.runInContext(markdownItSource, context);
   vm.runInContext(messageMarkdownSource, context);
   assert.equal(
-    context.renderMessageMarkdown('`next action: \\`start_process\\`: \\`arena-preview --serve --port 8000\\``').trim(),
-    '<p><code>next action: `start_process`: `arena-preview --serve --port 8000`</code></p>'
+    context.renderMessageMarkdown('`next action: \\`start_process\\`: \\`arena-preview serve --port 8000\\``').trim(),
+    '<p><code>next action: `start_process`: `arena-preview serve --port 8000`</code></p>'
   );
   assert.equal(
     context.renderMessageMarkdown('`\\`start_process\\``').trim(),

@@ -14241,7 +14241,7 @@ def test_gate_exempts_mkdir_publish_tasks_and_help(tmp_path):
     "commitlint: ok",
     "gitignore: ok",
     "arena-preview: ok",
-    "next action: `start_process`: `arena-preview --serve --port 8000`",
+    "next action: `start_process`: `arena-preview serve --port 8000`",
     "--reminder --rc",
   ):
     assert expected in installer
@@ -14359,11 +14359,11 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   tmp_path, monkeypatch, capsys
 ):
   rendered_html, _ = preview.render_report(
-    "`next action: \\`start_process\\`: \\`arena-preview --serve --port 8000\\``\n\n"
+    "`next action: \\`start_process\\`: \\`arena-preview serve --port 8000\\``\n\n"
     "replace `\\` with `/` in `bar`\n"
   )
   assert (
-    "<code>next action: `start_process`: `arena-preview --serve --port 8000`</code>"
+    "<code>next action: `start_process`: `arena-preview serve --port 8000`</code>"
     in rendered_html
   )
   assert (
