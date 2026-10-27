@@ -7170,7 +7170,9 @@
         "gate_threshold",
         "agent_seen_at",
         "turn_ended_at",
-        "agent_call_ended_at"
+        "agent_call_ended_at",
+        "remote_head",
+        "origin_main_head"
       ];
       for (var sk = 0; sk < statusKeys.length; sk += 1) {
         var sKey = statusKeys[sk];
@@ -7315,7 +7317,9 @@
       "gate_threshold",
       "agent_seen_at",
       "turn_ended_at",
-      "agent_call_ended_at"
+      "agent_call_ended_at",
+      "remote_head",
+      "origin_main_head"
     ];
     var syncNowIso = new Date().toISOString();
     var isSplitBrainHeal = Boolean(
@@ -7422,6 +7426,12 @@
     next.removed_sessions = Object.keys(removedSet);
     next.allowed_sessions = next.allowed_sessions.filter(function (sid) { return !removedSet[sid]; });
     next.sessions = next.sessions.filter(function (row) { return !removedSet[boardSessionId(row.session_id || row.branch)]; });
+    Object.keys(removedSet).forEach(function (removedSid) {
+      delete next.worker_ids[removedSid];
+      delete next.worker_tasks[removedSid];
+      delete next.worker_reports[removedSid];
+      delete next.wakes[removedSid];
+    });
     Object.keys(incoming.worker_ids || {}).forEach(function (sid) {
       if (!removedSet[sid]) next.worker_ids[sid] = incoming.worker_ids[sid];
     });
@@ -7514,9 +7524,13 @@
       next.main_session_id = "";
     }
     var bySid = {};
+    var prevSessionsBySid = {};
     next.sessions.forEach(function (row) {
       var rowSid = boardSessionId(row.session_id || row.branch);
-      if (rowSid && !removedSet[rowSid]) bySid[rowSid] = Object.assign({}, row, { session_id: rowSid });
+      if (rowSid && !removedSet[rowSid]) {
+        prevSessionsBySid[rowSid] = Object.assign({}, row, { session_id: rowSid });
+        bySid[rowSid] = Object.assign({}, row, { session_id: rowSid });
+      }
     });
     incoming.sessions.forEach(function (row) {
       var rowSid = boardSessionId(row.session_id || row.branch);
@@ -7650,7 +7664,33 @@
     if (previewSid && next.wakes[previewSid] && (!previewBoard.wakes || !previewBoard.wakes[previewSid])) {
       delete next.wakes[previewSid];
     }
-    return normalizeBoard(next);
+    var normalizedOut = normalizeBoard(next);
+    var gitShaRe = /^[0-9a-f]{40}$/;
+    (normalizedOut.sessions || []).forEach(function (mRow) {
+      if (!mRow || !mRow.allowed || mRow.role !== "main") return;
+      var prevM = prevSessionsBySid[mRow.session_id];
+      if (!prevM) return;
+      var prevRh = String(prevM.remote_head || "").trim().toLowerCase();
+      var curRh = String(mRow.remote_head || "").trim().toLowerCase();
+      var prevOm = String(prevM.origin_main_head || "").trim().toLowerCase();
+      var curOm = String(mRow.origin_main_head || "").trim().toLowerCase();
+      var rhMoved = gitShaRe.test(prevRh) && gitShaRe.test(curRh) && prevRh !== curRh;
+      var omMoved = gitShaRe.test(prevOm) && gitShaRe.test(curOm) && prevOm !== curOm;
+      if (!rhMoved && !omMoved) return;
+      var movedSha = rhMoved ? curRh : curOm;
+      var wakeTok = "main-moved:" + movedSha.slice(0, 12);
+      var mRepo = mRow.repo || "";
+      var linkedRepos = normalizedOut.multi_repo && Array.isArray(normalizedOut.linked_repos)
+        ? normalizedOut.linked_repos
+        : [];
+      (normalizedOut.sessions || []).forEach(function (wRow) {
+        if (!wRow || !wRow.allowed || wRow.role !== "worker") return;
+        if (wRow.session_id === previewSid) return;
+        if (mRepo && wRow.repo && wRow.repo !== mRepo && linkedRepos.indexOf(wRow.repo) === -1) return;
+        normalizedOut.wakes[wRow.session_id] = wakeTok;
+      });
+    });
+    return normalizedOut;
   }
 
   function readGlobalBoard() {
@@ -7685,6 +7725,8 @@
         seen: s.agent_seen_at || "",
         tend: s.turn_ended_at || "",
         cend: s.agent_call_ended_at || "",
+        rhead: s.remote_head || "",
+        omhead: s.origin_main_head || "",
         surv: s.survey ? String(s.survey.answered_at || s.survey.answered || "") : "",
       };
     });

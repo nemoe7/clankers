@@ -4337,6 +4337,53 @@ for raw in sys.stdin:
         !afterRevokedSelfSync.allowed_sessions.includes("beta2222-clankers"),
         "revoked session cannot re-allow itself via stale local allowed_sessions",
       );
+      assert.equal(
+        afterRevokedSelfSync.worker_ids["beta2222-clankers"],
+        undefined,
+        "removed_sessions clears revoked worker_ids entries on merge",
+      );
+
+      const sha1 = "1".repeat(40);
+      const sha2 = "2".repeat(40);
+      const seededMainHeads = boardApi.mergePreviewBoard(afterRevokedSelfSync, {
+        session_id: "alpha111-clankers",
+        repo: "clankers",
+        allowed_sessions: ["alpha111-clankers", "delta444-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          {
+            session_id: "alpha111-clankers",
+            repo: "clankers",
+            remote_head: sha1,
+            origin_main_head: sha1,
+            updated_at: "2026-10-27T08:00:00Z",
+          },
+          { session_id: "delta444-clankers", repo: "clankers", updated_at: "2026-10-27T08:00:00Z" },
+        ],
+      });
+      assert.equal(seededMainHeads.wakes["delta444-clankers"], undefined);
+
+      const movedMainHeads = boardApi.mergePreviewBoard(seededMainHeads, {
+        session_id: "alpha111-clankers",
+        repo: "clankers",
+        allowed_sessions: ["alpha111-clankers", "delta444-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          {
+            session_id: "alpha111-clankers",
+            repo: "clankers",
+            remote_head: sha2,
+            origin_main_head: sha1,
+            updated_at: "2026-10-27T08:01:00Z",
+          },
+          { session_id: "delta444-clankers", repo: "clankers", updated_at: "2026-10-27T08:00:00Z" },
+        ],
+      });
+      assert.equal(
+        movedMainHeads.wakes["delta444-clankers"],
+        "main-moved:" + sha2.slice(0, 12),
+        "advancing main remote_head stamps main-moved wake token for opted-in workers",
+      );
     });
   }
 

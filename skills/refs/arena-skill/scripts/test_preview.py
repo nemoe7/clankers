@@ -16601,3 +16601,75 @@ def test_board_sync_honors_revoked_sessions_for_peers_and_self(tmp_path):
   )
   assert sid not in after_self_revoke["allowed_sessions"]
   assert after_self_revoke["main_session_id"] == ""
+
+
+def test_board_wakes_worker_when_main_remote_branch_moves(tmp_path, monkeypatch):
+  worker_sid = "delta444-clankers"
+  main_sid = "alpha111-clankers"
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda *_a, **_kw: f"arena/{worker_sid}"
+  )
+  repo_dir = tmp_path / "clankers"
+  repo_dir.mkdir()
+  store = preview.Store(repo_dir / "state", create=True)
+  sha_a = "1" * 40
+  sha_b = "2" * 40
+  sha_m1 = "a" * 40
+  sha_m2 = "b" * 40
+
+  store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": [main_sid, worker_sid],
+        "main_session_id": main_sid,
+        "worker_ids": {worker_sid: "delta"},
+        "sessions": [
+          {
+            "session_id": main_sid,
+            "repo": "clankers",
+            "branch": f"arena/{main_sid}",
+            "remote_head": sha_a,
+            "origin_main_head": sha_m1,
+          },
+          {"session_id": worker_sid, "repo": "clankers"},
+        ],
+      },
+    }
+  )
+  initial_notices = store.take_board_notifications()
+  assert any(
+    "WORKER ROLE ASSIGNED" in item for item in initial_notices
+  )  # nonemo: NMT100
+  assert not any(
+    "MAIN BRANCH MOVED" in item for item in initial_notices
+  )  # nonemo: NMT100
+
+  store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": [main_sid, worker_sid],
+        "main_session_id": main_sid,
+        "worker_ids": {worker_sid: "delta"},
+        "wakes": {worker_sid: f"main-moved:{sha_b[:12]}"},
+        "sessions": [
+          {
+            "session_id": main_sid,
+            "repo": "clankers",
+            "branch": f"arena/{main_sid}",
+            "remote_head": sha_b,
+            "origin_main_head": sha_m2,
+          },
+          {"session_id": worker_sid, "repo": "clankers"},
+        ],
+      },
+    }
+  )
+  moved_notices = store.take_board_notifications()
+  assert (
+    sum("MAIN BRANCH MOVED" in item for item in moved_notices) == 2
+  )  # nonemo: NMT100
+  assert any(sha_b[:8] in item for item in moved_notices)
+  assert any(sha_m2[:8] in item for item in moved_notices)
+  assert store.take_board_notifications() == []

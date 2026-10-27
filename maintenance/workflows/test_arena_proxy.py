@@ -1143,3 +1143,64 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
       headers,
     )
     assert st == 200 and beta not in self_sync["board"]["allowed_sessions"]
+    assert beta not in self_sync["board"]["worker_ids"]
+
+    # Advancing main's remote_head or origin_main_head wakes opted-in workers:
+    sha_1 = "1" * 40
+    sha_2 = "2" * 40
+    st, seed_heads, _ = post_json(
+      restarted.port,
+      "/v1/board",
+      {
+        "action": "sync",
+        "session_id": alpha,
+        "repo": "clankers",
+        "board": {
+          "session_id": alpha,
+          "repo": "clankers",
+          "allowed_sessions": [alpha, delta],
+          "main_session_id": alpha,
+          "sessions": [
+            {
+              "session_id": alpha,
+              "repo": "clankers",
+              "remote_head": sha_1,
+              "origin_main_head": sha_1,
+              "updated_at": "2026-10-27T08:00:00Z",
+            },
+            {"session_id": delta, "repo": "clankers"},
+          ],
+        },
+      },
+      headers,
+    )
+    assert st == 200
+    assert delta not in seed_heads["board"]["wakes"]
+    st, moved_heads, _ = post_json(
+      restarted.port,
+      "/v1/board",
+      {
+        "action": "sync",
+        "session_id": alpha,
+        "repo": "clankers",
+        "board": {
+          "session_id": alpha,
+          "repo": "clankers",
+          "allowed_sessions": [alpha, delta],
+          "main_session_id": alpha,
+          "sessions": [
+            {
+              "session_id": alpha,
+              "repo": "clankers",
+              "remote_head": sha_2,
+              "origin_main_head": sha_1,
+              "updated_at": "2026-10-27T08:01:00Z",
+            },
+            {"session_id": delta, "repo": "clankers"},
+          ],
+        },
+      },
+      headers,
+    )
+    assert st == 200
+    assert moved_heads["board"]["wakes"].get(delta) == f"main-moved:{sha_2[:12]}"

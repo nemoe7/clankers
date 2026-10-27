@@ -16,6 +16,7 @@ MAX_BOARD_FILE_BYTES = 512 * 1024
 SESSION_SLUG_RE = re.compile(r"^[0-9a-f]{6,16}-([A-Za-z0-9._-]+)$", re.IGNORECASE)
 WORKER_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,5}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ISO_STAMP_RE = re.compile(
   r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)"
 )
@@ -28,6 +29,8 @@ STATUS_KEYS = (
   "agent_seen_at",
   "turn_ended_at",
   "agent_call_ended_at",
+  "remote_head",
+  "origin_main_head",
 )
 
 
@@ -677,6 +680,11 @@ def merge_preview_board(global_board, preview_board, passive=False):
     for row in next_board["sessions"]
     if board_session_id(row.get("session_id") or row.get("branch")) not in removed_set
   ]
+  for removed_sid in removed_set:
+    next_board["worker_ids"].pop(removed_sid, None)
+    next_board["worker_tasks"].pop(removed_sid, None)
+    next_board["worker_reports"].pop(removed_sid, None)
+    next_board["wakes"].pop(removed_sid, None)
   for sid, wid in incoming["worker_ids"].items():
     if sid not in removed_set:
       next_board["worker_ids"][sid] = wid
@@ -778,9 +786,11 @@ def merge_preview_board(global_board, preview_board, passive=False):
     next_board["main_session_id"] = ""
 
   by_sid = {}
+  prev_sessions_by_sid = {}
   for row in next_board["sessions"]:
     row_sid = board_session_id(row.get("session_id") or row.get("branch"))
     if row_sid and row_sid not in removed_set:
+      prev_sessions_by_sid[row_sid] = dict(row, session_id=row_sid)
       by_sid[row_sid] = dict(row, session_id=row_sid)
   for row in incoming["sessions"]:
     row_sid = board_session_id(row.get("session_id") or row.get("branch"))
@@ -941,7 +951,46 @@ def merge_preview_board(global_board, preview_board, passive=False):
     raw_wakes = preview_board.get("wakes")
     if not isinstance(raw_wakes, dict) or not raw_wakes.get(preview_sid):
       next_board["wakes"].pop(preview_sid, None)
-  return normalize_board(next_board)
+  normalized_out = normalize_board(next_board)
+  for m_row in normalized_out["sessions"]:
+    if not (m_row.get("allowed") and m_row.get("role") == "main"):
+      continue
+    prev_m = prev_sessions_by_sid.get(m_row["session_id"])
+    if not prev_m:
+      continue
+    prev_rh = str(prev_m.get("remote_head") or "").strip().lower()
+    cur_rh = str(m_row.get("remote_head") or "").strip().lower()
+    prev_om = str(prev_m.get("origin_main_head") or "").strip().lower()
+    cur_om = str(m_row.get("origin_main_head") or "").strip().lower()
+    rh_moved = bool(
+      GIT_SHA_RE.fullmatch(prev_rh)
+      and GIT_SHA_RE.fullmatch(cur_rh)
+      and prev_rh != cur_rh
+    )
+    om_moved = bool(
+      GIT_SHA_RE.fullmatch(prev_om)
+      and GIT_SHA_RE.fullmatch(cur_om)
+      and prev_om != cur_om
+    )
+    if not (rh_moved or om_moved):
+      continue
+    moved_sha = cur_rh if rh_moved else cur_om
+    wake_tok = f"main-moved:{moved_sha[:12]}"
+    m_repo = m_row.get("repo") or ""
+    linked_set = {
+      m_repo,
+      *(normalized_out["linked_repos"] if normalized_out["multi_repo"] else []),
+    }
+    for w_row in normalized_out["sessions"]:
+      w_sid = w_row["session_id"]
+      if not (w_row.get("allowed") and w_row.get("role") == "worker"):
+        continue
+      if w_sid == preview_sid:
+        continue
+      if m_repo and w_row.get("repo") and w_row.get("repo") not in linked_set:
+        continue
+      normalized_out["wakes"][w_sid] = wake_tok
+  return normalized_out
 
 
 def apply_board_action(board, action):

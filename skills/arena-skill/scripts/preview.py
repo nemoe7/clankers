@@ -160,6 +160,28 @@ def workspace_branch(root=None):
 	try:head=(Path(root or Path.cwd())/'.git'/'HEAD').read_text(encoding='utf-8').strip()
 	except OSError:return''
 	prefix='ref: refs/heads/';return head[len(prefix):]if head.startswith(prefix)else''
+GIT_SHA_RE=re.compile('^[0-9a-f]{40}$')
+def workspace_git_ref(root=None,ref='',depth=0):
+	if depth>4 or not ref or not str(ref).startswith('refs/'):return''
+	git_dir=Path(root or Path.cwd())/'.git'
+	try:
+		if git_dir.is_file():
+			pointer=git_dir.read_text(encoding='utf-8').strip()
+			if pointer.startswith('gitdir:'):git_dir=(git_dir.parent/pointer.split(':',1)[1].strip()).resolve()
+		loose=git_dir/ref
+		if loose.is_file():
+			val=loose.read_text(encoding='utf-8').strip()
+			if val.startswith('ref: '):return workspace_git_ref(root,val[5:].strip(),depth+1)
+			low=val.lower();return low if GIT_SHA_RE.fullmatch(low)else''
+		packed=git_dir/'packed-refs'
+		if packed.is_file():
+			for raw_line in packed.read_text(encoding='utf-8',errors='ignore').splitlines():
+				line=raw_line.strip()
+				if not line or line.startswith(('#','^')):continue
+				parts=line.split(' ',1)
+				if len(parts)==2 and parts[1].strip()==ref:low=parts[0].strip().lower();return low if GIT_SHA_RE.fullmatch(low)else''
+	except OSError:return''
+	return''
 def clear_skip_poll(db):db.execute('DELETE FROM meta WHERE key = ?',(SKIP_POLL_META,))
 def reset_poll_count(db):
 	if gate_pending_count(db)==1:db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
@@ -2284,6 +2306,11 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 		if isinstance(row.get('survey'),dict):s_entry['survey']=dict(row['survey'])
 		for status_key in('polling_since','waiting_for_gates','checking_pr','calls_since_message','gate_threshold','agent_seen_at','turn_ended_at','agent_call_ended_at'):
 			if status_key in row and row[status_key]is not None:s_entry[status_key]=row[status_key]
+		for sha_key in('remote_head','origin_main_head'):
+			raw_sha=row.get(sha_key)
+			if isinstance(raw_sha,str):
+				clean_sha=raw_sha.strip().lower()
+				if GIT_SHA_RE.fullmatch(clean_sha):s_entry[sha_key]=clean_sha
 		sessions.append(s_entry)
 	if sid and sid not in seen_sids:seen_sids.add(sid);self_polling=bool(polling)and not(sid in allowed and bool(wakes.get(sid)));self_repo=str(repo or'');self_role='main'if main_sid==sid or not main_sid and sid in allowed else'worker'if sid in allowed else'blocked';self_wid=worker_ids.get(sid)or default_worker_id(sid,self_repo)if self_role=='worker'else'';sessions.insert(0,{'session_id':sid,'board_id':format_board_role_id(self_role,repo=self_repo,worker_id=self_wid,multi_repo=multi_repo,fallback_sid=sid),'worker_id':self_wid,'repo':self_repo,'branch':str(branch or f"arena/{sid}"),'status':'polling'if self_polling else'active','polling':self_polling,'updated_at':clip_stamp(now()),'allowed':sid in allowed,'role':self_role})
 	for allowed_sid in allowed:
@@ -2888,7 +2915,9 @@ class Store:
 				with closing(self.connect())as db_conn:calls_count=meta_number(db_conn,POLLS_SINCE_MESSAGE)
 				m_dict=meta if isinstance(meta,dict)else{}
 				def _mval(key):return m_dict.get(key)if key in m_dict else self.meta_value(key)
-				self_status_fields={'survey':self_survey,'polling_since':clip_stamp(_mval(POLL_SINCE_META))if is_polling else None,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'calls_since_message':calls_count,'gate_threshold':GATE_THRESHOLD,'agent_seen_at':clip_stamp(_mval(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(_mval(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(_mval(AGENT_CALL_ENDED_META))}
+				root_dir=self.repository_root();cur_branch=workspace_branch(root_dir);cur_remote_head=workspace_git_ref(root_dir,f"refs/remotes/origin/{cur_branch}")if cur_branch else'';cur_origin_main=workspace_git_ref(root_dir,'refs/remotes/origin/main');self_status_fields={'survey':self_survey,'polling_since':clip_stamp(_mval(POLL_SINCE_META))if is_polling else None,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'calls_since_message':calls_count,'gate_threshold':GATE_THRESHOLD,'agent_seen_at':clip_stamp(_mval(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(_mval(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(_mval(AGENT_CALL_ENDED_META))}
+				if cur_remote_head:self_status_fields['remote_head']=cur_remote_head
+				if cur_origin_main:self_status_fields['origin_main_head']=cur_origin_main
 				for s_row in out['sessions']:
 					if s_row.get('session_id')==sid:
 						s_row.update(self_status_fields);latest_stamp=max(str(s_row.get('updated_at')or''),str(self_status_fields.get('polling_since')or''),str(self_status_fields.get('agent_seen_at')or''),str(self_status_fields.get('turn_ended_at')or''),str(self_status_fields.get('agent_call_ended_at')or''))
@@ -3061,7 +3090,25 @@ class Store:
 				for candidate in('.agents/skills/arena-skill/WORKER.md','skills/arena-skill/WORKER.md'):
 					if(root/candidate).is_file():worker_md=candidate;break
 				notices.append(f"WORKER ROLE ASSIGNED: you are assigned the worker role with identifier {self_ident}. Read {worker_md} before continuing work.");ack_wakes[worker_key]=self_board_id;changed=True
-		elif worker_key in ack_wakes:ack_wakes.pop(worker_key,None);changed=True
+			heads_key=f"{sid}:main_branch_heads";raw_heads=ack_wakes.get(heads_key);seen_heads={str(k):dict(v)for(k,v)in raw_heads.items()if k and isinstance(v,dict)}if isinstance(raw_heads,dict)else{};active_main_sids=set()
+			for row in board_now.get('sessions')or[]:
+				if not isinstance(row,dict)or not row.get('allowed'):continue
+				if str(row.get('role')or'')!='main':continue
+				m_sid=str(row.get('session_id')or'')
+				if not m_sid or m_sid==sid:continue
+				m_repo=clean_board_repo(row.get('repo')or'',m_sid)
+				if active_repos and m_repo and m_repo not in active_repos:continue
+				active_main_sids.add(m_sid);m_ident=str(row.get('board_id')or m_sid);m_branch=str(row.get('branch')or f"arena/{m_sid}");prev_rec=dict(seen_heads.get(m_sid)or{});cur_rh=str(row.get('remote_head')or'').strip().lower();cur_om=str(row.get('origin_main_head')or'').strip().lower();prev_rh=str(prev_rec.get('remote_head')or'').strip().lower();prev_om=str(prev_rec.get('origin_main_head')or'').strip().lower()
+				if GIT_SHA_RE.fullmatch(cur_rh):
+					if GIT_SHA_RE.fullmatch(prev_rh)and prev_rh!=cur_rh:notices.append(f"MAIN BRANCH MOVED: main session {m_ident} pushed {m_branch} ({prev_rh[:8]} -> {cur_rh[:8]}).");changed=True
+					if prev_rh!=cur_rh:prev_rec['remote_head']=cur_rh;changed=True
+				if GIT_SHA_RE.fullmatch(cur_om):
+					if GIT_SHA_RE.fullmatch(prev_om)and prev_om!=cur_om:notices.append(f"MAIN BRANCH MOVED: origin/main advanced ({prev_om[:8]} -> {cur_om[:8]}) on {m_ident}. Fetch origin/main and rebase if needed.");changed=True
+					if prev_om!=cur_om:prev_rec['origin_main_head']=cur_om;changed=True
+				if prev_rec:seen_heads[m_sid]=prev_rec
+			for stale_m in[k for k in seen_heads if k not in active_main_sids]:seen_heads.pop(stale_m,None);changed=True
+			ack_wakes[heads_key]=seen_heads
+		elif worker_key in ack_wakes:ack_wakes.pop(worker_key,None);ack_wakes.pop(f"{sid}:main_branch_heads",None);changed=True
 		if changed:
 			raw['ack_wakes']=ack_wakes
 			if notices and isinstance(raw.get('sessions'),list):
@@ -3132,7 +3179,7 @@ class Store:
 				if row_sid==sid and row_sid in by_sid:continue
 				prev_existing=by_sid.get(row_sid,{});prev_survey=prev_existing.get('survey');by_sid[row_sid]=dict(row)
 				if not isinstance(by_sid[row_sid].get('survey'),dict)and isinstance(prev_survey,dict):by_sid[row_sid]['survey']=prev_survey
-				for status_key in('polling_since','waiting_for_gates','checking_pr','calls_since_message','gate_threshold','agent_seen_at','turn_ended_at','agent_call_ended_at'):
+				for status_key in('polling_since','waiting_for_gates','checking_pr','calls_since_message','gate_threshold','agent_seen_at','turn_ended_at','agent_call_ended_at','remote_head','origin_main_head'):
 					if status_key not in by_sid[row_sid]and status_key in prev_existing and prev_existing[status_key]is not None:
 						if status_key=='polling_since'and not by_sid[row_sid].get('polling'):continue
 						if status_key=='turn_ended_at':

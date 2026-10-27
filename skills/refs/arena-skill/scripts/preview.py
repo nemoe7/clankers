@@ -401,6 +401,41 @@ def workspace_branch(root=None):
   return head[len(prefix) :] if head.startswith(prefix) else ""
 
 
+GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def workspace_git_ref(root=None, ref="", depth=0):
+  """Resolve a git ref SHA from .git files or packed-refs without spawning git."""
+  if depth > 4 or not ref or not str(ref).startswith("refs/"):
+    return ""
+  git_dir = Path(root or Path.cwd()) / ".git"
+  try:
+    if git_dir.is_file():
+      pointer = git_dir.read_text(encoding="utf-8").strip()
+      if pointer.startswith("gitdir:"):
+        git_dir = (git_dir.parent / pointer.split(":", 1)[1].strip()).resolve()
+    loose = git_dir / ref
+    if loose.is_file():
+      val = loose.read_text(encoding="utf-8").strip()
+      if val.startswith("ref: "):
+        return workspace_git_ref(root, val[5:].strip(), depth + 1)
+      low = val.lower()
+      return low if GIT_SHA_RE.fullmatch(low) else ""
+    packed = git_dir / "packed-refs"
+    if packed.is_file():
+      for raw_line in packed.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("#", "^")):
+          continue
+        parts = line.split(" ", 1)
+        if len(parts) == 2 and parts[1].strip() == ref:
+          low = parts[0].strip().lower()
+          return low if GIT_SHA_RE.fullmatch(low) else ""
+  except OSError:
+    return ""
+  return ""
+
+
 def clear_skip_poll(db):
   """Drop an armed Skip poll press when the owner writes.
 
@@ -6310,6 +6345,12 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     ):
       if status_key in row and row[status_key] is not None:
         s_entry[status_key] = row[status_key]
+    for sha_key in ("remote_head", "origin_main_head"):
+      raw_sha = row.get(sha_key)
+      if isinstance(raw_sha, str):
+        clean_sha = raw_sha.strip().lower()
+        if GIT_SHA_RE.fullmatch(clean_sha):
+          s_entry[sha_key] = clean_sha
     sessions.append(s_entry)
   if sid and sid not in seen_sids:
     seen_sids.add(sid)
@@ -8662,6 +8703,14 @@ class Store:
         def _mval(key):
           return m_dict.get(key) if key in m_dict else self.meta_value(key)
 
+        root_dir = self.repository_root()
+        cur_branch = workspace_branch(root_dir)
+        cur_remote_head = (
+          workspace_git_ref(root_dir, f"refs/remotes/origin/{cur_branch}")
+          if cur_branch
+          else ""
+        )
+        cur_origin_main = workspace_git_ref(root_dir, "refs/remotes/origin/main")
         self_status_fields = {
           "survey": self_survey,
           "polling_since": clip_stamp(_mval(POLL_SINCE_META)) if is_polling else None,
@@ -8676,6 +8725,10 @@ class Store:
           "turn_ended_at": clip_stamp(_mval(TURN_ENDED_META)),
           "agent_call_ended_at": clip_stamp(_mval(AGENT_CALL_ENDED_META)),
         }
+        if cur_remote_head:
+          self_status_fields["remote_head"] = cur_remote_head
+        if cur_origin_main:
+          self_status_fields["origin_main_head"] = cur_origin_main
         for s_row in out["sessions"]:
           if s_row.get("session_id") == sid:
             s_row.update(self_status_fields)
@@ -9145,8 +9198,62 @@ class Store:
         )
         ack_wakes[worker_key] = self_board_id
         changed = True
+      heads_key = f"{sid}:main_branch_heads"
+      raw_heads = ack_wakes.get(heads_key)
+      seen_heads = (
+        {str(k): dict(v) for k, v in raw_heads.items() if k and isinstance(v, dict)}
+        if isinstance(raw_heads, dict)
+        else {}
+      )
+      active_main_sids = set()
+      for row in board_now.get("sessions") or []:
+        if not isinstance(row, dict) or not row.get("allowed"):
+          continue
+        if str(row.get("role") or "") != "main":
+          continue
+        m_sid = str(row.get("session_id") or "")
+        if not m_sid or m_sid == sid:
+          continue
+        m_repo = clean_board_repo(row.get("repo") or "", m_sid)
+        if active_repos and m_repo and m_repo not in active_repos:
+          continue
+        active_main_sids.add(m_sid)
+        m_ident = str(row.get("board_id") or m_sid)
+        m_branch = str(row.get("branch") or f"arena/{m_sid}")
+        prev_rec = dict(seen_heads.get(m_sid) or {})
+        cur_rh = str(row.get("remote_head") or "").strip().lower()
+        cur_om = str(row.get("origin_main_head") or "").strip().lower()
+        prev_rh = str(prev_rec.get("remote_head") or "").strip().lower()
+        prev_om = str(prev_rec.get("origin_main_head") or "").strip().lower()
+        if GIT_SHA_RE.fullmatch(cur_rh):
+          if GIT_SHA_RE.fullmatch(prev_rh) and prev_rh != cur_rh:
+            notices.append(
+              f"MAIN BRANCH MOVED: main session {m_ident} pushed {m_branch}"
+              f" ({prev_rh[:8]} -> {cur_rh[:8]})."
+            )
+            changed = True
+          if prev_rh != cur_rh:
+            prev_rec["remote_head"] = cur_rh
+            changed = True
+        if GIT_SHA_RE.fullmatch(cur_om):
+          if GIT_SHA_RE.fullmatch(prev_om) and prev_om != cur_om:
+            notices.append(
+              f"MAIN BRANCH MOVED: origin/main advanced ({prev_om[:8]} -> {cur_om[:8]})"
+              f" on {m_ident}. Fetch origin/main and rebase if needed."
+            )
+            changed = True
+          if prev_om != cur_om:
+            prev_rec["origin_main_head"] = cur_om
+            changed = True
+        if prev_rec:
+          seen_heads[m_sid] = prev_rec
+      for stale_m in [k for k in seen_heads if k not in active_main_sids]:
+        seen_heads.pop(stale_m, None)
+        changed = True
+      ack_wakes[heads_key] = seen_heads
     elif worker_key in ack_wakes:
       ack_wakes.pop(worker_key, None)
+      ack_wakes.pop(f"{sid}:main_branch_heads", None)
       changed = True
     if changed:
       raw["ack_wakes"] = ack_wakes
@@ -9369,6 +9476,8 @@ class Store:
           "agent_seen_at",
           "turn_ended_at",
           "agent_call_ended_at",
+          "remote_head",
+          "origin_main_head",
         ):
           if (
             status_key not in by_sid[row_sid]

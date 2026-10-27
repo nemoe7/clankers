@@ -12,10 +12,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Wake opted-in board workers when a main session's remote branch or `origin/main` head advances (`scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`, `scripts/test_preview.py`).
 - Record `X-Clankers-Userscript-Version` headers on preview API requests and display the connected userscript version in `#agent-key` and `arena-preview key` (`assets/app.js`, `scripts/preview.py`, `scripts/client.test.cjs`, `scripts/test_preview.py`).
 
 #### userscripts
 
+- Stamp `main-moved` board wakes for opted-in workers when a main session's remote branch head changes (`userscripts/arena.user.js`, `maintenance/workflows/userscripts.test.cjs`).
 - Send `X-Clankers-Userscript-Version` on preview HTTP requests and `version` in `clankers:userscript-ready` messages (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 
 ### Changed
