@@ -16077,30 +16077,18 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
       },
     }
   )
-  mirrored_list = main_store.state()["reports"]
-  assert len(mirrored_list) == 1
-  assert mirrored_list[0]["id"] == "worker-prop"
-  assert mirrored_list[0]["title"] == "Worker Proposal"
-  assert mirrored_list[0]["needs_answer"] is True
-  fetched_mirror = main_store.report("worker-prop")
-  assert "Ship (Recommended)" in fetched_mirror["markdown"]
-  seen_mirror = main_store.mark_report_seen("worker-prop")
-  assert seen_mirror["seen_at"] is not None
-  assert main_store.mark_report_viewed("worker-prop", True)["viewed_at"] is not None
-  sub_res = main_store.submit_report(
-    "worker-prop",
-    "sub001",
-    {"decision": "Ship (Recommended)"},
-    revision=fetched_mirror["updated_at"],
+  assert main_store.state()["reports"] == []
+  main_store.board_action(
+    {
+      "action": "worker-report",
+      "op": "answer",
+      "from_owner": True,
+      "target": worker_sid,
+      "report_id": "worker-prop",
+      "submission_id": "sub001",
+      "answers": {"decision": "Ship (Recommended)"},
+    }
   )
-  assert sub_res["forwarded_to_worker"] == worker_sid
-  main_store.acknowledge(["sub001"], "Acknowledged worker report submission.")
-  mirrored_after_sub = main_store.state()["reports"]
-  assert mirrored_after_sub[0]["latest_answer_id"] == "sub001"
-  assert mirrored_after_sub[0]["needs_answer"] is False
-  assert mirrored_after_sub[0]["seen_at"] is not None
-  assert mirrored_after_sub[0]["agent_seen_at"] is not None
-  assert mirrored_after_sub[0]["latest_answer_acknowledged_at"] is not None
   after_sub_board = main_store.board_state()
   assert any(
     op.get("op") == "answer"
@@ -16108,7 +16096,14 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
     and op.get("report_id") == "worker-prop"
     for op in after_sub_board["report_ops"]
   )
-  assert main_store.unpublish("worker-prop", dismissed_by_owner=True) is True
+  main_store.board_action(
+    {
+      "action": "worker-report",
+      "op": "unpublish",
+      "target": worker_sid,
+      "report_id": "worker-prop",
+    }
+  )
   assert main_store.state()["reports"] == []
   assert any(
     op.get("op") == "unpublish"
@@ -16438,14 +16433,18 @@ def test_main_and_owner_unpublish_worker_report_propagates_across_sync(tmp_path)
     patch.object(StoreRepoMixin, "repository_root", return_value=tmp_path / "clankers"),
   ):
     main_store.board_action({"action": "sync", "board": w_board})
-    assert any(r["id"] == "worker-prop" for r in main_store.state()["reports"])
-
-    # Main unpublishes a worker report. A stale worker snapshot must not resurrect it.
-    assert main_store.resolve_id("worker-prop") == "worker-prop"
-    main_store.unpublish("worker-prop", dismissed_by_owner=True)
     assert not any(r["id"] == "worker-prop" for r in main_store.state()["reports"])
-    notes = [n["text"] for n in main_store.state()["notes"]]
-    assert any("The owner dismissed the report worker-prop" in t for t in notes)
+
+    # Main unpublishes a worker report via board op. A stale worker snapshot must not resurrect it.
+    main_store.board_action(
+      {
+        "action": "worker-report",
+        "op": "unpublish",
+        "target": worker_sid,
+        "report_id": "worker-prop",
+      }
+    )
+    assert not any(r["id"] == "worker-prop" for r in main_store.state()["reports"])
 
     # Even if a stale board snapshot still carries w_board["worker_reports"], sync keeps it unpublished:
     main_after_stale = main_store.board_action({"action": "sync", "board": w_board})
@@ -16848,3 +16847,151 @@ def test_board_sync_promotes_former_worker_to_main_in_single_post(
   )
   assert synced["main_session_id"] == promoted
   assert promoted not in synced["worker_ids"]
+
+
+def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
+  tmp_path, monkeypatch, capsys
+):
+  repo_root = tmp_path / "clankers"
+  repo_root.mkdir()
+  main_sid = "alpha111-clankers"
+  worker_sid = "beta2222-clankers"
+  main_state = repo_root / "main-state"
+  worker_state = repo_root / "worker-state"
+  main_state.mkdir()
+  worker_state.mkdir()
+
+  monkeypatch.setattr(preview, "require_server", lambda _store: None)
+  monkeypatch.setattr(preview.Store, "repository_root", lambda _self: repo_root)
+
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: f"arena/{worker_sid}"
+  )
+  w_store = preview.Store(worker_state / "state.sqlite3", create=True)
+  w_store.board_action({"action": "allow", "session_id": main_sid})
+  w_store.board_action(
+    {"action": "allow", "session_id": worker_sid, "worker_id": "beta"}
+  )
+  w_store.board_action({"action": "set-main", "session_id": main_sid})
+
+  monkeypatch.setenv("ARENA_PREVIEW_STATE_DIR", str(worker_state))
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "board", "status"])
+  assert preview.main() == 0
+  status_out = capsys.readouterr().out
+  assert f"board {worker_sid} role=worker main={main_sid}" in status_out
+
+  patch_file = tmp_path / "handoff.patch"
+  patch_file.write_text("diff --git a/x b/x\n", encoding="utf-8")
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    [
+      "arena-preview",
+      "board",
+      "post",
+      "-t",
+      main_sid,
+      "-f",
+      str(patch_file),
+      "Board entry confirmed and patch attached.",
+    ],
+  )
+  assert preview.main() == 0
+  post_out = capsys.readouterr().out
+  assert f"to {main_sid}" in post_out
+  posted_entries = w_store.board_state()["entries"]
+  assert len(posted_entries) == 1
+  assert posted_entries[0]["file"]["name"] == "handoff.patch"
+
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "board", "wake", main_sid])
+  assert preview.main() == 0
+  assert f"woke {main_sid}" in capsys.readouterr().out
+
+  rep_md = tmp_path / "worker-question.md"
+  rep_md.write_text("# Question\n\nBody.\n", encoding="utf-8")
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    [
+      "arena-preview",
+      "report",
+      "publish",
+      str(rep_md),
+      "-i",
+      "worker-q",
+      "-t",
+      "Worker Question",
+    ],
+  )
+  assert preview.main() == 2
+  blocked_err = capsys.readouterr().err
+  assert "REPORT PUBLISH BLOCKED:" in blocked_err
+  assert "arena-preview board post" in blocked_err
+
+  # Live poll state mirrors immediately onto BOARD_STATE_META and clears consumed wakes on main:
+  w_store.start_poll()
+  w_polling_board = w_store.board_state()
+  w_row = next(r for r in w_polling_board["sessions"] if r["session_id"] == worker_sid)
+  assert w_row["polling"] is True
+  assert w_row["status"] == "polling"
+  assert w_row["polling_since"] is not None
+
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: f"arena/{main_sid}"
+  )
+  m_store = preview.Store(main_state / "state.sqlite3", create=True)
+  m_store.board_action({"action": "allow", "session_id": main_sid})
+  m_store.board_action(
+    {"action": "allow", "session_id": worker_sid, "worker_id": "beta"}
+  )
+  m_store.board_action({"action": "set-main", "session_id": main_sid})
+  m_store.board_action({"action": "wake", "target": worker_sid})
+  first_wake = m_store.board_state()["wakes"][worker_sid]
+  # Simulate egress sync delivering the wake first:
+  m_store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": [main_sid, worker_sid],
+        "main_session_id": main_sid,
+        "worker_ids": {worker_sid: "beta"},
+        "wakes": {worker_sid: first_wake},
+        "sessions": [
+          {"session_id": main_sid, "repo": "clankers", "status": "active"},
+          {"session_id": worker_sid, "repo": "clankers", "status": "active"},
+        ],
+      },
+    }
+  )
+  # Worker consumes wake and starts polling, so consolidated sync omits wakes[worker_sid]:
+  after_worker_poll = m_store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": [main_sid, worker_sid],
+        "main_session_id": main_sid,
+        "worker_ids": {worker_sid: "beta"},
+        "wakes": {},
+        "sessions": [
+          {"session_id": main_sid, "repo": "clankers", "status": "active"},
+          w_row,
+        ],
+      },
+    }
+  )
+  assert worker_sid not in after_worker_poll["wakes"]
+  m_worker_row = next(
+    r for r in after_worker_poll["sessions"] if r["session_id"] == worker_sid
+  )
+  assert m_worker_row["polling"] is True
+  assert m_worker_row["status"] == "polling"
+
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: f"arena/{worker_sid}"
+  )
+  w_store.clear_polling()
+  w_after_clear = next(
+    r for r in w_store.board_state()["sessions"] if r["session_id"] == worker_sid
+  )
+  assert w_after_clear["polling"] is False
+  assert w_after_clear["status"] == "active"

@@ -139,7 +139,7 @@ Keep `state.sqlite3`, `saved-state.ndjson`, report sources and saved file bytes 
 
 ## Multi-session board
 
-Coordinate allowlisted sessions across tabs through `GET /api/board` and `POST /api/board` (`action`: `sync`, `allow`, `revoke`, `set-main`, `heartbeat`, `post`, `wake`, or `clear`); see [board commands](references/commands.md#multi-session-board-apiboard).
+Coordinate allowlisted sessions across tabs through `arena-preview board` (`status`, `post`, or `wake`) in [board commands](references/commands.md#multi-session-board-apiboard).
 
 - Only allowlisted sessions can post entries, stage file attachments under `board-files/<session_id>/`, or update heartbeats.
 - When `main_session_id` names a main session, non-main worker sessions hand off findings through the board instead of committing or pushing.

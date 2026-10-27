@@ -5582,6 +5582,26 @@ def poll_once(store, sleeper=None):
   return status
 
 
+def _notify_server_poll(store, active):
+  """Notify the live preview HTTP server when a `poll` waiter enters or exits."""
+  port = store.meta_value("port")
+  if not port:
+    return
+  try:
+    from urllib.request import Request, urlopen
+
+    req = Request(
+      f"http://127.0.0.1:{int(port)}/api/poll",
+      data=json.dumps({"active": bool(active)}).encode("utf-8"),
+      headers={"Content-Type": "application/json"},
+      method="POST",
+    )
+    with urlopen(req, timeout=0.5):
+      pass
+  except Exception:
+    pass
+
+
 def poll_inbox(store, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
@@ -5594,6 +5614,7 @@ def poll_inbox(store, sleeper=None):
     flush=True,
   )
   store.start_poll()
+  _notify_server_poll(store, True)
   # The monitor rechecks until a failure or the poll ends. It never holds the inbox path.
   failures = []
   stop_checks = threading.Event()
@@ -5637,7 +5658,7 @@ def poll_inbox(store, sleeper=None):
         # The line prints on stdout once, and it names the action the agent takes next.
         idle = idle_board_workers(store.path.parent)
         worker_step = (
-          f"Delegate to idle board worker @{idle[0]} via /api/board first, or start"
+          f"Delegate to idle board worker @{idle[0]} via arena-preview board post first, or start"
           if idle
           else "Start"
         )
@@ -5703,6 +5724,7 @@ def poll_inbox(store, sleeper=None):
   finally:
     stop_checks.set()
     store.clear_polling()
+    _notify_server_poll(store, False)
   # The wait ran its whole span with nothing to read: the turn ends here.
   store.mark_turn_ended()
   print("No new messages. End turn.", flush=True)
@@ -8420,229 +8442,10 @@ class Store:
       }
 
   def _mirrored_worker_reports(self, board_now=None, local_ids=None, meta=None):
-    b_state = board_now if isinstance(board_now, dict) else self.board_state(meta=meta)
-    self_sid = str(b_state.get("session_id") or "")
-    allowed = set(b_state.get("allowed_sessions") or [])
-    if not self_sid or self_sid not in allowed or b_state.get("board_role") != "main":
-      return {}
-    worker_reports = b_state.get("worker_reports")
-    if not isinstance(worker_reports, dict) or not worker_reports:
-      return {}
-    raw_text = (
-      meta.get(BOARD_STATE_META)
-      if isinstance(meta, dict)
-      else self.meta_value(BOARD_STATE_META)
-    )
-    try:
-      raw_stored = json.loads(raw_text) if raw_text else {}
-    except Exception:
-      raw_stored = {}
-    ack_wakes = (
-      raw_stored.get("ack_wakes")
-      if isinstance(raw_stored, dict) and isinstance(raw_stored.get("ack_wakes"), dict)
-      else {}
-    )
-    seen_map = (
-      ack_wakes.get(f"{self_sid}:mirrored_report_seen")
-      if isinstance(ack_wakes.get(f"{self_sid}:mirrored_report_seen"), dict)
-      else {}
-    )
-    local_latest_by_rep = {}
-    local_acks_by_rep = {}
-    try:
-      with closing(self.connect()) as db:
-        if local_ids is None:
-          used_ids = {
-            row["id"] for row in db.execute("SELECT id FROM reports").fetchall()
-          }
-        else:
-          used_ids = set(local_ids)
-        for s_row in db.execute("SELECT * FROM submissions ORDER BY seq").fetchall():
-          r_key = s_row["report_id"]
-          local_latest_by_rep[r_key] = s_row
-          if s_row["acknowledged_at"] is not None:
-            ack_msg = message_row(s_row)
-            ack_msg.pop("text", None)
-            local_acks_by_rep.setdefault(r_key, []).append(ack_msg)
-    except Exception:
-      used_ids = set(local_ids) if local_ids is not None else set()
-    multi_repo = bool(b_state.get("multi_repo"))
-    current_repo = clean_board_repo(b_state.get("repo") or "", self_sid)
-    active_repos = {current_repo, *(b_state.get("linked_repos") or [])}
-    active_repos.discard("")
-    session_by_sid = {
-      str(r.get("session_id") or ""): r
-      for r in (b_state.get("sessions") or [])
-      if isinstance(r, dict) and r.get("session_id")
-    }
-    mirrored = {}
-    seq_idx = 10000
-    for worker_sid, rep_list in worker_reports.items():
-      if (
-        not worker_sid
-        or worker_sid == self_sid
-        or worker_sid not in allowed
-        or not isinstance(rep_list, list)
-      ):
-        continue
-      s_row = session_by_sid.get(worker_sid, {})
-      worker_repo = clean_board_repo(s_row.get("repo") or "", worker_sid)
-      if active_repos and worker_repo and worker_repo not in active_repos:
-        continue
-      if multi_repo:
-        worker_label = str(
-          s_row.get("board_id")
-          or s_row.get("worker_id")
-          or (b_state.get("worker_ids") or {}).get(worker_sid)
-          or worker_sid
-        )
-      else:
-        worker_label = str(
-          s_row.get("worker_id")
-          or (b_state.get("worker_ids") or {}).get(worker_sid)
-          or s_row.get("board_id")
-          or worker_sid
-        )
-        if current_repo and worker_label.startswith(f"{current_repo}-"):
-          worker_label = worker_label[len(current_repo) + 1 :]
-      for w_rep in rep_list:
-        if not isinstance(w_rep, dict):
-          continue
-        orig_id = str(w_rep.get("id") or "").strip()
-        if not orig_id:
-          continue
-        updated_at = clip_stamp(
-          w_rep.get("updated_at") or w_rep.get("published_at") or now()
-        )
-        published_at = clip_stamp(w_rep.get("published_at") or updated_at)
-        op_sub_id = None
-        op_sub_at = None
-        unpublished_by_op = False
-        for op in b_state.get("report_ops") or []:
-          if not isinstance(op, dict):
-            continue
-          if str(op.get("target") or "") != worker_sid:
-            continue
-          if str(op.get("report_id") or "") != orig_id:
-            continue
-          op_kind = str(op.get("op") or "").strip().lower()
-          op_at_stamp = clip_stamp(op.get("at")) or ""
-          if op_kind in {"unpublish", "remove", "delete"}:
-            if not op_at_stamp or not updated_at or op_at_stamp >= updated_at:
-              unpublished_by_op = True
-          elif op_kind in {"answer", "submit"}:
-            cand_id = str(op.get("submission_id") or op.get("note_id") or "").strip()
-            if cand_id:
-              op_sub_id = cand_id
-            if op_at_stamp:
-              op_sub_at = op_at_stamp
-        if unpublished_by_op:
-          continue
-        mirror_id = orig_id if orig_id not in used_ids else f"{worker_label}--{orig_id}"
-        mirror_id = re.sub(r"[^a-zA-Z0-9_-]", "-", mirror_id)[:80]
-        used_ids.add(mirror_id)
-        title = str(w_rep.get("title") or orig_id).strip()
-        seen_key = f"{worker_sid}:{orig_id}"
-        seen_rec = seen_map.get(seen_key) if isinstance(seen_map, dict) else None
-        seen_at = (
-          clip_stamp(seen_rec.get("seen_at"))
-          if isinstance(seen_rec, dict)
-          and seen_rec.get("seen_at")
-          and seen_rec.get("updated_at") in (None, "", updated_at, published_at)
-          else None
-        )
-        local_sub = local_latest_by_rep.get(mirror_id) or local_latest_by_rep.get(
-          orig_id
-        )
-        local_acks = (
-          local_acks_by_rep.get(mirror_id) or local_acks_by_rep.get(orig_id) or []
-        )
-        answered_flag = bool(local_sub or w_rep.get("answered") or op_sub_id)
-        latest_answer_id = (
-          (local_sub["id"] if local_sub else None)
-          or str(w_rep.get("latest_answer_id") or "").strip()
-          or op_sub_id
-          or None
-        )
-        if latest_answer_id == "answered":
-          latest_answer_id = (
-            (local_sub["id"] if local_sub else None) or op_sub_id or None
-          )
-        latest_answer_at = (
-          clip_stamp(local_sub["at"])
-          if local_sub
-          else (
-            clip_stamp(w_rep.get("latest_answer_at"))
-            if w_rep.get("latest_answer_at")
-            else (op_sub_at or (updated_at if answered_flag else None))
-          )
-        )
-        latest_ack_at = (
-          clip_stamp(local_sub["acknowledged_at"])
-          if local_sub and local_sub["acknowledged_at"]
-          else (
-            clip_stamp(w_rep.get("latest_answer_acknowledged_at"))
-            if w_rep.get("latest_answer_acknowledged_at")
-            else None
-          )
-        )
-        agent_seen_val = (
-          clip_stamp(local_sub["seen_at"] or local_sub["acknowledged_at"])
-          if local_sub and (local_sub["seen_at"] or local_sub["acknowledged_at"])
-          else (
-            clip_stamp(w_rep.get("agent_seen_at"))
-            if w_rep.get("agent_seen_at")
-            else None
-          )
-        )
-        ack_seen_val = (
-          clip_stamp(seen_rec.get("ack_seen_at"))
-          if isinstance(seen_rec, dict) and seen_rec.get("ack_seen_at")
-          else (
-            clip_stamp(w_rep.get("ack_seen_at")) if w_rep.get("ack_seen_at") else None
-          )
-        )
-        markdown_text = str(w_rep.get("markdown") or "")
-        try:
-          has_fields = bool(
-            w_rep.get("fields")
-            if isinstance(w_rep.get("fields"), list)
-            else parse_fields(markdown_text)[1]
-          )
-        except Exception:
-          has_fields = False
-        seq_idx += 1
-        mirrored[mirror_id] = {
-          "id": mirror_id,
-          "title": title,
-          "markdown": markdown_text,
-          "updated_at": updated_at,
-          "published_at": published_at,
-          "seq": seq_idx,
-          "seen_at": seen_at,
-          "ever_seen": 1 if isinstance(seen_rec, dict) else 0,
-          "agent_seen_at": agent_seen_val,
-          "ack_seen_at": ack_seen_val,
-          "acknowledgements": local_acks
-          if local_acks
-          else (
-            list(w_rep.get("acknowledgements") or [])
-            if isinstance(w_rep.get("acknowledgements"), list)
-            else []
-          ),
-          "latest_answer_id": latest_answer_id,
-          "latest_answer_at": latest_answer_at,
-          "latest_answer_acknowledged_at": latest_ack_at,
-          "needs_answer": bool(
-            w_rep.get("needs_answer")
-            if "needs_answer" in w_rep and not op_sub_id and not local_sub
-            else (has_fields and not answered_flag)
-          ),
-          "submission_format": None,
-          "worker_session_id": worker_sid,
-          "worker_report_id": orig_id,
-        }
-    return mirrored
+    # Worker sessions route questions through `/api/board` (`arena-preview board post`)
+    # instead of auto-surfacing `worker_reports` in `main` Reports UI.
+    del board_now, local_ids, meta
+    return {}
 
   def board_state(self, meta=None, polling=None):
     root = self.repository_root()
@@ -9658,11 +9461,35 @@ class Store:
               for r in n_replies
               if isinstance(r, dict)
             ]
+      sent_wakes_key = f"{sid}:sent_wakes"
+      sent_wakes = (
+        dict(ack_wakes.get(sent_wakes_key))
+        if isinstance(ack_wakes.get(sent_wakes_key), dict)
+        else {}
+      )
       for k, v in merged["wakes"].items():
         if k == sid and str(v) in seen_wake_set:
           continue
         if not wakes.get(k) or str(v) >= str(wakes[k]):
           wakes[k] = v
+        if k != sid and v:
+          sent_wakes[k] = str(v)
+      if "wakes" in incoming:
+        for peer_sid in list(wakes):
+          if peer_sid == sid or peer_sid in merged["wakes"]:
+            continue
+          cur_wake = str(wakes.get(peer_sid) or "")
+          peer_row = by_sid.get(peer_sid, {})
+          peer_poll_since = str(peer_row.get("polling_since") or "")
+          wake_iso_match = re.match(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", cur_wake)
+          wake_iso = wake_iso_match.group(1) if wake_iso_match else ""
+          if sent_wakes.get(peer_sid) == cur_wake or (
+            peer_row.get("polling")
+            and (not wake_iso or (peer_poll_since and peer_poll_since >= wake_iso))
+          ):
+            wakes.pop(peer_sid, None)
+            sent_wakes.pop(peer_sid, None)
+      ack_wakes[sent_wakes_key] = sent_wakes
       for row in sessions:
         if row["session_id"] in allowed and wakes.get(row["session_id"]):
           row["polling"] = False
@@ -11990,6 +11817,59 @@ class Store:
       row = db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
       return row[0] if row else None
 
+  def _sync_board_poll_state(self, db, active, stamp):
+    """Mirror live `poll` entry and exit onto this session's `BOARD_STATE_META` row."""
+    sid = board_session_id(workspace_branch(self.repository_root()))
+    if not sid:
+      return
+    row = db.execute(
+      "SELECT value FROM meta WHERE key = ?", (BOARD_STATE_META,)
+    ).fetchone()
+    if not row or not row[0]:
+      return
+    try:
+      raw = json.loads(str(row[0]))
+    except Exception:
+      return
+    if not isinstance(raw, dict):
+      return
+    sessions = raw.get("sessions")
+    if not isinstance(sessions, list):
+      sessions = []
+      raw["sessions"] = sessions
+    clipped = clip_stamp(stamp)
+    matched = False
+    for s_row in sessions:
+      if (
+        isinstance(s_row, dict)
+        and board_session_id(s_row.get("session_id") or s_row.get("branch") or "")
+        == sid
+      ):
+        s_row["polling"] = bool(active)
+        s_row["status"] = "polling" if active else "active"
+        if active:
+          s_row["polling_since"] = clipped
+        else:
+          s_row.pop("polling_since", None)
+        s_row["updated_at"] = clipped
+        matched = True
+    if not matched:
+      entry = {
+        "session_id": sid,
+        "repo": self.repository_root().name,
+        "branch": workspace_branch(self.repository_root()) or f"arena/{sid}",
+        "status": "polling" if active else "active",
+        "polling": bool(active),
+        "updated_at": clipped,
+      }
+      if active:
+        entry["polling_since"] = clipped
+      sessions.insert(0, entry)
+    db.execute(
+      "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+      (BOARD_STATE_META, json.dumps(raw, ensure_ascii=False)),
+    )
+
   def stamp_polling(self):
     """Record that an agent poll runs now.
 
@@ -12005,13 +11885,16 @@ class Store:
       stamp = now()
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLING_META, stamp))
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLL_SINCE_META, stamp))
+      self._sync_board_poll_state(db, True, stamp)
 
   def clear_polling(self):
     """Drop the poll heartbeat and the wait start, so the page returns to its connected dot."""
     with closing(self.connect()) as db, db:
+      stamp = now()
       db.execute(
         "DELETE FROM meta WHERE key IN (?, ?)", (POLLING_META, POLL_SINCE_META)
       )
+      self._sync_board_poll_state(db, False, stamp)
 
   def polling(self):
     """True while a poll heartbeat sits inside the freshness window."""
@@ -12577,20 +12460,6 @@ class Store:
                 "text": b_text,
                 "at": b_entry.get("at"),
               }
-          for rep_list in (b_raw.get("worker_reports") or {}).values():
-            if not isinstance(rep_list, list):
-              continue
-            for w_rep in rep_list:
-              if not isinstance(w_rep, dict):
-                continue
-              m_id = str(w_rep.get("id") or "").strip()
-              if m_id and m_id not in notes:
-                notes[m_id] = {
-                  "id": m_id,
-                  "type": "report",
-                  "source": f"/api/reports/{m_id}",
-                  "text": "",
-                }
       attachments = {}
       for row in db.execute("SELECT * FROM uploads ORDER BY seq"):
         record = upload_row(row, self.path.parent)
@@ -14554,6 +14423,21 @@ def handler(store, reload_event=None):
         if path == "/api/board":
           self.reply(200, json.dumps(store.board_state(), ensure_ascii=False))
           return
+        if path == "/api/poll":
+          is_poll = store.polling()
+          self.reply(
+            200,
+            json.dumps(
+              {
+                "polling": is_poll,
+                "polling_since": clip_stamp(store.meta_value(POLL_SINCE_META))
+                if is_poll
+                else None,
+              },
+              ensure_ascii=False,
+            ),
+          )
+          return
         if path == "/api/state":
           header_tz = (self.headers.get("X-Timezone") or "").strip()
           if (
@@ -14734,6 +14618,7 @@ def handler(store, reload_event=None):
           "/api/survey",
           "/api/survey/request",
           "/api/board",
+          "/api/poll",
         }
         and not report_submit
         and not report_seen
@@ -14841,6 +14726,27 @@ def handler(store, reload_event=None):
           return
         if path == "/api/board":
           self.reply(200, json.dumps(store.board_action(payload), ensure_ascii=False))
+          return
+        if path == "/api/poll":
+          active = bool(payload.get("active"))
+          if active:
+            store.start_poll()
+          else:
+            store.clear_polling()
+          is_poll = store.polling()
+          self.reply(
+            200,
+            json.dumps(
+              {
+                "ok": True,
+                "polling": is_poll,
+                "polling_since": clip_stamp(store.meta_value(POLL_SINCE_META))
+                if is_poll
+                else None,
+              },
+              ensure_ascii=False,
+            ),
+          )
           return
         if path == "/api/survey/request":
           if payload:
@@ -17145,6 +17051,42 @@ def main():
     action="store_true",
     help="List files that would be removed without deleting them",
   )
+  board_group = commands.add_parser(
+    "board", help="Inspect, post to, or wake sessions on the multi-session board"
+  )
+  board_verbs = board_group.add_subparsers(dest="verb", required=True)
+  board_verbs.add_parser("status", help="Show board sessions and pending entries")
+  board_post_cmd = board_verbs.add_parser(
+    "post", help="Post a message or attachment to the multi-session board"
+  )
+  board_post_cmd.add_argument(
+    "-t",
+    "--to",
+    default="*",
+    help="Target session ID, worker ID, or '*' (default)",
+  )
+  board_post_cmd.add_argument(
+    "-f",
+    "--file",
+    type=Path,
+    default=None,
+    help="Optional file attachment (<= 512 KiB)",
+  )
+  board_post_cmd.add_argument(
+    "text",
+    nargs="?",
+    default="",
+    help="Board post message text",
+  )
+  board_wake_cmd = board_verbs.add_parser(
+    "wake", help="Wake a target session or all polling sessions"
+  )
+  board_wake_cmd.add_argument(
+    "session",
+    nargs="?",
+    default="all-polling",
+    help="Target session ID, worker ID, or 'all-polling' (default)",
+  )
   args = parser.parse_args()
   if args.command == "serve" and args.port != DEFAULT_PORT:
     serve.error(f"--port must be {DEFAULT_PORT}")
@@ -17174,6 +17116,9 @@ def main():
     ("state", "clear"): "clear-state",
     ("state", "status"): "status-state",
     ("state", "clean"): "clean-state",
+    ("board", "status"): "board-status",
+    ("board", "post"): "board-post",
+    ("board", "wake"): "board-wake",
   }
   args.command = grouped_commands.get((args.command, verb), args.command)
   if args.command == "route":
@@ -17492,7 +17437,82 @@ def main():
             f'arena-preview task set <id> "<title>" -m {i}' for i in untracked
           )
         )
+    elif args.command == "board-status":
+      b_state = store.board_state()
+      self_sid = b_state.get("session_id") or "none"
+      role = b_state.get("board_role") or "blocked"
+      main_sid = b_state.get("main_session_id") or "none"
+      print(f"board {self_sid} role={role} main={main_sid}")
+      for row in b_state.get("sessions") or []:
+        if not isinstance(row, dict):
+          continue
+        label = row.get("board_id") or row.get("worker_id") or row.get("session_id")
+        r_role = row.get("role") or "blocked"
+        r_status = "polling" if row.get("polling") else (row.get("status") or "active")
+        print(f"  {label}\t{r_role}\t{r_status}\t{row.get('session_id') or ''}")
+      pending_entries = [
+        item
+        for item in (b_state.get("entries") or [])
+        if isinstance(item, dict) and not item.get("acknowledged_at")
+      ]
+      if pending_entries:
+        print(f"unacked entries {len(pending_entries)}")
+        for item in pending_entries:
+          print(
+            f"  {item.get('id')}\t{item.get('session_id')} -> {item.get('to') or '*'}"
+          )
+    elif args.command == "board-post":
+      payload = {"action": "post", "to": args.to, "text": args.text}
+      if args.file is not None:
+        file_path = Path(args.file)
+        if not file_path.is_file():
+          raise ValueError(f"No such board attachment file: {file_path}")
+        raw_bytes = file_path.read_bytes()
+        if len(raw_bytes) > MAX_BOARD_FILE_BYTES:
+          raise ValueError("Board file exceeds 512 KB limit")
+        try:
+          content = raw_bytes.decode("utf-8")
+          encoding = "utf-8"
+        except UnicodeDecodeError:
+          content = base64.b64encode(raw_bytes).decode("ascii")
+          encoding = "base64"
+        payload["file"] = {
+          "name": file_path.name,
+          "size": len(raw_bytes),
+          "sha256": hashlib.sha256(raw_bytes).hexdigest(),
+          "encoding": encoding,
+          "content": content,
+        }
+      prev_ids = {
+        str(e.get("id") or "")
+        for e in (store.board_state().get("entries") or [])
+        if isinstance(e, dict)
+      }
+      updated_board = store.board_action(payload)
+      new_entry = next(
+        (
+          e
+          for e in reversed(updated_board.get("entries") or [])
+          if isinstance(e, dict) and str(e.get("id") or "") not in prev_ids
+        ),
+        None,
+      )
+      eid = (new_entry or {}).get("id") or "ok"
+      dest = (new_entry or {}).get("to") or args.to
+      print(f"posted {eid} to {dest}")
+    elif args.command == "board-wake":
+      target = args.session or "all-polling"
+      store.board_action({"action": "wake", "target": target})
+      print(f"woke {target}")
     elif args.command == "publish":
+      if store.board_state().get("board_role") == "worker":
+        print(
+          "REPORT PUBLISH BLOCKED: worker sessions NEVER publish reports;"
+          ' ask main via `arena-preview board post "<question>"` and'
+          " `arena-preview board wake`.",
+          file=sys.stderr,
+        )
+        return 2
       metadata = None
       if args.submission_format is not None:
         with args.submission_format.open("rb") as stream:
