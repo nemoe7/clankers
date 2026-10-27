@@ -94,34 +94,6 @@ def log_tail(data, cap=LOG_CAP_BYTES, lines=LOG_TAIL_LINES, only_failed=False):
   return "\n".join(text.splitlines()[-lines:]) + "\n"
 
 
-def pull_context(repo, pr=None, path=None, ref="", token="", api=GITHUB_API):
-  """Fetch review context: a pull request diff, or one file at a ref."""
-  if pr:
-    status, body = request(
-      f"repos/{repo}/pulls/{pr}",
-      token,
-      cap=2_000_000,
-      api=api,
-      accept="application/vnd.github.diff",
-    )
-    if status != 200:
-      return None, f"the pull request diff answered HTTP {status}"
-    return body.decode("utf-8", "replace"), None
-  if path:
-    suffix = f"?ref={ref}" if ref else ""
-    status, body = request(
-      f"repos/{repo}/contents/{path}{suffix}",
-      token,
-      cap=2_000_000,
-      api=api,
-      accept="application/vnd.github.raw",
-    )
-    if status != 200:
-      return None, f"the file read answered HTTP {status}"
-    return body.decode("utf-8", "replace"), None
-  return None, "no context requested"
-
-
 def next_target(header, api):
   match = re.search(r'<([^>]+)>;\s*rel="next"', header)
   if not match:

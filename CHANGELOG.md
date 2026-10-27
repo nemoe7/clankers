@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Replace `arena-egress-proxy` logging with plain-English `{METHOD} {CODE} {route} from {ip}` lines, `--quiet-polls`, loopback `/v1/health` suppression, explicit `repos/OWNER/REPO/` paths, and `/v1/llm` removal.
 - Run full `nemoizer` prose checks on JavaScript UI labels and messages, and remove UI semicolons in `assets/app.js`.
 - Enforce `nuu` `2ch` hanging list indents (`NUL007`, `NUM211`), add `mountRelativeTimers`, align `nuu.md`, and wire `NUM209`, `NUM210`, and `dimensionShift`.
 - Shorten `arena-preview` CLI reminders, gate hints, and inbox notices while keeping `POLL_WAIT_SECONDS` at `1799` (`scripts/preview.py`).

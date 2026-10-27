@@ -818,18 +818,7 @@ def merge_preview_board(global_board, preview_board, passive=False):
         else bool(row.get("disconnected") or row.get("status") == "disconnected")
       )
       prev_updated = prev.get("updated_at") if prev else ""
-      row_updated = str(row.get("updated_at") or "")
-      row_ms = parse_stamp_ms(row_updated)
-      prev_updated_ms = parse_stamp_ms(prev_updated)
-      if passive and prev_updated:
-        self_updated = (
-          row_updated
-          if row_ms is not None
-          and (prev_updated_ms is None or row_ms > prev_updated_ms)
-          else prev_updated
-        )
-      else:
-        self_updated = sync_iso
+      self_updated = prev_updated if passive and prev_updated else sync_iso
       next_row = {
         "session_id": row_sid,
         "repo": str(

@@ -10,13 +10,10 @@ services:
     environment:
       # A fine-grained, read-only token for the GitHub routes. Leave it out to skip them.
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      ARENA_PROXY_REPO: ${ARENA_PROXY_REPO:-nemoe7/clankers}
-      # Set a master key to turn on the /v1/key route. Leave it out to keep the route off.
+      # Set a master key to turn on the /v1/key and /v1/board routes. Leave it out to keep them off.
       ARENA_PROXY_MASTER_KEY: ${ARENA_PROXY_MASTER_KEY:-}
-      # The model endpoint, when the LLM route should work. Leave the set empty to skip it.
-      ARENA_PROXY_LLM_BASE: ${ARENA_PROXY_LLM_BASE:-}
-      ARENA_PROXY_LLM_KEY: ${ARENA_PROXY_LLM_KEY:-}
-      ARENA_PROXY_LLM_MODEL: ${ARENA_PROXY_LLM_MODEL:-}
+      # Suppress unchanged board poll lines when set to 1.
+      ARENA_PROXY_QUIET_POLLS: ${ARENA_PROXY_QUIET_POLLS:-0}
     volumes:
       - arena-proxy-state:/state
     depends_on:

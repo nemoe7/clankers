@@ -9,8 +9,7 @@ The repository holds the source. `scripts/` is the server, and the [`Dockerfile`
 ```
 docker build -t arena-egress-proxy .
 docker run --rm -p 8787:8787 \
-  -e GITHUB_TOKEN=<pat> -e ARENA_PROXY_REPO=<owner>/<repo> \
-  -e ARENA_PROXY_LLM_BASE=<url> -e ARENA_PROXY_LLM_KEY=<key> -e ARENA_PROXY_LLM_MODEL=<model> \
+  -e GITHUB_TOKEN=<pat> \
   -v arena-proxy-state:/state -e ARENA_PROXY_STATE_DIR=/state \
   arena-egress-proxy
 ```
@@ -18,8 +17,9 @@ docker run --rm -p 8787:8787 \
 - The published image is `ghcr.io/nemoe7/arena-egress-proxy:latest`, one mutable tag that follows the branch head.
 - Images are multi-arch, so an arm64 host pulls and builds natively.
 - The image holds no secrets. Pass them as environment variables, and mount a volume when staged bytes should outlive the container.
-- Every start makes a new agent key and prints `agent key (new on every start): ...`. The key is never read from the environment, so a restart rotates it.
-- A rotation prints the new key the same way: `agent key (rotated): ...`.
+- Every start makes a new agent key and prints `agent key: ...` plus `GH token: OK` (or `missing`). The key is never read from the environment, so a restart rotates it.
+- Pass `--quiet-polls` or `ARENA_PROXY_QUIET_POLLS=1` to print `quiet polls: OK` on startup and suppress unchanged `/v1/board` poll lines.
+- A rotation prints the new key as `agent key (rotated): ...`.
 - The server holds no state beyond the state directory, so `--rm` costs nothing but staged bytes.
 
 ## Compose and the funnel
@@ -35,7 +35,7 @@ docker run --rm -p 8787:8787 \
 ## Host notes
 
 - The backend is one Python package with no dependencies beyond the standard library, about 30 KB of source. It idles at a few megabytes of memory.
-- Environment variables: `ARENA_PROXY_HOST`, `ARENA_PROXY_PORT`, `ARENA_PROXY_STATE_DIR`, `ARENA_PROXY_FETCH_CAP`, `ARENA_PROXY_STAGE_CAP`, and `ARENA_PROXY_MASTER_KEY`, plus the GitHub and model groups.
+- Environment variables: `ARENA_PROXY_HOST`, `ARENA_PROXY_PORT`, `ARENA_PROXY_STATE_DIR`, `ARENA_PROXY_FETCH_CAP`, `ARENA_PROXY_STAGE_CAP`, `ARENA_PROXY_QUIET_POLLS`, `ARENA_PROXY_MASTER_KEY`, and `GITHUB_TOKEN`.
 - Prune the state directory if staged bytes accumulate. The server drops entries older than one hour when it handles requests.
 - On a small host, cap the process (`--memory 128m`) and keep one replica.
 

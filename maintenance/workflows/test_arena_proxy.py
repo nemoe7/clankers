@@ -26,7 +26,6 @@ board_module = importlib.import_module("arena_proxy.board")
 core = importlib.import_module("arena_proxy.core")
 github_api = importlib.import_module("arena_proxy.github_api")
 transfers = importlib.import_module("arena_proxy.transfers")
-llm_module = importlib.import_module("arena_proxy.llm")
 
 
 def log_zip():
@@ -158,20 +157,19 @@ def backend(tmp_path, **overrides):
     target=stub.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
   ).start()
   base = f"http://127.0.0.1:{stub.server_address[1]}"
+  log_lines = []
   options = SimpleNamespace(
     host="127.0.0.1",
     port=0,
     key=KEY,
     master=MASTER,
     token=TOKEN,
-    repo="o/r",
     api=base,
     state_dir=str(tmp_path),
-    llm_base=base,
-    llm_key="model-key",
-    llm_model="model-1",
     fetch_cap=transfers.DEFAULT_FETCH_CAP,
     stage_cap=transfers.DEFAULT_STAGE_CAP,
+    quiet_polls=False,
+    log_sink=log_lines.append,
   )
   for name, value in overrides.items():
     setattr(options, name, value)
@@ -180,7 +178,9 @@ def backend(tmp_path, **overrides):
     target=extension.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
   ).start()
   try:
-    yield SimpleNamespace(stub=stub, port=extension.server_address[1], stub_url=base)
+    yield SimpleNamespace(
+      stub=stub, port=extension.server_address[1], stub_url=base, logs=log_lines
+    )
   finally:
     extension.shutdown()
     extension.server_close()
@@ -201,15 +201,6 @@ def call_with_headers(port, target, headers=None):
     return response.status, response.read().decode("utf-8"), dict(response.getheaders())
   finally:
     connection.close()
-
-
-def wait_for_job(port, job):
-  for _ in range(200):
-    payload = json.loads(call(port, f"/v1/llm?key={KEY}&id={job}")[1])
-    if payload["status"] in ("done", "error"):
-      return payload
-    threading.Event().wait(0.05)
-  raise AssertionError(f"job {job} did not settle: {payload}")
 
 
 def test_health_route_needs_no_key(tmp_path):
@@ -287,9 +278,10 @@ def test_header_key_and_ping_payload(tmp_path):
     status, body = call(handle.port, "/v1/ping", {"X-Extension-Key": KEY})
     assert status == 200
     payload = json.loads(body)
-    assert (
-      payload["repo"] == "o/r" and payload["token"] is True and payload["llm"] is True
-    )
+    assert payload["token"] is True
+    assert "repo" not in payload
+    assert "llm" not in payload
+    assert "/v1/llm" not in payload["routes"]
 
 
 def test_gh_forwards_path_query_and_token(tmp_path):
@@ -312,6 +304,9 @@ def test_gh_rejects_an_absolute_path(tmp_path):
     )
     assert status == 400
     assert "relative" in json.loads(body)["error"]
+    bare_status, bare_body = call(handle.port, f"/v1/gh?key={KEY}&path=pulls/9")
+    assert bare_status == 400
+    assert "repos/OWNER/REPO/" in json.loads(bare_body)["error"]
 
 
 def test_gh_folds_the_run_log_tail_into_the_route(tmp_path):
@@ -471,55 +466,11 @@ def test_log_tail_rejects_non_zip_bytes():
   assert github_api.log_tail(b"not a zip") is None
 
 
-def test_llm_job_runs_and_returns_text(tmp_path):
+def test_llm_route_is_removed(tmp_path):
   with backend(tmp_path) as handle:
-    status, body = call(handle.port, f"/v1/llm?key={KEY}&prompt=review%20this")
-    assert status == 202
-    payload = wait_for_job(handle.port, json.loads(body)["job"])
-    assert payload["status"] == "done", payload
-    assert payload["text"] == "review text"
-    post = handle.stub.posts[-1]
-    assert post["auth"] == "Bearer model-key"
-    assert post["body"]["model"] == "model-1"
-    assert post["body"]["messages"][1]["content"][0]["text"].startswith("review this")
-
-
-def test_llm_diff_context_reaches_the_endpoint(tmp_path):
-  with backend(tmp_path) as handle:
-    status, body = call(handle.port, f"/v1/llm?key={KEY}&prompt=check&diff=9&repo=o/r")
-    assert status == 202
-    payload = wait_for_job(handle.port, json.loads(body)["job"])
-    assert payload["status"] == "done", payload
-    system = handle.stub.posts[-1]["body"]["messages"][0]["content"]
-    assert "diff --git a/x b/x" in system
-
-
-def test_llm_image_url_becomes_a_data_uri(tmp_path):
-  with backend(tmp_path) as handle:
-    status, body = call(
-      handle.port, f"/v1/llm?key={KEY}&prompt=see&image={handle.stub_url}/blob"
-    )
-    assert status == 202
-    payload = wait_for_job(handle.port, json.loads(body)["job"])
-    assert payload["status"] == "done", payload
-    content = handle.stub.posts[-1]["body"]["messages"][1]["content"]
-    assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
-
-
-def test_llm_validates_the_prompt_and_image_count(tmp_path):
-  with backend(tmp_path) as handle:
-    assert call(handle.port, f"/v1/llm?key={KEY}")[0] == 400
-    long_prompt = "x" * (llm_module.PROMPT_CAP_CHARS + 1)
-    assert call(handle.port, f"/v1/llm?key={KEY}&prompt={long_prompt}")[0] == 400
-    images = "".join(f"&image={handle.stub_url}/blob" for _ in range(5))
-    assert call(handle.port, f"/v1/llm?key={KEY}&prompt=see{images}")[0] == 400
-
-
-def test_llm_reports_a_missing_endpoint(tmp_path):
-  with backend(tmp_path, llm_base="") as handle:
-    status, body = call(handle.port, f"/v1/llm?key={KEY}&prompt=hello")
-    assert status == 503
-    assert "ARENA_PROXY_LLM_BASE" in json.loads(body)["hint"]
+    status, body = call(handle.port, f"/v1/llm?key={KEY}&prompt=review")
+    assert status == 404
+    assert "/v1/llm" not in json.loads(body)["routes"]
 
 
 class DeadConnection:
@@ -547,7 +498,7 @@ def test_a_caller_that_leaves_early_is_no_fault(tmp_path):
     handler = core.ExtensionHandler(
       DeadConnection(request),
       ("127.0.0.1", 42440),
-      SimpleNamespace(agent_key=KEY, store=store),
+      SimpleNamespace(agent_key=KEY, store=store, log_sink=lambda _: None),
     )
     assert handler.close_connection is True
 
@@ -556,19 +507,157 @@ def test_unknown_route_lists_the_routes(tmp_path):
   with backend(tmp_path) as handle:
     status, body = call(handle.port, "/v1/nothing")
     assert status == 404
-    assert "/v1/llm" in json.loads(body)["routes"]
+    assert "/v1/fetch" in json.loads(body)["routes"]
+    assert "/v1/llm" not in json.loads(body)["routes"]
 
 
 def test_rotation_line_names_the_new_key():
   assert core.rotation_line("fresh-key") == "agent key (rotated): fresh-key"
 
 
-def test_log_line_drops_the_query_string():
-  assert core.log_line("GET", "/v1/gh?key=SECRET&path=x", 200) == "GET /v1/gh -> 200"
+def test_startup_and_log_lines_use_plain_human_format_without_secrets():
+  assert core.startup_lines("k-1", "tok", quiet_polls=False) == [
+    "agent key: k-1",
+    "GH token: OK",
+  ]
+  assert core.startup_lines("k-1", "", quiet_polls=True) == [
+    "agent key: k-1",
+    "GH token: missing",
+    "quiet polls: OK",
+  ]
+  assert core.log_line("GET", "/v1/gh?key=SECRET&path=x", 200) == "GET 200 /v1/gh"
   assert (
-    core.log_line("GET", "/v1/gh?key=SECRET", 200, "203.0.113.7")
-    == "GET /v1/gh -> 200 from 203.0.113.7"
+    core.log_line(
+      "GET", "/v1/gh?key=SECRET", 200, "203.0.113.7", "repos/o/r/pulls/1 -> github 200"
+    )
+    == "GET 200 /v1/gh from 203.0.113.7: repos/o/r/pulls/1 -> github 200"
   )
+  assert (
+    core.safe_url_label("https://user:secret@example.com/file.bin?sig=SECRET#frag")
+    == "https://example.com/file.bin"
+  )
+
+
+def test_exhaustive_logging_loopback_health_suppression_and_quiet_polls(tmp_path):
+  headers = {"X-Master-Key": MASTER, "X-Forwarded-For": "100.64.0.2"}
+  with backend(tmp_path) as handle:
+    # Loopback /v1/health stays silent, while forwarded /v1/health logs cleanly.
+    assert call(handle.port, "/v1/health")[0] == 200
+    assert handle.logs == []
+    assert call(handle.port, "/v1/health", {"X-Forwarded-For": "100.64.0.2"})[0] == 200
+    assert handle.logs[-1] == "GET 200 /v1/health from 100.64.0.2"
+
+    # Auth, ping, gh, fetch, and board interactions log without leaking secrets.
+    assert (
+      call(handle.port, "/v1/gh?key=wrong-secret", {"X-Forwarded-For": "198.51.100.9"})[
+        0
+      ]
+      == 401
+    )
+    assert (
+      handle.logs[-1]
+      == "GET 401 /v1/gh from 198.51.100.9: missing or invalid agent key"
+    )
+    assert (
+      call(
+        handle.port,
+        f"/v1/gh?key={KEY}&path=repos/o/r/code-scanning/alerts",
+        {"X-Forwarded-For": "198.51.100.9"},
+      )[0]
+      == 200
+    )
+    assert handle.logs[-1].startswith(
+      "GET 200 /v1/gh from 198.51.100.9: repos/o/r/code-scanning/alerts -> github 200"
+    )
+    assert (
+      call(
+        handle.port,
+        f"/v1/fetch?key={KEY}&url={handle.stub_url}/text%3Fsig%3DSIGNED_SECRET",
+        {"X-Forwarded-For": "198.51.100.9"},
+      )[0]
+      == 200
+    )
+    assert "SIGNED_SECRET" not in "\n".join(handle.logs)
+    assert KEY not in "\n".join(handle.logs)
+    assert MASTER not in "\n".join(handle.logs)
+    assert TOKEN not in "\n".join(handle.logs)
+
+    # Default mode logs unchanged /v1/board polls.
+    st, snap_raw = call(
+      handle.port, "/v1/board?session_id=alpha-clankers&repo=clankers", headers
+    )
+    assert st == 200
+    rev = json.loads(snap_raw)["revision"]
+    assert (
+      call(
+        handle.port,
+        f"/v1/board?since={rev}&session_id=alpha-clankers&repo=clankers",
+        headers,
+      )[0]
+      == 200
+    )
+    assert f"unchanged at rev {rev} for alpha-clankers (clankers)" in handle.logs[-1]
+
+  with backend(tmp_path / "quiet", quiet_polls=True) as quiet:
+    assert (
+      post_json(
+        quiet.port,
+        "/v1/board",
+        {
+          "action": "sync",
+          "passive": True,
+          "session_id": "alpha-clankers",
+          "repo": "clankers",
+          "board": {},
+        },
+        headers,
+      )[0]
+      == 200
+    )
+    st, snap_raw = call(
+      quiet.port, "/v1/board?session_id=alpha-clankers&repo=clankers", headers
+    )
+    assert st == 200
+    rev = json.loads(snap_raw)["revision"]
+    logged_after_initial = len(quiet.logs)
+    assert (
+      call(
+        quiet.port,
+        f"/v1/board?since={rev}&session_id=alpha-clankers&repo=clankers",
+        headers,
+      )[0]
+      == 200
+    )
+    assert (
+      post_json(
+        quiet.port,
+        "/v1/board",
+        {
+          "action": "sync",
+          "passive": True,
+          "session_id": "alpha-clankers",
+          "repo": "clankers",
+          "board": {},
+        },
+        headers,
+      )[0]
+      == 200
+    )
+    assert len(quiet.logs) == logged_after_initial
+    assert (
+      post_json(
+        quiet.port,
+        "/v1/board",
+        {
+          "action": "apply",
+          "board_action": {"action": "allow", "session_id": "alpha-clankers"},
+        },
+        headers,
+      )[0]
+      == 200
+    )
+    assert len(quiet.logs) == logged_after_initial + 1
+    assert "allow by alpha-clankers -> rev" in quiet.logs[-1]
 
 
 def test_agent_key_is_fresh_on_every_call():
@@ -637,21 +726,6 @@ def test_compact_fetch_binary_starts_with_metadata(tmp_path):
     assert payload["bytes"] == len(BINARY)
     assert payload["id"] and payload["chunks"] >= 1
     assert "payload" not in payload
-
-
-def test_compact_model_pages_keep_status_and_complete_text(tmp_path):
-  text = "review λ\n" * 4000
-  with backend(tmp_path) as handle:
-    handle.stub.reply_text = text
-    status, body = call(handle.port, f"/v1/llm?key={KEY}&prompt=review")
-    assert status == 202
-    job = json.loads(body)["job"]
-    assert wait_for_job(handle.port, job)["status"] == "done"
-    pieces = []
-    for payload in compact_pages(handle.port, f"/v1/llm?key={KEY}&id={job}"):
-      assert payload["status"] == "done"
-      pieces.append(payload["text"])
-    assert "".join(pieces) == text
 
 
 def test_compact_unknown_gh_shape_needs_explicit_fields(tmp_path):
