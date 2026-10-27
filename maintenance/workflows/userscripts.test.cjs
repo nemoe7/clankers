@@ -3816,26 +3816,81 @@ for raw in sys.stdin:
       sync();
       assert.equal(page.title, "Arena | clankers \u03B2 \uD83D\uDDA5\uFE0F");
 
-      // Main session 91a01582-clankers mirrors allowlisted worker reports awaiting submission -> gets '* '.
+      // Main session 91a01582-clankers never shows '* ' for allowlisted worker_reports alone.
       branchHref = "https://github.com/nemoe7/clankers/tree/arena/91a01582-clankers";
       sync();
-      assert.equal(page.title, "* Arena | clankers \u03B1 \uD83D\uDDA5\uFE0F");
+      assert.equal(page.title, "Arena | clankers \u03B1 \uD83D\uDDA5\uFE0F");
 
+      // Main session's OWN fielded report awaiting submission prepends '* '.
+      const boardWithMainWaiting = boardApi.normalizeBoard(
+        Object.assign({}, boardWithWorkerWaiting, {
+          worker_reports: Object.assign({}, boardWithWorkerWaiting.worker_reports, {
+            "91a01582-clankers": boardWithWorkerWaiting.worker_reports["91a01582-clankers"].concat([
+              { id: "main-proposal", fields: [{ id: "approve-main" }], answered: false, needs_answer: true },
+            ]),
+          }),
+        }),
+      );
+      saved.set(boardApi.BOARD_KEY, boardWithMainWaiting);
       stop = false;
       sync();
       assert.equal(page.title, "* Arena | clankers \u03B1");
 
-      // Once a report_op answers or unpublishes worker-proposal, only info-only + answered-unseen-ack remain -> no '* '.
+      // Once a report_op answers or unpublishes main-proposal (even before 120 entry-ack ops), '* ' clears immediately.
+      const entryAckBurst = Array.from({ length: 120 }, (_, idx) => ({
+        id: `ack-burst-${idx}`,
+        op: "entry-ack",
+        target: "0735d422-clankers",
+        entry_id: `p-${idx}`,
+        at: "2026-10-27T01:06:00Z",
+      }));
       const boardAfterSubmit = boardApi.normalizeBoard(
-        Object.assign({}, boardWithWorkerWaiting, {
+        Object.assign({}, boardWithMainWaiting, {
           report_ops: [
-            { id: "rop1", op: "answer", target: "0735d422-clankers", report_id: "worker-proposal", at: "2026-10-27T01:05:00Z" },
-          ],
+            { id: "rop-main", op: "answer", target: "91a01582-clankers", report_id: "main-proposal", at: "2026-10-27T01:05:00Z" },
+          ].concat(entryAckBurst),
         }),
+      );
+      assert.equal(
+        boardApi.boardHasWaitingReportFor(boardAfterSubmit, "91a01582-clankers", {
+          "91a01582-clankers": [{ id: "main-proposal", fields: [{ id: "approve-main" }], answered: false, needs_answer: true }],
+        }),
+        false,
+        "report_ops in normalizeBoard clear stale localSessionReportsBySid entries even after an entry-ack burst",
       );
       saved.set(boardApi.BOARD_KEY, boardAfterSubmit);
       sync();
       assert.equal(page.title, "Arena | clankers \u03B1");
+
+      // normalizeBoard redacts survey.results[*].answer on unopted sessions while preserving allowlisted survey results.
+      const boardWithSurveys = boardApi.normalizeBoard({
+        allowed_sessions: ["91a01582-clankers"],
+        main_session_id: "91a01582-clankers",
+        sessions: [
+          {
+            session_id: "91a01582-clankers",
+            repo: "clankers",
+            survey: { score: 1, results: [{ id: "Q1", passed: true, answer: "secret-opted" }] },
+          },
+          {
+            session_id: "99999999-clankers",
+            repo: "clankers",
+            survey: { score: 1, results: [{ id: "Q1", passed: true, answer: "secret-unopted" }] },
+          },
+        ],
+      });
+      assert.equal(
+        boardWithSurveys.sessions.find(s => s.session_id === "91a01582-clankers").survey.results[0].answer,
+        "secret-opted",
+      );
+      assert.equal(
+        Object.prototype.hasOwnProperty.call(
+          boardWithSurveys.sessions.find(s => s.session_id === "99999999-clankers").survey.results[0],
+          "answer",
+        ),
+        false,
+        "unopted session survey results omit answer values after normalizeBoard",
+      );
 
       // Standalone unopted session (99999999-clankers) with a report awaiting submission gets '* ' without Greek symbol.
       const boardWithStandalone = boardApi.normalizeBoard(

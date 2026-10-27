@@ -90,6 +90,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Clear stale `* ` tab-title prefixes, apply `report_ops` to local report caches, and redact unopted survey answers (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Omit `X-Clankers-Userscript-Version` on `/pwa/recent` posts, fall back `discoverPreviews` repository and Steering base before `clankers:preview-ready`, and set `previewUiSessionId` before syncing preview URLs (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Pass `previewUiSessionId` instead of target `action.session_id` to post-action `syncPreviewBoard` and preserve global `removed_sessions` revocations across peer and self syncs (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Observe `document.body` for tab-title updates and suppress duplicate `[NemoUtils][title]` logs when the current emoji and base title hold across external `<title>` resets (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).

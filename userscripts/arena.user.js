@@ -5088,9 +5088,16 @@
 
   function shouldAutoSyncBoard(board, doc) {
     var normalized = board && Array.isArray(board.allowed_sessions) ? board : readGlobalBoard();
-    if (!normalized.allowed_sessions.length) return false;
     var docScope = doc ? stateScope(doc) : { repo: "", branch: "" };
     var selfSid = boardSessionId(previewUiSessionId || docScope.branch || "");
+    if (
+      selfSid &&
+      Array.isArray(localSessionReportsBySid[selfSid]) &&
+      boardHasWaitingReportFor(normalized, selfSid)
+    ) {
+      return true;
+    }
+    if (!normalized.allowed_sessions.length) return false;
     if (selfSid) {
       return normalized.allowed_sessions.indexOf(selfSid) !== -1;
     }
@@ -5150,6 +5157,7 @@
           }
           if (answerSid && answer.body.worker_reports && Array.isArray(answer.body.worker_reports[answerSid])) {
             localSessionReportsBySid[answerSid] = answer.body.worker_reports[answerSid].slice();
+            if (typeof syncTitleNowHook === "function") syncTitleNowHook();
           }
           if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
           var srvAllowed = Array.isArray(answer.body.allowed_sessions) ? answer.body.allowed_sessions : [];
@@ -5220,6 +5228,7 @@
                 var healedSid = boardSessionId(healed.body.session_id || targetSid || "");
                 if (healedSid && healed.body.worker_reports && Array.isArray(healed.body.worker_reports[healedSid])) {
                   localSessionReportsBySid[healedSid] = healed.body.worker_reports[healedSid].slice();
+                  if (typeof syncTitleNowHook === "function") syncTitleNowHook();
                 }
                 return finalizeSync(healed);
               }
@@ -7168,7 +7177,22 @@
         updated_at: typeof row.updated_at === "string" && !isNaN(parseBoardStampMs(row.updated_at)) ? row.updated_at : "",
       };
       if (row.survey && typeof row.survey === "object") {
-        rowOut.survey = row.survey;
+        if (rowOut.allowed) {
+          rowOut.survey = row.survey;
+        } else {
+          var cleanSurvey = Object.assign({}, row.survey);
+          if (Array.isArray(cleanSurvey.results)) {
+            cleanSurvey.results = cleanSurvey.results.map(function (item) {
+              if (!item || typeof item !== "object" || !Object.prototype.hasOwnProperty.call(item, "answer")) {
+                return item;
+              }
+              var redacted = Object.assign({}, item);
+              delete redacted.answer;
+              return redacted;
+            });
+          }
+          rowOut.survey = cleanSurvey;
+        }
       }
       var statusKeys = [
         "polling_since",
@@ -7261,7 +7285,35 @@
     }
     var entries = Array.isArray(data.entries) ? data.entries.slice(-MAX_BOARD_ENTRIES) : [];
     var taskOps = Array.isArray(data.task_ops) ? data.task_ops.slice(-MAX_BOARD_ENTRIES) : [];
-    var reportOps = Array.isArray(data.report_ops) ? data.report_ops.slice(-MAX_BOARD_ENTRIES) : [];
+    var rawReportOps = Array.isArray(data.report_ops) ? data.report_ops : [];
+    var decisionOps = [];
+    var ackOps = [];
+    for (var roIdx = 0; roIdx < rawReportOps.length; roIdx += 1) {
+      var rOp = rawReportOps[roIdx];
+      if (!rOp || typeof rOp !== "object") continue;
+      var rOpKind = String(rOp.op || rOp.operation || "").trim().toLowerCase();
+      if (rOpKind === "entry-ack") ackOps.push(rOp);
+      else decisionOps.push(rOp);
+    }
+    var keptDecisions = decisionOps.slice(-MAX_BOARD_ENTRIES);
+    var ackBudget = Math.max(0, MAX_BOARD_ENTRIES - keptDecisions.length);
+    var ackCut = ackBudget > 0 ? Math.max(0, ackOps.length - ackBudget) : ackOps.length;
+    var decCut = Math.max(0, decisionOps.length - MAX_BOARD_ENTRIES);
+    var reportOps = [];
+    var seenAckIdx = 0;
+    var seenDecIdx = 0;
+    for (var roIdx2 = 0; roIdx2 < rawReportOps.length; roIdx2 += 1) {
+      var rOp2 = rawReportOps[roIdx2];
+      if (!rOp2 || typeof rOp2 !== "object") continue;
+      var rOpKind2 = String(rOp2.op || rOp2.operation || "").trim().toLowerCase();
+      if (rOpKind2 === "entry-ack") {
+        if (seenAckIdx >= ackCut) reportOps.push(rOp2);
+        seenAckIdx += 1;
+      } else {
+        if (seenDecIdx >= decCut) reportOps.push(rOp2);
+        seenDecIdx += 1;
+      }
+    }
     var workerTasks = {};
     if (data.worker_tasks && typeof data.worker_tasks === "object" && !Array.isArray(data.worker_tasks)) {
       Object.keys(data.worker_tasks).forEach(function (key) {
@@ -7967,41 +8019,27 @@
     if (!sid || isBoardWorkerSession(normalized, sid)) return false;
     var map = localReportsMap && typeof localReportsMap === "object" ? localReportsMap : localSessionReportsBySid;
     var ownReports = Array.isArray(map[sid])
-      ? map[sid]
-      : (normalized.worker_reports && Array.isArray(normalized.worker_reports[sid]) ? normalized.worker_reports[sid] : []);
-    for (var i = 0; i < ownReports.length; i += 1) {
-      if (reportWaitingOnSubmission(ownReports[i], normalized.report_ops, sid)) return true;
-    }
-    var isMain = normalized.allowed_sessions.indexOf(sid) !== -1 && boardRoleFor(normalized, sid) === "main";
-    if (!isMain || !normalized.worker_reports) return false;
-    var mainRepo = cleanBoardRepo("", sid);
-    for (var s = 0; s < normalized.sessions.length; s += 1) {
-      if (normalized.sessions[s].session_id === sid && normalized.sessions[s].repo) {
-        mainRepo = normalized.sessions[s].repo;
-        break;
-      }
-    }
-    var linkedSet = {};
-    if (mainRepo) linkedSet[mainRepo] = true;
-    (normalized.linked_repos || []).forEach(function (slug) { linkedSet[slug] = true; });
-    var workerSids = Object.keys(normalized.worker_reports);
-    for (var w = 0; w < workerSids.length; w += 1) {
-      var wSid = workerSids[w];
-      if (!wSid || wSid === sid || normalized.allowed_sessions.indexOf(wSid) === -1) continue;
-      var wRepo = cleanBoardRepo("", wSid);
-      for (var sr = 0; sr < normalized.sessions.length; sr += 1) {
-        if (normalized.sessions[sr].session_id === wSid && normalized.sessions[sr].repo) {
-          wRepo = normalized.sessions[sr].repo;
-          break;
+      ? map[sid].slice()
+      : (normalized.worker_reports && Array.isArray(normalized.worker_reports[sid]) ? normalized.worker_reports[sid].slice() : []);
+    if (Array.isArray(normalized.report_ops)) {
+      for (var ro = 0; ro < normalized.report_ops.length; ro += 1) {
+        var op = normalized.report_ops[ro];
+        if (!op || typeof op !== "object") continue;
+        var opKind = String(op.op || op.operation || "").trim().toLowerCase();
+        if (opKind === "entry-ack") continue;
+        var opTarget = resolveBoardTarget(
+          op.target || "",
+          normalized.sessions,
+          normalized.allowed_sessions,
+          normalized.main_session_id,
+        );
+        if (opTarget === sid) {
+          ownReports = applyBoardReportOpToList(ownReports, op);
         }
       }
-      var repoVisible = !mainRepo || !wRepo || wRepo === mainRepo ||
-        (normalized.linked_repos.length > 0 ? Boolean(linkedSet[wRepo]) : Boolean(normalized.multi_repo));
-      if (!repoVisible) continue;
-      var wList = normalized.worker_reports[wSid] || [];
-      for (var r = 0; r < wList.length; r += 1) {
-        if (reportWaitingOnSubmission(wList[r], normalized.report_ops, wSid)) return true;
-      }
+    }
+    for (var i = 0; i < ownReports.length; i += 1) {
+      if (reportWaitingOnSubmission(ownReports[i], normalized.report_ops, sid)) return true;
     }
     return false;
   }
