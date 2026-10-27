@@ -170,10 +170,10 @@ def load_rule_descriptions(home: Path = HOME) -> dict[str, str]:
 VERSION = _load_version()
 RULE_DESCRIPTIONS = load_rule_descriptions()
 KNOWN_NUU_RULES = {
-  *(f"NUL00{i}" for i in range(1, 7)),
+  *(f"NUL00{i}" for i in range(1, 8)),
   *(f"NUI00{i}" for i in range(1, 4)),
   *(f"NUB10{i}" for i in range(1, 5)),
-  *(f"NUM{i}" for i in range(201, 211)),
+  *(f"NUM{i}" for i in range(201, 212) if i != 204),
   *(f"NUA{i}" for i in range(301, 311)),
   *RULE_DESCRIPTIONS,
 }
