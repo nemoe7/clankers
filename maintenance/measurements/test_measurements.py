@@ -96,3 +96,27 @@ def test_budget_group_row_sums_its_files(tmp_path: Path, monkeypatch):
     raise AssertionError("A missing group file was accepted")
   except RuntimeError:
     assert check.README.read_bytes() == before
+
+
+def test_check_case_collisions_rejects_case_only_tracked_duplicates(
+  tmp_path: Path, monkeypatch
+):
+  import subprocess
+
+  (tmp_path / ".git").mkdir()
+
+  def fake_run(cmd, **kwargs):
+    assert cmd[:3] == ["git", "-C", str(tmp_path)]
+    return subprocess.CompletedProcess(
+      cmd,
+      0,
+      stdout=".github/PULL_REQUEST_TEMPLATE.md\n.github/pull_request_template.md\nREADME.md\n",
+      stderr="",
+    )
+
+  monkeypatch.setattr(check.subprocess, "run", fake_run)
+  errors: list[str] = []
+  check.check_case_collisions(errors, root=tmp_path)
+  assert errors == [
+    "case-colliding tracked paths: .github/PULL_REQUEST_TEMPLATE.md, .github/pull_request_template.md"
+  ]

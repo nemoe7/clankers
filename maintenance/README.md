@@ -114,6 +114,7 @@ The checker reports every problem it finds in:
 - The markdownlint scope, recomputed from `.markdownlint-cli2.jsonc` and compared with the counts this repository documents.
 - Refs/live rule parity: identical section headings in the same order, and each live section holding no more rule lines than its refs baseline.
 - The byte identity of the root `ARENA.md` copy and `rules/ARENA.md`.
+- Tracked Git paths whose names differ only by letter case.
 
 ## Prose lint
 

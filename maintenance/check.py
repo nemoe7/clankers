@@ -977,8 +977,32 @@ def validate(errors: list[str]) -> int:
   check_refs_parity(errors)
   check_system_prompt_parity(errors)
   check_root_copies(errors)
+  check_case_collisions(errors)
 
   return len(skills)
+
+
+def check_case_collisions(errors: list[str], root: Path | None = None) -> None:
+  """Reject tracked Git paths that collide on case-insensitive filesystems."""
+  repo_root = ROOT if root is None else root
+  if not (repo_root / ".git").exists():
+    return
+  proc = subprocess.run(
+    ["git", "-C", str(repo_root), "ls-files"],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  if proc.returncode != 0:
+    return
+  seen: dict[str, list[str]] = {}
+  for line in proc.stdout.splitlines():
+    if line:
+      seen.setdefault(line.casefold(), []).append(line)
+  for paths in seen.values():
+    if len(paths) > 1:
+      joined = ", ".join(sorted(paths))
+      errors.append(f"case-colliding tracked paths: {joined}")
 
 
 def run_check(name: str, errors: list[str], check: Callable[[], Any]) -> Any:

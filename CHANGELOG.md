@@ -44,6 +44,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - Bump pinned Ruff to `0.17.3` and apply `py311` `UP017` and `I001` updates across maintenance and skill scripts (`pyproject.toml`, `requirements.txt`, `maintenance/`, `skills/`).
+- Remove duplicate `.github/pull_request_template.md` and reject case-colliding tracked Git paths in `maintenance/check.py` (`.github/`, `maintenance/check.py`, `maintenance/README.md`, `maintenance/measurements/test_measurements.py`).
 
 #### nemogpt
 
