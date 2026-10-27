@@ -131,9 +131,9 @@ MODULE_TESTS = {
     "skills/refs/arena-skill/scripts/test_survey.py",
     "maintenance/workflows/test_preview_gate.py",
   ),
-  "Nemoizer": ("skills/refs/nemoizer/scripts/test_nemoize.py",),  # nonemo: NMO100
+  "Nemoizer": ("skills/nemoizer/scripts/test_nemoize.py",),  # nonemo: NMO100
   "UI/UX": (
-    "skills/refs/nuu/scripts/test_nuu.py",
+    "skills/nuu/scripts/test_nuu.py",
     "maintenance/test_nemo_ui_ux.py",
   ),
   "Userscripts": (),

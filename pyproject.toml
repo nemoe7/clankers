@@ -3,9 +3,9 @@
 # Every run splits across the workers, local and CI both, so the config is the single source.
 addopts = "-n auto"
 testpaths = [
-  "skills/refs/nemoizer/scripts",
+  "skills/nemoizer/scripts",
   "skills/refs/arena-skill/scripts",
-  "skills/refs/nuu/scripts",
+  "skills/nuu/scripts",
   "github/workflows",
   "maintenance",
 ]

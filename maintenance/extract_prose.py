@@ -6,7 +6,7 @@ import json
 import subprocess
 from pathlib import Path
 
-_ENGINE = Path(__file__).resolve().parents[1] / "skills/refs/nemoizer/scripts/prose.py"
+_ENGINE = Path(__file__).resolve().parents[1] / "skills/nemoizer/scripts/prose.py"
 _SPEC = importlib.util.spec_from_file_location("nemoizer_prose", _ENGINE)
 _PROSE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_PROSE)

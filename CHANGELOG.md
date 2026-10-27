@@ -45,6 +45,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Restrict `skills/refs/` to prose files unless nested `AGENTS.md` exempts minification (`AGENTS.md`, `skills/arena-skill/AGENTS.md`).
+- Remove duplicate `skills/refs/{nemoizer,nuu}/scripts/` trees and point gates at `skills/{nemoizer,nuu}/scripts/` (`maintenance/`, `pyproject.toml`, `skills/`).
 - Require changed module versions in `gate_userscripts.py` and `gate_gpt_plugins.py` to sit one step above `main` per PR (`AGENTS.md`, `userscripts/AGENTS.md`, `skills/nuu/AGENTS.md`, `maintenance/userscripts/gate_userscripts.py`, `maintenance/gpt_plugins/gate_gpt_plugins.py`, `maintenance/pr/test_check_pr.py`).
 - Bump pinned Ruff to `0.17.3` and apply `py311` `UP017` and `I001` updates across maintenance and skill scripts (`pyproject.toml`, `requirements.txt`, `maintenance/`, `skills/`).
 - Remove duplicate `.github/pull_request_template.md` and reject case-colliding tracked Git paths in `maintenance/check.py` (`.github/`, `maintenance/check.py`, `maintenance/README.md`, `maintenance/measurements/test_measurements.py`).

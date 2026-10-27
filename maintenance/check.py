@@ -125,10 +125,10 @@ STE_DOCS = (
   "gpt-plugins/README.md",
   "CHANGELOG.md",
 )
-STE_LINT = "skills/refs/nemoizer/scripts/nemoize.py"
+STE_LINT = "skills/nemoizer/scripts/nemoize.py"
 # The prose lint covers the code comments and the documents outside the STE list.
 PROSE_LINT = "maintenance/lint_prose.py"
-NEMOIZER = "skills/refs/nemoizer/scripts/nemoize.py"  # nonemo: NMO100
+NEMOIZER = "skills/nemoizer/scripts/nemoize.py"  # nonemo: NMO100
 NEMOIZER_IGNORES = (
   "LICENSE.md",
   "skills/arena-skill/assets/markdown-it.min.js",

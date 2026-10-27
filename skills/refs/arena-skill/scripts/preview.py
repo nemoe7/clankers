@@ -7474,7 +7474,7 @@ def resolve_slash_command(text, root=None):
     }
   if sub == "audit":
     note_text = (
-      "Run `nemoizer` in audit mode (`python3 skills/refs/nemoizer/scripts/nemoize.py --audit`), "
+      "Run `nemoizer` in audit mode (`python3 skills/nemoizer/scripts/nemoize.py --audit`), "
       "fix blocking violations, and publish an audit report using "
       "`skills/refs/nemoizer/references/audit-report.md`."
     )

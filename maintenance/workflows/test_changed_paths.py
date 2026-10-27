@@ -191,7 +191,7 @@ def test_module_test_ownership_is_complete_and_unique():
   owned = [path for paths in changed_paths.MODULE_TESTS.values() for path in paths]
   discovered = {
     str(path.relative_to(root))
-    for directory in ("maintenance", "skills/refs", "github/workflows")
+    for directory in ("maintenance", "skills", "github/workflows")
     for path in (root / directory).rglob("test_*.py")
   }
   assert set(owned) == discovered
@@ -227,8 +227,8 @@ def test_unknown_tests_fail_before_scheduling(tmp_path):
 
 def test_renames_select_both_source_modules(tmp_path):
   repo = init_repo(tmp_path)
-  old = "skills/refs/nemoizer/scripts/example.py"
-  new = "skills/refs/nuu/scripts/example.py"
+  old = "skills/nemoizer/scripts/example.py"
+  new = "skills/nuu/scripts/example.py"
   commit_change(repo, old)
   base = base_of(repo)
   target = repo / new

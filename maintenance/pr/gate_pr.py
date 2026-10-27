@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-STE_LINT = ROOT / "skills" / "refs" / "nemoizer" / "scripts" / "nemoize.py"
+STE_LINT = ROOT / "skills" / "nemoizer" / "scripts" / "nemoize.py"
 USERSCRIPT_GATE = ROOT / "maintenance" / "userscripts" / "gate_userscripts.py"
 PLUGINS_GATE = ROOT / "maintenance" / "gpt_plugins" / "gate_gpt_plugins.py"
 # The `version-bumps` job watches only these paths.

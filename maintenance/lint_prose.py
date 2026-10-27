@@ -214,7 +214,7 @@ def nemoizer_scope(path: Path, text: str) -> tuple[str, str]:
 
 def nemoizer_linter():
   """Load the bundled scanner beside its shared prose parser."""
-  path = Path(__file__).resolve().parents[1] / "skills/refs/nemoizer/scripts/nemoize.py"
+  path = Path(__file__).resolve().parents[1] / "skills/nemoizer/scripts/nemoize.py"
   spec = importlib.util.spec_from_file_location("repository_nemoizer", path)
   module = importlib.util.module_from_spec(spec)
   sys.path.insert(0, str(path.parent))

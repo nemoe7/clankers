@@ -1,2 +1,2 @@
 'use strict';
-require('../skills/refs/nemoizer/scripts/javascript-comments.cjs');
+require('../skills/nemoizer/scripts/javascript-comments.cjs');

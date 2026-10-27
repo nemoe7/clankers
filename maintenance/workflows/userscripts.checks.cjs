@@ -2982,7 +2982,7 @@ require("node:test").test("multi-session board enforces allowlist opt-in, Main S
     repo: "nemoe7/clankers",
     payload: { topic: "scope-split", status: "ready" },
     file: {
-      name: "skills/refs/nuu/scripts/nuu.py",
+      name: "skills/nuu/scripts/nuu.py",
       encoding: "utf-8",
       content: "print('ok')\n",
       sha256: "a".repeat(64),
