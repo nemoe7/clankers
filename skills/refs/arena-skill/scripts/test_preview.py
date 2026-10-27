@@ -7056,7 +7056,7 @@ def test_reminder_rotation():
       len(preview.fill_reminder(entry, 1)) <= preview.REMINDER_CHAR_CAP
       for entry in preview.REMINDERS
     )
-    assert "Questions: ASAP, in reports." in preview.REMINDERS
+    assert "Ask questions in reports." in preview.REMINDERS
     assert "`ask_user` on GH_TOKEN failure." in preview.REMINDERS
     assert "Unpublish stale reports." in preview.REMINDERS
     assert "End turn with `poll`." in preview.REMINDERS
@@ -8693,8 +8693,8 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     assert len(pending) == 1
     checkpoint = pending[0]
     assert checkpoint["text"].startswith(
-      "Bible checkpoint after a 15-minute interval. Read each listed path in full "
-      "with the read tool only if its current full text is absent from context, then "
+      "Bible checkpoint after a 15-minute interval. Read each listed path fully "
+      "with the read tool only when its full text is absent from context, then "
       "acknowledge this note.\n"
     )
     assert checkpoint["quiet"] == 1 and checkpoint["blocking"] == 1
@@ -9221,8 +9221,8 @@ def test_expired_agent_key_tells_the_agent_once():
     assert first is not None and first["quiet"] == 1
     assert [item["text"] for item in store.read()["pending"]] == [
       (
-        "The recorded agent key expired (set 2020-01-01T00:00:00). Run `arena-preview key`"
-        " for the live key; a new post overwrites this record by itself."
+        "The agent key expired (set 2020-01-01T00:00:00). Run `arena-preview key`"
+        " for the live key. A new post replaces this record."
       )
     ]
     assert store.notice_expired_key() is None, "one note per record"

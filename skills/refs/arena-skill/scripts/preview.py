@@ -267,13 +267,13 @@ def reminder_tail(cursor, remaining, stale=0, unpushed=0, private=False):
 
 REMINDER_CHAR_CAP = 88
 REMINDERS = (
-  "Bible absent? MUST read ARENA.md, root AGENTS.md, arena-skill SKILL.md fully first.",
+  "If bible absent, read ARENA.md, AGENTS.md, and SKILL.md in full first.",
   "`task list` first; update as work changes.",
   "Smallest open task next.",
   "Always push.",
   "`ask_user` on GH_TOKEN failure.",
   "Docs: terse, clear.",
-  "Questions: ASAP, in reports.",
+  "Ask questions in reports.",
   "Publish reports.",
   "Never end turn with unblocked tasks.",
   "Unpublish stale reports.",
@@ -1552,8 +1552,8 @@ def commit_id_report(hits):
 
   lines = [
     (
-      "COMMIT BLOCKED: the staged change cites a session-local ID. That ID exists"
-      " only in this session, so a reader of the repository cannot resolve it."
+      "COMMIT BLOCKED: the staged change cites a session-local ID that exists"
+      " only in this session, so repository readers cannot resolve it."
     )
   ]
 
@@ -3492,15 +3492,15 @@ def idle_wait(line, state_dir=None):
   if any(head in ("arena-preview", "preview.py") for head in heads):
     return (
       "WAIT BLOCKED: a sleep beside a preview call holds the turn. Take the next queued"
-      " task, or read the run on a later call. A routed run keeps its verdict, and"
+      " task or read the run later. A routed run keeps its verdict."
       " `arena-preview poll` waits when the queue is empty."
     )
   if any(
     token.strip("\"'").endswith(".log") for piece in pieces for token in piece.split()
   ):
     return (
-      "SLEEP BLOCKED: a sleep beside a .log read holds the turn. Use"
-      " `arena-preview poll` to wait, and `arena-preview logs <name>` to read a run."
+      "SLEEP BLOCKED: a sleep beside a .log read holds the turn. Wait with"
+      " `arena-preview poll`, and read runs with `arena-preview logs <name>`."
     )
   if state_dir:
     running = live_runs(state_dir)
@@ -3508,15 +3508,15 @@ def idle_wait(line, state_dir=None):
       names = ", ".join(running)
       return (
         f"SLEEP BLOCKED: background run ({names}) is live. Never sleep during a"
-        " background gate. Delegate independent queued tasks to idle board workers,"
-        " work in a worktree (`arena-preview worktree start`), or run"
-        " `arena-preview poll` when only the gate's blocked task remains."
+        " background gate. Delegate queued tasks to idle board workers,"
+        " use a worktree (`arena-preview worktree start`), or run"
+        " `arena-preview poll` when only the blocked task remains."
       )
   if max_sleep_seconds(pieces) >= SLEEP_IDLE_CAP_SECONDS:
     return (
       "SLEEP BLOCKED: a long sleep holds the turn instead of working or polling."
-      " Use `arena-preview run start` for long commands and `arena-preview poll`"
-      " to wait when no unblocked tasks remain."
+      " Run long commands with `arena-preview run start`, and wait with `arena-preview poll`"
+      " when no unblocked tasks remain."
     )
   return None
 
@@ -4587,7 +4587,7 @@ def guard_task_push(repo_root, task_id, task_type):
   )
   if dirty.returncode == 0 and dirty.stdout.strip():
     raise ValueError(
-      f"FINISH BLOCKED: commit and push verified changes before marking {task_id} finished."
+      f"FINISH BLOCKED: commit and push verified changes before finishing {task_id}."
     )
   branch_proc = subprocess.run(
     ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -4621,7 +4621,7 @@ def guard_task_push(repo_root, task_id, task_type):
     if is_private_repo(root) and unpushed_commit_count(root) < PRIVATE_BATCH_CAP:
       return
     raise ValueError(
-      f"FINISH BLOCKED: commit and push verified changes before marking {task_id} finished."
+      f"FINISH BLOCKED: commit and push verified changes before finishing {task_id}."
     )
 
 
@@ -4784,7 +4784,7 @@ DETACHED_NOTICE = (
   "later call. " + WORKTREE_STEP
 )
 DETACHED_BLOCK = (
-  "RUN BLOCKED: background start failed, wait not started. Nothing on this line ran."
+  "RUN BLOCKED: background start failed, so nothing ran."
   " Use `arena-preview run start {name} -- <the same line>` instead."
 )
 # A detached record older than this stops printing its status line, so a killed child
@@ -5282,8 +5282,8 @@ def pr_check_wait(state_dir, line, command=None):
     return PR_CHECK_REFUSED
   if command is not None and line.strip() != command.strip():
     print(
-      "RUN BLOCKED: automatic routing would replay a mixed shell line."
-      " Nothing on this line ran."
+      "RUN BLOCKED: automatic routing would replay a mixed shell line,"
+      " so nothing ran."
       f" Use `arena-preview run start {name} -- <remaining command>`;"
       " do not repeat completed commands.",
       file=sys.stderr,
@@ -5609,7 +5609,7 @@ def poll_inbox(store, sleeper=None):
   listing = {"checked_at": None, "pending": []}
   # A full wait ends for messages, tasks, or failed branch checks. A heartbeat lights the page dot.
   print(
-    f"poll max {POLL_WAIT_SECONDS} s; bash timeout 1800 s. {REMINDERS[0]}",
+    f"poll max {POLL_WAIT_SECONDS} s, bash cap 1800 s. {REMINDERS[0]}",
     file=sys.stderr,
     flush=True,
   )
@@ -8168,10 +8168,10 @@ class Store:
 
       text = (
         f"{prefix}"
-        " Read each listed path in full"
-        " with the read tool only if its current full text is absent from context, then"
+        " Read each listed path fully"
+        " with the read tool only when its full text is absent from context, then"
         " acknowledge this note.\n"
-        "Answer the survey only if any required bible text was absent from context before this check.\n"
+        "Answer the survey only when required bible text was absent before this check.\n"
         f"{survey.INSTRUCTIONS}\n"
         f"{listed}"
       )
@@ -9082,7 +9082,7 @@ class Store:
           if GIT_SHA_RE.fullmatch(prev_om) and prev_om != cur_om:
             notices.append(
               f"MAIN BRANCH MOVED: origin/main advanced ({prev_om[:8]} -> {cur_om[:8]})"
-              f" on {m_ident}. Fetch origin/main and rebase if needed."
+              f" on {m_ident}. Fetch and rebase if needed."
             )
             changed = True
           if prev_om != cur_om:
@@ -10745,9 +10745,9 @@ class Store:
         )
         created.append(Path(record["path"]))
         note_body = (
-          f"{summary_text} Backed-up state `{record['name']}` uploaded to `{record['path']}`.\n"
-          "Run `arena-preview state compare` to inspect differences against live state before running "
-          f"`arena-preview state import {record['path']} -r` if the backup is newer, then acknowledge this note."
+          f"{summary_text} State backup `{record['name']}` uploaded to `{record['path']}`.\n"
+          "Run `arena-preview state compare` against live state, then "
+          f"`arena-preview state import {record['path']} -r` if newer. Acknowledge this note after."
         )
         note = self.note(
           note_id,
@@ -12171,8 +12171,8 @@ class Store:
     self.set_meta(AGENT_KEY_EXPIRY_META, record["at"])
     return self.note(
       self.free_id(),
-      f"The recorded agent key expired (set {record['at']}). Run `arena-preview key`"
-      " for the live key; a new post overwrites this record by itself.",
+      f"The agent key expired (set {record['at']}). Run `arena-preview key`"
+      " for the live key. A new post replaces this record.",
       quiet=True,
     )
 
