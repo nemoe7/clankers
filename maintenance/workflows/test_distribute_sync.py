@@ -298,6 +298,9 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
       git(remote, "show", f"{after}:.agents/skills/{skill}/SKILL.md")
       == (source / "skills" / skill / "SKILL.md").read_text().strip()
     )
+    assert not git(
+      remote, "ls-tree", "-r", "--name-only", after, f".agents/skills/{skill}/scripts"
+    )
   for name in payload["FILES"].split():
     assert (
       git(remote, "show", f"{after}:.github/workflows/{name}")

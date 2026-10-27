@@ -53,6 +53,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Exclude skill test files from `distribute-sync` and remove synced `.agents/skills/{nemoizer,nuu}/scripts/test_*.py` copies (`.github/actions/distribute-sync/sync.sh`, `.agents/skills/`, `maintenance/workflows/test_distribute_sync.py`).
 - Restrict `skills/refs/` to prose files unless nested `AGENTS.md` exempts minification (`AGENTS.md`, `skills/arena-skill/AGENTS.md`).
 - Remove duplicate `skills/refs/{nemoizer,nuu}/scripts/` trees and point gates at `skills/{nemoizer,nuu}/scripts/` (`maintenance/`, `pyproject.toml`, `skills/`).
 - Require changed module versions in `gate_userscripts.py` and `gate_gpt_plugins.py` to sit one step above `main` per PR (`AGENTS.md`, `userscripts/AGENTS.md`, `skills/nuu/AGENTS.md`, `maintenance/userscripts/gate_userscripts.py`, `maintenance/gpt_plugins/gate_gpt_plugins.py`, `maintenance/pr/test_check_pr.py`).

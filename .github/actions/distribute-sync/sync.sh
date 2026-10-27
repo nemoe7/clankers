@@ -14,7 +14,7 @@ done
 skill_files() {
   local out
   out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" \
-    | awk '$0 != "README.md" && $0 != "INSTALL.md" && $0 != "AGENTS.md" && $0 !~ /^(arena-egress-proxy|arena-preview-proxy)\//') || return
+    | awk '$0 != "README.md" && $0 != "INSTALL.md" && $0 != "AGENTS.md" && $0 !~ /^(arena-egress-proxy|arena-preview-proxy)\// && $0 !~ /(^|\/)test_[^/]+\.py$/ && $0 !~ /\.(test|checks)\.[cm]?js$/') || return
   printf '%s\n' "$out"
 }
 for skill in $SKILLS; do
