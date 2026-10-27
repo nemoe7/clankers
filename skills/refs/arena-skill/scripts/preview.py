@@ -296,6 +296,9 @@ STALE_REPORT_THRESHOLD = 10
 DEFAULT_PORT = 8000
 # The key the userscript holds. The page records it, so the Downloads tab can show it.
 AGENT_KEY_META = "agent_key"
+USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version"
+USERSCRIPT_VERSION_META = "userscript_version"
+USERSCRIPT_VERSION_RE = re.compile(r"^[0-9A-Za-z._+-]{1,32}$")
 # The userscript replaces the record inside its 15-minute rotation window, so an older
 # record means no key post arrived and the agent's key is dead until a new one lands.
 AGENT_KEY_EXPIRY_SECONDS = 1200
@@ -2883,6 +2886,8 @@ def format_key(record):
     lines.append(f"use fetch_page on {record['host']}/v1/<route>?key=<key>, never bash")
   if record.get("at"):
     lines.append(f"at {local_stamp(record['at'])}")
+  if record.get("userscript_version"):
+    lines.append(f"userscript {record['userscript_version']}")
   return "\n".join(lines) if lines else ""
 
 
@@ -8346,6 +8351,7 @@ class Store:
         "calls_since_message": meta_number(db, POLLS_SINCE_MESSAGE),
         # The Downloads tab shows the key the userscript holds.
         "agent_key": self.agent_key(),
+        "userscript_version": self.userscript_version(),
         # The header turns amber when this stamp ages, so a stale preview shows itself.
         "agent_seen_at": clip_stamp(meta.get(AGENT_SEEN_META)),
         # The header suppresses the long call text after this mark and turns amber past the
@@ -12136,6 +12142,22 @@ class Store:
       host = None
     return {"key": key, "host": host, "at": clip_stamp(record.get("at"))}
 
+  def set_userscript_version(self, version):
+    """Persist the connected userscript version when valid and changed."""
+    if not isinstance(version, str):
+      return None
+    cleaned = version.strip()
+    if not USERSCRIPT_VERSION_RE.fullmatch(cleaned):
+      return None
+    if self.meta_value(USERSCRIPT_VERSION_META) != cleaned:
+      self.set_meta(USERSCRIPT_VERSION_META, cleaned)
+    return cleaned
+
+  def userscript_version(self):
+    """Return the recorded userscript version, or None when absent or malformed."""
+    cleaned = (self.meta_value(USERSCRIPT_VERSION_META) or "").strip()
+    return cleaned if USERSCRIPT_VERSION_RE.fullmatch(cleaned) else None
+
   def stale_report_rows(self, db):
     """Unpinned reports whose linked tasks finished, or whose unlinked view is idle."""
     linked = {}
@@ -14319,12 +14341,19 @@ def handler(store, reload_event=None):
       except (OSError, sqlite_api().Error):
         return
 
+    def record_userscript_version(self):
+      header_ver = (self.headers.get(USERSCRIPT_VERSION_HEADER) or "").strip()
+      if header_ver:
+        store.set_userscript_version(header_ver)
+
     def do_GET(self):
       path = urlsplit(self.path).path
       try:
         if path == "/api/ws":
           self.websocket()
           return
+        if path.startswith("/api/"):
+          self.record_userscript_version()
         if path == "/":
           page = (ASSETS / "index.html").read_text(encoding="utf-8")
           page = page.replace(
@@ -14585,6 +14614,7 @@ def handler(store, reload_event=None):
       ):
         self.problem(404, "Not found")
         return
+      self.record_userscript_version()
       # A composed note carries its files and text in one multipart request.
       content_type = self.headers.get("Content-Type", "")
       if note_upload or staged_upload:
@@ -17250,7 +17280,8 @@ def main():
       if not record:
         print("No agent key recorded.", file=sys.stderr)
         return 1
-      print(format_key(record))
+      ver = store.userscript_version()
+      print(format_key({**record, "userscript_version": ver} if ver else record))
     elif args.command == "poll":
       require_server(store)
       require_survey(store)

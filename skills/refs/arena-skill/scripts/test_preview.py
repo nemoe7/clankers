@@ -16494,3 +16494,40 @@ def test_board_report_ops_preserve_decisions_under_entry_ack_flood(
   kept_ids = {op["id"] for op in synced["report_ops"]}
   assert "rop-keep-answer" in kept_ids
   assert len(synced["report_ops"]) <= preview.MAX_BOARD_ENTRIES
+
+
+def test_userscript_version_header_records_in_state_and_key_output(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  srv = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+  threading.Thread(target=srv.serve_forever, daemon=True).start()
+  try:
+    assert store.userscript_version() is None
+    conn = http.client.HTTPConnection("127.0.0.1", srv.server_port, timeout=5)
+    conn.request(
+      "GET", "/api/board", headers={"X-Clankers-Userscript-Version": "1.13.0"}
+    )
+    resp = conn.getresponse()
+    resp.read()
+    assert resp.status == 200
+    assert store.userscript_version() == "1.13.0"
+    assert store.state()["userscript_version"] == "1.13.0"
+
+    conn.request(
+      "GET",
+      "/api/board",
+      headers={"X-Clankers-Userscript-Version": "bad version with spaces"},
+    )
+    bad_resp = conn.getresponse()
+    bad_resp.read()
+    assert bad_resp.status == 200
+    assert store.userscript_version() == "1.13.0"
+    conn.close()
+
+    store.set_agent_key("K" * 32, "https://arena-proxy.example.ts.net")
+    key_text = preview.format_key(
+      {**store.agent_key(), "userscript_version": store.userscript_version()}
+    )
+    assert "userscript 1.13.0" in key_text
+  finally:
+    srv.shutdown()
+    srv.server_close()

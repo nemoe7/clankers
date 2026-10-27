@@ -4482,6 +4482,21 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(get('#agent-key').textContent, 'clankers · No key recorded.');
     assert.equal(get('#agent-key').title, '', 'the tooltip clears with the record');
+    state.userscript_version = '1.13.0';
+    await refresh();
+    assert.equal(get('#agent-key').textContent, 'clankers · v1.13.0 · No key recorded.');
+    assert.equal(get('#agent-key').title, 'Userscript v1.13.0');
+    state.agent_key = {
+      key: 'K'.repeat(43),
+      host: 'https://arena-proxy.example.ts.net',
+      at: '2026-10-03T15:00:00+00:00',
+    };
+    await refresh();
+    assert.match(get('#agent-key').textContent, /^clankers · v1\.13\.0 · Key K{7} · \d{2}:\d{2}$/);
+    assert.match(get('#agent-key').title, /^Userscript v1\.13\.0 · https:\/\/arena-proxy\.example\.ts\.net · set /);
+    state.userscript_version = null;
+    state.agent_key = null;
+    await refresh();
   });
 
   await t.test('A quiet note informs the agent and stays out of the log', async () => {

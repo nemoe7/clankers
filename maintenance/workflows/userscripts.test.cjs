@@ -4202,6 +4202,18 @@ for raw in sys.stdin:
         assert.equal(call.headers["X-Master-Key"], "master-secret-token", "every proxy board request sends X-Master-Key");
       }
       const previewSyncCall = httpCalls.find(c => c.url === "https://8000-sandbox.e2b.app/api/board");
+      const metaVersionMatch = source.match(/^\/\/\s*@version\s+(\S+)/m);
+      assert.ok(metaVersionMatch, "@version header is present in arena.user.js");
+      assert.equal(
+        checkBox.CLANKERS_CHECKS.stateDownload.userscriptVersion(),
+        metaVersionMatch[1],
+        "userscriptVersion() matches @version header",
+      );
+      assert.equal(
+        previewSyncCall.headers["X-Clankers-Userscript-Version"],
+        metaVersionMatch[1],
+        "preview HTTP calls carry X-Clankers-Userscript-Version header",
+      );
       const previewSentEntry = JSON.parse(previewSyncCall.data).board.entries[0];
       assert.equal(previewSentEntry.file.content, "diff --git\n", "file content is hydrated before posting to local /api/board");
 

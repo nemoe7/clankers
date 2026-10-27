@@ -119,6 +119,9 @@ GATE_THRESHOLD=6
 STALE_REPORT_THRESHOLD=10
 DEFAULT_PORT=8000
 AGENT_KEY_META='agent_key'
+USERSCRIPT_VERSION_HEADER='X-Clankers-Userscript-Version'
+USERSCRIPT_VERSION_META='userscript_version'
+USERSCRIPT_VERSION_RE=re.compile('^[0-9A-Za-z._+-]{1,32}$')
 AGENT_KEY_EXPIRY_SECONDS=1200
 AGENT_KEY_EXPIRY_META='agent_key_expired_at'
 AGENT_SEEN_META='agent_seen_at'
@@ -1046,6 +1049,7 @@ def format_key(record):
 	if record.get('key'):lines.append(f"key {record['key']}")
 	if record.get('host'):lines.append(f"host {record['host']}");lines.append(f"use fetch_page on {record['host']}/v1/<route>?key=<key>, never bash")
 	if record.get('at'):lines.append(f"at {local_stamp(record['at'])}")
+	if record.get('userscript_version'):lines.append(f"userscript {record['userscript_version']}")
 	return'\n'.join(lines)if lines else''
 def format_fetch_job(job):
 	id_=job.get('id');url=job.get('url');allow_proxy=job.get('allow_proxy');approval=job.get('approval');status=job.get('status');line=f"Queued {id_} {url}"
@@ -2819,7 +2823,7 @@ class Store:
 				for m_rep in mirrored_reports.values():m_copy=dict(m_rep);m_copy.pop('markdown',None);reports.append(m_copy)
 			if isinstance(board_now.get('worker_reports'),dict):board_now['worker_reports']={w_sid:[{k:v for(k,v)in w_r.items()if k not in{'markdown','fields'}}for w_r in w_list if isinstance(w_r,dict)]for(w_sid,w_list)in board_now['worker_reports'].items()if isinstance(w_list,list)}
 			if isinstance(board_now.get('entries'),list):board_now['entries']=[{**e_row,'file':{fk:fv for(fk,fv)in e_row['file'].items()if fk!='content'}if isinstance(e_row.get('file'),dict)else e_row.get('file')}for e_row in board_now['entries']if isinstance(e_row,dict)]
-			return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(state_dir=self.path.parent),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_FLAG_META)),'read_set':read_set_files(self.repository_root(),worker=board_now.get('board_role')=='worker'),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META)),'gate_threshold':GATE_THRESHOLD,'display_tz':meta.get(TIMEZONE_META),'repo':self.repository_root().name,'force_save_id':meta.get(FORCE_SAVE_META),'board':board_now}
+			return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(state_dir=self.path.parent),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'agent_interrupt_pending':bool(meta.get(AGENT_INTERRUPT_FLAG_META)),'read_set':read_set_files(self.repository_root(),worker=board_now.get('board_role')=='worker'),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'userscript_version':self.userscript_version(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META)),'gate_threshold':GATE_THRESHOLD,'display_tz':meta.get(TIMEZONE_META),'repo':self.repository_root().name,'force_save_id':meta.get(FORCE_SAVE_META),'board':board_now}
 	def _mirrored_worker_reports(self,board_now=None,local_ids=None,meta=None):
 		b_state=board_now if isinstance(board_now,dict)else self.board_state(meta=meta);self_sid=str(b_state.get('session_id')or'');allowed=set(b_state.get('allowed_sessions')or[])
 		if not self_sid or self_sid not in allowed or b_state.get('board_role')!='main':return{}
@@ -3979,6 +3983,13 @@ class Store:
 		host=record.get('host')
 		if not isinstance(host,str)or not AGENT_HOST_RE.fullmatch(host):host=None
 		return{'key':key,'host':host,'at':clip_stamp(record.get('at'))}
+	def set_userscript_version(self,version):
+		if not isinstance(version,str):return None
+		cleaned=version.strip()
+		if not USERSCRIPT_VERSION_RE.fullmatch(cleaned):return None
+		if self.meta_value(USERSCRIPT_VERSION_META)!=cleaned:self.set_meta(USERSCRIPT_VERSION_META,cleaned)
+		return cleaned
+	def userscript_version(self):cleaned=(self.meta_value(USERSCRIPT_VERSION_META)or'').strip();return cleaned if USERSCRIPT_VERSION_RE.fullmatch(cleaned)else None
 	def stale_report_rows(self,db):
 		linked={};tasks=[dict(row)for row in db.execute('SELECT id, status, report_id FROM tasks')]
 		for task in link_task_answers(db,tasks):
@@ -4644,10 +4655,14 @@ def handler(store,reload_event=None):
 				try:self.ws_send(8,code.to_bytes(2,'big'))
 				except OSError:pass
 			except(OSError,sqlite_api().Error):return
+		def record_userscript_version(self):
+			header_ver=(self.headers.get(USERSCRIPT_VERSION_HEADER)or'').strip()
+			if header_ver:store.set_userscript_version(header_ver)
 		def do_GET(self):
 			path=urlsplit(self.path).path
 			try:
 				if path=='/api/ws':self.websocket();return
+				if path.startswith('/api/'):self.record_userscript_version()
 				if path=='/':page=(ASSETS/'index.html').read_text(encoding='utf-8');page=page.replace('<title>Workspace · Messages & reports</title>',f"<title>{html.escape(store.repository_root().name)} - Steering</title>");page=page.replace('__STYLE__',(ASSETS/'style.css').read_text(encoding='utf-8'));page=page.replace('__MARKDOWN_SCRIPT__',(ASSETS/'markdown-it.min.js').read_text(encoding='utf-8'));page=page.replace('__SCRIPT__',(ASSETS/'message-markdown.js').read_text(encoding='utf-8')+'\n'+(ASSETS/'app.js').read_text(encoding='utf-8'));self.reply(200,page,'text/html; charset=utf-8');return
 				font_match=re.fullmatch('/assets/(Basel_Grotesk_(?:Book|Regular|Medium|Bold|Mono_Regular)\\.woff2)',path)
 				if font_match:self.reply(200,(ASSETS/font_match.group(1)).read_bytes(),'font/woff2');return
@@ -4696,7 +4711,7 @@ def handler(store,reload_event=None):
 		def do_POST(self):
 			path=urlsplit(self.path).path;autosave_post=path in{'/api/userscript-autosave','/api/userscript-autosave/compare','/api/userscript-autosave/offer'};report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);report_ack_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/ack-seen',path);report_view=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/view',path);message_replies_seen=re.fullmatch('/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny|drop)',path);note_upload=path=='/api/notes/with-file';staged_upload=path=='/api/uploads';upload_drop=re.fullmatch('/api/uploads/([a-zA-Z0-9_-]{1,80})/drop',path);agent_key_post=path=='/api/key';timezone_post=path=='/api/timezone';skip_poll_post=path=='/api/skip-poll';interrupt_post=path=='/api/agent-interrupt';task_order_post=path=='/api/tasks/order';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
 			if path not in{'/api/notes','/api/markdown','/api/slash','/api/fetch-jobs','/api/fetch-jobs/claim','/api/survey','/api/survey/request','/api/board'}and not report_submit and not report_seen and not report_ack_seen and not report_view and not message_replies_seen and not report_unpublish and not note_upload and not staged_upload and not upload_drop and not fetch_post and not agent_key_post and not timezone_post and not skip_poll_post and not interrupt_post and not task_order_post and not autosave_post:self.problem(404,'Not found');return
-			content_type=self.headers.get('Content-Type','')
+			self.record_userscript_version();content_type=self.headers.get('Content-Type','')
 			if note_upload or staged_upload:
 				if not content_type.lower().startswith('multipart/form-data;'):self.problem(415,'Expected multipart/form-data');return
 			elif content_type!='application/json'and not fetch_result:self.problem(415,'Expected application/json');return
@@ -5375,7 +5390,7 @@ def main():
 		elif args.command=='key':
 			record=store.agent_key()
 			if not record:print('No agent key recorded.',file=sys.stderr);return 1
-			print(format_key(record))
+			ver=store.userscript_version();print(format_key({**record,'userscript_version':ver}if ver else record))
 		elif args.command=='poll':
 			require_server(store);require_survey(store);store.notice_expired_key();refusal=poll_repeat(store)
 			if refusal:print(refusal,flush=True);return 2

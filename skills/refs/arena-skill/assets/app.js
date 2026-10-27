@@ -1634,7 +1634,7 @@ function renderState() {
   showHistory(logNotes);
   renderTasksIfChanged(state.tasks);
   renderFetchIfChanged(state.fetch_jobs || []);
-  renderAgentKey(state.agent_key, state.repo);
+  renderAgentKey(state.agent_key, state.repo, state.userscript_version || connectedUserscriptVersion);
   if (typeof state.repo === 'string' && state.repo && state.repo !== lastAnnouncedRepo) {
     lastAnnouncedRepo = state.repo;
     notifyParentPreviewReady(state.repo);
@@ -1725,6 +1725,7 @@ async function refreshState() {
     if (stateBusy === running) stateBusy = null;
   }
 }
+let connectedUserscriptVersion = '';
 function browserTimezone() {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; }
   catch { return ''; }
@@ -1734,7 +1735,10 @@ async function readState() {
   pollCommits = [];
   try {
     const tz = browserTimezone();
-    const state = await (await request('/api/state', tz ? { headers: { 'X-Timezone': tz } } : undefined)).json();
+    const stateHeaders = {};
+    if (tz) stateHeaders['X-Timezone'] = tz;
+    if (connectedUserscriptVersion) stateHeaders['X-Clankers-Userscript-Version'] = connectedUserscriptVersion;
+    const state = await (await request('/api/state', Object.keys(stateHeaders).length ? { headers: stateHeaders } : undefined)).json();
     if (Array.isArray(state.slash_commands)) {
       slashCommands = state.slash_commands;
       syncSlashComposerStyle();
@@ -2554,6 +2558,14 @@ setInterval(showClock, 1000);
       return;
     }
     if (event.data.type !== 'clankers:userscript-ready') return;
+    if (typeof event.data.version === 'string') {
+      const nextVer = event.data.version.trim();
+      if (/^[0-9A-Za-z._+-]{1,32}$/.test(nextVer) && nextVer !== connectedUserscriptVersion) {
+        connectedUserscriptVersion = nextVer;
+        if (lastState) renderAgentKey(lastState.agent_key, lastState.repo, lastState.userscript_version || connectedUserscriptVersion);
+        void readState();
+      }
+    }
     const newlyEnabled = enableUserscriptForceSave();
     if (lastAnnouncedRepo && (newlyEnabled || lastUserscriptAnnouncedRepo !== lastAnnouncedRepo)) {
       lastUserscriptAnnouncedRepo = lastAnnouncedRepo;
@@ -4771,19 +4783,29 @@ function approvalRow(item) {
 }
 // Show the repository name, seven characters of the userscript key, and its freshness hour so a stale key is visible without exposing the full key in the log.
 // Keep the host and full timestamp in the tooltip so the footer fits a phone.
-function renderAgentKey(record, repo) {
+function renderAgentKey(record, repo, userscriptVersion) {
   const line = $('#agent-key');
-  const prefix = repo ? `${repo} · ` : '';
+  const ver = typeof userscriptVersion === 'string' && userscriptVersion.trim()
+    ? `v${userscriptVersion.trim().replace(/^v/i, '')}`
+    : '';
+  const parts = [];
+  if (repo) parts.push(repo);
+  if (ver) parts.push(ver);
+  const prefix = parts.length ? `${parts.join(' · ')} · ` : '';
   if (!record) {
     line.textContent = `${prefix}No key recorded.`;
-    line.title = '';
+    line.title = ver ? `Userscript ${ver}` : '';
     return;
   }
   // Only the key characters are monospace, so the label and the hour read as prose.
   const key = document.createElement('code');
   key.textContent = record.key.slice(0, 7);
   line.replaceChildren(`${prefix}Key `, key, ` · ${clock(record.at)}`);
-  line.title = `${record.host ? `${record.host} · ` : ''}set ${time(record.at)}`;
+  const tipParts = [];
+  if (ver) tipParts.push(`Userscript ${ver}`);
+  if (record.host) tipParts.push(record.host);
+  tipParts.push(`set ${time(record.at)}`);
+  line.title = tipParts.join(' · ');
 }
 function renderFetchIfChanged(jobs) {
   const signature = JSON.stringify(jobs);

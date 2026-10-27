@@ -8,6 +8,16 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-27
 
+### Added
+
+#### arena-skill
+
+- Record `X-Clankers-Userscript-Version` headers on preview API requests and display the connected userscript version in `#agent-key` and `arena-preview key` (`assets/app.js`, `scripts/preview.py`, `scripts/client.test.cjs`, `scripts/test_preview.py`).
+
+#### userscripts
+
+- Send `X-Clankers-Userscript-Version` on preview HTTP requests and `version` in `clankers:userscript-ready` messages (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
+
 ### Changed
 
 #### arena

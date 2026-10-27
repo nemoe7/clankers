@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.12.3
+// @name         Arena.ai | NemoUtils | v1.13.0
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.12.3
+// @version      1.13.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -26,6 +26,31 @@
 
 (function () {
   "use strict";
+
+  var USERSCRIPT_VERSION = "1.13.0";
+  var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
+
+  function userscriptVersion() {
+    try {
+      if (
+        typeof GM_info === "object" &&
+        GM_info &&
+        GM_info.script &&
+        typeof GM_info.script.version === "string" &&
+        GM_info.script.version.trim()
+      ) {
+        return GM_info.script.version.trim();
+      }
+    } catch (err) {}
+    return USERSCRIPT_VERSION;
+  }
+
+  function previewHeaders(hasJson) {
+    var headers = {};
+    headers[USERSCRIPT_VERSION_HEADER] = userscriptVersion();
+    if (hasJson) headers["Content-Type"] = "application/json";
+    return headers;
+  }
 
   function exposeChecks(name, api) {
     if (typeof document !== "undefined") {
@@ -1029,7 +1054,7 @@
         GM_xmlhttpRequest({
           method: method,
           url: url,
-          headers: payload ? { "Content-Type": "application/json" } : {},
+          headers: previewHeaders(Boolean(payload)),
           data: payload ? JSON.stringify(payload) : undefined,
           onload: function (answer) {
             finish(answer.responseText, answer.status);
@@ -1674,7 +1699,7 @@
         GM_xmlhttpRequest({
           method: "POST",
           url: url,
-          headers: { "Content-Type": "application/json" },
+          headers: previewHeaders(true),
           data: JSON.stringify(payload),
           onload: function (answer) {
             done(answer && answer.status ? answer.status : 0);
@@ -1688,7 +1713,7 @@
       if (typeof fetch === "function") {
         fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: previewHeaders(true),
           body: JSON.stringify(payload),
         })
           .then(function (r) {
@@ -4837,14 +4862,15 @@
     if (!force && frame === lastNotifiedPreviewFrame && target === lastNotifiedPreviewTarget) {
       return false;
     }
+    var readyMsg = { type: "clankers:userscript-ready", version: userscriptVersion() };
     try {
-      frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, target);
+      frame.contentWindow.postMessage(readyMsg, target);
       lastNotifiedPreviewFrame = frame;
       lastNotifiedPreviewTarget = target;
       return true;
     } catch (err) {
       try {
-        frame.contentWindow.postMessage({ type: "clankers:userscript-ready" }, "*");
+        frame.contentWindow.postMessage(readyMsg, "*");
         lastNotifiedPreviewFrame = frame;
         lastNotifiedPreviewTarget = target;
         return true;
@@ -4863,7 +4889,7 @@
       GM_xmlhttpRequest({
         method: payload === undefined ? "GET" : "POST",
         url: url,
-        headers: payload === undefined ? {} : { "Content-Type": "application/json" },
+        headers: previewHeaders(payload !== undefined),
         data: payload === undefined ? undefined : JSON.stringify(payload),
         timeout: 15000,
         onload: function (answer) {
@@ -5367,6 +5393,8 @@
     var STATE_PANEL_MS = 6000;
 
     if (exposeChecks("stateDownload", {
+      USERSCRIPT_VERSION_HEADER: USERSCRIPT_VERSION_HEADER,
+      userscriptVersion: userscriptVersion,
       STATE_LINES: STATE_LINES,
       getLine: getLine,
       writeFailLine: writeFailLine,
