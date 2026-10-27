@@ -4293,6 +4293,8 @@ function renderBoard() {
   if (boardTab) {
     boardTab.dataset.boardRole = !isBoardActive ? 'inactive' : (isMainRole ? 'main' : 'worker');
   }
+  const clearBtn = $('#board-clear');
+  if (clearBtn) clearBtn.hidden = !isBoardActive;
   if (typeof document !== 'undefined' && document.body?.dataset) {
     if (isWorkerRole) {
       document.body.dataset.boardRole = 'worker';

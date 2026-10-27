@@ -53,6 +53,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Strip board entries and peer queues for unopted sessions in `scopeBoardForTarget` and suppress unopted heartbeats (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
+- Add `1s` post-load and `15s` allowlisted passive board syncs, let `allowed_sessions` outrank stale `removed_sessions`, and honor main `remove-session` dismissals (`userscripts/arena.user.js`, `maintenance/workflows/userscripts.test.cjs`).
 - Gate `GM_addValueChangeListener` board syncs on allowlisted sessions and material changes and keep passive sync stamps stable (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Sync the board with closed drawers or `state-download` active, listen on `GM_addValueChangeListener`, and isolate unallowlisted session syncs (`userscripts/arena.user.js`, `userscripts/AGENTS.md`).
 

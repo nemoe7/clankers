@@ -5476,6 +5476,22 @@ test('preview client', async (t) => {
       ),
       'beta',
     );
+    const unoptedBoard = {
+      repo: 'daedalus',
+      session_id: 'unopted01-daedalus',
+      allowed_sessions: ['alpha1111-clankers'],
+      sessions: [
+        { session_id: 'unopted01-daedalus', board_id: 'unopted01-daedalus', role: 'blocked', repo: 'daedalus' },
+      ],
+      entries: [
+        { id: 'p01234', session_id: 'alpha1111-clankers', repo: 'clankers', text: 'hidden from unopted', at: '2026-10-27T04:00:00Z' },
+      ],
+    };
+    assert.equal(
+      context.combinedHistoryItems([{ id: 'n11111', text: 'local note', at: '2026-10-27T04:00:00Z' }], unoptedBoard).length,
+      1,
+      'unopted sessions do not see board entries in history',
+    );
     get('#notes-tab').events.click();
 
     // Mobile virtual keyboard hides .composer-footer only when the viewport shrinks, not when #note stays focused with keyboard closed.

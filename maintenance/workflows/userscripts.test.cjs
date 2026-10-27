@@ -4034,6 +4034,75 @@ for raw in sys.stdin:
         },
       );
       assert.deepEqual(Array.from(withUnpubOp.worker_reports["beta2222-clankers"] || []), [], "report_ops unpublish strips stale worker report from BOARD_KEY immediately");
+
+      // scopeBoardForTarget strips board entries/queues for unopted chats and prunes unopted queues for opted-in chats:
+      const scopedUnopted = boardApi.scopeBoardForTarget(
+        {
+          allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+          main_session_id: "alpha111-clankers",
+          entries: [{ id: "p54321", session_id: "alpha111-clankers", payload: { text: "secret" } }],
+          worker_tasks: {
+            "alpha111-clankers": [{ id: "t1", title: "T1", status: "upcoming" }],
+            "unopted99-daedalus": [{ id: "t2", title: "T2", status: "upcoming" }],
+          },
+          worker_reports: {
+            "beta2222-clankers": [{ id: "r1", title: "R1" }],
+            "unopted99-daedalus": [{ id: "own-r", title: "Own" }],
+          },
+          wakes: { "unopted99-daedalus": "w1" },
+        },
+        "unopted99-daedalus",
+        "daedalus",
+      );
+      assert.deepEqual(Array.from(scopedUnopted.entries), [], "unopted chat receives empty entries");
+      assert.deepEqual(Object.keys(scopedUnopted.worker_tasks), [], "unopted chat receives empty worker_tasks");
+      assert.deepEqual(Object.keys(scopedUnopted.worker_reports), ["unopted99-daedalus"], "unopted chat sees only its own report metadata");
+      const scopedOpted = boardApi.scopeBoardForTarget(
+        {
+          allowed_sessions: ["alpha111-clankers"],
+          main_session_id: "alpha111-clankers",
+          worker_tasks: { "unopted99-daedalus": [{ id: "t2", title: "T2", status: "upcoming" }] },
+          worker_reports: { "unopted99-daedalus": [{ id: "own-r", title: "Own" }] },
+        },
+        "alpha111-clankers",
+        "clankers",
+      );
+      assert.deepEqual(Object.keys(scopedOpted.worker_tasks), [], "opted-in chat strips unopted worker_tasks");
+      assert.deepEqual(Object.keys(scopedOpted.worker_reports), [], "opted-in chat strips unopted worker_reports");
+
+      // mergePreviewBoard honors main-session remove-session dismissal over stale global allowed_sessions:
+      const afterMainDismiss = boardApi.mergePreviewBoard(
+        {
+          allowed_sessions: ["alpha111-clankers", "retired33-clankers"],
+          main_session_id: "alpha111-clankers",
+          sessions: [
+            { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:00Z" },
+            { session_id: "retired33-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:00Z" },
+          ],
+        },
+        {
+          session_id: "alpha111-clankers",
+          repo: "clankers",
+          allowed_sessions: ["alpha111-clankers"],
+          main_session_id: "alpha111-clankers",
+          removed_sessions: ["retired33-clankers"],
+          sessions: [
+            { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:05:00Z" },
+          ],
+        },
+      );
+      assert.ok(!afterMainDismiss.allowed_sessions.includes("retired33-clankers"), "main remove-session removes retired worker from allowed_sessions");
+      const allowOutranksRemoval = boardApi.normalizeBoard({
+        main_session_id: "alpha111-clankers",
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        removed_sessions: ["alpha111-clankers"],
+        sessions: [
+          { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:00Z" },
+        ],
+      });
+      assert.ok(allowOutranksRemoval.allowed_sessions.includes("alpha111-clankers"), "normalizeBoard keeps allowlisted session over stale removed_sessions");
+      assert.ok(!allowOutranksRemoval.removed_sessions.includes("alpha111-clankers"), "normalizeBoard drops allowlisted session from removed_sessions");
+      assert.equal(allowOutranksRemoval.main_session_id, "alpha111-clankers");
     });
   }
 

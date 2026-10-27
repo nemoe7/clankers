@@ -16267,3 +16267,149 @@ def test_main_and_owner_unpublish_worker_report_propagates_across_sync(tmp_path)
   ):
     worker_store.board_action({"action": "sync", "board": main_after_stale})
     assert not any(r["id"] == "worker-prop" for r in worker_store.state()["reports"])
+
+
+def test_unopted_session_hides_board_entries_and_direct_to_posts_surface_in_read(
+  tmp_path,
+):
+  from unittest.mock import patch
+
+  alpha_sid = "alpha1111-clankers"
+  delta_sid = "delta2222-clankers"
+  unopted_sid = "unopted01-daedalus"
+  alpha_store = preview.Store(str(tmp_path / "alpha"), create=True)
+  unopted_store = preview.Store(str(tmp_path / "daedalus"), create=True)
+  StoreRepoMixin = next(
+    cls for cls in preview.Store.__mro__ if "repository_root" in cls.__dict__
+  )
+
+  with (
+    patch.object(preview, "workspace_branch", return_value=f"arena/{unopted_sid}"),
+    patch.object(StoreRepoMixin, "repository_root", return_value=tmp_path / "daedalus"),
+  ):
+    unopted_store.write_task(
+      "unopted-task", "Local task", ["Scope: ."], task_type="code"
+    )
+    rep_src = tmp_path / "unopted-rep.md"
+    rep_src.write_text("# Local report\n\nBody.\n", encoding="utf-8")
+    unopted_store.publish("unopted-rep", "Local report", rep_src)
+    unopted_synced = unopted_store.board_action(
+      {
+        "action": "sync",
+        "board": {
+          "main_session_id": alpha_sid,
+          "allowed_sessions": [alpha_sid, delta_sid],
+          "sessions": [
+            {"session_id": alpha_sid, "repo": "clankers", "status": "active"},
+            {"session_id": unopted_sid, "repo": "daedalus", "status": "active"},
+          ],
+          "entries": [
+            {
+              "id": "p98765",
+              "session_id": delta_sid,
+              "to": alpha_sid,
+              "repo": "clankers",
+              "text": "worker ready without mention token",
+              "at": "2026-10-27T04:10:00",
+            }
+          ],
+          "worker_tasks": {
+            alpha_sid: [{"id": "t1", "title": "T1", "status": "upcoming"}]
+          },
+          "worker_reports": {alpha_sid: [{"id": "r1", "title": "R1"}]},
+          "wakes": {unopted_sid: "w1"},
+        },
+      }
+    )
+    assert unopted_synced["entries"] == []
+    assert unopted_synced["worker_tasks"] == {}
+    assert list(unopted_synced["worker_reports"].keys()) == [unopted_sid]
+    assert unopted_synced["wakes"] == {}
+    assert unopted_store.read()["pending"] == []
+
+  with (
+    patch.object(preview, "workspace_branch", return_value=f"arena/{alpha_sid}"),
+    patch.object(StoreRepoMixin, "repository_root", return_value=tmp_path / "clankers"),
+  ):
+    alpha_synced = alpha_store.board_action(
+      {
+        "action": "sync",
+        "board": {
+          "main_session_id": alpha_sid,
+          "allowed_sessions": [alpha_sid, delta_sid],
+          "sessions": [
+            {"session_id": alpha_sid, "repo": "clankers", "status": "active"},
+            {"session_id": delta_sid, "repo": "clankers", "status": "active"},
+            {"session_id": unopted_sid, "repo": "daedalus", "status": "active"},
+          ],
+          "entries": [
+            {
+              "id": "p98765",
+              "session_id": delta_sid,
+              "to": alpha_sid,
+              "repo": "clankers",
+              "text": "worker ready without mention token",
+              "at": "2026-10-27T04:10:00",
+            }
+          ],
+          "worker_tasks": {
+            unopted_sid: [
+              {"id": "unopted-task", "title": "Local", "status": "upcoming"}
+            ]
+          },
+          "worker_reports": {unopted_sid: [{"id": "unopted-rep", "title": "Local"}]},
+        },
+      }
+    )
+    assert unopted_sid not in alpha_synced["worker_tasks"]
+    assert unopted_sid not in alpha_synced["worker_reports"]
+    pending_ids = [item["id"] for item in alpha_store.read()["pending"]]
+    assert "p98765" in pending_ids
+    matched_notes = alpha_store.notes_matching("p98765")
+    assert len(matched_notes) == 1
+    assert "worker ready without mention token" in matched_notes[0]["text"]
+
+
+def test_board_sync_keeps_allowlisted_session_over_removal(tmp_path, monkeypatch):
+  repo = tmp_path / "clankers"
+  repo.mkdir()
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: "arena/gamma333-clankers"
+  )
+  store = preview.Store(repo / "arena-state" / "state.sqlite3", create=True)
+  monkeypatch.setattr(store, "repository_root", lambda: repo)
+  sid = store.board_state()["session_id"]
+  assert sid == "gamma333-clankers"
+  synced = store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "main_session_id": "alpha111-clankers",
+        "allowed_sessions": ["alpha111-clankers", sid],
+        "removed_sessions": ["alpha111-clankers"],
+        "sessions": [
+          {"session_id": "alpha111-clankers", "repo": "clankers", "status": "active"},
+          {"session_id": sid, "repo": "clankers", "status": "active"},
+        ],
+      },
+    }
+  )
+  assert "alpha111-clankers" in synced["allowed_sessions"]
+  assert "alpha111-clankers" not in synced["removed_sessions"]
+  assert synced["main_session_id"] == "alpha111-clankers"
+  assert "alpha111-clankers" in {row["session_id"] for row in synced["sessions"]}
+  pruned = store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "main_session_id": "alpha111-clankers",
+        "allowed_sessions": ["alpha111-clankers", sid],
+        "removed_sessions": ["gone444-clankers"],
+        "sessions": [
+          {"session_id": "alpha111-clankers", "repo": "clankers", "status": "active"},
+          {"session_id": sid, "repo": "clankers", "status": "active"},
+        ],
+      },
+    }
+  )
+  assert "gone444-clankers" in pruned["removed_sessions"]

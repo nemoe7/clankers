@@ -427,7 +427,7 @@ def meta_number(db, key):
 
 
 def pending_board_entries_for_db(db, session_id=""):
-  """Return unacknowledged @-mentioned board entries targeting the current session."""
+  """Return unacknowledged board entries targeting the current allowlisted session."""
   row = db.execute(
     "SELECT value FROM meta WHERE key = ?", (BOARD_STATE_META,)
   ).fetchone()
@@ -445,11 +445,14 @@ def pending_board_entries_for_db(db, session_id=""):
   if not sid:
     return []
   norm = normalize_board_state(raw, session_id=sid)
+  if sid not in set(norm.get("allowed_sessions") or []):
+    return []
   return [
     entry
     for entry in (norm.get("entries") or [])
     if isinstance(entry, dict)
-    and entry.get("mention_target") == sid
+    and entry.get("session_id") != sid
+    and (entry.get("mention_target") == sid or entry.get("to") == sid)
     and not entry.get("acknowledged_at")
   ]
 
@@ -6037,6 +6040,16 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     if slug and slug not in linked_repos:
       linked_repos.append(slug)
   multi_repo = bool(data.get("multi_repo") or linked_repos)
+  allowed = []
+  for item in (
+    data.get("allowed_sessions")
+    if isinstance(data.get("allowed_sessions"), list)
+    else []
+  ):
+    norm = board_session_id(item)
+    if norm and norm not in allowed:
+      allowed.append(norm)
+  allowed_set_init = set(allowed)
   removed_sessions = []
   for item in (
     data.get("removed_sessions")
@@ -6044,7 +6057,12 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     else []
   ):
     norm_rem = board_session_id(item)
-    if norm_rem and norm_rem != sid and norm_rem not in removed_sessions:
+    if (
+      norm_rem
+      and norm_rem != sid
+      and norm_rem not in allowed_set_init
+      and norm_rem not in removed_sessions
+    ):
       removed_sessions.append(norm_rem)
   removed_set = set(removed_sessions)
   raw_worker_ids = (
@@ -6104,15 +6122,6 @@ def normalize_board_state(raw, session_id="", repo="", branch="", polling=False)
     for row in raw_report_ops
     if isinstance(row, dict) and row.get("id") and row.get("target")
   ]
-  allowed = []
-  for item in (
-    data.get("allowed_sessions")
-    if isinstance(data.get("allowed_sessions"), list)
-    else []
-  ):
-    norm = board_session_id(item)
-    if norm and norm not in removed_set and norm not in allowed:
-      allowed.append(norm)
   raw_sessions_list = (
     data.get("sessions") if isinstance(data.get("sessions"), list) else []
   )
@@ -7779,13 +7788,52 @@ class Store:
     out of reach after its ack.
     """
     with closing(self.connect()) as db:
-      return [
+      matches = [
         message_row(row)
         for row in db.execute(
           "SELECT * FROM notes WHERE id = ? OR id LIKE ? ORDER BY at DESC",
           (token, f"{token}%"),
         ).fetchall()
       ]
+      b_row = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (BOARD_STATE_META,)
+      ).fetchone()
+    if b_row and b_row[0]:
+      try:
+        b_raw = json.loads(str(b_row[0]))
+      except Exception:
+        b_raw = None
+      if isinstance(b_raw, dict):
+        sid = board_session_id(
+          b_raw.get("local_session_id") or workspace_branch(self.repository_root())
+        )
+        norm = normalize_board_state(b_raw, session_id=sid)
+        if not sid or sid in set(norm.get("allowed_sessions") or []):
+          seen_ids = {str(m.get("id") or "") for m in matches}
+          for entry in reversed(norm.get("entries") or []):
+            if not isinstance(entry, dict):
+              continue
+            eid = str(entry.get("id") or "")
+            nid = str(entry.get("note_id") or "")
+            if (
+              eid
+              and eid not in seen_ids
+              and (
+                eid == token
+                or eid.startswith(token)
+                or (nid and (nid == token or nid.startswith(token)))
+              )
+            ):
+              seen_ids.add(eid)
+              matches.append(
+                {
+                  "id": eid,
+                  "at": str(entry.get("at") or now()),
+                  "acknowledged_at": entry.get("acknowledged_at"),
+                  "text": str(entry.get("text") or ""),
+                }
+              )
+    return matches
 
   def connect(self):
     db = sqlite_api().connect(self.path, timeout=5)
@@ -8500,6 +8548,21 @@ class Store:
     out = normalize_board_state(
       raw, session_id=sid, repo=repo, branch=branch, polling=is_polling
     )
+    allowed_set = set(out.get("allowed_sessions") or [])
+    is_self_allowed = bool(sid and sid in allowed_set)
+    out["worker_tasks"] = (
+      {k: v for k, v in (out.get("worker_tasks") or {}).items() if k in allowed_set}
+      if is_self_allowed
+      else {}
+    )
+    out["worker_reports"] = (
+      {k: v for k, v in (out.get("worker_reports") or {}).items() if k in allowed_set}
+      if is_self_allowed
+      else {}
+    )
+    if not is_self_allowed:
+      out["entries"] = []
+      out["wakes"] = {}
     if sid:
       try:
         survey_raw = (
@@ -8564,22 +8627,23 @@ class Store:
               s_row["updated_at"] = latest_stamp
       except Exception:
         pass
-      try:
-        out["worker_tasks"][sid] = [
-          {
-            "id": row["id"],
-            "title": row["title"],
-            "status": row["status"],
-            "type": row.get("type") or "code",
-            "details": list(row.get("details") or []),
-            "order": row.get("order"),
-            "report_id": row.get("report_id"),
-            "updated_at": clip_stamp(row.get("updated_at")),
-          }
-          for row in self.list_tasks()
-        ]
-      except Exception:
-        pass
+      if is_self_allowed:
+        try:
+          out["worker_tasks"][sid] = [
+            {
+              "id": row["id"],
+              "title": row["title"],
+              "status": row["status"],
+              "type": row.get("type") or "code",
+              "details": list(row.get("details") or []),
+              "order": row.get("order"),
+              "report_id": row.get("report_id"),
+              "updated_at": clip_stamp(row.get("updated_at")),
+            }
+            for row in self.list_tasks()
+          ]
+        except Exception:
+          pass
       try:
         with closing(self.connect()) as db:
           rep_rows = db.execute(
@@ -9174,6 +9238,13 @@ class Store:
         for item in merged["allowed_sessions"]:
           if item not in removed_set and item not in allowed:
             allowed.append(item)
+      allowed_sync_set = set(allowed)
+      worker_tasks = {k: v for k, v in worker_tasks.items() if k in allowed_sync_set}
+      worker_reports = {
+        k: v
+        for k, v in worker_reports.items()
+        if k in allowed_sync_set or (sid and k == sid)
+      }
       if (
         merged["main_session_id"]
         and merged["main_session_id"] not in removed_set

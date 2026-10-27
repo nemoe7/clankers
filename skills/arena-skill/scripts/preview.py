@@ -169,7 +169,9 @@ def pending_board_entries_for_db(db,session_id=''):
 	if not isinstance(raw,dict):return[]
 	sid=board_session_id(session_id or raw.get('local_session_id')or workspace_branch())
 	if not sid:return[]
-	norm=normalize_board_state(raw,session_id=sid);return[entry for entry in norm.get('entries')or[]if isinstance(entry,dict)and entry.get('mention_target')==sid and not entry.get('acknowledged_at')]
+	norm=normalize_board_state(raw,session_id=sid)
+	if sid not in set(norm.get('allowed_sessions')or[]):return[]
+	return[entry for entry in norm.get('entries')or[]if isinstance(entry,dict)and entry.get('session_id')!=sid and(entry.get('mention_target')==sid or entry.get('to')==sid)and not entry.get('acknowledged_at')]
 def gate_pending_count(db):base=db.execute(f"SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND blocking = 1) + (SELECT count(*) FROM submissions WHERE {PENDING_SUBMISSIONS})").fetchone()[0];return base+len(pending_board_entries_for_db(db))
 def pr_state_warning(line):
 	def payload(text):
@@ -2207,10 +2209,14 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 	for item in data.get('linked_repos')if isinstance(data.get('linked_repos'),list)else[]:
 		slug=clean_board_repo(item)
 		if slug and slug not in linked_repos:linked_repos.append(slug)
-	multi_repo=bool(data.get('multi_repo')or linked_repos);removed_sessions=[]
+	multi_repo=bool(data.get('multi_repo')or linked_repos);allowed=[]
+	for item in data.get('allowed_sessions')if isinstance(data.get('allowed_sessions'),list)else[]:
+		norm=board_session_id(item)
+		if norm and norm not in allowed:allowed.append(norm)
+	allowed_set_init=set(allowed);removed_sessions=[]
 	for item in data.get('removed_sessions')if isinstance(data.get('removed_sessions'),list)else[]:
 		norm_rem=board_session_id(item)
-		if norm_rem and norm_rem!=sid and norm_rem not in removed_sessions:removed_sessions.append(norm_rem)
+		if norm_rem and norm_rem!=sid and norm_rem not in allowed_set_init and norm_rem not in removed_sessions:removed_sessions.append(norm_rem)
 	removed_set=set(removed_sessions);raw_worker_ids=data.get('worker_ids')if isinstance(data.get('worker_ids'),dict)else{};worker_ids={}
 	for(k,v)in raw_worker_ids.items():
 		norm_k=board_session_id(k)
@@ -2225,11 +2231,7 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 	for(k,v)in raw_worker_reports.items():
 		norm_k=board_session_id(k)
 		if norm_k and norm_k not in removed_set and isinstance(v,list):worker_reports[norm_k]=[dict(row)for row in v if isinstance(row,dict)and row.get('id')]
-	raw_report_ops=data.get('report_ops')[-MAX_BOARD_ENTRIES:]if isinstance(data.get('report_ops'),list)else[];report_ops=[dict(row)for row in raw_report_ops if isinstance(row,dict)and row.get('id')and row.get('target')];allowed=[]
-	for item in data.get('allowed_sessions')if isinstance(data.get('allowed_sessions'),list)else[]:
-		norm=board_session_id(item)
-		if norm and norm not in removed_set and norm not in allowed:allowed.append(norm)
-	raw_sessions_list=data.get('sessions')if isinstance(data.get('sessions'),list)else[]
+	raw_report_ops=data.get('report_ops')[-MAX_BOARD_ENTRIES:]if isinstance(data.get('report_ops'),list)else[];report_ops=[dict(row)for row in raw_report_ops if isinstance(row,dict)and row.get('id')and row.get('target')];raw_sessions_list=data.get('sessions')if isinstance(data.get('sessions'),list)else[]
 	for row in raw_sessions_list:
 		if not isinstance(row,dict):continue
 		row_sid=board_session_id(row.get('session_id')or row.get('branch')or'')
@@ -2688,7 +2690,19 @@ class Store:
 			if offset<total:ids=[row[0]for row in db.execute('SELECT id FROM notes ORDER BY at DESC, seq DESC LIMIT ? OFFSET ?',(page_size,offset))]
 		return ids,total
 	def notes_matching(self,token):
-		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM notes WHERE id = ? OR id LIKE ? ORDER BY at DESC',(token,f"{token}%")).fetchall()]
+		with closing(self.connect())as db:matches=[message_row(row)for row in db.execute('SELECT * FROM notes WHERE id = ? OR id LIKE ? ORDER BY at DESC',(token,f"{token}%")).fetchall()];b_row=db.execute('SELECT value FROM meta WHERE key = ?',(BOARD_STATE_META,)).fetchone()
+		if b_row and b_row[0]:
+			try:b_raw=json.loads(str(b_row[0]))
+			except Exception:b_raw=None
+			if isinstance(b_raw,dict):
+				sid=board_session_id(b_raw.get('local_session_id')or workspace_branch(self.repository_root()));norm=normalize_board_state(b_raw,session_id=sid)
+				if not sid or sid in set(norm.get('allowed_sessions')or[]):
+					seen_ids={str(m.get('id')or'')for m in matches}
+					for entry in reversed(norm.get('entries')or[]):
+						if not isinstance(entry,dict):continue
+						eid=str(entry.get('id')or'');nid=str(entry.get('note_id')or'')
+						if eid and eid not in seen_ids and(eid==token or eid.startswith(token)or nid and(nid==token or nid.startswith(token))):seen_ids.add(eid);matches.append({'id':eid,'at':str(entry.get('at')or now()),'acknowledged_at':entry.get('acknowledged_at'),'text':str(entry.get('text')or'')})
+		return matches
 	def connect(self):db=sqlite_api().connect(self.path,timeout=5);db.row_factory=sqlite_api().Row;return db
 	def note(self,note_id,text,at=None,acknowledged_at=None,ack_type=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,autosave=True,shared=None,replies=None,ack_edited_seen_count=None,quiet=False,blocking=None,type=''):
 		identifier(note_id);owner_text(text);receipt=restore_receipt(acknowledged_at,ack_type,ack_text,ack_edited_at);more=restore_replies(replies,receipt[0]);seen_reply_count=restore_reply_seen_count(ack_edited_seen_count,more);seen=when(seen_at)if seen_at is not None else None;blocking=not quiet if blocking is None else bool(blocking)
@@ -2838,7 +2852,8 @@ class Store:
 		root=self.repository_root();branch=workspace_branch(root);repo=root.name;sid=board_session_id(branch);raw_text=meta.get(BOARD_STATE_META)if isinstance(meta,dict)else self.meta_value(BOARD_STATE_META)
 		try:raw=json.loads(raw_text)if raw_text else{}
 		except Exception:raw={}
-		is_polling=self.polling()if polling is None else bool(polling);out=normalize_board_state(raw,session_id=sid,repo=repo,branch=branch,polling=is_polling)
+		is_polling=self.polling()if polling is None else bool(polling);out=normalize_board_state(raw,session_id=sid,repo=repo,branch=branch,polling=is_polling);allowed_set=set(out.get('allowed_sessions')or[]);is_self_allowed=bool(sid and sid in allowed_set);out['worker_tasks']={k:v for(k,v)in(out.get('worker_tasks')or{}).items()if k in allowed_set}if is_self_allowed else{};out['worker_reports']={k:v for(k,v)in(out.get('worker_reports')or{}).items()if k in allowed_set}if is_self_allowed else{}
+		if not is_self_allowed:out['entries']=[];out['wakes']={}
 		if sid:
 			try:
 				survey_raw=meta.get('survey_state_json')if isinstance(meta,dict)else self.meta_value('survey_state_json');checked_at=clip_stamp(meta.get('survey_checked_at')if isinstance(meta,dict)else self.meta_value('survey_checked_at'));s_state=json.loads(survey_raw)if survey_raw else{};s_results=s_state.get('results')if isinstance(s_state,dict)else None;s_ans_at=clip_stamp(s_state.get('answered_at')if isinstance(s_state,dict)else None)
@@ -2853,8 +2868,9 @@ class Store:
 						s_row.update(self_status_fields);latest_stamp=max(str(s_row.get('updated_at')or''),str(self_status_fields.get('polling_since')or''),str(self_status_fields.get('agent_seen_at')or''),str(self_status_fields.get('turn_ended_at')or''),str(self_status_fields.get('agent_call_ended_at')or''))
 						if latest_stamp:s_row['updated_at']=latest_stamp
 			except Exception:pass
-			try:out['worker_tasks'][sid]=[{'id':row['id'],'title':row['title'],'status':row['status'],'type':row.get('type')or'code','details':list(row.get('details')or[]),'order':row.get('order'),'report_id':row.get('report_id'),'updated_at':clip_stamp(row.get('updated_at'))}for row in self.list_tasks()]
-			except Exception:pass
+			if is_self_allowed:
+				try:out['worker_tasks'][sid]=[{'id':row['id'],'title':row['title'],'status':row['status'],'type':row.get('type')or'code','details':list(row.get('details')or[]),'order':row.get('order'),'report_id':row.get('report_id'),'updated_at':clip_stamp(row.get('updated_at'))}for row in self.list_tasks()]
+				except Exception:pass
 			try:
 				with closing(self.connect())as db:rep_rows=db.execute('SELECT id, title, markdown, updated_at, published_at, agent_seen_at, ack_seen_at, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered, EXISTS(SELECT 1 FROM tasks JOIN notes ON notes.task_id = tasks.id WHERE tasks.report_id = reports.id AND notes.quiet = 0) AS owner_requested FROM reports WHERE published_at IS NOT NULL ORDER BY seq, id').fetchall();sub_rows=db.execute('SELECT * FROM submissions ORDER BY seq').fetchall()
 				latest_by_rep={};acks_by_rep={}
@@ -3067,6 +3083,7 @@ class Store:
 			if merged['allowed_sessions']or not allowed:
 				for item in merged['allowed_sessions']:
 					if item not in removed_set and item not in allowed:allowed.append(item)
+			allowed_sync_set=set(allowed);worker_tasks={k:v for(k,v)in worker_tasks.items()if k in allowed_sync_set};worker_reports={k:v for(k,v)in worker_reports.items()if k in allowed_sync_set or sid and k==sid}
 			if merged['main_session_id']and merged['main_session_id']not in removed_set and(merged['main_session_id']not in worker_ids or not main_sid or main_sid in worker_ids):main_sid=merged['main_session_id']
 			elif main_sid in removed_set or main_sid and main_sid not in allowed:main_sid=''
 			by_sid={row['session_id']:dict(row)for row in sessions}

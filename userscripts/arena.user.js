@@ -4893,7 +4893,9 @@
     if (!normalized.allowed_sessions.length) return false;
     var docScope = doc ? stateScope(doc) : { repo: "", branch: "" };
     var selfSid = boardSessionId(previewUiSessionId || docScope.branch || "");
-    if (selfSid && normalized.allowed_sessions.indexOf(selfSid) !== -1) return true;
+    if (selfSid) {
+      return normalized.allowed_sessions.indexOf(selfSid) !== -1;
+    }
     var selfRepo = cleanBoardRepo(previewUiRepo || docScope.repo || "", selfSid);
     if (!selfRepo) return false;
     if (Array.isArray(normalized.linked_repos) && normalized.linked_repos.indexOf(selfRepo) !== -1) {
@@ -6520,11 +6522,30 @@
       return Math.min(Math.round(ms), 60000);
     }
 
+    var bootBoardSyncDone = false;
+    var lastTitleBoardSyncMs = Date.now();
     function titleStep() {
       if (document.documentElement !== observedRoot) {
         observeRoot();
       }
       syncTitle(document);
+      if (typeof syncPreviewBoardHook === "function") {
+        var curBoard = readGlobalBoard();
+        var docScopeTick = stateScope(document);
+        var selfSidTick = boardSessionId(previewUiSessionId || docScopeTick.branch || "");
+        var tickBase = boardPreviewBase(document);
+        if (tickBase && selfSidTick && curBoard.allowed_sessions.indexOf(selfSidTick) !== -1) {
+          var nowTickMs = Date.now();
+          if (!bootBoardSyncDone) {
+            bootBoardSyncDone = true;
+            lastTitleBoardSyncMs = nowTickMs;
+            syncPreviewBoardHook(tickBase, selfSidTick, docScopeTick.repo || "", { passive: false });
+          } else if (nowTickMs - lastTitleBoardSyncMs >= 15000) {
+            lastTitleBoardSyncMs = nowTickMs;
+            syncPreviewBoardHook(tickBase, selfSidTick, docScopeTick.repo || "", { passive: true });
+          }
+        }
+      }
     }
 
     function restartTitleTimer() {
@@ -6745,12 +6766,23 @@
     }
     if (!data || typeof data !== "object") data = {};
     var multiRepo = Boolean(data.multi_repo);
+    var allowed = Array.isArray(data.allowed_sessions)
+      ? data.allowed_sessions.map(boardSessionId).filter(Boolean)
+      : [];
+    var seenAllowed = {};
+    var uniqueAllowed = [];
+    for (var i = 0; i < allowed.length; i += 1) {
+      if (!seenAllowed[allowed[i]]) {
+        seenAllowed[allowed[i]] = true;
+        uniqueAllowed.push(allowed[i]);
+      }
+    }
     var removedList = [];
     var removedSet = {};
     if (Array.isArray(data.removed_sessions)) {
       data.removed_sessions.forEach(function (item) {
         var normRem = boardSessionId(item);
-        if (normRem && !removedSet[normRem]) {
+        if (normRem && !seenAllowed[normRem] && !removedSet[normRem]) {
           removedSet[normRem] = true;
           removedList.push(normRem);
         }
@@ -6763,17 +6795,6 @@
         var cleanV = cleanWorkerId(data.worker_ids[key]);
         if (normK && !removedSet[normK] && cleanV) workerIds[normK] = cleanV;
       });
-    }
-    var allowed = Array.isArray(data.allowed_sessions)
-      ? data.allowed_sessions.map(boardSessionId).filter(Boolean)
-      : [];
-    var seenAllowed = {};
-    var uniqueAllowed = [];
-    for (var i = 0; i < allowed.length; i += 1) {
-      if (!removedSet[allowed[i]] && !seenAllowed[allowed[i]]) {
-        seenAllowed[allowed[i]] = true;
-        uniqueAllowed.push(allowed[i]);
-      }
     }
     var rawSessions = Array.isArray(data.sessions) ? data.sessions.slice(0, 64) : [];
     for (var sIdx = 0; sIdx < rawSessions.length; sIdx += 1) {
@@ -6793,13 +6814,15 @@
     if (mainId && (!seenAllowed[mainId] || removedSet[mainId])) mainId = "";
     if (mainId && workerIds[mainId]) {
       var mainRepoSlug = cleanBoardRepo("", mainId);
+      var replacementMain = "";
       for (var uIdx = 0; uIdx < uniqueAllowed.length; uIdx += 1) {
         var candSid = uniqueAllowed[uIdx];
         if (!workerIds[candSid] && cleanBoardRepo("", candSid) === mainRepoSlug) {
-          mainId = candSid;
+          replacementMain = candSid;
           break;
         }
       }
+      mainId = replacementMain;
     }
     if (mainId) delete workerIds[mainId];
     var sessions = [];
@@ -7037,26 +7060,43 @@
       else next.sessions.push(builtUnopted);
       return normalizeBoard(next);
     }
-    var canAuthorRepoLinks = !next.main_session_id || previewSid === next.main_session_id;
+    var canAuthorRepoLinks =
+      !next.main_session_id ||
+      previewSid === next.main_session_id ||
+      Boolean(
+        previewSid &&
+        previewSid === incoming.main_session_id &&
+        next.worker_ids[next.main_session_id] &&
+        !incoming.worker_ids[previewSid]
+      );
     if (previewBoard.multi_repo !== undefined && (canAuthorRepoLinks || Boolean(previewBoard.multi_repo))) {
       next.multi_repo = Boolean(previewBoard.multi_repo);
     }
     if (Array.isArray(previewBoard.linked_repos) && (canAuthorRepoLinks || incoming.linked_repos.length > 0)) {
       next.linked_repos = incoming.linked_repos.slice();
     }
+    var incomingAllowedSet = {};
+    (incoming.allowed_sessions || []).forEach(function (sid) {
+      if (sid) incomingAllowedSet[sid] = true;
+    });
     var protectedAllowedSet = {};
     (next.allowed_sessions || []).forEach(function (sid) {
       if (sid) protectedAllowedSet[sid] = true;
     });
-    (incoming.allowed_sessions || []).forEach(function (sid) {
-      if (sid) protectedAllowedSet[sid] = true;
+    Object.keys(incomingAllowedSet).forEach(function (sid) {
+      protectedAllowedSet[sid] = true;
     });
     var removedSet = {};
     (next.removed_sessions || []).forEach(function (sid) {
       if (sid && sid !== previewSid && !protectedAllowedSet[sid]) removedSet[sid] = true;
     });
     (incoming.removed_sessions || []).forEach(function (sid) {
-      if (sid && sid !== previewSid && !protectedAllowedSet[sid]) removedSet[sid] = true;
+      if (!sid || sid === previewSid) return;
+      if (canAuthorRepoLinks && !incomingAllowedSet[sid]) {
+        removedSet[sid] = true;
+        return;
+      }
+      if (!protectedAllowedSet[sid]) removedSet[sid] = true;
     });
     next.removed_sessions = Object.keys(removedSet);
     next.allowed_sessions = next.allowed_sessions.filter(function (sid) { return !removedSet[sid]; });
@@ -7094,9 +7134,17 @@
       mergedReportOps.push(op);
     });
     next.report_ops = mergedReportOps.slice(-MAX_BOARD_ENTRIES);
-    incoming.allowed_sessions.forEach(function (sid) {
-      if (!removedSet[sid] && next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
-    });
+    if (canAuthorRepoLinks && incoming.allowed_sessions.length) {
+      var orderedAllowed = [];
+      incoming.allowed_sessions.concat(next.allowed_sessions).forEach(function (sid) {
+        if (!removedSet[sid] && orderedAllowed.indexOf(sid) === -1) orderedAllowed.push(sid);
+      });
+      next.allowed_sessions = orderedAllowed;
+    } else {
+      incoming.allowed_sessions.forEach(function (sid) {
+        if (!removedSet[sid] && next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
+      });
+    }
     if (
       incoming.main_session_id &&
       !removedSet[incoming.main_session_id] &&
@@ -7360,7 +7408,7 @@
     var normalized = normalizeBoard(board);
     var sid = boardSessionId(sessionId);
     var targetRepo = cleanBoardRepo(repoHint || "", sid);
-    var isAllowed = sid && normalized.allowed_sessions.indexOf(sid) !== -1;
+    var isAllowed = Boolean(sid && normalized.allowed_sessions.indexOf(sid) !== -1);
     var scopedMain = "";
     if (targetRepo) {
       for (var i = 0; i < normalized.sessions.length; i += 1) {
@@ -7382,7 +7430,38 @@
     } else if (!sid || isAllowed) {
       scopedMain = normalized.main_session_id;
     }
-    return Object.assign({}, normalized, { main_session_id: scopedMain });
+    if (sid && !isAllowed) {
+      var ownReports = {};
+      if (normalized.worker_reports && Array.isArray(normalized.worker_reports[sid])) {
+        ownReports[sid] = normalized.worker_reports[sid].slice();
+      }
+      return Object.assign({}, normalized, {
+        main_session_id: scopedMain,
+        entries: [],
+        worker_tasks: {},
+        worker_reports: ownReports,
+        task_ops: [],
+        report_ops: [],
+        wakes: {},
+      });
+    }
+    var allowedSet = {};
+    normalized.allowed_sessions.forEach(function (aSid) {
+      if (aSid) allowedSet[aSid] = true;
+    });
+    var scopedTasks = {};
+    Object.keys(normalized.worker_tasks || {}).forEach(function (k) {
+      if (allowedSet[k]) scopedTasks[k] = normalized.worker_tasks[k].slice();
+    });
+    var scopedReports = {};
+    Object.keys(normalized.worker_reports || {}).forEach(function (k) {
+      if (allowedSet[k]) scopedReports[k] = normalized.worker_reports[k].slice();
+    });
+    return Object.assign({}, normalized, {
+      main_session_id: scopedMain,
+      worker_tasks: scopedTasks,
+      worker_reports: scopedReports,
+    });
   }
 
   function boardRoleFor(board, sessionId) {
