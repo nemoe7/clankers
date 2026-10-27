@@ -4,7 +4,7 @@
 - Bump `@version` and the version suffix in `@name` on every edit to `userscripts/*.user.js`.
 - Add controls in `openSettingsModal()` (`#clankers-settings-modal`) for every new feature, toggle, and configurable parameter.
 - Keep the 26 Tampermonkey menu command labels (`GM_registerMenuCommand`) unchanged unless explicitly instructed to change them.
-- Make every `MutationObserver` callback strictly idempotent: compare current `textContent`, attributes, and style value/priority before mutating the DOM, and NEVER write unconditionally inside an observed subtree.
+- Make every `MutationObserver` callback strictly idempotent: compare current `textContent`, attributes, and style value/priority before mutating the DOM, observe `document.body` instead of `<head><title>` for `page-tab-title`, and guard `syncTitle` logs on `currentTitleEmoji(doc.title) !== titleEmoji` (plus preserve `proxyBoardCache` against unseeded `revision === 0` empty pulls) so prefix/symbol updates NEVER trigger repeated emoji churn.
 - Exclude transcript children (`[role="log"]`, `[data-perf-target="transcript"]`, `.max-w-3xl`) when selecting outer layout or composer wrappers (`div.flex.min-h-0.flex-1.flex-col > div.shrink-0`).
 - Detect open preview drawers by preview-specific controls (`button[aria-label="Close preview"]`, `iframe[title^="App preview"]`), NEVER by `button[aria-label="Collapse workspace sidebar"]` alone (`256px` `Workspace card views` sidebar keeps that button when the preview is closed).
 - Lock width on both the outer (`div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip`) and inner (`> div`) preview drawer containers.

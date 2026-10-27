@@ -1095,6 +1095,15 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const count = titleLines.length;
     sync();
     assert.equal(logged.filter(([line]) => line.startsWith("[NemoUtils][title]")).length, count);
+    // Prefix/symbol updates on an existing NemoUtils title that already carries the same emoji do not re-log emoji churn.
+    page.title = "Arena | clankers \u03B1 \u2753";
+    sync();
+    assert.equal(page.title, "Arena | clankers \u2753");
+    assert.equal(
+      logged.filter(([line]) => line.startsWith("[NemoUtils][title]")).length,
+      count,
+      "changing prefix/symbol while current emoji already matches does not log duplicate emoji churn",
+    );
     titleMenus.get("Page - tab title (ON)")();
     assert.equal(page.title, "", "disabling the feature restores the original title");
     assert.equal(logged.filter(([line]) => line === "[NemoUtils][title][info] restored").length, 1);

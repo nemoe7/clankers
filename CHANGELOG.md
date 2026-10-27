@@ -56,6 +56,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Observe `document.body` for tab-title updates and suppress duplicate `[NemoUtils][title]` logs when the current emoji and base title hold across external `<title>` resets (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Send `sync` and `apply` actions to `POST /v1/board`, pass `session_id` and `name` with `sha256` on `GET /v1/board/files`, and omit live `body.digest` from `mismatchOfferId` (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Preserve worker-report `answer` and `unpublish` ops against `entry-ack` eviction and overlay main-session answered state onto `worker_reports` so answered reports clear `* ` immediately (`userscripts/arena.user.js`, `skills/refs/arena-skill/scripts/preview.py`, `maintenance/workflows/userscripts.test.cjs`, `skills/refs/arena-skill/scripts/test_preview.py`).
 - Strip board entries and peer queues for unopted sessions in `scopeBoardForTarget` and suppress unopted heartbeats (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).

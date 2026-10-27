@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.12.2
+// @name         Arena.ai | NemoUtils | v1.12.3
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.12.2
+// @version      1.12.3
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -4946,7 +4946,16 @@
   }
 
   function updateProxyBoardCache(rawBoard, revision) {
-    proxyBoardCache = normalizeBoard(rawBoard);
+    var normalized = normalizeBoard(rawBoard);
+    if (
+      revision === 0 &&
+      proxyBoardCache &&
+      proxyBoardCache.allowed_sessions.length > 0 &&
+      normalized.allowed_sessions.length === 0
+    ) {
+      return proxyBoardCache;
+    }
+    proxyBoardCache = normalized;
     if (typeof revision === "number" && isFinite(revision) && revision >= 0) {
       proxyBoardRevision = revision;
     }
@@ -6665,12 +6674,28 @@
     var titleRowKind = null;
     var lastRepo = null;
     var lastPath = null;
+    function currentTitleEmoji(rawTitle) {
+      var cur = String(rawTitle || "");
+      var stripped = cur.indexOf("* ") === 0 ? cur.slice(2) : cur;
+      if (stripped.indexOf(TITLE_PREFIX) !== 0) return null;
+      var i;
+      for (i = 0; i < LOG_VALUES.emoji.length; i += 1) {
+        var candidate = LOG_VALUES.emoji[i];
+        if (candidate && stripped.slice(-candidate.length - 1) === " " + candidate) {
+          return candidate;
+        }
+      }
+      return "";
+    }
     function syncTitle(doc) {
       var desired = desiredTitle(doc);
       if (desired) {
         if (doc.title === desired) return false;
-        logEvent("title", "changed", { type: titleRowKind || "none", emoji: titleEmoji, repo: repoForTitle(doc) });
-        logEvent("title", "conditions", titleConditions, "debug");
+        var prevEmoji = currentTitleEmoji(doc.title);
+        if (prevEmoji !== titleEmoji) {
+          logEvent("title", "changed", { type: titleRowKind || "none", emoji: titleEmoji, repo: repoForTitle(doc) });
+          logEvent("title", "conditions", titleConditions, "debug");
+        }
         appliedTitle = desired;
         doc.title = desired;
         return true;
@@ -6744,10 +6769,12 @@
       syncTitle(document);
     });
     function observeRoot() {
+      var targetRoot = document.body || document.documentElement;
+      if (!targetRoot || targetRoot === observedRoot) return;
       if (observedRoot) {
         observer.disconnect();
       }
-      observedRoot = document.documentElement;
+      observedRoot = targetRoot;
       observer.observe(observedRoot, {
         subtree: true,
         childList: true,
@@ -6769,9 +6796,7 @@
     var bootBoardSyncDone = false;
     var lastTitleBoardSyncMs = Date.now();
     function titleStep() {
-      if (document.documentElement !== observedRoot) {
-        observeRoot();
-      }
+      observeRoot();
       syncTitle(document);
       if (typeof syncPreviewBoardHook === "function") {
         var curBoard = readGlobalBoard();
