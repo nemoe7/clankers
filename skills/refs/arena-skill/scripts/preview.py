@@ -4683,7 +4683,8 @@ LONG_RUN_WORDS = (
   (("gradlew", "test"), "gradle-tests"),
 )
 WORKTREE_STEP = (
-  "NEXT: work queued file task in worktree while this runs: `arena-preview "
+  "NEXT: delegate independent queued tasks to idle board workers first, else work in"
+  " worktree while this runs: `arena-preview "
   "worktree start [-g, --gate <gate-name>] [-a, --allow <glob>] <name> <destination>`."
 )
 DETACHED_NOTICE = (
@@ -5367,13 +5368,47 @@ def next_open_task(state_dir, gate_name):
   return None
 
 
+def idle_board_workers(state_dir):
+  """Return display IDs of idle allowlisted board workers when this session is main."""
+  if not state_dir or not (Path(state_dir).resolve() / "state.sqlite3").is_file():
+    return []
+  try:
+    board = Store(state_dir).board_state()
+  except Exception:
+    return []
+  if board.get("board_role") != "main":
+    return []
+  allowed = set(board.get("allowed_sessions") or ())
+  worker_tasks = board.get("worker_tasks") or {}
+  idle = []
+  for row in board.get("sessions") or ():
+    sid = row.get("session_id") or ""
+    if (
+      not sid
+      or sid not in allowed
+      or row.get("role") != "worker"
+      or row.get("disconnected")
+    ):
+      continue
+    active = [t for t in (worker_tasks.get(sid) or ()) if t.get("status") == "upcoming"]
+    if not active:
+      idle.append(str(row.get("worker_id") or row.get("board_id") or sid))
+  return idle
+
+
 def next_task_hint(state_dir, gate_name):
   """Name the next open task and its worktree start command, when one exists."""
   task = next_open_task(state_dir, gate_name)
   if task is None:
     return ""
+  idle = idle_board_workers(state_dir)
+  worker_prefix = (
+    f" Delegate to idle board worker @{idle[0]} via /api/board first, or start"
+    if idle
+    else " Start"
+  )
   return (
-    f' Next open task: {task["id"]} "{task.get("title") or ""}". Start it in a'
+    f' Next open task: {task["id"]} "{task.get("title") or ""}".{worker_prefix} it in a'
     f" worktree: `arena-preview worktree start --gate {gate_name} --allow"
     f" '<task path glob>' {task['id']} <destination outside the repo root>`."
   )
@@ -5508,8 +5543,14 @@ def poll_inbox(store, sleeper=None):
         names = ", ".join(item["id"] for item in open_tasks)
         # The early return continues the task. Process the still-up list before the next poll.
         # The line prints on stdout once, and it names the action the agent takes next.
+        idle = idle_board_workers(store.path.parent)
+        worker_step = (
+          f"Delegate to idle board worker @{idle[0]} via /api/board first, or start"
+          if idle
+          else "Start"
+        )
         continue_line = (
-          f"CONTINUE: UNBLOCKED TASK {names}. Start a worktree with:"
+          f"CONTINUE: UNBLOCKED TASK {names}. {worker_step} a worktree with:"
           " arena-preview worktree start --gate <gate> <name> <destination>."
         )
         print(continue_line, flush=True)
@@ -9612,10 +9653,25 @@ class Store:
           }
         }
       entry_text = str(
-        payload.get("text") or body.get("text") or body.get("summary") or ""
+        payload.get("text")
+        or payload.get("body")
+        or payload.get("message")
+        or body.get("text")
+        or body.get("body")
+        or body.get("message")
+        or body.get("summary")
+        or ""
       )
       if entry_text and "text" not in body and not body.get("tag"):
         body["text"] = entry_text
+      if body.get("text"):
+        body.pop("body", None)
+        body.pop("message", None)
+      tag_value = str(payload.get("tag") or body.get("tag") or "").strip()
+      if not entry_text.strip() and not tag_value and staged_file is None:
+        raise ValueError(
+          "Board post requires non-empty text, a tag, or a file attachment"
+        )
       raw_to = str(payload.get("to") or "*")
       resolved_to = (
         "*"

@@ -16003,3 +16003,104 @@ def test_board_sync_skips_missing_reports_and_pre_clear_ops(tmp_path, monkeypatc
     "rop-missing-after-clear",
   ]
   assert synced["session_id"] == worker_sid
+
+
+def test_board_post_normalizes_body_and_message_and_rejects_empty_post(
+  tmp_path, monkeypatch
+):
+  main_repo = tmp_path / "clankers"
+  main_repo.mkdir()
+  monkeypatch.setattr(preview, "resolve_repo_root", lambda _cwd=None: main_repo)
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: "arena/alpha111-clankers"
+  )
+  main_dir = main_repo / "arena-state"
+  main_dir.mkdir()
+  store = preview.Store(main_dir, create=True)
+  monkeypatch.setattr(store, "repository_root", lambda: main_repo)
+  main_sid = store.board_state()["session_id"]
+  worker_sid = "0735d422-clankers"
+  store.board_action({"action": "allow", "session_id": main_sid})
+  store.board_action({"action": "set-main", "session_id": main_sid})
+  store.board_action({"action": "allow", "session_id": worker_sid, "worker_id": "beta"})
+  store.board_action(
+    {"action": "heartbeat", "session_id": worker_sid, "repo": "clankers"}
+  )
+
+  from_body = store.board_action(
+    {
+      "action": "post",
+      "session_id": main_sid,
+      "body": "@beta Delegate audit task",
+    }
+  )
+  body_entry = from_body["entries"][-1]
+  assert body_entry["text"] == f"@{worker_sid} Delegate audit task"
+  assert body_entry["payload"] == {"text": f"@{worker_sid} Delegate audit task"}
+  assert body_entry["mention_target"] == worker_sid
+  assert body_entry["to"] == worker_sid
+
+  from_msg = store.board_action(
+    {
+      "action": "post",
+      "session_id": main_sid,
+      "payload": {"message": "Status check"},
+    }
+  )
+  assert from_msg["entries"][-1]["payload"] == {"text": "Status check"}
+
+  with pytest.raises(ValueError, match="non-empty text"):
+    store.board_action({"action": "post", "session_id": main_sid, "text": "   "})
+
+
+def test_idle_board_workers_surface_in_gate_and_poll_hints(
+  tmp_path, capsys, monkeypatch
+):
+  main_repo = tmp_path / "clankers"
+  main_repo.mkdir()
+  monkeypatch.setattr(preview, "resolve_repo_root", lambda _cwd=None: main_repo)
+  monkeypatch.setattr(
+    preview, "workspace_branch", lambda _root=None: "arena/alpha111-clankers"
+  )
+  monkeypatch.setattr(preview, "guard_task_runs", lambda *_a, **_kw: None)
+  main_dir = main_repo / "arena-state"
+  main_dir.mkdir()
+  store = preview.Store(main_dir, create=True)
+  monkeypatch.setattr(store, "repository_root", lambda: main_repo)
+  main_sid = store.board_state()["session_id"]
+  worker_sid = "0735d422-clankers"
+  store.board_action({"action": "allow", "session_id": main_sid})
+  store.board_action({"action": "set-main", "session_id": main_sid})
+  store.board_action({"action": "allow", "session_id": worker_sid, "worker_id": "beta"})
+  store.board_action(
+    {"action": "heartbeat", "session_id": worker_sid, "repo": "clankers"}
+  )
+  store.write_task("queued-docs", "Write docs", ["Step 1"], task_type="docs")
+
+  assert preview.idle_board_workers(main_dir) == ["beta"]
+  (main_dir / "runs").mkdir(parents=True, exist_ok=True)
+  (main_dir / "runs" / "verify-gate.json").write_text(
+    '{"name": "verify-gate"}', encoding="utf-8"
+  )
+  hint = preview.next_task_hint(main_dir, "verify-gate")
+  assert "@beta" in hint
+  assert "worktree start --gate verify-gate" in hint
+
+  assert preview.poll_once(store, sleeper=lambda _: None) == 0
+  poll_out = capsys.readouterr().out
+  assert "Delegate to idle board worker @beta" in poll_out
+
+  store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        **store.board_state(),
+        "worker_tasks": {
+          worker_sid: [
+            {"id": "worker-job", "title": "Busy", "status": "upcoming", "order": 1}
+          ]
+        },
+      },
+    }
+  )
+  assert preview.idle_board_workers(main_dir) == []

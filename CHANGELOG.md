@@ -13,10 +13,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### arena
 
 - Align standalone Python Ruff defaults with `CORE.md` and pin `required-version = "0.17.3"` (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+- Require main sessions to delegate queued other-file tasks to idle allowlisted board workers before local worktrees (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 
 #### arena-skill
 
 - Require Python `3.11+` and adopt `datetime.UTC` and native `"Z"` timestamp parsing under Ruff `0.17.3` (`SKILL.md`, `scripts/preview.py`, `scripts/test_preview.py`).
+- Require main sessions to offload independent queued tasks to idle board workers and list idle workers in gate hints (`SKILL.md`, `scripts/preview.py`).
 
 #### chatgpt
 
@@ -39,6 +41,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### arena-skill
 
 - Skip missing reports and pre-clear operations during board sync after `state clear` instead of failing with HTTP `404` (`scripts/preview.py`).
+- Normalize `body` and `message` fields on board `post` actions and reject empty fileless and tagless posts (`scripts/preview.py`).
 
 ## 2026-10-26
 

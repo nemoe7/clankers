@@ -1694,7 +1694,7 @@ PR_CHECK_WRAPPERS='env','command','timeout','xargs','nice','nohup','stdbuf','sud
 PR_CHECK_NAMES=('pr','checks','pr-checks'),('run','watch','run-watch')
 LONG_RUN_HEADS={'pytest':'pytest','py.test':'pytest','tox':'tox','nox':'nox'}
 LONG_RUN_WORDS=(('npm','test'),'npm-tests'),(('npm','run','test*'),'npm-tests'),(('yarn','test'),'yarn-tests'),(('pnpm','test'),'pnpm-tests'),(('make','test'),'make-tests'),(('npx','jest'),'npx-tests'),(('npx','vitest'),'npx-tests'),(('npx','mocha'),'npx-tests'),(('npx','ava'),'npx-tests'),(('go','test'),'go-tests'),(('cargo','test'),'cargo-tests'),(('dotnet','test'),'dotnet-tests'),(('mvn','test'),'mvn-tests'),(('mvnw','test'),'mvn-tests'),(('gradle','test'),'gradle-tests'),(('gradlew','test'),'gradle-tests')
-WORKTREE_STEP='NEXT: work queued file task in worktree while this runs: `arena-preview worktree start [-g, --gate <gate-name>] [-a, --allow <glob>] <name> <destination>`.'
+WORKTREE_STEP='NEXT: delegate independent queued tasks to idle board workers first, else work in worktree while this runs: `arena-preview worktree start [-g, --gate <gate-name>] [-a, --allow <glob>] <name> <destination>`.'
 DETACHED_NOTICE='RUN DETACHED: `{name}` runs in background, call ends clean. Verdict on later call. '+WORKTREE_STEP
 DETACHED_BLOCK='RUN BLOCKED: background start failed, wait not started. Nothing on this line ran. Use `arena-preview run start {name} -- <the same line>` instead.'
 DETACHED_STATUS_SECONDS=7200
@@ -1959,10 +1959,22 @@ def next_open_task(state_dir,gate_name):
 		if gate_name in(task.get('runs')or[]):continue
 		return task
 	return None
+def idle_board_workers(state_dir):
+	if not state_dir or not(Path(state_dir).resolve()/'state.sqlite3').is_file():return[]
+	try:board=Store(state_dir).board_state()
+	except Exception:return[]
+	if board.get('board_role')!='main':return[]
+	allowed=set(board.get('allowed_sessions')or());worker_tasks=board.get('worker_tasks')or{};idle=[]
+	for row in board.get('sessions')or():
+		sid=row.get('session_id')or''
+		if not sid or sid not in allowed or row.get('role')!='worker'or row.get('disconnected'):continue
+		active=[t for t in worker_tasks.get(sid)or()if t.get('status')=='upcoming']
+		if not active:idle.append(str(row.get('worker_id')or row.get('board_id')or sid))
+	return idle
 def next_task_hint(state_dir,gate_name):
 	task=next_open_task(state_dir,gate_name)
 	if task is None:return''
-	return f" Next open task: {task['id']} \"{task.get('title')or''}\". Start it in a worktree: `arena-preview worktree start --gate {gate_name} --allow '<task path glob>' {task['id']} <destination outside the repo root>`."
+	idle=idle_board_workers(state_dir);worker_prefix=f" Delegate to idle board worker @{idle[0]} via /api/board first, or start"if idle else' Start';return f" Next open task: {task['id']} \"{task.get('title')or''}\".{worker_prefix} it in a worktree: `arena-preview worktree start --gate {gate_name} --allow '<task path glob>' {task['id']} <destination outside the repo root>`."
 def run_log_report(state_dir,name):
 	record=routed_record(state_dir,name)
 	if record.get('exit')is None:
@@ -1999,7 +2011,7 @@ def poll_inbox(store,sleeper=None):
 			if failures and'pr-checks'not in live_runs(store.path.parent):print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);return 0
 			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
-			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: UNBLOCKED TASK {names}. Start a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
+			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);idle=idle_board_workers(store.path.parent);worker_step=f"Delegate to idle board worker @{idle[0]} via /api/board first, or start"if idle else'Start';continue_line=f"CONTINUE: UNBLOCKED TASK {names}. {worker_step} a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
 			board_woken=bool(store.take_board_wake());board_notices=store.take_board_notifications()
 			if board_woken or board_notices:
 				clear_poll_repeat(store);print('BOARD WAKE: session woken from the multi-session board. Read board entries and continue work before polling again.',flush=True)
@@ -3189,8 +3201,11 @@ class Store:
 			body=payload.get('payload')
 			if not isinstance(body,dict):body={'text':str(body)}if body is not None else{}
 			if not body:body={k:v for(k,v)in payload.items()if k not in{'action','type','id','session_id','board_id','from_owner','note_id','mention_target','to','repo','branch','at','seen_at','acknowledged_at','ack_type','ack_text','ack_edited_at','replies','payload','file'}}
-			entry_text=str(payload.get('text')or body.get('text')or body.get('summary')or'')
+			entry_text=str(payload.get('text')or payload.get('body')or payload.get('message')or body.get('text')or body.get('body')or body.get('message')or body.get('summary')or'')
 			if entry_text and'text'not in body and not body.get('tag'):body['text']=entry_text
+			if body.get('text'):body.pop('body',None);body.pop('message',None)
+			tag_value=str(payload.get('tag')or body.get('tag')or'').strip()
+			if not entry_text.strip()and not tag_value and staged_file is None:raise ValueError('Board post requires non-empty text, a tag, or a file attachment')
 			raw_to=str(payload.get('to')or'*');resolved_to='*'if raw_to=='*'else resolve_board_target(raw_to,sessions,allowed=allowed,main_sid=main_sid);mention_target='';raw_mention=str(payload.get('mention_target')or'').strip()
 			if raw_mention:mention_target=resolve_board_target(raw_mention,sessions,allowed=allowed,main_sid=main_sid)
 			if not mention_target and entry_text:
