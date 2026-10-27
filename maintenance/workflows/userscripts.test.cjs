@@ -4008,6 +4008,32 @@ for raw in sys.stdin:
       assert.equal(alphaRefreshed.updated_at, "2026-10-27T03:02:00Z");
       assert.equal(alphaRefreshed.agent_call_ended_at, "2026-10-27T03:02:00Z");
       assert.equal(alphaRefreshed.turn_ended_at, undefined, "superseded peer turn_ended_at is cleared when newer bash activity arrives");
+
+      // normalizeBoard and mergePreviewBoard strip unpublished worker_reports via report_ops:
+      const withUnpubOp = boardApi.mergePreviewBoard(
+        {
+          allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+          main_session_id: "alpha111-clankers",
+          worker_reports: {
+            "beta2222-clankers": [
+              { id: "stale-worker-rep", title: "Old", updated_at: "2026-10-27T03:00:00", published_at: "2026-10-27T03:00:00", answered: false, needs_answer: true },
+            ],
+          },
+          report_ops: [],
+        },
+        {
+          session_id: "alpha111-clankers",
+          repo: "clankers",
+          branch: "arena/alpha111-clankers",
+          allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+          main_session_id: "alpha111-clankers",
+          report_ops: [
+            { id: "rop-unpub1", target: "beta2222-clankers", op: "unpublish", report_id: "stale-worker-rep", from_owner: true, at: "2026-10-27T03:05:00" },
+          ],
+          sessions: [{ session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:05:00Z" }],
+        },
+      );
+      assert.deepEqual(Array.from(withUnpubOp.worker_reports["beta2222-clankers"] || []), [], "report_ops unpublish strips stale worker report from BOARD_KEY immediately");
     });
   }
 

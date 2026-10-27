@@ -5974,8 +5974,19 @@ def apply_report_op_to_list(report_list, op):
   target_id = str(op.get("report_id") or op.get("id") or "").strip()
   if not target_id:
     return items
+  op_at = clip_stamp(op.get("at")) or ""
   if op_name in {"unpublish", "remove", "delete"}:
-    return [row for row in items if str(row.get("id") or "") != target_id]
+    kept = []
+    for row in items:
+      if str(row.get("id") or "") != target_id:
+        kept.append(row)
+        continue
+      row_stamp = (
+        clip_stamp(row.get("updated_at") or row.get("published_at") or "") or ""
+      )
+      if op_at and row_stamp and op_at < row_stamp:
+        kept.append(row)
+    return kept
   if op_name in {"answer", "submit"}:
     sub_id = str(op.get("submission_id") or op.get("note_id") or "").strip()
     sub_at = str(op.get("at") or clip_stamp(now()))
@@ -8338,14 +8349,37 @@ class Store:
         orig_id = str(w_rep.get("id") or "").strip()
         if not orig_id:
           continue
-        mirror_id = orig_id if orig_id not in used_ids else f"{worker_label}--{orig_id}"
-        mirror_id = re.sub(r"[^a-zA-Z0-9_-]", "-", mirror_id)[:80]
-        used_ids.add(mirror_id)
-        title = str(w_rep.get("title") or orig_id).strip()
         updated_at = clip_stamp(
           w_rep.get("updated_at") or w_rep.get("published_at") or now()
         )
         published_at = clip_stamp(w_rep.get("published_at") or updated_at)
+        op_sub_id = None
+        op_sub_at = None
+        unpublished_by_op = False
+        for op in b_state.get("report_ops") or []:
+          if not isinstance(op, dict):
+            continue
+          if str(op.get("target") or "") != worker_sid:
+            continue
+          if str(op.get("report_id") or "") != orig_id:
+            continue
+          op_kind = str(op.get("op") or "").strip().lower()
+          op_at_stamp = clip_stamp(op.get("at")) or ""
+          if op_kind in {"unpublish", "remove", "delete"}:
+            if not op_at_stamp or not updated_at or op_at_stamp >= updated_at:
+              unpublished_by_op = True
+          elif op_kind in {"answer", "submit"}:
+            cand_id = str(op.get("submission_id") or op.get("note_id") or "").strip()
+            if cand_id:
+              op_sub_id = cand_id
+            if op_at_stamp:
+              op_sub_at = op_at_stamp
+        if unpublished_by_op:
+          continue
+        mirror_id = orig_id if orig_id not in used_ids else f"{worker_label}--{orig_id}"
+        mirror_id = re.sub(r"[^a-zA-Z0-9_-]", "-", mirror_id)[:80]
+        used_ids.add(mirror_id)
+        title = str(w_rep.get("title") or orig_id).strip()
         seen_key = f"{worker_sid}:{orig_id}"
         seen_rec = seen_map.get(seen_key) if isinstance(seen_map, dict) else None
         seen_at = (
@@ -8355,21 +8389,6 @@ class Store:
           and seen_rec.get("updated_at") in (None, "", updated_at, published_at)
           else None
         )
-        op_sub_id = None
-        op_sub_at = None
-        for op in b_state.get("report_ops") or []:
-          if not isinstance(op, dict):
-            continue
-          if str(op.get("target") or "") != worker_sid:
-            continue
-          if str(op.get("report_id") or "") != orig_id:
-            continue
-          if str(op.get("op") or "") in {"answer", "submit"}:
-            cand_id = str(op.get("submission_id") or op.get("note_id") or "").strip()
-            if cand_id:
-              op_sub_id = cand_id
-            if op.get("at"):
-              op_sub_at = clip_stamp(op.get("at"))
         local_sub = local_latest_by_rep.get(mirror_id) or local_latest_by_rep.get(
           orig_id
         )
@@ -8639,7 +8658,11 @@ class Store:
       raise ValueError("Missing report_id")
     if op_name in {"unpublish", "remove", "delete"}:
       try:
-        self.unpublish(report_id, dismissed_by_owner=True)
+        self.unpublish(
+          report_id,
+          dismissed_by_owner=bool(op.get("from_owner", True)),
+          _from_board=True,
+        )
       except FileNotFoundError:
         return False
       return True
@@ -9134,6 +9157,10 @@ class Store:
         target_sid = resolve_board_target(
           op.get("target") or "", sessions, allowed=allowed, main_sid=main_sid
         )
+        if target_sid and target_sid in worker_reports:
+          worker_reports[target_sid] = apply_report_op_to_list(
+            worker_reports.get(target_sid) or [], op
+          )
         if op_id and target_sid == sid and op_id not in applied_rep_set:
           applied_rep_set.add(op_id)
           applied_rep_list.append(op_id)
@@ -9436,7 +9463,8 @@ class Store:
       sender = resolve_board_target(
         payload.get("session_id") or sid, sessions, allowed=allowed, main_sid=main_sid
       )
-      if main_sid and sender and sender != main_sid:
+      from_owner = bool(payload.get("from_owner"))
+      if not from_owner and main_sid and sender and sender != main_sid:
         raise ValueError("Only the main session can manage worker reports")
       target = resolve_board_target(
         payload.get("target")
@@ -9504,6 +9532,7 @@ class Store:
         "target": target,
         "op": op_name,
         "report_id": report_id,
+        "from_owner": from_owner,
         "answers": payload.get("answers")
         if isinstance(payload.get("answers"), dict)
         else {},
@@ -12794,7 +12823,14 @@ class Store:
       )
     return len(fields)
 
-  def unpublish(self, report_id, dismissed_by_owner=False, *, stale_only=False):
+  def unpublish(
+    self,
+    report_id,
+    dismissed_by_owner=False,
+    *,
+    stale_only=False,
+    _from_board=False,
+  ):
     """Remove only the report tab row. Keep answers and the Markdown source."""
     identifier(report_id)
     mirrored = None
@@ -12808,13 +12844,25 @@ class Store:
       if row is None:
         if stale_only:
           return False
+        if _from_board:
+          raise FileNotFoundError("Report not found")
         mirrored = self._mirrored_worker_reports().get(report_id)
         if mirrored is None:
           raise FileNotFoundError("Report not found")
+        db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMOVED_META, now()))
+        if dismissed_by_owner:
+          db.execute(
+            "INSERT INTO notes (id, text, at, quiet, blocking) VALUES (?, ?, ?, 1, 0)",
+            (
+              new_id(),
+              f"The owner dismissed the report {report_id} ({mirrored['title']}).",
+              now(),
+            ),
+          )
       else:
         if stale_only and report_id not in self.stale_report_ids(db):
           return False
-        if not dismissed_by_owner:
+        if not dismissed_by_owner and not _from_board:
           # The page holds the open report, so the owner's view never blocks this removal.
           self.guard_report_change(
             db, report_id, row, hold_view=False, hold_answer=False
@@ -12846,6 +12894,47 @@ class Store:
         }
       )
       return True
+
+    if not _from_board and not stale_only and dismissed_by_owner:
+      try:
+        b_state = self.board_state()
+        self_sid = str(b_state.get("session_id") or "")
+        allowed_set = set(b_state.get("allowed_sessions") or [])
+        if self_sid and self_sid in allowed_set:
+          if b_state.get("board_role") == "worker":
+            self.board_action(
+              {
+                "action": "worker-report",
+                "target": self_sid,
+                "op": "unpublish",
+                "report_id": report_id,
+                "from_owner": True,
+              }
+            )
+          elif b_state.get("board_role") == "main":
+            for w_sid, rep_list in (b_state.get("worker_reports") or {}).items():
+              if (
+                not w_sid
+                or w_sid == self_sid
+                or w_sid not in allowed_set
+                or not isinstance(rep_list, list)
+              ):
+                continue
+              if any(
+                isinstance(r, dict) and str(r.get("id") or "") == report_id
+                for r in rep_list
+              ):
+                self.board_action(
+                  {
+                    "action": "worker-report",
+                    "target": w_sid,
+                    "op": "unpublish",
+                    "report_id": report_id,
+                    "from_owner": True,
+                  }
+                )
+      except Exception:
+        pass
 
     if stale_only:
       return True

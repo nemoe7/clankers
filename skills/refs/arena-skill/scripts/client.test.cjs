@@ -5802,5 +5802,6 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /selfRow\?\.agent_seen_at\s*\|\|\s*''/);
   assert.match(appSource, /wake_id:\s*String\(stamp\)/);
   assert.match(appSource, /rRawTurnEndedAt\s*>=\s*rLatestActiveAt/);
+  assert.match(appSource, /const\s+reportsSig\s*=/);
 });
 

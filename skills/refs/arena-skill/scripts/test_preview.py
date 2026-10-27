@@ -16213,3 +16213,57 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
   )
   third = next(row for row in resumed["sessions"] if row["session_id"] == worker_sid)
   assert "turn_ended_at" not in third or third["turn_ended_at"] is None
+
+
+def test_main_and_owner_unpublish_worker_report_propagates_across_sync(tmp_path):
+  main_dir = tmp_path / "main-state"
+  worker_dir = tmp_path / "worker-state"
+  main_store = preview.Store(str(main_dir), create=True)
+  worker_store = preview.Store(str(worker_dir), create=True)
+  main_sid = "aaaa1111-clankers"
+  worker_sid = "bbbb2222-clankers"
+
+  md_file = tmp_path / "proposal.md"
+  md_file.write_text("# Worker Proposal\n\nBody text.\n", encoding="utf-8")
+
+  with (
+    patch.object(preview, "workspace_branch", return_value=f"arena/{worker_sid}"),
+    patch.object(
+      StoreRepoMixin := preview.Store,
+      "repository_root",
+      return_value=tmp_path / "clankers",
+    ),
+  ):
+    worker_store.publish("worker-prop", "Worker Proposal", md_file)
+    worker_store.board_action({"action": "allow", "session_id": main_sid})
+    worker_store.board_action(
+      {"action": "allow", "session_id": worker_sid, "worker_id": "beta"}
+    )
+    worker_store.board_action({"action": "set-main", "session_id": main_sid})
+    w_board = worker_store.board_state()
+
+  with (
+    patch.object(preview, "workspace_branch", return_value=f"arena/{main_sid}"),
+    patch.object(StoreRepoMixin, "repository_root", return_value=tmp_path / "clankers"),
+  ):
+    main_store.board_action({"action": "sync", "board": w_board})
+    assert any(r["id"] == "worker-prop" for r in main_store.state()["reports"])
+
+    # Main unpublishes a worker report. A stale worker snapshot must not resurrect it.
+    assert main_store.resolve_id("worker-prop") == "worker-prop"
+    main_store.unpublish("worker-prop", dismissed_by_owner=True)
+    assert not any(r["id"] == "worker-prop" for r in main_store.state()["reports"])
+    notes = [n["text"] for n in main_store.state()["notes"]]
+    assert any("The owner dismissed the report worker-prop" in t for t in notes)
+
+    # Even if a stale board snapshot still carries w_board["worker_reports"], sync keeps it unpublished:
+    main_after_stale = main_store.board_action({"action": "sync", "board": w_board})
+    assert not any(r["id"] == "worker-prop" for r in main_store.state()["reports"])
+
+  # Syncing main's board back to worker removes the report from worker's SQLite store too:
+  with (
+    patch.object(preview, "workspace_branch", return_value=f"arena/{worker_sid}"),
+    patch.object(StoreRepoMixin, "repository_root", return_value=tmp_path / "clankers"),
+  ):
+    worker_store.board_action({"action": "sync", "board": main_after_stale})
+    assert not any(r["id"] == "worker-prop" for r in worker_store.state()["reports"])

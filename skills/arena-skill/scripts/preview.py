@@ -2174,7 +2174,14 @@ def apply_task_op_to_list(task_list,op):
 def apply_report_op_to_list(report_list,op):
 	items=[dict(row)for row in report_list or[]if isinstance(row,dict)];op_name=str(op.get('op')or op.get('operation')or'answer').strip().lower();target_id=str(op.get('report_id')or op.get('id')or'').strip()
 	if not target_id:return items
-	if op_name in{'unpublish','remove','delete'}:return[row for row in items if str(row.get('id')or'')!=target_id]
+	op_at=clip_stamp(op.get('at'))or''
+	if op_name in{'unpublish','remove','delete'}:
+		kept=[]
+		for row in items:
+			if str(row.get('id')or'')!=target_id:kept.append(row);continue
+			row_stamp=clip_stamp(row.get('updated_at')or row.get('published_at')or'')or''
+			if op_at and row_stamp and op_at<row_stamp:kept.append(row)
+		return kept
 	if op_name in{'answer','submit'}:
 		sub_id=str(op.get('submission_id')or op.get('note_id')or'').strip();sub_at=str(op.get('at')or clip_stamp(now()))
 		for row in items:
@@ -2807,16 +2814,20 @@ class Store:
 				if not isinstance(w_rep,dict):continue
 				orig_id=str(w_rep.get('id')or'').strip()
 				if not orig_id:continue
-				mirror_id=orig_id if orig_id not in used_ids else f"{worker_label}--{orig_id}";mirror_id=re.sub('[^a-zA-Z0-9_-]','-',mirror_id)[:80];used_ids.add(mirror_id);title=str(w_rep.get('title')or orig_id).strip();updated_at=clip_stamp(w_rep.get('updated_at')or w_rep.get('published_at')or now());published_at=clip_stamp(w_rep.get('published_at')or updated_at);seen_key=f"{worker_sid}:{orig_id}";seen_rec=seen_map.get(seen_key)if isinstance(seen_map,dict)else None;seen_at=clip_stamp(seen_rec.get('seen_at'))if isinstance(seen_rec,dict)and seen_rec.get('seen_at')and seen_rec.get('updated_at')in(None,'',updated_at,published_at)else None;op_sub_id=None;op_sub_at=None
+				updated_at=clip_stamp(w_rep.get('updated_at')or w_rep.get('published_at')or now());published_at=clip_stamp(w_rep.get('published_at')or updated_at);op_sub_id=None;op_sub_at=None;unpublished_by_op=False
 				for op in b_state.get('report_ops')or[]:
 					if not isinstance(op,dict):continue
 					if str(op.get('target')or'')!=worker_sid:continue
 					if str(op.get('report_id')or'')!=orig_id:continue
-					if str(op.get('op')or'')in{'answer','submit'}:
+					op_kind=str(op.get('op')or'').strip().lower();op_at_stamp=clip_stamp(op.get('at'))or''
+					if op_kind in{'unpublish','remove','delete'}:
+						if not op_at_stamp or not updated_at or op_at_stamp>=updated_at:unpublished_by_op=True
+					elif op_kind in{'answer','submit'}:
 						cand_id=str(op.get('submission_id')or op.get('note_id')or'').strip()
 						if cand_id:op_sub_id=cand_id
-						if op.get('at'):op_sub_at=clip_stamp(op.get('at'))
-				local_sub=local_latest_by_rep.get(mirror_id)or local_latest_by_rep.get(orig_id);local_acks=local_acks_by_rep.get(mirror_id)or local_acks_by_rep.get(orig_id)or[];answered_flag=bool(local_sub or w_rep.get('answered')or op_sub_id);latest_answer_id=(local_sub['id']if local_sub else None)or str(w_rep.get('latest_answer_id')or'').strip()or op_sub_id or None
+						if op_at_stamp:op_sub_at=op_at_stamp
+				if unpublished_by_op:continue
+				mirror_id=orig_id if orig_id not in used_ids else f"{worker_label}--{orig_id}";mirror_id=re.sub('[^a-zA-Z0-9_-]','-',mirror_id)[:80];used_ids.add(mirror_id);title=str(w_rep.get('title')or orig_id).strip();seen_key=f"{worker_sid}:{orig_id}";seen_rec=seen_map.get(seen_key)if isinstance(seen_map,dict)else None;seen_at=clip_stamp(seen_rec.get('seen_at'))if isinstance(seen_rec,dict)and seen_rec.get('seen_at')and seen_rec.get('updated_at')in(None,'',updated_at,published_at)else None;local_sub=local_latest_by_rep.get(mirror_id)or local_latest_by_rep.get(orig_id);local_acks=local_acks_by_rep.get(mirror_id)or local_acks_by_rep.get(orig_id)or[];answered_flag=bool(local_sub or w_rep.get('answered')or op_sub_id);latest_answer_id=(local_sub['id']if local_sub else None)or str(w_rep.get('latest_answer_id')or'').strip()or op_sub_id or None
 				if latest_answer_id=='answered':latest_answer_id=(local_sub['id']if local_sub else None)or op_sub_id or None
 				latest_answer_at=clip_stamp(local_sub['at'])if local_sub else clip_stamp(w_rep.get('latest_answer_at'))if w_rep.get('latest_answer_at')else op_sub_at or(updated_at if answered_flag else None);latest_ack_at=clip_stamp(local_sub['acknowledged_at'])if local_sub and local_sub['acknowledged_at']else clip_stamp(w_rep.get('latest_answer_acknowledged_at'))if w_rep.get('latest_answer_acknowledged_at')else None;agent_seen_val=clip_stamp(local_sub['seen_at']or local_sub['acknowledged_at'])if local_sub and(local_sub['seen_at']or local_sub['acknowledged_at'])else clip_stamp(w_rep.get('agent_seen_at'))if w_rep.get('agent_seen_at')else None;ack_seen_val=clip_stamp(seen_rec.get('ack_seen_at'))if isinstance(seen_rec,dict)and seen_rec.get('ack_seen_at')else clip_stamp(w_rep.get('ack_seen_at'))if w_rep.get('ack_seen_at')else None;markdown_text=str(w_rep.get('markdown')or'')
 				try:has_fields=bool(w_rep.get('fields')if isinstance(w_rep.get('fields'),list)else parse_fields(markdown_text)[1])
@@ -2863,7 +2874,7 @@ class Store:
 		op_name=str(op.get('op')or op.get('operation')or'answer').strip().lower();report_id=str(op.get('report_id')or op.get('id')or'').strip()
 		if not report_id:raise ValueError('Missing report_id')
 		if op_name in{'unpublish','remove','delete'}:
-			try:self.unpublish(report_id,dismissed_by_owner=True)
+			try:self.unpublish(report_id,dismissed_by_owner=bool(op.get('from_owner',True)),_from_board=True)
 			except FileNotFoundError:return False
 			return True
 		if op_name in{'answer','submit'}:
@@ -3048,6 +3059,7 @@ class Store:
 				if op_id and op_id not in seen_rep_op_ids:seen_rep_op_ids.add(op_id);report_ops.append(dict(op))
 				if str(op.get('op')or'')=='entry-ack':continue
 				target_sid=resolve_board_target(op.get('target')or'',sessions,allowed=allowed,main_sid=main_sid)
+				if target_sid and target_sid in worker_reports:worker_reports[target_sid]=apply_report_op_to_list(worker_reports.get(target_sid)or[],op)
 				if op_id and target_sid==sid and op_id not in applied_rep_set:
 					applied_rep_set.add(op_id);applied_rep_list.append(op_id);op_at=str(op.get('at')or'')
 					if not(cleared_at and op_at and op_at<=cleared_at)and self.apply_board_report_op(op):wakes[sid]=op_id
@@ -3138,8 +3150,8 @@ class Store:
 				for row in sessions:
 					if row['session_id']==target:row['polling']=False;row['status']='active'
 		elif action_type in{'worker-report','manage-worker-reports'}:
-			sender=resolve_board_target(payload.get('session_id')or sid,sessions,allowed=allowed,main_sid=main_sid)
-			if main_sid and sender and sender!=main_sid:raise ValueError('Only the main session can manage worker reports')
+			sender=resolve_board_target(payload.get('session_id')or sid,sessions,allowed=allowed,main_sid=main_sid);from_owner=bool(payload.get('from_owner'))
+			if not from_owner and main_sid and sender and sender!=main_sid:raise ValueError('Only the main session can manage worker reports')
 			target=resolve_board_target(payload.get('target')or payload.get('worker')or payload.get('target_session_id')or'',sessions,allowed=allowed,main_sid=main_sid)
 			if not target:raise ValueError('Missing worker target')
 			op_name=str(payload.get('op')or payload.get('operation')or payload.get('subaction')or'answer').strip().lower()
@@ -3149,7 +3161,7 @@ class Store:
 			if op_name in{'answer','submit'}and not payload.get('from_owner'):
 				target_rep=next((r for r in worker_reports.get(target)or[]if isinstance(r,dict)and r.get('id')==report_id),None);sent_via_entry=any(e.get('session_id')==target and(report_id in str(e.get('text')or'')or str((e.get('payload')or{}).get('report_id')or'')==report_id)for e in entries if isinstance(e,dict));is_sent_to_main=bool(sent_via_entry or target_rep and target_rep.get('sent_to_main'));is_owner_requested=bool(target_rep and target_rep.get('owner_requested')or payload.get('owner_requested'));has_explicit_report_entries=any(isinstance(e,dict)and e.get('session_id')==target and str((e.get('payload')or{}).get('report_id')or'')for e in entries)
 				if is_owner_requested or has_explicit_report_entries and not is_sent_to_main:raise ValueError(f"Report {report_id!r} was not sent to main; owner-requested reports must be presented to the owner")
-			rep_op={'id':str(payload.get('id')or f"rop-{uuid.uuid4().hex[:8]}"),'target':target,'op':op_name,'report_id':report_id,'answers':payload.get('answers')if isinstance(payload.get('answers'),dict)else{},'submission_id':payload.get('submission_id')or payload.get('note_id'),'at':clip_stamp(now())};report_ops.append(rep_op);worker_reports[target]=apply_report_op_to_list(worker_reports.get(target)or[],rep_op)
+			rep_op={'id':str(payload.get('id')or f"rop-{uuid.uuid4().hex[:8]}"),'target':target,'op':op_name,'report_id':report_id,'from_owner':from_owner,'answers':payload.get('answers')if isinstance(payload.get('answers'),dict)else{},'submission_id':payload.get('submission_id')or payload.get('note_id'),'at':clip_stamp(now())};report_ops.append(rep_op);worker_reports[target]=apply_report_op_to_list(worker_reports.get(target)or[],rep_op)
 			if target==sid:
 				applied_rep_key=f"{sid}:report_ops";applied_rep_list=[str(x)for x in ack_wakes.get(applied_rep_key)if x]if isinstance(ack_wakes.get(applied_rep_key),list)else[]
 				if rep_op['id']not in applied_rep_list:applied_rep_list.append(rep_op['id']);ack_wakes[applied_rep_key]=applied_rep_list[-128:];self.apply_board_report_op(rep_op)
@@ -4153,21 +4165,34 @@ class Store:
 				if answered is not None:raise ValueError(f"Report {report_id} has submitted answers; publish the update under a new ID")
 			self.refuse_shared_id(db,'reports','tasks',report_id);highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports (id, title, markdown, updated_at, published_at, seq, source, submission_format)\n           VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n           ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n             markdown = excluded.markdown, updated_at = excluded.updated_at,\n             source = excluded.source, submission_format = excluded.submission_format,\n             seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL',(report_id,title,text,now(),now(),highest+1,str(source.resolve()),json.dumps(metadata)if metadata is not None else None))
 		return len(fields)
-	def unpublish(self,report_id,dismissed_by_owner=False,*,stale_only=False):
+	def unpublish(self,report_id,dismissed_by_owner=False,*,stale_only=False,_from_board=False):
 		identifier(report_id);mirrored=None
 		with self.transaction()as db:
 			if stale_only:db.execute('BEGIN IMMEDIATE')
 			row=db.execute('SELECT title, ack_seen_at, viewed_at FROM reports WHERE id = ?',(report_id,)).fetchone()
 			if row is None:
 				if stale_only:return False
+				if _from_board:raise FileNotFoundError('Report not found')
 				mirrored=self._mirrored_worker_reports().get(report_id)
 				if mirrored is None:raise FileNotFoundError('Report not found')
+				db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMOVED_META,now()))
+				if dismissed_by_owner:db.execute('INSERT INTO notes (id, text, at, quiet, blocking) VALUES (?, ?, ?, 1, 0)',(new_id(),f"The owner dismissed the report {report_id} ({mirrored['title']}).",now()))
 			else:
 				if stale_only and report_id not in self.stale_report_ids(db):return False
-				if not dismissed_by_owner:self.guard_report_change(db,report_id,row,hold_view=False,hold_answer=False)
+				if not dismissed_by_owner and not _from_board:self.guard_report_change(db,report_id,row,hold_view=False,hold_answer=False)
 				db.execute('DELETE FROM reports WHERE id = ?',(report_id,));self.release_report_tasks(db,report_id);db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMOVED_META,now()))
 				if dismissed_by_owner:db.execute('INSERT INTO notes (id, text, at, quiet, blocking) VALUES (?, ?, ?, 1, 0)',(new_id(),f"The owner dismissed the report {report_id} ({row['title']}).",now()))
 		if mirrored is not None:self.board_action({'action':'worker-report','target':mirrored['worker_session_id'],'op':'unpublish','report_id':mirrored['worker_report_id'],'from_owner':bool(dismissed_by_owner)});return True
+		if not _from_board and not stale_only and dismissed_by_owner:
+			try:
+				b_state=self.board_state();self_sid=str(b_state.get('session_id')or'');allowed_set=set(b_state.get('allowed_sessions')or[])
+				if self_sid and self_sid in allowed_set:
+					if b_state.get('board_role')=='worker':self.board_action({'action':'worker-report','target':self_sid,'op':'unpublish','report_id':report_id,'from_owner':True})
+					elif b_state.get('board_role')=='main':
+						for(w_sid,rep_list)in(b_state.get('worker_reports')or{}).items():
+							if not w_sid or w_sid==self_sid or w_sid not in allowed_set or not isinstance(rep_list,list):continue
+							if any(isinstance(r,dict)and str(r.get('id')or'')==report_id for r in rep_list):self.board_action({'action':'worker-report','target':w_sid,'op':'unpublish','report_id':report_id,'from_owner':True})
+			except Exception:pass
 		if stale_only:return True
 	def clear_state(self):
 		guard_task_runs(self.path.parent,action='clear state');self.rotate_backup();counts={}

@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.11.7
+// @name         Arena.ai | NemoUtils | v1.11.8
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.11.7
+// @version      1.11.8
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -6707,6 +6707,37 @@
     return Date.parse(normalized);
   }
 
+  function clipBoardStamp(value) {
+    var m = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/.exec(String(value || "").trim());
+    return m ? m[1] : "";
+  }
+
+  function applyBoardReportOpToList(reportList, op) {
+    var items = Array.isArray(reportList) ? reportList.filter(function (r) { return r && typeof r === "object"; }) : [];
+    var opName = String((op && (op.op || op.operation)) || "answer").trim().toLowerCase();
+    var targetId = String((op && (op.report_id || op.id)) || "").trim();
+    if (!targetId) return items;
+    var opAt = clipBoardStamp(op && op.at);
+    if (opName === "unpublish" || opName === "remove" || opName === "delete") {
+      return items.filter(function (row) {
+        if (String(row.id || "") !== targetId) return true;
+        var rowStamp = clipBoardStamp(row.updated_at || row.published_at || "");
+        return Boolean(opAt && rowStamp && opAt < rowStamp);
+      });
+    }
+    if (opName === "answer" || opName === "submit") {
+      var subId = String((op && (op.submission_id || op.note_id)) || "").trim();
+      var subAt = opAt || new Date().toISOString().slice(0, 19);
+      return items.map(function (row) {
+        if (String(row.id || "") !== targetId) return row;
+        var updated = Object.assign({}, row, { answered: true, needs_answer: false, latest_answer_at: subAt });
+        if (subId) updated.latest_answer_id = subId;
+        return updated;
+      });
+    }
+    return items;
+  }
+
   function normalizeBoard(raw) {
     var data = raw;
     if (typeof data === "string") {
@@ -6910,6 +6941,14 @@
         }
       });
     }
+    reportOps.forEach(function (op) {
+      if (!op || typeof op !== "object") return;
+      var opKind = String(op.op || op.operation || "").trim().toLowerCase();
+      if (opKind === "entry-ack") return;
+      var opTarget = resolveBoardTarget(op.target || "", sessions, uniqueAllowed, mainId);
+      if (!opTarget || !Array.isArray(workerReports[opTarget])) return;
+      workerReports[opTarget] = applyBoardReportOpToList(workerReports[opTarget], op);
+    });
     var wakes = {};
     if (data.wakes && typeof data.wakes === "object" && !Array.isArray(data.wakes)) {
       Object.keys(data.wakes).forEach(function (wakeK) {
@@ -7572,7 +7611,8 @@
       return { ok: true, board: normalizeBoard(next) };
     }
     if (actionType === "worker-report" || actionType === "manage-worker-reports") {
-      if (next.main_session_id && sid && sid !== next.main_session_id) {
+      var fromOwner = Boolean(action.from_owner);
+      if (!fromOwner && next.main_session_id && sid && sid !== next.main_session_id) {
         return { ok: false, error: "only-main-session", board: next };
       }
       var targetReportWorker = resolveBoardTarget(
@@ -7591,6 +7631,7 @@
         target: targetReportWorker,
         op: repOpName,
         report_id: reportId,
+        from_owner: fromOwner,
         answers: action.answers && typeof action.answers === "object" ? action.answers : {},
         submission_id: action.submission_id || action.note_id,
         at: nowIso,
