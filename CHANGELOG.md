@@ -45,12 +45,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Refresh peer session status rows when `updated_at` advances and ignore superseded `turn_ended_at` stamps so active peers do not show `Agent 404` (`assets/app.js`, `scripts/preview.py`, `scripts/client.test.cjs`, `scripts/test_preview.py`).
 - Skip missing reports and pre-clear operations during board sync after `state clear` instead of failing with HTTP `404` (`scripts/preview.py`).
 - Normalize `body` and `message` fields on board `post` actions and reject empty fileless and tagless posts (`scripts/preview.py`).
 - Refresh board sync on `agent_seen_at` and `wakes` updates, forward wake tokens via `wake_id`, and heal non-ISO `updated_at` session stamps (`assets/app.js`, `scripts/preview.py`).
 
 #### userscripts
 
+- Gate `GM_addValueChangeListener` board syncs on allowlisted sessions and material changes and keep passive sync stamps stable (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Sync the board with closed drawers or `state-download` active, listen on `GM_addValueChangeListener`, and isolate unallowlisted session syncs (`userscripts/arena.user.js`, `userscripts/AGENTS.md`).
 
 ## 2026-10-26

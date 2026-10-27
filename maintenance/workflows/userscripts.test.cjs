@@ -3938,6 +3938,76 @@ for raw in sys.stdin:
       const betaWoken = wokenOutcome.board.sessions.find(s => s.session_id === "beta2222-clankers");
       assert.equal(Number.isNaN(Date.parse(betaWoken.updated_at)), false);
       assert.notEqual(betaWoken.updated_at, "top-deadbeef");
+
+      // boardMaterialSignature ignores updated_at churn and passive writeGlobalBoard skips echo writes:
+      const sigA = boardApi.boardMaterialSignature({
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:00Z", agent_call_ended_at: "2026-10-27T03:00:00Z" },
+        ],
+      });
+      const sigB = boardApi.boardMaterialSignature({
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:05Z", agent_call_ended_at: "2026-10-27T03:00:00Z" },
+        ],
+      });
+      const sigC = boardApi.boardMaterialSignature({
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:05Z", agent_call_ended_at: "2026-10-27T03:00:05Z" },
+        ],
+      });
+      assert.equal(sigA, sigB, "boardMaterialSignature ignores synthetic updated_at churn");
+      assert.notEqual(sigB, sigC, "boardMaterialSignature changes when agent_call_ended_at advances");
+
+      // mergePreviewBoard refreshes allowed_sessions placeholder rows and clears superseded turn_ended_at:
+      const placeholderBoard = boardApi.normalizeBoard({
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          {
+            session_id: "alpha111-clankers",
+            repo: "clankers",
+            updated_at: "2026-10-27T03:01:00Z",
+            turn_ended_at: "2026-10-27T03:00:50Z",
+          },
+        ],
+      });
+      const refreshedFromPeer = boardApi.mergePreviewBoard(placeholderBoard, {
+        session_id: "beta2222-clankers",
+        repo: "clankers",
+        branch: "arena/beta2222-clankers",
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          {
+            session_id: "alpha111-clankers",
+            repo: "clankers",
+            branch: "arena/alpha111-clankers",
+            status: "active",
+            polling: false,
+            updated_at: "2026-10-27T03:02:00Z",
+            agent_seen_at: "2026-10-27T03:02:00Z",
+            agent_call_ended_at: "2026-10-27T03:02:00Z",
+          },
+          {
+            session_id: "beta2222-clankers",
+            repo: "clankers",
+            branch: "arena/beta2222-clankers",
+            status: "polling",
+            polling: true,
+            polling_since: "2026-10-27T03:01:30Z",
+          },
+        ],
+      });
+      const alphaRefreshed = refreshedFromPeer.sessions.find(s => s.session_id === "alpha111-clankers");
+      assert.equal(alphaRefreshed.updated_at, "2026-10-27T03:02:00Z");
+      assert.equal(alphaRefreshed.agent_call_ended_at, "2026-10-27T03:02:00Z");
+      assert.equal(alphaRefreshed.turn_ended_at, undefined, "superseded peer turn_ended_at is cleared when newer bash activity arrives");
     });
   }
 

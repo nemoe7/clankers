@@ -276,8 +276,13 @@ function sessionStatusInfo(row, selfSid = getState()?.board?.session_id || '') {
   }
   const rPollSince = row.polling ? stampMs(row.polling_since || row.updated_at) : null;
   const rAgentSeenAt = stampMs(row.agent_seen_at || row.updated_at);
-  const rTurnEndedAt = stampMs(row.turn_ended_at);
   const rCallEndStamp = row.agent_call_ended_at || null;
+  const rCallEndAt = stampMs(rCallEndStamp);
+  const rRawTurnEndedAt = stampMs(row.turn_ended_at);
+  const rLatestActiveAt = Math.max(rAgentSeenAt ?? -Infinity, rCallEndAt ?? -Infinity);
+  const rTurnEndedAt = (rRawTurnEndedAt !== null && rRawTurnEndedAt >= rLatestActiveAt)
+    ? rRawTurnEndedAt
+    : null;
   const rIdle = rPollSince === null && (
     rTurnEndedAt !== null
       ? Date.now() - rTurnEndedAt > AGENT_QUIET_MS

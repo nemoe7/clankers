@@ -16170,3 +16170,46 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
   )
   second = next(row for row in synced["sessions"] if row["session_id"] == worker_sid)
   assert second["agent_seen_at"] == "2026-10-27T02:55:00"
+
+  # Record an old turn_ended_at on peer, then sync newer bash activity without turn_ended_at:
+  store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        **store.board_state(),
+        "sessions": [
+          {
+            "session_id": worker_sid,
+            "repo": "clankers",
+            "branch": f"arena/{worker_sid}",
+            "status": "active",
+            "polling": False,
+            "updated_at": "2026-10-27T02:57:00",
+            "turn_ended_at": "2026-10-27T02:56:30",
+          }
+        ],
+      },
+    }
+  )
+  resumed = store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        **store.board_state(),
+        "sessions": [
+          {
+            "session_id": worker_sid,
+            "repo": "clankers",
+            "branch": f"arena/{worker_sid}",
+            "status": "active",
+            "polling": False,
+            "updated_at": "2026-10-27T02:58:00",
+            "agent_seen_at": "2026-10-27T02:58:00",
+            "agent_call_ended_at": "2026-10-27T02:58:00",
+          }
+        ],
+      },
+    }
+  )
+  third = next(row for row in resumed["sessions"] if row["session_id"] == worker_sid)
+  assert "turn_ended_at" not in third or third["turn_ended_at"] is None

@@ -2838,7 +2838,9 @@ class Store:
 				def _mval(key):return m_dict.get(key)if key in m_dict else self.meta_value(key)
 				self_status_fields={'survey':self_survey,'polling_since':clip_stamp(_mval(POLL_SINCE_META))if is_polling else None,'waiting_for_gates':bool(runs),'checking_pr':any(pr_checks_command(routed_record(self.path.parent,name).get('argv',[]))for name in runs),'calls_since_message':calls_count,'gate_threshold':GATE_THRESHOLD,'agent_seen_at':clip_stamp(_mval(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(_mval(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(_mval(AGENT_CALL_ENDED_META))}
 				for s_row in out['sessions']:
-					if s_row.get('session_id')==sid:s_row.update(self_status_fields)
+					if s_row.get('session_id')==sid:
+						s_row.update(self_status_fields);latest_stamp=max(str(s_row.get('updated_at')or''),str(self_status_fields.get('polling_since')or''),str(self_status_fields.get('agent_seen_at')or''),str(self_status_fields.get('turn_ended_at')or''),str(self_status_fields.get('agent_call_ended_at')or''))
+						if latest_stamp:s_row['updated_at']=latest_stamp
 			except Exception:pass
 			try:out['worker_tasks'][sid]=[{'id':row['id'],'title':row['title'],'status':row['status'],'type':row.get('type')or'code','details':list(row.get('details')or[]),'order':row.get('order'),'report_id':row.get('report_id'),'updated_at':clip_stamp(row.get('updated_at'))}for row in self.list_tasks()]
 			except Exception:pass
@@ -3063,7 +3065,13 @@ class Store:
 				prev_existing=by_sid.get(row_sid,{});prev_survey=prev_existing.get('survey');by_sid[row_sid]=dict(row)
 				if not isinstance(by_sid[row_sid].get('survey'),dict)and isinstance(prev_survey,dict):by_sid[row_sid]['survey']=prev_survey
 				for status_key in('polling_since','waiting_for_gates','checking_pr','calls_since_message','gate_threshold','agent_seen_at','turn_ended_at','agent_call_ended_at'):
-					if status_key not in by_sid[row_sid]and status_key in prev_existing and prev_existing[status_key]is not None:by_sid[row_sid][status_key]=prev_existing[status_key]
+					if status_key not in by_sid[row_sid]and status_key in prev_existing and prev_existing[status_key]is not None:
+						if status_key=='polling_since'and not by_sid[row_sid].get('polling'):continue
+						if status_key=='turn_ended_at':
+							if by_sid[row_sid].get('polling'):continue
+							prev_turn_end=str(prev_existing[status_key]or'');newest_active=max(str(by_sid[row_sid].get('agent_seen_at')or''),str(by_sid[row_sid].get('agent_call_ended_at')or''))
+							if newest_active and newest_active>prev_turn_end:continue
+						by_sid[row_sid][status_key]=prev_existing[status_key]
 			sessions=list(by_sid.values());existing_entry_ids={str(item.get('id')or'')for item in entries if item.get('id')};seen_wakes=ack_wakes.get(f"{sid}:history");seen_wake_set={str(x)for x in seen_wakes if x}if isinstance(seen_wakes,list)else set();seen_entries=ack_wakes.get(f"{sid}:entries")
 			if isinstance(seen_entries,list):seen_wake_set.update(str(x)for x in seen_entries if x)
 			prev_ack=ack_wakes.get(sid)

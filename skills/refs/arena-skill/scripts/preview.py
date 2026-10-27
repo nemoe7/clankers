@@ -8534,6 +8534,15 @@ class Store:
         for s_row in out["sessions"]:
           if s_row.get("session_id") == sid:
             s_row.update(self_status_fields)
+            latest_stamp = max(
+              str(s_row.get("updated_at") or ""),
+              str(self_status_fields.get("polling_since") or ""),
+              str(self_status_fields.get("agent_seen_at") or ""),
+              str(self_status_fields.get("turn_ended_at") or ""),
+              str(self_status_fields.get("agent_call_ended_at") or ""),
+            )
+            if latest_stamp:
+              s_row["updated_at"] = latest_stamp
       except Exception:
         pass
       try:
@@ -9179,6 +9188,18 @@ class Store:
             and status_key in prev_existing
             and prev_existing[status_key] is not None
           ):
+            if status_key == "polling_since" and not by_sid[row_sid].get("polling"):
+              continue
+            if status_key == "turn_ended_at":
+              if by_sid[row_sid].get("polling"):
+                continue
+              prev_turn_end = str(prev_existing[status_key] or "")
+              newest_active = max(
+                str(by_sid[row_sid].get("agent_seen_at") or ""),
+                str(by_sid[row_sid].get("agent_call_ended_at") or ""),
+              )
+              if newest_active and newest_active > prev_turn_end:
+                continue
             by_sid[row_sid][status_key] = prev_existing[status_key]
       sessions = list(by_sid.values())
       existing_entry_ids = {
