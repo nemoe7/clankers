@@ -275,9 +275,18 @@ body {margin:16px;font:16px sans-serif;background:#fff;color:#111}
 input,button {font:inherit;min-height:44px;max-width:100%;box-sizing:border-box}
 :focus-visible{outline:2px solid #08c;outline-offset:0}
 main {max-width:640px} [hidden]{display:none}
+#panel {width:100px;height:44px} #panel:hover {width:120px}
+#shift {width:100px;height:44px} #shift:hover {width:120px}
+#clip {width:120px;height:24px;overflow:hidden;white-space:nowrap}
+#clip > span {display:block;width:300px}
+ul#list {--indent:2ch;padding-inline-start:2ch;list-style-position:outside;list-style-type:disc;width:240px}
 </style></head><body><main><h1>Tool fixture</h1><form id="form">
 <label for="entry">Value</label><input id="entry"><button id="send">Continue</button>
-</form><p id="invalid" hidden>Value required</p><p id="pending" hidden>Pending</p>
+</form><div id="panel">Non-interactive target</div>
+<button id="shift">Resize on hover</button>
+<div id="clip"><span>Clipped content with a deliberately long line.</span></div>
+<ul id="list"><li>A wrapped list item with enough text to create several rendered lines for alignment checks.</li></ul>
+<p id="invalid" hidden>Value required</p><p id="pending" hidden>Pending</p>
 <p id="failure" hidden>Request failed</p><button id="retry" hidden>Retry</button>
 <p id="receipt" tabindex="-1" hidden>Saved</p></main><script>
 let attempts = 0;
@@ -316,6 +325,8 @@ byId('retry').addEventListener('click',submit);
   source = project / "index.html"
   source.write_bytes(markup)
   flow = [
+    {"action": "hover", "selector": "#panel"},
+    {"action": "hover", "selector": "#shift"},
     {"action": "focus", "selector": "#entry"},
     {"action": "press", "selector": "#entry", "key": "Enter"},
     {"action": "visible", "selector": "#invalid"},
@@ -371,7 +382,7 @@ byId('retry').addEventListener('click',submit);
       return json.loads(result.stdout)
 
     try:
-      report = run("flow", "--flow", str(flow_file))
+      report = run("flow", "--flow", str(flow_file), expected=1)
       captures = report["captures"]
       required_widths = set(nuu.WIDTHS)
       assert {row["width"] for row in captures} >= required_widths
@@ -383,6 +394,21 @@ byId('retry').addEventListener('click',submit);
       )
       assert captures[0]["flow"]["status"] == "passed"
       assert captures[0]["flow"]["assertions"] > 0
+      panel_step = next(
+        row for row in captures[0]["flow"]["steps"] if row.get("selector") == "#panel"
+      )
+      assert "dimensionShift" not in panel_step
+      shift_step = next(
+        row for row in captures[0]["flow"]["steps"] if row.get("selector") == "#shift"
+      )
+      assert (
+        shift_step["dimensionShift"]["before"]["width"]
+        < shift_step["dimensionShift"]["after"]["width"]
+      )
+      assert any(
+        row["rule"] == "NUA309" and row.get("selector") == "#shift"
+        for row in report["findings"]
+      )
       assert captures[0]["measurements"]["active"]["id"] == flow[-1][
         "selector"
       ].removeprefix("#")
@@ -391,8 +417,9 @@ byId('retry').addEventListener('click',submit);
         Path(row["screenshot"]): Path(row["screenshot"]).read_bytes()
         for row in captures
       }
+      clean_report = dict(report, findings=[])
       report_file = tmp_path / "report.json"
-      report_file.write_text(json.dumps(report))
+      report_file.write_text(json.dumps(clean_report))
       review = subprocess.run(
         [
           sys.executable,
@@ -409,6 +436,26 @@ byId('retry').addEventListener('click',submit);
       )
       assert review.returncode == 0
       assert json.loads(review.stdout)["rendered_evidence"]["values"]
+      list_report = run("inspect", "--selector", "#list,#clip")
+      list_capture = list_report["captures"][0]["measurements"]
+      list_elements = {row["selector"]: row for row in list_capture["elements"]}
+      list_data = list_elements["#list"]["list_indent"]
+      assert list_data["indent"] == "2ch"
+      assert list_data["list_style_position"] == "outside"
+      assert len(list_data["items"][0]["line_starts"]) >= 2
+      assert not any(
+        finding.startswith("NUM211 ")
+        for finding in measure.check(
+          {"elements": [list_elements["#list"]]},
+          measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8")),
+        )
+      )
+      clipped = list_elements["#clip"]
+      assert clipped["scroll_width"] > clipped["client_width"]
+      assert any(
+        row["rule"] == "NUM209"
+        for row in measure.check_density({"elements": [clipped]})
+      )
       overlap_page = project / "overlap.html"
       overlap_page.write_text(
         "<!doctype html><style>body{margin:0}"
@@ -422,10 +469,13 @@ byId('retry').addEventListener('click',submit);
       overlap_report = run(
         "inspect",
         "--overlaps",
+        "--profile",
+        "house",
         "--selector",
         "#under,#inside,#over,#far",
         "--url",
         f"{url}/overlap.html",
+        expected=1,
       )
       overlap_data = overlap_report["captures"][0]["overlaps"]
       assert overlap_data["status"] == "checked"
@@ -439,6 +489,7 @@ byId('retry').addEventListener('click',submit);
       assert all(
         "#far" not in (row["first"], row["second"]) for row in overlap_data["pairs"]
       )
+      assert any(row["rule"] == "NUM210" for row in overlap_report["findings"])
       house = run("inspect", "--profile", "house", expected=1)
       assert any(row["house_measurements"] for row in house["captures"])
       assert any(row["rule"] == "NUM201" for row in house["findings"])
@@ -1622,3 +1673,93 @@ def test_design_boards_and_html_typography(tmp_path):
     ["-x", "/custom/chromium", "http://127.0.0.1:8000"]
   )
   assert walk_parsed.executable == "/custom/chromium"
+
+
+def test_nuu_list_indent_and_overlap_rules(tmp_path):
+  project = tmp_path / "list-project"
+  docs = project / "docs"
+  docs.mkdir(parents=True)
+  (docs / "design.md").write_text("# Design\n", encoding="utf-8")
+  css = project / "style.css"
+  css.write_text(
+    "ul#list { list-style-position: inside; padding-inline-start: 0; }\n",
+    encoding="utf-8",
+  )
+  bad_lint = nuu.lint(project)
+  assert any(row["rule"] == "NUL007" for row in bad_lint["findings"])
+  css.write_text("ul#list { list-style-type: disc; }\n", encoding="utf-8")
+  unreset_lint = nuu.lint(project)
+  assert any(
+    row["rule"] == "NUL007" and "lacks --indent" in row["evidence"]
+    for row in unreset_lint["findings"]
+  )
+  css.write_text(
+    "ul#list { --indent: 2ch; padding-inline-start: 2ch; "
+    "list-style-position: outside; list-style-type: disc; }\n",
+    encoding="utf-8",
+  )
+  assert nuu.lint(project)["findings"] == []
+  assert "NUL007" in nuu.KNOWN_NUU_RULES
+  assert "NUM211" in nuu.KNOWN_NUU_RULES
+
+  tokens = measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8"))
+  list_report = {
+    "elements": [
+      {
+        "selector": "ul#list",
+        "tag": "ul",
+        "values": {
+          "--indent": "2ch",
+          "padding-inline-start": "18px",
+          "padding-left": "18px",
+        },
+        "list_indent": {
+          "indent": "2ch",
+          "padding_inline_start": 18,
+          "ch_px": 9,
+          "list_style_position": "outside",
+          "list_style_type": "disc",
+          "direction": "ltr",
+          "items": [{"selector": "li:first-child", "line_starts": [100, 100.4, 100.8]}],
+        },
+      }
+    ]
+  }
+  assert measure.check(list_report, tokens) == []
+  misaligned = json.loads(json.dumps(list_report))
+  misaligned["elements"][0]["list_indent"]["items"][0]["line_starts"] = [100, 106]
+  assert any(
+    finding.startswith("NUM211 ") for finding in measure.check(misaligned, tokens)
+  )
+  unverified = {
+    "elements": [{"selector": "ul#list", "values": {"padding-inline-start": "18px"}}]
+  }
+  assert any(
+    "padding-inline-start is 18px" in finding
+    for finding in measure.check(unverified, tokens)
+  )
+
+  clipping_findings = measure.check_density(
+    {
+      "elements": [
+        {
+          "selector": "#clip",
+          "values": {"overflow": "hidden", "white-space": "nowrap"},
+          "scroll_width": 300,
+          "client_width": 120,
+        }
+      ]
+    }
+  )
+  assert any(finding["rule"] == "NUM209" for finding in clipping_findings)
+
+  overlap_findings = measure.check_density(
+    {
+      "elements": [],
+      "overlaps": {
+        "status": "checked",
+        "pairs": [{"first": "#first", "second": "#second", "relation": "separate"}],
+      },
+    }
+  )
+  assert [finding["rule"] for finding in overlap_findings] == ["NUM210"]

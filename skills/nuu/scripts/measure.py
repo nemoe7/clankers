@@ -53,6 +53,9 @@ TYPE_PROPERTIES = ("font-size", "letter-spacing")
 SPACING_PROPERTIES = ("padding", "margin", "gap", "row-gap", "column-gap")
 LAYOUT_PROPERTIES = ("border-radius",)
 RADIUS_SIZES = {4.0, 6.0, 10.0, 9999.0}
+LIST_INDENT = "2ch"
+LIST_INDENT_PX_TOLERANCE = 1.0
+LIST_WRAP_PX_TOLERANCE = 1.0
 
 
 def parse_sheet(text: str) -> dict[str, str]:
@@ -104,14 +107,111 @@ def off_scale(name: str, value: str, tokens: dict[str, str], scale: float) -> bo
   return False
 
 
+def _numeric_value(value):
+  if isinstance(value, bool):
+    return None
+  if isinstance(value, (int, float)):
+    return float(value) if math.isfinite(value) else None
+  if isinstance(value, str):
+    match = PX.match(value.strip())
+    if match:
+      return float(match.group(1))
+    try:
+      number = float(value)
+    except ValueError:
+      return None
+    return number if math.isfinite(number) else None
+  return None
+
+
+def _list_indent_status(element: dict):
+  data = element.get("list_indent", element.get("listIndent"))
+  if data is None:
+    return None
+  if not isinstance(data, dict):
+    return {}, ["list indentation metrics are malformed"], False
+  errors = []
+  indent = str(data.get("indent") or "").strip().lower()
+  ch_px = _numeric_value(data.get("ch_px", data.get("chPx")))
+  padding = _numeric_value(
+    data.get("padding_inline_start", data.get("paddingInlineStart"))
+  )
+  slot_verified = (
+    indent == LIST_INDENT and ch_px is not None and ch_px > 0 and padding is not None
+  )
+  if indent != LIST_INDENT:
+    errors.append(f"--indent is {indent or 'unset'}, expected {LIST_INDENT}")
+  if ch_px is None or ch_px <= 0 or padding is None:
+    slot_verified = False
+    errors.append("2ch list padding could not be measured")
+  elif not math.isclose(padding, 2 * ch_px, abs_tol=LIST_INDENT_PX_TOLERANCE):
+    slot_verified = False
+    errors.append(
+      f"padding-inline-start is {padding:g}px, expected {2 * ch_px:g}px for 2ch"
+    )
+  if str(data.get("list_style_position") or "").strip().lower() != "outside":
+    errors.append("list-style-position is not outside")
+  items = data.get("items", [])
+  if isinstance(items, list):
+    for item in items:
+      if not isinstance(item, dict):
+        continue
+      raw_starts = item.get("line_starts", item.get("lineStarts"))
+      if not isinstance(raw_starts, list) or len(raw_starts) < 2:
+        continue
+      starts = [_numeric_value(value) for value in raw_starts]
+      if any(value is None for value in starts):
+        errors.append("wrapped-line positions are not numeric")
+        break
+      first = starts[0]
+      if any(abs(value - first) > LIST_WRAP_PX_TOLERANCE for value in starts[1:]):
+        errors.append(
+          f"{item.get('selector', 'list item')}: wrapped lines do not align with the first line"
+        )
+        break
+  else:
+    errors.append("wrapped-line positions are missing")
+  return data, errors, slot_verified
+
+
+def _verified_list_padding(element: dict, name: str, value: str, status) -> bool:
+  if status is None or name not in {
+    "padding-inline-start",
+    "padding-left",
+    "padding-right",
+  }:
+    return False
+  data, _, slot_verified = status
+  if not slot_verified:
+    return False
+  direction = str(data.get("direction") or "ltr").strip().lower()
+  physical_start = "padding-right" if direction == "rtl" else "padding-left"
+  if name not in {"padding-inline-start", physical_start}:
+    return False
+  observed = _numeric_value(value)
+  expected = _numeric_value(
+    data.get("padding_inline_start", data.get("paddingInlineStart"))
+  )
+  return (
+    observed is not None
+    and expected is not None
+    and math.isclose(observed, expected, abs_tol=LIST_INDENT_PX_TOLERANCE)
+  )
+
+
 def check(
   report: dict, tokens: dict[str, str], scale: float = DEFAULT_SCALE
 ) -> list[str]:
-  """Return one finding per computed value that leaves the sheet."""
+  """Return off-scale values and measured list-indent findings."""
   findings = []
   for element in report.get("elements", []):
     selector = element.get("selector", "?")
+    list_status = _list_indent_status(element)
+    if list_status and list_status[1]:
+      findings.append(f"NUM211 {selector}: {'; '.join(list_status[1])}")
     for name, value in element.get("values", {}).items():
+      if _verified_list_padding(element, name, str(value), list_status):
+        continue
       if off_scale(name, str(value), tokens, scale):
         findings.append(f"{selector}: {name} is {value}, off the {scale:g} px scale")
   return findings
@@ -245,10 +345,7 @@ def check_density(report: dict) -> list[dict]:
     client_w = float(element.get("client_width", element.get("clientWidth", 0)) or 0)
     scroll_h = float(element.get("scroll_height", element.get("scrollHeight", 0)) or 0)
     client_h = float(element.get("client_height", element.get("clientHeight", 0)) or 0)
-    is_ellipsis = (
-      str(values.get("text-overflow") or "").lower() == "ellipsis"
-      or str(values.get("white-space") or "").lower() == "nowrap"
-    )
+    is_ellipsis = str(values.get("text-overflow") or "").lower() == "ellipsis"
     clipped = bool(element.get("clipped_content", element.get("clippedContent")))
     if not clipped and not is_ellipsis:
       if (
@@ -278,7 +375,10 @@ def check_density(report: dict) -> list[dict]:
           **b_extra,
         }
       )
-  for pair in report.get("overlaps") or []:
+  overlaps = report.get("overlaps") or []
+  if isinstance(overlaps, dict):
+    overlaps = overlaps.get("pairs") or []
+  for pair in overlaps:
     if isinstance(pair, dict) and pair.get("relation") == "separate":
       first = str(pair.get("first") or "?")
       second = str(pair.get("second") or "?")

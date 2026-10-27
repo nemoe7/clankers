@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Enforce `nuu` `2ch` hanging list indents (`NUL007`, `NUM211`), add `mountRelativeTimers`, align `nuu.md`, and wire `NUM209`, `NUM210`, and `dimensionShift`.
 - Shorten `arena-preview` CLI reminders, gate hints, and inbox notices while keeping `POLL_WAIT_SECONDS` at `1799` (`scripts/preview.py`).
 - Add `/nemoizer learn` and `/nuu learn` maintainer-handoff slash workflows and skill clauses (`arena-skill`, `nemoizer`, `nuu`).
 - Add `arena-preview board`, block worker `report publish`, stop auto-forwarding `worker_reports`, and propagate live `poll` state (`SKILL.md`, `WORKER.md`, `references/commands.md`, `scripts/preview.py`, `assets/app.js`, `arena-egress-proxy/scripts/arena_proxy/board.py`).

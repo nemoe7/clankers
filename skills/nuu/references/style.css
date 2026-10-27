@@ -52,11 +52,23 @@
   --gutter: var(--space-4);
   --touch: 44px;
   --focus-ring: 2px;
+  --indent: 2ch;
 
   /* Motion: one curve, one band */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --fast: 150ms;
   --slow: 220ms;
+}
+
+ul,
+ol {
+  --indent: 2ch;
+  padding-inline-start: 2ch;
+  list-style-position: outside;
+}
+
+ul {
+  list-style-type: disc;
 }
 
 :root[data-scale="8"] {
