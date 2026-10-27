@@ -171,7 +171,7 @@ def test_main_needs_an_output_file(tmp_path, monkeypatch):
 
 
 def test_module_matrix_selects_owners_and_shared_changes():
-  path = "maintenance/measurements/test_measurements.py"
+  path = "tests/maintenance/measurements/test_measurements.py"
   owners = [name for name, tests in changed_paths.MODULE_TESTS.items() if path in tests]
   selected = changed_paths.module_matrix([path])
   assert [row["name"] for row in selected] == owners
@@ -191,7 +191,8 @@ def test_module_test_ownership_is_complete_and_unique():
   owned = [path for paths in changed_paths.MODULE_TESTS.values() for path in paths]
   discovered = {
     str(path.relative_to(root))
-    for directory in ("maintenance", "skills", "github/workflows")
+    for directory in ("tests", "maintenance", "skills", "github/workflows")
+    if (root / directory).exists()
     for path in (root / directory).rglob("test_*.py")
   }
   assert set(owned) == discovered
@@ -201,7 +202,7 @@ def test_module_test_ownership_is_complete_and_unique():
 def test_module_step_routes_changes_and_missing_bases(tmp_path):
   repo = init_repo(tmp_path)
   base = base_of(repo)
-  path = "maintenance/measurements/test_measurements.py"
+  path = "tests/maintenance/measurements/test_measurements.py"
   commit_change(repo, path)
   out = tmp_path / "modules.txt"
   assert changed_paths.step_module_tests({"PUSH_BEFORE": base}, out, str(repo)) == 0
@@ -215,7 +216,7 @@ def test_module_step_routes_changes_and_missing_bases(tmp_path):
 
 def test_unknown_tests_fail_before_scheduling(tmp_path):
   repo = init_repo(tmp_path)
-  path = "maintenance/test_new_module.py"
+  path = "tests/maintenance/workflows/test_new_module.py"
   commit_change(repo, path)
   try:
     changed_paths.check_module_ownership(str(repo))
@@ -246,7 +247,8 @@ def test_node_test_ownership_is_complete_and_unique():
   owned = [path for paths in changed_paths.MODULE_NODE_TESTS.values() for path in paths]
   discovered = {
     str(path.relative_to(root))
-    for directory in ("maintenance", "skills/refs")
+    for directory in ("tests", "maintenance", "skills/refs")
+    if (root / directory).exists()
     for suffix in ("*.test.cjs", "*.checks.cjs")
     for path in (root / directory).rglob(suffix)
   }

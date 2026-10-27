@@ -11,7 +11,7 @@ import pytest
 import yaml
 
 ACTION = (
-  Path(__file__).resolve().parents[2] / ".github/actions/distribute-sync/action.yml"
+  Path(__file__).resolve().parents[3] / ".github/actions/distribute-sync/action.yml"
 )
 GIT = shutil.which("git")
 SUBJECT = "chore: clankers sync"

@@ -11,7 +11,7 @@ on:
       - 'rules/**'
       - '!rules/refs/**'
       - 'maintenance/publish/publish.py'
-      - 'maintenance/publish/test_publish.py'
+      - 'tests/maintenance/publish/test_publish.py'
       - 'skills/arena-skill/arena-egress-proxy/**'
       - 'skills/arena-skill/arena-preview-proxy/**'
       - '.github/workflows/artifacts.yml'
@@ -222,7 +222,7 @@ jobs:
       - name: Install Test Dependencies
         run: uv pip install --system pytest==9.1.1 pytest-xdist==3.6.1
       - name: Test Reconciliation Fixtures Without GitHub Credentials
-        run: python3 -m pytest -q maintenance/publish/test_publish.py
+        run: python3 -m pytest -q tests/maintenance/publish/test_publish.py
       - name: Reconcile Secret Clankers-Rules Gist
         # GIST_TOKEN needs Gists:write and repository Variables:write.
         # Checkout uses GITHUB_TOKEN only. It cannot manage repository variables.

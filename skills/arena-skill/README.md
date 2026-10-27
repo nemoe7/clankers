@@ -135,8 +135,8 @@ Measure budgets with `python3 maintenance/check.py --update` and check drift wit
 
 Run `python3 -m pytest` with `markdown-it-py` and `pytest`.
 Run `node --check skills/refs/arena-skill/assets/app.js` and
-`node --test skills/refs/arena-skill/scripts/client.test.cjs` when Node is available.
-Run `python3 -m pytest maintenance/minify/test_minify.py` to check generated parity and parsed behavior.
+`node --test tests/skills/arena-skill/client.test.cjs` when Node is available.
+Run `python3 -m pytest tests/maintenance/minify/test_minify.py` to check generated parity and parsed behavior.
 
 Local checks cannot prove actual browser rendering or browser download behavior.
 

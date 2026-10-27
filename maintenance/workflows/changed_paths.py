@@ -32,7 +32,7 @@ ARTIFACT_RULES = (
     (
       "rules/*",
       "maintenance/publish/publish.py",
-      "maintenance/publish/test_publish.py",
+      "tests/maintenance/publish/test_publish.py",
       ARTIFACTS,
     ),
   ),
@@ -127,41 +127,41 @@ def step_artifacts(env: Mapping[str, str], output: Path, repo: str = ".") -> int
 
 MODULE_TESTS = {
   "Preview": (
-    "skills/refs/arena-skill/scripts/test_preview.py",
-    "skills/refs/arena-skill/scripts/test_survey.py",
-    "maintenance/workflows/test_preview_gate.py",
+    "tests/skills/arena-skill/test_preview.py",
+    "tests/skills/arena-skill/test_survey.py",
+    "tests/skills/arena-skill/test_preview_gate.py",
   ),
-  "Nemoizer": ("skills/nemoizer/scripts/test_nemoize.py",),  # nonemo: NMO100
+  "Nemoizer": ("tests/skills/nemoizer/test_nemoize.py",),  # nonemo: NMO100
   "UI/UX": (
-    "skills/nuu/scripts/test_nuu.py",
-    "maintenance/test_nemo_ui_ux.py",
+    "tests/skills/nuu/test_nuu.py",
+    "tests/skills/nuu/test_nemo_ui_ux.py",
   ),
   "Userscripts": (),
   "GPT Plugins": (
-    "maintenance/gpt_plugins/test_individual_assets.py",
-    "maintenance/gpt_plugins/test_release_artifact.py",
+    "tests/maintenance/gpt_plugins/test_individual_assets.py",
+    "tests/maintenance/gpt_plugins/test_release_artifact.py",
   ),
-  "Gemini Release": ("github/workflows/test_gemini_release.py",),
-  "Measurements": ("maintenance/measurements/test_measurements.py",),
-  "Minifier": ("maintenance/minify/test_minify.py",),
+  "Gemini Release": ("tests/github/workflows/test_gemini_release.py",),
+  "Measurements": ("tests/maintenance/measurements/test_measurements.py",),
+  "Minifier": ("tests/maintenance/minify/test_minify.py",),
   "PR Checks": (
-    "maintenance/pr/test_check_pr.py",
-    "maintenance/pr/test_commit_msg.py",
+    "tests/maintenance/pr/test_check_pr.py",
+    "tests/maintenance/pr/test_commit_msg.py",
   ),
-  "Rules Publishing": ("maintenance/publish/test_publish.py",),
+  "Rules Publishing": ("tests/maintenance/publish/test_publish.py",),
   "Workflow and Distribution": (
-    "maintenance/workflows/test_changed_paths.py",
-    "maintenance/workflows/test_check_artifacts.py",
-    "maintenance/workflows/test_check_workflows.py",
-    "maintenance/workflows/test_distribute_sync.py",
+    "tests/maintenance/workflows/test_changed_paths.py",
+    "tests/maintenance/workflows/test_check_artifacts.py",
+    "tests/maintenance/workflows/test_check_workflows.py",
+    "tests/maintenance/workflows/test_distribute_sync.py",
   ),
   "Proxies": (
-    "maintenance/workflows/test_arena_proxy.py",
-    "maintenance/workflows/test_preview_proxy.py",
+    "tests/maintenance/proxies/test_arena_proxy.py",
+    "tests/maintenance/proxies/test_preview_proxy.py",
   ),
   "Repository Prose and Validation": (
-    "maintenance/test_lint_prose.py",
-    "maintenance/workflows/test_check.py",
+    "tests/maintenance/validation/test_lint_prose.py",
+    "tests/maintenance/validation/test_check.py",
   ),
 }
 ARENA_SKILL_PATHS = (
@@ -175,27 +175,44 @@ ARENA_RUNTIME_PATHS = tuple(
   for directory in ("scripts", "assets", "references")
 )
 MODULE_PATHS = {
-  "Preview": ARENA_RUNTIME_PATHS,
-  "Nemoizer": ("skills/*nemoizer/*", ".agents/skills/nemoizer/*"),  # nonemo: NMO100
-  "UI/UX": ("skills/*nuu/*", ".agents/skills/nuu/*"),
-  "Userscripts": ("userscripts/*", "maintenance/workflows/userscripts*"),
+  "Preview": (*ARENA_RUNTIME_PATHS, "tests/skills/arena-skill/*"),
+  "Nemoizer": (  # nonemo: NMO100
+    "skills/*nemoizer/*",
+    ".agents/skills/nemoizer/*",
+    "tests/skills/nemoizer/*",
+  ),
+  "UI/UX": ("skills/*nuu/*", ".agents/skills/nuu/*", "tests/skills/nuu/*"),
+  "Userscripts": ("userscripts/*", "tests/userscripts/*"),
   "GPT Plugins": (
     "gpt-plugins/*",
     "maintenance/gpt_plugins/*",
     ".github/workflows/artifacts.yml",
+    "tests/maintenance/gpt_plugins/*",
   ),
-  "Gemini Release": ("github/workflows/*",),
-  "Measurements": ("maintenance/measurements/*",),
-  "Minifier": (*ARENA_RUNTIME_PATHS, "maintenance/minify/*"),
-  "PR Checks": ("maintenance/pr/*",),
-  "Rules Publishing": ("maintenance/publish/*", "rules/*"),
+  "Gemini Release": ("github/workflows/*", "tests/github/workflows/*"),
+  "Measurements": ("maintenance/check.py", "tests/maintenance/measurements/*"),
+  "Minifier": (
+    *ARENA_RUNTIME_PATHS,
+    "maintenance/minify/*",
+    "tests/maintenance/minify/*",
+  ),
+  "PR Checks": ("maintenance/pr/*", "tests/maintenance/pr/*"),
+  "Rules Publishing": (
+    "maintenance/publish/*",
+    "rules/*",
+    "tests/maintenance/publish/*",
+  ),
   "Workflow and Distribution": (
     ".github/workflows/*",
     ".github/actions/distribute-sync/*",
     "maintenance/workflows/check_artifacts.py",
     "maintenance/workflows/gate_workflows.py",
+    "tests/maintenance/workflows/*",
   ),
-  "Proxies": tuple(f"{root}/arena-*-proxy/*" for root in ARENA_SKILL_PATHS),
+  "Proxies": (
+    *(f"{root}/arena-*-proxy/*" for root in ARENA_SKILL_PATHS),
+    "tests/maintenance/proxies/*",
+  ),
   "Repository Prose and Validation": (
     "maintenance/check.py",
     "maintenance/lint_prose.py",
@@ -205,18 +222,19 @@ MODULE_PATHS = {
     "README.md",
     "rules/*",
     "skills/*/SKILL.md",
+    "tests/maintenance/validation/*",
   ),
 }
 MODULE_NODE_TESTS = {
-  "Preview": ("skills/refs/arena-skill/scripts/client.test.cjs",),
+  "Preview": ("tests/skills/arena-skill/client.test.cjs",),
   "Userscripts": (
-    "maintenance/workflows/userscripts.checks.cjs",
-    "maintenance/workflows/userscripts.test.cjs",
+    "tests/userscripts/userscripts.checks.cjs",
+    "tests/userscripts/userscripts.test.cjs",
   ),
 }
 MODULE_COMMANDS = {
   "Userscripts": ("node userscripts/arena.user.js", "node userscripts/chatgpt.user.js"),
-  "PR Checks": ("python maintenance/pr/test_commit_msg.py",),
+  "PR Checks": ("python tests/maintenance/pr/test_commit_msg.py",),
 }
 SHARED_TEST_PATHS = (
   "requirements.txt",

@@ -19,7 +19,7 @@ HTTP 503 permits two more attempts per model per request. Its wait starts at 5 s
 ## Check
 
 ```cmd
-python -m pytest github\workflows\test_gemini_release.py
+python -m pytest tests\github\workflows\test_gemini_release.py
 ```
 
 The check uses temporary Git history and mocked API responses. It needs no API keys and creates no releases.

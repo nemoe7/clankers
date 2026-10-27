@@ -1,5 +1,5 @@
 // The Arena and ChatGPT bundles carry no checks of their own. Outside a browser each feature publishes its helpers through `exposeChecks`, and this file drives them, so the installed scripts ship runtime code only.
-// Run: node --test maintenance/workflows/userscripts.checks.cjs
+// Run: node --test tests/userscripts/userscripts.checks.cjs
 
 const fs = require("node:fs");
 const path = require("node:path");

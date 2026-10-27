@@ -147,7 +147,7 @@ python3 -m pip install -r requirements.txt
 npm ci
 ```
 
-`--update` rebuilds the budget table from `EXPECTED_BUDGETS` and `EXPECTED_GROUPS` before checking, including added and retired skills. Test it with `python3 -m pytest maintenance/measurements/test_measurements.py`.
+`--update` rebuilds the budget table from `EXPECTED_BUDGETS` and `EXPECTED_GROUPS` before checking, including added and retired skills. Test it with `python3 -m pytest tests/maintenance/measurements/test_measurements.py`.
 
 ## PR checks
 
@@ -159,7 +159,7 @@ It reads all context pages and selects the latest run for each check and workflo
 
 ## Preview gate hooks
 
-The profile gate and EXIT hook have case labels in `skills/refs/arena-skill/scripts/install.sh`. `maintenance/workflows/test_preview_gate.py` compares those labels with the hook tables below.
+The profile gate and EXIT hook have case labels in `skills/refs/arena-skill/scripts/install.sh`. `tests/skills/arena-skill/test_preview_gate.py` compares those labels with the hook tables below.
 
 ## Minified assets and scripts
 
@@ -178,7 +178,7 @@ python3 maintenance/minify/minify.py --update   # write both distributed copies
 
 Python must compile with the same parsed tree and Python 3.10 syntax. Names, annotations, assertions, and shebangs remain. Ordinary comments and docstrings go, so a shipped script keeps no prose. Help text that a script prints lives in a string constant, not in a docstring.
 
-`check.py` rejects asset/script growth beyond recorded README budgets until an explicit table update. After each refs asset/script edit, run `minify.py`: budgets cannot detect stale copies. `python3 -m pytest maintenance/minify/test_minify.py` checks copy equality, drift, Python tree equality, syntax limits and generated runtime.
+`check.py` rejects asset/script growth beyond recorded README budgets until an explicit table update. After each refs asset/script edit, run `minify.py`: budgets cannot detect stale copies. `python3 -m pytest tests/maintenance/minify/test_minify.py` checks copy equality, drift, Python tree equality, syntax limits and generated runtime.
 
 It uses readable assets for exact page assertions, then shipped assets for page assembly. Ruff checks readable Python refs, not generated copies.
 

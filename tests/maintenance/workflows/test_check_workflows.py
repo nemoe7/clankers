@@ -96,7 +96,7 @@ def test_distribution_plan_groups_domains_and_keeps_one_writer(monkeypatch):
 def test_distribution_has_domain_rows_and_one_push_job():
   from pathlib import Path
 
-  path = Path(__file__).resolve().parents[2] / ".github/workflows/distribute.yml"
+  path = Path(__file__).resolve().parents[3] / ".github/workflows/distribute.yml"
   document = yaml.safe_load(path.read_text())
   jobs = document["jobs"]
   assert jobs["domains"]["strategy"]["fail-fast"] is False
@@ -252,7 +252,7 @@ def test_pull_requests_write_stays_allowed_for_review_comments():
 def test_minify_test_entrypoint_without_pytest_fails():
   document = copy.deepcopy(BASE)
   document["jobs"]["work"]["steps"] = [
-    {"name": "Minify", "run": "python maintenance/minify/test_minify.py"}
+    {"name": "Minify", "run": "python tests/maintenance/minify/test_minify.py"}
   ]
   assert any("must use pytest" in finding for finding in findings(document))
 
@@ -260,7 +260,10 @@ def test_minify_test_entrypoint_without_pytest_fails():
 def test_minify_test_entrypoint_with_pytest_passes():
   document = copy.deepcopy(BASE)
   document["jobs"]["work"]["steps"] = [
-    {"name": "Minify", "run": "python -m pytest maintenance/minify/test_minify.py"},
+    {
+      "name": "Minify",
+      "run": "python -m pytest tests/maintenance/minify/test_minify.py",
+    },
   ]
   assert findings(document) == []
 

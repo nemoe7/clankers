@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from unittest.mock import patch
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "skills" / "refs" / "arena-skill" / "scripts"))
 
 import minify
@@ -366,7 +366,8 @@ def test_compact_copies_drift_and_runtime():
       skill / "references/survey.json",
     )
     shutil.copyfile(
-      minify.SOURCE / "scripts/test_preview.py", skill / "scripts/test_preview.py"
+      ROOT / "tests/skills/arena-skill/test_preview.py",
+      skill / "scripts/test_preview.py",
     )
     subprocess.run(
       [

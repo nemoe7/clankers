@@ -653,9 +653,9 @@ test('preview client', async (t) => {
     assert.equal(probe.content.textContent, literal, 'the fixture decodes HTML once without treating text as tags');
     get('#history').clientHeight = 200;
     get('#note').scrollHeight = 40;
-    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/markdown-it.min.js'), 'utf8'), context);
-    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/message-markdown.js'), 'utf8'), context);
-    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), context);
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/markdown-it.min.js'), 'utf8'), context);
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/message-markdown.js'), 'utf8'), context);
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/app.js'), 'utf8'), context);
     get('#history').clientHeight = 0;
     get('#note').scrollHeight = 0;
     await tick();
@@ -1087,7 +1087,7 @@ test('preview client', async (t) => {
       assert.match(get('#tasks-status').textContent, /not saved/i);
       orderFails = false;
       const end = get('#tasks-upcoming-body');
-      assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8'),
+      assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/index.html'), 'utf8'),
         /tasks-drop-end/, 'the dedicated end area is removed');
       const beforeEnd = rows().map(row => row.dataset.taskId);
       const moved = rows()[0];
@@ -1696,10 +1696,10 @@ test('preview client', async (t) => {
     assert.equal(get('#copy-state').dataset.state, 'good', 'the server export needs no client cache');
     assert.ok(copied.at(-1).endsWith('\n'), 'the copy stays NDJSON with one trailing newline');
     // The userscript owns the save path. The toolbar has a copy control and no save control.
-    const pageHtml = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+    const pageHtml = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/index.html'), 'utf8');
     assert.ok(!pageHtml.includes('save-state'), 'the page carries no save control');
     assert.ok(
-      !fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8').includes('saveState'),
+      !fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/app.js'), 'utf8').includes('saveState'),
       'the page script wires no save control',
     );
 
@@ -3235,7 +3235,7 @@ test('preview client', async (t) => {
       assert.equal(replySeenCalls.length, replyCount, 'message replies stay unchanged');
       assert.equal(JSON.stringify(state.notes), notesBefore);
       assert.ok(state.reports.every(report => report.seen_at === null));
-      const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+      const html = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/index.html'), 'utf8');
       assert.match(html, /<button[^>]+id="mark-report-acks-seen"/);
       state.reports = [{ id: 'ack-failed', title: 'Retry', updated_at: '2026-09-25T10:00:00',
         seen_at: null, latest_answer_acknowledged_at: '2026-09-25T10:01:00', ack_seen_at: null }];
@@ -3345,7 +3345,7 @@ test('preview client', async (t) => {
       get('#reports-tab').events.click();
       await tick(); await tick();
       assert.equal(get('#reports-scroll-frame').hidden, false);
-      const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+      const html = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/index.html'), 'utf8');
       assert.match(html, /id="report-top"[^>]*class="log-newest"/);
       assert.match(html, /<section id="reports-panel"[\s\S]*?<\/section>\s*<button id="report-top"/);
       assert.match(html, /id="report-submit-float"/);
@@ -4107,7 +4107,7 @@ test('preview client', async (t) => {
     assert.equal(editedNode.children[1].children.length, 3);
     assert.equal(editedNode.children[1].children[2].children[0].textContent, 'Third block, same second', 'a note ack renders as plain text');
     await get('#log-edited').events.click();
-    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), {...context});
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/app.js'), 'utf8'), {...context});
     await tick();
     assert.deepEqual(replySeenCalls.map(call => call.count), [1, 2], 'same-second replies get distinct viewed counts');
     assert.equal(get('#log-edited').hidden, true, 'the SQLite-backed viewed count survives a reload');
@@ -5528,7 +5528,7 @@ test('preview client', async (t) => {
         addEventListener: (name, callback) => { localWindowEvents[name] = callback; },
       },
     };
-    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), subCtx);
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/app.js'), 'utf8'), subCtx);
     await tick();
     await subCtx.refreshState();
 
@@ -5834,7 +5834,7 @@ test('preview client', async (t) => {
 });
 
 test('the composer keeps Send inside and status lines outside its panel', () => {
-  const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/index.html'), 'utf8');
   const locations = new Map();
   const stack = [];
   const controls = new Set(['send', 'agent-key', 'send-status']);
@@ -5851,12 +5851,12 @@ test('the composer keeps Send inside and status lines outside its panel', () => 
     assert.equal(locations.get(identity), false, `${identity} remains outside the panel`);
   }
   assert.doesNotMatch(html, /Answers reach the agent inbox as one submission/, 'Reports panel omits the submission hint footer');
-  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/style.css'), 'utf8');
   assert.match(css, /\.notes-layout\s*>\s*\.composer-footer\s*\{[^}]*align-items:\s*center;[^}]*text-align:\s*center;/);
 });
 
 test('survey answer panels do not cover question controls', () => {
-  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/style.css'), 'utf8');
   const rule = css.match(/\.survey-answer-tooltip\s*\{([^}]*)\}/);
   assert.ok(rule, 'the answer panel has a positioning rule');
   assert.match(rule[1], /\bleft:\s*100%\s*;/, 'the panel starts beyond its question trigger');
@@ -5869,7 +5869,7 @@ test('survey answer panels do not cover question controls', () => {
 test('a wide table scrolls sideways on its own and keeps its words whole', () => {
   // Report and message text can wrap anywhere. Each table scrolls independently, as on GitHub.
   // Cells wrap only between words, so longer words stay whole.
-  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/style.css'), 'utf8');
   const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)];
   const body = selector => {
     const rule = rules.find(match => match[1].split(',').some(name => name.trim() === selector));
@@ -5888,9 +5888,9 @@ test('a wide table scrolls sideways on its own and keeps its words whole', () =>
 
 test('the toolbar and filter controls share the ui control sizes', () => {
   // Comments ahead of a rule would ride in its selector text, so the sheet reads bare.
-  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8')
+  const css = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/style.css'), 'utf8')
     .replace(new RegExp('/\\*[\\s\\S]*?\\*/', 'g'), '');
-  const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/index.html'), 'utf8');
   const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
   // The report icon buttons ride the shared icon-button class, so no rule names a square for them.
   for (const match of rules) {
@@ -5921,7 +5921,7 @@ test('the toolbar and filter controls share the ui control sizes', () => {
 
 
 test('scroll fades grow over a longer distance than their maximum depth', () => {
-  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/style.css'), 'utf8');
   const lengths = new Map([...css.matchAll(/--(edge-fade|edge-ramp):\s*([\d.]+)px/g)]
     .map(([, name, value]) => [name, Number(value)]));
   assert.ok(lengths.get('edge-ramp') > lengths.get('edge-fade'), 'the scroll ramp must be longer than the fade depth');
@@ -5935,7 +5935,7 @@ test('scroll fades grow over a longer distance than their maximum depth', () => 
 });
 
 test('draggable and finished task rows use the same native list dot', () => {
-  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/style.css'), 'utf8');
   const row = /\.task\[data-drag-handle="true"\]\s*\{([^}]*)}/.exec(css);
   assert.ok(row, 'the draggable row has a positioning rule');
   assert.doesNotMatch(row[1], /list-style\s*:\s*none/,
@@ -5947,7 +5947,7 @@ test('draggable and finished task rows use the same native list dot', () => {
 });
 
 test('only gate-waiting task titles use the existing code blue', () => {
-  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/style.css'), 'utf8');
   assert.match(css,
     /\.task-title\[data-waiting-gate="true"\]\s*\{\s*color:\s*#90CAF9;\s*}/,
     'the dark title color matches the code badge blue');
@@ -5957,7 +5957,7 @@ test('only gate-waiting task titles use the existing code blue', () => {
 });
 
 test('the queue end uses an accented line without an end card', () => {
-  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/style.css'), 'utf8');
   assert.doesNotMatch(css, /\.task-drop-end/);
   const hit = css.match(/\.task-list\[data-dragging\]\s*\{[^}]*padding-bottom:\s*(\d+)px/);
   assert.ok(hit && px(hit[1]) > 0, 'the list keeps an end-drop hit region during a drag');
@@ -5967,8 +5967,8 @@ test('the queue end uses an accented line without an end card', () => {
 
 test('renderMessageMarkdown unescapes escaped backticks inside single-backtick code spans', () => {
   const vm = require('node:vm');
-  const markdownItSource = fs.readFileSync(path.join(__dirname, '../assets/markdown-it.min.js'), 'utf8');
-  const messageMarkdownSource = fs.readFileSync(path.join(__dirname, '../assets/message-markdown.js'), 'utf8');
+  const markdownItSource = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/markdown-it.min.js'), 'utf8');
+  const messageMarkdownSource = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/message-markdown.js'), 'utf8');
   const context = {
     atob,
     btoa,
@@ -6032,18 +6032,18 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(commentedMd, /<h1>Rules<\/h1>/, 'heading after HTML comment renders as h1');
   assert.match(commentedMd, /<code>&lt;!-- inline --&gt;<\/code>/, 'inline code HTML comment is preserved');
   assert.match(commentedMd, /&lt;!-- fenced --&gt;/, 'fenced code HTML comment is preserved');
-  const appSource = fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8');
+  const appSource = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/app.js'), 'utf8');
   assert.match(appSource, /const alreadySelected = tab\.getAttribute\('aria-selected'\) === 'true';/);
   assert.match(appSource, /if \(selected && !alreadySelected\) gsap\.fromTo\(panel,/);
   assert.match(appSource, /\/api\/slash/);
   assert.match(appSource, /timeoutMs:\s*30_?000/);
   assert.match(appSource, /#slash-menu/);
   assert.match(appSource, /recognizedSlashPrefix/);
-  const htmlSource = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+  const htmlSource = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/index.html'), 'utf8');
   assert.match(htmlSource, /id="slash-menu"/);
   assert.match(htmlSource, /id="note-backdrop"/);
   assert.match(htmlSource, /id="modal-close"/);
-  const styleSource = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const styleSource = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/style.css'), 'utf8');
   assert.match(styleSource, /\.slash-token\b/);
   const slashTokenRule = styleSource.match(/\.slash-token\s*\{([^}]*)\}/);
   assert.ok(slashTokenRule, '.slash-token rule exists');

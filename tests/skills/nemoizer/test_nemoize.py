@@ -8,7 +8,7 @@ from pathlib import Path, PureWindowsPath
 
 import nemoize
 
-SCRIPT = Path(__file__).with_name("nemoize.py")
+SCRIPT = Path(nemoize.__file__).resolve()
 
 
 def run(*arguments, cwd):

@@ -10,7 +10,7 @@ import measure
 import nuu
 import uiux
 
-SCRIPT = Path(__file__).with_name("nuu.py")
+SCRIPT = Path(nuu.__file__).resolve()
 
 
 def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):

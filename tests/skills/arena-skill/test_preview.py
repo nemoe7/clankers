@@ -10447,7 +10447,7 @@ def test_cli_help_keeps_usage():
 
 def test_reference_commands_table_lists_every_agent_facing_command():
   """The commands table in the reference matches the CLI parser, internal commands aside."""
-  references = Path(__file__).parents[1] / "references"
+  references = Path(preview.__file__).resolve().parents[1] / "references"
   reference = references / "COMMANDS.md"
   if not reference.is_file():
     reference = references / "REFERENCE.md"
@@ -10465,7 +10465,7 @@ def test_reference_commands_table_lists_every_agent_facing_command():
     "CLI commands table repeats a signature"
   )
   help_text = subprocess.run(
-    [sys.executable, str(Path(__file__).parent / "preview.py"), "--help"],
+    [sys.executable, str(Path(preview.__file__).resolve()), "--help"],
     capture_output=True,
     text=True,
     check=True,
@@ -11143,7 +11143,7 @@ def test_a_routed_line_that_is_not_a_check_wait_skips_the_watcher(capsys):
 
 
 def test_the_worktree_reminder_shows_the_installed_start_form():
-  references = Path(__file__).resolve().parent.parent / "references"
+  references = Path(preview.__file__).resolve().parent.parent / "references"
   reference = references / "commands.md"
   if not reference.exists():
     reference = references / "reference.md"
@@ -14084,22 +14084,22 @@ def test_javascript_outline_command_parses_symbols_and_reports_fallbacks(
   assert len(fallback_repo_result["entries"]) == len(result["entries"])
 
   sortable_license = (
-    Path(__file__).resolve().parent.parent / "assets" / "sortable.LICENSE"
+    Path(preview.__file__).resolve().parent.parent / "assets" / "sortable.LICENSE"
   ).read_text(encoding="utf-8")
   assert "MIT License" in sortable_license
   assert "All contributors to Sortable" in sortable_license
   gsap_license = (
-    Path(__file__).resolve().parent.parent / "assets" / "gsap.LICENSE"
+    Path(preview.__file__).resolve().parent.parent / "assets" / "gsap.LICENSE"
   ).read_text(encoding="utf-8")
   assert "GreenSock" in gsap_license
   index_html = (
-    Path(__file__).resolve().parent.parent / "assets" / "index.html"
+    Path(preview.__file__).resolve().parent.parent / "assets" / "index.html"
   ).read_text(encoding="utf-8")
   assert 'id="image-modal"' in index_html
   assert 'id="image-modal-close"' in index_html
   assert 'id="image-modal-img" alt="" draggable="false"' in index_html
   style_css = (
-    Path(__file__).resolve().parent.parent / "assets" / "style.css"
+    Path(preview.__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
   assert "left: 50%; transform: translateX(-50%);" in style_css
   assert ".report-toolbar .select-wrap { flex: 1 1 100%; }" not in style_css
@@ -14705,7 +14705,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert "audit-report.md" in slash_nuu_audit["text"]
   assert slash_nuu_audit["text"].endswith("#compose")
   app_js_text = (
-    preview.Path(__file__).resolve().parent.parent / "assets" / "app.js"
+    Path(preview.__file__).resolve().parent.parent / "assets" / "app.js"
   ).read_text(encoding="utf-8")
   fallback_cmds = re.findall(
     r"\{\s*cmd:\s*'([^']+)',\s*desc:\s*'([^']+)'\s*\}", app_js_text
@@ -14909,7 +14909,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert "<h1>Custom Heading</h1>" in existing_h1_html
   assert "Fallback Title" not in existing_h1_html
   style_text = (
-    preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
+    Path(preview.__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
   assert "padding-top: 0;" in style_text
   assert "position: sticky; top: 0; z-index: 2; background: var(--bg);" in style_text
@@ -15875,7 +15875,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert "probe-verify-clankers" in pruned_board["removed_sessions"]
   assert "closed-worker-clankers" in pruned_board["removed_sessions"]
   style_css = (
-    preview.Path(__file__).resolve().parent.parent / "assets" / "style.css"
+    Path(preview.__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
   assert style_css.count("#copy-state { display: none; }") >= 2
   demo_script = (
@@ -15983,7 +15983,7 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
   assert preview._extract_nuu_breakpoints(
     repo_cwd / "skills" / "refs" / "arena-skill"
     if (repo_cwd / "skills" / "refs" / "arena-skill").is_dir()
-    else preview.Path(__file__).resolve().parent.parent
+    else Path(preview.__file__).resolve().parent.parent
   ) == ("68em", "60em", "30em", "24em")
   try:
     store.board_action(

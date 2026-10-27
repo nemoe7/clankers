@@ -3,22 +3,20 @@
 # Every run splits across the workers, local and CI both, so the config is the single source.
 addopts = "-n auto"
 testpaths = [
-  "skills/nemoizer/scripts",
-  "skills/refs/arena-skill/scripts",
-  "skills/nuu/scripts",
-  "github/workflows",
-  "maintenance",
+  "tests",
 ]
 python_files = ["test_*.py"]
 pythonpath = [
   "github/workflows",
   "maintenance",
   "maintenance/gpt_plugins",
-  "maintenance/measurements",
   "maintenance/minify",
   "maintenance/pr",
   "maintenance/publish",
   "maintenance/workflows",
+  "skills/nemoizer/scripts",
+  "skills/nuu/scripts",
+  "skills/refs/arena-skill/scripts",
 ]
 
 [tool.ruff]

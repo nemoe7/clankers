@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 SPEC = importlib.util.spec_from_file_location(
-  "gpt_assets", Path(__file__).with_name("gate_gpt_plugins.py")
+  "gpt_assets",
+  Path(__file__).resolve().parents[3] / "maintenance/gpt_plugins/gate_gpt_plugins.py",
 )
 gate = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(gate)

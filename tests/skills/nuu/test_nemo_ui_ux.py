@@ -6,7 +6,7 @@ import importlib.util
 from pathlib import Path
 
 MEASURE = (
-  Path(__file__).resolve().parents[1] / "skills" / "nuu" / "scripts" / "measure.py"
+  Path(__file__).resolve().parents[3] / "skills" / "nuu" / "scripts" / "measure.py"
 )
 
 SHEET = {
