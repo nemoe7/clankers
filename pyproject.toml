@@ -22,7 +22,7 @@ pythonpath = [
 ]
 
 [tool.ruff]
-required-version = "0.16.6"
+required-version = "0.17.3"
 indent-width = 2
 # The project does not own vendored third-party code. Do not reformat or lint it.
 # Check generated Python through minify.py. Lint and format its readable refs.

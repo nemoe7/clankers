@@ -127,7 +127,6 @@ def test_nuu_loads_version_and_rule_descriptions_from_docs_and_skips_agents(
   tmp_path: Path,
 ):
   import sys
-
   import tomllib
 
   scripts_dir = MEASURE.parent

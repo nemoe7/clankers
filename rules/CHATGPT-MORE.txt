@@ -1,3 +1,5 @@
+Plan:ask SOLID vs YAGNI/KISS/DRY;obey
+Comments only if method complexity requires
 Explicit chat instructions win;state override in 1 line
 MUST use `nemoizer` in human-facing text(responses/reports/comments/docs);fallback:ASD-STE100+Humanizer(look up rules as needed)
 RESPONSE:Terse/clear;numbered lists;detail on request;requested explanation NEVER debt

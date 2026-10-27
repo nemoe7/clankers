@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -523,7 +523,7 @@ def update_readme_measurements() -> bool:
     return False
   updated = re.sub(
     r"Latest measurements as of \d{4}-\d{2}-\d{2}\.",
-    f"Latest measurements as of {datetime.now(timezone.utc).date().isoformat()}.",
+    f"Latest measurements as of {datetime.now(UTC).date().isoformat()}.",
     updated,
   )
   README.write_text(updated, encoding="utf-8")

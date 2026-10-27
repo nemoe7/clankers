@@ -17,7 +17,7 @@ import threading
 import time
 import uuid
 from contextlib import closing,contextmanager,nullcontext
-from datetime import datetime,timedelta,timezone
+from datetime import UTC,datetime,timedelta
 from fnmatch import fnmatchcase
 from pathlib import Path
 from urllib.parse import parse_qs,unquote,urlsplit,urlunsplit
@@ -137,7 +137,7 @@ REPORT_CHANGE_VIEW_SECONDS=60
 REPORT_IDLE_SECONDS=30*60
 AGENT_KEY_RE=re.compile('[A-Za-z0-9_-]{20,64}\\Z')
 AGENT_HOST_RE=re.compile('https://[A-Za-z0-9.-]+\\Z')
-def now():return datetime.now(timezone.utc).isoformat()
+def now():return datetime.now(UTC).isoformat()
 TIMEZONE_META='display_tz'
 DISPLAY_ZONE=None
 def zone_exists(name):
@@ -151,7 +151,7 @@ def local_stamp(value):
 	if not value or DISPLAY_ZONE is None:return value
 	try:parsed=datetime.fromisoformat(value)
 	except ValueError:return value
-	if parsed.tzinfo is None:parsed=parsed.replace(tzinfo=timezone.utc)
+	if parsed.tzinfo is None:parsed=parsed.replace(tzinfo=UTC)
 	return parsed.astimezone(DISPLAY_ZONE).isoformat()
 def workspace_branch(root=None):
 	try:head=(Path(root or Path.cwd())/'.git'/'HEAD').read_text(encoding='utf-8').strip()
@@ -406,7 +406,7 @@ def pr_check_latest(root,slug,sha):
 	for node in data:
 		if not isinstance(node,dict)or not all(isinstance(node.get(field),str)for field in('type','name','workflow','state','at')):return None
 		if node['type']not in('check','status')or not node['name']:return None
-		try:stamp=datetime.fromisoformat(node['at'].replace('Z','+00:00'))
+		try:stamp=datetime.fromisoformat(node['at'])
 		except ValueError:return None
 		if stamp.tzinfo is None:return None
 		active=node['state']not in PR_CHECK_SUCCESS_STATES+PR_CHECK_FAILURE_STATES;rank=1 if active else 0,stamp;key=node['type'],node['name'],node['workflow']
@@ -533,7 +533,7 @@ def commit_id_report(hits):
 def new_id():return uuid.uuid4().hex[:6]
 def seconds_since(value):
 	if not value:return None
-	try:return(datetime.now(timezone.utc)-datetime.fromisoformat(value)).total_seconds()
+	try:return(datetime.now(UTC)-datetime.fromisoformat(value)).total_seconds()
 	except ValueError:return None
 def clip_stamp(value):return value[:19]if value else value
 def at_or_after(value,other):
@@ -543,7 +543,7 @@ def import_stamp(value):
 	if not value:return None
 	try:parsed=datetime.fromisoformat(str(value))
 	except ValueError:return None
-	if parsed.tzinfo is None:parsed=parsed.replace(tzinfo=timezone.utc)
+	if parsed.tzinfo is None:parsed=parsed.replace(tzinfo=UTC)
 	return parsed
 def identifier(value):
 	if not isinstance(value,str)or not IDENTIFIER.fullmatch(value):raise ValueError('ID must contain 1–80 letters, digits, underscores or hyphens')
@@ -1119,8 +1119,8 @@ READ_SET_LAST_META='read_set_last_at'
 READ_SET_INTERVAL_MINUTES=15
 SKIP_POLL_META='skip_poll_at'
 def read_set_slot(moment=None):
-	moment=moment or datetime.now(DISPLAY_ZONE or timezone.utc)
-	if moment.tzinfo is None:moment=moment.replace(tzinfo=timezone.utc)
+	moment=moment or datetime.now(DISPLAY_ZONE or UTC)
+	if moment.tzinfo is None:moment=moment.replace(tzinfo=UTC)
 	minute=moment.minute//READ_SET_INTERVAL_MINUTES*READ_SET_INTERVAL_MINUTES;return moment.replace(minute=minute,second=0,microsecond=0).isoformat()
 def read_set_paths(root=None,worker=False):
 	root=Path(root or resolve_repo_root()).resolve();skill=root/'.agents'/'skills'/'arena-skill'/'SKILL.md';candidates=[root/'ARENA.md',root/'AGENTS.md',skill]
@@ -1865,8 +1865,8 @@ def auto_start_post_push_pr_checks(state_dir,line,rc=0):
 def detached_seconds(started_at):
 	try:
 		started=datetime.fromisoformat(str(started_at))
-		if started.tzinfo is None:started=started.replace(tzinfo=timezone.utc)
-		return max(0,int((datetime.now(timezone.utc)-started).total_seconds()))
+		if started.tzinfo is None:started=started.replace(tzinfo=UTC)
+		return max(0,int((datetime.now(UTC)-started).total_seconds()))
 	except(TypeError,ValueError):return None
 def write_detached_placeholder(state_dir,name,argv,pid=None,pid_started_at=None,task_id=None,after=None):
 	path=run_record_path(state_dir,name)
@@ -2180,8 +2180,8 @@ def board_stamp_epoch(value):
 	try:
 		if text.endswith('Z'):text=text[:-1]+'+00:00'
 		dt=datetime.fromisoformat(text)
-		if dt.tzinfo is not None:dt=dt.astimezone(timezone.utc).replace(tzinfo=None)
-		return dt.replace(tzinfo=timezone.utc).timestamp()
+		if dt.tzinfo is not None:dt=dt.astimezone(UTC).replace(tzinfo=None)
+		return dt.replace(tzinfo=UTC).timestamp()
 	except Exception:return None
 def normalize_board_state(raw,session_id='',repo='',branch='',polling=False):
 	data=raw if isinstance(raw,dict)else{};sid=board_session_id(session_id or branch);linked_repos=[]
@@ -2693,8 +2693,8 @@ class Store:
 		with closing(self.connect())as db:row=db.execute(f"SELECT * FROM notes WHERE {VIOLATION_NOTES} AND acknowledged_at IS NULL ORDER BY at, seq LIMIT 1").fetchone()
 		return message_row(row)if row else None
 	def schedule_read_set_note(self,moment=None,root=None,manual=False):
-		moment=moment or datetime.now(DISPLAY_ZONE or timezone.utc)
-		if moment.tzinfo is None:moment=moment.replace(tzinfo=timezone.utc)
+		moment=moment or datetime.now(DISPLAY_ZONE or UTC)
+		if moment.tzinfo is None:moment=moment.replace(tzinfo=UTC)
 		slot=read_set_slot(moment);is_worker=self.board_state().get('board_role')=='worker';paths=read_set_paths(root or self.repository_root(),worker=is_worker)
 		with closing(self.connect())as db,db:
 			db.execute('BEGIN IMMEDIATE')
@@ -2709,7 +2709,7 @@ class Store:
 				try:previous=datetime.fromisoformat(recorded['value'])if recorded else None
 				except ValueError:previous=None
 				if previous is None:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(READ_SET_LAST_META,moment.isoformat()));return None
-				if previous.tzinfo is None:previous=previous.replace(tzinfo=timezone.utc)
+				if previous.tzinfo is None:previous=previous.replace(tzinfo=UTC)
 				if(moment-previous).total_seconds()<READ_SET_INTERVAL_MINUTES*60:return None
 			for _ in range(MINT_ATTEMPTS):
 				note_id=new_id()
@@ -3626,7 +3626,7 @@ class Store:
 		with self.transaction(autosave=False)as db:
 			db.execute("UPDATE fetch_jobs SET status = 'queued', claim = NULL, lease_until = NULL, error = 'Browser stopped; queued again', updated_at = ? WHERE status = 'fetching' AND approval = 'approved' AND lease_until <= ?",(stamp,stamp));row=db.execute("SELECT id FROM fetch_jobs WHERE status = 'queued' AND approval = 'approved' ORDER BY seq LIMIT 1").fetchone()
 			if row is None:return None
-			job_id=row['id'];claim=secrets.token_urlsafe(24);lease=(datetime.now(timezone.utc)+FETCH_LEASE).isoformat();db.execute("UPDATE fetch_jobs SET status = 'fetching', claim = ?, lease_until = ?, error = NULL, updated_at = ? WHERE id = ?",(claim,lease,stamp,job_id));row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+			job_id=row['id'];claim=secrets.token_urlsafe(24);lease=(datetime.now(UTC)+FETCH_LEASE).isoformat();db.execute("UPDATE fetch_jobs SET status = 'fetching', claim = ?, lease_until = ?, error = NULL, updated_at = ? WHERE id = ?",(claim,lease,stamp,job_id));row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
 		return fetch_row(row,self.path.parent)|{'claim':claim}
 	def claimed_fetch(self,db,job_id,claim):
 		identifier(job_id);row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
@@ -3634,7 +3634,7 @@ class Store:
 		if row['status']!='fetching'or row['approval']!='approved'or not isinstance(claim,str)or not secrets.compare_digest(row['claim']or'',claim)or not row['lease_until']or row['lease_until']<=now():raise FetchChanged('Download claim expired; refresh the queue and try again')
 		return row
 	def renew_fetch(self,job_id,claim):
-		with self.transaction(autosave=False)as db:self.claimed_fetch(db,job_id,claim);lease=(datetime.now(timezone.utc)+FETCH_LEASE).isoformat();db.execute('UPDATE fetch_jobs SET lease_until = ? WHERE id = ?',(lease,job_id));row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+		with self.transaction(autosave=False)as db:self.claimed_fetch(db,job_id,claim);lease=(datetime.now(UTC)+FETCH_LEASE).isoformat();db.execute('UPDATE fetch_jobs SET lease_until = ? WHERE id = ?',(lease,job_id));row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
 		return fetch_row(row,self.path.parent)
 	def fail_fetch(self,job_id,claim,error):
 		message=str(error).strip()[:1000]or'The browser could not fetch this URL'
@@ -3882,7 +3882,7 @@ class Store:
 		if not record:return None
 		stamp=import_stamp(record['at'])
 		if stamp is None:return None
-		if(datetime.now(timezone.utc)-stamp).total_seconds()<AGENT_KEY_EXPIRY_SECONDS:return None
+		if(datetime.now(UTC)-stamp).total_seconds()<AGENT_KEY_EXPIRY_SECONDS:return None
 		if self.meta_value(AGENT_KEY_EXPIRY_META)==record['at']:return None
 		self.set_meta(AGENT_KEY_EXPIRY_META,record['at']);return self.note(self.free_id(),f"The recorded agent key expired (set {record['at']}). Run `arena-preview key` for the live key; a new post overwrites this record by itself.",quiet=True)
 	def agent_key(self):

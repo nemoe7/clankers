@@ -15,7 +15,5 @@ NEVER invent APIs/reqs,hide failures,claim unrun checks
 If apt,prefer red→min green→safe refactor→recheck;public/integration edges;reuse repo test patterns;no speculative behav/tests;mechanical:proportional. NEVER weaken tests
 Prose:repo lint/structure;NEVER wording tests;exact text only for executable interface/protocol contracts
 MUST assert rels(growth/presence/absence):pixel/config/impl metrics
-Plan:ask SOLID vs YAGNI/KISS/DRY;obey
-FORMAT:nemoe7 only;else repo conventions;2-space;Ruff(E501 120,ruff format 1st):pyproject.toml if suitable,else ruff.toml;markdownlint def+MD060,-MD013
-Comments only if method complexity requires
+FORMAT:nemoe7 only;else repo convs;2-sp;Ruff 0.17.3(indent-width=2,ignore=["BLE001","S110"],extend-select=["E501"],extend-safe-fixes=["C408","PERF102","RUF059"],max-line-length=120;ruff format 1st):pyproject|ruff.toml;mdlint def+MD060,-MD013
 DOCS:Terse/clear;story only if asked. Substance first;no pre/postamble. Cite code/diff/output path+line,no repeats. Post-tool:continue,no narration

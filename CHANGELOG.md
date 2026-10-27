@@ -8,6 +8,28 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-27
 
+### Changed
+
+#### arena
+
+- Align standalone Python Ruff defaults with `CORE.md` and pin `required-version = "0.17.3"` (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+
+#### arena-skill
+
+- Require Python `3.11+` and adopt `datetime.UTC` and native `"Z"` timestamp parsing under Ruff `0.17.3` (`SKILL.md`, `scripts/preview.py`, `scripts/test_preview.py`).
+
+#### chatgpt
+
+- Align Python Ruff defaults and `0.17.3` pin with `CORE.md` while keeping both live instruction fields under `1,500` characters (`rules/refs/CHATGPT.txt`, `rules/CHATGPT-CUSTOM.txt`, `rules/CHATGPT-MORE.txt`).
+
+#### core
+
+- Bump the unconfigured Python Ruff pin from `0.16.6` to `0.17.3` (`rules/refs/CORE.md`, `rules/CORE.md`).
+
+#### maintenance
+
+- Bump pinned Ruff to `0.17.3` and apply `py311` `UP017` and `I001` updates across maintenance and skill scripts (`pyproject.toml`, `requirements.txt`, `maintenance/`, `skills/`).
+
 ### Fixed
 
 #### arena-skill

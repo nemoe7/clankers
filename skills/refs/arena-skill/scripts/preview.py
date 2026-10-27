@@ -19,7 +19,7 @@ import threading
 import time
 import uuid
 from contextlib import closing, contextmanager, nullcontext
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from fnmatch import fnmatchcase
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit, urlunsplit
@@ -345,7 +345,7 @@ AGENT_HOST_RE = re.compile(r"https://[A-Za-z0-9.-]+\Z")
 
 
 def now():
-  return datetime.now(timezone.utc).isoformat()
+  return datetime.now(UTC).isoformat()
 
 
 TIMEZONE_META = "display_tz"
@@ -378,7 +378,7 @@ def local_stamp(value):
   except ValueError:
     return value
   if parsed.tzinfo is None:
-    parsed = parsed.replace(tzinfo=timezone.utc)
+    parsed = parsed.replace(tzinfo=UTC)
   return parsed.astimezone(DISPLAY_ZONE).isoformat()
 
 
@@ -1148,7 +1148,7 @@ def pr_check_latest(root, slug, sha):
     if node["type"] not in ("check", "status") or not node["name"]:
       return None
     try:
-      stamp = datetime.fromisoformat(node["at"].replace("Z", "+00:00"))
+      stamp = datetime.fromisoformat(node["at"])
     except ValueError:
       return None
     if stamp.tzinfo is None:
@@ -1540,7 +1540,7 @@ def seconds_since(value):
   if not value:
     return None
   try:
-    return (datetime.now(timezone.utc) - datetime.fromisoformat(value)).total_seconds()
+    return (datetime.now(UTC) - datetime.fromisoformat(value)).total_seconds()
   except ValueError:
     return None
 
@@ -1570,7 +1570,7 @@ def import_stamp(value):
   except ValueError:
     return None
   if parsed.tzinfo is None:
-    parsed = parsed.replace(tzinfo=timezone.utc)
+    parsed = parsed.replace(tzinfo=UTC)
   return parsed
 
 
@@ -3095,9 +3095,9 @@ SKIP_POLL_META = "skip_poll_at"
 
 def read_set_slot(moment=None):
   """The current 00, 15, 30, or 45 wall-clock slot, including its UTC offset."""
-  moment = moment or datetime.now(DISPLAY_ZONE or timezone.utc)
+  moment = moment or datetime.now(DISPLAY_ZONE or UTC)
   if moment.tzinfo is None:
-    moment = moment.replace(tzinfo=timezone.utc)
+    moment = moment.replace(tzinfo=UTC)
   minute = (moment.minute // READ_SET_INTERVAL_MINUTES) * READ_SET_INTERVAL_MINUTES
   return moment.replace(minute=minute, second=0, microsecond=0).isoformat()
 
@@ -5101,8 +5101,8 @@ def detached_seconds(started_at):
   try:
     started = datetime.fromisoformat(str(started_at))
     if started.tzinfo is None:
-      started = started.replace(tzinfo=timezone.utc)
-    return max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
+      started = started.replace(tzinfo=UTC)
+    return max(0, int((datetime.now(UTC) - started).total_seconds()))
   except (TypeError, ValueError):
     return None
 
@@ -5968,8 +5968,8 @@ def board_stamp_epoch(value):
       text = text[:-1] + "+00:00"
     dt = datetime.fromisoformat(text)
     if dt.tzinfo is not None:
-      dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-    return dt.replace(tzinfo=timezone.utc).timestamp()
+      dt = dt.astimezone(UTC).replace(tzinfo=None)
+    return dt.replace(tzinfo=UTC).timestamp()
   except Exception:
     return None
 
@@ -7835,9 +7835,9 @@ class Store:
 
   def schedule_read_set_note(self, moment=None, root=None, manual=False):
     """Atomically create a checkpoint after each elapsed interval or on manual request."""
-    moment = moment or datetime.now(DISPLAY_ZONE or timezone.utc)
+    moment = moment or datetime.now(DISPLAY_ZONE or UTC)
     if moment.tzinfo is None:
-      moment = moment.replace(tzinfo=timezone.utc)
+      moment = moment.replace(tzinfo=UTC)
     slot = read_set_slot(moment)
     is_worker = self.board_state().get("board_role") == "worker"
     paths = read_set_paths(root or self.repository_root(), worker=is_worker)
@@ -7876,7 +7876,7 @@ class Store:
           )
           return None
         if previous.tzinfo is None:
-          previous = previous.replace(tzinfo=timezone.utc)
+          previous = previous.replace(tzinfo=UTC)
         if (moment - previous).total_seconds() < READ_SET_INTERVAL_MINUTES * 60:
           return None
       for _ in range(MINT_ATTEMPTS):
@@ -11044,7 +11044,7 @@ class Store:
         return None
       job_id = row["id"]
       claim = secrets.token_urlsafe(24)
-      lease = (datetime.now(timezone.utc) + FETCH_LEASE).isoformat()
+      lease = (datetime.now(UTC) + FETCH_LEASE).isoformat()
       db.execute(
         "UPDATE fetch_jobs SET status = 'fetching', claim = ?, lease_until = ?,"
         " error = NULL, updated_at = ? WHERE id = ?",
@@ -11072,7 +11072,7 @@ class Store:
   def renew_fetch(self, job_id, claim):
     with self.transaction(autosave=False) as db:
       self.claimed_fetch(db, job_id, claim)
-      lease = (datetime.now(timezone.utc) + FETCH_LEASE).isoformat()
+      lease = (datetime.now(UTC) + FETCH_LEASE).isoformat()
       db.execute("UPDATE fetch_jobs SET lease_until = ? WHERE id = ?", (lease, job_id))
       row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
     return fetch_row(row, self.path.parent)
@@ -11836,7 +11836,7 @@ class Store:
     stamp = import_stamp(record["at"])
     if stamp is None:
       return None
-    if (datetime.now(timezone.utc) - stamp).total_seconds() < AGENT_KEY_EXPIRY_SECONDS:
+    if (datetime.now(UTC) - stamp).total_seconds() < AGENT_KEY_EXPIRY_SECONDS:
       return None
     if self.meta_value(AGENT_KEY_EXPIRY_META) == record["at"]:
       return None

@@ -17,7 +17,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from unittest.mock import patch
@@ -764,7 +764,7 @@ def test_stale_report_task_completion_idle_and_pins(tmp_path):
   store.publish("solo", "Solo", source)
   assert store.stale_reports() == [], "a fresh unlinked report stays active"
   idle = timedelta(minutes=30)
-  past = (datetime.now(timezone.utc) - idle - timedelta(seconds=1)).isoformat()
+  past = (datetime.now(UTC) - idle - timedelta(seconds=1)).isoformat()
   with store.connect() as db, db:
     db.execute("UPDATE reports SET updated_at = ?", (past,))
   assert {row["id"] for row in store.stale_reports()} == {"solo"}
@@ -7477,7 +7477,7 @@ def test_poll_inbox():
       store.stamp_polling()
       assert store.polling() is True
       assert store.state()["polling"] is True
-      stale = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+      stale = (datetime.now(UTC) - timedelta(seconds=30)).isoformat()
       store.set_meta(preview.POLLING_META, stale)
       assert store.polling() is False
       store.set_meta(preview.POLLING_META, "not a stamp")
@@ -7725,7 +7725,7 @@ def test_a_violation_flag_signals_the_recorded_group():
     try:
       assert child.stdout.readline() == b"ready\n"
       store.set_meta(preview.CALL_GROUP_META, child.pid)
-      started = datetime.now(timezone.utc) - timedelta(seconds=10)
+      started = datetime.now(UTC) - timedelta(seconds=10)
       store.set_meta(preview.CALL_STARTED_META, started.isoformat())
       watcher = threading.Thread(
         target=preview.watch_call_group,
@@ -7765,7 +7765,7 @@ def test_a_short_or_other_flag_does_not_signal_the_group():
       try:
         assert child.stdout.readline() == b"ready\n"
         store.set_meta(preview.CALL_GROUP_META, child.pid)
-        started = datetime.now(timezone.utc) - timedelta(seconds=age)
+        started = datetime.now(UTC) - timedelta(seconds=age)
         store.set_meta(preview.CALL_STARTED_META, started.isoformat())
         watcher = threading.Thread(
           target=preview.watch_call_group,
@@ -8495,7 +8495,7 @@ def test_quiet_note_never_wakes_the_poll():
 
 
 def test_read_set_slots_follow_quarter_hours():
-  for zone in (timezone.utc, timezone(timedelta(hours=8))):
+  for zone in (UTC, timezone(timedelta(hours=8))):
     started = datetime(2026, 10, 19, 10, tzinfo=zone)
     for minute in (0, 15, 30, 45, 60):
       boundary = started + timedelta(minutes=minute)
@@ -8508,7 +8508,7 @@ def test_read_set_schedule_delays_first_checkpoint_and_keeps_intervals():
   with tempfile.TemporaryDirectory() as directory:
     root, state = read_set_cli_root(directory)
     store = preview.Store(state)
-    started = datetime(2026, 10, 19, 10, 7, 13, tzinfo=timezone.utc)
+    started = datetime(2026, 10, 19, 10, 7, 13, tzinfo=UTC)
 
     assert store.schedule_read_set_note(moment=started, root=root) is None
     assert store.pending_read_set_note() is None
@@ -8552,7 +8552,7 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     skill.parent.mkdir(parents=True)
     skill.write_text("skill\n", encoding="utf-8")
     store = preview.Store(root / "state", create=True)
-    started = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
+    started = datetime(2026, 10, 19, 10, 0, 4, tzinfo=UTC)
     assert preview.read_set_tick(store, "git status", moment=started, root=root) is None
     at_zero = started + CHECKPOINT_INTERVAL
 
@@ -8692,7 +8692,7 @@ def test_read_set_schedule_defers_for_polling_and_migrates_note_classes():
     ordinary = store.note("ordinary", "Owner work")
     quiet = store.note("quiet", "Key rotated", quiet=True)
     assert ordinary["blocking"] == 1 and quiet["blocking"] == 0
-    at_later = datetime(2026, 10, 19, 10, 47, tzinfo=timezone.utc)
+    at_later = datetime(2026, 10, 19, 10, 47, tzinfo=UTC)
     assert preview.read_set_slot(at_later).endswith("10:45:00+00:00")
     assert (
       preview.read_set_tick(
@@ -8799,7 +8799,7 @@ def test_read_set_tick_cli_keeps_a_pending_checkpoint_while_the_server_is_down()
   with tempfile.TemporaryDirectory() as directory:
     root, state = read_set_cli_root(directory)
     store = preview.Store(state)
-    started = datetime(2026, 10, 19, 10, 0, 4, tzinfo=timezone.utc)
+    started = datetime(2026, 10, 19, 10, 0, 4, tzinfo=UTC)
     assert store.schedule_read_set_note(moment=started, root=root) is None
     moment = started + CHECKPOINT_INTERVAL
     checkpoint = store.schedule_read_set_note(moment=moment, root=root)
@@ -8820,7 +8820,7 @@ def test_read_set_tick_cli_mints_a_note_with_the_server():
     store.set_meta("port", guard_port())
     store.set_meta(
       preview.READ_SET_LAST_META,
-      (datetime.now(timezone.utc) - timedelta(minutes=21)).isoformat(),
+      (datetime.now(UTC) - timedelta(minutes=21)).isoformat(),
     )
     minted = read_set_cli(state, root, "git status")
     assert minted.returncode == 0, minted.stderr
@@ -8838,7 +8838,7 @@ def test_read_set_tick_cli_acknowledgement_holds_the_slot():
     store.set_meta("port", guard_port())
     store.set_meta(
       preview.READ_SET_LAST_META,
-      (datetime.now(timezone.utc) - timedelta(minutes=21)).isoformat(),
+      (datetime.now(UTC) - timedelta(minutes=21)).isoformat(),
     )
     minted = read_set_cli(state, root, "git status")
     assert minted.returncode == 0, minted.stderr
@@ -11726,7 +11726,7 @@ def test_report_unpublish_stale_rechecks_changed_publication(tmp_path):
   form = tmp_path / "form.md"
   form.write_text("Choose: {#select}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8")
   idle = timedelta(minutes=30)
-  past = (datetime.now(timezone.utc) - idle - timedelta(seconds=1)).isoformat()
+  past = (datetime.now(UTC) - idle - timedelta(seconds=1)).isoformat()
   with patch("preview.now", return_value=past):
     store.publish("changed", "Information", plain)
   original = preview.Store.stale_reports
