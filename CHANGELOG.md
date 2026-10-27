@@ -10,6 +10,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+#### maintenance
+
+- Add a harness-neutral clause proposal template (`maintenance/amendment-template.md`, `AGENTS.md`).
+
 #### arena-skill
 
 - Wake opted-in board workers when a main session's remote branch or `origin/main` head advances (`scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`, `scripts/test_preview.py`).
