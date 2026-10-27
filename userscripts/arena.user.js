@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.11.8
+// @name         Arena.ai | NemoUtils | v1.12.0
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.11.8
+// @version      1.12.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -4887,6 +4887,153 @@
   var BOARD_HEARTBEAT_WRITE_MS = 15000;
   var BOARD_REMOTE_DEBOUNCE_MS = 500;
   var BOARD_REMOTE_MIN_INTERVAL_MS = 1000;
+  var BOARD_PROXY_HOST_KEY = "clankers-arena-proxy-host";
+  var BOARD_PROXY_MASTER_KEY = "clankers-arena-proxy-master";
+  var BOARD_PROXY_POLL_MS = 3000;
+  var proxyBoardCache = null;
+  var proxyBoardRevision = 0;
+  var proxyBoardPullInFlight = null;
+  var lastProxyBoardPullAtMs = 0;
+  var hydratedBoardFilesBySid = {};
+
+  function normalizeBoardProxyHost(raw) {
+    var host = String(raw || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
+    if (/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(host)) {
+      host = "https://" + host;
+    }
+    return /^https:\/\/[a-z0-9.-]+$/i.test(host) ? host : "";
+  }
+
+  function boardProxyConfig() {
+    try {
+      var host = normalizeBoardProxyHost(GM_getValue(BOARD_PROXY_HOST_KEY, ""));
+      var master = String(GM_getValue(BOARD_PROXY_MASTER_KEY, "") || "").trim();
+      if (host && master) return { host: host, master: master };
+    } catch (err) {}
+    return null;
+  }
+
+  function proxyBoardJson(path, payload) {
+    var cfg = boardProxyConfig();
+    if (!cfg) return Promise.resolve({ status: 0, body: null, failure: "unconfigured" });
+    return new Promise(function (resolve) {
+      if (typeof GM_xmlhttpRequest !== "function") {
+        resolve({ status: 0, body: null, failure: "unavailable" });
+        return;
+      }
+      var headers = { "X-Master-Key": cfg.master };
+      if (payload !== undefined) headers["Content-Type"] = "application/json";
+      GM_xmlhttpRequest({
+        method: payload === undefined ? "GET" : "POST",
+        url: cfg.host + path,
+        headers: headers,
+        data: payload === undefined ? undefined : JSON.stringify(payload),
+        timeout: 15000,
+        onload: function (answer) {
+          if (answer.status === 304) {
+            resolve({ status: 304, body: null, failure: null });
+            return;
+          }
+          var body = null;
+          var failure = null;
+          try { body = JSON.parse(answer.responseText); } catch (err) { failure = "parse"; }
+          resolve({ status: answer.status, body: body, failure: failure });
+        },
+        onerror: function () { resolve({ status: 0, body: null, failure: "error" }); },
+        ontimeout: function () { resolve({ status: 0, body: null, failure: "timeout" }); },
+      });
+    });
+  }
+
+  function updateProxyBoardCache(rawBoard, revision) {
+    proxyBoardCache = normalizeBoard(rawBoard);
+    if (typeof revision === "number" && isFinite(revision) && revision >= 0) {
+      proxyBoardRevision = revision;
+    }
+    if (typeof syncTitleNowHook === "function") syncTitleNowHook();
+    return proxyBoardCache;
+  }
+
+  function pullProxyBoard(force) {
+    if (!boardProxyConfig()) return Promise.resolve(null);
+    if (proxyBoardPullInFlight) return proxyBoardPullInFlight;
+    var query = !force && proxyBoardRevision > 0 ? ("?since=" + String(proxyBoardRevision)) : "";
+    lastProxyBoardPullAtMs = Date.now();
+    proxyBoardPullInFlight = proxyBoardJson("/v1/board" + query).then(function (res) {
+      proxyBoardPullInFlight = null;
+      if (res && res.status === 200 && res.body && res.body.board) {
+        return {
+          changed: true,
+          board: updateProxyBoardCache(res.body.board, Number(res.body.revision)),
+        };
+      }
+      if (res && res.status === 304 && proxyBoardCache) {
+        return { changed: false, board: proxyBoardCache };
+      }
+      return null;
+    }, function () {
+      proxyBoardPullInFlight = null;
+      return null;
+    });
+    return proxyBoardPullInFlight;
+  }
+
+  function hydrateBoardFilesForTarget(scopedBoard, targetSid) {
+    if (!boardProxyConfig() || !targetSid || !scopedBoard || !Array.isArray(scopedBoard.entries)) {
+      return Promise.resolve({ board: scopedBoard, keys: [] });
+    }
+    var neededShas = [];
+    var seenSha = {};
+    var deliveredKeys = [];
+    scopedBoard.entries.forEach(function (entry) {
+      if (!entry || typeof entry !== "object" || !entry.file || typeof entry.file !== "object") return;
+      var sha = String(entry.file.sha256 || "").trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(sha) || entry.file.content) return;
+      var entryTo = String(entry.to || "");
+      if (entryTo && entryTo !== "*" && entryTo !== targetSid) return;
+      if (boardSessionId(entry.session_id || "") === targetSid) return;
+      var hKey = targetSid + ":" + String(entry.id || "") + ":" + sha;
+      if (hydratedBoardFilesBySid[hKey]) return;
+      deliveredKeys.push(hKey);
+      if (!seenSha[sha]) {
+        seenSha[sha] = true;
+        neededShas.push(sha);
+      }
+    });
+    if (!neededShas.length) {
+      return Promise.resolve({ board: scopedBoard, keys: [] });
+    }
+    var fetchedBySha = {};
+    return Promise.all(neededShas.map(function (sha) {
+      return proxyBoardJson("/v1/board/files?sha256=" + encodeURIComponent(sha)).then(function (res) {
+        if (res && res.status === 200 && res.body && typeof res.body.content === "string") {
+          fetchedBySha[sha] = res.body.content;
+        }
+      });
+    })).then(function () {
+      var hydratedEntries = scopedBoard.entries.map(function (entry) {
+        if (!entry || typeof entry !== "object" || !entry.file || typeof entry.file !== "object") return entry;
+        var sha = String(entry.file.sha256 || "").trim().toLowerCase();
+        if (!sha || entry.file.content || fetchedBySha[sha] === undefined) return entry;
+        var entryTo = String(entry.to || "");
+        if (entryTo && entryTo !== "*" && entryTo !== targetSid) return entry;
+        if (boardSessionId(entry.session_id || "") === targetSid) return entry;
+        var hKey = targetSid + ":" + String(entry.id || "") + ":" + sha;
+        if (hydratedBoardFilesBySid[hKey]) return entry;
+        return Object.assign({}, entry, {
+          file: Object.assign({}, entry.file, { content: fetchedBySha[sha] }),
+        });
+      });
+      var confirmedKeys = deliveredKeys.filter(function (k) {
+        var shaPart = k.slice(k.lastIndexOf(":") + 1);
+        return fetchedBySha[shaPart] !== undefined;
+      });
+      return {
+        board: Object.assign({}, scopedBoard, { entries: hydratedEntries }),
+        keys: confirmedKeys,
+      };
+    });
+  }
 
   function shouldAutoSyncBoard(board, doc) {
     var normalized = board && Array.isArray(board.allowed_sessions) ? board : readGlobalBoard();
@@ -4909,97 +5056,156 @@
   function syncPreviewBoard(base, targetSidHint, targetRepoHint, opts) {
     if (!base) return Promise.resolve(null);
     var passive = Boolean(opts && opts.passive);
+    var skipProxyPull = Boolean(opts && opts.skipProxyPull);
+    var usingProxy = Boolean(boardProxyConfig());
     var docScope = typeof document !== "undefined" ? stateScope(document) : { repo: "", branch: "" };
     var targetSid = boardSessionId(targetSidHint || previewUiSessionId || docScope.branch || "");
     if (targetSid) {
       try { GM_setValue("clankers-arena-preview-base-" + targetSid, base); } catch (err) {}
     }
     var targetRepo = cleanBoardRepo(targetRepoHint || previewUiRepo || docScope.repo || "", targetSid);
-    var scopedBoard = scopeBoardForTarget(readGlobalBoard(), targetSid, targetRepo);
-    var targetIsAllowed = Boolean(targetSid && scopedBoard.allowed_sessions.indexOf(targetSid) !== -1);
-    var syncIso = new Date().toISOString();
-    if (targetSid && Array.isArray(scopedBoard.sessions)) {
-      scopedBoard.sessions = scopedBoard.sessions.map(function (row) {
-        if (!row || typeof row !== "object") return row;
-        var rSid = boardSessionId(row.session_id || row.branch || "");
-        if (rSid === targetSid) {
-          var nextUpdatedAt = passive && row.updated_at ? row.updated_at : syncIso;
-          return Object.assign({}, row, { updated_at: nextUpdatedAt });
-        }
-        return row;
-      });
+    function buildScopedSyncBoard() {
+      var scopedBoard = scopeBoardForTarget(readGlobalBoard(), targetSid, targetRepo);
+      var syncIso = new Date().toISOString();
+      if (targetSid && Array.isArray(scopedBoard.sessions)) {
+        scopedBoard.sessions = scopedBoard.sessions.map(function (row) {
+          if (!row || typeof row !== "object") return row;
+          var rSid = boardSessionId(row.session_id || row.branch || "");
+          if (rSid === targetSid) {
+            var nextUpdatedAt = passive && row.updated_at ? row.updated_at : syncIso;
+            return Object.assign({}, row, { updated_at: nextUpdatedAt });
+          }
+          return row;
+        });
+      }
+      if (Array.isArray(scopedBoard.removed_sessions)) {
+        scopedBoard.removed_sessions = scopedBoard.removed_sessions.filter(function (sid) {
+          return sid !== targetSid && scopedBoard.allowed_sessions.indexOf(sid) === -1;
+        });
+      }
+      return scopedBoard;
     }
-    if (Array.isArray(scopedBoard.removed_sessions)) {
-      scopedBoard.removed_sessions = scopedBoard.removed_sessions.filter(function (sid) {
-        return sid !== targetSid && scopedBoard.allowed_sessions.indexOf(sid) === -1;
-      });
-    }
-    return stateJson(base + "/api/board", { action: "sync", board: scopedBoard }).then(function (answer) {
-      if (answer && answer.status === 200 && answer.body) {
-        var answerSid = boardSessionId(answer.body.session_id || targetSid || "");
-        if (answerSid) {
-          try { GM_setValue("clankers-arena-preview-base-" + answerSid, base); } catch (err) {}
-        }
-        if (answerSid && answer.body.worker_reports && Array.isArray(answer.body.worker_reports[answerSid])) {
-          localSessionReportsBySid[answerSid] = answer.body.worker_reports[answerSid].slice();
-        }
-        if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
-        var srvAllowed = Array.isArray(answer.body.allowed_sessions) ? answer.body.allowed_sessions : [];
-        var missingAllowed = targetIsAllowed
-          ? (scopedBoard.allowed_sessions || []).filter(function (sid) {
-              return srvAllowed.indexOf(sid) === -1;
-            })
-          : [];
-        var needMainFix = Boolean(
-          targetIsAllowed &&
-          scopedBoard.main_session_id &&
-          scopedBoard.allowed_sessions.indexOf(scopedBoard.main_session_id) !== -1 &&
-          answer.body.main_session_id !== scopedBoard.main_session_id &&
-          !(scopedBoard.worker_ids && scopedBoard.worker_ids[scopedBoard.main_session_id])
-        );
-        if (needMainFix || missingAllowed.length > 0) {
-          var chain = Promise.resolve();
-          if (needMainFix) {
-            chain = chain.then(function () {
-              return stateJson(base + "/api/board", {
-                action: "set-main",
-                session_id: scopedBoard.main_session_id,
+    function runLocalPreviewSync(boardToSend, hydratedKeys) {
+      var targetIsAllowed = Boolean(targetSid && boardToSend.allowed_sessions.indexOf(targetSid) !== -1);
+      return stateJson(base + "/api/board", { action: "sync", board: boardToSend }).then(function (answer) {
+        if (answer && answer.status === 200 && answer.body) {
+          hydratedKeys.forEach(function (k) { hydratedBoardFilesBySid[k] = true; });
+          var answerSid = boardSessionId(answer.body.session_id || targetSid || "");
+          if (answerSid) {
+            try { GM_setValue("clankers-arena-preview-base-" + answerSid, base); } catch (err) {}
+          }
+          if (answerSid && answer.body.worker_reports && Array.isArray(answer.body.worker_reports[answerSid])) {
+            localSessionReportsBySid[answerSid] = answer.body.worker_reports[answerSid].slice();
+          }
+          if (answer.body.session_id) setPreviewUiSessionId(answer.body.session_id);
+          var srvAllowed = Array.isArray(answer.body.allowed_sessions) ? answer.body.allowed_sessions : [];
+          var missingAllowed = targetIsAllowed
+            ? (boardToSend.allowed_sessions || []).filter(function (sid) {
+                return srvAllowed.indexOf(sid) === -1;
+              })
+            : [];
+          var needMainFix = Boolean(
+            targetIsAllowed &&
+            boardToSend.main_session_id &&
+            boardToSend.allowed_sessions.indexOf(boardToSend.main_session_id) !== -1 &&
+            answer.body.main_session_id !== boardToSend.main_session_id &&
+            !(boardToSend.worker_ids && boardToSend.worker_ids[boardToSend.main_session_id])
+          );
+          var finalizeSync = function (finalAnswer) {
+            var finalBody = finalAnswer && finalAnswer.body ? finalAnswer.body : answer.body;
+            var finalSid = boardSessionId(finalBody.session_id || targetSid || "");
+            if (usingProxy) {
+              return proxyBoardJson("/v1/board", {
+                action: "merge",
+                board: finalBody,
+                session_id: finalSid,
+                repo: targetRepo,
+              }).then(function (mergedRes) {
+                if (mergedRes && mergedRes.status === 200 && mergedRes.body && mergedRes.body.board) {
+                  writeGlobalBoard(mergedRes.body.board, {
+                    passive: passive,
+                    fromProxy: true,
+                    revision: Number(mergedRes.body.revision),
+                  });
+                } else {
+                  writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), finalBody), {
+                    passive: passive,
+                    fromProxy: true,
+                  });
+                }
+                return finalAnswer;
+              });
+            }
+            writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), finalBody), { passive: passive });
+            return finalAnswer;
+          };
+          if (needMainFix || missingAllowed.length > 0) {
+            var chain = Promise.resolve();
+            if (needMainFix) {
+              chain = chain.then(function () {
+                return stateJson(base + "/api/board", {
+                  action: "set-main",
+                  session_id: boardToSend.main_session_id,
+                });
+              });
+            }
+            missingAllowed.forEach(function (mSid) {
+              chain = chain.then(function () {
+                var allowPayload = { action: "allow", session_id: mSid };
+                if (boardToSend.worker_ids && boardToSend.worker_ids[mSid]) {
+                  allowPayload.worker_id = boardToSend.worker_ids[mSid];
+                }
+                return stateJson(base + "/api/board", allowPayload);
               });
             });
-          }
-          missingAllowed.forEach(function (mSid) {
-            chain = chain.then(function () {
-              var allowPayload = { action: "allow", session_id: mSid };
-              if (scopedBoard.worker_ids && scopedBoard.worker_ids[mSid]) {
-                allowPayload.worker_id = scopedBoard.worker_ids[mSid];
+            return chain.then(function () {
+              return stateJson(base + "/api/board", { action: "sync", board: boardToSend });
+            }).then(function (healed) {
+              if (healed && healed.status === 200 && healed.body) {
+                var healedSid = boardSessionId(healed.body.session_id || targetSid || "");
+                if (healedSid && healed.body.worker_reports && Array.isArray(healed.body.worker_reports[healedSid])) {
+                  localSessionReportsBySid[healedSid] = healed.body.worker_reports[healedSid].slice();
+                }
+                return finalizeSync(healed);
               }
-              return stateJson(base + "/api/board", allowPayload);
+              return finalizeSync(answer);
             });
-          });
-          return chain.then(function () {
-            return stateJson(base + "/api/board", { action: "sync", board: scopedBoard });
-          }).then(function (healed) {
-            if (healed && healed.status === 200 && healed.body) {
-              var healedSid = boardSessionId(healed.body.session_id || targetSid || "");
-              if (healedSid && healed.body.worker_reports && Array.isArray(healed.body.worker_reports[healedSid])) {
-                localSessionReportsBySid[healedSid] = healed.body.worker_reports[healedSid].slice();
-              }
-              writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), healed.body), { passive: passive });
-              return healed;
-            }
-            writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body), { passive: passive });
-            return answer;
-          });
+          }
+          return finalizeSync(answer);
         }
-        writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body), { passive: passive });
-      } else if (targetSid && (!answer || answer.status === 0 || answer.status >= 500)) {
-        var discRes = applyBoardAction(readGlobalBoard(), {
-          type: "disconnect-session",
-          session_id: targetSid,
-        });
-        if (discRes.ok) writeGlobalBoard(discRes.board);
-      }
-      return answer;
+        if (targetSid && (!answer || answer.status === 0 || answer.status >= 500)) {
+          if (usingProxy) {
+            return proxyBoardJson("/v1/board", {
+              action: "action",
+              board_action: { type: "disconnect-session", session_id: targetSid },
+            }).then(function (discProxy) {
+              if (discProxy && discProxy.status === 200 && discProxy.body && discProxy.body.board) {
+                writeGlobalBoard(discProxy.body.board, {
+                  fromProxy: true,
+                  revision: Number(discProxy.body.revision),
+                });
+              }
+              return answer;
+            });
+          }
+          var discRes = applyBoardAction(readGlobalBoard(), {
+            type: "disconnect-session",
+            session_id: targetSid,
+          });
+          if (discRes.ok) writeGlobalBoard(discRes.board);
+        }
+        return answer;
+      });
+    }
+    if (!usingProxy) {
+      return runLocalPreviewSync(buildScopedSyncBoard(), []);
+    }
+    var prepPromise = skipProxyPull ? Promise.resolve(null) : pullProxyBoard(false);
+    return prepPromise.then(function () {
+      var scopedBoard = buildScopedSyncBoard();
+      return hydrateBoardFilesForTarget(scopedBoard, targetSid).then(function (hydrated) {
+        return runLocalPreviewSync(hydrated.board, hydrated.keys);
+      });
     });
   }
 
@@ -5047,15 +5253,38 @@
       if (isHeartbeatAction && event.data.action.session_id) {
         setPreviewUiSessionId(event.data.action.session_id);
       }
-      var outcome = applyBoardAction(readGlobalBoard(), event.data.action);
-      if (outcome.ok) writeGlobalBoard(outcome.board, { passive: isHeartbeatAction });
-      if (outcome.ok && base) {
-        syncPreviewBoard(
-          base,
-          event.data.action.session_id || event.data.action.branch || "",
-          event.data.action.repo || "",
-          { passive: isHeartbeatAction }
-        );
+      if (boardProxyConfig()) {
+        proxyBoardJson("/v1/board", {
+          action: "action",
+          board_action: event.data.action,
+        }).then(function (actRes) {
+          if (actRes && actRes.status === 200 && actRes.body && actRes.body.board) {
+            writeGlobalBoard(actRes.body.board, {
+              passive: isHeartbeatAction,
+              fromProxy: true,
+              revision: Number(actRes.body.revision),
+            });
+            if (base) {
+              syncPreviewBoard(
+                base,
+                event.data.action.session_id || event.data.action.branch || "",
+                event.data.action.repo || "",
+                { passive: isHeartbeatAction, skipProxyPull: true }
+              );
+            }
+          }
+        });
+      } else {
+        var outcome = applyBoardAction(readGlobalBoard(), event.data.action);
+        if (outcome.ok) writeGlobalBoard(outcome.board, { passive: isHeartbeatAction });
+        if (outcome.ok && base) {
+          syncPreviewBoard(
+            base,
+            event.data.action.session_id || event.data.action.branch || "",
+            event.data.action.repo || "",
+            { passive: isHeartbeatAction }
+          );
+        }
       }
     }
   }
@@ -5066,6 +5295,13 @@
       window.addEventListener("message", onPreviewMessage);
       window.addEventListener("pagehide", function () {
         if (!previewUiSessionId) return;
+        if (boardProxyConfig()) {
+          proxyBoardJson("/v1/board", {
+            action: "action",
+            board_action: { type: "disconnect-session", session_id: previewUiSessionId },
+          });
+          return;
+        }
         var closeRes = applyBoardAction(readGlobalBoard(), {
           type: "disconnect-session",
           session_id: previewUiSessionId,
@@ -5076,7 +5312,7 @@
     if (typeof GM_addValueChangeListener === "function") {
       var remoteBoardSyncPending = false;
       GM_addValueChangeListener(BOARD_KEY, function (_key, _oldVal, newVal, remote) {
-        if (!remote) return;
+        if (!remote || boardProxyConfig()) return;
         var incomingBoard = normalizeBoard(newVal !== undefined ? newVal : readGlobalBoard());
         var docScopeNow = stateScope(document);
         var selfSidNow = boardSessionId(previewUiSessionId || docScopeNow.branch || "");
@@ -7295,6 +7531,9 @@
   }
 
   function readGlobalBoard() {
+    if (boardProxyConfig() && proxyBoardCache) {
+      return proxyBoardCache;
+    }
     try {
       return normalizeBoard(GM_getValue(BOARD_KEY, null));
     } catch (err) {
@@ -7371,6 +7610,18 @@
   }
 
   function writeGlobalBoard(board, opts) {
+    if (boardProxyConfig()) {
+      var proxyNext = updateProxyBoardCache(board, opts && opts.revision);
+      lastHandledBoardMaterialSig = boardMaterialSignature(proxyNext);
+      if (!opts || !opts.fromProxy) {
+        proxyBoardJson("/v1/board", { action: "merge", board: proxyNext }).then(function (res) {
+          if (res && res.status === 200 && res.body && res.body.board) {
+            updateProxyBoardCache(res.body.board, Number(res.body.revision));
+          }
+        });
+      }
+      return proxyNext;
+    }
     var next = normalizeBoard(board);
     while (next.entries.length > 1 && JSON.stringify(next).length > MAX_BOARD_BYTES) {
       next.entries.shift();
@@ -7853,8 +8104,20 @@
 
   exposeChecks("board", {
     BOARD_KEY: BOARD_KEY,
+    BOARD_PROXY_HOST_KEY: BOARD_PROXY_HOST_KEY,
+    BOARD_PROXY_MASTER_KEY: BOARD_PROXY_MASTER_KEY,
     MAX_BOARD_FILE_BYTES: MAX_BOARD_FILE_BYTES,
     MAX_BOARD_BYTES: MAX_BOARD_BYTES,
+    boardProxyConfig: boardProxyConfig,
+    pullProxyBoard: pullProxyBoard,
+    hydrateBoardFilesForTarget: hydrateBoardFilesForTarget,
+    syncPreviewBoard: syncPreviewBoard,
+    resetBoardProxyCache: function () {
+      proxyBoardCache = null;
+      proxyBoardRevision = 0;
+      proxyBoardPullInFlight = null;
+      hydratedBoardFilesBySid = {};
+    },
     boardSessionId: boardSessionId,
     cleanWorkerId: cleanWorkerId,
     defaultWorkerId: defaultWorkerId,

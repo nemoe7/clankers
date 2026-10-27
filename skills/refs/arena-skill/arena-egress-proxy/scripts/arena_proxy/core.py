@@ -17,15 +17,18 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import VERSION, github_api, output, transfers
+from .board import BoardStore
 from .llm import LlmService
 from .store import Store
 
 API_CAP_BYTES = 1_000_000
+BOARD_BODY_CAP_BYTES = 4 * 1024 * 1024
 PUBLIC_ROUTES = ("/v1/health",)
 # The key route carries its own master check instead of the agent key.
 MASTER_ROUTES = ("/v1/key",)
 # A hidden route answers by name and appears in no route list.
 HIDDEN_ROUTES = ("/v1/rotate",)
+PRIVATE_BOARD_ROUTES = ("/v1/board", "/v1/board/files")
 ROUTES = (
   "/v1/health",
   "/v1/ping",
@@ -72,6 +75,7 @@ class ExtensionServer(ThreadingHTTPServer):
     llm,
     fetch_cap,
     stage_cap,
+    board_store=None,
   ):
     super().__init__(address, ExtensionHandler)
     self.agent_key = agent_key
@@ -84,17 +88,39 @@ class ExtensionServer(ThreadingHTTPServer):
     self.llm = llm
     self.fetch_cap = fetch_cap
     self.stage_cap = stage_cap
+    self.board_store = board_store
 
 
 class ExtensionHandler(BaseHTTPRequestHandler):
-  """Answer the key-gated routes over GET only."""
+  """Answer the key-gated routes and private master-key board routes."""
 
   server_version = f"arena-proxy/{VERSION}"
   protocol_version = "HTTP/1.1"
 
-  def do_GET(self):
+  def do_OPTIONS(self):
     try:
-      self._route()
+      self.send_response(204)
+      self.send_header("Access-Control-Allow-Origin", "*")
+      self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+      self.send_header(
+        "Access-Control-Allow-Headers",
+        "Content-Type, X-Master-Key, X-Extension-Key",
+      )
+      self.send_header("Access-Control-Max-Age", "86400")
+      self.send_header("Content-Length", "0")
+      self.end_headers()
+    except (BrokenPipeError, ConnectionResetError):
+      self.close_connection = True
+
+  def do_GET(self):
+    self._dispatch(self._route)
+
+  def do_POST(self):
+    self._dispatch(self._route_post)
+
+  def _dispatch(self, fn):
+    try:
+      fn()
     except (BrokenPipeError, ConnectionResetError):
       # A caller that leaves before the answer is not a fault: close without a traceback.
       self.close_connection = True
@@ -115,6 +141,9 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     route = path.rstrip("/") or "/"
     if route in HIDDEN_ROUTES:
       self._rotate(params)
+      return
+    if route in PRIVATE_BOARD_ROUTES:
+      self._board_get(route, params)
       return
     if route not in ROUTES:
       self._send_json(404, {"error": "unknown route", "routes": list(ROUTES)})
@@ -604,6 +633,110 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       ).encode()
     self._send(status, body)
 
+  def _route_post(self):
+    path, params = split_target(self.path)
+    route = path.rstrip("/") or "/"
+    if route in PRIVATE_BOARD_ROUTES:
+      self._board_post(route, params)
+      return
+    self._send_json(404, {"error": "unknown route", "routes": list(ROUTES)})
+
+  def _check_board_master(self, params):
+    expected = getattr(self.server, "master_key", "")
+    board_store = getattr(self.server, "board_store", None)
+    if not expected or board_store is None:
+      self._send_json(404, {"error": "unknown route", "routes": list(ROUTES)})
+      return None
+    supplied = (
+      params.get("master", [""])[0].strip()
+      or self.headers.get("X-Master-Key", "").strip()
+    )
+    if not supplied or not hmac.compare_digest(supplied, expected):
+      self._send_json(401, {"error": "wrong master key"})
+      return None
+    return board_store
+
+  def _read_json_body(self):
+    try:
+      length = int(self.headers.get("Content-Length") or "0")
+    except ValueError:
+      raise output.OutputError("invalid Content-Length") from None
+    if length < 0 or length > BOARD_BODY_CAP_BYTES:
+      raise transfers.TransferError(413, "request body exceeds board limit")
+    raw = self.rfile.read(length) if length > 0 else b"{}"
+    try:
+      parsed = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+      raise output.OutputError("request body must be valid JSON") from None
+    if not isinstance(parsed, dict):
+      raise output.OutputError("request body must be a JSON object")
+    return parsed
+
+  def _board_get(self, route, params):
+    board_store = self._check_board_master(params)
+    if board_store is None:
+      return
+    if route == "/v1/board":
+      since_raw = params.get("since", [""])[0].strip()
+      since = None
+      if since_raw:
+        try:
+          since = int(since_raw)
+        except ValueError:
+          self._send_json(400, {"error": "since must be an integer"})
+          return
+      session_id = params.get("session_id", [""])[0].strip()
+      repo = params.get("repo", [""])[0].strip()
+      self._send_json(
+        200, board_store.snapshot(since=since, session_id=session_id, repo=repo)
+      )
+      return
+    session_id = params.get("session_id", [""])[0].strip()
+    name = params.get("name", [""])[0].strip()
+    try:
+      found = board_store.get_file(session_id, name)
+    except ValueError as error:
+      self._send_json(400, {"error": str(error)})
+      return
+    if found is None:
+      self._send_json(404, {"error": "board file not found"})
+      return
+    self._send_json(200, {"ok": True, "file": found})
+
+  def _board_post(self, route, params):
+    board_store = self._check_board_master(params)
+    if board_store is None:
+      return
+    payload = self._read_json_body()
+    if route == "/v1/board/files":
+      session_id = str(payload.get("session_id") or "").strip()
+      try:
+        info = board_store.put_file(session_id, payload.get("file"))
+      except ValueError as error:
+        self._send_json(400, {"error": str(error)})
+        return
+      self._send_json(200, {"ok": True, "file": info})
+      return
+    mode = str(payload.get("action") or payload.get("type") or "sync").strip().lower()
+    session_id = str(payload.get("session_id") or "").strip()
+    repo = str(payload.get("repo") or "").strip()
+    if mode == "sync" and isinstance(payload.get("board"), dict):
+      result = board_store.sync(
+        payload["board"],
+        session_id=session_id,
+        repo=repo,
+        passive=bool(payload.get("passive")),
+      )
+      self._send_json(200, result)
+      return
+    action_body = (
+      payload.get("board_action")
+      if mode == "apply" and isinstance(payload.get("board_action"), dict)
+      else payload
+    )
+    result = board_store.apply(action_body, session_id=session_id, repo=repo)
+    self._send_json(200 if result.get("ok") else 400, result)
+
   def _send(self, status, body, content_type="application/json; charset=utf-8"):
     self.send_response(status)
     self.send_header("Content-Type", content_type)
@@ -634,6 +767,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
 def build_server(options):
   """Wire the store, the model service and the HTTP server from parsed options."""
   store = Store(options.state_dir)
+  board_store = BoardStore(os.path.join(options.state_dir, "board"))
   llm = LlmService(
     store,
     options.llm_base,
@@ -653,6 +787,7 @@ def build_server(options):
     llm=llm,
     fetch_cap=options.fetch_cap,
     stage_cap=options.stage_cap,
+    board_store=board_store,
   )
 
 

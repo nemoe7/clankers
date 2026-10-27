@@ -4104,6 +4104,111 @@ for raw in sys.stdin:
       assert.ok(!allowOutranksRemoval.removed_sessions.includes("alpha111-clankers"), "normalizeBoard drops allowlisted session from removed_sessions");
       assert.equal(allowOutranksRemoval.main_session_id, "alpha111-clankers");
     });
+
+    test("egress proxy thin board bridge uses master key, skips GM_setValue(BOARD_KEY), and hydrates file blobs once", async () => {
+      const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+      const gmStore = new Map([
+        ["clankers-arena-proxy-host", "arena-proxy.example.ts.net"],
+        ["clankers-arena-proxy-master", "master-secret-token"],
+      ]);
+      const gmWrites = [];
+      const httpCalls = [];
+      const sha = "a".repeat(64);
+      let proxyRev = 1;
+      const proxyBoardState = {
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T04:00:00Z" },
+          { session_id: "beta2222-clankers", repo: "clankers", updated_at: "2026-10-27T04:00:00Z" },
+        ],
+        entries: [
+          {
+            id: "pfile01",
+            session_id: "beta2222-clankers",
+            to: "alpha111-clankers",
+            repo: "clankers",
+            branch: "arena/beta2222-clankers",
+            at: "2026-10-27T04:01:00Z",
+            payload: { text: "patch ready" },
+            file: { name: "fix.patch", encoding: "utf-8", content: "", size: 11, sha256: sha },
+          },
+        ],
+      };
+      const checkBox = {
+        globalThis: {},
+        GM_getValue: (key, fallback) => (gmStore.has(key) ? gmStore.get(key) : fallback),
+        GM_setValue: (key, val) => {
+          gmWrites.push(key);
+          gmStore.set(key, val);
+        },
+        GM_xmlhttpRequest: (req) => {
+          httpCalls.push({ method: req.method, url: req.url, headers: req.headers || {}, data: req.data });
+          if (req.url === "https://arena-proxy.example.ts.net/v1/board") {
+            if (req.method === "GET") {
+              req.onload({ status: 200, responseText: JSON.stringify({ revision: proxyRev, board: proxyBoardState }) });
+              return;
+            }
+            const parsed = JSON.parse(req.data);
+            proxyRev += 1;
+            req.onload({ status: 200, responseText: JSON.stringify({ revision: proxyRev, board: parsed.board || proxyBoardState }) });
+            return;
+          }
+          if (req.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=")) {
+            req.onload({ status: 304, responseText: "" });
+            return;
+          }
+          if (req.url === `https://arena-proxy.example.ts.net/v1/board/files?sha256=${sha}`) {
+            req.onload({ status: 200, responseText: JSON.stringify({ sha256: sha, encoding: "utf-8", size: 11, content: "diff --git\n" }) });
+            return;
+          }
+          if (req.url === "https://8000-sandbox.e2b.app/api/board") {
+            const syncPayload = JSON.parse(req.data);
+            req.onload({
+              status: 200,
+              responseText: JSON.stringify(
+                Object.assign({}, syncPayload.board, {
+                  session_id: "alpha111-clankers",
+                  repo: "clankers",
+                }),
+              ),
+            });
+            return;
+          }
+          req.onload({ status: 404, responseText: "{}" });
+        },
+      };
+      checkBox.globalThis = checkBox;
+      vm.runInNewContext(source, checkBox, { filename: "arena.user.js" });
+      const boardApi = checkBox.CLANKERS_CHECKS.board;
+      const cfg = boardApi.boardProxyConfig();
+      assert.ok(cfg, "boardProxyConfig returns config when host and master are stored");
+      assert.equal(cfg.host, "https://arena-proxy.example.ts.net");
+      assert.equal(cfg.master, "master-secret-token");
+      await boardApi.syncPreviewBoard("https://8000-sandbox.e2b.app", "alpha111-clankers", "clankers");
+      assert.equal(gmWrites.includes(boardApi.BOARD_KEY), false, "proxy mode never writes BOARD_KEY to GM_setValue");
+      const proxyCalls = httpCalls.filter(c => c.url.startsWith("https://arena-proxy.example.ts.net/"));
+      assert.ok(proxyCalls.length >= 3, "calls GET /v1/board, GET /v1/board/files, and POST /v1/board");
+      for (const call of proxyCalls) {
+        assert.equal(call.headers["X-Master-Key"], "master-secret-token", "every proxy board request sends X-Master-Key");
+      }
+      const previewSyncCall = httpCalls.find(c => c.url === "https://8000-sandbox.e2b.app/api/board");
+      const previewSentEntry = JSON.parse(previewSyncCall.data).board.entries[0];
+      assert.equal(previewSentEntry.file.content, "diff --git\n", "file content is hydrated before posting to local /api/board");
+
+      httpCalls.length = 0;
+      await boardApi.syncPreviewBoard("https://8000-sandbox.e2b.app", "alpha111-clankers", "clankers");
+      assert.equal(
+        httpCalls.some(c => c.url.includes("/v1/board/files")),
+        false,
+        "already-hydrated file blob is not fetched a second time for the same target session",
+      );
+      assert.equal(
+        httpCalls.some(c => c.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=")),
+        true,
+        "subsequent sync uses ?since=<revision> conditional poll",
+      );
+    });
   }
 
 

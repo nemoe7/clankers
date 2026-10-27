@@ -874,3 +874,179 @@ def test_compact_github_links_stay_within_the_configured_api():
       pass
     else:
       raise AssertionError("an upstream next link must stay within the configured API")
+
+
+def post_json(port, target, payload, headers=None, method="POST"):
+  body_bytes = json.dumps(payload).encode("utf-8") if payload is not None else b""
+  req_headers = {"Content-Type": "application/json"}
+  if headers:
+    req_headers.update(headers)
+  connection = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
+  try:
+    connection.request(method, target, body=body_bytes, headers=req_headers)
+    response = connection.getresponse()
+    raw = response.read().decode("utf-8")
+    return (
+      response.status,
+      (json.loads(raw) if raw else {}),
+      dict(response.getheaders()),
+    )
+  finally:
+    connection.close()
+
+
+def test_private_board_routes_stay_hidden_and_require_master_key(tmp_path):
+  with backend(tmp_path) as handle:
+    assert "/v1/board" not in core.ROUTES
+    assert "/v1/board/files" not in core.ROUTES
+    status, ping_body = call(handle.port, f"/v1/ping?key={KEY}")
+    assert status == 200 and "board" not in ping_body
+    status, unknown_body = call(handle.port, "/v1/nothing")
+    assert status == 404 and "board" not in unknown_body
+    status, post_old, _ = post_json(handle.port, f"/v1/ping?key={KEY}", {})
+    assert status == 404 and "board" not in json.dumps(post_old)
+    assert call(handle.port, "/v1/board")[0] == 401
+    assert call(handle.port, f"/v1/board?key={KEY}")[0] == 401
+    assert call(handle.port, "/v1/board", {"X-Extension-Key": KEY})[0] == 401
+    assert post_json(handle.port, "/v1/board", {}, {"X-Master-Key": "wrong"})[0] == 401
+    opt_status, _, opt_headers = post_json(
+      handle.port, "/v1/board", None, method="OPTIONS"
+    )
+    assert opt_status == 204
+    assert opt_headers.get("Access-Control-Allow-Origin") == "*"
+    assert "X-Master-Key" in (opt_headers.get("Access-Control-Allow-Headers") or "")
+  with backend(tmp_path, master="") as closed:
+    status, closed_body = call(closed.port, f"/v1/board?master={MASTER}")
+    assert status == 404 and "board" not in closed_body
+
+
+def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
+  alpha = "alpha111-clankers"
+  delta = "delta222-clankers"
+  unopted = "solo999-daedalus"
+  headers = {"X-Master-Key": MASTER}
+  with backend(tmp_path) as handle:
+    st, init_snap = call(handle.port, "/v1/board", headers)
+    assert st == 200
+    assert json.loads(init_snap)["revision"] == 0
+
+    st, res1, _ = post_json(
+      handle.port,
+      "/v1/board",
+      {
+        "action": "sync",
+        "session_id": alpha,
+        "repo": "clankers",
+        "board": {
+          "session_id": alpha,
+          "repo": "clankers",
+          "main_session_id": alpha,
+          "allowed_sessions": [alpha, delta],
+          "removed_sessions": [alpha],
+          "worker_ids": {delta: "delta"},
+          "sessions": [
+            {"session_id": alpha, "repo": "clankers", "status": "active"},
+            {
+              "session_id": delta,
+              "repo": "clankers",
+              "status": "polling",
+              "polling": True,
+            },
+          ],
+          "entries": [
+            {
+              "id": "p-file-1",
+              "session_id": alpha,
+              "to": delta,
+              "repo": "clankers",
+              "at": "2026-10-27T05:00:00Z",
+              "text": "@delta review patch",
+              "file": {
+                "name": "patches/fix.patch",
+                "encoding": "utf-8",
+                "content": "diff --git a/a b/a\n",
+              },
+            }
+          ],
+        },
+      },
+      headers,
+    )
+    assert st == 200 and res1["ok"] is True
+    rev1 = res1["revision"]
+    assert rev1 == 1
+    assert alpha in res1["board"]["allowed_sessions"]
+    assert alpha not in res1["board"]["removed_sessions"]
+    stored_entry = res1["board"]["entries"][0]
+    assert stored_entry["file"]["staged"] is True
+    assert "content" not in stored_entry["file"]
+
+    st, unchanged_raw = call(handle.port, f"/v1/board?since={rev1}", headers)
+    assert st == 200 and json.loads(unchanged_raw) == {
+      "ok": True,
+      "unchanged": True,
+      "revision": rev1,
+    }
+
+    st, file_raw = call(
+      handle.port,
+      f"/v1/board/files?session_id={alpha}&name=patches/fix.patch",
+      headers,
+    )
+    assert st == 200
+    file_payload = json.loads(file_raw)["file"]
+    assert file_payload["content"] == "diff --git a/a b/a\n"
+    assert (
+      call(handle.port, f"/v1/board/files?session_id={alpha}&name=../secret", headers)[
+        0
+      ]
+      == 400
+    )
+
+    st, unopted_res, _ = post_json(
+      handle.port,
+      "/v1/board",
+      {
+        "action": "sync",
+        "session_id": unopted,
+        "repo": "daedalus",
+        "board": {
+          "session_id": unopted,
+          "repo": "daedalus",
+          "sessions": [{"session_id": unopted, "repo": "daedalus", "status": "active"}],
+        },
+      },
+      headers,
+    )
+    assert st == 200
+    assert unopted_res["scoped_board"]["entries"] == []
+    assert unopted_res["scoped_board"]["main_session_id"] == ""
+
+    st, act_res, _ = post_json(
+      handle.port,
+      "/v1/board",
+      {
+        "action": "apply",
+        "board_action": {
+          "action": "worker-task",
+          "session_id": alpha,
+          "target": "delta",
+          "op": "set",
+          "task_id": "t-delta",
+          "title": "Audit rule",
+        },
+      },
+      headers,
+    )
+    assert st == 200 and act_res["ok"] is True
+    assert delta in act_res["board"]["wakes"]
+
+  with backend(tmp_path) as restarted:
+    st, snap_raw = call(
+      restarted.port, f"/v1/board?session_id={delta}&repo=clankers", headers
+    )
+    assert st == 200
+    snap = json.loads(snap_raw)
+    assert snap["revision"] >= 2
+    assert len(snap["scoped_board"]["entries"]) == 1
+    assert snap["scoped_board"]["main_session_id"] == alpha

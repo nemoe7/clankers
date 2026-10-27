@@ -30,6 +30,7 @@ docker run --rm -p 8787:8787 \
 - A tagged auth key carries its tag to the node, so the compose file requests no tag of its own.
 - Funnel accepts connections from anywhere, so treat the URL as public and keep the token read-only.
 - The userscript can rotate the agent key through the hidden `/v1/rotate` route. Set `ARENA_PROXY_MASTER_KEY` first.
+- The userscript also syncs cross-session board state and files through private `/v1/board` and `/v1/board/files` master-key routes.
 
 ## Host notes
 
