@@ -1041,6 +1041,44 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
     assert st == 200 and act_res["ok"] is True
     assert delta in act_res["board"]["wakes"]
 
+    # Userscript v1.12.1 compatibility aliases ("merge", "action", "?sha256=", unopted heartbeat):
+    st, merge_res, _ = post_json(
+      handle.port,
+      "/v1/board",
+      {
+        "action": "merge",
+        "session_id": alpha,
+        "repo": "clankers",
+        "board": {"session_id": alpha, "repo": "clankers"},
+      },
+      headers,
+    )
+    assert st == 200 and merge_res["ok"] is True
+    st, hb_res, _ = post_json(
+      handle.port,
+      "/v1/board",
+      {
+        "action": "action",
+        "board_action": {
+          "type": "heartbeat",
+          "session_id": "fresh888-daedalus",
+          "repo": "daedalus",
+          "status": "active",
+        },
+      },
+      headers,
+    )
+    assert st == 200 and hb_res["ok"] is True
+    assert "fresh888-daedalus" not in {
+      s["session_id"] for s in hb_res["board"]["sessions"] if isinstance(s, dict)
+    }
+    sha = file_payload["sha256"]
+    st, sha_raw = call(handle.port, f"/v1/board/files?sha256={sha}", headers)
+    assert st == 200
+    sha_body = json.loads(sha_raw)
+    assert sha_body["content"] == "diff --git a/a b/a\n"
+    assert sha_body["file"]["content"] == "diff --git a/a b/a\n"
+
   with backend(tmp_path) as restarted:
     st, snap_raw = call(
       restarted.port, f"/v1/board?session_id={delta}&repo=clankers", headers

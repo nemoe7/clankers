@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.12.1
+// @name         Arena.ai | NemoUtils | v1.12.2
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.12.1
+// @version      1.12.2
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -4967,7 +4967,7 @@
           board: updateProxyBoardCache(res.body.board, Number(res.body.revision)),
         };
       }
-      if (res && res.status === 304 && proxyBoardCache) {
+      if (res && (res.status === 304 || (res.status === 200 && res.body && res.body.unchanged)) && proxyBoardCache) {
         return { changed: false, board: proxyBoardCache };
       }
       return null;
@@ -4982,7 +4982,7 @@
     if (!boardProxyConfig() || !targetSid || !scopedBoard || !Array.isArray(scopedBoard.entries)) {
       return Promise.resolve({ board: scopedBoard, keys: [] });
     }
-    var neededShas = [];
+    var neededItems = [];
     var seenSha = {};
     var deliveredKeys = [];
     scopedBoard.entries.forEach(function (entry) {
@@ -4990,24 +4990,32 @@
       var sha = String(entry.file.sha256 || "").trim().toLowerCase();
       if (!/^[0-9a-f]{64}$/.test(sha) || entry.file.content) return;
       var entryTo = String(entry.to || "");
+      var senderSid = boardSessionId(entry.session_id || "");
       if (entryTo && entryTo !== "*" && entryTo !== targetSid) return;
-      if (boardSessionId(entry.session_id || "") === targetSid) return;
+      if (senderSid === targetSid) return;
       var hKey = targetSid + ":" + String(entry.id || "") + ":" + sha;
       if (hydratedBoardFilesBySid[hKey]) return;
       deliveredKeys.push(hKey);
       if (!seenSha[sha]) {
         seenSha[sha] = true;
-        neededShas.push(sha);
+        neededItems.push({ sha: sha, sid: senderSid, name: String(entry.file.name || "") });
       }
     });
-    if (!neededShas.length) {
+    if (!neededItems.length) {
       return Promise.resolve({ board: scopedBoard, keys: [] });
     }
     var fetchedBySha = {};
-    return Promise.all(neededShas.map(function (sha) {
-      return proxyBoardJson("/v1/board/files?sha256=" + encodeURIComponent(sha)).then(function (res) {
-        if (res && res.status === 200 && res.body && typeof res.body.content === "string") {
-          fetchedBySha[sha] = res.body.content;
+    return Promise.all(neededItems.map(function (item) {
+      var q = "sha256=" + encodeURIComponent(item.sha);
+      if (item.sid && item.name) {
+        q += "&session_id=" + encodeURIComponent(item.sid) + "&name=" + encodeURIComponent(item.name);
+      }
+      return proxyBoardJson("/v1/board/files?" + q).then(function (res) {
+        var fileContent = res && res.status === 200 && res.body
+          ? (res.body.file && typeof res.body.file.content === "string" ? res.body.file.content : res.body.content)
+          : null;
+        if (typeof fileContent === "string") {
+          fetchedBySha[item.sha] = fileContent;
         }
       });
     })).then(function () {
@@ -5116,10 +5124,11 @@
             var finalSid = boardSessionId(finalBody.session_id || targetSid || "");
             if (usingProxy) {
               return proxyBoardJson("/v1/board", {
-                action: "merge",
+                action: "sync",
                 board: finalBody,
                 session_id: finalSid,
                 repo: targetRepo,
+                passive: passive,
               }).then(function (mergedRes) {
                 if (mergedRes && mergedRes.status === 200 && mergedRes.body && mergedRes.body.board) {
                   writeGlobalBoard(mergedRes.body.board, {
@@ -5176,7 +5185,7 @@
         if (targetSid && (!answer || answer.status === 0 || answer.status >= 500)) {
           if (usingProxy) {
             return proxyBoardJson("/v1/board", {
-              action: "action",
+              action: "apply",
               board_action: { type: "disconnect-session", session_id: targetSid },
             }).then(function (discProxy) {
               if (discProxy && discProxy.status === 200 && discProxy.body && discProxy.body.board) {
@@ -5255,7 +5264,7 @@
       }
       if (boardProxyConfig()) {
         proxyBoardJson("/v1/board", {
-          action: "action",
+          action: "apply",
           board_action: event.data.action,
         }).then(function (actRes) {
           if (actRes && actRes.status === 200 && actRes.body && actRes.body.board) {
@@ -5807,7 +5816,6 @@
         saveStampPair(known),
         (known && known.digest) || "",
         saveStampPair(body),
-        (body && body.digest) || "",
       ].join("|");
     }
 

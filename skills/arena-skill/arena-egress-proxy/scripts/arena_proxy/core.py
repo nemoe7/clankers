@@ -693,15 +693,21 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       return
     session_id = params.get("session_id", [""])[0].strip()
     name = params.get("name", [""])[0].strip()
+    sha256 = params.get("sha256", [""])[0].strip().lower()
     try:
-      found = board_store.get_file(session_id, name)
+      if session_id and name:
+        found = board_store.get_file(session_id, name)
+      elif sha256:
+        found = board_store.get_file_by_sha256(sha256)
+      else:
+        found = board_store.get_file(session_id, name)
     except ValueError as error:
       self._send_json(400, {"error": str(error)})
       return
     if found is None:
       self._send_json(404, {"error": "board file not found"})
       return
-    self._send_json(200, {"ok": True, "file": found})
+    self._send_json(200, {"ok": True, **found, "file": found})
 
   def _board_post(self, route, params):
     board_store = self._check_board_master(params)
@@ -720,7 +726,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     mode = str(payload.get("action") or payload.get("type") or "sync").strip().lower()
     session_id = str(payload.get("session_id") or "").strip()
     repo = str(payload.get("repo") or "").strip()
-    if mode == "sync" and isinstance(payload.get("board"), dict):
+    if mode in ("sync", "merge") and isinstance(payload.get("board"), dict):
       result = board_store.sync(
         payload["board"],
         session_id=session_id,
@@ -731,7 +737,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       return
     action_body = (
       payload.get("board_action")
-      if mode == "apply" and isinstance(payload.get("board_action"), dict)
+      if mode in ("apply", "action") and isinstance(payload.get("board_action"), dict)
       else payload
     )
     result = board_store.apply(action_body, session_id=session_id, repo=repo)

@@ -4158,8 +4158,8 @@ for raw in sys.stdin:
             req.onload({ status: 304, responseText: "" });
             return;
           }
-          if (req.url === `https://arena-proxy.example.ts.net/v1/board/files?sha256=${sha}`) {
-            req.onload({ status: 200, responseText: JSON.stringify({ sha256: sha, encoding: "utf-8", size: 11, content: "diff --git\n" }) });
+          if (req.url.startsWith("https://arena-proxy.example.ts.net/v1/board/files?") && req.url.includes(`sha256=${sha}`)) {
+            req.onload({ status: 200, responseText: JSON.stringify({ ok: true, sha256: sha, encoding: "utf-8", size: 11, content: "diff --git\n", file: { sha256: sha, encoding: "utf-8", size: 11, content: "diff --git\n" } }) });
             return;
           }
           if (req.url === "https://8000-sandbox.e2b.app/api/board") {

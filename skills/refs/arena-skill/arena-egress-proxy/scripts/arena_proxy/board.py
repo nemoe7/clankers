@@ -1115,6 +1115,8 @@ def apply_board_action(board, action):
     hb_sid = board_session_id(action.get("session_id") or action.get("branch") or "")
     if not hb_sid:
       return False, "missing-session-id", next_board
+    if next_board["allowed_sessions"] and hb_sid not in next_board["allowed_sessions"]:
+      return True, "", next_board
     next_board["removed_sessions"] = [
       item for item in next_board["removed_sessions"] if item != hb_sid
     ]
@@ -1418,6 +1420,49 @@ class BoardStore:
       raise ValueError(err or "missing-file-content")
     with self.lock:
       return self._write_file_locked(session_id, meta["name"], raw_bytes, meta)
+
+  def get_file_by_sha256(self, sha256):
+    """Read a staged board file attachment matching a 64-hex SHA-256 digest."""
+    digest = str(sha256 or "").strip().lower()
+    if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+      raise ValueError("invalid-sha256")
+    with self.lock:
+      if not self.files_dir.is_dir():
+        return None
+      for meta_path in self.files_dir.rglob("*.meta.json"):
+        try:
+          saved_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+          continue
+        if str(saved_meta.get("sha256") or "").lower() != digest:
+          continue
+        target = meta_path.with_name(meta_path.name[: -len(".meta.json")])
+        if not target.is_file():
+          continue
+        raw_bytes = target.read_bytes()
+        if hashlib.sha256(raw_bytes).hexdigest() != digest:
+          continue
+        encoding = (
+          saved_meta.get("encoding")
+          if saved_meta.get("encoding") in ("utf-8", "base64")
+          else "base64"
+        )
+        if encoding == "utf-8":
+          try:
+            content = raw_bytes.decode("utf-8")
+          except UnicodeDecodeError:
+            encoding = "base64"
+            content = base64.b64encode(raw_bytes).decode("ascii")
+        else:
+          content = base64.b64encode(raw_bytes).decode("ascii")
+        return {
+          "name": str(saved_meta.get("name") or target.name),
+          "encoding": encoding,
+          "content": content,
+          "size": len(raw_bytes),
+          "sha256": digest,
+        }
+      return None
 
   def get_file(self, session_id, name):
     """Read a staged board file attachment as descriptor with inline content."""
