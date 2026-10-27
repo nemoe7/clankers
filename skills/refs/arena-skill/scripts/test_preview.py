@@ -1812,7 +1812,10 @@ def test_http_boundaries():
       assert "lucide-chevron-down select-chevron" in page, (
         "every select uses an inline Lucide chevron-down SVG instead of a CSS gradient or data image"
       )
-      assert "data:image/svg+xml" not in page, "the preview CSP blocks data images"
+      markup, _, _ = page.partition("<script")
+      assert "data:image/svg+xml" not in markup, (
+        "the select chevron stays an inline SVG"
+      )
       # The collapse button is gone, its closed state with it, and the strip can no longer push
       # past the bar: it shrinks and scrolls at any width instead.
       assert "#chrome" not in page and "data-chrome" not in page

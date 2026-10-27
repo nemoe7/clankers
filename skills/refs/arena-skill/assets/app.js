@@ -2453,6 +2453,11 @@ document.addEventListener('input', event => {
   if (slot) slot.checked = Boolean(target.value.trim());
 });
 document.addEventListener('click', event => {
+  const diagram = event.target?.closest?.('.mermaid-diagram');
+  if (diagram) {
+    openMermaidModal(diagram);
+    return;
+  }
   const image = event.target?.tagName === 'IMG' || event.target?.tagName === 'img'
     ? event.target : event.target?.closest?.('.report img');
   if (image && ($('#report')?.contains?.(image) || image.closest?.('#report, .report'))) {
@@ -2486,6 +2491,12 @@ document.addEventListener('keydown', event => {
     document.documentElement.dataset.keyboardNav = 'true';
   }
   const target = event.target;
+  const diagram = target?.closest?.('.mermaid-diagram');
+  if (diagram && (event.key === 'Enter' || event.key === ' ')) {
+    event.preventDefault();
+    openMermaidModal(diagram);
+    return;
+  }
   if (!target || typeof target.className !== 'string' ||
       !target.className.split(' ').includes('task-title')) return;
   if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -2842,7 +2853,7 @@ function wrapMermaidLabel(label, maxChars = 24) {
   if (current) lines.push(current);
   return lines.length ? lines : [text];
 }
-function renderFlowchartSvg(lines, header, config) {
+function renderFlowchartSvg(lines, header, config, stateMarkers = null) {
   const dirMatch = /^(?:flowchart|graph)(?:\s+(TD|TB|BT|LR|RL))?\s*$/.exec(header);
   if (!dirMatch) throw new Error('Invalid flowchart header');
   const dir = dirMatch[1] || 'TD';
@@ -2879,20 +2890,40 @@ function renderFlowchartSvg(lines, header, config) {
   if (!nodes.size) throw new Error('Empty flowchart');
   const ordered = [...nodes.values()];
   for (const node of ordered) {
+    node.marker = node.id === stateMarkers?.start ? 'start' : node.id === stateMarkers?.end ? 'end' : '';
     node.lines = wrapMermaidLabel(node.label, node.shape === 'diamond' ? 20 : 26);
-    const longest = Math.max(6, ...node.lines.map(l => l.length));
+    const longest = node.marker ? 0 : Math.max(6, ...node.lines.map(l => l.length));
     node.w = Math.round(Math.max(148, longest * 7.6 + (node.shape === 'diamond' ? 64 : 28)));
     node.h = Math.round(Math.max(44, node.lines.length * 18 + (node.shape === 'diamond' ? 28 : 18)));
   }
+  const outgoing = new Map(ordered.map(node => [node.id, []]));
+  edges.forEach((edge, index) => outgoing.get(edge.from).push({ edge, index }));
+  const marks = new Map();
+  const backEdges = new Set();
+  function visit(id) {
+    marks.set(id, 1);
+    for (const { edge, index } of outgoing.get(id)) {
+      if (edge.from === edge.to) continue;
+      const mark = marks.get(edge.to) || 0;
+      if (mark === 1) backEdges.add(index);
+      else if (!mark) visit(edge.to);
+    }
+    marks.set(id, 2);
+  }
+  for (const node of ordered) if (!marks.has(node.id)) visit(node.id);
   const depths = new Map(ordered.map(node => [node.id, 0]));
   for (let pass = 0; pass < ordered.length; pass++) {
-    for (const edge of edges) {
-      const dFrom = depths.get(edge.from) || 0;
-      const dTo = depths.get(edge.to) || 0;
-      if (edge.from !== edge.to && dTo < dFrom + 1 && dFrom + 1 < ordered.length) {
-        depths.set(edge.to, dFrom + 1);
+    let changed = false;
+    edges.forEach((edge, index) => {
+      const from = backEdges.has(index) ? edge.to : edge.from;
+      const to = backEdges.has(index) ? edge.from : edge.to;
+      const next = depths.get(from) + 1;
+      if (from !== to && depths.get(to) < next) {
+        depths.set(to, next);
+        changed = true;
       }
-    }
+    });
+    if (!changed) break;
   }
   const layers = [];
   for (const node of ordered) {
@@ -2905,11 +2936,21 @@ function renderFlowchartSvg(lines, header, config) {
   const maxBreadth = Math.max(1, ...denseLayers.map(layer => layer.length));
   const boxW = Math.max(148, ...ordered.map(n => n.w));
   const boxH = Math.max(44, ...ordered.map(n => n.h));
+  const pairKey = edge => [edge.from, edge.to].sort().join('|');
+  const pairGroups = new Map();
+  edges.forEach((edge, index) => {
+    const key = pairKey(edge);
+    if (!pairGroups.has(key)) pairGroups.set(key, []);
+    pairGroups.get(key).push(index);
+  });
   const hasEdgeLabels = edges.some(e => Boolean(e.label));
   const maxPillW = Math.max(0, ...edges.map(e => e.pillW || 0));
   const maxPillH = Math.max(0, ...edges.map(e => e.pillH || 0));
+  const maxParallelLabels = Math.max(0, ...[...pairGroups.values()]
+    .map(group => group.filter(index => edges[index].label).length));
+  const labelStack = maxParallelLabels * (maxPillH + 8) + 8;
   const mainGap = hasEdgeLabels
-    ? (horizontal ? Math.max(96, maxPillW + 28) : Math.max(76, maxPillH + 28))
+    ? (horizontal ? Math.max(96, maxPillW + 28) : Math.max(76, maxPillH + 28, labelStack))
     : 56;
   const crossGap = 44;
   const pad = 24;
@@ -2926,73 +2967,119 @@ function renderFlowchartSvg(lines, header, config) {
       const y = horizontal
         ? pad + Math.round((spanH - layerH) / 2) + slotIdx * (boxH + crossGap)
         : pad + layerIdx * (boxH + mainGap);
-      coords.set(node.id, { x, y, cx: x + boxW / 2, cy: y + boxH / 2, layerIdx });
+      const cx = x + boxW / 2;
+      const cy = y + boxH / 2;
+      const radius = node.marker === 'start' ? 8 : node.marker === 'end' ? 10 : 0;
+      coords.set(node.id, {
+        x, y, cx, cy, layerIdx,
+        left: radius ? cx - radius : x - (node.shape === 'diamond' ? 6 : 0),
+        right: radius ? cx + radius : x + boxW + (node.shape === 'diamond' ? 6 : 0),
+        top: radius ? cy - radius : y - (node.shape === 'diamond' ? 4 : 0),
+        bottom: radius ? cy + radius : y + boxH + (node.shape === 'diamond' ? 4 : 0),
+      });
     });
   });
-  const width = horizontal
+  const feedbackSpace = backEdges.size ? Math.max(96, (horizontal ? maxPillH : maxPillW) + 48) : 0;
+  let width = horizontal
     ? pad * 2 + denseLayers.length * boxW + (denseLayers.length - 1) * mainGap
-    : pad * 2 + Math.max(spanW, boxW + 40);
-  const height = horizontal
-    ? pad * 2 + Math.max(spanH, boxH + 32)
+    : pad * 2 + Math.max(spanW, boxW + 40) + feedbackSpace;
+  let height = horizontal
+    ? pad * 2 + Math.max(spanH, boxH + 32) + feedbackSpace
     : pad * 2 + denseLayers.length * boxH + (denseLayers.length - 1) * mainGap;
   const parts = [
-    `<${'svg'} class="mermaid-svg" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" data-diagram-type="flowchart" data-direction="${dir}">`,
+    '',
     '<defs><marker id="mermaid-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" /></marker></defs>',
   ];
-  const pairGroups = new Map();
-  edges.forEach((edge, idx) => {
-    const key = `${edge.from}->${edge.to}`;
-    if (!pairGroups.has(key)) pairGroups.set(key, []);
-    pairGroups.get(key).push(idx);
-  });
   const edgeLineParts = [];
   const edgeLabelParts = [];
-  const overlapsAnyNode = (lx, ly, pw, ph) => {
-    const left = lx - pw / 2;
-    const right = lx + pw / 2;
-    const top = ly - ph / 2;
-    const bottom = ly + ph / 2;
-    for (const pos of coords.values()) {
-      if (right > pos.x - 4 && left < pos.x + boxW + 4 && bottom > pos.y - 4 && top < pos.y + boxH + 4) {
-        return true;
+  const placedLabels = [];
+  const nodeRight = Math.max(...[...coords.values()].map(pos => pos.right));
+  const nodeBottom = Math.max(...[...coords.values()].map(pos => pos.bottom));
+  const feedbackOrder = [...backEdges];
+  function placeLabel(cx, cy, w, h) {
+    const clear = rect => {
+      if (rect.x < 4 || rect.y < 4 || rect.x + w > width - 4 || rect.y + h > height - 4) return false;
+      const overlaps = box => rect.x < box.right + 4 && rect.x + w > box.left - 4 &&
+        rect.y < box.bottom + 4 && rect.y + h > box.top - 4;
+      return ![...coords.values()].some(overlaps) && !placedLabels.some(overlaps);
+    };
+    const directions = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+    for (let ring = 0; ring <= 12; ring++) {
+      for (const [dx, dy] of directions) {
+        if (ring && !dx && !dy) continue;
+        const rect = {
+          x: Math.round(cx - w / 2 + dx * ring * (w + 8) / 2),
+          y: Math.round(cy - h / 2 + dy * ring * (h + 8) / 2),
+        };
+        if (clear(rect)) return rect;
       }
     }
-    return false;
-  };
+    width = Math.max(width, w + 2 * pad);
+    const rect = { x: pad, y: height + 8 };
+    height = rect.y + h + 8;
+    return rect;
+  }
   edges.forEach((edge, idx) => {
     const a = coords.get(edge.from);
     const b = coords.get(edge.to);
     if (!a || !b) return;
-    const siblings = pairGroups.get(`${edge.from}->${edge.to}`) || [idx];
+    const siblings = pairGroups.get(pairKey(edge));
     const slot = siblings.indexOf(idx);
-    const shift = siblings.length > 1 ? Math.round((slot - (siblings.length - 1) / 2) * 32) : 0;
-    const x1 = (horizontal ? (a.cx <= b.cx ? a.x + boxW : a.x) : a.cx) + (horizontal ? 0 : shift);
-    const y1 = (horizontal ? a.cy : (a.cy <= b.cy ? a.y + boxH : a.y)) + (horizontal ? shift : 0);
-    const x2 = (horizontal ? (a.cx <= b.cx ? b.x : b.x + boxW) : b.cx) + (horizontal ? 0 : shift);
-    const y2 = (horizontal ? b.cy : (a.cy <= b.cy ? b.y : b.y + boxH)) + (horizontal ? shift : 0);
+    const shift = (slot - (siblings.length - 1) / 2) * 48;
+    const x1 = horizontal ? (a.cx <= b.cx ? a.right : a.left) : a.cx;
+    const y1 = horizontal ? a.cy : (a.cy <= b.cy ? a.bottom : a.top);
+    const x2 = horizontal ? (a.cx <= b.cx ? b.left : b.right) : b.cx;
+    const y2 = horizontal ? b.cy : (a.cy <= b.cy ? b.top : b.bottom);
     const dash = edge.dotted ? ' stroke-dasharray="4 3"' : '';
     const marker = edge.open ? '' : ' marker-end="url(#mermaid-arrow)"';
-    edgeLineParts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
-    if (edge.label && edge.labelLines.length) {
-      const labelVerticalShift = siblings.length > 1 ? Math.round((slot - (siblings.length - 1) / 2) * 16) : 0;
-      let mx = Math.round((x1 + x2) / 2);
-      let my = Math.round((y1 + y2) / 2) + labelVerticalShift;
-      if (overlapsAnyNode(mx, my, edge.pillW, edge.pillH)) {
-        if (horizontal && x2 !== x1) {
-          const gapX = a.cx <= b.cx ? Math.round(a.x + boxW + mainGap / 2) : Math.round(a.x - mainGap / 2);
-          const t = Math.max(0.15, Math.min(0.85, (gapX - x1) / (x2 - x1)));
-          mx = Math.round(x1 + (x2 - x1) * t);
-          my = Math.round(y1 + (y2 - y1) * t) + labelVerticalShift;
-        } else if (!horizontal && y2 !== y1) {
-          const gapY = a.cy <= b.cy ? Math.round(a.y + boxH + mainGap / 2) : Math.round(a.y - mainGap / 2);
-          const t = Math.max(0.15, Math.min(0.85, (gapY - y1) / (y2 - y1)));
-          mx = Math.round(x1 + (x2 - x1) * t);
-          my = Math.round(y1 + (y2 - y1) * t) + labelVerticalShift;
-        }
+    let mx = (x1 + x2) / 2;
+    let my = (y1 + y2) / 2;
+    if (edge.from === edge.to) {
+      const reach = 48 + slot * 24;
+      const side = Math.min(10, (a.bottom - a.top) / 3);
+      width = Math.max(width, a.right + reach + 12);
+      edgeLineParts.push(`<path class="mermaid-edge" d="M ${a.right} ${a.cy - side} C ${a.right + reach} ${a.cy - side * 3} ${a.right + reach} ${a.cy + side * 3} ${a.right} ${a.cy + side}" fill="none" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
+      mx = a.right + reach * 0.75;
+      my = a.cy;
+    } else if (backEdges.has(idx)) {
+      const feedbackSlot = feedbackOrder.indexOf(idx);
+      if (horizontal) {
+        const rail = nodeBottom + Math.max(32, edge.pillH / 2 + 16) + feedbackSlot * 28;
+        const direction = Math.sign(b.cx - a.cx) || 1;
+        const bend = Math.min(24, Math.abs(b.cx - a.cx) / 3);
+        height = Math.max(height, rail + edge.pillH / 2 + pad);
+        edgeLineParts.push(`<path class="mermaid-edge" d="M ${a.cx} ${a.bottom} C ${a.cx} ${rail} ${a.cx} ${rail} ${a.cx + direction * bend} ${rail} L ${b.cx - direction * bend} ${rail} C ${b.cx} ${rail} ${b.cx} ${rail} ${b.cx} ${b.bottom}" fill="none" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
+        mx = (a.cx + b.cx) / 2;
+        my = rail;
+      } else {
+        const rail = nodeRight + Math.max(32, edge.pillW / 2 + 16) + feedbackSlot * 28;
+        const direction = Math.sign(b.cy - a.cy) || 1;
+        const bend = Math.min(24, Math.abs(b.cy - a.cy) / 3);
+        width = Math.max(width, rail + edge.pillW / 2 + pad);
+        edgeLineParts.push(`<path class="mermaid-edge" d="M ${a.right} ${a.cy} C ${rail} ${a.cy} ${rail} ${a.cy} ${rail} ${a.cy + direction * bend} L ${rail} ${b.cy - direction * bend} C ${rail} ${b.cy} ${rail} ${b.cy} ${b.right} ${b.cy}" fill="none" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
+        mx = rail;
+        my = (a.cy + b.cy) / 2;
       }
-      const rectX = Math.round(mx - edge.pillW / 2);
-      const rectY = Math.round(my - edge.pillH / 2);
-      edgeLabelParts.push(`<rect x="${rectX}" y="${rectY}" width="${edge.pillW}" height="${edge.pillH}" rx="4" fill="var(--bg)" stroke="var(--border)" stroke-width="1" />`);
+    } else if (siblings.length > 1) {
+      const controlX = Math.max(4, Math.min(width - 4, mx + (horizontal ? 0 : shift)));
+      const controlY = Math.max(4, Math.min(height - 4, my + (horizontal ? shift : 0)));
+      edgeLineParts.push(`<path class="mermaid-edge" d="M ${x1} ${y1} Q ${controlX} ${controlY} ${x2} ${y2}" fill="none" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
+      mx = (x1 + 2 * controlX + x2) / 4;
+      my = (y1 + 2 * controlY + y2) / 4;
+    } else {
+      edgeLineParts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
+    }
+    if (edge.label && edge.labelLines.length) {
+      const labeledSiblings = siblings.filter(index => edges[index].label);
+      if (labeledSiblings.length > 1 && edge.from !== edge.to && !backEdges.has(idx)) {
+        const labelSlot = labeledSiblings.indexOf(idx);
+        my += (labelSlot - (labeledSiblings.length - 1) / 2) * (maxPillH + 8);
+      }
+      const { x: rectX, y: rectY } = placeLabel(mx, my, edge.pillW, edge.pillH);
+      placedLabels.push({ left: rectX, top: rectY, right: rectX + edge.pillW, bottom: rectY + edge.pillH });
+      mx = rectX + edge.pillW / 2;
+      my = rectY + edge.pillH / 2;
+      edgeLabelParts.push(`<rect class="mermaid-edge-label-bg" x="${rectX}" y="${rectY}" width="${edge.pillW}" height="${edge.pillH}" rx="4" fill="var(--bg)" stroke="var(--border)" stroke-width="1" />`);
       if (edge.labelLines.length === 1) {
         edgeLabelParts.push(`<text class="mermaid-edge-label" x="${mx}" y="${my + 4}" text-anchor="middle" fill="var(--text)" font-size="12">${escapeSvgText(edge.labelLines[0])}</text>`);
       } else {
@@ -3007,6 +3094,15 @@ function renderFlowchartSvg(lines, header, config) {
     const pos = coords.get(node.id);
     const rx = node.shape === 'round' ? 12 : node.shape === 'circle' ? 22 : 6;
     parts.push(`<g class="mermaid-node" data-node-id="${escapeSvgText(node.id)}">`);
+    if (node.marker === 'start') {
+      parts.push(`<circle cx="${pos.cx}" cy="${pos.cy}" r="8" fill="var(--text)" /></g>`);
+      continue;
+    }
+    if (node.marker === 'end') {
+      parts.push(`<circle cx="${pos.cx}" cy="${pos.cy}" r="10" fill="var(--panel)" stroke="var(--text)" stroke-width="1.5" />`);
+      parts.push(`<circle cx="${pos.cx}" cy="${pos.cy}" r="5" fill="var(--text)" /></g>`);
+      continue;
+    }
     if (node.shape === 'diamond') {
       const pts = `${pos.cx},${pos.y - 4} ${pos.x + boxW + 6},${pos.cy} ${pos.cx},${pos.y + boxH + 4} ${pos.x - 6},${pos.cy}`;
       parts.push(`<polygon points="${pts}" fill="var(--panel)" stroke="var(--border)" stroke-width="1.5" />`);
@@ -3023,6 +3119,7 @@ function renderFlowchartSvg(lines, header, config) {
   }
   parts.push(...edgeLabelParts);
   parts.push('</svg>');
+  parts[0] = `<${'svg'} class="mermaid-svg" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" data-diagram-type="flowchart" data-direction="${dir}">`;
   return parts.join('');
 }
 function renderSequenceSvg(lines, config) {
@@ -3038,6 +3135,20 @@ function renderSequenceSvg(lines, config) {
     const partMatch = /^(?:participant|actor)\s+([A-Za-z0-9_.-]+)(?:\s+as\s+(.+))?$/i.exec(line);
     if (partMatch) {
       ensureActor(partMatch[1], partMatch[2] || partMatch[1]);
+      continue;
+    }
+    const noteMatch = /^note\s+(over|left\s+of|right\s+of)\s+([A-Za-z0-9_.-]+)(?:\s*,\s*([A-Za-z0-9_.-]+))?\s*:\s*(.*)$/i.exec(line);
+    if (noteMatch) {
+      const placement = noteMatch[1].toLowerCase().split(/\s+/)[0];
+      if (placement !== 'over' && noteMatch[3]) throw new Error(`Invalid sequenceDiagram note: ${line}`);
+      const text = noteMatch[4].replace(/<br\s*\/?>/gi, '\n').trim();
+      if (/<[a-z!/][^>]*>/i.test(text)) throw new Error('HTML labels are disabled in strict mode');
+      ensureActor(noteMatch[2]);
+      if (noteMatch[3]) ensureActor(noteMatch[3]);
+      const noteLines = wrapMermaidLabel(text, 26);
+      const noteWidth = Math.max(120, Math.round(Math.max(...noteLines.map(value => value.length)) * 6.8 + 24));
+      messages.push({ type: 'note', placement, from: noteMatch[2], to: noteMatch[3] || noteMatch[2], lines: noteLines, width: noteWidth });
+      if (messages.length > config.maxEdges) throw new Error('Mermaid edge limit exceeded');
       continue;
     }
     const msgMatch = /^([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)\s*(-->>|->>|-->|->|--x|-x)\s*([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)\s*:\s*(.*)$/.exec(line);
@@ -3057,50 +3168,78 @@ function renderSequenceSvg(lines, config) {
   const pad = 24;
   const headH = 38;
   const rowH = 44;
-  const width = Math.max(240, pad * 2 + actorList.length * colW);
-  const height = pad * 2 + headH + Math.max(1, messages.length) * rowH + 24;
+  const notes = messages.filter(msg => msg.type === 'note');
+  const overMargin = Math.max(0, ...notes.filter(note => note.placement === 'over' && note.from === note.to)
+    .map(note => note.width / 2 - colW / 2 - pad + 4));
+  const leftExtra = Math.max(overMargin, ...notes.filter(note => note.placement === 'left').map(note => note.width), 0);
+  const rightExtra = Math.max(overMargin, ...notes.filter(note => note.placement === 'right').map(note => note.width), 0);
+  const width = Math.max(240, pad * 2 + actorList.length * colW + leftExtra + rightExtra);
+  const rowHeight = msg => msg.type === 'note' ? msg.lines.length * 16 + 28 : rowH;
+  const height = pad * 2 + headH + Math.max(rowH, messages.reduce((sum, msg) => sum + rowHeight(msg), 0)) + 24;
   const parts = [
     `<${'svg'} class="mermaid-svg" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" data-diagram-type="sequenceDiagram">`,
     '<defs><marker id="mermaid-seq-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" /></marker></defs>',
   ];
   const xOf = new Map();
   actorList.forEach((actor, idx) => {
-    const cx = pad + idx * colW + colW / 2;
+    const cx = pad + leftExtra + idx * colW + colW / 2;
     xOf.set(actor.id, cx);
     parts.push(`<g class="mermaid-actor" data-actor-id="${escapeSvgText(actor.id)}">`);
     parts.push(`<line x1="${cx}" y1="${pad + headH}" x2="${cx}" y2="${height - pad}" stroke="var(--border)" stroke-dasharray="4 3" />`);
     parts.push(`<rect x="${cx - 60}" y="${pad}" width="120" height="${headH}" rx="6" fill="var(--panel)" stroke="var(--border)" stroke-width="1.5" />`);
     parts.push(`<text x="${cx}" y="${pad + 23}" text-anchor="middle" fill="var(--text)" font-size="13">${escapeSvgText(actor.label)}</text></g>`);
   });
-  messages.forEach((msg, idx) => {
-    const y = pad + headH + (idx + 1) * rowH - 8;
-    const x1 = xOf.get(msg.from) || pad;
-    const x2 = xOf.get(msg.to) || pad;
-    const dash = msg.arrow.startsWith('--') ? ' stroke-dasharray="4 3"' : '';
-    parts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="var(--muted)" stroke-width="1.5"${dash} marker-end="url(#mermaid-seq-arrow)" />`);
-    if (msg.text) {
-      parts.push(`<text class="mermaid-edge-label" x="${Math.round((x1 + x2) / 2)}" y="${y - 6}" text-anchor="middle" fill="var(--text)" font-size="12">${escapeSvgText(msg.text)}</text>`);
+  let cursor = pad + headH;
+  messages.forEach(msg => {
+    const x1 = xOf.get(msg.from);
+    const x2 = xOf.get(msg.to);
+    if (msg.type === 'note') {
+      const noteWidth = msg.placement === 'over' ? Math.max(msg.width, Math.abs(x2 - x1) + 80) : msg.width;
+      const x = msg.placement === 'left' ? x1 - 68 - noteWidth
+        : msg.placement === 'right' ? x1 + 68 : (x1 + x2 - noteWidth) / 2;
+      const y = cursor + 6;
+      const noteHeight = msg.lines.length * 16 + 16;
+      const center = x + noteWidth / 2;
+      const tspans = msg.lines.map((text, index) => `<tspan x="${center}" dy="${index ? 16 : 0}">${escapeSvgText(text)}</tspan>`).join('');
+      parts.push(`<g class="mermaid-note"><rect x="${x}" y="${y}" width="${noteWidth}" height="${noteHeight}" rx="4" fill="var(--bg)" stroke="var(--border)" />`);
+      parts.push(`<text x="${center}" y="${y + 16}" text-anchor="middle" fill="var(--text)" font-size="12">${tspans}</text></g>`);
+    } else {
+      const y = cursor + rowH - 8;
+      const dash = msg.arrow.startsWith('--') ? ' stroke-dasharray="4 3"' : '';
+      parts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="var(--muted)" stroke-width="1.5"${dash} marker-end="url(#mermaid-seq-arrow)" />`);
+      if (msg.text) {
+        parts.push(`<text class="mermaid-edge-label" x="${Math.round((x1 + x2) / 2)}" y="${y - 6}" text-anchor="middle" fill="var(--text)" font-size="12">${escapeSvgText(msg.text)}</text>`);
+      }
     }
+    cursor += rowHeight(msg);
   });
   parts.push('</svg>');
   return parts.join('');
 }
 function renderStateSvg(lines, config) {
+  const names = new Set(lines.flatMap(line => line.match(/[A-Za-z0-9_.-]+/g) || []));
+  function unusedId(base) {
+    let id = base;
+    while (names.has(id)) id += '_';
+    names.add(id);
+    return id;
+  }
+  const markers = { start: unusedId('__mermaid_start__'), end: unusedId('__mermaid_end__') };
   const flowLines = [];
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line || line.startsWith('%%')) continue;
     const tr = /^(\[\*\]|[A-Za-z0-9_.-]+)\s*-->\s*(\[\*\]|[A-Za-z0-9_.-]+)(?:\s*:\s*(.+))?$/.exec(line);
     if (tr) {
-      const from = tr[1] === '[*]' ? 'start_state((●))' : tr[1];
-      const to = tr[2] === '[*]' ? 'end_state((◉))' : tr[2];
+      const from = tr[1] === '[*]' ? markers.start : tr[1];
+      const to = tr[2] === '[*]' ? markers.end : tr[2];
       const label = tr[3] ? `|${tr[3].trim()}| ` : '';
       flowLines.push(`${from} --> ${label}${to}`);
       continue;
     }
     throw new Error(`Invalid stateDiagram statement: ${line}`);
   }
-  return renderFlowchartSvg(flowLines, 'flowchart TD', config).replace('data-diagram-type="flowchart"', 'data-diagram-type="stateDiagram"');
+  return renderFlowchartSvg(flowLines, 'flowchart TD', config, markers).replace('data-diagram-type="flowchart"', 'data-diagram-type="stateDiagram"');
 }
 function parseAndRenderMermaid(source, config = MERMAID_STRICT_CONFIG) {
   if (typeof source !== 'string') throw new Error('Mermaid source must be a string');
@@ -3159,7 +3298,7 @@ function formatMermaidBlockHtml(buttons, header, escapedSource, rawSource, safeS
     const toggleBtn = buttons.includes('preview-code-mermaid')
       ? ''
       : `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${payload}">${icon('braces', 14).outerHTML}</button>`;
-    return `<div class="code-block" data-mermaid-state="rendered">${toggleBtn}${buttons}${header}<div class="mermaid-diagram" role="figure" aria-label="Mermaid diagram">${safeSvg}</div><pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
+    return `<div class="code-block" data-mermaid-state="rendered">${toggleBtn}${buttons}${header}<div class="mermaid-diagram" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Open Mermaid diagram">${safeSvg}</div><pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
   }
   const fallbackButtons = buttons.replace(/<button\b[^>]*class="preview-code-mermaid"[\s\S]*?<\/button>/g, '');
   return `<div class="code-block" data-mermaid-state="fallback">${fallbackButtons}${header}<pre><code class="language-mermaid">${escapedSource}</code></pre></div>`;
@@ -5100,6 +5239,32 @@ function startImagePinch() {
     midY: (p1.y + p2.y) / 2,
   };
   imageDrag = null;
+}
+function openMermaidModal(diagram) {
+  const svg = diagram?.querySelector?.('.mermaid-svg');
+  if (!svg) return;
+  const viewBox = (svg.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+  if (viewBox.length !== 4 || viewBox.some(value => !Number.isFinite(value)) || viewBox[2] <= 0 || viewBox[3] <= 0) return;
+  const clone = svg.cloneNode(true);
+  const originalNodes = [svg, ...svg.querySelectorAll('*')];
+  const cloneNodes = [clone, ...clone.querySelectorAll('*')];
+  originalNodes.forEach((node, index) => {
+    const style = window.getComputedStyle(node);
+    for (const property of ['color', 'fill', 'stroke', 'font-family', 'font-size', 'font-weight']) {
+      const value = style.getPropertyValue(property);
+      if (value) cloneNodes[index].style.setProperty(property, value);
+    }
+  });
+  const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  ['x', 'y', 'width', 'height'].forEach((name, index) => background.setAttribute(name, viewBox[index]));
+  background.setAttribute('fill', window.getComputedStyle(diagram).backgroundColor);
+  clone.insertBefore(background, clone.firstChild);
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  const serialized = new window.XMLSerializer().serializeToString(clone);
+  openImageModal({
+    src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(serialized)}`,
+    alt: diagram.getAttribute('aria-label') || 'Mermaid diagram',
+  });
 }
 function openImageModal(image) {
   if (!imageModal || !imageModalImg) return;

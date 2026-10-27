@@ -5265,6 +5265,164 @@ test('preview client', async (t) => {
     assert.equal(context.sanitizeMermaidSvg('<svg><a href="https://example.com"><text>x</text></a></svg>'), null);
   });
 
+  await t.test('state diagrams draw compact start and end markers', () => {
+    const { svg } = context.parseAndRenderMermaid(
+      'stateDiagram-v2\n[*] --> Active\nActive --> [*]\nActive --> start_state\nend_state --> Active'
+    );
+    assert.match(svg, /<circle\b[^>]*\br="8"/);
+    assert.match(svg, /<circle\b[^>]*\br="10"/);
+    assert.match(svg, /<circle\b[^>]*\br="5"/);
+    assert.match(svg, />start_state<\/text>/);
+    assert.match(svg, />end_state<\/text>/);
+    assert.doesNotMatch(svg, />[●◉]<\/text>/);
+  });
+
+  await t.test('sequence notes render supported positions and reject HTML', async () => {
+    const source = 'sequenceDiagram\nparticipant Alice\nparticipant Bob\n' +
+      'Note over Alice: One<br>Two\nNote over Alice,Bob: Shared<br/>Second line\n' +
+      'Note left of Alice: Left note\nNote right of Bob: Right note\nAlice->>Bob: Hi';
+    const { svg } = context.parseAndRenderMermaid(source);
+    assert.equal((svg.match(/class="mermaid-note"/g) || []).length, 4);
+    assert.match(svg, /<tspan\b[^>]*>One<\/tspan>/);
+    assert.match(svg, /<tspan\b[^>]*>Two<\/tspan>/);
+    assert.match(svg, /<tspan\b[^>]*>Second line<\/tspan>/);
+    assert.throws(() => context.parseAndRenderMermaid(
+      'sequenceDiagram\nNote over Alice: <img src=x onerror=alert(1)>'
+    ), /HTML labels are disabled/);
+    const unsafe = '<div class="code-block"><pre><code class="language-mermaid">' +
+      'sequenceDiagram\nNote over Alice: &lt;script&gt;alert(1)&lt;/script&gt;' +
+      '</code></pre></div>';
+    const fallback = await context.renderMermaidBlocks(unsafe);
+    assert.match(fallback, /data-mermaid-state="fallback"/);
+    assert.doesNotMatch(fallback, /<script\b/i);
+  });
+
+  await t.test('feedback edges preserve forward flow ranks', () => {
+    const source = 'flowchart TD\nAssign --> Worker\nWorker --> Stage\nStage --> Audit\n' +
+      'Audit --> Correction\nCorrection --> Worker\nLegend[Independent]';
+    const { svg } = context.parseAndRenderMermaid(source);
+    const positions = new Map();
+    let id = null;
+    const parser = new Parser({
+      onopentag(name, attrs) {
+        if (name === 'g' && attrs.class === 'mermaid-node') id = attrs['data-node-id'];
+        if (name === 'rect' && id) positions.set(id, Number(attrs.y));
+      },
+      onclosetag(name) { if (name === 'g') id = null; },
+    }, { xmlMode: true });
+    parser.end(svg);
+    for (const [before, after] of [
+      ['Assign', 'Worker'], ['Worker', 'Stage'], ['Stage', 'Audit'], ['Audit', 'Correction'],
+    ]) {
+      assert.ok(positions.has(before) && positions.has(after));
+      assert.ok(positions.get(before) < positions.get(after), `${before} must precede ${after}`);
+    }
+  });
+
+  await t.test('parallel edges curve and labels avoid nodes and each other', () => {
+    const source = 'flowchart TD\nA[Assign] -->|First label| B[Worker]\n' +
+      'A -->|Second label| B\nA -->|Third label| B\nB --> C[Stage]\n' +
+      'C -->|Review update| D[Audit]\nD -->|Return to worker| B';
+    const { svg } = context.parseAndRenderMermaid(source);
+    assert.ok((svg.match(/<path\b[^>]*class="mermaid-edge"[^>]*\bd="[^"]*\bQ\b/g) || []).length >= 3);
+    const nodes = [];
+    const labels = [];
+    let nodeId = null;
+    let viewBox = null;
+    const rect = attrs => ({
+      x: Number(attrs.x), y: Number(attrs.y), width: Number(attrs.width), height: Number(attrs.height),
+    });
+    const parser = new Parser({
+      onopentag(name, attrs) {
+        if (name === 'svg') viewBox = attrs.viewBox.split(/\s+/).map(Number);
+        if (name === 'g' && attrs.class === 'mermaid-node') nodeId = attrs['data-node-id'];
+        if (name === 'rect' && nodeId) nodes.push({ id: nodeId, ...rect(attrs) });
+        if (name === 'rect' && attrs.class === 'mermaid-edge-label-bg') labels.push(rect(attrs));
+      },
+      onclosetag(name) { if (name === 'g') nodeId = null; },
+    }, { xmlMode: true });
+    parser.end(svg);
+    assert.equal(labels.length, 5);
+    const overlaps = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x &&
+      a.y < b.y + b.height && a.y + a.height > b.y;
+    labels.forEach((label, index) => {
+      assert.ok(label.x >= viewBox[0] && label.y >= viewBox[1]);
+      assert.ok(label.x + label.width <= viewBox[0] + viewBox[2]);
+      assert.ok(label.y + label.height <= viewBox[1] + viewBox[3]);
+      assert.ok(nodes.every(node => !overlaps(label, node)), `label ${index} overlaps a node`);
+      assert.ok(labels.slice(0, index).every(other => !overlaps(label, other)), `label ${index} overlaps another label`);
+    });
+    const from = nodes.find(node => node.id === 'A');
+    const to = nodes.find(node => node.id === 'B');
+    for (const label of labels.slice(0, 3)) {
+      assert.ok(label.y >= from.y + from.height && label.y + label.height <= to.y,
+        'parallel-edge labels stay between their source and target');
+    }
+  });
+
+  await t.test('rendered diagrams open the image viewer by click and keyboard', () => {
+    const html = context.renderMermaidBlocksSync(
+      '<div class="code-block"><pre><code class="language-mermaid">flowchart TD\nA --> B</code></pre></div>'
+    );
+    assert.match(html, /class="mermaid-diagram"[^>]*tabindex="0"/);
+    assert.match(html, /class="mermaid-diagram"[^>]*role="button"/);
+    assert.equal(typeof context.openMermaidModal, 'function');
+    const originalStyle = context.window.getComputedStyle;
+    const originalSerializer = context.window.XMLSerializer;
+    const svg = new Element();
+    svg.setAttribute('viewBox', '0 0 100 80');
+    const sourceShape = new Element();
+    svg.querySelectorAll = () => [sourceShape];
+    svg.cloneNode = () => {
+      const clone = new Element();
+      const shape = new Element();
+      for (const node of [clone, shape]) node.style.setProperty = (name, value) => { node.style[name] = value; };
+      clone.querySelectorAll = () => [shape];
+      clone.insertBefore = node => { clone.children.unshift(node); };
+      clone.shape = shape;
+      return clone;
+    };
+    context.window.getComputedStyle = () => ({
+      backgroundColor: 'rgb(30, 30, 30)',
+      getPropertyValue: name => name === 'fill' ? 'rgb(220, 220, 220)' : '',
+    });
+    context.window.XMLSerializer = class {
+      serializeToString(clone) {
+        const background = clone.children[0];
+        assert.equal(background.getAttribute('width'), 100);
+        assert.equal(background.getAttribute('height'), 80);
+        assert.equal(clone.shape.style.fill, 'rgb(220, 220, 220)');
+        return `<svg><rect fill="${background.getAttribute('fill')}" /></svg>`;
+      }
+    };
+    try {
+      const diagram = new Element();
+      diagram.className = 'mermaid-diagram';
+      diagram.setAttribute('aria-label', 'Open Mermaid diagram');
+      diagram.querySelector = selector => selector === '.mermaid-svg' ? svg : null;
+      diagram.closest = selector => selector === '.mermaid-diagram' ? diagram : null;
+      const child = { tagName: 'path', closest: selector => selector === '.mermaid-diagram' ? diagram : null };
+      const checkOpened = () => {
+        assert.equal(get('#image-modal').open, true);
+        const src = get('#image-modal-img').src;
+        assert.match(src, /^data:image\/svg\+xml;charset=utf-8,/);
+        assert.match(decodeURIComponent(src.split(',')[1]), /rgb\(30, 30, 30\)/);
+        get('#image-modal').close();
+      };
+      documentEvents.click(event({ target: child }));
+      checkOpened();
+      for (const key of ['Enter', ' ']) {
+        const keyboard = event({ target: diagram, key });
+        documentEvents.keydown(keyboard);
+        assert.equal(keyboard.prevented, true);
+        checkOpened();
+      }
+    } finally {
+      context.window.getComputedStyle = originalStyle;
+      context.window.XMLSerializer = originalSerializer;
+    }
+  });
+
   await t.test('Userscript readiness swaps #copy-state to the Lucide save icon and posts clankers:force-save', async () => {
     const parentMessages = [];
     context.window.parent = {
