@@ -14,7 +14,6 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
-// @grant        GM_addValueChangeListener
 // @grant        GM_registerMenuCommand
 // @grant        unsafeWindow
 // @grant        GM_download
@@ -390,9 +389,7 @@
   var PREVIEW_DRAWER_DEFAULT_PX = 1398;
   var PREVIEW_DRAWER_MIN_PX = 600;
   var PREVIEW_DRAWER_MAX_PX = 2400;
-  var BOARD_KEY = "clankers_global_board_v1";
   var MAX_BOARD_FILE_BYTES = 524288;
-  var MAX_BOARD_BYTES = 8388608;
   var MAX_BOARD_ENTRIES = 100;
   var GREEK_LETTER_NAMES = [
     "alpha", "beta", "gamma", "delta", "epsilon", "zeta",
@@ -1504,11 +1501,17 @@
 
     var stopKeyWatch = jitteredTimer(function () {
       if (captchaSignal(document)) return;
-      if (
-        typeof syncPreviewBoardHook === "function" &&
-        shouldAutoSyncBoard(readGlobalBoard(), document)
-      ) {
-        syncPreviewBoardHook(boardPreviewBase(document), "", "", { passive: true });
+      if (typeof syncPreviewBoardHook === "function" && boardProxyConfig()) {
+        var syncFromKeyWatch = function () {
+          if (shouldAutoSyncBoard(readGlobalBoard(), document)) {
+            syncPreviewBoardHook(boardPreviewBase(document), "", "", { passive: true });
+          }
+        };
+        if (!proxyBoardCache) {
+          pullProxyBoard(true).then(syncFromKeyWatch);
+        } else {
+          syncFromKeyWatch();
+        }
       }
       postRecentPreviews(document, false);
       var pair = settings();
@@ -4947,16 +4950,7 @@
     });
   }
 
-  var lastWrittenBoardJson = "";
-  var lastWrittenMaterialSig = "";
-  var lastWrittenAtMs = 0;
-  var lastHandledBoardMaterialSig = "";
-  var lastRemoteBoardSyncAtMs = 0;
-  var wasListenerSessionAllowed = false;
-  var BOARD_HEARTBEAT_WRITE_MS = 15000;
   var BOARD_SESSION_TTL_SECONDS = 180;
-  var BOARD_REMOTE_DEBOUNCE_MS = 500;
-  var BOARD_REMOTE_MIN_INTERVAL_MS = 1000;
   var BOARD_PROXY_HOST_KEY = "clankers-arena-proxy-host";
   var BOARD_PROXY_MASTER_KEY = "clankers-arena-proxy-master";
   var BOARD_PROXY_POLL_MS = 3000;
@@ -5151,10 +5145,9 @@
   }
 
   function syncPreviewBoard(base, targetSidHint, targetRepoHint, opts) {
-    if (!base) return Promise.resolve(null);
+    if (!base || !boardProxyConfig()) return Promise.resolve(null);
     var passive = Boolean(opts && opts.passive);
     var pushOnly = Boolean(opts && opts.pushOnly);
-    var usingProxy = Boolean(boardProxyConfig());
     var docScope = typeof document !== "undefined" ? stateScope(document) : { repo: "", branch: "" };
     var targetSid = boardSessionId(targetSidHint || previewUiSessionId || docScope.branch || "");
     if (targetSid) {
@@ -5203,42 +5196,28 @@
       if (!sid || (failedAns && failedAns.status > 0 && failedAns.status < 500)) {
         return Promise.resolve(failedAns);
       }
-      if (usingProxy) {
-        return proxyBoardJson("/v1/board", {
-          action: "apply",
-          board_action: { type: "disconnect-session", session_id: sid },
-        }).then(function (discProxy) {
-          if (discProxy && discProxy.status === 200 && discProxy.body && discProxy.body.board) {
-            writeGlobalBoard(discProxy.body.board, {
-              fromProxy: true,
-              revision: Number(discProxy.body.revision),
-            });
-          }
-          return failedAns;
-        });
-      }
-      var discRes = applyBoardAction(readGlobalBoard(), {
-        type: "disconnect-session",
-        session_id: sid,
+      return proxyBoardJson("/v1/board", {
+        action: "apply",
+        board_action: { type: "disconnect-session", session_id: sid },
+      }).then(function (discProxy) {
+        if (discProxy && discProxy.status === 200 && discProxy.body && discProxy.body.board) {
+          writeGlobalBoard(discProxy.body.board, {
+            fromProxy: true,
+            revision: Number(discProxy.body.revision),
+          });
+        }
+        return failedAns;
       });
-      if (discRes.ok) writeGlobalBoard(discRes.board);
-      return Promise.resolve(failedAns);
     }
     function postConsolidatedOnce(boardToSend, hydratedKeys, sid) {
       return stateJson(base + "/api/board", { action: "sync", board: boardToSend }).then(function (answer) {
         if (answer && answer.status === 200 && answer.body) {
           hydratedKeys.forEach(function (k) { hydratedBoardFilesBySid[k] = true; });
           recordMemberMetadata(answer.body, sid);
-          if (!usingProxy) {
-            writeGlobalBoard(mergePreviewBoard(readGlobalBoard(), answer.body), { passive: passive });
-          }
           return answer;
         }
         return handleMemberFailure(answer, sid);
       });
-    }
-    if (!usingProxy) {
-      return postConsolidatedOnce(buildScopedSyncBoard(targetSid, targetRepo), [], targetSid);
     }
     if (pushOnly) {
       var directScoped = (opts && opts.scopedBoard && typeof opts.scopedBoard === "object")
@@ -5333,7 +5312,7 @@
       }
     } else if (event.data.type === "clankers:board-request") {
       syncPreviewBoard(base, event.data.session_id || event.data.branch || "", event.data.repo || "", { passive: true });
-    } else if (event.data.type === "clankers:board-action" && event.data.action) {
+    } else if (event.data.type === "clankers:board-action" && event.data.action && boardProxyConfig()) {
       var isHeartbeatAction = (event.data.action.action === "heartbeat" || event.data.action.type === "heartbeat");
       if (isHeartbeatAction && event.data.action.session_id) {
         setPreviewUiSessionId(event.data.action.session_id);
@@ -5344,45 +5323,32 @@
       var syncActionRepo = isHeartbeatAction
         ? (event.data.action.repo || "")
         : (previewUiRepo || event.data.action.repo || "");
-      if (boardProxyConfig()) {
-        proxyBoardJson("/v1/board", {
-          action: "apply",
-          board_action: event.data.action,
-          session_id: syncActionSid,
-          repo: syncActionRepo,
-        }).then(function (actRes) {
-          if (actRes && actRes.status === 200 && actRes.body && actRes.body.board) {
-            writeGlobalBoard(actRes.body.board, {
-              passive: isHeartbeatAction,
-              fromProxy: true,
-              revision: Number(actRes.body.revision),
-            });
-            if (base) {
-              syncPreviewBoard(
-                base,
-                syncActionSid,
-                syncActionRepo,
-                {
-                  passive: isHeartbeatAction,
-                  pushOnly: true,
-                  scopedBoard: actRes.body.scoped_board || null,
-                }
-              );
-            }
+      proxyBoardJson("/v1/board", {
+        action: "apply",
+        board_action: event.data.action,
+        session_id: syncActionSid,
+        repo: syncActionRepo,
+      }).then(function (actRes) {
+        if (actRes && actRes.status === 200 && actRes.body && actRes.body.board) {
+          writeGlobalBoard(actRes.body.board, {
+            passive: isHeartbeatAction,
+            fromProxy: true,
+            revision: Number(actRes.body.revision),
+          });
+          if (base) {
+            syncPreviewBoard(
+              base,
+              syncActionSid,
+              syncActionRepo,
+              {
+                passive: isHeartbeatAction,
+                pushOnly: true,
+                scopedBoard: actRes.body.scoped_board || null,
+              }
+            );
           }
-        });
-      } else {
-        var outcome = applyBoardAction(readGlobalBoard(), event.data.action);
-        if (outcome.ok) writeGlobalBoard(outcome.board, { passive: isHeartbeatAction });
-        if (outcome.ok && base) {
-          syncPreviewBoard(
-            base,
-            syncActionSid,
-            syncActionRepo,
-            { passive: isHeartbeatAction }
-          );
         }
-      }
+      });
     }
   }
 
@@ -5391,51 +5357,11 @@
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
       window.addEventListener("message", onPreviewMessage);
       window.addEventListener("pagehide", function () {
-        if (!previewUiSessionId) return;
-        if (boardProxyConfig()) {
-          proxyBoardJson("/v1/board", {
-            action: "action",
-            board_action: { type: "disconnect-session", session_id: previewUiSessionId },
-          });
-          return;
-        }
-        var closeRes = applyBoardAction(readGlobalBoard(), {
-          type: "disconnect-session",
-          session_id: previewUiSessionId,
+        if (!previewUiSessionId || !boardProxyConfig()) return;
+        proxyBoardJson("/v1/board", {
+          action: "apply",
+          board_action: { type: "disconnect-session", session_id: previewUiSessionId },
         });
-        if (closeRes.ok) writeGlobalBoard(closeRes.board);
-      });
-    }
-    if (typeof GM_addValueChangeListener === "function") {
-      var remoteBoardSyncPending = false;
-      GM_addValueChangeListener(BOARD_KEY, function (_key, _oldVal, newVal, remote) {
-        if (!remote || boardProxyConfig()) return;
-        var incomingBoard = normalizeBoard(newVal !== undefined ? newVal : readGlobalBoard());
-        var docScopeNow = stateScope(document);
-        var selfSidNow = boardSessionId(previewUiSessionId || docScopeNow.branch || "");
-        var isNowAllowed = Boolean(selfSidNow && incomingBoard.allowed_sessions.indexOf(selfSidNow) !== -1);
-        var shouldReact = isNowAllowed || wasListenerSessionAllowed;
-        wasListenerSessionAllowed = isNowAllowed;
-        if (!shouldReact) return;
-        var nextMaterialSig = boardMaterialSignature(incomingBoard);
-        if (nextMaterialSig === lastHandledBoardMaterialSig) return;
-        var targetBase = boardPreviewBase(document);
-        if (!targetBase || remoteBoardSyncPending) return;
-        remoteBoardSyncPending = true;
-        var elapsed = Date.now() - lastRemoteBoardSyncAtMs;
-        var waitMs = Math.max(
-          BOARD_REMOTE_DEBOUNCE_MS,
-          BOARD_REMOTE_MIN_INTERVAL_MS - elapsed,
-        ) + randomSkillHttpJitterMs();
-        setTimeout(function () {
-          remoteBoardSyncPending = false;
-          var latestBoard = readGlobalBoard();
-          var latestSig = boardMaterialSignature(latestBoard);
-          if (latestSig === lastHandledBoardMaterialSig) return;
-          lastHandledBoardMaterialSig = latestSig;
-          lastRemoteBoardSyncAtMs = Date.now();
-          syncPreviewBoard(boardPreviewBase(document) || targetBase, "", "", { passive: true });
-        }, waitMs);
       });
     }
     notifyPreviewReadyHook = function () {
@@ -5955,6 +5881,9 @@
     async function fetchStateFile(manual, force, chosen) {
       notifyPreviewReady(document);
       var base = activePreviewBase(document);
+      if (boardProxyConfig() && !proxyBoardCache) {
+        await pullProxyBoard(true);
+      }
       var initialBoard = readGlobalBoard();
       var boardBase = base || boardPreviewBase(document);
       if (boardBase && shouldAutoSyncBoard(initialBoard, document)) {
@@ -6883,13 +6812,28 @@
     function titleStep() {
       observeRoot();
       syncTitle(document);
-      if (typeof syncPreviewBoardHook === "function") {
+      var nowTickMs = Date.now();
+      if (boardProxyConfig() && (!proxyBoardCache || nowTickMs - lastProxyBoardPullAtMs >= BOARD_PROXY_POLL_MS)) {
+        pullProxyBoard(!proxyBoardCache).then(function (pulled) {
+          if (!pulled || !pulled.changed || typeof syncPreviewBoardHook !== "function") return;
+          var pulledScope = stateScope(document);
+          var pulledSid = boardSessionId(previewUiSessionId || pulledScope.branch || "");
+          var pulledBase = boardPreviewBase(document);
+          if (pulledBase && pulledSid && pulled.board.allowed_sessions.indexOf(pulledSid) !== -1) {
+            var firstSync = !bootBoardSyncDone;
+            bootBoardSyncDone = true;
+            lastTitleBoardSyncMs = Date.now();
+            nextTitleBoardSyncDelayMs = 15000 + randomHttpJitterWindowMs();
+            syncPreviewBoardHook(pulledBase, pulledSid, pulledScope.repo || "", { passive: !firstSync });
+          }
+        });
+      }
+      if (typeof syncPreviewBoardHook === "function" && boardProxyConfig()) {
         var curBoard = readGlobalBoard();
         var docScopeTick = stateScope(document);
         var selfSidTick = boardSessionId(previewUiSessionId || docScopeTick.branch || "");
         var tickBase = boardPreviewBase(document);
         if (tickBase && selfSidTick && curBoard.allowed_sessions.indexOf(selfSidTick) !== -1) {
-          var nowTickMs = Date.now();
           if (!bootBoardSyncDone) {
             bootBoardSyncDone = true;
             lastTitleBoardSyncMs = nowTickMs;
@@ -7413,404 +7357,8 @@
     };
   }
 
-  function mergePreviewBoard(globalBoard, previewBoard) {
-    var next = normalizeBoard(globalBoard);
-    if (!previewBoard || typeof previewBoard !== "object") return next;
-    var previewSid = boardSessionId(previewBoard.session_id || previewBoard.branch || "");
-    var incoming = normalizeBoard(previewBoard);
-    var mergeStatusKeys = [
-      "polling_since",
-      "waiting_for_gates",
-      "checking_pr",
-      "calls_since_message",
-      "gate_threshold",
-      "agent_seen_at",
-      "turn_ended_at",
-      "agent_call_ended_at",
-      "remote_head",
-      "origin_main_head"
-    ];
-    var syncNowIso = new Date().toISOString();
-    var isSplitBrainHeal = Boolean(
-      previewSid &&
-      previewSid === incoming.main_session_id &&
-      !incoming.worker_ids[previewSid] &&
-      (!next.main_session_id
-        ? (next.allowed_sessions.length > 0 && next.allowed_sessions.every(function (s) { return Boolean(next.worker_ids[s]); }))
-        : Boolean(next.worker_ids[next.main_session_id]))
-    );
-    var globalAllowedSet = {};
-    (next.allowed_sessions || []).forEach(function (sid) {
-      if (sid) globalAllowedSet[sid] = true;
-    });
-    var globalRemovedSet = {};
-    (next.removed_sessions || []).forEach(function (sid) {
-      if (sid && !globalAllowedSet[sid]) globalRemovedSet[sid] = true;
-    });
-    var previewIsAllowed = !previewSid ||
-      Boolean(globalAllowedSet[previewSid]) ||
-      ((isSplitBrainHeal || !globalRemovedSet[previewSid]) && incoming.allowed_sessions.indexOf(previewSid) !== -1);
-    if (!previewIsAllowed) {
-      if (next.removed_sessions.indexOf(previewSid) !== -1) return next;
-      if (incoming.worker_reports && Array.isArray(incoming.worker_reports[previewSid])) {
-        next.worker_reports[previewSid] = incoming.worker_reports[previewSid];
-      }
-      var unoptedRow = null;
-      for (var ui = 0; ui < incoming.sessions.length; ui += 1) {
-        if (boardSessionId(incoming.sessions[ui].session_id || incoming.sessions[ui].branch) === previewSid) {
-          unoptedRow = incoming.sessions[ui];
-          break;
-        }
-      }
-      var existingIdx = -1;
-      for (var ei = 0; ei < next.sessions.length; ei += 1) {
-        if (boardSessionId(next.sessions[ei].session_id || next.sessions[ei].branch) === previewSid) {
-          existingIdx = ei;
-          break;
-        }
-      }
-      var prevUnopted = existingIdx !== -1 ? next.sessions[existingIdx] : null;
-      var builtUnopted = {
-        session_id: previewSid,
-        repo: String((unoptedRow && unoptedRow.repo) || (prevUnopted && prevUnopted.repo) || previewBoard.repo || ""),
-        branch: String((unoptedRow && unoptedRow.branch) || (prevUnopted && prevUnopted.branch) || ("arena/" + previewSid)),
-        status: unoptedRow && (unoptedRow.polling || unoptedRow.status === "polling") ? "polling" : "active",
-        polling: Boolean(unoptedRow && (unoptedRow.polling || unoptedRow.status === "polling")),
-        disconnected: false,
-        updated_at: syncNowIso,
-      };
-      var unoptedSurvey = (unoptedRow && unoptedRow.survey && typeof unoptedRow.survey === "object")
-        ? unoptedRow.survey
-        : (prevUnopted && prevUnopted.survey ? prevUnopted.survey : null);
-      if (unoptedSurvey) builtUnopted.survey = unoptedSurvey;
-      if (unoptedRow) {
-        for (var usk = 0; usk < mergeStatusKeys.length; usk += 1) {
-          var uKey = mergeStatusKeys[usk];
-          if (unoptedRow[uKey] !== undefined && unoptedRow[uKey] !== null) {
-            builtUnopted[uKey] = unoptedRow[uKey];
-          }
-        }
-      }
-      if (existingIdx !== -1) next.sessions[existingIdx] = builtUnopted;
-      else next.sessions.push(builtUnopted);
-      return normalizeBoard(next);
-    }
-    var canAuthorRepoLinks =
-      !next.main_session_id ||
-      previewSid === next.main_session_id ||
-      isSplitBrainHeal;
-    if (previewBoard.multi_repo !== undefined && (canAuthorRepoLinks || Boolean(previewBoard.multi_repo))) {
-      next.multi_repo = Boolean(previewBoard.multi_repo);
-    }
-    if (Array.isArray(previewBoard.linked_repos) && (canAuthorRepoLinks || incoming.linked_repos.length > 0)) {
-      next.linked_repos = incoming.linked_repos.slice();
-    }
-    var incomingAllowedSet = {};
-    (incoming.allowed_sessions || []).forEach(function (sid) {
-      if (sid) incomingAllowedSet[sid] = true;
-    });
-    var protectedAllowedSet = {};
-    Object.keys(globalAllowedSet).forEach(function (sid) {
-      protectedAllowedSet[sid] = true;
-    });
-    if (isSplitBrainHeal) {
-      Object.keys(incomingAllowedSet).forEach(function (sid) {
-        protectedAllowedSet[sid] = true;
-      });
-    }
-    var removedSet = {};
-    (next.removed_sessions || []).forEach(function (sid) {
-      if (sid && (isSplitBrainHeal || sid !== previewSid || globalRemovedSet[sid]) && !protectedAllowedSet[sid]) {
-        removedSet[sid] = true;
-      }
-    });
-    (incoming.removed_sessions || []).forEach(function (sid) {
-      if (!sid || sid === previewSid) return;
-      if (canAuthorRepoLinks && !incomingAllowedSet[sid]) {
-        removedSet[sid] = true;
-        return;
-      }
-      if (!globalAllowedSet[sid] && !incomingAllowedSet[sid]) removedSet[sid] = true;
-    });
-    next.removed_sessions = Object.keys(removedSet);
-    next.allowed_sessions = next.allowed_sessions.filter(function (sid) { return !removedSet[sid]; });
-    next.sessions = next.sessions.filter(function (row) { return !removedSet[boardSessionId(row.session_id || row.branch)]; });
-    Object.keys(removedSet).forEach(function (removedSid) {
-      delete next.worker_ids[removedSid];
-      delete next.worker_tasks[removedSid];
-      delete next.worker_reports[removedSid];
-      delete next.wakes[removedSid];
-    });
-    Object.keys(incoming.worker_ids || {}).forEach(function (sid) {
-      if (!removedSet[sid]) next.worker_ids[sid] = incoming.worker_ids[sid];
-    });
-    Object.keys(incoming.worker_tasks || {}).forEach(function (sid) {
-      if (!removedSet[sid] && (sid === previewSid || !next.worker_tasks[sid])) {
-        next.worker_tasks[sid] = incoming.worker_tasks[sid];
-      }
-    });
-    Object.keys(incoming.worker_reports || {}).forEach(function (sid) {
-      if (removedSet[sid]) return;
-      if (sid === previewSid || !next.worker_reports[sid]) {
-        next.worker_reports[sid] = incoming.worker_reports[sid];
-      } else if (canAuthorRepoLinks && Array.isArray(incoming.worker_reports[sid])) {
-        var incById = {};
-        incoming.worker_reports[sid].forEach(function (r) {
-          if (r && typeof r === "object" && r.id) incById[String(r.id)] = r;
-        });
-        next.worker_reports[sid] = (next.worker_reports[sid] || []).map(function (existingRep) {
-          if (!existingRep || typeof existingRep !== "object") return existingRep;
-          var incRep = incById[String(existingRep.id || "")];
-          if (incRep && incRep.answered && !existingRep.answered) {
-            var updatedRep = Object.assign({}, existingRep, {
-              answered: true,
-              needs_answer: false,
-              latest_answer_at: incRep.latest_answer_at || existingRep.latest_answer_at,
-            });
-            if (incRep.latest_answer_id) updatedRep.latest_answer_id = incRep.latest_answer_id;
-            return updatedRep;
-          }
-          return existingRep;
-        });
-      }
-    });
-    var seenTaskOpIds = {};
-    var mergedTaskOps = [];
-    next.task_ops.concat(incoming.task_ops || []).forEach(function (op) {
-      if (!op || typeof op !== "object") return;
-      var opId = String(op.id || "");
-      if (opId && seenTaskOpIds[opId]) return;
-      if (opId) seenTaskOpIds[opId] = true;
-      mergedTaskOps.push(op);
-    });
-    mergedTaskOps.sort(function (a, b) {
-      return (parseBoardStampMs(a && a.at) || 0) - (parseBoardStampMs(b && b.at) || 0);
-    });
-    next.task_ops = mergedTaskOps.slice(-MAX_BOARD_ENTRIES);
-    var seenReportOpIds = {};
-    var mergedReportOps = [];
-    next.report_ops.concat(incoming.report_ops || []).forEach(function (op) {
-      if (!op || typeof op !== "object") return;
-      var opId = String(op.id || "");
-      if (opId && seenReportOpIds[opId]) return;
-      if (opId) seenReportOpIds[opId] = true;
-      mergedReportOps.push(op);
-    });
-    mergedReportOps.sort(function (a, b) {
-      return (parseBoardStampMs(a && a.at) || 0) - (parseBoardStampMs(b && b.at) || 0);
-    });
-    var repDecisionOps = mergedReportOps.filter(function (op) {
-      return String(op.op || "") !== "entry-ack";
-    });
-    var repEntryAckOps = mergedReportOps.filter(function (op) {
-      return String(op.op || "") === "entry-ack";
-    });
-    var keptDecisionOps = repDecisionOps.slice(-MAX_BOARD_ENTRIES);
-    var ackOpBudget = Math.max(0, MAX_BOARD_ENTRIES - keptDecisionOps.length);
-    var combinedReportOps = keptDecisionOps.concat(ackOpBudget > 0 ? repEntryAckOps.slice(-ackOpBudget) : []);
-    combinedReportOps.sort(function (a, b) {
-      return (parseBoardStampMs(a && a.at) || 0) - (parseBoardStampMs(b && b.at) || 0);
-    });
-    next.report_ops = combinedReportOps;
-    if (canAuthorRepoLinks && incoming.allowed_sessions.length) {
-      var orderedAllowed = [];
-      incoming.allowed_sessions.concat(next.allowed_sessions).forEach(function (sid) {
-        if (!removedSet[sid] && orderedAllowed.indexOf(sid) === -1) orderedAllowed.push(sid);
-      });
-      next.allowed_sessions = orderedAllowed;
-    } else {
-      incoming.allowed_sessions.forEach(function (sid) {
-        if (!removedSet[sid] && next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
-      });
-    }
-    if (
-      incoming.main_session_id &&
-      !removedSet[incoming.main_session_id] &&
-      (!next.main_session_id || (next.worker_ids[next.main_session_id] && !next.worker_ids[incoming.main_session_id]))
-    ) {
-      next.main_session_id = incoming.main_session_id;
-    } else if (next.main_session_id && removedSet[next.main_session_id]) {
-      next.main_session_id = "";
-    }
-    var bySid = {};
-    var prevSessionsBySid = {};
-    next.sessions.forEach(function (row) {
-      var rowSid = boardSessionId(row.session_id || row.branch);
-      if (rowSid && !removedSet[rowSid]) {
-        prevSessionsBySid[rowSid] = Object.assign({}, row, { session_id: rowSid });
-        bySid[rowSid] = Object.assign({}, row, { session_id: rowSid });
-      }
-    });
-    incoming.sessions.forEach(function (row) {
-      var rowSid = boardSessionId(row.session_id || row.branch);
-      if (!rowSid || removedSet[rowSid]) return;
-      var prevExisting = bySid[rowSid] || null;
-      var incomingUpdatedMs = parseBoardStampMs(row.updated_at);
-      var existingUpdatedMs = prevExisting ? parseBoardStampMs(prevExisting.updated_at) : NaN;
-      var peerIsFresher = Boolean(
-        prevExisting &&
-        !isNaN(incomingUpdatedMs) &&
-        (isNaN(existingUpdatedMs) || incomingUpdatedMs > existingUpdatedMs)
-      );
-      if (rowSid === previewSid || !prevExisting || peerIsFresher) {
-        var nextPolling = Boolean(row.polling || row.status === "polling");
-        var nextRow = {
-          session_id: rowSid,
-          repo: String(row.repo || (prevExisting && prevExisting.repo) || previewBoard.repo || ""),
-          branch: String(row.branch || (prevExisting && prevExisting.branch) || ("arena/" + rowSid)),
-          status: rowSid === previewSid
-            ? (nextPolling ? "polling" : "active")
-            : (row.disconnected || row.status === "disconnected" ? "disconnected" : (nextPolling ? "polling" : "active")),
-          polling: nextPolling,
-          disconnected: rowSid === previewSid ? false : Boolean(row.disconnected || row.status === "disconnected"),
-          updated_at: rowSid === previewSid ? syncNowIso : String(row.updated_at || (prevExisting && prevExisting.updated_at) || syncNowIso),
-        };
-        var rowSurvey = (row.survey && typeof row.survey === "object")
-          ? row.survey
-          : (prevExisting && prevExisting.survey ? prevExisting.survey : null);
-        if (rowSurvey) nextRow.survey = rowSurvey;
-        for (var msk = 0; msk < mergeStatusKeys.length; msk += 1) {
-          var msKey = mergeStatusKeys[msk];
-          if (row[msKey] !== undefined && row[msKey] !== null) {
-            nextRow[msKey] = row[msKey];
-          } else if (rowSid !== previewSid && prevExisting && prevExisting[msKey] !== undefined && prevExisting[msKey] !== null) {
-            if (msKey === "polling_since" && !nextPolling) continue;
-            if (msKey === "turn_ended_at") {
-              if (nextPolling) continue;
-              var prevTurnMs = parseBoardStampMs(prevExisting.turn_ended_at);
-              var latestActMs = Math.max(
-                parseBoardStampMs(row.agent_seen_at) || 0,
-                parseBoardStampMs(row.agent_call_ended_at) || 0
-              );
-              if (!isNaN(prevTurnMs) && latestActMs > prevTurnMs) continue;
-            }
-            nextRow[msKey] = prevExisting[msKey];
-          }
-        }
-        bySid[rowSid] = nextRow;
-      } else {
-        if (row.survey && typeof row.survey === "object") {
-          bySid[rowSid].survey = row.survey;
-        }
-        for (var msk2 = 0; msk2 < mergeStatusKeys.length; msk2 += 1) {
-          var msKey2 = mergeStatusKeys[msk2];
-          if (bySid[rowSid][msKey2] === undefined && row[msKey2] !== undefined && row[msKey2] !== null) {
-            bySid[rowSid][msKey2] = row[msKey2];
-          }
-        }
-      }
-    });
-    next.sessions = Object.keys(bySid).map(function (k) { return bySid[k]; });
-    var entryById = {};
-    var mergedEntries = [];
-    next.entries.concat(incoming.entries).forEach(function (item) {
-      if (!item || typeof item !== "object") return;
-      var copy = Object.assign({}, item);
-      var id = String(copy.id || "");
-      if (id && entryById[id]) {
-        var prev = entryById[id];
-        ["seen_at", "acknowledged_at", "ack_type", "ack_text", "ack_sender", "ack_edited_at", "task_id"].forEach(function (field) {
-          if (copy[field] && !prev[field]) prev[field] = copy[field];
-        });
-        if (copy.to && copy.to !== "*" && prev.to && prev.to !== copy.to && next.allowed_sessions.indexOf(copy.to) !== -1) {
-          prev.to = copy.to;
-        }
-        if (
-          copy.ack_sender &&
-          prev.to &&
-          prev.to !== "*" &&
-          prev.to !== prev.session_id &&
-          (copy.ack_sender === prev.to || (prev.ack_sender === prev.session_id && copy.ack_sender !== prev.session_id))
-        ) {
-          prev.ack_sender = copy.ack_sender;
-        }
-        if (copy.ack_edited_at && (!prev.ack_edited_at || String(copy.ack_edited_at) > String(prev.ack_edited_at))) {
-          prev.ack_edited_at = copy.ack_edited_at;
-        }
-        if ((Number(copy.ack_edited_seen_count) || 0) > (Number(prev.ack_edited_seen_count) || 0)) {
-          prev.ack_edited_seen_count = Number(copy.ack_edited_seen_count) || 0;
-        }
-        if (Array.isArray(copy.replies)) {
-          var prevReplies = Array.isArray(prev.replies) ? prev.replies : [];
-          if (copy.replies.length > prevReplies.length) {
-            prev.replies = copy.replies.slice();
-          } else if (copy.replies.length === prevReplies.length && prev.to && prev.to !== "*" && prev.to !== prev.session_id) {
-            prev.replies = prevReplies.map(function (r, idx) {
-              var cr = copy.replies[idx];
-              if (!r || !cr) return r;
-              if (cr.sender && (cr.sender === prev.to || (r.sender === prev.session_id && cr.sender !== prev.session_id))) {
-                return Object.assign({}, r, { sender: cr.sender });
-              }
-              return r;
-            });
-          }
-        }
-        return;
-      }
-      if (id) entryById[id] = copy;
-      mergedEntries.push(copy);
-    });
-    next.report_ops.forEach(function (op) {
-      if (!op || op.op !== "entry-ack") return;
-      var target = entryById[String(op.entry_id || "")];
-      if (!target) return;
-      if ((Number(op.ack_edited_seen_count) || 0) > (Number(target.ack_edited_seen_count) || 0)) {
-        target.ack_edited_seen_count = Number(op.ack_edited_seen_count) || 0;
-      }
-    });
-    mergedEntries.sort(function (a, b) {
-      var ta = parseBoardStampMs(a && a.at);
-      var tb = parseBoardStampMs(b && b.at);
-      if (isNaN(ta) || isNaN(tb)) return 0;
-      return ta - tb;
-    });
-    next.entries = mergedEntries.slice(-MAX_BOARD_ENTRIES);
-    Object.keys(incoming.wakes).forEach(function (wakeK) {
-      if (wakeK !== previewSid && incoming.wakes[wakeK]) {
-        next.wakes[wakeK] = incoming.wakes[wakeK];
-      }
-    });
-    if (previewSid && next.wakes[previewSid] && (!previewBoard.wakes || !previewBoard.wakes[previewSid])) {
-      delete next.wakes[previewSid];
-    }
-    var normalizedOut = normalizeBoard(next);
-    var gitShaRe = /^[0-9a-f]{40}$/;
-    (normalizedOut.sessions || []).forEach(function (mRow) {
-      if (!mRow || !mRow.allowed || mRow.role !== "main") return;
-      var prevM = prevSessionsBySid[mRow.session_id];
-      if (!prevM) return;
-      var prevRh = String(prevM.remote_head || "").trim().toLowerCase();
-      var curRh = String(mRow.remote_head || "").trim().toLowerCase();
-      var prevOm = String(prevM.origin_main_head || "").trim().toLowerCase();
-      var curOm = String(mRow.origin_main_head || "").trim().toLowerCase();
-      var rhMoved = gitShaRe.test(prevRh) && gitShaRe.test(curRh) && prevRh !== curRh;
-      var omMoved = gitShaRe.test(prevOm) && gitShaRe.test(curOm) && prevOm !== curOm;
-      if (!rhMoved && !omMoved) return;
-      var movedSha = rhMoved ? curRh : curOm;
-      var wakeTok = "main-moved:" + movedSha.slice(0, 12);
-      var mRepo = mRow.repo || "";
-      var linkedRepos = normalizedOut.multi_repo && Array.isArray(normalizedOut.linked_repos)
-        ? normalizedOut.linked_repos
-        : [];
-      (normalizedOut.sessions || []).forEach(function (wRow) {
-        if (!wRow || !wRow.allowed || wRow.role !== "worker") return;
-        if (wRow.session_id === previewSid) return;
-        if (mRepo && wRow.repo && wRow.repo !== mRepo && linkedRepos.indexOf(wRow.repo) === -1) return;
-        normalizedOut.wakes[wRow.session_id] = wakeTok;
-      });
-    });
-    return normalizedOut;
-  }
-
   function readGlobalBoard() {
-    if (boardProxyConfig() && proxyBoardCache) {
-      return proxyBoardCache;
-    }
-    try {
-      return normalizeBoard(GM_getValue(BOARD_KEY, null));
-    } catch (err) {
-      return normalizeBoard(null);
-    }
+    return proxyBoardCache || normalizeBoard(null);
   }
 
   function boardMaterialSignature(board) {
@@ -7884,49 +7432,15 @@
   }
 
   function writeGlobalBoard(board, opts) {
-    if (boardProxyConfig()) {
-      var proxyNext = updateProxyBoardCache(board, opts && opts.revision);
-      lastHandledBoardMaterialSig = boardMaterialSignature(proxyNext);
-      if (!opts || !opts.fromProxy) {
-        proxyBoardJson("/v1/board", { action: "merge", board: proxyNext }).then(function (res) {
-          if (res && res.status === 200 && res.body && res.body.board) {
-            updateProxyBoardCache(res.body.board, Number(res.body.revision));
-          }
-        });
-      }
-      return proxyNext;
+    var proxyNext = updateProxyBoardCache(board, opts && opts.revision);
+    if (boardProxyConfig() && (!opts || !opts.fromProxy)) {
+      proxyBoardJson("/v1/board", { action: "merge", board: proxyNext }).then(function (res) {
+        if (res && res.status === 200 && res.body && res.body.board) {
+          updateProxyBoardCache(res.body.board, Number(res.body.revision));
+        }
+      });
     }
-    var next = normalizeBoard(board);
-    while (next.entries.length > 1 && JSON.stringify(next).length > MAX_BOARD_BYTES) {
-      next.entries.shift();
-    }
-    var serialized = JSON.stringify(next);
-    var materialSig = boardMaterialSignature(next);
-    var passive = Boolean(opts && opts.passive);
-    var hasStored = false;
-    try {
-      hasStored = GM_getValue(BOARD_KEY, null) !== null;
-    } catch (err) {}
-    var skipPassiveEcho = Boolean(
-      passive &&
-      hasStored &&
-      materialSig === lastWrittenMaterialSig &&
-      (Date.now() - lastWrittenAtMs) < BOARD_HEARTBEAT_WRITE_MS
-    );
-    var skipIdentical = Boolean(hasStored && serialized === lastWrittenBoardJson);
-    if (!skipPassiveEcho && !skipIdentical) {
-      try {
-        GM_setValue(BOARD_KEY, next);
-        lastWrittenBoardJson = serialized;
-        lastWrittenMaterialSig = materialSig;
-        lastWrittenAtMs = Date.now();
-        lastHandledBoardMaterialSig = materialSig;
-      } catch (err) {}
-    } else {
-      lastHandledBoardMaterialSig = materialSig;
-    }
-    if (typeof syncTitleNowHook === "function") syncTitleNowHook();
-    return next;
+    return proxyNext;
   }
 
   function scopeBoardForTarget(board, sessionId, repoHint) {
@@ -8118,283 +7632,14 @@
     return false;
   }
 
-  function validateBoardFile(file) {
-    if (!file || typeof file !== "object") return { ok: true, file: null };
-    var name = String(file.name || "").trim().replace(/\\/g, "/");
-    if (!name || name.indexOf("..") !== -1 || name.indexOf("/") === 0) {
-      return { ok: false, error: "invalid-file-name" };
-    }
-    var encoding = file.encoding === "base64" ? "base64" : "utf-8";
-    var content = typeof file.content === "string" ? file.content : "";
-    var byteSize = 0;
-    if (encoding === "base64") {
-      var stripped = content.replace(/\s+/g, "");
-      var padding = stripped.slice(-2) === "==" ? 2 : stripped.slice(-1) === "=" ? 1 : 0;
-      byteSize = Math.max(0, Math.floor((stripped.length * 3) / 4) - padding);
-    } else {
-      byteSize = typeof Buffer !== "undefined"
-        ? Buffer.byteLength(content, "utf8")
-        : unescape(encodeURIComponent(content)).length;
-    }
-    if (byteSize > MAX_BOARD_FILE_BYTES) {
-      return { ok: false, error: "file-too-large" };
-    }
-    var sha256 = String(file.sha256 || "").trim().toLowerCase();
-    if (sha256 && !/^[0-9a-f]{64}$/.test(sha256)) {
-      return { ok: false, error: "invalid-file-sha256" };
-    }
-    return {
-      ok: true,
-      file: {
-        name: name,
-        encoding: encoding,
-        content: content,
-        size: byteSize,
-        sha256: sha256,
-      },
-    };
-  }
-
-  function applyBoardAction(board, action) {
-    var next = normalizeBoard(board);
-    if (!action || typeof action !== "object") return { ok: false, error: "invalid-action", board: next };
-    var actionType = String(action.type || action.action || "");
-    var sid = resolveBoardTarget(action.session_id || action.branch || "", next.sessions, next.allowed_sessions, next.main_session_id);
-    var nowIso = action.at || new Date().toISOString();
-    if (actionType === "allow") {
-      if (!sid) return { ok: false, error: "missing-session-id", board: next };
-      next.removed_sessions = (next.removed_sessions || []).filter(function (item) { return item !== sid; });
-      var rawWid = action.worker_id !== undefined ? action.worker_id : action.identifier;
-      if (rawWid !== undefined) {
-        var cleanWid = cleanWorkerId(rawWid);
-        if (!cleanWid) return { ok: false, error: "invalid-worker-id", board: next };
-        next.worker_ids[sid] = cleanWid;
-      }
-      if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
-      return { ok: true, board: normalizeBoard(next) };
-    }
-    if (actionType === "delegate-id" || actionType === "set-worker-id") {
-      var targetSid = resolveBoardTarget(action.session_id || action.target || "", next.sessions, next.allowed_sessions, next.main_session_id);
-      if (!targetSid) return { ok: false, error: "missing-session-id", board: next };
-      var rawId = action.worker_id !== undefined ? action.worker_id : (action.identifier !== undefined ? action.identifier : action.id);
-      var cleanId = cleanWorkerId(rawId);
-      if (!cleanId) return { ok: false, error: "invalid-worker-id", board: next };
-      next.worker_ids[targetSid] = cleanId;
-      return { ok: true, board: normalizeBoard(next) };
-    }
-    if (actionType === "set-multi-repo") {
-      next.multi_repo = Boolean(action.multi_repo !== undefined ? action.multi_repo : action.enabled);
-      return { ok: true, board: normalizeBoard(next) };
-    }
-    if (actionType === "worker-task" || actionType === "manage-worker-tasks") {
-      if (next.main_session_id && sid && sid !== next.main_session_id) {
-        return { ok: false, error: "only-main-session", board: next };
-      }
-      var targetWorker = resolveBoardTarget(
-        action.target || action.worker || action.target_session_id || "",
-        next.sessions,
-        next.allowed_sessions,
-        next.main_session_id
-      );
-      if (!targetWorker) return { ok: false, error: "missing-worker-target", board: next };
-      var opName = String(action.op || action.operation || action.subaction || "set").trim().toLowerCase();
-      var opId = String(action.id || ("top-" + Date.now()));
-      var opRecord = {
-        id: opId,
-        target: targetWorker,
-        op: opName,
-        task_id: String(action.task_id || action.task || ""),
-        title: action.title,
-        details: action.details,
-        scope: action.scope,
-        status: action.status,
-        task_type: action.task_type || action.type,
-        order: action.order,
-        order_ids: action.order_ids,
-        append: Boolean(action.append),
-        report_id: action.report_id,
-        tasks: action.tasks,
-        at: nowIso,
-      };
-      next.task_ops.push(opRecord);
-      if (next.task_ops.length > MAX_BOARD_ENTRIES) {
-        next.task_ops = next.task_ops.slice(-MAX_BOARD_ENTRIES);
-      }
-      if (next.allowed_sessions.indexOf(targetWorker) !== -1) {
-        next.wakes[targetWorker] = opId;
-      }
-      return { ok: true, board: normalizeBoard(next) };
-    }
-    if (actionType === "worker-report" || actionType === "manage-worker-reports") {
-      var fromOwner = Boolean(action.from_owner);
-      if (!fromOwner && next.main_session_id && sid && sid !== next.main_session_id) {
-        return { ok: false, error: "only-main-session", board: next };
-      }
-      var targetReportWorker = resolveBoardTarget(
-        action.target || action.worker || action.target_session_id || "",
-        next.sessions,
-        next.allowed_sessions,
-        next.main_session_id
-      );
-      if (!targetReportWorker) return { ok: false, error: "missing-worker-target", board: next };
-      var reportId = String(action.report_id || action.report || "").trim();
-      if (!reportId) return { ok: false, error: "missing-report-id", board: next };
-      var repOpName = String(action.op || action.operation || action.subaction || "answer").trim().toLowerCase();
-      var repOpId = String(action.id || ("rop-" + Date.now()));
-      var repOpRecord = {
-        id: repOpId,
-        target: targetReportWorker,
-        op: repOpName,
-        report_id: reportId,
-        from_owner: fromOwner,
-        answers: action.answers && typeof action.answers === "object" ? action.answers : {},
-        submission_id: action.submission_id || action.note_id,
-        at: nowIso,
-      };
-      next.report_ops.push(repOpRecord);
-      if (next.report_ops.length > MAX_BOARD_ENTRIES) {
-        next.report_ops = next.report_ops.slice(-MAX_BOARD_ENTRIES);
-      }
-      if (next.allowed_sessions.indexOf(targetReportWorker) !== -1) {
-        next.wakes[targetReportWorker] = repOpId;
-      }
-      return { ok: true, board: normalizeBoard(next) };
-    }
-    if (actionType === "disconnect-session") {
-      if (!sid) return { ok: false, error: "missing-session-id", board: next };
-      next.sessions = next.sessions.map(function (row) {
-        if (boardSessionId(row.session_id || row.branch) !== sid) return row;
-        return Object.assign({}, row, { status: "disconnected", disconnected: true, polling: false });
-      });
-      return { ok: true, board: normalizeBoard(next) };
-    }
-    if (actionType === "revoke" || actionType === "remove-session" || actionType === "dismiss") {
-      if (!sid) return { ok: false, error: "missing-session-id", board: next };
-      if ((next.removed_sessions || []).indexOf(sid) === -1) {
-        next.removed_sessions = (next.removed_sessions || []).concat([sid]);
-      }
-      next.allowed_sessions = next.allowed_sessions.filter(function (item) { return item !== sid; });
-      next.sessions = next.sessions.filter(function (row) { return boardSessionId(row.session_id || row.branch) !== sid; });
-      delete next.wakes[sid];
-      delete next.worker_ids[sid];
-      delete next.worker_tasks[sid];
-      delete next.worker_reports[sid];
-      if (next.main_session_id === sid) next.main_session_id = "";
-      return { ok: true, board: normalizeBoard(next) };
-    }
-    if (actionType === "set-main") {
-      if (!sid) {
-        next.main_session_id = "";
-        return { ok: true, board: normalizeBoard(next) };
-      }
-      next.removed_sessions = (next.removed_sessions || []).filter(function (item) { return item !== sid; });
-      delete next.worker_ids[sid];
-      if (next.allowed_sessions.indexOf(sid) === -1) next.allowed_sessions.push(sid);
-      next.main_session_id = sid;
-      return { ok: true, board: normalizeBoard(next) };
-    }
-    if (actionType === "heartbeat") {
-      var hbSid = boardSessionId(action.session_id || action.branch || "");
-      if (!hbSid) return { ok: false, error: "missing-session-id", board: next };
-      next.removed_sessions = (next.removed_sessions || []).filter(function (item) { return item !== hbSid; });
-      var found = false;
-      next.sessions = next.sessions.map(function (row) {
-        if (boardSessionId(row.session_id || row.branch) !== hbSid) return row;
-        found = true;
-        return {
-          session_id: hbSid,
-          repo: String(action.repo || row.repo || ""),
-          branch: String(action.branch || row.branch || ("arena/" + hbSid)),
-          status: String(action.status || row.status || "active"),
-          polling: Boolean(action.polling),
-          updated_at: nowIso,
-        };
-      });
-      if (!found) {
-        next.sessions.push({
-          session_id: hbSid,
-          repo: String(action.repo || ""),
-          branch: String(action.branch || ("arena/" + hbSid)),
-          status: String(action.status || "active"),
-          polling: Boolean(action.polling),
-          updated_at: nowIso,
-        });
-      }
-      return { ok: true, board: normalizeBoard(next) };
-    }
-    if (actionType === "post") {
-      if (!sid || next.allowed_sessions.indexOf(sid) === -1) {
-        return { ok: false, error: "not-allowed", board: next };
-      }
-      var checkedFile = validateBoardFile(action.file);
-      if (!checkedFile.ok) return { ok: false, error: checkedFile.error, board: next };
-      var rawTo = String(action.to || "");
-      var resolvedTo = rawTo === "*" || !rawTo
-        ? rawTo
-        : resolveBoardTarget(rawTo, next.sessions, next.allowed_sessions, next.main_session_id);
-      next.entries.push({
-        id: String(action.id || ("b-" + Date.now())),
-        session_id: sid,
-        to: resolvedTo,
-        repo: String(action.repo || ""),
-        branch: String(action.branch || ("arena/" + sid)),
-        at: nowIso,
-        payload: action.payload === undefined ? null : action.payload,
-        file: checkedFile.file,
-      });
-      if (next.entries.length > MAX_BOARD_ENTRIES) {
-        next.entries = next.entries.slice(-MAX_BOARD_ENTRIES);
-      }
-      return { ok: true, board: next };
-    }
-    if (actionType === "wake") {
-      if (sid && next.allowed_sessions.indexOf(sid) === -1) {
-        return { ok: false, error: "not-allowed", board: next };
-      }
-      var target = String(action.target || "");
-      var wakeToken = String(action.wake_id || nowIso);
-      var wakeUpdatedIso = !isNaN(parseBoardStampMs(action.at)) ? String(action.at) : new Date().toISOString();
-      if (target === "all-polling") {
-        next.sessions.forEach(function (row) {
-          var rowId = boardSessionId(row.session_id || row.branch);
-          if (row.polling && next.allowed_sessions.indexOf(rowId) !== -1) {
-            next.wakes[rowId] = wakeToken;
-            row.polling = false;
-            row.status = "active";
-            row.updated_at = wakeUpdatedIso;
-          }
-        });
-      } else {
-        var targetId = resolveBoardTarget(target, next.sessions, next.allowed_sessions, next.main_session_id);
-        if (!targetId || next.allowed_sessions.indexOf(targetId) === -1) {
-          return { ok: false, error: "target-not-allowed", board: next };
-        }
-        next.wakes[targetId] = wakeToken;
-        next.sessions.forEach(function (row) {
-          if (boardSessionId(row.session_id || row.branch) === targetId) {
-            row.polling = false;
-            row.status = "active";
-            row.updated_at = wakeUpdatedIso;
-          }
-        });
-      }
-      return { ok: true, board: next };
-    }
-    if (actionType === "clear") {
-      next.entries = [];
-      return { ok: true, board: next };
-    }
-    return { ok: false, error: "unknown-action", board: next };
-  }
-
   exposeChecks("board", {
-    BOARD_KEY: BOARD_KEY,
     BOARD_PROXY_HOST_KEY: BOARD_PROXY_HOST_KEY,
     BOARD_PROXY_MASTER_KEY: BOARD_PROXY_MASTER_KEY,
+    BOARD_PROXY_POLL_MS: BOARD_PROXY_POLL_MS,
     BOARD_SESSION_TTL_SECONDS: BOARD_SESSION_TTL_SECONDS,
     MAX_BOARD_FILE_BYTES: MAX_BOARD_FILE_BYTES,
-    MAX_BOARD_BYTES: MAX_BOARD_BYTES,
     boardProxyConfig: boardProxyConfig,
+    updateProxyBoardCache: updateProxyBoardCache,
     pullProxyBoard: pullProxyBoard,
     hydrateBoardFilesForTarget: hydrateBoardFilesForTarget,
     syncPreviewBoard: syncPreviewBoard,
@@ -8402,6 +7647,7 @@
       proxyBoardCache = null;
       proxyBoardRevision = 0;
       proxyBoardPullInFlight = null;
+      lastProxyBoardPullAtMs = 0;
       hydratedBoardFilesBySid = {};
     },
     boardSessionId: boardSessionId,
@@ -8411,7 +7657,6 @@
     resolveBoardTarget: resolveBoardTarget,
     normalizeBoard: normalizeBoard,
     boardMaterialSignature: boardMaterialSignature,
-    mergePreviewBoard: mergePreviewBoard,
     readGlobalBoard: readGlobalBoard,
     writeGlobalBoard: writeGlobalBoard,
     scopeBoardForTarget: scopeBoardForTarget,
@@ -8422,8 +7667,6 @@
     boardHasWaitingReportFor: boardHasWaitingReportFor,
     GREEK_LETTER_SYMBOLS: GREEK_LETTER_SYMBOLS,
     canPushOrPr: canPushOrPr,
-    validateBoardFile: validateBoardFile,
-    applyBoardAction: applyBoardAction,
   });
   exposeChecks("pause", { PAUSE_KEY: PAUSE_KEY, pauseLabel: pauseLabel });
   exposeChecks("menus", {

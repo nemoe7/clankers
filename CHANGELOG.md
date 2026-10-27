@@ -77,6 +77,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Make `/v1/board` the sole board backend, drop `BOARD_KEY` consolidation, and poll revision deltas on tab ticks (`userscripts/`, `tests/userscripts/`).
 - Trim proxy board sync to pure transport between member `/api/board` and egress `/v1/board`, removing client-side `set-main` and `allow` healing chains (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `skills/refs/arena-skill/scripts/preview.py`, `maintenance/workflows/userscripts.test.cjs`).
 - Offload cross-session board storage and file blobs from `GM_setValue` to `arena-egress-proxy` master-key routes (`userscripts/arena.user.js`, `userscripts/AGENTS.md`, `maintenance/workflows/userscripts.test.cjs`).
 - Add Greek board symbols (`α`..`ω`, or custom worker IDs) to allowlisted session tab titles and prepend `* ` on non-worker sessions with published reports awaiting submission (`userscripts/arena.user.js`, `userscripts/README.md`).

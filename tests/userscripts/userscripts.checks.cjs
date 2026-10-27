@@ -2937,83 +2937,66 @@ require("node:test").test("successful state saves clear stale failure notices", 
   assert.ok(panel, "a transient success message keeps its existing timeout");
 });
 
-require("node:test").test("multi-session board enforces allowlist opt-in, Main Session role, 512 KB file cap, and wake", () => {
+require("node:test").test("multi-session board enforces proxy-only cache, Main Session role, 512 KB file cap, and target scoping", () => {
   const loaded = loadChecks("arena.user.js");
   const boardApi = loaded.checks.board;
   assert.equal(boardApi.boardSessionId("arena/main0001-clankers"), "main0001-clankers");
   assert.equal(boardApi.boardSessionId("work0002-clankers"), "work0002-clankers");
   assert.equal(boardApi.MAX_BOARD_FILE_BYTES, 524288);
+  assert.equal(boardApi.BOARD_KEY, undefined);
+  assert.equal(boardApi.applyBoardAction, undefined);
+  assert.equal(boardApi.mergePreviewBoard, undefined);
 
   let state = boardApi.readGlobalBoard();
   assert.deepEqual([...state.allowed_sessions], []);
-  const denied = boardApi.applyBoardAction(state, {
-    type: "post",
-    session_id: "arena/untr0003-sandbox",
-    payload: { topic: "untrusted" },
-  });
-  assert.equal(denied.ok, false);
-  assert.equal(denied.error, "not-allowed");
 
-  state = boardApi.applyBoardAction(state, { type: "set-main", session_id: "arena/main0001-clankers" }).board;
-  state = boardApi.applyBoardAction(state, { type: "allow", session_id: "arena/work0002-clankers" }).board;
+  state = boardApi.writeGlobalBoard(
+    {
+      allowed_sessions: ["arena/main0001-clankers", "arena/work0002-clankers"],
+      main_session_id: "arena/main0001-clankers",
+      sessions: [
+        { session_id: "arena/main0001-clankers", repo: "clankers", polling: true },
+        { session_id: "arena/work0002-clankers", repo: "clankers", status: "active" },
+      ],
+      entries: [
+        {
+          id: "p00001",
+          session_id: "work0002-clankers",
+          to: "main0001-clankers",
+          repo: "nemoe7/clankers",
+          payload: { topic: "scope-split", status: "ready" },
+          file: {
+            name: "skills/nuu/scripts/nuu.py",
+            encoding: "utf-8",
+            content: "print('ok')\n",
+            size: 12,
+            sha256: "a".repeat(64),
+          },
+        },
+      ],
+      wakes: { "main0001-clankers": "2026-10-25T12:01:00Z" },
+    },
+    { fromProxy: true, revision: 1 },
+  );
   assert.deepEqual([...state.allowed_sessions], ["main0001-clankers", "work0002-clankers"]);
   assert.equal(state.main_session_id, "main0001-clankers");
   assert.equal(boardApi.boardRoleFor(state, "main0001-clankers"), "main");
   assert.equal(boardApi.canPushOrPr(state, "main0001-clankers"), true);
   assert.equal(boardApi.boardRoleFor(state, "work0002-clankers"), "worker");
   assert.equal(boardApi.canPushOrPr(state, "work0002-clankers"), false);
-
-  const oversized = boardApi.applyBoardAction(state, {
-    type: "post",
-    session_id: "work0002-clankers",
-    file: {
-      name: "big.bin",
-      encoding: "utf-8",
-      content: "x".repeat(524289),
-    },
-  });
-  assert.equal(oversized.ok, false);
-  assert.equal(oversized.error, "file-too-large");
-
-  const validPost = boardApi.applyBoardAction(state, {
-    type: "post",
-    session_id: "work0002-clankers",
-    to: "main0001-clankers",
-    repo: "nemoe7/clankers",
-    payload: { topic: "scope-split", status: "ready" },
-    file: {
-      name: "skills/nuu/scripts/nuu.py",
-      encoding: "utf-8",
-      content: "print('ok')\n",
-      sha256: "a".repeat(64),
-    },
-  });
-  assert.equal(validPost.ok, true);
-  state = boardApi.writeGlobalBoard(validPost.board);
   assert.equal(state.entries.length, 1);
   assert.equal(state.entries[0].file.size, 12);
   assert.equal(state.entries[0].payload.topic, "scope-split");
+  assert.equal(state.wakes["main0001-clankers"], "2026-10-25T12:01:00Z");
 
-  state = boardApi.applyBoardAction(state, {
-    type: "heartbeat",
-    session_id: "main0001-clankers",
-    repo: "nemoe7/clankers",
-    polling: true,
-    at: "2026-10-25T12:00:00Z",
-  }).board;
-  const woken = boardApi.applyBoardAction(state, {
-    type: "wake",
-    session_id: "work0002-clankers",
-    target: "all-polling",
-    at: "2026-10-25T12:01:00Z",
-  });
-  assert.equal(woken.ok, true);
-  assert.equal(woken.board.wakes["main0001-clankers"], "2026-10-25T12:01:00Z");
+  const unoptedView = boardApi.scopeBoardForTarget(state, "untr0003-sandbox", "sandbox");
+  assert.deepEqual([...unoptedView.entries], []);
+  assert.equal(unoptedView.main_session_id, "");
 
-  const revoked = boardApi.applyBoardAction(woken.board, {
-    type: "revoke",
-    session_id: "main0001-clankers",
+  const revoked = boardApi.normalizeBoard({
+    allowed_sessions: ["work0002-clankers"],
+    removed_sessions: ["main0001-clankers"],
+    main_session_id: "main0001-clankers",
   });
-  assert.equal(revoked.ok, true);
-  assert.equal(revoked.board.main_session_id, "");
+  assert.equal(revoked.main_session_id, "");
 });

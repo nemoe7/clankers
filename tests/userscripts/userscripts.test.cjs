@@ -2358,7 +2358,7 @@ for raw in sys.stdin:
 
 {
   const { test } = require("node:test");
-  test("configurable timers, dropped stale inner VERSION, and draggable Lucide settings modal", () => {
+  test("configurable timers, dropped stale inner VERSION, and draggable Lucide settings modal", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const checkSaved = new Map();
     const checkContext = {
@@ -3122,47 +3122,7 @@ for raw in sys.stdin:
       "second ensurePreviewDrawerStyle must not rewrite attributes when style node already exists",
     );
 
-    const allowedBoard = checks.board.applyBoardAction(null, {
-      action: "allow",
-      session_id: "arena/bdf20cf5-clankers",
-    }).board;
-    assert.equal(allowedBoard.sessions.length, 1);
-    assert.equal(allowedBoard.sessions[0].session_id, "bdf20cf5-clankers");
-    const syncedWorker = checks.board.mergePreviewBoard(allowedBoard, {
-      session_id: "bdf20cf5-clankers",
-      repo: "clankers",
-      branch: "arena/bdf20cf5-clankers",
-      allowed_sessions: ["bdf20cf5-clankers", "293da56c-clankers"],
-      main_session_id: "293da56c-clankers",
-      sessions: [
-        {
-          session_id: "bdf20cf5-clankers",
-          repo: "clankers",
-          branch: "arena/bdf20cf5-clankers",
-          status: "polling",
-          polling: true,
-          updated_at: "2026-10-25T15:00:00Z",
-        },
-      ],
-      entries: [],
-      wakes: {},
-    });
-    const workerRow = syncedWorker.sessions.find((r) => r.session_id === "bdf20cf5-clankers");
-    assert.equal(workerRow.polling, true);
-    const wokenAll = checks.board.applyBoardAction(syncedWorker, {
-      action: "wake",
-      target: "all-polling",
-      at: "2026-10-25T15:00:05Z",
-    }).board;
-    assert.equal(wokenAll.wakes["bdf20cf5-clankers"], "2026-10-25T15:00:05Z");
-    assert.equal(
-      wokenAll.sessions.find((r) => r.session_id === "bdf20cf5-clankers").polling,
-      false,
-    );
-    const afterWakeConsumed = checks.board.mergePreviewBoard(wokenAll, {
-      session_id: "bdf20cf5-clankers",
-      repo: "clankers",
-      branch: "arena/bdf20cf5-clankers",
+    const afterWakeConsumed = checks.board.normalizeBoard({
       allowed_sessions: ["bdf20cf5-clankers", "293da56c-clankers"],
       main_session_id: "293da56c-clankers",
       sessions: [
@@ -3174,36 +3134,20 @@ for raw in sys.stdin:
           polling: false,
           updated_at: "2026-10-25T15:00:06Z",
         },
+        {
+          session_id: "293da56c-clankers",
+          repo: "clankers",
+          branch: "arena/293da56c-clankers",
+          status: "active",
+          polling: false,
+          updated_at: "2026-10-25T15:00:06Z",
+        },
       ],
       entries: [],
       wakes: {},
     });
     assert.equal(afterWakeConsumed.wakes["bdf20cf5-clankers"], undefined);
-    const wokenFromMainServer = checks.board.mergePreviewBoard(afterWakeConsumed, {
-      session_id: "293da56c-clankers",
-      repo: "clankers",
-      branch: "arena/293da56c-clankers",
-      allowed_sessions: ["bdf20cf5-clankers", "293da56c-clankers"],
-      main_session_id: "293da56c-clankers",
-      sessions: [
-        {
-          session_id: "bdf20cf5-clankers",
-          repo: "clankers",
-          branch: "arena/bdf20cf5-clankers",
-          status: "polling",
-          polling: true,
-          updated_at: "2026-10-25T15:00:07Z",
-        },
-      ],
-      entries: [],
-      wakes: { "bdf20cf5-clankers": "2026-10-25T15:00:08Z" },
-    });
-    assert.equal(wokenFromMainServer.wakes["bdf20cf5-clankers"], "2026-10-25T15:00:08Z");
-    assert.equal(
-      wokenFromMainServer.sessions.find((r) => r.session_id === "bdf20cf5-clankers").polling,
-      false,
-    );
-    checks.board.writeGlobalBoard(afterWakeConsumed);
+    checks.board.writeGlobalBoard(afterWakeConsumed, { fromProxy: true, revision: 1 });
     assert.deepEqual(
       JSON.parse(
         JSON.stringify(
@@ -3217,410 +3161,244 @@ for raw in sys.stdin:
       [],
       "worker session does not post preview URLs to the preview proxy",
     );
-      assert.deepEqual(
-        JSON.parse(
-          JSON.stringify(
-            checks.promptFill.discoverPreviews(
-              steeringAndDemoDoc,
-              "clankers",
-              "293da56c-clankers",
-            ),
+    assert.deepEqual(
+      JSON.parse(
+        JSON.stringify(
+          checks.promptFill.discoverPreviews(
+            steeringAndDemoDoc,
+            "clankers",
+            "293da56c-clankers",
           ),
         ),
-        [
-          {
-            url: "https://sbx-steering8000.arena.site/",
-            name: "clankers - Steering",
-          },
-          { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
-        ],
-        "main session steering preview keeps the canonical repo - Steering label",
-      );
-      assert.deepEqual(
-        JSON.parse(
-          JSON.stringify(
-            checks.promptFill.discoverPreviews(
-              steeringAndDemoDoc,
-              "otherrepo",
-              "11111111-otherrepo",
-            ),
+      ),
+      [
+        {
+          url: "https://sbx-steering8000.arena.site/",
+          name: "clankers - Steering",
+        },
+        { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
+      ],
+      "main session steering preview keeps the canonical repo - Steering label",
+    );
+    assert.deepEqual(
+      JSON.parse(
+        JSON.stringify(
+          checks.promptFill.discoverPreviews(
+            steeringAndDemoDoc,
+            "otherrepo",
+            "11111111-otherrepo",
           ),
         ),
-        [
-          {
-            url: "https://sbx-steering8000.arena.site/",
-            name: "otherrepo - Steering",
-          },
-          { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
-        ],
-        "independent main session for another repo posts its own repo - Steering preview",
-      );
-      var syncedAck = checks.board.mergePreviewBoard(
+      ),
+      [
         {
-          allowed_sessions: ["293da56c-clankers", "bdf20cf5-clankers"],
-          main_session_id: "293da56c-clankers",
-          entries: [
-            {
-              id: "p1a2b3",
-              session_id: "293da56c-clankers",
-              to: "bdf20cf5-clankers",
-              text: "Please check nuu\n@beta",
-              seen_at: null,
-              acknowledged_at: null,
-              ack_text: null,
-              replies: [],
-            },
-          ],
+          url: "https://sbx-steering8000.arena.site/",
+          name: "otherrepo - Steering",
         },
-        {
-          session_id: "bdf20cf5-clankers",
-          allowed_sessions: ["293da56c-clankers", "bdf20cf5-clankers"],
-          main_session_id: "293da56c-clankers",
-          entries: [
-            {
-              id: "p1a2b3",
-              session_id: "293da56c-clankers",
-              to: "bdf20cf5-clankers",
-              text: "Please check nuu\n@beta",
-              seen_at: "2026-10-26T18:50:00Z",
-              acknowledged_at: "2026-10-26T18:50:05Z",
-              ack_type: "reply",
-              ack_text: "Acknowledged, checking nuu now.",
-              ack_edited_at: "2026-10-26T18:50:10Z",
-              replies: [{ type: "reply", text: "Follow-up reply", at: "2026-10-26T18:50:10Z" }],
-            },
-          ],
-        },
-      );
-      assert.equal(syncedAck.entries[0].seen_at, "2026-10-26T18:50:00Z");
-      assert.equal(syncedAck.entries[0].acknowledged_at, "2026-10-26T18:50:05Z");
-      assert.equal(syncedAck.entries[0].ack_text, "Acknowledged, checking nuu now.");
-      assert.equal(syncedAck.entries[0].replies.length, 1);
-      assert.equal(
-        checks.stateDownload.isWorkerSession(
-          afterWakeConsumed,
-          "bdf20cf5-clankers",
-          null,
-        ),
-        true,
-        "worker session on board is identified as worker even when not checking allowed_sessions or force",
-      );
-      assert.equal(
-        checks.stateDownload.isWorkerSession(
-          afterWakeConsumed,
-          "unlisted-worker-clankers",
-          null,
-        ),
-        true,
-        "non-main session when main_session_id is set is identified as worker",
-      );
-      assert.equal(
-        checks.stateDownload.isWorkerSession(
-          { main_session_id: "", allowed_sessions: [] },
-          "bdf20cf5-clankers",
-          { board: { role: "worker" } },
-        ),
-        true,
-        "autosave payload reporting board.role === worker is identified as worker",
-      );
-      assert.equal(
-        checks.stateDownload.isWorkerSession(
-          afterWakeConsumed,
-          "293da56c-clankers",
-          null,
-        ),
-        false,
-        "main session on board is not identified as worker",
-      );
-      assert.equal(
-        checks.board.boardRoleFor(afterWakeConsumed, "c40a4115-arena-cleanup"),
-        "main",
-        "unopted or cross-repo session is never assigned worker role",
-      );
-      assert.equal(
-        checks.board.scopeBoardForTarget(
-          afterWakeConsumed,
-          "c40a4115-arena-cleanup",
-          "arena-cleanup",
-        ).main_session_id,
-        "",
-        "scopeBoardForTarget clears main_session_id for unopted cross-repo session",
-      );
-      const mergedAckSender = checks.board.mergePreviewBoard(
-        {
-          allowed_sessions: ["293da56c-clankers"],
-          main_session_id: "293da56c-clankers",
-          entries: [{ id: "pe4a3b", session_id: "bdf20cf5-clankers", payload: { text: "hi" } }],
-        },
-        {
-          session_id: "293da56c-clankers",
-          entries: [
-            {
-              id: "pe4a3b",
-              session_id: "bdf20cf5-clankers",
-              payload: { text: "hi" },
-              acknowledged_at: "2026-10-26T12:00:00Z",
-              ack_text: "done",
-              ack_sender: "alpha",
-            },
-          ],
-        },
-      );
-      assert.equal(
-        mergedAckSender.entries[0].ack_sender,
-        "alpha",
-        "mergePreviewBoard merges ack_sender onto existing board entry",
-      );
-      const healedSplitBrain = checks.board.mergePreviewBoard(
-        {
-          removed_sessions: ["293da56c-clankers", "91a01582-clankers"],
-          allowed_sessions: ["91a01582-clankers"],
-          main_session_id: "91a01582-clankers",
-          worker_ids: { "91a01582-clankers": "beta" },
-          sessions: [
-            {
-              session_id: "91a01582-clankers",
-              repo: "clankers",
-              updated_at: "2020-01-01T00:00:00Z",
-            },
-          ],
-          entries: [{ id: "p00002", session_id: "91a01582-clankers", at: "2026-10-26T20:05:00Z", payload: { text: "second" } }],
-        },
-        {
-          session_id: "293da56c-clankers",
-          allowed_sessions: ["293da56c-clankers", "91a01582-clankers"],
-          main_session_id: "293da56c-clankers",
-          worker_ids: { "91a01582-clankers": "beta" },
-          sessions: [
-            {
-              session_id: "293da56c-clankers",
-              repo: "clankers",
-              updated_at: "2026-10-26T20:00:00Z",
-              survey: { answered: true, total: 5, correct: 4 },
-              polling_since: "2026-10-26T20:00:00Z",
-              calls_since_message: 1,
-              gate_threshold: 5,
-            },
-            {
-              session_id: "91a01582-clankers",
-              repo: "clankers",
-              updated_at: "2020-01-01T00:00:00Z",
-              survey: { answered: true, total: 5, correct: 3 },
-              waiting_for_gates: true,
-            },
-          ],
-          entries: [{ id: "p00001", session_id: "293da56c-clankers", at: "2026-10-26T20:01:00Z", payload: { text: "first" } }],
-        },
-      );
-      assert.deepEqual(
-        Array.from(healedSplitBrain.allowed_sessions),
-        ["293da56c-clankers", "91a01582-clankers"],
-        "mergePreviewBoard heals stale removed_sessions when sessions are in incoming.allowed_sessions and does not TTL-evict older updated_at",
-      );
-      assert.equal(
-        healedSplitBrain.main_session_id,
+        { url: "https://sbx-demo3000.arena.site/", name: "Demo App" },
+      ],
+      "independent main session for another repo posts its own repo - Steering preview",
+    );
+    assert.equal(
+      checks.stateDownload.isWorkerSession(
+        afterWakeConsumed,
+        "bdf20cf5-clankers",
+        null,
+      ),
+      true,
+      "worker session on board is identified as worker even when not checking allowed_sessions or force",
+    );
+    assert.equal(
+      checks.stateDownload.isWorkerSession(
+        afterWakeConsumed,
+        "unlisted-worker-clankers",
+        null,
+      ),
+      true,
+      "non-main session when main_session_id is set is identified as worker",
+    );
+    assert.equal(
+      checks.stateDownload.isWorkerSession(
+        { main_session_id: "", allowed_sessions: [] },
+        "bdf20cf5-clankers",
+        { board: { role: "worker" } },
+      ),
+      true,
+      "autosave payload reporting board.role === worker is identified as worker",
+    );
+    assert.equal(
+      checks.stateDownload.isWorkerSession(
+        afterWakeConsumed,
         "293da56c-clankers",
-        "mergePreviewBoard elects non-worker main_session_id over worker session",
-      );
-      assert.deepEqual(
-        Array.from(healedSplitBrain.entries, (e) => e.id),
-        ["p00001", "p00002"],
-        "mergePreviewBoard sorts entries chronologically by at",
-      );
-      assert.equal(
-        healedSplitBrain.sessions.find((s) => s.session_id === "91a01582-clankers").survey.correct,
-        3,
-        "mergePreviewBoard preserves session survey evaluation on session rows",
-      );
-      assert.equal(
-        healedSplitBrain.sessions.find((s) => s.session_id === "293da56c-clankers").polling_since,
-        "2026-10-26T20:00:00Z",
-        "mergePreviewBoard preserves polling_since on session rows",
-      );
-      assert.equal(
-        healedSplitBrain.sessions.find((s) => s.session_id === "91a01582-clankers").waiting_for_gates,
-        true,
-        "mergePreviewBoard preserves waiting_for_gates on peer session rows",
-      );
-      const healedAckBoard = checks.board.mergePreviewBoard(
-        {
-          main_session_id: "a1111111-clankers",
-          allowed_sessions: ["a1111111-clankers", "b2222222-clankers"],
-          sessions: [
-            { session_id: "a1111111-clankers", repo: "clankers" },
-            { session_id: "b2222222-clankers", repo: "clankers" },
-          ],
-          entries: [
-            {
-              id: "p00099",
-              session_id: "b2222222-clankers",
-              to: "clankers-alpha",
-              at: "2026-10-26T20:05:00Z",
-              acknowledged_at: "2026-10-26T20:06:00Z",
-              ack_sender: "b2222222-clankers",
-              replies: [{ type: "reply", text: "ok", at: "2026-10-26T20:07:00Z", sender: "b2222222-clankers" }],
-            },
-          ],
-        },
-        {
-          session_id: "a1111111-clankers",
-          repo: "clankers",
-          main_session_id: "a1111111-clankers",
-          allowed_sessions: ["a1111111-clankers", "b2222222-clankers"],
-          entries: [
-            {
-              id: "p00099",
-              session_id: "b2222222-clankers",
-              to: "a1111111-clankers",
-              at: "2026-10-26T20:05:00Z",
-              acknowledged_at: "2026-10-26T20:06:00Z",
-              ack_sender: "a1111111-clankers",
-              replies: [{ type: "reply", text: "ok", at: "2026-10-26T20:07:00Z", sender: "a1111111-clankers" }],
-            },
-          ],
-          report_ops: [
-            { id: "erseen-p00099-1", target: "*", op: "entry-ack", entry_id: "p00099", ack_edited_seen_count: 1 },
-          ],
-        },
-      );
-      const healedEntry = healedAckBoard.entries.find((e) => e.id === "p00099");
-      assert.equal(healedEntry.to, "a1111111-clankers");
-      assert.equal(healedEntry.ack_sender, "a1111111-clankers");
-      assert.equal(healedEntry.replies[0].sender, "a1111111-clankers");
-      assert.equal(healedEntry.ack_edited_seen_count, 1);
-      const discOut = checks.board.applyBoardAction(healedSplitBrain, {
-        type: "disconnect-session",
-        session_id: "91a01582-clankers",
-      });
-      assert.equal(
-        discOut.board.sessions.find((s) => s.session_id === "91a01582-clankers").disconnected,
-        true,
-        "disconnect-session marks session disconnected without removing from allowed_sessions",
-      );
-      assert.ok(
-        discOut.board.allowed_sessions.includes("91a01582-clankers"),
-        "disconnect-session keeps session in allowed_sessions",
-      );
+        null,
+      ),
+      false,
+      "main session on board is not identified as worker",
+    );
+    assert.equal(
+      checks.board.boardRoleFor(afterWakeConsumed, "c40a4115-arena-cleanup"),
+      "main",
+      "unopted or cross-repo session is never assigned worker role",
+    );
+    assert.equal(
+      checks.board.scopeBoardForTarget(
+        afterWakeConsumed,
+        "c40a4115-arena-cleanup",
+        "arena-cleanup",
+      ).main_session_id,
+      "",
+      "scopeBoardForTarget clears main_session_id for unopted cross-repo session",
+    );
 
-      // Verify board sync works with state-download off or stateBusy true.
-      const boardReqs = [];
-      const postedToFrame = [];
-      const winListeners = new Map();
-      const boardSaved = new Map([
-        ["state-download", false],
-        [
-          "clankers_global_board_v1",
-          {
-            allowed_sessions: ["293da56c-clankers", "bdf20cf5-clankers"],
-            main_session_id: "293da56c-clankers",
-            sessions: [],
-            entries: [],
-            wakes: {},
-          },
-        ],
-      ]);
-      const frameObj = {
-        src: "https://8000-sbx.e2b.app/",
-        getAttribute(name) {
-          return name === "title" ? "App preview on port 8000" : null;
+    // Verify proxy-only board sync works with state-download off and seeds proxyBoardCache on boot.
+    const boardReqs = [];
+    const postedToFrame = [];
+    const winListeners = new Map();
+    const boardSaved = new Map([
+      ["state-download", false],
+      ["clankers-arena-proxy-host", "arena-proxy.example.ts.net"],
+      ["clankers-arena-proxy-master", "master-secret"],
+    ]);
+    const seededProxyBoard = {
+      allowed_sessions: ["293da56c-clankers", "bdf20cf5-clankers"],
+      main_session_id: "293da56c-clankers",
+      sessions: [
+        { session_id: "293da56c-clankers", repo: "clankers", status: "active" },
+        { session_id: "bdf20cf5-clankers", repo: "clankers", status: "active" },
+      ],
+      entries: [],
+      wakes: {},
+    };
+    const frameObj = {
+      src: "https://8000-sbx.e2b.app/",
+      getAttribute(name) {
+        return name === "title" ? "App preview on port 8000" : null;
+      },
+      setAttribute() {},
+      addEventListener() {},
+      contentWindow: {
+        postMessage(msg, origin) {
+          postedToFrame.push({ msg, origin });
         },
-        setAttribute() {},
-        addEventListener() {},
-        contentWindow: {
-          postMessage(msg, origin) {
-            postedToFrame.push({ msg, origin });
-          },
+      },
+    };
+    const boardDoc = {
+      documentElement: {},
+      title: "Arena",
+      location: { href: "https://arena.ai/c/1", pathname: "/c/1" },
+      querySelector() {
+        return null;
+      },
+      querySelectorAll(sel) {
+        return sel === "iframe[title]" ? [frameObj] : [];
+      },
+    };
+    const boardIntervals = [];
+    let mockProxyRev = 1;
+    const boardCtx = {
+      console: { log() {}, warn() {}, error() {}, debug() {}, info() {} },
+      URL,
+      Math: Object.assign(Object.create(Math), { random: () => 0 }),
+      Date,
+      location: { href: "https://arena.ai/c/1", pathname: "/c/1", origin: "https://arena.ai", host: "arena.ai" },
+      document: boardDoc,
+      window: {
+        addEventListener(name, fn) {
+          winListeners.set(name, fn);
         },
-      };
-      const boardDoc = {
-        documentElement: {},
-        title: "Arena",
-        location: { href: "https://arena.ai/c/1", pathname: "/c/1" },
-        querySelector() {
-          return null;
-        },
-        querySelectorAll(sel) {
-          return sel === "iframe[title]" ? [frameObj] : [];
-        },
-      };
-      const boardIntervals = [];
-      const boardCtx = {
-        console: { log() {}, warn() {}, error() {}, debug() {}, info() {} },
-        URL,
-        Math: Object.assign(Object.create(Math), { random: () => 0 }),
-        Date,
-        location: { href: "https://arena.ai/c/1", pathname: "/c/1", origin: "https://arena.ai", host: "arena.ai" },
-        document: boardDoc,
-        window: {
-          addEventListener(name, fn) {
-            winListeners.set(name, fn);
-          },
-          removeEventListener() {},
-        },
-        MutationObserver: class {
-          observe() {}
-          disconnect() {}
-        },
-        setInterval(fn, ms) {
-          boardIntervals.push({ fn, ms });
-          return boardIntervals.length;
-        },
-        clearInterval() {},
-        setTimeout(fn) {
-          fn();
-          return 1;
-        },
-        clearTimeout() {},
-        GM_getValue(k, fb) {
-          return boardSaved.has(k) ? boardSaved.get(k) : fb;
-        },
-        GM_setValue(k, v) {
-          boardSaved.set(k, v);
-        },
-        GM_registerMenuCommand() {
-          return 1;
-        },
-        GM_unregisterMenuCommand() {},
-        GM_xmlhttpRequest(opts) {
-          boardReqs.push(opts);
-        },
-      };
-      boardCtx.self = boardCtx.window;
-      vm.runInNewContext(source, boardCtx, { filename: "arena.user.js" });
-      assert.ok(
-        winListeners.has("message"),
-        "window message listener for board sync registers with state-download off",
-      );
-      winListeners.get("message")({
-        origin: "https://8000-sbx.e2b.app",
-        source: frameObj.contentWindow,
-        data: { type: "clankers:preview-ready", repo: "clankers" },
-      });
-      assert.ok(
-        postedToFrame.some((p) => p.msg && p.msg.type === "clankers:userscript-ready"),
-        "preview-ready notifies iframe with userscript-ready with state-download off",
-      );
-      assert.ok(
-        boardReqs.some((r) => r.url === "https://8000-sbx.e2b.app/api/board"),
-        "preview-ready triggers POST /api/board with state-download off",
-      );
-      const countBeforeKeyWatch = boardReqs.filter(
-        (r) => r.url === "https://8000-sbx.e2b.app/api/board",
-      ).length;
-      const keyWatchInterval = boardIntervals.find((entry) => entry.ms === 60000);
-      assert.ok(keyWatchInterval, "script registers key watch interval");
-      keyWatchInterval.fn();
-      assert.equal(
-        boardReqs.filter((r) => r.url === "https://8000-sbx.e2b.app/api/board").length,
-        countBeforeKeyWatch + 1,
-        "key watch interval syncs /api/board with state-download off",
-      );
+        removeEventListener() {},
+      },
+      MutationObserver: class {
+        observe() {}
+        disconnect() {}
+      },
+      setInterval(fn, ms) {
+        boardIntervals.push({ fn, ms });
+        return boardIntervals.length;
+      },
+      clearInterval() {},
+      setTimeout(fn) {
+        fn();
+        return 1;
+      },
+      clearTimeout() {},
+      fetch() {
+        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}), text: () => Promise.resolve("") });
+      },
+      GM_getValue(k, fb) {
+        return boardSaved.has(k) ? boardSaved.get(k) : fb;
+      },
+      GM_setValue(k, v) {
+        boardSaved.set(k, v);
+      },
+      GM_registerMenuCommand() {
+        return 1;
+      },
+      GM_unregisterMenuCommand() {},
+      GM_xmlhttpRequest(opts) {
+        boardReqs.push(opts);
+        if (!opts.onload) return;
+        if (opts.url === "https://8000-sbx.e2b.app/api/board") {
+          opts.onload({
+            status: 200,
+            responseText: JSON.stringify({
+              session_id: "293da56c-clankers",
+              repo: "clankers",
+              allowed_sessions: ["293da56c-clankers", "bdf20cf5-clankers"],
+              main_session_id: "293da56c-clankers",
+              sessions: [{ session_id: "293da56c-clankers", repo: "clankers", status: "active" }],
+              entries: [],
+              wakes: {},
+            }),
+          });
+          return;
+        }
+        if (opts.url.startsWith("https://arena-proxy.example.ts.net/v1/board")) {
+          if (opts.method === "POST") mockProxyRev += 1;
+          opts.onload({
+            status: 200,
+            responseText: JSON.stringify({ revision: mockProxyRev, board: seededProxyBoard }),
+          });
+        }
+      },
+    };
+    boardCtx.self = boardCtx.window;
+    vm.runInNewContext(source, boardCtx, { filename: "arena.user.js" });
+    assert.ok(
+      winListeners.has("message"),
+      "window message listener for board sync registers with state-download off",
+    );
+    winListeners.get("message")({
+      origin: "https://8000-sbx.e2b.app",
+      source: frameObj.contentWindow,
+      data: { type: "clankers:preview-ready", repo: "clankers", session_id: "293da56c-clankers" },
     });
-  }
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.ok(
+      postedToFrame.some((p) => p.msg && p.msg.type === "clankers:userscript-ready"),
+      "preview-ready notifies iframe with userscript-ready with state-download off",
+    );
+    assert.ok(
+      boardReqs.some((r) => r.url === "https://8000-sbx.e2b.app/api/board"),
+      "preview-ready triggers /api/board with state-download off",
+    );
+    const countBeforeKeyWatch = boardReqs.filter(
+      (r) => r.url === "https://8000-sbx.e2b.app/api/board",
+    ).length;
+    const keyWatchInterval = boardIntervals.find((entry) => entry.ms === 60000);
+    assert.ok(keyWatchInterval, "script registers key watch interval");
+    keyWatchInterval.fn();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.ok(
+      boardReqs.filter((r) => r.url === "https://8000-sbx.e2b.app/api/board").length > countBeforeKeyWatch,
+      "key watch interval syncs /api/board with state-download off",
+    );
+  });
+}
 
   {
     const { test } = require("node:test");
-    test("tab title inserts Greek symbol when board is enabled on session", () => {
+    test("tab title inserts Greek symbol when board is enabled on session", async () => {
       const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
       const checkBox = { globalThis: {} };
       checkBox.globalThis = checkBox;
@@ -3654,9 +3432,15 @@ for raw in sys.stdin:
       assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "ee55ff66-clankers"), "fix1");
       assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "99999999-clankers"), "");
 
-      const saved = new Map([["clankers-arena-show-settings-button", false]]);
+      const saved = new Map([
+        ["clankers-arena-show-settings-button", false],
+        ["state-download", false],
+      ]);
       const page = { title: "" };
       const intervals = [];
+      let tabNowMs = 50000;
+      let activeProxyRev = 0;
+      let activeProxyBoard = null;
       let branchHref = "https://github.com/nemoe7/clankers/tree/arena/91a01582-clankers";
       let stop = true;
       const barLink = {
@@ -3731,6 +3515,10 @@ for raw in sys.stdin:
       const ctx = {
         console: { log() {}, info() {}, debug() {}, warn() {}, error() {} },
         URL,
+        Date: Object.assign(function (...args) { return new Date(...args); }, {
+          now: () => tabNowMs,
+          parse: Date.parse,
+        }),
         location: { href: "https://arena.ai/c/one", pathname: "/c/one", origin: "https://arena.ai" },
         document: {
           documentElement: {},
@@ -3766,16 +3554,30 @@ for raw in sys.stdin:
         GM_setValue(k, v) { saved.set(k, v); },
         GM_registerMenuCommand() { return "m"; },
         GM_unregisterMenuCommand() {},
-        GM_xmlhttpRequest() {},
+        GM_xmlhttpRequest(req) {
+          if (req.url && req.url.startsWith("https://arena-proxy.example.ts.net/v1/board") && activeProxyBoard) {
+            req.onload({ status: 200, responseText: JSON.stringify({ revision: activeProxyRev, board: activeProxyBoard }) });
+            return;
+          }
+          if (req.onload) req.onload({ status: 404, responseText: "{}" });
+        },
       };
       vm.runInNewContext(source, ctx, { filename: "arena.user.js" });
       const sync = () => intervals.forEach((item) => item.fn());
+      const pushProxyBoard = async (nextBoard) => {
+        saved.set("clankers-arena-proxy-host", "arena-proxy.example.ts.net");
+        saved.set("clankers-arena-proxy-master", "master-secret");
+        activeProxyRev += 1;
+        activeProxyBoard = nextBoard;
+        tabNowMs += boardApi.BOARD_PROXY_POLL_MS + 10;
+        sync();
+        await new Promise((resolve) => setImmediate(resolve));
+      };
 
       sync();
       assert.equal(page.title, "Arena | clankers \uD83D\uDDA5\uFE0F");
 
-      saved.set(boardApi.BOARD_KEY, sampleBoard);
-      sync();
+      await pushProxyBoard(sampleBoard);
       assert.equal(page.title, "Arena | clankers \u03B1 \uD83D\uDDA5\uFE0F");
 
       stop = false;
@@ -3811,7 +3613,7 @@ for raw in sys.stdin:
           },
         }),
       );
-      saved.set(boardApi.BOARD_KEY, boardWithWorkerWaiting);
+      await pushProxyBoard(boardWithWorkerWaiting);
       // Worker session 0735d422-clankers must NOT get '* ' even though its own report awaits submission.
       sync();
       assert.equal(page.title, "Arena | clankers \u03B2 \uD83D\uDDA5\uFE0F");
@@ -3831,9 +3633,8 @@ for raw in sys.stdin:
           }),
         }),
       );
-      saved.set(boardApi.BOARD_KEY, boardWithMainWaiting);
       stop = false;
-      sync();
+      await pushProxyBoard(boardWithMainWaiting);
       assert.equal(page.title, "* Arena | clankers \u03B1");
 
       // Once a report_op answers or unpublishes main-proposal (even before 120 entry-ack ops), '* ' clears immediately.
@@ -3858,8 +3659,7 @@ for raw in sys.stdin:
         false,
         "report_ops in normalizeBoard clear stale localSessionReportsBySid entries even after an entry-ack burst",
       );
-      saved.set(boardApi.BOARD_KEY, boardAfterSubmit);
-      sync();
+      await pushProxyBoard(boardAfterSubmit);
       assert.equal(page.title, "Arena | clankers \u03B1");
 
       // normalizeBoard redacts survey.results[*].answer on unopted sessions while preserving allowlisted survey results.
@@ -3902,18 +3702,22 @@ for raw in sys.stdin:
           }),
         }),
       );
-      saved.set(boardApi.BOARD_KEY, boardWithStandalone);
       branchHref = "https://github.com/nemoe7/clankers/tree/arena/99999999-clankers";
-      sync();
+      await pushProxyBoard(boardWithStandalone);
       assert.equal(page.title, "* Arena | clankers");
     });
 
-    test("unopted cross-repo board sync isolates global board state and wake_id keeps ISO updated_at", () => {
+    test("normalizeBoard, boardMaterialSignature, and scopeBoardForTarget isolate unopted and cross-repo sessions without BOARD_KEY", () => {
       const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+      assert.equal(source.includes("clankers_global_board_v1"), false, "arena.user.js removes BOARD_KEY storage key");
+      assert.equal(source.includes("GM_addValueChangeListener"), false, "arena.user.js removes GM_addValueChangeListener");
       const checkBox = { globalThis: {} };
       checkBox.globalThis = checkBox;
       vm.runInNewContext(source, checkBox, { filename: "arena.user.js" });
       const boardApi = checkBox.CLANKERS_CHECKS.board;
+      assert.equal(boardApi.BOARD_KEY, undefined);
+      assert.equal(boardApi.mergePreviewBoard, undefined);
+      assert.equal(boardApi.applyBoardAction, undefined);
       const baseBoard = boardApi.normalizeBoard({
         multi_repo: true,
         linked_repos: ["other-repo"],
@@ -3955,55 +3759,7 @@ for raw in sys.stdin:
       const betaBefore = baseBoard.sessions.find(s => s.session_id === "beta2222-clankers");
       assert.equal(betaBefore.updated_at, "", "corrupted non-ISO updated_at string is stripped by normalizeBoard");
 
-      // Sync response from an unallowlisted session (unopt333-daedalus) with empty multi_repo/linked_repos/entries/wakes:
-      const mergedAfterDaedalus = boardApi.mergePreviewBoard(baseBoard, {
-        session_id: "unopt333-daedalus",
-        repo: "daedalus",
-        branch: "arena/unopt333-daedalus",
-        multi_repo: false,
-        linked_repos: [],
-        allowed_sessions: [],
-        main_session_id: "",
-        sessions: [
-          {
-            session_id: "unopt333-daedalus",
-            repo: "daedalus",
-            branch: "arena/unopt333-daedalus",
-            status: "active",
-            polling: false,
-          },
-        ],
-        entries: [],
-        wakes: {},
-      });
-
-      assert.equal(mergedAfterDaedalus.multi_repo, true);
-      assert.deepEqual(Array.from(mergedAfterDaedalus.linked_repos), ["other-repo"]);
-      assert.equal(mergedAfterDaedalus.main_session_id, "alpha111-clankers");
-      assert.equal(mergedAfterDaedalus.entries.length, 1);
-      assert.equal(mergedAfterDaedalus.wakes["beta2222-clankers"], "p11111");
-      const alphaAfter = mergedAfterDaedalus.sessions.find(s => s.session_id === "alpha111-clankers");
-      const betaAfter = mergedAfterDaedalus.sessions.find(s => s.session_id === "beta2222-clankers");
-      const daedalusAfter = mergedAfterDaedalus.sessions.find(s => s.session_id === "unopt333-daedalus");
-      assert.equal(alphaAfter.agent_seen_at, "2026-10-27T02:00:00Z");
-      assert.equal(betaAfter.polling, true, "beta keeps polling=true until beta itself consumes its wake");
-      assert.equal(daedalusAfter.allowed, false, "unopted cross-repo session still registers for discovery");
-      assert.equal(daedalusAfter.repo, "daedalus");
-
-      // Wake action with wake_id preserves ISO updated_at instead of writing wake_id into updated_at:
-      const wokenOutcome = boardApi.applyBoardAction(mergedAfterDaedalus, {
-        action: "wake",
-        session_id: "alpha111-clankers",
-        target: "beta2222-clankers",
-        wake_id: "top-deadbeef",
-      });
-      assert.equal(wokenOutcome.ok, true);
-      assert.equal(wokenOutcome.board.wakes["beta2222-clankers"], "top-deadbeef");
-      const betaWoken = wokenOutcome.board.sessions.find(s => s.session_id === "beta2222-clankers");
-      assert.equal(Number.isNaN(Date.parse(betaWoken.updated_at)), false);
-      assert.notEqual(betaWoken.updated_at, "top-deadbeef");
-
-      // boardMaterialSignature ignores updated_at churn and passive writeGlobalBoard skips echo writes:
+      // boardMaterialSignature ignores updated_at churn and tracks agent_call_ended_at:
       const sigA = boardApi.boardMaterialSignature({
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         main_session_id: "alpha111-clankers",
@@ -4028,76 +3784,21 @@ for raw in sys.stdin:
       assert.equal(sigA, sigB, "boardMaterialSignature ignores synthetic updated_at churn");
       assert.notEqual(sigB, sigC, "boardMaterialSignature changes when agent_call_ended_at advances");
 
-      // mergePreviewBoard refreshes allowed_sessions placeholder rows and clears superseded turn_ended_at:
-      const placeholderBoard = boardApi.normalizeBoard({
+      // normalizeBoard strips unpublished worker_reports via report_ops:
+      const withUnpubOp = boardApi.normalizeBoard({
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         main_session_id: "alpha111-clankers",
-        sessions: [
-          {
-            session_id: "alpha111-clankers",
-            repo: "clankers",
-            updated_at: "2026-10-27T03:01:00Z",
-            turn_ended_at: "2026-10-27T03:00:50Z",
-          },
-        ],
-      });
-      const refreshedFromPeer = boardApi.mergePreviewBoard(placeholderBoard, {
-        session_id: "beta2222-clankers",
-        repo: "clankers",
-        branch: "arena/beta2222-clankers",
-        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
-        main_session_id: "alpha111-clankers",
-        sessions: [
-          {
-            session_id: "alpha111-clankers",
-            repo: "clankers",
-            branch: "arena/alpha111-clankers",
-            status: "active",
-            polling: false,
-            updated_at: "2026-10-27T03:02:00Z",
-            agent_seen_at: "2026-10-27T03:02:00Z",
-            agent_call_ended_at: "2026-10-27T03:02:00Z",
-          },
-          {
-            session_id: "beta2222-clankers",
-            repo: "clankers",
-            branch: "arena/beta2222-clankers",
-            status: "polling",
-            polling: true,
-            polling_since: "2026-10-27T03:01:30Z",
-          },
-        ],
-      });
-      const alphaRefreshed = refreshedFromPeer.sessions.find(s => s.session_id === "alpha111-clankers");
-      assert.equal(alphaRefreshed.updated_at, "2026-10-27T03:02:00Z");
-      assert.equal(alphaRefreshed.agent_call_ended_at, "2026-10-27T03:02:00Z");
-      assert.equal(alphaRefreshed.turn_ended_at, undefined, "superseded peer turn_ended_at is cleared when newer bash activity arrives");
-
-      // normalizeBoard and mergePreviewBoard strip unpublished worker_reports via report_ops:
-      const withUnpubOp = boardApi.mergePreviewBoard(
-        {
-          allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
-          main_session_id: "alpha111-clankers",
-          worker_reports: {
-            "beta2222-clankers": [
-              { id: "stale-worker-rep", title: "Old", updated_at: "2026-10-27T03:00:00", published_at: "2026-10-27T03:00:00", answered: false, needs_answer: true },
-            ],
-          },
-          report_ops: [],
-        },
-        {
-          session_id: "alpha111-clankers",
-          repo: "clankers",
-          branch: "arena/alpha111-clankers",
-          allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
-          main_session_id: "alpha111-clankers",
-          report_ops: [
-            { id: "rop-unpub1", target: "beta2222-clankers", op: "unpublish", report_id: "stale-worker-rep", from_owner: true, at: "2026-10-27T03:05:00" },
+        worker_reports: {
+          "beta2222-clankers": [
+            { id: "stale-worker-rep", title: "Old", updated_at: "2026-10-27T03:00:00", published_at: "2026-10-27T03:00:00", answered: false, needs_answer: true },
           ],
-          sessions: [{ session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:05:00Z" }],
         },
-      );
-      assert.deepEqual(Array.from(withUnpubOp.worker_reports["beta2222-clankers"] || []), [], "report_ops unpublish strips stale worker report from BOARD_KEY immediately");
+        report_ops: [
+          { id: "rop-unpub1", target: "beta2222-clankers", op: "unpublish", report_id: "stale-worker-rep", from_owner: true, at: "2026-10-27T03:05:00" },
+        ],
+        sessions: [{ session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:05:00Z" }],
+      });
+      assert.deepEqual(Array.from(withUnpubOp.worker_reports["beta2222-clankers"] || []), [], "report_ops unpublish strips stale worker report immediately");
 
       // scopeBoardForTarget strips board entries/queues for unopted chats and prunes unopted queues for opted-in chats:
       const scopedUnopted = boardApi.scopeBoardForTarget(
@@ -4134,28 +3835,6 @@ for raw in sys.stdin:
       assert.deepEqual(Object.keys(scopedOpted.worker_tasks), [], "opted-in chat strips unopted worker_tasks");
       assert.deepEqual(Object.keys(scopedOpted.worker_reports), [], "opted-in chat strips unopted worker_reports");
 
-      // mergePreviewBoard honors main-session remove-session dismissal over stale global allowed_sessions:
-      const afterMainDismiss = boardApi.mergePreviewBoard(
-        {
-          allowed_sessions: ["alpha111-clankers", "retired33-clankers"],
-          main_session_id: "alpha111-clankers",
-          sessions: [
-            { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:00Z" },
-            { session_id: "retired33-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:00Z" },
-          ],
-        },
-        {
-          session_id: "alpha111-clankers",
-          repo: "clankers",
-          allowed_sessions: ["alpha111-clankers"],
-          main_session_id: "alpha111-clankers",
-          removed_sessions: ["retired33-clankers"],
-          sessions: [
-            { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:05:00Z" },
-          ],
-        },
-      );
-      assert.ok(!afterMainDismiss.allowed_sessions.includes("retired33-clankers"), "main remove-session removes retired worker from allowed_sessions");
       const allowOutranksRemoval = boardApi.normalizeBoard({
         main_session_id: "alpha111-clankers",
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
@@ -4169,12 +3848,9 @@ for raw in sys.stdin:
       assert.equal(allowOutranksRemoval.main_session_id, "alpha111-clankers");
     });
 
-    test("egress proxy thin board bridge uses master key, skips GM_setValue(BOARD_KEY), and hydrates file blobs once", async () => {
+    test("egress proxy /v1/board is sole board backend, seeds cold tabs, polls revision deltas, and hydrates file blobs once", async () => {
       const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
-      const gmStore = new Map([
-        ["clankers-arena-proxy-host", "arena-proxy.example.ts.net"],
-        ["clankers-arena-proxy-master", "master-secret-token"],
-      ]);
+      const gmStore = new Map();
       const gmWrites = [];
       const httpCalls = [];
       const sha = "a".repeat(64);
@@ -4198,6 +3874,7 @@ for raw in sys.stdin:
             file: { name: "fix.patch", encoding: "utf-8", content: "", size: 11, sha256: sha },
           },
         ],
+        wakes: {},
       };
       let memberStoredBoard = {
         session_id: "alpha111-clankers",
@@ -4207,6 +3884,7 @@ for raw in sys.stdin:
         sessions: [{ session_id: "alpha111-clankers", repo: "clankers", status: "active" }],
         entries: [],
       };
+      let sinceChangedPayload = null;
       const checkBox = {
         globalThis: {},
         GM_getValue: (key, fallback) => (gmStore.has(key) ? gmStore.get(key) : fallback),
@@ -4227,6 +3905,12 @@ for raw in sys.stdin:
             return;
           }
           if (req.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=")) {
+            if (sinceChangedPayload) {
+              const payload = sinceChangedPayload;
+              sinceChangedPayload = null;
+              req.onload({ status: 200, responseText: JSON.stringify(payload) });
+              return;
+            }
             req.onload({ status: 304, responseText: "" });
             return;
           }
@@ -4259,12 +3943,21 @@ for raw in sys.stdin:
       checkBox.globalThis = checkBox;
       vm.runInNewContext(source, checkBox, { filename: "arena.user.js" });
       const boardApi = checkBox.CLANKERS_CHECKS.board;
+
+      // Without proxy host/master, /v1/board is the sole mode so syncPreviewBoard is a no-op:
+      assert.equal(boardApi.boardProxyConfig(), null);
+      const unconfiguredRes = await boardApi.syncPreviewBoard("https://8000-sandbox.e2b.app", "alpha111-clankers", "clankers");
+      assert.equal(unconfiguredRes, null, "syncPreviewBoard returns null when /v1/board proxy is unconfigured");
+      assert.equal(httpCalls.length, 0, "unconfigured board mode performs zero HTTP calls");
+
+      gmStore.set("clankers-arena-proxy-host", "arena-proxy.example.ts.net");
+      gmStore.set("clankers-arena-proxy-master", "master-secret-token");
       const cfg = boardApi.boardProxyConfig();
       assert.ok(cfg, "boardProxyConfig returns config when host and master are stored");
       assert.equal(cfg.host, "https://arena-proxy.example.ts.net");
       assert.equal(cfg.master, "master-secret-token");
       await boardApi.syncPreviewBoard("https://8000-sandbox.e2b.app", "alpha111-clankers", "clankers");
-      assert.equal(gmWrites.includes(boardApi.BOARD_KEY), false, "proxy mode never writes BOARD_KEY to GM_setValue");
+      assert.equal(gmWrites.includes("clankers_global_board_v1"), false, "never writes legacy BOARD_KEY to GM_setValue");
       const proxyCalls = httpCalls.filter(c => c.url.startsWith("https://arena-proxy.example.ts.net/"));
       assert.ok(proxyCalls.length >= 3, "calls POST /v1/board, GET /v1/board?since=, and GET /v1/board/files");
       for (const call of proxyCalls) {
@@ -4367,159 +4060,149 @@ for raw in sys.stdin:
         "passive sync skips redundant POST /api/board when consolidated state matches member snapshot",
       );
 
-      // Stale '* ' regression: entry-ack flood never evicts answer/unpublish ops and main answered overlay clears worker needs_answer:
-      const ackFlood = Array.from({ length: 120 }, (_, idx) => ({
-        id: `ack-${idx}`,
-        target: "delta444-clankers",
-        op: "entry-ack",
-        entry_id: `p-${idx}`,
-        at: "2026-10-26T12:00:00Z",
-      }));
-      const mergedAfterAnswer = boardApi.mergePreviewBoard(
-        {
-          allowed_sessions: ["alpha111-clankers", "delta444-clankers"],
-          main_session_id: "alpha111-clankers",
-          worker_ids: { "delta444-clankers": "delta" },
-          worker_reports: {
-            "delta444-clankers": [
-              { id: "learn-v2", fields: [{ id: "q1" }], answered: false, needs_answer: true },
-              { id: "nuu-scope", fields: [{ id: "q2" }], answered: false, needs_answer: true },
-            ],
-          },
-          report_ops: [
-            { id: "rop-ans-1", target: "delta444-clankers", op: "answer", report_id: "learn-v2", at: "2026-10-27T05:00:00Z" },
-          ],
-          sessions: [
-            { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T05:00:00Z" },
-            { session_id: "delta444-clankers", repo: "clankers", updated_at: "2026-10-27T05:00:00Z" },
-          ],
-        },
-        {
-          session_id: "alpha111-clankers",
-          repo: "clankers",
-          allowed_sessions: ["alpha111-clankers", "delta444-clankers"],
-          main_session_id: "alpha111-clankers",
-          worker_ids: { "delta444-clankers": "delta" },
-          worker_reports: {
-            "alpha111-clankers": [],
-            "delta444-clankers": [
-              { id: "learn-v2", fields: [{ id: "q1" }], answered: true, needs_answer: false, latest_answer_id: "sub1", latest_answer_at: "2026-10-27T05:00:00" },
-              { id: "nuu-scope", fields: [{ id: "q2" }], answered: true, needs_answer: false, latest_answer_id: "sub2", latest_answer_at: "2026-10-27T05:02:00" },
-            ],
-          },
-          report_ops: ackFlood,
-          sessions: [
-            { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T05:02:00Z" },
-          ],
-        },
-      );
-      assert.ok(
-        mergedAfterAnswer.report_ops.some(op => op.id === "rop-ans-1"),
-        "entry-ack flood does not evict worker-report answer op",
-      );
-      assert.equal(
-        boardApi.boardHasWaitingReportFor(mergedAfterAnswer, "alpha111-clankers", {}),
-        false,
-        "main session answered overlay clears stale '* ' indicator immediately",
-      );
-
-      // Revoking a session is not undone by a stale peer worker sync or the revoked tab's own sync:
-      const revokedRes = boardApi.applyBoardAction(
-        {
-          allowed_sessions: ["alpha111-clankers", "delta444-clankers", "beta2222-clankers"],
-          main_session_id: "alpha111-clankers",
-          worker_ids: { "delta444-clankers": "delta", "beta2222-clankers": "beta" },
-          sessions: [
-            { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T06:00:00Z" },
-            { session_id: "delta444-clankers", repo: "clankers", updated_at: "2026-10-27T06:00:00Z" },
-            { session_id: "beta2222-clankers", repo: "clankers", updated_at: "2026-10-27T06:00:00Z" },
-          ],
-        },
-        { action: "revoke", session_id: "beta2222-clankers" },
-      );
-      assert.equal(revokedRes.ok, true);
-      assert.ok(!revokedRes.board.allowed_sessions.includes("beta2222-clankers"));
-      assert.ok(revokedRes.board.removed_sessions.includes("beta2222-clankers"));
-
-      const afterStaleWorkerSync = boardApi.mergePreviewBoard(revokedRes.board, {
-        session_id: "delta444-clankers",
-        repo: "clankers",
-        allowed_sessions: ["alpha111-clankers", "delta444-clankers", "beta2222-clankers"],
-        main_session_id: "alpha111-clankers",
-        worker_ids: { "delta444-clankers": "delta", "beta2222-clankers": "beta" },
-        sessions: [
-          { session_id: "delta444-clankers", repo: "clankers", updated_at: "2026-10-27T06:01:00Z" },
-          { session_id: "beta2222-clankers", repo: "clankers", updated_at: "2026-10-27T06:00:00Z" },
-        ],
-      });
-      assert.ok(
-        !afterStaleWorkerSync.allowed_sessions.includes("beta2222-clankers"),
-        "stale worker allowed_sessions does not resurrect revoked session",
-      );
-      assert.ok(
-        afterStaleWorkerSync.removed_sessions.includes("beta2222-clankers"),
-        "revoked session stays in removed_sessions across peer syncs",
-      );
-
-      const afterRevokedSelfSync = boardApi.mergePreviewBoard(afterStaleWorkerSync, {
-        session_id: "beta2222-clankers",
-        repo: "clankers",
+      // Cold-boot tab title tick seeds proxyBoardCache via GET /v1/board and polls ?since=<rev> every BOARD_PROXY_POLL_MS:
+      let nowMs = 100000;
+      const coldSaved = new Map([
+        ["clankers-arena-proxy-host", "arena-proxy.example.ts.net"],
+        ["clankers-arena-proxy-master", "master-secret-token"],
+        ["clankers-arena-preview-base-beta2222-clankers", "https://8000-beta.e2b.app"],
+        ["clankers-arena-show-settings-button", false],
+        ["state-download", false],
+        ["prompt-fill", false],
+        ["keep-awake", false],
+      ]);
+      const coldCalls = [];
+      const coldIntervals = [];
+      const coldPage = { title: "" };
+      let coldRev = 5;
+      let coldProxyBoard = {
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         main_session_id: "alpha111-clankers",
         sessions: [
-          { session_id: "beta2222-clankers", repo: "clankers", updated_at: "2026-10-27T06:02:00Z" },
+          { session_id: "alpha111-clankers", repo: "clankers", status: "active" },
+          { session_id: "beta2222-clankers", repo: "clankers", status: "polling", polling: true },
         ],
-      });
+        entries: [],
+        wakes: {},
+      };
+      const coldBarLink = {
+        getAttribute(attr) {
+          return attr === "href" ? "https://github.com/nemoe7/clankers/tree/arena/beta2222-clankers" : null;
+        },
+      };
+      const coldBar = {
+        textContent: "nemoe7/clankers",
+        querySelectorAll(sel) {
+          if (sel === "span.truncate") return [{ textContent: "nemoe7/clankers" }];
+          if (sel === "a, [title]") return [coldBarLink];
+          return [];
+        },
+      };
+      const coldRepoLink = {
+        getAttribute(name) {
+          if (name === "href") return "https://github.com/nemoe7/clankers";
+          if (name === "aria-label") return "Open nemoe7/clankers on GitHub";
+          return null;
+        },
+      };
+      const coldCtx = {
+        console: { log() {}, info() {}, debug() {}, warn() {}, error() {} },
+        URL,
+        Date: Object.assign(function (...args) { return new Date(...args); }, {
+          now: () => nowMs,
+          parse: Date.parse,
+        }),
+        Math: Object.assign(Object.create(Math), { random: () => 0 }),
+        location: { href: "https://arena.ai/c/beta", pathname: "/c/beta", origin: "https://arena.ai" },
+        document: {
+          documentElement: {},
+          querySelector(selector) {
+            if (selector.indexOf("div.relative.z-10") === 0) return coldBar;
+            if (selector.indexOf('a[aria-label^="Open "]') === 0) return coldRepoLink;
+            return null;
+          },
+          querySelectorAll() { return []; },
+          get title() { return coldPage.title; },
+          set title(val) { coldPage.title = val; },
+        },
+        window: { addEventListener() {}, removeEventListener() {} },
+        MutationObserver: class { observe() {} disconnect() {} },
+        setInterval(fn, ms) { coldIntervals.push({ fn, ms }); return coldIntervals.length; },
+        clearInterval() {},
+        setTimeout(fn) { fn(); return 1; },
+        clearTimeout() {},
+        fetch() { return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) }); },
+        GM_getValue(k, fb) { return coldSaved.has(k) ? coldSaved.get(k) : fb; },
+        GM_setValue(k, v) { coldSaved.set(k, v); },
+        GM_registerMenuCommand() { return "m"; },
+        GM_unregisterMenuCommand() {},
+        GM_xmlhttpRequest(req) {
+          coldCalls.push({ method: req.method, url: req.url, data: req.data });
+          if (req.url === "https://arena-proxy.example.ts.net/v1/board") {
+            if (req.method === "POST") coldRev += 1;
+            req.onload({ status: 200, responseText: JSON.stringify({ revision: coldRev, board: coldProxyBoard }) });
+            return;
+          }
+          if (req.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=")) {
+            const sinceRev = Number(req.url.split("since=")[1]);
+            if (sinceRev < coldRev) {
+              req.onload({ status: 200, responseText: JSON.stringify({ revision: coldRev, board: coldProxyBoard }) });
+            } else {
+              req.onload({ status: 200, responseText: JSON.stringify({ ok: true, revision: coldRev, unchanged: true }) });
+            }
+            return;
+          }
+          if (req.url === "https://8000-beta.e2b.app/api/board") {
+            req.onload({
+              status: 200,
+              responseText: JSON.stringify({
+                session_id: "beta2222-clankers",
+                repo: "clankers",
+                allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+                main_session_id: "alpha111-clankers",
+                sessions: [{ session_id: "beta2222-clankers", repo: "clankers", status: "polling", polling: true }],
+                entries: [],
+                wakes: {},
+              }),
+            });
+            return;
+          }
+          req.onload({ status: 404, responseText: "{}" });
+        },
+      };
+      vm.runInNewContext(source, coldCtx, { filename: "arena.user.js" });
+      const titleTick = coldIntervals.find(item => item.ms === 1000);
+      assert.ok(titleTick, "registers 1s tab-title interval");
+
+      // Cold boot tick fetches GET /v1/board, sets beta symbol, and triggers initial /api/board sync:
+      titleTick.fn();
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(coldPage.title, "Arena | clankers \u03B2", "cold boot GET /v1/board seeds proxyBoardCache and renders Greek symbol");
       assert.ok(
-        !afterRevokedSelfSync.allowed_sessions.includes("beta2222-clankers"),
-        "revoked session cannot re-allow itself via stale local allowed_sessions",
+        coldCalls.some(c => c.method === "GET" && c.url === "https://arena-proxy.example.ts.net/v1/board"),
+        "cold boot tick pulls full GET /v1/board once",
       );
-      assert.equal(
-        afterRevokedSelfSync.worker_ids["beta2222-clankers"],
-        undefined,
-        "removed_sessions clears revoked worker_ids entries on merge",
+      assert.ok(
+        coldCalls.some(c => c.url === "https://8000-beta.e2b.app/api/board"),
+        "cold boot discovery syncs opted-in session's /api/board without drawer open",
       );
 
-      const sha1 = "1".repeat(40);
-      const sha2 = "2".repeat(40);
-      const seededMainHeads = boardApi.mergePreviewBoard(afterRevokedSelfSync, {
-        session_id: "alpha111-clankers",
-        repo: "clankers",
-        allowed_sessions: ["alpha111-clankers", "delta444-clankers"],
-        main_session_id: "alpha111-clankers",
-        sessions: [
-          {
-            session_id: "alpha111-clankers",
-            repo: "clankers",
-            remote_head: sha1,
-            origin_main_head: sha1,
-            updated_at: "2026-10-27T08:00:00Z",
-          },
-          { session_id: "delta444-clankers", repo: "clankers", updated_at: "2026-10-27T08:00:00Z" },
-        ],
+      // Advance past BOARD_PROXY_POLL_MS with peer wake/revision bump on /v1/board:
+      coldCalls.length = 0;
+      nowMs += boardApi.BOARD_PROXY_POLL_MS + 50;
+      coldRev += 1;
+      coldProxyBoard = Object.assign({}, coldProxyBoard, {
+        wakes: { "beta2222-clankers": "wake-now" },
       });
-      assert.equal(seededMainHeads.wakes["delta444-clankers"], undefined);
-
-      const movedMainHeads = boardApi.mergePreviewBoard(seededMainHeads, {
-        session_id: "alpha111-clankers",
-        repo: "clankers",
-        allowed_sessions: ["alpha111-clankers", "delta444-clankers"],
-        main_session_id: "alpha111-clankers",
-        sessions: [
-          {
-            session_id: "alpha111-clankers",
-            repo: "clankers",
-            remote_head: sha2,
-            origin_main_head: sha1,
-            updated_at: "2026-10-27T08:01:00Z",
-          },
-          { session_id: "delta444-clankers", repo: "clankers", updated_at: "2026-10-27T08:00:00Z" },
-        ],
-      });
-      assert.equal(
-        movedMainHeads.wakes["delta444-clankers"],
-        "main-moved:" + sha2.slice(0, 12),
-        "advancing main remote_head stamps main-moved wake token for opted-in workers",
+      titleTick.fn();
+      await new Promise(resolve => setImmediate(resolve));
+      assert.ok(
+        coldCalls.some(c => c.method === "GET" && c.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=")),
+        "titleStep polls conditional GET /v1/board?since=<rev> after BOARD_PROXY_POLL_MS",
+      );
+      assert.ok(
+        coldCalls.some(c => c.method === "POST" && c.url === "https://8000-beta.e2b.app/api/board"),
+        "revision delta on /v1/board immediately delivers wake to member POST /api/board",
       );
     });
 
