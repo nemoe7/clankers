@@ -17088,3 +17088,128 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
     now_epoch=base_dt.timestamp(),
   )
   assert len(scoped_state["sessions"]) < len(unscoped_state["sessions"])
+
+
+def test_preview_board_and_autosave_revision_diff_sync(tmp_path, monkeypatch):
+  repo = tmp_path / "clankers"
+  repo.mkdir()
+  subprocess.run(
+    ["git", "init", "-b", "arena/91a01582-clankers"],
+    cwd=repo,
+    check=True,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+  )
+  store = preview.Store(repo / "arena-state" / "state.sqlite3", create=True)
+  monkeypatch.setattr(store, "repository_root", lambda: repo)
+  store.note("n-1", "initial note")
+  store.write_task("t-1", "First task", ["Step 1"], task_type="code")
+
+  # Autosave snapshot cold boot vs unchanged vs incremental diff:
+  snap1 = store.userscript_snapshot()
+  assert snap1["revision"] == 1
+  assert isinstance(snap1["core"], list) and isinstance(snap1["text"], str)
+
+  snap_same = store.userscript_snapshot(since=1, mode="diff")
+  assert snap_same["unchanged"] is True
+  assert snap_same["revision"] == 1
+  assert "core" not in snap_same and "text" not in snap_same
+
+  store.note("n-2", "second note")
+  store.remove_task("t-1")
+  snap_diff = store.userscript_snapshot(since=1, mode="diff")
+  assert snap_diff["unchanged"] is False
+  assert snap_diff["mode"] == "diff"
+  assert snap_diff["revision"] == 2
+  assert "text" not in snap_diff
+  rebuilt_core = preview.apply_preview_state_diff(snap1["core"], snap_diff["diff"])
+  assert preview.autosave_digest(rebuilt_core) == snap_diff["digest"]
+
+  # confirm_userscript_save resolves omitted core from cached/live snapshot:
+  confirmed = store.confirm_userscript_save(
+    {
+      "save_id": snap_diff["save_id"],
+      "scope": snap_diff["scope"],
+      "digest": snap_diff["digest"],
+      "lastsave": snap_diff["stamp"],
+      "beforelastsave": snap_diff["lastsave"],
+    }
+  )
+  assert confirmed["confirmed"] is True
+
+  # Board sync cold boot, unchanged, incremental diff, and 409 need_full over HTTP:
+  srv = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+  threading.Thread(target=srv.serve_forever, daemon=True).start()
+  try:
+    conn = http.client.HTTPConnection("127.0.0.1", srv.server_port, timeout=5)
+    conn.request("GET", "/api/board")
+    r1 = conn.getresponse()
+    b1 = json.loads(r1.read().decode("utf-8"))
+    assert r1.status == 200 and b1["revision"] >= 1
+    rev1 = b1["revision"]
+
+    conn.request("GET", f"/api/board?since={rev1}&mode=diff")
+    r_same = conn.getresponse()
+    b_same = json.loads(r_same.read().decode("utf-8"))
+    assert r_same.status == 200 and b_same["unchanged"] is True
+
+    # Stale board_diff POST returns 409 need_full:
+    conn.request(
+      "POST",
+      "/api/board",
+      body=json.dumps(
+        {
+          "action": "sync",
+          "board_diff": {"base_rev": 99, "rev": 100, "upserts": [], "tombstones": []},
+        }
+      ),
+      headers={"Content-Type": "application/json"},
+    )
+    r_409 = conn.getresponse()
+    b_409 = json.loads(r_409.read().decode("utf-8"))
+    assert r_409.status == 409 and b_409["need_full"] is True
+
+    # Seed push cursor via client_rev=1, then send incremental board_diff:
+    self_sid = b1["session_id"]
+    seeded_board = {
+      **b1,
+      "main_session_id": self_sid,
+      "allowed_sessions": [self_sid, "beta2222-clankers"],
+    }
+    conn.request(
+      "POST",
+      "/api/board",
+      body=json.dumps({"action": "sync", "client_rev": 1, "board": seeded_board}),
+      headers={"Content-Type": "application/json"},
+    )
+    r_seed = conn.getresponse()
+    b_seed = json.loads(r_seed.read().decode("utf-8"))
+    assert r_seed.status == 200
+
+    next_board = {
+      **seeded_board,
+      "wakes": {self_sid: "w-delta-1"},
+    }
+    b_diff = preview.compute_preview_board_diff(seeded_board, next_board, 1, 2)
+    conn.request(
+      "POST",
+      "/api/board",
+      body=json.dumps(
+        {
+          "action": "sync",
+          "board_diff": b_diff,
+          "reply_since": b_seed["revision"],
+          "reply_mode": "diff",
+        }
+      ),
+      headers={"Content-Type": "application/json"},
+    )
+    r_delta = conn.getresponse()
+    b_delta = json.loads(r_delta.read().decode("utf-8"))
+    assert r_delta.status == 200 and b_delta["mode"] == "diff"
+    rebuilt_board = preview.apply_preview_board_diff(b_seed, b_delta["diff"])
+    assert rebuilt_board["wakes"].get(self_sid) == "w-delta-1"
+    conn.close()
+  finally:
+    srv.shutdown()
+    srv.server_close()

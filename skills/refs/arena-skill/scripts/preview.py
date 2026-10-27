@@ -6779,6 +6779,266 @@ def board_main_session_warning(state_dir, command):
   return None
 
 
+_PREVIEW_BOARD_COLLECTION_KEYS = frozenset(
+  {
+    "sessions",
+    "entries",
+    "task_ops",
+    "report_ops",
+    "worker_tasks",
+    "worker_reports",
+    "wakes",
+  }
+)
+
+
+def _preview_canonical_json(value):
+  return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def _preview_state_record_group(record):
+  if not isinstance(record, dict):
+    return "notes"
+  if "markdown" in record:
+    return "reports"
+  if "title" in record:
+    return "tasks"
+  if "report_id" in record:
+    return "answers"
+  return "notes"
+
+
+def _preview_state_record_key(record):
+  if not isinstance(record, dict):
+    return hashlib.sha256(_preview_canonical_json(record).encode("utf-8")).hexdigest()[
+      :16
+    ]
+  rec_id = str(record.get("id") or "").strip()
+  if rec_id:
+    return rec_id
+  if record.get("seq") is not None:
+    return f"seq:{record['seq']}"
+  return hashlib.sha256(_preview_canonical_json(record).encode("utf-8")).hexdigest()[
+    :16
+  ]
+
+
+def compute_preview_state_diff(prev_core, next_core, base_rev, next_rev):
+  prev_map = {}
+  for row in prev_core or []:
+    if isinstance(row, dict) and row.get("type") != "userscript-autosave":
+      pair = (_preview_state_record_group(row), _preview_state_record_key(row))
+      prev_map[pair] = (row, _preview_canonical_json(row))
+  next_map = {}
+  upserts = []
+  for row in next_core or []:
+    if not isinstance(row, dict) or row.get("type") == "userscript-autosave":
+      continue
+    pair = (_preview_state_record_group(row), _preview_state_record_key(row))
+    encoded = _preview_canonical_json(row)
+    next_map[pair] = (row, encoded)
+    prev_item = prev_map.get(pair)
+    if prev_item is None or prev_item[1] != encoded:
+      upserts.append(row)
+  tombstones = [
+    {"group": grp, "key": rec_key}
+    for (grp, rec_key) in sorted(prev_map)
+    if (grp, rec_key) not in next_map
+  ]
+  return {
+    "base_rev": int(base_rev),
+    "rev": int(next_rev),
+    "upserts": upserts,
+    "tombstones": tombstones,
+  }
+
+
+def apply_preview_state_diff(base_core, diff_obj):
+  if not isinstance(diff_obj, dict):
+    raise TypeError("State diff must be an object")
+  upserts = diff_obj.get("upserts")
+  tombstones = diff_obj.get("tombstones")
+  if not isinstance(upserts, list) or not isinstance(tombstones, list):
+    raise TypeError("State diff requires upserts and tombstones arrays")
+  index = {}
+  order = []
+  for row in base_core or []:
+    if not isinstance(row, dict) or row.get("type") == "userscript-autosave":
+      continue
+    pair = (_preview_state_record_group(row), _preview_state_record_key(row))
+    if pair not in index:
+      order.append(pair)
+    index[pair] = dict(row)
+  removed = set()
+  for tomb in tombstones:
+    if not isinstance(tomb, dict):
+      continue
+    grp = str(tomb.get("group") or "").strip()
+    rec_key = str(tomb.get("key") or "").strip()
+    if grp and rec_key:
+      removed.add((grp, rec_key))
+      index.pop((grp, rec_key), None)
+  for row in upserts:
+    if not isinstance(row, dict) or row.get("type") == "userscript-autosave":
+      continue
+    pair = (_preview_state_record_group(row), _preview_state_record_key(row))
+    removed.discard(pair)
+    if pair not in index:
+      order.append(pair)
+    index[pair] = dict(row)
+  return [index[pair] for pair in order if pair in index and pair not in removed]
+
+
+def _decompose_preview_board(board):
+  data = board if isinstance(board, dict) else {}
+  records = {
+    ("meta", "scalars"): {
+      key: val for key, val in data.items() if key not in _PREVIEW_BOARD_COLLECTION_KEYS
+    }
+  }
+  for idx, row in enumerate(data.get("sessions") or []):
+    if isinstance(row, dict):
+      sid = str(row.get("session_id") or row.get("branch") or f"idx:{idx}").strip()
+      if sid:
+        records[("session", sid)] = row
+  for idx, row in enumerate(data.get("entries") or []):
+    if isinstance(row, dict):
+      eid = str(row.get("id") or f"idx:{idx}").strip()
+      if eid:
+        records[("entry", eid)] = row
+  for idx, row in enumerate(data.get("task_ops") or []):
+    if isinstance(row, dict):
+      oid = str(row.get("id") or f"idx:{idx}").strip()
+      if oid:
+        records[("task_op", oid)] = row
+  for idx, row in enumerate(data.get("report_ops") or []):
+    if isinstance(row, dict):
+      oid = str(row.get("id") or f"idx:{idx}").strip()
+      if oid:
+        records[("report_op", oid)] = row
+  wt = data.get("worker_tasks")
+  if isinstance(wt, dict):
+    for sid, items in wt.items():
+      clean_sid = str(sid or "").strip()
+      if clean_sid and isinstance(items, list):
+        records[("worker_tasks", clean_sid)] = items
+  wr = data.get("worker_reports")
+  if isinstance(wr, dict):
+    for sid, items in wr.items():
+      clean_sid = str(sid or "").strip()
+      if clean_sid and isinstance(items, list):
+        records[("worker_reports", clean_sid)] = items
+  wakes = data.get("wakes")
+  if isinstance(wakes, dict):
+    for sid, stamp in wakes.items():
+      clean_sid = str(sid or "").strip()
+      if clean_sid and stamp:
+        records[("wake", clean_sid)] = stamp
+  return records
+
+
+def _recompose_preview_board(records):
+  out = {
+    "multi_repo": False,
+    "linked_repos": [],
+    "removed_sessions": [],
+    "worker_ids": {},
+    "worker_tasks": {},
+    "task_ops": [],
+    "worker_reports": {},
+    "report_ops": [],
+    "allowed_sessions": [],
+    "main_session_id": "",
+    "sessions": [],
+    "entries": [],
+    "wakes": {},
+  }
+  meta = records.get(("meta", "scalars"))
+  if isinstance(meta, dict):
+    for key, val in meta.items():
+      out[key] = val
+  sessions = []
+  entries = []
+  task_ops = []
+  report_ops = []
+  for (rec_type, rec_key), val in records.items():
+    if rec_type == "meta":
+      continue
+    if rec_type == "session" and isinstance(val, dict):
+      sessions.append(dict(val))
+    elif rec_type == "entry" and isinstance(val, dict):
+      entries.append(dict(val))
+    elif rec_type == "task_op" and isinstance(val, dict):
+      task_ops.append(dict(val))
+    elif rec_type == "report_op" and isinstance(val, dict):
+      report_ops.append(dict(val))
+    elif rec_type == "worker_tasks" and isinstance(val, list):
+      out["worker_tasks"][rec_key] = list(val)
+    elif rec_type == "worker_reports" and isinstance(val, list):
+      out["worker_reports"][rec_key] = list(val)
+    elif rec_type == "wake" and val:
+      out["wakes"][rec_key] = val
+  entries.sort(
+    key=lambda r: (
+      str(r.get("created_at") or r.get("at") or ""),
+      str(r.get("id") or ""),
+    )
+  )
+  task_ops.sort(key=lambda r: (str(r.get("at") or ""), str(r.get("id") or "")))
+  report_ops.sort(key=lambda r: (str(r.get("at") or ""), str(r.get("id") or "")))
+  out["sessions"] = sessions
+  out["entries"] = entries
+  out["task_ops"] = task_ops
+  out["report_ops"] = report_ops
+  return out
+
+
+def compute_preview_board_diff(prev_board, next_board, base_rev, next_rev):
+  prev_records = _decompose_preview_board(prev_board)
+  next_records = _decompose_preview_board(next_board)
+  upserts = []
+  for pair, val in next_records.items():
+    encoded = _preview_canonical_json(val)
+    if (
+      pair not in prev_records or _preview_canonical_json(prev_records[pair]) != encoded
+    ):
+      upserts.append({"type": pair[0], "key": pair[1], "value": val})
+  tombstones = [
+    {"type": pair[0], "key": pair[1]}
+    for pair in sorted(prev_records)
+    if pair not in next_records
+  ]
+  return {
+    "base_rev": int(base_rev),
+    "rev": int(next_rev),
+    "upserts": upserts,
+    "tombstones": tombstones,
+  }
+
+
+def apply_preview_board_diff(base_board, diff_obj):
+  if not isinstance(diff_obj, dict):
+    raise TypeError("Board diff must be an object")
+  upserts = diff_obj.get("upserts")
+  tombstones = diff_obj.get("tombstones")
+  if not isinstance(upserts, list) or not isinstance(tombstones, list):
+    raise TypeError("Board diff requires upserts and tombstones arrays")
+  records = _decompose_preview_board(base_board)
+  for tomb in tombstones:
+    if isinstance(tomb, dict):
+      rec_type = str(tomb.get("type") or "").strip()
+      rec_key = str(tomb.get("key") or "").strip()
+      if rec_type and rec_key:
+        records.pop((rec_type, rec_key), None)
+  for item in upserts:
+    if isinstance(item, dict):
+      rec_type = str(item.get("type") or "").strip()
+      rec_key = str(item.get("key") or "").strip()
+      if rec_type and rec_key and "value" in item:
+        records[(rec_type, rec_key)] = item["value"]
+  return _recompose_preview_board(records)
+
+
 def autosave_core_and_stamp(records):
   if not isinstance(records, list) or not all(isinstance(row, dict) for row in records):
     raise TypeError("Autosave core must be an array of records")
@@ -8730,6 +8990,55 @@ class Store:
         pass
     return out
 
+  def board_state_sync(self, since=None, mode="full"):
+    current = self.board_state()
+    lock = getattr(self, "_board_sync_lock", None)
+    if lock is None:
+      lock = threading.RLock()
+      self._board_sync_lock = lock
+      self._board_sync_rev = 0
+      self._board_sync_sig = ""
+      self._board_sync_history = {}
+    with lock:
+      sig = _preview_canonical_json(current)
+      if self._board_sync_rev == 0 or sig != self._board_sync_sig:
+        self._board_sync_rev += 1
+        self._board_sync_sig = sig
+        self._board_sync_history[self._board_sync_rev] = current
+        cutoff = self._board_sync_rev - 16
+        for rev_key in [k for k in self._board_sync_history if k < cutoff]:
+          self._board_sync_history.pop(rev_key, None)
+      cur_rev = self._board_sync_rev
+      if since is not None and since == cur_rev:
+        return {
+          "ok": True,
+          "unchanged": True,
+          "revision": cur_rev,
+          "mode": mode or "full",
+        }
+      if (
+        mode == "diff"
+        and since is not None
+        and since < cur_rev
+        and since in self._board_sync_history
+      ):
+        return {
+          "ok": True,
+          "unchanged": False,
+          "revision": cur_rev,
+          "mode": "diff",
+          "diff": compute_preview_board_diff(
+            self._board_sync_history[since], current, since, cur_rev
+          ),
+        }
+      return {
+        **current,
+        "ok": True,
+        "unchanged": False,
+        "revision": cur_rev,
+        "mode": "full",
+      }
+
   def apply_board_report_op(self, op):
     if not isinstance(op, dict):
       return False
@@ -9205,11 +9514,29 @@ class Store:
     wakes = dict(state["wakes"])
 
     if action_type == "sync":
-      incoming = (
-        dict(payload.get("board"))
-        if isinstance(payload.get("board"), dict)
-        else dict(payload)
-      )
+      if "board_diff" in payload and payload.get("board_diff") is not None:
+        diff_obj = payload.get("board_diff")
+        if not isinstance(diff_obj, dict):
+          raise TypeError("board_diff must be an object")
+        base_rev = diff_obj.get("base_rev")
+        next_rev = diff_obj.get("rev")
+        if type(base_rev) is not int or type(next_rev) is not int:
+          raise TypeError("board_diff base_rev and rev must be integers")
+        push_cursor = getattr(self, "_board_push_cursor", None)
+        if push_cursor is None or push_cursor[0] != base_rev:
+          return {"ok": False, "error": "stale-revision", "need_full": True}
+        incoming = apply_preview_board_diff(push_cursor[1], diff_obj)
+        self._board_push_cursor = (next_rev, incoming)
+      else:
+        incoming = (
+          dict(payload.get("board"))
+          if isinstance(payload.get("board"), dict)
+          else dict(payload)
+        )
+        if payload.get("client_rev") is not None and isinstance(
+          payload.get("board"), dict
+        ):
+          self._board_push_cursor = (int(payload["client_rev"]), dict(payload["board"]))
       if isinstance(incoming, dict) and isinstance(incoming.get("linked_repos"), list):
         linked_repos = []
         for item in incoming["linked_repos"]:
@@ -10065,6 +10392,12 @@ class Store:
         db.execute(
           "INSERT OR REPLACE INTO meta VALUES (?, ?)", (BOARD_STATE_META, encoded)
         )
+    if payload.get("reply_mode") == "diff" and payload.get("reply_since") is not None:
+      return self.board_state_sync(since=int(payload["reply_since"]), mode="diff")
+    if payload.get("client_rev") is not None or isinstance(
+      payload.get("board_diff"), dict
+    ):
+      return self.board_state_sync(mode="full")
     return self.board_state()
 
   def tasks(self):
@@ -10622,7 +10955,7 @@ class Store:
       )
     return save_id
 
-  def userscript_snapshot(self):
+  def userscript_snapshot(self, since=None, mode="full"):
     core, counts = self.state_lines(self.state()["notes"], self.tasks() or {})
     core, stamp = autosave_core_and_stamp(core)
     scope = self.userscript_scope()
@@ -10631,15 +10964,67 @@ class Store:
     rows = [row for row in history if row["scope"] == scope and row.get("stamp")]
     force_save_id = self.meta_value(FORCE_SAVE_META)
     save_id = force_save_id if force_save_id else str(uuid.uuid4())
+    digest = autosave_digest(core)
+    lastsave = rows[-1]["stamp"] if rows else None
+    beforelastsave = rows[-2]["stamp"] if len(rows) > 1 else None
+    lock = getattr(self, "_autosave_sync_lock", None)
+    if lock is None:
+      lock = threading.RLock()
+      self._autosave_sync_lock = lock
+      self._autosave_sync_rev = 0
+      self._autosave_sync_key = None
+      self._autosave_sync_history = {}
+    with lock:
+      self._autosave_latest = (digest, core)
+      sync_key = (
+        digest,
+        lastsave,
+        beforelastsave,
+        bool(force_save_id),
+        json.dumps(scope, sort_keys=True),
+      )
+      if self._autosave_sync_rev == 0 or sync_key != self._autosave_sync_key:
+        self._autosave_sync_rev += 1
+        self._autosave_sync_key = sync_key
+        self._autosave_sync_history[self._autosave_sync_rev] = core
+        cutoff = self._autosave_sync_rev - 8
+        for rev_key in [k for k in self._autosave_sync_history if k < cutoff]:
+          self._autosave_sync_history.pop(rev_key, None)
+      cur_rev = self._autosave_sync_rev
+      if mode == "diff" and not force_save_id and since is not None:
+        base_fields = {
+          "revision": cur_rev,
+          "mode": "diff",
+          "save_id": save_id,
+          "force": False,
+          "scope": scope,
+          "digest": digest,
+          "lastsave": lastsave,
+          "beforelastsave": beforelastsave,
+          "counts": counts,
+          "stamp": stamp,
+          "stamps": stamps,
+        }
+        if since == cur_rev:
+          return {**base_fields, "unchanged": True}
+        if since < cur_rev and since in self._autosave_sync_history:
+          return {
+            **base_fields,
+            "unchanged": False,
+            "diff": compute_preview_state_diff(
+              self._autosave_sync_history[since], core, since, cur_rev
+            ),
+          }
     return {
+      "revision": cur_rev,
       "save_id": save_id,
       "force": bool(force_save_id),
       "scope": scope,
       "core": core,
-      "digest": autosave_digest(core),
+      "digest": digest,
       "history": rows,
-      "lastsave": rows[-1]["stamp"] if rows else None,
-      "beforelastsave": rows[-2]["stamp"] if len(rows) > 1 else None,
+      "lastsave": lastsave,
+      "beforelastsave": beforelastsave,
       "text": state_ndjson(core + rows),
       "counts": counts,
       "stamp": stamp,
@@ -10654,7 +11039,15 @@ class Store:
     key = autosave_scope_key(scope)
     if scope != self.userscript_scope():
       raise ValueError("Autosave confirmation is outside this repository and branch")
-    core = autosave_core(payload.get("core"))
+    if "core" in payload:
+      core = autosave_core(payload.get("core"))
+    else:
+      latest = getattr(self, "_autosave_latest", None)
+      if latest is not None and latest[0] == payload.get("digest"):
+        core = latest[1]
+      else:
+        live_lines, _ = self.state_lines(self.state()["notes"], self.tasks() or {})
+        core = autosave_core(live_lines)
     stamp = payload.get("stamp", payload.get("lastsave"))
     if stamp is not None and import_stamp(stamp) is None:
       raise ValueError("Autosave confirmation stamp is invalid")
@@ -14485,15 +14878,41 @@ def handler(store, reload_event=None):
           self.reply(200, body)
           return
         if path == "/api/userscript-autosave":
+          params = parse_qs(urlsplit(self.path).query)
+          since_raw = (params.get("since") or [""])[0].strip()
+          mode = (params.get("mode") or ["full"])[0].strip().lower() or "full"
+          since = None
+          if since_raw:
+            try:
+              since = int(since_raw)
+            except ValueError:
+              self.problem(400, "since must be an integer")
+              return
           try:
-            snapshot = store.userscript_snapshot()
+            snapshot = store.userscript_snapshot(since=since, mode=mode)
           except (ValueError, TypeError) as error:
             self.problem(400, error)
             return
           self.reply(200, json.dumps(snapshot, ensure_ascii=False))
           return
         if path == "/api/board":
-          self.reply(200, json.dumps(store.board_state(), ensure_ascii=False))
+          params = parse_qs(urlsplit(self.path).query)
+          since_raw = (params.get("since") or [""])[0].strip()
+          mode = (params.get("mode") or ["full"])[0].strip().lower() or "full"
+          since = None
+          if since_raw:
+            try:
+              since = int(since_raw)
+            except ValueError:
+              self.problem(400, "since must be an integer")
+              return
+          self.reply(
+            200,
+            json.dumps(
+              store.board_state_sync(since=since, mode=mode),
+              ensure_ascii=False,
+            ),
+          )
           return
         if path == "/api/poll":
           is_poll = store.polling()
@@ -14797,7 +15216,13 @@ def handler(store, reload_event=None):
           self.problem(400, "Expected a JSON object")
           return
         if path == "/api/board":
-          self.reply(200, json.dumps(store.board_action(payload), ensure_ascii=False))
+          board_result = store.board_action(payload)
+          board_status = (
+            409
+            if isinstance(board_result, dict) and board_result.get("need_full")
+            else 200
+          )
+          self.reply(board_status, json.dumps(board_result, ensure_ascii=False))
           return
         if path == "/api/poll":
           active = bool(payload.get("active"))

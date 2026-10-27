@@ -2224,27 +2224,25 @@ function checkStateDownload(api, session, logging) {
   var stateDownload = api.stateDownload;
   var stateMemory = api.stateMemory;
   var stateRemembered = api.stateRemembered;
-  var stateDelivery = api.stateDelivery;
   var saveMoved = api.saveMoved;
   var overwriteAsk = api.overwriteAsk;
   var overwriteLine = api.overwriteLine;
-  var stateAction = api.stateAction;
   var panelNeeded = api.panelNeeded;
-  var handleMatchesScope = api.handleMatchesScope;
   var stateScope = api.stateScope;
   var stateRepo = api.stateRepo;
   var stateBranch = api.stateBranch;
   var stateScopeKey = api.stateScopeKey;
   var readSlug = api.readSlug;
   var slugFromBare = api.slugFromBare;
-  var pagePicker = api.pagePicker;
-  var writtenName = api.writtenName;
   var getLine = api.getLine;
-  var writeFailLine = api.writeFailLine;
-  var managerFailLine = api.managerFailLine;
+  var proxyStateFailLine = api.proxyStateFailLine;
+  var computeStateDiff = api.computeStateDiff;
+  var applyStateDiff = api.applyStateDiff;
   var stateError = api.stateError;
-  var downloadRoute = api.downloadRoute;
-  var stateDownloadRoute = api.stateDownloadRoute;
+  assert.equal(api.pagePicker, undefined);
+  assert.equal(api.writeToHandle, undefined);
+  assert.equal(api.writeStateDownload, undefined);
+  assert.equal(api.handleMatchesScope, undefined);
   var counts = { notes: 12, tasks: 4 };
   var repo = "clankers";
   var branch = "main";
@@ -2384,14 +2382,23 @@ function checkStateDownload(api, session, logging) {
     ).type,
     "download",
   );
-  // One route per state: the chosen file, the one-time select, or the stamped download on a
-  // browser without the file selector.
-  var fresh = stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "");
-  assert.equal(stateDelivery(fresh, true, true), "write");
-  assert.equal(stateDelivery(fresh, false, true), "select");
-  assert.equal(stateDelivery(fresh, false, false), "download");
-  assert.equal(stateDelivery(repeated, true, true), "unchanged");
-  assert.equal(stateDelivery(stale, true, true), "stale");
+  // Shared state diff helpers compute minimal upserts + tombstones and reconstruct canonical order.
+  var baseCore = [
+    { id: "n-1", text: "note 1" },
+    { id: "t-1", title: "Task 1" },
+  ];
+  var nextCore = [
+    { id: "n-1", text: "note 1" },
+    { id: "n-2", text: "note 2" },
+  ];
+  var computedDiff = computeStateDiff(baseCore, nextCore, 1, 2);
+  assert.equal(computedDiff.base_rev, 1);
+  assert.equal(computedDiff.rev, 2);
+  assert.equal(computedDiff.upserts.length, 1);
+  assert.equal(computedDiff.upserts[0].id, "n-2");
+  assert.equal(computedDiff.tombstones.length, 1);
+  assert.equal(computedDiff.tombstones[0].key, "t-1");
+  assert.deepEqual(JSON.parse(JSON.stringify(applyStateDiff(baseCore, computedDiff))), nextCore);
   // The repo bar carries the pair and the branch anchor, so the name scopes to this repo and
   // branch and two repos never collide in one folder.
   var branchLink = {
@@ -2545,10 +2552,8 @@ function checkStateDownload(api, session, logging) {
   assert.notEqual(stateScopeKey("clankers", "main"), stateScopeKey("clankers", "feat/x"));
   assert.equal(stateScopeKey("", ""), "arena");
   assert.equal(stateScopeKey("my repo", "feat/x"), "my-repo-feat-x");
-  // The manager's download beats the page link, because the page policy can block a link.
-  assert.equal(downloadRoute(true), "manager");
-  assert.equal(downloadRoute(false), "link");
-  assert.equal(stateDownloadRoute(), "manager");
+  assert.equal(api.downloadRoute, undefined);
+  assert.equal(api.stateDownloadRoute, undefined);
   // A title without the arrow falls back to the href. A page without the bar stays empty.
   branchLink.getAttribute = function (name) {
     if (name === "href") return "https://github.com/other/repo/tree/feat%2Fx";
@@ -2559,13 +2564,6 @@ function checkStateDownload(api, session, logging) {
     JSON.stringify(stateScope({ querySelector: function () { return null; } })),
     JSON.stringify({ repo: "", branch: "" }),
   );
-  // The selector call runs on the page window. A realm without one yields no selector rather
-  // than a throw, which is what keeps the download route alive.
-  assert.equal(pagePicker(), null);
-  // The chosen file keeps its own name, so the save line names the file the write reached.
-  assert.equal(writtenName({ name: "clankers-state.ndjson" }, "generated.ndjson"), "clankers-state.ndjson");
-  assert.equal(writtenName({}, "generated.ndjson"), "generated.ndjson");
-  assert.equal(writtenName(null, "generated.ndjson"), "generated.ndjson");
   // The bar leaves the page while a dialog holds it. With no saved slug either, the title
   // still carries the repository this script wrote.
   session.value = null;
@@ -2604,22 +2602,13 @@ function checkStateDownload(api, session, logging) {
   headerSpan.textContent = "clankers read ARENA.md";
   assert.equal(stateRepo(headerOnlyDoc), "saved");
   session.value = null;
-  assert.equal(stateAction("select", false), "block");
-  assert.equal(stateAction("select", true), "hint");
-  assert.equal(stateAction("download", false), "block");
-  assert.equal(stateAction("download", true), "download");
-  assert.equal(stateAction("write", true), "write");
-  // The no-file card: a manual press always shows it, and an automatic tick shows it once
-  // per unconfigured period.
+  // The proxy-config card: a manual press always shows it, and an automatic tick stays quiet.
   assert.equal(panelNeeded(true, true), true);
   assert.equal(panelNeeded(true, false), true);
   assert.equal(panelNeeded(false, false), true);
   assert.equal(panelNeeded(false, true), false);
-  assert.equal(stateAction("unchanged", false), "unchanged");
-  assert.match(writeFailLine({ name: "NotAllowedError" }), /NotAllowedError/);
-  assert.match(writeFailLine(null), /unknown/);
-  assert.match(managerFailLine({ error: "NETWORK" }), /NETWORK/);
-  assert.match(managerFailLine(null), /unknown/);
+  assert.match(proxyStateFailLine("http-502"), /http-502/);
+  assert.match(proxyStateFailLine(null), /unknown/);
   // The panel keeps its text, but the console carries only the error code and status.
   var errorLines = [];
   var restoreLog = console.error;
@@ -2681,18 +2670,6 @@ function checkStateDownload(api, session, logging) {
   assert.ok(comparedLine("force-stamp", { group: "note" }));
   assert.ok(comparedLine("force-stamp", { group: "task" }));
   assert.doesNotMatch(compared.join("\n"), /2026-|http|private/);
-  assert.equal(handleMatchesScope({ name: "clankers-main.ndjson" }, "clankers", "main"), true);
-  assert.equal(
-    handleMatchesScope({ name: "clankers-main-20261006T061233-n12-t4.ndjson" }, "clankers", "main"),
-    true,
-  );
-  assert.equal(handleMatchesScope({ name: "f360-main.ndjson" }, "clankers", "main"), false);
-  assert.equal(handleMatchesScope({ name: "clankers-mainx.ndjson" }, "clankers", "main"), false);
-  assert.equal(handleMatchesScope({ name: "my-backup.ndjson" }, "clankers", "main"), false);
-  assert.equal(handleMatchesScope(null, "clankers", "main"), false);
-  assert.equal(handleMatchesScope({}, "clankers", "main"), false);
-  assert.equal(handleMatchesScope({ name: "f360-main.ndjson" }, "", ""), false);
-  assert.equal(handleMatchesScope({ name: "arena.ndjson" }, "", ""), true);
   // A save moves when the session branch is unknown, or when the preview URL differs from the one that last wrote this scope.
   // A moved save that would write asks before it writes. A forced save never asks.
   assert.equal(saveMoved("", "", "https://p.example"), true, "No branch moves the save");
@@ -2815,14 +2792,6 @@ function checkStateDownload(api, session, logging) {
   assert.match(unknown, /Notes: unknown/);
   assert.match(unknown, /Tasks: unknown/);
   assert.equal(unknown.includes(FILE), false);
-  const mismatchScope = api.handleMismatchScope;
-  const REPO = "clankers";
-  const BRANCH = "main";
-  const matching = REPO + "-" + BRANCH + "-n1-t1.ndjson";
-  assert.equal(mismatchScope({ name: matching }, REPO, BRANCH), "", "a matching file has no mismatch");
-  assert.equal(mismatchScope({ name: REPO + "-dev.ndjson" }, REPO, BRANCH), BRANCH, "another branch names the branch");
-  assert.equal(mismatchScope({ name: "widget-" + BRANCH + ".ndjson" }, REPO, BRANCH), REPO, "another repo names the repo");
-  assert.equal(mismatchScope({ name: "unrelated.ndjson" }, REPO, BRANCH), REPO, "an unknown scope names the repo");
 
   console.log("ok state download 32");
   // The session bar names an unpushed branch in a titled span. A pushed branch also has an
@@ -2915,25 +2884,11 @@ require("node:test").test("successful state saves clear stale failure notices", 
   loaded.context.document = {
     getElementById(id) { assert.equal(id, "clankers-state-panel"); return panel; },
   };
-  const handle = fail => ({ createWritable: async () => ({
-    write: async () => {},
-    close: async () => { if (fail) throw new Error("close failed"); },
-  }) });
   reset();
-  await api.writeToHandle(handle(false), "state");
-  assert.equal(panel, null, "a successful file close clears the old failure");
-  reset();
-  await assert.rejects(api.writeToHandle(handle(true), "state"), /close failed/);
-  assert.ok(panel, "an unsuccessful save keeps the failure notice");
-  let download;
-  loaded.context.Blob = Blob;
-  loaded.context.GM_download = options => { download = options; };
-  api.writeStateDownload("state", "state.ndjson");
-  assert.ok(panel, "starting a download is not a successful save");
-  download.onload();
-  assert.equal(panel, null, "manager completion clears the old failure");
+  api.clearSavedFailure();
+  assert.equal(panel, null, "a successful proxy state save clears the old failure");
   reset(true);
-  await api.writeToHandle(handle(false), "state");
+  api.clearSavedFailure();
   assert.ok(panel, "a transient success message keeps its existing timeout");
 });
 
@@ -2946,6 +2901,30 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
   assert.equal(boardApi.BOARD_KEY, undefined);
   assert.equal(boardApi.applyBoardAction, undefined);
   assert.equal(boardApi.mergePreviewBoard, undefined);
+  const bBase = {
+    main_session_id: "main0001-clankers",
+    allowed_sessions: ["main0001-clankers"],
+    sessions: [{ session_id: "main0001-clankers", repo: "clankers", status: "active" }],
+    entries: [{ id: "e-1", session_id: "main0001-clankers", to: "*", text: "first" }],
+    wakes: {},
+    worker_tasks: {},
+    files: {},
+  };
+  const bNext = {
+    ...bBase,
+    entries: [
+      ...bBase.entries,
+      { id: "e-2", session_id: "main0001-clankers", to: "*", text: "second" },
+    ],
+    wakes: { "main0001-clankers": "w-1" },
+  };
+  const bDiff = boardApi.computeBoardDiff(bBase, bNext, 4, 5);
+  assert.equal(bDiff.base_rev, 4);
+  assert.equal(bDiff.rev, 5);
+  assert.ok(bDiff.upserts.some((u) => u.type === "entry" && u.key === "e-2"));
+  const bApplied = boardApi.applyBoardDiff(bBase, bDiff);
+  assert.equal(bApplied.entries.length, 2);
+  assert.equal(bApplied.wakes["main0001-clankers"], "w-1");
 
   const manySessions = Array.from({ length: 70 }, (_, idx) => ({
     session_id: `${String(idx + 1).padStart(8, "0")}-clankers`,

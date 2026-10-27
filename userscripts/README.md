@@ -125,21 +125,19 @@ The script saves the pause, so a reload keeps it. Each feature switch stays in t
 
 ## Arena state saves
 
-The userscript fetches a candidate from `GET /api/userscript-autosave`. It compares the server's two retained completion stamps with the browser's last successful receipt. After the pair matches, it uses the digest to skip an unchanged candidate.
+The userscript syncs preview state between `GET /api/userscript-autosave` and `arena-egress-proxy` `/v1/state` via revision-cursor diffs. It compares the server's two retained completion stamps with `/v1/state`'s latest receipt and skips unchanged digests.
 
-A stamp-pair mismatch stops automatic replacement and uploads the `.ndjson` backup once per mismatch to `POST /api/userscript-autosave/offer` as a quiet blocking note instructing `state compare` before `state import`. A changed digest writes the candidate.
+A stamp-pair mismatch stops automatic replacement, fetches full backup NDJSON from `/v1/state`, and uploads it once to `POST /api/userscript-autosave/offer`. A changed digest writes the incremental diff to `/v1/state`, falling back to a full snapshot on cold boot or reset.
 
-A new empty selected file can receive its first save. `State - force save` keeps the explicit override. Its successful completion receipt sets the pair that later automatic saves use.
+`State - force save` overrides stamp comparison with a full snapshot write. Its completion receipt updates `/v1/state` and confirms `POST /api/userscript-autosave` so later ticks resume incremental diffs.
 
-Only a successful file close permits the completion receipt, sent to `POST /api/userscript-autosave`. Failed receipts retry without another file write.
+Saves never use browser downloads or local `.ndjson` file handles. Failed `/v1/state` requests show `#clankers-state-panel` with `Retry save`, and missing proxy settings on manual saves offer `Settings`.
 
-Saves never fall back to regular timestamped downloads. When a quiet or forced save fails, or when no file handle is selected, the script shows a toast naming the error and offering `Choose file`. A successful file close clears persistent notices.
-
-The preview retains two saved core states with completion receipts per repository and branch. New save files include flat, versioned history. Manual Copy state stays core-only.
+The preview retains two saved core states with completion receipts per repository and branch. Reconstructed NDJSON backups include flat, versioned history, while manual Copy state stays core-only.
 
 Replacement imports check and restore supplied history. Legacy imports preserve it. Merge imports preserve existing history or adopt supplied history only when none exists.
 
-The existing minute timer defers each periodic request by a random 0-15 seconds. These autosave routes add no authentication or token check.
+The existing minute timer defers each periodic request by a random 0-15 seconds. `/v1/state` requires `X-Master-Key` on `arena-egress-proxy` and stays omitted from agent `/v1/ping` routes.
 
 ## Arena state reset window
 

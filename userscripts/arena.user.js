@@ -73,7 +73,7 @@
     "keep-working": ["clicked", "filled"],
     fill: ["inserted", "rebuilt", "no-repo", "no-composer", "no-template", "filled"],
     trim: ["removed"],
-    state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-selector", "requested", "selector-closed", "reset-accept"],
+    state: ["no-stamp", "compare", "force-stamp", "failed", "proxy-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "requested", "reset-accept"],
     "preview-proxy": ["posted", "failed", "no-host"],
     steering: ["flagged-name"],
     wake: ["refused", "unavailable"],
@@ -84,10 +84,10 @@
     group: ["note", "task"],
     verdict: ["older", "same", "forward"],
     type: ["none", "chat", "reasoning", "poll", "play", "action", "error", "unchanged", "stale", "download"],
-    route: ["link", "manager", "stamped"],
+    route: ["link", "manager", "stamped", "proxy"],
     emoji: ["", "💬", "💭", "🖥️", "📖", "✏️", "🔍", "💤", "📜", "❓", "⚙️", "⏳", "🛡️"],
     level: LOG_LEVELS,
-    code: ["unknown", "manager-download", "copy-state", "missing-branch", "older-history", "wrong-file", "write", "file-api", "autosave", "autosave-get", "autosave-compare", "save-receipt", "NotAllowedError", "AbortError", "NotFoundError", "SecurityError", "TypeError", "Error"],
+    code: ["unknown", "manager-download", "copy-state", "missing-branch", "older-history", "proxy-unconfigured", "proxy-get", "proxy-put", "autosave", "autosave-get", "autosave-compare", "save-receipt", "NotAllowedError", "AbortError", "NotFoundError", "SecurityError", "TypeError", "Error"],
     result: ["equal", "different", "candidate-missing-records", "scope-mismatch", "unknown-baseline"],
   };
   var logMenuEntry = null;
@@ -460,11 +460,11 @@
   var registerTrimCapHook = null;
   var restartTrimTimerHook = null;
   var trimNowHook = null;
-  var chooseStateFileHook = null;
   var forceSaveStateHook = null;
   var setResetWindowHook = null;
   var restartTitleTimerHook = null;
   var syncSettingsModalVisibilityHook = null;
+  var openSettingsModalHook = null;
 
   function httpJitterMs() {
     if (typeof GM_getValue !== "function") return HTTP_JITTER_MS;
@@ -3060,14 +3060,6 @@
       );
       addDependentSectionItem(
         "State",
-        "Choose state file",
-        buildActionRow("State file", "Choose file", "choose-state-file", function () {
-          if (typeof chooseStateFileHook === "function") chooseStateFileHook();
-        }),
-        "state-download",
-      );
-      addDependentSectionItem(
-        "State",
         "Force save state",
         buildActionRow("Force save", "Force save", "force-save", function () {
           if (typeof forceSaveStateHook === "function") forceSaveStateHook();
@@ -3433,6 +3425,7 @@
       }
     }
     syncSettingsButtonHook = ensureButton;
+    openSettingsModalHook = openSettingsModal;
 
     var observer = new MutationObserver(ensureButton);
 
@@ -4589,33 +4582,14 @@
     return { type: "download", name: name, message: "Wrote " + name };
   }
 
-  function handleMatchesScope(handle, repo, branch) {
-    if (!handle || !handle.name) return false;
-    var scope = stateScopeKey(repo, branch);
-    var name = String(handle.name);
-    if (name.slice(-7) === ".ndjson") name = name.slice(0, -7);
-    return name === scope || name.indexOf(scope + "-") === 0;
-  }
-
-  function handleMismatchScope(handle, repo, branch) {
-    if (!handle || !handle.name) return repo;
-    var name = String(handle.name);
-    if (name.slice(-7) === ".ndjson") name = name.slice(0, -7);
-    var repoScope = stateScopeKey(repo, "");
-    var branchScope = stateScopeKey(repo, branch);
-    if (name === branchScope || name.indexOf(branchScope + "-") === 0) return "";
-    if (name === repoScope || name.indexOf(repoScope + "-") === 0) return branch;
-    return repo;
-  }
-
   function saveMoved(branch, remembered, base, rememberedScope, rememberedBranch) {
     return !(branch || rememberedScope) ||
       (Boolean(remembered) && remembered !== base) ||
       (Boolean(branch) && Boolean(rememberedBranch) && branch !== rememberedBranch);
   }
 
-  function overwriteAsk(moved, plan, hasHandle, force) {
-    return !force && Boolean(moved) && hasHandle && plan.type === "download";
+  function overwriteAsk(moved, plan, hasSavedState, force) {
+    return !force && Boolean(moved) && Boolean(hasSavedState) && plan.type === "download";
   }
 
   function overwriteLine(name, context) {
@@ -4677,38 +4651,335 @@
     return GM_getValue(RESET_WINDOW_KEY, true) !== false;
   }
 
-  function stateDelivery(plan, hasHandle, hasPicker) {
-    if (plan.type !== "download") return plan.type;
-    if (hasHandle) return "write";
-    return hasPicker ? "select" : "download";
-  }
-
-  function stateAction(route, manual) {
-    if (!manual) return route === "select" || route === "download" ? "block" : route;
-    return route === "select" ? "hint" : route;
-  }
-
   function getLine(status, base) {
     return "GET " + status;
   }
 
-  function writeFailLine(err) {
-    return (
-      "The file could not be saved (" + ((err && err.name) || "unknown") +
-      "). Choose the file again to retry."
-    );
-  }
-
-  function managerFailLine(err) {
-    return "The download manager failed (" + ((err && err.error) || "unknown") + "). Trying a browser-link download.";
+  function proxyStateFailLine(detail) {
+    return "Proxy state sync failed (" + (detail || "unknown") + ").";
   }
 
   var STATE_LINES = {
     noBranch: "Missing branch.",
+    noProxy: "Configure proxy host and master key in Settings.",
   };
 
-  function writtenName(handle, fallback) {
-    return handle && handle.name ? handle.name : fallback;
+  var BOARD_COLLECTION_KEYS_MAP = {
+    sessions: true,
+    entries: true,
+    task_ops: true,
+    report_ops: true,
+    worker_tasks: true,
+    worker_reports: true,
+    wakes: true,
+  };
+
+  function canonicalDiffJson(val) {
+    if (val === null || typeof val !== "object") return JSON.stringify(val);
+    if (Array.isArray(val)) {
+      return "[" + val.map(canonicalDiffJson).join(",") + "]";
+    }
+    var keys = Object.keys(val).sort();
+    var parts = [];
+    for (var i = 0; i < keys.length; i += 1) {
+      var k = keys[i];
+      if (val[k] !== undefined) {
+        parts.push(JSON.stringify(k) + ":" + canonicalDiffJson(val[k]));
+      }
+    }
+    return "{" + parts.join(",") + "}";
+  }
+
+  function stateRecordGroup(record) {
+    if (!record || typeof record !== "object") return "notes";
+    if ("markdown" in record) return "reports";
+    if ("title" in record) return "tasks";
+    if ("report_id" in record) return "answers";
+    return "notes";
+  }
+
+  function stateRecordKey(record) {
+    if (!record || typeof record !== "object") return canonicalDiffJson(record);
+    var recId = String(record.id || "").trim();
+    if (recId) return recId;
+    if (record.seq !== undefined && record.seq !== null) return "seq:" + String(record.seq);
+    return canonicalDiffJson(record);
+  }
+
+  function computeStateDiff(prevCore, nextCore, baseRev, nextRev) {
+    var prevMap = Object.create(null);
+    var i;
+    var row;
+    var pairKey;
+    if (Array.isArray(prevCore)) {
+      for (i = 0; i < prevCore.length; i += 1) {
+        row = prevCore[i];
+        if (!row || typeof row !== "object" || row.type === "userscript-autosave") continue;
+        var pGrp = stateRecordGroup(row);
+        var pKey = stateRecordKey(row);
+        pairKey = pGrp + "\u0000" + pKey;
+        prevMap[pairKey] = { grp: pGrp, key: pKey, json: canonicalDiffJson(row) };
+      }
+    }
+    var nextSeen = Object.create(null);
+    var upserts = [];
+    if (Array.isArray(nextCore)) {
+      for (i = 0; i < nextCore.length; i += 1) {
+        row = nextCore[i];
+        if (!row || typeof row !== "object" || row.type === "userscript-autosave") continue;
+        var nGrp = stateRecordGroup(row);
+        var nKey = stateRecordKey(row);
+        pairKey = nGrp + "\u0000" + nKey;
+        nextSeen[pairKey] = true;
+        var enc = canonicalDiffJson(row);
+        if (!prevMap[pairKey] || prevMap[pairKey].json !== enc) {
+          upserts.push(row);
+        }
+      }
+    }
+    var tombstones = [];
+    var prevKeys = Object.keys(prevMap).sort();
+    for (i = 0; i < prevKeys.length; i += 1) {
+      if (!nextSeen[prevKeys[i]]) {
+        tombstones.push({ group: prevMap[prevKeys[i]].grp, key: prevMap[prevKeys[i]].key });
+      }
+    }
+    return {
+      base_rev: Number(baseRev) || 0,
+      rev: Number(nextRev) || 0,
+      upserts: upserts,
+      tombstones: tombstones,
+    };
+  }
+
+  function applyStateDiff(baseCore, diffObj) {
+    if (!diffObj || typeof diffObj !== "object") return Array.isArray(baseCore) ? baseCore.slice() : [];
+    var upserts = Array.isArray(diffObj.upserts) ? diffObj.upserts : [];
+    var tombstones = Array.isArray(diffObj.tombstones) ? diffObj.tombstones : [];
+    var index = Object.create(null);
+    var order = [];
+    var i;
+    var row;
+    var pairKey;
+    if (Array.isArray(baseCore)) {
+      for (i = 0; i < baseCore.length; i += 1) {
+        row = baseCore[i];
+        if (!row || typeof row !== "object" || row.type === "userscript-autosave") continue;
+        pairKey = stateRecordGroup(row) + "\u0000" + stateRecordKey(row);
+        if (!index[pairKey]) order.push(pairKey);
+        index[pairKey] = Object.assign({}, row);
+      }
+    }
+    var removed = Object.create(null);
+    for (i = 0; i < tombstones.length; i += 1) {
+      var tomb = tombstones[i];
+      if (!tomb || typeof tomb !== "object") continue;
+      var tGrp = String(tomb.group || "").trim();
+      var tKey = String(tomb.key || "").trim();
+      if (tGrp && tKey) {
+        removed[tGrp + "\u0000" + tKey] = true;
+        delete index[tGrp + "\u0000" + tKey];
+      }
+    }
+    for (i = 0; i < upserts.length; i += 1) {
+      row = upserts[i];
+      if (!row || typeof row !== "object" || row.type === "userscript-autosave") continue;
+      pairKey = stateRecordGroup(row) + "\u0000" + stateRecordKey(row);
+      delete removed[pairKey];
+      if (!index[pairKey]) order.push(pairKey);
+      index[pairKey] = Object.assign({}, row);
+    }
+    var out = [];
+    for (i = 0; i < order.length; i += 1) {
+      if (index[order[i]] && !removed[order[i]]) out.push(index[order[i]]);
+    }
+    return out;
+  }
+
+  function decomposeBoardRecords(board) {
+    var data = board && typeof board === "object" ? board : {};
+    var records = Object.create(null);
+    var meta = {};
+    Object.keys(data).forEach(function (k) {
+      if (!BOARD_COLLECTION_KEYS_MAP[k]) meta[k] = data[k];
+    });
+    records["meta\u0000scalars"] = { type: "meta", key: "scalars", value: meta };
+    if (Array.isArray(data.sessions)) {
+      data.sessions.forEach(function (row, idx) {
+        if (!row || typeof row !== "object") return;
+        var sid = String(row.session_id || row.branch || ("idx:" + idx)).trim();
+        if (sid) records["session\u0000" + sid] = { type: "session", key: sid, value: row };
+      });
+    }
+    if (Array.isArray(data.entries)) {
+      data.entries.forEach(function (row, idx) {
+        if (!row || typeof row !== "object") return;
+        var eid = String(row.id || ("idx:" + idx)).trim();
+        if (eid) records["entry\u0000" + eid] = { type: "entry", key: eid, value: row };
+      });
+    }
+    if (Array.isArray(data.task_ops)) {
+      data.task_ops.forEach(function (row, idx) {
+        if (!row || typeof row !== "object") return;
+        var oid = String(row.id || ("idx:" + idx)).trim();
+        if (oid) records["task_op\u0000" + oid] = { type: "task_op", key: oid, value: row };
+      });
+    }
+    if (Array.isArray(data.report_ops)) {
+      data.report_ops.forEach(function (row, idx) {
+        if (!row || typeof row !== "object") return;
+        var oid = String(row.id || ("idx:" + idx)).trim();
+        if (oid) records["report_op\u0000" + oid] = { type: "report_op", key: oid, value: row };
+      });
+    }
+    if (data.worker_tasks && typeof data.worker_tasks === "object") {
+      Object.keys(data.worker_tasks).forEach(function (sid) {
+        var cleanSid = String(sid || "").trim();
+        if (cleanSid && Array.isArray(data.worker_tasks[sid])) {
+          records["worker_tasks\u0000" + cleanSid] = {
+            type: "worker_tasks",
+            key: cleanSid,
+            value: data.worker_tasks[sid],
+          };
+        }
+      });
+    }
+    if (data.worker_reports && typeof data.worker_reports === "object") {
+      Object.keys(data.worker_reports).forEach(function (sid) {
+        var cleanSid = String(sid || "").trim();
+        if (cleanSid && Array.isArray(data.worker_reports[sid])) {
+          records["worker_reports\u0000" + cleanSid] = {
+            type: "worker_reports",
+            key: cleanSid,
+            value: data.worker_reports[sid],
+          };
+        }
+      });
+    }
+    if (data.wakes && typeof data.wakes === "object") {
+      Object.keys(data.wakes).forEach(function (sid) {
+        var cleanSid = String(sid || "").trim();
+        if (cleanSid && data.wakes[sid]) {
+          records["wake\u0000" + cleanSid] = { type: "wake", key: cleanSid, value: data.wakes[sid] };
+        }
+      });
+    }
+    return records;
+  }
+
+  function recomposeBoardRecords(records) {
+    var out = {
+      multi_repo: false,
+      linked_repos: [],
+      removed_sessions: [],
+      worker_ids: {},
+      worker_tasks: {},
+      task_ops: [],
+      worker_reports: {},
+      report_ops: [],
+      allowed_sessions: [],
+      main_session_id: "",
+      sessions: [],
+      entries: [],
+      wakes: {},
+    };
+    var metaEntry = records["meta\u0000scalars"];
+    if (metaEntry && metaEntry.value && typeof metaEntry.value === "object") {
+      Object.keys(metaEntry.value).forEach(function (k) {
+        out[k] = metaEntry.value[k];
+      });
+    }
+    Object.keys(records).forEach(function (pairKey) {
+      var item = records[pairKey];
+      if (!item || item.type === "meta") return;
+      if (item.type === "session" && item.value && typeof item.value === "object") {
+        out.sessions.push(Object.assign({}, item.value));
+      } else if (item.type === "entry" && item.value && typeof item.value === "object") {
+        out.entries.push(Object.assign({}, item.value));
+      } else if (item.type === "task_op" && item.value && typeof item.value === "object") {
+        out.task_ops.push(Object.assign({}, item.value));
+      } else if (item.type === "report_op" && item.value && typeof item.value === "object") {
+        out.report_ops.push(Object.assign({}, item.value));
+      } else if (item.type === "worker_tasks" && Array.isArray(item.value)) {
+        out.worker_tasks[item.key] = item.value.slice();
+      } else if (item.type === "worker_reports" && Array.isArray(item.value)) {
+        out.worker_reports[item.key] = item.value.slice();
+      } else if (item.type === "wake" && item.value) {
+        out.wakes[item.key] = item.value;
+      }
+    });
+    out.entries.sort(function (a, b) {
+      var ta = String((a && (a.created_at || a.at)) || "");
+      var tb = String((b && (b.created_at || b.at)) || "");
+      if (ta !== tb) return ta < tb ? -1 : 1;
+      var ia = String((a && a.id) || "");
+      var ib = String((b && b.id) || "");
+      return ia < ib ? -1 : ia > ib ? 1 : 0;
+    });
+    out.task_ops.sort(function (a, b) {
+      var ta = String((a && a.at) || "");
+      var tb = String((b && b.at) || "");
+      if (ta !== tb) return ta < tb ? -1 : 1;
+      var ia = String((a && a.id) || "");
+      var ib = String((b && b.id) || "");
+      return ia < ib ? -1 : ia > ib ? 1 : 0;
+    });
+    out.report_ops.sort(function (a, b) {
+      var ta = String((a && a.at) || "");
+      var tb = String((b && b.at) || "");
+      if (ta !== tb) return ta < tb ? -1 : 1;
+      var ia = String((a && a.id) || "");
+      var ib = String((b && b.id) || "");
+      return ia < ib ? -1 : ia > ib ? 1 : 0;
+    });
+    return out;
+  }
+
+  function computeBoardDiff(prevBoard, nextBoard, baseRev, nextRev) {
+    var prevRecs = decomposeBoardRecords(prevBoard);
+    var nextRecs = decomposeBoardRecords(nextBoard);
+    var upserts = [];
+    Object.keys(nextRecs).forEach(function (pairKey) {
+      var nItem = nextRecs[pairKey];
+      var pItem = prevRecs[pairKey];
+      if (!pItem || canonicalDiffJson(pItem.value) !== canonicalDiffJson(nItem.value)) {
+        upserts.push({ type: nItem.type, key: nItem.key, value: nItem.value });
+      }
+    });
+    var tombstones = [];
+    Object.keys(prevRecs).sort().forEach(function (pairKey) {
+      if (!nextRecs[pairKey]) {
+        tombstones.push({ type: prevRecs[pairKey].type, key: prevRecs[pairKey].key });
+      }
+    });
+    return {
+      base_rev: Number(baseRev) || 0,
+      rev: Number(nextRev) || 0,
+      upserts: upserts,
+      tombstones: tombstones,
+    };
+  }
+
+  function applyBoardDiff(baseBoard, diffObj) {
+    if (!diffObj || typeof diffObj !== "object") return baseBoard;
+    var records = decomposeBoardRecords(baseBoard);
+    var tombstones = Array.isArray(diffObj.tombstones) ? diffObj.tombstones : [];
+    var upserts = Array.isArray(diffObj.upserts) ? diffObj.upserts : [];
+    tombstones.forEach(function (tomb) {
+      if (!tomb || typeof tomb !== "object") return;
+      var recType = String(tomb.type || "").trim();
+      var key = String(tomb.key || "").trim();
+      if (recType && key) delete records[recType + "\u0000" + key];
+    });
+    upserts.forEach(function (item) {
+      if (!item || typeof item !== "object") return;
+      var recType = String(item.type || "").trim();
+      var key = String(item.key || "").trim();
+      if (recType && key && "value" in item) {
+        records[recType + "\u0000" + key] = { type: recType, key: key, value: item.value };
+      }
+    });
+    return recomposeBoardRecords(records);
   }
 
   var STATE_WATCH_MS = 60 * 1000;
@@ -4957,6 +5228,11 @@
   var proxyBoardPullInFlight = null;
   var lastProxyBoardPullAtMs = 0;
   var hydratedBoardFilesBySid = {};
+  var previewBoardPullByBase = {};
+  var previewBoardPushBySid = {};
+  var previewScopedPushByBase = {};
+  var previewAutosavePullByBase = {};
+  var proxyStateCacheByScope = {};
 
   function normalizeBoardProxyHost(raw) {
     var host = String(raw || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
@@ -5028,20 +5304,40 @@
   function pullProxyBoard(force) {
     if (!boardProxyConfig()) return Promise.resolve(null);
     if (proxyBoardPullInFlight) return proxyBoardPullInFlight;
-    var query = !force && proxyBoardRevision > 0 ? ("?since=" + String(proxyBoardRevision)) : "";
+    var query = !force && proxyBoardRevision > 0 && proxyBoardCache
+      ? ("?since=" + String(proxyBoardRevision) + "&mode=diff")
+      : "";
     lastProxyBoardPullAtMs = Date.now();
     proxyBoardPullInFlight = proxyBoardJson("/v1/board" + query).then(function (res) {
       proxyBoardPullInFlight = null;
-      if (res && res.status === 200 && res.body && res.body.board) {
-        return {
-          changed: true,
-          board: updateProxyBoardCache(res.body.board, Number(res.body.revision)),
-          scoped_board: res.body.scoped_board && typeof res.body.scoped_board === "object"
-            ? res.body.scoped_board
-            : null,
-        };
+      if (res && res.status === 200 && res.body) {
+        if (res.body.unchanged && proxyBoardCache) {
+          if (typeof res.body.revision === "number" && isFinite(res.body.revision)) {
+            proxyBoardRevision = Number(res.body.revision);
+          }
+          return { changed: false, board: proxyBoardCache, scoped_board: null };
+        }
+        if (res.body.mode === "diff" && res.body.diff && proxyBoardCache) {
+          var patched = applyBoardDiff(proxyBoardCache, res.body.diff);
+          return {
+            changed: true,
+            board: updateProxyBoardCache(patched, Number(res.body.revision)),
+            scoped_board: res.body.scoped_board && typeof res.body.scoped_board === "object"
+              ? res.body.scoped_board
+              : null,
+          };
+        }
+        if (res.body.board) {
+          return {
+            changed: true,
+            board: updateProxyBoardCache(res.body.board, Number(res.body.revision)),
+            scoped_board: res.body.scoped_board && typeof res.body.scoped_board === "object"
+              ? res.body.scoped_board
+              : null,
+          };
+        }
       }
-      if (res && (res.status === 304 || (res.status === 200 && res.body && res.body.unchanged)) && proxyBoardCache) {
+      if (res && res.status === 304 && proxyBoardCache) {
         return { changed: false, board: proxyBoardCache, scoped_board: null };
       }
       return null;
@@ -5208,13 +5504,50 @@
       });
     }
     function postConsolidatedOnce(boardToSend, hydratedKeys, sid) {
-      return stateJson(base + "/api/board", { action: "sync", board: boardToSend }).then(function (answer) {
+      var pullCur = previewBoardPullByBase[base];
+      var supportsPreviewDiff = Boolean(pullCur && pullCur.rev > 0);
+      var scopedCur = supportsPreviewDiff ? previewScopedPushByBase[base] : null;
+      var syncPayload = (scopedCur && scopedCur.board)
+        ? {
+          action: "sync",
+          board_diff: computeBoardDiff(scopedCur.board, boardToSend, scopedCur.rev, scopedCur.rev + 1),
+        }
+        : (supportsPreviewDiff
+          ? { action: "sync", board: boardToSend, client_rev: 1 }
+          : { action: "sync", board: boardToSend });
+      function finishConsolidated(answer, nextPushRev) {
         if (answer && answer.status === 200 && answer.body) {
           hydratedKeys.forEach(function (k) { hydratedBoardFilesBySid[k] = true; });
+          if (supportsPreviewDiff) {
+            previewScopedPushByBase[base] = { rev: nextPushRev, board: boardToSend };
+          }
+          if (typeof answer.body.revision === "number" && answer.body.sessions) {
+            previewBoardPullByBase[base] = {
+              rev: Number(answer.body.revision),
+              board: answer.body,
+            };
+          }
           recordMemberMetadata(answer.body, sid);
           return answer;
         }
         return handleMemberFailure(answer, sid);
+      }
+      return stateJson(base + "/api/board", syncPayload).then(function (answer) {
+        if (
+          scopedCur &&
+          answer &&
+          (answer.status === 409 || (answer.body && answer.body.need_full))
+        ) {
+          previewScopedPushByBase[base] = null;
+          return stateJson(base + "/api/board", {
+            action: "sync",
+            board: boardToSend,
+            client_rev: 1,
+          }).then(function (retryAns) {
+            return finishConsolidated(retryAns, 1);
+          });
+        }
+        return finishConsolidated(answer, scopedCur ? scopedCur.rev + 1 : 1);
       });
     }
     if (pushOnly) {
@@ -5225,27 +5558,112 @@
         return postConsolidatedOnce(hydrated.board, hydrated.keys, targetSid);
       });
     }
-    return stateJson(base + "/api/board").then(function (memberAns) {
+    var memberPullCur = previewBoardPullByBase[base];
+    var memberGetUrl = (memberPullCur && memberPullCur.rev > 0 && memberPullCur.board)
+      ? (base + "/api/board?since=" + String(memberPullCur.rev) + "&mode=diff")
+      : (base + "/api/board");
+    return stateJson(memberGetUrl).then(function (memberAns) {
       if (!memberAns || memberAns.status !== 200 || !memberAns.body) {
         return handleMemberFailure(memberAns, targetSid);
       }
-      var memberBody = memberAns.body;
+      var rawMemberBody = memberAns.body;
+      var memberBody;
+      if (rawMemberBody.unchanged && memberPullCur && memberPullCur.board) {
+        memberBody = memberPullCur.board;
+        if (typeof rawMemberBody.revision === "number") {
+          memberPullCur.rev = Number(rawMemberBody.revision);
+        }
+      } else if (rawMemberBody.mode === "diff" && rawMemberBody.diff && memberPullCur && memberPullCur.board) {
+        memberBody = applyBoardDiff(memberPullCur.board, rawMemberBody.diff);
+        previewBoardPullByBase[base] = {
+          rev: Number(rawMemberBody.revision) || (memberPullCur.rev + 1),
+          board: memberBody,
+        };
+      } else {
+        memberBody = rawMemberBody.board && typeof rawMemberBody.board === "object"
+          ? rawMemberBody.board
+          : rawMemberBody;
+        if (typeof rawMemberBody.revision === "number" && rawMemberBody.revision > 0) {
+          previewBoardPullByBase[base] = {
+            rev: Number(rawMemberBody.revision),
+            board: memberBody,
+          };
+        } else {
+          delete previewBoardPullByBase[base];
+        }
+      }
       var memberSid = recordMemberMetadata(memberBody, targetSid);
       var memberRepo = cleanBoardRepo(memberBody.repo || targetRepo || "", memberSid);
-      return proxyBoardJson("/v1/board", {
-        action: "sync",
-        board: memberBody,
-        session_id: memberSid,
-        repo: memberRepo,
-        passive: passive,
-      }).then(function (syncRes) {
+      var proxyPushCur = memberSid ? previewBoardPushBySid[memberSid] : null;
+      var proxySyncReq = (proxyPushCur && proxyPushCur.board)
+        ? {
+          action: "sync",
+          board_diff: computeBoardDiff(proxyPushCur.board, memberBody, proxyPushCur.rev, proxyPushCur.rev + 1),
+          session_id: memberSid,
+          repo: memberRepo,
+          passive: passive,
+          reply_since: proxyBoardRevision > 0 && proxyBoardCache ? proxyBoardRevision : undefined,
+          reply_mode: proxyBoardRevision > 0 && proxyBoardCache ? "diff" : undefined,
+        }
+        : {
+          action: "sync",
+          board: memberBody,
+          client_rev: 1,
+          session_id: memberSid,
+          repo: memberRepo,
+          passive: passive,
+        };
+      function sendMemberToProxy() {
+        return proxyBoardJson("/v1/board", proxySyncReq).then(function (syncRes) {
+          if (
+            proxyPushCur &&
+            syncRes &&
+            (syncRes.status === 409 || (syncRes.body && syncRes.body.need_full))
+          ) {
+            if (memberSid) delete previewBoardPushBySid[memberSid];
+            proxyPushCur = null;
+            return proxyBoardJson("/v1/board", {
+              action: "sync",
+              board: memberBody,
+              client_rev: 1,
+              session_id: memberSid,
+              repo: memberRepo,
+              passive: passive,
+            }).then(function (retryRes) {
+              if (memberSid && retryRes && retryRes.status === 200) {
+                previewBoardPushBySid[memberSid] = { rev: 1, board: memberBody };
+              }
+              return retryRes;
+            });
+          }
+          if (memberSid && syncRes && syncRes.status === 200) {
+            previewBoardPushBySid[memberSid] = {
+              rev: proxyPushCur ? proxyPushCur.rev + 1 : 1,
+              board: memberBody,
+            };
+          }
+          return syncRes;
+        });
+      }
+      return sendMemberToProxy().then(function (syncRes) {
         var syncedScoped = null;
-        if (syncRes && syncRes.status === 200 && syncRes.body && syncRes.body.board) {
-          writeGlobalBoard(syncRes.body.board, {
-            passive: passive,
-            fromProxy: true,
-            revision: Number(syncRes.body.revision),
-          });
+        if (syncRes && syncRes.status === 200 && syncRes.body) {
+          if (syncRes.body.mode === "diff" && syncRes.body.diff && proxyBoardCache) {
+            var nextGlobal = applyBoardDiff(proxyBoardCache, syncRes.body.diff);
+            writeGlobalBoard(nextGlobal, {
+              passive: passive,
+              fromProxy: true,
+              revision: Number(syncRes.body.revision),
+            });
+          } else if (syncRes.body.board) {
+            writeGlobalBoard(syncRes.body.board, {
+              passive: passive,
+              fromProxy: true,
+              revision: Number(syncRes.body.revision),
+            });
+          } else if (syncRes.body.unchanged && typeof syncRes.body.revision === "number") {
+            proxyBoardRevision = Number(syncRes.body.revision);
+          }
           if (syncRes.body.scoped_board && typeof syncRes.body.scoped_board === "object") {
             syncedScoped = normalizeBoard(syncRes.body.scoped_board);
           }
@@ -5370,15 +5788,26 @@
 
   runFeature("state-download", "State - download", function () {
     var STATE_PANEL_ID = "clankers-state-panel";
-    var STATE_PANEL_MS = 6000;
+
+    function removeStatePanel(keepAutoHide) {
+      try {
+        var node = document.getElementById ? document.getElementById(STATE_PANEL_ID) : null;
+        if (node && node.parentNode &&
+            (keepAutoHide !== true || node.getAttribute("data-auto-hide") !== "true")) {
+          node.parentNode.removeChild(node);
+        }
+      } catch (err) {
+        return;
+      }
+    }
 
     if (exposeChecks("stateDownload", {
       USERSCRIPT_VERSION_HEADER: USERSCRIPT_VERSION_HEADER,
       userscriptVersion: userscriptVersion,
       STATE_LINES: STATE_LINES,
       getLine: getLine,
-      writeFailLine: writeFailLine,
-      managerFailLine: managerFailLine,
+      proxyStateFailLine: proxyStateFailLine,
+      clearSavedFailure: function () { removeStatePanel(true); },
       stateError: stateError,
       stateFileName: stateFileName,
       stateScopeKey: stateScopeKey,
@@ -5390,12 +5819,7 @@
       backupTextForOffer: backupTextForOffer,
       stateMemory: stateMemory,
       stateRemembered: stateRemembered,
-      stateDelivery: stateDelivery,
-      stateAction: stateAction,
       panelNeeded: panelNeeded,
-      writtenName: writtenName,
-      handleMatchesScope: handleMatchesScope,
-      handleMismatchScope: handleMismatchScope,
       saveMoved: saveMoved,
       overwriteAsk: overwriteAsk,
       overwriteLine: overwriteLine,
@@ -5408,12 +5832,9 @@
       stateBranch: stateBranch,
       readSlug: readSlug,
       slugFromBare: slugFromBare,
-      pagePicker: pagePicker,
-      downloadRoute: downloadRoute,
-      stateDownloadRoute: stateDownloadRoute,
-      writeToHandle: writeToHandle,
-      writeStateDownload: writeStateDownload,
       sameSaves: sameSaves,
+      computeStateDiff: computeStateDiff,
+      applyStateDiff: applyStateDiff,
       previewFrame: previewFrame,
       previewBase: previewBase,
       notifyPreviewReady: notifyPreviewReady,
@@ -5423,13 +5844,9 @@
       return function () {};
     }
 
-    var STATE_DB = "clankers-arena-state";
     var STATE_HINT_KEY = "clankers-arena-state-hinted";
     function stampKey(scopeKey) {
       return "clankers-arena-state-stamp-" + scopeKey;
-    }
-    function fileKey(scopeKey) {
-      return "state-file-" + scopeKey;
     }
     function lastScopeKey(repo) {
       return "clankers-arena-state-scope-" + stateScopeKey(repo, "");
@@ -5471,8 +5888,6 @@
       GM_setValue(stampKey(storeKey), JSON.stringify(stateMemory(stamp, stamps)));
     }
     var stateBusy = false;
-    var selected = null;
-    var selectedKey = null;
 
     function receiptKey(storeKey) { return "clankers-arena-state-receipt-" + storeKey; }
     function pendingKey(storeKey) { return "clankers-arena-state-pending-" + storeKey; }
@@ -5487,7 +5902,7 @@
         if (answer.status === 400) {
           GM_setValue(pendingKey(storeKey), null);
         }
-        stateError("Failed to confirm. File saved.",
+        stateError("Failed to confirm. State saved on proxy.",
           null, null, "save-receipt", answer.status, undefined,
           (answer.status === 200 || answer.status === 201 ? "body" : "status" + (answer.failure ? ":" + answer.failure : "")));
         return;
@@ -5501,7 +5916,7 @@
       GM_setValue(offerKey(storeKey), "");
       rememberState(pending.scope, storeKey, pending.base, pending.branch, pending.stamp, pending.stamps);
       removeStatePanel(true);
-      logEvent("state", "saved", { repo: pending.scope.repo, filename: pending.name });
+      logEvent("state", "saved", { route: "proxy", repo: pending.scope.repo, filename: pending.name });
       if (pending.force) statePanel("Forced save of " + pending.name + ".", null, null, true);
     }
 
@@ -5518,87 +5933,10 @@
       });
     }
 
-    function pagePicker() {
-      var page = typeof unsafeWindow !== "undefined" ? unsafeWindow : null;
-      if (!page && typeof window !== "undefined") page = window;
-      var selector = page && page.showSaveFilePicker;
-      if (typeof selector !== "function") return null;
-      return function (options) {
-        return selector.call(page, options);
-      };
-    }
-
-    function stateDb() {
-      return new Promise(function (resolve, reject) {
-        var request = indexedDB.open(STATE_DB, 1);
-        request.onupgradeneeded = function () {
-          request.result.createObjectStore("files");
-        };
-        request.onsuccess = function () {
-          resolve(request.result);
-        };
-        request.onerror = function () {
-          reject(request.error);
-        };
-      });
-    }
-
-    function stateHandle(key) {
-      return stateDb()
-        .then(function (db) {
-          return new Promise(function (resolve) {
-            var request = db
-              .transaction("files")
-              .objectStore("files")
-              .get(key);
-            request.onsuccess = function () {
-              resolve(request.result || null);
-            };
-            request.onerror = function () {
-              resolve(null);
-            };
-          });
-        })
-        .catch(function () {
-          return null;
-        });
-    }
-
-    function saveStateHandle(handle, key) {
-      return stateDb()
-        .then(function (db) {
-          db.transaction("files", "readwrite")
-            .objectStore("files")
-            .put(handle, key);
-        })
-        .catch(function () {});
-    }
-
-    function writeToHandle(handle, text) {
-      return handle.createWritable().then(function (writable) {
-        return writable.write(text).then(function () {
-          return writable.close();
-        }).then(function () { removeStatePanel(true); });
-      });
-    }
-
     function panelNeeded(manual, shown) {
       return Boolean(manual) || !shown;
     }
 
-    function removeStatePanel(keepAutoHide) {
-      try {
-        var node = document.getElementById ? document.getElementById(STATE_PANEL_ID) : null;
-        if (node && node.parentNode &&
-            (keepAutoHide !== true || node.getAttribute("data-auto-hide") !== "true")) {
-          node.parentNode.removeChild(node);
-        }
-      } catch (err) {
-        return;
-      }
-    }
-
-    // A healthy cycle retires an earlier get failure notice, and prompts with a button stay.
     function clearErrorPanel() {
       try {
         var node = document.getElementById ? document.getElementById(STATE_PANEL_ID) : null;
@@ -5612,7 +5950,7 @@
     }
 
     function statePanel(message, actionLabel, action, autoHide) {
-      if (actionLabel !== "Choose file") return;
+      if (actionLabel !== "Retry save" && actionLabel !== "Settings") return;
       try {
         if (typeof document === "undefined" || typeof document.createElement !== "function" || !document.body) return;
         removeStatePanel();
@@ -5646,7 +5984,7 @@
         }
         var close = document.createElement("button");
         close.type = "button";
-        close.textContent = actionLabel === "Choose file" ? "Cancel" : "Dismiss";
+        close.textContent = "Cancel";
         close.style.cssText =
           "cursor:pointer;border:1px solid #56504a;border-radius:6px;padding:5px 10px;" +
           "background:transparent;color:inherit;font:inherit";
@@ -5661,86 +5999,30 @@
     }
 
     function stateError(line, actionLabel, action, code, status, showPanel, detail) {
-      logEvent("state", "failed", { code: code || "unknown", status: status, detail: detail }, code === "file-api" ? "warn" : "error");
+      logEvent("state", "failed", { code: code || "unknown", status: status, detail: detail }, code === "proxy-unconfigured" ? "warn" : "error");
       if (showPanel !== false) statePanel(line, actionLabel, action);
     }
 
-    function hintStateFile(manual) {
+    function hintProxyNeeded(manual) {
       var shown = GM_getValue(STATE_HINT_KEY, false);
       if (!shown) {
         GM_setValue(STATE_HINT_KEY, true);
       }
-      logEvent("state", "file-needed", null, "warn");
+      logEvent("state", "proxy-needed", null, "warn");
       if (panelNeeded(manual, shown)) {
-        statePanel(
-          "No file selected.",
-          "Choose file",
-          chooseStateFile
-        );
+        statePanel(STATE_LINES.noProxy, "Settings", function () {
+          if (typeof openSettingsModalHook === "function") openSettingsModalHook();
+        });
       }
     }
 
-    function askOverwrite(handle, storeKey, manual, context) {
+    function askOverwrite(name, storeKey, manual, context) {
       var askedKey = overwriteKey(storeKey);
       var shown = GM_getValue(askedKey, false);
       if (!panelNeeded(manual, shown)) return;
       GM_setValue(askedKey, true);
-      statePanel(overwriteLine(writtenName(handle, "the save file"), context), "Overwrite", function () {
+      statePanel(overwriteLine(name || "proxy state", context), "Overwrite", function () {
         fetchStateFile(true, true);
-      });
-    }
-
-    function downloadRoute(hasManagerDownload) {
-      return hasManagerDownload ? "manager" : "link";
-    }
-
-    function stateDownloadRoute() {
-      return downloadRoute(typeof GM_download === "function");
-    }
-
-    function linkDownload(url, name) {
-      var anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = name;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-    }
-
-    function writeStateDownload(text, name) {
-      var url = URL.createObjectURL(
-        new Blob([text], { type: "application/x-ndjson" }),
-      );
-      var route = stateDownloadRoute();
-      if (route === "link") {
-        logEvent("state", "download", { route: "link", filename: name });
-        linkDownload(url, name);
-        statePanel("Browser download requested. Completion unconfirmed.", null, null, true);
-        setTimeout(function () {
-          URL.revokeObjectURL(url);
-        }, 1000);
-        return Promise.resolve(false);
-      }
-      return new Promise(function (resolve) {
-        GM_download({
-          url: url,
-          name: name,
-          saveAs: false,
-          onload: function () {
-            removeStatePanel(true);
-            logEvent("state", "saved", { route: "manager", filename: name });
-            URL.revokeObjectURL(url);
-            resolve(true);
-          },
-          onerror: function (err) {
-            stateError(managerFailLine(err), null, null, "manager-download");
-            linkDownload(url, name);
-            setTimeout(function () {
-              URL.revokeObjectURL(url);
-            }, 1000);
-            resolve(false);
-          },
-        });
       });
     }
 
@@ -5845,7 +6127,7 @@
       return "";
     }
 
-    function offerStateBackup(base, storeKey, scope, handle, known, body, backupText, summary) {
+    function offerStateBackup(base, storeKey, scope, preferredName, known, body, backupText, summary) {
       var text = backupTextForOffer(backupText, known);
       if (!text) return;
       try {
@@ -5856,13 +6138,12 @@
       var offerId = mismatchOfferId(known, body);
       if (GM_getValue(offerKey(storeKey), "") === offerId) return;
       GM_setValue(offerKey(storeKey), offerId);
-      var fallbackName = stateFileName(
+      var name = preferredName || stateFileName(
         scope && scope.repo,
         scope && scope.branch,
         (known && known.lastsave) || "",
         (known && known.counts) || (known && Array.isArray(known.core) ? coreCounts(known.core) : null),
       );
-      var name = writtenName(handle, fallbackName);
       stateJson(base + "/api/userscript-autosave/offer", {
         name: name,
         text: text,
@@ -5876,7 +6157,158 @@
       });
     }
 
-    async function fetchStateFile(manual, force, chosen) {
+    async function pullPreviewAutosave(base, force) {
+      var cur = !force ? previewAutosavePullByBase[base] : null;
+      var url = (cur && cur.rev > 0 && Array.isArray(cur.core))
+        ? (base + "/api/userscript-autosave?since=" + String(cur.rev) + "&mode=diff")
+        : (base + "/api/userscript-autosave");
+      var answer = await stateJson(url);
+      if (!answer || answer.status !== 200 || !answer.body) return answer;
+      var rawBody = answer.body;
+      if (rawBody.mode === "diff" && cur && Array.isArray(cur.core)) {
+        var nextCore = rawBody.unchanged
+          ? cur.core
+          : (rawBody.diff ? applyStateDiff(cur.core, rawBody.diff) : null);
+        if (Array.isArray(nextCore)) {
+          var nextRev = Number(rawBody.revision) || cur.rev;
+          previewAutosavePullByBase[base] = { rev: nextRev, core: nextCore };
+          return {
+            status: 200,
+            failure: null,
+            body: Object.assign({}, rawBody, { core: nextCore }),
+          };
+        }
+        delete previewAutosavePullByBase[base];
+        return pullPreviewAutosave(base, true);
+      }
+      if (Array.isArray(rawBody.core)) {
+        if (typeof rawBody.revision === "number" && rawBody.revision > 0) {
+          previewAutosavePullByBase[base] = {
+            rev: Number(rawBody.revision),
+            core: rawBody.core,
+          };
+        } else {
+          delete previewAutosavePullByBase[base];
+        }
+      }
+      return answer;
+    }
+
+    async function pullProxyStateSnapshot(repo, branch, force) {
+      var scopeId = stateScopeKey(repo, branch);
+      var cached = !force ? proxyStateCacheByScope[scopeId] : null;
+      var query = "?repo=" + encodeURIComponent(repo || "") +
+        "&branch=" + encodeURIComponent(branch || "") +
+        "&fallback_repo=1" +
+        (cached && cached.rev > 0 ? ("&since=" + String(cached.rev) + "&mode=diff") : "");
+      var res = await proxyBoardJson("/v1/state" + query);
+      if (!res || res.status !== 200 || !res.body || res.body.ok === false) {
+        delete proxyStateCacheByScope[scopeId];
+        return { ok: false, res: res, snap: null };
+      }
+      var rb = res.body;
+      if (rb.unchanged && cached) {
+        if (typeof rb.revision === "number" && rb.revision > 0) cached.rev = Number(rb.revision);
+        return { ok: true, res: res, snap: cached };
+      }
+      if (rb.mode === "diff" && rb.diff && cached && Array.isArray(cached.core)) {
+        var mergedCore = applyStateDiff(cached.core, rb.diff);
+        var updatedSnap = {
+          exists: true,
+          rev: Number(rb.revision) || (cached.rev + 1),
+          scope: rb.scope || cached.scope || { repo: repo, branch: branch },
+          save_id: rb.save_id || cached.save_id || "",
+          digest: rb.digest || cached.digest || "",
+          stamp: rb.stamp || cached.stamp || "",
+          lastsave: rb.lastsave !== undefined ? rb.lastsave : cached.lastsave,
+          beforelastsave: rb.beforelastsave !== undefined ? rb.beforelastsave : cached.beforelastsave,
+          counts: rb.counts || coreCounts(mergedCore),
+          core: mergedCore,
+          text: "",
+        };
+        proxyStateCacheByScope[scopeId] = updatedSnap;
+        return { ok: true, res: res, snap: updatedSnap };
+      }
+      if (rb.exists) {
+        var fullCore = Array.isArray(rb.core) ? rb.core : [];
+        var fullSnap = {
+          exists: true,
+          rev: Number(rb.revision) || 0,
+          scope: rb.scope || { repo: repo, branch: branch },
+          save_id: rb.save_id || "",
+          digest: rb.digest || "",
+          stamp: rb.stamp || "",
+          lastsave: rb.lastsave !== undefined ? rb.lastsave : null,
+          beforelastsave: rb.beforelastsave !== undefined ? rb.beforelastsave : null,
+          counts: rb.counts || coreCounts(fullCore),
+          core: fullCore,
+          text: typeof rb.text === "string" ? rb.text : "",
+        };
+        proxyStateCacheByScope[scopeId] = fullSnap;
+        return { ok: true, res: res, snap: fullSnap };
+      }
+      delete proxyStateCacheByScope[scopeId];
+      return {
+        ok: true,
+        res: res,
+        snap: { exists: false, rev: 0, core: [], text: "" },
+      };
+    }
+
+    async function pushProxyStateSnapshot(repo, branch, prevSnap, body, force) {
+      var scopeId = stateScopeKey(repo, branch);
+      var targetScope = { repo: repo, branch: branch };
+      var baseFields = {
+        action: "put",
+        scope: targetScope,
+        save_id: body.save_id,
+        digest: body.digest,
+        stamp: body.stamp,
+        lastsave: body.stamp,
+        beforelastsave: body.lastsave || null,
+        counts: body.counts || coreCounts(body.core),
+        stamps: body.stamps || {},
+      };
+      var useDiff = Boolean(!force && prevSnap && prevSnap.exists && prevSnap.rev > 0 && Array.isArray(prevSnap.core));
+      var putPayload = useDiff
+        ? Object.assign({}, baseFields, {
+          diff: computeStateDiff(prevSnap.core, body.core, prevSnap.rev, prevSnap.rev + 1),
+        })
+        : Object.assign({}, baseFields, {
+          core: body.core,
+          history: Array.isArray(body.history) ? body.history : undefined,
+        });
+      var putRes = await proxyBoardJson("/v1/state", putPayload);
+      if (
+        useDiff &&
+        putRes &&
+        (putRes.status === 409 || (putRes.body && putRes.body.need_full))
+      ) {
+        delete proxyStateCacheByScope[scopeId];
+        putRes = await proxyBoardJson("/v1/state", Object.assign({}, baseFields, {
+          core: body.core,
+          history: Array.isArray(body.history) ? body.history : undefined,
+        }));
+      }
+      if (putRes && putRes.status === 200 && putRes.body && putRes.body.ok !== false) {
+        proxyStateCacheByScope[scopeId] = {
+          exists: true,
+          rev: Number(putRes.body.revision) || ((prevSnap && prevSnap.rev ? prevSnap.rev : 0) + 1),
+          scope: targetScope,
+          save_id: body.save_id,
+          digest: body.digest,
+          stamp: body.stamp,
+          lastsave: body.stamp,
+          beforelastsave: body.lastsave || null,
+          counts: body.counts || coreCounts(body.core),
+          core: body.core,
+          text: "",
+        };
+      }
+      return putRes;
+    }
+
+    async function fetchStateFile(manual, force) {
       notifyPreviewReady(document);
       var base = activePreviewBase(document);
       if (boardProxyConfig() && !proxyBoardCache) {
@@ -5906,12 +6338,12 @@
           await confirmPending(base, storeKey, pending);
           return;
         }
-        var answer = await stateJson(base + "/api/userscript-autosave");
-        var body = answer.body;
-        if (answer.status !== 200 || !body || !Array.isArray(body.core) || !body.scope ||
-            !body.save_id || !body.digest || typeof body.text !== "string") {
-          stateError(getLine(answer.status, base + "/api/userscript-autosave"), null, null, "autosave-get", answer.status, undefined,
-            (answer.status === 200 ? "body" : "status" + (answer.failure ? ":" + answer.failure : "")));
+        var answer = await pullPreviewAutosave(base, Boolean(force));
+        var body = answer && answer.body;
+        if (!answer || answer.status !== 200 || !body || !Array.isArray(body.core) || !body.scope ||
+            !body.save_id || !body.digest) {
+          stateError(getLine(answer ? answer.status : 0, base + "/api/userscript-autosave"), null, null, "autosave-get", answer ? answer.status : 0, undefined,
+            (answer && answer.status === 200 ? "body" : "status" + (answer && answer.failure ? ":" + answer.failure : "")));
           return;
         }
         clearErrorPanel();
@@ -5951,82 +6383,66 @@
         if (force) statePanel("Forcing save...");
         var rememberedBase = GM_getValue(baseKey(lastScope || storeKey), "");
         var rememberedBranch = GM_getValue(branchKey(lastScope || storeKey), "");
-        var repoOnlyKey = scope.repo ? stateScopeKey(scope.repo, "") : "";
-        var serverStoreKey = scope.repo && serverBranch ? stateScopeKey(scope.repo, serverBranch) : "";
-        var handle = null;
-        if (selected && (selectedKey === storeKey || selectedKey === lastScope || selectedKey === repoOnlyKey || selectedKey === serverStoreKey)) {
-          handle = selected;
-        }
-        if (!handle) {
-          handle = await stateHandle(fileKey(storeKey));
-        }
-        if (!handle && lastScope && lastScope !== storeKey) {
-          handle = await stateHandle(fileKey(lastScope));
-        }
-        if (!handle && serverStoreKey && serverStoreKey !== storeKey && serverStoreKey !== lastScope) {
-          handle = await stateHandle(fileKey(serverStoreKey));
-        }
-        if (!handle && repoOnlyKey && repoOnlyKey !== storeKey && repoOnlyKey !== lastScope) {
-          handle = await stateHandle(fileKey(repoOnlyKey));
-        }
-        if (!scope.branch && !lastScope && !force && !handle) {
+        if (!scope.branch && !lastScope && !force && !serverBranch) {
           stateError(STATE_LINES.noBranch, "Force save", function () { fetchStateFile(true, true); }, "missing-branch");
           return;
         }
-        var matchesScope = handle && (
-          handleMatchesScope(handle, scope.repo, scope.branch) ||
-          (!scope.branch && handleMatchesScope(handle, scope.repo, "")) ||
-          (serverBranch && handleMatchesScope(handle, scope.repo, serverBranch)) ||
-          (rememberedBranch && handleMatchesScope(handle, scope.repo, rememberedBranch)) ||
-          (serverRepo && handleMatchesScope(handle, serverRepo, scope.branch || serverBranch)) ||
-          (serverRepo && !scope.branch && handleMatchesScope(handle, serverRepo, ""))
-        );
-        if (handle && !matchesScope) {
-          stateError(handle.name + " does not match this " + handleMismatchScope(handle, scope.repo, scope.branch) + ".",
-            "Choose file", chooseStateFile, "wrong-file");
+        if (!boardProxyConfig()) {
+          hintProxyNeeded(manual || Boolean(force));
           return;
         }
-        if (!handle) {
-          hintStateFile(manual || Boolean(force));
+        var effectiveRepo = scope.repo || serverRepo || previewUiRepo || "";
+        var effectiveBranch = scope.branch || serverBranch || rememberedBranch || "";
+        var pulledState = await pullProxyStateSnapshot(effectiveRepo, effectiveBranch, Boolean(force));
+        if (!pulledState.ok) {
+          var getStatus = pulledState.res ? pulledState.res.status : 0;
+          var getDetail = getStatus ? ("GET " + getStatus) : ((pulledState.res && pulledState.res.failure) || "unreachable");
+          stateError(
+            proxyStateFailLine(getDetail),
+            "Retry save",
+            function () { fetchStateFile(true, Boolean(force)); },
+            "proxy-get",
+            getStatus,
+          );
           return;
         }
+        var proxySnap = pulledState.snap;
         var baseline = GM_getValue(receiptKey(storeKey), null);
-        var initialFile = false;
-        var backupText = "";
-        if (handle && !force) {
-          var text = "";
-          try {
-            text = await (await handle.getFile()).text();
-          } catch (readErr) {
-            selected = null;
-            selectedKey = null;
-            stateError(writeFailLine(readErr), "Choose file", chooseStateFile, "write");
-            return;
-          }
-          backupText = text;
-          initialFile = !text.trim() && !baseline;
-          if (text.trim()) {
-            try {
-              baseline = Object.assign({}, baseline || {}, { core: fileCore(text) });
-            } catch (parseErr) {
-              if (!chosen) throw parseErr;
-              baseline = null;
-            }
-          } else if (baseline) {
-            baseline = Object.assign({}, baseline, { core: [] });
-          }
+        var initialState = !proxySnap.exists && !baseline;
+        if (proxySnap.exists) {
+          baseline = {
+            save_id: proxySnap.save_id || (baseline && baseline.save_id) || "",
+            digest: proxySnap.digest || (baseline && baseline.digest) || "",
+            scope: body.scope,
+            lastsave: proxySnap.lastsave !== undefined ? proxySnap.lastsave : (baseline && baseline.lastsave) || null,
+            beforelastsave: proxySnap.beforelastsave !== undefined ? proxySnap.beforelastsave : (baseline && baseline.beforelastsave) || null,
+            counts: proxySnap.counts || coreCounts(proxySnap.core),
+            core: proxySnap.core,
+          };
         }
         var inSync = sameSaves(baseline, body);
-        if (!force && !chosen && !inSync && !(initialFile && !baseline)) {
+        var name = stateFileName(effectiveRepo, effectiveBranch, body.stamp, body.counts);
+        if (!force && !inSync && !initialState) {
           var mismatchLine = stateMismatchLine(baseline, body);
           stateError(mismatchLine, "Force save",
             function () { fetchStateFile(true, true); }, "autosave-compare",
             undefined, undefined, sameSaveDetail(baseline, body));
+          var backupText = proxySnap.text || "";
+          if (proxySnap.exists && !backupText) {
+            var fullOfferRes = await proxyBoardJson(
+              "/v1/state?repo=" + encodeURIComponent(effectiveRepo) +
+              "&branch=" + encodeURIComponent(effectiveBranch) +
+              "&fallback_repo=1&include_text=1"
+            );
+            if (fullOfferRes && fullOfferRes.status === 200 && fullOfferRes.body && typeof fullOfferRes.body.text === "string") {
+              backupText = fullOfferRes.body.text;
+            }
+          }
           offerStateBackup(
             base,
             storeKey,
-            scope,
-            handle,
+            { repo: effectiveRepo, branch: effectiveBranch },
+            stateFileName(effectiveRepo, effectiveBranch, (baseline && baseline.lastsave) || "", baseline && baseline.counts),
             baseline,
             body,
             backupText,
@@ -6035,36 +6451,40 @@
           return;
         }
         if (!force && inSync && body.digest === (baseline && baseline.digest)) return;
-        var effectiveBranch = scope.branch || rememberedBranch || serverBranch || "";
-        var plan = { type: "download", name: stateFileName(scope.repo, scope.branch, body.stamp, body.counts) };
+        var plan = { type: "download", name: name };
         var moved = saveMoved(scope.branch, rememberedBase, base, lastScope, rememberedBranch);
-        var asks = overwriteAsk(moved, plan, Boolean(handle) && !initialFile, force || Boolean(chosen));
+        var asks = overwriteAsk(moved, plan, Boolean(proxySnap.exists), Boolean(force));
         var accepted = asks && resetWindowAccepts(new Date(), resetWindowOn(), effectiveBranch, rememberedBase, base, rememberedBranch);
         if (asks && !accepted) {
-          askOverwrite(handle, storeKey, manual, {
+          askOverwrite(name, storeKey, manual, {
             branch: scope.branch, rememberedBranch: rememberedBranch, lastScope: lastScope,
             base: base, rememberedBase: rememberedBase, memory: stateRemembered(GM_getValue(stampKey(storeKey), "")),
             stamp: body.stamp, stamps: body.stamps,
           });
           return;
         }
-        selected = handle || null;
-        selectedKey = handle ? storeKey : null;
-        var name = writtenName(handle, plan.name);
-        try { await writeToHandle(handle, body.text); }
-        catch (err) {
-          selected = null;
-          selectedKey = null;
-          stateError(writeFailLine(err), "Choose file", chooseStateFile, "write");
+        var putRes = await pushProxyStateSnapshot(effectiveRepo, effectiveBranch, proxySnap, body, Boolean(force));
+        if (!putRes || putRes.status !== 200 || !putRes.body || putRes.body.ok === false) {
+          var putStatus = putRes ? putRes.status : 0;
+          var putDetail = putStatus ? ("POST " + putStatus) : ((putRes && putRes.failure) || "unreachable");
+          stateError(
+            proxyStateFailLine(putDetail),
+            "Retry save",
+            function () { fetchStateFile(true, Boolean(force)); },
+            "proxy-put",
+            putStatus,
+          );
           return;
         }
+        removeStatePanel(true);
         pending = {
           receipt: {
-            save_id: body.save_id, scope: body.scope, digest: body.digest, core: body.core,
+            save_id: body.save_id, scope: body.scope, digest: body.digest,
             lastsave: body.stamp, beforelastsave: body.lastsave,
           },
-          counts: body.counts,
-          scope: scope, base: base, branch: effectiveBranch, stamp: body.stamp,
+          counts: body.counts || coreCounts(body.core),
+          scope: { repo: effectiveRepo, branch: effectiveBranch },
+          base: base, branch: effectiveBranch, stamp: body.stamp,
           stamps: body.stamps, name: name, force: Boolean(force),
         };
         GM_setValue(pendingKey(storeKey), pending);
@@ -6076,52 +6496,7 @@
       }
     }
 
-    function chooseStateFile() {
-      var select = pagePicker();
-      if (!select) {
-        stateError("Direct write unavailable.", "Choose file", chooseStateFile, "file-api");
-        return;
-      }
-      select({
-        suggestedName: (function () {
-          var scope = stateScope(document);
-          return stateFileName(scope.repo || previewUiRepo || "", scope.branch, "", null);
-        })(),
-        types: [
-          {
-            description: "State file (NDJSON)",
-            accept: { "application/x-ndjson": [".ndjson"] },
-          },
-        ],
-      })
-        .then(function (handle) {
-          var scope = stateScope(document);
-          var repo = scope.repo || previewUiRepo || "";
-          var storeKey = stateScopeKey(repo, scope.branch);
-          var activeLastScope = repo ? GM_getValue(lastScopeKey(repo), "") : "";
-          return saveStateHandle(handle, fileKey(storeKey)).then(function () {
-            if (activeLastScope && activeLastScope !== storeKey) {
-              saveStateHandle(handle, fileKey(activeLastScope));
-            }
-            selected = handle;
-            selectedKey = storeKey;
-            GM_setValue(stampKey(storeKey), "");
-            GM_setValue(pendingKey(storeKey), null);
-            if (activeLastScope && activeLastScope !== storeKey) {
-              GM_setValue(stampKey(activeLastScope), "");
-              GM_setValue(pendingKey(activeLastScope), null);
-            }
-            GM_setValue(STATE_HINT_KEY, false);
-            fetchStateFile(true, false, true);
-          });
-        })
-        .catch(function () {
-          logEvent("state", "selector-closed", null, "debug");
-        });
-    }
-
     var menus = [];
-    chooseStateFileHook = chooseStateFile;
     forceSaveStateHook = function (manual) {
       fetchStateFile(manual !== false, true);
     };
@@ -6133,7 +6508,6 @@
       });
       menuRefresh();
     };
-    menuItem(menus, "State - choose the file", chooseStateFile);
     menuItem(menus, "State - force save", function () {
       fetchStateFile(true, true);
     });
@@ -6163,7 +6537,6 @@
       }, stateWatchMs(), HTTP_JITTER_MS);
     };
     return function () {
-      chooseStateFileHook = null;
       forceSaveStateHook = null;
       restartStateWatchHook = null;
       stopStateWatch();
@@ -7617,12 +7990,21 @@
     pullProxyBoard: pullProxyBoard,
     hydrateBoardFilesForTarget: hydrateBoardFilesForTarget,
     syncPreviewBoard: syncPreviewBoard,
+    computeBoardDiff: computeBoardDiff,
+    applyBoardDiff: applyBoardDiff,
+    computeStateDiff: computeStateDiff,
+    applyStateDiff: applyStateDiff,
     resetBoardProxyCache: function () {
       proxyBoardCache = null;
       proxyBoardRevision = 0;
       proxyBoardPullInFlight = null;
       lastProxyBoardPullAtMs = 0;
       hydratedBoardFilesBySid = {};
+      previewBoardPullByBase = {};
+      previewBoardPushBySid = {};
+      previewScopedPushByBase = {};
+      previewAutosavePullByBase = {};
+      proxyStateCacheByScope = {};
     },
     boardSessionId: boardSessionId,
     cleanWorkerId: cleanWorkerId,

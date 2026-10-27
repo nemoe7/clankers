@@ -3,12 +3,18 @@
 import base64
 import hashlib
 import json
-import os
 import re
-import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+
+from .sqlite_store import (
+  ProxySqliteEngine,
+  apply_board_diff,
+  compute_board_diff,
+  decompose_board_records,
+  recompose_board_records,
+)
 
 BOARD_SESSION_TTL_SECONDS = 180
 SESSION_SLUG_RE = re.compile(r"^[0-9a-f]{6,16}-([A-Za-z0-9._-]+)$", re.IGNORECASE)
@@ -1423,51 +1429,240 @@ def material_signature(board):
 
 
 class BoardStore:
-  """Persist cross-session board JSON and staged board attachments on disk."""
+  """Persist cross-session board rows and SHA-256 attachments in SQLite WAL."""
 
-  def __init__(self, directory, max_file_bytes=None):
+  def __init__(self, directory, max_file_bytes=None, engine=None):
     self.directory = Path(directory)
     self.files_dir = self.directory / "files"
     self.state_file = self.directory / "board.json"
     self.max_file_bytes = max_file_bytes
-    self.lock = threading.RLock()
+    self._owns_engine = engine is None
+    self.engine = (
+      engine
+      if isinstance(engine, ProxySqliteEngine)
+      else ProxySqliteEngine(self.directory)
+    )
+    self.lock = self.engine.lock
     self.revision = 0
+    self.min_rev = 1
     self.state = normalize_board(None)
     self.material_sig = material_signature(self.state)
     self._load()
 
+  def close(self):
+    if self._owns_engine:
+      self.engine.close()
+
+  def _get_meta_locked(self, key, default=""):
+    row = self.engine.conn.execute(
+      "SELECT value FROM board_meta WHERE key = ?",
+      (key,),
+    ).fetchone()
+    return row["value"] if row is not None else default
+
+  def _load_records_locked(self):
+    rows = self.engine.conn.execute(
+      "SELECT record_type, record_key, value_json, blob_sha256"
+      " FROM board_records WHERE deleted = 0"
+    ).fetchall()
+    records = {}
+    for row in rows:
+      decoded = self.engine.decode_json_cell(row["value_json"], row["blob_sha256"])
+      if decoded is not None:
+        records[(row["record_type"], row["record_key"])] = decoded
+    return records
+
   def _load(self):
     with self.lock:
-      if not self.state_file.is_file():
+      rev_raw = self._get_meta_locked("revision", "")
+      if rev_raw != "":
+        self.revision = max(0, int(rev_raw or 0))
+        self.min_rev = max(1, int(self._get_meta_locked("min_rev", "1") or 1))
+        records = self._load_records_locked()
+        self.state = normalize_board(
+          recompose_board_records(records) if records else None
+        )
+        self.material_sig = material_signature(self.state)
         return
+      self._migrate_legacy_locked()
+
+  def _migrate_legacy_locked(self):
+    migrated_rev = 0
+    migrated_board = None
+    if self.state_file.is_file():
       try:
         saved = json.loads(self.state_file.read_text(encoding="utf-8"))
+        if isinstance(saved, dict):
+          migrated_rev = max(1, int(saved.get("revision") or 1))
+          migrated_board = normalize_board(saved.get("board"))
       except (OSError, ValueError):
-        return
-      if not isinstance(saved, dict):
-        return
-      self.revision = max(0, int(saved.get("revision") or 0))
-      self.state = normalize_board(saved.get("board"))
-      self.material_sig = material_signature(self.state)
+        migrated_board = None
+    has_legacy_files = self.files_dir.is_dir() and any(self.files_dir.rglob("*"))
+    if migrated_board is None and not has_legacy_files:
+      return
+    if migrated_board is None:
+      migrated_board = normalize_board(None)
+      migrated_rev = 1
+    self.revision = migrated_rev
+    self.min_rev = migrated_rev
+    self.state = migrated_board
+    self.material_sig = material_signature(self.state)
+    stamp = now_iso()
+    records = decompose_board_records(self.state)
+    self.engine.conn.execute("BEGIN IMMEDIATE")
+    try:
+      for (rec_type, rec_key), val in records.items():
+        val_json, blob_sha = self.engine.encode_json_cell(val)
+        self.engine.conn.execute(
+          "INSERT OR REPLACE INTO board_records"
+          " (record_type, record_key, value_json, blob_sha256, deleted, rev, updated_at)"
+          " VALUES (?, ?, ?, ?, 0, ?, ?)",
+          (rec_type, rec_key, val_json, blob_sha, self.revision, stamp),
+        )
+      if self.files_dir.is_dir():
+        for candidate in sorted(self.files_dir.rglob("*")):
+          if not candidate.is_file() or candidate.name.endswith(".meta.json"):
+            continue
+          rel = candidate.relative_to(self.files_dir).parts
+          if len(rel) < 2:
+            continue
+          sid = board_session_id(rel[0])
+          clean_name = "/".join(rel[1:])
+          if not sid or not clean_name:
+            continue
+          try:
+            raw_bytes = candidate.read_bytes()
+          except OSError:
+            continue
+          encoding = "base64"
+          meta_path = candidate.with_name(f"{candidate.name}.meta.json")
+          if meta_path.is_file():
+            try:
+              saved_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+              if saved_meta.get("encoding") in ("utf-8", "base64"):
+                encoding = saved_meta["encoding"]
+            except (OSError, ValueError):
+              pass
+          digest, size = self.engine.put_blob_bytes(raw_bytes)
+          self.engine.conn.execute(
+            "INSERT OR REPLACE INTO board_files"
+            " (session_id, name, sha256, encoding, size, staged, rev, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+            (sid, clean_name, digest, encoding, size, self.revision, stamp),
+          )
+      self.engine.conn.execute(
+        "INSERT OR REPLACE INTO board_meta (key, value) VALUES ('revision', ?),"
+        " ('min_rev', ?), ('material_sig', ?)",
+        (str(self.revision), str(self.min_rev), self.material_sig),
+      )
+      self.engine.conn.execute("COMMIT")
+    except Exception:
+      self.engine.conn.execute("ROLLBACK")
+      raise
+    if self.state_file.is_file():
+      try:
+        self.state_file.replace(self.directory / "board.json.migrated")
+      except OSError:
+        pass
 
   def _persist_locked(self, next_state, passive=False):
     trimmed = normalize_board(next_state)
     next_sig = material_signature(trimmed)
     changed_material = next_sig != self.material_sig
-    if changed_material or (not passive and trimmed != self.state):
-      self.revision += 1
+    if not changed_material and (passive or trimmed == self.state):
+      self.state = trimmed
+      self.material_sig = next_sig
+      return self.revision, self.state
+    prev_state = self.state
+    next_rev = self.revision + 1
+    if self.revision == 0:
+      self.min_rev = 1
+    delta = compute_board_diff(prev_state, trimmed, self.revision, next_rev)
+    stamp = now_iso()
+    self.engine.conn.execute("BEGIN IMMEDIATE")
+    try:
+      for tomb in delta["tombstones"]:
+        self.engine.conn.execute(
+          "INSERT INTO board_records"
+          " (record_type, record_key, value_json, blob_sha256, deleted, rev, updated_at)"
+          " VALUES (?, ?, NULL, '', 1, ?, ?)"
+          " ON CONFLICT(record_type, record_key) DO UPDATE SET"
+          " value_json = NULL, blob_sha256 = '', deleted = 1,"
+          " rev = excluded.rev, updated_at = excluded.updated_at",
+          (tomb["type"], tomb["key"], next_rev, stamp),
+        )
+      for item in delta["upserts"]:
+        val_json, blob_sha = self.engine.encode_json_cell(item["value"])
+        self.engine.conn.execute(
+          "INSERT INTO board_records"
+          " (record_type, record_key, value_json, blob_sha256, deleted, rev, updated_at)"
+          " VALUES (?, ?, ?, ?, 0, ?, ?)"
+          " ON CONFLICT(record_type, record_key) DO UPDATE SET"
+          " value_json = excluded.value_json, blob_sha256 = excluded.blob_sha256,"
+          " deleted = 0, rev = excluded.rev, updated_at = excluded.updated_at",
+          (item["type"], item["key"], val_json, blob_sha, next_rev, stamp),
+        )
+      self.engine.conn.execute(
+        "INSERT OR REPLACE INTO board_meta (key, value) VALUES ('revision', ?),"
+        " ('min_rev', ?), ('material_sig', ?)",
+        (str(next_rev), str(self.min_rev), next_sig),
+      )
+      self.engine.conn.execute("COMMIT")
+    except Exception:
+      self.engine.conn.execute("ROLLBACK")
+      raise
+    self.revision = next_rev
     self.state = trimmed
     self.material_sig = next_sig
-    self.directory.mkdir(parents=True, exist_ok=True)
-    tmp_path = self.directory / f"board.{os.getpid()}.{threading.get_ident()}.tmp"
-    payload = json.dumps(
-      {"revision": self.revision, "board": self.state},
-      ensure_ascii=False,
-      separators=(",", ":"),
-    )
-    tmp_path.write_text(payload, encoding="utf-8")
-    os.replace(tmp_path, self.state_file)
     return self.revision, self.state
+
+  def _diff_since_locked(self, since_rev):
+    rows = self.engine.conn.execute(
+      "SELECT record_type, record_key, value_json, blob_sha256, deleted"
+      " FROM board_records WHERE rev > ?",
+      (since_rev,),
+    ).fetchall()
+    upserts = []
+    tombstones = []
+    for row in rows:
+      if row["deleted"]:
+        tombstones.append({"type": row["record_type"], "key": row["record_key"]})
+      else:
+        decoded = self.engine.decode_json_cell(row["value_json"], row["blob_sha256"])
+        if decoded is not None:
+          upserts.append(
+            {"type": row["record_type"], "key": row["record_key"], "value": decoded}
+          )
+    return {
+      "base_rev": int(since_rev),
+      "rev": self.revision,
+      "upserts": upserts,
+      "tombstones": tombstones,
+    }
+
+  def _load_client_cursor_locked(self, session_id):
+    row = self.engine.conn.execute(
+      "SELECT client_rev, board_json, blob_sha256 FROM board_client_cursors"
+      " WHERE session_id = ?",
+      (session_id,),
+    ).fetchone()
+    if row is None:
+      return None
+    board_obj = self.engine.decode_json_cell(row["board_json"], row["blob_sha256"])
+    if not isinstance(board_obj, dict):
+      return None
+    return int(row["client_rev"]), board_obj
+
+  def _save_client_cursor_locked(self, session_id, client_rev, board_obj):
+    if not session_id or not isinstance(board_obj, dict):
+      return
+    val_json, blob_sha = self.engine.encode_json_cell(board_obj)
+    self.engine.conn.execute(
+      "INSERT OR REPLACE INTO board_client_cursors"
+      " (session_id, client_rev, board_json, blob_sha256, updated_at)"
+      " VALUES (?, ?, ?, ?, ?)",
+      (session_id, int(client_rev), val_json, blob_sha, now_iso()),
+    )
 
   def _extract_entry_files_locked(self, entries, fallback_sid=""):
     cleaned = []
@@ -1488,40 +1683,61 @@ class BoardStore:
       cleaned.append(copy)
     return cleaned
 
-  def _file_target_locked(self, session_id, name):
+  def _validate_file_target_locked(self, session_id, name):
     sid = board_session_id(session_id)
     ok, meta, _, err = validate_board_file({"name": name}, self.max_file_bytes)
     if not sid:
       raise ValueError("missing session_id")
     if not ok or not meta:
       raise ValueError(err or "invalid-file-name")
-    base = (self.files_dir / sid).resolve()
-    target = (base / meta["name"]).resolve()
-    if base != target and base not in target.parents:
-      raise ValueError("invalid-file-name")
-    return sid, meta["name"], target
+    return sid, meta["name"]
 
   def _write_file_locked(self, session_id, name, raw_bytes, meta=None):
-    _, clean_name, target = self._file_target_locked(session_id, name)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(raw_bytes)
-    info = dict(
-      meta
-      or {
-        "name": clean_name,
-        "encoding": "base64",
-        "size": len(raw_bytes),
-        "sha256": hashlib.sha256(raw_bytes).hexdigest(),
-        "staged": True,
-      }
+    sid, clean_name = self._validate_file_target_locked(session_id, name)
+    digest, size = self.engine.put_blob_bytes(raw_bytes)
+    encoding = (
+      meta.get("encoding")
+      if isinstance(meta, dict) and meta.get("encoding") in ("utf-8", "base64")
+      else "base64"
     )
-    target.with_name(f"{target.name}.meta.json").write_text(
-      json.dumps(info, separators=(",", ":")), encoding="utf-8"
+    info = {
+      "name": clean_name,
+      "encoding": encoding,
+      "size": size,
+      "sha256": digest,
+      "staged": True,
+    }
+    self.engine.conn.execute(
+      "INSERT OR REPLACE INTO board_files"
+      " (session_id, name, sha256, encoding, size, staged, rev, updated_at)"
+      " VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+      (sid, clean_name, digest, encoding, size, max(1, self.revision), now_iso()),
     )
     return info
 
+  def _format_file_payload_locked(self, name, encoding, digest):
+    raw_bytes = self.engine.get_blob_bytes(digest)
+    if raw_bytes is None:
+      return None
+    enc = encoding if encoding in ("utf-8", "base64") else "base64"
+    if enc == "utf-8":
+      try:
+        content = raw_bytes.decode("utf-8")
+      except UnicodeDecodeError:
+        enc = "base64"
+        content = base64.b64encode(raw_bytes).decode("ascii")
+    else:
+      content = base64.b64encode(raw_bytes).decode("ascii")
+    return {
+      "name": name,
+      "encoding": enc,
+      "content": content,
+      "size": len(raw_bytes),
+      "sha256": digest,
+    }
+
   def put_file(self, session_id, file_obj):
-    """Validate and persist a board file attachment."""
+    """Validate and persist a board file attachment in SHA-256 blob storage."""
     ok, meta, raw_bytes, err = validate_board_file(file_obj, self.max_file_bytes)
     if not ok or not meta or raw_bytes is None:
       raise ValueError(err or "missing-file-content")
@@ -1534,83 +1750,76 @@ class BoardStore:
     if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
       raise ValueError("invalid-sha256")
     with self.lock:
-      if not self.files_dir.is_dir():
+      row = self.engine.conn.execute(
+        "SELECT session_id, name, encoding FROM board_files"
+        " WHERE sha256 = ? ORDER BY updated_at DESC LIMIT 1",
+        (digest,),
+      ).fetchone()
+      if row is None:
         return None
-      for meta_path in self.files_dir.rglob("*.meta.json"):
-        try:
-          saved_meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-          continue
-        if str(saved_meta.get("sha256") or "").lower() != digest:
-          continue
-        target = meta_path.with_name(meta_path.name[: -len(".meta.json")])
-        if not target.is_file():
-          continue
-        raw_bytes = target.read_bytes()
-        if hashlib.sha256(raw_bytes).hexdigest() != digest:
-          continue
-        encoding = (
-          saved_meta.get("encoding")
-          if saved_meta.get("encoding") in ("utf-8", "base64")
-          else "base64"
-        )
-        if encoding == "utf-8":
-          try:
-            content = raw_bytes.decode("utf-8")
-          except UnicodeDecodeError:
-            encoding = "base64"
-            content = base64.b64encode(raw_bytes).decode("ascii")
-        else:
-          content = base64.b64encode(raw_bytes).decode("ascii")
-        return {
-          "name": str(saved_meta.get("name") or target.name),
-          "encoding": encoding,
-          "content": content,
-          "size": len(raw_bytes),
-          "sha256": digest,
-        }
-      return None
+      payload = self._format_file_payload_locked(row["name"], row["encoding"], digest)
+      if payload is None:
+        return None
+      payload["session_id"] = row["session_id"]
+      return payload
 
   def get_file(self, session_id, name):
     """Read a staged board file attachment as descriptor with inline content."""
     with self.lock:
-      _, clean_name, target = self._file_target_locked(session_id, name)
-      if not target.is_file():
+      sid, clean_name = self._validate_file_target_locked(session_id, name)
+      row = self.engine.conn.execute(
+        "SELECT sha256, encoding FROM board_files WHERE session_id = ? AND name = ?",
+        (sid, clean_name),
+      ).fetchone()
+      if row is None:
         return None
-      raw_bytes = target.read_bytes()
-      meta_path = target.with_name(f"{target.name}.meta.json")
-      encoding = "base64"
-      if meta_path.is_file():
-        try:
-          saved_meta = json.loads(meta_path.read_text(encoding="utf-8"))
-          if saved_meta.get("encoding") in ("utf-8", "base64"):
-            encoding = saved_meta["encoding"]
-        except (OSError, ValueError):
-          pass
-      if encoding == "utf-8":
-        try:
-          content = raw_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-          encoding = "base64"
-          content = base64.b64encode(raw_bytes).decode("ascii")
-      else:
-        content = base64.b64encode(raw_bytes).decode("ascii")
-      return {
-        "name": clean_name,
-        "encoding": encoding,
-        "content": content,
-        "size": len(raw_bytes),
-        "sha256": hashlib.sha256(raw_bytes).hexdigest(),
-      }
+      return self._format_file_payload_locked(
+        clean_name, row["encoding"], row["sha256"]
+      )
 
-  def snapshot(self, since=None, session_id="", repo=""):
-    """Return full or unchanged board snapshot, plus optional target-scoped board."""
+  def _build_reply_locked(
+    self, rev, saved, target_sid="", target_repo="", reply_since=None, reply_mode="full"
+  ):
+    if reply_mode == "diff" and reply_since is not None:
+      if reply_since == rev:
+        return {"ok": True, "unchanged": True, "revision": rev, "mode": "diff"}
+      if self.min_rev <= reply_since < rev:
+        return {
+          "ok": True,
+          "unchanged": False,
+          "revision": rev,
+          "mode": "diff",
+          "diff": self._diff_since_locked(reply_since),
+        }
+    return {
+      "ok": True,
+      "unchanged": False,
+      "mode": "full",
+      "revision": rev,
+      "board": saved,
+      "scoped_board": scope_board_for_target(saved, target_sid, target_repo),
+    }
+
+  def snapshot(self, since=None, session_id="", repo="", mode="full"):
+    """Return full, unchanged, or incremental diff board snapshot."""
     with self.lock:
       if since is not None and since == self.revision:
         return {"ok": True, "unchanged": True, "revision": self.revision}
+      if mode == "diff" and since is not None and self.min_rev <= since < self.revision:
+        out = {
+          "ok": True,
+          "unchanged": False,
+          "revision": self.revision,
+          "mode": "diff",
+          "diff": self._diff_since_locked(since),
+        }
+        if session_id or repo:
+          out["scoped_board"] = scope_board_for_target(self.state, session_id, repo)
+        return out
       out = {
         "ok": True,
         "unchanged": False,
+        "mode": "full",
         "revision": self.revision,
         "board": self.state,
       }
@@ -1618,12 +1827,42 @@ class BoardStore:
         out["scoped_board"] = scope_board_for_target(self.state, session_id, repo)
       return out
 
-  def sync(self, preview_board, session_id="", repo="", passive=False):
-    """Merge a preview session board payload and return global plus scoped boards."""
+  def sync(
+    self,
+    preview_board=None,
+    session_id="",
+    repo="",
+    passive=False,
+    *,
+    board_diff=None,
+    client_rev=None,
+    reply_since=None,
+    reply_mode="full",
+  ):
+    """Merge a preview session board or diff and return full or diff reply."""
     with self.lock:
-      incoming = dict(preview_board) if isinstance(preview_board, dict) else {}
+      sid = board_session_id(session_id)
+      if board_diff is not None:
+        if not isinstance(board_diff, dict):
+          raise TypeError("board_diff must be an object")
+        base_rev = board_diff.get("base_rev")
+        next_client_rev = board_diff.get("rev")
+        if type(base_rev) is not int or type(next_client_rev) is not int:
+          raise TypeError("board_diff base_rev and rev must be integers")
+        cursor = self._load_client_cursor_locked(sid) if sid else None
+        if cursor is None or cursor[0] != base_rev:
+          return {
+            "ok": False,
+            "error": "stale-revision",
+            "need_full": True,
+            "revision": self.revision,
+          }
+        incoming = apply_board_diff(cursor[1], board_diff)
+        client_rev = next_client_rev
+      else:
+        incoming = dict(preview_board) if isinstance(preview_board, dict) else {}
       sid = board_session_id(
-        session_id or incoming.get("session_id") or incoming.get("branch") or ""
+        sid or incoming.get("session_id") or incoming.get("branch") or ""
       )
       if sid and not incoming.get("session_id"):
         incoming["session_id"] = sid
@@ -1631,19 +1870,23 @@ class BoardStore:
         incoming["repo"] = repo
       if isinstance(incoming.get("entries"), list):
         incoming["entries"] = self._extract_entry_files_locked(incoming["entries"], sid)
+      if sid and client_rev is not None:
+        self._save_client_cursor_locked(sid, int(client_rev), incoming)
       merged = merge_preview_board(self.state, incoming, passive=passive)
       rev, saved = self._persist_locked(merged, passive=passive)
-      return {
-        "ok": True,
-        "revision": rev,
-        "board": saved,
-        "scoped_board": scope_board_for_target(
-          saved, sid, repo or incoming.get("repo") or ""
-        ),
-      }
+      return self._build_reply_locked(
+        rev,
+        saved,
+        target_sid=sid,
+        target_repo=repo or incoming.get("repo") or "",
+        reply_since=reply_since,
+        reply_mode=reply_mode,
+      )
 
-  def apply(self, action, session_id="", repo=""):
-    """Apply an imperative board action and return global plus scoped boards."""
+  def apply(
+    self, action, session_id="", repo="", *, reply_since=None, reply_mode="full"
+  ):
+    """Apply an imperative board action and return full or diff reply."""
     with self.lock:
       act = dict(action) if isinstance(action, dict) else {}
       act_sid = board_session_id(
@@ -1671,11 +1914,11 @@ class BoardStore:
           "board": self.state,
         }
       rev, saved = self._persist_locked(updated, passive=passive)
-      return {
-        "ok": True,
-        "revision": rev,
-        "board": saved,
-        "scoped_board": scope_board_for_target(
-          saved, act_sid or session_id, repo or act.get("repo") or ""
-        ),
-      }
+      return self._build_reply_locked(
+        rev,
+        saved,
+        target_sid=act_sid or session_id,
+        target_repo=repo or act.get("repo") or "",
+        reply_since=reply_since,
+        reply_mode=reply_mode,
+      )

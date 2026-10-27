@@ -3,6 +3,7 @@
 import base64
 import contextlib
 import gzip
+import hashlib
 import http.client
 import importlib
 import io
@@ -1493,3 +1494,283 @@ def test_private_board_routes_accept_uncapped_script_sync_and_files(tmp_path):
     snap_board = json.loads(snap_raw)["board"]
     assert len(snap_board["entries"]) == 210
     assert len(snap_board["sessions"]) == 70
+
+
+def test_sqlite_wal_storage_legacy_migration_and_board_diff_sync(tmp_path):
+  import sqlite3
+
+  alpha = "alpha111-clankers"
+  beta = "beta2222-clankers"
+  headers = {"X-Master-Key": MASTER}
+  board_dir = tmp_path / "board"
+  files_dir = board_dir / "files" / alpha / "patches"
+  files_dir.mkdir(parents=True, exist_ok=True)
+  legacy_patch = "diff --git a/x.py b/x.py\n+migrated\n"
+  (files_dir / "legacy.patch").write_text(legacy_patch, encoding="utf-8")
+  (files_dir / "legacy.patch.meta.json").write_text(
+    json.dumps({"encoding": "utf-8"}), encoding="utf-8"
+  )
+  legacy_sha = hashlib.sha256(legacy_patch.encode("utf-8")).hexdigest()
+  (board_dir / "board.json").write_text(
+    json.dumps(
+      {
+        "revision": 7,
+        "board": {
+          "main_session_id": alpha,
+          "allowed_sessions": [alpha, beta],
+          "sessions": [{"session_id": alpha, "repo": "clankers", "status": "active"}],
+          "entries": [
+            {
+              "id": "e-leg",
+              "session_id": alpha,
+              "to": "*",
+              "repo": "clankers",
+              "at": "2026-10-27T01:00:00Z",
+              "text": "migrated entry",
+              "file": {
+                "name": "patches/legacy.patch",
+                "encoding": "utf-8",
+                "sha256": legacy_sha,
+                "size": len(legacy_patch.encode("utf-8")),
+              },
+            }
+          ],
+        },
+      }
+    ),
+    encoding="utf-8",
+  )
+
+  with backend(tmp_path) as handle:
+    db_path = tmp_path / "proxy.sqlite3"
+    assert db_path.is_file()
+    assert (board_dir / "board.json.migrated").is_file()
+    assert not (board_dir / "board.json").exists()
+    with sqlite3.connect(str(db_path)) as check_conn:
+      mode = check_conn.execute("PRAGMA journal_mode").fetchone()[0]
+      assert mode.lower() == "wal"
+
+    st, raw_snap = call(handle.port, "/v1/board", headers)
+    assert st == 200
+    snap = json.loads(raw_snap)
+    assert snap["revision"] == 7
+    assert snap["board"]["entries"][0]["id"] == "e-leg"
+
+    st_f, raw_f = call(handle.port, f"/v1/board/files?sha256={legacy_sha}", headers)
+    assert st_f == 200
+    assert json.loads(raw_f)["content"] == legacy_patch
+
+    # Unchanged diff poll at revision 7:
+    st_u, raw_u = call(handle.port, "/v1/board?since=7&mode=diff", headers)
+    assert st_u == 200
+    u_body = json.loads(raw_u)
+    assert u_body["unchanged"] is True
+    assert u_body["revision"] == 7
+
+    # Stale client_rev board_diff without prior cursor returns 409 need_full:
+    st_409, err_409, _ = post_json(
+      handle.port,
+      "/v1/board",
+      {
+        "action": "sync",
+        "session_id": alpha,
+        "repo": "clankers",
+        "board_diff": {"base_rev": 3, "rev": 4, "upserts": [], "tombstones": []},
+      },
+      headers,
+    )
+    assert st_409 == 409 and err_409["need_full"] is True
+
+    # Seed client cursor via full sync with client_rev=1, then push incremental board_diff:
+    base_member = {
+      "session_id": alpha,
+      "repo": "clankers",
+      "main_session_id": alpha,
+      "allowed_sessions": [alpha, beta],
+      "sessions": [{"session_id": alpha, "repo": "clankers", "status": "active"}],
+      "entries": snap["board"]["entries"],
+      "worker_tasks": {beta: [{"id": "t-a", "title": "First", "status": "upcoming"}]},
+    }
+    st_seed, seed_res, _ = post_json(
+      handle.port,
+      "/v1/board",
+      {
+        "action": "sync",
+        "session_id": alpha,
+        "repo": "clankers",
+        "client_rev": 1,
+        "board": base_member,
+      },
+      headers,
+    )
+    assert st_seed == 200
+    rev_after_seed = seed_res["revision"]
+
+    next_member = {
+      **base_member,
+      "entries": [
+        *base_member["entries"],
+        {
+          "id": "e-diff-2",
+          "session_id": alpha,
+          "to": beta,
+          "repo": "clankers",
+          "at": "2026-10-27T02:00:00Z",
+          "text": "delta post",
+        },
+      ],
+      "worker_tasks": {},
+    }
+    from arena_proxy.sqlite_store import apply_board_diff, compute_board_diff
+
+    member_diff = compute_board_diff(base_member, next_member, 1, 2)
+    st_diff, diff_res, _ = post_json(
+      handle.port,
+      "/v1/board",
+      {
+        "action": "sync",
+        "session_id": alpha,
+        "repo": "clankers",
+        "board_diff": member_diff,
+        "reply_since": rev_after_seed,
+        "reply_mode": "diff",
+      },
+      headers,
+    )
+    assert st_diff == 200
+    assert diff_res["mode"] == "diff"
+    reconstructed = apply_board_diff(seed_res["board"], diff_res["diff"])
+    assert any(e["id"] == "e-diff-2" for e in reconstructed["entries"])
+
+    # GET /v1/board?since=<rev_after_seed>&mode=diff returns the exact record diff:
+    st_pull, raw_pull = call(
+      handle.port, f"/v1/board?since={rev_after_seed}&mode=diff", headers
+    )
+    assert st_pull == 200
+    pull_body = json.loads(raw_pull)
+    assert pull_body["mode"] == "diff"
+    assert any(
+      u["type"] == "entry" and u["key"] == "e-diff-2"
+      for u in pull_body["diff"]["upserts"]
+    )
+
+
+def test_private_state_route_master_auth_diff_sync_and_ndjson_hydration(tmp_path):
+  headers = {"X-Master-Key": MASTER}
+  with backend(tmp_path) as handle:
+    # Omit /v1/state from /v1/ping and reject agent keys without X-Master-Key:
+    st_ping, raw_ping = call(handle.port, f"/v1/ping?key={KEY}")
+    assert st_ping == 200
+    ping_routes = json.loads(raw_ping)["routes"]
+    assert "/v1/state" not in ping_routes
+    assert "/v1/board" not in ping_routes
+
+    st_unauth, _ = call(handle.port, f"/v1/state?key={KEY}&repo=clankers")
+    assert st_unauth == 401
+
+    st_empty, raw_empty = call(
+      handle.port, "/v1/state?repo=clankers&branch=arena/11111111-clankers", headers
+    )
+    assert st_empty == 200
+    empty_body = json.loads(raw_empty)
+    assert empty_body["exists"] is False
+    assert empty_body["revision"] == 0
+
+    scope = {"repo": "clankers", "branch": "arena/11111111-clankers"}
+    core_v1 = [
+      {"id": "n-1", "text": "note one", "at": "2026-10-27T01:00:00Z"},
+      {"id": "t-1", "title": "Task one", "status": "upcoming"},
+      {"id": "rep-1", "markdown": "# Report\n\nBody\n"},
+    ]
+    digest_v1 = hashlib.sha256(json.dumps(core_v1).encode("utf-8")).hexdigest()
+    st_put1, put1, _ = post_json(
+      handle.port,
+      "/v1/state",
+      {
+        "action": "put",
+        "scope": scope,
+        "save_id": "11111111-1111-4111-8111-111111111111",
+        "digest": digest_v1,
+        "stamp": "2026-10-27T01:00:00Z",
+        "lastsave": "2026-10-27T01:00:00Z",
+        "beforelastsave": None,
+        "counts": {"notes": 1, "tasks": 1, "reports": 1, "answers": 0},
+        "core": core_v1,
+      },
+      headers,
+    )
+    assert st_put1 == 200 and put1["revision"] == 1
+
+    # Stale diff base_rev returns 409 need_full:
+    st_stale, stale_res, _ = post_json(
+      handle.port,
+      "/v1/state",
+      {
+        "action": "put",
+        "scope": scope,
+        "save_id": "22222222-2222-4222-8222-222222222222",
+        "digest": "x",
+        "diff": {"base_rev": 9, "rev": 10, "upserts": [], "tombstones": []},
+      },
+      headers,
+    )
+    assert st_stale == 409 and stale_res["need_full"] is True
+
+    # Incremental diff update (upsert n-2, delete t-1):
+    from arena_proxy.sqlite_store import apply_state_diff, compute_state_diff
+
+    core_v2 = [
+      {"id": "n-1", "text": "note one", "at": "2026-10-27T01:00:00Z"},
+      {"id": "n-2", "text": "note two", "at": "2026-10-27T02:00:00Z"},
+      {"id": "rep-1", "markdown": "# Report\n\nBody\n"},
+    ]
+    digest_v2 = hashlib.sha256(json.dumps(core_v2).encode("utf-8")).hexdigest()
+    state_diff = compute_state_diff(core_v1, core_v2, 1, 2)
+    assert len(state_diff["upserts"]) == 1 and state_diff["upserts"][0]["id"] == "n-2"
+    assert state_diff["tombstones"] == [{"group": "tasks", "key": "t-1"}]
+
+    st_put2, put2, _ = post_json(
+      handle.port,
+      "/v1/state",
+      {
+        "action": "put",
+        "scope": scope,
+        "save_id": "22222222-2222-4222-8222-222222222222",
+        "digest": digest_v2,
+        "stamp": "2026-10-27T02:00:00Z",
+        "lastsave": "2026-10-27T02:00:00Z",
+        "beforelastsave": "2026-10-27T01:00:00Z",
+        "counts": {"notes": 2, "tasks": 0, "reports": 1, "answers": 0},
+        "diff": state_diff,
+      },
+      headers,
+    )
+    assert st_put2 == 200 and put2["revision"] == 2
+
+    # Incremental GET /v1/state?since=1&mode=diff returns only the delta:
+    st_get_diff, raw_get_diff = call(
+      handle.port,
+      "/v1/state?repo=clankers&branch=arena/11111111-clankers&since=1&mode=diff",
+      headers,
+    )
+    assert st_get_diff == 200
+    get_diff_body = json.loads(raw_get_diff)
+    assert get_diff_body["mode"] == "diff"
+    rebuilt_v2 = apply_state_diff(core_v1, get_diff_body["diff"])
+    assert {r["id"] for r in rebuilt_v2} == {"n-1", "n-2", "rep-1"}
+
+    # Fallback repo lookup + include_text=1 hydrates NDJSON with history core records:
+    st_text, raw_text = call(
+      handle.port,
+      "/v1/state?repo=clankers&branch=arena/99999999-clankers&fallback_repo=1&include_text=1",
+      headers,
+    )
+    assert st_text == 200
+    text_body = json.loads(raw_text)
+    assert text_body["exists"] is True
+    lines = [
+      json.loads(line) for line in text_body["text"].splitlines() if line.strip()
+    ]
+    hist_rows = [row for row in lines if row.get("type") == "userscript-autosave"]
+    assert len(hist_rows) == 2
+    assert isinstance(hist_rows[-1]["core"], list) and len(hist_rows[-1]["core"]) == 3

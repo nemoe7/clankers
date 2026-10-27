@@ -38,9 +38,9 @@ const bundles = {
     // Every Arena entry leads with its module and carries no role word. A switch ends in (ON)/(OFF).
     moduleSwitch: true,
     offByDefault: ["transcript-trim"],
-    // The prompt fill owns the four proxy entries. The state download owns its three. The auto
+    // The prompt fill owns the four proxy entries. The state download owns its two. The auto
     // trim gates its interval line behind the switch alone.
-    extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 3, "tab-title": 1 },
+    extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 2, "tab-title": 1 },
     // The keep-rows plan, the trim cap and the trim-now press stay on the menu whatever
     // the switch says.
     alwaysMenus: { "transcript-trim": 3 },
@@ -208,7 +208,6 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Transcript - trim now",
       "Transcript - hide generation alerts (ON)",
       "State - download (ON)",
-      "State - choose the file",
       "State - force save",
       "State - reset-window overwrite (ON)",
       "Page - keep awake (ON)",
@@ -400,7 +399,6 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Transcript - hide generation alerts (ON)",
         "Transcript - auto trim interval 5 s",
         "State - download (ON)",
-        "State - choose the file",
         "State - force save",
         "State - reset-window overwrite (ON)",
         "Page - keep awake (ON)",
@@ -1615,23 +1613,49 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     context.self = context;
     saved.set("clankers-arena-state-hinted", true);
     saved.set("clankers-arena-show-settings-button", false);
+    saved.set("clankers-arena-feature-prompt-fill", false);
     vm.runInNewContext(source, context, { filename: "arena.user.js" });
+    assert.equal(menus.has("State - choose the file"), false, "browser file-picker menu command removed");
+    assert.equal(menus.has("State - force save"), true, "Force save menu command retained");
     const settle = () => new Promise(setImmediate);
     const digest = core => require("node:crypto").createHash("sha256").update(JSON.stringify(core)).digest("hex");
     const scope = { repo: "r", branch: "" };
     const core = [{ id: "n", text: "saved" }];
     const receiptKey = "clankers-arena-state-receipt-o.r";
     const pendingKey = "clankers-arena-state-pending-o.r";
-    const receipt = { save_id: "first", digest: digest(core), scope, lastsave: "t1", beforelastsave: null };
+    const receipt = {
+      save_id: "first",
+      digest: digest(core),
+      scope,
+      lastsave: "t1",
+      beforelastsave: null,
+      counts: { notes: 1, tasks: 0 },
+    };
     saved.set(receiptKey, receipt);
     const healthy = {
-      save_id: "first", scope, core, digest: digest(core), stamp: "t1",
-      lastsave: "t1", beforelastsave: null, text: core.map(JSON.stringify).join("\n") + "\n",
+      revision: 1,
+      unchanged: false,
+      mode: "full",
+      save_id: "first",
+      scope,
+      core,
+      digest: digest(core),
+      stamp: "t1",
+      counts: { notes: 1, tasks: 0 },
+      lastsave: "t1",
+      beforelastsave: null,
+      text: core.map(JSON.stringify).join("\n") + "\n",
     };
     const changedCore = [{ id: "n", text: "changed" }];
     const changed = {
-      ...healthy, save_id: "second", core: changedCore, digest: digest(changedCore),
-      stamp: "t2", lastsave: "t1", beforelastsave: null,
+      ...healthy,
+      revision: 2,
+      save_id: "second",
+      core: changedCore,
+      digest: digest(changedCore),
+      stamp: "t2",
+      lastsave: "t1",
+      beforelastsave: null,
       text: changedCore.map(JSON.stringify).join("\n") + "\n",
     };
     const panel = () => body.children.find(child => child.id === "clankers-state-panel") || null;
@@ -1647,277 +1671,187 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(requests.length, 1);
     await respond("GET", "/api/userscript-autosave", 200, healthy);
     assert.equal(panel(), null);
+
+    // Background 502 never shows #clankers-state-panel:
     tick();
+    const pollAfterSeed = requests.at(-1);
+    assert.match(pollAfterSeed.url, /\?since=1&mode=diff$/);
     await respond("GET", "/api/userscript-autosave", 502, null);
     assert.equal(panel(), null);
+
+    // Enable proxy host and master key so the next tick seeds /v1/board and syncs /v1/state:
+    saved.set("clankers-arena-proxy-host", "https://arena-proxy.example.ts.net");
+    saved.set("clankers-arena-proxy-master", "test-master-key");
     tick();
-    await respond("GET", "/api/userscript-autosave", 200, healthy);
+    await respond("GET", "/v1/board", 200, {
+      ok: true,
+      revision: 1,
+      board: { main_session_id: "", allowed_sessions: [], sessions: [], entries: [] },
+    });
+    await respond("GET", "/api/userscript-autosave", 200, { unchanged: true, mode: "diff", revision: 1, scope, save_id: "first", digest: healthy.digest, stamp: "t1", lastsave: "t1", beforelastsave: null, counts: { notes: 1, tasks: 0 } });
+    await respond("GET", "/v1/state", 200, {
+      ok: true,
+      exists: true,
+      revision: 1,
+      mode: "full",
+      scope,
+      save_id: "first",
+      digest: healthy.digest,
+      stamp: "t1",
+      lastsave: "t1",
+      beforelastsave: null,
+      counts: { notes: 1, tasks: 0 },
+      core,
+    });
     assert.equal(panel(), null);
 
-    const writes = [];
-    const writeAttempts = [];
-    let fileText = healthy.text;
-    let finishClose;
-    let failWrite = false;
-    let closeWait = new Promise(resolve => { finishClose = resolve; });
-    const handle = { name: "o.r.ndjson", getFile: async () => ({ text: async () => fileText }), createWritable: async () => ({
-      write: async text => { writeAttempts.push(text); if (failWrite) throw new Error("write failed"); writes.push(text); },
-      close: async () => { await closeWait; fileText = writes.at(-1); },
-    }) };
-    let availableHandle = handle;
-    context.indexedDB = { open() {
-      const opening = { result: { transaction: () => ({ objectStore: () => ({ get() {
-        const reading = { result: availableHandle };
-        queueMicrotask(() => reading.onsuccess());
-        return reading;
-      } }) }) } };
-      queueMicrotask(() => opening.onsuccess());
-      return opening;
-    } };
+    // URL move + missing branch blocks quiet save until Force save:
     iframe.src = "https://new-preview.example/";
     tick();
     await respond("GET", "/api/userscript-autosave", 200, changed);
+    await respond("GET", "/v1/state", 200, { ok: true, unchanged: true, exists: true, revision: 1 });
     assert.equal(panel(), null);
-    assert.deepEqual(writes, []);
+    assert.equal(saved.get(receiptKey).lastsave, "t1");
+
+    // Force save writes full snapshot to /v1/state before confirming receipt on :8000:
     menus.get("State - force save")();
     assert.equal(panel(), null);
     await respond("GET", "/api/userscript-autosave", 200, changed);
-    assert.equal(writes.length, 1, "the accepted move writes the server state");
-    assert.equal(requests.at(-1).url.endsWith("/userscript-autosave"), true, "no compare request");
-    assert.equal(saved.get(receiptKey).lastsave, "t1", "the receipt waits for the close");
-    finishClose();
-    await settle();
-    const confirm = requests.at(-1);
-    assert.equal(confirm.method, "POST");
-    assert.equal(new URL(confirm.url).pathname, "/api/userscript-autosave");
-    const sent = JSON.parse(confirm.data);
-    assert.equal(sent.digest, changed.digest);
-    assert.equal(sent.lastsave, "t2");
-    assert.equal(sent.beforelastsave, "t1");
-    await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: changed.save_id, digest: changed.digest });
-    assert.equal(writes.length, 1, "receipt retry does not rewrite the file");
+    await respond("GET", "/v1/state", 200, { ok: true, unchanged: true, exists: true, revision: 1 });
+    const putReq1 = requests.at(-1);
+    assert.equal(putReq1.method, "POST");
+    assert.equal(new URL(putReq1.url).pathname, "/v1/state");
+    assert.equal(putReq1.headers["X-Master-Key"], "test-master-key");
+    const putBody1 = JSON.parse(putReq1.data);
+    assert.ok(Array.isArray(putBody1.core), "Force save sends full core snapshot");
+    assert.equal(putBody1.diff, undefined);
+    assert.equal(saved.get(receiptKey).lastsave, "t1", "receipt waits until /v1/state write finishes");
+    await respond("POST", "/v1/state", 200, { ok: true, revision: 2, digest: changed.digest });
+    const confirm1 = requests.at(-1);
+    assert.equal(confirm1.method, "POST");
+    assert.equal(new URL(confirm1.url).pathname, "/api/userscript-autosave");
+    const sent1 = JSON.parse(confirm1.data);
+    assert.equal(sent1.digest, changed.digest);
+    assert.equal(sent1.lastsave, "t2");
+    assert.equal(sent1.beforelastsave, "t1");
+    await respond("POST", "/api/userscript-autosave", 201, {
+      confirmed: true,
+      save_id: changed.save_id,
+      digest: changed.digest,
+    });
     assert.equal(saved.get(receiptKey).lastsave, "t2");
     assert.equal(saved.get(receiptKey).beforelastsave, "t1");
     assert.equal(saved.get(pendingKey), null);
 
-    closeWait = Promise.resolve();
-    const synced = { ...changed, lastsave: "t2", beforelastsave: "t1" };
+    // 409 need_full on /v1/state falls back to full core snapshot automatically:
+    const coreV3 = [{ id: "n", text: "changed" }, { id: "n2", text: "added" }];
+    const snapV3 = {
+      revision: 3,
+      unchanged: false,
+      mode: "diff",
+      diff: { base_rev: 2, rev: 3, upserts: [{ id: "n2", text: "added" }], tombstones: [] },
+      save_id: "third",
+      scope,
+      digest: digest(coreV3),
+      stamp: "t3",
+      counts: { notes: 2, tasks: 0 },
+      lastsave: "t2",
+      beforelastsave: "t1",
+    };
     tick();
-    await respond("GET", "/api/userscript-autosave", 200, synced);
-    assert.equal(writes.length, 1, "an in-sync cycle with the same stamp writes nothing");
-    assert.equal(panel(), null);
-    for (const field of ["type", "kind"]) { // nonemo: NMO100
-      const validText = [...changedCore, { [field]: "userscript-autosave" }].map(JSON.stringify).join("\n") + "\n";
-      fileText = validText;
-      const beforeWrites = writes.slice();
-      const beforeReceipt = structuredClone(saved.get(receiptKey));
-      const unchangedAttempts = writeAttempts.slice();
-      tick();
-      await respond("GET", "/api/userscript-autosave", 200, synced);
-      assert.deepEqual(writeAttempts, unchangedAttempts);
-      assert.deepEqual(writes, beforeWrites);
-      assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
-
-      const next = { ...synced, core: healthy.core, digest: healthy.digest, text: healthy.text, stamp: "next" };
-      failWrite = true;
-      tick();
-      await respond("GET", "/api/userscript-autosave", 200, next);
-      assert.ok(writeAttempts.length > unchangedAttempts.length);
-      assert.deepEqual(writes, beforeWrites);
-      assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
-      assert.equal(saved.get(pendingKey), null);
-      assert.ok(panel(), "a failed quiet save shows an error toast");
-      assert.equal(
-        panel().children[0].textContent,
-        "The file could not be saved (Error). Choose the file again to retry.",
-      );
-      assert.deepEqual(
-        panel().children[1].children.map(button => button.textContent),
-        ["Choose file", "Cancel"],
-      );
-      panel().children[1].children[1].listeners.click();
-      assert.equal(panel(), null);
-      failWrite = false;
-
-      fileText = "{invalid";
-      const blockedAttempts = writeAttempts.slice();
-      tick();
-      await respond("GET", "/api/userscript-autosave", 200, next);
-      assert.deepEqual(writeAttempts, blockedAttempts);
-      assert.deepEqual(writes, beforeWrites);
-      assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
-      assert.equal(panel(), null);
-
-      fileText = validText;
-      const ahead = { ...synced, lastsave: "ahead", beforelastsave: synced.lastsave };
-      tick();
-      await respond("GET", "/api/userscript-autosave", 200, ahead);
-      assert.deepEqual(writeAttempts, blockedAttempts);
-      assert.deepEqual(writes, beforeWrites);
-      assert.deepEqual(structuredClone(saved.get(receiptKey)), beforeReceipt);
-      assert.equal(panel(), null);
-    }
-    fileText = changed.text;
-
-    const stale = { ...changed, save_id: "stale", stamp: "t9", lastsave: "t9", beforelastsave: "t2" };
-    tick();
-    await respond("GET", "/api/userscript-autosave", 200, stale);
-    assert.equal(panel(), null);
-    assert.equal(writes.length, 1);
-    const refusal = logs.map(args => args[1]).filter(data => data && data.code === "autosave-compare").at(-1);
-    assert.equal(refusal.detail, "saved t2/t1 server t9/t2 n1 t0 dn0 dt0", "the refusal names both stamp pairs");
-    menus.get("State - force save")();
-    assert.equal(panel(), null);
-    await respond("GET", "/api/userscript-autosave", 200, stale);
-    assert.equal(writes.length, 2, "the overwrite button runs force save");
-    await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: stale.save_id, digest: stale.digest });
-    assert.equal(saved.get(receiptKey).lastsave, "t9");
-    assert.equal(saved.get(receiptKey).beforelastsave, "t9");
-    tick();
-    await respond("GET", "/api/userscript-autosave", 200, {
-      ...stale, save_id: "after-force", stamp: "t10", lastsave: "t9", beforelastsave: "t9",
+    await respond("GET", "/api/userscript-autosave", 200, snapV3);
+    await respond("GET", "/v1/state", 200, { ok: true, unchanged: true, exists: true, revision: 2 });
+    assert.ok(JSON.parse(requests.at(-1).data).diff);
+    await respond("POST", "/v1/state", 409, { ok: false, error: "stale-revision", need_full: true });
+    const retryFull = JSON.parse(requests.at(-1).data);
+    assert.ok(Array.isArray(retryFull.core), "409 need_full retries immediately with full core");
+    await respond("POST", "/v1/state", 200, { ok: true, revision: 1, digest: snapV3.digest });
+    await respond("POST", "/api/userscript-autosave", 201, {
+      confirmed: true,
+      save_id: snapV3.save_id,
+      digest: snapV3.digest,
     });
-    assert.equal(writes.length, 2, "future autosaves pass after Force save");
+    assert.equal(saved.get(receiptKey).lastsave, "t3");
 
-    const diverged = { ...stale, save_id: "diverged", stamp: "t11", lastsave: "t8", beforelastsave: "t7" };
+    // Failed /v1/state write leaves pending receipt empty and offers Retry save:
+    const coreV4 = [...coreV3, { id: "n3", text: "fail-case" }];
+    const snapV4 = {
+      ...snapV3,
+      revision: 4,
+      mode: "full",
+      core: coreV4,
+      diff: undefined,
+      save_id: "fourth",
+      digest: digest(coreV4),
+      stamp: "t4",
+      lastsave: "t3",
+      beforelastsave: "t2",
+    };
     tick();
-    await respond("GET", "/api/userscript-autosave", 200, diverged);
-    assert.equal(panel(), null);
-    assert.equal(writes.length, 2);
-
-    failWrite = true;
-    menus.get("State - force save")();
-    await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "failed-write" });
-    assert.equal(saved.get(pendingKey), null, "a failed write does not create a pending receipt");
-    assert.ok(panel(), "a failed save shows the error toast offering Choose file");
-    assert.equal(
-      panel().children[0].textContent,
-      "The file could not be saved (Error). Choose the file again to retry.",
-    );
+    await respond("GET", "/api/userscript-autosave", 200, snapV4);
+    await respond("GET", "/v1/state", 200, { ok: true, unchanged: true, exists: true, revision: 1 });
+    await respond("POST", "/v1/state", 502, { ok: false, error: "http-502" });
+    assert.equal(saved.get(pendingKey), null, "failed proxy write creates no pending receipt");
+    assert.ok(panel(), "failed proxy write surfaces error toast");
+    assert.match(panel().children[0].textContent, /Proxy state sync failed \(POST 502\)\./);
     assert.deepEqual(
       panel().children[1].children.map(button => button.textContent),
-      ["Choose file", "Cancel"],
+      ["Retry save", "Cancel"],
     );
     panel().children[1].children[1].listeners.click();
     assert.equal(panel(), null);
-    failWrite = false;
 
-    availableHandle = null;
-    menus.get("State - force save")();
-    await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "link-only" });
-    assert.equal(linkClicks.length, 0, "never falls back to regular timestamped link downloads");
-    assert.equal(saved.get(pendingKey), null);
-    assert.ok(panel(), "missing handle shows toast offering Choose file instead of timestamped download");
-    assert.equal(panel().children[0].textContent, "No file selected.");
-    assert.deepEqual(
-      panel().children[1].children.map(button => button.textContent),
-      ["Choose file", "Cancel"],
-    );
-    panel().children[1].children[1].listeners.click();
+    // Diverged autosave-compare logs bounded detail, suppresses panel, and offers hydrated text:
+    const stale = {
+      ...snapV3,
+      revision: 5,
+      mode: "full",
+      core: coreV3,
+      diff: undefined,
+      save_id: "stale",
+      stamp: "t9",
+      lastsave: "t9",
+      beforelastsave: "t2",
+    };
+    tick();
+    await respond("GET", "/api/userscript-autosave", 200, stale);
+    await respond("GET", "/v1/state", 200, { ok: true, unchanged: true, exists: true, revision: 1 });
+    // Hydrated NDJSON pull for backup offer:
+    assert.match(requests.at(-1).url, /include_text=1/);
+    await respond("GET", "/v1/state", 200, {
+      ok: true,
+      exists: true,
+      revision: 1,
+      mode: "full",
+      scope,
+      core: coreV3,
+      text: coreV3.map(JSON.stringify).join("\n") + "\n",
+    });
+    await respond("POST", "/api/userscript-autosave/offer", 201, { offered: true, note_id: "b1" });
+    assert.equal(panel(), null);
+    const refusal = logs.map(args => args[1]).filter(data => data && data.code === "autosave-compare").at(-1);
+    assert.equal(refusal.detail, "saved t3/t2 server t9/t2 n2 t0 dn0 dt0", "the refusal names both stamp pairs");
 
+    // Force save without proxy configuration shows Settings toast and never downloads files:
+    saved.set("clankers-arena-proxy-host", "");
+    saved.set("clankers-arena-proxy-master", "");
     let downloadCalled = false;
     context.GM_download = () => { downloadCalled = true; };
     menus.get("State - force save")();
-    await respond("GET", "/api/userscript-autosave", 200, { ...stale, save_id: "manager-disabled" });
-    await settle();
-    assert.equal(downloadCalled, false, "never falls back to GM_download timestamped downloads");
-    assert.equal(linkClicks.length, 0);
-    assert.ok(panel(), "still offers Choose file when handle is missing");
-    panel().children[1].children[1].listeners.click();
-
-    saved.delete("clankers-arena-state-scope-o.r");
-    saved.delete(receiptKey);
-    saved.delete(pendingKey);
-    saved.set("clankers-arena-state-hinted", true);
-    availableHandle = null;
-    const downloadsBeforeUnlisted = linkClicks.length;
-    context.GM_download = undefined;
-    let pickerPromise;
-    context.showSaveFilePicker = () => pickerPromise;
-    tick();
-    await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-1", lastsave: null, beforelastsave: null });
-    assert.equal(panel(), null);
-    menus.get("State - force save")();
-    await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-1", lastsave: null, beforelastsave: null });
-    assert.equal(linkClicks.length, downloadsBeforeUnlisted, "Force save does not fall back to browser download when the file picker is available");
-    assert.ok(panel(), "Force save prompts for a file on a fresh unlisted repo");
-    assert.equal(panel().children[0].textContent, "No file selected.");
-    assert.deepEqual(panel().children[1].children.map(button => button.textContent), ["Choose file", "Cancel"]);
-    panel().children[1].children[1].listeners.click();
-
-    tick();
-    await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-2", lastsave: null, beforelastsave: null });
-    assert.equal(panel(), null);
-    pickerPromise = Promise.reject(Object.assign(new Error("cancelled"), { name: "AbortError" }));
-    menus.get("State - choose the file")();
-    await settle();
-    assert.equal(panel(), null);
-
-    fileText = "";
-    availableHandle = handle;
-    context.indexedDB = { open() {
-      const opening = { result: { transaction: () => ({ objectStore: () => ({
-        get() {
-          const reading = { result: availableHandle };
-          queueMicrotask(() => reading.onsuccess());
-          return reading;
-        },
-        put() {},
-      }) }) } };
-      queueMicrotask(() => opening.onsuccess());
-      return opening;
-    } };
-    pickerPromise = Promise.resolve(handle);
-    menus.get("State - choose the file")();
-    await settle();
-    await settle();
-    await respond("GET", "/api/userscript-autosave", 200, { ...healthy, save_id: "unlisted-saved", lastsave: null, beforelastsave: null });
-    await settle();
-    await respond("POST", "/api/userscript-autosave", 201, { confirmed: true, save_id: "unlisted-saved", digest: healthy.digest });
-    assert.equal(panel(), null, "a completed Choose file save clears the missing-branch warning");
-    assert.equal(saved.get("clankers-arena-state-scope-o.r"), "o.r");
-
-    menus.get("State - force save")();
-    await respond("GET", "/api/userscript-autosave", 200, {
-      ...healthy,
-      scope: { repo: "o/r", branch: "arena/293da56c-clankers" },
-      save_id: "unlisted-force-with-server-branch",
-    });
-    await settle();
-    await respond("POST", "/api/userscript-autosave", 201, {
-      confirmed: true,
-      save_id: "unlisted-force-with-server-branch",
-      digest: healthy.digest,
-    });
+    await respond("GET", "/api/userscript-autosave", 200, stale);
+    assert.equal(downloadCalled, false, "never falls back to GM_download");
+    assert.equal(linkClicks.length, 0, "never falls back to browser link downloads");
+    assert.ok(panel(), "manual Force save without proxy config shows Settings prompt");
     assert.equal(
-      panel(),
-      null,
-      "Force save reuses the chosen repo handle when DOM branch is empty",
+      panel().children[0].textContent,
+      "Configure proxy host and master key in Settings.",
     );
-
-    fileText = "existing-diverged-content\n";
-    pickerPromise = Promise.resolve(handle);
-    menus.get("State - choose the file")();
-    await settle();
-    await settle();
-    await respond("GET", "/api/userscript-autosave", 200, {
-      ...changed,
-      scope: { repo: "o/r", branch: "arena/293da56c-clankers" },
-      save_id: "choose-file-overwrites-existing",
-      lastsave: "other-stamp",
-      beforelastsave: "older-stamp",
-    });
-    await settle();
-    await respond("POST", "/api/userscript-autosave", 201, {
-      confirmed: true,
-      save_id: "choose-file-overwrites-existing",
-      digest: changed.digest,
-    });
-    assert.equal(
-      fileText,
-      changed.text,
-      "Choose file force-writes immediately even when the selected file has diverged content",
+    assert.deepEqual(
+      panel().children[1].children.map(button => button.textContent),
+      ["Settings", "Cancel"],
     );
+    panel().children[1].children[1].listeners.click();
+    assert.equal(panel(), null);
   });
 }
 
@@ -2005,14 +1939,19 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const { spawn } = require("node:child_process");
   test("autosave round-trips live preview HTTP responses and state import", async () => {
     const pyScript = `
-import importlib.util, json, os, subprocess, sys, tempfile, threading
+import importlib, importlib.util, json, os, subprocess, sys, tempfile, threading
 from contextlib import closing
 from pathlib import Path
+from types import SimpleNamespace
 
 root = Path(sys.argv[1])
 spec = importlib.util.spec_from_file_location("preview_mod", root / "skills/refs/arena-skill/scripts/preview.py")
 preview = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(preview)
+
+sys.path.insert(0, str(root / "skills/refs/arena-skill/arena-egress-proxy/scripts"))
+proxy_core = importlib.import_module("arena_proxy.core")
+proxy_transfers = importlib.import_module("arena_proxy.transfers")
 
 tmp = tempfile.TemporaryDirectory()
 repo = Path(tmp.name) / "r"
@@ -2030,9 +1969,31 @@ report_md.write_text("# Sample Report\\n\\nProceed? {#go}\\n- (x) Yes\\n- ( ) No
 store.publish("sample-report", "Sample Report", report_md)
 
 server = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
-thread = threading.Thread(target=server.serve_forever, daemon=True)
+thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
 thread.start()
-print(json.dumps({"base": f"http://127.0.0.1:{server.server_port}"}), flush=True)
+
+proxy_state_dir = Path(tmp.name) / "proxy-state"
+proxy_state_dir.mkdir()
+proxy_server = proxy_core.build_server(SimpleNamespace(
+  host="127.0.0.1",
+  port=0,
+  key="test-agent-key-0123456789",
+  master="test-master-key-0123456789",
+  token="",
+  api="http://127.0.0.1:9",
+  state_dir=str(proxy_state_dir),
+  fetch_cap=proxy_transfers.DEFAULT_FETCH_CAP,
+  stage_cap=proxy_transfers.DEFAULT_STAGE_CAP,
+  quiet_polls=True,
+  log_sink=lambda _line: None,
+))
+proxy_thread = threading.Thread(target=proxy_server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+proxy_thread.start()
+
+print(json.dumps({
+  "base": f"http://127.0.0.1:{server.server_port}",
+  "proxy_base": f"http://127.0.0.1:{proxy_server.server_address[1]}",
+}), flush=True)
 
 for raw in sys.stdin:
   cmd = json.loads(raw)
@@ -2095,6 +2056,7 @@ for raw in sys.stdin:
     visible_notes = [
       item["id"] for item in store.state()["notes"] if not item.get("quiet")
     ]
+    proxy_snap = proxy_server.state_store.get_state("r", "arena/11223344-r", include_text=True)
     print(json.dumps({
       "lastsave": snap["lastsave"],
       "beforelastsave": snap["beforelastsave"],
@@ -2102,6 +2064,8 @@ for raw in sys.stdin:
       "force": snap.get("force"),
       "backup_notes": backup_notes,
       "visible_notes": visible_notes,
+      "proxy_revision": proxy_snap.get("revision"),
+      "proxy_text": proxy_snap.get("text", ""),
     }), flush=True)
   elif op == "import":
     dest = Path(tmp.name) / "imported" / "r"
@@ -2115,14 +2079,19 @@ for raw in sys.stdin:
     with closing(fresh.connect()) as db:
       row = db.execute("SELECT source FROM reports WHERE id = ?", ("sample-report",)).fetchone()
     hist_lines = fresh.userscript_history()
+    fresh_snap = fresh.userscript_snapshot()
     print(json.dumps({
       "counts": counts,
       "report_source": row[0] if row else None,
       "history_count": len(hist_lines),
-      "lastsave": fresh.userscript_snapshot().get("lastsave"),
+      "lastsave": fresh_snap.get("lastsave"),
+      "beforelastsave": fresh_snap.get("beforelastsave"),
     }), flush=True)
   elif op == "quit":
+    proxy_server.shutdown()
+    proxy_server.server_close()
     server.shutdown()
+    server.server_close()
     tmp.cleanup()
     print(json.dumps({"ok": True}), flush=True)
     break
@@ -2152,22 +2121,13 @@ for raw in sys.stdin:
     };
 
     try {
-      const { base } = await nextMessage();
+      const { base, proxy_base: proxyBase } = await nextMessage();
       const source = fs.readFileSync(path.join(repoRoot, "userscripts/arena.user.js"), "utf8");
       const saved = new Map();
       const menus = new Map();
       const timers = [];
       let inFlight = [];
-      let fileText = "";
-      const writes = [];
-      const handle = {
-        name: "r-arena-11223344-r.ndjson",
-        getFile: async () => ({ text: async () => fileText }),
-        createWritable: async () => ({
-          write: async text => { writes.push(text); },
-          close: async () => { fileText = writes.at(-1); },
-        }),
-      };
+      const proxyWrites = [];
       const makeElement = tag => ({
         tagName: tag,
         children: [],
@@ -2231,7 +2191,11 @@ for raw in sys.stdin:
         GM_registerMenuCommand: (label, callback) => { menus.set(label, callback); return label; },
         GM_unregisterMenuCommand: label => { menus.delete(label); },
         GM_xmlhttpRequest: options => {
-          const p = fetch(options.url, {
+          const targetUrl = String(options.url || "").replace("https://arena-proxy.example.ts.net", proxyBase);
+          if ((options.method || "GET") === "POST" && targetUrl.includes("/v1/state")) {
+            proxyWrites.push(JSON.parse(options.data));
+          }
+          const p = fetch(targetUrl, {
             method: options.method || "GET",
             headers: options.headers || {},
             body: options.data,
@@ -2247,31 +2211,13 @@ for raw in sys.stdin:
         addEventListener: () => {},
         removeEventListener: () => {},
         matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-        showSaveFilePicker: () => Promise.resolve(handle),
-        indexedDB: {
-          open() {
-            const opening = {
-              result: {
-                transaction: () => ({
-                  objectStore: () => ({
-                    get() {
-                      const reading = { result: handle };
-                      queueMicrotask(() => reading.onsuccess());
-                      return reading;
-                    },
-                    put() {},
-                  }),
-                }),
-              },
-            };
-            queueMicrotask(() => opening.onsuccess());
-            return opening;
-          },
-        },
       };
       context.window = context;
       context.self = context;
       saved.set("clankers-arena-state-hinted", true);
+      saved.set("clankers-arena-feature-prompt-fill", false);
+      saved.set("clankers-arena-proxy-host", "https://arena-proxy.example.ts.net");
+      saved.set("clankers-arena-proxy-master", "test-master-key-0123456789");
       vm.runInNewContext(source, context, { filename: "arena.user.js" });
 
       const drain = async () => {
@@ -2287,31 +2233,33 @@ for raw in sys.stdin:
       const receiptKey = "clankers-arena-state-receipt-r-arena-11223344-r";
 
       await drain();
-      menus.get("State - choose the file")();
-      await drain();
-      assert.equal(writes.length, 1, "initial file selection writes and confirms the first snapshot");
+      assert.equal(proxyWrites.length, 1, "cold boot writes and confirms the first snapshot to /v1/state");
+      assert.ok(Array.isArray(proxyWrites[0].core), "first cold-boot write sends full core");
       const firstReceipt = structuredClone(saved.get(receiptKey));
       const firstServer = await callPy({ op: "inspect" });
       assert.ok(firstReceipt && firstReceipt.lastsave);
       assert.equal(firstReceipt.lastsave, firstServer.lastsave);
       assert.equal(firstReceipt.beforelastsave, null);
+      assert.equal(firstServer.proxy_revision, 1);
 
       await callPy({ op: "mutate" });
       tick();
       await drain();
-      assert.equal(writes.length, 2, "second autosave writes the mutated state");
+      assert.equal(proxyWrites.length, 2, "second autosave writes incremental diff to /v1/state");
+      assert.ok(proxyWrites[1].diff, "second autosave sends diff instead of full core");
       const secondReceipt = structuredClone(saved.get(receiptKey));
       const secondServer = await callPy({ op: "inspect" });
       assert.equal(secondReceipt.lastsave, secondServer.lastsave);
       assert.equal(secondReceipt.beforelastsave, firstReceipt.lastsave);
+      assert.equal(secondServer.proxy_revision, 2);
 
       await callPy({ op: "diverge" });
       tick();
       await drain();
-      assert.equal(writes.length, 2, "diverged server stamps block automatic overwrite");
+      assert.equal(proxyWrites.length, 2, "diverged server stamps block automatic overwrite");
       assert.equal(panel(), null);
       const divergedServer = await callPy({ op: "inspect" });
-      assert.equal(divergedServer.backup_notes.length, 1, "mismatch auto-uploads backup once to inbox");
+      assert.equal(divergedServer.backup_notes.length, 1, "mismatch auto-uploads hydrated backup once to inbox");
       assert.equal(divergedServer.backup_notes[0].quiet, 1, "backup note is non-user-visible");
       assert.equal(divergedServer.backup_notes[0].blocking, 1, "backup note requires agent ack");
       assert.equal(divergedServer.backup_notes[0].type, "state-backup");
@@ -2326,21 +2274,23 @@ for raw in sys.stdin:
 
       menus.get("State - force save")();
       await drain();
-      assert.equal(writes.length, 3, "Force save writes and re-synchronizes after divergence");
+      assert.equal(proxyWrites.length, 3, "Force save writes and re-synchronizes after divergence");
       assert.equal(panel(), null);
       const thirdReceipt = structuredClone(saved.get(receiptKey));
+      const thirdServer = await callPy({ op: "inspect" });
 
-      const imported = await callPy({ op: "import", text: fileText });
+      const imported = await callPy({ op: "import", text: thirdServer.proxy_text });
       assert.deepEqual(imported.counts, { notes: 3, tasks: 1, answers: 0, reports: 1 });
       assert.ok(imported.report_source && imported.report_source.endsWith("sample-report.md"));
       assert.equal(imported.history_count, 2);
-      assert.equal(imported.lastsave, thirdReceipt.beforelastsave);
+      assert.equal(imported.lastsave, thirdReceipt.lastsave);
+      assert.equal(imported.beforelastsave, thirdReceipt.beforelastsave);
 
       const clearedResp = await callPy({ op: "clear" });
       assert.equal(clearedResp.force, true, "clear_state sets force=true on userscript snapshot");
       tick();
       await drain();
-      assert.equal(writes.length, 4, "server-side force flag writes cleared state without mismatch prompt");
+      assert.equal(proxyWrites.length, 4, "server-side force flag writes cleared state without mismatch prompt");
       const afterClearServer = await callPy({ op: "inspect" });
       assert.equal(afterClearServer.force, false, "confirmation clears force flag");
 
@@ -2348,8 +2298,9 @@ for raw in sys.stdin:
       assert.equal(restoredResp.force, true, "restore_state sets force=true on userscript snapshot");
       tick();
       await drain();
-      assert.equal(writes.length, 5, "server-side force flag writes restored state without mismatch prompt");
-      assert.match(fileText, /third-note/);
+      assert.equal(proxyWrites.length, 5, "server-side force flag writes restored state without mismatch prompt");
+      const afterRestoreServer = await callPy({ op: "inspect" });
+      assert.match(afterRestoreServer.proxy_text, /third-note/);
     } finally {
       await callPy({ op: "quit" }).catch(() => {});
     }
@@ -2586,7 +2537,12 @@ for raw in sys.stdin:
 
     const allInputs = modalNode.querySelectorAll("input, select");
     const allButtons = modalNode.querySelectorAll("button");
-    for (const actionId of ["choose-state-file", "force-save", "trim-now", "post-key-now"]) {
+    assert.equal(
+      allButtons.some((btn) => btn.attrs["data-settings-action"] === "choose-state-file"),
+      false,
+      "settings modal omits removed choose-state-file action",
+    );
+    for (const actionId of ["force-save", "trim-now", "post-key-now"]) {
       assert.ok(
         allButtons.some((btn) => btn.attrs["data-settings-action"] === actionId),
         `settings modal exposes action button ${actionId}`,
@@ -4144,7 +4100,7 @@ for raw in sys.stdin:
             return;
           }
           if (req.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=")) {
-            const sinceRev = Number(req.url.split("since=")[1]);
+            const sinceRev = parseInt(req.url.split("since=")[1], 10);
             if (sinceRev < coldRev) {
               req.onload({ status: 200, responseText: JSON.stringify({ revision: coldRev, board: coldProxyBoard }) });
             } else {

@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import VERSION, github_api, output, transfers
 from .board import BoardStore
+from .sqlite_store import ProxySqliteEngine, StateStore
 from .store import Store
 
 API_CAP_BYTES = 1_000_000
@@ -26,7 +27,7 @@ PUBLIC_ROUTES = ("/v1/health",)
 MASTER_ROUTES = ("/v1/key",)
 # A hidden route answers by name and appears in no route list.
 HIDDEN_ROUTES = ("/v1/rotate",)
-PRIVATE_BOARD_ROUTES = ("/v1/board", "/v1/board/files")
+PRIVATE_BOARD_ROUTES = ("/v1/board", "/v1/board/files", "/v1/state")
 ROUTES = (
   "/v1/health",
   "/v1/ping",
@@ -108,6 +109,8 @@ class ExtensionServer(ThreadingHTTPServer):
     fetch_cap,
     stage_cap,
     board_store=None,
+    state_store=None,
+    sqlite_engine=None,
     quiet_polls=False,
     log_sink=None,
   ):
@@ -121,8 +124,19 @@ class ExtensionServer(ThreadingHTTPServer):
     self.fetch_cap = fetch_cap
     self.stage_cap = stage_cap
     self.board_store = board_store
+    self.state_store = state_store
+    self.sqlite_engine = sqlite_engine
     self.quiet_polls = bool(quiet_polls)
     self.log_sink = log_sink
+
+  def server_close(self):
+    try:
+      if self.board_store is not None and hasattr(self.board_store, "close"):
+        self.board_store.close()
+      if self.sqlite_engine is not None and hasattr(self.sqlite_engine, "close"):
+        self.sqlite_engine.close()
+    finally:
+      super().server_close()
 
 
 class ExtensionHandler(BaseHTTPRequestHandler):
@@ -752,6 +766,29 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       return None
     return board_store
 
+  def _check_state_master(self, params):
+    expected = getattr(self.server, "master_key", "")
+    state_store = getattr(self.server, "state_store", None)
+    board_store = getattr(self.server, "board_store", None)
+    if (
+      state_store is None and board_store is not None and hasattr(board_store, "engine")
+    ):
+      state_store = StateStore(board_store.engine)
+      self.server.state_store = state_store
+    if not expected or state_store is None:
+      self._log_detail = "unknown route"
+      self._send_json(404, {"error": "unknown route", "routes": list(ROUTES)})
+      return None
+    supplied = (
+      params.get("master", [""])[0].strip()
+      or self.headers.get("X-Master-Key", "").strip()
+    )
+    if not supplied or not hmac.compare_digest(supplied, expected):
+      self._log_detail = "wrong master key"
+      self._send_json(401, {"error": "wrong master key"})
+      return None
+    return state_store
+
   def _read_json_body(self):
     try:
       length = int(self.headers.get("Content-Length") or "0")
@@ -769,6 +806,58 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     return parsed
 
   def _board_get(self, route, params):
+    if route == "/v1/state":
+      state_store = self._check_state_master(params)
+      if state_store is None:
+        return
+      repo = params.get("repo", [""])[0].strip()
+      branch = params.get("branch", [""])[0].strip()
+      fallback_repo = _truthy_env(params.get("fallback_repo", [""])[0])
+      include_text = _truthy_env(params.get("include_text", [""])[0])
+      mode = params.get("mode", ["full"])[0].strip().lower() or "full"
+      since_raw = params.get("since", [""])[0].strip()
+      since = None
+      if since_raw:
+        try:
+          since = int(since_raw)
+        except ValueError:
+          self._log_detail = "since must be an integer"
+          self._send_json(400, {"error": "since must be an integer"})
+          return
+      try:
+        snap = state_store.get_state(
+          repo,
+          branch,
+          fallback_repo=fallback_repo,
+          since=since,
+          mode=mode,
+          include_text=include_text,
+        )
+      except (ValueError, TypeError) as error:
+        self._log_detail = str(error)
+        self._send_json(400, {"error": str(error)})
+        return
+      scope_label = f"{repo}/{branch}" if branch else repo
+      rev = snap.get("revision", 0)
+      if not snap.get("found"):
+        self._log_detail = f"no saved state for {scope_label}"
+      elif snap.get("unchanged"):
+        self._suppress_poll_log = bool(getattr(self.server, "quiet_polls", False))
+        self._log_detail = f"state unchanged at rev {rev} for {scope_label}"
+      elif snap.get("mode") == "diff":
+        diff = snap.get("diff") or {}
+        up_n = len(diff.get("upserts") or [])
+        del_n = len(diff.get("tombstones") or [])
+        self._log_detail = (
+          f"served state diff rev {rev} for {scope_label}"
+          f" ({up_n} upserts, {del_n} tombstones)"
+        )
+      else:
+        core_n = len(snap.get("core") or [])
+        self._log_detail = f"served state rev {rev} for {scope_label} ({core_n} rows)"
+      self._send_json(200, snap)
+      return
+
     board_store = self._check_board_master(params)
     if board_store is None:
       return
@@ -784,13 +873,24 @@ class ExtensionHandler(BaseHTTPRequestHandler):
           return
       session_id = params.get("session_id", [""])[0].strip()
       repo = params.get("repo", [""])[0].strip()
-      snap = board_store.snapshot(since=since, session_id=session_id, repo=repo)
+      snap_mode = params.get("mode", ["full"])[0].strip().lower() or "full"
+      snap = board_store.snapshot(
+        since=since, session_id=session_id, repo=repo, mode=snap_mode
+      )
       rev = snap.get("revision", 0)
       who = session_id or "anonymous"
       repo_note = f" ({repo})" if repo else ""
       if snap.get("unchanged"):
         self._suppress_poll_log = bool(getattr(self.server, "quiet_polls", False))
         self._log_detail = f"unchanged at rev {rev} for {who}{repo_note}"
+      elif snap.get("mode") == "diff":
+        diff = snap.get("diff") or {}
+        up_n = len(diff.get("upserts") or [])
+        del_n = len(diff.get("tombstones") or [])
+        self._log_detail = (
+          f"served diff rev {rev} to {who}{repo_note}"
+          f" ({up_n} upserts, {del_n} tombstones)"
+        )
       else:
         board = snap.get("scoped_board") or snap.get("board") or {}
         sessions = len(board.get("sessions") or [])
@@ -810,7 +910,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         found = board_store.get_file_by_sha256(sha256)
       else:
         found = board_store.get_file(session_id, name)
-    except ValueError as error:
+    except (ValueError, TypeError) as error:
       self._log_detail = str(error)
       self._send_json(400, {"error": str(error)})
       return
@@ -830,6 +930,36 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     self._send_json(200, {"ok": True, **found, "file": found})
 
   def _board_post(self, route, params):
+    if route == "/v1/state":
+      state_store = self._check_state_master(params)
+      if state_store is None:
+        return
+      payload = self._read_json_body()
+      try:
+        result = state_store.put_state(payload)
+      except (ValueError, TypeError) as error:
+        self._log_detail = str(error)
+        self._send_json(400, {"error": str(error)})
+        return
+      scope = result.get("scope") or {}
+      scope_label = (
+        f"{scope.get('repo')}/{scope.get('branch')}"
+        if scope.get("branch")
+        else str(scope.get("repo") or payload.get("repo") or "state")
+      )
+      rev = result.get("revision", 0)
+      if not result.get("ok") and result.get("need_full"):
+        self._log_detail = f"stale state diff for {scope_label} at rev {rev}"
+        self._send_json(409, result)
+        return
+      if result.get("unchanged"):
+        self._suppress_poll_log = bool(getattr(self.server, "quiet_polls", False))
+        self._log_detail = f"state unchanged for {scope_label} at rev {rev}"
+      else:
+        self._log_detail = f"saved state for {scope_label} -> rev {rev}"
+      self._send_json(200, result)
+      return
+
     board_store = self._check_board_master(params)
     if board_store is None:
       return
@@ -838,7 +968,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       session_id = str(payload.get("session_id") or "").strip()
       try:
         info = board_store.put_file(session_id, payload.get("file"))
-      except ValueError as error:
+      except (ValueError, TypeError) as error:
         self._log_detail = str(error)
         self._send_json(400, {"error": str(error)})
         return
@@ -854,15 +984,51 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     mode = str(payload.get("action") or payload.get("type") or "sync").strip().lower()
     session_id = str(payload.get("session_id") or "").strip()
     repo = str(payload.get("repo") or "").strip()
-    if mode in ("sync", "merge") and isinstance(payload.get("board"), dict):
+    reply_mode = str(payload.get("reply_mode") or "full").strip().lower() or "full"
+    reply_since = None
+    if payload.get("reply_since") is not None:
+      try:
+        reply_since = int(payload["reply_since"])
+      except (ValueError, TypeError):
+        self._log_detail = "reply_since must be an integer"
+        self._send_json(400, {"error": "reply_since must be an integer"})
+        return
+    if mode in ("sync", "merge") and (
+      isinstance(payload.get("board"), dict)
+      or isinstance(payload.get("board_diff"), dict)
+    ):
       passive = bool(payload.get("passive"))
+      client_rev = payload.get("client_rev")
+      if client_rev is not None:
+        try:
+          client_rev = int(client_rev)
+        except (ValueError, TypeError):
+          self._log_detail = "client_rev must be an integer"
+          self._send_json(400, {"error": "client_rev must be an integer"})
+          return
       before_rev = board_store.snapshot().get("revision", 0)
-      result = board_store.sync(
-        payload["board"],
-        session_id=session_id,
-        repo=repo,
-        passive=passive,
-      )
+      try:
+        result = board_store.sync(
+          payload.get("board"),
+          session_id=session_id,
+          repo=repo,
+          passive=passive,
+          board_diff=payload.get("board_diff"),
+          client_rev=client_rev,
+          reply_since=reply_since,
+          reply_mode=reply_mode,
+        )
+      except (ValueError, TypeError) as error:
+        self._log_detail = str(error)
+        self._send_json(400, {"error": str(error)})
+        return
+      if not result.get("ok") and result.get("need_full"):
+        who = session_id or "anonymous"
+        self._log_detail = (
+          f"stale board diff from {who} at rev {result.get('revision', before_rev)}"
+        )
+        self._send_json(409, result)
+        return
       after_rev = result.get("revision", before_rev)
       who = session_id or "anonymous"
       repo_note = f" ({repo})" if repo else ""
@@ -870,6 +1036,14 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         self._suppress_poll_log = bool(getattr(self.server, "quiet_polls", False))
         self._log_detail = (
           f"passive sync from {who}{repo_note} unchanged at rev {after_rev}"
+        )
+      elif result.get("mode") == "diff":
+        diff = result.get("diff") or {}
+        up_n = len(diff.get("upserts") or [])
+        del_n = len(diff.get("tombstones") or [])
+        self._log_detail = (
+          f"synced {who}{repo_note} -> rev {after_rev}"
+          f" ({up_n} upserts, {del_n} tombstones)"
         )
       else:
         board = result.get("board") or {}
@@ -892,7 +1066,13 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     )
     actor = str(action_body.get("session_id") or session_id or "caller").strip()
     target = str(action_body.get("target") or action_body.get("to") or "").strip()
-    result = board_store.apply(action_body, session_id=session_id, repo=repo)
+    result = board_store.apply(
+      action_body,
+      session_id=session_id,
+      repo=repo,
+      reply_since=reply_since,
+      reply_mode=reply_mode,
+    )
     if result.get("ok"):
       rev = result.get("revision", 0)
       target_note = f" targeting {target}" if target else ""
@@ -942,9 +1122,14 @@ class ExtensionHandler(BaseHTTPRequestHandler):
 
 
 def build_server(options):
-  """Wire the store, the board store, and the HTTP server from parsed options."""
+  """Wire the store, SQLite WAL board/state stores, and HTTP server."""
   store = Store(options.state_dir)
-  board_store = BoardStore(os.path.join(options.state_dir, "board"))
+  sqlite_engine = ProxySqliteEngine(options.state_dir)
+  board_store = BoardStore(
+    os.path.join(options.state_dir, "board"),
+    engine=sqlite_engine,
+  )
+  state_store = StateStore(sqlite_engine)
   return ExtensionServer(
     (options.host, options.port),
     agent_key=options.key,
@@ -955,6 +1140,8 @@ def build_server(options):
     fetch_cap=options.fetch_cap,
     stage_cap=options.stage_cap,
     board_store=board_store,
+    state_store=state_store,
+    sqlite_engine=sqlite_engine,
     quiet_polls=getattr(options, "quiet_polls", False),
     log_sink=getattr(options, "log_sink", None),
   )
