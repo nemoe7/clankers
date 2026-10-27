@@ -2937,15 +2937,32 @@ require("node:test").test("successful state saves clear stale failure notices", 
   assert.ok(panel, "a transient success message keeps its existing timeout");
 });
 
-require("node:test").test("multi-session board enforces proxy-only cache, Main Session role, 512 KB file cap, and target scoping", () => {
+require("node:test").test("multi-session board enforces proxy-only cache, Main Session role, uncapped script-to-proxy state, and target scoping", () => {
   const loaded = loadChecks("arena.user.js");
   const boardApi = loaded.checks.board;
   assert.equal(boardApi.boardSessionId("arena/main0001-clankers"), "main0001-clankers");
   assert.equal(boardApi.boardSessionId("work0002-clankers"), "work0002-clankers");
-  assert.equal(boardApi.MAX_BOARD_FILE_BYTES, 524288);
+  assert.equal(boardApi.MAX_BOARD_FILE_BYTES, undefined);
   assert.equal(boardApi.BOARD_KEY, undefined);
   assert.equal(boardApi.applyBoardAction, undefined);
   assert.equal(boardApi.mergePreviewBoard, undefined);
+
+  const manySessions = Array.from({ length: 70 }, (_, idx) => ({
+    session_id: `${String(idx + 1).padStart(8, "0")}-clankers`,
+    repo: "clankers",
+  }));
+  const manyEntries = Array.from({ length: 120 }, (_, idx) => ({
+    id: `p${idx}`,
+    session_id: "00000001-clankers",
+    text: `entry-${idx}`,
+  }));
+  const uncapped = boardApi.normalizeBoard({
+    allowed_sessions: manySessions.map((row) => row.session_id),
+    sessions: manySessions,
+    entries: manyEntries,
+  });
+  assert.equal(uncapped.sessions.length, 70);
+  assert.equal(uncapped.entries.length, 120);
 
   let state = boardApi.readGlobalBoard();
   assert.deepEqual([...state.allowed_sessions], []);

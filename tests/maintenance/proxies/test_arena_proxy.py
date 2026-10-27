@@ -1409,3 +1409,87 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
       repo_hint="clankers",
     )
     assert opted_otherrepo in {row["session_id"] for row in scoped_linked["sessions"]}
+
+
+def test_private_board_routes_accept_uncapped_script_sync_and_files(tmp_path):
+  alpha = "alpha111-clankers"
+  headers = {"X-Master-Key": MASTER}
+  big_file_text = "f" * (600 * 1024)
+  big_report_md = "r" * (2_200_000)
+  extra_sessions = [
+    {"session_id": f"{idx:08x}-clankers", "repo": "clankers", "status": "active"}
+    for idx in range(1, 70)
+  ]
+  extra_entries = [
+    {
+      "id": f"e-{idx}",
+      "session_id": alpha,
+      "to": "*",
+      "repo": "clankers",
+      "at": f"2026-10-27T09:{idx // 60:02d}:{idx % 60:02d}Z",
+      "text": "m" * 9_000,
+    }
+    for idx in range(210)
+  ]
+  extra_entries[0]["file"] = {
+    "name": "reports/large.txt",
+    "encoding": "utf-8",
+    "content": big_file_text,
+  }
+  sync_payload = {
+    "action": "sync",
+    "session_id": alpha,
+    "repo": "clankers",
+    "board": {
+      "session_id": alpha,
+      "repo": "clankers",
+      "main_session_id": alpha,
+      "allowed_sessions": [alpha, *(row["session_id"] for row in extra_sessions)],
+      "sessions": [
+        {"session_id": alpha, "repo": "clankers", "status": "active"},
+        *extra_sessions,
+      ],
+      "entries": extra_entries,
+      "worker_reports": {
+        alpha: [{"id": "big-rep", "title": "Big", "markdown": big_report_md}]
+      },
+    },
+  }
+  assert len(json.dumps(sync_payload).encode("utf-8")) > 4 * 1024 * 1024
+
+  with backend(tmp_path) as handle:
+    st, res, _ = post_json(handle.port, "/v1/board", sync_payload, headers)
+    assert st == 200 and res["ok"] is True
+    assert len(res["board"]["entries"]) == 210
+    assert len(res["board"]["sessions"]) == 70
+    assert len(res["board"]["worker_reports"][alpha][0]["markdown"]) == len(
+      big_report_md
+    )
+
+    st_file, file_res, _ = post_json(
+      handle.port,
+      "/v1/board/files",
+      {
+        "session_id": alpha,
+        "file": {
+          "name": "reports/direct-large.txt",
+          "encoding": "utf-8",
+          "content": big_file_text,
+        },
+      },
+      headers,
+    )
+    assert st_file == 200 and file_res["file"]["size"] == len(big_file_text)
+    st_get, raw_get = call(
+      handle.port,
+      f"/v1/board/files?session_id={alpha}&name=reports/direct-large.txt",
+      headers,
+    )
+    assert st_get == 200 and json.loads(raw_get)["file"]["content"] == big_file_text
+
+  with backend(tmp_path) as restarted:
+    st_snap, snap_raw = call(restarted.port, "/v1/board", headers)
+    assert st_snap == 200
+    snap_board = json.loads(snap_raw)["board"]
+    assert len(snap_board["entries"]) == 210
+    assert len(snap_board["sessions"]) == 70

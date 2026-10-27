@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.3
+// @name         Arena.ai | NemoUtils | v1.13.4
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.3
+// @version      1.13.4
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -26,7 +26,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.3";
+  var USERSCRIPT_VERSION = "1.13.4";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
 
   function userscriptVersion() {
@@ -389,8 +389,6 @@
   var PREVIEW_DRAWER_DEFAULT_PX = 1398;
   var PREVIEW_DRAWER_MIN_PX = 600;
   var PREVIEW_DRAWER_MAX_PX = 2400;
-  var MAX_BOARD_FILE_BYTES = 524288;
-  var MAX_BOARD_ENTRIES = 100;
   var GREEK_LETTER_NAMES = [
     "alpha", "beta", "gamma", "delta", "epsilon", "zeta",
     "eta", "theta", "iota", "kappa", "lambda", "mu",
@@ -7096,7 +7094,7 @@
         if (normK && !removedSet[normK] && cleanV) workerIds[normK] = cleanV;
       });
     }
-    var rawSessions = Array.isArray(data.sessions) ? data.sessions.slice(0, 64) : [];
+    var rawSessions = Array.isArray(data.sessions) ? data.sessions.slice() : [];
     for (var sIdx = 0; sIdx < rawSessions.length; sIdx += 1) {
       var sRow = rawSessions[sIdx];
       if (!sRow || typeof sRow !== "object") continue;
@@ -7276,36 +7274,13 @@
         }
       });
     }
-    var entries = Array.isArray(data.entries) ? data.entries.slice(-MAX_BOARD_ENTRIES) : [];
-    var taskOps = Array.isArray(data.task_ops) ? data.task_ops.slice(-MAX_BOARD_ENTRIES) : [];
+    var entries = Array.isArray(data.entries) ? data.entries.slice() : [];
+    var taskOps = Array.isArray(data.task_ops) ? data.task_ops.slice() : [];
     var rawReportOps = Array.isArray(data.report_ops) ? data.report_ops : [];
-    var decisionOps = [];
-    var ackOps = [];
+    var reportOps = [];
     for (var roIdx = 0; roIdx < rawReportOps.length; roIdx += 1) {
       var rOp = rawReportOps[roIdx];
-      if (!rOp || typeof rOp !== "object") continue;
-      var rOpKind = String(rOp.op || rOp.operation || "").trim().toLowerCase();
-      if (rOpKind === "entry-ack") ackOps.push(rOp);
-      else decisionOps.push(rOp);
-    }
-    var keptDecisions = decisionOps.slice(-MAX_BOARD_ENTRIES);
-    var ackBudget = Math.max(0, MAX_BOARD_ENTRIES - keptDecisions.length);
-    var ackCut = ackBudget > 0 ? Math.max(0, ackOps.length - ackBudget) : ackOps.length;
-    var decCut = Math.max(0, decisionOps.length - MAX_BOARD_ENTRIES);
-    var reportOps = [];
-    var seenAckIdx = 0;
-    var seenDecIdx = 0;
-    for (var roIdx2 = 0; roIdx2 < rawReportOps.length; roIdx2 += 1) {
-      var rOp2 = rawReportOps[roIdx2];
-      if (!rOp2 || typeof rOp2 !== "object") continue;
-      var rOpKind2 = String(rOp2.op || rOp2.operation || "").trim().toLowerCase();
-      if (rOpKind2 === "entry-ack") {
-        if (seenAckIdx >= ackCut) reportOps.push(rOp2);
-        seenAckIdx += 1;
-      } else {
-        if (seenDecIdx >= decCut) reportOps.push(rOp2);
-        seenDecIdx += 1;
-      }
+      if (rOp && typeof rOp === "object") reportOps.push(rOp);
     }
     var workerTasks = {};
     if (data.worker_tasks && typeof data.worker_tasks === "object" && !Array.isArray(data.worker_tasks)) {
@@ -7343,7 +7318,7 @@
     return {
       multi_repo: multiRepo,
       linked_repos: linkedRepos,
-      removed_sessions: removedList.slice(-MAX_BOARD_ENTRIES),
+      removed_sessions: removedList.slice(),
       worker_ids: workerIds,
       worker_tasks: workerTasks,
       task_ops: taskOps,
@@ -7637,7 +7612,6 @@
     BOARD_PROXY_MASTER_KEY: BOARD_PROXY_MASTER_KEY,
     BOARD_PROXY_POLL_MS: BOARD_PROXY_POLL_MS,
     BOARD_SESSION_TTL_SECONDS: BOARD_SESSION_TTL_SECONDS,
-    MAX_BOARD_FILE_BYTES: MAX_BOARD_FILE_BYTES,
     boardProxyConfig: boardProxyConfig,
     updateProxyBoardCache: updateProxyBoardCache,
     pullProxyBoard: pullProxyBoard,

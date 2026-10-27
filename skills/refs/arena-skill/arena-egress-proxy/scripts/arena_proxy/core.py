@@ -20,7 +20,6 @@ from .board import BoardStore
 from .store import Store
 
 API_CAP_BYTES = 1_000_000
-BOARD_BODY_CAP_BYTES = 4 * 1024 * 1024
 LOOPBACK_CALLERS = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
 PUBLIC_ROUTES = ("/v1/health",)
 # The key route carries its own master check instead of the agent key.
@@ -758,9 +757,8 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       length = int(self.headers.get("Content-Length") or "0")
     except ValueError:
       raise output.OutputError("invalid Content-Length") from None
-    if length < 0 or length > BOARD_BODY_CAP_BYTES:
-      self._log_detail = f"request body exceeded {BOARD_BODY_CAP_BYTES} B board limit"
-      raise transfers.TransferError(413, "request body exceeds board limit")
+    if length < 0:
+      raise output.OutputError("invalid Content-Length")
     raw = self.rfile.read(length) if length > 0 else b"{}"
     try:
       parsed = json.loads(raw.decode("utf-8"))

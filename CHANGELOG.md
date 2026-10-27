@@ -46,6 +46,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Remove script-to-proxy HTTP body, stored JSON, attachment, entry, and session caps on `/v1/board` and `/v1/board/files` while keeping preview and agent caps intact (`arena-egress-proxy/scripts/arena_proxy/`, `userscripts/arena.user.js`, `tests/`).
 - Tighten vertical `ul` and `ol` margins, `li` margins, and inside bullet-marker spacing in board posts and acknowledgement bodies (`assets/style.css`, `scripts/test_preview.py`).
 - Propagate manual owner and main-session report unpublishes across `worker_reports` and worker stores via `report_ops` (`assets/app.js`, `scripts/preview.py`, `scripts/client.test.cjs`, `scripts/test_preview.py`).
 - Halve the vertical gap under `.board-sender` and format rendered board sender labels as `@name:` (`assets/style.css`, `assets/app.js`, `scripts/client.test.cjs`).

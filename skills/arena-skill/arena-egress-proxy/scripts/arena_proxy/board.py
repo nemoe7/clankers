@@ -10,9 +10,6 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-MAX_BOARD_ENTRIES = 200
-MAX_BOARD_BYTES = 2 * 1024 * 1024
-MAX_BOARD_FILE_BYTES = 512 * 1024
 BOARD_SESSION_TTL_SECONDS = 180
 SESSION_SLUG_RE = re.compile(r"^[0-9a-f]{6,16}-([A-Za-z0-9._-]+)$", re.IGNORECASE)
 WORKER_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,5}$")
@@ -178,7 +175,7 @@ def apply_report_op_to_list(report_list, op):
   return items
 
 
-def validate_board_file(file_obj, max_bytes=MAX_BOARD_FILE_BYTES):
+def validate_board_file(file_obj, max_bytes=None):
   """Validate a board file descriptor and decode its bytes when content is present."""
   if not file_obj or not isinstance(file_obj, dict):
     return True, None, None, ""
@@ -193,7 +190,7 @@ def validate_board_file(file_obj, max_bytes=MAX_BOARD_FILE_BYTES):
     return False, None, None, "invalid-file-sha256"
   if "content" not in file_obj or file_obj.get("content") is None:
     size = int(file_obj.get("size") or 0)
-    if size < 0 or size > max_bytes:
+    if size < 0 or (max_bytes is not None and size > max_bytes):
       return False, None, None, "file-too-large"
     meta = {
       "name": clean_name,
@@ -212,7 +209,7 @@ def validate_board_file(file_obj, max_bytes=MAX_BOARD_FILE_BYTES):
     )
   except Exception:
     return False, None, None, "invalid-file-encoding"
-  if len(raw) > max_bytes:
+  if max_bytes is not None and len(raw) > max_bytes:
     return False, None, None, "file-too-large"
   digest = hashlib.sha256(raw).hexdigest()
   if sha256 and sha256 != digest:
@@ -269,7 +266,7 @@ def normalize_board(raw):
       if norm_k and norm_k not in removed_set and clean_v:
         worker_ids[norm_k] = clean_v
   raw_sessions = (
-    data.get("sessions")[:64] if isinstance(data.get("sessions"), list) else []
+    list(data.get("sessions")) if isinstance(data.get("sessions"), list) else []
   )
   for s_row in raw_sessions:
     if not isinstance(s_row, dict):
@@ -425,29 +422,17 @@ def normalize_board(raw):
       seen_linked.add(slug)
       linked_repos.append(slug)
   entries = (
-    [
-      dict(item)
-      for item in data.get("entries")[-MAX_BOARD_ENTRIES:]
-      if isinstance(item, dict)
-    ]
+    [dict(item) for item in data.get("entries") if isinstance(item, dict)]
     if isinstance(data.get("entries"), list)
     else []
   )
   task_ops = (
-    [
-      dict(item)
-      for item in data.get("task_ops")[-MAX_BOARD_ENTRIES:]
-      if isinstance(item, dict)
-    ]
+    [dict(item) for item in data.get("task_ops") if isinstance(item, dict)]
     if isinstance(data.get("task_ops"), list)
     else []
   )
   report_ops = (
-    [
-      dict(item)
-      for item in data.get("report_ops")[-MAX_BOARD_ENTRIES:]
-      if isinstance(item, dict)
-    ]
+    [dict(item) for item in data.get("report_ops") if isinstance(item, dict)]
     if isinstance(data.get("report_ops"), list)
     else []
   )
@@ -481,7 +466,7 @@ def normalize_board(raw):
   return {
     "multi_repo": multi_repo,
     "linked_repos": linked_repos,
-    "removed_sessions": removed_list[-MAX_BOARD_ENTRIES:],
+    "removed_sessions": removed_list,
     "worker_ids": worker_ids,
     "worker_tasks": worker_tasks,
     "task_ops": task_ops,
@@ -796,7 +781,7 @@ def merge_preview_board(global_board, preview_board, passive=False):
       seen_top.add(op_id)
     merged_tops.append(op)
   merged_tops.sort(key=lambda item: parse_stamp_ms(item.get("at")) or 0)
-  next_board["task_ops"] = merged_tops[-MAX_BOARD_ENTRIES:]
+  next_board["task_ops"] = merged_tops
 
   seen_rop = set()
   merged_rops = []
@@ -810,13 +795,7 @@ def merge_preview_board(global_board, preview_board, passive=False):
       seen_rop.add(op_id)
     merged_rops.append(op)
   merged_rops.sort(key=lambda item: parse_stamp_ms(item.get("at")) or 0)
-  rep_decisions = [op for op in merged_rops if str(op.get("op") or "") != "entry-ack"]
-  entry_acks = [op for op in merged_rops if str(op.get("op") or "") == "entry-ack"]
-  kept_decisions = rep_decisions[-MAX_BOARD_ENTRIES:]
-  ack_budget = max(0, MAX_BOARD_ENTRIES - len(kept_decisions))
-  combined_rops = [*kept_decisions, *entry_acks[-ack_budget:]]
-  combined_rops.sort(key=lambda item: parse_stamp_ms(item.get("at")) or 0)
-  next_board["report_ops"] = combined_rops
+  next_board["report_ops"] = merged_rops
 
   if can_author_links and incoming["allowed_sessions"]:
     ordered = []
@@ -1001,7 +980,7 @@ def merge_preview_board(global_board, preview_board, passive=False):
     ):
       target["ack_edited_seen_count"] = int(op.get("ack_edited_seen_count") or 0)
   merged_entries.sort(key=lambda item: parse_stamp_ms(item.get("at")) or 0)
-  next_board["entries"] = merged_entries[-MAX_BOARD_ENTRIES:]
+  next_board["entries"] = merged_entries
 
   for wake_k, wake_v in incoming["wakes"].items():
     if wake_k != preview_sid and wake_v:
@@ -1150,7 +1129,6 @@ def apply_board_action(board, action):
         "at": stamp,
       }
     )
-    next_board["task_ops"] = next_board["task_ops"][-MAX_BOARD_ENTRIES:]
     if target_worker in next_board["allowed_sessions"]:
       next_board["wakes"][target_worker] = op_id
     return True, "", normalize_board(next_board)
@@ -1202,7 +1180,6 @@ def apply_board_action(board, action):
         "at": stamp,
       }
     )
-    next_board["report_ops"] = next_board["report_ops"][-MAX_BOARD_ENTRIES:]
     if target_worker in next_board["allowed_sessions"]:
       next_board["wakes"][target_worker] = op_id
     return True, "", normalize_board(next_board)
@@ -1310,7 +1287,6 @@ def apply_board_action(board, action):
         "file": checked_file,
       }
     )
-    next_board["entries"] = next_board["entries"][-MAX_BOARD_ENTRIES:]
     return True, "", normalize_board(next_board)
   if action_type == "wake":
     if sid and sid not in next_board["allowed_sessions"]:
@@ -1449,7 +1425,7 @@ def material_signature(board):
 class BoardStore:
   """Persist cross-session board JSON and staged board attachments on disk."""
 
-  def __init__(self, directory, max_file_bytes=MAX_BOARD_FILE_BYTES):
+  def __init__(self, directory, max_file_bytes=None):
     self.directory = Path(directory)
     self.files_dir = self.directory / "files"
     self.state_file = self.directory / "board.json"
@@ -1476,11 +1452,6 @@ class BoardStore:
 
   def _persist_locked(self, next_state, passive=False):
     trimmed = normalize_board(next_state)
-    while (
-      len(trimmed["entries"]) > 1
-      and len(json.dumps(trimmed, ensure_ascii=False).encode("utf-8")) > MAX_BOARD_BYTES
-    ):
-      trimmed["entries"].pop(0)
     next_sig = material_signature(trimmed)
     changed_material = next_sig != self.material_sig
     if changed_material or (not passive and trimmed != self.state):
