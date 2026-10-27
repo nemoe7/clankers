@@ -428,7 +428,12 @@
   var syncPreviewDrawerLockHook = null;
   var previewUiRepo = "";
   var previewUiSessionId = "";
-  var localSessionReportsBySid = {};
+  var localSessionReportsBySid = Object.create(null);
+
+  function isSafeRecordKey(k) {
+    return typeof k === "string" && k.length > 0 &&
+      k !== "__proto__" && k !== "constructor" && k !== "prototype";
+  }
 
   function previewDrawerLockOn() {
     if (typeof GM_getValue !== "function") return true;
@@ -4799,9 +4804,9 @@
   function decomposeBoardRecords(board) {
     var data = board && typeof board === "object" ? board : {};
     var records = Object.create(null);
-    var meta = {};
+    var meta = Object.create(null);
     Object.keys(data).forEach(function (k) {
-      if (!BOARD_COLLECTION_KEYS_MAP[k]) meta[k] = data[k];
+      if (isSafeRecordKey(k) && !BOARD_COLLECTION_KEYS_MAP[k]) meta[k] = data[k];
     });
     records["meta\u0000scalars"] = { type: "meta", key: "scalars", value: meta };
     if (Array.isArray(data.sessions)) {
@@ -4835,7 +4840,7 @@
     if (data.worker_tasks && typeof data.worker_tasks === "object") {
       Object.keys(data.worker_tasks).forEach(function (sid) {
         var cleanSid = String(sid || "").trim();
-        if (cleanSid && Array.isArray(data.worker_tasks[sid])) {
+        if (isSafeRecordKey(cleanSid) && Array.isArray(data.worker_tasks[sid])) {
           records["worker_tasks\u0000" + cleanSid] = {
             type: "worker_tasks",
             key: cleanSid,
@@ -4847,7 +4852,7 @@
     if (data.worker_reports && typeof data.worker_reports === "object") {
       Object.keys(data.worker_reports).forEach(function (sid) {
         var cleanSid = String(sid || "").trim();
-        if (cleanSid && Array.isArray(data.worker_reports[sid])) {
+        if (isSafeRecordKey(cleanSid) && Array.isArray(data.worker_reports[sid])) {
           records["worker_reports\u0000" + cleanSid] = {
             type: "worker_reports",
             key: cleanSid,
@@ -4859,7 +4864,7 @@
     if (data.wakes && typeof data.wakes === "object") {
       Object.keys(data.wakes).forEach(function (sid) {
         var cleanSid = String(sid || "").trim();
-        if (cleanSid && data.wakes[sid]) {
+        if (isSafeRecordKey(cleanSid) && data.wakes[sid]) {
           records["wake\u0000" + cleanSid] = { type: "wake", key: cleanSid, value: data.wakes[sid] };
         }
       });
@@ -4872,21 +4877,21 @@
       multi_repo: false,
       linked_repos: [],
       removed_sessions: [],
-      worker_ids: {},
-      worker_tasks: {},
+      worker_ids: Object.create(null),
+      worker_tasks: Object.create(null),
       task_ops: [],
-      worker_reports: {},
+      worker_reports: Object.create(null),
       report_ops: [],
       allowed_sessions: [],
       main_session_id: "",
       sessions: [],
       entries: [],
-      wakes: {},
+      wakes: Object.create(null),
     };
     var metaEntry = records["meta\u0000scalars"];
     if (metaEntry && metaEntry.value && typeof metaEntry.value === "object") {
       Object.keys(metaEntry.value).forEach(function (k) {
-        out[k] = metaEntry.value[k];
+        if (isSafeRecordKey(k)) out[k] = metaEntry.value[k];
       });
     }
     Object.keys(records).forEach(function (pairKey) {
@@ -4900,11 +4905,11 @@
         out.task_ops.push(Object.assign({}, item.value));
       } else if (item.type === "report_op" && item.value && typeof item.value === "object") {
         out.report_ops.push(Object.assign({}, item.value));
-      } else if (item.type === "worker_tasks" && Array.isArray(item.value)) {
+      } else if (item.type === "worker_tasks" && isSafeRecordKey(item.key) && Array.isArray(item.value)) {
         out.worker_tasks[item.key] = item.value.slice();
-      } else if (item.type === "worker_reports" && Array.isArray(item.value)) {
+      } else if (item.type === "worker_reports" && isSafeRecordKey(item.key) && Array.isArray(item.value)) {
         out.worker_reports[item.key] = item.value.slice();
-      } else if (item.type === "wake" && item.value) {
+      } else if (item.type === "wake" && isSafeRecordKey(item.key) && item.value) {
         out.wakes[item.key] = item.value;
       }
     });
@@ -5227,12 +5232,12 @@
   var proxyBoardRevision = 0;
   var proxyBoardPullInFlight = null;
   var lastProxyBoardPullAtMs = 0;
-  var hydratedBoardFilesBySid = {};
-  var previewBoardPullByBase = {};
-  var previewBoardPushBySid = {};
-  var previewScopedPushByBase = {};
-  var previewAutosavePullByBase = {};
-  var proxyStateCacheByScope = {};
+  var hydratedBoardFilesBySid = new Set();
+  var previewBoardPullByBase = new Map();
+  var previewBoardPushBySid = new Map();
+  var previewScopedPushByBase = new Map();
+  var previewAutosavePullByBase = new Map();
+  var proxyStateCacheByScope = new Map();
 
   function normalizeBoardProxyHost(raw) {
     var host = String(raw || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
@@ -5353,7 +5358,7 @@
       return Promise.resolve({ board: scopedBoard, keys: [] });
     }
     var neededItems = [];
-    var seenSha = {};
+    var seenSha = new Set();
     var deliveredKeys = [];
     scopedBoard.entries.forEach(function (entry) {
       if (!entry || typeof entry !== "object" || !entry.file || typeof entry.file !== "object") return;
@@ -5364,17 +5369,17 @@
       if (entryTo && entryTo !== "*" && entryTo !== targetSid) return;
       if (senderSid === targetSid) return;
       var hKey = targetSid + ":" + String(entry.id || "") + ":" + sha;
-      if (hydratedBoardFilesBySid[hKey]) return;
+      if (hydratedBoardFilesBySid.has(hKey)) return;
       deliveredKeys.push(hKey);
-      if (!seenSha[sha]) {
-        seenSha[sha] = true;
+      if (!seenSha.has(sha)) {
+        seenSha.add(sha);
         neededItems.push({ sha: sha, sid: senderSid, name: String(entry.file.name || "") });
       }
     });
     if (!neededItems.length) {
       return Promise.resolve({ board: scopedBoard, keys: [] });
     }
-    var fetchedBySha = {};
+    var fetchedBySha = new Map();
     return Promise.all(neededItems.map(function (item) {
       var q = "sha256=" + encodeURIComponent(item.sha);
       if (item.sid && item.name) {
@@ -5385,26 +5390,26 @@
           ? (res.body.file && typeof res.body.file.content === "string" ? res.body.file.content : res.body.content)
           : null;
         if (typeof fileContent === "string") {
-          fetchedBySha[item.sha] = fileContent;
+          fetchedBySha.set(item.sha, fileContent);
         }
       });
     })).then(function () {
       var hydratedEntries = scopedBoard.entries.map(function (entry) {
         if (!entry || typeof entry !== "object" || !entry.file || typeof entry.file !== "object") return entry;
         var sha = String(entry.file.sha256 || "").trim().toLowerCase();
-        if (!sha || entry.file.content || fetchedBySha[sha] === undefined) return entry;
+        if (!sha || entry.file.content || !fetchedBySha.has(sha)) return entry;
         var entryTo = String(entry.to || "");
         if (entryTo && entryTo !== "*" && entryTo !== targetSid) return entry;
         if (boardSessionId(entry.session_id || "") === targetSid) return entry;
         var hKey = targetSid + ":" + String(entry.id || "") + ":" + sha;
-        if (hydratedBoardFilesBySid[hKey]) return entry;
+        if (hydratedBoardFilesBySid.has(hKey)) return entry;
         return Object.assign({}, entry, {
-          file: Object.assign({}, entry.file, { content: fetchedBySha[sha] }),
+          file: Object.assign({}, entry.file, { content: fetchedBySha.get(sha) }),
         });
       });
       var confirmedKeys = deliveredKeys.filter(function (k) {
         var shaPart = k.slice(k.lastIndexOf(":") + 1);
-        return fetchedBySha[shaPart] !== undefined;
+        return fetchedBySha.has(shaPart);
       });
       return {
         board: Object.assign({}, scopedBoard, { entries: hydratedEntries }),
@@ -5418,7 +5423,7 @@
     var docScope = doc ? stateScope(doc) : { repo: "", branch: "" };
     var selfSid = boardSessionId(previewUiSessionId || docScope.branch || "");
     if (
-      selfSid &&
+      isSafeRecordKey(selfSid) &&
       Array.isArray(localSessionReportsBySid[selfSid]) &&
       boardHasWaitingReportFor(normalized, selfSid)
     ) {
@@ -5479,7 +5484,7 @@
       if (sid) {
         try { GM_setValue("clankers-arena-preview-base-" + sid, base); } catch (err) {}
       }
-      if (sid && body && body.worker_reports && Array.isArray(body.worker_reports[sid])) {
+      if (isSafeRecordKey(sid) && body && body.worker_reports && Array.isArray(body.worker_reports[sid])) {
         localSessionReportsBySid[sid] = body.worker_reports[sid].slice();
         if (typeof syncTitleNowHook === "function") syncTitleNowHook();
       }
@@ -5504,9 +5509,9 @@
       });
     }
     function postConsolidatedOnce(boardToSend, hydratedKeys, sid) {
-      var pullCur = previewBoardPullByBase[base];
+      var pullCur = previewBoardPullByBase.get(base);
       var supportsPreviewDiff = Boolean(pullCur && pullCur.rev > 0);
-      var scopedCur = supportsPreviewDiff ? previewScopedPushByBase[base] : null;
+      var scopedCur = supportsPreviewDiff ? previewScopedPushByBase.get(base) : null;
       var syncPayload = (scopedCur && scopedCur.board)
         ? {
           action: "sync",
@@ -5517,15 +5522,15 @@
           : { action: "sync", board: boardToSend });
       function finishConsolidated(answer, nextPushRev) {
         if (answer && answer.status === 200 && answer.body) {
-          hydratedKeys.forEach(function (k) { hydratedBoardFilesBySid[k] = true; });
+          hydratedKeys.forEach(function (k) { hydratedBoardFilesBySid.add(k); });
           if (supportsPreviewDiff) {
-            previewScopedPushByBase[base] = { rev: nextPushRev, board: boardToSend };
+            previewScopedPushByBase.set(base, { rev: nextPushRev, board: boardToSend });
           }
           if (typeof answer.body.revision === "number" && answer.body.sessions) {
-            previewBoardPullByBase[base] = {
+            previewBoardPullByBase.set(base, {
               rev: Number(answer.body.revision),
               board: answer.body,
-            };
+            });
           }
           recordMemberMetadata(answer.body, sid);
           return answer;
@@ -5538,7 +5543,7 @@
           answer &&
           (answer.status === 409 || (answer.body && answer.body.need_full))
         ) {
-          previewScopedPushByBase[base] = null;
+          previewScopedPushByBase.delete(base);
           return stateJson(base + "/api/board", {
             action: "sync",
             board: boardToSend,
@@ -5558,7 +5563,7 @@
         return postConsolidatedOnce(hydrated.board, hydrated.keys, targetSid);
       });
     }
-    var memberPullCur = previewBoardPullByBase[base];
+    var memberPullCur = previewBoardPullByBase.get(base);
     var memberGetUrl = (memberPullCur && memberPullCur.rev > 0 && memberPullCur.board)
       ? (base + "/api/board?since=" + String(memberPullCur.rev) + "&mode=diff")
       : (base + "/api/board");
@@ -5571,30 +5576,33 @@
       if (rawMemberBody.unchanged && memberPullCur && memberPullCur.board) {
         memberBody = memberPullCur.board;
         if (typeof rawMemberBody.revision === "number") {
-          memberPullCur.rev = Number(rawMemberBody.revision);
+          previewBoardPullByBase.set(base, {
+            rev: Number(rawMemberBody.revision),
+            board: memberBody,
+          });
         }
       } else if (rawMemberBody.mode === "diff" && rawMemberBody.diff && memberPullCur && memberPullCur.board) {
         memberBody = applyBoardDiff(memberPullCur.board, rawMemberBody.diff);
-        previewBoardPullByBase[base] = {
+        previewBoardPullByBase.set(base, {
           rev: Number(rawMemberBody.revision) || (memberPullCur.rev + 1),
           board: memberBody,
-        };
+        });
       } else {
         memberBody = rawMemberBody.board && typeof rawMemberBody.board === "object"
           ? rawMemberBody.board
           : rawMemberBody;
         if (typeof rawMemberBody.revision === "number" && rawMemberBody.revision > 0) {
-          previewBoardPullByBase[base] = {
+          previewBoardPullByBase.set(base, {
             rev: Number(rawMemberBody.revision),
             board: memberBody,
-          };
+          });
         } else {
-          delete previewBoardPullByBase[base];
+          previewBoardPullByBase.delete(base);
         }
       }
       var memberSid = recordMemberMetadata(memberBody, targetSid);
       var memberRepo = cleanBoardRepo(memberBody.repo || targetRepo || "", memberSid);
-      var proxyPushCur = memberSid ? previewBoardPushBySid[memberSid] : null;
+      var proxyPushCur = memberSid ? previewBoardPushBySid.get(memberSid) : null;
       var proxySyncReq = (proxyPushCur && proxyPushCur.board)
         ? {
           action: "sync",
@@ -5620,7 +5628,7 @@
             syncRes &&
             (syncRes.status === 409 || (syncRes.body && syncRes.body.need_full))
           ) {
-            if (memberSid) delete previewBoardPushBySid[memberSid];
+            if (memberSid) previewBoardPushBySid.delete(memberSid);
             proxyPushCur = null;
             return proxyBoardJson("/v1/board", {
               action: "sync",
@@ -5631,16 +5639,16 @@
               passive: passive,
             }).then(function (retryRes) {
               if (memberSid && retryRes && retryRes.status === 200) {
-                previewBoardPushBySid[memberSid] = { rev: 1, board: memberBody };
+                previewBoardPushBySid.set(memberSid, { rev: 1, board: memberBody });
               }
               return retryRes;
             });
           }
           if (memberSid && syncRes && syncRes.status === 200) {
-            previewBoardPushBySid[memberSid] = {
+            previewBoardPushBySid.set(memberSid, {
               rev: proxyPushCur ? proxyPushCur.rev + 1 : 1,
               board: memberBody,
-            };
+            });
           }
           return syncRes;
         });
@@ -6158,7 +6166,7 @@
     }
 
     async function pullPreviewAutosave(base, force) {
-      var cur = !force ? previewAutosavePullByBase[base] : null;
+      var cur = !force ? previewAutosavePullByBase.get(base) : null;
       var url = (cur && cur.rev > 0 && Array.isArray(cur.core))
         ? (base + "/api/userscript-autosave?since=" + String(cur.rev) + "&mode=diff")
         : (base + "/api/userscript-autosave");
@@ -6171,24 +6179,24 @@
           : (rawBody.diff ? applyStateDiff(cur.core, rawBody.diff) : null);
         if (Array.isArray(nextCore)) {
           var nextRev = Number(rawBody.revision) || cur.rev;
-          previewAutosavePullByBase[base] = { rev: nextRev, core: nextCore };
+          previewAutosavePullByBase.set(base, { rev: nextRev, core: nextCore });
           return {
             status: 200,
             failure: null,
             body: Object.assign({}, rawBody, { core: nextCore }),
           };
         }
-        delete previewAutosavePullByBase[base];
+        previewAutosavePullByBase.delete(base);
         return pullPreviewAutosave(base, true);
       }
       if (Array.isArray(rawBody.core)) {
         if (typeof rawBody.revision === "number" && rawBody.revision > 0) {
-          previewAutosavePullByBase[base] = {
+          previewAutosavePullByBase.set(base, {
             rev: Number(rawBody.revision),
             core: rawBody.core,
-          };
+          });
         } else {
-          delete previewAutosavePullByBase[base];
+          previewAutosavePullByBase.delete(base);
         }
       }
       return answer;
@@ -6196,20 +6204,23 @@
 
     async function pullProxyStateSnapshot(repo, branch, force) {
       var scopeId = stateScopeKey(repo, branch);
-      var cached = !force ? proxyStateCacheByScope[scopeId] : null;
+      var cached = !force ? proxyStateCacheByScope.get(scopeId) : null;
       var query = "?repo=" + encodeURIComponent(repo || "") +
         "&branch=" + encodeURIComponent(branch || "") +
         "&fallback_repo=1" +
         (cached && cached.rev > 0 ? ("&since=" + String(cached.rev) + "&mode=diff") : "");
       var res = await proxyBoardJson("/v1/state" + query);
       if (!res || res.status !== 200 || !res.body || res.body.ok === false) {
-        delete proxyStateCacheByScope[scopeId];
+        proxyStateCacheByScope.delete(scopeId);
         return { ok: false, res: res, snap: null };
       }
       var rb = res.body;
       if (rb.unchanged && cached) {
-        if (typeof rb.revision === "number" && rb.revision > 0) cached.rev = Number(rb.revision);
-        return { ok: true, res: res, snap: cached };
+        var unchangedSnap = (typeof rb.revision === "number" && rb.revision > 0)
+          ? Object.assign({}, cached, { rev: Number(rb.revision) })
+          : cached;
+        proxyStateCacheByScope.set(scopeId, unchangedSnap);
+        return { ok: true, res: res, snap: unchangedSnap };
       }
       if (rb.mode === "diff" && rb.diff && cached && Array.isArray(cached.core)) {
         var mergedCore = applyStateDiff(cached.core, rb.diff);
@@ -6226,7 +6237,7 @@
           core: mergedCore,
           text: "",
         };
-        proxyStateCacheByScope[scopeId] = updatedSnap;
+        proxyStateCacheByScope.set(scopeId, updatedSnap);
         return { ok: true, res: res, snap: updatedSnap };
       }
       if (rb.exists) {
@@ -6244,10 +6255,10 @@
           core: fullCore,
           text: typeof rb.text === "string" ? rb.text : "",
         };
-        proxyStateCacheByScope[scopeId] = fullSnap;
+        proxyStateCacheByScope.set(scopeId, fullSnap);
         return { ok: true, res: res, snap: fullSnap };
       }
-      delete proxyStateCacheByScope[scopeId];
+      proxyStateCacheByScope.delete(scopeId);
       return {
         ok: true,
         res: res,
@@ -6284,14 +6295,14 @@
         putRes &&
         (putRes.status === 409 || (putRes.body && putRes.body.need_full))
       ) {
-        delete proxyStateCacheByScope[scopeId];
+        proxyStateCacheByScope.delete(scopeId);
         putRes = await proxyBoardJson("/v1/state", Object.assign({}, baseFields, {
           core: body.core,
           history: Array.isArray(body.history) ? body.history : undefined,
         }));
       }
       if (putRes && putRes.status === 200 && putRes.body && putRes.body.ok !== false) {
-        proxyStateCacheByScope[scopeId] = {
+        proxyStateCacheByScope.set(scopeId, {
           exists: true,
           rev: Number(putRes.body.revision) || ((prevSnap && prevSnap.rev ? prevSnap.rev : 0) + 1),
           scope: targetScope,
@@ -6303,7 +6314,7 @@
           counts: body.counts || coreCounts(body.core),
           core: body.core,
           text: "",
-        };
+        });
       }
       return putRes;
     }
@@ -7952,11 +7963,12 @@
   function boardHasWaitingReportFor(board, sessionId, localReportsMap) {
     var normalized = normalizeBoard(board);
     var sid = boardSessionId(sessionId);
-    if (!sid || isBoardWorkerSession(normalized, sid)) return false;
+    if (!isSafeRecordKey(sid) || isBoardWorkerSession(normalized, sid)) return false;
     var map = localReportsMap && typeof localReportsMap === "object" ? localReportsMap : localSessionReportsBySid;
-    var ownReports = Array.isArray(map[sid])
+    var hasLocal = Object.prototype.hasOwnProperty.call(map, sid) && Array.isArray(map[sid]);
+    var ownReports = hasLocal
       ? map[sid].slice()
-      : (normalized.worker_reports && Array.isArray(normalized.worker_reports[sid]) ? normalized.worker_reports[sid].slice() : []);
+      : (normalized.worker_reports && Object.prototype.hasOwnProperty.call(normalized.worker_reports, sid) && Array.isArray(normalized.worker_reports[sid]) ? normalized.worker_reports[sid].slice() : []);
     if (Array.isArray(normalized.report_ops)) {
       for (var ro = 0; ro < normalized.report_ops.length; ro += 1) {
         var op = normalized.report_ops[ro];
@@ -7999,12 +8011,12 @@
       proxyBoardRevision = 0;
       proxyBoardPullInFlight = null;
       lastProxyBoardPullAtMs = 0;
-      hydratedBoardFilesBySid = {};
-      previewBoardPullByBase = {};
-      previewBoardPushBySid = {};
-      previewScopedPushByBase = {};
-      previewAutosavePullByBase = {};
-      proxyStateCacheByScope = {};
+      hydratedBoardFilesBySid.clear();
+      previewBoardPullByBase.clear();
+      previewBoardPushBySid.clear();
+      previewScopedPushByBase.clear();
+      previewAutosavePullByBase.clear();
+      proxyStateCacheByScope.clear();
     },
     boardSessionId: boardSessionId,
     cleanWorkerId: cleanWorkerId,

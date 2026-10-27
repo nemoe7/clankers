@@ -9,6 +9,7 @@
 - Detect open preview drawers by preview-specific controls (`button[aria-label="Close preview"]`, `iframe[title^="App preview"]`), NEVER by `button[aria-label="Collapse workspace sidebar"]` alone (`256px` `Workspace card views` sidebar keeps that button when the preview is closed).
 - Lock width on both the outer (`div.absolute.bottom-0.end-0.top-0.z-10.overflow-clip`) and inner (`> div`) preview drawer containers.
 - Keep `/v1/state` on `arena-egress-proxy` as the sole userscript state backend with zero `showSaveFilePicker`, IndexedDB file handles, or browser downloads. Render `#clankers-state-panel` only on failed `/v1/state` requests (`Retry save`) or missing proxy configuration on manual force saves (`Settings` via `openSettingsModalHook`).
+- Store dynamic cursor, state, and file-hydration maps in `Map`/`Set` (never plain `{}` bracket lookups or in-place `cached.rev = ...` mutations) so CodeQL `js/prototype-polluting-assignment` never triggers on message or HTTP keys.
 - Sync `/api/userscript-autosave` and `/v1/state` via `computeStateDiff` and `applyStateDiff` cursors. Fall back to full snapshots on reset or `409`, and fetch `?include_text=1` for mismatch backup offers.
 - In `chipRepo`, NEVER return a lone `SESSION_BRANCH_RE` (`arena/<hash>-<repo>`) chip as the repository slug when `hits === 1`; return `repo` only so `detectRepo` falls through to `titleRepo`.
 - Cache `lastPreviewBase` and `clankers-arena-preview-base-<sid>` so `Force save` and `syncPreviewBoardHook` reach `:8000` with closed drawers.

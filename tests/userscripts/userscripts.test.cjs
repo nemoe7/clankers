@@ -4160,6 +4160,21 @@ for raw in sys.stdin:
         coldCalls.some(c => c.method === "POST" && c.url === "https://8000-beta.e2b.app/api/board"),
         "revision delta on /v1/board immediately delivers wake to member POST /api/board",
       );
+      const patchedProto = boardApi.applyBoardDiff(
+        { allowed_sessions: ["alpha111-clankers"], sessions: [], entries: [] },
+        {
+          base_rev: 1,
+          rev: 2,
+          upserts: [
+            { type: "meta", key: "scalars", value: JSON.parse('{"__proto__":{"polluted":true},"multi_repo":true}') },
+            { type: "wake", key: "__proto__", value: { reason: "polluted" } },
+          ],
+          tombstones: [],
+        },
+      );
+      assert.strictEqual(({}).polluted, undefined, "applyBoardDiff never pollutes Object.prototype");
+      assert.strictEqual(patchedProto.multi_repo, true);
+      assert.strictEqual(Object.prototype.hasOwnProperty.call(patchedProto.wakes, "__proto__"), false);
     });
 
     test("skill HTTP calls to sbx-*.arena.site apply randomized jitter while non-skill URLs run immediately", async () => {
