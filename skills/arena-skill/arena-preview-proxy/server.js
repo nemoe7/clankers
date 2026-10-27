@@ -109,7 +109,7 @@ function sendJson(res, status, payload, cors = false) {
   if (cors) {
     headers['access-control-allow-origin'] = '*';
     headers['access-control-allow-methods'] = 'GET, POST, OPTIONS';
-    headers['access-control-allow-headers'] = 'content-type';
+    headers['access-control-allow-headers'] = 'content-type, x-clankers-userscript-version';
     headers['access-control-allow-private-network'] = 'true';
   }
   res.writeHead(status, headers);
@@ -121,7 +121,7 @@ function serveRecent(req, res) {
     res.writeHead(204, {
       'access-control-allow-origin': '*',
       'access-control-allow-methods': 'GET, POST, OPTIONS',
-      'access-control-allow-headers': 'content-type',
+      'access-control-allow-headers': 'content-type, x-clankers-userscript-version',
       'access-control-allow-private-network': 'true',
       'cache-control': 'no-store'
     });

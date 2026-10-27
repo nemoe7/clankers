@@ -744,3 +744,11 @@ def test_pwa_recent_endpoint_accepts_posted_previews_and_merges_into_chooser():
     "https://sbx-port8000.arena.site": "clankers - Steering",
     "https://sbx-port3000.arena.site": "clankers - Web App",
   }
+
+
+def test_recent_options_allows_userscript_version_header():
+  src = SERVER.read_text(encoding="utf-8")
+  assert (
+    "'access-control-allow-headers': 'content-type, x-clankers-userscript-version'"
+    in src
+  )

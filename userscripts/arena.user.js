@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.1
+// @name         Arena.ai | NemoUtils | v1.13.2
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.1
+// @version      1.13.2
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -27,7 +27,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.1";
+  var USERSCRIPT_VERSION = "1.13.2";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
 
   function userscriptVersion() {
@@ -892,21 +892,23 @@
       var rawHeader = previewHeaderRaw(doc);
       if (isUnavailablePreviewName(rawHeader)) return [];
       var domName = isUnavailablePreviewName(rawHeader) ? "" : rawHeader;
+      var docScope = stateScope(doc);
       var uiRepo = String(
-        reportedRepo !== undefined ? reportedRepo : previewUiRepo || "",
+        reportedRepo !== undefined ? reportedRepo : (previewUiRepo || docScope.repo || ""),
       ).trim();
       var sid = boardSessionId(
         reportedSessionId !== undefined
           ? reportedSessionId
-          : (previewUiSessionId || stateBranch(doc) || ""),
+          : (previewUiSessionId || docScope.branch || ""),
       );
       var board = readGlobalBoard();
       var hasMain = Boolean(board && board.main_session_id);
       if (sid && hasMain && boardRoleFor(board, sid) === "worker") {
         return [];
       }
-      var steeringBase = previewBase(doc);
-      var steeringRoot = steeringBase ? steeringBase + "/" : "";
+      var steeringBase = previewBase(doc) || lastPreviewBase || "";
+      var steeringOrigin = steeringBase ? (/^https:\/\/[^/]+/i.exec(steeringBase) || [""])[0] : "";
+      var steeringRoot = steeringOrigin ? steeringOrigin + "/" : "";
       var frames = doc.querySelectorAll("iframe");
       var links = doc.querySelectorAll("a");
       var nodes = [];
@@ -941,9 +943,9 @@
         if (seen[root]) continue;
         seen[root] = true;
         var isSteeringFrame = Boolean(
-          (uiRepo && (!steeringRoot || root === steeringRoot)) ||
           (steeringRoot && root === steeringRoot) ||
-          /\s-\sSteering$/i.test(domName),
+          /\s-\sSteering$/i.test(domName) ||
+          (reportedRepo !== undefined && uiRepo && !steeringRoot && !domName),
         );
         if (isSteeringFrame && hasMain && !sid && reportedSessionId === undefined) {
           continue;
@@ -1040,7 +1042,7 @@
       return Math.max(0, dueMs - nowMs);
     }
 
-    function requestJson(method, url, payload, done) {
+    function requestJson(method, url, payload, done, includeVersion) {
       function finish(text, status) {
         var body = null;
         try {
@@ -1051,10 +1053,13 @@
         done(status, body);
       }
       if (typeof GM_xmlhttpRequest === "function") {
+        var reqHeaders = includeVersion === false
+          ? (payload ? { "Content-Type": "application/json" } : {})
+          : previewHeaders(Boolean(payload));
         GM_xmlhttpRequest({
           method: method,
           url: url,
-          headers: previewHeaders(Boolean(payload)),
+          headers: reqHeaders,
           data: payload ? JSON.stringify(payload) : undefined,
           onload: function (answer) {
             finish(answer.responseText, answer.status);
@@ -1152,6 +1157,7 @@
       rotationWaitMs: rotationWaitMs,
       previewBase: previewBase,
       keyPostUrl: keyPostUrl,
+      requestJson: requestJson,
       fetchJson: fetchJson,
       rotateUrl: rotateUrl,
       postKeyNow: postKeyNow,
@@ -1289,7 +1295,7 @@
     function removeRecentPreview(endpoint, url) {
       var payload = { url: url, remove: true, forget: url };
       if (typeof GM_xmlhttpRequest === "function") {
-        requestJson("POST", endpoint, payload, function () {});
+        requestJson("POST", endpoint, payload, function () {}, false);
       } else if (typeof fetch === "function") {
         fetch(endpoint, {
           method: "POST",
@@ -1335,7 +1341,7 @@
           } else {
             onDone(status);
           }
-        });
+        }, false);
       } else {
         viaFetch();
       }
@@ -4682,7 +4688,9 @@
   }
 
   function detectRepo(doc) {
-    var bar = doc.querySelector(BAR_SELECTOR);
+    var bar = doc && typeof doc.querySelector === "function"
+      ? doc.querySelector(BAR_SELECTOR)
+      : null;
     var spans;
     var i;
     var repo;
@@ -5275,17 +5283,17 @@
       base = lastPreviewBase || null;
     }
     if (event.data.type === "clankers:preview-ready") {
+      if (typeof event.data.session_id === "string" && event.data.session_id.trim()) {
+        setPreviewUiSessionId(event.data.session_id);
+      } else if (typeof event.data.branch === "string" && event.data.branch.trim()) {
+        setPreviewUiSessionId(event.data.branch);
+      }
       if (typeof event.data.repo === "string" && event.data.repo.trim()) {
         var nextRepo = event.data.repo.trim();
         if (nextRepo !== previewUiRepo) {
           previewUiRepo = nextRepo;
           if (typeof syncPreviewProxyHook === "function") syncPreviewProxyHook();
         }
-      }
-      if (typeof event.data.session_id === "string" && event.data.session_id.trim()) {
-        setPreviewUiSessionId(event.data.session_id);
-      } else if (typeof event.data.branch === "string" && event.data.branch.trim()) {
-        setPreviewUiSessionId(event.data.branch);
       }
       notifyPreviewReady(document, true);
       syncPreviewBoard(base, event.data.session_id || event.data.branch || "", event.data.repo || "");

@@ -4214,6 +4214,53 @@ for raw in sys.stdin:
         metaVersionMatch[1],
         "preview HTTP calls carry X-Clankers-Userscript-Version header",
       );
+      const fallbackSteeringFrame = {
+        src: "https://sbx-steering8000.arena.site/app",
+        getAttribute(name) {
+          if (name === "title") return "App preview on port 8000";
+          if (name === "src") return "https://sbx-steering8000.arena.site/app";
+          return "";
+        },
+      };
+      const fallbackSteeringDoc = {
+        title: "Arena | clankers",
+        querySelector() {
+          return null;
+        },
+        querySelectorAll(sel) {
+          if (sel === "iframe[title]" || sel === "iframe") {
+            return [fallbackSteeringFrame];
+          }
+          return [];
+        },
+      };
+      assert.deepEqual(
+        JSON.parse(
+          JSON.stringify(
+            checkBox.CLANKERS_CHECKS.promptFill.discoverPreviews(
+              fallbackSteeringDoc,
+              undefined,
+              "alpha111-clankers",
+            ),
+          ),
+        ),
+        [{ url: "https://sbx-steering8000.arena.site/", name: "clankers - Steering" }],
+        "discoverPreviews falls back to stateScope(doc).repo for port-8000 Steering iframe before preview-ready",
+      );
+      checkBox.CLANKERS_CHECKS.promptFill.requestJson(
+        "POST",
+        "https://preview-proxy.example.ts.net/pwa/recent",
+        { url: "https://sbx-steering8000.arena.site/", name: "clankers - Steering" },
+        () => {},
+        false,
+      );
+      const recentPostCall = httpCalls.find(c => c.url === "https://preview-proxy.example.ts.net/pwa/recent");
+      assert.ok(recentPostCall, "requestJson sends /pwa/recent post");
+      assert.equal(
+        recentPostCall.headers["X-Clankers-Userscript-Version"],
+        undefined,
+        "external /pwa/recent posts omit X-Clankers-Userscript-Version header",
+      );
       const previewSentEntry = JSON.parse(previewSyncCall.data).board.entries[0];
       assert.equal(previewSentEntry.file.content, "diff --git\n", "file content is hydrated before posting to local /api/board");
 
