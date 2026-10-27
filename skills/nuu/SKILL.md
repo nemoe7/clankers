@@ -42,6 +42,7 @@ One short specification for every page we ship, paired with a small command-line
 14. Inline suppression markers (`nonuu: RULE_ID`) silence false-positive findings on that line and appear in `lint`, `audit`, and `collect` output. Approved house-style deviations use `nuu-deviation: <reason>` in comments or `docs/design.md` (`nuu collect --deviations`). Agents MUST NEVER add `nuu-deviation:` without explicit user approval.
 15. Use outside list markers with a `2ch` hanging indent slot (`--indent: 2ch; padding-inline-start: 2ch; list-style-position: outside`) and native `disc` marker size so wrapped lines align with the first line (`NUL007`, `NUM211`).
 16. Keep heading (h1 to h6) line-height within 1.1 to 1.3x font-size and non-heading line-height within 1.3 to 1.5x (NUM212).
+17. Keep heading (h1 to h6) letter-spacing within -0.5% to -2% (-0.005em to -0.02em) and non-heading letter-spacing at 0 (NUM213).
 
 Component and interaction patterns live in `references/recipes/`: [modal-manager.md](references/recipes/modal-manager.md) (top-right `.close-button` and delete confirmation), [range-sliders.md](references/recipes/range-sliders.md) (step ticks and `<output>` bubbles), [relative-timestamps.md](references/recipes/relative-timestamps.md) (relative ages, full or abbreviated by width), [loading-bar.md](references/recipes/loading-bar.md) (200 ms delayed edge bar and fixed-slot controls), [scrollbars.md](references/recipes/scrollbars.md) (`10 px` rounded thumb without arrow buttons), and [overflow-and-clipping.md](references/recipes/overflow-and-clipping.md) (unclipped focus rings, shadows, and tooltips).
 
@@ -57,7 +58,7 @@ Component and interaction patterns live in `references/recipes/`: [modal-manager
 
 - `AGENTS.md`: mandatory agent workflow rules for `nuu` (`--wireframe` / `-W`, `nuu walk`, `nuu board`, and `nuu.toml`).
 - `references/nuu.toml`: default configuration (`Inter` / `Monaspace Neon` font stack, scale, and board defaults).
-- `references/nuu.md`: CLI flags, exit codes, rule codes (`NUI001`–`NUI003`, `NUL001`–`NUL007`, `NUB101`–`NUB104`, `NUM201`–`NUM212`, `NUA301`–`NUA310`), and recipe index.
+- `references/nuu.md`: CLI flags, exit codes, rule codes (`NUI001`–`NUI003`, `NUL001`–`NUL007`, `NUB101`–`NUB104`, `NUM201`–`NUM213`, `NUA301`–`NUA310`), and recipe index.
 - `references/style.css`: house tokens, type ramp, `4 px` default scale (`8 px` opt-in via `:root[data-scale="8"]`), `.close-button`, and states.
 - `references/examples.md`: dark-mode correct and incorrect UI pairs per clause, recipe, and audit rule.
 - `references/design-document.md`: sections and a filled example for `docs/design.md`.

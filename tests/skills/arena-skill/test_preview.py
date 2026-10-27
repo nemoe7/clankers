@@ -2065,7 +2065,11 @@ def test_http_boundaries():
         "#downloads-panel>.card,#reports-panel>.card,#tasks-panel>.card{"
         "max-width:900px;width:100%;margin-inline:auto" in page
       )
-      assert "h1{letter-spacing:-.035em;margin:4px 0" in page
+      assert re.search(
+        r"h1,h2,h3,h4,h5,h6\{[^}]*letter-spacing:-.015em",
+        page,
+      )
+      assert "h1{margin:4px 0" in page
       assert "h2{margin:0 0 8px" in page
       assert re.search(r"\.report p[^{}]*\{margin:8px 0", page)
       assert re.search(r"\.message-text p[^{}]*\{margin:8px 0", page)

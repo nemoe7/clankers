@@ -1805,3 +1805,41 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     tokens,
   )
   assert len([f for f in lh_bad if f.startswith("NUM212 ")]) == 2
+  ls_ok = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "h1",
+          "tag": "h1",
+          "values": {"font-size": "24px", "letter-spacing": "-0.36px"},
+        },
+        {
+          "selector": "p",
+          "tag": "p",
+          "values": {"font-size": "14px", "letter-spacing": "0px"},
+        },
+      ],
+    },
+    tokens,
+  )
+  assert ls_ok == []
+  ls_bad = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "h1",
+          "tag": "h1",
+          "values": {"font-size": "24px", "letter-spacing": "-1.2px"},
+        },
+        {
+          "selector": "p",
+          "tag": "p",
+          "values": {"font-size": "14px", "letter-spacing": "0.56px"},
+        },
+      ],
+    },
+    tokens,
+  )
+  assert len([f for f in ls_bad if f.startswith("NUM213 ")]) == 2

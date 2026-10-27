@@ -49,7 +49,7 @@ STRETCH_EXEMPT_INPUTS = {
 }
 PX = re.compile(r"^(-?\d+(?:\.\d+)?)px$")
 CUSTOM_PROPERTY = re.compile(r"--([a-z0-9-]+)\s*:\s*([^;]+);")
-TYPE_PROPERTIES = ("font-size", "letter-spacing")
+TYPE_PROPERTIES = ("font-size",)
 SPACING_PROPERTIES = ("padding", "margin", "gap", "row-gap", "column-gap")
 LAYOUT_PROPERTIES = ("border-radius",)
 RADIUS_SIZES = {4.0, 6.0, 10.0, 9999.0}
@@ -272,6 +272,53 @@ def _line_height_finding(element: dict) -> str | None:
   return None
 
 
+def _letter_spacing_finding(element: dict) -> str | None:
+  values = element.get("values") or {}
+  if "letter-spacing" not in values:
+    return None
+  raw_ls = str(values.get("letter-spacing") or "").strip().lower()
+  if not raw_ls:
+    return None
+  selector = str(element.get("selector") or "?")
+  classes = element.get("classes") or []
+  if "eyebrow" in classes or re.search(r"\beyebrow\b", selector, re.IGNORECASE):
+    return None
+  text = element.get("text")
+  if isinstance(text, str) and not text.strip():
+    return None
+  heading = is_heading_element(element)
+  if raw_ls in {"normal", "0", "0px", "0em", "0%"}:
+    em_ratio = 0.0
+  elif raw_ls.endswith("em"):
+    num = _numeric_value(raw_ls[:-2])
+    if num is None:
+      return None
+    em_ratio = num
+  elif raw_ls.endswith("%"):
+    num = _numeric_value(raw_ls[:-1])
+    if num is None:
+      return None
+    em_ratio = num / 100.0
+  elif raw_ls.endswith("px"):
+    ls_px = _numeric_value(raw_ls)
+    fs_px = _numeric_value(str(values.get("font-size") or ""))
+    if ls_px is None or fs_px is None or fs_px <= 0:
+      return None
+    em_ratio = ls_px / fs_px
+  else:
+    return None
+  if heading:
+    if em_ratio < -0.02 - 1e-4 or em_ratio > -0.005 + 1e-4:
+      return (
+        f"NUM213 {selector}: heading letter-spacing {values['letter-spacing']} "
+        f"({em_ratio:.4f}em) is outside -0.005em to -0.02em"
+      )
+    return None
+  if abs(em_ratio) > 1e-4:
+    return f"NUM213 {selector}: non-heading letter-spacing {values['letter-spacing']} must be 0"
+  return None
+
+
 def check(
   report: dict, tokens: dict[str, str], scale: float = DEFAULT_SCALE
 ) -> list[str]:
@@ -282,9 +329,9 @@ def check(
     list_status = _list_indent_status(element)
     if list_status and list_status[1]:
       findings.append(f"NUM211 {selector}: {'; '.join(list_status[1])}")
-    lh_finding = _line_height_finding(element)
-    if lh_finding:
-      findings.append(lh_finding)
+    for extra in (_line_height_finding(element), _letter_spacing_finding(element)):
+      if extra:
+        findings.append(extra)
     for name, value in element.get("values", {}).items():
       if _verified_list_padding(element, name, str(value), list_status):
         continue

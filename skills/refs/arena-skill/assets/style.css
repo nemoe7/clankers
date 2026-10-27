@@ -131,8 +131,8 @@
 html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: var(--app-height, 100dvh); max-height: min(100%, var(--app-height, 100svh)); overflow: hidden; }
 /* Headings use browser default sizes (32, 24, 18.72, 16, 13.28, and 10.72px) so h2 stays distinct from h3. */
-h1, h2, h3, h4, h5, h6 { line-height: 1.2; }
-h1 { letter-spacing: -.035em; margin: 4px 0; }
+h1, h2, h3, h4, h5, h6 { line-height: 1.2; letter-spacing: -.015em; }
+h1 { margin: 4px 0; }
 h2 { margin: 0 0 8px; }
 p, li { line-height: 1.45; }
 .topbar { flex: none; position: sticky; top: 0; z-index: 5; padding: 10px 5vw; background: var(--bg); border-bottom: 1px solid var(--border); overflow: hidden; }

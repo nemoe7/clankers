@@ -121,7 +121,7 @@ async function metrics(page, selector) {
   return page.evaluate(selector => {
     const properties = ['height', 'width', 'padding-top', 'padding-right', 'padding-bottom',
       'padding-left', 'padding-inline-start', 'margin-top', 'margin-bottom', 'gap', 'font-size', 'font-weight',
-      'line-height', 'border-radius', 'color', 'background-color', 'outline-style',
+      'line-height', 'letter-spacing', 'border-radius', 'color', 'background-color', 'outline-style',
       'outline-width', 'transition-duration', 'animation-duration', '--indent',
       'list-style-position', 'list-style-type', 'overflow', 'overflow-x', 'overflow-y',
       'text-overflow', 'white-space'];

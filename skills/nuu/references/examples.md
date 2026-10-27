@@ -84,6 +84,12 @@ Pass: headings (`h1` to `h6`) within `1.1` to `1.3x` font-size (`1.2x` default) 
 
 ![Clause 16](examples/line-height-bands.png)
 
+## 17. Heading-only negative letter-spacing
+
+Pass: headings (`h1` to `h6`) tracked within `-0.005em` to `-0.02em` (`-0.015em` default) and non-heading prose at `0`. Fail: over-tightened `-0.05em` heading or tracked body copy (`NUM213`).
+
+![Clause 17](examples/heading-letter-spacing.png)
+
 ## Recipe and Audit-Rule Examples
 
 - **Modal `.close-button` and confirmation (`recipes/modal-manager.md`):**
