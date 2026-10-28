@@ -16932,7 +16932,11 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
   assert f"woke {main_sid}" in capsys.readouterr().out
 
   rep_md = tmp_path / "worker-question.md"
-  rep_md.write_text("# Question\n\nBody.\n", encoding="utf-8")
+  rep_md.write_text(
+    "# Question\n\nBody context.\n\nChoose direction:\n\n- (x) option-a\n- ( ) option-b\n- ( ) custom: ___\n",
+    encoding="utf-8",
+  )
+  monkeypatch.setattr(preview, "verify_publication", lambda *_a, **_kw: [])
   monkeypatch.setattr(
     sys,
     "argv",
@@ -16947,10 +16951,22 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
       "Worker Question",
     ],
   )
-  assert preview.main() == 2
-  blocked_err = capsys.readouterr().err
-  assert "REPORT PUBLISH BLOCKED:" in blocked_err
-  assert "arena-preview board post" in blocked_err
+  assert preview.main() == 0
+  pub_out = capsys.readouterr().out
+  assert "Published worker-q, 1 field. Verified." in pub_out
+  assert "Staged worker-question.md on board" in pub_out
+  rep_entries = [
+    e
+    for e in w_store.board_state()["entries"]
+    if (e.get("payload") or {}).get("report_id") == "worker-q"
+  ]
+  assert len(rep_entries) == 1
+  rep_entry = rep_entries[0]
+  assert rep_entry["to"] == main_sid
+  assert rep_entry["file"]["name"] == "worker-question.md"
+  assert rep_entry["file"]["content"] == rep_md.read_text(encoding="utf-8")
+  assert "# Question" not in rep_entry["text"]
+  assert "Body context." not in rep_entry["text"]
 
   # Live poll state mirrors immediately onto BOARD_STATE_META and clears consumed wakes on main:
   w_store.start_poll()
@@ -17432,3 +17448,111 @@ def test_board_polling_not_masked_by_stale_wake_and_post_to_wakes_target(
   assert beta not in after_remove["allowed_sessions"]
   assert beta in after_remove["removed_sessions"]
   assert all(s["branch"] != beta for s in after_remove["sessions"])
+
+
+def test_worker_report_publish_board_triage_answer_and_forward(tmp_path, monkeypatch):
+  alpha = "arena/11111111-clankers"
+  beta = "arena/22222222-clankers"
+  repo_root = tmp_path / "clankers"
+  repo_root.mkdir(parents=True)
+  monkeypatch.setattr(preview, "workspace_branch", lambda _r=None: alpha)
+  main_store = preview.Store(repo_root / "arena-state-main", create=True)
+  main_store.board_action({"action": "allow", "branch": alpha})
+  main_store.board_action({"action": "set-main", "branch": alpha})
+  main_store.board_action({"action": "allow", "branch": beta, "worker_id": "beta"})
+
+  monkeypatch.setattr(preview, "workspace_branch", lambda _r=None: beta)
+  worker_store = preview.Store(repo_root / "arena-state-beta", create=True)
+  worker_store.board_action({"action": "sync", "board": main_store.board_state()})
+
+  # Worker publishes two fielded reports (`worker-ask` for main, `owner-ask` for owner).
+  src_dir = tmp_path / "worker-reports"
+  src_dir.mkdir()
+  worker_ask_md = src_dir / "worker-ask.md"
+  worker_ask_md.write_text(
+    "# Worker Scope Check\n\nPick approach:\n\n- (x) keep-narrow\n- ( ) widen-scope\n- ( ) custom: ___\n",
+    encoding="utf-8",
+  )
+  owner_ask_md = src_dir / "owner-ask.md"
+  owner_ask_md.write_text(
+    "# Owner Policy Choice\n\nSelect policy:\n\n- (x) policy-a\n- ( ) policy-b\n- ( ) custom: ___\n",
+    encoding="utf-8",
+  )
+  for rid, rtitle, rpath in (
+    ("worker-ask", "Worker Scope Check", worker_ask_md),
+    ("owner-ask", "Owner Policy Choice", owner_ask_md),
+  ):
+    worker_store.publish(rid, rtitle, rpath)
+    raw = rpath.read_bytes()
+    worker_store.board_action(
+      {
+        "action": "post",
+        "to": "main",
+        "text": f"Worker report `{rid}` ({rtitle}, 1 field) staged for main triage.",
+        "payload": {"report_id": rid, "report_title": rtitle, "field_count": 1},
+        "file": {
+          "name": rpath.name,
+          "size": len(raw),
+          "sha256": preview.hashlib.sha256(raw).hexdigest(),
+          "encoding": "utf-8",
+          "content": raw.decode("utf-8"),
+        },
+      }
+    )
+  worker_store.write_task(
+    "task-worker-ask",
+    "Wait on main answer",
+    ["Scope: skills/refs/arena-skill/"],
+    blocked=True,
+    report_id="worker-ask",
+    task_type="code",
+  )
+  worker_store.write_task(
+    "task-owner-ask",
+    "Wait on owner answer",
+    ["Scope: skills/refs/arena-skill/"],
+    blocked=True,
+    report_id="owner-ask",
+    task_type="code",
+  )
+
+  # Main syncs worker board state and stages attached .md files without inline report body in entry.text.
+  monkeypatch.setattr(preview, "workspace_branch", lambda _r=None: alpha)
+  main_store.board_action({"action": "sync", "board": worker_store.board_state()})
+  for e in main_store.board_state()["entries"]:
+    assert "Pick approach:" not in e["text"]
+    assert "Select policy:" not in e["text"]
+
+  # 1) Main answers worker-targeted report directly:
+  ans_res = main_store.answer_worker_report(
+    "@beta", "worker-ask", {"pick-approach": "keep-narrow"}
+  )
+  assert ans_res == {"worker": beta, "report_id": "worker-ask"}
+
+  # 2) Main forwards owner-targeted report unanswered to owner Reports tab:
+  fwd_res = main_store.forward_worker_report("@beta", "owner-ask")
+  assert fwd_res["id"] == "owner-ask"
+  assert fwd_res["fields"] == 1
+  main_rep = main_store.report("owner-ask")
+  assert main_rep["title"] == "Owner Policy Choice"
+  assert not any(
+    s.get("report_id") == "owner-ask" for s in main_store.state().get("notes", [])
+  )
+
+  # Owner submits answer on main's forwarded report -> relays back to beta over board!
+  sub = main_store.submit_report(
+    "owner-ask",
+    "ownsub1",
+    {"select-policy": "policy-b"},
+    revision=main_rep["updated_at"],
+  )
+  assert sub["forwarded_to_worker"] == beta
+
+  # Beta syncs main's board state -> both submissions land on beta and unblock both tasks!
+  monkeypatch.setattr(preview, "workspace_branch", lambda _r=None: beta)
+  worker_store.start_poll()
+  worker_store.board_action({"action": "sync", "board": main_store.board_state()})
+  tasks_by_id = {t["id"]: t for t in worker_store.list_tasks()}
+  assert not tasks_by_id["task-worker-ask"]["blocked"]
+  assert not tasks_by_id["task-owner-ask"]["blocked"]
+  assert worker_store.board_state()["wakes"].get(beta)

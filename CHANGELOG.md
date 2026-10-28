@@ -20,6 +20,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### arena-skill
 
 - Replace the Board tab's separate `Revoke` and `Dismiss` buttons with one `Dismiss` button (`assets/app.js`, `scripts/preview.py`).
+- Route worker `report publish` to the board with staged `.md` file attachments, and add `report answer` and `report forward` triage on `main` (`SKILL.md`, `WORKER.md`, `scripts/preview.py`).
 
 #### nuu
 

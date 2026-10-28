@@ -140,6 +140,7 @@ Coordinate allowlisted sessions across tabs through `arena-preview board` (`stat
 - When `main_session_id` names a main session, non-main worker sessions hand off findings through the board instead of committing or pushing.
 - Worker sessions load WORKER.md in their bible. NEVER paste full reports into board posts; attach files or cite a report ID.
 - Main sessions MUST question worker behavior, code, and claims; NEVER take worker notes at face value. With idle allowlisted workers, MUST delegate independent queued tasks via `worker-task` and `@worker` posts before local worktrees.
+- Answer worker-targeted board reports directly on `main`, and forward owner-targeted worker reports unanswered.
 - A wake stamp or a new board entry wakes `arena-preview poll` (`BOARD WAKE`) without arming `skip_poll`.
 
 ## Proxy access

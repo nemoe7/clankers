@@ -8919,6 +8919,181 @@ class Store:
     del board_now, local_ids, meta
     return {}
 
+  def _forwarded_worker_reports(self):
+    raw_text = self.meta_value(BOARD_STATE_META)
+    try:
+      stored = json.loads(raw_text) if raw_text else {}
+    except Exception:
+      stored = {}
+    ack_wakes = (
+      stored.get("ack_wakes")
+      if isinstance(stored, dict) and isinstance(stored.get("ack_wakes"), dict)
+      else {}
+    )
+    mapping = ack_wakes.get("forwarded_worker_reports")
+    return dict(mapping) if isinstance(mapping, dict) else {}
+
+  def _record_forwarded_worker_report(self, local_id, worker_branch, worker_report_id):
+    with self.transaction() as db:
+      row = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (BOARD_STATE_META,)
+      ).fetchone()
+      try:
+        stored = json.loads(row[0]) if row and row[0] else {}
+      except Exception:
+        stored = {}
+      if not isinstance(stored, dict):
+        stored = {}
+      ack_wakes = (
+        dict(stored.get("ack_wakes"))
+        if isinstance(stored.get("ack_wakes"), dict)
+        else {}
+      )
+      fwd = (
+        dict(ack_wakes.get("forwarded_worker_reports"))
+        if isinstance(ack_wakes.get("forwarded_worker_reports"), dict)
+        else {}
+      )
+      fwd[local_id] = {
+        "worker_branch": worker_branch,
+        "worker_report_id": worker_report_id,
+      }
+      ack_wakes["forwarded_worker_reports"] = fwd
+      stored["ack_wakes"] = ack_wakes
+      db.execute(
+        "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+        (BOARD_STATE_META, json.dumps(stored)),
+      )
+
+  def _locate_worker_report_source(self, worker_target, report_id):
+    identifier(report_id)
+    b_state = self.board_state()
+    if b_state.get("board_role") == "worker":
+      raise ValueError("Only the main session can triage worker reports")
+    worker_br = resolve_board_target(
+      worker_target,
+      b_state.get("sessions") or (),
+      allowed=b_state.get("allowed_sessions") or (),
+      main_sid=b_state.get("main_session_id") or "",
+    )
+    if not worker_br:
+      raise ValueError("Missing worker target")
+    state_dir = self.path.parent
+    raw_text = self.meta_value(BOARD_STATE_META)
+    try:
+      raw_board = json.loads(raw_text) if raw_text else {}
+    except Exception:
+      raw_board = {}
+    raw_entries = (
+      raw_board.get("entries")
+      if isinstance(raw_board, dict) and isinstance(raw_board.get("entries"), list)
+      else []
+    )
+    source_path = None
+    title = ""
+    for entry in reversed([*(b_state.get("entries") or []), *raw_entries]):
+      if not isinstance(entry, dict):
+        continue
+      entry_br = resolve_board_target(
+        entry.get("branch") or entry.get("session_id") or "",
+        b_state.get("sessions") or (),
+        allowed=b_state.get("allowed_sessions") or (),
+        main_sid=b_state.get("main_session_id") or "",
+      )
+      payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else {}
+      if entry_br != worker_br or str(payload.get("report_id") or "") != report_id:
+        continue
+      if payload.get("report_title") and not title:
+        title = str(payload["report_title"])
+      file_obj = entry.get("file") if isinstance(entry.get("file"), dict) else None
+      if file_obj is None:
+        continue
+      staged_rel = str(file_obj.get("staged_path") or "").strip()
+      cand = (
+        state_dir / staged_rel
+        if staged_rel
+        else state_dir
+        / "board-files"
+        / encode_board_branch_dir(worker_br)
+        / str(file_obj.get("name") or f"{report_id}.md")
+      )
+      if (
+        not cand.is_file()
+        and isinstance(file_obj.get("content"), str)
+        and file_obj["content"]
+      ):
+        staged = stage_board_file(state_dir, worker_br, file_obj)
+        cand = state_dir / staged["staged_path"]
+      if cand.is_file():
+        source_path = cand
+        break
+    raw_wr = (
+      raw_board.get("worker_reports")
+      if isinstance(raw_board, dict)
+      and isinstance(raw_board.get("worker_reports"), dict)
+      else {}
+    )
+    rep_meta = next(
+      (
+        r
+        for r in [
+          *((b_state.get("worker_reports") or {}).get(worker_br) or []),
+          *(raw_wr.get(worker_br) or []),
+        ]
+        if isinstance(r, dict) and str(r.get("id") or "") == report_id
+      ),
+      None,
+    )
+    if rep_meta and rep_meta.get("title") and not title:
+      title = str(rep_meta["title"])
+    if source_path is None and rep_meta and isinstance(rep_meta.get("markdown"), str):
+      fallback_dir = state_dir / "board-files" / encode_board_branch_dir(worker_br)
+      fallback_dir.mkdir(parents=True, exist_ok=True)
+      source_path = fallback_dir / f"{report_id}.md"
+      source_path.write_text(rep_meta["markdown"], encoding="utf-8")
+    if source_path is None or not source_path.is_file():
+      raise FileNotFoundError(
+        f"Worker report {report_id!r} from {worker_br} has no staged source on board"
+      )
+    return worker_br, source_path, title or report_id
+
+  def answer_worker_report(self, worker_target, report_id, answers):
+    worker_br, source_path, title = self._locate_worker_report_source(
+      worker_target, report_id
+    )
+    md_text = source_path.read_text(encoding="utf-8")
+    fields = parse_fields(md_text)[1]
+    if not fields:
+      raise ValueError("This worker report has no fields to answer")
+    self._format_report_submission(report_id, title, fields, answers)
+    self.board_action(
+      {
+        "action": "worker-report",
+        "target": worker_br,
+        "op": "answer",
+        "report_id": report_id,
+        "answers": answers,
+      }
+    )
+    return {"worker": worker_br, "report_id": report_id}
+
+  def forward_worker_report(
+    self, worker_target, report_id, *, local_id=None, title_override=None
+  ):
+    worker_br, source_path, title = self._locate_worker_report_source(
+      worker_target, report_id
+    )
+    dest_id = str(local_id or report_id).strip()
+    dest_title = str(title_override or title or report_id).strip()
+    count = self.publish(dest_id, dest_title, source_path)
+    self._record_forwarded_worker_report(dest_id, worker_br, report_id)
+    return {
+      "id": dest_id,
+      "worker": worker_br,
+      "worker_report_id": report_id,
+      "fields": count,
+    }
+
   def board_state(self, meta=None, polling=None, _scope_repos=True):
     root = self.repository_root()
     branch = workspace_branch(root)
@@ -13710,27 +13885,39 @@ class Store:
               }
             )
           elif b_state.get("board_role") == "main":
-            for w_sid, rep_list in (b_state.get("worker_reports") or {}).items():
-              if (
-                not w_sid
-                or w_sid == self_sid
-                or w_sid not in allowed_set
-                or not isinstance(rep_list, list)
-              ):
-                continue
-              if any(
-                isinstance(r, dict) and str(r.get("id") or "") == report_id
-                for r in rep_list
-              ):
-                self.board_action(
-                  {
-                    "action": "worker-report",
-                    "target": w_sid,
-                    "op": "unpublish",
-                    "report_id": report_id,
-                    "from_owner": True,
-                  }
-                )
+            fwd = self._forwarded_worker_reports().get(report_id)
+            if fwd and fwd.get("worker_branch"):
+              self.board_action(
+                {
+                  "action": "worker-report",
+                  "target": fwd["worker_branch"],
+                  "op": "unpublish",
+                  "report_id": fwd["worker_report_id"],
+                  "from_owner": True,
+                }
+              )
+            else:
+              for w_sid, rep_list in (b_state.get("worker_reports") or {}).items():
+                if (
+                  not w_sid
+                  or w_sid == self_sid
+                  or w_sid not in allowed_set
+                  or not isinstance(rep_list, list)
+                ):
+                  continue
+                if any(
+                  isinstance(r, dict) and str(r.get("id") or "") == report_id
+                  for r in rep_list
+                ):
+                  self.board_action(
+                    {
+                      "action": "worker-report",
+                      "target": w_sid,
+                      "op": "unpublish",
+                      "report_id": report_id,
+                      "from_owner": True,
+                    }
+                  )
       except Exception:
         pass
 
@@ -14171,9 +14358,17 @@ class Store:
         submission_format=report["submission_format"],
         revision=revision,
       )
-      if not report.get("worker_branch"):
+      fwd = self._forwarded_worker_reports().get(report_id)
+      if not report.get("worker_branch") and not (fwd and fwd.get("worker_branch")):
         return local_sub
-      mirrored = report
+      mirrored = (
+        report
+        if report.get("worker_branch")
+        else {
+          "worker_branch": fwd["worker_branch"],
+          "worker_report_id": fwd["worker_report_id"],
+        }
+      )
     self.board_action(
       {
         "action": "worker-report",
@@ -17572,6 +17767,21 @@ def main():
     help="Print publication, owner view stamp and answer visibility for one report or all",
   )
   report_state.add_argument("report_id", nargs="?")
+  report_answer = report_verbs.add_parser(
+    "answer",
+    help="Answer a worker-published board report directly from main",
+  )
+  report_answer.add_argument("worker", help="Worker session branch or @role alias")
+  report_answer.add_argument("report_id", help="Worker report ID")
+  report_answer.add_argument("answers_json", help="JSON object keyed by field ID")
+  report_forward = report_verbs.add_parser(
+    "forward",
+    help="Forward an owner-targeted worker board report unanswered to the owner",
+  )
+  report_forward.add_argument("worker", help="Worker session branch or @role alias")
+  report_forward.add_argument("report_id", help="Worker report ID")
+  report_forward.add_argument("-i", "--id", dest="local_id", default=None)
+  report_forward.add_argument("-t", "--title", dest="local_title", default=None)
   task_group = commands.add_parser("task", help="Read and update tasks")
   task_verbs = task_group.add_subparsers(dest="verb", required=True)
   task_list = task_verbs.add_parser("list", help="List tasks; -f includes finished")
@@ -17767,6 +17977,8 @@ def main():
     ("report", "state"): "report-state",
     ("report", "pin"): "report-pin",
     ("report", "unpin"): "report-unpin",
+    ("report", "answer"): "report-answer",
+    ("report", "forward"): "report-forward",
     ("task", "list"): "task-list",
     ("task", "show"): "task-show",
     ("task", "set"): "task",
@@ -18174,14 +18386,6 @@ def main():
       store.board_action({"action": "wake", "target": target})
       print(f"woke {target}")
     elif args.command == "publish":
-      if store.board_state().get("board_role") == "worker":
-        print(
-          "REPORT PUBLISH BLOCKED: worker sessions NEVER publish reports;"
-          ' ask main via `arena-preview board post "<question>"` and'
-          " `arena-preview board wake`.",
-          file=sys.stderr,
-        )
-        return 2
       metadata = None
       if args.submission_format is not None:
         with args.submission_format.open("rb") as stream:
@@ -18200,7 +18404,37 @@ def main():
       warnings = verify_publication(store, args.id, revision, count)
       plural = "" if count == 1 else "s"
       print(f"Published {args.id}, {count} field{plural}. Verified.")
-      parsed_questions = parse_fields(Path(args.source).read_text("utf-8"))[1]
+      src_path = Path(args.source)
+      src_text = src_path.read_text("utf-8")
+      if store.board_state().get("board_role") == "worker":
+        raw_bytes = src_path.read_bytes()
+        posted_board = store.board_action(
+          {
+            "action": "post",
+            "to": "main",
+            "text": (
+              f"Worker report `{args.id}` ({args.title}, {count} field{plural})"
+              " staged for main triage."
+            ),
+            "payload": {
+              "report_id": args.id,
+              "report_title": args.title,
+              "field_count": count,
+            },
+            "file": {
+              "name": src_path.name,
+              "size": len(raw_bytes),
+              "sha256": hashlib.sha256(raw_bytes).hexdigest(),
+              "encoding": "utf-8",
+              "content": src_text,
+            },
+          }
+        )
+        post_eid = (posted_board.get("entries") or [{}])[-1].get("id") or "ok"
+        print(
+          f"Staged {src_path.name} on board ({post_eid}) for main; wait via arena-preview poll."
+        )
+      parsed_questions = parse_fields(src_text)[1]
       recommendations = [
         f"{question['prompt']}: {', '.join(question['default'])}"
         for question in parsed_questions
@@ -18228,13 +18462,28 @@ def main():
           "Literal marker text can be intentional.",
           file=sys.stderr,
         )
-      if not count and "{#" in Path(args.source).read_text("utf-8"):
+      if not count and "{#" in src_text:
         # A `{#id}` marker on its own parses as prose. The owner then sees no answer form.
         print(
           "Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then"
           " the `- ( ) option` lines follow.",
           file=sys.stderr,
         )
+    elif args.command == "report-answer":
+      answers = json.loads(args.answers_json)
+      res = store.answer_worker_report(args.worker, args.report_id, answers)
+      print(f"Answered {res['report_id']} for {res['worker']}.")
+    elif args.command == "report-forward":
+      res = store.forward_worker_report(
+        args.worker,
+        args.report_id,
+        local_id=args.local_id,
+        title_override=args.local_title,
+      )
+      plural = "" if res["fields"] == 1 else "s"
+      print(
+        f"Forwarded {res['worker_report_id']} from {res['worker']} as {res['id']} ({res['fields']} field{plural})."
+      )
     elif args.command == "report":
       held = False
       for record in store.stale_reports():
