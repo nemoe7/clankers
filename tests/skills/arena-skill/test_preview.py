@@ -18109,3 +18109,57 @@ def test_installer_hook_probes_platform_shells_before_the_early_exit():
   assert db_name in helper
   assert silent_redirect in helper
   assert reminder_flag in hook[branch_exit:]
+
+
+def test_task_reblocks_on_new_unanswered_report_and_poll_respects_blocked_by(
+  tmp_path, monkeypatch, capsys
+):
+  """A prior submission from an older report never clears a new --report wait."""
+  state = tmp_path / "state"
+  store = preview.Store(state, create=True)
+  first_md = tmp_path / "first.md"
+  first_md.write_text("Defer? {#defer}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
+  second_md = tmp_path / "second.md"
+  second_md.write_text("Start now? {#start}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
+  store.publish("first-report", "First", first_md)
+  store.publish("second-report", "Second", second_md)
+
+  store.write_task(
+    "step-one",
+    "Step one",
+    ["Wait on second report"],
+    blocked=True,
+    report_id="second-report",
+    task_type="code",
+  )
+  store.write_task(
+    "step-two",
+    "Step two",
+    ["Answered earlier, now waiting on second report"],
+    blocked=True,
+    report_id="first-report",
+    blocked_by=["step-one"],
+    task_type="code",
+  )
+  rev1 = store.report("first-report")["updated_at"]
+  store.submit_report("first-report", "ans111", {"defer": "yes"}, rev1)
+  store.mark_task("ans111", "step-two")
+  store.acknowledge(["ans111"], "Deferred.")
+  assert store.task_record("step-two")["blocked"] is False
+
+  # Linking step-two to a new unanswered report must re-arm its blocked state.
+  reblocked = store.write_task("step-two", blocked=True, report_id="second-report")
+  assert reblocked["blocked"] is True
+
+  # Even if step-two is unblocked directly, poll waits while step-one is upcoming.
+  store.write_task("step-two", blocked=False)
+  store.request_skip_poll()
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: state)
+  monkeypatch.setattr(preview, "require_server", lambda _store: None)
+  monkeypatch.setattr(sys, "argv", ["arena-preview", "poll"])
+  assert preview.main() == 0
+  poll_out = capsys.readouterr().out
+  continue_prefix = "CONTINUE: UNBLOCKED TASK"
+  assert [
+    line for line in poll_out.splitlines() if line.startswith(continue_prefix)
+  ] == []

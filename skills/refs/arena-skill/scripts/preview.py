@@ -5843,10 +5843,13 @@ def poll_inbox(store, sleeper=None):
         clear_poll_repeat(store)
         print("DO NOT END TURN. POLL AGAIN.", flush=True)
         return 0
+      upcoming = [item for item in store.list_tasks() if item["status"] == "upcoming"]
+      upcoming_ids = {item["id"] for item in upcoming}
       open_tasks = [
         item
-        for item in store.list_tasks()
-        if item["status"] == "upcoming" and not item["blocked"]
+        for item in upcoming
+        if not item["blocked"]
+        and not any(dep in upcoming_ids for dep in item.get("blocked_by") or ())
       ]
       if open_tasks:
         store.take_board_wake()
@@ -11506,8 +11509,8 @@ class Store:
 
   def task_has_report_answer(self, db, task_id, report_id=None):
     """Whether the task's linked report or linked submission already holds an answer."""
-    if report_id and self.report_has_answers(db, report_id):
-      return True
+    if report_id:
+      return self.report_has_answers(db, report_id)
     return bool(
       db.execute(
         "SELECT 1 FROM submissions WHERE task_id = ? LIMIT 1", (task_id,)

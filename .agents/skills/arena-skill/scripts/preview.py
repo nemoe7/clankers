@@ -2152,7 +2152,7 @@ def poll_inbox(store,sleeper=None):
 			if violation or listing['pending']:store.take_board_wake();print_read(store);return 0
 			if failures and'pr-checks'not in live_runs(store.path.parent):print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);return 0
 			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
-			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
+			upcoming=[item for item in store.list_tasks()if item['status']=='upcoming'];upcoming_ids={item['id']for item in upcoming};open_tasks=[item for item in upcoming if not item['blocked']and not any(dep in upcoming_ids for dep in item.get('blocked_by')or())]
 			if open_tasks:store.take_board_wake();listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);idle=idle_board_workers(store.path.parent);worker_step=f"Delegate to idle board worker @{idle[0]} via arena-preview board post first, or start"if idle else'Start';continue_line=f"CONTINUE: UNBLOCKED TASK {names}. {worker_step} a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
 			board_woken=bool(store.take_board_wake());is_worker_role=store.board_state().get('board_role')=='worker';board_notices=store.take_board_notifications(include_peer_notices=board_woken or not is_worker_role)
 			if board_woken or board_notices:
@@ -3869,7 +3869,7 @@ class Store:
 	@staticmethod
 	def report_has_answers(db,report_id):return bool(db.execute('SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1',(report_id,)).fetchone())
 	def task_has_report_answer(self,db,task_id,report_id=None):
-		if report_id and self.report_has_answers(db,report_id):return True
+		if report_id:return self.report_has_answers(db,report_id)
 		return bool(db.execute('SELECT 1 FROM submissions WHERE task_id = ? LIMIT 1',(task_id,)).fetchone())
 	@staticmethod
 	def release_report_tasks(db,report_id):db.execute('UPDATE tasks SET blocked = 0, updated_at = ? WHERE report_id = ? AND blocked = 1',(now(),report_id))
