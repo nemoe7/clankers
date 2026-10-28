@@ -17,8 +17,6 @@
 
 ## Report fields
 
-In report diffs, keep leading and trailing whitespace outside `~~...~~` and `==...==` spans; do not mark whitespace-only runs. Publication rejects possible unparsed `==` or `~~` diff markers; fix the spacing around the markers, or pass `-u` / `--allow-unparsed-markers` when the literal characters are intentional.
-
 | Markdown marker | Control |
 | --- | --- |
 | `- ( ) option` (`- (x)` to mark recommended) | One radio choice; the UI prefixes a marked choice with `* ` and `report publish` prints `you recommended:` |

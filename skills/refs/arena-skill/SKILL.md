@@ -123,8 +123,6 @@ Republish the same ID after each source update; if answers exist, use a new ID. 
 
 `read` lists report submissions as `type: report`. Acknowledge only the latest submission for each report when it is unacknowledged; retain earlier acknowledgements. Publishing a report never acknowledges a submission.
 
-- Prose diffs use `~~strikethrough~~` and `==highlight==` in a single `Diff` column, not `Before` and `After` columns.
-
 ## Files and downloads
 
 For each note's `attachments[]`, the read carries each file's size; an image MUST be read before acknowledging that note once, and read a text file with caution. If `present` is false or bytes are missing, report the loss.
