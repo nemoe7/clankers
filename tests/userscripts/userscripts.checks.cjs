@@ -288,7 +288,7 @@ function checkPromptFill(api) {
     [slugFromOwnerRepo("a/"), null],
     [slugFromOwnerRepo("/b"), null],
     [slugFromOwnerRepo("a/b/c"), null],
-    // The repo name leads the fetched template. The rules file follows it when available.
+    // Repo name leads fetched template. Rules file follows when available.
     [prompt.split("\n")[0],
       "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
     [prompt.includes(promptFillText), true],
@@ -323,7 +323,7 @@ function checkPromptFill(api) {
     [agentKeyFrom({ key: "short" }), null],
     [agentKeyFrom({ key: "has spaces in it aaaaaaaaaaaaa" }), null],
     [agentKeyFrom(null), null],
-    // The composer carries the fill only: the proxy rides the preview.
+    // Composer carries only prompt fill. Proxy rides preview.
     [prompt.indexOf("http"), -1],
     [PREVIEW_FRAME_TITLE, "App preview on port 8000"],
     [ROTATE_MIN_SECONDS, 900],
@@ -347,13 +347,13 @@ function checkPromptFill(api) {
     [keyChanged("old", "new"), "new"],
     [keyChanged("same", "same"), null],
     [keyChanged("old", null), null],
-    // The key posts when the frame appears, and the minute tick posts it again.
+    // Key posts when frame appears, and each minute tick posts it again.
     [keyPostDue(null, null, true), false],
     [keyPostDue("https://sbx.example", null, false), true],
     [keyPostDue("https://sbx.example", "https://sbx.example", false), false],
     [keyPostDue("https://sbx.example", "https://sbx.example", true), true],
     [NOTED_KEY, "clankers-arena-noted-key"],
-    // The note names the host and expiry countdown while omitting the raw secret.
+    // Note names host and expiry countdown while omitting raw secret.
     [keyNote("replaced", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example", Date.parse("2026-10-03T15:03:00+00:00")),
       "Proxy https://h.example key replaced (expires in 12m). Run arena-preview key to read it."],
     [keyNote("ready", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example", Date.parse("2026-10-03T15:18:00+00:00")),
@@ -1106,7 +1106,7 @@ function checkHideComposer(api) {
 }
 
 function checkTabTitle(api, logging) {
-  // The bundle hooks change its state. The cases compare the call result to null.
+  // Bundle hooks change state. Cases compare each call result to null.
   function expireHold() {
     api.expireHold();
     return null;
@@ -1275,8 +1275,8 @@ function checkTabTitle(api, logging) {
     return el;
   }
   var ROW_CONTAINER_CLASS = "flex flex-col gap-2";
-  // The session dump's agent root: the bubble card, then `px-3 pb-3`, then the row
-  // container. Every root carries the transcript attributes.
+  // Session dump agent root: bubble card, then `px-3 pb-3`, then row container.
+  // Every root carries transcript attributes.
   function agentRoot(rows) {
     var container = node("div", ROW_CONTAINER_CLASS, rows);
     var root = node("div", "", [
@@ -1288,8 +1288,8 @@ function checkTabTitle(api, logging) {
     root.attrs["data-chat-message-id"] = "chat-agent";
     return root;
   }
-  // The session dump's user root: the layout div, the body row, the raised card, then
-  // `px-3`, the container and the `prose` body. The agent root is the negation of this fact.
+  // Session dump user root: layout div, body row, raised card, then `px-3`,
+  // container, and `prose` body. Agent root negates this chain.
   function userRootNode() {
     var body = node("div", "prose prose-pre:bg-transparent text-wrap break-words", []);
     var card = node("div", "relative overflow-hidden bg-surface-raised rounded-lg w-fit max-w-[min(70%,768px)] border-transparent ms-0", [
@@ -1593,8 +1593,7 @@ function checkTabTitle(api, logging) {
   assert.equal(repoForTitle(promptPage), "clankers");
 
   var cases = [
-    // The repo name still reads off the GitHub link, and the memory answers while the
-    // path holds.
+    // Repo name still comes from GitHub link, with memory answering while path holds.
     [repoFromLink(repoLink), "clankers"],
     [repoFromLink(labelOnly), "clankers"],
     [repoFromLink(emptyLink), null],
@@ -1604,8 +1603,8 @@ function checkTabTitle(api, logging) {
     [repoForTitle(docWith(null, "ChatGPT")), null],
     [repoForTitle(docWith(repoLink, "ChatGPT")), "clankers"],
     [repoForTitle(docWith(null, "ChatGPT")), "clankers"],
-    // The root reads: the agent root is the negation of the user-root chain, and the row
-    // container and the newest row come off the last root alone.
+    // Root reads: agent root negates user-root chain. Row container and newest row
+    // come from last root alone.
     [userRoot(userShape), true],
     [userRoot(agentShape), false],
     [lastRoot(page([agentShape])), agentShape],
@@ -1617,8 +1616,8 @@ function checkTabTitle(api, logging) {
     [rowKind(directReasoning), "reasoning"],
     [rowKind(directAction), "action"],
     [rowKind(null), "none"],
-    // The row type carries the mark: the chat body takes the balloon, the reasoning block
-    // takes the thinking mark, and the action rows keep their label words.
+    // Row type carries its mark: chat body takes balloon, reasoning block takes
+    // thinking mark, and action rows keep label words.
     [expireHold(), null],
     [desiredTitle(chatPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [expireHold(), null],
@@ -1697,7 +1696,7 @@ function checkTabTitle(api, logging) {
     [reasoningLogLine.data.type, "reasoning"],
     [bashLogLine.data.type, "action"],
     [pollLogLine.data.type, "poll"],
-    // The hold bridges the gaps inside a turn and dies with the stop control.
+    // Hold bridges gaps inside a turn and ends with stop control.
     [expireHold(), null],
     [desiredTitle(chatPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [desiredTitle(quietPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
@@ -1775,7 +1774,7 @@ function checkTabTitle(api, logging) {
     [polls("arena-preview poll --max 1"), true],
     [polls("python preview.py poll"), true],
     [polls("cat skills/arena-skill/README.md | grep polling"), false],
-    // The title writes through syncTitle, and the line carries the row anchors.
+    // Title writes through syncTitle, and line carries row anchors.
     [setPriorTitle("ChatGPT"), undefined],
     [expireHold(), null],
     [syncTitle(syncChatPage), true],
@@ -1797,8 +1796,8 @@ function checkTabTitle(api, logging) {
     [questionsLogLine.data.emoji, QUESTION_EMOJI],
     [api.VERSION, undefined],
   ];
-  // The title writes through syncTitle, which logs the signal that won. The capture keeps
-  // the host console clean and returns the last line.
+  // Title writes through syncTitle, which logs winning signal. Capture keeps host
+  // console clean and returns last line.
   function loggedTitle(doc) {
     var lines = [];
     var original = console.log;
@@ -2403,7 +2402,7 @@ function checkStateDownload(api, session, logging) {
     stateFileName(scope.repo, scope.branch, "2026-10-06T06:12:33", counts),
     "clankers-arena-01a0fd4f-clankers-20261006T061233-n12-t4.ndjson",
   );
-  // The server stamp carries the timezone. The name keeps the seconds alone.
+  // Server stamp carries timezone. Name keeps seconds alone.
   assert.equal(
     stateFileName(scope.repo, scope.branch, "2026-10-06T08:33:57+00:00", null),
     "clankers-arena-01a0fd4f-clankers-20261006T083357.ndjson",
@@ -2515,8 +2514,8 @@ function checkStateDownload(api, session, logging) {
     title: "Arena | clankers",
   };
   assert.equal(readSlug(staleTitleDoc), "daedalus");
-  // The header leaves the page while a dialog holds it, so the fill's saved slug names the
-  // repository. The branch stays empty.
+  // While dialog holds page, header disappears and fill's saved slug names repository.
+  // Branch stays empty.
   session.value = "clankers";
   assert.equal(stateRepo({ querySelector: function () { return null; } }), "clankers");
   assert.equal(
@@ -2577,7 +2576,7 @@ function checkStateDownload(api, session, logging) {
   // A header span with no slug-like first word and no title yields nothing.
   headerSpan.textContent = "";
   assert.equal(stateRepo(headerOnlyDoc), "");
-  // The saved slug still wins over the header read when the title is gone.
+  // Saved slug still wins over header read when title disappears.
   session.value = "saved";
   headerSpan.textContent = "clankers read ARENA.md";
   assert.equal(stateRepo(headerOnlyDoc), "saved");

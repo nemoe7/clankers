@@ -247,6 +247,47 @@ def test_collect_keeps_all_markers_including_suppressed_files():
     assert legacy.returncode == 0 and legacy.stdout == result.stdout
 
 
+def test_audit_markers_skip_inline_code_and_test_fixture_strings(tmp_path):
+  note = tmp_path / "note.md"
+  note.write_text(
+    "Use `nonemo: NMO100` or ``nonemo: NMO901``.\n<!-- nonemo: NMO100 -->\n",
+    encoding="utf-8",
+  )
+  python_fixture = tmp_path / "test_fixture.py"
+  python_fixture.write_text(
+    'TEXT = """fixture\nnonemo: NMO100\nend"""\nvalue = "kind"  # nonemo: NMO100\n',
+    encoding="utf-8",
+  )
+  javascript_fixture = tmp_path / "sample.test.cjs"
+  javascript_fixture.write_text(
+    'const text = "nonemo: NMO100"; // nonemo: NMO901\n'
+    "const pattern = /nonemo:\\s*NMO100/;\n"
+    "// nonemo: NMO100\n",
+    encoding="utf-8",
+  )
+  _, raw_marks = nemoize.scan([tmp_path], [])
+  _, audit_marks = nemoize.scan([tmp_path], [], audit=True)
+  assert any(mark.startswith(f"{note}:1:") for mark in raw_marks)
+  assert any(mark.startswith(f"{python_fixture}:2:") for mark in raw_marks)
+  assert any(mark.startswith(f"{javascript_fixture}:1:") for mark in raw_marks)
+  assert any(mark.startswith(f"{javascript_fixture}:2:") for mark in raw_marks)
+  assert not any(mark.startswith(f"{note}:1:") for mark in audit_marks)
+  assert not any(mark.startswith(f"{python_fixture}:2:") for mark in audit_marks)
+  javascript_line_one = [
+    mark for mark in audit_marks if mark.startswith(f"{javascript_fixture}:1:")
+  ]
+  assert len(javascript_line_one) == 1
+  assert javascript_line_one[0].startswith(f"{javascript_fixture}:1: NMO901 ")
+  assert not any(mark.startswith(f"{javascript_fixture}:2:") for mark in audit_marks)
+  assert any(mark.startswith(f"{note}:2: NMO100 file:") for mark in audit_marks)
+  assert any(
+    mark.startswith(f"{python_fixture}:4: NMO100 line:") for mark in audit_marks
+  )
+  assert any(
+    mark.startswith(f"{javascript_fixture}:3: NMO100 file:") for mark in audit_marks
+  )
+
+
 def test_multiple_rule_exclusions_preserve_the_marker_text():
   import tempfile
 

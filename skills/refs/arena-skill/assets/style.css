@@ -245,8 +245,7 @@ small, .muted, #last-check, #report-status { color: var(--muted); font-size: 13p
 #form > div:last-child { margin-bottom: 0; padding-bottom: 0; }
 p.muted { margin-block: 4px; }
 .icon-button { flex: none; width: 34px; height: 34px; min-height: 0; padding: 0; line-height: 1; font-size: 19px; display: inline-flex; align-items: center; justify-content: center; }
-/* Every icon is an inline SVG, so the shape never takes a pointer event of its own and
-   never stretches inside a flex row. */
+/* Inline SVG icons keep pointer events off their shapes and stay sized inside flex rows. */
 button svg, .icon-button svg { pointer-events: none; flex: none; }
 /* The quiet-notes eye sits beside Skip. It is muted while quiet notes stay hidden and filled when shown. */
 #quiet-notes { color: var(--muted); }
