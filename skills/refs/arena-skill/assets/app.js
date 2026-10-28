@@ -4133,13 +4133,6 @@ function resolveBoardMentions(text, board = getState()?.board, rowRepo = '', ent
     return labelText ? `${prefix}@${labelText}` : full;
   });
 }
-const boardEntryStamps = new Set();
-function formatBoardEntryStamp(entry, stamp, now = Date.now()) {
-  stamp.dataset.timestamp = entry.at || '';
-  stamp.textContent = entry.at ? time(entry.at, { now }) : '';
-  if (entry.at) stamp.title = fullRelativeTime(entry.at, { now });
-  boardEntryStamps.add(stamp);
-}
 function renderBoard() {
   const state = getState();
   const board = state?.board;
@@ -5638,11 +5631,6 @@ function repaintRelativeStamps() {
   }
   if (lastState?.skip_poll && !$('#skip-poll').dataset.error) {
     paintSkipPoll(lastState.skip_poll, now);
-  }
-  for (const stamp of [...boardEntryStamps]) {
-    if (!stamp?.dataset?.timestamp) { boardEntryStamps.delete(stamp); continue; }
-    stamp.textContent = time(stamp.dataset.timestamp, { now });
-    stamp.title = fullRelativeTime(stamp.dataset.timestamp, { now });
   }
   repaintReceiptAges(now);
 }

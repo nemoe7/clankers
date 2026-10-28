@@ -1948,10 +1948,9 @@ test('preview client', async (t) => {
       assert.equal(context.relativeTime(relativeAt(5 * 60_000), { now: fixedNow }), '5 minutes ago');
       assert.equal(context.relativeTime(relativeAt(5 * 60_000), { compact: true, now: fixedNow }), '5min ago');
       context.window.innerWidth = 360;
-      const compactStamp = new Element();
-      context.formatBoardEntryStamp({ at: relativeAt(2 * 60_000).toISOString() }, compactStamp, fixedNow);
-      assert.equal(compactStamp.textContent, '2min ago');
-      assert.equal(compactStamp.title, '2 minutes ago');
+      const twoMinutes = relativeAt(2 * 60_000).toISOString();
+      assert.equal(context.time(twoMinutes, { compact: true, now: fixedNow }), '2min ago');
+      assert.equal(context.fullRelativeTime(twoMinutes, { now: fixedNow }), '2 minutes ago');
       delete context.window.innerWidth;
       const at = ms => new Date(Date.now() - ms).toISOString();
       assert.equal(context.time(at(500)), 'just now');
