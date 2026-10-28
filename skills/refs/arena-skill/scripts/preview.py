@@ -2877,6 +2877,14 @@ def format_pending_record(item):
   if attachments:
     names = ", ".join(attachment_line(record) for record in attachments)
     lines.append(f"attachments: {names}")
+  elif type == "board" and isinstance(item.get("file"), dict):
+    board_file = str(
+      item["file"].get("staged_path") or item["file"].get("name") or ""
+    ).strip()
+    if board_file:
+      lines.append(f"attachments: {board_file}")
+  if item.get("patch_hint"):
+    lines.append(str(item["patch_hint"]))
   return "\n".join(lines)
 
 
@@ -5845,6 +5853,12 @@ def poll_inbox(store, sleeper=None):
         print(wake_head, flush=True)
         for notice in board_notices:
           print(notice, flush=True)
+        pending_board_ids = {
+          str(item.get("id") or "")
+          for item in (listing.get("pending") or [])
+          if isinstance(item, dict) and item.get("type") == "board"
+        }
+        repo_root = store.repository_root()
         for entry in unseen_entries:
           payload = entry.get("payload")
           body_text = (
@@ -5861,6 +5875,11 @@ def poll_inbox(store, sleeper=None):
           file_suffix = f" [file: {file_path}]" if file_path else ""
           head = f"[board {entry.get('id', '')}] {entry.get('branch', '')} -> {entry.get('to', '*')}"
           print(f"{head}: {body_text}{file_suffix}", flush=True)
+          patch_hint = board_patch_apply_hint(
+            entry, state_dir=store.path.parent, repo_root=repo_root
+          )
+          if patch_hint and str(entry.get("id") or "") not in pending_board_ids:
+            print(patch_hint, flush=True)
         print(format_read(listing), flush=True)
         return 0
       if skip_poll_ready(store):
@@ -5996,6 +6015,36 @@ def stage_board_file(state_dir, sender_branch, file_obj):
     "sha256": digest,
     "staged_path": str(target.relative_to(Path(state_dir))),
   }
+
+
+def board_patch_apply_hint(entry, state_dir=None, repo_root=None):
+  """Return a git apply --3way CLI hint when a board entry attaches a .patch file."""
+  if not isinstance(entry, dict):
+    return ""
+  file_obj = entry.get("file") if isinstance(entry.get("file"), dict) else None
+  if file_obj is None:
+    return ""
+  name = str(file_obj.get("name") or "").strip()
+  staged_rel = str(file_obj.get("staged_path") or "").strip()
+  if not (name or staged_rel).lower().endswith(".patch"):
+    return ""
+  if not staged_rel:
+    sender = str(entry.get("branch") or entry.get("session_id") or "").strip()
+    staged_rel = (
+      f"board-files/{encode_board_branch_dir(sender)}/{name}" if sender else name
+    )
+  full_path = (
+    Path(state_dir) / staged_rel if state_dir is not None else Path(staged_rel)
+  )
+  display_path = full_path.as_posix()
+  if repo_root is not None:
+    try:
+      display_path = (
+        full_path.resolve().relative_to(Path(repo_root).resolve()).as_posix()
+      )
+    except ValueError:
+      display_path = full_path.as_posix()
+  return f"patch hint: git apply --3way {shlex.quote(display_path)}"
 
 
 GREEK_LETTERS = (
@@ -8524,6 +8573,11 @@ class Store:
                   "at": str(entry.get("at") or now()),
                   "acknowledged_at": entry.get("acknowledged_at"),
                   "text": str(entry.get("text") or ""),
+                  "patch_hint": board_patch_apply_hint(
+                    entry,
+                    state_dir=self.path.parent,
+                    repo_root=self.repository_root(),
+                  ),
                 }
               )
     return matches
@@ -13452,8 +13506,9 @@ class Store:
           f"SELECT * FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at, seq"
         )
       ]
+      repo_root = self.repository_root()
       for b_entry in pending_board_entries_for_db(
-        db, branch=board_branch(workspace_branch(self.repository_root()))
+        db, branch=board_branch(workspace_branch(repo_root))
       ):
         pending.append(
           {
@@ -13466,9 +13521,16 @@ class Store:
             "seen_at": b_entry.get("seen_at"),
             "acknowledged_at": b_entry.get("acknowledged_at"),
             "ack_edited_at": b_entry.get("ack_edited_at"),
+            "file": b_entry.get("file")
+            if isinstance(b_entry.get("file"), dict)
+            else None,
+            "patch_hint": board_patch_apply_hint(
+              b_entry, state_dir=self.path.parent, repo_root=repo_root
+            ),
           }
         )
       notes = {}
+      board_patch_hints = {}
       for table in ("notes", "submissions"):
         for row in db.execute(f"SELECT * FROM {table} ORDER BY at, seq"):
           record = message_row(row)
@@ -13494,6 +13556,15 @@ class Store:
             if not isinstance(b_entry, dict):
               continue
             b_eid = str(b_entry.get("id") or "")
+            b_nid = str(b_entry.get("note_id") or "")
+            hint = board_patch_apply_hint(
+              b_entry, state_dir=self.path.parent, repo_root=repo_root
+            )
+            if hint:
+              if b_eid:
+                board_patch_hints[b_eid] = hint
+              if b_nid:
+                board_patch_hints[b_nid] = hint
             if b_eid and b_eid not in notes:
               payload_obj = b_entry.get("payload")
               b_text = str(
@@ -13515,6 +13586,8 @@ class Store:
       for item in pending:
         if item["type"] == "note":
           add_note_attachments(item, attachments.get(item["id"], []))
+          if item["id"] in board_patch_hints:
+            item["patch_hint"] = board_patch_hints[item["id"]]
           thread = reply_thread(item, notes)
           if thread:
             item["thread"] = thread
@@ -13745,6 +13818,8 @@ class Store:
     `ack_edited_at` for the latest reply stamp."""
     text = note_text(text)
     stamp = now()
+    patch_hints = []
+    repo_root = self.repository_root()
     with self.transaction(shared) as db:
       for record_id in ids:
         identifier(record_id)
@@ -13897,6 +13972,11 @@ class Store:
                 )
                 wakes[sender_sid] = f"{eid}-ack"
                 b_raw["wakes"] = wakes
+              hint = board_patch_apply_hint(
+                entry, state_dir=self.path.parent, repo_root=repo_root
+              )
+              if hint and hint not in patch_hints:
+                patch_hints.append(hint)
               board_dirty = True
               matched_db = True
               break
@@ -13919,6 +13999,7 @@ class Store:
         db.execute(
           "INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,)
         )
+    return patch_hints
 
   def guard_report_change(
     self, db, report_id, report, hold_view=True, hold_answer=True
@@ -18496,6 +18577,8 @@ def main():
         )
         print(head)
         print(row["text"])
+        if row.get("patch_hint"):
+          print(row["patch_hint"])
         print()
     elif args.command == "key":
       # The key note is quiet and it ages out of the pending list after an ack, so a later
@@ -18563,12 +18646,14 @@ def main():
             scope=args.task_scope,
             shared=shared,
           )
-          store.acknowledge(ids, text, shared=shared)
+          patch_hints = store.acknowledge(ids, text, shared=shared)
           store.mark_task(ids[0], args.task_id, shared=shared)
       else:
-        store.acknowledge(ids, text)
+        patch_hints = store.acknowledge(ids, text)
       short = [i[:6] for i in ids]
       print("ok " + " ".join(short))
+      for hint in patch_hints:
+        print(hint)
       untracked = [
         record_id
         for record_id in ids

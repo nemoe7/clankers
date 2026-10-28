@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Print a `git apply --3way` CLI hint when reading, polling, or acknowledging a board post with a `.patch` attachment (`scripts/preview.py`).
 - Vendor offline Mermaid (`assets/mermaid.min.js`, `assets/mermaid.LICENSE`) to render preview diagrams without network fetches (`skills/refs/arena-skill/`).
 - Add a Lucide eye `#quiet-notes` toggle beside `Skip poll` to show or hide quiet notes in the Messages log (`assets/index.html`, `assets/style.css`, `assets/app.js`).
 

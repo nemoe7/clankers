@@ -17842,3 +17842,112 @@ def test_board_post_rejects_unrecognized_targets_across_cli_and_api_board(
   finally:
     srv.shutdown()
     srv.server_close()
+
+
+def test_board_patch_attachment_prints_git_apply_hint_on_read_poll_note_and_ack(
+  tmp_path, monkeypatch, capsys
+):
+  repo_root = tmp_path / "repo"
+  state_dir = repo_root / "arena-state"
+  state_dir.mkdir(parents=True)
+  alpha = "arena/" + "a1" * 4 + "-clankers"
+  beta = "arena/" + "b2" * 4 + "-clankers"
+
+  monkeypatch.setattr(preview, "workspace_branch", lambda *_a, **_kw: alpha)
+  monkeypatch.setattr(preview.Store, "repository_root", lambda _self: repo_root)
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: state_dir)
+  monkeypatch.setattr(preview, "require_server", lambda _s: None)
+  monkeypatch.setattr(preview, "require_survey", lambda _s: None)
+
+  store = preview.Store(state_dir, create=True)
+  store.board_action({"action": "set-main", "branch": alpha, "repo": "clankers"})
+  store.board_action({"action": "allow", "branch": beta, "worker_id": "beta"})
+
+  patch_body = (
+    "diff --git a/x.txt b/x.txt\n--- a/x.txt\n+++ b/x.txt\n@@ -1 +1 @@\n-old\n+new\n"
+  )
+  store.board_action(
+    {
+      "action": "post",
+      "branch": beta,
+      "to": alpha,
+      "text": "@alpha Patch ready for review.",
+      "file": {
+        "name": "worker-fix.patch",
+        "encoding": "utf-8",
+        "content": patch_body,
+      },
+    }
+  )
+  store.board_action(
+    {
+      "action": "post",
+      "branch": beta,
+      "to": alpha,
+      "text": "@alpha Plain note attachment.",
+      "file": {
+        "name": "notes.txt",
+        "encoding": "utf-8",
+        "content": "hello\n",
+      },
+    }
+  )
+  entries = store.board_state()["entries"]
+  patch_entry_id = entries[-2]["id"]
+  txt_entry_id = entries[-1]["id"]
+  expected_rel = f"arena-state/board-files/arena%2F{'b2' * 4}-clankers/worker-fix.patch"
+  expected_hint = f"patch hint: git apply --3way {expected_rel}"
+
+  # 1. `arena-preview read` emits the git apply hint for .patch posts only.
+  capsys.readouterr()
+  monkeypatch.setattr(sys, "argv", ["preview.py", "read"])
+  assert preview.main() == 0
+  read_out = capsys.readouterr().out
+  assert expected_hint in read_out
+  assert "notes.txt" in read_out
+  assert "git apply --3way" not in read_out.replace(expected_hint, "")
+
+  # 2. `arena-preview note show <id>` emits the git apply hint when rereading the board post.
+  capsys.readouterr()
+  monkeypatch.setattr(sys, "argv", ["preview.py", "note", "show", patch_entry_id])
+  assert preview.main() == 0
+  note_out = capsys.readouterr().out
+  assert expected_hint in note_out
+
+  # 3. `arena-preview ack <id>` prints the git apply hint for .patch posts and not .txt posts.
+  capsys.readouterr()
+  monkeypatch.setattr(
+    sys, "argv", ["preview.py", "ack", patch_entry_id, "Applying worker patch."]
+  )
+  assert preview.main() == 0
+  ack_patch_out = capsys.readouterr().out
+  assert f"ok {patch_entry_id[:6]}" in ack_patch_out
+  assert expected_hint in ack_patch_out
+
+  capsys.readouterr()
+  monkeypatch.setattr(sys, "argv", ["preview.py", "ack", txt_entry_id, "Read note."])
+  assert preview.main() == 0
+  ack_txt_out = capsys.readouterr().out
+  assert "git apply --3way" not in ack_txt_out
+
+  # 4. `arena-preview poll` board wake emits the hint once for unseen handoff .patch posts.
+  store.board_action(
+    {
+      "action": "post",
+      "branch": beta,
+      "to": alpha,
+      "tag": "handoff",
+      "text": "Handoff patch staged.",
+      "file": {
+        "name": "handoff.patch",
+        "encoding": "utf-8",
+        "content": patch_body,
+      },
+    }
+  )
+  expected_handoff = f"patch hint: git apply --3way arena-state/board-files/arena%2F{'b2' * 4}-clankers/handoff.patch"
+  capsys.readouterr()
+  monkeypatch.setattr(sys, "argv", ["preview.py", "poll"])
+  assert preview.main() == 0
+  poll_out = capsys.readouterr().out
+  assert poll_out.count(expected_handoff) == 1

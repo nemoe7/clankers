@@ -1064,6 +1064,10 @@ def format_pending_record(item):
 	if text:lines.append(text)
 	attachments=item.get('attachments')or[]
 	if attachments:names=', '.join(attachment_line(record)for record in attachments);lines.append(f"attachments: {names}")
+	elif type=='board'and isinstance(item.get('file'),dict):
+		board_file=str(item['file'].get('staged_path')or item['file'].get('name')or'').strip()
+		if board_file:lines.append(f"attachments: {board_file}")
+	if item.get('patch_hint'):lines.append(str(item['patch_hint']))
 	return'\n'.join(lines)
 def format_pending_item(item):
 	if not reply_reference(item.get('text')):return format_pending_record(item)
@@ -2139,7 +2143,10 @@ def poll_inbox(store,sleeper=None):
 			if board_woken or board_notices:
 				clear_poll_repeat(store);unseen_entries=store.take_unseen_board_entries();has_work=bool(unseen_entries or listing.get('pending'));wake_head='BOARD WAKE: session woken from the multi-session board. Read board entries and continue work before polling again.'if has_work else'BOARD WAKE: session woken from the multi-session board. DO NOT END TURN. Delegate queued work if main, else run arena-preview poll again.';print(wake_head,flush=True)
 				for notice in board_notices:print(notice,flush=True)
-				for entry in unseen_entries:payload=entry.get('payload');body_text=json.dumps(payload,ensure_ascii=False)if isinstance(payload,dict)else str(payload or'');file_obj=entry.get('file')if isinstance(entry.get('file'),dict)else None;file_path=file_obj.get('staged_path')or file_obj.get('name')or''if file_obj else'';file_suffix=f" [file: {file_path}]"if file_path else'';head=f"[board {entry.get('id','')}] {entry.get('branch','')} -> {entry.get('to','*')}";print(f"{head}: {body_text}{file_suffix}",flush=True)
+				pending_board_ids={str(item.get('id')or'')for item in listing.get('pending')or[]if isinstance(item,dict)and item.get('type')=='board'};repo_root=store.repository_root()
+				for entry in unseen_entries:
+					payload=entry.get('payload');body_text=json.dumps(payload,ensure_ascii=False)if isinstance(payload,dict)else str(payload or'');file_obj=entry.get('file')if isinstance(entry.get('file'),dict)else None;file_path=file_obj.get('staged_path')or file_obj.get('name')or''if file_obj else'';file_suffix=f" [file: {file_path}]"if file_path else'';head=f"[board {entry.get('id','')}] {entry.get('branch','')} -> {entry.get('to','*')}";print(f"{head}: {body_text}{file_suffix}",flush=True);patch_hint=board_patch_apply_hint(entry,state_dir=store.path.parent,repo_root=repo_root)
+					if patch_hint and str(entry.get('id')or'')not in pending_board_ids:print(patch_hint,flush=True)
 				print(format_read(listing),flush=True);return 0
 			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);return 0
 			if not announced_running:announced_running=True;run_notices(store.path.parent,show_running=True)
@@ -2193,6 +2200,18 @@ def stage_board_file(state_dir,sender_branch,file_obj):
 	digest=hashlib.sha256(raw_bytes).hexdigest();expected=str(file_obj.get('sha256')or'').strip().lower()
 	if expected and expected!=digest:raise ValueError('Board file SHA-256 mismatch')
 	safe_sender=encode_board_branch_dir(sender_branch or'session');target=Path(state_dir)/'board-files'/safe_sender/clean_name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw_bytes);return{'name':clean_name,'encoding':encoding,'content':content,'size':len(raw_bytes),'sha256':digest,'staged_path':str(target.relative_to(Path(state_dir)))}
+def board_patch_apply_hint(entry,state_dir=None,repo_root=None):
+	if not isinstance(entry,dict):return''
+	file_obj=entry.get('file')if isinstance(entry.get('file'),dict)else None
+	if file_obj is None:return''
+	name=str(file_obj.get('name')or'').strip();staged_rel=str(file_obj.get('staged_path')or'').strip()
+	if not(name or staged_rel).lower().endswith('.patch'):return''
+	if not staged_rel:sender=str(entry.get('branch')or entry.get('session_id')or'').strip();staged_rel=f"board-files/{encode_board_branch_dir(sender)}/{name}"if sender else name
+	full_path=Path(state_dir)/staged_rel if state_dir is not None else Path(staged_rel);display_path=full_path.as_posix()
+	if repo_root is not None:
+		try:display_path=full_path.resolve().relative_to(Path(repo_root).resolve()).as_posix()
+		except ValueError:display_path=full_path.as_posix()
+	return f"patch hint: git apply --3way {shlex.quote(display_path)}"
 GREEK_LETTERS='alpha','beta','gamma','delta','epsilon','zeta','eta','theta','iota','kappa','lambda','mu','nu','xi','omicron','pi','rho','sigma','tau','upsilon','phi','chi','psi','omega'
 WORKER_ID_RE=re.compile('^[A-Za-z0-9_-]{1,6}$')
 def clean_board_repo(repo='',fallback_branch=''):
@@ -2996,7 +3015,7 @@ class Store:
 					for entry in reversed(norm.get('entries')or[]):
 						if not isinstance(entry,dict):continue
 						eid=str(entry.get('id')or'');nid=str(entry.get('note_id')or'')
-						if eid and eid not in seen_ids and(eid==token or eid.startswith(token)or nid and(nid==token or nid.startswith(token))):seen_ids.add(eid);matches.append({'id':eid,'at':str(entry.get('at')or now()),'acknowledged_at':entry.get('acknowledged_at'),'text':str(entry.get('text')or'')})
+						if eid and eid not in seen_ids and(eid==token or eid.startswith(token)or nid and(nid==token or nid.startswith(token))):seen_ids.add(eid);matches.append({'id':eid,'at':str(entry.get('at')or now()),'acknowledged_at':entry.get('acknowledged_at'),'text':str(entry.get('text')or''),'patch_hint':board_patch_apply_hint(entry,state_dir=self.path.parent,repo_root=self.repository_root())})
 		return matches
 	def connect(self):db=sqlite_api().connect(self.path,timeout=5);db.row_factory=sqlite_api().Row;return db
 	def note(self,note_id,text,at=None,acknowledged_at=None,ack_type=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,autosave=True,shared=None,replies=None,ack_edited_seen_count=None,quiet=False,blocking=None,type=''):
@@ -4464,9 +4483,9 @@ class Store:
 	def read(self,include_quiet=True):
 		quiet_filter=' AND (quiet = 0 OR blocking = 1 OR seen_at IS NULL)'if include_quiet else" AND (quiet = 0 OR (type IN ('state-backup', 'survey', 'worker-idle', 'worker-disconnected') AND blocking = 1))"
 		with self.transaction(autosave=False)as db:
-			pending=[message_row(row)|{'type':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'type':'report'}for row in db.execute(f"SELECT * FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at, seq")]
-			for b_entry in pending_board_entries_for_db(db,branch=board_branch(workspace_branch(self.repository_root()))):pending.append({'id':str(b_entry.get('id')or''),'type':'board','branch':str(b_entry.get('branch')or''),'board_id':str(b_entry.get('board_id')or b_entry.get('branch')or''),'text':str(b_entry.get('text')or''),'at':str(b_entry.get('at')or now()),'seen_at':b_entry.get('seen_at'),'acknowledged_at':b_entry.get('acknowledged_at'),'ack_edited_at':b_entry.get('ack_edited_at')})
-			notes={}
+			pending=[message_row(row)|{'type':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'type':'report'}for row in db.execute(f"SELECT * FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at, seq")];repo_root=self.repository_root()
+			for b_entry in pending_board_entries_for_db(db,branch=board_branch(workspace_branch(repo_root))):pending.append({'id':str(b_entry.get('id')or''),'type':'board','branch':str(b_entry.get('branch')or''),'board_id':str(b_entry.get('board_id')or b_entry.get('branch')or''),'text':str(b_entry.get('text')or''),'at':str(b_entry.get('at')or now()),'seen_at':b_entry.get('seen_at'),'acknowledged_at':b_entry.get('acknowledged_at'),'ack_edited_at':b_entry.get('ack_edited_at'),'file':b_entry.get('file')if isinstance(b_entry.get('file'),dict)else None,'patch_hint':board_patch_apply_hint(b_entry,state_dir=self.path.parent,repo_root=repo_root)})
+			notes={};board_patch_hints={}
 			for table in('notes','submissions'):
 				for row in db.execute(f"SELECT * FROM {table} ORDER BY at, seq"):record=message_row(row);notes[record['id']]=record
 			for row in db.execute('SELECT id, source FROM reports'):notes[row['id']]=dict(row)|{'type':'report','text':''}
@@ -4478,14 +4497,19 @@ class Store:
 				if isinstance(b_raw,dict):
 					for b_entry in b_raw.get('entries')or[]:
 						if not isinstance(b_entry,dict):continue
-						b_eid=str(b_entry.get('id')or'')
+						b_eid=str(b_entry.get('id')or'');b_nid=str(b_entry.get('note_id')or'');hint=board_patch_apply_hint(b_entry,state_dir=self.path.parent,repo_root=repo_root)
+						if hint:
+							if b_eid:board_patch_hints[b_eid]=hint
+							if b_nid:board_patch_hints[b_nid]=hint
 						if b_eid and b_eid not in notes:payload_obj=b_entry.get('payload');b_text=str(b_entry.get('text')or(payload_obj.get('text')if isinstance(payload_obj,dict)else'')or'');notes[b_eid]={'id':b_eid,'text':b_text,'at':b_entry.get('at')}
 			attachments={}
 			for row in db.execute('SELECT * FROM uploads ORDER BY seq'):record=upload_row(row,self.path.parent);attachments.setdefault(record['note_id'],[]).append(record)
 			for record in notes.values():add_note_attachments(record,attachments.get(record['id'],[]))
 			for item in pending:
 				if item['type']=='note':
-					add_note_attachments(item,attachments.get(item['id'],[]));thread=reply_thread(item,notes)
+					add_note_attachments(item,attachments.get(item['id'],[]))
+					if item['id']in board_patch_hints:item['patch_hint']=board_patch_hints[item['id']]
+					thread=reply_thread(item,notes)
 					if thread:item['thread']=thread
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):item[key]=clip_stamp(item[key])
 			pending.sort(key=lambda item:item['at']);checked=now();db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(checked,));waiting=db.execute('SELECT value FROM meta WHERE key = ?',(SKIP_POLL_META,)).fetchone();return{'checked_at':clip_stamp(checked),'pending':pending,'skip_poll':clip_stamp(waiting[0])if waiting else None}
@@ -4564,7 +4588,7 @@ class Store:
 		if len(rows)>1:listed=', '.join(row['id']for row in rows);raise ValueError(f"{len(rows)} items are pending: {listed}. Name the ID to answer one")
 		return rows[0]['id']
 	def acknowledge(self,ids,text,shared=None):
-		text=note_text(text);stamp=now()
+		text=note_text(text);stamp=now();patch_hints=[];repo_root=self.repository_root()
 		with self.transaction(shared)as db:
 			for record_id in ids:identifier(record_id)
 			for record_id in ids:
@@ -4598,12 +4622,15 @@ class Store:
 							else:replies=list(entry['replies'])if isinstance(entry.get('replies'),list)else[];replies.append({'type':'reply','text':norm_ack_msg,'at':clip_stamp(stamp),'sender':ack_sender_id});entry['replies']=replies;entry['ack_edited_at']=clip_stamp(stamp)
 							rep_ops=list(b_raw['report_ops'])if isinstance(b_raw.get('report_ops'),list)else[];rep_ops.append({'id':f"eack-{eid}-{uuid.uuid4().hex[:6]}",'target':'*','op':'entry-ack','entry_id':eid,'seen_at':entry.get('seen_at'),'acknowledged_at':entry.get('acknowledged_at'),'ack_type':entry.get('ack_type'),'ack_text':entry.get('ack_text'),'ack_sender':entry.get('ack_sender'),'ack_edited_at':entry.get('ack_edited_at'),'replies':entry.get('replies'),'at':clip_stamp(stamp)});b_raw['report_ops']=rep_ops;sender_sid=str(entry.get('branch')or entry.get('session_id')or'')
 							if sender_sid and sender_sid!=local_sid:wakes=dict(b_raw['wakes'])if isinstance(b_raw.get('wakes'),dict)else{};wakes[sender_sid]=f"{eid}-ack";b_raw['wakes']=wakes
+							hint=board_patch_apply_hint(entry,state_dir=self.path.parent,repo_root=repo_root)
+							if hint and hint not in patch_hints:patch_hints.append(hint)
 							board_dirty=True;matched_db=True;break
 				if not matched_db:raise ValueError(f"Unknown note: {record_id}; no receipts written")
 			if board_dirty and isinstance(b_raw,dict):db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,json.dumps(b_raw,ensure_ascii=False)))
 			if not db.execute(f"SELECT 1 FROM notes WHERE {VIOLATION_NOTES} AND acknowledged_at IS NULL").fetchone():db.execute('DELETE FROM meta WHERE key = ?',(AGENT_INTERRUPT_FLAG_META,))
 			db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(stamp,))
 			if not gate_pending_count(db):db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
+		return patch_hints
 	def guard_report_change(self,db,report_id,report,hold_view=True,hold_answer=True):
 		unread=db.execute(f"SELECT 1 FROM submissions WHERE report_id = ? AND {PENDING_SUBMISSIONS} LIMIT 1",(report_id,)).fetchone()
 		if unread is not None:raise ReportHeld('The report has an unacknowledged answer.')
@@ -5824,7 +5851,10 @@ def main():
 		elif args.command=='note':
 			rows=store.notes_matching(args.id)
 			if not rows:print(f"No note matches {args.id}.",file=sys.stderr);return 1
-			for row in rows:head=f"note {row['id']} at {local_stamp(row['at'])}";head+=f" acked {local_stamp(row['acknowledged_at'])}"if row['acknowledged_at']else' unacked';print(head);print(row['text']);print()
+			for row in rows:
+				head=f"note {row['id']} at {local_stamp(row['at'])}";head+=f" acked {local_stamp(row['acknowledged_at'])}"if row['acknowledged_at']else' unacked';print(head);print(row['text'])
+				if row.get('patch_hint'):print(row['patch_hint'])
+				print()
 		elif args.command=='key':
 			record=store.agent_key()
 			if not record:print('No agent key recorded.',file=sys.stderr);return 1
@@ -5844,9 +5874,11 @@ def main():
 			if any(value is not None for value in task_options):
 				if len(args.ids)!=1 or not all(task_options):raise ValueError('A combined acknowledgement needs one explicit message ID and all five task options')
 				details=task_steps(args.task_detail);check_task_steps(details)
-				with store.transaction()as shared:store.write_task(args.task_id,args.task_title,details,task_type=args.task_type,scope=args.task_scope,shared=shared);store.acknowledge(ids,text,shared=shared);store.mark_task(ids[0],args.task_id,shared=shared)
-			else:store.acknowledge(ids,text)
-			short=[i[:6]for i in ids];print('ok '+' '.join(short));untracked=[record_id for record_id in ids if not any(record.get('task_id')is not None for(_,record)in store.id_matches(record_id)if record['id']==record_id)]
+				with store.transaction()as shared:store.write_task(args.task_id,args.task_title,details,task_type=args.task_type,scope=args.task_scope,shared=shared);patch_hints=store.acknowledge(ids,text,shared=shared);store.mark_task(ids[0],args.task_id,shared=shared)
+			else:patch_hints=store.acknowledge(ids,text)
+			short=[i[:6]for i in ids];print('ok '+' '.join(short))
+			for hint in patch_hints:print(hint)
+			untracked=[record_id for record_id in ids if not any(record.get('task_id')is not None for(_,record)in store.id_matches(record_id)if record['id']==record_id)]
 			if untracked:print('link it with: '+'; '.join(f'arena-preview task set <id> "<title>" -m {i}'for i in untracked))
 		elif args.command=='board-status':
 			b_state=store.board_state();self_sid=b_state.get('branch')or'none';role=b_state.get('board_role')or'blocked';main_sid=b_state.get('main_session_id')or'none';print(f"board {self_sid} role={role} main={main_sid}")
