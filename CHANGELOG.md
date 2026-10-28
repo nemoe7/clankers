@@ -31,6 +31,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Apply the `nuu` relative-timestamps recipe (`includeSeconds: true`), full-form hover `title` attributes, and 1-second stamp refreshes across preview surfaces (`assets/app.js`).
 - Omit `report_id` from linked submission headers in the Tasks UI and CLI `task list`, `task show`, and `read` output (`assets/app.js`, `scripts/preview.py`).
 - Shorten quiet notes, format configured-timezone CLI stamps, and display key expiry countdowns (`assets/app.js`, `scripts/preview.py`, `scripts/survey.py`).
 - Inform `main` via one `ack`-required quiet note per transition when an allowlisted worker enters idle `poll` or disconnects from the board (`scripts/preview.py`).

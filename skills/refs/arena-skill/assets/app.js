@@ -10,6 +10,7 @@ const key = 'arena-preview-v1';
 const PASTE_LINE_LIMIT = 15;
 const PASTE_CHAR_LIMIT = 1500;
 const BINARY_TIMEOUT = 600_000;
+const RELATIVE_STAMP_REFRESH_MS = 1000;
 let pending = null;
 let stateBusy = null;
 let stateAgain = false;
@@ -204,7 +205,9 @@ function setConnection(state, text) {
   const dot = $('#connection-dot');
   dot.dataset.state = state;
   dot.setAttribute('aria-label', connectionLabel(state));
-  $('#connection-text').textContent = text;
+  const status = $('#connection-text');
+  status.textContent = text;
+  status.title = connectionTitle();
 }
 // The server stores the wait stamp in second-precision UTC.
 // Add Z for the browser parser.
@@ -254,6 +257,11 @@ function connectionText() {
   if (callEndStamp !== null) return `Bash ${time(callEndStamp)}${tail}${callTally}`;
   return agentIdle() ? `Agent 404${callTally}` : connectionBase + callTally;
 }
+function connectionTitle() {
+  if (callEndStamp === null) return connectionText();
+  const tail = agentIdle() ? ' · Agent 404' : '';
+  return `Bash ${fullRelativeTime(callEndStamp)}${tail}${callTally}`;
+}
 function stampMs(value) {
   if (typeof value !== 'string') return null;
   const stamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value) ? `${value}Z` : value;
@@ -295,6 +303,7 @@ function sessionStatusInfo(row, selfSid = getState()?.board?.branch || '') {
       dotState: selfDot,
       statusWord: selfDot === 'polling' ? 'Polling' : connectionLabel(selfDot),
       statusText: connectionText(),
+      statusTitle: connectionTitle(),
     };
   }
   const rPollSince = row.polling ? stampMs(row.polling_since || row.updated_at) : null;
@@ -332,6 +341,7 @@ function sessionStatusInfo(row, selfSid = getState()?.board?.branch || '') {
       dotState,
       statusWord: connectionLabel(dotState),
       statusText: `Bash ${time(rCallEndStamp)}${tail}${rTally}`,
+      statusTitle: `Bash ${fullRelativeTime(rCallEndStamp)}${tail}${rTally}`,
     };
   }
   if (rIdle) {
@@ -341,11 +351,15 @@ function sessionStatusInfo(row, selfSid = getState()?.board?.branch || '') {
     dotState: 'ok',
     statusWord: 'Connected',
     statusText: `${row.updated_at ? `Active ${time(row.updated_at)}` : 'Connected'}${rTally}`,
+    statusTitle: `${row.updated_at ? `Active ${fullRelativeTime(row.updated_at)}` : 'Connected'}${rTally}`,
   };
 }
 function paintConnection() {
-  if (pollSince !== null || agentInCall()) $('#connection-text').textContent = connectionText();
-  else if (agentIdle() && $('#connection-dot').dataset.state !== 'down') {
+  if (pollSince !== null || agentInCall()) {
+    const status = $('#connection-text');
+    status.textContent = connectionText();
+    status.title = connectionTitle();
+  } else if (agentIdle() && $('#connection-dot').dataset.state !== 'down') {
     setConnection('idle', connectionText());
   }
   const board = getState()?.board;
@@ -357,7 +371,11 @@ function paintConnection() {
       const sid = statusEl?.dataset?.branch;
       if (!sid) continue;
       const row = board.sessions.find(item => item && item.branch === sid);
-      if (row) statusEl.textContent = sessionStatusInfo(row, selfSid).statusText;
+      if (row) {
+        const status = sessionStatusInfo(row, selfSid);
+        statusEl.textContent = status.statusText;
+        statusEl.title = status.statusTitle || '';
+      }
     }
   }
 }
@@ -1057,8 +1075,9 @@ function compactViewport() {
     (Number(window.innerHeight) > 0 && Number(window.innerHeight) <= 480)
   );
 }
-function time(value, { compact = compactViewport(), includeSeconds = true } = {}) {
-  const seconds = Math.max(0, Math.floor((Date.now() - stampDate(value).getTime()) / 1000));
+function relativeTime(value, { compact = false, includeSeconds = false, now = Date.now() } = {}) {
+  const nowMs = now instanceof Date ? now.getTime() : now;
+  const seconds = Math.max(0, Math.floor((nowMs - stampDate(value).getTime()) / 1000));
   if (includeSeconds) {
     if (seconds < 1) return compact ? 'now' : 'just now';
     if (seconds < 60) return compact ? `${seconds}s ago` : (seconds === 1 ? 'a second ago' : `${seconds} seconds ago`);
@@ -1080,6 +1099,12 @@ function time(value, { compact = compactViewport(), includeSeconds = true } = {}
   }
   const years = Math.max(1, Math.floor(days / 365));
   return compact ? `${years}yr ago` : (years === 1 ? 'last year' : `${years} years ago`);
+}
+function fullRelativeTime(value, options = {}) {
+  return relativeTime(value, { includeSeconds: true, ...options, compact: false });
+}
+function time(value, options = {}) {
+  return relativeTime(value, { compact: compactViewport(), includeSeconds: true, ...options });
 }
 function clockTime(value) {
   // The header clock shows absolute time in the browser's local zone.
@@ -1375,6 +1400,8 @@ function showHistory(rawNotes) {
     const receiptState = document.createElement('span');
     receiptState.textContent = ` · ${time(item.at)}` +
       (item.ack_edited_at ? ` · Replied again ${time(item.ack_edited_at)}` : '');
+    receiptState.title = `${fullRelativeTime(item.at)}` +
+      (item.ack_edited_at ? ` · Replied again ${fullRelativeTime(item.ack_edited_at)}` : '');
     receiptState.dataset.at = item.at;
     if (item.ack_edited_at) receiptState.dataset.ackEditedAt = item.ack_edited_at;
     // Separate the receipt ID, state, time, filenames, and task with middle dots.
@@ -1424,7 +1451,7 @@ function showHistory(rawNotes) {
       const blocks = (item.replies || []).map(reply => {
         const block = document.createElement('div');
         block.className = 'reply-block';
-        block.title = `Replied again ${time(reply.at)}`;
+        block.title = `Replied again ${fullRelativeTime(reply.at)}`;
         if (reply.type === 'reply' && reply.html !== undefined) {
           block.innerHTML = linkReferences(reply.html, references);
         }
@@ -1679,6 +1706,7 @@ function renderState() {
   }
   // The ack writes the same stamp as a read does, so the label is true.
   $('#last-check').textContent = state.last_check ? `Last read/ack: ${time(state.last_check)}` : 'No read or ack yet.';
+  $('#last-check').title = state.last_check ? fullRelativeTime(state.last_check) : '';
   // File tool activity rides its own line under that stamp, so the header shows the work.
   paintLastTool(state.last_tool);
   showHistory(logNotes);
@@ -2700,16 +2728,16 @@ function ackUnread(report) {
 }
 function submissionStateWord(report) {
   if (report.pending_answer) return 'Sending';
-  if (report.latest_answer_acknowledged_at) return `Acked ${time(report.latest_answer_acknowledged_at)}`;
+  if (report.latest_answer_acknowledged_at) return `Acked ${fullRelativeTime(report.latest_answer_acknowledged_at)}`;
   return submissionSeenAt(report) ? 'Awaiting ack' : 'Sent';
 }
 function submissionStamp(report) {
   return report.latest_answer_acknowledged_at || submissionSeenAt(report) || report.latest_answer_at;
 }
 function submissionStampTitle(report) {
-  return `Sent ${time(report.latest_answer_at)}` +
-    (submissionSeenAt(report) ? ` · Read ${time(report.agent_seen_at)}` : '') +
-    (report.latest_answer_acknowledged_at ? ` · Acked ${time(report.latest_answer_acknowledged_at)}` : '');
+  return `Sent ${fullRelativeTime(report.latest_answer_at)}` +
+    (submissionSeenAt(report) ? ` · Read ${fullRelativeTime(report.agent_seen_at)}` : '') +
+    (report.latest_answer_acknowledged_at ? ` · Acked ${fullRelativeTime(report.latest_answer_acknowledged_at)}` : '');
 }
 function submissionReceipt(report) {
   const parts = submissionParts(report);
@@ -2731,6 +2759,7 @@ function submissionReceipt(report) {
   dot.title = submissionStateWord(report);
   const when = document.createElement('span');
   when.textContent = time(submissionStamp(report));
+  when.title = fullRelativeTime(submissionStamp(report));
   return [stamp, separator(), dot, separator(), when];
 }
 function renderReportAcknowledgement() {
@@ -2748,7 +2777,7 @@ function renderReportAcknowledgement() {
     for (const reply of [{text: ack.ack_text, html: ack.ack_html, at: ack.acknowledged_at}, ...(ack.replies || [])]) {
       const block = document.createElement('div');
       block.className = 'reply-block';
-      block.title = `Submission ${ack.id.slice(0, 6)} · ${time(reply.at)}`;
+      block.title = `Submission ${ack.id.slice(0, 6)} · ${fullRelativeTime(reply.at)}`;
       if (reply.html !== undefined) block.innerHTML = linkReferences(reply.html, references);
       else {
         const plain = document.createElement('p');
@@ -2998,7 +3027,11 @@ async function loadReport(force = false) {
     const stampSource = result.edited && result.published && result.edited !== result.published
       ? `Edited ${time(result.edited)}`
       : result.published || result.edited ? `Published ${time(result.published || result.edited)}` : '';
+    const stampTitle = result.edited && result.published && result.edited !== result.published
+      ? `Edited ${fullRelativeTime(result.edited)}`
+      : result.published || result.edited ? `Published ${fullRelativeTime(result.published || result.edited)}` : '';
     reportStatusLine(stampSource, id, report?.latest_answer_at ? report.latest_answer_id : null);
+    $('#report-status').title = stampTitle;
     // Opening the report clears any unread ack immediately because the receipt sits at the panel top.
     settleReportAck();
     checkReportRead();
@@ -3070,7 +3103,7 @@ function taskFilterType(task) {
 }
 function taskTooltip(task) {
   const stamp = task.completed_at || task.updated_at;
-  const age = stamp ? time(stamp) : '';
+  const age = stamp ? fullRelativeTime(stamp) : '';
   const hasOrder = task.order !== undefined && task.order !== null && task.order !== '';
   const first = hasOrder ? `${task.order}. ${task.id}` : task.id;
   const runs = Array.isArray(task.runs) && task.runs.length ? task.runs.join(' ') : '';
@@ -3170,7 +3203,9 @@ function taskRow(task) {
         }
         const stamp = document.createElement('time');
         stamp.dateTime = answer.at;
-        stamp.title = stampDate(answer.at).toLocaleString();
+        stamp.title = compactViewport()
+          ? fullRelativeTime(answer.at)
+          : stampDate(answer.at).toLocaleString();
         stamp.textContent = time(answer.at);
         const text = document.createElement('p');
         text.className = 'task-answer-text';
@@ -3236,6 +3271,7 @@ function renderTasksIfChanged(tasks) {
     renderTasks(tasks);
   } else if (tasks) {
     $('#tasks-status').textContent = `Updated ${time(tasks.updated_at)}`;
+    $('#tasks-status').title = fullRelativeTime(tasks.updated_at);
   }
   if (tasks) {
     const byId = new Map([...(tasks.upcoming || []), ...(tasks.finished || [])].map(task => [task.id, task]));
@@ -3251,6 +3287,9 @@ function renderTasksIfChanged(tasks) {
   }
   for (const stamp of document.querySelectorAll('.task-answer time')) {
     stamp.textContent = time(stamp.dateTime);
+    stamp.title = compactViewport()
+      ? fullRelativeTime(stamp.dateTime)
+      : stampDate(stamp.dateTime).toLocaleString();
     if (taskSearch) markNode(stamp, taskSearch);
   }
 }
@@ -3281,6 +3320,7 @@ function renderTasks(tasks) {
     if (!liveIds.has(id)) openTaskDetails.delete(id);
   }
   status.textContent = `Updated ${time(tasks.updated_at)}`;
+  status.title = fullRelativeTime(tasks.updated_at);
   const visible = task =>
     (taskTypeFilter === 'all' || taskFilterType(task) === taskTypeFilter)
     && (!taskSearch || taskHaystack(task).includes(taskSearch));
@@ -4061,9 +4101,11 @@ function resolveBoardMentions(text, board = getState()?.board, rowRepo = '', ent
     return labelText ? `${prefix}@${labelText}` : full;
   });
 }
-function formatBoardEntryStamp(entry, stamp) {
-  stamp.textContent = entry.at ? time(entry.at) : '';
-  if (entry.at) stamp.title = clockTime(entry.at);
+function formatBoardEntryStamp(entry, stamp, now = Date.now()) {
+  stamp.textContent = entry.at ? time(entry.at, { now }) : '';
+  if (entry.at) stamp.title = compactViewport()
+    ? fullRelativeTime(entry.at, { now })
+    : clockTime(entry.at);
 }
 function renderBoard() {
   const board = getState()?.board;
@@ -4580,7 +4622,7 @@ function renderAgentKey(record, repo, userscriptVersion) {
   const tipParts = [];
   if (ver) tipParts.push(`Userscript ${ver}`);
   if (record.host) tipParts.push(record.host);
-  tipParts.push(`set ${time(record.at)}`);
+  tipParts.push(`set ${fullRelativeTime(record.at)}`);
   line.title = tipParts.join(' · ');
 }
 function renderFetchIfChanged(jobs) {
@@ -4785,7 +4827,9 @@ function clearReportPanel(id) {
   delete $('#report').dataset.revision;
   const nextId = $('#report-select').value && $('#report-select').value !== id ? $('#report-select').value : '';
   save('report', nextId);
-  $('#report-status').textContent = `Report ${id} · Deleted · ${time(new Date().toISOString())}`;
+  const deletedAt = new Date().toISOString();
+  $('#report-status').textContent = `Report ${id} · Deleted · ${time(deletedAt)}`;
+  $('#report-status').title = `Deleted ${fullRelativeTime(deletedAt)}`;
   listSignature = null;
   if (nextId && !$('#reports-panel').hidden) void loadReport(true);
   void refreshState();
@@ -5200,10 +5244,12 @@ function surveyAnswer(result, index, total) {
 function renderSurvey(view, results, answeredAt) {
   const snapshot = JSON.stringify([results, answeredAt]);
   const relative = answeredAt ? time(answeredAt) : '';
+  const full = answeredAt ? fullRelativeTime(answeredAt) : '';
   if (view.dataset.snapshot === snapshot) {
     const age = view.querySelector('time');
     age.textContent = relative;
-    age.setAttribute('aria-label', `Last answer: ${relative}`);
+    age.title = full;
+    age.setAttribute('aria-label', `Last answer: ${full}`);
     $('#survey-again').disabled = surveyRequested;
     return;
   }
@@ -5253,7 +5299,8 @@ function renderSurvey(view, results, answeredAt) {
   age.dateTime = answeredAt || '';
   age.hidden = !answeredAt;
   age.textContent = relative;
-  age.setAttribute('aria-label', `Last answer: ${relative}`);
+  age.title = full;
+  age.setAttribute('aria-label', `Last answer: ${full}`);
   const again = $('#survey-again');
   again.hidden = false;
   again.disabled = surveyRequested;
@@ -5445,6 +5492,9 @@ function paintSkipPoll(skipPoll) {
   label(button, button.dataset.error || (armed
     ? `Skip poll armed ${time(skipPoll)}, ending the agent wait`
     : 'Ask the agent to end its wait now'));
+  if (armed && !button.dataset.error) {
+    button.title = `Skip poll armed ${fullRelativeTime(skipPoll)}, ending the agent wait`;
+  }
 }
 $('#skip-poll').addEventListener('click', async () => {
   const button = $('#skip-poll');
@@ -5497,16 +5547,30 @@ connectSocket();
 setInterval(checkSocket, 5000);
 // The wait timer repaints between state refreshes, so the seconds move without a request.
 setInterval(paintConnection, 1000);
-// Render mints each age label once, so a long-open page keeps a stale minute count.
-// A half-minute timer repaints every receipt age from its stored stamp.
-function repaintReceiptAges() {
+function repaintReceiptAges(now = Date.now()) {
   if (lastState) renderAgentKey(lastState.agent_key, lastState.repo, lastState.userscript_version || connectedUserscriptVersion);
   for (const row of messageNodes.values()) {
     const receipt = row.children[2];
     const stamp = receipt && receipt.children[3];
     if (!stamp || !stamp.dataset.at) continue;
-    stamp.textContent = ` · ${time(stamp.dataset.at)}` +
-      (stamp.dataset.ackEditedAt ? ` · Replied again ${time(stamp.dataset.ackEditedAt)}` : '');
+    stamp.textContent = ` · ${time(stamp.dataset.at, { now })}` +
+      (stamp.dataset.ackEditedAt ? ` · Replied again ${time(stamp.dataset.ackEditedAt, { now })}` : '');
+    stamp.title = `${fullRelativeTime(stamp.dataset.at, { now })}` +
+      (stamp.dataset.ackEditedAt ? ` · Replied again ${fullRelativeTime(stamp.dataset.ackEditedAt, { now })}` : '');
   }
 }
-setInterval(repaintReceiptAges, 30000);
+function repaintRelativeStamps() {
+  const now = Date.now();
+  const compact = compactViewport();
+  for (const stamp of document.querySelectorAll('time[datetime]')) {
+    const value = stamp.dateTime || stamp.getAttribute('datetime');
+    if (!value) continue;
+    stamp.textContent = time(value, { now });
+    if (compact) stamp.title = fullRelativeTime(value, { now });
+    if (stamp.className === 'muted') {
+      stamp.setAttribute('aria-label', `Last answer: ${fullRelativeTime(value, { now })}`);
+    }
+  }
+  repaintReceiptAges(now);
+}
+setInterval(repaintRelativeStamps, RELATIVE_STAMP_REFRESH_MS);

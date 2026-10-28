@@ -226,12 +226,19 @@ test('preview client', async (t) => {
       }),
     },
     document: { querySelector: get, querySelectorAll(selector) {
-      if (selector !== '.task-answer time') return [];
+      if (selector !== '.task-answer time' && selector !== 'time[datetime]') return [];
       const matches = new Set();
       const visit = (node, inAnswer = false) => {
         if (!(node instanceof Element)) return;
         const answer = inAnswer || node.className === 'task-answer';
-        if (answer && node.tagName === 'time') matches.add(node);
+        if (
+          node.tagName === 'time' &&
+          (selector === 'time[datetime]'
+            ? Boolean(node.dateTime || node.getAttribute('datetime'))
+            : answer)
+        ) {
+          matches.add(node);
+        }
         node.children.forEach(child => visit(child, answer));
       };
       elements.forEach(node => visit(node));
@@ -257,7 +264,7 @@ test('preview client', async (t) => {
     URL,
     setTimeout,
     clearTimeout,
-    setInterval: callback => { intervals.push(callback); return 1; },
+    setInterval: (callback, delay) => { callback.delay = delay; intervals.push(callback); return 1; },
     clearInterval: () => {},
     fetch: t.mock.fn(async (url, options) => {
       if (options?.signal?.aborted) throw abortError();
@@ -1931,6 +1938,21 @@ test('preview client', async (t) => {
         'a seconds-only stamp formats as UTC, matching the same instant with a Z');
       const offsetKept = context.time(`${recentBase.slice(0, 19)}.000+00:00`);
       assert.equal(offsetKept, withZone, 'a stamped offset still parses as UTC');
+      const fixedNow = Date.UTC(2026, 0, 1);
+      const relativeAt = ms => new Date(fixedNow - ms);
+      assert.equal(context.relativeTime(relativeAt(500), { now: fixedNow }), 'just now');
+      assert.equal(context.relativeTime(relativeAt(1000), { now: fixedNow }), 'just now');
+      assert.equal(context.relativeTime(relativeAt(500), { compact: true, now: fixedNow }), 'now');
+      assert.equal(context.relativeTime(relativeAt(1000), { compact: true, now: fixedNow }), 'now');
+      assert.equal(context.relativeTime(relativeAt(1000), { includeSeconds: true, now: fixedNow }), 'a second ago');
+      assert.equal(context.relativeTime(relativeAt(5 * 60_000), { now: fixedNow }), '5 minutes ago');
+      assert.equal(context.relativeTime(relativeAt(5 * 60_000), { compact: true, now: fixedNow }), '5min ago');
+      context.window.innerWidth = 360;
+      const compactStamp = new Element();
+      context.formatBoardEntryStamp({ at: relativeAt(2 * 60_000).toISOString() }, compactStamp, fixedNow);
+      assert.equal(compactStamp.textContent, '2min ago');
+      assert.equal(compactStamp.title, '2 minutes ago');
+      delete context.window.innerWidth;
       const at = ms => new Date(Date.now() - ms).toISOString();
       assert.equal(context.time(at(500)), 'just now');
       assert.equal(context.time(at(500), { compact: true }), 'now');
@@ -4749,7 +4771,7 @@ test('preview client', async (t) => {
       documentEvents.click({ target: title, preventDefault: () => {} });
       assert.equal(get('#note').value.startsWith('RE: hover-stays'), true, 'the quote still lands');
       assert.equal(title.title, row.title, 'the quoted title retains the task ID tooltip');
-      assert.equal(row.title, `2. hover-stays\n${context.time(stamp)}`, 'the row keeps the multiline task tooltip');
+      assert.equal(row.title, `2. hover-stays\n${context.fullRelativeTime(stamp)}`, 'the row tooltip keeps a full relative timestamp');
     } finally {
       state.tasks = priorTasks;
       get('#note').value = '';
@@ -4758,20 +4780,28 @@ test('preview client', async (t) => {
   });
   await t.test("The age timer repaints a receipt stamp that render minted earlier", async () => {
     const priorNotes = state.notes;
+    const priorWidth = context.window.innerWidth;
+    context.window.innerWidth = 360;
     state.notes = [{ id: 'age-note', text: 'age note',
-      at: new Date(Date.now() - 4 * 60000).toISOString(), acknowledged_at: null, ack_type: null,
+      at: new Date(Date.now() - 5 * 1000).toISOString(), acknowledged_at: null, ack_type: null,
       ack_text: null, ack_edited_at: null, replies: [], ack_edited_seen_count: 0, seen_at: null,
       task_id: null }];
     await refresh();
     try {
       const stamp = get('#history').children[0].children[2].children[3];
-      assert.match(stamp.textContent, /4 minutes ago/);
+      assert.match(stamp.textContent, /\d+s ago/);
+      assert.match(stamp.title, /\d+ seconds ago/);
       stamp.dataset.at = new Date(Date.now() - 21 * 60000).toISOString();
-      const repaint = intervals.filter(callback => callback.name === 'repaintReceiptAges').at(-1);
-      assert.ok(repaint, 'an interval repaints the receipt ages');
+      const repaint = intervals.filter(callback => callback.name === 'repaintRelativeStamps').at(-1);
+      const oneSecond = 1000;
+      assert.ok(repaint, 'an interval repaints all relative stamps');
+      assert.equal(repaint.delay, oneSecond, 'recent relative timestamps refresh each second');
       repaint();
-      assert.match(stamp.textContent, /21 minutes ago/);
+      assert.match(stamp.textContent, /21min ago/);
+      assert.equal(stamp.title, '21 minutes ago');
     } finally {
+      if (priorWidth === undefined) delete context.window.innerWidth;
+      else context.window.innerWidth = priorWidth;
       state.notes = priorNotes;
       await refresh();
     }
@@ -6194,8 +6224,6 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /querySelectorAll\?\.\('h2, h3, \.question\[data-field\]'\)/);
   assert.match(styleSource, /\.report-toc-link\.active/);
   assert.match(styleSource, /calc\(50vw - 458px\)/);
-  assert.match(appSource, /stamp\.textContent\s*=\s*entry\.at\s*\?\s*time\(entry\.at\)\s*:\s*''/);
-  assert.match(appSource, /stamp\.title\s*=\s*clockTime\(entry\.at\)/);
   assert.match(appSource, /const\s+ACTIVE_TAB_KEY\s*=\s*'arena-preview-active-tab'/);
   assert.match(appSource, /function\s+restoreLastTab\(/);
   assert.match(styleSource, /\.report-toc\s*\{[\s\S]*?border:\s*0;\s*background:\s*transparent;/);
