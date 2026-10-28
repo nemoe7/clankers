@@ -109,7 +109,7 @@ Keep the register and the audience. Do not turn prose into telegraphic notes, in
 
 ### Caveman register
 
-The caveman register is the one named exception to the paragraph above. When the user asks for it, by name or by intent ("caveman squash", "make it caveman", "squash into caveman"), the pass may drop articles, use fragments, and put the answer first: the terse voice the `caveman` skill defines. Every rule under [What must survive](#what-must-survive) still holds, code, commands, paths, numbers and error strings stay verbatim, and a sentence with two readings becomes a full sentence. Name the register in the report, so the wording change reads apart from the size change. Without that request, keep the register the text arrived in.
+The caveman register is the one named exception to the paragraph above. When the user asks for it, by name or by intent ("caveman squash", "make it caveman", "squash into caveman"), the pass may drop articles, use fragments, and put the answer first: the terse voice the `caveman` skill defines. Every rule under [What must survive](#what-must-survive) still holds, code, commands, paths, numbers, and error strings stay verbatim, and a sentence with two readings becomes a full sentence. Name the register in the report, so the wording change reads apart from the size change. Without that request, keep the register the text arrived in.
 
 Keep verbatim spans verbatim: quotations, code, commands, error strings, identifiers, and anything else the reader must copy exactly.
 

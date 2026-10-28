@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-29
+
+### Changed
+
+#### maintenance
+
+- Exclude skill, rule, and minified-JavaScript trees from direct repo-wide Nemoizer scans (`pyproject.toml`).
+
+#### squash
+
+- Add the Oxford comma to the caveman register's verbatim-span list (`SKILL.md`).
+
 ## 2026-10-28
 
 ### Added

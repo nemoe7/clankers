@@ -42,6 +42,7 @@ extend-safe-fixes = ["C408", "PERF102", "RUF059"]
 max-line-length = 120
 
 [tool.nemoizer]
+extend-exclude = ["skills/**", "rules/**", "**/*.min.js"]
 
 [[tool.nemoizer.files]]
 paths = ["CHANGELOG.md"]
