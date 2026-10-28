@@ -153,7 +153,7 @@ def clip_stamp(value):
 
 def resolve_board_target(target, sessions, allowed, main_sid):
   """Resolve a branch, board, or worker alias to a canonical branch."""
-  clean = board_branch(target)
+  clean = board_branch(str(target or "").strip().lstrip("@"))
   if not clean:
     return ""
   for row in sessions or []:
@@ -165,9 +165,22 @@ def resolve_board_target(target, sessions, allowed, main_sid):
     if "/" not in clean and branch_slug_tail(row_br) == clean:
       return row_br
     wid = str(row.get("worker_id") or "")
-    if wid and clean in (wid, f"worker-{wid}"):
+    row_repo = clean_board_repo(row.get("repo") or "", row_br)
+    if wid and clean in (
+      wid,
+      f"worker-{wid}",
+      f"{row_repo}-{wid}" if row_repo else wid,
+      f"worker-{wid}-{row_repo}" if row_repo else f"worker-{wid}",
+    ):
       return row_br
-  if clean == "main" or clean.startswith("main-"):
+    if row.get("role") == "main" and clean in (
+      f"{row_repo}-alpha" if row_repo else "alpha",
+      f"main-{row_repo}" if row_repo else "main",
+    ):
+      return row_br
+  if (
+    clean in ("main", "alpha") or clean.startswith("main-") or clean.endswith("-alpha")
+  ):
     if main_sid:
       return main_sid
     if allowed:
@@ -487,7 +500,8 @@ def normalize_board(raw):
       copy_e.pop("session_id", None)
       copy_e["branch"] = e_br
       if copy_e.get("to") and copy_e["to"] not in ("*", ""):
-        copy_e["to"] = legacy_aliases.get(str(copy_e["to"]), copy_e["to"])
+        raw_to = legacy_aliases.get(str(copy_e["to"]), str(copy_e["to"]))
+        copy_e["to"] = resolve_board_target(raw_to, sessions, unique_allowed, main_id)
       entries.append(copy_e)
   task_ops = (
     [dict(item) for item in data.get("task_ops") if isinstance(item, dict)]

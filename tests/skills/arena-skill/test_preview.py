@@ -17384,13 +17384,48 @@ def test_board_polling_not_masked_by_stale_wake_and_post_to_wakes_target(
   assert self_row["status"] == "polling"
   store.clear_polling()
 
-  # Posting with explicit `to` (without `@beta` in text) wakes beta immediately.
+  # Posting with explicit `to` (with or without leading `@`) resolves to target branch and wakes beta.
   after_post = store.board_action(
     {"action": "post", "to": "beta", "text": "Task ready without at-mention"}
   )
   assert after_post["wakes"].get(beta) == after_post["entries"][-1]["id"]
   beta_row = next(s for s in after_post["sessions"] if s["branch"] == beta)
   assert beta_row["polling"] is False
+
+  # Posting with `-t @main` from beta resolves `to` to alpha and surfaces in alpha's pending inbox.
+  beta_root = tmp_path / "clankers"
+  monkeypatch.setattr(preview, "workspace_branch", lambda _r=None: beta)
+  worker_store = preview.Store(beta_root / "arena-state-beta", create=True)
+  worker_store.board_action({"action": "sync", "board": store.board_state()})
+  at_main_res = worker_store.board_action(
+    {"action": "post", "to": "@main", "text": "Patch ready from gamma style target"}
+  )
+  assert at_main_res["entries"][-1]["to"] == alpha
+  monkeypatch.setattr(preview, "workspace_branch", lambda _r=None: alpha)
+  store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        **store.board_state(),
+        "entries": [
+          *store.board_state()["entries"],
+          {
+            "id": "patmain1",
+            "branch": beta,
+            "to": "@main",
+            "repo": "clankers",
+            "at": "2026-10-28T07:30:00Z",
+            "payload": {"text": "Stored @main recipient resolves on sync"},
+          },
+        ],
+      },
+    }
+  )
+  assert any(
+    e["id"] == "patmain1" and e["to"] == alpha for e in store.board_state()["entries"]
+  )
+  with store.transaction() as db:
+    assert any(e["id"] == "patmain1" for e in preview.pending_board_entries_for_db(db))
 
   # `remove-session` tombstones and drops an opted-in session in one step.
   after_remove = store.board_action({"action": "remove-session", "branch": beta})

@@ -2207,7 +2207,7 @@ def format_board_role_id(role,repo='',worker_id='',multi_repo=False,fallback_sid
 	if role=='worker':wid=clean_worker_id(worker_id)if worker_id else default_worker_id(fallback_sid,clean_repo);return f"{clean_repo}-{wid}"if clean_repo else wid
 	return str(fallback_sid or'')
 def resolve_board_target(target,sessions,allowed=(),main_sid=''):
-	clean=board_branch(target)
+	clean=board_branch(str(target or'').strip().lstrip('@'))
 	if not clean:return''
 	for row in sessions or():
 		row_br=row.get('branch')or''

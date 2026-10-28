@@ -7674,7 +7674,7 @@
   }
 
   function resolveBoardTarget(target, sessions, allowed, mainSid) {
-    var clean = boardBranch(target);
+    var clean = boardBranch(String(target || "").trim().replace(/^@+/, ""));
     if (!clean) return "";
     var list = Array.isArray(sessions) ? sessions : [];
     for (var i = 0; i < list.length; i += 1) {
@@ -7684,9 +7684,29 @@
       if (rowBr === clean || row.board_id === clean) return rowBr;
       if (clean.indexOf("/") === -1 && branchSlugTail(rowBr) === clean) return rowBr;
       var wid = row.worker_id || "";
-      if (wid && (clean === "worker-" + wid || clean === wid)) return rowBr;
+      var rowRepo = cleanBoardRepo(row.repo || "", rowBr);
+      if (
+        wid &&
+        (clean === "worker-" + wid ||
+          clean === wid ||
+          (rowRepo && (clean === rowRepo + "-" + wid || clean === "worker-" + wid + "-" + rowRepo)))
+      ) {
+        return rowBr;
+      }
+      if (
+        row.role === "main" &&
+        (clean === (rowRepo ? rowRepo + "-alpha" : "alpha") ||
+          clean === (rowRepo ? "main-" + rowRepo : "main"))
+      ) {
+        return rowBr;
+      }
     }
-    if (clean === "main" || clean.indexOf("main-") === 0) {
+    if (
+      clean === "main" ||
+      clean === "alpha" ||
+      clean.indexOf("main-") === 0 ||
+      clean.slice(-6) === "-alpha"
+    ) {
       if (mainSid) return mainSid;
       if (Array.isArray(allowed) && allowed.length) return allowed[0];
     }
@@ -7970,8 +7990,9 @@
         var eBr = normBranchKey(eCopy.branch || eCopy.session_id || "");
         delete eCopy.session_id;
         eCopy.branch = eBr;
-        if (eCopy.to && eCopy.to !== "*" && legacyAliases[eCopy.to]) {
-          eCopy.to = legacyAliases[eCopy.to];
+        if (eCopy.to && eCopy.to !== "*") {
+          var rawTo = legacyAliases[eCopy.to] || eCopy.to;
+          eCopy.to = resolveBoardTarget(rawTo, sessions, uniqueAllowed, mainId);
         }
         entries.push(eCopy);
       }

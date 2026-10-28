@@ -6037,7 +6037,7 @@ def format_board_role_id(
 
 
 def resolve_board_target(target, sessions, allowed=(), main_sid=""):
-  clean = board_branch(target)
+  clean = board_branch(str(target or "").strip().lstrip("@"))
   if not clean:
     return ""
   for row in sessions or ():

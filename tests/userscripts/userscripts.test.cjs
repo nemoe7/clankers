@@ -4648,6 +4648,36 @@ for raw in sys.stdin:
       const callsBeforeRepeat = httpCalls.length;
       await boardApi.seedPreviewBoardOnFirstConnect(base, "arena/gamma333-clankers", "nemoe7/clankers");
       assert.equal(httpCalls.length, callsBeforeRepeat);
+
+      // Leading @ on resolveBoardTarget and stored entry.to (@main, @beta, @clankers-alpha) resolves to canonical branch.
+      const normalizedAtMain = boardApi.normalizeBoard({
+        allowed_sessions: ["arena/alpha111-clankers", "arena/beta2222-clankers"],
+        main_session_id: "arena/alpha111-clankers",
+        worker_ids: { "arena/beta2222-clankers": "beta" },
+        sessions: [
+          { branch: "arena/alpha111-clankers", repo: "nemoe7/clankers", status: "active" },
+          { branch: "arena/beta2222-clankers", repo: "nemoe7/clankers", status: "active" },
+        ],
+        entries: [
+          {
+            id: "patmain3",
+            branch: "arena/beta2222-clankers",
+            to: "@main",
+            repo: "nemoe7/clankers",
+            at: "2026-10-28T06:05:00Z",
+            payload: { text: "patch for @main" },
+          },
+        ],
+      });
+      assert.equal(normalizedAtMain.entries[0].to, "arena/alpha111-clankers");
+      assert.equal(
+        boardApi.resolveBoardTarget("@beta", normalizedAtMain.sessions, normalizedAtMain.allowed_sessions, "arena/alpha111-clankers"),
+        "arena/beta2222-clankers",
+      );
+      assert.equal(
+        boardApi.resolveBoardTarget("@clankers-alpha", normalizedAtMain.sessions, normalizedAtMain.allowed_sessions, "arena/alpha111-clankers"),
+        "arena/alpha111-clankers",
+      );
     });
   }
 

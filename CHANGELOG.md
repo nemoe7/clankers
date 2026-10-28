@@ -33,11 +33,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Keep expanded task `<details>` open across task updates and preview state refreshes (`assets/app.js`).
 - Preserve live board polling state, stop consumed wake resurrection, and wake explicit post recipients (`scripts/preview.py`, `assets/app.js`, `arena-egress-proxy/scripts/arena_proxy/board.py`).
 - Keep worker `poll` asleep on peer board notices without a wake stamp and tell empty wakes to re-poll (`scripts/preview.py`).
+- Strip leading `@` prefixes on board `-t` targets and resolve `@role` recipients across normalization and file hydration (`scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`).
 
 #### userscripts
 
 - Sync opted-in preview boards every 3s and send wake up once per idle board wake (`arena.user.js`).
 - Seed local `/api/board` on first preview connect from read-only `/v1/board` pulls without registering unopted sessions (`arena.user.js`).
+- Normalize `@role` board recipients in `resolveBoardTarget` and `normalizeBoard` so `-t @main` attachments hydrate cleanly (`arena.user.js`).
 
 ## 2026-10-27
 

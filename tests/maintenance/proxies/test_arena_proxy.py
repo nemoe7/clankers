@@ -1947,5 +1947,27 @@ def test_board_polling_heartbeat_post_wake_and_consumed_wake_anti_resurrection(
     )
     assert fresh_wake["mode"] == "diff"
     assert fresh_wake["scoped_board"]["wakes"].get(beta) == "2026-10-28T05:02:00-abc123"
+    at_main_sync = reopened.sync(
+      {
+        "branch": beta,
+        "repo": "clankers",
+        "entries": [
+          {
+            "id": "patmain2",
+            "branch": beta,
+            "to": "@main",
+            "repo": "clankers",
+            "at": "2026-10-28T05:03:00Z",
+            "payload": {"text": "Sent with -t @main"},
+          }
+        ],
+      },
+      branch=beta,
+      repo="clankers",
+    )
+    resolved_entry = next(
+      e for e in at_main_sync["board"]["entries"] if e["id"] == "patmain2"
+    )
+    assert resolved_entry["to"] == alpha
   finally:
     reopened.close()
