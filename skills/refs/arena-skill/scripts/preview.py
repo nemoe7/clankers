@@ -2495,7 +2495,10 @@ def link_task_answers(db, records):
   plus any answer that names the task. A task with no link keeps its record unchanged.
   """
   links = db.execute(
-    "SELECT id, report_id, task_id, text, at FROM submissions ORDER BY at, seq"
+    """SELECT submissions.id, submissions.report_id, submissions.task_id,
+              submissions.text, submissions.at, reports.title AS title
+       FROM submissions LEFT JOIN reports ON reports.id = submissions.report_id
+       ORDER BY submissions.at, submissions.seq"""
   ).fetchall()
   answers = [
     {
@@ -2503,6 +2506,7 @@ def link_task_answers(db, records):
       "at": clip_stamp(link["at"]),
       "text": link["text"],
       "report_id": link["report_id"],
+      "title": link["title"] or "",
       "task_id": link["task_id"],
     }
     for link in links
@@ -2514,6 +2518,7 @@ def link_task_answers(db, records):
         "at": answer["at"],
         "text": answer["text"],
         "report_id": answer["report_id"],
+        "title": answer["title"],
       }
       for answer in answers
       if answer["task_id"] != UNLINKED_TASK_ID
@@ -2869,6 +2874,8 @@ def format_pending_record(item):
     header += f" report {item['report_id']}"
   lines = [header]
   text = item.get("text") or ""
+  if type == "report":
+    text = format_task_answer(item)
   if text:
     lines.append(text)
   # A note's own text never names its uploads, so the read carries each file's name, saved
@@ -2943,6 +2950,22 @@ def current_task(tasks):
   return None
 
 
+def format_task_answer(answer):
+  text = str(answer.get("text") or "")
+  report_id = str(answer.get("report_id") or "")
+  if not report_id:
+    return text
+  first_line, separator, _ = text.partition("\n")
+  prefix = f"REPORT {report_id}"
+  boundary = first_line[len(prefix) : len(prefix) + 1]
+  if not separator or not first_line.startswith(prefix):
+    return text
+  if boundary not in (" ", ":") or not first_line.endswith(":"):
+    return text
+  title = str(answer.get("title") or "").strip()
+  return f"REPORT {title or report_id}:{text[len(first_line) :]}"
+
+
 def format_task_list(tasks, full=False):
   """The working queue by default. `full` prints every task, finished included.
 
@@ -2981,7 +3004,7 @@ def format_task_list(tasks, full=False):
       lines.append(f"    {detail}")
     for answer in task.get("answers", []):
       lines.append(f"    answer {answer['id']}, at {answer['at']}")
-      lines.append(f"    {answer['text']}")
+      lines.append(f"    {format_task_answer(answer)}")
     if is_current:
       lines.append("    Is this still the task you are working on?")
   return "\n".join(lines)
@@ -3016,7 +3039,9 @@ def format_task(record, full=False):
   lines = [first, title] + [f"- {d}" for d in cut]
   if full:
     for answer in record.get("answers", []):
-      lines.extend([f"answer {answer['id']}, at {answer['at']}", answer["text"]])
+      lines.extend(
+        [f"answer {answer['id']}, at {answer['at']}", format_task_answer(answer)]
+      )
   return "\n".join(lines)
 
 
@@ -13503,7 +13528,10 @@ class Store:
       pending += [
         message_row(row) | {"type": "report"}
         for row in db.execute(
-          f"SELECT * FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at, seq"
+          f"""SELECT submissions.*,
+                     (SELECT title FROM reports WHERE reports.id = submissions.report_id) AS title
+              FROM submissions WHERE {PENDING_SUBMISSIONS}
+              ORDER BY submissions.at, submissions.seq"""
         )
       ]
       repo_root = self.repository_root()

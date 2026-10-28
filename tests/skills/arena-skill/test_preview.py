@@ -4422,6 +4422,9 @@ def test_task_list_prints_a_linked_report_answer():
   """A report answer linked to a task prints in the list, the way the page links it."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
+    source = Path(directory) / "select.md"
+    source.write_text("Choice? {#select}\n- (x) one\n- ( ) two\n", encoding="utf-8")
+    store.publish("select", "Select one", source)
     store.write_task(
       "first",
       "First upcoming",
@@ -4429,17 +4432,51 @@ def test_task_list_prints_a_linked_report_answer():
       task_type="misc",
       report_id="select",
     )
-    store.submission("answer-1", "select", "REPORT select: one")
+    store.submission("answer-1", "select", "REPORT select Select one:\n  Choice: one")
+    linked = store.tasks()["upcoming"][0]["answers"][0]
+    assert linked["title"] == "Select one"
     listed = preview.format_task_list(store.list_tasks()).splitlines()
     assert any(line.startswith("    answer answer-1, at ") for line in listed), listed
-    assert "    REPORT select: one" in listed, listed
+    assert "    REPORT Select one:" in listed, listed
+    assert "  Choice: one" in listed, listed
+    assert "    REPORT select Select one:" not in listed, listed
     # The row labels the report link and the type, so neither reads as the title.
     assert any(" | waits on select | type misc" in line for line in listed), listed
-    # A task with no linked answer keeps the older list shape.
-    store.write_task("second", "Second upcoming", ["Step two"], task_type="misc")
+    # Empty report titles use their ID. Unlinked tasks keep their old shape.
+    store.write_task(
+      "second", "Second upcoming", ["Step two"], task_type="misc", report_id="missing"
+    )
+    store.submission("answer-2", "missing", "REPORT missing:\n  Choice: two")
     lines = preview.format_task_list(store.list_tasks()).splitlines()
+    assert "    REPORT missing:" in lines, lines
+    assert "  Choice: two" in lines, lines
     assert lines.count("    Step two") == 1
-    assert sum(line.startswith("    answer ") for line in lines) == 1
+    assert sum(line.startswith("    answer ") for line in lines) == 2
+
+
+def test_task_show_and_read_use_title_first_linked_report_headers(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  source = tmp_path / "select.md"
+  source.write_text("Choice? {#select}\n- (x) one\n- ( ) two\n", encoding="utf-8")
+  store.publish("select", "Select one", source)
+  store.write_task("first", "First", ["Step one"], task_type="misc", report_id="select")
+  store.submission("answer-1", "select", "REPORT select Select one:\n  Choice: one")
+  store.write_task(
+    "second", "Second", ["Step two"], task_type="misc", report_id="missing"
+  )
+  store.submission("answer-2", "missing", "REPORT missing:\n  Choice: two")
+
+  first, second = store.tasks()["upcoming"]
+  shown = preview.format_task(first, full=True)
+  assert "REPORT Select one:" in shown, shown
+  assert "REPORT select Select one:" not in shown, shown
+  fallback = preview.format_task(second, full=True)
+  assert "REPORT missing:" in fallback, fallback
+
+  inbox = preview.format_read(store.read())
+  assert "REPORT Select one:" in inbox, inbox
+  assert "REPORT select Select one:" not in inbox, inbox
+  assert "REPORT missing:" in inbox, inbox
 
 
 def test_a_short_id_prefix_names_one_record():

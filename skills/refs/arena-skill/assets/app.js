@@ -3075,6 +3075,20 @@ function taskTooltip(task) {
 function rowTaskId(row) {
   return row?.dataset?.taskId || row?.querySelector?.('.task-title')?.dataset?.taskId || row?.title || '';
 }
+function taskAnswerText(answer, reports) {
+  const text = String(answer.text ?? '');
+  const reportId = String(answer.report_id ?? '');
+  if (!reportId) return text;
+  const lineEnd = text.indexOf('\n');
+  if (lineEnd < 0) return text;
+  const header = text.slice(0, lineEnd);
+  const prefix = `REPORT ${reportId}`;
+  const boundary = header[prefix.length];
+  if (!header.startsWith(prefix) || (boundary !== ' ' && boundary !== ':') || !header.endsWith(':')) return text;
+  const report = reports.find(item => item.id === reportId);
+  const title = String(answer.title || '').trim() || String(report?.title || '').trim();
+  return `REPORT ${title || reportId}:${text.slice(lineEnd)}`;
+}
 function taskRow(task) {
   const item = document.createElement('li');
   item.className = 'task';
@@ -3156,7 +3170,7 @@ function taskRow(task) {
         stamp.textContent = time(answer.at);
         const text = document.createElement('p');
         text.className = 'task-answer-text';
-        text.textContent = answer.text;
+        text.textContent = taskAnswerText(answer, reports);
         entry.replaceChildren(answerLabel, stamp, text);
         return entry;
       }));

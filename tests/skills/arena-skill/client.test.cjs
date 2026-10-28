@@ -1486,8 +1486,10 @@ test('preview client', async (t) => {
         { type: 'unspecified', id: 'answered-task', title: 'Answered work', details: ['read it'], status: 'upcoming',
           order: 2, updated_at: new Date().toISOString(),
           answers: [
-            { id: 'answer-abc123', report_id: 'answer-source', at: '2026-10-15T05:44:00.000Z', text: 'Choice? {#select}\n- (x) yes' },
-            { id: 'answer-def456', report_id: 'unpublished-source', at: '2026-10-15T06:00:00.000Z', text: 'Approved: ship it' },
+            { id: 'answer-abc123', report_id: 'answer-source', title: 'Source report', at: '2026-10-15T05:44:00.000Z',
+              text: 'REPORT answer-source Source report:\nChoice? {#select}\n- (x) yes' },
+            { id: 'answer-def456', report_id: 'unpublished-source', title: '', at: '2026-10-15T06:00:00.000Z',
+              text: 'REPORT unpublished-source:\nApproved: ship it' },
             { id: 'answer-long01', at: '2026-10-15T06:04:00.000Z',
               text: 'Decision recorded for the record: the receipt line keeps every word of the answer text, past the step cap that manual details obey.' },
           ] },
@@ -1526,7 +1528,13 @@ test('preview client', async (t) => {
     assert.equal(first.children[1].dateTime, '2026-10-15T05:44:00.000Z', 'the stored UTC stamp stays intact');
     assert.equal(first.children[1].title, context.stampDate('2026-10-15T05:44:00.000Z').toLocaleString(),
       'the tooltip uses the full date in the browser timezone');
-    assert.match(first.children[2].textContent, /\(x\) yes/, 'the field and value text shows');
+    const expectedTitled = 'REPORT Source report:\nChoice? {#select}\n- (x) yes';
+    const expectedFallback = 'REPORT unpublished-source:\nApproved: ship it';
+    assert.equal(first.children[2].textContent, expectedTitled,
+      'the linked-submission header uses the report title instead of its raw ID');
+    assert.doesNotMatch(first.children[2].textContent, /answer-source/);
+    assert.equal(answers.children[1].children[2].textContent, expectedFallback,
+      'an empty title falls back to the report ID');
     details.open = true;
     state.reports.push({ id: 'unrelated-source', title: 'Unrelated report', updated_at: new Date().toISOString() });
     await refresh();

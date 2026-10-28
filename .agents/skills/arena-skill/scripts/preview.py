@@ -919,9 +919,9 @@ def order_after_blockers(records):
 	return placed
 UNLINKED_TASK_ID=''
 def link_task_answers(db,records):
-	links=db.execute('SELECT id, report_id, task_id, text, at FROM submissions ORDER BY at, seq').fetchall();answers=[{'id':link['id'],'at':clip_stamp(link['at']),'text':link['text'],'report_id':link['report_id'],'task_id':link['task_id']}for link in links]
+	links=db.execute('SELECT submissions.id, submissions.report_id, submissions.task_id,\n              submissions.text, submissions.at, reports.title AS title\n       FROM submissions LEFT JOIN reports ON reports.id = submissions.report_id\n       ORDER BY submissions.at, submissions.seq').fetchall();answers=[{'id':link['id'],'at':clip_stamp(link['at']),'text':link['text'],'report_id':link['report_id'],'title':link['title']or'','task_id':link['task_id']}for link in links]
 	for item in records:
-		linked=[{'id':answer['id'],'at':answer['at'],'text':answer['text'],'report_id':answer['report_id']}for answer in answers if answer['task_id']!=UNLINKED_TASK_ID and(answer['task_id']==item['id']or answer['report_id']and answer['report_id']==item.get('report_id'))]
+		linked=[{'id':answer['id'],'at':answer['at'],'text':answer['text'],'report_id':answer['report_id'],'title':answer['title']}for answer in answers if answer['task_id']!=UNLINKED_TASK_ID and(answer['task_id']==item['id']or answer['report_id']and answer['report_id']==item.get('report_id'))]
 		if linked:item['answers']=linked
 	return records
 def saved_note_line(record):
@@ -1061,6 +1061,7 @@ def format_pending_record(item):
 	if item.get('quiet')and not item.get('blocking'):header+=' quiet (no ack required)'
 	if item.get('report_id'):header+=f" report {item['report_id']}"
 	lines=[header];text=item.get('text')or''
+	if type=='report':text=format_task_answer(item)
 	if text:lines.append(text)
 	attachments=item.get('attachments')or[]
 	if attachments:names=', '.join(attachment_line(record)for record in attachments);lines.append(f"attachments: {names}")
@@ -1090,6 +1091,13 @@ def current_task(tasks):
 		if task.get('status')!='upcoming'or task.get('blocked'):continue
 		if all(statuses.get(blocker)=='finished'for blocker in task.get('blocked_by')or()):return task
 	return None
+def format_task_answer(answer):
+	text=str(answer.get('text')or'');report_id=str(answer.get('report_id')or'')
+	if not report_id:return text
+	first_line,separator,_=text.partition('\n');prefix=f"REPORT {report_id}";boundary=first_line[len(prefix):len(prefix)+1]
+	if not separator or not first_line.startswith(prefix):return text
+	if boundary not in(' ',':')or not first_line.endswith(':'):return text
+	title=str(answer.get('title')or'').strip();return f"REPORT {title or report_id}:{text[len(first_line):]}"
 def format_task_list(tasks,full=False):
 	shown=tasks if full else[t for t in tasks if t.get('status')=='upcoming'];lines=[f"Tasks {len(shown)}"if full else f"Tasks {len(shown)} upcoming"]
 	if any(t.get('blocked')for t in shown):lines.append('* = blocked on a report answer or linked run')
@@ -1105,7 +1113,7 @@ def format_task_list(tasks,full=False):
 		if task.get('type')and task.get('type')!=TASK_UNSPECIFIED:line+=f" | type {task.get('type')}"
 		lines.append(line)
 		for detail in task.get('details',[]):lines.append(f"    {detail}")
-		for answer in task.get('answers',[]):lines.append(f"    answer {answer['id']}, at {answer['at']}");lines.append(f"    {answer['text']}")
+		for answer in task.get('answers',[]):lines.append(f"    answer {answer['id']}, at {answer['at']}");lines.append(f"    {format_task_answer(answer)}")
 		if is_current:lines.append('    Is this still the task you are working on?')
 	return'\n'.join(lines)
 def format_task(record,full=False):
@@ -1116,7 +1124,7 @@ def format_task(record,full=False):
 	if blocked:first+=', blocked'
 	lines=[first,title]+[f"- {d}"for d in cut]
 	if full:
-		for answer in record.get('answers',[]):lines.extend([f"answer {answer['id']}, at {answer['at']}",answer['text']])
+		for answer in record.get('answers',[]):lines.extend([f"answer {answer['id']}, at {answer['at']}",format_task_answer(answer)])
 	return'\n'.join(lines)
 def print_task_row(store,task_id):
 	if not store.id_matches(task_id):raise ValueError(f"No task is stored under {task_id}.")
@@ -4483,7 +4491,7 @@ class Store:
 	def read(self,include_quiet=True):
 		quiet_filter=' AND (quiet = 0 OR blocking = 1 OR seen_at IS NULL)'if include_quiet else" AND (quiet = 0 OR (type IN ('state-backup', 'survey', 'worker-idle', 'worker-disconnected') AND blocking = 1))"
 		with self.transaction(autosave=False)as db:
-			pending=[message_row(row)|{'type':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'type':'report'}for row in db.execute(f"SELECT * FROM submissions WHERE {PENDING_SUBMISSIONS} ORDER BY at, seq")];repo_root=self.repository_root()
+			pending=[message_row(row)|{'type':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'type':'report'}for row in db.execute(f"SELECT submissions.*,\n                     (SELECT title FROM reports WHERE reports.id = submissions.report_id) AS title\n              FROM submissions WHERE {PENDING_SUBMISSIONS}\n              ORDER BY submissions.at, submissions.seq")];repo_root=self.repository_root()
 			for b_entry in pending_board_entries_for_db(db,branch=board_branch(workspace_branch(repo_root))):pending.append({'id':str(b_entry.get('id')or''),'type':'board','branch':str(b_entry.get('branch')or''),'board_id':str(b_entry.get('board_id')or b_entry.get('branch')or''),'text':str(b_entry.get('text')or''),'at':str(b_entry.get('at')or now()),'seen_at':b_entry.get('seen_at'),'acknowledged_at':b_entry.get('acknowledged_at'),'ack_edited_at':b_entry.get('ack_edited_at'),'file':b_entry.get('file')if isinstance(b_entry.get('file'),dict)else None,'patch_hint':board_patch_apply_hint(b_entry,state_dir=self.path.parent,repo_root=repo_root)})
 			notes={};board_patch_hints={}
 			for table in('notes','submissions'):
