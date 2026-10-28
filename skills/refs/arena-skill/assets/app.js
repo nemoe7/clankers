@@ -2520,7 +2520,7 @@ function quoteQuestionId(target) {
 // The tab buttons share one confirmation, and null text means there was nothing to copy.
 const copyTimers = new WeakMap();
 async function copyFrom(button, text, what, glyph = 'copy', failure = null) {
-  // The label a copy came in with is the label it leaves behind, so a restored `Copy the state`
+  // The label a copy came in with is the label it leaves behind, so a restored `Copy the report`
   // never names the wrong job.
   const before = button.title;
   const words = text === null ? null : await copyText(text);
@@ -2621,10 +2621,7 @@ function showClock() {
 }
 showClock();
 setInterval(showClock, 1000);
-  // Copy state exports notes, tasks, and report answers for `state import`.
-  // One request carries the server's NDJSON, which matches the save file.
-  const copyStateButton = $('#copy-state');
-  let userscriptForceSave = false;
+  let userscriptReady = false;
   var lastForceSaveId = null;
   var lastAnnouncedRepo = '';
   var lastUserscriptAnnouncedRepo = '';
@@ -2642,11 +2639,9 @@ setInterval(showClock, 1000);
     if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(locOrigin)) return locOrigin;
     return 'https://arena.ai';
   }
-  function enableUserscriptForceSave() {
-    if (userscriptForceSave) return false;
-    userscriptForceSave = true;
-    setIcon(copyStateButton, 'save', 16);
-    label(copyStateButton, 'Force save state');
+  function markUserscriptReady() {
+    if (userscriptReady) return false;
+    userscriptReady = true;
     return true;
   }
   function notifyParentPreviewReady(repo = lastAnnouncedRepo) {
@@ -2684,35 +2679,13 @@ setInterval(showClock, 1000);
         socketRefresh();
       }
     }
-    const newlyEnabled = enableUserscriptForceSave();
-    if (lastAnnouncedRepo && (newlyEnabled || lastUserscriptAnnouncedRepo !== lastAnnouncedRepo)) {
+    const newlyReady = markUserscriptReady();
+    if (lastAnnouncedRepo && (newlyReady || lastUserscriptAnnouncedRepo !== lastAnnouncedRepo)) {
       lastUserscriptAnnouncedRepo = lastAnnouncedRepo;
       notifyParentPreviewReady(lastAnnouncedRepo);
     }
   });
   notifyParentPreviewReady();
-  copyStateButton.addEventListener('click', async () => {
-    if (userscriptForceSave && typeof window !== 'undefined' && window.parent &&
-        window.parent !== window && typeof window.parent.postMessage === 'function') {
-      window.parent.postMessage({ type: 'clankers:force-save' }, '*');
-      setIcon(copyStateButton, 'check', 16);
-      copyStateButton.dataset.state = 'good';
-      label(copyStateButton, 'Force save requested');
-      (window.setTimeout || setTimeout)(() => {
-        delete copyStateButton.dataset.state;
-        setIcon(copyStateButton, 'save', 16);
-        label(copyStateButton, 'Force save state');
-      }, 1500);
-      return;
-    }
-    let payload = null;
-    try { payload = await (await request('/api/copy-state')).json(); }
-    catch { payload = null; }
-    if (!payload || !payload.text) {
-      return copyFrom(copyStateButton, null, 'state', 'copy', 'The state route did not answer, so nothing was copied.');
-    }
-    await copyFrom(copyStateButton, payload.text, 'state');
-  });
 $('#copy-report').addEventListener('click', async () => {
   const id = $('#report-select').value;
   if (!id) return copyFrom($('#copy-report'), null, 'report');
@@ -3987,7 +3960,7 @@ function showBoardPanel({ persist = true } = {}) {
 let lastBoardHeartbeatKey = '';
 let lastBoardEntriesKey = '';
 function syncBoardHeartbeat(state) {
-  if (!userscriptForceSave || !state || !state.board || !state.board.branch) return;
+  if (!userscriptReady || !state || !state.board || !state.board.branch) return;
   if (typeof window === 'undefined' || !window.parent || window.parent === window || typeof window.parent.postMessage !== 'function') return;
   const branch = String(state.board.branch);
   const selfRow = Array.isArray(state.board.sessions)
