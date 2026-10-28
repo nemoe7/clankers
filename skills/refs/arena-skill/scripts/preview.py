@@ -5768,17 +5768,27 @@ def poll_inbox(store, sleeper=None):
       # A message, unblocked task, or live detached run outranks a skip so its verdict arrives first.
       # The skip stays armed until the run ends. It ends the turn only then.
       board_woken = bool(store.take_board_wake())
-      board_notices = store.take_board_notifications()
+      is_worker_role = store.board_state().get("board_role") == "worker"
+      board_notices = store.take_board_notifications(
+        include_peer_notices=board_woken or not is_worker_role
+      )
       if board_woken or board_notices:
         clear_poll_repeat(store)
-        print(
+        unseen_entries = store.take_unseen_board_entries()
+        has_work = bool(unseen_entries or listing.get("pending"))
+        wake_head = (
           "BOARD WAKE: session woken from the multi-session board."
-          " Read board entries and continue work before polling again.",
-          flush=True,
+          " Read board entries and continue work before polling again."
+          if has_work
+          else (
+            "BOARD WAKE: session woken from the multi-session board."
+            " DO NOT END TURN. Delegate queued work if main, else run arena-preview poll again."
+          )
         )
+        print(wake_head, flush=True)
         for notice in board_notices:
           print(notice, flush=True)
-        for entry in store.take_unseen_board_entries():
+        for entry in unseen_entries:
           payload = entry.get("payload")
           body_text = (
             json.dumps(payload, ensure_ascii=False)
@@ -9408,7 +9418,7 @@ class Store:
       )
     return unseen
 
-  def take_board_notifications(self):
+  def take_board_notifications(self, *, include_peer_notices=True):
     raw_text = self.meta_value(BOARD_STATE_META)
     if not raw_text:
       return []
@@ -9426,74 +9436,83 @@ class Store:
     ack_wakes = (
       dict(raw.get("ack_wakes")) if isinstance(raw.get("ack_wakes"), dict) else {}
     )
-    joined_key = f"{sid}:joined_sessions"
-    raw_joined = ack_wakes.get(joined_key)
-    seen_joined = (
-      {str(k): str(v) for k, v in raw_joined.items() if k}
-      if isinstance(raw_joined, dict)
-      else {}
-    )
-    disc_key = f"{sid}:disconnected_sessions"
-    raw_disc = ack_wakes.get(disc_key)
-    seen_disc = {str(x) for x in raw_disc if x} if isinstance(raw_disc, list) else set()
     multi_repo = bool(board_now.get("multi_repo"))
     current_repo = clean_board_repo(board_now.get("repo") or "", sid)
     active_repos = {current_repo, *(board_now.get("linked_repos") or [])}
     active_repos.discard("")
     notices = []
     changed = False
-    active_other_sids = set()
-    for row in board_now.get("sessions") or []:
-      if not isinstance(row, dict) or not row.get("allowed"):
-        continue
-      other_sid = str(row.get("branch") or "")
-      if not other_sid or other_sid == sid:
-        continue
-      other_repo = clean_board_repo(row.get("repo") or "", other_sid)
-      if active_repos and other_repo and other_repo not in active_repos:
-        continue
-      active_other_sids.add(other_sid)
-      other_board_id = str(row.get("board_id") or other_sid)
-      other_role = str(row.get("role") or "worker")
-      short_id = (
-        "alpha" if other_role == "main" else str(row.get("worker_id") or other_board_id)
+    if include_peer_notices:
+      joined_key = f"{sid}:joined_sessions"
+      raw_joined = ack_wakes.get(joined_key)
+      seen_joined = (
+        {str(k): str(v) for k, v in raw_joined.items() if k}
+        if isinstance(raw_joined, dict)
+        else {}
       )
-      ident_label = (
-        other_board_id
-        if multi_repo or short_id == other_board_id
-        else f"{short_id} ({other_board_id})"
+      disc_key = f"{sid}:disconnected_sessions"
+      raw_disc = ack_wakes.get(disc_key)
+      seen_disc = (
+        {str(x) for x in raw_disc if x} if isinstance(raw_disc, list) else set()
       )
-      prev_board_id = seen_joined.get(other_sid)
-      if prev_board_id != other_board_id:
-        if prev_board_id is None:
-          notices.append(
-            f"BOARD SESSION JOINED: session {other_sid} joined the board with identifier {ident_label} ({other_role})."
-          )
-        else:
-          notices.append(
-            f"BOARD SESSION UPDATED: session {other_sid} now uses identifier {ident_label} ({other_role})."
-          )
-        seen_joined[other_sid] = other_board_id
-        changed = True
-      is_disc = bool(row.get("disconnected") or row.get("status") == "disconnected")
-      if is_disc and other_sid not in seen_disc:
-        notices.append(
-          f"BOARD SESSION DISCONNECTED: session {other_sid} ({ident_label}, {other_role}) disconnected from the board."
+      active_other_sids = set()
+      for row in board_now.get("sessions") or []:
+        if not isinstance(row, dict) or not row.get("allowed"):
+          continue
+        other_sid = str(row.get("branch") or "")
+        if not other_sid or other_sid == sid:
+          continue
+        other_repo = clean_board_repo(row.get("repo") or "", other_sid)
+        if active_repos and other_repo and other_repo not in active_repos:
+          continue
+        active_other_sids.add(other_sid)
+        other_board_id = str(row.get("board_id") or other_sid)
+        other_role = str(row.get("role") or "worker")
+        short_id = (
+          "alpha"
+          if other_role == "main"
+          else str(row.get("worker_id") or other_board_id)
         )
-        seen_disc.add(other_sid)
-        changed = True
-      elif not is_disc and other_sid in seen_disc:
-        notices.append(
-          f"BOARD SESSION RECONNECTED: session {other_sid} ({ident_label}, {other_role}) reconnected to the board."
+        ident_label = (
+          other_board_id
+          if multi_repo or short_id == other_board_id
+          else f"{short_id} ({other_board_id})"
         )
-        seen_disc.discard(other_sid)
+        prev_board_id = seen_joined.get(other_sid)
+        if prev_board_id != other_board_id:
+          if prev_board_id is None:
+            notices.append(
+              f"BOARD SESSION JOINED: session {other_sid} joined the board"
+              f" with identifier {ident_label} ({other_role})."
+            )
+          else:
+            notices.append(
+              f"BOARD SESSION UPDATED: session {other_sid} now uses"
+              f" identifier {ident_label} ({other_role})."
+            )
+          seen_joined[other_sid] = other_board_id
+          changed = True
+        is_disc = bool(row.get("disconnected") or row.get("status") == "disconnected")
+        if is_disc and other_sid not in seen_disc:
+          notices.append(
+            f"BOARD SESSION DISCONNECTED: session {other_sid}"
+            f" ({ident_label}, {other_role}) disconnected from the board."
+          )
+          seen_disc.add(other_sid)
+          changed = True
+        elif not is_disc and other_sid in seen_disc:
+          notices.append(
+            f"BOARD SESSION RECONNECTED: session {other_sid}"
+            f" ({ident_label}, {other_role}) reconnected to the board."
+          )
+          seen_disc.discard(other_sid)
+          changed = True
+      for stale_sid in [item for item in seen_joined if item not in active_other_sids]:
+        seen_joined.pop(stale_sid, None)
+        seen_disc.discard(stale_sid)
         changed = True
-    for stale_sid in [item for item in seen_joined if item not in active_other_sids]:
-      seen_joined.pop(stale_sid, None)
-      seen_disc.discard(stale_sid)
-      changed = True
-    ack_wakes[joined_key] = seen_joined
-    ack_wakes[disc_key] = sorted(seen_disc)
+      ack_wakes[joined_key] = seen_joined
+      ack_wakes[disc_key] = sorted(seen_disc)
     worker_key = f"{sid}:worker_role_notified"
     if board_now.get("board_role") == "worker":
       self_board_id = str(board_now.get("board_id") or sid)
@@ -9519,59 +9538,60 @@ class Store:
         )
         ack_wakes[worker_key] = self_board_id
         changed = True
-      heads_key = f"{sid}:main_branch_heads"
-      raw_heads = ack_wakes.get(heads_key)
-      seen_heads = (
-        {str(k): dict(v) for k, v in raw_heads.items() if k and isinstance(v, dict)}
-        if isinstance(raw_heads, dict)
-        else {}
-      )
-      active_main_sids = set()
-      for row in board_now.get("sessions") or []:
-        if not isinstance(row, dict) or not row.get("allowed"):
-          continue
-        if str(row.get("role") or "") != "main":
-          continue
-        m_sid = str(row.get("branch") or "")
-        if not m_sid or m_sid == sid:
-          continue
-        m_repo = clean_board_repo(row.get("repo") or "", m_sid)
-        if active_repos and m_repo and m_repo not in active_repos:
-          continue
-        active_main_sids.add(m_sid)
-        m_ident = str(row.get("board_id") or m_sid)
-        m_branch = m_sid
-        prev_rec = dict(seen_heads.get(m_sid) or {})
-        cur_rh = str(row.get("remote_head") or "").strip().lower()
-        cur_om = str(row.get("origin_main_head") or "").strip().lower()
-        prev_rh = str(prev_rec.get("remote_head") or "").strip().lower()
-        prev_om = str(prev_rec.get("origin_main_head") or "").strip().lower()
-        if GIT_SHA_RE.fullmatch(cur_rh):
-          if GIT_SHA_RE.fullmatch(prev_rh) and prev_rh != cur_rh:
-            notices.append(
-              f"MAIN BRANCH MOVED: main session {m_ident} pushed {m_branch}"
-              f" ({prev_rh[:8]} -> {cur_rh[:8]})."
-            )
-            changed = True
-          if prev_rh != cur_rh:
-            prev_rec["remote_head"] = cur_rh
-            changed = True
-        if GIT_SHA_RE.fullmatch(cur_om):
-          if GIT_SHA_RE.fullmatch(prev_om) and prev_om != cur_om:
-            notices.append(
-              f"MAIN BRANCH MOVED: origin/main advanced ({prev_om[:8]} -> {cur_om[:8]})"
-              f" on {m_ident}. Fetch and rebase if needed."
-            )
-            changed = True
-          if prev_om != cur_om:
-            prev_rec["origin_main_head"] = cur_om
-            changed = True
-        if prev_rec:
-          seen_heads[m_sid] = prev_rec
-      for stale_m in [k for k in seen_heads if k not in active_main_sids]:
-        seen_heads.pop(stale_m, None)
-        changed = True
-      ack_wakes[heads_key] = seen_heads
+      if include_peer_notices:
+        heads_key = f"{sid}:main_branch_heads"
+        raw_heads = ack_wakes.get(heads_key)
+        seen_heads = (
+          {str(k): dict(v) for k, v in raw_heads.items() if k and isinstance(v, dict)}
+          if isinstance(raw_heads, dict)
+          else {}
+        )
+        active_main_sids = set()
+        for row in board_now.get("sessions") or []:
+          if not isinstance(row, dict) or not row.get("allowed"):
+            continue
+          if str(row.get("role") or "") != "main":
+            continue
+          m_sid = str(row.get("branch") or "")
+          if not m_sid or m_sid == sid:
+            continue
+          m_repo = clean_board_repo(row.get("repo") or "", m_sid)
+          if active_repos and m_repo and m_repo not in active_repos:
+            continue
+          active_main_sids.add(m_sid)
+          m_ident = str(row.get("board_id") or m_sid)
+          m_branch = m_sid
+          prev_rec = dict(seen_heads.get(m_sid) or {})
+          cur_rh = str(row.get("remote_head") or "").strip().lower()
+          cur_om = str(row.get("origin_main_head") or "").strip().lower()
+          prev_rh = str(prev_rec.get("remote_head") or "").strip().lower()
+          prev_om = str(prev_rec.get("origin_main_head") or "").strip().lower()
+          if GIT_SHA_RE.fullmatch(cur_rh):
+            if GIT_SHA_RE.fullmatch(prev_rh) and prev_rh != cur_rh:
+              notices.append(
+                f"MAIN BRANCH MOVED: main session {m_ident} pushed {m_branch}"
+                f" ({prev_rh[:8]} -> {cur_rh[:8]})."
+              )
+              changed = True
+            if prev_rh != cur_rh:
+              prev_rec["remote_head"] = cur_rh
+              changed = True
+          if GIT_SHA_RE.fullmatch(cur_om):
+            if GIT_SHA_RE.fullmatch(prev_om) and prev_om != cur_om:
+              notices.append(
+                f"MAIN BRANCH MOVED: origin/main advanced ({prev_om[:8]} -> {cur_om[:8]})"
+                f" on {m_ident}. Fetch and rebase if needed."
+              )
+              changed = True
+            if prev_om != cur_om:
+              prev_rec["origin_main_head"] = cur_om
+              changed = True
+          if prev_rec:
+            seen_heads[m_sid] = prev_rec
+        for stale_m in [k for k in seen_heads if k not in active_main_sids]:
+          seen_heads.pop(stale_m, None)
+          changed = True
+        ack_wakes[heads_key] = seen_heads
     elif worker_key in ack_wakes:
       ack_wakes.pop(worker_key, None)
       ack_wakes.pop(f"{sid}:main_branch_heads", None)

@@ -15948,11 +15948,30 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
   assert ".agents/skills/arena-skill/WORKER.md" in joined_text
   assert store.take_board_notifications() == []
   store.board_action({"action": "allow", "branch": "arena/c77a11b0-clankers"})
+  assert preview.poll_once(store, sleeper=lambda _: None) == 1
+  capsys.readouterr()
+  store.board_action({"action": "wake", "target": "arena/main0001-clankers"})
+  assert preview.poll_once(store, sleeper=lambda _: None) == 0
+  worker_wake_out = capsys.readouterr().out
+  assert "BOARD SESSION JOINED:" in worker_wake_out
+  assert "c77a11b0-clankers" in worker_wake_out
+  assert "gamma" in worker_wake_out
+  assert (
+    "DO NOT END TURN. Delegate queued work if main, else run arena-preview poll again."
+    in worker_wake_out
+  )
+  store.board_action({"action": "set-main", "branch": "arena/main0001-clankers"})
+  store.board_action({"action": "allow", "branch": "arena/cf681ae5-clankers"})
   assert preview.poll_once(store, sleeper=lambda _: None) == 0
   poll_out = capsys.readouterr().out
   assert "BOARD SESSION JOINED:" in poll_out
-  assert "c77a11b0-clankers" in poll_out
-  assert "gamma" in poll_out
+  assert "cf681ae5-clankers" in poll_out
+  assert "delta" in poll_out
+  assert (
+    "DO NOT END TURN. Delegate queued work if main, else run arena-preview poll again."
+    in poll_out
+  )
+  store.board_action({"action": "set-main", "branch": "arena/b14c09a2-clankers"})
   demo_mod_path = preview.Path.cwd() / "maintenance" / "demo_preview.py"
   if demo_mod_path.is_file():
     assert "sys.path.insert(0, scripts_dir)" in demo_mod_path.read_text(

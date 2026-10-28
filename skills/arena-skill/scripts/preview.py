@@ -2114,11 +2114,11 @@ def poll_inbox(store,sleeper=None):
 			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
 			if open_tasks:store.take_board_wake();listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);idle=idle_board_workers(store.path.parent);worker_step=f"Delegate to idle board worker @{idle[0]} via arena-preview board post first, or start"if idle else'Start';continue_line=f"CONTINUE: UNBLOCKED TASK {names}. {worker_step} a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
-			board_woken=bool(store.take_board_wake());board_notices=store.take_board_notifications()
+			board_woken=bool(store.take_board_wake());is_worker_role=store.board_state().get('board_role')=='worker';board_notices=store.take_board_notifications(include_peer_notices=board_woken or not is_worker_role)
 			if board_woken or board_notices:
-				clear_poll_repeat(store);print('BOARD WAKE: session woken from the multi-session board. Read board entries and continue work before polling again.',flush=True)
+				clear_poll_repeat(store);unseen_entries=store.take_unseen_board_entries();has_work=bool(unseen_entries or listing.get('pending'));wake_head='BOARD WAKE: session woken from the multi-session board. Read board entries and continue work before polling again.'if has_work else'BOARD WAKE: session woken from the multi-session board. DO NOT END TURN. Delegate queued work if main, else run arena-preview poll again.';print(wake_head,flush=True)
 				for notice in board_notices:print(notice,flush=True)
-				for entry in store.take_unseen_board_entries():payload=entry.get('payload');body_text=json.dumps(payload,ensure_ascii=False)if isinstance(payload,dict)else str(payload or'');file_obj=entry.get('file')if isinstance(entry.get('file'),dict)else None;file_path=file_obj.get('staged_path')or file_obj.get('name')or''if file_obj else'';file_suffix=f" [file: {file_path}]"if file_path else'';head=f"[board {entry.get('id','')}] {entry.get('branch','')} -> {entry.get('to','*')}";print(f"{head}: {body_text}{file_suffix}",flush=True)
+				for entry in unseen_entries:payload=entry.get('payload');body_text=json.dumps(payload,ensure_ascii=False)if isinstance(payload,dict)else str(payload or'');file_obj=entry.get('file')if isinstance(entry.get('file'),dict)else None;file_path=file_obj.get('staged_path')or file_obj.get('name')or''if file_obj else'';file_suffix=f" [file: {file_path}]"if file_path else'';head=f"[board {entry.get('id','')}] {entry.get('branch','')} -> {entry.get('to','*')}";print(f"{head}: {body_text}{file_suffix}",flush=True)
 				print(format_read(listing),flush=True);return 0
 			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);return 0
 			if not announced_running:announced_running=True;run_notices(store.path.parent,show_running=True)
@@ -3228,7 +3228,7 @@ class Store:
 		ack_wakes[entries_key]=seen_list[-512:];raw['ack_wakes']=ack_wakes
 		with self.transaction(autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,json.dumps(raw,ensure_ascii=False)))
 		return unseen
-	def take_board_notifications(self):
+	def take_board_notifications(self,*,include_peer_notices=True):
 		raw_text=self.meta_value(BOARD_STATE_META)
 		if not raw_text:return[]
 		try:raw=json.loads(raw_text)
@@ -3236,23 +3236,26 @@ class Store:
 		if not isinstance(raw,dict):return[]
 		board_now=self.board_state();sid=str(board_now.get('branch')or'');allowed=set(board_now.get('allowed_sessions')or[])
 		if not sid or sid not in allowed:return[]
-		ack_wakes=dict(raw.get('ack_wakes'))if isinstance(raw.get('ack_wakes'),dict)else{};joined_key=f"{sid}:joined_sessions";raw_joined=ack_wakes.get(joined_key);seen_joined={str(k):str(v)for(k,v)in raw_joined.items()if k}if isinstance(raw_joined,dict)else{};disc_key=f"{sid}:disconnected_sessions";raw_disc=ack_wakes.get(disc_key);seen_disc={str(x)for x in raw_disc if x}if isinstance(raw_disc,list)else set();multi_repo=bool(board_now.get('multi_repo'));current_repo=clean_board_repo(board_now.get('repo')or'',sid);active_repos={current_repo,*(board_now.get('linked_repos')or[])};active_repos.discard('');notices=[];changed=False;active_other_sids=set()
-		for row in board_now.get('sessions')or[]:
-			if not isinstance(row,dict)or not row.get('allowed'):continue
-			other_sid=str(row.get('branch')or'')
-			if not other_sid or other_sid==sid:continue
-			other_repo=clean_board_repo(row.get('repo')or'',other_sid)
-			if active_repos and other_repo and other_repo not in active_repos:continue
-			active_other_sids.add(other_sid);other_board_id=str(row.get('board_id')or other_sid);other_role=str(row.get('role')or'worker');short_id='alpha'if other_role=='main'else str(row.get('worker_id')or other_board_id);ident_label=other_board_id if multi_repo or short_id==other_board_id else f"{short_id} ({other_board_id})";prev_board_id=seen_joined.get(other_sid)
-			if prev_board_id!=other_board_id:
-				if prev_board_id is None:notices.append(f"BOARD SESSION JOINED: session {other_sid} joined the board with identifier {ident_label} ({other_role}).")
-				else:notices.append(f"BOARD SESSION UPDATED: session {other_sid} now uses identifier {ident_label} ({other_role}).")
-				seen_joined[other_sid]=other_board_id;changed=True
-			is_disc=bool(row.get('disconnected')or row.get('status')=='disconnected')
-			if is_disc and other_sid not in seen_disc:notices.append(f"BOARD SESSION DISCONNECTED: session {other_sid} ({ident_label}, {other_role}) disconnected from the board.");seen_disc.add(other_sid);changed=True
-			elif not is_disc and other_sid in seen_disc:notices.append(f"BOARD SESSION RECONNECTED: session {other_sid} ({ident_label}, {other_role}) reconnected to the board.");seen_disc.discard(other_sid);changed=True
-		for stale_sid in[item for item in seen_joined if item not in active_other_sids]:seen_joined.pop(stale_sid,None);seen_disc.discard(stale_sid);changed=True
-		ack_wakes[joined_key]=seen_joined;ack_wakes[disc_key]=sorted(seen_disc);worker_key=f"{sid}:worker_role_notified"
+		ack_wakes=dict(raw.get('ack_wakes'))if isinstance(raw.get('ack_wakes'),dict)else{};multi_repo=bool(board_now.get('multi_repo'));current_repo=clean_board_repo(board_now.get('repo')or'',sid);active_repos={current_repo,*(board_now.get('linked_repos')or[])};active_repos.discard('');notices=[];changed=False
+		if include_peer_notices:
+			joined_key=f"{sid}:joined_sessions";raw_joined=ack_wakes.get(joined_key);seen_joined={str(k):str(v)for(k,v)in raw_joined.items()if k}if isinstance(raw_joined,dict)else{};disc_key=f"{sid}:disconnected_sessions";raw_disc=ack_wakes.get(disc_key);seen_disc={str(x)for x in raw_disc if x}if isinstance(raw_disc,list)else set();active_other_sids=set()
+			for row in board_now.get('sessions')or[]:
+				if not isinstance(row,dict)or not row.get('allowed'):continue
+				other_sid=str(row.get('branch')or'')
+				if not other_sid or other_sid==sid:continue
+				other_repo=clean_board_repo(row.get('repo')or'',other_sid)
+				if active_repos and other_repo and other_repo not in active_repos:continue
+				active_other_sids.add(other_sid);other_board_id=str(row.get('board_id')or other_sid);other_role=str(row.get('role')or'worker');short_id='alpha'if other_role=='main'else str(row.get('worker_id')or other_board_id);ident_label=other_board_id if multi_repo or short_id==other_board_id else f"{short_id} ({other_board_id})";prev_board_id=seen_joined.get(other_sid)
+				if prev_board_id!=other_board_id:
+					if prev_board_id is None:notices.append(f"BOARD SESSION JOINED: session {other_sid} joined the board with identifier {ident_label} ({other_role}).")
+					else:notices.append(f"BOARD SESSION UPDATED: session {other_sid} now uses identifier {ident_label} ({other_role}).")
+					seen_joined[other_sid]=other_board_id;changed=True
+				is_disc=bool(row.get('disconnected')or row.get('status')=='disconnected')
+				if is_disc and other_sid not in seen_disc:notices.append(f"BOARD SESSION DISCONNECTED: session {other_sid} ({ident_label}, {other_role}) disconnected from the board.");seen_disc.add(other_sid);changed=True
+				elif not is_disc and other_sid in seen_disc:notices.append(f"BOARD SESSION RECONNECTED: session {other_sid} ({ident_label}, {other_role}) reconnected to the board.");seen_disc.discard(other_sid);changed=True
+			for stale_sid in[item for item in seen_joined if item not in active_other_sids]:seen_joined.pop(stale_sid,None);seen_disc.discard(stale_sid);changed=True
+			ack_wakes[joined_key]=seen_joined;ack_wakes[disc_key]=sorted(seen_disc)
+		worker_key=f"{sid}:worker_role_notified"
 		if board_now.get('board_role')=='worker':
 			self_board_id=str(board_now.get('board_id')or sid);self_short_id=str(board_now.get('worker_id')or self_board_id);self_ident=self_board_id if multi_repo or self_short_id==self_board_id else f"{self_short_id} ({self_board_id})"
 			if ack_wakes.get(worker_key)!=self_board_id:
@@ -3260,24 +3263,25 @@ class Store:
 				for candidate in('.agents/skills/arena-skill/WORKER.md','skills/arena-skill/WORKER.md'):
 					if(root/candidate).is_file():worker_md=candidate;break
 				notices.append(f"WORKER ROLE ASSIGNED: you are assigned the worker role with identifier {self_ident}. Read {worker_md} before continuing work.");ack_wakes[worker_key]=self_board_id;changed=True
-			heads_key=f"{sid}:main_branch_heads";raw_heads=ack_wakes.get(heads_key);seen_heads={str(k):dict(v)for(k,v)in raw_heads.items()if k and isinstance(v,dict)}if isinstance(raw_heads,dict)else{};active_main_sids=set()
-			for row in board_now.get('sessions')or[]:
-				if not isinstance(row,dict)or not row.get('allowed'):continue
-				if str(row.get('role')or'')!='main':continue
-				m_sid=str(row.get('branch')or'')
-				if not m_sid or m_sid==sid:continue
-				m_repo=clean_board_repo(row.get('repo')or'',m_sid)
-				if active_repos and m_repo and m_repo not in active_repos:continue
-				active_main_sids.add(m_sid);m_ident=str(row.get('board_id')or m_sid);m_branch=m_sid;prev_rec=dict(seen_heads.get(m_sid)or{});cur_rh=str(row.get('remote_head')or'').strip().lower();cur_om=str(row.get('origin_main_head')or'').strip().lower();prev_rh=str(prev_rec.get('remote_head')or'').strip().lower();prev_om=str(prev_rec.get('origin_main_head')or'').strip().lower()
-				if GIT_SHA_RE.fullmatch(cur_rh):
-					if GIT_SHA_RE.fullmatch(prev_rh)and prev_rh!=cur_rh:notices.append(f"MAIN BRANCH MOVED: main session {m_ident} pushed {m_branch} ({prev_rh[:8]} -> {cur_rh[:8]}).");changed=True
-					if prev_rh!=cur_rh:prev_rec['remote_head']=cur_rh;changed=True
-				if GIT_SHA_RE.fullmatch(cur_om):
-					if GIT_SHA_RE.fullmatch(prev_om)and prev_om!=cur_om:notices.append(f"MAIN BRANCH MOVED: origin/main advanced ({prev_om[:8]} -> {cur_om[:8]}) on {m_ident}. Fetch and rebase if needed.");changed=True
-					if prev_om!=cur_om:prev_rec['origin_main_head']=cur_om;changed=True
-				if prev_rec:seen_heads[m_sid]=prev_rec
-			for stale_m in[k for k in seen_heads if k not in active_main_sids]:seen_heads.pop(stale_m,None);changed=True
-			ack_wakes[heads_key]=seen_heads
+			if include_peer_notices:
+				heads_key=f"{sid}:main_branch_heads";raw_heads=ack_wakes.get(heads_key);seen_heads={str(k):dict(v)for(k,v)in raw_heads.items()if k and isinstance(v,dict)}if isinstance(raw_heads,dict)else{};active_main_sids=set()
+				for row in board_now.get('sessions')or[]:
+					if not isinstance(row,dict)or not row.get('allowed'):continue
+					if str(row.get('role')or'')!='main':continue
+					m_sid=str(row.get('branch')or'')
+					if not m_sid or m_sid==sid:continue
+					m_repo=clean_board_repo(row.get('repo')or'',m_sid)
+					if active_repos and m_repo and m_repo not in active_repos:continue
+					active_main_sids.add(m_sid);m_ident=str(row.get('board_id')or m_sid);m_branch=m_sid;prev_rec=dict(seen_heads.get(m_sid)or{});cur_rh=str(row.get('remote_head')or'').strip().lower();cur_om=str(row.get('origin_main_head')or'').strip().lower();prev_rh=str(prev_rec.get('remote_head')or'').strip().lower();prev_om=str(prev_rec.get('origin_main_head')or'').strip().lower()
+					if GIT_SHA_RE.fullmatch(cur_rh):
+						if GIT_SHA_RE.fullmatch(prev_rh)and prev_rh!=cur_rh:notices.append(f"MAIN BRANCH MOVED: main session {m_ident} pushed {m_branch} ({prev_rh[:8]} -> {cur_rh[:8]}).");changed=True
+						if prev_rh!=cur_rh:prev_rec['remote_head']=cur_rh;changed=True
+					if GIT_SHA_RE.fullmatch(cur_om):
+						if GIT_SHA_RE.fullmatch(prev_om)and prev_om!=cur_om:notices.append(f"MAIN BRANCH MOVED: origin/main advanced ({prev_om[:8]} -> {cur_om[:8]}) on {m_ident}. Fetch and rebase if needed.");changed=True
+						if prev_om!=cur_om:prev_rec['origin_main_head']=cur_om;changed=True
+					if prev_rec:seen_heads[m_sid]=prev_rec
+				for stale_m in[k for k in seen_heads if k not in active_main_sids]:seen_heads.pop(stale_m,None);changed=True
+				ack_wakes[heads_key]=seen_heads
 		elif worker_key in ack_wakes:ack_wakes.pop(worker_key,None);ack_wakes.pop(f"{sid}:main_branch_heads",None);changed=True
 		if changed:
 			raw['ack_wakes']=ack_wakes
