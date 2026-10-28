@@ -28,8 +28,8 @@
 
   var USERSCRIPT_VERSION = "1.13.6";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
-
-  function userscriptVersion() {
+  var proxyBoardEgressVersion = "";
+  var USERSCRIPT_BOOT_VERSION = (function () {
     try {
       if (
         typeof GM_info === "object" &&
@@ -42,6 +42,10 @@
       }
     } catch (err) {}
     return USERSCRIPT_VERSION;
+  })();
+
+  function userscriptVersion() {
+    return USERSCRIPT_BOOT_VERSION;
   }
 
   function previewHeaders(hasJson) {
@@ -1225,7 +1229,9 @@
     function postAgentKey(key, host) {
       var base = previewBase(document);
       if (!base || !key) return;
-      requestJson("POST", keyPostUrl(base), { key: key, host: host }, function () {});
+      var payload = { key: key, host: host };
+      if (proxyBoardEgressVersion) payload.egress_version = proxyBoardEgressVersion;
+      requestJson("POST", keyPostUrl(base), payload, function () {});
     }
 
     function postKeyNow(state, post, fetchNow) {
@@ -1262,6 +1268,9 @@
           return r.json();
         })
         .then(function (body) {
+          if (body && typeof body.version === "string" && body.version.trim()) {
+            proxyBoardEgressVersion = body.version.trim();
+          }
           var key = agentKeyFrom(body);
           if (key) {
             heldKey = key;
@@ -1429,6 +1438,9 @@
       fetchJson(
         rotateUrl(pair.host, pair.master, minSeconds),
         function (status, body) {
+          if (body && typeof body.version === "string" && body.version.trim()) {
+            proxyBoardEgressVersion = body.version.trim();
+          }
           if (status !== 200 || !body) {
             if (typeof done === "function") done(false);
             return;
@@ -1524,6 +1536,9 @@
           return r.ok ? r.json() : null;
         })
         .then(function (body) {
+          var nextEgressVer = body && typeof body.version === "string" ? body.version.trim() : "";
+          var egressChanged = Boolean(nextEgressVer && nextEgressVer !== proxyBoardEgressVersion);
+          if (nextEgressVer) proxyBoardEgressVersion = nextEgressVer;
           var key = keyChanged(heldKey, agentKeyFrom(body));
           if (key) {
             heldKey = key;
@@ -1533,7 +1548,7 @@
               sync();
             }
           }
-          postKeyToPreview(true);
+          postKeyToPreview(Boolean(key || egressChanged));
         })
         .catch(function () {});
     }, KEY_WATCH_MS, HTTP_JITTER_MS);
@@ -5262,7 +5277,6 @@
   var BOARD_PROXY_POLL_MS = 3000;
   var proxyBoardCache = null;
   var proxyBoardRevision = 0;
-  var proxyBoardEgressVersion = "";
   var proxyBoardPullInFlight = null;
   var lastProxyBoardPullAtMs = 0;
   var hydratedBoardFilesByBranch = new Set();

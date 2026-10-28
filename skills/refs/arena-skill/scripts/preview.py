@@ -298,6 +298,7 @@ DEFAULT_PORT = 8000
 AGENT_KEY_META = "agent_key"
 USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version"
 USERSCRIPT_VERSION_META = "userscript_version"
+EGRESS_VERSION_META = "egress_version"
 USERSCRIPT_VERSION_RE = re.compile(r"^[0-9A-Za-z._+-]{1,32}$")
 # The userscript replaces the record inside its 15-minute rotation window, so an older
 # record means no key post arrived and the agent's key is dead until a new one lands.
@@ -2924,6 +2925,8 @@ def format_key(record):
     lines.append(f"use fetch_page on {record['host']}/v1/<route>?key=<key>, never bash")
   if record.get("at"):
     lines.append(f"at {local_stamp(record['at'])}")
+  if record.get("egress_version"):
+    lines.append(f"egress {record['egress_version']}")
   if record.get("userscript_version"):
     lines.append(f"userscript {record['userscript_version']}")
   return "\n".join(lines) if lines else ""
@@ -8784,6 +8787,7 @@ class Store:
         "calls_since_message": meta_number(db, POLLS_SINCE_MESSAGE),
         # The Downloads tab shows the key the userscript holds.
         "agent_key": self.agent_key(),
+        "egress_version": self.egress_version(),
         "userscript_version": self.userscript_version(),
         # The header turns amber when this stamp ages, so a stale preview shows itself.
         "agent_seen_at": clip_stamp(meta.get(AGENT_SEEN_META)),
@@ -9570,6 +9574,8 @@ class Store:
         egress_version = str(incoming.get("egress_version") or "").strip()
       elif str(payload.get("egress_version") or "").strip():
         egress_version = str(payload.get("egress_version") or "").strip()
+      if egress_version:
+        self.set_egress_version(egress_version)
       if isinstance(incoming, dict) and "multi_repo" in incoming:
         multi_repo = bool(incoming.get("multi_repo") or linked_repos)
       merged = normalize_board_state(
@@ -12662,6 +12668,25 @@ class Store:
     cleaned = (self.meta_value(USERSCRIPT_VERSION_META) or "").strip()
     return cleaned if USERSCRIPT_VERSION_RE.fullmatch(cleaned) else None
 
+  def set_egress_version(self, version):
+    """Persist the live egress proxy version when valid and changed."""
+    if not isinstance(version, str):
+      return None
+    cleaned = version.strip()
+    if not USERSCRIPT_VERSION_RE.fullmatch(cleaned):
+      return None
+    if self.meta_value(EGRESS_VERSION_META) != cleaned:
+      self.set_meta(EGRESS_VERSION_META, cleaned)
+    return cleaned
+
+  def egress_version(self):
+    """Return the recorded live egress proxy version, or None when absent."""
+    cleaned = (self.meta_value(EGRESS_VERSION_META) or "").strip()
+    if USERSCRIPT_VERSION_RE.fullmatch(cleaned):
+      return cleaned
+    b_ver = str(self.board_state().get("egress_version") or "").strip()
+    return b_ver if USERSCRIPT_VERSION_RE.fullmatch(b_ver) else None
+
   def stale_report_rows(self, db):
     """Unpinned reports whose linked tasks finished, or whose unlinked view is idle."""
     linked = {}
@@ -15309,6 +15334,8 @@ def handler(store, reload_event=None):
           ):
             raise ValueError("host must be one https origin, with no path")
           store.set_agent_key(candidate, host)
+          if payload.get("egress_version") is not None:
+            store.set_egress_version(payload.get("egress_version"))
           self.reply(200, json.dumps(store.agent_key(), ensure_ascii=False))
           return
         if interrupt_post:
@@ -17263,6 +17290,9 @@ def main():
     "-r", "--run", dest="run_id", help="GitHub Actions run ID"
   )
   commands.add_parser("key", help="Print the recorded agent key, host and use line")
+  commands.add_parser(
+    "version", help="Print live egress proxy and boot userscript versions"
+  )
   pre = commands.add_parser(
     "pre", help="Run all pre-Bash gates in order; list completed steps"
   )
@@ -17879,7 +17909,16 @@ def main():
         print("No agent key recorded.", file=sys.stderr)
         return 1
       ver = store.userscript_version()
-      print(format_key({**record, "userscript_version": ver} if ver else record))
+      egress_ver = store.egress_version()
+      enriched = dict(record)
+      if egress_ver:
+        enriched["egress_version"] = egress_ver
+      if ver:
+        enriched["userscript_version"] = ver
+      print(format_key(enriched))
+    elif args.command == "version":
+      print(f"egress {store.egress_version() or 'unknown'}")
+      print(f"userscript {store.userscript_version() or 'unknown'}")
     elif args.command == "poll":
       require_server(store)
       require_survey(store)

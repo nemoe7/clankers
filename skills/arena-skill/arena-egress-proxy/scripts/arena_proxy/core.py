@@ -312,14 +312,23 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     age = int(time.monotonic() - self.server.key_changed)
     if age < minimum:
       self._log_detail = f"kept current agent key (age {age} s below min {minimum} s)"
-      self._send_json(200, {"ok": True, "rotated": False, "age": age})
+      self._send_json(
+        200, {"ok": True, "version": VERSION, "rotated": False, "age": age}
+      )
       return
     self.server.agent_key = secrets.token_urlsafe(32)
     self.server.key_changed = time.monotonic()
     self._emit_log(rotation_line(self.server.agent_key))
     self._log_detail = f"rotated agent key after {age} s"
     self._send_json(
-      200, {"ok": True, "rotated": True, "age": 0, "key": self.server.agent_key}
+      200,
+      {
+        "ok": True,
+        "version": VERSION,
+        "rotated": True,
+        "age": 0,
+        "key": self.server.agent_key,
+      },
     )
 
   def _authorized(self, params):

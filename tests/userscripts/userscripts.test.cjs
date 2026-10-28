@@ -3928,6 +3928,12 @@ for raw in sys.stdin:
         metaVersionMatch[1],
         "userscriptVersion() matches @version header",
       );
+      checkBox.GM_info = { script: { version: "9.9.9-updated-without-refresh" } };
+      assert.equal(
+        checkBox.CLANKERS_CHECKS.stateDownload.userscriptVersion(),
+        metaVersionMatch[1],
+        "userscriptVersion() stays frozen to page-load boot version when GM_info mutates without tab refresh",
+      );
       assert.equal(
         previewSyncCall.headers["X-Clankers-Userscript-Version"],
         metaVersionMatch[1],

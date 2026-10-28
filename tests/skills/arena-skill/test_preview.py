@@ -17182,3 +17182,76 @@ def test_preview_board_and_autosave_revision_diff_sync(tmp_path, monkeypatch):
   finally:
     srv.shutdown()
     srv.server_close()
+
+
+def test_cli_exposes_live_egress_and_boot_userscript_versions(
+  tmp_path, monkeypatch, capsys
+):
+  store = preview.Store(tmp_path / "arena-state", create=True)
+  srv = preview.PreviewServer(
+    ("127.0.0.1", 0),
+    preview.make_handler(store, ("127.0.0.1", 0)),
+  )
+  port = srv.server_address[1]
+  t = threading.Thread(target=srv.serve_forever, daemon=True)
+  t.start()
+  try:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    conn.request(
+      "POST",
+      "/api/key",
+      body=json.dumps(
+        {
+          "key": "A" * 32,
+          "host": "https://arena-proxy.example.ts.net",
+          "egress_version": "3.2.3",
+        }
+      ),
+      headers={
+        "Content-Type": "application/json",
+        "X-Clankers-Userscript-Version": "1.13.6",
+      },
+    )
+    res = conn.getresponse()
+    assert res.status == 200
+    res.read()
+
+    # Live egress updates propagate via /api/key or /api/board while boot userscript stays as sent:
+    conn.request(
+      "POST",
+      "/api/board",
+      body=json.dumps({"action": "sync", "egress_version": "3.2.4", "board": {}}),
+      headers={
+        "Content-Type": "application/json",
+        "X-Clankers-Userscript-Version": "1.13.6",
+      },
+    )
+    r_b = conn.getresponse()
+    assert r_b.status == 200
+    r_b.read()
+    conn.close()
+
+    assert store.egress_version() == "3.2.4"
+    assert store.userscript_version() == "1.13.6"
+    formatted = preview.format_key(
+      {
+        **store.agent_key(),
+        "egress_version": store.egress_version(),
+        "userscript_version": store.userscript_version(),
+      }
+    )
+    assert "egress 3.2.4" in formatted
+    assert "userscript 1.13.6" in formatted
+
+    monkeypatch.setattr(
+      sys,
+      "argv",
+      ["preview.py", "--state-dir", str(store.path), "version"],
+    )
+    assert preview.main() == 0
+    out = capsys.readouterr().out
+    assert "egress 3.2.4" in out
+    assert "userscript 1.13.6" in out
+  finally:
+    srv.shutdown()
+    srv.server_close()
