@@ -1813,7 +1813,7 @@ def submission_text(text):
 
 
 def slug(text, used):
-  base = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60] or "field"
+  base = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60].rstrip("-") or "field"
   candidate, suffix = base, 2
   while candidate in used:
     candidate = f"{base}-{suffix}"
@@ -7406,13 +7406,19 @@ def _find_skill_dir(root, name):
   roots.extend(cwd.parents)
   for base in roots:
     for candidate in (
-      base / "skills" / "refs" / name,
-      base / "skills" / name,
       base / ".agents" / "skills" / name,
+      base / "skills" / name,
     ):
       if candidate.is_dir():
         return candidate
-  return Path(root) / "skills" / "refs" / name
+  return Path(root) / ".agents" / "skills" / name
+
+
+def _skill_rel_path(skill_dir, repo_root, name):
+  try:
+    return skill_dir.resolve().relative_to(Path(repo_root).resolve()).as_posix()
+  except ValueError:
+    return f".agents/skills/{name}"
 
 
 def _extract_clauses(skill_md):
@@ -7517,9 +7523,8 @@ def _skill_exists(root, name):
   roots.extend(cwd.parents)
   for base in roots:
     for candidate in (
-      base / "skills" / "refs" / name,
-      base / "skills" / name,
       base / ".agents" / "skills" / name,
+      base / "skills" / name,
     ):
       if (candidate / "SKILL.md").is_file():
         return candidate
@@ -7687,11 +7692,12 @@ def resolve_slash_command(text, root=None):
       }
     if sub == "audit":
       bp_list = ", ".join(f"`{bp}`" for bp in _extract_nuu_breakpoints(nuu_dir))
+      nuu_rel = _skill_rel_path(nuu_dir, repo_root, "nuu")
       note_text = (
         f"Run a full `nuu` UI/UX audit (breakpoints {bp_list}; `a11y`, "
         "`density`, and `annotate`; report shots for `1920x957` desktop "
         "maximized and `411x799` phone portrait only) and publish the audit "
-        "report using `skills/refs/nuu/references/audit-report.md`."
+        f"report using `{nuu_rel}/references/audit-report.md`."
       )
       if trailing:
         note_text = f"{note_text}\n\n{trailing}"
@@ -7708,11 +7714,12 @@ def resolve_slash_command(text, root=None):
     if sub == "recipe":
       recipe_parts = arg.split(None, 1)
       recipe_name = re.sub(r"[^a-zA-Z0-9_-]", "", recipe_parts[0]).lower()
-      recipe_rest = recipe_parts[1].strip() if len(recipe_parts) > 1 else ""
+      recipe_rest = recipe_parts[1].strip() if len(recipe_parts[1:]) else ""
       recipe_trailing = "\n\n".join(
         part for part in (recipe_rest, extra_lines) if part
       ).strip()
-      recipe_rel = f"skills/refs/nuu/references/recipes/{recipe_name}.md"
+      nuu_rel = _skill_rel_path(nuu_dir, repo_root, "nuu")
+      recipe_rel = f"{nuu_rel}/references/recipes/{recipe_name}.md"
       note_text = f"Apply the `nuu` recipe `{recipe_name}` (`{recipe_rel}`)."
       if recipe_trailing:
         note_text = f"{note_text}\n\n{recipe_trailing}"
@@ -7858,10 +7865,11 @@ def resolve_slash_command(text, root=None):
       "markdown": summary,
     }
   if sub == "audit":
+    nemo_rel = _skill_rel_path(nemo_dir, repo_root, "nemoizer")
     note_text = (
-      "Run `nemoizer` in audit mode (`python3 skills/nemoizer/scripts/nemoize.py --audit`), "
+      f"Run `nemoizer` in audit mode (`python3 {nemo_rel}/scripts/nemoize.py --audit`), "
       "fix blocking violations, and publish an audit report using "
-      "`skills/refs/nemoizer/references/audit-report.md`."
+      f"`{nemo_rel}/references/audit-report.md`."
     )
     if trailing:
       note_text = f"{note_text}\n\n{trailing}"

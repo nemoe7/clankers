@@ -645,7 +645,7 @@ def submission_text(text):
 	if not isinstance(text,str)or not text.strip():raise ValueError('A report submission carries at least one answer')
 	return text
 def slug(text,used):
-	base=re.sub('[^a-z0-9]+','-',text.lower()).strip('-')[:60]or'field';candidate,suffix=base,2
+	base=re.sub('[^a-z0-9]+','-',text.lower()).strip('-')[:60].rstrip('-')or'field';candidate,suffix=base,2
 	while candidate in used:candidate=f"{base}-{suffix}";suffix+=1
 	used.add(candidate);return candidate
 def prompt_text(line):text=re.sub('^\\s*(?:[-*+]\\s+|#+\\s+|>\\s+|\\d+[.)]\\s+)','',line).strip();return text.strip('*_` ').rstrip(':').strip()
@@ -2656,9 +2656,12 @@ NEMOIZER_COLLECT_IGNORES='arena-state','.agents','.git','node_modules','LICENSE.
 def _find_skill_dir(root,name):
 	roots=[Path(root)];here=Path(__file__).resolve();roots.extend(here.parents);cwd=Path.cwd().resolve();roots.append(cwd);roots.extend(cwd.parents)
 	for base in roots:
-		for candidate in(base/'skills'/'refs'/name,base/'skills'/name,base/'.agents'/'skills'/name):
+		for candidate in(base/'.agents'/'skills'/name,base/'skills'/name):
 			if candidate.is_dir():return candidate
-	return Path(root)/'skills'/'refs'/name
+	return Path(root)/'.agents'/'skills'/name
+def _skill_rel_path(skill_dir,repo_root,name):
+	try:return skill_dir.resolve().relative_to(Path(repo_root).resolve()).as_posix()
+	except ValueError:return f".agents/skills/{name}"
 def _extract_clauses(skill_md):
 	if not skill_md.is_file():return''
 	text=skill_md.read_text(encoding='utf-8')
@@ -2713,7 +2716,7 @@ def _concise_rule_doc(markdown):
 def _skill_exists(root,name):
 	roots=[Path(root or resolve_repo_root()).resolve()];here=Path(__file__).resolve();roots.extend(here.parents);cwd=Path.cwd().resolve();roots.append(cwd);roots.extend(cwd.parents)
 	for base in roots:
-		for candidate in(base/'skills'/'refs'/name,base/'skills'/name,base/'.agents'/'skills'/name):
+		for candidate in(base/'.agents'/'skills'/name,base/'skills'/name):
 			if(candidate/'SKILL.md').is_file():return candidate
 	return None
 def discover_slash_commands(root=None):
@@ -2745,7 +2748,7 @@ def resolve_slash_command(text,root=None):
 			except ValueError as err:return{'mode':'query','command':'/nuu search','title':'nuu search','markdown':f"Invalid search arguments: `{err}`"}
 			proc=subprocess.run([sys.executable,str(nuu_dir/'scripts'/'uiux.py'),'search',*tokens],cwd=str(repo_root),capture_output=True,text=True,timeout=15,check=False);out=(proc.stdout or proc.stderr or'No results.').strip();return{'mode':'query','command':f"/nuu search {arg}",'title':f"nuu search · {arg}",'markdown':f"```text\n{out}\n```"}
 		if sub=='audit':
-			bp_list=', '.join(f"`{bp}`"for bp in _extract_nuu_breakpoints(nuu_dir));note_text=f"Run a full `nuu` UI/UX audit (breakpoints {bp_list}; `a11y`, `density`, and `annotate`; report shots for `1920x957` desktop maximized and `411x799` phone portrait only) and publish the audit report using `skills/refs/nuu/references/audit-report.md`."
+			bp_list=', '.join(f"`{bp}`"for bp in _extract_nuu_breakpoints(nuu_dir));nuu_rel=_skill_rel_path(nuu_dir,repo_root,'nuu');note_text=f"Run a full `nuu` UI/UX audit (breakpoints {bp_list}; `a11y`, `density`, and `annotate`; report shots for `1920x957` desktop maximized and `411x799` phone portrait only) and publish the audit report using `{nuu_rel}/references/audit-report.md`."
 			if trailing:note_text=f"{note_text}\n\n{trailing}"
 			return{'mode':'note','command':'/nuu audit','text':note_text}
 		if sub=='learn':
@@ -2753,7 +2756,7 @@ def resolve_slash_command(text,root=None):
 			if trailing:note_text=f"{note_text}\n\n{trailing}"
 			return{'mode':'note','command':'/nuu learn','text':note_text}
 		if sub=='recipe':
-			recipe_parts=arg.split(None,1);recipe_name=re.sub('[^a-zA-Z0-9_-]','',recipe_parts[0]).lower();recipe_rest=recipe_parts[1].strip()if len(recipe_parts)>1 else'';recipe_trailing='\n\n'.join(part for part in(recipe_rest,extra_lines)if part).strip();recipe_rel=f"skills/refs/nuu/references/recipes/{recipe_name}.md";note_text=f"Apply the `nuu` recipe `{recipe_name}` (`{recipe_rel}`)."
+			recipe_parts=arg.split(None,1);recipe_name=re.sub('[^a-zA-Z0-9_-]','',recipe_parts[0]).lower();recipe_rest=recipe_parts[1].strip()if len(recipe_parts[1:])else'';recipe_trailing='\n\n'.join(part for part in(recipe_rest,extra_lines)if part).strip();nuu_rel=_skill_rel_path(nuu_dir,repo_root,'nuu');recipe_rel=f"{nuu_rel}/references/recipes/{recipe_name}.md";note_text=f"Apply the `nuu` recipe `{recipe_name}` (`{recipe_rel}`)."
 			if recipe_trailing:note_text=f"{note_text}\n\n{recipe_trailing}"
 			return{'mode':'note','command':f"/nuu recipe {recipe_name}",'text':note_text}
 		return{'mode':'query','command':f"/nuu {sub}",'title':'nuu · Unknown Command','markdown':f"Unknown `/nuu` subcommand `{sub}`. Try `/nuu help`, `/nuu learn`, `/nuu recipes`, `/nuu search <query>`, `/nuu audit [target]`, or `/nuu recipe <name> [target]`."}
@@ -2786,7 +2789,7 @@ def resolve_slash_command(text,root=None):
 		except subprocess.TimeoutExpired:return{'mode':'query','command':f"/nemoizer {sub}",'title':'nemoizer collect · Timeout','markdown':'Scan timed out. Pass a narrower path (e.g. `/nemoizer collect docs/ README.md`).'}
 		finding_lines=[line for line in out.splitlines()if line.strip()];summary=f"Found **{len(finding_lines)}** output line(s).\n\n```text\n{out}\n```"if finding_lines else'No findings.';return{'mode':'query','command':f"/nemoizer {sub}"+(f" {arg}"if arg else''),'title':'nemoizer collect · Audit Findings','markdown':summary}
 	if sub=='audit':
-		note_text='Run `nemoizer` in audit mode (`python3 skills/nemoizer/scripts/nemoize.py --audit`), fix blocking violations, and publish an audit report using `skills/refs/nemoizer/references/audit-report.md`.'
+		nemo_rel=_skill_rel_path(nemo_dir,repo_root,'nemoizer');note_text=f"Run `nemoizer` in audit mode (`python3 {nemo_rel}/scripts/nemoize.py --audit`), fix blocking violations, and publish an audit report using `{nemo_rel}/references/audit-report.md`."
 		if trailing:note_text=f"{note_text}\n\n{trailing}"
 		return{'mode':'note','command':'/nemoizer audit','text':note_text}
 	if sub=='learn':

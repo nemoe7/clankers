@@ -17188,10 +17188,7 @@ def test_cli_exposes_live_egress_and_boot_userscript_versions(
   tmp_path, monkeypatch, capsys
 ):
   store = preview.Store(tmp_path / "arena-state", create=True)
-  srv = preview.PreviewServer(
-    ("127.0.0.1", 0),
-    preview.make_handler(store, ("127.0.0.1", 0)),
-  )
+  srv = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
   port = srv.server_address[1]
   t = threading.Thread(target=srv.serve_forever, daemon=True)
   t.start()
@@ -17243,11 +17240,9 @@ def test_cli_exposes_live_egress_and_boot_userscript_versions(
     assert "egress 3.2.4" in formatted
     assert "userscript 1.13.6" in formatted
 
-    monkeypatch.setattr(
-      sys,
-      "argv",
-      ["preview.py", "--state-dir", str(store.path), "version"],
-    )
+    monkeypatch.setattr(preview, "resolve_state_dir", lambda: tmp_path / "arena-state")
+    monkeypatch.setattr(preview, "require_server", lambda _s: None)
+    monkeypatch.setattr(sys, "argv", ["preview.py", "version"])
     assert preview.main() == 0
     out = capsys.readouterr().out
     assert "egress 3.2.4" in out
@@ -17255,3 +17250,46 @@ def test_cli_exposes_live_egress_and_boot_userscript_versions(
   finally:
     srv.shutdown()
     srv.server_close()
+
+
+def test_slug_strips_trailing_hyphen_after_length_truncation():
+  prompt = "Choose how to fix the repeating /v1/board and /v1/board/files log lines."
+  generated = preview.slug(prompt, set())
+  assert len(generated) <= 60
+  assert not generated.endswith("-")
+  assert generated == "choose-how-to-fix-the-repeating-v1-board-and-v1-board-files"
+
+
+def test_slash_skill_lookup_prefers_installed_then_live_and_ignores_refs(tmp_path):
+  refs_dir = tmp_path / "skills" / "refs" / "demo-skill"
+  refs_dir.mkdir(parents=True)
+  (refs_dir / "SKILL.md").write_text("# Demo refs\n", encoding="utf-8")
+  assert preview._skill_exists(tmp_path, "demo-skill") is None
+  assert (
+    preview._find_skill_dir(tmp_path, "demo-skill")
+    == tmp_path / ".agents" / "skills" / "demo-skill"
+  )
+
+  live_dir = tmp_path / "skills" / "demo-skill"
+  live_dir.mkdir(parents=True)
+  (live_dir / "SKILL.md").write_text("# Demo live\n", encoding="utf-8")
+  assert preview._skill_exists(tmp_path, "demo-skill") == live_dir
+  assert preview._find_skill_dir(tmp_path, "demo-skill") == live_dir
+
+  installed_dir = tmp_path / ".agents" / "skills" / "demo-skill"
+  installed_dir.mkdir(parents=True)
+  (installed_dir / "SKILL.md").write_text("# Demo installed\n", encoding="utf-8")
+  assert preview._skill_exists(tmp_path, "demo-skill") == installed_dir
+  assert preview._find_skill_dir(tmp_path, "demo-skill") == installed_dir
+
+  installed_nuu = tmp_path / ".agents" / "skills" / "nuu" / "references" / "recipes"
+  installed_nuu.mkdir(parents=True)
+  (tmp_path / ".agents" / "skills" / "nuu" / "SKILL.md").write_text(
+    "## Clauses\n\n1. Test clause.\n", encoding="utf-8"
+  )
+  audit_res = preview.resolve_slash_command("/nuu audit", root=tmp_path)
+  assert ".agents/skills/nuu/references/audit-report.md" in audit_res["text"]
+  assert "skills/refs/" not in audit_res["text"]
+  recipe_res = preview.resolve_slash_command("/nuu recipe modal-manager", root=tmp_path)
+  assert ".agents/skills/nuu/references/recipes/modal-manager.md" in recipe_res["text"]
+  assert "skills/refs/" not in recipe_res["text"]
