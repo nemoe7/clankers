@@ -138,12 +138,10 @@ def test_survey_transport_keeps_grades_in_server_memory(tmp_path, monkeypatch, c
 def test_board_survey_answers_follow_the_session_allowlist(tmp_path, monkeypatch):
   repo = tmp_path / "clankers"
   repo.mkdir()
-  self_sid = "local1111-clankers"
-  peer_sid = "peer2222-clankers"
-  unopted_sid = "unopted3-clankers"
-  monkeypatch.setattr(
-    preview, "workspace_branch", lambda _root=None: f"arena/{self_sid}"
-  )
+  self_sid = "arena/local1111-clankers"
+  peer_sid = "arena/peer2222-clankers"
+  unopted_sid = "arena/unopted3-clankers"
+  monkeypatch.setattr(preview, "workspace_branch", lambda _root=None: self_sid)
   store = preview.Store(repo / "arena-state", create=True)
   monkeypatch.setattr(store, "repository_root", lambda: repo)
   local_result = {
@@ -171,16 +169,16 @@ def test_board_survey_answers_follow_the_session_allowlist(tmp_path, monkeypatch
     "allowed_sessions": [peer_sid],
     "main_session_id": peer_sid,
     "sessions": [
-      {"session_id": peer_sid, "survey": {"results": [peer_result]}},
+      {"branch": peer_sid, "survey": {"results": [peer_result]}},
       {
-        "session_id": unopted_sid,
+        "branch": unopted_sid,
         "survey": {"results": [blocked_result, legacy_result]},
       },
     ],
   }
 
   board = store.board_action({"action": "sync", "board": incoming})
-  by_sid = {row["session_id"]: row for row in board["sessions"]}
+  by_sid = {row["branch"]: row for row in board["sessions"]}
   assert by_sid[peer_sid]["survey"]["results"] == [peer_result]
   assert by_sid[unopted_sid]["survey"]["results"] == [
     {key: value for key, value in blocked_result.items() if key != "answer"},
@@ -192,8 +190,8 @@ def test_board_survey_answers_follow_the_session_allowlist(tmp_path, monkeypatch
   assert json.loads(store.meta_value("survey_state_json")) == local_survey
   assert incoming["sessions"][1]["survey"]["results"][0] == blocked_result
 
-  board = store.board_action({"action": "allow", "session_id": self_sid})
-  self_row = next(row for row in board["sessions"] if row["session_id"] == self_sid)
+  board = store.board_action({"action": "allow", "branch": self_sid})
+  self_row = next(row for row in board["sessions"] if row["branch"] == self_sid)
   assert self_row["survey"]["results"] == [local_result]
 
 
@@ -203,10 +201,8 @@ def test_survey_http_keeps_local_answers_after_board_revocation(tmp_path, monkey
   global app
   repo = tmp_path / "clankers"
   repo.mkdir()
-  self_sid = "local1111-clankers"
-  monkeypatch.setattr(
-    preview, "workspace_branch", lambda _root=None: f"arena/{self_sid}"
-  )
+  self_sid = "arena/local1111-clankers"
+  monkeypatch.setattr(preview, "workspace_branch", lambda _root=None: self_sid)
   store = preview.Store(repo / "arena-state", create=True)
   monkeypatch.setattr(store, "repository_root", lambda: repo)
   submitted = survey.template()
@@ -228,20 +224,16 @@ def test_survey_http_keeps_local_answers_after_board_revocation(tmp_path, monkey
     local = json.loads(body)
     assert local["results"][2]["answer"] == submitted[2]["answer"]
 
-    store.board_action({"action": "allow", "session_id": self_sid})
+    store.board_action({"action": "allow", "branch": self_sid})
     status, _, body = request("GET", "/api/board")
     assert status == 200
-    own = next(
-      row for row in json.loads(body)["sessions"] if row["session_id"] == self_sid
-    )
+    own = next(row for row in json.loads(body)["sessions"] if row["branch"] == self_sid)
     assert own["survey"]["results"][2]["answer"] == submitted[2]["answer"]
 
-    store.board_action({"action": "revoke", "session_id": self_sid})
+    store.board_action({"action": "revoke", "branch": self_sid})
     status, _, body = request("GET", "/api/board")
     assert status == 200
-    own = next(
-      row for row in json.loads(body)["sessions"] if row["session_id"] == self_sid
-    )
+    own = next(row for row in json.loads(body)["sessions"] if row["branch"] == self_sid)
     assert "answer" not in own["survey"]["results"][2]
     status, _, body = request("GET", "/api/survey")
     assert status == 200 and json.loads(body) == local
@@ -15441,22 +15433,26 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert (hygiene_dir / "active-rep.md").exists()
   assert (hygiene_dir / "pr-body.md").exists()
 
-  assert preview.board_session_id("arena/293da56c-clankers") == "293da56c-clankers"
-  assert preview.board_session_id("b14c09a2-clankers") == "b14c09a2-clankers"
+  assert preview.board_branch("arena/main0001-clankers") == "arena/main0001-clankers"
+  assert preview.board_branch("b14c09a2-clankers") == "b14c09a2-clankers"
+  assert (
+    preview.encode_board_branch_dir("arena/b14c09a2-clankers")
+    == "arena%2Fb14c09a2-clankers"
+  )
   monkeypatch.setattr(
-    preview, "workspace_branch", lambda *_a: "arena/293da56c-clankers"
+    preview, "workspace_branch", lambda *_a: "arena/main0001-clankers"
   )
   preview.run_notices(hygiene_dir)
   capsys.readouterr()
   with pytest.raises(ValueError):
     preview.stage_board_file(
       hygiene_dir,
-      "arena/293da56c-clankers",
+      "arena/main0001-clankers",
       {"name": "../bad.txt", "encoding": "utf-8", "content": "x"},
     )
   large_file = preview.stage_board_file(
     hygiene_dir,
-    "arena/293da56c-clankers",
+    "arena/main0001-clankers",
     {
       "name": "huge.bin",
       "encoding": "utf-8",
@@ -15468,25 +15464,23 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     hygiene_store.board_action(
       {
         "action": "post",
-        "session_id": "arena/b14c09a2-clankers",
+        "branch": "arena/b14c09a2-clankers",
         "payload": {"tag": "patch"},
       }
     )
   board_after_allow = hygiene_store.board_action(
-    {"action": "allow", "session_id": "arena/293da56c-clankers"}
+    {"action": "allow", "branch": "arena/main0001-clankers"}
   )
-  assert "293da56c-clankers" in board_after_allow["allowed_sessions"]
+  assert "arena/main0001-clankers" in board_after_allow["allowed_sessions"]
+  hygiene_store.board_action({"action": "allow", "branch": "arena/b14c09a2-clankers"})
   hygiene_store.board_action(
-    {"action": "allow", "session_id": "arena/b14c09a2-clankers"}
-  )
-  hygiene_store.board_action(
-    {"action": "set-main", "session_id": "arena/b14c09a2-clankers"}
+    {"action": "set-main", "branch": "arena/b14c09a2-clankers"}
   )
   posted = hygiene_store.board_action(
     {
       "action": "post",
-      "session_id": "arena/b14c09a2-clankers",
-      "to": "293da56c-clankers",
+      "branch": "arena/b14c09a2-clankers",
+      "to": "main0001-clankers",
       "payload": {"tag": "patch"},
       "file": {
         "name": "src/demo.txt",
@@ -15498,28 +15492,26 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert len(posted["entries"]) == 1
   assert posted["entries"][0]["file"]["size"] == 10
   assert (
-    hygiene_dir / "board-files" / "b14c09a2-clankers" / "src" / "demo.txt"
+    hygiene_dir / "board-files" / "arena%2Fb14c09a2-clankers" / "src" / "demo.txt"
   ).read_text(encoding="utf-8") == "demo-bytes"
   hygiene_store.stamp_polling()
   assert hygiene_store.polling() is True
   woken_board = hygiene_store.board_action({"action": "wake", "target": "all-polling"})
   assert hygiene_store.skip_poll_requested() is False
   self_row = next(
-    row
-    for row in woken_board["sessions"]
-    if row["session_id"] == woken_board["session_id"]
+    row for row in woken_board["sessions"] if row["branch"] == woken_board["branch"]
   )
   assert self_row["polling"] is False
   assert hygiene_store.take_board_wake() is not None
   assert hygiene_store.take_board_wake() is None
   hygiene_store.stamp_polling()
-  hygiene_store.board_action({"action": "wake", "target": woken_board["session_id"]})
+  hygiene_store.board_action({"action": "wake", "target": woken_board["branch"]})
   assert hygiene_store.skip_poll_requested() is False
   assert preview.poll_once(hygiene_store, sleeper=lambda _: None) == 0
   wake_out = capsys.readouterr().out
   assert "BOARD WAKE:" in wake_out
   assert '"tag": "patch"' in wake_out
-  assert "[file: board-files/b14c09a2-clankers/src/demo.txt]" in wake_out
+  assert "[file: board-files/arena%2Fb14c09a2-clankers/src/demo.txt]" in wake_out
   assert hygiene_store.polling() is False
   assert hygiene_store.skip_poll_requested() is False
   hygiene_store.stamp_polling()
@@ -15534,10 +15526,9 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
           *woken_board["entries"],
           {
             "id": "b-sync-99",
-            "session_id": "b14c09a2-clankers",
-            "to": woken_board["session_id"],
-            "repo": "clankers",
             "branch": "arena/b14c09a2-clankers",
+            "to": woken_board["branch"],
+            "repo": "clankers",
             "at": "2026-10-25T15:30:00",
             "payload": {"tag": "reply", "text": "pong"},
             "file": None,
@@ -15547,7 +15538,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
       },
     }
   )
-  assert synced_wake["wakes"].get(woken_board["session_id"]) == "b-sync-99"
+  assert synced_wake["wakes"].get(woken_board["branch"]) == "b-sync-99"
   assert preview.poll_once(hygiene_store, sleeper=lambda _: None) == 0
   second_wake_out = capsys.readouterr().out
   assert "b-sync-99" in second_wake_out
@@ -15558,7 +15549,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
       "action": "sync",
       "board": {
         **hygiene_store.board_state(),
-        "wakes": {woken_board["session_id"]: "b-sync-99"},
+        "wakes": {woken_board["branch"]: "b-sync-99"},
       },
     }
   )
@@ -15566,8 +15557,8 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   top_post = hygiene_store.board_action(
     {
       "action": "post",
-      "session_id": woken_board["session_id"],
-      "to": "b14c09a2-clankers",
+      "branch": woken_board["branch"],
+      "to": "arena/b14c09a2-clankers",
       "tag": "flat",
       "text": "top-level fields",
     }
@@ -15577,7 +15568,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     "text": "top-level fields",
   }
   gate_msg = preview.board_main_session_warning(
-    hygiene_dir, "git push origin arena/293da56c-clankers"
+    hygiene_dir, "git push origin arena/main0001-clankers"
   )
   assert gate_msg is not None
   assert "MAIN SESSION GATE" in gate_msg
@@ -15642,20 +15633,20 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   default_main_row = next(
     row
     for row in default_greek_state["sessions"]
-    if row["session_id"] == "b14c09a2-clankers"
+    if row["branch"] == "arena/b14c09a2-clankers"
   )
   assert default_main_row["board_id"] == f"{default_main_row['repo']}-alpha"
   role_state = hygiene_store.board_action(
     {
       "action": "delegate-id",
-      "session_id": woken_board["session_id"],
+      "branch": woken_board["branch"],
       "worker_id": "ui",
     }
   )
   assert role_state["board_id"] == f"{role_state['repo']}-ui"
   assert role_state["worker_id"] == "ui"
   main_row = next(
-    row for row in role_state["sessions"] if row["session_id"] == "b14c09a2-clankers"
+    row for row in role_state["sessions"] if row["branch"] == "arena/b14c09a2-clankers"
   )
   assert main_row["board_id"] == f"{main_row['repo']}-alpha"
   multi_state = hygiene_store.board_action(
@@ -15663,7 +15654,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   assert multi_state["board_id"] == f"{multi_state['repo']}-ui"
   main_multi_row = next(
-    row for row in multi_state["sessions"] if row["session_id"] == "b14c09a2-clankers"
+    row for row in multi_state["sessions"] if row["branch"] == "arena/b14c09a2-clankers"
   )
   assert main_multi_row["board_id"] == f"{main_multi_row['repo']}-alpha"
   cross_repo_norm = preview.normalize_board_state(
@@ -15672,23 +15663,23 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
       "main_session_id": "b14c09a2-clankers",
       "allowed_sessions": [
         "b14c09a2-clankers",
-        "293da56c-clankers",
+        "main0001-clankers",
         "11111111-otherrepo",
         "22222222-otherrepo",
       ],
       "sessions": [
-        {"session_id": "b14c09a2-clankers", "repo": "clankers"},
-        {"session_id": "293da56c-clankers", "repo": "clankers"},
-        {"session_id": "11111111-otherrepo", "repo": "otherrepo"},
-        {"session_id": "22222222-otherrepo", "repo": "otherrepo"},
+        {"branch": "b14c09a2-clankers", "repo": "clankers"},
+        {"branch": "main0001-clankers", "repo": "clankers"},
+        {"branch": "11111111-otherrepo", "repo": "otherrepo"},
+        {"branch": "22222222-otherrepo", "repo": "otherrepo"},
       ],
     },
-    session_id="293da56c-clankers",
+    branch="main0001-clankers",
     repo="clankers",
   )
-  by_sid = {row["session_id"]: row for row in cross_repo_norm["sessions"]}
+  by_sid = {row["branch"]: row for row in cross_repo_norm["sessions"]}
   assert by_sid["b14c09a2-clankers"]["board_id"] == "clankers-alpha"
-  assert by_sid["293da56c-clankers"]["board_id"] == "clankers-beta"
+  assert by_sid["main0001-clankers"]["board_id"] == "clankers-beta"
   assert by_sid["11111111-otherrepo"]["board_id"] == "otherrepo-alpha"
   assert by_sid["11111111-otherrepo"]["role"] == "main"
   assert by_sid["22222222-otherrepo"]["board_id"] == "otherrepo-beta"
@@ -15709,13 +15700,13 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     {
       "action": "post",
       "id": "b-mention-1",
-      "session_id": "b14c09a2-clankers",
+      "branch": "arena/b14c09a2-clankers",
       "text": "Audit mobile viewport.\n@ui",
     }
   )
   mention_entry = mention_post["entries"][-1]
-  assert mention_entry["mention_target"] == woken_board["session_id"]
-  assert mention_entry["to"] == woken_board["session_id"]
+  assert mention_entry["mention_target"] == woken_board["branch"]
+  assert mention_entry["to"] == woken_board["branch"]
   assert any(
     item["id"] == "b-mention-1" and item["type"] == "board"
     for item in hygiene_store.read()["pending"]
@@ -15735,7 +15726,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     hygiene_store.board_action(
       {
         "action": "delegate-id",
-        "session_id": woken_board["session_id"],
+        "branch": woken_board["branch"],
         "worker_id": "toolongid",
       }
     )
@@ -15745,7 +15736,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   task_op_create = hygiene_store.board_action(
     {
       "action": "worker-task",
-      "session_id": "b14c09a2-clankers",
+      "branch": "arena/b14c09a2-clankers",
       "target": "worker-ui",
       "op": "set",
       "task_id": "delegated-task",
@@ -15758,12 +15749,12 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   assert any(row["id"] == "delegated-task" for row in hygiene_store.list_tasks())
   assert any(
     row["id"] == "delegated-task"
-    for row in task_op_create["worker_tasks"][woken_board["session_id"]]
+    for row in task_op_create["worker_tasks"][woken_board["branch"]]
   )
   hygiene_store.board_action(
     {
       "action": "worker-task",
-      "session_id": "b14c09a2-clankers",
+      "branch": "arena/b14c09a2-clankers",
       "target": "worker-ui",
       "op": "reorder",
       "task_id": "delegated-task",
@@ -15773,7 +15764,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   hygiene_store.board_action(
     {
       "action": "worker-task",
-      "session_id": "b14c09a2-clankers",
+      "branch": "arena/b14c09a2-clankers",
       "target": "worker-ui",
       "op": "finish",
       "task_id": "delegated-task",
@@ -15788,7 +15779,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   hygiene_store.board_action(
     {
       "action": "worker-task",
-      "session_id": "b14c09a2-clankers",
+      "branch": "arena/b14c09a2-clankers",
       "target": "worker-ui",
       "op": "remove",
       "task_id": "delegated-task",
@@ -15812,12 +15803,12 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   board_with_rep = hygiene_store.board_state()
   assert any(
     r["id"] == "worker-rep" and r["needs_answer"] is True
-    for r in board_with_rep["worker_reports"][woken_board["session_id"]]
+    for r in board_with_rep["worker_reports"][woken_board["branch"]]
   )
   answered_rep_board = hygiene_store.board_action(
     {
       "action": "worker-report",
-      "session_id": "b14c09a2-clankers",
+      "branch": "arena/b14c09a2-clankers",
       "target": "worker-ui",
       "op": "answer",
       "report_id": "worker-rep",
@@ -15826,7 +15817,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   assert any(
     r["id"] == "worker-rep" and r["answered"] is True and r["needs_answer"] is False
-    for r in answered_rep_board["worker_reports"][woken_board["session_id"]]
+    for r in answered_rep_board["worker_reports"][woken_board["branch"]]
   )
   unblocked_task = {row["id"]: row for row in hygiene_store.list_tasks()}[
     "blocked-on-worker-rep"
@@ -15835,7 +15826,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   unpublished_rep_board = hygiene_store.board_action(
     {
       "action": "worker-report",
-      "session_id": "b14c09a2-clankers",
+      "branch": "arena/b14c09a2-clankers",
       "target": "worker-ui",
       "op": "unpublish",
       "report_id": "worker-rep",
@@ -15843,28 +15834,26 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   assert not any(
     r["id"] == "worker-rep"
-    for r in unpublished_rep_board["worker_reports"][woken_board["session_id"]]
+    for r in unpublished_rep_board["worker_reports"][woken_board["branch"]]
   )
   pruned_board = hygiene_store.board_action(
     {
       "action": "sync",
       "board": {
         **unpublished_rep_board,
-        "removed_sessions": ["closed-worker-clankers"],
+        "removed_sessions": ["arena/closed-worker-clankers"],
         "sessions": [
           *unpublished_rep_board["sessions"],
           {
-            "session_id": "probe-verify-clankers",
-            "repo": "clankers",
             "branch": "arena/probe-verify-clankers",
+            "repo": "clankers",
             "status": "active",
             "polling": False,
             "updated_at": "2020-01-01T00:00:00",
           },
           {
-            "session_id": "closed-worker-clankers",
-            "repo": "clankers",
             "branch": "arena/closed-worker-clankers",
+            "repo": "clankers",
             "status": "active",
             "polling": False,
             "updated_at": "2020-01-01T00:00:00",
@@ -15873,11 +15862,11 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
       },
     }
   )
-  pruned_sids = {row["session_id"] for row in pruned_board["sessions"]}
-  assert "probe-verify-clankers" not in pruned_sids
-  assert "closed-worker-clankers" not in pruned_sids
-  assert "probe-verify-clankers" in pruned_board["removed_sessions"]
-  assert "closed-worker-clankers" in pruned_board["removed_sessions"]
+  pruned_sids = {row["branch"] for row in pruned_board["sessions"]}
+  assert "arena/probe-verify-clankers" not in pruned_sids
+  assert "arena/closed-worker-clankers" not in pruned_sids
+  assert "arena/probe-verify-clankers" in pruned_board["removed_sessions"]
+  assert "arena/closed-worker-clankers" in pruned_board["removed_sessions"]
   style_css = (
     Path(preview.__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
@@ -15935,7 +15924,7 @@ def test_clause_ack_error_keeps_root_agents_when_nested_agents_is_shorter(tmp_pa
 
 def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, capsys):
   monkeypatch.setattr(
-    preview, "workspace_branch", lambda *_a, **_kw: "arena/293da56c-clankers"
+    preview, "workspace_branch", lambda *_a, **_kw: "arena/main0001-clankers"
   )
   monkeypatch.setattr(preview, "resolve_repo_root", lambda *_a, **_kw: tmp_path)
   (tmp_path / "ARENA.md").write_text("# ARENA\n", encoding="utf-8")
@@ -15946,9 +15935,9 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
   (skill_dir / "WORKER.md").write_text("# WORKER\n", encoding="utf-8")
   state_dir = tmp_path / "arena-state"
   store = preview.Store(state_dir, create=True)
-  store.board_action({"action": "allow", "session_id": "293da56c-clankers"})
-  store.board_action({"action": "allow", "session_id": "b14c09a2-clankers"})
-  store.board_action({"action": "set-main", "session_id": "b14c09a2-clankers"})
+  store.board_action({"action": "allow", "branch": "arena/main0001-clankers"})
+  store.board_action({"action": "allow", "branch": "arena/b14c09a2-clankers"})
+  store.board_action({"action": "set-main", "branch": "arena/b14c09a2-clankers"})
   notices = store.take_board_notifications()
   joined_text = "\n".join(notices)
   assert "BOARD SESSION JOINED:" in joined_text
@@ -15958,7 +15947,7 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
   assert "beta" in joined_text
   assert ".agents/skills/arena-skill/WORKER.md" in joined_text
   assert store.take_board_notifications() == []
-  store.board_action({"action": "allow", "session_id": "c77a11b0-clankers"})
+  store.board_action({"action": "allow", "branch": "arena/c77a11b0-clankers"})
   assert preview.poll_once(store, sleeper=lambda _: None) == 0
   poll_out = capsys.readouterr().out
   assert "BOARD SESSION JOINED:" in poll_out
@@ -15970,7 +15959,7 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
       encoding="utf-8"
     )
   auto_posted = store.board_action(
-    {"action": "post", "session_id": "293da56c-clankers", "text": "status update"}
+    {"action": "post", "branch": "arena/main0001-clankers", "text": "status update"}
   )
   posted_id = auto_posted["entries"][-1]["id"]
   assert preview.re.fullmatch(r"p[0-9a-f]{5}", posted_id)
@@ -15993,8 +15982,8 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
     store.board_action(
       {
         "action": "worker-report",
-        "session_id": "b14c09a2-clankers",
-        "target": "293da56c-clankers",
+        "branch": "arena/b14c09a2-clankers",
+        "target": "arena/main0001-clankers",
         "op": "answer",
         "report_id": "owner-only-rep",
         "owner_requested": True,
@@ -16007,13 +15996,13 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
   unopted_cross = preview.normalize_board_state(
     {
       "main_session_id": "b14c09a2-clankers",
-      "allowed_sessions": ["b14c09a2-clankers", "293da56c-clankers"],
+      "allowed_sessions": ["b14c09a2-clankers", "main0001-clankers"],
       "sessions": [
-        {"session_id": "b14c09a2-clankers", "repo": "clankers"},
-        {"session_id": "293da56c-clankers", "repo": "clankers"},
+        {"branch": "b14c09a2-clankers", "repo": "clankers"},
+        {"branch": "main0001-clankers", "repo": "clankers"},
       ],
     },
-    session_id="c40a4115-arena-cleanup",
+    branch="arena/c40a4115-arena-cleanup",
     repo="arena-cleanup",
   )
   assert unopted_cross["board_role"] == "main"
@@ -16026,17 +16015,17 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
   acked_state = store.board_state()
   acked_entry = next(e for e in acked_state["entries"] if e["id"] == posted_id)
   assert acked_entry["acknowledged_at"] is not None
-  assert acked_entry["ack_sender"] == acked_state["session_id"]
+  assert acked_entry["ack_sender"] == acked_state["branch"]
   assert acked_entry["ack_edited_seen_count"] == 1
-  assert "@b14c09a2-clankers" in acked_entry["ack_text"]
+  assert "@arena/b14c09a2-clankers" in acked_entry["ack_text"]
   drifted_norm = preview.normalize_board_state(
     {
-      "main_session_id": "293da56c-clankers",
-      "allowed_sessions": ["293da56c-clankers", "91a01582-clankers"],
+      "main_session_id": "main0001-clankers",
+      "allowed_sessions": ["main0001-clankers", "beta9999-clankers"],
       "sessions": [
-        {"session_id": "293da56c-clankers", "repo": "clankers", "status": "active"},
+        {"branch": "main0001-clankers", "repo": "clankers", "status": "active"},
         {
-          "session_id": "91a01582-clankers",
+          "branch": "beta9999-clankers",
           "repo": "clankers",
           "status": "polling",
           "polling": True,
@@ -16050,9 +16039,9 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
       "entries": [
         {
           "id": "pa8e29",
-          "session_id": "293da56c-clankers",
+          "branch": "main0001-clankers",
           "board_id": "clankers-alpha",
-          "to": "91a01582-clankers",
+          "to": "beta9999-clankers",
           "text": "Assigned NMU100 task.\n@beta",
           "acknowledged_at": "2026-10-26T14:01:00Z",
           "ack_type": "reply",
@@ -16061,15 +16050,15 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
         }
       ],
     },
-    session_id="293da56c-clankers",
+    branch="main0001-clankers",
     repo="clankers",
   )
   drifted_entry = drifted_norm["entries"][0]
-  assert drifted_entry["text"] == "Assigned NMU100 task.\n@91a01582-clankers"
-  assert drifted_entry["ack_text"] == "Claiming NMU100.\n@293da56c-clankers"
-  assert drifted_entry["ack_sender"] == "91a01582-clankers"
+  assert drifted_entry["text"] == "Assigned NMU100 task.\n@beta9999-clankers"
+  assert drifted_entry["ack_text"] == "Claiming NMU100.\n@main0001-clankers"
+  assert drifted_entry["ack_sender"] == "beta9999-clankers"
   worker_row_status = next(
-    r for r in drifted_norm["sessions"] if r["session_id"] == "91a01582-clankers"
+    r for r in drifted_norm["sessions"] if r["branch"] == "beta9999-clankers"
   )
   assert worker_row_status["polling_since"] == "2026-10-26T14:00:00Z"
   assert worker_row_status["calls_since_message"] == 2
@@ -16082,8 +16071,8 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
     tmp_path / "main-mirror-state" / "state.sqlite3", create=True
   )
   monkeypatch.setattr(main_store, "repository_root", lambda: tmp_path / "clankers")
-  main_sid = main_store.board_state()["session_id"]
-  worker_sid = "91a01582-clankers"
+  main_sid = main_store.board_state()["branch"]
+  worker_sid = "beta9999-clankers"
   main_store.board_action(
     {
       "action": "sync",
@@ -16091,8 +16080,8 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
         "main_session_id": main_sid,
         "allowed_sessions": [main_sid, worker_sid],
         "sessions": [
-          {"session_id": main_sid, "repo": "clankers", "status": "active"},
-          {"session_id": worker_sid, "repo": "clankers", "status": "active"},
+          {"branch": main_sid, "repo": "clankers", "status": "active"},
+          {"branch": worker_sid, "repo": "clankers", "status": "active"},
         ],
         "worker_reports": {
           worker_sid: [
@@ -16158,8 +16147,8 @@ def test_board_sync_skips_missing_reports_and_pre_clear_ops(tmp_path, monkeypatc
     worker_repo / "arena-state" / "state.sqlite3", create=True
   )
   monkeypatch.setattr(worker_store, "repository_root", lambda: worker_repo)
-  worker_sid = worker_store.board_state()["session_id"]
-  assert worker_sid == "beta2222-clankers"
+  worker_sid = worker_store.board_state()["branch"]
+  assert worker_sid == "arena/beta2222-clankers"
 
   worker_store.clear_state()
   cleared_at = worker_store.meta_value(preview.CLEARED_AT_META)
@@ -16172,8 +16161,8 @@ def test_board_sync_skips_missing_reports_and_pre_clear_ops(tmp_path, monkeypatc
         "main_session_id": "alpha111-clankers",
         "allowed_sessions": ["alpha111-clankers", worker_sid],
         "sessions": [
-          {"session_id": "alpha111-clankers", "repo": "clankers", "status": "active"},
-          {"session_id": worker_sid, "repo": "clankers", "status": "active"},
+          {"branch": "alpha111-clankers", "repo": "clankers", "status": "active"},
+          {"branch": worker_sid, "repo": "clankers", "status": "active"},
         ],
         "task_ops": [
           {
@@ -16222,7 +16211,7 @@ def test_board_sync_skips_missing_reports_and_pre_clear_ops(tmp_path, monkeypatc
     "rop-before-clear",
     "rop-missing-after-clear",
   ]
-  assert synced["session_id"] == worker_sid
+  assert synced["branch"] == worker_sid
 
 
 def test_board_post_normalizes_body_and_message_and_rejects_empty_post(
@@ -16238,19 +16227,17 @@ def test_board_post_normalizes_body_and_message_and_rejects_empty_post(
   main_dir.mkdir()
   store = preview.Store(main_dir, create=True)
   monkeypatch.setattr(store, "repository_root", lambda: main_repo)
-  main_sid = store.board_state()["session_id"]
-  worker_sid = "0735d422-clankers"
-  store.board_action({"action": "allow", "session_id": main_sid})
-  store.board_action({"action": "set-main", "session_id": main_sid})
-  store.board_action({"action": "allow", "session_id": worker_sid, "worker_id": "beta"})
-  store.board_action(
-    {"action": "heartbeat", "session_id": worker_sid, "repo": "clankers"}
-  )
+  main_sid = store.board_state()["branch"]
+  worker_sid = "beta0735-clankers"
+  store.board_action({"action": "allow", "branch": main_sid})
+  store.board_action({"action": "set-main", "branch": main_sid})
+  store.board_action({"action": "allow", "branch": worker_sid, "worker_id": "beta"})
+  store.board_action({"action": "heartbeat", "branch": worker_sid, "repo": "clankers"})
 
   from_body = store.board_action(
     {
       "action": "post",
-      "session_id": main_sid,
+      "branch": main_sid,
       "body": "@beta Delegate audit task",
     }
   )
@@ -16263,14 +16250,14 @@ def test_board_post_normalizes_body_and_message_and_rejects_empty_post(
   from_msg = store.board_action(
     {
       "action": "post",
-      "session_id": main_sid,
+      "branch": main_sid,
       "payload": {"message": "Status check"},
     }
   )
   assert from_msg["entries"][-1]["payload"] == {"text": "Status check"}
 
   with pytest.raises(ValueError, match="non-empty text"):
-    store.board_action({"action": "post", "session_id": main_sid, "text": "   "})
+    store.board_action({"action": "post", "branch": main_sid, "text": "   "})
 
 
 def test_idle_board_workers_surface_in_gate_and_poll_hints(
@@ -16287,14 +16274,12 @@ def test_idle_board_workers_surface_in_gate_and_poll_hints(
   main_dir.mkdir()
   store = preview.Store(main_dir, create=True)
   monkeypatch.setattr(store, "repository_root", lambda: main_repo)
-  main_sid = store.board_state()["session_id"]
-  worker_sid = "0735d422-clankers"
-  store.board_action({"action": "allow", "session_id": main_sid})
-  store.board_action({"action": "set-main", "session_id": main_sid})
-  store.board_action({"action": "allow", "session_id": worker_sid, "worker_id": "beta"})
-  store.board_action(
-    {"action": "heartbeat", "session_id": worker_sid, "repo": "clankers"}
-  )
+  main_sid = store.board_state()["branch"]
+  worker_sid = "beta0735-clankers"
+  store.board_action({"action": "allow", "branch": main_sid})
+  store.board_action({"action": "set-main", "branch": main_sid})
+  store.board_action({"action": "allow", "branch": worker_sid, "worker_id": "beta"})
+  store.board_action({"action": "heartbeat", "branch": worker_sid, "repo": "clankers"})
   store.write_task("queued-docs", "Write docs", ["Step 1"], task_type="docs")
 
   assert preview.idle_board_workers(main_dir) == ["beta"]
@@ -16339,11 +16324,11 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
   main_dir.mkdir()
   store = preview.Store(main_dir, create=True)
   monkeypatch.setattr(store, "repository_root", lambda: main_repo)
-  main_sid = store.board_state()["session_id"]
+  main_sid = store.board_state()["branch"]
   worker_sid = "beta2222-clankers"
-  store.board_action({"action": "allow", "session_id": main_sid})
-  store.board_action({"action": "set-main", "session_id": main_sid})
-  store.board_action({"action": "allow", "session_id": worker_sid, "worker_id": "beta"})
+  store.board_action({"action": "allow", "branch": main_sid})
+  store.board_action({"action": "set-main", "branch": main_sid})
+  store.board_action({"action": "allow", "branch": worker_sid, "worker_id": "beta"})
   store.board_action(
     {
       "action": "sync",
@@ -16351,9 +16336,8 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
         **store.board_state(),
         "sessions": [
           {
-            "session_id": worker_sid,
+            "branch": worker_sid,
             "repo": "clankers",
-            "branch": f"arena/{worker_sid}",
             "status": "active",
             "polling": False,
             "updated_at": "top-deadbeef",
@@ -16364,7 +16348,7 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
     }
   )
   first = next(
-    row for row in store.board_state()["sessions"] if row["session_id"] == worker_sid
+    row for row in store.board_state()["sessions"] if row["branch"] == worker_sid
   )
   assert first["updated_at"].startswith("20")
   assert first["agent_seen_at"] == "2026-10-27T02:55:00"
@@ -16377,9 +16361,8 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
         **store.board_state(),
         "sessions": [
           {
-            "session_id": worker_sid,
+            "branch": worker_sid,
             "repo": "clankers",
-            "branch": f"arena/{worker_sid}",
             "status": "active",
             "polling": False,
             "updated_at": "2026-10-27T02:56:00",
@@ -16388,7 +16371,7 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
       },
     }
   )
-  second = next(row for row in synced["sessions"] if row["session_id"] == worker_sid)
+  second = next(row for row in synced["sessions"] if row["branch"] == worker_sid)
   assert second["agent_seen_at"] == "2026-10-27T02:55:00"
 
   # Record an old turn_ended_at on peer, then sync newer bash activity without turn_ended_at:
@@ -16399,9 +16382,8 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
         **store.board_state(),
         "sessions": [
           {
-            "session_id": worker_sid,
+            "branch": worker_sid,
             "repo": "clankers",
-            "branch": f"arena/{worker_sid}",
             "status": "active",
             "polling": False,
             "updated_at": "2026-10-27T02:57:00",
@@ -16418,9 +16400,8 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
         **store.board_state(),
         "sessions": [
           {
-            "session_id": worker_sid,
+            "branch": worker_sid,
             "repo": "clankers",
-            "branch": f"arena/{worker_sid}",
             "status": "active",
             "polling": False,
             "updated_at": "2026-10-27T02:58:00",
@@ -16431,7 +16412,7 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
       },
     }
   )
-  third = next(row for row in resumed["sessions"] if row["session_id"] == worker_sid)
+  third = next(row for row in resumed["sessions"] if row["branch"] == worker_sid)
   assert "turn_ended_at" not in third or third["turn_ended_at"] is None
 
 
@@ -16440,14 +16421,14 @@ def test_main_and_owner_unpublish_worker_report_propagates_across_sync(tmp_path)
   worker_dir = tmp_path / "worker-state"
   main_store = preview.Store(str(main_dir), create=True)
   worker_store = preview.Store(str(worker_dir), create=True)
-  main_sid = "aaaa1111-clankers"
-  worker_sid = "bbbb2222-clankers"
+  main_sid = "arena/aaaa1111-clankers"
+  worker_sid = "arena/bbbb2222-clankers"
 
   md_file = tmp_path / "proposal.md"
   md_file.write_text("# Worker Proposal\n\nBody text.\n", encoding="utf-8")
 
   with (
-    patch.object(preview, "workspace_branch", return_value=f"arena/{worker_sid}"),
+    patch.object(preview, "workspace_branch", return_value=worker_sid),
     patch.object(
       StoreRepoMixin := preview.Store,
       "repository_root",
@@ -16455,15 +16436,15 @@ def test_main_and_owner_unpublish_worker_report_propagates_across_sync(tmp_path)
     ),
   ):
     worker_store.publish("worker-prop", "Worker Proposal", md_file)
-    worker_store.board_action({"action": "allow", "session_id": main_sid})
+    worker_store.board_action({"action": "allow", "branch": main_sid})
     worker_store.board_action(
-      {"action": "allow", "session_id": worker_sid, "worker_id": "beta"}
+      {"action": "allow", "branch": worker_sid, "worker_id": "beta"}
     )
-    worker_store.board_action({"action": "set-main", "session_id": main_sid})
+    worker_store.board_action({"action": "set-main", "branch": main_sid})
     w_board = worker_store.board_state()
 
   with (
-    patch.object(preview, "workspace_branch", return_value=f"arena/{main_sid}"),
+    patch.object(preview, "workspace_branch", return_value=main_sid),
     patch.object(StoreRepoMixin, "repository_root", return_value=tmp_path / "clankers"),
   ):
     main_store.board_action({"action": "sync", "board": w_board})
@@ -16486,7 +16467,7 @@ def test_main_and_owner_unpublish_worker_report_propagates_across_sync(tmp_path)
 
   # Syncing main's board back to worker removes the report from worker's SQLite store too:
   with (
-    patch.object(preview, "workspace_branch", return_value=f"arena/{worker_sid}"),
+    patch.object(preview, "workspace_branch", return_value=worker_sid),
     patch.object(StoreRepoMixin, "repository_root", return_value=tmp_path / "clankers"),
   ):
     worker_store.board_action({"action": "sync", "board": main_after_stale})
@@ -16498,9 +16479,9 @@ def test_unopted_session_hides_board_entries_and_direct_to_posts_surface_in_read
 ):
   from unittest.mock import patch
 
-  alpha_sid = "alpha1111-clankers"
-  delta_sid = "delta2222-clankers"
-  unopted_sid = "unopted01-daedalus"
+  alpha_sid = "arena/alpha1111-clankers"
+  delta_sid = "arena/delta2222-clankers"
+  unopted_sid = "arena/unopted01-daedalus"
   alpha_store = preview.Store(str(tmp_path / "alpha"), create=True)
   unopted_store = preview.Store(str(tmp_path / "daedalus"), create=True)
   StoreRepoMixin = next(
@@ -16508,7 +16489,7 @@ def test_unopted_session_hides_board_entries_and_direct_to_posts_surface_in_read
   )
 
   with (
-    patch.object(preview, "workspace_branch", return_value=f"arena/{unopted_sid}"),
+    patch.object(preview, "workspace_branch", return_value=unopted_sid),
     patch.object(StoreRepoMixin, "repository_root", return_value=tmp_path / "daedalus"),
   ):
     unopted_store.write_task(
@@ -16524,13 +16505,13 @@ def test_unopted_session_hides_board_entries_and_direct_to_posts_surface_in_read
           "main_session_id": alpha_sid,
           "allowed_sessions": [alpha_sid, delta_sid],
           "sessions": [
-            {"session_id": alpha_sid, "repo": "clankers", "status": "active"},
-            {"session_id": unopted_sid, "repo": "daedalus", "status": "active"},
+            {"branch": alpha_sid, "repo": "clankers", "status": "active"},
+            {"branch": unopted_sid, "repo": "daedalus", "status": "active"},
           ],
           "entries": [
             {
               "id": "p98765",
-              "session_id": delta_sid,
+              "branch": delta_sid,
               "to": alpha_sid,
               "repo": "clankers",
               "text": "worker ready without mention token",
@@ -16552,7 +16533,7 @@ def test_unopted_session_hides_board_entries_and_direct_to_posts_surface_in_read
     assert unopted_store.read()["pending"] == []
 
   with (
-    patch.object(preview, "workspace_branch", return_value=f"arena/{alpha_sid}"),
+    patch.object(preview, "workspace_branch", return_value=alpha_sid),
     patch.object(StoreRepoMixin, "repository_root", return_value=tmp_path / "clankers"),
   ):
     alpha_synced = alpha_store.board_action(
@@ -16562,14 +16543,14 @@ def test_unopted_session_hides_board_entries_and_direct_to_posts_surface_in_read
           "main_session_id": alpha_sid,
           "allowed_sessions": [alpha_sid, delta_sid],
           "sessions": [
-            {"session_id": alpha_sid, "repo": "clankers", "status": "active"},
-            {"session_id": delta_sid, "repo": "clankers", "status": "active"},
-            {"session_id": unopted_sid, "repo": "daedalus", "status": "active"},
+            {"branch": alpha_sid, "repo": "clankers", "status": "active"},
+            {"branch": delta_sid, "repo": "clankers", "status": "active"},
+            {"branch": unopted_sid, "repo": "daedalus", "status": "active"},
           ],
           "entries": [
             {
               "id": "p98765",
-              "session_id": delta_sid,
+              "branch": delta_sid,
               "to": alpha_sid,
               "repo": "clankers",
               "text": "worker ready without mention token",
@@ -16602,8 +16583,8 @@ def test_board_sync_keeps_allowlisted_session_over_removal(tmp_path, monkeypatch
   )
   store = preview.Store(repo / "arena-state" / "state.sqlite3", create=True)
   monkeypatch.setattr(store, "repository_root", lambda: repo)
-  sid = store.board_state()["session_id"]
-  assert sid == "gamma333-clankers"
+  sid = store.board_state()["branch"]
+  assert sid == "arena/gamma333-clankers"
   synced = store.board_action(
     {
       "action": "sync",
@@ -16612,8 +16593,8 @@ def test_board_sync_keeps_allowlisted_session_over_removal(tmp_path, monkeypatch
         "allowed_sessions": ["alpha111-clankers", sid],
         "removed_sessions": ["alpha111-clankers"],
         "sessions": [
-          {"session_id": "alpha111-clankers", "repo": "clankers", "status": "active"},
-          {"session_id": sid, "repo": "clankers", "status": "active"},
+          {"branch": "alpha111-clankers", "repo": "clankers", "status": "active"},
+          {"branch": sid, "repo": "clankers", "status": "active"},
         ],
       },
     }
@@ -16621,7 +16602,7 @@ def test_board_sync_keeps_allowlisted_session_over_removal(tmp_path, monkeypatch
   assert "alpha111-clankers" in synced["allowed_sessions"]
   assert "alpha111-clankers" not in synced["removed_sessions"]
   assert synced["main_session_id"] == "alpha111-clankers"
-  assert "alpha111-clankers" in {row["session_id"] for row in synced["sessions"]}
+  assert "alpha111-clankers" in {row["branch"] for row in synced["sessions"]}
   pruned = store.board_action(
     {
       "action": "sync",
@@ -16630,8 +16611,8 @@ def test_board_sync_keeps_allowlisted_session_over_removal(tmp_path, monkeypatch
         "allowed_sessions": ["alpha111-clankers", sid],
         "removed_sessions": ["gone444-clankers"],
         "sessions": [
-          {"session_id": "alpha111-clankers", "repo": "clankers", "status": "active"},
-          {"session_id": sid, "repo": "clankers", "status": "active"},
+          {"branch": "alpha111-clankers", "repo": "clankers", "status": "active"},
+          {"branch": sid, "repo": "clankers", "status": "active"},
         ],
       },
     }
@@ -16724,7 +16705,7 @@ def test_userscript_version_header_records_in_state_and_key_output(tmp_path):
 
 def test_board_sync_honors_revoked_sessions_for_peers_and_self(tmp_path):
   store = preview.Store(tmp_path, create=True)
-  sid = store.board_state()["session_id"]
+  sid = store.board_state()["branch"]
   peer = "beta2222-clankers"
   store.board_action(
     {
@@ -16733,8 +16714,8 @@ def test_board_sync_honors_revoked_sessions_for_peers_and_self(tmp_path):
         "allowed_sessions": [sid, peer],
         "main_session_id": sid,
         "sessions": [
-          {"session_id": sid, "repo": "clankers"},
-          {"session_id": peer, "repo": "clankers"},
+          {"branch": sid, "repo": "clankers"},
+          {"branch": peer, "repo": "clankers"},
         ],
       },
     }
@@ -16748,7 +16729,7 @@ def test_board_sync_honors_revoked_sessions_for_peers_and_self(tmp_path):
         "allowed_sessions": [sid],
         "removed_sessions": [peer],
         "main_session_id": sid,
-        "sessions": [{"session_id": sid, "repo": "clankers"}],
+        "sessions": [{"branch": sid, "repo": "clankers"}],
       },
     }
   )
@@ -16771,11 +16752,9 @@ def test_board_sync_honors_revoked_sessions_for_peers_and_self(tmp_path):
 
 
 def test_board_wakes_worker_when_main_remote_branch_moves(tmp_path, monkeypatch):
-  worker_sid = "delta444-clankers"
-  main_sid = "alpha111-clankers"
-  monkeypatch.setattr(
-    preview, "workspace_branch", lambda *_a, **_kw: f"arena/{worker_sid}"
-  )
+  worker_sid = "arena/delta444-clankers"
+  main_sid = "arena/alpha111-clankers"
+  monkeypatch.setattr(preview, "workspace_branch", lambda *_a, **_kw: worker_sid)
   repo_dir = tmp_path / "clankers"
   repo_dir.mkdir()
   store = preview.Store(repo_dir / "state", create=True)
@@ -16793,13 +16772,12 @@ def test_board_wakes_worker_when_main_remote_branch_moves(tmp_path, monkeypatch)
         "worker_ids": {worker_sid: "delta"},
         "sessions": [
           {
-            "session_id": main_sid,
+            "branch": main_sid,
             "repo": "clankers",
-            "branch": f"arena/{main_sid}",
             "remote_head": sha_a,
             "origin_main_head": sha_m1,
           },
-          {"session_id": worker_sid, "repo": "clankers"},
+          {"branch": worker_sid, "repo": "clankers"},
         ],
       },
     }
@@ -16822,13 +16800,12 @@ def test_board_wakes_worker_when_main_remote_branch_moves(tmp_path, monkeypatch)
         "wakes": {worker_sid: f"main-moved:{sha_b[:12]}"},
         "sessions": [
           {
-            "session_id": main_sid,
+            "branch": main_sid,
             "repo": "clankers",
-            "branch": f"arena/{main_sid}",
             "remote_head": sha_b,
             "origin_main_head": sha_m2,
           },
-          {"session_id": worker_sid, "repo": "clankers"},
+          {"branch": worker_sid, "repo": "clankers"},
         ],
       },
     }
@@ -16854,15 +16831,13 @@ def test_board_sync_promotes_former_worker_to_main_in_single_post(
   state_dir.mkdir()
   store = preview.Store(state_dir, create=True)
   monkeypatch.setattr(store, "repository_root", lambda: repo_root)
-  old_main = "alpha111-clankers"
-  promoted = "f6f478b6-clankers"
-  peer_worker = "beta2222-clankers"
-  store.board_action({"action": "allow", "session_id": old_main})
-  store.board_action({"action": "set-main", "session_id": old_main})
-  store.board_action({"action": "allow", "session_id": promoted, "worker_id": "gamma"})
-  store.board_action(
-    {"action": "allow", "session_id": peer_worker, "worker_id": "beta"}
-  )
+  old_main = "arena/alpha111-clankers"
+  promoted = "arena/f6f478b6-clankers"
+  peer_worker = "arena/beta2222-clankers"
+  store.board_action({"action": "allow", "branch": old_main})
+  store.board_action({"action": "set-main", "branch": old_main})
+  store.board_action({"action": "allow", "branch": promoted, "worker_id": "gamma"})
+  store.board_action({"action": "allow", "branch": peer_worker, "worker_id": "beta"})
 
   synced = store.board_action(
     {
@@ -16873,8 +16848,8 @@ def test_board_sync_promotes_former_worker_to_main_in_single_post(
         "main_session_id": promoted,
         "worker_ids": {peer_worker: "beta"},
         "sessions": [
-          {"session_id": promoted, "repo": "clankers"},
-          {"session_id": peer_worker, "repo": "clankers"},
+          {"branch": promoted, "repo": "clankers"},
+          {"branch": peer_worker, "repo": "clankers"},
         ],
       },
     }
@@ -16888,8 +16863,8 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
 ):
   repo_root = tmp_path / "clankers"
   repo_root.mkdir()
-  main_sid = "alpha111-clankers"
-  worker_sid = "beta2222-clankers"
+  main_sid = "arena/alpha111-clankers"
+  worker_sid = "arena/beta2222-clankers"
   main_state = repo_root / "main-state"
   worker_state = repo_root / "worker-state"
   main_state.mkdir()
@@ -16898,15 +16873,11 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
   monkeypatch.setattr(preview, "require_server", lambda _store: None)
   monkeypatch.setattr(preview.Store, "repository_root", lambda _self: repo_root)
 
-  monkeypatch.setattr(
-    preview, "workspace_branch", lambda _root=None: f"arena/{worker_sid}"
-  )
+  monkeypatch.setattr(preview, "workspace_branch", lambda _root=None: worker_sid)
   w_store = preview.Store(worker_state / "state.sqlite3", create=True)
-  w_store.board_action({"action": "allow", "session_id": main_sid})
-  w_store.board_action(
-    {"action": "allow", "session_id": worker_sid, "worker_id": "beta"}
-  )
-  w_store.board_action({"action": "set-main", "session_id": main_sid})
+  w_store.board_action({"action": "allow", "branch": main_sid})
+  w_store.board_action({"action": "allow", "branch": worker_sid, "worker_id": "beta"})
+  w_store.board_action({"action": "set-main", "branch": main_sid})
 
   monkeypatch.setenv("ARENA_PREVIEW_STATE_DIR", str(worker_state))
   monkeypatch.setattr(sys, "argv", ["arena-preview", "board", "status"])
@@ -16965,20 +16936,16 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
   # Live poll state mirrors immediately onto BOARD_STATE_META and clears consumed wakes on main:
   w_store.start_poll()
   w_polling_board = w_store.board_state()
-  w_row = next(r for r in w_polling_board["sessions"] if r["session_id"] == worker_sid)
+  w_row = next(r for r in w_polling_board["sessions"] if r["branch"] == worker_sid)
   assert w_row["polling"] is True
   assert w_row["status"] == "polling"
   assert w_row["polling_since"] is not None
 
-  monkeypatch.setattr(
-    preview, "workspace_branch", lambda _root=None: f"arena/{main_sid}"
-  )
+  monkeypatch.setattr(preview, "workspace_branch", lambda _root=None: main_sid)
   m_store = preview.Store(main_state / "state.sqlite3", create=True)
-  m_store.board_action({"action": "allow", "session_id": main_sid})
-  m_store.board_action(
-    {"action": "allow", "session_id": worker_sid, "worker_id": "beta"}
-  )
-  m_store.board_action({"action": "set-main", "session_id": main_sid})
+  m_store.board_action({"action": "allow", "branch": main_sid})
+  m_store.board_action({"action": "allow", "branch": worker_sid, "worker_id": "beta"})
+  m_store.board_action({"action": "set-main", "branch": main_sid})
   m_store.board_action({"action": "wake", "target": worker_sid})
   first_wake = m_store.board_state()["wakes"][worker_sid]
   # Simulate egress sync delivering the wake first:
@@ -16991,8 +16958,8 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
         "worker_ids": {worker_sid: "beta"},
         "wakes": {worker_sid: first_wake},
         "sessions": [
-          {"session_id": main_sid, "repo": "clankers", "status": "active"},
-          {"session_id": worker_sid, "repo": "clankers", "status": "active"},
+          {"branch": main_sid, "repo": "clankers", "status": "active"},
+          {"branch": worker_sid, "repo": "clankers", "status": "active"},
         ],
       },
     }
@@ -17007,7 +16974,7 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
         "worker_ids": {worker_sid: "beta"},
         "wakes": {},
         "sessions": [
-          {"session_id": main_sid, "repo": "clankers", "status": "active"},
+          {"branch": main_sid, "repo": "clankers", "status": "active"},
           w_row,
         ],
       },
@@ -17015,17 +16982,15 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
   )
   assert worker_sid not in after_worker_poll["wakes"]
   m_worker_row = next(
-    r for r in after_worker_poll["sessions"] if r["session_id"] == worker_sid
+    r for r in after_worker_poll["sessions"] if r["branch"] == worker_sid
   )
   assert m_worker_row["polling"] is True
   assert m_worker_row["status"] == "polling"
 
-  monkeypatch.setattr(
-    preview, "workspace_branch", lambda _root=None: f"arena/{worker_sid}"
-  )
+  monkeypatch.setattr(preview, "workspace_branch", lambda _root=None: worker_sid)
   w_store.clear_polling()
   w_after_clear = next(
-    r for r in w_store.board_state()["sessions"] if r["session_id"] == worker_sid
+    r for r in w_store.board_state()["sessions"] if r["branch"] == worker_sid
   )
   assert w_after_clear["polling"] is False
   assert w_after_clear["status"] == "active"
@@ -17048,23 +17013,23 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
     "allowed_sessions": [main_sid, "11111111-otherrepo"],
     "main_session_id": main_sid,
     "sessions": [
-      {"session_id": main_sid, "repo": "clankers", "updated_at": fresh_stamp},
+      {"branch": main_sid, "repo": "clankers", "updated_at": fresh_stamp},
       {
-        "session_id": "dead9999-daedalus",
+        "branch": "dead9999-daedalus",
         "repo": "daedalus",
         "status": "disconnected",
         "disconnected": True,
         "updated_at": expired_stamp,
       },
       {
-        "session_id": "fresh888-clankers",
+        "branch": "fresh888-clankers",
         "repo": "clankers",
         "status": "disconnected",
         "disconnected": True,
         "updated_at": fresh_stamp,
       },
       {
-        "session_id": "11111111-otherrepo",
+        "branch": "11111111-otherrepo",
         "repo": "otherrepo",
         "status": "disconnected",
         "disconnected": True,
@@ -17074,11 +17039,11 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
   }
   scoped_state = preview.normalize_board_state(
     raw_mixed,
-    session_id=main_sid,
+    branch=main_sid,
     repo="clankers",
     now_epoch=base_dt.timestamp(),
   )
-  scoped_ids = {r["session_id"] for r in scoped_state["sessions"]}
+  scoped_ids = {r["branch"] for r in scoped_state["sessions"]}
   assert "dead9999-daedalus" not in scoped_ids
   assert "11111111-otherrepo" not in scoped_ids
   assert "fresh888-clankers" in scoped_ids
@@ -17086,7 +17051,7 @@ def test_board_cli_subcommands_worker_publish_block_and_live_poll_propagation(
   assert "daedalus" not in scoped_state["known_repos"]
   unscoped_state = preview.normalize_board_state(
     raw_mixed,
-    session_id=main_sid,
+    branch=main_sid,
     repo="clankers",
     scope_repos=False,
     now_epoch=base_dt.timestamp(),
@@ -17098,7 +17063,7 @@ def test_preview_board_and_autosave_revision_diff_sync(tmp_path, monkeypatch):
   repo = tmp_path / "clankers"
   repo.mkdir()
   subprocess.run(
-    ["git", "init", "-b", "arena/91a01582-clankers"],
+    ["git", "init", "-b", "arena/beta9999-clankers"],
     cwd=repo,
     check=True,
     stdout=subprocess.DEVNULL,
@@ -17174,7 +17139,7 @@ def test_preview_board_and_autosave_revision_diff_sync(tmp_path, monkeypatch):
     assert r_409.status == 409 and b_409["need_full"] is True
 
     # Seed push cursor via client_rev=1, then send incremental board_diff:
-    self_sid = b1["session_id"]
+    self_sid = b1["branch"]
     seeded_board = {
       **b1,
       "main_session_id": self_sid,

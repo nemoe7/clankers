@@ -595,19 +595,21 @@ def test_exhaustive_logging_loopback_health_suppression_and_quiet_polls(tmp_path
 
     # Default mode logs unchanged /v1/board polls.
     st, snap_raw = call(
-      handle.port, "/v1/board?session_id=alpha-clankers&repo=clankers", headers
+      handle.port, "/v1/board?branch=arena/alpha-clankers&repo=clankers", headers
     )
     assert st == 200
     rev = json.loads(snap_raw)["revision"]
     assert (
       call(
         handle.port,
-        f"/v1/board?since={rev}&session_id=alpha-clankers&repo=clankers",
+        f"/v1/board?since={rev}&branch=arena/alpha-clankers&repo=clankers",
         headers,
       )[0]
       == 200
     )
-    assert f"unchanged at rev {rev} for alpha-clankers (clankers)" in handle.logs[-1]
+    assert (
+      f"unchanged at rev {rev} for arena/alpha-clankers (clankers)" in handle.logs[-1]
+    )
 
   with backend(tmp_path / "quiet", quiet_polls=True) as quiet:
     assert (
@@ -617,7 +619,7 @@ def test_exhaustive_logging_loopback_health_suppression_and_quiet_polls(tmp_path
         {
           "action": "sync",
           "passive": True,
-          "session_id": "alpha-clankers",
+          "branch": "arena/alpha-clankers",
           "repo": "clankers",
           "board": {},
         },
@@ -626,7 +628,7 @@ def test_exhaustive_logging_loopback_health_suppression_and_quiet_polls(tmp_path
       == 200
     )
     st, snap_raw = call(
-      quiet.port, "/v1/board?session_id=alpha-clankers&repo=clankers", headers
+      quiet.port, "/v1/board?branch=arena/alpha-clankers&repo=clankers", headers
     )
     assert st == 200
     rev = json.loads(snap_raw)["revision"]
@@ -634,7 +636,7 @@ def test_exhaustive_logging_loopback_health_suppression_and_quiet_polls(tmp_path
     assert (
       call(
         quiet.port,
-        f"/v1/board?since={rev}&session_id=alpha-clankers&repo=clankers",
+        f"/v1/board?since={rev}&branch=arena/alpha-clankers&repo=clankers",
         headers,
       )[0]
       == 200
@@ -646,7 +648,7 @@ def test_exhaustive_logging_loopback_health_suppression_and_quiet_polls(tmp_path
         {
           "action": "sync",
           "passive": True,
-          "session_id": "alpha-clankers",
+          "branch": "arena/alpha-clankers",
           "repo": "clankers",
           "board": {},
         },
@@ -661,14 +663,14 @@ def test_exhaustive_logging_loopback_health_suppression_and_quiet_polls(tmp_path
         "/v1/board",
         {
           "action": "apply",
-          "board_action": {"action": "allow", "session_id": "alpha-clankers"},
+          "board_action": {"action": "allow", "branch": "arena/alpha-clankers"},
         },
         headers,
       )[0]
       == 200
     )
     assert len(quiet.logs) == logged_after_initial + 1
-    assert "allow by alpha-clankers -> rev" in quiet.logs[-1]
+    assert "allow by arena/alpha-clankers -> rev" in quiet.logs[-1]
 
 
 def test_agent_key_is_fresh_on_every_call():
@@ -1016,13 +1018,13 @@ def test_board_normalization_redacts_unallowlisted_survey_answers():
     "allowed_sessions": [allowed],
     "main_session_id": allowed,
     "sessions": [
-      {"session_id": allowed, "survey": survey},
-      {"session_id": unopted, "survey": survey},
+      {"branch": allowed, "survey": survey},
+      {"branch": unopted, "survey": survey},
     ],
   }
 
   normalized = board_module.normalize_board(raw)
-  rows = {row["session_id"]: row for row in normalized["sessions"]}
+  rows = {row["branch"]: row for row in normalized["sessions"]}
   assert rows[allowed]["survey"] == survey
   assert rows[unopted]["survey"]["results"] == [
     {"id": "Q1", "correct": True, "confidence": 1},
@@ -1043,20 +1045,20 @@ def test_board_sync_keeps_unallowlisted_survey_answers_private(tmp_path):
         "/v1/board",
         {
           "action": "sync",
-          "session_id": sid,
+          "branch": sid,
           "repo": "clankers",
           "board": {
-            "session_id": sid,
+            "branch": sid,
             "allowed_sessions": [allowed],
             "main_session_id": allowed,
-            "sessions": [{"session_id": sid, "survey": {"results": [answer]}}],
+            "sessions": [{"branch": sid, "survey": {"results": [answer]}}],
           },
         },
         headers,
       )
       assert status == 200
     for key in ("board", "scoped_board"):
-      rows = {row["session_id"]: row for row in result[key]["sessions"]}
+      rows = {row["branch"]: row for row in result[key]["sessions"]}
       assert rows[allowed]["survey"]["results"] == [answer]
       assert rows[unopted]["survey"]["results"] == [
         {"id": "Q1", "correct": True, "confidence": 1}
@@ -1064,9 +1066,9 @@ def test_board_sync_keeps_unallowlisted_survey_answers_private(tmp_path):
 
 
 def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
-  alpha = "alpha111-clankers"
-  delta = "delta222-clankers"
-  unopted = "solo999-daedalus"
+  alpha = "arena/alpha111-clankers"
+  delta = "arena/delta222-clankers"
+  unopted = "arena/solo999-daedalus"
   headers = {"X-Master-Key": MASTER}
   with backend(tmp_path) as handle:
     st, init_snap = call(handle.port, "/v1/board", headers)
@@ -1078,19 +1080,19 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
       "/v1/board",
       {
         "action": "sync",
-        "session_id": alpha,
+        "branch": alpha,
         "repo": "clankers",
         "board": {
-          "session_id": alpha,
+          "branch": alpha,
           "repo": "clankers",
           "main_session_id": alpha,
           "allowed_sessions": [alpha, delta],
           "removed_sessions": [alpha],
           "worker_ids": {delta: "delta"},
           "sessions": [
-            {"session_id": alpha, "repo": "clankers", "status": "active"},
+            {"branch": alpha, "repo": "clankers", "status": "active"},
             {
-              "session_id": delta,
+              "branch": delta,
               "repo": "clankers",
               "status": "polling",
               "polling": True,
@@ -1099,7 +1101,7 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
           "entries": [
             {
               "id": "p-file-1",
-              "session_id": alpha,
+              "branch": alpha,
               "to": delta,
               "repo": "clankers",
               "at": "2026-10-27T05:00:00Z",
@@ -1134,16 +1136,14 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
 
     st, file_raw = call(
       handle.port,
-      f"/v1/board/files?session_id={alpha}&name=patches/fix.patch",
+      f"/v1/board/files?branch={alpha}&name=patches/fix.patch",
       headers,
     )
     assert st == 200
     file_payload = json.loads(file_raw)["file"]
     assert file_payload["content"] == "diff --git a/a b/a\n"
     assert (
-      call(handle.port, f"/v1/board/files?session_id={alpha}&name=../secret", headers)[
-        0
-      ]
+      call(handle.port, f"/v1/board/files?branch={alpha}&name=../secret", headers)[0]
       == 400
     )
 
@@ -1152,12 +1152,12 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
       "/v1/board",
       {
         "action": "sync",
-        "session_id": unopted,
+        "branch": unopted,
         "repo": "daedalus",
         "board": {
-          "session_id": unopted,
+          "branch": unopted,
           "repo": "daedalus",
-          "sessions": [{"session_id": unopted, "repo": "daedalus", "status": "active"}],
+          "sessions": [{"branch": unopted, "repo": "daedalus", "status": "active"}],
         },
       },
       headers,
@@ -1173,7 +1173,7 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
         "action": "apply",
         "board_action": {
           "action": "worker-task",
-          "session_id": alpha,
+          "branch": alpha,
           "target": "delta",
           "op": "set",
           "task_id": "t-delta",
@@ -1191,9 +1191,9 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
       "/v1/board",
       {
         "action": "merge",
-        "session_id": alpha,
+        "branch": alpha,
         "repo": "clankers",
-        "board": {"session_id": alpha, "repo": "clankers"},
+        "board": {"branch": alpha, "repo": "clankers"},
       },
       headers,
     )
@@ -1205,7 +1205,7 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
         "action": "action",
         "board_action": {
           "type": "heartbeat",
-          "session_id": "fresh888-daedalus",
+          "branch": "fresh888-daedalus",
           "repo": "daedalus",
           "status": "active",
         },
@@ -1214,7 +1214,7 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
     )
     assert st == 200 and hb_res["ok"] is True
     assert "fresh888-daedalus" not in {
-      s["session_id"] for s in hb_res["board"]["sessions"] if isinstance(s, dict)
+      s["branch"] for s in hb_res["board"]["sessions"] if isinstance(s, dict)
     }
     sha = file_payload["sha256"]
     st, sha_raw = call(handle.port, f"/v1/board/files?sha256={sha}", headers)
@@ -1225,7 +1225,7 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
 
   with backend(tmp_path) as restarted:
     st, snap_raw = call(
-      restarted.port, f"/v1/board?session_id={delta}&repo=clankers", headers
+      restarted.port, f"/v1/board?branch={delta}&repo=clankers", headers
     )
     assert st == 200
     snap = json.loads(snap_raw)
@@ -1238,14 +1238,14 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
     st, opt_res, _ = post_json(
       restarted.port,
       "/v1/board",
-      {"action": "apply", "board_action": {"action": "allow", "session_id": beta}},
+      {"action": "apply", "board_action": {"action": "allow", "branch": beta}},
       headers,
     )
     assert st == 200 and beta in opt_res["board"]["allowed_sessions"]
     st, rev_res, _ = post_json(
       restarted.port,
       "/v1/board",
-      {"action": "apply", "board_action": {"action": "revoke", "session_id": beta}},
+      {"action": "apply", "board_action": {"action": "revoke", "branch": beta}},
       headers,
     )
     assert st == 200 and beta not in rev_res["board"]["allowed_sessions"]
@@ -1255,14 +1255,14 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
       "/v1/board",
       {
         "action": "sync",
-        "session_id": delta,
+        "branch": delta,
         "repo": "clankers",
         "board": {
-          "session_id": delta,
+          "branch": delta,
           "repo": "clankers",
           "allowed_sessions": [alpha, delta, beta],
           "main_session_id": alpha,
-          "sessions": [{"session_id": delta, "repo": "clankers"}],
+          "sessions": [{"branch": delta, "repo": "clankers"}],
         },
       },
       headers,
@@ -1274,14 +1274,14 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
       "/v1/board",
       {
         "action": "sync",
-        "session_id": beta,
+        "branch": beta,
         "repo": "clankers",
         "board": {
-          "session_id": beta,
+          "branch": beta,
           "repo": "clankers",
           "allowed_sessions": [alpha, beta],
           "main_session_id": alpha,
-          "sessions": [{"session_id": beta, "repo": "clankers"}],
+          "sessions": [{"branch": beta, "repo": "clankers"}],
         },
       },
       headers,
@@ -1297,22 +1297,22 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
       "/v1/board",
       {
         "action": "sync",
-        "session_id": alpha,
+        "branch": alpha,
         "repo": "clankers",
         "board": {
-          "session_id": alpha,
+          "branch": alpha,
           "repo": "clankers",
           "allowed_sessions": [alpha, delta],
           "main_session_id": alpha,
           "sessions": [
             {
-              "session_id": alpha,
+              "branch": alpha,
               "repo": "clankers",
               "remote_head": sha_1,
               "origin_main_head": sha_1,
               "updated_at": "2026-10-27T08:00:00Z",
             },
-            {"session_id": delta, "repo": "clankers"},
+            {"branch": delta, "repo": "clankers"},
           ],
         },
       },
@@ -1325,22 +1325,22 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
       "/v1/board",
       {
         "action": "sync",
-        "session_id": alpha,
+        "branch": alpha,
         "repo": "clankers",
         "board": {
-          "session_id": alpha,
+          "branch": alpha,
           "repo": "clankers",
           "allowed_sessions": [alpha, delta],
           "main_session_id": alpha,
           "sessions": [
             {
-              "session_id": alpha,
+              "branch": alpha,
               "repo": "clankers",
               "remote_head": sha_2,
               "origin_main_head": sha_1,
               "updated_at": "2026-10-27T08:01:00Z",
             },
-            {"session_id": delta, "repo": "clankers"},
+            {"branch": delta, "repo": "clankers"},
           ],
         },
       },
@@ -1376,23 +1376,23 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
         "allowed_sessions": [alpha, opted_otherrepo],
         "main_session_id": alpha,
         "sessions": [
-          {"session_id": alpha, "repo": "clankers", "updated_at": fresh_iso},
+          {"branch": alpha, "repo": "clankers", "updated_at": fresh_iso},
           {
-            "session_id": expired_daedalus,
+            "branch": expired_daedalus,
             "repo": "daedalus",
             "status": "disconnected",
             "disconnected": True,
             "updated_at": expired_iso,
           },
           {
-            "session_id": fresh_clankers_unopted,
+            "branch": fresh_clankers_unopted,
             "repo": "clankers",
             "status": "disconnected",
             "disconnected": True,
             "updated_at": fresh_iso,
           },
           {
-            "session_id": opted_otherrepo,
+            "branch": opted_otherrepo,
             "repo": "otherrepo",
             "status": "disconnected",
             "disconnected": True,
@@ -1401,15 +1401,15 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
         ],
       }
     )
-    norm_sids = {row["session_id"] for row in norm_pruned["sessions"]}
+    norm_sids = {row["branch"] for row in norm_pruned["sessions"]}
     assert expired_daedalus not in norm_sids
     assert fresh_clankers_unopted in norm_sids
     assert opted_otherrepo in norm_sids
 
     scoped_single = board_mod.scope_board_for_target(
-      norm_pruned, session_id=alpha, repo_hint="clankers"
+      norm_pruned, branch=alpha, repo_hint="clankers"
     )
-    scoped_sids = {row["session_id"] for row in scoped_single["sessions"]}
+    scoped_sids = {row["branch"] for row in scoped_single["sessions"]}
     assert opted_otherrepo not in scoped_sids
     assert len(scoped_single["sessions"]) < len(norm_pruned["sessions"])
     assert "otherrepo" in scoped_single["known_repos"]
@@ -1417,10 +1417,10 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
 
     scoped_linked = board_mod.scope_board_for_target(
       dict(norm_pruned, multi_repo=True, linked_repos=["otherrepo"]),
-      session_id=alpha,
+      branch=alpha,
       repo_hint="clankers",
     )
-    assert opted_otherrepo in {row["session_id"] for row in scoped_linked["sessions"]}
+    assert opted_otherrepo in {row["branch"] for row in scoped_linked["sessions"]}
 
 
 def test_private_board_routes_accept_uncapped_script_sync_and_files(tmp_path):
@@ -1429,13 +1429,13 @@ def test_private_board_routes_accept_uncapped_script_sync_and_files(tmp_path):
   big_file_text = "f" * (600 * 1024)
   big_report_md = "r" * (2_200_000)
   extra_sessions = [
-    {"session_id": f"{idx:08x}-clankers", "repo": "clankers", "status": "active"}
+    {"branch": f"{idx:08x}-clankers", "repo": "clankers", "status": "active"}
     for idx in range(1, 70)
   ]
   extra_entries = [
     {
       "id": f"e-{idx}",
-      "session_id": alpha,
+      "branch": alpha,
       "to": "*",
       "repo": "clankers",
       "at": f"2026-10-27T09:{idx // 60:02d}:{idx % 60:02d}Z",
@@ -1450,15 +1450,15 @@ def test_private_board_routes_accept_uncapped_script_sync_and_files(tmp_path):
   }
   sync_payload = {
     "action": "sync",
-    "session_id": alpha,
+    "branch": alpha,
     "repo": "clankers",
     "board": {
-      "session_id": alpha,
+      "branch": alpha,
       "repo": "clankers",
       "main_session_id": alpha,
-      "allowed_sessions": [alpha, *(row["session_id"] for row in extra_sessions)],
+      "allowed_sessions": [alpha, *(row["branch"] for row in extra_sessions)],
       "sessions": [
-        {"session_id": alpha, "repo": "clankers", "status": "active"},
+        {"branch": alpha, "repo": "clankers", "status": "active"},
         *extra_sessions,
       ],
       "entries": extra_entries,
@@ -1482,7 +1482,7 @@ def test_private_board_routes_accept_uncapped_script_sync_and_files(tmp_path):
       handle.port,
       "/v1/board/files",
       {
-        "session_id": alpha,
+        "branch": alpha,
         "file": {
           "name": "reports/direct-large.txt",
           "encoding": "utf-8",
@@ -1494,7 +1494,7 @@ def test_private_board_routes_accept_uncapped_script_sync_and_files(tmp_path):
     assert st_file == 200 and file_res["file"]["size"] == len(big_file_text)
     st_get, raw_get = call(
       handle.port,
-      f"/v1/board/files?session_id={alpha}&name=reports/direct-large.txt",
+      f"/v1/board/files?branch={alpha}&name=reports/direct-large.txt",
       headers,
     )
     assert st_get == 200 and json.loads(raw_get)["file"]["content"] == big_file_text
@@ -1529,11 +1529,11 @@ def test_sqlite_wal_storage_legacy_migration_and_board_diff_sync(tmp_path):
         "board": {
           "main_session_id": alpha,
           "allowed_sessions": [alpha, beta],
-          "sessions": [{"session_id": alpha, "repo": "clankers", "status": "active"}],
+          "sessions": [{"branch": alpha, "repo": "clankers", "status": "active"}],
           "entries": [
             {
               "id": "e-leg",
-              "session_id": alpha,
+              "branch": alpha,
               "to": "*",
               "repo": "clankers",
               "at": "2026-10-27T01:00:00Z",
@@ -1584,7 +1584,7 @@ def test_sqlite_wal_storage_legacy_migration_and_board_diff_sync(tmp_path):
       "/v1/board",
       {
         "action": "sync",
-        "session_id": alpha,
+        "branch": alpha,
         "repo": "clankers",
         "board_diff": {"base_rev": 3, "rev": 4, "upserts": [], "tombstones": []},
       },
@@ -1594,11 +1594,11 @@ def test_sqlite_wal_storage_legacy_migration_and_board_diff_sync(tmp_path):
 
     # Seed client cursor via full sync with client_rev=1, then push incremental board_diff:
     base_member = {
-      "session_id": alpha,
+      "branch": alpha,
       "repo": "clankers",
       "main_session_id": alpha,
       "allowed_sessions": [alpha, beta],
-      "sessions": [{"session_id": alpha, "repo": "clankers", "status": "active"}],
+      "sessions": [{"branch": alpha, "repo": "clankers", "status": "active"}],
       "entries": snap["board"]["entries"],
       "worker_tasks": {beta: [{"id": "t-a", "title": "First", "status": "upcoming"}]},
     }
@@ -1607,7 +1607,7 @@ def test_sqlite_wal_storage_legacy_migration_and_board_diff_sync(tmp_path):
       "/v1/board",
       {
         "action": "sync",
-        "session_id": alpha,
+        "branch": alpha,
         "repo": "clankers",
         "client_rev": 1,
         "board": base_member,
@@ -1623,7 +1623,7 @@ def test_sqlite_wal_storage_legacy_migration_and_board_diff_sync(tmp_path):
         *base_member["entries"],
         {
           "id": "e-diff-2",
-          "session_id": alpha,
+          "branch": alpha,
           "to": beta,
           "repo": "clankers",
           "at": "2026-10-27T02:00:00Z",
@@ -1640,7 +1640,7 @@ def test_sqlite_wal_storage_legacy_migration_and_board_diff_sync(tmp_path):
       "/v1/board",
       {
         "action": "sync",
-        "session_id": alpha,
+        "branch": alpha,
         "repo": "clankers",
         "board_diff": member_diff,
         "reply_since": rev_after_seed,

@@ -201,9 +201,9 @@ def decompose_board_records(board):
   for idx, row in enumerate(data.get("sessions") or []):
     if not isinstance(row, dict):
       continue
-    sid = str(row.get("session_id") or row.get("branch") or f"idx:{idx}").strip()
-    if sid:
-      records[("session", sid)] = row
+    br = str(row.get("branch") or row.get("session_id") or f"idx:{idx}").strip()
+    if br:
+      records[("session", br)] = row
   for idx, row in enumerate(data.get("entries") or []):
     if not isinstance(row, dict):
       continue
@@ -406,7 +406,7 @@ class ProxySqliteEngine:
       CREATE INDEX IF NOT EXISTS idx_board_records_rev ON board_records(rev);
 
       CREATE TABLE IF NOT EXISTS board_files (
-        session_id TEXT NOT NULL,
+        branch TEXT NOT NULL,
         name TEXT NOT NULL,
         sha256 TEXT NOT NULL,
         encoding TEXT NOT NULL,
@@ -414,12 +414,12 @@ class ProxySqliteEngine:
         staged INTEGER NOT NULL DEFAULT 1,
         rev INTEGER NOT NULL,
         updated_at TEXT NOT NULL,
-        PRIMARY KEY (session_id, name)
+        PRIMARY KEY (branch, name)
       );
       CREATE INDEX IF NOT EXISTS idx_board_files_sha256 ON board_files(sha256);
 
       CREATE TABLE IF NOT EXISTS board_client_cursors (
-        session_id TEXT PRIMARY KEY,
+        branch TEXT PRIMARY KEY,
         client_rev INTEGER NOT NULL,
         board_json TEXT,
         blob_sha256 TEXT NOT NULL DEFAULT '',
@@ -460,6 +460,14 @@ class ProxySqliteEngine:
         ON state_records(scope_key, rev);
       """
     )
+    for table in ("board_files", "board_client_cursors"):
+      cols = {
+        row["name"]
+        for row in self.conn.execute(f"PRAGMA table_info({table})").fetchall()
+      }
+      if "session_id" in cols and "branch" not in cols:
+        self.conn.execute(f"ALTER TABLE {table} RENAME COLUMN session_id TO branch")
+        self.conn.commit()
 
   def blob_path(self, sha256):
     digest = str(sha256 or "").strip().lower()

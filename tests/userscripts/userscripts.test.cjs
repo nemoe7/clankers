@@ -3079,21 +3079,19 @@ for raw in sys.stdin:
     );
 
     const afterWakeConsumed = checks.board.normalizeBoard({
-      allowed_sessions: ["bdf20cf5-clankers", "293da56c-clankers"],
-      main_session_id: "293da56c-clankers",
+      allowed_sessions: ["arena/work0002-clankers", "arena/main0001-clankers"],
+      main_session_id: "arena/main0001-clankers",
       sessions: [
         {
-          session_id: "bdf20cf5-clankers",
+          branch: "arena/work0002-clankers",
           repo: "clankers",
-          branch: "arena/bdf20cf5-clankers",
           status: "active",
           polling: false,
           updated_at: "2026-10-25T15:00:06Z",
         },
         {
-          session_id: "293da56c-clankers",
+          branch: "arena/main0001-clankers",
           repo: "clankers",
-          branch: "arena/293da56c-clankers",
           status: "active",
           polling: false,
           updated_at: "2026-10-25T15:00:06Z",
@@ -3102,7 +3100,7 @@ for raw in sys.stdin:
       entries: [],
       wakes: {},
     });
-    assert.equal(afterWakeConsumed.wakes["bdf20cf5-clankers"], undefined);
+    assert.equal(afterWakeConsumed.wakes["arena/work0002-clankers"], undefined);
     checks.board.writeGlobalBoard(afterWakeConsumed, { fromProxy: true, revision: 1 });
     assert.deepEqual(
       JSON.parse(
@@ -3110,7 +3108,7 @@ for raw in sys.stdin:
           checks.promptFill.discoverPreviews(
             steeringAndDemoDoc,
             "clankers",
-            "bdf20cf5-clankers",
+            "arena/work0002-clankers",
           ),
         ),
       ),
@@ -3123,7 +3121,7 @@ for raw in sys.stdin:
           checks.promptFill.discoverPreviews(
             steeringAndDemoDoc,
             "clankers",
-            "293da56c-clankers",
+            "arena/main0001-clankers",
           ),
         ),
       ),
@@ -3158,7 +3156,7 @@ for raw in sys.stdin:
     assert.equal(
       checks.stateDownload.isWorkerSession(
         afterWakeConsumed,
-        "bdf20cf5-clankers",
+        "arena/work0002-clankers",
         null,
       ),
       true,
@@ -3176,7 +3174,7 @@ for raw in sys.stdin:
     assert.equal(
       checks.stateDownload.isWorkerSession(
         { main_session_id: "", allowed_sessions: [] },
-        "bdf20cf5-clankers",
+        "arena/work0002-clankers",
         { board: { role: "worker" } },
       ),
       true,
@@ -3185,7 +3183,7 @@ for raw in sys.stdin:
     assert.equal(
       checks.stateDownload.isWorkerSession(
         afterWakeConsumed,
-        "293da56c-clankers",
+        "arena/main0001-clankers",
         null,
       ),
       false,
@@ -3216,11 +3214,11 @@ for raw in sys.stdin:
       ["clankers-arena-proxy-master", "master-secret"],
     ]);
     const seededProxyBoard = {
-      allowed_sessions: ["293da56c-clankers", "bdf20cf5-clankers"],
-      main_session_id: "293da56c-clankers",
+      allowed_sessions: ["arena/main0001-clankers", "arena/work0002-clankers"],
+      main_session_id: "arena/main0001-clankers",
       sessions: [
-        { session_id: "293da56c-clankers", repo: "clankers", status: "active" },
-        { session_id: "bdf20cf5-clankers", repo: "clankers", status: "active" },
+        { branch: "arena/main0001-clankers", repo: "clankers", status: "active" },
+        { branch: "arena/work0002-clankers", repo: "clankers", status: "active" },
       ],
       entries: [],
       wakes: {},
@@ -3298,11 +3296,11 @@ for raw in sys.stdin:
           opts.onload({
             status: 200,
             responseText: JSON.stringify({
-              session_id: "293da56c-clankers",
+              branch: "arena/main0001-clankers",
               repo: "clankers",
-              allowed_sessions: ["293da56c-clankers", "bdf20cf5-clankers"],
-              main_session_id: "293da56c-clankers",
-              sessions: [{ session_id: "293da56c-clankers", repo: "clankers", status: "active" }],
+              allowed_sessions: ["arena/main0001-clankers", "arena/work0002-clankers"],
+              main_session_id: "arena/main0001-clankers",
+              sessions: [{ branch: "arena/main0001-clankers", repo: "clankers", status: "active" }],
               entries: [],
               wakes: {},
             }),
@@ -3327,7 +3325,7 @@ for raw in sys.stdin:
     winListeners.get("message")({
       origin: "https://8000-sbx.e2b.app",
       source: frameObj.contentWindow,
-      data: { type: "clankers:preview-ready", repo: "clankers", session_id: "293da56c-clankers" },
+      data: { type: "clankers:preview-ready", repo: "clankers", branch: "arena/main0001-clankers" },
     });
     await new Promise((resolve) => setImmediate(resolve));
     assert.ok(
@@ -3361,32 +3359,32 @@ for raw in sys.stdin:
       vm.runInNewContext(source, checkBox, { filename: "arena.user.js" });
       const boardApi = checkBox.CLANKERS_CHECKS.board;
       const sampleBoard = boardApi.normalizeBoard({
-        main_session_id: "91a01582-clankers",
+        main_session_id: "arena/11111111-clankers",
         allowed_sessions: [
-          "91a01582-clankers",
-          "0735d422-clankers",
-          "aa11bb22-clankers",
-          "cc33dd44-clankers",
-          "ee55ff66-clankers",
+          "arena/11111111-clankers",
+          "arena/22222222-clankers",
+          "arena/aa11bb22-clankers",
+          "arena/cc33dd44-clankers",
+          "arena/ee55ff66-clankers",
         ],
         worker_ids: {
-          "cc33dd44-clankers": "epsilon",
-          "ee55ff66-clankers": "fix1",
+          "arena/cc33dd44-clankers": "epsilon",
+          "arena/ee55ff66-clankers": "fix1",
         },
         sessions: [
-          { session_id: "91a01582-clankers", repo: "clankers" },
-          { session_id: "0735d422-clankers", repo: "clankers" },
-          { session_id: "aa11bb22-clankers", repo: "clankers" },
-          { session_id: "cc33dd44-clankers", repo: "clankers" },
-          { session_id: "ee55ff66-clankers", repo: "clankers" },
+          { branch: "arena/11111111-clankers", repo: "clankers" },
+          { branch: "arena/22222222-clankers", repo: "clankers" },
+          { branch: "arena/aa11bb22-clankers", repo: "clankers" },
+          { branch: "arena/cc33dd44-clankers", repo: "clankers" },
+          { branch: "arena/ee55ff66-clankers", repo: "clankers" },
         ],
       });
-      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "91a01582-clankers"), "\u03B1");
-      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "0735d422-clankers"), "\u03B2");
-      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "aa11bb22-clankers"), "\u03B3");
-      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "cc33dd44-clankers"), "\u03B5");
-      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "ee55ff66-clankers"), "fix1");
-      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "99999999-clankers"), "");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "arena/11111111-clankers"), "\u03B1");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "arena/22222222-clankers"), "\u03B2");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "arena/aa11bb22-clankers"), "\u03B3");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "arena/cc33dd44-clankers"), "\u03B5");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "arena/ee55ff66-clankers"), "fix1");
+      assert.equal(boardApi.boardGreekSymbolFor(sampleBoard, "arena/99999999-clankers"), "");
 
       const saved = new Map([
         ["clankers-arena-show-settings-button", false],
@@ -3397,7 +3395,7 @@ for raw in sys.stdin:
       let tabNowMs = 50000;
       let activeProxyRev = 0;
       let activeProxyBoard = null;
-      let branchHref = "https://github.com/nemoe7/clankers/tree/arena/91a01582-clankers";
+      let branchHref = "https://github.com/nemoe7/clankers/tree/arena/11111111-clankers";
       let stop = true;
       const barLink = {
         getAttribute(attr) {
@@ -3540,7 +3538,7 @@ for raw in sys.stdin:
       sync();
       assert.equal(page.title, "Arena | clankers \u03B1");
 
-      branchHref = "https://github.com/nemoe7/clankers/tree/arena/0735d422-clankers";
+      branchHref = "https://github.com/nemoe7/clankers/tree/arena/22222222-clankers";
       stop = true;
       sync();
       assert.equal(page.title, "Arena | clankers \u03B2 \uD83D\uDDA5\uFE0F");
@@ -3550,7 +3548,7 @@ for raw in sys.stdin:
       const boardWithWorkerWaiting = boardApi.normalizeBoard(
         Object.assign({}, sampleBoard, {
           worker_reports: {
-            "91a01582-clankers": [
+            "arena/11111111-clankers": [
               { id: "info-only", fields: [], answered: false, needs_answer: false },
               {
                 id: "answered-unseen-ack",
@@ -3563,19 +3561,19 @@ for raw in sys.stdin:
                 ack_seen_at: null,
               },
             ],
-            "0735d422-clankers": [
+            "arena/22222222-clankers": [
               { id: "worker-proposal", fields: [{ id: "approve" }], answered: false, needs_answer: true },
             ],
           },
         }),
       );
       await pushProxyBoard(boardWithWorkerWaiting);
-      // Worker session 0735d422-clankers must NOT get '* ' even though its own report awaits submission.
+      // Worker session 22222222-clankers must NOT get '* ' even though its own report awaits submission.
       sync();
       assert.equal(page.title, "Arena | clankers \u03B2 \uD83D\uDDA5\uFE0F");
 
-      // Main session 91a01582-clankers never shows '* ' for allowlisted worker_reports alone.
-      branchHref = "https://github.com/nemoe7/clankers/tree/arena/91a01582-clankers";
+      // Main session 11111111-clankers never shows '* ' for allowlisted worker_reports alone.
+      branchHref = "https://github.com/nemoe7/clankers/tree/arena/11111111-clankers";
       sync();
       assert.equal(page.title, "Arena | clankers \u03B1 \uD83D\uDDA5\uFE0F");
 
@@ -3583,7 +3581,7 @@ for raw in sys.stdin:
       const boardWithMainWaiting = boardApi.normalizeBoard(
         Object.assign({}, boardWithWorkerWaiting, {
           worker_reports: Object.assign({}, boardWithWorkerWaiting.worker_reports, {
-            "91a01582-clankers": boardWithWorkerWaiting.worker_reports["91a01582-clankers"].concat([
+            "arena/11111111-clankers": boardWithWorkerWaiting.worker_reports["arena/11111111-clankers"].concat([
               { id: "main-proposal", fields: [{ id: "approve-main" }], answered: false, needs_answer: true },
             ]),
           }),
@@ -3597,51 +3595,51 @@ for raw in sys.stdin:
       const entryAckBurst = Array.from({ length: 120 }, (_, idx) => ({
         id: `ack-burst-${idx}`,
         op: "entry-ack",
-        target: "0735d422-clankers",
+        target: "arena/22222222-clankers",
         entry_id: `p-${idx}`,
         at: "2026-10-27T01:06:00Z",
       }));
       const boardAfterSubmit = boardApi.normalizeBoard(
         Object.assign({}, boardWithMainWaiting, {
           report_ops: [
-            { id: "rop-main", op: "answer", target: "91a01582-clankers", report_id: "main-proposal", at: "2026-10-27T01:05:00Z" },
+            { id: "rop-main", op: "answer", target: "arena/11111111-clankers", report_id: "main-proposal", at: "2026-10-27T01:05:00Z" },
           ].concat(entryAckBurst),
         }),
       );
       assert.equal(
-        boardApi.boardHasWaitingReportFor(boardAfterSubmit, "91a01582-clankers", {
-          "91a01582-clankers": [{ id: "main-proposal", fields: [{ id: "approve-main" }], answered: false, needs_answer: true }],
+        boardApi.boardHasWaitingReportFor(boardAfterSubmit, "arena/11111111-clankers", {
+          "arena/11111111-clankers": [{ id: "main-proposal", fields: [{ id: "approve-main" }], answered: false, needs_answer: true }],
         }),
         false,
-        "report_ops in normalizeBoard clear stale localSessionReportsBySid entries even after an entry-ack burst",
+        "report_ops in normalizeBoard clear stale localSessionReportsByBranch entries even after an entry-ack burst",
       );
       await pushProxyBoard(boardAfterSubmit);
       assert.equal(page.title, "Arena | clankers \u03B1");
 
       // normalizeBoard redacts survey.results[*].answer on unopted sessions while preserving allowlisted survey results.
       const boardWithSurveys = boardApi.normalizeBoard({
-        allowed_sessions: ["91a01582-clankers"],
-        main_session_id: "91a01582-clankers",
+        allowed_sessions: ["11111111-clankers"],
+        main_session_id: "11111111-clankers",
         sessions: [
           {
-            session_id: "91a01582-clankers",
+            branch: "11111111-clankers",
             repo: "clankers",
             survey: { score: 1, results: [{ id: "Q1", passed: true, answer: "secret-opted" }] },
           },
           {
-            session_id: "99999999-clankers",
+            branch: "99999999-clankers",
             repo: "clankers",
             survey: { score: 1, results: [{ id: "Q1", passed: true, answer: "secret-unopted" }] },
           },
         ],
       });
       assert.equal(
-        boardWithSurveys.sessions.find(s => s.session_id === "91a01582-clankers").survey.results[0].answer,
+        boardWithSurveys.sessions.find(s => s.branch === "11111111-clankers").survey.results[0].answer,
         "secret-opted",
       );
       assert.equal(
         Object.prototype.hasOwnProperty.call(
-          boardWithSurveys.sessions.find(s => s.session_id === "99999999-clankers").survey.results[0],
+          boardWithSurveys.sessions.find(s => s.branch === "99999999-clankers").survey.results[0],
           "answer",
         ),
         false,
@@ -3652,7 +3650,7 @@ for raw in sys.stdin:
       const boardWithStandalone = boardApi.normalizeBoard(
         Object.assign({}, boardAfterSubmit, {
           worker_reports: Object.assign({}, boardAfterSubmit.worker_reports, {
-            "99999999-clankers": [
+            "arena/99999999-clankers": [
               { id: "standalone-q", fields: [{ id: "choice" }], answered: false, needs_answer: true },
             ],
           }),
@@ -3682,18 +3680,16 @@ for raw in sys.stdin:
         worker_ids: { "beta2222-clankers": "beta" },
         sessions: [
           {
-            session_id: "alpha111-clankers",
+            branch: "alpha111-clankers",
             repo: "clankers",
-            branch: "arena/alpha111-clankers",
             status: "active",
             polling: false,
             updated_at: "2026-10-27T02:00:00Z",
             agent_seen_at: "2026-10-27T02:00:00Z",
           },
           {
-            session_id: "beta2222-clankers",
+            branch: "beta2222-clankers",
             repo: "clankers",
-            branch: "arena/beta2222-clankers",
             status: "polling",
             polling: true,
             updated_at: "top-corrupted-wake-id",
@@ -3703,7 +3699,7 @@ for raw in sys.stdin:
         entries: [
           {
             id: "p11111",
-            session_id: "alpha111-clankers",
+            branch: "alpha111-clankers",
             to: "beta2222-clankers",
             at: "2026-10-27T02:01:00Z",
             payload: { text: "hello beta" },
@@ -3712,7 +3708,7 @@ for raw in sys.stdin:
         wakes: { "beta2222-clankers": "p11111" },
       });
 
-      const betaBefore = baseBoard.sessions.find(s => s.session_id === "beta2222-clankers");
+      const betaBefore = baseBoard.sessions.find(s => s.branch === "beta2222-clankers");
       assert.equal(betaBefore.updated_at, "", "corrupted non-ISO updated_at string is stripped by normalizeBoard");
 
       // boardMaterialSignature ignores updated_at churn and tracks agent_call_ended_at:
@@ -3720,21 +3716,21 @@ for raw in sys.stdin:
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         main_session_id: "alpha111-clankers",
         sessions: [
-          { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:00Z", agent_call_ended_at: "2026-10-27T03:00:00Z" },
+          { branch: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:00Z", agent_call_ended_at: "2026-10-27T03:00:00Z" },
         ],
       });
       const sigB = boardApi.boardMaterialSignature({
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         main_session_id: "alpha111-clankers",
         sessions: [
-          { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:05Z", agent_call_ended_at: "2026-10-27T03:00:00Z" },
+          { branch: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:05Z", agent_call_ended_at: "2026-10-27T03:00:00Z" },
         ],
       });
       const sigC = boardApi.boardMaterialSignature({
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         main_session_id: "alpha111-clankers",
         sessions: [
-          { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:05Z", agent_call_ended_at: "2026-10-27T03:00:05Z" },
+          { branch: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:05Z", agent_call_ended_at: "2026-10-27T03:00:05Z" },
         ],
       });
       assert.equal(sigA, sigB, "boardMaterialSignature ignores synthetic updated_at churn");
@@ -3752,7 +3748,7 @@ for raw in sys.stdin:
         report_ops: [
           { id: "rop-unpub1", target: "beta2222-clankers", op: "unpublish", report_id: "stale-worker-rep", from_owner: true, at: "2026-10-27T03:05:00" },
         ],
-        sessions: [{ session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:05:00Z" }],
+        sessions: [{ branch: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:05:00Z" }],
       });
       assert.deepEqual(Array.from(withUnpubOp.worker_reports["beta2222-clankers"] || []), [], "report_ops unpublish strips stale worker report immediately");
 
@@ -3761,7 +3757,7 @@ for raw in sys.stdin:
         {
           allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
           main_session_id: "alpha111-clankers",
-          entries: [{ id: "p54321", session_id: "alpha111-clankers", payload: { text: "secret" } }],
+          entries: [{ id: "p54321", branch: "alpha111-clankers", payload: { text: "secret" } }],
           worker_tasks: {
             "alpha111-clankers": [{ id: "t1", title: "T1", status: "upcoming" }],
             "unopted99-daedalus": [{ id: "t2", title: "T2", status: "upcoming" }],
@@ -3796,7 +3792,7 @@ for raw in sys.stdin:
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         removed_sessions: ["alpha111-clankers"],
         sessions: [
-          { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:00Z" },
+          { branch: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:00Z" },
         ],
       });
       assert.ok(allowOutranksRemoval.allowed_sessions.includes("alpha111-clankers"), "normalizeBoard keeps allowlisted session over stale removed_sessions");
@@ -3815,16 +3811,15 @@ for raw in sys.stdin:
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         main_session_id: "alpha111-clankers",
         sessions: [
-          { session_id: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T04:00:00Z" },
-          { session_id: "beta2222-clankers", repo: "clankers", updated_at: "2026-10-27T04:00:00Z" },
+          { branch: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T04:00:00Z" },
+          { branch: "beta2222-clankers", repo: "clankers", updated_at: "2026-10-27T04:00:00Z" },
         ],
         entries: [
           {
             id: "pfile01",
-            session_id: "beta2222-clankers",
+            branch: "beta2222-clankers",
             to: "alpha111-clankers",
             repo: "clankers",
-            branch: "arena/beta2222-clankers",
             at: "2026-10-27T04:01:00Z",
             payload: { text: "patch ready" },
             file: { name: "fix.patch", encoding: "utf-8", content: "", size: 11, sha256: sha },
@@ -3833,11 +3828,11 @@ for raw in sys.stdin:
         wakes: {},
       };
       let memberStoredBoard = {
-        session_id: "alpha111-clankers",
+        branch: "alpha111-clankers",
         repo: "clankers",
         main_session_id: "",
         allowed_sessions: ["alpha111-clankers"],
-        sessions: [{ session_id: "alpha111-clankers", repo: "clankers", status: "active" }],
+        sessions: [{ branch: "alpha111-clankers", repo: "clankers", status: "active" }],
         entries: [],
       };
       let sinceChangedPayload = null;
@@ -3850,7 +3845,7 @@ for raw in sys.stdin:
         },
         GM_xmlhttpRequest: (req) => {
           httpCalls.push({ method: req.method, url: req.url, headers: req.headers || {}, data: req.data });
-          if (req.url === "https://arena-proxy.example.ts.net/v1/board") {
+          if (req.url === "https://arena-proxy.example.ts.net/v1/board" || (req.method === "GET" && req.url.startsWith("https://arena-proxy.example.ts.net/v1/board?") && !req.url.includes("since="))) {
             if (req.method === "GET") {
               req.onload({ status: 200, responseText: JSON.stringify({ revision: proxyRev, board: proxyBoardState }) });
               return;
@@ -3884,7 +3879,7 @@ for raw in sys.stdin:
             }
             const syncPayload = JSON.parse(req.data);
             memberStoredBoard = Object.assign({}, syncPayload.board, {
-              session_id: "alpha111-clankers",
+              branch: "alpha111-clankers",
               repo: "clankers",
             });
             req.onload({
@@ -4021,7 +4016,7 @@ for raw in sys.stdin:
       const coldSaved = new Map([
         ["clankers-arena-proxy-host", "arena-proxy.example.ts.net"],
         ["clankers-arena-proxy-master", "master-secret-token"],
-        ["clankers-arena-preview-base-beta2222-clankers", "https://8000-beta.e2b.app"],
+        ["clankers-arena-preview-base-arena/beta2222-clankers", "https://8000-beta.e2b.app"],
         ["clankers-arena-show-settings-button", false],
         ["state-download", false],
         ["prompt-fill", false],
@@ -4032,11 +4027,11 @@ for raw in sys.stdin:
       const coldPage = { title: "" };
       let coldRev = 5;
       let coldProxyBoard = {
-        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
-        main_session_id: "alpha111-clankers",
+        allowed_sessions: ["arena/alpha111-clankers", "arena/beta2222-clankers"],
+        main_session_id: "arena/alpha111-clankers",
         sessions: [
-          { session_id: "alpha111-clankers", repo: "clankers", status: "active" },
-          { session_id: "beta2222-clankers", repo: "clankers", status: "polling", polling: true },
+          { branch: "arena/alpha111-clankers", repo: "clankers", status: "active" },
+          { branch: "arena/beta2222-clankers", repo: "clankers", status: "polling", polling: true },
         ],
         entries: [],
         wakes: {},
@@ -4094,7 +4089,7 @@ for raw in sys.stdin:
         GM_unregisterMenuCommand() {},
         GM_xmlhttpRequest(req) {
           coldCalls.push({ method: req.method, url: req.url, data: req.data });
-          if (req.url === "https://arena-proxy.example.ts.net/v1/board") {
+          if (req.url === "https://arena-proxy.example.ts.net/v1/board" || (req.method === "GET" && req.url.startsWith("https://arena-proxy.example.ts.net/v1/board?") && !req.url.includes("since="))) {
             if (req.method === "POST") coldRev += 1;
             req.onload({ status: 200, responseText: JSON.stringify({ revision: coldRev, board: coldProxyBoard }) });
             return;
@@ -4112,11 +4107,11 @@ for raw in sys.stdin:
             req.onload({
               status: 200,
               responseText: JSON.stringify({
-                session_id: "beta2222-clankers",
+                branch: "arena/beta2222-clankers",
                 repo: "clankers",
-                allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
-                main_session_id: "alpha111-clankers",
-                sessions: [{ session_id: "beta2222-clankers", repo: "clankers", status: "polling", polling: true }],
+                allowed_sessions: ["arena/alpha111-clankers", "arena/beta2222-clankers"],
+                main_session_id: "arena/alpha111-clankers",
+                sessions: [{ branch: "arena/beta2222-clankers", repo: "clankers", status: "polling", polling: true }],
                 entries: [],
                 wakes: {},
               }),
@@ -4135,8 +4130,8 @@ for raw in sys.stdin:
       await new Promise(resolve => setImmediate(resolve));
       assert.equal(coldPage.title, "Arena | clankers \u03B2", "cold boot GET /v1/board seeds proxyBoardCache and renders Greek symbol");
       assert.ok(
-        coldCalls.some(c => c.method === "GET" && c.url === "https://arena-proxy.example.ts.net/v1/board"),
-        "cold boot tick pulls full GET /v1/board once",
+        coldCalls.some(c => c.method === "GET" && c.url.startsWith("https://arena-proxy.example.ts.net/v1/board?branch=arena%2Fbeta2222-clankers&repo=clankers")),
+        "cold boot tick pulls full GET /v1/board with branch and repo query params",
       );
       assert.ok(
         coldCalls.some(c => c.url === "https://8000-beta.e2b.app/api/board"),
@@ -4148,7 +4143,7 @@ for raw in sys.stdin:
       nowMs += boardApi.BOARD_PROXY_POLL_MS + 50;
       coldRev += 1;
       coldProxyBoard = Object.assign({}, coldProxyBoard, {
-        wakes: { "beta2222-clankers": "wake-now" },
+        wakes: { "arena/beta2222-clankers": "wake-now" },
       });
       titleTick.fn();
       await new Promise(resolve => setImmediate(resolve));
@@ -4256,18 +4251,18 @@ for raw in sys.stdin:
         allowed_sessions: ["alpha111-clankers", "opt33333-otherrepo"],
         main_session_id: "alpha111-clankers",
         sessions: [
-          { session_id: "alpha111-clankers", repo: "clankers", updated_at: freshIso },
-          { session_id: "dead9999-daedalus", repo: "daedalus", status: "disconnected", disconnected: true, updated_at: expiredIso },
-          { session_id: "fresh888-clankers", repo: "clankers", status: "disconnected", disconnected: true, updated_at: freshIso },
-          { session_id: "opt33333-otherrepo", repo: "otherrepo", status: "disconnected", disconnected: true, updated_at: expiredIso },
+          { branch: "alpha111-clankers", repo: "clankers", updated_at: freshIso },
+          { branch: "dead9999-daedalus", repo: "daedalus", status: "disconnected", disconnected: true, updated_at: expiredIso },
+          { branch: "fresh888-clankers", repo: "clankers", status: "disconnected", disconnected: true, updated_at: freshIso },
+          { branch: "opt33333-otherrepo", repo: "otherrepo", status: "disconnected", disconnected: true, updated_at: expiredIso },
         ],
       });
-      const normIds = normalizedMixed.sessions.map((row) => row.session_id);
+      const normIds = normalizedMixed.sessions.map((row) => row.branch);
       assert.ok(!normIds.includes("dead9999-daedalus"), "expired unopted disconnected row is pruned");
       assert.ok(normIds.includes("fresh888-clankers"), "fresh unopted disconnected row stays within TTL");
       assert.ok(normIds.includes("opt33333-otherrepo"), "opted disconnected row is retained");
       const scopedClankers = boardCheck.scopeBoardForTarget(normalizedMixed, "alpha111-clankers", "clankers");
-      const scopedIds = scopedClankers.sessions.map((row) => row.session_id);
+      const scopedIds = scopedClankers.sessions.map((row) => row.branch);
       assert.ok(!scopedIds.includes("opt33333-otherrepo"), "unlinked cross-repo row hides when multi_repo is false");
       assert.ok(scopedClankers.sessions.length < normalizedMixed.sessions.length);
       assert.ok(scopedClankers.known_repos.includes("otherrepo"));

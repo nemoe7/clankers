@@ -2895,8 +2895,8 @@ require("node:test").test("successful state saves clear stale failure notices", 
 require("node:test").test("multi-session board enforces proxy-only cache, Main Session role, uncapped script-to-proxy state, and target scoping", () => {
   const loaded = loadChecks("arena.user.js");
   const boardApi = loaded.checks.board;
-  assert.equal(boardApi.boardSessionId("arena/main0001-clankers"), "main0001-clankers");
-  assert.equal(boardApi.boardSessionId("work0002-clankers"), "work0002-clankers");
+  assert.equal(boardApi.boardBranch("arena/main0001-clankers"), "arena/main0001-clankers");
+  assert.equal(boardApi.boardBranch("work0002-clankers"), "work0002-clankers");
   assert.equal(boardApi.MAX_BOARD_FILE_BYTES, undefined);
   assert.equal(boardApi.BOARD_KEY, undefined);
   assert.equal(boardApi.applyBoardAction, undefined);
@@ -2904,8 +2904,8 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
   const bBase = {
     main_session_id: "main0001-clankers",
     allowed_sessions: ["main0001-clankers"],
-    sessions: [{ session_id: "main0001-clankers", repo: "clankers", status: "active" }],
-    entries: [{ id: "e-1", session_id: "main0001-clankers", to: "*", text: "first" }],
+    sessions: [{ branch: "main0001-clankers", repo: "clankers", status: "active" }],
+    entries: [{ id: "e-1", branch: "main0001-clankers", to: "*", text: "first" }],
     wakes: {},
     worker_tasks: {},
     files: {},
@@ -2914,7 +2914,7 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
     ...bBase,
     entries: [
       ...bBase.entries,
-      { id: "e-2", session_id: "main0001-clankers", to: "*", text: "second" },
+      { id: "e-2", branch: "main0001-clankers", to: "*", text: "second" },
     ],
     wakes: { "main0001-clankers": "w-1" },
   };
@@ -2927,16 +2927,16 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
   assert.equal(bApplied.wakes["main0001-clankers"], "w-1");
 
   const manySessions = Array.from({ length: 70 }, (_, idx) => ({
-    session_id: `${String(idx + 1).padStart(8, "0")}-clankers`,
+    branch: `${String(idx + 1).padStart(8, "0")}-clankers`,
     repo: "clankers",
   }));
   const manyEntries = Array.from({ length: 120 }, (_, idx) => ({
     id: `p${idx}`,
-    session_id: "00000001-clankers",
+    branch: "00000001-clankers",
     text: `entry-${idx}`,
   }));
   const uncapped = boardApi.normalizeBoard({
-    allowed_sessions: manySessions.map((row) => row.session_id),
+    allowed_sessions: manySessions.map((row) => row.branch),
     sessions: manySessions,
     entries: manyEntries,
   });
@@ -2951,14 +2951,14 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
       allowed_sessions: ["arena/main0001-clankers", "arena/work0002-clankers"],
       main_session_id: "arena/main0001-clankers",
       sessions: [
-        { session_id: "arena/main0001-clankers", repo: "clankers", polling: true },
-        { session_id: "arena/work0002-clankers", repo: "clankers", status: "active" },
+        { branch: "arena/main0001-clankers", repo: "clankers", polling: true },
+        { branch: "arena/work0002-clankers", repo: "clankers", status: "active" },
       ],
       entries: [
         {
           id: "p00001",
-          session_id: "work0002-clankers",
-          to: "main0001-clankers",
+          branch: "arena/work0002-clankers",
+          to: "arena/main0001-clankers",
           repo: "nemoe7/clankers",
           payload: { topic: "scope-split", status: "ready" },
           file: {
@@ -2970,20 +2970,20 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
           },
         },
       ],
-      wakes: { "main0001-clankers": "2026-10-25T12:01:00Z" },
+      wakes: { "arena/main0001-clankers": "2026-10-25T12:01:00Z" },
     },
     { fromProxy: true, revision: 1 },
   );
-  assert.deepEqual([...state.allowed_sessions], ["main0001-clankers", "work0002-clankers"]);
-  assert.equal(state.main_session_id, "main0001-clankers");
-  assert.equal(boardApi.boardRoleFor(state, "main0001-clankers"), "main");
-  assert.equal(boardApi.canPushOrPr(state, "main0001-clankers"), true);
-  assert.equal(boardApi.boardRoleFor(state, "work0002-clankers"), "worker");
-  assert.equal(boardApi.canPushOrPr(state, "work0002-clankers"), false);
+  assert.deepEqual([...state.allowed_sessions], ["arena/main0001-clankers", "arena/work0002-clankers"]);
+  assert.equal(state.main_session_id, "arena/main0001-clankers");
+  assert.equal(boardApi.boardRoleFor(state, "arena/main0001-clankers"), "main");
+  assert.equal(boardApi.canPushOrPr(state, "arena/main0001-clankers"), true);
+  assert.equal(boardApi.boardRoleFor(state, "arena/work0002-clankers"), "worker");
+  assert.equal(boardApi.canPushOrPr(state, "arena/work0002-clankers"), false);
   assert.equal(state.entries.length, 1);
   assert.equal(state.entries[0].file.size, 12);
   assert.equal(state.entries[0].payload.topic, "scope-split");
-  assert.equal(state.wakes["main0001-clankers"], "2026-10-25T12:01:00Z");
+  assert.equal(state.wakes["arena/main0001-clankers"], "2026-10-25T12:01:00Z");
 
   const unoptedView = boardApi.scopeBoardForTarget(state, "untr0003-sandbox", "sandbox");
   assert.deepEqual([...unoptedView.entries], []);

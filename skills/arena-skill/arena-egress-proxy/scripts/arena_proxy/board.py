@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import time
+import urllib.parse
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -43,14 +44,40 @@ def now_iso():
   return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
-def board_session_id(raw):
-  """Normalize an Arena branch or session identifier."""
+def board_branch(raw):
+  """Normalize an Arena branch identifier while keeping interior slashes."""
   text = str(raw or "").strip()
-  if text.startswith("arena/"):
-    text = text[6:].strip()
-  if not text or "/" in text or ".." in text or any(ch.isspace() for ch in text):
+  if (
+    not text
+    or ".." in text
+    or "\\" in text
+    or "//" in text
+    or text.startswith("/")
+    or text.endswith("/")
+    or any(ch.isspace() for ch in text)
+  ):
     return ""
-  return text[:96]
+  return text[:128]
+
+
+def encode_board_branch_dir(branch):
+  """Percent-encode slashes so a branch fits in one board-files directory segment."""
+  clean = board_branch(branch)
+  return urllib.parse.quote(clean, safe="A-Za-z0-9._-") if clean else ""
+
+
+def decode_board_branch_dir(segment):
+  """Decode a percent-encoded board-files directory segment back to a branch."""
+  raw = str(segment or "").strip()
+  if not raw or "/" in raw or "\\" in raw or raw in (".", ".."):
+    return ""
+  return board_branch(urllib.parse.unquote(raw))
+
+
+def branch_slug_tail(branch):
+  """Return the trailing slug segment after any slash in a normalized branch."""
+  clean = board_branch(branch)
+  return clean.rsplit("/", 1)[-1] if clean else ""
 
 
 def clean_worker_id(raw):
@@ -61,42 +88,42 @@ def clean_worker_id(raw):
   return text if WORKER_ID_RE.match(text) else ""
 
 
-def clean_board_repo(raw_value, fallback_sid=""):
-  """Extract a lowercase repo slug from a path or session identifier."""
+def clean_board_repo(raw_value, fallback_branch=""):
+  """Extract a lowercase repo slug from a path or branch identifier."""
   text = str(raw_value or "").strip()
   if "/" in text:
     text = text.rsplit("/", 1)[-1]
-  if not text and fallback_sid:
-    sid = board_session_id(fallback_sid)
-    match = SESSION_SLUG_RE.match(sid)
+  if not text and fallback_branch:
+    tail = branch_slug_tail(fallback_branch)
+    match = SESSION_SLUG_RE.match(tail)
     if match:
       text = match.group(1)
   return text.lower()
 
 
-def default_worker_id(session_id, repo=""):
-  """Derive a fallback worker token from a session identifier."""
-  sid = board_session_id(session_id)
+def default_worker_id(branch, repo=""):
+  """Derive a fallback worker token from a branch identifier."""
+  tail = branch_slug_tail(branch)
   clean_repo = str(repo or "").strip()
   suffix = f"-{clean_repo}"
-  if clean_repo and len(sid) > len(suffix) and sid.endswith(suffix):
-    sid = sid[: -len(suffix)]
-  head = sid.split("-", 1)[0] if "-" in sid else sid
+  if clean_repo and len(tail) > len(suffix) and tail.endswith(suffix):
+    tail = tail[: -len(suffix)]
+  head = tail.split("-", 1)[0] if "-" in tail else tail
   token = re.sub(r"[^A-Za-z0-9]+", "", head)[:6]
   return token or "w1"
 
 
-def format_board_role_id(role, repo, worker_id, multi_repo, fallback_sid):
+def format_board_role_id(role, repo, worker_id, multi_repo, fallback_branch):
   """Format the role label for a main or worker session."""
   clean_repo = str(repo or "").strip()
   if role == "main":
     return f"main-{clean_repo}" if multi_repo and clean_repo else "main"
   if role == "worker":
-    wid = clean_worker_id(worker_id) or default_worker_id(fallback_sid, clean_repo)
+    wid = clean_worker_id(worker_id) or default_worker_id(fallback_branch, clean_repo)
     return (
       f"worker-{wid}-{clean_repo}" if multi_repo and clean_repo else f"worker-{wid}"
     )
-  return str(fallback_sid or "")
+  return str(fallback_branch or "")
 
 
 def parse_stamp_ms(value):
@@ -125,18 +152,21 @@ def clip_stamp(value):
 
 
 def resolve_board_target(target, sessions, allowed, main_sid):
-  """Resolve a session, board, or worker alias to a canonical session ID."""
-  clean = board_session_id(target)
+  """Resolve a branch, board, or worker alias to a canonical branch."""
+  clean = board_branch(target)
   if not clean:
     return ""
   for row in sessions or []:
     if not isinstance(row, dict):
       continue
-    if row.get("session_id") == clean or row.get("board_id") == clean:
-      return str(row.get("session_id") or "")
+    row_br = str(row.get("branch") or "")
+    if row_br == clean or row.get("board_id") == clean:
+      return row_br
+    if "/" not in clean and branch_slug_tail(row_br) == clean:
+      return row_br
     wid = str(row.get("worker_id") or "")
     if wid and clean in (wid, f"worker-{wid}"):
-      return str(row.get("session_id") or "")
+      return row_br
   if clean == "main" or clean.startswith("main-"):
     if main_sid:
       return main_sid
@@ -230,6 +260,15 @@ def validate_board_file(file_obj, max_bytes=None):
   return True, meta, raw, ""
 
 
+def _row_branch(row, aliases=None):
+  if not isinstance(row, dict):
+    return ""
+  br = board_branch(row.get("branch") or row.get("session_id") or "")
+  if aliases and br in aliases:
+    return aliases[br]
+  return br
+
+
 def normalize_board(raw):
   """Normalize board state, preserving allowlist priority and worker isolation."""
   data = raw
@@ -241,6 +280,22 @@ def normalize_board(raw):
   if not isinstance(data, dict):
     data = {}
   multi_repo = bool(data.get("multi_repo"))
+  raw_sessions = (
+    list(data.get("sessions")) if isinstance(data.get("sessions"), list) else []
+  )
+  legacy_aliases = {}
+  for s_row in raw_sessions:
+    if not isinstance(s_row, dict):
+      continue
+    s_br = board_branch(s_row.get("branch") or "")
+    s_legacy = board_branch(s_row.get("session_id") or "")
+    if s_br and s_legacy and s_legacy != s_br:
+      legacy_aliases[s_legacy] = s_br
+
+  def norm_key(val):
+    br = board_branch(val)
+    return legacy_aliases.get(br, br)
+
   unique_allowed = []
   seen_allowed = set()
   for item in (
@@ -248,10 +303,10 @@ def normalize_board(raw):
     if isinstance(data.get("allowed_sessions"), list)
     else []
   ):
-    sid = board_session_id(item)
-    if sid and sid not in seen_allowed:
-      seen_allowed.add(sid)
-      unique_allowed.append(sid)
+    br = norm_key(item)
+    if br and br not in seen_allowed:
+      seen_allowed.add(br)
+      unique_allowed.append(br)
   removed_list = []
   removed_set = set()
   for item in (
@@ -259,7 +314,7 @@ def normalize_board(raw):
     if isinstance(data.get("removed_sessions"), list)
     else []
   ):
-    rem = board_session_id(item)
+    rem = norm_key(item)
     if rem and rem not in seen_allowed and rem not in removed_set:
       removed_set.add(rem)
       removed_list.append(rem)
@@ -267,26 +322,23 @@ def normalize_board(raw):
   raw_wids = data.get("worker_ids")
   if isinstance(raw_wids, dict):
     for key, val in raw_wids.items():
-      norm_k = board_session_id(key)
+      norm_k = norm_key(key)
       clean_v = clean_worker_id(val)
       if norm_k and norm_k not in removed_set and clean_v:
         worker_ids[norm_k] = clean_v
-  raw_sessions = (
-    list(data.get("sessions")) if isinstance(data.get("sessions"), list) else []
-  )
   for s_row in raw_sessions:
     if not isinstance(s_row, dict):
       continue
-    s_sid = board_session_id(s_row.get("session_id") or s_row.get("branch") or "")
-    if not s_sid or s_sid in removed_set:
+    s_br = _row_branch(s_row, legacy_aliases)
+    if not s_br or s_br in removed_set:
       continue
-    if s_sid.startswith("probe-") and s_sid not in seen_allowed:
-      removed_set.add(s_sid)
-      removed_list.append(s_sid)
-      worker_ids.pop(s_sid, None)
-  unique_allowed = [sid for sid in unique_allowed if sid not in removed_set]
+    if branch_slug_tail(s_br).startswith("probe-") and s_br not in seen_allowed:
+      removed_set.add(s_br)
+      removed_list.append(s_br)
+      worker_ids.pop(s_br, None)
+  unique_allowed = [br for br in unique_allowed if br not in removed_set]
   seen_allowed = set(unique_allowed)
-  main_id = board_session_id(data.get("main_session_id") or "")
+  main_id = norm_key(data.get("main_session_id") or "")
   if main_id and (main_id not in seen_allowed or main_id in removed_set):
     main_id = ""
   if main_id and main_id in worker_ids:
@@ -305,17 +357,17 @@ def normalize_board(raw):
   for row in raw_sessions:
     if not isinstance(row, dict):
       continue
-    row_sid = board_session_id(row.get("session_id") or row.get("branch") or "")
+    row_br = _row_branch(row, legacy_aliases)
     if (
-      not row_sid
-      or row_sid in seen_sessions
-      or row_sid in removed_set
-      or (row_sid.startswith("probe-") and row_sid not in seen_allowed)
+      not row_br
+      or row_br in seen_sessions
+      or row_br in removed_set
+      or (branch_slug_tail(row_br).startswith("probe-") and row_br not in seen_allowed)
     ):
       continue
     is_poll = bool(row.get("polling") or row.get("status") == "polling")
     is_disc = bool(row.get("disconnected") or row.get("status") == "disconnected")
-    is_allowed_row = row_sid in seen_allowed
+    is_allowed_row = row_br in seen_allowed
     if not is_allowed_row and is_disc:
       stamp_ms = parse_stamp_ms(row.get("updated_at"))
       if stamp_ms is None:
@@ -329,21 +381,20 @@ def normalize_board(raw):
         stamp_ms is not None and (now_ms - stamp_ms) > BOARD_SESSION_TTL_SECONDS * 1000
       ):
         continue
-    seen_sessions.add(row_sid)
-    if row.get("worker_id") and row_sid not in worker_ids and row_sid != main_id:
+    seen_sessions.add(row_br)
+    if row.get("worker_id") and row_br not in worker_ids and row_br != main_id:
       delegated = clean_worker_id(row.get("worker_id"))
       if delegated:
-        worker_ids[row_sid] = delegated
-    row_repo = clean_board_repo(row.get("repo"), row_sid)
+        worker_ids[row_br] = delegated
+    row_repo = clean_board_repo(row.get("repo"), row_br)
     updated_at = row.get("updated_at")
     row_out = {
-      "session_id": row_sid,
+      "branch": row_br,
       "board_id": "",
       "worker_id": "",
       "allowed": is_allowed_row,
       "role": "worker" if is_allowed_row else "blocked",
       "repo": row_repo,
-      "branch": str(row.get("branch") or f"arena/{row_sid}"),
       "status": "disconnected" if is_disc else ("polling" if is_poll else "active"),
       "polling": is_poll,
       "disconnected": is_disc,
@@ -353,7 +404,7 @@ def normalize_board(raw):
     }
     if isinstance(row.get("survey"), dict):
       survey = dict(row["survey"])
-      if row_sid not in seen_allowed and isinstance(survey.get("results"), list):
+      if row_br not in seen_allowed and isinstance(survey.get("results"), list):
         survey["results"] = [
           {key: value for key, value in result.items() if key != "answer"}
           if isinstance(result, dict)
@@ -365,18 +416,17 @@ def normalize_board(raw):
       if row.get(key) is not None:
         row_out[key] = row[key]
     sessions.append(row_out)
-  for allowed_sid in unique_allowed:
-    if allowed_sid not in seen_sessions:
-      seen_sessions.add(allowed_sid)
+  for allowed_br in unique_allowed:
+    if allowed_br not in seen_sessions:
+      seen_sessions.add(allowed_br)
       sessions.append(
         {
-          "session_id": allowed_sid,
+          "branch": allowed_br,
           "board_id": "",
           "worker_id": "",
           "allowed": True,
           "role": "worker",
-          "repo": clean_board_repo("", allowed_sid),
-          "branch": f"arena/{allowed_sid}",
+          "repo": clean_board_repo("", allowed_br),
           "status": "active",
           "polling": False,
           "disconnected": False,
@@ -385,29 +435,29 @@ def normalize_board(raw):
       )
   repo_has_main = {}
   for s_row in sessions:
-    if s_row["role"] != "blocked" and main_id and s_row["session_id"] == main_id:
+    if s_row["role"] != "blocked" and main_id and s_row["branch"] == main_id:
       s_row["role"] = "main"
-      repo_has_main[s_row["repo"]] = s_row["session_id"]
+      repo_has_main[s_row["repo"]] = s_row["branch"]
   for s_row in sessions:
     if s_row["role"] == "blocked":
       continue
     s_repo = s_row["repo"]
-    if s_repo not in repo_has_main and s_row["session_id"] not in worker_ids:
+    if s_repo not in repo_has_main and s_row["branch"] not in worker_ids:
       s_row["role"] = "main"
-      repo_has_main[s_repo] = s_row["session_id"]
+      repo_has_main[s_repo] = s_row["branch"]
   for s_row in sessions:
     if s_row["role"] == "blocked":
       continue
     s_repo = s_row["repo"]
     if s_repo not in repo_has_main:
       s_row["role"] = "main"
-      repo_has_main[s_repo] = s_row["session_id"]
-    elif repo_has_main[s_repo] != s_row["session_id"]:
+      repo_has_main[s_repo] = s_row["branch"]
+    elif repo_has_main[s_repo] != s_row["branch"]:
       s_row["role"] = "worker"
   for s_row in sessions:
     s_row["worker_id"] = (
-      worker_ids.get(s_row["session_id"])
-      or default_worker_id(s_row["session_id"], s_row["repo"])
+      worker_ids.get(s_row["branch"])
+      or default_worker_id(s_row["branch"], s_row["repo"])
       if s_row["role"] == "worker"
       else ""
     )
@@ -416,7 +466,7 @@ def normalize_board(raw):
       s_row["repo"],
       s_row["worker_id"],
       multi_repo,
-      s_row["session_id"],
+      s_row["branch"],
     )
   linked_repos = []
   seen_linked = set()
@@ -427,11 +477,18 @@ def normalize_board(raw):
     if slug and slug not in seen_linked:
       seen_linked.add(slug)
       linked_repos.append(slug)
-  entries = (
-    [dict(item) for item in data.get("entries") if isinstance(item, dict)]
-    if isinstance(data.get("entries"), list)
-    else []
-  )
+  entries = []
+  if isinstance(data.get("entries"), list):
+    for item in data["entries"]:
+      if not isinstance(item, dict):
+        continue
+      copy_e = dict(item)
+      e_br = norm_key(copy_e.get("branch") or copy_e.get("session_id") or "")
+      copy_e.pop("session_id", None)
+      copy_e["branch"] = e_br
+      if copy_e.get("to") and copy_e["to"] not in ("*", ""):
+        copy_e["to"] = legacy_aliases.get(str(copy_e["to"]), copy_e["to"])
+      entries.append(copy_e)
   task_ops = (
     [dict(item) for item in data.get("task_ops") if isinstance(item, dict)]
     if isinstance(data.get("task_ops"), list)
@@ -445,13 +502,13 @@ def normalize_board(raw):
   worker_tasks = {}
   if isinstance(data.get("worker_tasks"), dict):
     for key, val in data["worker_tasks"].items():
-      norm_k = board_session_id(key)
+      norm_k = norm_key(key)
       if norm_k and norm_k not in removed_set and isinstance(val, list):
         worker_tasks[norm_k] = list(val)
   worker_reports = {}
   if isinstance(data.get("worker_reports"), dict):
     for key, val in data["worker_reports"].items():
-      norm_k = board_session_id(key)
+      norm_k = norm_key(key)
       if norm_k and norm_k not in removed_set and isinstance(val, list):
         worker_reports[norm_k] = list(val)
   for op in report_ops:
@@ -466,7 +523,7 @@ def normalize_board(raw):
   wakes = {}
   if isinstance(data.get("wakes"), dict):
     for key, val in data["wakes"].items():
-      norm_k = board_session_id(key)
+      norm_k = norm_key(key)
       if norm_k and norm_k not in removed_set and val:
         wakes[norm_k] = val
   return {
@@ -494,13 +551,13 @@ def _is_repo_visible(row_repo, target_repo, multi_repo, linked_set):
   return bool(multi_repo)
 
 
-def scope_board_for_target(board, session_id="", repo_hint=""):
-  """Scope normalized board state for a specific session and repository."""
+def scope_board_for_target(board, branch="", repo_hint=""):
+  """Scope normalized board state for a specific branch and repository."""
   normalized = normalize_board(board)
-  sid = board_session_id(session_id)
-  target_repo = clean_board_repo(repo_hint or "", sid)
+  br = board_branch(branch)
+  target_repo = clean_board_repo(repo_hint or "", br)
   allowed_set = set(normalized["allowed_sessions"])
-  is_allowed = bool(sid and sid in allowed_set)
+  is_allowed = bool(br and br in allowed_set)
   linked_set = set(normalized["linked_repos"])
   known_repos = []
   if target_repo:
@@ -519,7 +576,7 @@ def scope_board_for_target(board, session_id="", repo_hint=""):
   visible_sessions = [
     dict(row)
     for row in normalized["sessions"]
-    if row["session_id"] == sid
+    if row["branch"] == br
     or _is_repo_visible(
       row.get("repo", ""), target_repo, normalized["multi_repo"], linked_set
     )
@@ -528,7 +585,7 @@ def scope_board_for_target(board, session_id="", repo_hint=""):
   if target_repo:
     for row in normalized["sessions"]:
       if row["repo"] == target_repo and row["allowed"] and row["role"] == "main":
-        scoped_main = row["session_id"]
+        scoped_main = row["branch"]
         break
     if (
       not scoped_main
@@ -536,19 +593,19 @@ def scope_board_for_target(board, session_id="", repo_hint=""):
       and clean_board_repo("", normalized["main_session_id"]) == target_repo
     ):
       scoped_main = normalized["main_session_id"]
-    if sid and not is_allowed and scoped_main != sid:
+    if br and not is_allowed and scoped_main != br:
       same_repo_allowed = any(
-        clean_board_repo("", a_sid) == target_repo
-        for a_sid in normalized["allowed_sessions"]
+        clean_board_repo("", a_br) == target_repo
+        for a_br in normalized["allowed_sessions"]
       )
       if not same_repo_allowed:
         scoped_main = ""
-  elif not sid or is_allowed:
+  elif not br or is_allowed:
     scoped_main = normalized["main_session_id"]
-  if sid and not is_allowed:
+  if br and not is_allowed:
     own_reports = {}
-    if sid in normalized["worker_reports"]:
-      own_reports[sid] = list(normalized["worker_reports"][sid])
+    if br in normalized["worker_reports"]:
+      own_reports[br] = list(normalized["worker_reports"][br])
     out = dict(
       normalized,
       main_session_id=scoped_main,
@@ -578,7 +635,7 @@ def scope_board_for_target(board, session_id="", repo_hint=""):
     },
   )
   out["removed_sessions"] = [
-    rem for rem in out["removed_sessions"] if rem != sid and rem not in allowed_set
+    rem for rem in out["removed_sessions"] if rem != br and rem not in allowed_set
   ]
   return out
 
@@ -588,15 +645,15 @@ def merge_preview_board(global_board, preview_board, passive=False):
   next_board = normalize_board(global_board)
   if not isinstance(preview_board, dict):
     return next_board
-  preview_sid = board_session_id(
-    preview_board.get("session_id") or preview_board.get("branch") or ""
+  preview_br = board_branch(
+    preview_board.get("branch") or preview_board.get("session_id") or ""
   )
   incoming = normalize_board(preview_board)
   sync_iso = now_iso()
   is_split_brain_heal = bool(
-    preview_sid
-    and preview_sid == incoming["main_session_id"]
-    and preview_sid not in incoming["worker_ids"]
+    preview_br
+    and preview_br == incoming["main_session_id"]
+    and preview_br not in incoming["worker_ids"]
     and (
       (
         bool(next_board["allowed_sessions"])
@@ -613,33 +670,27 @@ def merge_preview_board(global_board, preview_board, passive=False):
     if rem and rem not in global_allowed_set
   }
   preview_is_allowed = (
-    not preview_sid
-    or preview_sid in global_allowed_set
+    not preview_br
+    or preview_br in global_allowed_set
     or (
-      (is_split_brain_heal or preview_sid not in global_removed_set)
-      and preview_sid in incoming["allowed_sessions"]
+      (is_split_brain_heal or preview_br not in global_removed_set)
+      and preview_br in incoming["allowed_sessions"]
     )
   )
   if not preview_is_allowed:
-    if preview_sid in next_board["removed_sessions"]:
+    if preview_br in next_board["removed_sessions"]:
       return next_board
-    if preview_sid in incoming["worker_reports"]:
-      next_board["worker_reports"][preview_sid] = incoming["worker_reports"][
-        preview_sid
-      ]
+    if preview_br in incoming["worker_reports"]:
+      next_board["worker_reports"][preview_br] = incoming["worker_reports"][preview_br]
     unopted_row = next(
-      (
-        row
-        for row in incoming["sessions"]
-        if board_session_id(row.get("session_id") or row.get("branch")) == preview_sid
-      ),
+      (row for row in incoming["sessions"] if _row_branch(row) == preview_br),
       None,
     )
     existing_idx = next(
       (
         idx
         for idx, row in enumerate(next_board["sessions"])
-        if board_session_id(row.get("session_id") or row.get("branch")) == preview_sid
+        if _row_branch(row) == preview_br
       ),
       -1,
     )
@@ -650,17 +701,12 @@ def merge_preview_board(global_board, preview_board, passive=False):
     )
     prev_updated = prev_unopted.get("updated_at") if prev_unopted else ""
     built_unopted = {
-      "session_id": preview_sid,
+      "branch": preview_br,
       "repo": str(
         (unopted_row and unopted_row.get("repo"))
         or (prev_unopted and prev_unopted.get("repo"))
         or preview_board.get("repo")
         or ""
-      ),
-      "branch": str(
-        (unopted_row and unopted_row.get("branch"))
-        or (prev_unopted and prev_unopted.get("branch"))
-        or f"arena/{preview_sid}"
       ),
       "status": "polling" if is_poll else "active",
       "polling": is_poll,
@@ -684,12 +730,12 @@ def merge_preview_board(global_board, preview_board, passive=False):
 
   can_author_links = (
     not next_board["main_session_id"]
-    or preview_sid == next_board["main_session_id"]
+    or preview_br == next_board["main_session_id"]
     or bool(
-      preview_sid
-      and preview_sid == incoming["main_session_id"]
+      preview_br
+      and preview_br == incoming["main_session_id"]
       and next_board["main_session_id"] in next_board["worker_ids"]
-      and preview_sid not in incoming["worker_ids"]
+      and preview_br not in incoming["worker_ids"]
     )
   )
   if "multi_repo" in preview_board and (
@@ -708,46 +754,44 @@ def merge_preview_board(global_board, preview_board, passive=False):
     else global_allowed_set
   )
   removed_set = {
-    sid
-    for sid in next_board["removed_sessions"]
-    if sid
-    and (is_split_brain_heal or sid != preview_sid or sid in global_removed_set)
-    and sid not in protected_allowed
+    br
+    for br in next_board["removed_sessions"]
+    if br
+    and (is_split_brain_heal or br != preview_br or br in global_removed_set)
+    and br not in protected_allowed
   }
-  for sid in incoming["removed_sessions"]:
-    if not sid or sid == preview_sid:
+  for br in incoming["removed_sessions"]:
+    if not br or br == preview_br:
       continue
-    if (can_author_links and sid not in incoming_allowed_set) or (
-      sid not in global_allowed_set and sid not in incoming_allowed_set
+    if (can_author_links and br not in incoming_allowed_set) or (
+      br not in global_allowed_set and br not in incoming_allowed_set
     ):
-      removed_set.add(sid)
+      removed_set.add(br)
   next_board["removed_sessions"] = list(removed_set)
   next_board["allowed_sessions"] = [
-    sid for sid in next_board["allowed_sessions"] if sid not in removed_set
+    br for br in next_board["allowed_sessions"] if br not in removed_set
   ]
   next_board["sessions"] = [
-    row
-    for row in next_board["sessions"]
-    if board_session_id(row.get("session_id") or row.get("branch")) not in removed_set
+    row for row in next_board["sessions"] if _row_branch(row) not in removed_set
   ]
-  for removed_sid in removed_set:
-    next_board["worker_ids"].pop(removed_sid, None)
-    next_board["worker_tasks"].pop(removed_sid, None)
-    next_board["worker_reports"].pop(removed_sid, None)
-    next_board["wakes"].pop(removed_sid, None)
-  for sid, wid in incoming["worker_ids"].items():
-    if sid not in removed_set:
-      next_board["worker_ids"][sid] = wid
-  for sid, tasks in incoming["worker_tasks"].items():
-    if sid not in removed_set and (
-      sid == preview_sid or sid not in next_board["worker_tasks"]
+  for removed_br in removed_set:
+    next_board["worker_ids"].pop(removed_br, None)
+    next_board["worker_tasks"].pop(removed_br, None)
+    next_board["worker_reports"].pop(removed_br, None)
+    next_board["wakes"].pop(removed_br, None)
+  for br, wid in incoming["worker_ids"].items():
+    if br not in removed_set:
+      next_board["worker_ids"][br] = wid
+  for br, tasks in incoming["worker_tasks"].items():
+    if br not in removed_set and (
+      br == preview_br or br not in next_board["worker_tasks"]
     ):
-      next_board["worker_tasks"][sid] = tasks
-  for sid, reports in incoming["worker_reports"].items():
-    if sid in removed_set:
+      next_board["worker_tasks"][br] = tasks
+  for br, reports in incoming["worker_reports"].items():
+    if br in removed_set:
       continue
-    if sid == preview_sid or sid not in next_board["worker_reports"]:
-      next_board["worker_reports"][sid] = reports
+    if br == preview_br or br not in next_board["worker_reports"]:
+      next_board["worker_reports"][br] = reports
     elif can_author_links and isinstance(reports, list):
       inc_by_id = {
         str(r.get("id") or ""): r
@@ -755,7 +799,7 @@ def merge_preview_board(global_board, preview_board, passive=False):
         if isinstance(r, dict) and r.get("id")
       }
       merged_rep_list = []
-      for existing_rep in next_board["worker_reports"].get(sid) or []:
+      for existing_rep in next_board["worker_reports"].get(br) or []:
         if not isinstance(existing_rep, dict):
           continue
         rid = str(existing_rep.get("id") or "")
@@ -773,7 +817,7 @@ def merge_preview_board(global_board, preview_board, passive=False):
           merged_rep_list.append(updated_rep)
         else:
           merged_rep_list.append(existing_rep)
-      next_board["worker_reports"][sid] = merged_rep_list
+      next_board["worker_reports"][br] = merged_rep_list
 
   seen_top = set()
   merged_tops = []
@@ -805,14 +849,14 @@ def merge_preview_board(global_board, preview_board, passive=False):
 
   if can_author_links and incoming["allowed_sessions"]:
     ordered = []
-    for sid in [*incoming["allowed_sessions"], *next_board["allowed_sessions"]]:
-      if sid not in removed_set and sid not in ordered:
-        ordered.append(sid)
+    for br in [*incoming["allowed_sessions"], *next_board["allowed_sessions"]]:
+      if br not in removed_set and br not in ordered:
+        ordered.append(br)
     next_board["allowed_sessions"] = ordered
   else:
-    for sid in incoming["allowed_sessions"]:
-      if sid not in removed_set and sid not in next_board["allowed_sessions"]:
-        next_board["allowed_sessions"].append(sid)
+    for br in incoming["allowed_sessions"]:
+      if br not in removed_set and br not in next_board["allowed_sessions"]:
+        next_board["allowed_sessions"].append(br)
 
   if (
     incoming["main_session_id"]
@@ -829,54 +873,53 @@ def merge_preview_board(global_board, preview_board, passive=False):
   elif next_board["main_session_id"] in removed_set:
     next_board["main_session_id"] = ""
 
-  by_sid = {}
-  prev_sessions_by_sid = {}
+  by_br = {}
+  prev_sessions_by_br = {}
   for row in next_board["sessions"]:
-    row_sid = board_session_id(row.get("session_id") or row.get("branch"))
-    if row_sid and row_sid not in removed_set:
-      prev_sessions_by_sid[row_sid] = dict(row, session_id=row_sid)
-      by_sid[row_sid] = dict(row, session_id=row_sid)
+    row_br = _row_branch(row)
+    if row_br and row_br not in removed_set:
+      clean_row = dict(row, branch=row_br)
+      clean_row.pop("session_id", None)
+      prev_sessions_by_br[row_br] = dict(clean_row)
+      by_br[row_br] = clean_row
   for row in incoming["sessions"]:
-    row_sid = board_session_id(row.get("session_id") or row.get("branch"))
-    if not row_sid or row_sid in removed_set:
+    row_br = _row_branch(row)
+    if not row_br or row_br in removed_set:
       continue
-    prev = by_sid.get(row_sid)
+    prev = by_br.get(row_br)
     inc_ms = parse_stamp_ms(row.get("updated_at"))
     prev_ms = parse_stamp_ms(prev.get("updated_at")) if prev else None
     peer_fresher = bool(
       prev is not None and inc_ms is not None and (prev_ms is None or inc_ms > prev_ms)
     )
-    if row_sid == preview_sid or prev is None or peer_fresher:
+    if row_br == preview_br or prev is None or peer_fresher:
       next_poll = bool(row.get("polling") or row.get("status") == "polling")
       is_disc = (
         False
-        if row_sid == preview_sid
+        if row_br == preview_br
         else bool(row.get("disconnected") or row.get("status") == "disconnected")
       )
       prev_updated = prev.get("updated_at") if prev else ""
       self_updated = prev_updated if passive and prev_updated else sync_iso
       next_row = {
-        "session_id": row_sid,
+        "branch": row_br,
         "repo": str(
           row.get("repo")
           or (prev and prev.get("repo"))
           or preview_board.get("repo")
           or ""
         ),
-        "branch": str(
-          row.get("branch") or (prev and prev.get("branch")) or f"arena/{row_sid}"
-        ),
         "status": "polling"
-        if (row_sid == preview_sid and next_poll)
+        if (row_br == preview_br and next_poll)
         else (
           "active"
-          if row_sid == preview_sid
+          if row_br == preview_br
           else ("disconnected" if is_disc else ("polling" if next_poll else "active"))
         ),
         "polling": next_poll,
         "disconnected": is_disc,
         "updated_at": self_updated
-        if row_sid == preview_sid
+        if row_br == preview_br
         else str(row.get("updated_at") or prev_updated or sync_iso),
       }
       survey = (
@@ -891,7 +934,7 @@ def merge_preview_board(global_board, preview_board, passive=False):
       for key in STATUS_KEYS:
         if row.get(key) is not None:
           next_row[key] = row[key]
-        elif row_sid != preview_sid and prev and prev.get(key) is not None:
+        elif row_br != preview_br and prev and prev.get(key) is not None:
           if key == "polling_since" and not next_poll:
             continue
           if key == "turn_ended_at":
@@ -905,14 +948,14 @@ def merge_preview_board(global_board, preview_board, passive=False):
             if prev_turn_ms is not None and latest_act_ms > prev_turn_ms:
               continue
           next_row[key] = prev[key]
-      by_sid[row_sid] = next_row
+      by_br[row_br] = next_row
     else:
       if isinstance(row.get("survey"), dict):
-        by_sid[row_sid]["survey"] = row["survey"]
+        by_br[row_br]["survey"] = row["survey"]
       for key in STATUS_KEYS:
-        if by_sid[row_sid].get(key) is None and row.get(key) is not None:
-          by_sid[row_sid][key] = row[key]
-  next_board["sessions"] = list(by_sid.values())
+        if by_br[row_br].get(key) is None and row.get(key) is not None:
+          by_br[row_br][key] = row[key]
+  next_board["sessions"] = list(by_br.values())
 
   entry_by_id = {}
   merged_entries = []
@@ -920,6 +963,7 @@ def merge_preview_board(global_board, preview_board, passive=False):
     if not isinstance(item, dict):
       continue
     copy = dict(item)
+    copy.pop("session_id", None)
     eid = str(copy.get("id") or "")
     if eid and eid in entry_by_id:
       prev = entry_by_id[eid]
@@ -946,12 +990,12 @@ def merge_preview_board(global_board, preview_board, passive=False):
         copy.get("ack_sender")
         and prev.get("to")
         and prev.get("to") != "*"
-        and prev.get("to") != prev.get("session_id")
+        and prev.get("to") != prev.get("branch")
         and (
           copy.get("ack_sender") == prev.get("to")
           or (
-            prev.get("ack_sender") == prev.get("session_id")
-            and copy.get("ack_sender") != prev.get("session_id")
+            prev.get("ack_sender") == prev.get("branch")
+            and copy.get("ack_sender") != prev.get("branch")
           )
         )
       ):
@@ -989,17 +1033,17 @@ def merge_preview_board(global_board, preview_board, passive=False):
   next_board["entries"] = merged_entries
 
   for wake_k, wake_v in incoming["wakes"].items():
-    if wake_k != preview_sid and wake_v:
+    if wake_k != preview_br and wake_v:
       next_board["wakes"][wake_k] = wake_v
-  if preview_sid and preview_sid in next_board["wakes"]:
+  if preview_br and preview_br in next_board["wakes"]:
     raw_wakes = preview_board.get("wakes")
-    if not isinstance(raw_wakes, dict) or not raw_wakes.get(preview_sid):
-      next_board["wakes"].pop(preview_sid, None)
+    if not isinstance(raw_wakes, dict) or not raw_wakes.get(preview_br):
+      next_board["wakes"].pop(preview_br, None)
   normalized_out = normalize_board(next_board)
   for m_row in normalized_out["sessions"]:
     if not (m_row.get("allowed") and m_row.get("role") == "main"):
       continue
-    prev_m = prev_sessions_by_sid.get(m_row["session_id"])
+    prev_m = prev_sessions_by_br.get(m_row["branch"])
     if not prev_m:
       continue
     prev_rh = str(prev_m.get("remote_head") or "").strip().lower()
@@ -1026,14 +1070,14 @@ def merge_preview_board(global_board, preview_board, passive=False):
       *(normalized_out["linked_repos"] if normalized_out["multi_repo"] else []),
     }
     for w_row in normalized_out["sessions"]:
-      w_sid = w_row["session_id"]
+      w_br = w_row["branch"]
       if not (w_row.get("allowed") and w_row.get("role") == "worker"):
         continue
-      if w_sid == preview_sid:
+      if w_br == preview_br:
         continue
       if m_repo and w_row.get("repo") and w_row.get("repo") not in linked_set:
         continue
-      normalized_out["wakes"][w_sid] = wake_tok
+      normalized_out["wakes"][w_br] = wake_tok
   return normalized_out
 
 
@@ -1043,18 +1087,18 @@ def apply_board_action(board, action):
   if not isinstance(action, dict):
     return False, "invalid-action", next_board
   action_type = str(action.get("type") or action.get("action") or "").strip()
-  sid = resolve_board_target(
-    action.get("session_id") or action.get("branch") or "",
+  br = resolve_board_target(
+    action.get("branch") or "",
     next_board["sessions"],
     next_board["allowed_sessions"],
     next_board["main_session_id"],
   )
   stamp = str(action.get("at") or now_iso())
   if action_type == "allow":
-    if not sid:
-      return False, "missing-session-id", next_board
+    if not br:
+      return False, "missing-branch", next_board
     next_board["removed_sessions"] = [
-      item for item in next_board["removed_sessions"] if item != sid
+      item for item in next_board["removed_sessions"] if item != br
     ]
     raw_wid = (
       action.get("worker_id") if "worker_id" in action else action.get("identifier")
@@ -1063,19 +1107,19 @@ def apply_board_action(board, action):
       clean_wid = clean_worker_id(raw_wid)
       if not clean_wid:
         return False, "invalid-worker-id", next_board
-      next_board["worker_ids"][sid] = clean_wid
-    if sid not in next_board["allowed_sessions"]:
-      next_board["allowed_sessions"].append(sid)
+      next_board["worker_ids"][br] = clean_wid
+    if br not in next_board["allowed_sessions"]:
+      next_board["allowed_sessions"].append(br)
     return True, "", normalize_board(next_board)
   if action_type in ("delegate-id", "set-worker-id"):
-    target_sid = resolve_board_target(
-      action.get("session_id") or action.get("target") or "",
+    target_br = resolve_board_target(
+      action.get("branch") or action.get("target") or "",
       next_board["sessions"],
       next_board["allowed_sessions"],
       next_board["main_session_id"],
     )
-    if not target_sid:
-      return False, "missing-session-id", next_board
+    if not target_br:
+      return False, "missing-branch", next_board
     raw_id = (
       action.get("worker_id")
       if action.get("worker_id") is not None
@@ -1088,20 +1132,17 @@ def apply_board_action(board, action):
     clean_id = clean_worker_id(raw_id)
     if not clean_id:
       return False, "invalid-worker-id", next_board
-    next_board["worker_ids"][target_sid] = clean_id
+    next_board["worker_ids"][target_br] = clean_id
     return True, "", normalize_board(next_board)
   if action_type == "set-multi-repo":
     val = action["multi_repo"] if "multi_repo" in action else action.get("enabled")
     next_board["multi_repo"] = bool(val)
     return True, "", normalize_board(next_board)
   if action_type in ("worker-task", "manage-worker-tasks"):
-    if next_board["main_session_id"] and sid and sid != next_board["main_session_id"]:
+    if next_board["main_session_id"] and br and br != next_board["main_session_id"]:
       return False, "only-main-session", next_board
     target_worker = resolve_board_target(
-      action.get("target")
-      or action.get("worker")
-      or action.get("target_session_id")
-      or "",
+      action.get("target") or action.get("worker") or action.get("target_branch") or "",
       next_board["sessions"],
       next_board["allowed_sessions"],
       next_board["main_session_id"],
@@ -1143,15 +1184,12 @@ def apply_board_action(board, action):
     if (
       not from_owner
       and next_board["main_session_id"]
-      and sid
-      and sid != next_board["main_session_id"]
+      and br
+      and br != next_board["main_session_id"]
     ):
       return False, "only-main-session", next_board
     target_worker = resolve_board_target(
-      action.get("target")
-      or action.get("worker")
-      or action.get("target_session_id")
-      or "",
+      action.get("target") or action.get("worker") or action.get("target_branch") or "",
       next_board["sessions"],
       next_board["allowed_sessions"],
       next_board["main_session_id"],
@@ -1190,63 +1228,60 @@ def apply_board_action(board, action):
       next_board["wakes"][target_worker] = op_id
     return True, "", normalize_board(next_board)
   if action_type == "disconnect-session":
-    if not sid:
-      return False, "missing-session-id", next_board
+    if not br:
+      return False, "missing-branch", next_board
     for row in next_board["sessions"]:
-      if board_session_id(row.get("session_id") or row.get("branch")) == sid:
+      if _row_branch(row) == br:
         row["status"] = "disconnected"
         row["disconnected"] = True
         row["polling"] = False
     return True, "", normalize_board(next_board)
   if action_type in ("revoke", "remove-session", "dismiss"):
-    if not sid:
-      return False, "missing-session-id", next_board
-    if sid not in next_board["removed_sessions"]:
-      next_board["removed_sessions"].append(sid)
+    if not br:
+      return False, "missing-branch", next_board
+    if br not in next_board["removed_sessions"]:
+      next_board["removed_sessions"].append(br)
     next_board["allowed_sessions"] = [
-      item for item in next_board["allowed_sessions"] if item != sid
+      item for item in next_board["allowed_sessions"] if item != br
     ]
     next_board["sessions"] = [
-      row
-      for row in next_board["sessions"]
-      if board_session_id(row.get("session_id") or row.get("branch")) != sid
+      row for row in next_board["sessions"] if _row_branch(row) != br
     ]
-    next_board["wakes"].pop(sid, None)
-    next_board["worker_ids"].pop(sid, None)
-    next_board["worker_tasks"].pop(sid, None)
-    next_board["worker_reports"].pop(sid, None)
-    if next_board["main_session_id"] == sid:
+    next_board["wakes"].pop(br, None)
+    next_board["worker_ids"].pop(br, None)
+    next_board["worker_tasks"].pop(br, None)
+    next_board["worker_reports"].pop(br, None)
+    if next_board["main_session_id"] == br:
       next_board["main_session_id"] = ""
     return True, "", normalize_board(next_board)
   if action_type == "set-main":
-    if not sid:
+    if not br:
       next_board["main_session_id"] = ""
       return True, "", normalize_board(next_board)
     next_board["removed_sessions"] = [
-      item for item in next_board["removed_sessions"] if item != sid
+      item for item in next_board["removed_sessions"] if item != br
     ]
-    next_board["worker_ids"].pop(sid, None)
-    if sid not in next_board["allowed_sessions"]:
-      next_board["allowed_sessions"].append(sid)
-    next_board["main_session_id"] = sid
+    next_board["worker_ids"].pop(br, None)
+    if br not in next_board["allowed_sessions"]:
+      next_board["allowed_sessions"].append(br)
+    next_board["main_session_id"] = br
     return True, "", normalize_board(next_board)
   if action_type == "heartbeat":
-    hb_sid = board_session_id(action.get("session_id") or action.get("branch") or "")
-    if not hb_sid:
-      return False, "missing-session-id", next_board
-    if next_board["allowed_sessions"] and hb_sid not in next_board["allowed_sessions"]:
+    hb_br = board_branch(action.get("branch") or "")
+    if not hb_br:
+      return False, "missing-branch", next_board
+    if next_board["allowed_sessions"] and hb_br not in next_board["allowed_sessions"]:
       return True, "", next_board
     next_board["removed_sessions"] = [
-      item for item in next_board["removed_sessions"] if item != hb_sid
+      item for item in next_board["removed_sessions"] if item != hb_br
     ]
     found = False
     for idx, row in enumerate(next_board["sessions"]):
-      if board_session_id(row.get("session_id") or row.get("branch")) == hb_sid:
+      if _row_branch(row) == hb_br:
         found = True
         next_board["sessions"][idx] = {
-          "session_id": hb_sid,
+          "branch": hb_br,
           "repo": str(action.get("repo") or row.get("repo") or ""),
-          "branch": str(action.get("branch") or row.get("branch") or f"arena/{hb_sid}"),
           "status": str(action.get("status") or row.get("status") or "active"),
           "polling": bool(action.get("polling")),
           "updated_at": stamp,
@@ -1254,9 +1289,8 @@ def apply_board_action(board, action):
     if not found:
       next_board["sessions"].append(
         {
-          "session_id": hb_sid,
+          "branch": hb_br,
           "repo": str(action.get("repo") or ""),
-          "branch": str(action.get("branch") or f"arena/{hb_sid}"),
           "status": str(action.get("status") or "active"),
           "polling": bool(action.get("polling")),
           "updated_at": stamp,
@@ -1264,7 +1298,7 @@ def apply_board_action(board, action):
       )
     return True, "", normalize_board(next_board)
   if action_type == "post":
-    if not sid or sid not in next_board["allowed_sessions"]:
+    if not br or br not in next_board["allowed_sessions"]:
       return False, "not-allowed", next_board
     ok, checked_file, _, err = validate_board_file(action.get("file"))
     if not ok:
@@ -1283,10 +1317,9 @@ def apply_board_action(board, action):
     next_board["entries"].append(
       {
         "id": str(action.get("id") or f"b-{int(time.time() * 1000)}"),
-        "session_id": sid,
+        "branch": br,
         "to": resolved_to,
         "repo": str(action.get("repo") or ""),
-        "branch": str(action.get("branch") or f"arena/{sid}"),
         "at": stamp,
         "text": str(action.get("text") or ""),
         "payload": action.get("payload"),
@@ -1295,16 +1328,16 @@ def apply_board_action(board, action):
     )
     return True, "", normalize_board(next_board)
   if action_type == "wake":
-    if sid and sid not in next_board["allowed_sessions"]:
+    if br and br not in next_board["allowed_sessions"]:
       return False, "not-allowed", next_board
     target = str(action.get("target") or "")
     wake_token = str(action.get("wake_id") or stamp)
     wake_iso = stamp if parse_stamp_ms(stamp) is not None else now_iso()
     if target == "all-polling":
       for row in next_board["sessions"]:
-        row_id = board_session_id(row.get("session_id") or row.get("branch"))
-        if row.get("polling") and row_id in next_board["allowed_sessions"]:
-          next_board["wakes"][row_id] = wake_token
+        row_br = _row_branch(row)
+        if row.get("polling") and row_br in next_board["allowed_sessions"]:
+          next_board["wakes"][row_br] = wake_token
           row["polling"] = False
           row["status"] = "active"
           row["updated_at"] = wake_iso
@@ -1319,7 +1352,7 @@ def apply_board_action(board, action):
         return False, "target-not-allowed", next_board
       next_board["wakes"][target_id] = wake_token
       for row in next_board["sessions"]:
-        if board_session_id(row.get("session_id") or row.get("branch")) == target_id:
+        if _row_branch(row) == target_id:
           row["polling"] = False
           row["status"] = "active"
           row["updated_at"] = wake_iso
@@ -1335,7 +1368,7 @@ def material_signature(board):
   norm = normalize_board(board)
   sessions_sig = [
     {
-      "sid": s.get("session_id") or "",
+      "branch": s.get("branch") or "",
       "repo": s.get("repo") or "",
       "role": s.get("role") or "",
       "allowed": bool(s.get("allowed")),
@@ -1356,9 +1389,7 @@ def material_signature(board):
         or ""
       ),
     }
-    for s in sorted(
-      norm["sessions"], key=lambda item: str(item.get("session_id") or "")
-    )
+    for s in sorted(norm["sessions"], key=lambda item: str(item.get("branch") or ""))
   ]
   entries_sig = [
     {
@@ -1526,9 +1557,9 @@ class BoardStore:
           rel = candidate.relative_to(self.files_dir).parts
           if len(rel) < 2:
             continue
-          sid = board_session_id(rel[0])
+          br = decode_board_branch_dir(rel[0])
           clean_name = "/".join(rel[1:])
-          if not sid or not clean_name:
+          if not br or not clean_name:
             continue
           try:
             raw_bytes = candidate.read_bytes()
@@ -1546,9 +1577,9 @@ class BoardStore:
           digest, size = self.engine.put_blob_bytes(raw_bytes)
           self.engine.conn.execute(
             "INSERT OR REPLACE INTO board_files"
-            " (session_id, name, sha256, encoding, size, staged, rev, updated_at)"
+            " (branch, name, sha256, encoding, size, staged, rev, updated_at)"
             " VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
-            (sid, clean_name, digest, encoding, size, self.revision, stamp),
+            (br, clean_name, digest, encoding, size, self.revision, stamp),
           )
       self.engine.conn.execute(
         "INSERT OR REPLACE INTO board_meta (key, value) VALUES ('revision', ?),"
@@ -1640,11 +1671,11 @@ class BoardStore:
       "tombstones": tombstones,
     }
 
-  def _load_client_cursor_locked(self, session_id):
+  def _load_client_cursor_locked(self, branch):
     row = self.engine.conn.execute(
       "SELECT client_rev, board_json, blob_sha256 FROM board_client_cursors"
-      " WHERE session_id = ?",
-      (session_id,),
+      " WHERE branch = ?",
+      (branch,),
     ).fetchone()
     if row is None:
       return None
@@ -1653,18 +1684,18 @@ class BoardStore:
       return None
     return int(row["client_rev"]), board_obj
 
-  def _save_client_cursor_locked(self, session_id, client_rev, board_obj):
-    if not session_id or not isinstance(board_obj, dict):
+  def _save_client_cursor_locked(self, branch, client_rev, board_obj):
+    if not branch or not isinstance(board_obj, dict):
       return
     val_json, blob_sha = self.engine.encode_json_cell(board_obj)
     self.engine.conn.execute(
       "INSERT OR REPLACE INTO board_client_cursors"
-      " (session_id, client_rev, board_json, blob_sha256, updated_at)"
+      " (branch, client_rev, board_json, blob_sha256, updated_at)"
       " VALUES (?, ?, ?, ?, ?)",
-      (session_id, int(client_rev), val_json, blob_sha, now_iso()),
+      (branch, int(client_rev), val_json, blob_sha, now_iso()),
     )
 
-  def _extract_entry_files_locked(self, entries, fallback_sid=""):
+  def _extract_entry_files_locked(self, entries, fallback_branch=""):
     cleaned = []
     for entry in entries or []:
       if not isinstance(entry, dict):
@@ -1672,28 +1703,28 @@ class BoardStore:
       copy = dict(entry)
       file_obj = copy.get("file")
       if isinstance(file_obj, dict):
-        from_sid = board_session_id(copy.get("session_id") or fallback_sid)
+        from_br = board_branch(copy.get("branch") or fallback_branch)
         ok, meta, raw_bytes, _ = validate_board_file(file_obj, self.max_file_bytes)
         if ok and meta:
-          if raw_bytes is not None and from_sid:
-            self._write_file_locked(from_sid, meta["name"], raw_bytes, meta)
+          if raw_bytes is not None and from_br:
+            self._write_file_locked(from_br, meta["name"], raw_bytes, meta)
           copy["file"] = meta
         else:
           copy["file"] = None
       cleaned.append(copy)
     return cleaned
 
-  def _validate_file_target_locked(self, session_id, name):
-    sid = board_session_id(session_id)
+  def _validate_file_target_locked(self, branch, name):
+    br = board_branch(branch)
     ok, meta, _, err = validate_board_file({"name": name}, self.max_file_bytes)
-    if not sid:
-      raise ValueError("missing session_id")
+    if not br:
+      raise ValueError("missing branch")
     if not ok or not meta:
       raise ValueError(err or "invalid-file-name")
-    return sid, meta["name"]
+    return br, meta["name"]
 
-  def _write_file_locked(self, session_id, name, raw_bytes, meta=None):
-    sid, clean_name = self._validate_file_target_locked(session_id, name)
+  def _write_file_locked(self, branch, name, raw_bytes, meta=None):
+    br, clean_name = self._validate_file_target_locked(branch, name)
     digest, size = self.engine.put_blob_bytes(raw_bytes)
     encoding = (
       meta.get("encoding")
@@ -1709,9 +1740,9 @@ class BoardStore:
     }
     self.engine.conn.execute(
       "INSERT OR REPLACE INTO board_files"
-      " (session_id, name, sha256, encoding, size, staged, rev, updated_at)"
+      " (branch, name, sha256, encoding, size, staged, rev, updated_at)"
       " VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
-      (sid, clean_name, digest, encoding, size, max(1, self.revision), now_iso()),
+      (br, clean_name, digest, encoding, size, max(1, self.revision), now_iso()),
     )
     return info
 
@@ -1736,13 +1767,13 @@ class BoardStore:
       "sha256": digest,
     }
 
-  def put_file(self, session_id, file_obj):
+  def put_file(self, branch, file_obj):
     """Validate and persist a board file attachment in SHA-256 blob storage."""
     ok, meta, raw_bytes, err = validate_board_file(file_obj, self.max_file_bytes)
     if not ok or not meta or raw_bytes is None:
       raise ValueError(err or "missing-file-content")
     with self.lock:
-      return self._write_file_locked(session_id, meta["name"], raw_bytes, meta)
+      return self._write_file_locked(branch, meta["name"], raw_bytes, meta)
 
   def get_file_by_sha256(self, sha256):
     """Read a staged board file attachment matching a 64-hex SHA-256 digest."""
@@ -1751,7 +1782,7 @@ class BoardStore:
       raise ValueError("invalid-sha256")
     with self.lock:
       row = self.engine.conn.execute(
-        "SELECT session_id, name, encoding FROM board_files"
+        "SELECT branch, name, encoding FROM board_files"
         " WHERE sha256 = ? ORDER BY updated_at DESC LIMIT 1",
         (digest,),
       ).fetchone()
@@ -1760,16 +1791,16 @@ class BoardStore:
       payload = self._format_file_payload_locked(row["name"], row["encoding"], digest)
       if payload is None:
         return None
-      payload["session_id"] = row["session_id"]
+      payload["branch"] = row["branch"]
       return payload
 
-  def get_file(self, session_id, name):
+  def get_file(self, branch, name):
     """Read a staged board file attachment as descriptor with inline content."""
     with self.lock:
-      sid, clean_name = self._validate_file_target_locked(session_id, name)
+      br, clean_name = self._validate_file_target_locked(branch, name)
       row = self.engine.conn.execute(
-        "SELECT sha256, encoding FROM board_files WHERE session_id = ? AND name = ?",
-        (sid, clean_name),
+        "SELECT sha256, encoding FROM board_files WHERE branch = ? AND name = ?",
+        (br, clean_name),
       ).fetchone()
       if row is None:
         return None
@@ -1778,7 +1809,13 @@ class BoardStore:
       )
 
   def _build_reply_locked(
-    self, rev, saved, target_sid="", target_repo="", reply_since=None, reply_mode="full"
+    self,
+    rev,
+    saved,
+    target_branch="",
+    target_repo="",
+    reply_since=None,
+    reply_mode="full",
   ):
     if reply_mode == "diff" and reply_since is not None:
       if reply_since == rev:
@@ -1797,10 +1834,10 @@ class BoardStore:
       "mode": "full",
       "revision": rev,
       "board": saved,
-      "scoped_board": scope_board_for_target(saved, target_sid, target_repo),
+      "scoped_board": scope_board_for_target(saved, target_branch, target_repo),
     }
 
-  def snapshot(self, since=None, session_id="", repo="", mode="full"):
+  def snapshot(self, since=None, branch="", repo="", mode="full"):
     """Return full, unchanged, or incremental diff board snapshot."""
     with self.lock:
       if since is not None and since == self.revision:
@@ -1813,8 +1850,8 @@ class BoardStore:
           "mode": "diff",
           "diff": self._diff_since_locked(since),
         }
-        if session_id or repo:
-          out["scoped_board"] = scope_board_for_target(self.state, session_id, repo)
+        if branch or repo:
+          out["scoped_board"] = scope_board_for_target(self.state, branch, repo)
         return out
       out = {
         "ok": True,
@@ -1823,14 +1860,14 @@ class BoardStore:
         "revision": self.revision,
         "board": self.state,
       }
-      if session_id or repo:
-        out["scoped_board"] = scope_board_for_target(self.state, session_id, repo)
+      if branch or repo:
+        out["scoped_board"] = scope_board_for_target(self.state, branch, repo)
       return out
 
   def sync(
     self,
     preview_board=None,
-    session_id="",
+    branch="",
     repo="",
     passive=False,
     *,
@@ -1841,7 +1878,7 @@ class BoardStore:
   ):
     """Merge a preview session board or diff and return full or diff reply."""
     with self.lock:
-      sid = board_session_id(session_id)
+      br = board_branch(branch)
       if board_diff is not None:
         if not isinstance(board_diff, dict):
           raise TypeError("board_diff must be an object")
@@ -1849,7 +1886,7 @@ class BoardStore:
         next_client_rev = board_diff.get("rev")
         if type(base_rev) is not int or type(next_client_rev) is not int:
           raise TypeError("board_diff base_rev and rev must be integers")
-        cursor = self._load_client_cursor_locked(sid) if sid else None
+        cursor = self._load_client_cursor_locked(br) if br else None
         if cursor is None or cursor[0] != base_rev:
           return {
             "ok": False,
@@ -1861,38 +1898,33 @@ class BoardStore:
         client_rev = next_client_rev
       else:
         incoming = dict(preview_board) if isinstance(preview_board, dict) else {}
-      sid = board_session_id(
-        sid or incoming.get("session_id") or incoming.get("branch") or ""
-      )
-      if sid and not incoming.get("session_id"):
-        incoming["session_id"] = sid
+      br = board_branch(br or incoming.get("branch") or "")
+      if br and not incoming.get("branch"):
+        incoming["branch"] = br
+      incoming.pop("session_id", None)
       if repo and not incoming.get("repo"):
         incoming["repo"] = repo
       if isinstance(incoming.get("entries"), list):
-        incoming["entries"] = self._extract_entry_files_locked(incoming["entries"], sid)
-      if sid and client_rev is not None:
-        self._save_client_cursor_locked(sid, int(client_rev), incoming)
+        incoming["entries"] = self._extract_entry_files_locked(incoming["entries"], br)
+      if br and client_rev is not None:
+        self._save_client_cursor_locked(br, int(client_rev), incoming)
       merged = merge_preview_board(self.state, incoming, passive=passive)
       rev, saved = self._persist_locked(merged, passive=passive)
       return self._build_reply_locked(
         rev,
         saved,
-        target_sid=sid,
+        target_branch=br,
         target_repo=repo or incoming.get("repo") or "",
         reply_since=reply_since,
         reply_mode=reply_mode,
       )
 
-  def apply(
-    self, action, session_id="", repo="", *, reply_since=None, reply_mode="full"
-  ):
+  def apply(self, action, branch="", repo="", *, reply_since=None, reply_mode="full"):
     """Apply an imperative board action and return full or diff reply."""
     with self.lock:
       act = dict(action) if isinstance(action, dict) else {}
-      act_sid = board_session_id(
-        act.get("session_id") or act.get("branch") or session_id or ""
-      )
-      if isinstance(act.get("file"), dict) and act_sid:
+      act_br = board_branch(act.get("branch") or branch or "")
+      if isinstance(act.get("file"), dict) and act_br:
         ok, meta, raw_bytes, err = validate_board_file(act["file"], self.max_file_bytes)
         if not ok:
           return {
@@ -1902,7 +1934,7 @@ class BoardStore:
             "board": self.state,
           }
         if meta and raw_bytes is not None:
-          self._write_file_locked(act_sid, meta["name"], raw_bytes, meta)
+          self._write_file_locked(act_br, meta["name"], raw_bytes, meta)
           act["file"] = meta
       passive = str(act.get("type") or act.get("action") or "") == "heartbeat"
       ok, err, updated = apply_board_action(self.state, act)
@@ -1917,7 +1949,7 @@ class BoardStore:
       return self._build_reply_locked(
         rev,
         saved,
-        target_sid=act_sid or session_id,
+        target_branch=act_br or branch,
         target_repo=repo or act.get("repo") or "",
         reply_since=reply_since,
         reply_mode=reply_mode,

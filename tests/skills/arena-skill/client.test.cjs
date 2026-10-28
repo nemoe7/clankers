@@ -5762,26 +5762,26 @@ test('preview client', async (t) => {
     const mockBoard = {
       repo: 'clankers',
       multi_repo: false,
-      main_session_id: '293da56c-clankers',
-      allowed_sessions: ['293da56c-clankers', '91a01582-clankers'],
+      main_session_id: 'arena/alpha1111-clankers',
+      allowed_sessions: ['arena/alpha1111-clankers', 'arena/beta2222-clankers'],
       sessions: [
-        { session_id: '293da56c-clankers', board_id: 'clankers-alpha', role: 'main', repo: 'clankers', branch: 'arena/293da56c-clankers' },
-        { session_id: '91a01582-clankers', board_id: 'clankers-beta', worker_id: 'beta', role: 'worker', repo: 'clankers', branch: 'arena/91a01582-clankers' },
+        { branch: 'arena/alpha1111-clankers', board_id: 'clankers-alpha', role: 'main', repo: 'clankers' },
+        { branch: 'arena/beta2222-clankers', board_id: 'clankers-beta', worker_id: 'beta', role: 'worker', repo: 'clankers' },
       ],
     };
-    assert.equal(context.displayBoardId('91a01582-clankers', mockBoard, 'clankers'), 'beta');
-    assert.equal(context.displayBoardId('arena/293da56c-clankers', mockBoard, 'clankers'), 'alpha');
+    assert.equal(context.displayBoardId('beta2222-clankers', mockBoard, 'clankers'), 'beta');
+    assert.equal(context.displayBoardId('arena/alpha1111-clankers', mockBoard, 'clankers'), 'alpha');
     assert.equal(context.formatBoardSenderLabel('alpha'), '@alpha:');
     assert.equal(context.formatBoardSenderLabel('beta'), '@beta:');
     assert.equal(context.formatBoardSenderLabel('@alpha:'), '@alpha:');
     assert.equal(
-      context.resolveBoardMentions('Ready for review.\n@91a01582-clankers and @arena/293da56c-clankers', mockBoard, 'clankers'),
+      context.resolveBoardMentions('Ready for review.\n@beta2222-clankers and @arena/alpha1111-clankers', mockBoard, 'clankers'),
       'Ready for review.\n@beta and @alpha',
     );
     assert.equal(
       context.resolveBoardAckSender(
         'clankers-alpha',
-        { session_id: '293da56c-clankers', board_sender: 'alpha', to: '91a01582-clankers' },
+        { branch: 'arena/alpha1111-clankers', board_sender: 'alpha', to: 'arena/beta2222-clankers' },
         mockBoard,
         'clankers',
       ),
@@ -5789,13 +5789,13 @@ test('preview client', async (t) => {
     );
     const unoptedBoard = {
       repo: 'daedalus',
-      session_id: 'unopted01-daedalus',
-      allowed_sessions: ['alpha1111-clankers'],
+      branch: 'arena/unopted01-daedalus',
+      allowed_sessions: ['arena/alpha1111-clankers'],
       sessions: [
-        { session_id: 'unopted01-daedalus', board_id: 'unopted01-daedalus', role: 'blocked', repo: 'daedalus' },
+        { branch: 'arena/unopted01-daedalus', board_id: 'unopted01-daedalus', role: 'blocked', repo: 'daedalus' },
       ],
       entries: [
-        { id: 'p01234', session_id: 'alpha1111-clankers', repo: 'clankers', text: 'hidden from unopted', at: '2026-10-27T04:00:00Z' },
+        { id: 'p01234', branch: 'arena/alpha1111-clankers', repo: 'clankers', text: 'hidden from unopted', at: '2026-10-27T04:00:00Z' },
       ],
     };
     assert.equal(

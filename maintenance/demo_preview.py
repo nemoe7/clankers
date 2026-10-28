@@ -88,12 +88,12 @@ def seed_demo_store(state_dir: Path):
     scope="arena-state/ui-audit-demo.md",
   )
 
-  sid = store.board_state()["session_id"] or "293da56c-clankers"
-  store.board_action({"action": "allow", "session_id": sid})
+  branch = store.board_state()["branch"] or "arena/demo0001-clankers"
+  store.board_action({"action": "allow", "branch": branch})
   store.board_action(
     {
       "action": "post",
-      "session_id": sid,
+      "branch": branch,
       "to": "*",
       "tag": "audit",
       "text": "Completed spacing audit on `#reports-panel` and verified mobile portrait.",
@@ -102,7 +102,7 @@ def seed_demo_store(state_dir: Path):
   store.board_action(
     {
       "action": "post",
-      "session_id": sid,
+      "branch": branch,
       "to": "*",
       "tag": "review",
       "text": "Verified the diff locally; all preview tests pass.",

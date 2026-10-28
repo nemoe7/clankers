@@ -6,4 +6,4 @@ that shape: results are text or JSON, inputs travel in the query string, and the
 provider credentials stay on the owner's machine.
 """
 
-VERSION = "3.2.2"
+VERSION = "3.2.3"

@@ -888,14 +888,12 @@ class ExtensionHandler(BaseHTTPRequestHandler):
           self._log_detail = "since must be an integer"
           self._send_json(400, {"error": "since must be an integer"})
           return
-      session_id = params.get("session_id", [""])[0].strip()
+      branch = params.get("branch", [""])[0].strip()
       repo = params.get("repo", [""])[0].strip()
       snap_mode = params.get("mode", ["full"])[0].strip().lower() or "full"
-      snap = board_store.snapshot(
-        since=since, session_id=session_id, repo=repo, mode=snap_mode
-      )
+      snap = board_store.snapshot(since=since, branch=branch, repo=repo, mode=snap_mode)
       rev = snap.get("revision", 0)
-      who = session_id or "anonymous"
+      who = branch or "anonymous"
       repo_note = f" ({repo})" if repo else ""
       if snap.get("unchanged"):
         self._suppress_poll_log = bool(getattr(self.server, "quiet_polls", False))
@@ -917,32 +915,32 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         self._log_detail = f"served rev {rev} to {who} ({extra})"
       self._send_json(200, {**snap, "egress_version": VERSION})
       return
-    session_id = params.get("session_id", [""])[0].strip()
+    branch = params.get("branch", [""])[0].strip()
     name = params.get("name", [""])[0].strip()
     sha256 = params.get("sha256", [""])[0].strip().lower()
     try:
-      if session_id and name:
-        found = board_store.get_file(session_id, name)
+      if branch and name:
+        found = board_store.get_file(branch, name)
       elif sha256:
         found = board_store.get_file_by_sha256(sha256)
       else:
-        found = board_store.get_file(session_id, name)
+        found = board_store.get_file(branch, name)
     except (ValueError, TypeError) as error:
       self._log_detail = str(error)
       self._send_json(400, {"error": str(error)})
       return
     if found is None:
       target_label = name or (sha256[:12] if sha256 else "file")
-      owner_label = f" for {session_id}" if session_id else ""
+      owner_label = f" for {branch}" if branch else ""
       self._log_detail = f"{target_label} not found{owner_label}"
       self._send_json(404, {"error": "board file not found"})
       return
     file_name = found.get("name") or name or "file"
-    owner_sid = found.get("session_id") or session_id or "board"
+    owner_branch = found.get("branch") or branch or "board"
     size = found.get("size", 0)
     digest = str(found.get("sha256") or "")[:12]
     self._log_detail = (
-      f"served {file_name} from {owner_sid} ({format_bytes(size)}, sha256 {digest})"
+      f"served {file_name} from {owner_branch} ({format_bytes(size)}, sha256 {digest})"
     )
     self._send_json(200, {"ok": True, **found, "file": found})
 
@@ -982,9 +980,9 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       return
     payload = self._read_json_body()
     if route == "/v1/board/files":
-      session_id = str(payload.get("session_id") or "").strip()
+      branch = str(payload.get("branch") or "").strip()
       try:
-        info = board_store.put_file(session_id, payload.get("file"))
+        info = board_store.put_file(branch, payload.get("file"))
       except (ValueError, TypeError) as error:
         self._log_detail = str(error)
         self._send_json(400, {"error": str(error)})
@@ -993,11 +991,11 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       size = info.get("size", 0)
       digest = str(info.get("sha256") or "")[:12]
       rev = board_store.snapshot().get("revision", 0)
-      self._log_detail = f"staged {file_name} for {session_id} ({format_bytes(size)}, sha256 {digest}, rev {rev})"
+      self._log_detail = f"staged {file_name} for {branch} ({format_bytes(size)}, sha256 {digest}, rev {rev})"
       self._send_json(200, {"ok": True, "file": info})
       return
     mode = str(payload.get("action") or payload.get("type") or "sync").strip().lower()
-    session_id = str(payload.get("session_id") or "").strip()
+    branch = str(payload.get("branch") or "").strip()
     repo = str(payload.get("repo") or "").strip()
     reply_mode = str(payload.get("reply_mode") or "full").strip().lower() or "full"
     reply_since = None
@@ -1025,7 +1023,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       try:
         result = board_store.sync(
           payload.get("board"),
-          session_id=session_id,
+          branch=branch,
           repo=repo,
           passive=passive,
           board_diff=payload.get("board_diff"),
@@ -1038,14 +1036,14 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         self._send_json(400, {"error": str(error)})
         return
       if not result.get("ok") and result.get("need_full"):
-        who = session_id or "anonymous"
+        who = branch or "anonymous"
         self._log_detail = (
           f"stale board diff from {who} at rev {result.get('revision', before_rev)}"
         )
         self._send_json(409, {**result, "egress_version": VERSION})
         return
       after_rev = result.get("revision", before_rev)
-      who = session_id or "anonymous"
+      who = branch or "anonymous"
       repo_note = f" ({repo})" if repo else ""
       if passive and after_rev == before_rev:
         self._suppress_poll_log = bool(getattr(self.server, "quiet_polls", False))
@@ -1079,11 +1077,11 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       .strip()
       .lower()
     )
-    actor = str(action_body.get("session_id") or session_id or "caller").strip()
+    actor = str(action_body.get("branch") or branch or "caller").strip()
     target = str(action_body.get("target") or action_body.get("to") or "").strip()
     result = board_store.apply(
       action_body,
-      session_id=session_id,
+      branch=branch,
       repo=repo,
       reply_since=reply_since,
       reply_mode=reply_mode,
