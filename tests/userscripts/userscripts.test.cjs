@@ -3997,9 +3997,15 @@ for raw in sys.stdin:
         "already-hydrated file blob is not fetched a second time for the same target session",
       );
       assert.equal(
+        httpCalls.some(c => c.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=")),
+        false,
+        "subsequent sync omits redundant pullProxyBoard GET after POST /v1/board sync succeeds",
+      );
+      await boardApi.pullProxyBoard(false, "alpha111-clankers", "clankers");
+      assert.equal(
         httpCalls.some(c => c.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=") && c.url.includes("branch=alpha111-clankers")),
         true,
-        "subsequent sync uses ?since=<revision> conditional poll with branch query param",
+        "pullProxyBoard uses ?since=<revision> conditional poll with branch query param",
       );
 
       // Acked entries and unreachable :8000 sandboxes never trigger /v1/board/files downloads:
@@ -4678,6 +4684,244 @@ for raw in sys.stdin:
         boardApi.resolveBoardTarget("@clankers-alpha", normalizedAtMain.sessions, normalizedAtMain.allowed_sessions, "arena/alpha111-clankers"),
         "arena/alpha111-clankers",
       );
+    });
+
+    test("BroadcastChannel and visibilitychange wake board sync immediately and queue one trailing rerun when in flight", async () => {
+      const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+      const channelsByName = new Map();
+      class MockBroadcastChannel {
+        constructor(name) {
+          this.name = name;
+          this.closed = false;
+          this.onmessage = null;
+          if (!channelsByName.has(name)) channelsByName.set(name, new Set());
+          channelsByName.get(name).add(this);
+        }
+        postMessage(payload) {
+          if (this.closed) return;
+          const peers = channelsByName.get(this.name) || new Set();
+          for (const peer of peers) {
+            if (peer !== this && !peer.closed && typeof peer.onmessage === "function") {
+              peer.onmessage({ data: JSON.parse(JSON.stringify(payload)) });
+            }
+          }
+        }
+        close() {
+          this.closed = true;
+          const peers = channelsByName.get(this.name);
+          if (peers) peers.delete(this);
+        }
+      }
+
+      let proxyRevision = 1;
+      let proxyBoard = {
+        allowed_sessions: ["arena/alpha111-clankers", "arena/beta2222-clankers"],
+        main_session_id: "arena/alpha111-clankers",
+        worker_ids: { "arena/beta2222-clankers": "beta" },
+        sessions: [
+          { branch: "arena/alpha111-clankers", repo: "nemoe7/clankers", status: "active" },
+          { branch: "arena/beta2222-clankers", repo: "nemoe7/clankers", status: "polling", polling: true },
+        ],
+        entries: [],
+        wakes: {},
+      };
+
+      function bootTab(branchName, previewOrigin) {
+        const saved = new Map([
+          ["clankers-arena-proxy-host", "https://arena-proxy.example.ts.net"],
+          ["clankers-arena-proxy-master", "master-secret"],
+          ["clankers-arena-preview-base-" + branchName, previewOrigin],
+        ]);
+        const docListeners = new Map();
+        const intervals = [];
+        const previewPosts = [];
+        let localPreviewRev = 1;
+        let localPreviewBoard = {
+          branch: branchName,
+          repo: "nemoe7/clankers",
+          allowed_sessions: [branchName],
+          main_session_id: "arena/alpha111-clankers",
+          sessions: [{ branch: branchName, repo: "nemoe7/clankers", status: "active" }],
+          entries: [],
+          wakes: {},
+        };
+        let visibilityState = "visible";
+        let holdNextGet = false;
+        let releaseHeldSync = null;
+        const repoLink = {
+          getAttribute(attr) {
+            if (attr === "href") return "https://github.com/nemoe7/clankers/tree/" + branchName;
+            if (attr === "aria-label") return "Open nemoe7/clankers on GitHub";
+            return null;
+          },
+        };
+        const bar = {
+          textContent: "nemoe7/clankers " + branchName,
+          querySelectorAll() { return [repoLink]; },
+        };
+        const previewFrameNode = {
+          src: previewOrigin + "/",
+          getAttribute(attr) {
+            if (attr === "title") return "App preview on port 8000";
+            if (attr === "src") return previewOrigin + "/";
+            return null;
+          },
+        };
+        const ctx = {
+          console: { log() {}, info() {}, debug() {}, warn() {}, error() {} },
+          URL,
+          BroadcastChannel: MockBroadcastChannel,
+          Date,
+          location: { href: "https://arena.ai/c/tab", pathname: "/c/tab", origin: "https://arena.ai" },
+          document: {
+            documentElement: {},
+            body: {},
+            get visibilityState() { return visibilityState; },
+            addEventListener(ev, fn) { docListeners.set(ev, fn); },
+            removeEventListener(ev, fn) {
+              if (docListeners.get(ev) === fn) docListeners.delete(ev);
+            },
+            execCommand() { return true; },
+            createRange() { return { selectNodeContents() {} }; },
+            querySelector(selector) {
+              if (selector.indexOf("div.relative.z-10") === 0) return bar;
+              if (selector.indexOf('a[aria-label^="Open "]') === 0) return repoLink;
+              return null;
+            },
+            querySelectorAll(selector) {
+              if (selector === "iframe[title]") return [previewFrameNode];
+              return [];
+            },
+            title: "Arena",
+          },
+          window: { addEventListener() {}, removeEventListener() {} },
+          getComputedStyle() { return { overflowY: "auto" }; },
+          MutationObserver: class { observe() {} disconnect() {} },
+          ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+          requestAnimationFrame() { return 1; },
+          cancelAnimationFrame() {},
+          setInterval(fn, ms) { intervals.push({ ms, fn }); return intervals.length; },
+          clearInterval() {},
+          setTimeout(fn) { fn(); return 1; },
+          clearTimeout() {},
+          fetch() { return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}), text: () => Promise.resolve("") }); },
+          sessionStorage: { getItem() { return null; }, setItem() {} },
+          prompt() { return null; },
+          GM_getValue(k, fb) { return saved.has(k) ? saved.get(k) : fb; },
+          GM_setValue(k, v) { saved.set(k, v); },
+          GM_registerMenuCommand() { return "m"; },
+          GM_unregisterMenuCommand() {},
+          GM_xmlhttpRequest(req) {
+            if (req.url.startsWith("https://arena-proxy.example.ts.net/v1/board")) {
+              if (req.method === "POST" && req.data) {
+                const parsed = JSON.parse(req.data);
+                if (parsed.action === "merge" && parsed.board) {
+                  proxyRevision += 1;
+                  proxyBoard = parsed.board;
+                }
+              }
+              req.onload({
+                status: 200,
+                responseText: JSON.stringify({ revision: proxyRevision, board: proxyBoard }),
+              });
+              return;
+            }
+            if (req.url.startsWith(previewOrigin + "/api/board")) {
+              if (req.method === "POST") {
+                const bodyObj = JSON.parse(req.data);
+                previewPosts.push(bodyObj);
+                localPreviewRev += 1;
+                if (bodyObj.board) {
+                  localPreviewBoard = Object.assign({ branch: branchName, repo: "nemoe7/clankers" }, bodyObj.board);
+                } else if (bodyObj.board_diff && bodyObj.board_diff.patch) {
+                  localPreviewBoard = Object.assign({}, localPreviewBoard, bodyObj.board_diff.patch);
+                }
+              }
+              const reply = () => req.onload({
+                status: 200,
+                responseText: JSON.stringify(Object.assign({ revision: localPreviewRev }, localPreviewBoard)),
+              });
+              if (holdNextGet && req.method === "GET") {
+                holdNextGet = false;
+                releaseHeldSync = reply;
+                return;
+              }
+              reply();
+              return;
+            }
+            if (req.onload) req.onload({ status: 404, responseText: "{}" });
+          },
+        };
+        vm.runInNewContext(source, ctx, { filename: "arena.user.js" });
+        return {
+          intervals,
+          previewPosts,
+          docListeners,
+          setVisibility(next) { visibilityState = next; },
+          armHoldNextGet() { holdNextGet = true; },
+          getReleaseHeldSync: () => releaseHeldSync,
+        };
+      }
+
+      const tabAlpha = bootTab("arena/alpha111-clankers", "https://8000-alpha.e2b.app");
+      const tabBeta = bootTab("arena/beta2222-clankers", "https://8000-beta.e2b.app");
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+
+      // Arm hold on tabBeta right before titleStep so titleBoardSyncInFlight stays true.
+      tabBeta.armHoldNextGet();
+      proxyRevision += 1;
+      proxyBoard = Object.assign({}, proxyBoard, {
+        wakes: { "arena/alpha111-clankers": "2026-10-28T07:59:00Z" },
+      });
+      tabAlpha.intervals.filter((i) => i.ms === 1000).forEach((i) => i.fn());
+      const visBeta = tabBeta.docListeners.get("visibilitychange");
+      visBeta();
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+      const beforeBroadcastPosts = tabBeta.previewPosts.length;
+      assert.equal(typeof tabBeta.getReleaseHeldSync(), "function", "tabBeta title sync is held in flight");
+
+      // While tabBeta's sync is in flight, a BroadcastChannel wake arrives with a newer revision.
+      proxyRevision += 1;
+      proxyBoard = Object.assign({}, proxyBoard, {
+        wakes: { "arena/beta2222-clankers": "2026-10-28T08:00:00Z" },
+      });
+      const sender = new MockBroadcastChannel("clankers-arena-board-sync");
+      sender.postMessage({ type: "board-updated", revision: proxyRevision, branch: "arena/alpha111-clankers" });
+      await new Promise((r) => setImmediate(r));
+      assert.equal(tabBeta.previewPosts.length, beforeBroadcastPosts, "in-flight guard queues trailing rerun without overlapping");
+
+      // Release the held sync: both the held sync and the queued trailing rerun complete immediately without waiting 3s!
+      const release = tabBeta.getReleaseHeldSync();
+      release();
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+      assert.ok(tabBeta.previewPosts.length >= beforeBroadcastPosts + 2, "trailing rerun immediately delivers the newer wake without waiting for timer tick");
+
+      // visibilitychange on visible tab also triggers immediate board pull + sync when revision advances.
+      const beforeVisPosts = tabAlpha.previewPosts.length;
+      proxyRevision += 1;
+      proxyBoard = Object.assign({}, proxyBoard, {
+        entries: [
+          {
+            id: "pvis1",
+            branch: "arena/beta2222-clankers",
+            to: "arena/alpha111-clankers",
+            repo: "nemoe7/clankers",
+            at: "2026-10-28T08:01:00Z",
+            payload: { text: "ready on visibility" },
+          },
+        ],
+      });
+      tabAlpha.setVisibility("visible");
+      const visHandler = tabAlpha.docListeners.get("visibilitychange");
+      assert.equal(typeof visHandler, "function", "visibilitychange listener registered on document");
+      visHandler();
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+      assert.ok(tabAlpha.previewPosts.length > beforeVisPosts, "visibilitychange wakes immediate preview board sync");
+      sender.close();
     });
   }
 

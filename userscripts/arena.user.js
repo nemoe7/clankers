@@ -472,8 +472,26 @@
   var forceSaveStateHook = null;
   var setResetWindowHook = null;
   var restartTitleTimerHook = null;
+  var notifyBoardBroadcastHook = null;
   var syncSettingsModalVisibilityHook = null;
   var openSettingsModalHook = null;
+  var BOARD_BROADCAST_CHANNEL_NAME = "clankers-arena-board-sync";
+  var BOARD_BROADCAST_KEY = "clankers-arena-board-broadcast";
+
+  function boardBroadcastOn() {
+    if (typeof GM_getValue !== "function") return true;
+    return GM_getValue(BOARD_BROADCAST_KEY, true) !== false;
+  }
+
+  function emitBoardBroadcast(revision, senderBranch) {
+    if (!boardBroadcastOn() || typeof notifyBoardBroadcastHook !== "function") return;
+    notifyBoardBroadcastHook({
+      type: "board-updated",
+      revision: typeof revision === "number" && isFinite(revision) ? revision : 0,
+      branch: boardBranch(senderBranch || previewUiBranch || ""),
+      at: Date.now(),
+    });
+  }
 
   function httpJitterMs() {
     if (typeof GM_getValue !== "function") return HTTP_JITTER_MS;
@@ -3135,6 +3153,20 @@
           1000,
         ),
         "prompt-fill",
+      );
+      addDependentSectionItem(
+        "Proxy",
+        "Board broadcast sync",
+        buildCheckboxRow(
+          "Board broadcast sync",
+          BOARD_BROADCAST_KEY,
+          boardBroadcastOn(),
+          function (next) {
+            GM_setValue(BOARD_BROADCAST_KEY, Boolean(next));
+            menuRefresh();
+          },
+        ),
+        "page-tab-title",
       );
       addDependentSectionItem(
         "Proxy",
@@ -5817,7 +5849,10 @@
         }
         return sendMemberToProxy().then(function (syncRes) {
           var syncedScoped = null;
-          if (syncRes && syncRes.status === 200 && syncRes.body) {
+          var prevRev = proxyBoardRevision;
+          var syncOk = Boolean(syncRes && syncRes.status === 200 && syncRes.body);
+          if (syncOk) {
+            lastProxyBoardPullAtMs = Date.now();
             if (syncRes.body.mode === "diff" && syncRes.body.diff && proxyBoardCache) {
               var nextGlobal = applyBoardDiff(proxyBoardCache, syncRes.body.diff);
               writeGlobalBoard(nextGlobal, {
@@ -5834,16 +5869,21 @@
             } else if (syncRes.body.unchanged && typeof syncRes.body.revision === "number") {
               proxyBoardRevision = Number(syncRes.body.revision);
             }
+            if (!passive && proxyBoardRevision > prevRev && !syncRes.body.unchanged) {
+              emitBoardBroadcast(proxyBoardRevision, memberSid);
+            }
             if (syncRes.body.scoped_board && typeof syncRes.body.scoped_board === "object") {
               syncedScoped = normalizeBoard(syncRes.body.scoped_board);
             }
           }
-          return pullProxyBoard(false, memberSid, memberRepo).then(function (pulled) {
-            var consolidatedScoped = (pulled && pulled.changed && pulled.scoped_board)
-              ? normalizeBoard(pulled.scoped_board)
-              : ((!pulled || !pulled.changed) && syncedScoped)
-                ? syncedScoped
+          var readyScopedPromise = syncOk
+            ? Promise.resolve(syncedScoped || buildScopedSyncBoard(memberSid, memberRepo))
+            : pullProxyBoard(false, memberSid, memberRepo).then(function (pulled) {
+              return (pulled && pulled.changed && pulled.scoped_board)
+                ? normalizeBoard(pulled.scoped_board)
                 : buildScopedSyncBoard(memberSid, memberRepo);
+            });
+          return readyScopedPromise.then(function (consolidatedScoped) {
             return hydrateBoardFilesForTarget(consolidatedScoped, memberSid).then(function (hydrated) {
               if (
                 passive &&
@@ -5979,6 +6019,9 @@
             fromProxy: true,
             revision: Number(actRes.body.revision),
           });
+          if (!isHeartbeatAction) {
+            emitBoardBroadcast(proxyBoardRevision, syncActionBranch);
+          }
           if (base) {
             syncPreviewBoard(
               base,
@@ -7442,10 +7485,26 @@
 
     var bootBoardSyncDone = false;
     var titleBoardSyncInFlight = false;
+    var queuedTitleBoardSync = null;
     var lastTitleBoardSyncMs = Date.now();
     var nextTitleBoardSyncDelayMs = BOARD_PROXY_POLL_MS;
+    function flushQueuedTitleBoardSync() {
+      if (titleBoardSyncInFlight || !queuedTitleBoardSync) return;
+      var nextReq = queuedTitleBoardSync;
+      queuedTitleBoardSync = null;
+      runTitleBoardSync(nextReq.baseUrl, nextReq.sidVal, nextReq.repoVal, nextReq.passiveVal);
+    }
     function runTitleBoardSync(baseUrl, sidVal, repoVal, passiveVal) {
-      if (titleBoardSyncInFlight || typeof syncPreviewBoardHook !== "function") return;
+      if (typeof syncPreviewBoardHook !== "function") return;
+      if (titleBoardSyncInFlight) {
+        queuedTitleBoardSync = {
+          baseUrl: baseUrl,
+          sidVal: sidVal,
+          repoVal: repoVal,
+          passiveVal: queuedTitleBoardSync ? Boolean(queuedTitleBoardSync.passiveVal && passiveVal) : Boolean(passiveVal),
+        };
+        return;
+      }
       titleBoardSyncInFlight = true;
       lastTitleBoardSyncMs = Date.now();
       nextTitleBoardSyncDelayMs = BOARD_PROXY_POLL_MS;
@@ -7456,11 +7515,41 @@
           titleBoardSyncInFlight = false;
           boardSyncReadyForWake = true;
           if (typeof autoWakeNotify === "function") autoWakeNotify();
+          flushQueuedTitleBoardSync();
         },
         function () {
           titleBoardSyncInFlight = false;
+          flushQueuedTitleBoardSync();
         },
       );
+    }
+    function wakeBoardFromSignal(signalRevision) {
+      if (!boardBroadcastOn() || !boardProxyConfig()) return;
+      if (
+        typeof signalRevision === "number" &&
+        isFinite(signalRevision) &&
+        signalRevision > 0 &&
+        proxyBoardCache &&
+        signalRevision <= proxyBoardRevision
+      ) {
+        return;
+      }
+      pullProxyBoard(!proxyBoardCache).then(function (pulled) {
+        if (!pulled || !pulled.changed) return;
+        var sigScope = stateScope(document);
+        var sigSid = boardBranch(previewUiBranch || sigScope.branch || "");
+        var sigBase = boardPreviewBase(document);
+        if (sigBase && sigSid && pulled.board.allowed_sessions.indexOf(sigSid) !== -1) {
+          var firstSigSync = !bootBoardSyncDone;
+          bootBoardSyncDone = true;
+          runTitleBoardSync(sigBase, sigSid, sigScope.repo || "", !firstSigSync);
+        } else if (sigBase && !seededPreviewBoardBases.has(sigBase.replace(/\/+$/, ""))) {
+          seedPreviewBoardOnFirstConnect(sigBase, sigSid, sigScope.repo || "");
+        } else if (!sigBase) {
+          boardSyncReadyForWake = true;
+          if (typeof autoWakeNotify === "function") autoWakeNotify();
+        }
+      });
     }
     function titleStep() {
       observeRoot();
@@ -7476,6 +7565,8 @@
             var firstSync = !bootBoardSyncDone;
             bootBoardSyncDone = true;
             runTitleBoardSync(pulledBase, pulledSid, pulledScope.repo || "", !firstSync);
+          } else if (pulledBase && !seededPreviewBoardBases.has(pulledBase.replace(/\/+$/, ""))) {
+            seedPreviewBoardOnFirstConnect(pulledBase, pulledSid, pulledScope.repo || "");
           } else if (!pulledBase) {
             boardSyncReadyForWake = true;
             if (typeof autoWakeNotify === "function") autoWakeNotify();
@@ -7494,7 +7585,7 @@
           } else if (nowTickMs - lastTitleBoardSyncMs >= nextTitleBoardSyncDelayMs) {
             runTitleBoardSync(tickBase, selfSidTick, docScopeTick.repo || "", true);
           }
-        } else if (tickBase && !seededPreviewBoardBases.has(tickBase.replace(/\/+$/, ""))) {
+        } else if (proxyBoardCache && tickBase && !seededPreviewBoardBases.has(tickBase.replace(/\/+$/, ""))) {
           seedPreviewBoardOnFirstConnect(tickBase, selfSidTick, docScopeTick.repo || "");
         }
       }
@@ -7548,10 +7639,45 @@
       lastPath = null;
       syncTitle(document);
     }
+    var boardChannel = null;
+    if (typeof BroadcastChannel === "function") {
+      try {
+        boardChannel = new BroadcastChannel(BOARD_BROADCAST_CHANNEL_NAME);
+        boardChannel.onmessage = function (ev) {
+          var msg = ev && ev.data && typeof ev.data === "object" ? ev.data : null;
+          if (!msg || msg.type !== "board-updated") return;
+          wakeBoardFromSignal(Number(msg.revision));
+        };
+      } catch (err) {
+        boardChannel = null;
+      }
+    }
+    notifyBoardBroadcastHook = function (payload) {
+      if (!boardChannel || typeof boardChannel.postMessage !== "function") return;
+      try {
+        boardChannel.postMessage(payload);
+      } catch (err) {}
+    };
+    function onBoardVisibility() {
+      if (document && document.visibilityState === "hidden") return;
+      wakeBoardFromSignal(0);
+    }
+    if (document && typeof document.addEventListener === "function") {
+      document.addEventListener("visibilitychange", onBoardVisibility);
+    }
     window.addEventListener("popstate", onRoute);
     return function () {
       restartTitleTimerHook = null;
       syncTitleNowHook = null;
+      notifyBoardBroadcastHook = null;
+      queuedTitleBoardSync = null;
+      if (boardChannel && typeof boardChannel.close === "function") {
+        try { boardChannel.close(); } catch (err) {}
+      }
+      boardChannel = null;
+      if (document && typeof document.removeEventListener === "function") {
+        document.removeEventListener("visibilitychange", onBoardVisibility);
+      }
       clearInterval(titleTimer);
       if (titleEntry !== null) {
         menuDrop(titleEntry);
@@ -8136,6 +8262,7 @@
       proxyBoardJson("/v1/board", { action: "merge", board: proxyNext }).then(function (res) {
         if (res && res.status === 200 && res.body && res.body.board) {
           updateProxyBoardCache(res.body.board, Number(res.body.revision));
+          emitBoardBroadcast(proxyBoardRevision, previewUiBranch || "");
         }
       });
     }
@@ -8340,6 +8467,10 @@
     BOARD_PROXY_MASTER_KEY: BOARD_PROXY_MASTER_KEY,
     BOARD_PROXY_POLL_MS: BOARD_PROXY_POLL_MS,
     BOARD_SESSION_TTL_SECONDS: BOARD_SESSION_TTL_SECONDS,
+    BOARD_BROADCAST_CHANNEL_NAME: BOARD_BROADCAST_CHANNEL_NAME,
+    BOARD_BROADCAST_KEY: BOARD_BROADCAST_KEY,
+    boardBroadcastOn: boardBroadcastOn,
+    emitBoardBroadcast: emitBoardBroadcast,
     boardProxyConfig: boardProxyConfig,
     updateProxyBoardCache: updateProxyBoardCache,
     pullProxyBoard: pullProxyBoard,

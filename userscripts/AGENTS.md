@@ -25,4 +25,5 @@
 - Keep `titleStep` allowlisted `:8000` board sync cadence on `BOARD_PROXY_POLL_MS` with an in-flight guard, and trigger composer `"wake up"` once per unseen `wakes[branch]` token only after `:8000` sync confirms the session is idle (`!polling` and no stop button).
 - Seed `:8000` `/api/board` once per preview origin on first connect via read-only `/v1/board` pulls. Never send `POST /v1/board` `sync` or `disconnect-session` for unopted branches before opt-in.
 - Strip leading `@` prefixes in `resolveBoardTarget` and resolve `entry.to` aliases during `normalizeBoard` so `-t @main` or `-t @beta` posts hydrate and deliver to the target branch.
+- Wake same-origin tabs via `BroadcastChannel` (`clankers-arena-board-sync`) and `visibilitychange` inside `page-tab-title` with teardown cleanup, queue one trailing rerun when `runTitleBoardSync` is already in flight, and skip redundant `pullProxyBoard` GETs after `POST /v1/board` `sync` succeeds while keeping preview jitter.
 - Run both `node --test tests/userscripts/userscripts.test.cjs` and `node --test tests/userscripts/userscripts.checks.cjs` via `arena-preview run start` before pushing `userscripts/` changes.
