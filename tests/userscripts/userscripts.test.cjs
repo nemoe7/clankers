@@ -4530,6 +4530,125 @@ for raw in sys.stdin:
       flushWakeTimers();
       assert.equal(sendClicks, 2);
     });
+
+    test("unopted preview seeds /api/board on first connect without registering upstream on POST /v1/board", async () => {
+      const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+      const gmStore = new Map([
+        ["clankers-arena-proxy-host", "https://arena-proxy.example.ts.net"],
+        ["clankers-arena-proxy-master", "secret-master"],
+      ]);
+      const httpCalls = [];
+      let localPreviewReady = false;
+      let localSeededBoard = null;
+      const upstreamBoard = {
+        allowed_sessions: ["arena/alpha111-clankers", "arena/beta2222-clankers"],
+        main_session_id: "arena/alpha111-clankers",
+        sessions: [
+          { branch: "arena/alpha111-clankers", repo: "nemoe7/clankers", status: "active" },
+          { branch: "arena/beta2222-clankers", repo: "nemoe7/clankers", status: "active" },
+        ],
+        entries: [
+          {
+            id: "ppriv01",
+            branch: "arena/alpha111-clankers",
+            to: "arena/beta2222-clankers",
+            repo: "nemoe7/clankers",
+            at: "2026-10-28T06:00:00Z",
+            payload: { text: "private worker note" },
+          },
+        ],
+      };
+      const checkBox = {
+        globalThis: {},
+        GM_getValue: (key, fallback) => (gmStore.has(key) ? gmStore.get(key) : fallback),
+        GM_setValue: (key, val) => gmStore.set(key, val),
+        GM_xmlhttpRequest: (req) => {
+          httpCalls.push({ method: req.method, url: req.url, data: req.data });
+          if (req.url.startsWith("https://arena-proxy.example.ts.net/v1/board")) {
+            assert.equal(req.method, "GET", "unopted preview never posts to /v1/board");
+            req.onload({
+              status: 200,
+              responseText: JSON.stringify({
+                revision: 5,
+                egress_version: "3.2.3",
+                board: upstreamBoard,
+              }),
+            });
+            return;
+          }
+          if (req.url.startsWith("https://8000-unopted.e2b.app/api/board")) {
+            if (!localPreviewReady) {
+              req.onload({ status: 502, responseText: "" });
+              return;
+            }
+            if (req.method === "GET") {
+              req.onload({
+                status: 200,
+                responseText: JSON.stringify({
+                  revision: 1,
+                  branch: "arena/gamma333-clankers",
+                  repo: "nemoe7/clankers",
+                  allowed_sessions: [],
+                  sessions: [{ branch: "arena/gamma333-clankers", repo: "nemoe7/clankers", status: "active" }],
+                  entries: [],
+                }),
+              });
+              return;
+            }
+            localSeededBoard = JSON.parse(req.data).board;
+            req.onload({
+              status: 200,
+              responseText: JSON.stringify(
+                Object.assign({}, localSeededBoard, {
+                  revision: 2,
+                  branch: "arena/gamma333-clankers",
+                  repo: "nemoe7/clankers",
+                }),
+              ),
+            });
+          }
+        },
+        GM_registerMenuCommand: () => 1,
+        GM_unregisterMenuCommand: () => {},
+        setTimeout: (fn) => { fn(); return 1; },
+        clearTimeout: () => {},
+      };
+      checkBox.globalThis = checkBox;
+      vm.runInNewContext(source, checkBox, { filename: "arena.user.js" });
+      const boardApi = checkBox.CLANKERS_CHECKS.board;
+      const base = "https://8000-unopted.e2b.app";
+
+      // First attempt while :8000 is booting (502): does not mark seeded and does not POST disconnect-session.
+      await boardApi.seedPreviewBoardOnFirstConnect(base, "arena/gamma333-clankers", "nemoe7/clankers");
+      assert.equal(boardApi.hasSeededPreviewBoard(base), false);
+      assert.equal(
+        httpCalls.some((c) => c.method === "POST" && c.url.includes("/v1/board")),
+        false,
+        "boot 502 on unopted session does not send disconnect-session to /v1/board",
+      );
+
+      // Next retry once :8000 is ready hydrates peer sessions and egress_version locally without POST /v1/board.
+      localPreviewReady = true;
+      await boardApi.seedPreviewBoardOnFirstConnect(base, "arena/gamma333-clankers", "nemoe7/clankers");
+      assert.equal(boardApi.hasSeededPreviewBoard(base), true);
+      assert.ok(localSeededBoard, "local /api/board receives scoped snapshot on first connect");
+      assert.equal(localSeededBoard.egress_version, "3.2.3");
+      assert.deepEqual(
+        localSeededBoard.sessions.map((s) => s.branch).sort(),
+        ["arena/alpha111-clankers", "arena/beta2222-clankers"],
+      );
+      assert.deepEqual(localSeededBoard.entries, [], "private entries stay stripped for unopted session");
+      assert.equal(
+        httpCalls.some((c) => c.method === "POST" && c.url.includes("/v1/board")),
+        false,
+        "unopted session never registers upstream on POST /v1/board",
+      );
+
+      // Once seeded, repeat seedPreviewBoardOnFirstConnect is a no-op.
+      const callsBeforeRepeat = httpCalls.length;
+      await boardApi.seedPreviewBoardOnFirstConnect(base, "arena/gamma333-clankers", "nemoe7/clankers");
+      assert.equal(httpCalls.length, callsBeforeRepeat);
+    });
   }
 
 
