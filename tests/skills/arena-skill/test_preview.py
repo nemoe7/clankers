@@ -17372,3 +17372,9 @@ def test_board_polling_not_masked_by_stale_wake_and_post_to_wakes_target(
   assert after_post["wakes"].get(beta) == after_post["entries"][-1]["id"]
   beta_row = next(s for s in after_post["sessions"] if s["branch"] == beta)
   assert beta_row["polling"] is False
+
+  # `remove-session` tombstones and drops an opted-in session in one step.
+  after_remove = store.board_action({"action": "remove-session", "branch": beta})
+  assert beta not in after_remove["allowed_sessions"]
+  assert beta in after_remove["removed_sessions"]
+  assert all(s["branch"] != beta for s in after_remove["sessions"])

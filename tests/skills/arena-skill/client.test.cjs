@@ -6146,5 +6146,9 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /const\s+isPolling\s*=\s*Boolean\(state\.polling\);/);
   assert.match(appSource, /type:\s*'clankers:board-request',\s*branch,\s*repo,\s*active:\s*hbChanged/);
   assert.doesNotMatch(appSource, /action:\s*'heartbeat'/);
+  assert.doesNotMatch(appSource, /textContent\s*=\s*'Revoke'/);
+  assert.doesNotMatch(appSource, /action:\s*'revoke'/);
+  assert.match(appSource, /dismissBtn\.textContent\s*=\s*'Dismiss'/);
+  assert.match(appSource, /action:\s*'remove-session',\s*branch:\s*row\.branch/);
 });
 

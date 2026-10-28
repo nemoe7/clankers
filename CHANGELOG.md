@@ -11,6 +11,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### arena-skill
+
+- Replace the Board tab's separate `Revoke` and `Dismiss` buttons with one `Dismiss` button (`assets/app.js`, `scripts/preview.py`).
+
 #### nuu
 
 - Pair top-right `.close-button` (`X`) with footer `Cancel` by default on confirmation, form, and unsaved-edit modals (`references/recipes/modal-manager.md`, `references/examples/modal-close-button.png`).

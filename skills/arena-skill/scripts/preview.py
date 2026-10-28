@@ -3493,9 +3493,8 @@ class Store:
 			target=resolve_board_target(payload.get('branch')or payload.get('target')or'',sessions,allowed=allowed,main_sid=main_sid)
 			if target:
 				if target!=sid and target not in removed_sessions:removed_sessions.append(target)
-				allowed=[item for item in allowed if item!=target]
-				if action_type in{'remove-session','dismiss'}or target!=sid:sessions=[row for row in sessions if row['branch']!=target];wakes.pop(target,None);worker_ids.pop(target,None);worker_tasks.pop(target,None);worker_reports.pop(target,None)
-				if main_sid==target:main_sid=''
+				allowed=[item for item in allowed if item!=target];sessions=[row for row in sessions if row['branch']!=target];wakes.pop(target,None);worker_ids.pop(target,None);worker_tasks.pop(target,None);worker_reports.pop(target,None)
+				if main_sid==target:main_sid=allowed[0]if allowed else''
 		elif action_type=='set-main':
 			target=resolve_board_target(payload.get('branch')or'',sessions,allowed=allowed,main_sid=main_sid)
 			if target:

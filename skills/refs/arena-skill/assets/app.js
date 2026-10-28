@@ -4535,22 +4535,18 @@ function renderBoard() {
         setMainBtn.addEventListener('click', () => { void sendBoardAction({ action: 'set-main', branch: row.branch }); });
         actions.append(setMainBtn);
       }
-      const revokeBtn = document.createElement('button');
-      revokeBtn.type = 'button';
-      revokeBtn.textContent = 'Revoke';
-      revokeBtn.addEventListener('click', () => { void sendBoardAction({ action: 'revoke', branch: row.branch }); });
-      actions.append(revokeBtn);
     } else {
       const allowBtn = document.createElement('button');
       allowBtn.type = 'button';
       allowBtn.textContent = 'Opt in';
       allowBtn.addEventListener('click', () => { void sendBoardAction({ action: 'allow', branch: row.branch }); });
-      const dismissBtn = document.createElement('button');
-      dismissBtn.type = 'button';
-      dismissBtn.textContent = 'Dismiss';
-      dismissBtn.addEventListener('click', () => { void sendBoardAction({ action: 'remove-session', branch: row.branch }); });
-      actions.append(allowBtn, dismissBtn);
+      actions.append(allowBtn);
     }
+    const dismissBtn = document.createElement('button');
+    dismissBtn.type = 'button';
+    dismissBtn.textContent = 'Dismiss';
+    dismissBtn.addEventListener('click', () => { void sendBoardAction({ action: 'remove-session', branch: row.branch }); });
+    actions.append(dismissBtn);
     item.append(info, actions);
     sessionsEl.append(item);
   }
