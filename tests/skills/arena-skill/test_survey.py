@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -20,7 +21,7 @@ def test_survey_schema_and_hashes(monkeypatch):
   ]
   examples = copy.deepcopy(empty)
   examples[0]["answer"] = {"reasoning": True}
-  examples[1]["answer"] = {"image_in": True}
+  examples[1]["answer"] = {"vision": True}
   examples[2]["answer"] = {
     "full_name": "Example Person",
     "organization": "Test Org",
@@ -70,8 +71,8 @@ def test_survey_schema_and_hashes(monkeypatch):
 
   invalid = []
   for change in (
-    lambda rows: rows.reverse(),
     lambda rows: rows.append(copy.deepcopy(rows[0])),
+    lambda rows: rows[1].update(id=rows[0]["id"]),
     lambda rows: rows[0].update(extra=None),
     lambda rows: rows[0].update(confidence=True),
     lambda rows: rows[0].update(confidence=2),
@@ -80,6 +81,7 @@ def test_survey_schema_and_hashes(monkeypatch):
     lambda rows: rows[0]["answer"].update(reasoning="unknown"),
     lambda rows: rows[0]["answer"].update(reasoning=1),
     lambda rows: rows[1]["answer"].update(image_in=None),
+    lambda rows: rows[1]["answer"].update(vision=None),
     lambda rows: rows[3]["answer"].update(command_name=3),
     lambda rows: rows[4]["answer"]["power_capacity_mw"].update(operator="gte"),
     lambda rows: rows[4]["answer"]["power_capacity_mw"].update(value=True),
@@ -130,3 +132,59 @@ def test_grade_retains_each_submitted_answer():
   assert [row["answer"] for row in results] == [row["answer"] for row in submitted]
   assert results[2]["answer"]["role"] == "Team Lead"
   assert results[3]["correct"] is None
+
+
+def test_survey_vision_question_and_unsorted_acceptance():
+  import survey
+
+  question = next(row for row in survey.SPEC["questions"] if row["id"] == "V1S0N")
+  assert list(question["answer_fields"]) == ["vision"]
+  assert not any(row["id"] == "I4M6G" for row in survey.SPEC["questions"])
+
+  rows = survey.template()
+  rows[0]["answer"] = {"reasoning": True}
+  shuffled = [rows[2], rows[0], rows[4], rows[1], rows[3]]
+  parsed = survey.loads(json.dumps(shuffled))
+  assert [row["id"] for row in parsed] == [
+    row["id"] for row in survey.SPEC["questions"]
+  ]
+  assert survey.submission_order(json.dumps(shuffled)) is False
+  assert survey.submission_order(json.dumps(rows)) is True
+  graded = survey.grade(json.dumps(shuffled))
+  assert [row["id"] for row in graded] == [
+    row["id"] for row in survey.SPEC["questions"]
+  ]
+  assert graded[0]["correct"] is True
+
+  duplicated = [rows[0], rows[0], rows[2], rows[3], rows[4]]
+  with pytest.raises(ValueError, match="Duplicate"):
+    survey.loads(json.dumps(duplicated))
+  unknown = copy.deepcopy(rows)
+  unknown[0]["id"] = "ZZZZZZ"
+  with pytest.raises(ValueError, match="Unknown question IDs: ZZZZZZ"):
+    survey.loads(json.dumps(unknown))
+  missing = copy.deepcopy(rows)
+  missing[1]["id"] = "R3S0N"
+  with pytest.raises(ValueError):
+    survey.loads(json.dumps(missing))
+
+
+def test_smallest_image_writes_a_temp_png_without_repo_images(tmp_path):
+  import survey
+
+  (tmp_path / "notes.md").write_text("No images here.\n", encoding="utf-8")
+  found = survey.smallest_image(tmp_path)
+  assert found is not None
+  temp = Path(found)
+  assert temp.is_file() and temp.suffix == ".png"
+  payload = temp.read_bytes()
+  assert payload.startswith(b"\x89PNG\r\n\x1a\n")
+  assert payload.rstrip().endswith(b"IEND\xaeB`\x82")
+  assert len(payload) < 200
+  assert tmp_path.resolve() not in temp.resolve().parents
+  temp.unlink()
+
+  image = tmp_path / "only.png"
+  image.write_bytes(payload)
+  assert survey.smallest_image(tmp_path) == "only.png"
+  assert survey.smallest_image(tmp_path / "absent") is None

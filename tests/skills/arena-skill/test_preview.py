@@ -42,14 +42,18 @@ def test_survey_transport_keeps_grades_in_server_memory(tmp_path, monkeypatch, c
   store = preview.Store(tmp_path, create=True)
   headers = {"Content-Type": "application/json"}
   payload = json.dumps(survey.template())
-  expected = [
+  grade_rows = [
     {"id": row["id"], "correct": index == 1, "confidence": row["confidence"]}
     for index, row in enumerate(survey.loads(payload))
+  ]
+  expected = [
+    *grade_rows,
+    {"id": "S0R7D", "correct": True, "confidence": 1, "answer": {"sorted": True}},
   ]
 
   def grade(text):
     survey.loads(text)
-    return expected
+    return list(grade_rows)
 
   monkeypatch.setattr(survey, "grade", grade)
   app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
@@ -82,6 +86,21 @@ def test_survey_transport_keeps_grades_in_server_memory(tmp_path, monkeypatch, c
     assert status == 200
     received = json.loads(body)
     assert received["results"] == expected
+    shuffled_payload = json.dumps(list(reversed(survey.template())))
+    status, _, body = request("POST", "/api/survey", shuffled_payload, headers)
+    assert status == 200 and json.loads(body) == {"ok": True}
+    status, _, body = request("GET", "/api/survey")
+    assert status == 200
+    assert json.loads(body)["results"][-1] == {
+      "id": "S0R7D",
+      "correct": False,
+      "confidence": 1,
+      "answer": {"sorted": False},
+    }
+    status, _, body = request("POST", "/api/survey", payload, headers)
+    assert status == 200 and json.loads(body) == {"ok": True}
+    status, _, body = request("GET", "/api/survey")
+    received = json.loads(body)
     answered_at = received["answered_at"]
     assert datetime.fromisoformat(answered_at).tzinfo is not None
     store.acknowledge([pending[0]["id"]], "Survey complete.")
@@ -14168,7 +14187,7 @@ def test_survey_rejects_null_partial_and_zero_confidence_known_answers():
 
   blank = survey.template()
   assert blank[0]["answer"] == {"reasoning": False}
-  assert blank[1]["answer"] == {"image_in": False}
+  assert blank[1]["answer"] == {"vision": False}
   assert blank[3]["answer"] == {
     "command_name": "unknown",
     "concurrency_option": "unknown",
@@ -14218,7 +14237,7 @@ def test_survey_rejects_null_partial_and_zero_confidence_known_answers():
     "answer": lower_conf[0]["answer"],
   }
   assert graded[1] == {
-    "id": "I4M6G",
+    "id": "V1S0N",
     "correct": False,
     "confidence": 1,
     "answer": lower_conf[1]["answer"],
@@ -14975,11 +14994,18 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   (img_repo / "arena-state").mkdir(parents=True)
   (img_repo / "arena-state" / "ignored.png").write_bytes(b"12")
   (img_repo / "empty.png").write_bytes(b"")
-  assert survey.smallest_image(img_repo) is None
+  fallback = Path(survey.smallest_image(img_repo))
+  assert img_repo.resolve() not in fallback.resolve().parents
+  assert fallback.read_bytes() == survey.one_pixel_png()
+  fallback.unlink()
+  capsys.readouterr()
   monkeypatch.chdir(img_repo)
   monkeypatch.setattr(sys, "argv", ["arena-preview", "survey", "--smallest-image"])
-  assert preview.main() == 1
-  capsys.readouterr()
+  assert preview.main() == 0
+  printed = Path(capsys.readouterr().out.strip())
+  assert img_repo.resolve() not in printed.resolve().parents
+  assert printed.read_bytes() == survey.one_pixel_png()
+  printed.unlink()
 
   (img_repo / ".agents" / "skills" / "demo").mkdir(parents=True)
   (img_repo / ".agents" / "skills" / "demo" / "tie.png").write_bytes(b"12345")

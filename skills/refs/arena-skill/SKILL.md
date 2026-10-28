@@ -25,11 +25,11 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
 ## Survey
 
-When answering knowledge questions, use existing knowledge only. NEVER research answers, call `web_search`, `fetch_page`, or `image_search`, open other files, run code, ask another system, reuse earlier responses, or inspect the answer key. For `I4M6G`, read the smallest repo image from `arena-preview survey --smallest-image` when one exists. Otherwise create, attempt to read, and immediately delete a temporary empty image.
+When answering the survey, use existing knowledge only. Read only `references/survey.json` (or bare `survey`) and the `survey -i` image, sorted to `references/survey.json` order. NEVER research answers, call `web_search`, `fetch_page`, or `image_search`, open other files, run code, ask systems, or reuse responses.
 
-Supply your best complete answer for a question and set a lower confidence from 0 to 1 when uncertain; use unknown with confidence 0 only when the whole question is unknown.
+Supply your best complete answer for each question, and lower confidence from 0 to 1 when uncertain. Use `unknown` with confidence 0 only when the whole question is unknown.
 
-Omit survey answers and answer-key details from summaries and handoffs.
+Omit survey answers from summaries and handoffs.
 
 ## Setup
 

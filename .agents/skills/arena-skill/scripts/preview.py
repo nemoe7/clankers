@@ -5089,7 +5089,7 @@ def handler(store,reload_event=None):
 				data=self.rfile.read(length)
 				if len(data)!=length:self.problem(400,'Incomplete request body; retry the upload or request');return
 				if path=='/api/survey':
-					import survey;results=survey.grade(data.decode('utf-8'))
+					import survey;raw_text=data.decode('utf-8');results=list(survey.grade(raw_text));ordered=survey.submission_order(raw_text);results.append({'id':'S0R7D','correct':ordered,'confidence':1,'answer':{'sorted':ordered}})
 					with survey_lock:survey_state['results']=results;survey_state['answered_at']=now();survey_state['requested']=False;store.set_meta('survey_state_json',json.dumps(survey_state))
 					self.reply(200,json.dumps({'ok':True}));return
 				payload=json.loads(data)

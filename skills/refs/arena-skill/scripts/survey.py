@@ -2,6 +2,9 @@ import hashlib
 import json
 import math
 import os
+import struct
+import tempfile
+import zlib
 from pathlib import Path
 
 SPEC = json.loads(
@@ -44,17 +47,44 @@ IGNORED_IMAGE_DIRS = frozenset(
   }
 )
 INSTRUCTIONS = (
-  "When answering knowledge questions, use existing knowledge only; NEVER research answers, "
-  "call web_search, fetch_page, or image_search, "
-  "open other files, run code, ask another system, reuse earlier responses, or inspect the answer key.\n"
-  "For I4M6G, first check whether an image exists in the repository tree "
-  "(arena-preview survey --smallest-image) and read the smallest one; if none exists, "
-  "create a temporary empty image file, attempt to read it, and delete the file immediately afterward.\n"
+  "When answering the survey, use existing knowledge only. Read only references/survey.json "
+  "(or bare `arena-preview survey`) and the `survey -i` image, sorted to references/survey.json order.\n"
+  "NEVER research answers, call web_search, fetch_page, or image_search, "
+  "open other files, run code, ask systems, or reuse responses.\n"
+  "For V1S0N, read the smallest repo image (`arena-preview survey -i`, `--smallest-image`); "
+  "with no repo image the command writes a temporary 1x1 PNG to read and delete.\n"
   "Supply your best complete answer for a question and set a lower confidence from 0 to 1 "
   "when uncertain; boolean questions require true or false with confidence > 0, and knowledge questions "
   "use unknown with confidence 0 only when the whole question is unknown.\n"
-  "Omit survey answers and answer-key details from summaries and handoffs."
+  "Omit survey answers from summaries and handoffs."
 )
+
+
+def one_pixel_png():
+  """Return the bytes of a 1x1 transparent PNG, built without dependencies."""
+
+  def chunk(code, payload):
+    body = code + payload
+    return (
+      struct.pack(">I", len(payload))
+      + body
+      + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+    )
+
+  header = struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)
+  return (
+    b"\x89PNG\r\n\x1a\n"
+    + chunk(b"IHDR", header)
+    + chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00\x00"))
+    + chunk(b"IEND", b"")
+  )
+
+
+def temp_image():
+  """Write a 1x1 PNG outside the repo and return its path for reading and deletion."""
+  path = Path(tempfile.mkdtemp(prefix="arena-survey-")) / "survey.png"
+  path.write_bytes(one_pixel_png())
+  return str(path)
 
 
 def smallest_image(root="."):
@@ -82,7 +112,7 @@ def smallest_image(root="."):
       key = (size, hidden, rel.as_posix())
       if best is None or key < best[0]:
         best = (key, rel.as_posix())
-  return None if best is None else best[1]
+  return best[1] if best is not None else temp_image()
 
 
 def template():
@@ -140,16 +170,39 @@ def quantity(value, path):
   return {"operator": operator, "value": number}
 
 
-def loads(text):
+def records(text):
+  """Map submitted records by question ID, in any order."""
   rows = json.loads(text, object_pairs_hook=pairs, parse_constant=invalid_constant)
   if not isinstance(rows, list) or len(rows) != len(SPEC["questions"]):
-    raise ValueError("Expected one ordered record per question")
-  normalized = []
-  for row, question in zip(rows, SPEC["questions"]):
+    raise ValueError("Expected one record per question")
+  by_id = {}
+  for row in rows:
     if not isinstance(row, dict) or list(row) != SPEC["response_order"]:
       raise ValueError("Each record requires id, answer, confidence in that order")
-    if row["id"] != question["id"]:
-      raise ValueError("Question IDs must follow the displayed order")
+    if row["id"] in by_id:
+      raise ValueError(f"Duplicate record for question {row['id']}")
+    by_id[row["id"]] = row
+  expected = [question["id"] for question in SPEC["questions"]]
+  unknown = sorted(set(by_id) - set(expected))
+  if unknown:
+    raise ValueError(f"Unknown question IDs: {', '.join(unknown)}")
+  missing = [key for key in expected if key not in by_id]
+  if missing:
+    raise ValueError(f"Missing question IDs: {', '.join(missing)}")
+  return by_id, expected
+
+
+def submission_order(text):
+  """True when the submitted records follow references/survey.json order."""
+  by_id, expected = records(text)
+  return list(by_id) == expected
+
+
+def loads(text):
+  by_id, _expected = records(text)
+  normalized = []
+  for question in SPEC["questions"]:
+    row = by_id[question["id"]]
     answer = row["answer"]
     if not isinstance(answer, dict) or set(answer) != set(question["answer_fields"]):
       raise ValueError(f"{question['id']}.answer fields do not match the schema")
@@ -197,9 +250,10 @@ def loads(text):
 
 def grade(text):
   rows = loads(text)
-  submitted = json.loads(text)
+  submitted = {row["id"]: row for row in json.loads(text)}
   results = []
-  for row, original in zip(rows, submitted):
+  for row in rows:
+    original = submitted[row["id"]]
     result = {
       "id": row["id"],
       "correct": None,

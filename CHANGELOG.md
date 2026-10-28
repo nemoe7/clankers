@@ -23,6 +23,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Rename survey `I4M6G` to `V1S0N` (`vision`), accept unsorted JSON with `S0R7D` tracking, and add `survey -i` PNG fallback (`SKILL.md`, `references/survey.json`, `scripts/survey.py`, `scripts/preview.py`).
 - Show `@sender to @target` headers on initial board posts in the Messages UI while keeping acks without `to` (`assets/app.js`).
 - Replace the Board tab's separate `Revoke` and `Dismiss` buttons with one `Dismiss` button (`assets/app.js`, `scripts/preview.py`).
 - Route worker `report publish` to the board with staged `.md` file attachments, and add `report answer` and `report forward` triage on `main` (`SKILL.md`, `WORKER.md`, `scripts/preview.py`).
