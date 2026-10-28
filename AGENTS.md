@@ -89,19 +89,18 @@ Read these first:
 
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 - MUST include ARENA and CHATGPT amendment proposals in the same report as each CORE amendment proposal.
-- MUST name the failure and the check that verifies each proposed amendment.
+- MUST name the failure each proposed amendment prevents.
 - Apply this section's AGENTS.md proposal and approval requirements only to `rules/**/CORE.md`; other AGENTS.md files are exempt.
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
 - Before editing a clause, follow maintenance/amendment-template.md and show one <filename.ext> - <clause-name> section per clause. Put one Line | Diff | Reason row per changed line.
-  - Quote the exact final clause verbatim below its table, without diff markup or deleted text; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
-  - In Diff, keep unchanged wording verbatim, strike only removed text with ~~...~~, highlight only inserted text with ==...==, and omit change labels.
+  - Put `Final clause:` with the exact final clause verbatim below its table, without diff markup, backticks, or deleted text; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
+  - In Diff, keep unchanged wording verbatim, strike only removed text with ~~...~~, highlight only inserted text with `<mark>...</mark>` (or `==...==` on Arena), and omit change labels.
   - Omit only unchanged context with `...`.
-  - Quote clauses in double quotes, NEVER backticks, in proposals, acks, and reports.
+  - Never wrap clauses in backticks in proposals, acks, and reports.
   - Each clause takes approve, reject, or custom (rendered as fielded report options on Arena).
-  - Put its options directly under its row, and start a new table for the next clause under the same file heading.
+  - Put its options directly under its clause, and start a new table for the next clause under the same file heading.
   - Put it above form fields; a form without it is not a proposal.
-  - Open the report with Status: proposal. No line lands before approval. and list per-clause Citations: sub-items as <domain> - <GUIDELINES.md>, Section <N>: <guideline text>, Failure:, and Verification:.
-  - Place the quoted final clause directly above the approve, reject, and custom options.
+  - List per-clause Citations: sub-items as `<rules/GUIDELINES.md or system-prompts/GUIDELINES.md>, Section <N> <Title>: "<guideline rule text>"` and `Failure:`.
   - Code changes need no proposal; keep them lean.
 - Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
 - Run an amendment proposal task first, before any other queued work.
