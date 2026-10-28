@@ -4805,13 +4805,40 @@ test('preview client', async (t) => {
       assert.match(stamp.title, /\d+ seconds ago/);
       stamp.dataset.at = new Date(Date.now() - 21 * 60000).toISOString();
       const repaint = intervals.filter(callback => callback.name === 'repaintRelativeStamps').at(-1);
+      const paintConn = intervals.filter(callback => callback.name === 'paintConnection').at(-1);
       const oneSecond = 1000;
       assert.ok(repaint, 'an interval repaints all relative stamps');
+      assert.ok(paintConn, 'an interval repaints the connection header');
       assert.equal(repaint.delay, oneSecond, 'recent relative timestamps refresh each second');
+      assert.equal(paintConn.delay, oneSecond, 'connection header refreshes each second');
       repaint();
       assert.match(stamp.textContent, /21min ago/);
       assert.equal(stamp.title, '21 minutes ago');
+
+      const realmDate = repaint.constructor('return Date')();
+      const origNow = realmDate.now;
+      const baseNow = origNow.call(realmDate);
+      try {
+        state.agent_call_ended_at = new Date(baseNow - 3000).toISOString().slice(0, 19);
+        state.last_check = new Date(baseNow - 4000).toISOString().slice(0, 19);
+        state.skip_poll = new Date(baseNow - 5000).toISOString();
+        state.tasks = { updated_at: new Date(baseNow - 6000).toISOString(), upcoming: [], finished: [] };
+        await refresh();
+        realmDate.now = () => baseNow + 120 * 1000;
+        paintConn();
+        repaint();
+        assert.match(get('#connection-text').textContent, /^Bash 2min ago/);
+        assert.equal(get('#last-check').textContent, 'Last read/ack: 2min ago');
+        assert.equal(get('#last-check').title, '2 minutes ago');
+        assert.equal(get('#tasks-status').textContent, 'Updated 2min ago');
+        assert.equal(get('#tasks-status').title, '2 minutes ago');
+        assert.match(get('#skip-poll').getAttribute('aria-label'), /^Skip poll armed 2min ago/);
+        assert.equal(get('#skip-poll').title, 'Skip poll armed 2 minutes ago, ending the agent wait');
+      } finally {
+        realmDate.now = origNow;
+      }
     } finally {
+      state.skip_poll = null;
       if (priorWidth === undefined) delete context.window.innerWidth;
       else context.window.innerWidth = priorWidth;
       state.notes = priorNotes;

@@ -253,7 +253,7 @@ function agentIdle() {
   const silent = agentSilentMs();
   return silent !== null && silent > AGENT_CALL_MS;
 }
-function connectionText() {
+function connectionText(now = Date.now()) {
   // The header names what the agent is doing: the wait while a poll runs, else the stamp of the latest tool.
   // An absent agent carries its own marker in place of the sentence that stood here.
   const tail = agentIdle() ? ' · Agent 404' : '';
@@ -262,17 +262,17 @@ function connectionText() {
   if (pollSince !== null) {
     const label = getState()?.checking_pr ? 'PR checks...'
       : getState()?.waiting_for_gates ? 'Running gates...' : 'Polling…';
-    return `${label} ${duration(Date.now() - pollSince)}${tail}${callTally}`;
+    return `${label} ${duration(now - pollSince)}${tail}${callTally}`;
   }
   const activity = latestToolActivity();
-  if (activity !== null) return `${activity.label} ${time(activity.stamp)}${tail}${callTally}`;
+  if (activity !== null) return `${activity.label} ${time(activity.stamp, { now })}${tail}${callTally}`;
   return agentIdle() ? `Agent 404${callTally}` : connectionBase + callTally;
 }
-function connectionTitle() {
+function connectionTitle(now = Date.now()) {
   const activity = latestToolActivity();
-  if (activity === null) return connectionText();
+  if (activity === null) return connectionText(now);
   const tail = agentIdle() ? ' · Agent 404' : '';
-  return `${activity.label} ${fullRelativeTime(activity.stamp)}${tail}${callTally}`;
+  return `${activity.label} ${fullRelativeTime(activity.stamp, { now })}${tail}${callTally}`;
 }
 function stampMs(value) {
   if (typeof value !== 'string') return null;
@@ -367,11 +367,12 @@ function sessionStatusInfo(row, selfSid = getState()?.board?.branch || '') {
   };
 }
 function paintConnection() {
-  if (pollSince !== null || agentInCall()) {
+  if (pollSince !== null || agentInCall() || latestToolActivity() !== null) {
     const status = $('#connection-text');
     status.textContent = connectionText();
     status.title = connectionTitle();
-  } else if (agentIdle() && $('#connection-dot').dataset.state !== 'down') {
+  }
+  if (agentIdle() && $('#connection-dot').dataset.state !== 'down') {
     setConnection('idle', connectionText());
   }
   const board = getState()?.board;
@@ -1463,6 +1464,7 @@ function showHistory(rawNotes) {
       const blocks = (item.replies || []).map(reply => {
         const block = document.createElement('div');
         block.className = 'reply-block';
+        block.dataset.replyAt = reply.at || '';
         block.title = `Replied again ${fullRelativeTime(reply.at)}`;
         if (reply.type === 'reply' && reply.html !== undefined) {
           block.innerHTML = linkReferences(reply.html, references);
@@ -2740,20 +2742,20 @@ function ackUnread(report) {
   return Boolean(report?.latest_answer_acknowledged_at &&
     (!report.ack_seen_at || report.ack_seen_at < report.latest_answer_acknowledged_at));
 }
-function submissionStateWord(report) {
+function submissionStateWord(report, now = Date.now()) {
   if (report.pending_answer) return 'Sending';
-  if (report.latest_answer_acknowledged_at) return `Acked ${fullRelativeTime(report.latest_answer_acknowledged_at)}`;
+  if (report.latest_answer_acknowledged_at) return `Acked ${fullRelativeTime(report.latest_answer_acknowledged_at, { now })}`;
   return submissionSeenAt(report) ? 'Awaiting ack' : 'Sent';
 }
 function submissionStamp(report) {
   return report.latest_answer_acknowledged_at || submissionSeenAt(report) || report.latest_answer_at;
 }
-function submissionStampTitle(report) {
-  return `Sent ${fullRelativeTime(report.latest_answer_at)}` +
-    (submissionSeenAt(report) ? ` · Read ${fullRelativeTime(report.agent_seen_at)}` : '') +
-    (report.latest_answer_acknowledged_at ? ` · Acked ${fullRelativeTime(report.latest_answer_acknowledged_at)}` : '');
+function submissionStampTitle(report, now = Date.now()) {
+  return `Sent ${fullRelativeTime(report.latest_answer_at, { now })}` +
+    (submissionSeenAt(report) ? ` · Read ${fullRelativeTime(report.agent_seen_at, { now })}` : '') +
+    (report.latest_answer_acknowledged_at ? ` · Acked ${fullRelativeTime(report.latest_answer_acknowledged_at, { now })}` : '');
 }
-function submissionReceipt(report) {
+function submissionReceipt(report, now = Date.now()) {
   const parts = submissionParts(report);
   if (!parts) return [];
   const separator = () => {
@@ -2764,25 +2766,26 @@ function submissionReceipt(report) {
   };
   const stamp = document.createElement('span');
   stamp.textContent = parts.slice(3);
-  stamp.title = submissionStampTitle(report);
+  stamp.title = submissionStampTitle(report, now);
   const dot = document.createElement('span');
   dot.className = 'state-dot';
   dot.dataset.state = submissionState(report);
   dot.setAttribute('role', 'img');
-  dot.setAttribute('aria-label', submissionStateWord(report));
-  dot.title = submissionStateWord(report);
+  const stateWord = submissionStateWord(report, now);
+  dot.setAttribute('aria-label', stateWord);
+  dot.title = stateWord;
   const when = document.createElement('span');
-  when.textContent = time(submissionStamp(report));
-  when.title = fullRelativeTime(submissionStamp(report));
+  when.textContent = time(submissionStamp(report), { now });
+  when.title = fullRelativeTime(submissionStamp(report), { now });
   return [stamp, separator(), dot, separator(), when];
 }
-function renderReportAcknowledgement() {
+function renderReportAcknowledgement(now = Date.now()) {
   const report = getState()?.reports.find(item => item.id === $('#report-select').value);
   const receipt = $('#report-agent-ack');
-  receipt.replaceChildren(...submissionReceipt(report));
+  receipt.replaceChildren(...submissionReceipt(report, now));
   receipt.hidden = !receipt.children.length;
   const footer = $('#report-agent-ack-footer');
-  footer.replaceChildren(...submissionReceipt(report));
+  footer.replaceChildren(...submissionReceipt(report, now));
   footer.hidden = receipt.hidden;
   const history = $('#report-ack-history');
   const references = referenceTypes(getState() || {});
@@ -2791,7 +2794,7 @@ function renderReportAcknowledgement() {
     for (const reply of [{text: ack.ack_text, html: ack.ack_html, at: ack.acknowledged_at}, ...(ack.replies || [])]) {
       const block = document.createElement('div');
       block.className = 'reply-block';
-      block.title = `Submission ${ack.id.slice(0, 6)} · ${fullRelativeTime(reply.at)}`;
+      block.title = `Submission ${ack.id.slice(0, 6)} · ${fullRelativeTime(reply.at, { now })}`;
       if (reply.html !== undefined) block.innerHTML = linkReferences(reply.html, references);
       else {
         const plain = document.createElement('p');
@@ -3038,14 +3041,17 @@ async function loadReport(force = false) {
     $('#report-form').dataset.fields = result.fields;
     const report = getState()?.reports.find(item => item.id === id);
     // Show one date: Edited for a republished report, or Published.
-    const stampSource = result.edited && result.published && result.edited !== result.published
-      ? `Edited ${time(result.edited)}`
-      : result.published || result.edited ? `Published ${time(result.published || result.edited)}` : '';
-    const stampTitle = result.edited && result.published && result.edited !== result.published
-      ? `Edited ${fullRelativeTime(result.edited)}`
-      : result.published || result.edited ? `Published ${fullRelativeTime(result.published || result.edited)}` : '';
-    reportStatusLine(stampSource, id, report?.latest_answer_at ? report.latest_answer_id : null);
+    const isEdited = Boolean(result.edited && result.published && result.edited !== result.published);
+    const reportStampAt = isEdited ? result.edited : (result.published || result.edited || null);
+    const reportStampPrefix = isEdited ? 'Edited' : 'Published';
+    const stampSource = reportStampAt ? `${reportStampPrefix} ${time(reportStampAt)}` : '';
+    const stampTitle = reportStampAt ? `${reportStampPrefix} ${fullRelativeTime(reportStampAt)}` : '';
+    const answerId = report?.latest_answer_at ? report.latest_answer_id : null;
+    reportStatusLine(stampSource, id, answerId);
     $('#report-status').title = stampTitle;
+    reportStatusStamp = reportStampAt
+      ? { mode: 'line', prefix: reportStampPrefix, at: reportStampAt, id, answerId, renderedText: $('#report-status').textContent }
+      : null;
     // Opening the report clears any unread ack immediately because the receipt sits at the panel top.
     settleReportAck();
     checkReportRead();
@@ -3115,9 +3121,9 @@ function taskFilterType(task) {
   if (task.type === 'operations') return 'ops';
   return task.type === 'unspecified' ? 'misc' : task.type || 'misc';
 }
-function taskTooltip(task) {
+function taskTooltip(task, now = Date.now()) {
   const stamp = task.completed_at || task.updated_at;
-  const age = stamp ? fullRelativeTime(stamp) : '';
+  const age = stamp ? fullRelativeTime(stamp, { now }) : '';
   const hasOrder = task.order !== undefined && task.order !== null && task.order !== '';
   const first = hasOrder ? `${task.order}. ${task.id}` : task.id;
   const runs = Array.isArray(task.runs) && task.runs.length ? task.runs.join(' ') : '';
@@ -4115,11 +4121,12 @@ function resolveBoardMentions(text, board = getState()?.board, rowRepo = '', ent
     return labelText ? `${prefix}@${labelText}` : full;
   });
 }
+const boardEntryStamps = new Set();
 function formatBoardEntryStamp(entry, stamp, now = Date.now()) {
+  stamp.dataset.timestamp = entry.at || '';
   stamp.textContent = entry.at ? time(entry.at, { now }) : '';
-  if (entry.at) stamp.title = compactViewport()
-    ? fullRelativeTime(entry.at, { now })
-    : clockTime(entry.at);
+  if (entry.at) stamp.title = fullRelativeTime(entry.at, { now });
+  boardEntryStamps.add(stamp);
 }
 function renderBoard() {
   const board = getState()?.board;
@@ -4201,7 +4208,7 @@ function renderBoard() {
     const surveyBtn = document.createElement('button');
     surveyBtn.type = 'button';
     surveyBtn.className = 'board-survey-open';
-    const { dotState, statusWord, statusText } = sessionStatusInfo(row, selfSid);
+    const { dotState, statusWord, statusText, statusTitle } = sessionStatusInfo(row, selfSid);
     const dotLabel = `Open survey results (${statusWord})`;
     surveyBtn.setAttribute('aria-label', dotLabel);
     surveyBtn.title = dotLabel;
@@ -4218,6 +4225,7 @@ function renderBoard() {
     statusSpan.className = 'board-status-text';
     statusSpan.dataset.branch = row.branch || '';
     statusSpan.textContent = statusText;
+    statusSpan.title = statusTitle || '';
     info.append(code, badge, meta, surveyBtn, statusSpan);
     const actions = document.createElement('div');
     actions.className = 'row tight';
@@ -4844,6 +4852,7 @@ function clearReportPanel(id) {
   const deletedAt = new Date().toISOString();
   $('#report-status').textContent = `Report ${id} · Deleted · ${time(deletedAt)}`;
   $('#report-status').title = `Deleted ${fullRelativeTime(deletedAt)}`;
+  reportStatusStamp = { mode: 'deleted', at: deletedAt, id, renderedText: $('#report-status').textContent };
   listSignature = null;
   if (nextId && !$('#reports-panel').hidden) void loadReport(true);
   void refreshState();
@@ -5482,16 +5491,17 @@ $('#agent-interrupt').addEventListener('click', async () => {
 });
 // Skip poll toggles a one-shot flag that ends the agent's wait without leaving a note for a later turn.
 // A second press cancels the skip, so an early press cannot force the wait to end.
-function paintSkipPoll(skipPoll) {
+let reportStatusStamp = null;
+function paintSkipPoll(skipPoll, now = Date.now()) {
   const button = $('#skip-poll');
   const armed = Boolean(skipPoll);
   button.setAttribute('aria-pressed', armed ? 'true' : 'false');
   button.dataset.state = button.dataset.error ? 'bad' : armed ? 'good' : '';
   label(button, button.dataset.error || (armed
-    ? `Skip poll armed ${time(skipPoll)}, ending the agent wait`
+    ? `Skip poll armed ${time(skipPoll, { now })}, ending the agent wait`
     : 'Ask the agent to end its wait now'));
   if (armed && !button.dataset.error) {
-    button.title = `Skip poll armed ${fullRelativeTime(skipPoll)}, ending the agent wait`;
+    button.title = `Skip poll armed ${fullRelativeTime(skipPoll, { now })}, ending the agent wait`;
   }
 }
 $('#skip-poll').addEventListener('click', async () => {
@@ -5548,6 +5558,14 @@ setInterval(paintConnection, 1000);
 function repaintReceiptAges(now = Date.now()) {
   if (lastState) renderAgentKey(lastState.agent_key, lastState.repo, lastState.userscript_version || connectedUserscriptVersion);
   for (const row of messageNodes.values()) {
+    const answer = row.children[1];
+    if (answer && !answer.hidden) {
+      for (const block of answer.children || []) {
+        if (block?.dataset?.replyAt) {
+          block.title = `Replied again ${fullRelativeTime(block.dataset.replyAt, { now })}`;
+        }
+      }
+    }
     const receipt = row.children[2];
     const stamp = receipt && receipt.children[3];
     if (!stamp || !stamp.dataset.at) continue;
@@ -5566,8 +5584,53 @@ function repaintRelativeStamps() {
     stamp.textContent = time(value, { now });
     if (compact) stamp.title = fullRelativeTime(value, { now });
     if (stamp.className === 'muted') {
+      stamp.title = fullRelativeTime(value, { now });
       stamp.setAttribute('aria-label', `Last answer: ${fullRelativeTime(value, { now })}`);
     }
+  }
+  if (lastState?.last_check) {
+    $('#last-check').textContent = `Last read/ack: ${time(lastState.last_check, { now })}`;
+    $('#last-check').title = fullRelativeTime(lastState.last_check, { now });
+  }
+  if (!draggingTaskId && lastTasksPayload?.updated_at) {
+    $('#tasks-status').textContent = `Updated ${time(lastTasksPayload.updated_at, { now })}`;
+    $('#tasks-status').title = fullRelativeTime(lastTasksPayload.updated_at, { now });
+    if (!$('#tasks-panel')?.hidden) {
+      const byId = new Map([...(lastTasksPayload.upcoming || []), ...(lastTasksPayload.finished || [])].map(t => [t.id, t]));
+      for (const row of [...$('#tasks-current-body').children, ...$('#tasks-upcoming-body').children, ...$('#tasks-finished-body').children]) {
+        const record = byId.get(rowTaskId(row));
+        if (!record) continue;
+        const tooltip = taskTooltip(record, now);
+        row.title = tooltip;
+        const titleNode = row.children?.find?.(child => child.className === 'task-title') || row.querySelector?.('.task-title');
+        if (titleNode) titleNode.title = tooltip;
+      }
+    }
+  }
+  if (reportStatusStamp) {
+    const statusEl = $('#report-status');
+    if (statusEl.textContent !== reportStatusStamp.renderedText) {
+      reportStatusStamp = null;
+    } else if (reportStatusStamp.mode === 'deleted') {
+      statusEl.textContent = `Report ${reportStatusStamp.id} · Deleted · ${time(reportStatusStamp.at, { now })}`;
+      statusEl.title = `Deleted ${fullRelativeTime(reportStatusStamp.at, { now })}`;
+      reportStatusStamp.renderedText = statusEl.textContent;
+    } else {
+      reportStatusLine(`${reportStatusStamp.prefix} ${time(reportStatusStamp.at, { now })}`, reportStatusStamp.id, reportStatusStamp.answerId);
+      statusEl.title = `${reportStatusStamp.prefix} ${fullRelativeTime(reportStatusStamp.at, { now })}`;
+      reportStatusStamp.renderedText = statusEl.textContent;
+    }
+  }
+  if (!$('#reports-panel')?.hidden && lastState) {
+    renderReportAcknowledgement(now);
+  }
+  if (lastState?.skip_poll && !$('#skip-poll').dataset.error) {
+    paintSkipPoll(lastState.skip_poll, now);
+  }
+  for (const stamp of [...boardEntryStamps]) {
+    if (!stamp?.dataset?.timestamp) { boardEntryStamps.delete(stamp); continue; }
+    stamp.textContent = time(stamp.dataset.timestamp, { now });
+    stamp.title = fullRelativeTime(stamp.dataset.timestamp, { now });
   }
   repaintReceiptAges(now);
 }

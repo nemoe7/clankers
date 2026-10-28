@@ -58,6 +58,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Tick all preview relative timestamps and hover `title` attributes every second on the client timer without WebSocket refreshes (`assets/app.js`).
 - Honor new unanswered `--report` waits on tasks with earlier submissions, and wait in `poll` when `blocked_by` tasks remain upcoming (`scripts/preview.py`).
 - Clear unread report-acknowledgement markers via `settleReportAck` when an ack arrives in view or when returning to an already-loaded report (`assets/app.js`).
 - Check the live preview port in `scripts/install.sh` and print an in-process hot-reload notice instead of a `start_process` hint when `serve` is already up.
