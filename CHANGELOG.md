@@ -52,6 +52,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Strip client-side state diff, merge, and backup synthesis helpers from `arena.user.js` while keeping revision-gated state relay, receipts, backup offers, and status UI.
 - Strip client-side board diff and merge helpers from `arena.user.js` while keeping revision-gated board relay, file hydration, wakes, and status UI.
 - Omit raw secrets from `keyNote()` and report proxy key expiry countdowns (`arena.user.js`).
 

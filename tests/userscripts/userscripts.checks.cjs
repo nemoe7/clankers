@@ -2232,9 +2232,10 @@ function checkStateDownload(api, session, logging) {
   var slugFromBare = api.slugFromBare;
   var getLine = api.getLine;
   var proxyStateFailLine = api.proxyStateFailLine;
-  var computeStateDiff = api.computeStateDiff;
-  var applyStateDiff = api.applyStateDiff;
   var stateError = api.stateError;
+  assert.equal(api.computeStateDiff, undefined);
+  assert.equal(api.applyStateDiff, undefined);
+  assert.equal(api.backupTextForOffer, undefined);
   assert.equal(api.pagePicker, undefined);
   assert.equal(api.writeToHandle, undefined);
   assert.equal(api.writeStateDownload, undefined);
@@ -2378,23 +2379,6 @@ function checkStateDownload(api, session, logging) {
     ).type,
     "download",
   );
-  // Shared state diff helpers compute minimal upserts + tombstones and reconstruct canonical order.
-  var baseCore = [
-    { id: "n-1", text: "note 1" },
-    { id: "t-1", title: "Task 1" },
-  ];
-  var nextCore = [
-    { id: "n-1", text: "note 1" },
-    { id: "n-2", text: "note 2" },
-  ];
-  var computedDiff = computeStateDiff(baseCore, nextCore, 1, 2);
-  assert.equal(computedDiff.base_rev, 1);
-  assert.equal(computedDiff.rev, 2);
-  assert.equal(computedDiff.upserts.length, 1);
-  assert.equal(computedDiff.upserts[0].id, "n-2");
-  assert.equal(computedDiff.tombstones.length, 1);
-  assert.equal(computedDiff.tombstones[0].key, "t-1");
-  assert.deepEqual(JSON.parse(JSON.stringify(applyStateDiff(baseCore, computedDiff))), nextCore);
   // The repo bar carries the pair and the branch anchor, so the name scopes to this repo and
   // branch and two repos never collide in one folder.
   var branchLink = {

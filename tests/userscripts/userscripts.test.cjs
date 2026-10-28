@@ -1675,7 +1675,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     // Background 502 never shows #clankers-state-panel:
     tick();
     const pollAfterSeed = requests.at(-1);
-    assert.match(pollAfterSeed.url, /\?since=1&mode=diff$/);
+    assert.equal(new URL(pollAfterSeed.url).pathname, "/api/userscript-autosave");
+    assert.equal(new URL(pollAfterSeed.url).search, "");
     await respond("GET", "/api/userscript-autosave", 502, null);
     assert.equal(panel(), null);
 
@@ -1688,7 +1689,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       revision: 1,
       board: { main_session_id: "", allowed_sessions: [], sessions: [], entries: [] },
     });
-    await respond("GET", "/api/userscript-autosave", 200, { unchanged: true, mode: "diff", revision: 1, scope, save_id: "first", digest: healthy.digest, stamp: "t1", lastsave: "t1", beforelastsave: null, counts: { notes: 1, tasks: 0 } });
+    await respond("GET", "/api/userscript-autosave", 200, healthy);
     await respond("GET", "/v1/state", 200, {
       ok: true,
       exists: true,
@@ -1743,13 +1744,12 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(saved.get(receiptKey).beforelastsave, "t1");
     assert.equal(saved.get(pendingKey), null);
 
-    // 409 need_full on /v1/state falls back to full core snapshot automatically:
+    // Incremental autosave relays full core snapshot directly to /v1/state:
     const coreV3 = [{ id: "n", text: "changed" }, { id: "n2", text: "added" }];
     const snapV3 = {
       revision: 3,
-      unchanged: false,
-      mode: "diff",
-      diff: { base_rev: 2, rev: 3, upserts: [{ id: "n2", text: "added" }], tombstones: [] },
+      mode: "full",
+      core: coreV3,
       save_id: "third",
       scope,
       digest: digest(coreV3),
@@ -1760,11 +1760,11 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     };
     tick();
     await respond("GET", "/api/userscript-autosave", 200, snapV3);
+    assert.match(requests.at(-1).url, /since=2$/);
     await respond("GET", "/v1/state", 200, { ok: true, unchanged: true, exists: true, revision: 2 });
-    assert.ok(JSON.parse(requests.at(-1).data).diff);
-    await respond("POST", "/v1/state", 409, { ok: false, error: "stale-revision", need_full: true });
-    const retryFull = JSON.parse(requests.at(-1).data);
-    assert.ok(Array.isArray(retryFull.core), "409 need_full retries immediately with full core");
+    const putV3 = JSON.parse(requests.at(-1).data);
+    assert.ok(Array.isArray(putV3.core), "autosave relays full core without client diffing");
+    assert.equal(putV3.diff, undefined);
     await respond("POST", "/v1/state", 200, { ok: true, revision: 1, digest: snapV3.digest });
     await respond("POST", "/api/userscript-autosave", 201, {
       confirmed: true,
@@ -2245,8 +2245,9 @@ for raw in sys.stdin:
       await callPy({ op: "mutate" });
       tick();
       await drain();
-      assert.equal(proxyWrites.length, 2, "second autosave writes incremental diff to /v1/state");
-      assert.ok(proxyWrites[1].diff, "second autosave sends diff instead of full core");
+      assert.equal(proxyWrites.length, 2, "second autosave relays full snapshot to /v1/state");
+      assert.ok(Array.isArray(proxyWrites[1].core), "second autosave sends full core");
+      assert.equal(proxyWrites[1].diff, undefined);
       const secondReceipt = structuredClone(saved.get(receiptKey));
       const secondServer = await callPy({ op: "inspect" });
       assert.equal(secondReceipt.lastsave, secondServer.lastsave);

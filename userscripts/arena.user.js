@@ -4858,128 +4858,6 @@
     noProxy: "Configure proxy host and master key in Settings.",
   };
 
-  function canonicalDiffJson(val) {
-    if (val === null || typeof val !== "object") return JSON.stringify(val);
-    if (Array.isArray(val)) {
-      return "[" + val.map(canonicalDiffJson).join(",") + "]";
-    }
-    var keys = Object.keys(val).sort();
-    var parts = [];
-    for (var i = 0; i < keys.length; i += 1) {
-      var k = keys[i];
-      if (val[k] !== undefined) {
-        parts.push(JSON.stringify(k) + ":" + canonicalDiffJson(val[k]));
-      }
-    }
-    return "{" + parts.join(",") + "}";
-  }
-
-  function stateRecordGroup(record) {
-    if (!record || typeof record !== "object") return "notes";
-    if ("markdown" in record) return "reports";
-    if ("title" in record) return "tasks";
-    if ("report_id" in record) return "answers";
-    return "notes";
-  }
-
-  function stateRecordKey(record) {
-    if (!record || typeof record !== "object") return canonicalDiffJson(record);
-    var recId = String(record.id || "").trim();
-    if (recId) return recId;
-    if (record.seq !== undefined && record.seq !== null) return "seq:" + String(record.seq);
-    return canonicalDiffJson(record);
-  }
-
-  function computeStateDiff(prevCore, nextCore, baseRev, nextRev) {
-    var prevMap = Object.create(null);
-    var i;
-    var row;
-    var pairKey;
-    if (Array.isArray(prevCore)) {
-      for (i = 0; i < prevCore.length; i += 1) {
-        row = prevCore[i];
-        if (!row || typeof row !== "object" || row.type === "userscript-autosave") continue;
-        var pGrp = stateRecordGroup(row);
-        var pKey = stateRecordKey(row);
-        pairKey = pGrp + "\u0000" + pKey;
-        prevMap[pairKey] = { grp: pGrp, key: pKey, json: canonicalDiffJson(row) };
-      }
-    }
-    var nextSeen = Object.create(null);
-    var upserts = [];
-    if (Array.isArray(nextCore)) {
-      for (i = 0; i < nextCore.length; i += 1) {
-        row = nextCore[i];
-        if (!row || typeof row !== "object" || row.type === "userscript-autosave") continue;
-        var nGrp = stateRecordGroup(row);
-        var nKey = stateRecordKey(row);
-        pairKey = nGrp + "\u0000" + nKey;
-        nextSeen[pairKey] = true;
-        var enc = canonicalDiffJson(row);
-        if (!prevMap[pairKey] || prevMap[pairKey].json !== enc) {
-          upserts.push(row);
-        }
-      }
-    }
-    var tombstones = [];
-    var prevKeys = Object.keys(prevMap).sort();
-    for (i = 0; i < prevKeys.length; i += 1) {
-      if (!nextSeen[prevKeys[i]]) {
-        tombstones.push({ group: prevMap[prevKeys[i]].grp, key: prevMap[prevKeys[i]].key });
-      }
-    }
-    return {
-      base_rev: Number(baseRev) || 0,
-      rev: Number(nextRev) || 0,
-      upserts: upserts,
-      tombstones: tombstones,
-    };
-  }
-
-  function applyStateDiff(baseCore, diffObj) {
-    if (!diffObj || typeof diffObj !== "object") return Array.isArray(baseCore) ? baseCore.slice() : [];
-    var upserts = Array.isArray(diffObj.upserts) ? diffObj.upserts : [];
-    var tombstones = Array.isArray(diffObj.tombstones) ? diffObj.tombstones : [];
-    var index = Object.create(null);
-    var order = [];
-    var i;
-    var row;
-    var pairKey;
-    if (Array.isArray(baseCore)) {
-      for (i = 0; i < baseCore.length; i += 1) {
-        row = baseCore[i];
-        if (!row || typeof row !== "object" || row.type === "userscript-autosave") continue;
-        pairKey = stateRecordGroup(row) + "\u0000" + stateRecordKey(row);
-        if (!index[pairKey]) order.push(pairKey);
-        index[pairKey] = Object.assign({}, row);
-      }
-    }
-    var removed = Object.create(null);
-    for (i = 0; i < tombstones.length; i += 1) {
-      var tomb = tombstones[i];
-      if (!tomb || typeof tomb !== "object") continue;
-      var tGrp = String(tomb.group || "").trim();
-      var tKey = String(tomb.key || "").trim();
-      if (tGrp && tKey) {
-        removed[tGrp + "\u0000" + tKey] = true;
-        delete index[tGrp + "\u0000" + tKey];
-      }
-    }
-    for (i = 0; i < upserts.length; i += 1) {
-      row = upserts[i];
-      if (!row || typeof row !== "object" || row.type === "userscript-autosave") continue;
-      pairKey = stateRecordGroup(row) + "\u0000" + stateRecordKey(row);
-      delete removed[pairKey];
-      if (!index[pairKey]) order.push(pairKey);
-      index[pairKey] = Object.assign({}, row);
-    }
-    var out = [];
-    for (i = 0; i < order.length; i += 1) {
-      if (index[order[i]] && !removed[order[i]]) out.push(index[order[i]]);
-    }
-    return out;
-  }
-
   var STATE_WATCH_MS = 60 * 1000;
 
 
@@ -5259,7 +5137,6 @@
   var seedPreviewBoardInFlightByBase = new Set();
   var previewBoardPullByBase = new Map();
   var lastSyncedMemberSigByBase = new Map();
-  var previewAutosavePullByBase = new Map();
   var proxyStateCacheByScope = new Map();
   var MAX_ORIGIN_STATE_CACHE = 2;
   var MAX_HYDRATED_FILE_KEYS = 256;
@@ -5937,7 +5814,6 @@
       stateDiffCounts: stateDiffCounts,
       stateMismatchLine: stateMismatchLine,
       mismatchOfferId: mismatchOfferId,
-      backupTextForOffer: backupTextForOffer,
       stateMemory: stateMemory,
       stateRemembered: stateRemembered,
       panelNeeded: panelNeeded,
@@ -5954,8 +5830,6 @@
       readSlug: readSlug,
       slugFromBare: slugFromBare,
       sameSaves: sameSaves,
-      computeStateDiff: computeStateDiff,
-      applyStateDiff: applyStateDiff,
       previewFrame: previewFrame,
       previewBase: previewBase,
       notifyPreviewReady: notifyPreviewReady,
@@ -6055,19 +5929,6 @@
       removeStatePanel(true);
       logEvent("state", "saved", { route: "proxy", repo: pending.scope.repo, filename: pending.name });
       if (pending.force) statePanel("Forced save of " + pending.name + ".", null, null, true);
-    }
-
-    function fileCore(text) {
-      var records;
-      try {
-        records = JSON.parse(text);
-        if (!Array.isArray(records)) records = [records];
-      } catch (err) {
-        records = text.split(/\r?\n/).filter(function (line) { return line.trim(); }).map(function (line) { return JSON.parse(line); });
-      }
-      return records.filter(function (record) {
-        return record.type !== "userscript-autosave";
-      });
     }
 
     function panelNeeded(manual, shown) {
@@ -6255,23 +6116,9 @@
       ].join("|");
     }
 
-    function backupTextForOffer(backupText, known) {
-      var raw = String(backupText || "");
-      if (raw.trim()) return raw;
-      if (known && Array.isArray(known.core) && known.core.length) {
-        return known.core.map(function (row) { return JSON.stringify(row); }).join("\n") + "\n";
-      }
-      return "";
-    }
-
     function offerStateBackup(base, storeKey, scope, preferredName, known, body, backupText, summary) {
-      var text = backupTextForOffer(backupText, known);
-      if (!text) return;
-      try {
-        if (!fileCore(text).length) return;
-      } catch (err) {
-        return;
-      }
+      var text = String(backupText || "");
+      if (!text.trim()) return;
       var offerId = mismatchOfferId(known, body);
       if (GM_getValue(offerKey(storeKey), "") === offerId) return;
       GM_setValue(offerKey(storeKey), offerId);
@@ -6279,7 +6126,7 @@
         scope && scope.repo,
         scope && scope.branch,
         (known && known.lastsave) || "",
-        (known && known.counts) || (known && Array.isArray(known.core) ? coreCounts(known.core) : null),
+        (known && known.counts) || null,
       );
       stateJson(base + "/api/userscript-autosave/offer", {
         name: name,
@@ -6294,41 +6141,8 @@
       });
     }
 
-    async function pullPreviewAutosave(base, force) {
-      var cur = !force ? previewAutosavePullByBase.get(base) : null;
-      var url = (cur && cur.rev > 0 && Array.isArray(cur.core))
-        ? (base + "/api/userscript-autosave?since=" + String(cur.rev) + "&mode=diff")
-        : (base + "/api/userscript-autosave");
-      var answer = await stateJson(url);
-      if (!answer || answer.status !== 200 || !answer.body) return answer;
-      var rawBody = answer.body;
-      if (rawBody.mode === "diff" && cur && Array.isArray(cur.core)) {
-        var nextCore = rawBody.unchanged
-          ? cur.core
-          : (rawBody.diff ? applyStateDiff(cur.core, rawBody.diff) : null);
-        if (Array.isArray(nextCore)) {
-          var nextRev = Number(rawBody.revision) || cur.rev;
-          setBoundedMap(previewAutosavePullByBase, base, { rev: nextRev, core: nextCore }, MAX_ORIGIN_STATE_CACHE);
-          return {
-            status: 200,
-            failure: null,
-            body: Object.assign({}, rawBody, { core: nextCore }),
-          };
-        }
-        previewAutosavePullByBase.delete(base);
-        return pullPreviewAutosave(base, true);
-      }
-      if (Array.isArray(rawBody.core)) {
-        if (typeof rawBody.revision === "number" && rawBody.revision > 0) {
-          setBoundedMap(previewAutosavePullByBase, base, {
-            rev: Number(rawBody.revision),
-            core: rawBody.core,
-          }, MAX_ORIGIN_STATE_CACHE);
-        } else {
-          previewAutosavePullByBase.delete(base);
-        }
-      }
-      return answer;
+    async function pullPreviewAutosave(base) {
+      return stateJson(base + "/api/userscript-autosave");
     }
 
     async function pullProxyStateSnapshot(repo, branch, force) {
@@ -6337,7 +6151,7 @@
       var query = "?repo=" + encodeURIComponent(repo || "") +
         "&branch=" + encodeURIComponent(branch || "") +
         "&fallback_repo=1" +
-        (cached && cached.rev > 0 ? ("&since=" + String(cached.rev) + "&mode=diff") : "");
+        (cached && cached.rev > 0 ? ("&since=" + String(cached.rev)) : "");
       var res = await proxyBoardJson("/v1/state" + query);
       if (!res || res.status !== 200 || !res.body || res.body.ok === false) {
         proxyStateCacheByScope.delete(scopeId);
@@ -6351,27 +6165,9 @@
         setBoundedMap(proxyStateCacheByScope, scopeId, unchangedSnap, MAX_ORIGIN_STATE_CACHE);
         return { ok: true, res: res, snap: unchangedSnap };
       }
-      if (rb.mode === "diff" && rb.diff && cached && Array.isArray(cached.core)) {
-        var mergedCore = applyStateDiff(cached.core, rb.diff);
-        var updatedSnap = {
-          exists: true,
-          rev: Number(rb.revision) || (cached.rev + 1),
-          scope: rb.scope || cached.scope || { repo: repo, branch: branch },
-          save_id: rb.save_id || cached.save_id || "",
-          digest: rb.digest || cached.digest || "",
-          stamp: rb.stamp || cached.stamp || "",
-          lastsave: rb.lastsave !== undefined ? rb.lastsave : cached.lastsave,
-          beforelastsave: rb.beforelastsave !== undefined ? rb.beforelastsave : cached.beforelastsave,
-          counts: rb.counts || coreCounts(mergedCore),
-          core: mergedCore,
-          text: "",
-        };
-        setBoundedMap(proxyStateCacheByScope, scopeId, updatedSnap, MAX_ORIGIN_STATE_CACHE);
-        return { ok: true, res: res, snap: updatedSnap };
-      }
       if (rb.exists) {
         var fullCore = Array.isArray(rb.core) ? rb.core : [];
-        var fullSnap = {
+        var metaSnap = {
           exists: true,
           rev: Number(rb.revision) || 0,
           scope: rb.scope || { repo: repo, branch: branch },
@@ -6381,30 +6177,30 @@
           lastsave: rb.lastsave !== undefined ? rb.lastsave : null,
           beforelastsave: rb.beforelastsave !== undefined ? rb.beforelastsave : null,
           counts: rb.counts || coreCounts(fullCore),
-          core: fullCore,
           text: "",
         };
-        setBoundedMap(proxyStateCacheByScope, scopeId, fullSnap, MAX_ORIGIN_STATE_CACHE);
+        setBoundedMap(proxyStateCacheByScope, scopeId, metaSnap, MAX_ORIGIN_STATE_CACHE);
         return {
           ok: true,
           res: res,
           snap: typeof rb.text === "string" && rb.text
-            ? Object.assign({}, fullSnap, { text: rb.text })
-            : fullSnap,
+            ? Object.assign({}, metaSnap, { text: rb.text })
+            : metaSnap,
         };
       }
       proxyStateCacheByScope.delete(scopeId);
       return {
         ok: true,
         res: res,
-        snap: { exists: false, rev: 0, core: [], text: "" },
+        snap: { exists: false, rev: 0, text: "" },
       };
     }
 
-    async function pushProxyStateSnapshot(repo, branch, prevSnap, body, force) {
+    async function pushProxyStateSnapshot(repo, branch, prevSnap, body) {
       var scopeId = stateScopeKey(repo, branch);
       var targetScope = { repo: repo, branch: branch };
-      var baseFields = {
+      var counts = body.counts || coreCounts(body.core);
+      var putRes = await proxyBoardJson("/v1/state", {
         action: "put",
         scope: targetScope,
         save_id: body.save_id,
@@ -6412,30 +6208,11 @@
         stamp: body.stamp,
         lastsave: body.stamp,
         beforelastsave: body.lastsave || null,
-        counts: body.counts || coreCounts(body.core),
+        counts: counts,
         stamps: body.stamps || {},
-      };
-      var useDiff = Boolean(!force && prevSnap && prevSnap.exists && prevSnap.rev > 0 && Array.isArray(prevSnap.core));
-      var putPayload = useDiff
-        ? Object.assign({}, baseFields, {
-          diff: computeStateDiff(prevSnap.core, body.core, prevSnap.rev, prevSnap.rev + 1),
-        })
-        : Object.assign({}, baseFields, {
-          core: body.core,
-          history: Array.isArray(body.history) ? body.history : undefined,
-        });
-      var putRes = await proxyBoardJson("/v1/state", putPayload);
-      if (
-        useDiff &&
-        putRes &&
-        (putRes.status === 409 || (putRes.body && putRes.body.need_full))
-      ) {
-        proxyStateCacheByScope.delete(scopeId);
-        putRes = await proxyBoardJson("/v1/state", Object.assign({}, baseFields, {
-          core: body.core,
-          history: Array.isArray(body.history) ? body.history : undefined,
-        }));
-      }
+        core: body.core,
+        history: Array.isArray(body.history) ? body.history : undefined,
+      });
       if (putRes && putRes.status === 200 && putRes.body && putRes.body.ok !== false) {
         setBoundedMap(proxyStateCacheByScope, scopeId, {
           exists: true,
@@ -6446,8 +6223,7 @@
           stamp: body.stamp,
           lastsave: body.stamp,
           beforelastsave: body.lastsave || null,
-          counts: body.counts || coreCounts(body.core),
-          core: body.core,
+          counts: counts,
           text: "",
         }, MAX_ORIGIN_STATE_CACHE);
       }
@@ -6488,7 +6264,7 @@
           await confirmPending(base, storeKey, pending);
           return;
         }
-        var answer = await pullPreviewAutosave(base, Boolean(force));
+        var answer = await pullPreviewAutosave(base);
         var body = answer && answer.body;
         if (!answer || answer.status !== 200 || !body || !Array.isArray(body.core) || !body.scope ||
             !body.save_id || !body.digest) {
@@ -6566,8 +6342,7 @@
             scope: body.scope,
             lastsave: proxySnap.lastsave !== undefined ? proxySnap.lastsave : (baseline && baseline.lastsave) || null,
             beforelastsave: proxySnap.beforelastsave !== undefined ? proxySnap.beforelastsave : (baseline && baseline.beforelastsave) || null,
-            counts: proxySnap.counts || coreCounts(proxySnap.core),
-            core: proxySnap.core,
+            counts: proxySnap.counts || (baseline && baseline.counts) || null,
           };
         }
         var inSync = sameSaves(baseline, body);
@@ -6613,7 +6388,7 @@
           });
           return;
         }
-        var putRes = await pushProxyStateSnapshot(effectiveRepo, effectiveBranch, proxySnap, body, Boolean(force));
+        var putRes = await pushProxyStateSnapshot(effectiveRepo, effectiveBranch, proxySnap, body);
         if (!putRes || putRes.status !== 200 || !putRes.body || putRes.body.ok === false) {
           var putStatus = putRes ? putRes.status : 0;
           var putDetail = putStatus ? ("POST " + putStatus) : ((putRes && putRes.failure) || "unreachable");
@@ -8325,8 +8100,6 @@
     hasSeededPreviewBoard: function (base) {
       return seededPreviewBoardBases.has(String(base || "").replace(/\/+$/, ""));
     },
-    computeStateDiff: computeStateDiff,
-    applyStateDiff: applyStateDiff,
     resetBoardProxyCache: function () {
       proxyBoardCache = null;
       proxyBoardRevision = 0;
@@ -8339,7 +8112,6 @@
       seedPreviewBoardInFlightByBase.clear();
       previewBoardPullByBase.clear();
       lastSyncedMemberSigByBase.clear();
-      previewAutosavePullByBase.clear();
       proxyStateCacheByScope.clear();
       lastSkillPostAtByOrigin.clear();
     },
