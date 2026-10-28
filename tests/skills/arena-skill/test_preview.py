@@ -1386,20 +1386,15 @@ def test_http_boundaries():
       assert css_px(edited[1], "top") > 0
       assert re.search(r"\.log-edited\s*\{[^}]*color:\s*var\(--text\)", page)
       assert page.index('id="log-edited"') > page.index('class="log-scroll"')
-      # The save button sits in the top bar after the theme button rather than in the log's own row.
-      # The log's own copy and the tasks' copy are gone, and one copy button carries the state to the clipboard.
-      assert (
-        page.index('id="theme"')
-        < page.index('id="copy-state"')
-        < page.index('id="notes-panel"')
-      )
+      # The header has no state copy control. The log and task copy controls stay absent too.
+      assert 'id="copy-state"' not in page
+      assert page.index('id="theme"') < page.index('id="notes-panel"')
       assert page.index('id="log-search"') < page.index('id="skip-poll"')
       # The Skip poll button carries Lucide's skip-forward geometry, vendored inline.
       assert 'd="M21 4v16"' in page and "M6.029 4.285" in page
       assert 'id="copy-log"' not in page and 'id="copy-tasks"' not in page
       # Every icon button carries a title that repeats its accessible name.
       controls = (
-        "copy-state",
         "attach-file",
         "unpublish-report",
         "copy-report",
@@ -1581,12 +1576,10 @@ def test_http_boundaries():
       status, headers, _ = request("GET", "/api/reports/first/source")
       assert status == 200
       assert headers["Content-Disposition"] == 'attachment; filename="first.md"'
-      # The copy button asks for the report lines, so the clipboard carries the same
-      # fields as the save file.
+      # The report-source route carries the same fields as the save file.
       status, _, sources = request("GET", "/api/report-sources")
       assert status == 200
-      # One route hands the page the whole save file in one piece, so the copy button
-      # copies the server's export instead of assembling three routes.
+      # The export route returns the whole save file in one piece.
       status, _, copy_state = request("GET", "/api/copy-state")
       assert status == 200
       copy_payload = json.loads(copy_state)
@@ -1816,7 +1809,7 @@ def test_http_boundaries():
       assert '<section class="card log-card" aria-label="Message log">' in page
       assert page.index('id="connection"') < page.index('id="log-search"')
       # On phones, hide the composer hint and keep Send right-aligned with smaller padding and gaps.
-      # Keep Copy beside Downloads with equal button gaps. Shrink labels and hide the clock and theme.
+      # Keep equal button gaps. Shrink labels and hide the clock and theme.
       coarse_block = re.search(
         r"@media \(pointer:coarse\)\{((?:[^{}]|\{[^}]*\})*)\}", page
       )
@@ -1824,7 +1817,6 @@ def test_http_boundaries():
       coarse_rules = coarse_block[1]
       assert ".topbar-row{flex-wrap:nowrap;" in coarse_rules
       assert "#clock,#theme{display:none;}" in coarse_rules
-      assert "#copy-state{display:none;}" in coarse_rules
       assert "nav{flex:1;" in coarse_rules
       assert "nav button{padding:7px 3px;font-size:13px;}" in coarse_rules
       assert "#send{margin-left:auto;}" in coarse_rules
@@ -1849,7 +1841,7 @@ def test_http_boundaries():
         page.index('id="agent-interrupt"')
         < page.index('id="downloads-tab"')
         < page.index('id="theme"')
-        < page.index('id="copy-state"')
+        < page.index('id="notes-panel"')
       )
       assert "grid-template-columns:repeat(3,1fr)" in page
       assert (
@@ -2404,8 +2396,8 @@ def test_http_boundaries():
         seen_at="2026-09-21T09:03:00",
         task_id="saved-task",
       )
-      # Autosave writes what the database holds, in one file the importer can read. The page's
-      # copy button posts nothing, so this drives the writer the way a committed mutation does.
+      # Autosave writes what the database holds, in one file the importer can read. This drives
+      # the writer the way a committed mutation does.
       written = store.save_state(
         {
           "notes": [
@@ -15952,7 +15944,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   style_css = (
     Path(preview.__file__).resolve().parent.parent / "assets" / "style.css"
   ).read_text(encoding="utf-8")
-  assert style_css.count("#copy-state { display: none; }") >= 2
+  assert "#copy-state" not in style_css
   demo_script = (
     (collect_root / "skills" / "nemoizer").resolve().parents[1]
     / "maintenance"

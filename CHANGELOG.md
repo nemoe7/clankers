@@ -32,6 +32,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### arena-skill
 
 - Remove unused preview helpers and the board stamp registry (`skills/refs/arena-skill/`).
+- Remove the preview Copy state control and its client handlers (`assets/`).
 
 #### nuu
 

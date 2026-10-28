@@ -444,7 +444,6 @@ mark code { color: var(--text); }
   .log-card > .row:first-child > .stack { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .log-card > .row > .row.tight { flex: 1 1 100%; }
   #log-search { flex: 1 1 auto; max-width: none; }
-  #copy-state { display: none; }
 }
 @media (max-height: 30em) {
   .topbar { padding: 6px 12px; }
@@ -457,7 +456,7 @@ mark code { color: var(--text); }
   #note, .note-backdrop { max-height: min(120px, 24dvh); }
 }
 
-/* On touch devices, the tab strip and copy button stay on one line while the clock and theme toggle hide. */
+/* On touch devices, the tab strip stays on one line while the clock and theme toggle hide. */
 @media (pointer: coarse) {
   .topbar-row { flex-wrap: nowrap; gap: 6px; }
   .topbar-row > .row.tight { flex: 0 0 auto; gap: 6px; }
@@ -466,7 +465,6 @@ mark code { color: var(--text); }
   nav button { padding: 7px 3px; font-size: 13px; }
   #send { margin-left: auto; }
   .card.compose { padding: 6px; }
-  #copy-state { display: none; }
 }
 :root[data-keyboard-open="true"] .notes-layout > .composer-footer { display: none; }
 
@@ -768,7 +766,7 @@ mark code { color: var(--text); }
 #history :is(.answer, .message[data-board-author="agent"] > .message-text) ul, :is(.answer, .board-entry .message-text) ul ul { list-style-type: "\25E6\2004"; }
 .report .answer li { margin: 1px 0; }
 :is(#history, #reports-panel, #board-panel) :is(.answer, .message[data-board-author="agent"] > .message-text, .board-entry .message-text) li > p:not(:first-child) { margin: 5px 0; }
-body[data-board-role="worker"] :is(#notes-tab, #tasks-tab, #reports-tab, #downloads-tab, #copy-state, #force-save, #survey-test, #notes-panel, #tasks-panel, #reports-panel, #downloads-panel, #reports-scroll-frame, #report-submit-float) { display: none !important; }
+body[data-board-role="worker"] :is(#notes-tab, #tasks-tab, #reports-tab, #downloads-tab, #force-save, #survey-test, #notes-panel, #tasks-panel, #reports-panel, #downloads-panel, #reports-scroll-frame, #report-submit-float) { display: none !important; }
 #board-panel { flex: 1 1 auto; min-height: 0; width: 100%; overflow-y: auto; padding-inline: 5vw; }
 #board-panel > .card { background: transparent; border: 0; padding-inline: 0; padding-top: 0; width: min(900px, 90vw); max-width: 900px; margin-left: max(0px, calc((100vw - 900px) / 2 - 5vw)); margin-right: 0; }
 .board-layout { display: flex; flex-direction: column; gap: 16px; }

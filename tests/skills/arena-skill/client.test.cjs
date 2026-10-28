@@ -284,33 +284,6 @@ test('preview client', async (t) => {
       }
       if (url === '/api/submissions') return response((state.submissions || []).filter(record => (state.reports || []).some(report => report.id === record.report_id)));
       if (url === '/api/report-sources') return response(state.reportSources || []);
-      if (url === '/api/copy-state') {
-        // The route serves the save-file text and its counts. The harness projects the same keys.
-        if (state.copyStateFails) return response({ error: 'no route' }, false);
-        const noteKeys = ['id', 'text', 'at', 'acknowledged_at', 'ack_type', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
-        const taskKeys = ['id', 'title', 'details', 'status', 'order', 'blocked', 'type'];
-        const project = (record, keys) => {
-          const line = {};
-          for (const key of keys) line[key] = record[key] ?? null;
-          return line;
-        };
-        const tasks = state.tasks || {};
-        const taskLines = [...(tasks.upcoming || []), ...(tasks.finished || [])];
-        const lines = [
-          ...(state.notes || []).map(record => project(record, noteKeys)),
-          ...taskLines.map(record => project(record, taskKeys)),
-          ...(state.submissions || []),
-          ...(state.reportSources || []),
-        ];
-        return response({
-          text: lines.map(line => JSON.stringify(line)).join('\n') + '\n',
-          counts: { notes: (state.notes || []).length, tasks: taskLines.length,
-            answers: (state.submissions || []).length, reports: (state.reportSources || []).length },
-          stamp: '2026-10-06T09:00:00',
-          repo: 'clankers',
-          branch: 'main',
-        });
-      }
       if (url === '/api/skip-poll') {
         // The press toggles one flag and writes no note, so the harness records the call alone.
         const posted = JSON.parse(options.body || '{}');
@@ -554,14 +527,6 @@ test('preview client', async (t) => {
   let taskDraft;
   let taskCopied;
   let opened;
-  let cacheKeyHere;
-  let copiedText;
-  let lines;
-  let cachedHere;
-  let projectHere;
-  let noteKeysHere;
-  let taskKeysHere;
-  let taskLines;
   let release;
   let sending;
   let agentReceipt;
@@ -600,12 +565,10 @@ test('preview client', async (t) => {
   let logView;
   let jump;
   let priorState;
-  let stateCopyButton;
   let cacheKey;
   let sendNote;
   let sendsBefore;
   let fetchesBefore;
-  let filteredNotes;
   let longReceipt;
   let longId;
   let noteBox;
@@ -651,7 +614,6 @@ test('preview client', async (t) => {
   let editedNode;
   let renders;
   let replacements;
-  let copiesBeforeNotesOnly;
 
   await t.test("load the client", async () => {
     const probe = new Element();
@@ -670,11 +632,11 @@ test('preview client', async (t) => {
 
   await t.test("A copy swaps the shape for its check and back, and the theme swaps its own", async () => {
     // The page's icons come from the vendored Lucide table, so each swap redraws from one source.
-    copyIcon = get('#copy-state');
+    copyIcon = get('#copy-report');
     normalTimeout = context.setTimeout;
     finishCopy = undefined;
     context.setTimeout = callback => { finishCopy = callback; };
-    await context.copyFrom(copyIcon, 'icon probe', 'state');
+    await context.copyFrom(copyIcon, 'icon probe', 'report');
     assert.equal(shapeOf(copyIcon).getAttribute('d'), 'M20 6 9 17l-5-5');
     finishCopy();
     const restored = shapeOf(copyIcon);
@@ -1711,52 +1673,15 @@ test('preview client', async (t) => {
     }
   });
 
-  await t.test("The log and the tasks lost their own copy buttons", async () => {
-    // One button copies notes, tasks, and live answers as restorable NDJSON. Reports keep a separate copy button.
-    // Copy only state data. Exclude rendered HTML, tokens, sequences, uploads, and last checks. Poll stamps already use seconds.
-    cacheKeyHere = [...storage.keys()].find(key => key.endsWith(':state-cache'));
-    assert.ok(cacheKeyHere, 'every poll caches the state the copy button copies');
+  await t.test("The log, tasks, and header have no state copy buttons", async () => {
+    const pageHtml = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/index.html'), 'utf8');
+    assert.ok(!pageHtml.includes('id="copy-log"'), 'the log has no copy button');
+    assert.ok(!pageHtml.includes('id="copy-tasks"'), 'the tasks have no copy button');
+    assert.ok(!pageHtml.includes('id="copy-state"'), 'the header has no state copy button');
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
     state.reportSources = [{ id: 'r1', title: 'Fielded', markdown: '# Fielded\n\nA question.\n', published_at: '2026-09-22T10:00:00' }];
     state.submissions = [{ id: 'ans-1', report_id: 'r1', text: 'REPORT r1: one', at: '2026-09-22T10:00:00',
       acknowledged_at: null, ack_type: null, ack_text: null, ack_edited_at: null, replies: null, ack_edited_seen_count: 0, seen_at: null, task_id: null }];
-    copied.length = 0;
-    const statusBeforeCopy = get('#send-status').textContent;
-    get('#copy-state').events.click();
-    await tick();
-    copiedText = copied.at(-1);
-    assert.ok(copiedText.endsWith('\n') && !copiedText.endsWith('\n\n'),
-      'the state copies as NDJSON with one trailing newline');
-    lines = copiedText.slice(0, -1).split('\n').map(line => JSON.parse(line));
-    cachedHere = JSON.parse(storage.get(cacheKeyHere));
-    projectHere = (record, keys) => {
-      const line = {};
-      for (const key of keys) line[key] = record[key] ?? null;
-      return line;
-    };
-    noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_type', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
-    taskKeysHere = ['id', 'title', 'details', 'status', 'order', 'blocked', 'type'];
-    assert.deepEqual(lines, [
-      ...cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
-      ...(cachedHere.tasks.upcoming || []).map(task => projectHere(task, taskKeysHere)),
-      ...(cachedHere.tasks.finished || []).map(task => projectHere(task, taskKeysHere)),
-      ...state.submissions,
-      ...state.reportSources,
-    ], 'the copy carries the note, task, answer and report lines a restore reads, and nothing derived');
-    reportLines = lines.filter(line => 'markdown' in line);
-    assert.equal(reportLines.length, 1, 'the copy carries the report sources, as the save file does');
-    assert.equal(reportLines[0].id, 'r1', 'the report line is the save-file shape from the server');
-    // A report line carries a title too, so the task filter excludes it.
-    taskLines = lines.filter(line => 'title' in line && !('markdown' in line));
-    answerLines = lines.filter(line => 'report_id' in line);
-    assert.equal(answerLines.length, 1, 'the copy carries the live report answers');
-    assert.equal(answerLines[0].id, 'ans-1', 'the answer line is the save-file shape from the server');
-    assert.equal(taskLines.length,
-      (cachedHere.tasks.upcoming || []).length + (cachedHere.tasks.finished || []).length,
-      'every cached task rides the copy');
-    assert.equal(get('#copy-state').dataset.state, 'good', 'the click reports through the button');
-    assert.equal(get('#send-status').textContent, statusBeforeCopy,
-      'the copy reports through its own control, not the composer');
     state.tasks.upcoming = [];
     await refresh();
     assert.equal(get('#tasks-current').hidden, true, 'an empty queue has no current task');
@@ -1769,20 +1694,10 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(get('#tasks-finished').hidden, true);
     assert.equal(get('#tasks-current').hidden, true, 'no task list, no current div');
-    // The server route answers whatever the poll cached, so the copy needs no client cache.
-    storage.delete(cacheKeyHere);
-    copied.length = 0;
-    get('#copy-state').events.click();
-    await tick();
-    assert.equal(get('#copy-state').dataset.state, 'good', 'the server export needs no client cache');
-    assert.ok(copied.at(-1).endsWith('\n'), 'the copy stays NDJSON with one trailing newline');
-    // The userscript owns the save path. The toolbar has a copy control and no save control.
-    const pageHtml = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/index.html'), 'utf8');
     assert.ok(!pageHtml.includes('save-state'), 'the page carries no save control');
-    assert.ok(
-      !fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/app.js'), 'utf8').includes('saveState'),
-      'the page script wires no save control',
-    );
+    const appSource = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/app.js'), 'utf8');
+    assert.ok(!appSource.includes('saveState'), 'the page script wires no save control');
+    assert.ok(!appSource.includes('copyState'), 'the page script wires no state copy control');
 
     assert.ok(get('#tasks-status').textContent.trim().length > 0, 'an empty task list says so');
     assert.equal(get('#notes-tab').focused, true);
@@ -3092,7 +3007,7 @@ test('preview client', async (t) => {
     assert.equal(jump.hidden, true, 'and goes when there is nothing below');
   });
 
-  await t.test("The save button posts the page's cached copy, so a wiped server is refilled from the brows", async () => {
+  await t.test('Writes after a state refresh carry no page-token header', async () => {
     priorState = state;
     state = {
       notes: [{ id: 'saved', text: 'cached here', at: new Date().toISOString(), acknowledged_at: null }],
@@ -3102,35 +3017,8 @@ test('preview client', async (t) => {
       last_check: null
     };
     await refresh();
-    stateCopyButton = get('#copy-state');
-    const composerBeforeCopy = get('#send-status').textContent;
     cacheKey = [...storage.keys()].find(item => item.endsWith(':state-cache'));
-    assert.ok(cacheKey, 'every successful poll caches the copy the state button copies');
-    copied.length = 0;
-    stateCopyButton.events.click();
-    await tick();
-    assert.equal(copied.length, 1, 'the button copies the cache');
-    assert.ok(copied[0].split('\n').filter(Boolean).length > 1, 'the copy carries note and task lines');
-    assert.equal(get('#send-status').textContent, composerBeforeCopy, 'copy success leaves composer feedback alone');
-    assert.equal(stateCopyButton.dataset.state, 'good');
-    storage.delete(cacheKey);
-    copied.length = 0;
-    stateCopyButton.events.click();
-    await tick();
-    assert.equal(copied.length, 1, 'the server export copies without a client cache');
-    assert.equal(get('#send-status').textContent, composerBeforeCopy, 'server export stays in its own control');
-    state.copyStateFails = true;
-    copied.length = 0;
-    stateCopyButton.events.click();
-    await new Promise(done => setTimeout(done, 1200));
-    await tick();
-    assert.equal(copied.length, 0, 'a down route copies nothing');
-    assert.equal(get('#send-status').textContent, composerBeforeCopy, 'copy failure leaves composer feedback alone');
-    assert.equal(stateCopyButton.dataset.state, 'bad', 'copy failure stays visible on its control');
-    delete state.copyStateFails;
-  });
-
-  await t.test('Writes after a state refresh carry no page-token header', async () => {
+    assert.ok(cacheKey, 'every successful poll caches the state');
     storage.set(cacheKey, JSON.stringify({ notes: state.notes, tasks: state.tasks }));
     sendHandler = async note => response({ ...note, at: new Date().toISOString() });
     sendNote = async text => {
@@ -3166,22 +3054,7 @@ test('preview client', async (t) => {
     await refresh();
   });
 
-  await t.test("With the search matching nothing, the state copy still carries every message: the cache is", async () => {
-    // With the search matching nothing, the state copy still carries every message: the cache is the
-    // restore path, and a narrowed copy would restore a partial log as if it were all of it.
-    get('#log-search').value = 'nothing here';
-    get('#log-search').events.input();
-    copied.length = 0;
-    get('#copy-state').events.click();
-    await tick();
-    filteredNotes = copied.at(-1).slice(0, -1).split('\n')
-      .map(line => JSON.parse(line)).filter(line => 'title' in line === false);
-    assert.ok(filteredNotes.length > 0, 'the fixture holds messages to carry');
-    assert.equal(filteredNotes.length, state.notes.length,
-      'the state copies whatever the log holds, not the narrowed view of it');
-    get('#log-search').value = '';
-    get('#log-search').events.input();
-    await tick();
+  await t.test('Relative receipts and report refreshes preserve DOM state', async () => {
     state.notes.push({ id: 'old', text: 'old note', at: '2024-06-15T12:00:00.000Z', acknowledged_at: null });
     await refresh();
     assert.match(get('#history').children.at(-1).children[2].textContent, /(just now|a minute ago|\d+ minutes ago|an hour ago|\d+ hours ago|yesterday|\d+ days ago|last (week|month|year)|\d+ (weeks|months|years) ago)/);
@@ -4261,13 +4134,6 @@ test('preview client', async (t) => {
     state.notes = [{id:'notes-only', text:'No tasks yet', at:'2026-09-22T12:00:00'}];
     state.tasks = null;
     await refresh();
-    copiesBeforeNotesOnly = copied.length;
-    const statusBeforeCopy = get('#send-status').textContent;
-    await get('#copy-state').events.click();
-    await tick();
-    assert.equal(copied.length, copiesBeforeNotesOnly + 1, 'copy a session before its first task');
-    assert.match(copied.at(-1), /"id":"notes-only"/);
-    assert.equal(get('#copy-state').dataset.state, 'good');
   });
 
   await t.test('A reply click clears immediately, survives refresh, and restores a failed write', async () => {
@@ -5670,7 +5536,7 @@ test('preview client', async (t) => {
     }
   });
 
-  await t.test('Userscript readiness swaps #copy-state to the Lucide save icon and posts clankers:force-save', async () => {
+  await t.test('Userscript readiness announces the preview once per repository', async () => {
     const parentMessages = [];
     context.window.parent = {
       postMessage(data, target) {
@@ -5679,24 +5545,9 @@ test('preview client', async (t) => {
     };
     windowEvents.message({ data: { type: 'clankers:userscript-ready' } });
     windowEvents.message({ data: { type: 'clankers:userscript-ready' } });
-    const copyBtn = get('#copy-state');
-    assert.equal(copyBtn.getAttribute('aria-label'), 'Force save state');
-    assert.equal(copyBtn.title, 'Force save state');
-    assert.equal(copyBtn.children[0].getAttribute('class'), 'lucide lucide-save');
-    assert.equal(copyBtn.children[0].children.length, 3);
-    let restoreIcon = null;
-    context.window.setTimeout = callback => { restoreIcon = callback; return 1; };
-    await copyBtn.events.click();
-    delete context.window.setTimeout;
-    assert.equal(parentMessages.length, 2);
+    assert.equal(parentMessages.length, 1);
     assert.equal(parentMessages[0].data.type, 'clankers:preview-ready');
     assert.equal(parentMessages[0].data.repo, 'clankers');
-    assert.equal(parentMessages[1].data.type, 'clankers:force-save');
-    assert.equal(copyBtn.children[0].getAttribute('class'), 'lucide lucide-check');
-    assert.equal(copyBtn.dataset.state, 'good');
-    restoreIcon();
-    assert.equal(copyBtn.children[0].getAttribute('class'), 'lucide lucide-save');
-    assert.equal(copyBtn.getAttribute('aria-label'), 'Force save state');
     delete context.window.parent;
   });
 
@@ -6295,7 +6146,7 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
     /return\s+window\.location\?\.origin\s*\|\|\s*'https:\/\/arena\.ai'/,
     'parentTargetOrigin never falls back to the preview iframe origin on .arena.site'
   );
-  assert.match(styleSource, /#copy-state\s*\{\s*display:\s*none;\s*\}/);
+  assert.doesNotMatch(styleSource, /#copy-state/);
   assert.match(appSource, /updateReportTocActive/);
   assert.match(appSource, /querySelectorAll\?\.\('h2, h3, \.question\[data-field\]'\)/);
   assert.match(styleSource, /\.report-toc-link\.active/);

@@ -12106,7 +12106,7 @@ class Store:
     """Write the current state to the save file, in the shape the importer reads.
 
     Autosave calls this after every committed mutation, so the file follows the database with no button press.
-    The page copies the same text from `/api/copy-state`. It posts nothing.
+    The `/api/copy-state` route returns the same text without writing state.
 
     The file lands inside the state directory unless a path overrides it, so one globally ignored directory
     carries the database and its export together."""
@@ -15835,7 +15835,7 @@ def handler(store, reload_event=None):
           )
           return
         if path == "/api/copy-state":
-          # The copy button requests the server state export in one call.
+          # The export route serves the server state in one call.
           # The server stamp names the downloaded state file.
           notes = store.state()["notes"]
           lines, counts = store.state_lines(notes, store.tasks() or {})
