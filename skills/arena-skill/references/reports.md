@@ -3,6 +3,7 @@
 ## Publish reports
 
 - A report source is UTF-8 `.md`, at most 2,000,000 bytes.
+- Explain findings, bugs, decisions, and options in plain English, not internal code symbols or database identifiers.
 - Report IDs have 1–80 letters, digits, hyphens or underscores; titles have 1–200 characters.
 - Source edits do not update a published report: call `publish` again.
 - A report that has answers refuses republishing under the same ID; publish its update under a new ID.

@@ -25,12 +25,17 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### rules
+
+- Require plain-English explanations instead of internal function, table, or variable identifiers in Arena chat replies and reports (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+
 #### maintenance
 
 - Remove the `ADR_REFERENCE` ban, `SYNONYM_GROUPS` 5-pair check, and duplicate comment and bullet caps from `maintenance/lint_prose.py`.
 
 #### arena-skill
 
+- Require plain-English explanations in published reports and forms (`SKILL.md`, `references/reports.md`).
 - Apply the `nuu` relative-timestamps recipe (`includeSeconds: true`), full-form hover `title` attributes, and 1-second stamp refreshes across preview surfaces (`assets/app.js`).
 - Omit `report_id` from linked submission headers in the Tasks UI and CLI `task list`, `task show`, and `read` output (`assets/app.js`, `scripts/preview.py`).
 - Shorten quiet notes, format configured-timezone CLI stamps, and display key expiry countdowns (`assets/app.js`, `scripts/preview.py`, `scripts/survey.py`).
