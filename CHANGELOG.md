@@ -42,6 +42,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Seed local `/api/board` on first preview connect from read-only `/v1/board` pulls without registering unopted sessions (`arena.user.js`).
 - Normalize `@role` board recipients in `resolveBoardTarget` and `normalizeBoard` so `-t @main` attachments hydrate cleanly (`arena.user.js`).
 - Wake same-origin tabs via `BroadcastChannel` and `visibilitychange`, queue trailing board sync reruns, and drop redundant `pullProxyBoard` requests while keeping preview jitter (`arena.user.js`).
+- Pace `sbx-*.arena.site` preview `POST` requests from the last `POST` timestamp so idle requests send immediately and bursts space by `interval + jitter` (`arena.user.js`).
 
 ## 2026-10-27
 

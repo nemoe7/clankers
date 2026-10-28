@@ -4244,8 +4244,13 @@ for raw in sys.stdin:
       const scheduled = [];
       const wireCalls = [];
       const gmStore = new Map([["clankers-arena-http-jitter-ms", 15000]]);
+      let fakeNowMs = Date.now();
       const checkBox = {
         globalThis: {},
+        Date: Object.assign(function (...args) { return new Date(...args); }, {
+          now: () => fakeNowMs,
+          parse: Date.parse,
+        }),
         setTimeout: (fn, ms) => {
           scheduled.push({ fn, ms });
           return scheduled.length;
@@ -4274,6 +4279,9 @@ for raw in sys.stdin:
         { key: "k", host: "h" },
         (status) => { keyDoneStatus = status; },
       );
+      assert.equal(wireCalls.length, 1, "first POST to sbx-*.arena.site fires immediately with no artificial wait");
+      assert.equal(keyDoneStatus, 200);
+
       const statePromise = timersApi.stateJson("https://sbx-abc123.arena.site/api/board");
       let interruptDoneStatus = null;
       checkBox.CLANKERS_CHECKS.openSteering.sendSteeringInterrupt(
@@ -4281,22 +4289,34 @@ for raw in sys.stdin:
         { note: "test" },
         (status) => { interruptDoneStatus = status; },
       );
-      assert.equal(wireCalls.length, 0, "sbx-*.arena.site requests wait inside randomized jitter window");
-      assert.equal(scheduled.length, 3, "requestJson, stateJson, and sendSteeringInterrupt each schedule jitter");
-      for (const item of scheduled) {
-        assert.ok(
-          item.ms >= 0 && item.ms <= timersApi.SKILL_HTTP_JITTER_MAX_MS,
-          `expected jitter delay inside 0..${timersApi.SKILL_HTTP_JITTER_MAX_MS}ms, got ${item.ms}`,
-        );
-      }
+      assert.equal(wireCalls.length, 1, "GET jitter and burst POST pacing wait on scheduled timers");
+      assert.equal(scheduled.length, 2, "GET schedules jitter and burst POST schedules pacing from lastPost");
+      assert.ok(
+        scheduled[0].ms >= 0 && scheduled[0].ms <= timersApi.SKILL_HTTP_JITTER_MAX_MS,
+        `expected GET jitter delay inside 0..${timersApi.SKILL_HTTP_JITTER_MAX_MS}ms, got ${scheduled[0].ms}`,
+      );
+      assert.ok(
+        scheduled[1].ms >= timersApi.SKILL_POST_INTERVAL_MS &&
+          scheduled[1].ms <= timersApi.SKILL_POST_INTERVAL_MS + timersApi.SKILL_HTTP_JITTER_MAX_MS,
+        `expected burst POST delay inside ${timersApi.SKILL_POST_INTERVAL_MS}..${timersApi.SKILL_POST_INTERVAL_MS + timersApi.SKILL_HTTP_JITTER_MAX_MS}ms, got ${scheduled[1].ms}`,
+      );
       while (scheduled.length) {
         scheduled.shift().fn();
       }
       const stateRes = await statePromise;
-      assert.equal(keyDoneStatus, 200);
       assert.equal(stateRes.status, 200);
       assert.equal(interruptDoneStatus, 200);
-      assert.equal(wireCalls.length, 3, "all jittered sbx-*.arena.site requests fire once their timers drain");
+      assert.equal(wireCalls.length, 3, "all scheduled sbx-*.arena.site requests fire once timers drain");
+
+      // Once interval + jitter elapses since lastPost, the next POST fires immediately again.
+      fakeNowMs += timersApi.SKILL_POST_INTERVAL_MS * 3 + timersApi.SKILL_HTTP_JITTER_MAX_MS * 3;
+      const immediatePostRes = await timersApi.stateJson(
+        "https://sbx-abc123.arena.site/api/board",
+        { action: "sync" },
+      );
+      assert.equal(scheduled.length, 0, "POST after elapsed interval + jitter does not schedule a timer");
+      assert.equal(immediatePostRes.status, 200);
+      assert.equal(wireCalls.length, 4, "POST after elapsed interval + jitter fires immediately");
 
       wireCalls.length = 0;
       checkBox.CLANKERS_CHECKS.promptFill.requestJson(
@@ -4310,7 +4330,7 @@ for raw in sys.stdin:
       assert.equal(wireCalls.length, 1, "non-sbx URL fires immediately");
 
       const boardCheck = checkBox.CLANKERS_CHECKS.board;
-      const nowEpochMs = Date.now();
+      const nowEpochMs = fakeNowMs;
       const expiredIso = new Date(nowEpochMs - (boardCheck.BOARD_SESSION_TTL_SECONDS + 30) * 1000).toISOString();
       const freshIso = new Date(nowEpochMs - Math.floor(boardCheck.BOARD_SESSION_TTL_SECONDS / 3) * 1000).toISOString();
       const normalizedMixed = boardCheck.normalizeBoard({

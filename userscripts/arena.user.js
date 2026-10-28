@@ -565,11 +565,28 @@
   }
 
   var SKILL_HTTP_JITTER_MAX_MS = 400;
+  var SKILL_POST_INTERVAL_MS = 1000;
+  var SKILL_POST_INTERVAL_KEY = "clankers-arena-skill-post-interval-ms";
+  var lastSkillPostAtByOrigin = new Map();
+
+  function skillPostIntervalMs() {
+    if (typeof GM_getValue !== "function") return SKILL_POST_INTERVAL_MS;
+    var ms = Number(GM_getValue(SKILL_POST_INTERVAL_KEY, SKILL_POST_INTERVAL_MS));
+    if (!isFinite(ms) || ms < 0) return SKILL_POST_INTERVAL_MS;
+    return Math.min(Math.round(ms), 60000);
+  }
 
   function isSkillPreviewUrl(url) {
     return /^https:\/\/sbx-[a-z0-9-]+\.arena\.site(?::\d+)?(?:\/|$)/i.test(
       String(url || "").trim(),
     );
+  }
+
+  function skillPreviewOrigin(url) {
+    var match = /^(https:\/\/sbx-[a-z0-9-]+\.arena\.site(?::\d+)?)/i.exec(
+      String(url || "").trim(),
+    );
+    return match ? match[1].toLowerCase() : "";
   }
 
   function randomHttpJitterWindowMs() {
@@ -582,10 +599,37 @@
     return span > 0 ? Math.floor(Math.random() * (span + 1)) : 0;
   }
 
-  function withSkillHttpJitter(url, send) {
+  function rememberSkillPostStamp(originKey, stampMs) {
+    if (lastSkillPostAtByOrigin.has(originKey)) {
+      lastSkillPostAtByOrigin.delete(originKey);
+    }
+    lastSkillPostAtByOrigin.set(originKey, stampMs);
+    while (lastSkillPostAtByOrigin.size > 8) {
+      var oldest = lastSkillPostAtByOrigin.keys().next();
+      if (oldest.done) break;
+      lastSkillPostAtByOrigin.delete(oldest.value);
+    }
+  }
+
+  function withSkillHttpJitter(url, send, method) {
     if (!isSkillPreviewUrl(url) || typeof setTimeout !== "function") {
       send();
       return null;
+    }
+    if (String(method || "GET").toUpperCase() === "POST") {
+      var originKey = skillPreviewOrigin(url);
+      var nowMs = Date.now();
+      var spacingMs = skillPostIntervalMs() + randomSkillHttpJitterMs();
+      var hasLast = Boolean(originKey && lastSkillPostAtByOrigin.has(originKey));
+      var prevAtMs = hasLast ? Number(lastSkillPostAtByOrigin.get(originKey)) : 0;
+      if (!hasLast || spacingMs <= 0 || nowMs - prevAtMs >= spacingMs) {
+        if (originKey) rememberSkillPostStamp(originKey, nowMs);
+        send();
+        return null;
+      }
+      var dueAtMs = prevAtMs + spacingMs;
+      if (originKey) rememberSkillPostStamp(originKey, dueAtMs);
+      return setTimeout(send, Math.max(0, dueAtMs - nowMs));
     }
     return setTimeout(send, randomSkillHttpJitterMs());
   }
@@ -1117,7 +1161,7 @@
               finish("", 0);
             },
           });
-        });
+        }, method);
         return;
       }
       done(0, null);
@@ -1782,7 +1826,7 @@
               done(0);
             },
           });
-        });
+        }, "POST");
         return;
       }
       if (typeof fetch === "function") {
@@ -1798,7 +1842,7 @@
             .catch(function () {
               done(0);
             });
-        });
+        }, "POST");
         return;
       }
       done(0);
@@ -3148,6 +3192,19 @@
           "HTTP jitter range (s)",
           HTTP_JITTER_KEY,
           Math.round(httpJitterMs() / 1000),
+          0,
+          60,
+          1000,
+        ),
+        "prompt-fill",
+      );
+      addDependentSectionItem(
+        "Proxy",
+        "Preview POST interval (s)",
+        buildNumberRow(
+          "Preview POST interval (s)",
+          SKILL_POST_INTERVAL_KEY,
+          Math.round(skillPostIntervalMs() / 1000),
           0,
           60,
           1000,
@@ -5310,9 +5367,10 @@
         resolve({ status: 0, body: null, failure: "unavailable" });
         return;
       }
+      var reqMethod = payload === undefined ? "GET" : "POST";
       withSkillHttpJitter(url, function () {
         GM_xmlhttpRequest({
-          method: payload === undefined ? "GET" : "POST",
+          method: reqMethod,
           url: url,
           headers: previewHeaders(payload !== undefined),
           data: payload === undefined ? undefined : JSON.stringify(payload),
@@ -5326,7 +5384,7 @@
           onerror: function () { resolve({ status: 0, body: null, failure: "error" }); },
           ontimeout: function () { resolve({ status: 0, body: null, failure: "timeout" }); },
         });
-      });
+      }, reqMethod);
     });
   }
 
@@ -8497,6 +8555,7 @@
       previewScopedPushByBase.clear();
       previewAutosavePullByBase.clear();
       proxyStateCacheByScope.clear();
+      lastSkillPostAtByOrigin.clear();
     },
     boardBranch: boardBranch,
     cleanWorkerId: cleanWorkerId,
@@ -8527,9 +8586,15 @@
     jitteredTimer: jitteredTimer,
     HTTP_JITTER_MS: HTTP_JITTER_MS,
     SKILL_HTTP_JITTER_MAX_MS: SKILL_HTTP_JITTER_MAX_MS,
+    SKILL_POST_INTERVAL_MS: SKILL_POST_INTERVAL_MS,
+    SKILL_POST_INTERVAL_KEY: SKILL_POST_INTERVAL_KEY,
+    skillPostIntervalMs: skillPostIntervalMs,
     isSkillPreviewUrl: isSkillPreviewUrl,
     randomSkillHttpJitterMs: randomSkillHttpJitterMs,
     withSkillHttpJitter: withSkillHttpJitter,
+    resetSkillPostPacing: function () {
+      lastSkillPostAtByOrigin.clear();
+    },
     stateJson: stateJson,
   });
   showPauseMenu();
