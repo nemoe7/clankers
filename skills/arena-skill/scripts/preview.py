@@ -3907,7 +3907,9 @@ class Store:
 		with self.transaction(shared,autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(FORCE_SAVE_META,save_id))
 		return save_id
 	def userscript_snapshot(self,since=None,mode='full'):
-		core,counts=self.state_lines(self.state()['notes'],self.tasks()or{});core,stamp=autosave_core_and_stamp(core);scope=self.userscript_scope();history=self.userscript_history();stamps=self.newest_stamps();rows=[row for row in history if row['scope']==scope and row.get('stamp')];force_save_id=self.meta_value(FORCE_SAVE_META);save_id=force_save_id if force_save_id else str(uuid.uuid4());digest=autosave_digest(core);lastsave=rows[-1]['stamp']if rows else None;beforelastsave=rows[-2]['stamp']if len(rows)>1 else None;lock=getattr(self,'_autosave_sync_lock',None)
+		core,counts=self.state_lines(self.state()['notes'],self.tasks()or{});core,stamp=autosave_core_and_stamp(core);scope=self.userscript_scope();history=self.userscript_history();stamps=self.newest_stamps();rows=[row for row in history if row['scope']==scope and row.get('stamp')];force_save_id=self.meta_value(FORCE_SAVE_META);instance_id=getattr(self,'_userscript_instance_id',None)
+		if instance_id is None:instance_id=str(uuid.uuid4());self._userscript_instance_id=instance_id
+		save_id=force_save_id if force_save_id else str(uuid.uuid4());digest=autosave_digest(core);lastsave=rows[-1]['stamp']if rows else None;beforelastsave=rows[-2]['stamp']if len(rows)>1 else None;lock=getattr(self,'_autosave_sync_lock',None)
 		if lock is None:lock=threading.RLock();self._autosave_sync_lock=lock;self._autosave_sync_rev=0;self._autosave_sync_key=None;self._autosave_sync_history={}
 		with lock:
 			self._autosave_latest=digest,core;sync_key=digest,lastsave,beforelastsave,bool(force_save_id),json.dumps(scope,sort_keys=True)
@@ -3916,10 +3918,10 @@ class Store:
 				for rev_key in[k for k in self._autosave_sync_history if k<cutoff]:self._autosave_sync_history.pop(rev_key,None)
 			cur_rev=self._autosave_sync_rev
 			if mode=='diff'and not force_save_id and since is not None:
-				base_fields={'revision':cur_rev,'mode':'diff','save_id':save_id,'force':False,'scope':scope,'digest':digest,'lastsave':lastsave,'beforelastsave':beforelastsave,'counts':counts,'stamp':stamp,'stamps':stamps}
+				base_fields={'revision':cur_rev,'mode':'diff','save_id':save_id,'force':False,'instance_id':instance_id,'scope':scope,'digest':digest,'lastsave':lastsave,'beforelastsave':beforelastsave,'counts':counts,'stamp':stamp,'stamps':stamps}
 				if since==cur_rev:return{**base_fields,'unchanged':True}
 				if since<cur_rev and since in self._autosave_sync_history:return{**base_fields,'unchanged':False,'diff':compute_preview_state_diff(self._autosave_sync_history[since],core,since,cur_rev)}
-		return{'revision':cur_rev,'save_id':save_id,'force':bool(force_save_id),'scope':scope,'core':core,'digest':digest,'history':rows,'lastsave':lastsave,'beforelastsave':beforelastsave,'text':state_ndjson(core+rows),'counts':counts,'stamp':stamp,'stamps':stamps}
+		return{'revision':cur_rev,'save_id':save_id,'force':bool(force_save_id),'instance_id':instance_id,'scope':scope,'core':core,'digest':digest,'history':rows,'lastsave':lastsave,'beforelastsave':beforelastsave,'text':state_ndjson(core+rows),'counts':counts,'stamp':stamp,'stamps':stamps}
 	def confirm_userscript_save(self,payload):
 		save_id,scope=payload.get('save_id'),payload.get('scope')
 		if not isinstance(save_id,str):raise TypeError('Autosave save ID must be a UUID string')
@@ -4206,7 +4208,11 @@ class Store:
 				if save_id in receipts and receipts[save_id]!=digest:raise ValueError('Conflicting autosave receipt digests')
 				receipts[save_id]=digest
 			if len(groups[key])>2 or len({item['save_id']for item in groups[key]})!=len(groups[key]):raise ValueError('Autosave history holds at most two distinct saves per scope')
-		reports=[r for r in records if'markdown'in r and'text'not in r];tasks=[r for r in records if'markdown'not in r and'title'in r and'text'not in r];messages=[r for r in records if'markdown'not in r and('title'not in r or'text'in r)];guard_task_runs(self.path.parent,action='replace state')
+		reports=[r for r in records if'markdown'in r and'text'not in r];tasks=[r for r in records if'markdown'not in r and'title'in r and'text'not in r];messages=[r for r in records if'markdown'not in r and('title'not in r or'text'in r)];guard_task_runs(self.path.parent,action='replace state');backup_stamps=[parsed for row in records for key in('at','acknowledged_at','ack_edited_at','seen_at','updated_at','published_at','agent_seen_at','confirmed_at','stamp')if(parsed:=import_stamp(row.get(key)))is not None];backup_stamp=max(backup_stamps,default=None)
+		if backup_stamp is not None:
+			with closing(self.connect())as live_db:live_notes=[message_row(row)for row in live_db.execute('SELECT * FROM notes ORDER BY at, seq')];live_answers=[message_row(row)for row in live_db.execute('SELECT * FROM submissions ORDER BY seq')]
+		else:live_notes,live_answers=[],[]
+		preserved=[row for row in(*live_notes,*live_answers)if row.get('type')!='state-backup'and(created:=import_stamp(row.get('at')))is not None and created>backup_stamp];preserved_keys={('answer'if'report_id'in row else'note',row.get('id'))for row in preserved};messages=[row for row in messages if('answer'if'report_id'in row else'note',row.get('id'))not in preserved_keys]+preserved
 		with self.transaction(autosave=False)as db:
 			db.execute('BEGIN IMMEDIATE')
 			if history:
@@ -4221,6 +4227,7 @@ class Store:
 				if'text'not in record or'title'in record:raise ValueError('Each record must be a note, task or report answer')
 				options={key:record.get(key)for key in('acknowledged_at','ack_type','ack_text','ack_edited_at','seen_at','task_id','replies','ack_edited_seen_count')};args=[record['id']];writer=self.note
 				if'report_id'in record:writer=self.submission;args.append(record['report_id']);options['answer_data']=record.get('answer_data')
+				else:options.update({key:record[key]for key in('quiet','blocking','type')if key in record})
 				writer(*args,record['text'],record.get('at'),shared=db,autosave=False,**options)
 			self.import_reports(reports,shared=db)
 		receipt={'notes':sum('report_id'not in r for r in messages),'answers':sum('report_id'in r for r in messages),'reports':len(reports),'tasks':len(tasks)};return receipt

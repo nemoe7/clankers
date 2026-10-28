@@ -8424,7 +8424,7 @@ def test_unified_import_atomicity():
     }
     assert not store.save_path.exists(), "Import must not overwrite the source backup"
     receipt_at = "2026-09-20T22:05:11+00:00"
-    store.note("already-here", "Existing message")
+    store.note("already-here", "Existing message", at="2026-09-19T22:05:11+00:00")
     store.acknowledge(["already-here"], "Existing answer")
     imported = [
       {
@@ -8466,24 +8466,39 @@ def test_unified_import_atomicity():
     except ValueError:
       pass
     assert store.list_tasks() == []
-    assert {n["id"] for n in store.state()["notes"]} == {"already-here"}
+    assert {n["id"] for n in store.state()["notes"]} == {"already-here", "restored"}
     assert {a["id"] for a in store.submissions()} == {"new-answer"}
     assert (
       store.save_path.read_bytes() if store.save_path.exists() else None
     ) == backup
 
 
-def test_an_older_snapshot_replaces_the_live_state():
-  """Every import overrides, so an old copy replaces newer live messages."""
+def test_an_older_snapshot_preserves_newer_live_records():
+  """Post-backup notes and answers survive an older restore."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    store.note("live", "Newest message", at="2026-10-04T15:00:00+00:00")
+    store.note("live-note", "Newest message", at="2026-10-04T15:00:00+00:00")
+    store.submission(
+      "live-answer", "form", "New answer", at="2026-10-04T16:00:00+00:00"
+    )
     older = json.dumps(
-      [{"id": "old", "text": "Old message", "at": "2026-10-04T11:42:48"}]
+      [
+        {"id": "old-note", "text": "Old message", "at": "2026-10-04T11:42:48"},
+        {
+          "id": "old-answer",
+          "report_id": "form",
+          "text": "Old answer",
+          "at": "2026-10-04T10:42:48",
+        },
+      ]
     )
     receipt = store.import_state(older)
-    assert receipt == {"notes": 1, "answers": 0, "reports": 0, "tasks": 0}
-    assert {note["id"] for note in store.state()["notes"]} == {"old"}
+    assert receipt == {"notes": 2, "answers": 2, "reports": 0, "tasks": 0}
+    assert {note["id"] for note in store.state()["notes"]} == {"live-note", "old-note"}
+    assert {answer["id"] for answer in store.submissions()} == {
+      "live-answer",
+      "old-answer",
+    }
 
 
 def test_import_state_has_no_force_option():
@@ -17192,6 +17207,7 @@ def test_preview_board_and_autosave_revision_diff_sync(tmp_path, monkeypatch):
   snap_same = store.userscript_snapshot(since=1, mode="diff")
   assert snap_same["unchanged"] is True
   assert snap_same["revision"] == 1
+  assert snap_same["instance_id"] == snap1["instance_id"]
   assert "core" not in snap_same and "text" not in snap_same
 
   store.note("n-2", "second note")

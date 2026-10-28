@@ -1852,6 +1852,21 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     );
     panel().children[1].children[1].listeners.click();
     assert.equal(panel(), null);
+
+    // An empty remote snapshot starts cleanly even when a stale local receipt exists:
+    saved.set("clankers-arena-proxy-host", "https://arena-proxy.example.ts.net");
+    saved.set("clankers-arena-proxy-master", "test-master-key");
+    saved.set(receiptKey, receipt);
+    tick();
+    await respond("GET", "/api/userscript-autosave", 200, healthy);
+    await respond("GET", "/v1/state", 200, { ok: true, exists: false, revision: 0 });
+    await respond("POST", "/v1/state", 200, { ok: true, revision: 1, digest: healthy.digest });
+    await respond("POST", "/api/userscript-autosave", 201, {
+      confirmed: true,
+      save_id: healthy.save_id,
+      digest: healthy.digest,
+    });
+    assert.equal(panel(), null, "missing remote state does not create a mismatch banner");
   });
 }
 
@@ -1874,7 +1889,19 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       removeEventListener: () => {},
     };
     vm.runInNewContext(source, context, { filename: "arena.user.js" });
-    const { sameSaves, sameSaveDetail, stateDiffCounts, stateMismatchLine } = context.CLANKERS_CHECKS.stateDownload;
+    const { sameSaves, sameSaveDetail, stateDiffCounts, stateMismatchLine, mismatchOfferId } = context.CLANKERS_CHECKS.stateDownload;
+    const offerBaseline = { lastsave: "t1", beforelastsave: null, digest: "d1" };
+    const offerBody = { lastsave: "t2", beforelastsave: "t1", instance_id: "container-a" };
+    assert.equal(
+      mismatchOfferId(offerBaseline, offerBody),
+      mismatchOfferId(offerBaseline, { ...offerBody }),
+      "the same live container keeps backup-offer deduplication stable"
+    );
+    assert.notEqual(
+      mismatchOfferId(offerBaseline, offerBody),
+      mismatchOfferId(offerBaseline, { ...offerBody, instance_id: "container-b" }),
+      "a new container can offer the same backup again"
+    );
     assert.equal(sameSaves(null, { lastsave: "a", beforelastsave: null }), false);
     assert.equal(sameSaves({ lastsave: "a", beforelastsave: null }, { lastsave: "a", beforelastsave: null }), true);
     assert.equal(sameSaves({ lastsave: "a", beforelastsave: "b" }, { lastsave: "a", beforelastsave: null }), false);

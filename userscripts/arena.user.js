@@ -6161,6 +6161,7 @@
       return [
         saveStampPair(known),
         (known && known.digest) || "",
+        (body && body.instance_id) || "",
         saveStampPair(body),
       ].join("|");
     }
@@ -6386,7 +6387,10 @@
         }
         var proxySnap = pulledState.snap;
         var baseline = GM_getValue(receiptKey(storeKey), null);
-        var initialState = !proxySnap.exists && !baseline;
+        var initialState = !proxySnap.exists;
+        if (!proxySnap.exists) {
+          baseline = null;
+        }
         if (proxySnap.exists) {
           baseline = {
             save_id: proxySnap.save_id || (baseline && baseline.save_id) || "",
@@ -6397,7 +6401,7 @@
             counts: proxySnap.counts || (baseline && baseline.counts) || null,
           };
         }
-        var inSync = sameSaves(baseline, body);
+        var inSync = proxySnap.exists && sameSaves(baseline, body);
         var name = stateFileName(effectiveRepo, effectiveBranch, body.stamp, body.counts);
         if (!force && !inSync && !initialState) {
           var mismatchLine = stateMismatchLine(baseline, body);

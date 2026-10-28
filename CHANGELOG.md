@@ -41,6 +41,16 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Remove the unused HTTP jitter helper (`arena.user.js`).
 
+### Fixed
+
+#### arena-skill
+
+- Preserve post-backup notes and answers during state imports (`scripts/preview.py`).
+
+#### userscripts
+
+- Reoffer backups after container resets and start cleanly when remote state is missing (`arena.user.js`).
+
 ## 2026-10-28
 
 ### Added
