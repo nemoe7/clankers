@@ -94,7 +94,7 @@ def seed_demo_store(state_dir: Path):
     {
       "action": "post",
       "branch": branch,
-      "to": "*",
+      "to": branch,
       "tag": "audit",
       "text": "Completed spacing audit on `#reports-panel` and verified mobile portrait.",
     }
@@ -103,7 +103,7 @@ def seed_demo_store(state_dir: Path):
     {
       "action": "post",
       "branch": branch,
-      "to": "*",
+      "to": branch,
       "tag": "review",
       "text": "Verified the diff locally; all preview tests pass.",
     }

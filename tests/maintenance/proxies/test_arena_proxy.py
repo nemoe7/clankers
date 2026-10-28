@@ -1969,35 +1969,66 @@ def test_board_polling_heartbeat_post_wake_and_consumed_wake_anti_resurrection(
       e for e in at_main_sync["board"]["entries"] if e["id"] == "patmain2"
     )
     assert resolved_entry["to"] == alpha
-    for bad_target in ("all", "@all", "gama", "arena/unopted99-clankers", ""):
+    for bad_target in ("*", "all", "@all", "gama", "arena/unopted99-clankers", ""):
       bad_res = reopened.apply(
         {
           "action": "post",
           "branch": alpha,
           "to": bad_target,
           "repo": "clankers",
-          "text": "Should reject unknown target",
+          "text": "Should reject unknown or broadcast target",
         },
         branch=alpha,
         repo="clankers",
       )
       assert bad_res["ok"] is False
       assert "Unrecognized board target" in bad_res["error"]
-      assert "valid targets: *, main," in bad_res["error"]
+      assert "valid targets: main," in bad_res["error"]
+      assert "*" not in bad_res["error"].split("valid targets:", 1)[1]
       assert beta in bad_res["error"]
-    ok_broadcast = reopened.apply(
+    omitted_res = reopened.apply(
       {
         "action": "post",
         "branch": alpha,
-        "to": "*",
         "repo": "clankers",
-        "text": "Broadcast ok",
+        "text": "Untargeted post without mention",
       },
       branch=alpha,
       repo="clankers",
     )
-    assert ok_broadcast["ok"] is True
-    assert ok_broadcast["board"]["entries"][-1]["to"] == "*"
+    assert omitted_res["ok"] is False
+    assert "Unrecognized board target" in omitted_res["error"]
+    # Mixed-offset timestamps in apply_report_op_to_list compare by UTC epoch ms, not string slice.
+    rep_items = [
+      {
+        "id": "tz-rep",
+        "updated_at": "2026-10-28T10:30:00Z",
+        "answered": False,
+        "needs_answer": True,
+      }
+    ]
+    # 2026-10-28T17:00:00+08:00 == 09:00:00Z (older than 10:30:00Z -> stale unpublish is ignored)
+    kept = board_module.apply_report_op_to_list(
+      rep_items,
+      {"op": "unpublish", "report_id": "tz-rep", "at": "2026-10-28T17:00:00+08:00"},
+    )
+    assert len(kept) == 1
+    # 2026-10-28T19:00:00+08:00 == 11:00:00Z (newer than 10:30:00Z -> unpublish removes report)
+    removed = board_module.apply_report_op_to_list(
+      rep_items,
+      {"op": "unpublish", "report_id": "tz-rep", "at": "2026-10-28T19:00:00+08:00"},
+    )
+    assert removed == []
+    answered = board_module.apply_report_op_to_list(
+      rep_items,
+      {
+        "op": "answer",
+        "report_id": "tz-rep",
+        "submission_id": "sub-tz",
+        "at": "2026-10-28T19:00:00+08:00",
+      },
+    )
+    assert answered[0]["latest_answer_at"] == "2026-10-28T11:00:00Z"
   finally:
     reopened.close()
 

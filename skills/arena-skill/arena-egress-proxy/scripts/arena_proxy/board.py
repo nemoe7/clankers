@@ -153,7 +153,10 @@ def clip_stamp(value):
 
 def resolve_board_target(target, sessions, allowed, main_sid):
   """Resolve a branch, board, or worker alias to a canonical branch."""
-  clean = board_branch(str(target or "").strip().lstrip("@"))
+  raw_token = str(target or "").strip().lstrip("@")
+  if raw_token in {"*", "all"}:
+    return ""
+  clean = board_branch(raw_token)
   if not clean:
     return ""
   for row in sessions or []:
@@ -191,8 +194,8 @@ def resolve_board_target(target, sessions, allowed, main_sid):
 def valid_board_targets(sessions, allowed=(), main_sid=""):
   """Return ordered valid `-t` target tokens for board posts."""
   allowed_set = {str(item) for item in (allowed or ()) if item}
-  targets = ["*"]
-  seen = {"*"}
+  targets = []
+  seen = set()
 
   def _add(token):
     val = str(token or "").strip()
@@ -226,20 +229,24 @@ def apply_report_op_to_list(report_list, op):
   target_id = str(op.get("report_id") or op.get("id") or "").strip()
   if not target_id:
     return items
-  op_at = clip_stamp(op.get("at"))
+  op_ms = parse_stamp_ms(op.get("at"))
   if op_name in ("unpublish", "remove", "delete"):
     kept = []
     for row in items:
       if str(row.get("id") or "") != target_id:
         kept.append(row)
         continue
-      row_stamp = clip_stamp(row.get("updated_at") or row.get("published_at") or "")
-      if op_at and row_stamp and op_at < row_stamp:
+      row_ms = parse_stamp_ms(row.get("updated_at") or row.get("published_at") or "")
+      if op_ms is not None and row_ms is not None and op_ms < row_ms:
         kept.append(row)
     return kept
   if op_name in ("answer", "submit"):
     sub_id = str(op.get("submission_id") or op.get("note_id") or "").strip()
-    sub_at = op_at or now_iso()[:19]
+    sub_at = (
+      datetime.fromtimestamp(op_ms / 1000, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+      if op_ms is not None
+      else now_iso()
+    )
     out = []
     for row in items:
       if str(row.get("id") or "") != target_id:
@@ -1402,45 +1409,7 @@ def apply_board_action(board, action):
   if action_type == "post":
     if not br or br not in next_board["allowed_sessions"]:
       return False, "not-allowed", next_board
-    has_explicit_to = "to" in action and action.get("to") is not None
-    raw_to = str(action.get("to") or "").strip() if has_explicit_to else "*"
-    if raw_to == "*":
-      resolved_to = "*"
-    else:
-      resolved_to = (
-        resolve_board_target(
-          raw_to,
-          next_board["sessions"],
-          next_board["allowed_sessions"],
-          next_board["main_session_id"],
-        )
-        if raw_to
-        else ""
-      )
-      if not resolved_to or resolved_to not in next_board["allowed_sessions"]:
-        valid_str = ", ".join(
-          valid_board_targets(
-            next_board["sessions"],
-            next_board["allowed_sessions"],
-            next_board["main_session_id"],
-          )
-        )
-        return (
-          False,
-          f"Unrecognized board target {raw_to!r}; valid targets: {valid_str}",
-          next_board,
-        )
-    ok, checked_file, _, err = validate_board_file(action.get("file"))
-    if not ok:
-      return False, err, next_board
-    entry_id = str(action.get("id") or f"b-{int(time.time() * 1000)}")
     entry_text = str(action.get("text") or "")
-    from_owner = bool(
-      action.get("from_owner")
-      or (
-        isinstance(action.get("payload"), dict) and action["payload"].get("from_owner")
-      )
-    )
     mention_target = ""
     raw_mention = str(action.get("mention_target") or "").strip()
     if raw_mention:
@@ -1458,11 +1427,49 @@ def apply_board_action(board, action):
           next_board["allowed_sessions"],
           next_board["main_session_id"],
         )
-        if cand and cand in next_board["allowed_sessions"]:
+        if cand and cand in next_board["allowed_sessions"] and cand != br:
           mention_target = cand
-          if resolved_to in ("", "*"):
-            resolved_to = cand
           break
+    has_explicit_to = "to" in action and action.get("to") is not None
+    raw_to = str(action.get("to") or "").strip() if has_explicit_to else ""
+    if has_explicit_to:
+      resolved_to = (
+        resolve_board_target(
+          raw_to,
+          next_board["sessions"],
+          next_board["allowed_sessions"],
+          next_board["main_session_id"],
+        )
+        if raw_to and raw_to not in {"*", "all", "@all"}
+        else ""
+      )
+    else:
+      resolved_to = (
+        mention_target if mention_target in next_board["allowed_sessions"] else ""
+      )
+    if not resolved_to or resolved_to not in next_board["allowed_sessions"]:
+      valid_str = ", ".join(
+        valid_board_targets(
+          next_board["sessions"],
+          next_board["allowed_sessions"],
+          next_board["main_session_id"],
+        )
+      )
+      return (
+        False,
+        f"Unrecognized board target {raw_to!r}; valid targets: {valid_str}",
+        next_board,
+      )
+    ok, checked_file, _, err = validate_board_file(action.get("file"))
+    if not ok:
+      return False, err, next_board
+    entry_id = str(action.get("id") or f"b-{int(time.time() * 1000)}")
+    from_owner = bool(
+      action.get("from_owner")
+      or (
+        isinstance(action.get("payload"), dict) and action["payload"].get("from_owner")
+      )
+    )
     next_board["entries"].append(
       {
         "id": entry_id,
@@ -1478,9 +1485,7 @@ def apply_board_action(board, action):
       }
     )
     wake_iso = stamp if parse_stamp_ms(stamp) is not None else now_iso()
-    direct_target = mention_target or (
-      resolved_to if resolved_to and resolved_to != "*" else ""
-    )
+    direct_target = mention_target or resolved_to
     if (
       direct_target
       and direct_target in next_board["allowed_sessions"]
@@ -1489,14 +1494,6 @@ def apply_board_action(board, action):
       next_board["wakes"][direct_target] = entry_id
       for row in next_board["sessions"]:
         if _row_branch(row) == direct_target:
-          row["polling"] = False
-          row["status"] = "active"
-          row["updated_at"] = wake_iso
-    elif from_owner and resolved_to in ("", "*"):
-      for row in next_board["sessions"]:
-        target_sid = _row_branch(row)
-        if target_sid in next_board["allowed_sessions"] and target_sid != br:
-          next_board["wakes"][target_sid] = entry_id
           row["polling"] = False
           row["status"] = "active"
           row["updated_at"] = wake_iso

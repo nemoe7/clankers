@@ -16110,7 +16110,12 @@ def test_board_notifies_new_session_join_and_worker_role(tmp_path, monkeypatch, 
       encoding="utf-8"
     )
   auto_posted = store.board_action(
-    {"action": "post", "branch": "arena/main0001-clankers", "text": "status update"}
+    {
+      "action": "post",
+      "branch": "arena/main0001-clankers",
+      "to": "arena/main0001-clankers",
+      "text": "status update",
+    }
   )
   posted_id = auto_posted["entries"][-1]["id"]
   assert preview.re.fullmatch(r"p[0-9a-f]{5}", posted_id)
@@ -16402,13 +16407,16 @@ def test_board_post_normalizes_body_and_message_and_rejects_empty_post(
     {
       "action": "post",
       "branch": main_sid,
+      "to": "beta",
       "payload": {"message": "Status check"},
     }
   )
   assert from_msg["entries"][-1]["payload"] == {"text": "Status check"}
 
   with pytest.raises(ValueError, match="non-empty text"):
-    store.board_action({"action": "post", "branch": main_sid, "text": "   "})
+    store.board_action(
+      {"action": "post", "branch": main_sid, "to": "beta", "text": "   "}
+    )
 
 
 def test_idle_board_workers_surface_in_gate_and_poll_hints(
@@ -16502,7 +16510,7 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
     row for row in store.board_state()["sessions"] if row["branch"] == worker_sid
   )
   assert first["updated_at"].startswith("20")
-  assert first["agent_seen_at"] == "2026-10-27T02:55:00"
+  assert first["agent_seen_at"] == "2026-10-27T02:55:00Z"
 
   # A subsequent sync payload omitting peer agent_seen_at preserves the recorded stamp.
   synced = store.board_action(
@@ -16523,7 +16531,7 @@ def test_board_sync_heals_non_iso_updated_at_and_preserves_peer_seen_stamps(
     }
   )
   second = next(row for row in synced["sessions"] if row["branch"] == worker_sid)
-  assert second["agent_seen_at"] == "2026-10-27T02:55:00"
+  assert second["agent_seen_at"] == "2026-10-27T02:55:00Z"
 
   # Record an old turn_ended_at on peer, then sync newer bash activity without turn_ended_at:
   store.board_action(
@@ -17870,7 +17878,7 @@ def test_board_post_rejects_unrecognized_targets_across_cli_and_api_board(
   store.board_action({"action": "allow", "branch": beta, "worker_id": "beta"})
   store.board_action({"action": "heartbeat", "branch": unopted, "repo": "clankers"})
 
-  for bad_to in ("all", "@all", "gama", unopted, ""):
+  for bad_to in ("*", "all", "@all", "gama", unopted, ""):
     with pytest.raises(
       ValueError, match=r"Unrecognized board target.*valid targets:"
     ) as exc:
@@ -17883,32 +17891,38 @@ def test_board_post_rejects_unrecognized_targets_across_cli_and_api_board(
         }
       )
     msg = str(exc.value)
-    assert "*" in msg and "main" in msg and "beta" in msg
+    assert "*" not in msg.split("valid targets:", 1)[1]
+    assert "main" in msg and "beta" in msg
     assert alpha in msg and beta in msg
   assert not (state_dir / "board-files").exists()
 
-  # CLI `arena-preview board post -t all` exits 1 and lists valid targets on stderr.
+  # CLI `arena-preview board post -t all` and omitted `-t` exit 1 and list valid targets on stderr.
   monkeypatch.setattr(preview, "resolve_state_dir", lambda: state_dir)
   monkeypatch.setattr(preview, "require_server", lambda _s: None)
-  capsys.readouterr()
-  monkeypatch.setattr(
-    sys, "argv", ["preview.py", "board", "post", "-t", "all", "broadcast attempt"]
-  )
-  rc = preview.main()
-  err_out = capsys.readouterr().err
-  assert rc == 1
-  assert "Unrecognized board target" in err_out
-  assert "valid targets: *, main," in err_out
+  for bad_argv in (
+    ["preview.py", "board", "post", "-t", "all", "broadcast attempt"],
+    ["preview.py", "board", "post", "-t", "*", "wildcard attempt"],
+    ["preview.py", "board", "post", "untargeted attempt"],
+  ):
+    capsys.readouterr()
+    monkeypatch.setattr(sys, "argv", bad_argv)
+    rc = preview.main()
+    err_out = capsys.readouterr().err
+    assert rc == 1
+    assert "Unrecognized board target" in err_out
+    assert "valid targets: main," in err_out
 
-  # Broadcast `*`, `main`, `@beta`, and allowlisted branches continue to work.
-  monkeypatch.setattr(sys, "argv", ["preview.py", "board", "post", "Broadcast message"])
+  # Explicit `main`, `@beta`, and allowlisted branches continue to work.
+  monkeypatch.setattr(
+    sys, "argv", ["preview.py", "board", "post", "-t", "main", "Direct to main"]
+  )
   assert preview.main() == 0
   monkeypatch.setattr(
     sys, "argv", ["preview.py", "board", "post", "-t", "@beta", "Direct to beta"]
   )
   assert preview.main() == 0
   entries = store.board_state()["entries"]
-  assert entries[-2]["to"] == "*"
+  assert entries[-2]["to"] == alpha
   assert entries[-1]["to"] == beta
 
   # HTTP POST /api/board returns 400 on unrecognized targets.
@@ -18163,3 +18177,111 @@ def test_task_reblocks_on_new_unanswered_report_and_poll_respects_blocked_by(
   assert [
     line for line in poll_out.splitlines() if line.startswith(continue_prefix)
   ] == []
+
+
+def test_order_after_blockers_keeps_dependent_task_right_behind_its_blocker(tmp_path):
+  state = tmp_path / "arena-state"
+  store = preview.Store(state, create=True)
+  store.write_task("task-1", "Task 1", ["Scope: a/"], task_type="code")
+  store.write_task(
+    "task-2",
+    "Task 2",
+    ["Scope: a/"],
+    task_type="code",
+    blocked_by=["task-1"],
+  )
+  store.write_task("task-3", "Task 3", ["Scope: b/"], task_type="code")
+  store.write_task("task-4", "Task 4", ["Scope: c/"], task_type="code")
+  store.write_task("task-5", "Task 5", ["Scope: d/"], task_type="code")
+
+  ordered_ids = [row["id"] for row in store.list_tasks()]
+  assert ordered_ids == ["task-1", "task-2", "task-3", "task-4", "task-5"]
+
+
+def test_board_timestamps_canonical_utc_and_worker_ignores_legacy_broadcasts(
+  tmp_path, monkeypatch
+):
+  assert preview.board_stamp("2026-10-28T17:30:00+08:00") == "2026-10-28T09:30:00Z"
+  assert preview.clip_stamp("2026-10-28T17:30:00+08:00") == "2026-10-28T09:30:00"
+  assert preview.at_or_after("2026-10-28T10:00:00Z", "2026-10-28T17:30:00+08:00")
+  assert not preview.at_or_after("2026-10-28T17:30:00+08:00", "2026-10-28T10:00:00Z")
+
+  alpha = "arena/alpha111-clankers"
+  beta = "arena/beta2222-clankers"
+  repo_root = tmp_path / "clankers"
+  repo_root.mkdir()
+  monkeypatch.setattr(preview, "resolve_repo_root", lambda _cwd=None: repo_root)
+  monkeypatch.setattr(preview, "workspace_branch", lambda _root=None: beta)
+  worker_store = preview.Store(repo_root / "arena-state", create=True)
+  synced = worker_store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "main_session_id": alpha,
+        "allowed_sessions": [alpha, beta],
+        "sessions": [
+          {
+            "branch": alpha,
+            "repo": "clankers",
+            "updated_at": "2026-10-28T17:00:00+08:00",
+          },
+          {
+            "branch": beta,
+            "repo": "clankers",
+            "worker_id": "beta",
+            "updated_at": "2026-10-28T09:05:00",
+          },
+        ],
+        "entries": [
+          {
+            "id": "pbc001",
+            "branch": alpha,
+            "to": "*",
+            "repo": "clankers",
+            "at": "2026-10-28T17:10:00+08:00",
+            "text": "Legacy broadcast entry",
+          },
+          {
+            "id": "pdir02",
+            "branch": alpha,
+            "to": beta,
+            "repo": "clankers",
+            "at": "2026-10-28T09:08:00Z",
+            "text": "Direct to beta",
+          },
+        ],
+      },
+    }
+  )
+  # Sorted by UTC epoch: 09:08:00Z comes before 17:10:00+08:00 (09:10:00Z), and stamps end in Z.
+  assert [e["id"] for e in synced["entries"]] == ["pdir02", "pbc001"]
+  assert synced["entries"][1]["at"] == "2026-10-28T09:10:00Z"
+  # Worker wake and unseen entries ignore legacy broadcast pbc001 and only surface direct pdir02.
+  assert synced["wakes"].get(beta) == "pdir02"
+  unseen = worker_store.take_unseen_board_entries()
+  assert [e["id"] for e in unseen] == ["pdir02"]
+
+
+def test_watch_workspace_files_records_native_write_and_edit_outside_bash(tmp_path):
+  repo_root = tmp_path / "clankers"
+  repo_root.mkdir()
+  store = preview.Store(repo_root / "arena-state", create=True)
+  store.repository_root = lambda: repo_root
+
+  snap0 = preview.workspace_file_snapshot(repo_root)
+  target = repo_root / "notes.md"
+  target.write_text("v1\n", encoding="utf-8")
+  snap1 = preview.workspace_file_snapshot(repo_root)
+  assert preview.record_workspace_file_changes(store, snap0, snap1) == "write"
+  assert store.meta_value(preview.TOOL_NAME_META) == "write"
+
+  target.write_text("v2 longer\n", encoding="utf-8")
+  snap2 = preview.workspace_file_snapshot(repo_root)
+  assert preview.record_workspace_file_changes(store, snap1, snap2) == "edit"
+  assert store.meta_value(preview.TOOL_NAME_META) == "edit"
+
+  # While Bash is running, bash_call_running suppresses native tool attribution.
+  store.set_meta(preview.BASH_RUNNING_META, preview.now())
+  assert preview.bash_call_running(store) is True
+  preview.refresh_bash_timer(store.path.parent)
+  assert preview.bash_call_running(store) is False

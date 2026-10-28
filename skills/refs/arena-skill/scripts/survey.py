@@ -172,22 +172,36 @@ def quantity(value, path):
 def records(text):
   """Map submitted records by question ID, in any order."""
   rows = json.loads(text, object_pairs_hook=pairs, parse_constant=invalid_constant)
-  if not isinstance(rows, list) or len(rows) != len(SPEC["questions"]):
-    raise ValueError("Expected one record per question")
+  expected = [question["id"] for question in SPEC["questions"]]
+  hint = (
+    "run bare 'arena-preview survey' or read references/survey.json"
+    " for the current question schema"
+  )
+  is_list = isinstance(rows, list)
+  if not is_list:
+    raise ValueError(
+      f"Survey payload must be a JSON array of {len(expected)} question records ({hint})"
+    )
   by_id = {}
   for row in rows:
-    if not isinstance(row, dict) or list(row) != SPEC["response_order"]:
+    if (
+      not isinstance(row, dict)
+      or list(row) != SPEC["response_order"]
+      or not isinstance(row["id"], str)
+    ):
       raise ValueError("Each record requires id, answer, confidence in that order")
     if row["id"] in by_id:
       raise ValueError(f"Duplicate record for question {row['id']}")
     by_id[row["id"]] = row
-  expected = [question["id"] for question in SPEC["questions"]]
   unknown = sorted(set(by_id) - set(expected))
-  if unknown:
-    raise ValueError(f"Unknown question IDs: {', '.join(unknown)}")
   missing = [key for key in expected if key not in by_id]
-  if missing:
-    raise ValueError(f"Missing question IDs: {', '.join(missing)}")
+  if len(rows) != len(expected) or unknown or missing:
+    parts = [f"received {len(rows)} of {len(expected)} expected question records"]
+    if unknown:
+      parts.append(f"Unknown question IDs: {', '.join(unknown)}")
+    if missing:
+      parts.append(f"Missing question IDs: {', '.join(missing)}")
+    raise ValueError(f"Survey questions mismatch ({'; '.join(parts)}; {hint})")
   return by_id, expected
 
 

@@ -4612,18 +4612,56 @@ test('preview client', async (t) => {
     assert.equal(get('#agent-key').title, '', 'the tooltip clears with the record');
     state.userscript_version = '1.13.0';
     await refresh();
-    assert.equal(get('#agent-key').textContent, 'clankers · v1.13.0 · No key recorded.');
-    assert.equal(get('#agent-key').title, 'Userscript v1.13.0');
+    assert.equal(get('#agent-key').textContent, 'clankers · No key recorded.');
+    assert.equal(get('#agent-key').title, '');
+    assert.equal(get('#board-userscript-version').textContent, 'Userscript v1.13.0');
+    assert.equal(get('#board-userscript-version').hidden, false);
     state.agent_key = {
       key: 'K'.repeat(43),
       host: 'https://arena-proxy.example.ts.net',
       at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
     };
     await refresh();
-    assert.match(get('#agent-key').textContent, /^clankers · v1\.13\.0 · Key K{7} · expires in (11m|12m)$/);
-    assert.match(get('#agent-key').title, /^Userscript v1\.13\.0 · https:\/\/arena-proxy\.example\.ts\.net · set /);
+    assert.match(get('#agent-key').textContent, /^clankers · Key K{7} · expires in (11m|12m)$/);
+    assert.match(get('#agent-key').title, /^https:\/\/arena-proxy\.example\.ts\.net · set /);
+    assert.equal(get('#board-userscript-version').textContent, 'Userscript v1.13.0');
     state.userscript_version = null;
     state.agent_key = null;
+    await refresh();
+    assert.equal(get('#board-userscript-version').hidden, true);
+  });
+
+  await t.test('Optimistic pending notes stay at the bottom of the log window across mixed board timestamps', async () => {
+    const prevBoard = state.board;
+    const prevNotes = state.notes;
+    const entries = Array.from({ length: 24 }, (_, idx) => ({
+      id: `p${String(idx).padStart(5, '0')}`,
+      branch: 'arena/worker01-clankers',
+      to: 'arena/main0001-clankers',
+      repo: 'clankers',
+      at: `2026-10-28T23:${String(idx).padStart(2, '0')}:00+08:00`,
+      text: `Board entry ${idx}`,
+      payload: { text: `Board entry ${idx}` },
+    }));
+    state.board = {
+      branch: 'arena/main0001-clankers',
+      repo: 'clankers',
+      main_session_id: 'arena/main0001-clankers',
+      allowed_sessions: ['arena/main0001-clankers', 'arena/worker01-clankers'],
+      sessions: [
+        { branch: 'arena/main0001-clankers', repo: 'clankers', role: 'main', allowed: true },
+        { branch: 'arena/worker01-clankers', repo: 'clankers', worker_id: 'beta', role: 'worker', allowed: true },
+      ],
+      entries,
+    };
+    state.notes = [
+      { id: 'opt123', text: 'Optimistic owner note', at: '2026-10-28T15:30:00.250Z', pending: true },
+    ];
+    await refresh();
+    const renderedIds = get('#history').children.map(node => node.children[2].children[0].dataset.full);
+    assert.equal(renderedIds[renderedIds.length - 1], 'opt123', 'pending UTC note stays visible at the bottom');
+    state.board = prevBoard;
+    state.notes = prevNotes;
     await refresh();
   });
 
@@ -6305,7 +6343,8 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /function\s+sessionStatusInfo\(/);
   assert.match(appSource, /statusSpan\.className\s*=\s*'board-status-text'/);
   assert.match(styleSource, /\.board-status-text\s*\{[^}]*font-size:\s*14px/);
-  assert.match(appSource, /selfRow\?\.agent_seen_at\s*\|\|\s*''/);
+  assert.match(appSource, /selfRow\?\.turn_ended_at\s*\|\|\s*''/);
+  assert.match(htmlSource, /id="board-userscript-version"/);
   assert.match(appSource, /wake_id:\s*String\(stamp\)/);
   assert.match(appSource, /rRawTurnEndedAt\s*>=\s*rLatestActiveAt/);
   assert.match(appSource, /const\s+reportsSig\s*=/);

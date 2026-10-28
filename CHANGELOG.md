@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Watch workspace file creates and edits during `serve` so native `Edit` and `Write` tools appear in `#connection-text` (`scripts/preview.py`).
 - Probe file-tool activity via silent `preview.py --tool-probe` and show `Bash`, `Read`, `Edit`, or `Write` with a relative timestamp in `#connection-text` (`scripts/install.sh`, `scripts/preview.py`, `assets/app.js`).
 - Print structural syntax warnings on `report publish` when fenced Mermaid blocks fail to parse (`scripts/mermaid_check.py`, `scripts/preview.py`).
 - Print a `git apply --3way` CLI hint when reading, polling, or acknowledging a board post with a `.patch` attachment (`scripts/preview.py`).
@@ -58,10 +59,18 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Strip client-side board diff and merge helpers from `arena.user.js` while keeping revision-gated board relay, file hydration, wakes, and status UI.
 - Omit raw secrets from `keyNote()` and report proxy key expiry countdowns (`arena.user.js`).
 
+### Removed
+
+#### arena-skill
+
+- Remove `*` and `@all` board broadcast targets across CLI, `/api/board`, `/v1/board`, and `arena.user.js`.
+
 ### Fixed
 
 #### arena-skill
 
+- Normalize board timestamps to UTC `Z`, compare timestamps by epoch milliseconds, and keep optimistic notes visible at the bottom (`scripts/preview.py`, `board.py`, `assets/app.js`, `arena.user.js`).
+- Keep dependent tasks right behind their blockers and restrict worker `poll` wakes to direct targets (`scripts/preview.py`).
 - Skip `/v1/board` revisions on heartbeat counters, guard session status against peer snapshots, and prune orphan blobs (`board.py`, `sqlite_store.py`).
 - Tick all preview relative timestamps and hover `title` attributes every second on the client timer without WebSocket refreshes (`assets/app.js`).
 - Honor new unanswered `--report` waits on tasks with earlier submissions, and wait in `poll` when `blocked_by` tasks remain upcoming (`scripts/preview.py`).
@@ -75,6 +84,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Compare board report operations by epoch milliseconds and reject `*` and `all` broadcast targets (`arena.user.js`).
 - Coalesce concurrent board syncs and file downloads per origin, and check state immediately on preview startup (`arena.user.js`).
 - Show `*` in the Arena tab title only when an unseen report needs answers (`arena.user.js`, `scripts/preview.py`, `assets/app.js`).
 - Poll preview and proxy boards every `60s +- 2.5s`, sending `POST` requests only on new diffs. Wake sibling tabs on passive advances and strip tombstoned branches from client diffs (`arena.user.js`, `assets/app.js`).

@@ -276,7 +276,8 @@ function connectionTitle(now = Date.now()) {
 }
 function stampMs(value) {
   if (typeof value !== 'string') return null;
-  const stamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value) ? `${value}Z` : value;
+  const trimmed = value.trim();
+  const stamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(trimmed) ? `${trimmed}Z` : trimmed;
   const parsed = Date.parse(stamp);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -1307,7 +1308,15 @@ function combinedHistoryItems(notes, board = getState()?.board) {
     });
   }
   if (!boardItems.length) return baseNotes;
-  return [...baseNotes, ...boardItems].sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
+  return [...baseNotes, ...boardItems].sort((a, b) => {
+    const pendingA = Boolean(a?.pending);
+    const pendingB = Boolean(b?.pending);
+    if (pendingA !== pendingB) return pendingA ? 1 : -1;
+    const msA = stampMs(a?.at);
+    const msB = stampMs(b?.at);
+    if (msA !== null && msB !== null && msA !== msB) return msA - msB;
+    return String(a?.at || '').localeCompare(String(b?.at || ''));
+  });
 }
 function revealMessage(id) {
   const row = messageNodes.get(id);
@@ -2668,7 +2677,10 @@ setInterval(showClock, 1000);
       const nextVer = event.data.version.trim();
       if (/^[0-9A-Za-z._+-]{1,32}$/.test(nextVer) && nextVer !== connectedUserscriptVersion) {
         connectedUserscriptVersion = nextVer;
-        if (lastState) renderAgentKey(lastState.agent_key, lastState.repo, lastState.userscript_version || connectedUserscriptVersion);
+        if (lastState) {
+          renderAgentKey(lastState.agent_key, lastState.repo);
+          renderBoard();
+        }
         socketRefresh();
       }
     }
@@ -3995,7 +4007,7 @@ function syncBoardHeartbeat(state) {
     : '';
   const allowSig = Array.isArray(state.board.allowed_sessions) ? state.board.allowed_sessions.join(',') : '';
   const removedSig = Array.isArray(state.board.removed_sessions) ? state.board.removed_sessions.join(',') : '';
-  const entriesKey = `${isPolling ? '1' : '0'}|${selfRow?.polling_since || ''}|${selfRow?.agent_seen_at || ''}|${selfRow?.agent_call_ended_at || ''}|${allowSig}|${removedSig}|${wakesSig}|${reportsSig}|${entries.map(row => row && row.id
+  const entriesKey = `${isPolling ? '1' : '0'}|${selfRow?.polling_since || ''}|${selfRow?.turn_ended_at || ''}|${allowSig}|${removedSig}|${wakesSig}|${reportsSig}|${entries.map(row => row && row.id
     ? `${row.id}:${row.seen_at || ''}:${row.acknowledged_at || ''}:${row.ack_edited_at || ''}:${row.ack_edited_seen_count || 0}:${Array.isArray(row.replies) ? row.replies.length : 0}:${row.task_id || ''}`
     : '').join(',')}|${reportOps.map(op => op?.id || '').join(',')}|${taskOps.map(op => op?.id || '').join(',')}`;
   const targetOrigin = parentTargetOrigin();
@@ -4129,9 +4141,16 @@ function formatBoardEntryStamp(entry, stamp, now = Date.now()) {
   boardEntryStamps.add(stamp);
 }
 function renderBoard() {
-  const board = getState()?.board;
+  const state = getState();
+  const board = state?.board;
   const boardTab = $('#board-tab');
   const sessionsEl = $('#board-sessions');
+  const userscriptVerEl = $('#board-userscript-version');
+  if (userscriptVerEl) {
+    const rawUserVer = String(state?.userscript_version || connectedUserscriptVersion || '').trim().replace(/^v/i, '');
+    userscriptVerEl.textContent = rawUserVer ? `Userscript v${rawUserVer}` : '';
+    userscriptVerEl.hidden = !rawUserVer;
+  }
   const egressVerEl = $('#board-egress-version');
   if (egressVerEl) {
     const rawVer = String(board?.egress_version || '').trim().replace(/^v/i, '');
@@ -4623,18 +4642,12 @@ function approvalRow(item) {
 }
 // Show the repository name, seven characters of the userscript key, and its freshness hour so a stale key is visible without exposing the full key in the log.
 // Keep the host and full timestamp in the tooltip so the footer fits a phone.
-function renderAgentKey(record, repo, userscriptVersion) {
+function renderAgentKey(record, repo) {
   const line = $('#agent-key');
-  const ver = typeof userscriptVersion === 'string' && userscriptVersion.trim()
-    ? `v${userscriptVersion.trim().replace(/^v/i, '')}`
-    : '';
-  const parts = [];
-  if (repo) parts.push(repo);
-  if (ver) parts.push(ver);
-  const prefix = parts.length ? `${parts.join(' · ')} · ` : '';
+  const prefix = repo ? `${repo} · ` : '';
   if (!record) {
     line.textContent = `${prefix}No key recorded.`;
-    line.title = ver ? `Userscript ${ver}` : '';
+    line.title = '';
     return;
   }
   // Only the key characters are monospace, so the label and countdown read as prose.
@@ -4642,7 +4655,6 @@ function renderAgentKey(record, repo, userscriptVersion) {
   key.textContent = record.key.slice(0, 7);
   line.replaceChildren(`${prefix}Key `, key, ` · ${keyCountdown(record.at)}`);
   const tipParts = [];
-  if (ver) tipParts.push(`Userscript ${ver}`);
   if (record.host) tipParts.push(record.host);
   tipParts.push(`set ${fullRelativeTime(record.at)}`);
   line.title = tipParts.join(' · ');

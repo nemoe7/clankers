@@ -201,3 +201,22 @@ def test_survey_instructions_omit_reuse_and_answer_key_mentions():
   assert "arena-preview survey -i" in survey.INSTRUCTIONS
   assert "--smallest-image" not in survey.INSTRUCTIONS
   assert "V1S0N" in survey.INSTRUCTIONS
+
+
+def test_survey_records_reports_count_missing_unknown_and_schema_hint():
+  import survey
+
+  template = survey.template()
+  expected_ids = [row["id"] for row in template]
+  short = copy.deepcopy(template[:-1])
+  short[0]["id"] = "LEGACY1"
+  with pytest.raises(ValueError) as exc:
+    survey.loads(json.dumps(short))
+  msg = str(exc.value)
+  assert (
+    f"received {len(short)} of {len(expected_ids)} expected question records" in msg
+  )
+  assert "Unknown question IDs: LEGACY1" in msg
+  assert f"Missing question IDs: {expected_ids[0]}, {expected_ids[-1]}" in msg
+  assert "references/survey.json" in msg
+  assert "arena-preview survey" in msg

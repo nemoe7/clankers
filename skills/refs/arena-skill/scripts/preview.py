@@ -1623,17 +1623,48 @@ def new_id():
 
 def seconds_since(value):
   """Seconds between one stored stamp and now, or None when it will not parse."""
-  if not value:
+  parsed = import_stamp(value)
+  if parsed is None:
     return None
-  try:
-    return (datetime.now(UTC) - datetime.fromisoformat(value)).total_seconds()
-  except ValueError:
-    return None
+  return (datetime.now(UTC) - parsed.astimezone(UTC)).total_seconds()
 
 
 def clip_stamp(value):
-  "Cut an ISO stamp to seconds. A restore needs no milliseconds or offset."
-  return value[:19] if value else value
+  "Cut an ISO stamp to UTC seconds without slicing away non-UTC offsets."
+  if not value:
+    return value
+  parsed = import_stamp(value)
+  if parsed is not None:
+    return parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+  return str(value)[:19]
+
+
+def board_stamp(value=None):
+  "Format a board wire timestamp as canonical second-resolution UTC with Z."
+  if not value:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+  parsed = import_stamp(value)
+  if parsed is not None:
+    return parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+  text = str(value).strip()
+  if len(text) >= 19:
+    return f"{text[:19]}Z"
+  return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def board_stamp_or_none(value):
+  "Format an optional board timestamp as canonical UTC Z, or None when empty."
+  if not value:
+    return None
+  return board_stamp(value)
+
+
+def board_stamp_ms(value):
+  "Return UTC epoch milliseconds for a stored or wire timestamp, or None."
+  parsed = import_stamp(value)
+  if parsed is None:
+    return None
+  return int(parsed.astimezone(UTC).timestamp() * 1000)
 
 
 def tool_activity(meta):
@@ -1645,9 +1676,15 @@ def tool_activity(meta):
 
 
 def at_or_after(value, other):
-  "True when a stored stamp is at or after another. Equal seconds count."
+  "True when a stored stamp is at or after another. Equal UTC seconds count."
   if not value or not other:
     return False
+  left = import_stamp(value)
+  right = import_stamp(other)
+  if left is not None and right is not None:
+    return int(left.astimezone(UTC).timestamp()) >= int(
+      right.astimezone(UTC).timestamp()
+    )
   return clip_stamp(value) >= clip_stamp(other)
 
 
@@ -2484,15 +2521,17 @@ def order_after_blockers(records):
   }
   placed, done, pending = [], set(), list(records)
   while pending:
-    ready = [item for item in pending if all(b in done for b in waiting[item["id"]])]
-    if not ready:
+    first = next(
+      (item for item in pending if all(b in done for b in waiting[item["id"]])),
+      None,
+    )
+    if first is None:
       # A stored cycle cannot hang the listing.
       placed.extend(pending)
       break
-    for item in ready:
-      placed.append(item)
-      done.add(item["id"])
-      pending.remove(item)
+    placed.append(first)
+    done.add(first["id"])
+    pending.remove(first)
   return placed
 
 
@@ -3790,10 +3829,15 @@ def slow_bash_hint(line, elapsed_seconds):
   )
 
 
+BASH_RUNNING_META = "bash_running_at"
+
+
 def refresh_bash_timer(state_dir):
   """Stamp the Bash call end timer when the state database exists."""
   if (Path(state_dir).resolve() / "state.sqlite3").is_file():
-    Store(state_dir, create=False).set_meta(AGENT_CALL_ENDED_META, now())
+    timer_store = Store(state_dir, create=False)
+    timer_store.set_meta(AGENT_CALL_ENDED_META, now())
+    timer_store.clear_meta(BASH_RUNNING_META)
 
 
 def read_set_actions(line):
@@ -6183,7 +6227,10 @@ def format_board_role_id(
 
 
 def resolve_board_target(target, sessions, allowed=(), main_sid=""):
-  clean = board_branch(str(target or "").strip().lstrip("@"))
+  raw_token = str(target or "").strip().lstrip("@")
+  if raw_token in {"*", "all"}:
+    return ""
+  clean = board_branch(raw_token)
   if not clean:
     return ""
   for row in sessions or ():
@@ -6220,8 +6267,8 @@ def resolve_board_target(target, sessions, allowed=(), main_sid=""):
 
 def valid_board_targets(sessions, allowed=(), main_sid=""):
   allowed_set = {str(item) for item in (allowed or ()) if item}
-  targets = ["*"]
-  seen = {"*"}
+  targets = []
+  seen = set()
 
   def _add(token):
     val = str(token or "").strip()
@@ -6350,7 +6397,7 @@ def apply_task_op_to_list(task_list, op):
       "details": [str(x) for x in (details_in or [])],
       "order": int(op.get("order") or (len(items) + 1)),
       "report_id": op.get("report_id"),
-      "updated_at": str(op.get("at") or clip_stamp(now())),
+      "updated_at": board_stamp(op.get("at")),
     }
     items.append(record)
   else:
@@ -6372,7 +6419,7 @@ def apply_task_op_to_list(task_list, op):
       existing["order"] = int(op.get("order"))
     if "report_id" in op:
       existing["report_id"] = op.get("report_id")
-    existing["updated_at"] = str(op.get("at") or clip_stamp(now()))
+    existing["updated_at"] = board_stamp(op.get("at"))
   return items
 
 
@@ -6382,22 +6429,20 @@ def apply_report_op_to_list(report_list, op):
   target_id = str(op.get("report_id") or op.get("id") or "").strip()
   if not target_id:
     return items
-  op_at = clip_stamp(op.get("at")) or ""
+  op_ms = board_stamp_ms(op.get("at"))
   if op_name in {"unpublish", "remove", "delete"}:
     kept = []
     for row in items:
       if str(row.get("id") or "") != target_id:
         kept.append(row)
         continue
-      row_stamp = (
-        clip_stamp(row.get("updated_at") or row.get("published_at") or "") or ""
-      )
-      if op_at and row_stamp and op_at < row_stamp:
+      row_ms = board_stamp_ms(row.get("updated_at") or row.get("published_at") or "")
+      if op_ms is not None and row_ms is not None and op_ms < row_ms:
         kept.append(row)
     return kept
   if op_name in {"answer", "submit"}:
     sub_id = str(op.get("submission_id") or op.get("note_id") or "").strip()
-    sub_at = str(op.get("at") or clip_stamp(now()))
+    sub_at = board_stamp(op.get("at"))
     for row in items:
       if str(row.get("id") or "") == target_id:
         row["answered"] = True
@@ -6435,18 +6480,30 @@ def board_stamp_epoch(value):
 
 
 def trim_report_ops(ops):
-  """Sort report ops by timestamp and protect worker-report decisions from entry-ack eviction."""
-  valid = [
-    dict(row)
-    for row in (ops or [])
-    if isinstance(row, dict) and row.get("id") and row.get("target")
-  ]
-  valid.sort(key=lambda item: str(item.get("at") or ""))
+  """Sort report ops by UTC epoch ms and protect worker-report decisions from eviction."""
+  valid = []
+  for row in ops or ():
+    if not isinstance(row, dict) or not row.get("id") or not row.get("target"):
+      continue
+    copy_row = dict(row)
+    if copy_row.get("at"):
+      copy_row["at"] = board_stamp(copy_row["at"])
+    valid.append(copy_row)
+  valid.sort(
+    key=lambda item: (
+      board_stamp_ms(item.get("at"))
+      if board_stamp_ms(item.get("at")) is not None
+      else -1,
+      str(item.get("id") or ""),
+    )
+  )
   return valid
 
 
 def board_survey(survey, allowed):
   result = dict(survey)
+  if "answered_at" in result:
+    result["answered_at"] = board_stamp_or_none(result.get("answered_at"))
   if not allowed and isinstance(result.get("results"), list):
     result["results"] = [
       {key: value for key, value in row.items() if key != "answer"}
@@ -6691,10 +6748,10 @@ def normalize_board_state(
       "polling": row_polling,
       "disconnected": row_disc,
       "updated_at": (
-        str(row.get("updated_at"))
+        board_stamp(row.get("updated_at"))
         if isinstance(row.get("updated_at"), str)
         and re.match(r"^\d{4}-\d{2}-\d{2}T", row["updated_at"])
-        else clip_stamp(now())
+        else board_stamp()
       ),
       "allowed": row_sid in allowed,
       "role": row_role,
@@ -6712,7 +6769,17 @@ def normalize_board_state(
       "agent_call_ended_at",
     ):
       if status_key in row and row[status_key] is not None:
-        s_entry[status_key] = row[status_key]
+        if status_key in {
+          "polling_since",
+          "agent_seen_at",
+          "turn_ended_at",
+          "agent_call_ended_at",
+        }:
+          norm_stamp = board_stamp_or_none(row[status_key])
+          if norm_stamp is not None:
+            s_entry[status_key] = norm_stamp
+        else:
+          s_entry[status_key] = row[status_key]
     for sha_key in ("remote_head", "origin_main_head"):
       raw_sha = row.get(sha_key)
       if isinstance(raw_sha, str):
@@ -6749,7 +6816,7 @@ def normalize_board_state(
         "repo": self_repo,
         "status": "polling" if self_polling else "active",
         "polling": self_polling,
-        "updated_at": clip_stamp(now()),
+        "updated_at": board_stamp(),
         "allowed": sid in allowed,
         "role": self_role,
       },
@@ -6768,7 +6835,7 @@ def normalize_board_state(
           "repo": allowed_repo,
           "status": "active",
           "polling": False,
-          "updated_at": clip_stamp(now()),
+          "updated_at": board_stamp(),
           "allowed": True,
           "role": allowed_role,
         }
@@ -6910,6 +6977,8 @@ def normalize_board_state(
             from_sid=from_sid,
             to_sid=resolved_to,
           )
+        if r_copy.get("at"):
+          r_copy["at"] = board_stamp(r_copy["at"])
         replies.append(r_copy)
     raw_ack_text = item.get("ack_text")
     norm_ack_text = (
@@ -6942,23 +7011,17 @@ def normalize_board_state(
         "to": resolved_to or "*",
         "mention_target": mention_target,
         "repo": str(item.get("repo") or sender_row.get("repo") or ""),
-        "at": str(item.get("at") or clip_stamp(now())),
+        "at": board_stamp(item.get("at")),
         "tag": str(item.get("tag") or item_payload.get("tag") or ""),
         "text": entry_text,
-        "seen_at": clip_stamp(item.get("seen_at")) if item.get("seen_at") else None,
-        "acknowledged_at": (
-          clip_stamp(item.get("acknowledged_at"))
-          if item.get("acknowledged_at")
-          else None
-        ),
+        "seen_at": board_stamp_or_none(item.get("seen_at")),
+        "acknowledged_at": board_stamp_or_none(item.get("acknowledged_at")),
         "ack_type": (
           str(item.get("ack_type") or "reply") if item.get("acknowledged_at") else None
         ),
         "ack_text": norm_ack_text,
         "ack_sender": norm_ack_sender,
-        "ack_edited_at": (
-          clip_stamp(item.get("ack_edited_at")) if item.get("ack_edited_at") else None
-        ),
+        "ack_edited_at": board_stamp_or_none(item.get("ack_edited_at")),
         "ack_edited_seen_count": int(item.get("ack_edited_seen_count") or 0),
         "task_id": str(item.get("task_id") or "") if item.get("task_id") else None,
         "replies": replies,
@@ -9348,20 +9411,23 @@ class Store:
           if isinstance(meta, dict)
           else self.meta_value("survey_state_json")
         )
-        checked_at = clip_stamp(
+        checked_at = board_stamp_or_none(
           meta.get("survey_checked_at")
           if isinstance(meta, dict)
           else self.meta_value("survey_checked_at")
         )
         s_state = json.loads(survey_raw) if survey_raw else {}
         s_results = s_state.get("results") if isinstance(s_state, dict) else None
-        s_ans_at = clip_stamp(
+        s_ans_at = board_stamp_or_none(
           s_state.get("answered_at") if isinstance(s_state, dict) else None
         )
         if (
           s_results is not None
           and checked_at
-          and (not s_ans_at or checked_at > s_ans_at)
+          and (
+            not s_ans_at
+            or (board_stamp_ms(checked_at) or 0) > (board_stamp_ms(s_ans_at) or 0)
+          )
         ):
           s_ans_at = checked_at
         self_survey = {
@@ -9387,7 +9453,9 @@ class Store:
         cur_origin_main = workspace_git_ref(root_dir, "refs/remotes/origin/main")
         self_status_fields = {
           "survey": board_survey(self_survey, sid in allowed_set),
-          "polling_since": clip_stamp(_mval(POLL_SINCE_META)) if is_polling else None,
+          "polling_since": board_stamp_or_none(_mval(POLL_SINCE_META))
+          if is_polling
+          else None,
           "waiting_for_gates": bool(runs),
           "checking_pr": any(
             pr_checks_command(routed_record(self.path.parent, name).get("argv", []))
@@ -9395,9 +9463,9 @@ class Store:
           ),
           "calls_since_message": calls_count,
           "gate_threshold": GATE_THRESHOLD,
-          "agent_seen_at": clip_stamp(_mval(AGENT_SEEN_META)),
-          "turn_ended_at": clip_stamp(_mval(TURN_ENDED_META)),
-          "agent_call_ended_at": clip_stamp(_mval(AGENT_CALL_ENDED_META)),
+          "agent_seen_at": board_stamp_or_none(_mval(AGENT_SEEN_META)),
+          "turn_ended_at": board_stamp_or_none(_mval(TURN_ENDED_META)),
+          "agent_call_ended_at": board_stamp_or_none(_mval(AGENT_CALL_ENDED_META)),
         }
         if cur_remote_head:
           self_status_fields["remote_head"] = cur_remote_head
@@ -9406,15 +9474,19 @@ class Store:
         for s_row in out["sessions"]:
           if s_row.get("branch") == sid:
             s_row.update(self_status_fields)
-            latest_stamp = max(
-              str(s_row.get("updated_at") or ""),
-              str(self_status_fields.get("polling_since") or ""),
-              str(self_status_fields.get("agent_seen_at") or ""),
-              str(self_status_fields.get("turn_ended_at") or ""),
-              str(self_status_fields.get("agent_call_ended_at") or ""),
-            )
-            if latest_stamp:
-              s_row["updated_at"] = latest_stamp
+            stamp_candidates = [
+              (ms, val)
+              for val in (
+                s_row.get("updated_at"),
+                self_status_fields.get("polling_since"),
+                self_status_fields.get("agent_seen_at"),
+                self_status_fields.get("turn_ended_at"),
+                self_status_fields.get("agent_call_ended_at"),
+              )
+              if val and (ms := board_stamp_ms(val)) is not None
+            ]
+            if stamp_candidates:
+              s_row["updated_at"] = max(stamp_candidates, key=lambda pair: pair[0])[1]
       except Exception:
         pass
       if is_self_allowed:
@@ -9428,7 +9500,7 @@ class Store:
               "details": list(row.get("details") or []),
               "order": row.get("order"),
               "report_id": row.get("report_id"),
-              "updated_at": clip_stamp(row.get("updated_at")),
+              "updated_at": board_stamp_or_none(row.get("updated_at")),
             }
             for row in self.list_tasks()
           ]
@@ -9480,24 +9552,24 @@ class Store:
               "fields": fields,
               "answered": answered_flag,
               "needs_answer": bool(fields) and not answered_flag,
-              "seen_at": clip_stamp(r_row["seen_at"]) if r_row["seen_at"] else None,
+              "seen_at": board_stamp_or_none(r_row["seen_at"]),
               "ever_seen": bool(r_row["ever_seen"]),
               "latest_answer_id": latest_sub["id"] if latest_sub else None,
-              "latest_answer_at": clip_stamp(latest_sub["at"]) if latest_sub else None,
-              "latest_answer_acknowledged_at": clip_stamp(latest_sub["acknowledged_at"])
+              "latest_answer_at": board_stamp_or_none(latest_sub["at"])
+              if latest_sub
+              else None,
+              "latest_answer_acknowledged_at": board_stamp_or_none(
+                latest_sub["acknowledged_at"]
+              )
               if latest_sub and latest_sub["acknowledged_at"]
               else None,
-              "agent_seen_at": clip_stamp(r_row["agent_seen_at"])
-              if r_row["agent_seen_at"]
-              else None,
-              "ack_seen_at": clip_stamp(r_row["ack_seen_at"])
-              if r_row["ack_seen_at"]
-              else None,
+              "agent_seen_at": board_stamp_or_none(r_row["agent_seen_at"]),
+              "ack_seen_at": board_stamp_or_none(r_row["ack_seen_at"]),
               "acknowledgements": acks_by_rep.get(rid, []),
               "owner_requested": bool(r_row["owner_requested"]),
               "sent_to_main": sent_flag,
-              "updated_at": clip_stamp(r_row["updated_at"]),
-              "published_at": clip_stamp(r_row["published_at"]),
+              "updated_at": board_stamp_or_none(r_row["updated_at"]),
+              "published_at": board_stamp_or_none(r_row["published_at"]),
             }
           )
         out["worker_reports"][sid] = rep_list
@@ -9513,7 +9585,7 @@ class Store:
                 r_item["answered"] = True
                 r_item["needs_answer"] = False
                 r_item["latest_answer_id"] = sub_hit["id"]
-                r_item["latest_answer_at"] = clip_stamp(sub_hit["at"])
+                r_item["latest_answer_at"] = board_stamp_or_none(sub_hit["at"])
       except Exception:
         pass
     return out
@@ -9772,6 +9844,9 @@ class Store:
     )
     if not sid or not entries:
       return []
+    is_worker = board_now.get("board_role") == "worker" or (
+      bool(board_now.get("main_session_id")) and board_now.get("main_session_id") != sid
+    )
     raw_text = self.meta_value(BOARD_STATE_META)
     try:
       raw = json.loads(raw_text) if raw_text else {}
@@ -9794,7 +9869,14 @@ class Store:
       if entry_id and entry_id not in seen_set:
         seen_set.add(entry_id)
         seen_list.append(entry_id)
-        if entry.get("branch") != sid and entry.get("to") in ("*", sid, "", None):
+        if entry.get("branch") == sid:
+          continue
+        if is_worker:
+          if entry.get("to") == sid or entry.get("mention_target") == sid:
+            unseen.append(entry)
+        elif (
+          entry.get("to") in ("*", sid, "", None) or entry.get("mention_target") == sid
+        ):
           unseen.append(entry)
     ack_wakes[entries_key] = seen_list[-512:]
     raw["ack_wakes"] = ack_wakes
@@ -10150,8 +10232,9 @@ class Store:
         if op_id and target_sid == sid and op_id not in applied_set:
           applied_set.add(op_id)
           applied_list.append(op_id)
-          op_at = str(op.get("at") or "")
-          if not (cleared_at and op_at and op_at <= cleared_at):
+          cleared_ms = board_stamp_ms(cleared_at)
+          op_ms = board_stamp_ms(op.get("at"))
+          if not (cleared_ms is not None and op_ms is not None and op_ms <= cleared_ms):
             self.apply_board_task_op(op)
             wakes[sid] = op_id
       ack_wakes[applied_key] = applied_list[-128:]
@@ -10180,9 +10263,10 @@ class Store:
         if op_id and target_sid == sid and op_id not in applied_rep_set:
           applied_rep_set.add(op_id)
           applied_rep_list.append(op_id)
-          op_at = str(op.get("at") or "")
+          cleared_ms = board_stamp_ms(cleared_at)
+          op_ms = board_stamp_ms(op.get("at"))
           if not (
-            cleared_at and op_at and op_at <= cleared_at
+            cleared_ms is not None and op_ms is not None and op_ms <= cleared_ms
           ) and self.apply_board_report_op(op):
             wakes[sid] = op_id
       ack_wakes[applied_rep_key] = applied_rep_list[-128:]
@@ -10252,12 +10336,16 @@ class Store:
             if status_key == "turn_ended_at":
               if by_sid[row_sid].get("polling"):
                 continue
-              prev_turn_end = str(prev_existing[status_key] or "")
-              newest_active = max(
-                str(by_sid[row_sid].get("agent_seen_at") or ""),
-                str(by_sid[row_sid].get("agent_call_ended_at") or ""),
-              )
-              if newest_active and newest_active > prev_turn_end:
+              prev_turn_ms = board_stamp_ms(prev_existing[status_key])
+              active_ms = [
+                ms
+                for ms in (
+                  board_stamp_ms(by_sid[row_sid].get("agent_seen_at")),
+                  board_stamp_ms(by_sid[row_sid].get("agent_call_ended_at")),
+                )
+                if ms is not None
+              ]
+              if active_ms and (prev_turn_ms is None or max(active_ms) > prev_turn_ms):
                 continue
             by_sid[row_sid][status_key] = prev_existing[status_key]
       sessions = list(by_sid.values())
@@ -10353,18 +10441,33 @@ class Store:
           target_entry["replies"] = op["replies"]
           if op.get("ack_edited_at"):
             target_entry["ack_edited_at"] = op["ack_edited_at"]
+      is_worker_sid = bool(main_sid and sid and sid != main_sid)
       for row in merged_entries:
         eid = str(row.get("id") or "")
+        direct_hit = row.get("to") == sid or row.get("mention_target") == sid
+        target_hit = (
+          direct_hit
+          if is_worker_sid
+          else (direct_hit or row.get("to") in ("*", "", None))
+        )
         if (
           eid
           and eid not in existing_entry_ids
           and row.get("branch") != sid
-          and row.get("to") in ("*", sid, "", None)
+          and target_hit
           and sid in allowed
           and eid not in seen_wake_set
         ):
           wakes[sid] = eid
-      entries = sorted(merged_entries, key=lambda r: str(r.get("at") or ""))
+      entries = sorted(
+        merged_entries,
+        key=lambda r: (
+          board_stamp_ms(r.get("at"))
+          if board_stamp_ms(r.get("at")) is not None
+          else -1,
+          str(r.get("id") or ""),
+        ),
+      )
       with closing(self.connect()) as db:
         for b_entry in entries:
           note_ref = str(b_entry.get("note_id") or b_entry.get("id") or "")
@@ -10387,7 +10490,7 @@ class Store:
           ):
             if n_row[n_field] and not b_entry.get(n_field):
               b_entry[n_field] = (
-                clip_stamp(n_row[n_field])
+                board_stamp(n_row[n_field])
                 if n_field.endswith("_at")
                 else n_row[n_field]
               )
@@ -10397,7 +10500,7 @@ class Store:
               {
                 "type": r.get("type") or "reply",
                 "text": r.get("text") or "",
-                "at": clip_stamp(r.get("at")),
+                "at": board_stamp(r.get("at")),
               }
               for r in n_replies
               if isinstance(r, dict)
@@ -10489,7 +10592,7 @@ class Store:
         "append": bool(payload.get("append")),
         "report_id": payload.get("report_id"),
         "tasks": payload.get("tasks"),
-        "at": clip_stamp(now()),
+        "at": board_stamp(),
       }
       task_ops.append(op_record)
       worker_tasks[target] = apply_task_op_to_list(
@@ -10591,7 +10694,7 @@ class Store:
         if isinstance(payload.get("answers"), dict)
         else {},
         "submission_id": payload.get("submission_id") or payload.get("note_id"),
-        "at": clip_stamp(now()),
+        "at": board_stamp(),
       }
       report_ops.append(rep_op)
       worker_reports[target] = apply_report_op_to_list(
@@ -10630,7 +10733,7 @@ class Store:
       found_target = False
       for row in sessions:
         if row["branch"] == target:
-          row["updated_at"] = clip_stamp(now())
+          row["updated_at"] = board_stamp()
           found_target = True
       if not found_target:
         sessions.append(
@@ -10639,7 +10742,7 @@ class Store:
             "repo": state["repo"],
             "status": "active",
             "polling": False,
-            "updated_at": clip_stamp(now()),
+            "updated_at": board_stamp(),
           }
         )
     elif action_type in {"delegate-id", "set-worker-id"}:
@@ -10707,7 +10810,7 @@ class Store:
           if row["branch"] == target:
             row["worker_id"] = ""
             row["role"] = "main"
-            row["updated_at"] = clip_stamp(now())
+            row["updated_at"] = board_stamp()
       main_sid = target
     elif action_type == "heartbeat":
       target = board_branch(payload.get("branch") or sid)
@@ -10720,7 +10823,7 @@ class Store:
             row["repo"] = str(payload.get("repo") or row.get("repo") or state["repo"])
             row["status"] = "polling" if is_poll else "active"
             row["polling"] = is_poll
-            row["updated_at"] = clip_stamp(now())
+            row["updated_at"] = board_stamp()
             updated = True
         if not updated:
           sessions.append(
@@ -10729,7 +10832,7 @@ class Store:
               "repo": str(payload.get("repo") or state["repo"]),
               "status": "polling" if is_poll else "active",
               "polling": is_poll,
-              "updated_at": clip_stamp(now()),
+              "updated_at": board_stamp(),
             }
           )
     elif action_type == "post":
@@ -10738,26 +10841,6 @@ class Store:
       )
       if not sender or sender not in allowed:
         raise ValueError("Session is not on the board allowlist")
-      has_explicit_to = "to" in payload and payload.get("to") is not None
-      raw_to = str(payload.get("to") or "").strip() if has_explicit_to else "*"
-      if raw_to == "*":
-        resolved_to = "*"
-      else:
-        resolved_to = (
-          resolve_board_target(raw_to, sessions, allowed=allowed, main_sid=main_sid)
-          if raw_to
-          else ""
-        )
-        if not resolved_to or resolved_to not in allowed:
-          valid_str = ", ".join(
-            valid_board_targets(sessions, allowed=allowed, main_sid=main_sid)
-          )
-          raise ValueError(
-            f"Unrecognized board target {raw_to!r}; valid targets: {valid_str}"
-          )
-      staged_file = None
-      if payload.get("file") is not None:
-        staged_file = stage_board_file(self.path.parent, sender, payload.get("file"))
       body = payload.get("payload")
       if not isinstance(body, dict):
         body = {"text": str(body)} if body is not None else {}
@@ -10798,16 +10881,6 @@ class Store:
         or body.get("summary")
         or ""
       )
-      if entry_text and "text" not in body and not body.get("tag"):
-        body["text"] = entry_text
-      if body.get("text"):
-        body.pop("body", None)
-        body.pop("message", None)
-      tag_value = str(payload.get("tag") or body.get("tag") or "").strip()
-      if not entry_text.strip() and not tag_value and staged_file is None:
-        raise ValueError(
-          "Board post requires non-empty text, a tag, or a file attachment"
-        )
       mention_target = ""
       raw_mention = str(payload.get("mention_target") or "").strip()
       if raw_mention:
@@ -10822,8 +10895,36 @@ class Store:
           if cand and cand in allowed and cand != sender:
             mention_target = cand
             break
-      if mention_target and resolved_to == "*":
-        resolved_to = mention_target
+      has_explicit_to = "to" in payload and payload.get("to") is not None
+      raw_to = str(payload.get("to") or "").strip() if has_explicit_to else ""
+      if has_explicit_to:
+        resolved_to = (
+          resolve_board_target(raw_to, sessions, allowed=allowed, main_sid=main_sid)
+          if raw_to and raw_to not in {"*", "all", "@all"}
+          else ""
+        )
+      else:
+        resolved_to = mention_target if mention_target in allowed else ""
+      if not resolved_to or resolved_to not in allowed:
+        valid_str = ", ".join(
+          valid_board_targets(sessions, allowed=allowed, main_sid=main_sid)
+        )
+        raise ValueError(
+          f"Unrecognized board target {raw_to!r}; valid targets: {valid_str}"
+        )
+      staged_file = None
+      if payload.get("file") is not None:
+        staged_file = stage_board_file(self.path.parent, sender, payload.get("file"))
+      if entry_text and "text" not in body and not body.get("tag"):
+        body["text"] = entry_text
+      if body.get("text"):
+        body.pop("body", None)
+        body.pop("message", None)
+      tag_value = str(payload.get("tag") or body.get("tag") or "").strip()
+      if not entry_text.strip() and not tag_value and staged_file is None:
+        raise ValueError(
+          "Board post requires non-empty text, a tag, or a file attachment"
+        )
       entry_text = normalize_board_mentions(
         entry_text,
         sessions,
@@ -10846,10 +10947,10 @@ class Store:
           ),
           "from_owner": from_owner,
           "note_id": str(payload.get("note_id") or ""),
-          "to": resolved_to or "*",
+          "to": resolved_to,
           "mention_target": mention_target,
           "repo": str(payload.get("repo") or sender_row.get("repo") or state["repo"]),
-          "at": clip_stamp(now()),
+          "at": board_stamp(),
           "tag": str(payload.get("tag") or body.get("tag") or ""),
           "text": entry_text,
           "seen_at": None,
@@ -10862,9 +10963,7 @@ class Store:
           "file": staged_file,
         }
       )
-      direct_target = mention_target or (
-        resolved_to if resolved_to and resolved_to != "*" else ""
-      )
+      direct_target = mention_target or resolved_to
       if direct_target and direct_target in allowed and direct_target != sender:
         for row in sessions:
           if row["branch"] == direct_target:
@@ -10872,17 +10971,9 @@ class Store:
             row["status"] = "active"
         wakes[direct_target] = entry_id
         ack_wakes.pop(direct_target, None)
-      elif from_owner and (resolved_to or "*") == "*":
-        for row in sessions:
-          target_sid = row["branch"]
-          if target_sid in allowed and target_sid != sender:
-            row["polling"] = False
-            row["status"] = "active"
-            wakes[target_sid] = entry_id
-            ack_wakes.pop(target_sid, None)
     elif action_type == "wake":
       target = str(payload.get("target") or payload.get("branch") or "").strip()
-      stamp = f"{clip_stamp(now())}-{uuid.uuid4().hex[:6]}"
+      stamp = f"{board_stamp()}-{uuid.uuid4().hex[:6]}"
       if target == "all-polling":
         for row in sessions:
           if row["branch"] in allowed and row.get("polling"):
@@ -13723,7 +13814,7 @@ class Store:
                 entry.get("id") == record_id
                 or str(entry.get("id") or "")[:6] == record_id
               ):
-                entry["seen_at"] = entry.get("seen_at") or clip_stamp(stamp)
+                entry["seen_at"] = entry.get("seen_at") or board_stamp(stamp)
                 matched_board = True
                 break
           if matched_board:
@@ -13802,7 +13893,7 @@ class Store:
                   "op": "entry-ack",
                   "entry_id": record_id,
                   "ack_edited_seen_count": seen_count,
-                  "at": clip_stamp(now()),
+                  "at": board_stamp(),
                 }
               )
               b_raw["report_ops"] = rep_ops
@@ -14008,11 +14099,11 @@ class Store:
                 to_sid=str(entry.get("branch") or entry.get("session_id") or ""),
               )
               if not entry.get("acknowledged_at"):
-                entry["acknowledged_at"] = clip_stamp(stamp)
+                entry["acknowledged_at"] = board_stamp(stamp)
                 entry["ack_type"] = "reply"
                 entry["ack_text"] = norm_ack_msg
                 entry["ack_sender"] = ack_sender_id
-                entry["seen_at"] = entry.get("seen_at") or clip_stamp(stamp)
+                entry["seen_at"] = entry.get("seen_at") or board_stamp(stamp)
               else:
                 replies = (
                   list(entry["replies"])
@@ -14023,12 +14114,12 @@ class Store:
                   {
                     "type": "reply",
                     "text": norm_ack_msg,
-                    "at": clip_stamp(stamp),
+                    "at": board_stamp(stamp),
                     "sender": ack_sender_id,
                   }
                 )
                 entry["replies"] = replies
-                entry["ack_edited_at"] = clip_stamp(stamp)
+                entry["ack_edited_at"] = board_stamp(stamp)
               rep_ops = (
                 list(b_raw["report_ops"])
                 if isinstance(b_raw.get("report_ops"), list)
@@ -14047,7 +14138,7 @@ class Store:
                   "ack_sender": entry.get("ack_sender"),
                   "ack_edited_at": entry.get("ack_edited_at"),
                   "replies": entry.get("replies"),
-                  "at": clip_stamp(stamp),
+                  "at": board_stamp(stamp),
                 }
               )
               b_raw["report_ops"] = rep_ops
@@ -14367,7 +14458,7 @@ class Store:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, '1')", (CLEARED_META,))
       db.execute(
         "INSERT OR REPLACE INTO meta VALUES (?, ?)",
-        (CLEARED_AT_META, clip_stamp(now())),
+        (CLEARED_AT_META, board_stamp()),
       )
       db.execute(
         "INSERT OR REPLACE INTO meta VALUES (?, ?)",
@@ -15322,6 +15413,8 @@ def scripts_signature(scripts_dir=None):
 def handler(store, reload_event=None):
   from http.server import BaseHTTPRequestHandler
 
+  if reload_event is not None and not os.environ.get("PYTEST_CURRENT_TEST"):
+    ensure_workspace_watcher(store)
   survey_state = {"results": None, "answered_at": None, "requested": False}
   survey_lock = threading.Lock()
 
@@ -17592,6 +17685,8 @@ def pre_command(state_dir, line, command, root, done="", shell=""):
   # Record the process group only for sleep calls so violation flags never break other commands.
   if not routed and state_file(state_dir).is_file():
     group_store = Store(state_dir, create=False)
+    if not platform_line(line):
+      group_store.set_meta(BASH_RUNNING_META, now())
     if sleep_command(command):
       group = str(os.getpgid(0))
       if group_store.meta_value(CALL_GROUP_META) != group:
@@ -17819,6 +17914,138 @@ def watch_call_group(store, stop=None, interval=1.0, signal_group=os.killpg):
       time.sleep(interval)
     elif stop.wait(interval):
       return
+
+
+WORKSPACE_WATCH_SKIP_DIRS = frozenset(
+  {
+    ".git",
+    ".agents",
+    "arena-state",
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    ".tox",
+    ".nox",
+    ".cache",
+  }
+)
+
+
+def workspace_file_snapshot(root):
+  """Return a relative-path -> (mtime_ns, size) snapshot of workspace files."""
+  snapshot = {}
+  root_path = Path(root)
+  if not root_path.is_dir():
+    return snapshot
+  state_dir_name = ""
+  for dirpath, dirnames, filenames in os.walk(root_path, followlinks=False):
+    dirnames[:] = [
+      name
+      for name in dirnames
+      if name not in WORKSPACE_WATCH_SKIP_DIRS
+      and name != state_dir_name
+      and not name.startswith(".arena-worktree")
+    ]
+    for fname in filenames:
+      if fname.endswith((".pyc", ".swp", ".tmp")) or fname.startswith(".#"):
+        continue
+      full = os.path.join(dirpath, fname)
+      try:
+        st = os.lstat(full)
+      except OSError:
+        continue
+      if os.path.islink(full):
+        continue
+      rel = os.path.relpath(full, root_path)
+      snapshot[rel] = (st.st_mtime_ns, st.st_size)
+  return snapshot
+
+
+def bash_call_running(store):
+  """True while a gated Bash call is currently executing."""
+  bash_at = store.meta_value(BASH_RUNNING_META)
+  if bash_at:
+    age = seconds_since(bash_at)
+    if age is not None and 0 <= age < 1800:
+      return True
+  try:
+    group = int(store.meta_value(CALL_GROUP_META) or 0)
+  except (TypeError, ValueError):
+    group = 0
+  if group > 1:
+    age = seconds_since(store.meta_value(CALL_STARTED_META))
+    if age is not None and 0 <= age < 1800:
+      return True
+  return False
+
+
+def record_workspace_file_changes(store, previous, current):
+  """Record at most one Write/Edit tool event for workspace changes outside Bash."""
+  ended_dt = import_stamp(store.meta_value(AGENT_CALL_ENDED_META))
+  ended_ns = (
+    int(ended_dt.astimezone(UTC).timestamp() * 1_000_000_000) + 20_000_000
+    if ended_dt is not None
+    else 0
+  )
+  created = False
+  edited = False
+  for rel, sig in current.items():
+    if sig[0] <= ended_ns:
+      continue
+    if rel not in previous:
+      created = True
+      break
+    if previous[rel] != sig:
+      edited = True
+  if created:
+    store.record_tool("write")
+    return "write"
+  if edited:
+    store.record_tool("edit")
+    return "edit"
+  return None
+
+
+def watch_workspace_files(store, stop=None, interval=1.0):
+  """Poll workspace files so native Edit/Write tools register in #connection-text."""
+  try:
+    root = store.repository_root()
+  except Exception:
+    root = Path.cwd()
+  previous = workspace_file_snapshot(root)
+  while stop is None or not stop.is_set():
+    if stop is None:
+      time.sleep(interval)
+    elif stop.wait(interval):
+      return
+    try:
+      current = workspace_file_snapshot(root)
+      if not bash_call_running(store):
+        record_workspace_file_changes(store, previous, current)
+      previous = current
+    except Exception:
+      pass
+
+
+def ensure_workspace_watcher(store, stop=None, interval=1.0):
+  """Keep a single active workspace file watcher thread per server process."""
+  prev_stop = getattr(sys, "_arena_workspace_watcher_stop", None)
+  if prev_stop is not None and prev_stop is not stop:
+    prev_stop.set()
+  watcher_stop = stop if stop is not None else threading.Event()
+  sys._arena_workspace_watcher_stop = watcher_stop
+  threading.Thread(
+    target=watch_workspace_files,
+    args=(store, watcher_stop, interval),
+    daemon=True,
+  ).start()
+  return watcher_stop
 
 
 def watch_hot_reload(
@@ -18374,8 +18601,8 @@ def main():
   board_post_cmd.add_argument(
     "-t",
     "--to",
-    default="*",
-    help="Target session ID, worker ID, or '*' (default)",
+    default=None,
+    help="Target session ID, worker ID, or 'main'",
   )
   board_post_cmd.add_argument(
     "-f",
@@ -18464,6 +18691,7 @@ def main():
       # The hook runs this after every bash call, so the stamp marks the call's end: the
       # page keeps the long call text only while a call started after the last recorded end.
       store.set_meta(AGENT_CALL_ENDED_META, now())
+      store.clear_meta(BASH_RUNNING_META)
       if slow_hint:
         print(slow_hint, file=sys.stderr, flush=True)
       # A pending inbox item outranks a routed status. Otherwise one routed status or one
@@ -18633,6 +18861,7 @@ def main():
         threading.Thread(
           target=watch_call_group, args=(store, stop_event), daemon=True
         ).start()
+        ensure_workspace_watcher(store, stop_event)
         threading.Thread(
           target=watch_hot_reload,
           args=(server, reload_event, stop_event, 1.0, None, store),
@@ -18790,7 +19019,9 @@ def main():
         for item in pending_entries:
           print(f"  {item.get('id')}\t{item.get('branch')} -> {item.get('to') or '*'}")
     elif args.command == "board-post":
-      payload = {"action": "post", "to": args.to, "text": args.text}
+      payload = {"action": "post", "text": args.text}
+      if args.to is not None:
+        payload["to"] = args.to
       if args.file is not None:
         file_path = Path(args.file)
         if not file_path.is_file():

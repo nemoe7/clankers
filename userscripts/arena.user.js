@@ -7494,7 +7494,9 @@
   }
 
   function resolveBoardTarget(target, sessions, allowed, mainSid) {
-    var clean = boardBranch(String(target || "").trim().replace(/^@+/, ""));
+    var rawToken = String(target || "").trim().replace(/^@+/, "");
+    if (rawToken === "*" || rawToken === "all") return "";
+    var clean = boardBranch(rawToken);
     if (!clean) return "";
     var list = Array.isArray(sessions) ? sessions : [];
     for (var i = 0; i < list.length; i += 1) {
@@ -7542,9 +7544,8 @@
     return Date.parse(normalized);
   }
 
-  function clipBoardStamp(value) {
-    var m = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/.exec(String(value || "").trim());
-    return m ? m[1] : "";
+  function formatBoardUtcStamp(ms) {
+    return new Date(Number.isFinite(ms) ? ms : Date.now()).toISOString().replace(/\.\d{3}Z$/, "Z");
   }
 
   function applyBoardReportOpToList(reportList, op) {
@@ -7552,17 +7553,17 @@
     var opName = String((op && (op.op || op.operation)) || "answer").trim().toLowerCase();
     var targetId = String((op && (op.report_id || op.id)) || "").trim();
     if (!targetId) return items;
-    var opAt = clipBoardStamp(op && op.at);
+    var opMs = parseBoardStampMs(op && op.at);
     if (opName === "unpublish" || opName === "remove" || opName === "delete") {
       return items.filter(function (row) {
         if (String(row.id || "") !== targetId) return true;
-        var rowStamp = clipBoardStamp(row.updated_at || row.published_at || "");
-        return Boolean(opAt && rowStamp && opAt < rowStamp);
+        var rowMs = parseBoardStampMs(row.updated_at || row.published_at || "");
+        return Number.isFinite(opMs) && Number.isFinite(rowMs) && opMs < rowMs;
       });
     }
     if (opName === "answer" || opName === "submit") {
       var subId = String((op && (op.submission_id || op.note_id)) || "").trim();
-      var subAt = opAt || new Date().toISOString().slice(0, 19);
+      var subAt = formatBoardUtcStamp(opMs);
       return items.map(function (row) {
         if (String(row.id || "") !== targetId) return row;
         var updated = Object.assign({}, row, { answered: true, needs_answer: false, latest_answer_at: subAt });

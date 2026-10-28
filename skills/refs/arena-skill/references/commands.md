@@ -41,7 +41,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `report state` | Print publication, owner view stamp, staleness and answer visibility for one report or all |
 | `rename <id> <new-id>` | Rename one stored note, report answer, report or task in place, so its answers, order and stamps survive |
 | `state clear` | Empty every state table in place; preserve the agent key, refresh the save file to match, and keep a running server's recorded port |
-| `board status \| post [-t, --to <session>] [-f, --file <path>] <text> \| wake [<session>]` | Inspect board sessions and unread entries, post a board message (with optional target or attachment), or wake a polling session |
+| `board status \| post -t, --to <session> [-f, --file <path>] <text> \| wake [<session>]` | Inspect board sessions and unread entries, post a targeted board message (with optional attachment), or wake a polling session |
 | `GET / POST /api/board` | Read or update the multi-session board (`action`: `sync`, `allow`, `revoke`, `set-main`, `heartbeat`, `post`, `wake`, or `clear`) |
 
 - Every command except `init` and `serve` breaks with a restart line while no preview answers, so the agent starts the server first.
@@ -62,7 +62,7 @@ When an acknowledgement refers to a report or task, use `ack` and put its exact 
 
 ## Multi-session board (`/api/board`)
 
-Run `arena-preview board status`, `arena-preview board post <text>`, or `arena-preview board wake [<session>]` from the shell.
+Run `arena-preview board status`, `arena-preview board post -t <target> <text>`, or `arena-preview board wake [<session>]` from the shell.
 
 `GET /api/board` returns the current `allowlist`, `main_session_id`, `sessions`, `entries`, and `wake_stamps`. `POST /api/board` accepts JSON with `action` set to `sync`, `allow`, `revoke`, `set-main`, `heartbeat`, `post`, `wake`, or `clear`.
 
