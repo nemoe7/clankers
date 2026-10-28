@@ -1969,5 +1969,34 @@ def test_board_polling_heartbeat_post_wake_and_consumed_wake_anti_resurrection(
       e for e in at_main_sync["board"]["entries"] if e["id"] == "patmain2"
     )
     assert resolved_entry["to"] == alpha
+    for bad_target in ("all", "@all", "gama", "arena/unopted99-clankers", ""):
+      bad_res = reopened.apply(
+        {
+          "action": "post",
+          "branch": alpha,
+          "to": bad_target,
+          "repo": "clankers",
+          "text": "Should reject unknown target",
+        },
+        branch=alpha,
+        repo="clankers",
+      )
+      assert bad_res["ok"] is False
+      assert "Unrecognized board target" in bad_res["error"]
+      assert "valid targets: *, main," in bad_res["error"]
+      assert beta in bad_res["error"]
+    ok_broadcast = reopened.apply(
+      {
+        "action": "post",
+        "branch": alpha,
+        "to": "*",
+        "repo": "clankers",
+        "text": "Broadcast ok",
+      },
+      branch=alpha,
+      repo="clankers",
+    )
+    assert ok_broadcast["ok"] is True
+    assert ok_broadcast["board"]["entries"][-1]["to"] == "*"
   finally:
     reopened.close()

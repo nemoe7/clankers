@@ -188,6 +188,35 @@ def resolve_board_target(target, sessions, allowed, main_sid):
   return clean
 
 
+def valid_board_targets(sessions, allowed=(), main_sid=""):
+  """Return ordered valid `-t` target tokens for board posts."""
+  allowed_set = {str(item) for item in (allowed or ()) if item}
+  targets = ["*"]
+  seen = {"*"}
+
+  def _add(token):
+    val = str(token or "").strip()
+    if val and val not in seen:
+      seen.add(val)
+      targets.append(val)
+
+  if main_sid or allowed_set:
+    _add("main")
+  for row in sessions or ():
+    if not isinstance(row, dict):
+      continue
+    row_br = str(row.get("branch") or "")
+    if not row_br or row_br not in allowed_set:
+      continue
+    if row.get("worker_id"):
+      _add(row["worker_id"])
+    if row.get("board_id") and row.get("board_id") != row_br:
+      _add(row["board_id"])
+  for allow_br in allowed or ():
+    _add(allow_br)
+  return targets
+
+
 def apply_report_op_to_list(report_list, op):
   """Apply an answer or unpublish operation to a worker report list."""
   items = [dict(row) for row in (report_list or []) if isinstance(row, dict)]
@@ -1364,20 +1393,37 @@ def apply_board_action(board, action):
   if action_type == "post":
     if not br or br not in next_board["allowed_sessions"]:
       return False, "not-allowed", next_board
+    has_explicit_to = "to" in action and action.get("to") is not None
+    raw_to = str(action.get("to") or "").strip() if has_explicit_to else "*"
+    if raw_to == "*":
+      resolved_to = "*"
+    else:
+      resolved_to = (
+        resolve_board_target(
+          raw_to,
+          next_board["sessions"],
+          next_board["allowed_sessions"],
+          next_board["main_session_id"],
+        )
+        if raw_to
+        else ""
+      )
+      if not resolved_to or resolved_to not in next_board["allowed_sessions"]:
+        valid_str = ", ".join(
+          valid_board_targets(
+            next_board["sessions"],
+            next_board["allowed_sessions"],
+            next_board["main_session_id"],
+          )
+        )
+        return (
+          False,
+          f"Unrecognized board target {raw_to!r}; valid targets: {valid_str}",
+          next_board,
+        )
     ok, checked_file, _, err = validate_board_file(action.get("file"))
     if not ok:
       return False, err, next_board
-    raw_to = str(action.get("to") or "")
-    resolved_to = (
-      raw_to
-      if raw_to in ("", "*")
-      else resolve_board_target(
-        raw_to,
-        next_board["sessions"],
-        next_board["allowed_sessions"],
-        next_board["main_session_id"],
-      )
-    )
     entry_id = str(action.get("id") or f"b-{int(time.time() * 1000)}")
     entry_text = str(action.get("text") or "")
     from_owner = bool(

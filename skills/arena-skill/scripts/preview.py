@@ -2242,6 +2242,20 @@ def resolve_board_target(target,sessions,allowed=(),main_sid=''):
 		if main_sid:return main_sid
 		if allowed:return allowed[0]
 	return clean
+def valid_board_targets(sessions,allowed=(),main_sid=''):
+	allowed_set={str(item)for item in allowed or()if item};targets=['*'];seen={'*'}
+	def _add(token):
+		val=str(token or'').strip()
+		if val and val not in seen:seen.add(val);targets.append(val)
+	if main_sid or allowed_set:_add('main')
+	for row in sessions or():
+		if not isinstance(row,dict):continue
+		row_br=str(row.get('branch')or'')
+		if not row_br or row_br not in allowed_set:continue
+		if row.get('worker_id'):_add(row['worker_id'])
+		if row.get('board_id')and row.get('board_id')!=row_br:_add(row['board_id'])
+	for allow_br in allowed or():_add(allow_br)
+	return targets
 def normalize_board_mentions(text,sessions,allowed=(),main_sid='',from_sid='',to_sid=''):
 	raw=str(text or'')
 	if'@'not in raw:return raw
@@ -3580,6 +3594,11 @@ class Store:
 		elif action_type=='post':
 			sender=resolve_board_target(payload.get('branch')or sid,sessions,allowed=allowed,main_sid=main_sid)
 			if not sender or sender not in allowed:raise ValueError('Session is not on the board allowlist')
+			has_explicit_to='to'in payload and payload.get('to')is not None;raw_to=str(payload.get('to')or'').strip()if has_explicit_to else'*'
+			if raw_to=='*':resolved_to='*'
+			else:
+				resolved_to=resolve_board_target(raw_to,sessions,allowed=allowed,main_sid=main_sid)if raw_to else''
+				if not resolved_to or resolved_to not in allowed:valid_str=', '.join(valid_board_targets(sessions,allowed=allowed,main_sid=main_sid));raise ValueError(f"Unrecognized board target {raw_to!r}; valid targets: {valid_str}")
 			staged_file=None
 			if payload.get('file')is not None:staged_file=stage_board_file(self.path.parent,sender,payload.get('file'))
 			body=payload.get('payload')
@@ -3590,7 +3609,7 @@ class Store:
 			if body.get('text'):body.pop('body',None);body.pop('message',None)
 			tag_value=str(payload.get('tag')or body.get('tag')or'').strip()
 			if not entry_text.strip()and not tag_value and staged_file is None:raise ValueError('Board post requires non-empty text, a tag, or a file attachment')
-			raw_to=str(payload.get('to')or'*');resolved_to='*'if raw_to=='*'else resolve_board_target(raw_to,sessions,allowed=allowed,main_sid=main_sid);mention_target='';raw_mention=str(payload.get('mention_target')or'').strip()
+			mention_target='';raw_mention=str(payload.get('mention_target')or'').strip()
 			if raw_mention:mention_target=resolve_board_target(raw_mention,sessions,allowed=allowed,main_sid=main_sid)
 			if not mention_target and entry_text:
 				for token in re.findall('(?:^|(?<=\\s))@([A-Za-z0-9_/-]{1,64})\\b',entry_text):

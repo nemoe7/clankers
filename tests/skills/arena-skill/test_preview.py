@@ -17761,3 +17761,84 @@ def test_main_receives_one_ack_required_note_per_worker_disconnect_transition(
   sync_beta(True, "2026-10-28T09:55:00")
   pending2 = main_store.read()["pending"]
   assert len(pending2) == 1 and pending2[0]["id"] != disc_note["id"]
+
+
+def test_board_post_rejects_unrecognized_targets_across_cli_and_api_board(
+  tmp_path, capsys, monkeypatch
+):
+  repo_root = tmp_path / "clankers"
+  repo_root.mkdir()
+  alpha = "arena/alpha111-clankers"
+  beta = "arena/beta2222-clankers"
+  unopted = "arena/unopted3-clankers"
+  monkeypatch.setattr(preview, "resolve_repo_root", lambda _cwd=None: repo_root)
+  monkeypatch.setattr(preview, "workspace_branch", lambda _root=None: alpha)
+  state_dir = repo_root / "arena-state"
+  store = preview.Store(state_dir, create=True)
+  store.board_action({"action": "allow", "branch": alpha})
+  store.board_action({"action": "set-main", "branch": alpha})
+  store.board_action({"action": "allow", "branch": beta, "worker_id": "beta"})
+  store.board_action({"action": "heartbeat", "branch": unopted, "repo": "clankers"})
+
+  for bad_to in ("all", "@all", "gama", unopted, ""):
+    with pytest.raises(
+      ValueError, match=r"Unrecognized board target.*valid targets:"
+    ) as exc:
+      store.board_action(
+        {
+          "action": "post",
+          "to": bad_to,
+          "text": "Should fail before staging",
+          "file": {"name": "leak.txt", "encoding": "utf-8", "content": "nope"},
+        }
+      )
+    msg = str(exc.value)
+    assert "*" in msg and "main" in msg and "beta" in msg
+    assert alpha in msg and beta in msg
+  assert not (state_dir / "board-files").exists()
+
+  # CLI `arena-preview board post -t all` exits 1 and lists valid targets on stderr.
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: state_dir)
+  monkeypatch.setattr(preview, "require_server", lambda _s: None)
+  capsys.readouterr()
+  monkeypatch.setattr(
+    sys, "argv", ["preview.py", "board", "post", "-t", "all", "broadcast attempt"]
+  )
+  rc = preview.main()
+  err_out = capsys.readouterr().err
+  assert rc == 1
+  assert "Unrecognized board target" in err_out
+  assert "valid targets: *, main," in err_out
+
+  # Broadcast `*`, `main`, `@beta`, and allowlisted branches continue to work.
+  monkeypatch.setattr(sys, "argv", ["preview.py", "board", "post", "Broadcast message"])
+  assert preview.main() == 0
+  monkeypatch.setattr(
+    sys, "argv", ["preview.py", "board", "post", "-t", "@beta", "Direct to beta"]
+  )
+  assert preview.main() == 0
+  entries = store.board_state()["entries"]
+  assert entries[-2]["to"] == "*"
+  assert entries[-1]["to"] == beta
+
+  # HTTP POST /api/board returns 400 on unrecognized targets.
+  srv = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+  port = srv.server_address[1]
+  t = threading.Thread(target=srv.serve_forever, daemon=True)
+  t.start()
+  try:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    conn.request(
+      "POST",
+      "/api/board",
+      body=json.dumps({"action": "post", "to": "all", "text": "Bad HTTP target"}),
+      headers={"Content-Type": "application/json", "X-Arena-Preview": "1"},
+    )
+    resp = conn.getresponse()
+    err_json = json.loads(resp.read().decode("utf-8"))
+    assert resp.status == 400
+    assert alpha in err_json["error"] and beta in err_json["error"]
+    conn.close()
+  finally:
+    srv.shutdown()
+    srv.server_close()

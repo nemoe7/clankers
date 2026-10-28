@@ -48,6 +48,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Reject unrecognized non-`*` `-t` board post targets in CLI, `/api/board`, and `/v1/board`, listing valid targets (`scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`).
 - Keep expanded task `<details>` open across task updates and preview state refreshes (`assets/app.js`).
 - Preserve live board polling state, stop consumed wake resurrection, and wake explicit post recipients (`scripts/preview.py`, `assets/app.js`, `arena-egress-proxy/scripts/arena_proxy/board.py`).
 - Keep worker `poll` asleep on peer board notices without a wake stamp and tell empty wakes to re-poll (`scripts/preview.py`).
