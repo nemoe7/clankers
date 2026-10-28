@@ -1743,8 +1743,8 @@ function renderState() {
     if (!$('#reports-panel').hidden && !pendingDelete &&
         ($('#report').dataset.reportId !== select.value ||
          $('#report').dataset.updatedAt !== (selectedReport?.updated_at || ''))) loadReport();
-    // When the report is already open, mark new acks seen immediately without waiting for a tab switch.
-    else if (!$('#reports-panel').hidden && ackUnread(selectedReport)) void markAckSeen(select.value);
+    // An ack that lands in view stamps at once, without waiting for a tab switch.
+    else if (!$('#reports-panel').hidden) settleReportAck();
   }
   // The pip tracks unopened reports, edited reports keep their star, and the receipt tracks the latest answer.
   for (const option of $('#report-select').children) {
@@ -2996,7 +2996,7 @@ async function loadReport(force = false) {
       : result.published || result.edited ? `Published ${time(result.published || result.edited)}` : '';
     reportStatusLine(stampSource, id, report?.latest_answer_at ? report.latest_answer_id : null);
     // Opening the report clears any unread ack immediately because the receipt sits at the panel top.
-    if (report && ackUnread(report)) void markAckSeen(id);
+    settleReportAck();
     checkReportRead();
   } catch (error) {
     if (sequence === reportRequest) $('#report-status').textContent = `Report unavailable: ${error.message}`;
@@ -3713,6 +3713,17 @@ async function markReportRead(id) {
     // A later look retries a failed read stamp.
   } finally { pendingReportReads.delete(readKey); }
 }
+// One stamp per report and ack: a retry after a failure re-arms it, and a repeated render waits.
+const pendingAckSeen = new Set();
+function settleReportAck() {
+  const id = shownReportId();
+  const report = id ? getState()?.reports.find(item => item.id === id) : null;
+  if (!report || !ackUnread(report)) return;
+  const key = `${id}:${report.latest_answer_acknowledged_at}`;
+  if (pendingAckSeen.has(key)) return;
+  pendingAckSeen.add(key);
+  void markAckSeen(id).finally(() => pendingAckSeen.delete(key));
+}
 // An agent ack holds a star and the tab dot until the owner opens the report. The open is the
 // gesture, not the read: the receipt sits at the top of the panel, so the visit clears it.
 async function markAckSeen(id) {
@@ -3845,6 +3856,8 @@ function showTab(tab, { persist = true, initial = false } = {}) {
       // Record the tab visit before the poll recomputes its pip so the marker clears during this visit.
       refreshState();
       loadReport();
+      // The return is the open gesture, so an ack that landed while the panel was hidden clears now.
+      settleReportAck();
     }
   } else {
     if (left) void markReportViewed(left, false);

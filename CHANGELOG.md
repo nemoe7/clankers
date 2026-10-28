@@ -49,6 +49,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Clear unread report-acknowledgement markers via `settleReportAck` when an ack arrives in view or when returning to an already-loaded report (`assets/app.js`).
 - Check the live preview port in `scripts/install.sh` and print an in-process hot-reload notice instead of a `start_process` hint when `serve` is already up.
 - Reject unrecognized non-`*` `-t` board post targets in CLI, `/api/board`, and `/v1/board`, listing valid targets (`scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`).
 - Keep expanded task `<details>` open across task updates and preview state refreshes (`assets/app.js`).

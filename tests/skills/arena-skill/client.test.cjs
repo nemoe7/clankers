@@ -2646,6 +2646,37 @@ test('preview client', async (t) => {
       '1. Fielded', 'the star goes with the in-view ack');
   });
 
+  await t.test('Returning to a report whose ack arrived off screen clears it at once', async () => {
+    // The panel keeps the report loaded while the owner reads Messages. A list that stops
+    // changing must not leave the tab dot, the dropdown star, or the receipt behind.
+    pip = get('#report-pip');
+    ackSeenCalls.length = 0;
+    const report = (ack) => ({ id: 'r1', title: 'Fielded', updated_at: '2026-09-24T09:59:00',
+      seen_at: '2026-09-20T22:00:00', ever_seen: 1,
+      latest_answer_id: 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa',
+      latest_answer_at: '2026-09-24T10:00:00',
+      latest_answer_acknowledged_at: ack, ack_seen_at: null });
+    state.reports = [report(null)];
+    await refresh();
+    await get('#reports-tab').events.click();
+    await tick(); await tick();
+    assert.deepEqual(ackSeenCalls, [], 'nothing to stamp before the ack lands');
+    await get('#notes-tab').events.click();
+    await tick(); await tick();
+    state.reports = [report('2026-09-24T10:01:00')];
+    await refresh();
+    await tick(); await tick();
+    assert.deepEqual(ackSeenCalls, [], 'a hidden panel never stamps an ack');
+    assert.equal(pip.hidden, false, 'the dot waits for the owner');
+    await get('#reports-tab').events.click();
+    await tick(); await tick();
+    assert.deepEqual(ackSeenCalls, ['/api/reports/r1/ack-seen'],
+      'the return stamps the ack with no list change behind it');
+    assert.equal(pip.hidden, true, 'the dot goes with the return');
+    assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+      '1. Fielded', 'the dropdown star goes with the return');
+  });
+
   await t.test('Opening a short report stamps it without a dwell', async () => {
     panel = get('#reports-panel');
     state.reports = [{ id: 'r1', title: 'Fits', updated_at: new Date().toISOString(), seen_at: null }];
