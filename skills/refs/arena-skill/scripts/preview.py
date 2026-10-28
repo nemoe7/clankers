@@ -49,7 +49,7 @@ def __getattr__(name):
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
-VIOLATION_NOTES = "type NOT IN ('', 'survey', 'state-backup')"
+VIOLATION_NOTES = "type NOT IN ('', 'survey', 'state-backup', 'worker-idle')"
 PENDING_SUBMISSIONS = (
   "acknowledged_at IS NULL"
   " AND seq IN (SELECT MAX(seq) FROM submissions GROUP BY report_id)"
@@ -10705,12 +10705,101 @@ class Store:
       "wakes": wakes,
       "ack_wakes": ack_wakes,
     }
+    normalized = normalize_board_state(stored, branch=sid, repo=state["repo"])
+    idle_key = f"{sid}:idle_workers"
+    idle_seen = (
+      dict(ack_wakes.get(idle_key)) if isinstance(ack_wakes.get(idle_key), dict) else {}
+    )
+    pending_idle_notes = []
+    if sid and sid in allowed and normalized.get("board_role") == "main":
+      unacked_targets = {
+        str(e.get("to") or "")
+        for e in normalized.get("entries") or []
+        if isinstance(e, dict)
+        and e.get("to")
+        and e.get("to") != "*"
+        and not e.get("acknowledged_at")
+      }
+      active_worker_sids = set()
+      for w_row in normalized.get("sessions") or []:
+        w_sid = str(w_row.get("branch") or "")
+        if (
+          not w_sid
+          or w_sid == sid
+          or not w_row.get("allowed")
+          or w_row.get("role") != "worker"
+        ):
+          continue
+        active_worker_sids.add(w_sid)
+        is_disc = bool(
+          w_row.get("disconnected") or w_row.get("status") == "disconnected"
+        )
+        is_idle = bool(
+          not is_disc
+          and w_row.get("polling")
+          and not w_row.get("waiting_for_gates")
+          and not w_row.get("checking_pr")
+          and not wakes.get(w_sid)
+          and w_sid not in unacked_targets
+        )
+        raw_prev = idle_seen.get(w_sid)
+        if isinstance(raw_prev, dict):
+          was_active = bool(raw_prev.get("active"))
+          prev_since = str(raw_prev.get("since") or "")
+        elif isinstance(raw_prev, str):
+          was_active = True
+          prev_since = "" if raw_prev == "polling" else raw_prev
+        else:
+          was_active = False
+          prev_since = ""
+        if not is_idle:
+          if raw_prev is not None:
+            idle_seen[w_sid] = {"active": False, "since": prev_since}
+          continue
+        episode = str(w_row.get("polling_since") or "")
+        effective_since = episode or prev_since
+        same_active_episode = was_active and (
+          not episode or not prev_since or episode <= prev_since
+        )
+        same_flapped_episode = (
+          not was_active and bool(prev_since) and (not episode or episode <= prev_since)
+        )
+        if same_active_episode or same_flapped_episode:
+          idle_seen[w_sid] = {"active": True, "since": effective_since}
+          continue
+        idle_seen[w_sid] = {"active": True, "since": effective_since}
+        w_label = str(w_row.get("worker_id") or w_row.get("board_id") or w_sid).strip()
+        pending_idle_notes.append((w_sid, w_label))
+      for stale_sid in list(idle_seen):
+        if stale_sid not in active_worker_sids:
+          idle_seen.pop(stale_sid, None)
+      if idle_seen:
+        ack_wakes[idle_key] = idle_seen
+      else:
+        ack_wakes.pop(idle_key, None)
     encoded = json.dumps(stored, ensure_ascii=False)
     if encoded != raw_text:
       with self.transaction(autosave=False) as db:
         db.execute(
           "INSERT OR REPLACE INTO meta VALUES (?, ?)", (BOARD_STATE_META, encoded)
         )
+    for w_sid, w_label in pending_idle_notes:
+      with closing(self.connect()) as db:
+        dup = db.execute(
+          "SELECT 1 FROM notes WHERE type = 'worker-idle'"
+          " AND acknowledged_at IS NULL AND instr(text, ?) > 0 LIMIT 1",
+          (f"({w_sid})",),
+        ).fetchone()
+      if dup is not None:
+        continue
+      tag = w_label if w_label.startswith("@") else f"@{w_label}"
+      self.note(
+        self.free_id(),
+        f"Worker {tag} ({w_sid}) is idle in poll. Delegate an independent task or ack this note.",
+        quiet=True,
+        blocking=True,
+        type="worker-idle",
+      )
     if payload.get("reply_mode") == "diff" and payload.get("reply_since") is not None:
       return self.board_state_sync(since=int(payload["reply_since"]), mode="diff")
     if payload.get("client_rev") is not None or isinstance(
@@ -13191,7 +13280,10 @@ class Store:
     quiet_filter = (
       " AND (quiet = 0 OR blocking = 1 OR seen_at IS NULL)"
       if include_quiet
-      else " AND (quiet = 0 OR (type IN ('state-backup', 'survey') AND blocking = 1))"
+      else (
+        " AND (quiet = 0 OR (type IN ('state-backup', 'survey', 'worker-idle')"
+        " AND blocking = 1))"
+      )
     )
     with self.transaction(autosave=False) as db:
       pending = [

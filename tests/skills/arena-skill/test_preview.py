@@ -17582,3 +17582,95 @@ def test_worker_report_publish_board_triage_answer_and_forward(tmp_path, monkeyp
   assert not tasks_by_id["task-worker-ask"]["blocked"]
   assert not tasks_by_id["task-owner-ask"]["blocked"]
   assert worker_store.board_state()["wakes"].get(beta)
+
+
+def test_main_receives_one_ack_required_note_per_worker_idle_transition(
+  tmp_path, monkeypatch, capsys
+):
+  alpha = "arena/11111111-clankers"
+  beta = "arena/22222222-clankers"
+  repo_root = tmp_path / "clankers"
+  repo_root.mkdir(parents=True)
+  monkeypatch.setattr(preview, "resolve_repo_root", lambda _cwd=None: repo_root)
+  monkeypatch.setattr(preview, "workspace_branch", lambda _r=None: alpha)
+  main_store = preview.Store(repo_root / "arena-state", create=True)
+  monkeypatch.setattr(main_store, "repository_root", lambda: repo_root)
+  main_store.board_action({"action": "allow", "branch": alpha})
+  main_store.board_action({"action": "set-main", "branch": alpha})
+  main_store.board_action({"action": "allow", "branch": beta, "worker_id": "beta"})
+
+  def sync_beta(polling, polling_since=None, waiting_for_gates=False):
+    row = {
+      "branch": beta,
+      "repo": "clankers",
+      "status": "polling" if polling else "active",
+      "polling": polling,
+      "waiting_for_gates": waiting_for_gates,
+      "checking_pr": False,
+    }
+    if polling_since:
+      row["polling_since"] = polling_since
+    return main_store.board_action(
+      {
+        "action": "sync",
+        "board": {
+          "allowed_sessions": [alpha, beta],
+          "main_session_id": alpha,
+          "sessions": [
+            {"branch": alpha, "repo": "clankers", "status": "active", "polling": False},
+            row,
+          ],
+        },
+      }
+    )
+
+  # While worker runs gates inside poll, main does not get an idle note.
+  sync_beta(True, "2026-10-28T09:00:00", waiting_for_gates=True)
+  assert main_store.read()["pending"] == []
+
+  # Once worker enters idle poll (even if first sync lacks polling_since), main gets one note.
+  sync_beta(True)
+  pending = main_store.read()["pending"]
+  assert len(pending) == 1
+  idle_note = pending[0]
+  assert idle_note["quiet"] == 1 and idle_note["blocking"] == 1
+  assert "@beta" in idle_note["text"] and beta in idle_note["text"]
+  assert main_store.pending_violation_note() is None
+  assert len(main_store.read(include_quiet=False)["pending"]) == 1
+
+  # Repeated syncs or noisy active flaps in the same poll_since episode never duplicate it.
+  sync_beta(True, "2026-10-28T09:00:00")
+  assert [n["id"] for n in main_store.read()["pending"]] == [idle_note["id"]]
+  main_store.acknowledge([idle_note["id"]], "Delegating next queued task to @beta.")
+  assert main_store.read()["pending"] == []
+  sync_beta(True, "2026-10-28T09:00:00")
+  sync_beta(True)
+  sync_beta(False, "2026-10-28T09:00:00")
+  sync_beta(True, "2026-10-28T09:00:00")
+  assert main_store.read()["pending"] == []
+
+  # Worker becomes active, then enters a fresh idle poll -> main gets a new ack-required note.
+  sync_beta(False)
+  assert main_store.read()["pending"] == []
+  sync_beta(True, "2026-10-28T09:05:00")
+  pending2 = main_store.read()["pending"]
+  assert len(pending2) == 1 and pending2[0]["id"] != idle_note["id"]
+
+  # Worker sessions themselves never emit worker-idle notes.
+  monkeypatch.setattr(preview, "workspace_branch", lambda _r=None: beta)
+  worker_store = preview.Store(repo_root / "arena-state-beta", create=True)
+  monkeypatch.setattr(worker_store, "repository_root", lambda: repo_root)
+  worker_store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": [alpha, beta],
+        "main_session_id": alpha,
+        "sessions": [
+          {"branch": alpha, "repo": "clankers", "status": "polling", "polling": True},
+          {"branch": beta, "repo": "clankers", "status": "polling", "polling": True},
+        ],
+      },
+    }
+  )
+  assert worker_store.read()["pending"] == []
