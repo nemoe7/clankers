@@ -10,25 +10,31 @@ Work can continue indefinitely without a fixed turn limit. Each final poll waits
 
 After required reads, preview setup, and inbox acknowledgements, complete the survey before queued work.
 
-At initial activation, use the questions below instead of rereading the survey file or calling the CLI just to view them. Submit fresh answers directly with `arena-preview survey '<json>'`.
+At initial activation, use the questions below and run `arena-preview survey -i` to read the image path it prints before submitting fresh answers with `arena-preview survey '<json>'`.
 
-After compaction, summary, or context replacement, run `arena-preview survey` to view the questions again, then submit fresh answers.
+After compaction, summary, or context replacement, run `arena-preview survey` and `arena-preview survey -i`, read the image path, and submit fresh answers.
 
-Use existing knowledge only: do not research, open other files, run code, ask other systems, reuse earlier responses, or inspect the answer key to derive answers. Preserve known parts and use `null` for unknown parts.
+Use existing knowledge only: do not research, open other files (except the `arena-preview survey -i` image), run code, ask other systems, reuse earlier responses, or inspect the answer key. Supply your best complete answer with a lower confidence from 0 to 1 when uncertain, or set every field of a question to `"unknown"` with confidence 0 when wholly unknown.
 
-Submit a JSON array in question order. Each object must have keys in this order: `id`, `answer`, `confidence`; keep answer fields in the order shown below. Set confidence from 0 to 1, and use 0 when the whole answer is unknown.
+Submit a JSON array in question order. Each object must have keys in this order: `id`, `answer`, `confidence`; keep answer fields in the order shown below. Boolean questions require `true` or `false` with confidence greater than 0.
 
 For quantities, use `operator` followed by `value`. Use `gt`, `eq`, or `lt` with the exact known bound, or `unknown` with `null`.
 
-1. **H8P3C:** Which new PostgreSQL 19 command and option rebuild tables while allowing concurrent use?
-   - Answer fields: `command_name`, `concurrency_option`.
-   - Each field is a string or `null`.
-2. **D9V4N:** In the context of Codex usage-limit reset announcements, who is Tibo? Identify the person and their relevant Codex responsibility.
+1. **R3S0N:** Did you reason before answering this survey?
+   - Answer fields: `reasoning`.
+   - `reasoning` is a boolean.
+2. **V1S0N:** Read the smallest repo image from `arena-preview survey -i`, or the temporary 1x1 PNG it creates when none exists. Is image input enabled?
+   - Answer fields: `vision`.
+   - `vision` is a boolean.
+3. **S2E5P:** In the context of Codex usage-limit reset announcements, who is Tibo? Identify the person and their relevant Codex responsibility.
    - Answer fields: `full_name`, `organization`, `role`.
-   - Each field is a string or `null`.
-3. **G2W6M:** Under Anthropic's May 2026 compute deal with SpaceX, which data center's capacity did Anthropic acquire, and what power and GPU scales were stated?
+   - Each field is a string or `"unknown"`.
+4. **A2P6R:** Which new PostgreSQL 19 command and option rebuild tables while allowing concurrent use?
+   - Answer fields: `command_name`, `concurrency_option`.
+   - Each field is a string or `"unknown"`.
+5. **M2A6Y:** Under Anthropic's May 2026 compute deal with SpaceX, which data center's capacity did Anthropic acquire, and what power and GPU scales were stated?
    - Answer fields: `data_center`, `power_capacity_mw`, `nvidia_gpu_count`.
-   - `data_center` is a string or `null`; the other fields are quantities.
+   - `data_center` is a string or `"unknown"`; the other fields are quantities.
 
 ## Engineering loop
 

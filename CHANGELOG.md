@@ -52,6 +52,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Align `Startup survey` in `arena-prompt-fill.txt` with `references/survey.json` (`R3S0N`, `V1S0N` via `survey -i`, `S2E5P`, `A2P6R`, `M2A6Y`, boolean confidence rules, and `"unknown"`).
 - Strip client-side state diff, merge, and backup synthesis helpers from `arena.user.js` while keeping revision-gated state relay, receipts, backup offers, and status UI.
 - Strip client-side board diff and merge helpers from `arena.user.js` while keeping revision-gated board relay, file hydration, wakes, and status UI.
 - Omit raw secrets from `keyNote()` and report proxy key expiry countdowns (`arena.user.js`).

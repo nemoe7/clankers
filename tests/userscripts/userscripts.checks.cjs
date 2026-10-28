@@ -2954,4 +2954,25 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
     main_session_id: "main0001-clankers",
   });
   assert.equal(revoked.main_session_id, "");
+
+  const promptFill = fs.readFileSync(
+    path.join(__dirname, "../../userscripts/arena-prompt-fill.txt"),
+    "utf8",
+  );
+  const surveySpec = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, "../../skills/refs/arena-skill/references/survey.json"),
+      "utf8",
+    ),
+  );
+  const promptSurveyIds = Array.from(
+    promptFill.matchAll(/^\d+\.\s+\*\*([A-Z0-9]+):\*\*/gm),
+    m => m[1],
+  );
+  assert.deepEqual(
+    promptSurveyIds,
+    surveySpec.questions.map(q => q.id),
+  );
+  assert.match(promptFill, /arena-preview survey -i/);
+  assert.match(promptFill, /"unknown"/);
 });
