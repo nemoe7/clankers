@@ -40,6 +40,7 @@ ROUTES = (
 def startup_lines(key, token, quiet_polls=False):
   """Format startup status lines without timestamps or secret token values."""
   lines = [
+    f"version: {VERSION}",
     f"agent key: {key}",
     f"GH token: {'OK' if token else 'missing'}",
   ]

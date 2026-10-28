@@ -17,7 +17,7 @@ docker run --rm -p 8787:8787 \
 - The published image is `ghcr.io/nemoe7/arena-egress-proxy:latest`, one mutable tag that follows the branch head.
 - Images are multi-arch, so an arm64 host pulls and builds natively.
 - The image holds no secrets. Pass them as environment variables, and mount a volume when staged bytes should outlive the container.
-- Every start makes a new agent key and prints `agent key: ...` plus `GH token: OK` (or `missing`). The key is never read from the environment, so a restart rotates it.
+- Every start prints `version: ...`, `agent key: ...`, and `GH token: OK` (or `missing`). The key is never read from the environment, so a restart rotates it.
 - Pass `--quiet-polls` or `ARENA_PROXY_QUIET_POLLS=1` to print `quiet polls: OK` on startup and suppress unchanged `/v1/board` poll lines.
 - A rotation prints the new key as `agent key (rotated): ...`.
 - The server holds no state beyond the state directory, so `--rm` costs nothing but staged bytes.

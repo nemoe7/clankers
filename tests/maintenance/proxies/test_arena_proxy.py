@@ -518,10 +518,12 @@ def test_rotation_line_names_the_new_key():
 
 def test_startup_and_log_lines_use_plain_human_format_without_secrets():
   assert core.startup_lines("k-1", "tok", quiet_polls=False) == [
+    f"version: {core.VERSION}",
     "agent key: k-1",
     "GH token: OK",
   ]
   assert core.startup_lines("k-1", "", quiet_polls=True) == [
+    f"version: {core.VERSION}",
     "agent key: k-1",
     "GH token: missing",
     "quiet polls: OK",
