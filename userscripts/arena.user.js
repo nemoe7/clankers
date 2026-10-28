@@ -484,13 +484,24 @@
   }
 
   function emitBoardBroadcast(revision, senderBranch) {
-    if (!boardBroadcastOn() || typeof notifyBoardBroadcastHook !== "function") return;
-    notifyBoardBroadcastHook({
+    if (!boardBroadcastOn()) return;
+    var msg = {
       type: "board-updated",
       revision: typeof revision === "number" && isFinite(revision) ? revision : 0,
       branch: boardBranch(senderBranch || previewUiBranch || ""),
       at: Date.now(),
-    });
+    };
+    if (typeof notifyBoardBroadcastHook === "function") {
+      notifyBoardBroadcastHook(msg);
+      return;
+    }
+    if (typeof BroadcastChannel === "function") {
+      try {
+        var oneShot = new BroadcastChannel(BOARD_BROADCAST_CHANNEL_NAME);
+        oneShot.postMessage(msg);
+        if (typeof oneShot.close === "function") oneShot.close();
+      } catch (err) {}
+    }
   }
 
   function httpJitterMs() {
@@ -5316,6 +5327,16 @@
   var lastNotifiedPreviewTarget = "";
   var lastPreviewBase = "";
 
+  function sessionPathPreviewKey(doc) {
+    var href = (doc && doc.location && doc.location.href) ||
+      (typeof location !== "undefined" ? location.href : "");
+    if (!isSessionUrl(href)) return "";
+    var pathname = (doc && doc.location && doc.location.pathname) ||
+      (typeof location !== "undefined" ? location.pathname : "");
+    pathname = String(pathname || "").replace(/\/+$/, "");
+    return pathname ? ("clankers-arena-preview-path-" + pathname) : "";
+  }
+
   function activePreviewBase(doc) {
     var current = previewBase(doc);
     if (current) {
@@ -5323,6 +5344,10 @@
       var currentSid = boardBranch(previewUiBranch || (doc ? stateBranch(doc) : "") || "");
       if (currentSid) {
         try { GM_setValue("clankers-arena-preview-base-" + currentSid, current); } catch (err) {}
+      }
+      var pathKey = sessionPathPreviewKey(doc);
+      if (pathKey) {
+        try { GM_setValue(pathKey, current); } catch (err) {}
       }
     }
     return current || lastPreviewBase || null;
@@ -5332,10 +5357,17 @@
     var live = activePreviewBase(doc);
     if (live) return live;
     var docSid = boardBranch(previewUiBranch || (doc ? stateBranch(doc) : "") || "");
-    if (!docSid) return null;
+    if (docSid) {
+      try {
+        var remembered = String(GM_getValue("clankers-arena-preview-base-" + docSid, "") || "");
+        if (remembered) return remembered;
+      } catch (err) {}
+    }
+    var pathKey = sessionPathPreviewKey(doc);
+    if (!pathKey) return null;
     try {
-      var remembered = String(GM_getValue("clankers-arena-preview-base-" + docSid, "") || "");
-      return remembered || null;
+      var byPath = String(GM_getValue(pathKey, "") || "");
+      return byPath || null;
     } catch (err) {
       return null;
     }
@@ -5406,7 +5438,14 @@
   var BOARD_SESSION_TTL_SECONDS = 180;
   var BOARD_PROXY_HOST_KEY = "clankers-arena-proxy-host";
   var BOARD_PROXY_MASTER_KEY = "clankers-arena-proxy-master";
-  var BOARD_PROXY_POLL_MS = 3000;
+  var BOARD_PROXY_POLL_MS = 60000;
+  var BOARD_PROXY_POLL_JITTER_MS = 2500;
+  function sampleBoardPollDelayMs() {
+    var offset = Math.round((Math.random() * 2 - 1) * BOARD_PROXY_POLL_JITTER_MS);
+    return Math.max(1000, BOARD_PROXY_POLL_MS + offset);
+  }
+  var nextProxyBoardPollDelayMs = sampleBoardPollDelayMs();
+  var lastGlobalBoardPollAtMs = 0;
   var proxyBoardCache = null;
   var proxyBoardRevision = 0;
   var proxyBoardPullInFlight = null;
@@ -5417,6 +5456,7 @@
   var previewBoardPullByBase = new Map();
   var previewBoardPushByBranch = new Map();
   var previewScopedPushByBase = new Map();
+  var lastSyncedMemberSigByBase = new Map();
   var previewAutosavePullByBase = new Map();
   var proxyStateCacheByScope = new Map();
   var MAX_ORIGIN_STATE_CACHE = 2;
@@ -5531,6 +5571,7 @@
     if (pullRepo) params.push("repo=" + encodeURIComponent(pullRepo));
     var query = params.length ? ("?" + params.join("&")) : "";
     lastProxyBoardPullAtMs = Date.now();
+    nextProxyBoardPollDelayMs = sampleBoardPollDelayMs();
     proxyBoardPullInFlight = proxyBoardJson("/v1/board" + query).then(function (res) {
       proxyBoardPullInFlight = null;
       if (res && res.status === 200 && res.body) {
@@ -5676,14 +5717,54 @@
     });
   }
 
+  function stripTombstonedBranches(rawBoard, refBoard) {
+    if (!rawBoard || typeof rawBoard !== "object") return rawBoard;
+    var ref = refBoard && typeof refBoard === "object" ? refBoard : null;
+    var allowedSet = new Set(
+      (Array.isArray(ref && ref.allowed_sessions) ? ref.allowed_sessions : []).map(boardBranch).filter(Boolean)
+    );
+    var tombSet = new Set();
+    [rawBoard.removed_sessions, ref && ref.removed_sessions].forEach(function (list) {
+      if (!Array.isArray(list)) return;
+      list.forEach(function (item) {
+        var br = boardBranch(item);
+        if (br && !allowedSet.has(br)) tombSet.add(br);
+      });
+    });
+    if (!tombSet.size) return rawBoard;
+    var out = Object.assign({}, rawBoard);
+    if (Array.isArray(out.sessions)) {
+      out.sessions = out.sessions.filter(function (row) {
+        var br = boardBranch(row && (row.branch || row.session_id || ""));
+        return !br || !tombSet.has(br);
+      });
+    }
+    ["wakes", "worker_ids", "worker_tasks", "worker_reports"].forEach(function (mapKey) {
+      if (!out[mapKey] || typeof out[mapKey] !== "object") return;
+      var nextMap = Object.create(null);
+      Object.keys(out[mapKey]).forEach(function (k) {
+        var br = boardBranch(k);
+        if (!isSafeRecordKey(k) || (br && tombSet.has(br))) return;
+        nextMap[k] = out[mapKey][k];
+      });
+      out[mapKey] = nextMap;
+    });
+    return out;
+  }
+
   function syncPreviewBoard(base, targetSidHint, targetRepoHint, opts) {
     if (!base || !boardProxyConfig()) return Promise.resolve(null);
+    lastGlobalBoardPollAtMs = Date.now();
     var passive = Boolean(opts && opts.passive);
     var pushOnly = Boolean(opts && opts.pushOnly);
     var docScope = typeof document !== "undefined" ? stateScope(document) : { repo: "", branch: "" };
     var targetSid = boardBranch(targetSidHint || previewUiBranch || docScope.branch || "");
     if (targetSid) {
       try { GM_setValue("clankers-arena-preview-base-" + targetSid, base); } catch (err) {}
+    }
+    var docPathKey = typeof document !== "undefined" ? sessionPathPreviewKey(document) : "";
+    if (docPathKey) {
+      try { GM_setValue(docPathKey, base); } catch (err) {}
     }
     var targetRepo = cleanBoardRepo(targetRepoHint || previewUiRepo || docScope.repo || "", targetSid);
     function buildScopedSyncBoard(sidOverride, repoOverride) {
@@ -5756,6 +5837,18 @@
         : (supportsPreviewDiff
           ? { action: "sync", board: boardToSend, client_rev: 1 }
           : { action: "sync", board: boardToSend });
+      if (
+        scopedCur &&
+        scopedCur.board &&
+        !hydratedKeys.length &&
+        syncPayload.board_diff &&
+        !syncPayload.board_diff.upserts.length &&
+        !syncPayload.board_diff.tombstones.length
+      ) {
+        addBoundedSet(seededPreviewBoardBases, base, MAX_ORIGIN_STATE_CACHE);
+        setBoundedMap(lastSyncedMemberSigByBase, base, boardMaterialSignature(boardToSend), MAX_ORIGIN_STATE_CACHE);
+        return Promise.resolve({ status: 200, body: boardToSend, failure: null });
+      }
       function finishConsolidated(answer, nextPushRev) {
         if (answer && answer.status === 200 && answer.body) {
           addBoundedSet(seededPreviewBoardBases, base, MAX_ORIGIN_STATE_CACHE);
@@ -5769,6 +5862,10 @@
               board: answer.body,
             }, MAX_ORIGIN_STATE_CACHE);
           }
+          var savedSig = boardMaterialSignature(
+            (answer.body && answer.body.sessions) ? answer.body : boardToSend,
+          );
+          setBoundedMap(lastSyncedMemberSigByBase, base, savedSig, MAX_ORIGIN_STATE_CACHE);
           recordMemberMetadata(answer.body, sid);
           return answer;
         }
@@ -5849,7 +5946,7 @@
         var allowCheckBoard = readGlobalBoard();
         var memberAllowed = Boolean(memberSid && allowCheckBoard.allowed_sessions.indexOf(memberSid) !== -1);
         if (!memberAllowed) {
-          var unoptedPull = (!proxyBoardCache || Date.now() - lastProxyBoardPullAtMs >= BOARD_PROXY_POLL_MS)
+          var unoptedPull = (!proxyBoardCache || Date.now() - lastProxyBoardPullAtMs >= nextProxyBoardPollDelayMs)
             ? pullProxyBoard(!proxyBoardCache, memberSid, memberRepo)
             : Promise.resolve({ board: proxyBoardCache, scoped_board: null });
           return unoptedPull.then(function (pulledUnopted) {
@@ -5858,22 +5955,70 @@
               : buildScopedSyncBoard(memberSid, memberRepo);
             return hydrateBoardFilesForTarget(unoptedScoped, memberSid).then(function (hydratedUnopted) {
               if (
-                passive &&
                 !hydratedUnopted.keys.length &&
                 boardMaterialSignature(hydratedUnopted.board) === boardMaterialSignature(memberBody)
               ) {
                 addBoundedSet(seededPreviewBoardBases, base, MAX_ORIGIN_STATE_CACHE);
+                setBoundedMap(lastSyncedMemberSigByBase, base, boardMaterialSignature(memberBody), MAX_ORIGIN_STATE_CACHE);
                 return memberAns;
               }
               return postConsolidatedOnce(hydratedUnopted.board, hydratedUnopted.keys, memberSid);
             });
           });
         }
+        var cleanMemberBody = stripTombstonedBranches(memberBody, allowCheckBoard);
+        var cleanMemberSig = boardMaterialSignature(cleanMemberBody);
+        var prevPreviewSig = lastSyncedMemberSigByBase.get(base) || "";
         var proxyPushCur = memberSid ? previewBoardPushByBranch.get(memberSid) : null;
-        var proxySyncReq = (proxyPushCur && proxyPushCur.board)
+        var cleanPrevPush = (proxyPushCur && proxyPushCur.board)
+          ? stripTombstonedBranches(proxyPushCur.board, allowCheckBoard)
+          : null;
+        var memberDiff = cleanPrevPush
+          ? computeBoardDiff(cleanPrevPush, cleanMemberBody, proxyPushCur.rev, proxyPushCur.rev + 1)
+          : null;
+        var hasNewMemberDiff = Boolean(
+          !prevPreviewSig ||
+          !cleanPrevPush ||
+          ((memberDiff.upserts.length > 0 || memberDiff.tombstones.length > 0) && cleanMemberSig !== prevPreviewSig)
+        );
+        function finishPreviewSync(consolidatedScoped) {
+          return hydrateBoardFilesForTarget(consolidatedScoped, memberSid).then(function (hydrated) {
+            if (
+              !hydrated.keys.length &&
+              boardMaterialSignature(hydrated.board) === boardMaterialSignature(memberBody)
+            ) {
+              addBoundedSet(seededPreviewBoardBases, base, MAX_ORIGIN_STATE_CACHE);
+              setBoundedMap(lastSyncedMemberSigByBase, base, boardMaterialSignature(memberBody), MAX_ORIGIN_STATE_CACHE);
+              return memberAns;
+            }
+            return postConsolidatedOnce(hydrated.board, hydrated.keys, memberSid);
+          });
+        }
+        if (!hasNewMemberDiff) {
+          var prevRevIdle = proxyBoardRevision;
+          var shouldPollIdleProxy = Boolean(
+            proxyBoardPullInFlight ||
+            !proxyBoardCache ||
+            (opts && opts.forceProxyPull) ||
+            Date.now() - lastProxyBoardPullAtMs >= nextProxyBoardPollDelayMs
+          );
+          var idlePullPromise = shouldPollIdleProxy
+            ? pullProxyBoard(!proxyBoardCache, memberSid, memberRepo)
+            : Promise.resolve({ changed: false, board: proxyBoardCache, scoped_board: null });
+          return idlePullPromise.then(function (pulledIdle) {
+            if (pulledIdle && pulledIdle.changed && proxyBoardRevision > prevRevIdle) {
+              emitBoardBroadcast(proxyBoardRevision, memberSid);
+            }
+            var idleScoped = (pulledIdle && pulledIdle.changed && pulledIdle.scoped_board)
+              ? normalizeBoard(pulledIdle.scoped_board)
+              : buildScopedSyncBoard(memberSid, memberRepo);
+            return finishPreviewSync(idleScoped);
+          });
+        }
+        var proxySyncReq = cleanPrevPush
           ? {
             action: "sync",
-            board_diff: computeBoardDiff(proxyPushCur.board, memberBody, proxyPushCur.rev, proxyPushCur.rev + 1),
+            board_diff: memberDiff,
             branch: memberSid,
             repo: memberRepo,
             passive: passive,
@@ -5882,7 +6027,7 @@
           }
           : {
             action: "sync",
-            board: memberBody,
+            board: cleanMemberBody,
             client_rev: 1,
             branch: memberSid,
             repo: memberRepo,
@@ -5899,14 +6044,14 @@
               proxyPushCur = null;
               return proxyBoardJson("/v1/board", {
                 action: "sync",
-                board: memberBody,
+                board: cleanMemberBody,
                 client_rev: 1,
                 branch: memberSid,
                 repo: memberRepo,
                 passive: passive,
               }).then(function (retryRes) {
                 if (memberSid && retryRes && retryRes.status === 200) {
-                  previewBoardPushByBranch.set(memberSid, { rev: 1, board: memberBody });
+                  previewBoardPushByBranch.set(memberSid, { rev: 1, board: cleanMemberBody });
                 }
                 return retryRes;
               });
@@ -5914,7 +6059,7 @@
             if (memberSid && syncRes && syncRes.status === 200) {
               previewBoardPushByBranch.set(memberSid, {
                 rev: proxyPushCur ? proxyPushCur.rev + 1 : 1,
-                board: memberBody,
+                board: cleanMemberBody,
               });
             }
             return syncRes;
@@ -5926,6 +6071,7 @@
           var syncOk = Boolean(syncRes && syncRes.status === 200 && syncRes.body);
           if (syncOk) {
             lastProxyBoardPullAtMs = Date.now();
+            nextProxyBoardPollDelayMs = sampleBoardPollDelayMs();
             if (syncRes.body.mode === "diff" && syncRes.body.diff && proxyBoardCache) {
               var nextGlobal = applyBoardDiff(proxyBoardCache, syncRes.body.diff);
               writeGlobalBoard(nextGlobal, {
@@ -5942,7 +6088,7 @@
             } else if (syncRes.body.unchanged && typeof syncRes.body.revision === "number") {
               proxyBoardRevision = Number(syncRes.body.revision);
             }
-            if (!passive && proxyBoardRevision > prevRev && !syncRes.body.unchanged) {
+            if (proxyBoardRevision > prevRev && !syncRes.body.unchanged) {
               emitBoardBroadcast(proxyBoardRevision, memberSid);
             }
             if (syncRes.body.scoped_board && typeof syncRes.body.scoped_board === "object") {
@@ -5957,17 +6103,7 @@
                 : buildScopedSyncBoard(memberSid, memberRepo);
             });
           return readyScopedPromise.then(function (consolidatedScoped) {
-            return hydrateBoardFilesForTarget(consolidatedScoped, memberSid).then(function (hydrated) {
-              if (
-                passive &&
-                !hydrated.keys.length &&
-                boardMaterialSignature(hydrated.board) === boardMaterialSignature(memberBody)
-              ) {
-                addBoundedSet(seededPreviewBoardBases, base, MAX_ORIGIN_STATE_CACHE);
-                return memberAns;
-              }
-              return postConsolidatedOnce(hydrated.board, hydrated.keys, memberSid);
-            });
+            return finishPreviewSync(consolidatedScoped);
           });
         });
       });
@@ -5993,7 +6129,10 @@
       : pullProxyBoard(true, seedSid, seedRepo);
     return readyPull.then(function (pulled) {
       var curBoard = readGlobalBoard();
-      if (seedSid && curBoard.allowed_sessions.indexOf(seedSid) !== -1) {
+      if (
+        (!seedSid && curBoard.allowed_sessions.length > 0) ||
+        (seedSid && curBoard.allowed_sessions.indexOf(seedSid) !== -1)
+      ) {
         return syncPreviewBoard(cleanBase, seedSid, seedRepo, { passive: true });
       }
       var hasRemoteBoardState = Boolean(
@@ -6685,7 +6824,11 @@
       }
       var initialBoard = readGlobalBoard();
       var boardBase = base || boardPreviewBase(document);
-      if (boardBase && shouldAutoSyncBoard(initialBoard, document)) {
+      if (
+        boardBase &&
+        shouldAutoSyncBoard(initialBoard, document) &&
+        (!lastGlobalBoardPollAtMs || Date.now() - lastGlobalBoardPollAtMs >= BOARD_PROXY_POLL_MS - BOARD_PROXY_POLL_JITTER_MS)
+      ) {
         syncPreviewBoard(boardBase, "", "", { passive: true });
       }
       if (!base) return;
@@ -7560,7 +7703,7 @@
     var titleBoardSyncInFlight = false;
     var queuedTitleBoardSync = null;
     var lastTitleBoardSyncMs = Date.now();
-    var nextTitleBoardSyncDelayMs = BOARD_PROXY_POLL_MS;
+    var nextTitleBoardSyncDelayMs = sampleBoardPollDelayMs();
     function flushQueuedTitleBoardSync() {
       if (titleBoardSyncInFlight || !queuedTitleBoardSync) return;
       var nextReq = queuedTitleBoardSync;
@@ -7580,7 +7723,7 @@
       }
       titleBoardSyncInFlight = true;
       lastTitleBoardSyncMs = Date.now();
-      nextTitleBoardSyncDelayMs = BOARD_PROXY_POLL_MS;
+      nextTitleBoardSyncDelayMs = sampleBoardPollDelayMs();
       Promise.resolve(
         syncPreviewBoardHook(baseUrl, sidVal, repoVal, { passive: passiveVal })
       ).then(
@@ -7628,7 +7771,7 @@
       observeRoot();
       syncTitle(document);
       var nowTickMs = Date.now();
-      if (boardProxyConfig() && (!proxyBoardCache || nowTickMs - lastProxyBoardPullAtMs >= BOARD_PROXY_POLL_MS)) {
+      if (boardProxyConfig() && (!proxyBoardCache || nowTickMs - lastProxyBoardPullAtMs >= nextProxyBoardPollDelayMs)) {
         pullProxyBoard(!proxyBoardCache).then(function (pulled) {
           if (!pulled || !pulled.changed || typeof syncPreviewBoardHook !== "function") return;
           var pulledScope = stateScope(document);
@@ -8539,6 +8682,9 @@
     BOARD_PROXY_HOST_KEY: BOARD_PROXY_HOST_KEY,
     BOARD_PROXY_MASTER_KEY: BOARD_PROXY_MASTER_KEY,
     BOARD_PROXY_POLL_MS: BOARD_PROXY_POLL_MS,
+    BOARD_PROXY_POLL_JITTER_MS: BOARD_PROXY_POLL_JITTER_MS,
+    sampleBoardPollDelayMs: sampleBoardPollDelayMs,
+    stripTombstonedBranches: stripTombstonedBranches,
     BOARD_SESSION_TTL_SECONDS: BOARD_SESSION_TTL_SECONDS,
     BOARD_BROADCAST_CHANNEL_NAME: BOARD_BROADCAST_CHANNEL_NAME,
     BOARD_BROADCAST_KEY: BOARD_BROADCAST_KEY,
@@ -8562,12 +8708,15 @@
       proxyBoardRevision = 0;
       proxyBoardPullInFlight = null;
       lastProxyBoardPullAtMs = 0;
+      lastGlobalBoardPollAtMs = 0;
+      nextProxyBoardPollDelayMs = sampleBoardPollDelayMs();
       hydratedBoardFilesByBranch.clear();
       seededPreviewBoardBases.clear();
       seedPreviewBoardInFlightByBase.clear();
       previewBoardPullByBase.clear();
       previewBoardPushByBranch.clear();
       previewScopedPushByBase.clear();
+      lastSyncedMemberSigByBase.clear();
       previewAutosavePullByBase.clear();
       proxyStateCacheByScope.clear();
       lastSkillPostAtByOrigin.clear();

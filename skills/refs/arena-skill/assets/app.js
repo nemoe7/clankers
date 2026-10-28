@@ -3902,7 +3902,9 @@ function syncBoardHeartbeat(state) {
   const wakesSig = state.board.wakes && typeof state.board.wakes === 'object'
     ? Object.entries(state.board.wakes).map(([k, v]) => `${k}:${v || ''}`).sort().join(',')
     : '';
-  const entriesKey = `${isPolling ? '1' : '0'}|${selfRow?.polling_since || ''}|${selfRow?.agent_seen_at || ''}|${selfRow?.agent_call_ended_at || ''}|${wakesSig}|${reportsSig}|${entries.map(row => row && row.id
+  const allowSig = Array.isArray(state.board.allowed_sessions) ? state.board.allowed_sessions.join(',') : '';
+  const removedSig = Array.isArray(state.board.removed_sessions) ? state.board.removed_sessions.join(',') : '';
+  const entriesKey = `${isPolling ? '1' : '0'}|${selfRow?.polling_since || ''}|${selfRow?.agent_seen_at || ''}|${selfRow?.agent_call_ended_at || ''}|${allowSig}|${removedSig}|${wakesSig}|${reportsSig}|${entries.map(row => row && row.id
     ? `${row.id}:${row.seen_at || ''}:${row.acknowledged_at || ''}:${row.ack_edited_at || ''}:${row.ack_edited_seen_count || 0}:${Array.isArray(row.replies) ? row.replies.length : 0}:${row.task_id || ''}`
     : '').join(',')}|${reportOps.map(op => op?.id || '').join(',')}|${taskOps.map(op => op?.id || '').join(',')}`;
   const targetOrigin = parentTargetOrigin();

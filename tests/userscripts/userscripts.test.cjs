@@ -3523,7 +3523,7 @@ for raw in sys.stdin:
         saved.set("clankers-arena-proxy-master", "master-secret");
         activeProxyRev += 1;
         activeProxyBoard = nextBoard;
-        tabNowMs += boardApi.BOARD_PROXY_POLL_MS + 10;
+        tabNowMs += boardApi.BOARD_PROXY_POLL_MS + boardApi.BOARD_PROXY_POLL_JITTER_MS + 10;
         sync();
         await new Promise((resolve) => setImmediate(resolve));
       };
@@ -4207,7 +4207,7 @@ for raw in sys.stdin:
 
       // Advance past BOARD_PROXY_POLL_MS with peer wake/revision bump on /v1/board:
       coldCalls.length = 0;
-      nowMs += boardApi.BOARD_PROXY_POLL_MS + 50;
+      nowMs += boardApi.BOARD_PROXY_POLL_MS + boardApi.BOARD_PROXY_POLL_JITTER_MS + 50;
       coldRev += 1;
       coldProxyBoard = Object.assign({}, coldProxyBoard, {
         wakes: { "arena/beta2222-clankers": "wake-now" },
@@ -4511,7 +4511,7 @@ for raw in sys.stdin:
       vm.runInNewContext(source, ctx, { filename: "arena.user.js" });
 
       const tickIntervals = async () => {
-        fakeNow += 3100;
+        fakeNow += 62600;
         intervals.forEach((it) => it.fn());
         await new Promise((r) => setImmediate(r));
         await new Promise((r) => setImmediate(r));
@@ -4754,6 +4754,7 @@ for raw in sys.stdin:
         ]);
         const docListeners = new Map();
         const intervals = [];
+        const previewGets = [];
         const previewPosts = [];
         let localPreviewRev = 1;
         let localPreviewBoard = {
@@ -4847,6 +4848,9 @@ for raw in sys.stdin:
               return;
             }
             if (req.url.startsWith(previewOrigin + "/api/board")) {
+              if (req.method === "GET") {
+                previewGets.push(req.url);
+              }
               if (req.method === "POST") {
                 const bodyObj = JSON.parse(req.data);
                 previewPosts.push(bodyObj);
@@ -4875,6 +4879,7 @@ for raw in sys.stdin:
         vm.runInNewContext(source, ctx, { filename: "arena.user.js" });
         return {
           intervals,
+          previewGets,
           previewPosts,
           docListeners,
           setVisibility(next) { visibilityState = next; },
@@ -4889,6 +4894,7 @@ for raw in sys.stdin:
       await new Promise((r) => setImmediate(r));
 
       // Arm hold on tabBeta right before titleStep so titleBoardSyncInFlight stays true.
+      const beforeBroadcastGets = tabBeta.previewGets.length;
       tabBeta.armHoldNextGet();
       proxyRevision += 1;
       proxyBoard = Object.assign({}, proxyBoard, {
@@ -4912,12 +4918,18 @@ for raw in sys.stdin:
       await new Promise((r) => setImmediate(r));
       assert.equal(tabBeta.previewPosts.length, beforeBroadcastPosts, "in-flight guard queues trailing rerun without overlapping");
 
-      // Release the held sync: both the held sync and the queued trailing rerun complete immediately without waiting 3s!
+      // Release the held sync: both the held sync and the queued trailing rerun complete immediately without waiting,
+      // delivering the beta wake once while skipping duplicate no-op preview POSTs.
       const release = tabBeta.getReleaseHeldSync();
       release();
       await new Promise((r) => setImmediate(r));
       await new Promise((r) => setImmediate(r));
-      assert.ok(tabBeta.previewPosts.length >= beforeBroadcastPosts + 2, "trailing rerun immediately delivers the newer wake without waiting for timer tick");
+      assert.ok(tabBeta.previewGets.length >= beforeBroadcastGets + 2, "both held sync and queued trailing rerun execute immediately");
+      assert.ok(tabBeta.previewPosts.length >= beforeBroadcastPosts + 1, "delivers the newer beta wake without waiting for timer tick");
+      assert.ok(
+        tabBeta.previewPosts.slice(beforeBroadcastPosts).some((p) => JSON.stringify(p).includes("2026-10-28T08:00:00Z")),
+        "delivered preview POST carries beta wake token",
+      );
 
       // visibilitychange on visible tab also triggers immediate board pull + sync when revision advances.
       const beforeVisPosts = tabAlpha.previewPosts.length;
@@ -4942,6 +4954,202 @@ for raw in sys.stdin:
       await new Promise((r) => setImmediate(r));
       assert.ok(tabAlpha.previewPosts.length > beforeVisPosts, "visibilitychange wakes immediate preview board sync");
       sender.close();
+    });
+
+    test("board sync enforces 60s +-2.5s GET poll, conditional proxy and preview POSTs, passive BroadcastChannel wakes, and tombstone stripping", async () => {
+      const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+      const channelHub = new Set();
+      class BroadcastBus {
+        constructor(name) {
+          this.name = name;
+          this.onmessage = null;
+          channelHub.add(this);
+        }
+        postMessage(data) {
+          for (const peer of channelHub) {
+            if (peer !== this && peer.name === this.name && typeof peer.onmessage === "function") {
+              peer.onmessage({ data });
+            }
+          }
+        }
+        close() {
+          channelHub.delete(this);
+        }
+      }
+
+      const wireCalls = [];
+      let proxyRev = 10;
+      let proxyBoard = {
+        allowed_sessions: ["arena/alpha111-clankers", "arena/beta2222-clankers"],
+        removed_sessions: ["arena/gone9999-clankers"],
+        main_session_id: "arena/alpha111-clankers",
+        sessions: [
+          { branch: "arena/alpha111-clankers", repo: "clankers", status: "active" },
+          { branch: "arena/beta2222-clankers", repo: "clankers", status: "polling", polling: true },
+        ],
+        entries: [],
+        wakes: {},
+      };
+      let previewBoardState = {
+        branch: "arena/beta2222-clankers",
+        repo: "clankers",
+        allowed_sessions: ["arena/alpha111-clankers", "arena/beta2222-clankers"],
+        removed_sessions: [],
+        main_session_id: "arena/alpha111-clankers",
+        sessions: [
+          { branch: "arena/alpha111-clankers", repo: "clankers", status: "active" },
+          { branch: "arena/beta2222-clankers", repo: "clankers", status: "polling", polling: true },
+          { branch: "arena/gone9999-clankers", repo: "clankers", status: "disconnected", disconnected: true },
+        ],
+        entries: [],
+        wakes: { "arena/gone9999-clankers": "stale-wake" },
+      };
+
+      const saved = new Map([
+        ["clankers-arena-proxy-host", "arena-proxy.example.ts.net"],
+        ["clankers-arena-proxy-master", "master-secret"],
+        ["clankers-arena-preview-path-/c/worker-beta", "https://8000-worker-beta.e2b.app"],
+        ["clankers-arena-show-settings-button", false],
+        ["state-download", false],
+        ["prompt-fill", false],
+        ["keep-awake", false],
+      ]);
+      let fakeNowMs = 500000;
+      const ctx = {
+        globalThis: {},
+        console: { log() {}, info() {}, debug() {}, warn() {}, error() {} },
+        URL,
+        BroadcastChannel: BroadcastBus,
+        Date: Object.assign(function (...args) { return new Date(...args); }, {
+          now: () => fakeNowMs,
+          parse: Date.parse,
+        }),
+        location: { href: "https://arena.ai/c/worker-beta", pathname: "/c/worker-beta", origin: "https://arena.ai" },
+        setInterval() { return 1; },
+        clearInterval() {},
+        setTimeout(fn) { fn(); return 1; },
+        clearTimeout() {},
+        GM_getValue(k, fb) { return saved.has(k) ? saved.get(k) : fb; },
+        GM_setValue(k, v) { saved.set(k, v); },
+        GM_registerMenuCommand() { return "m"; },
+        GM_unregisterMenuCommand() {},
+        GM_xmlhttpRequest(req) {
+          wireCalls.push({ method: req.method, url: req.url, data: req.data });
+          if (req.url.startsWith("https://arena-proxy.example.ts.net/v1/board")) {
+            if (req.method === "POST") {
+              const payload = JSON.parse(req.data);
+              proxyRev += 1;
+              if (payload.board && Array.isArray(payload.board.entries) && payload.board.entries.length) {
+                proxyBoard = Object.assign({}, proxyBoard, { entries: payload.board.entries.slice() });
+              } else if (payload.board_diff && Array.isArray(payload.board_diff.upserts)) {
+                const entryUpserts = payload.board_diff.upserts
+                  .filter(u => u.type === "entry")
+                  .map(u => u.value);
+                if (entryUpserts.length) {
+                  proxyBoard = Object.assign({}, proxyBoard, { entries: proxyBoard.entries.concat(entryUpserts) });
+                }
+              }
+              req.onload({ status: 200, responseText: JSON.stringify({ revision: proxyRev, board: proxyBoard }) });
+              return;
+            }
+            if (req.url.includes("since=")) {
+              req.onload({ status: 200, responseText: JSON.stringify({ ok: true, revision: proxyRev, unchanged: true }) });
+              return;
+            }
+            req.onload({ status: 200, responseText: JSON.stringify({ revision: proxyRev, board: proxyBoard }) });
+            return;
+          }
+          if (req.url.startsWith("https://8000-worker-beta.e2b.app/api/board")) {
+            if (req.method === "POST") {
+              const bodyObj = JSON.parse(req.data);
+              if (bodyObj.board) {
+                previewBoardState = Object.assign({ branch: "arena/beta2222-clankers", repo: "clankers" }, bodyObj.board);
+              }
+            }
+            req.onload({ status: 200, responseText: JSON.stringify(previewBoardState) });
+            return;
+          }
+          req.onload({ status: 404, responseText: "{}" });
+        },
+      };
+      ctx.globalThis = ctx;
+      ctx.CLANKERS_CHECKS = {};
+      vm.runInNewContext(source, ctx, { filename: "arena.user.js" });
+
+      const boardApi = ctx.CLANKERS_CHECKS.board;
+      assert.equal(boardApi.BOARD_PROXY_POLL_MS, 60000, "steady-state board poll cadence is 60s");
+      assert.equal(boardApi.BOARD_PROXY_POLL_JITTER_MS, 2500, "board poll jitter window is +-2.5s");
+      for (let i = 0; i < 20; i += 1) {
+        const delay = boardApi.sampleBoardPollDelayMs();
+        assert.ok(
+          delay >= boardApi.BOARD_PROXY_POLL_MS - boardApi.BOARD_PROXY_POLL_JITTER_MS &&
+            delay <= boardApi.BOARD_PROXY_POLL_MS + boardApi.BOARD_PROXY_POLL_JITTER_MS,
+          `sampled board poll delay ${delay} stays within 57.5s..62.5s`,
+        );
+      }
+
+      const broadcastSpy = new BroadcastBus("clankers-arena-board-sync");
+      const receivedBroadcasts = [];
+      broadcastSpy.onmessage = (ev) => receivedBroadcasts.push(ev.data);
+
+      // Initial passive sync strips tombstoned gone9999 branch from client push, wakes siblings on passive revision advance,
+      // and posts consolidated tombstone state to preview because preview still held gone9999:
+      wireCalls.length = 0;
+      await boardApi.seedPreviewBoardOnFirstConnect("https://8000-worker-beta.e2b.app", "", "clankers");
+      const firstProxyPost = wireCalls.find(c => c.method === "POST" && c.url === "https://arena-proxy.example.ts.net/v1/board");
+      assert.ok(firstProxyPost, "worker tab without header PR chip discovers branch from GET /api/board and syncs");
+      const pushedSessions = JSON.parse(firstProxyPost.data).board.sessions.map(s => s.branch);
+      assert.equal(pushedSessions.includes("arena/gone9999-clankers"), false, "tombstoned branch is stripped before pushing to /v1/board");
+      assert.equal(receivedBroadcasts.length, 1, "passive revision advance emits BroadcastChannel wake to sibling tabs");
+      assert.equal(
+        previewBoardState.sessions.some(s => s.branch === "arena/gone9999-clankers"),
+        false,
+        "conditional preview POST purges tombstoned session from local :8000 state",
+      );
+
+      // Steady-state minute poll with NO new diff sends GETs only (zero POST /v1/board, zero POST /api/board):
+      wireCalls.length = 0;
+      fakeNowMs += boardApi.BOARD_PROXY_POLL_MS + boardApi.BOARD_PROXY_POLL_JITTER_MS + 100;
+      await boardApi.syncPreviewBoard("https://8000-worker-beta.e2b.app", "arena/beta2222-clankers", "clankers", { passive: true });
+      assert.equal(
+        wireCalls.some(c => c.method === "POST"),
+        false,
+        "unchanged minute poll sends zero POSTs to /v1/board or /api/board",
+      );
+      assert.equal(
+        wireCalls.some(c => c.method === "GET" && c.url.includes("/v1/board?since=")),
+        true,
+        "unchanged minute poll performs conditional GET /v1/board?since=",
+      );
+
+      // Even a non-passive syncPreviewBoard call skips both POSTs when GET /api/board has no new diff and proxy matches:
+      wireCalls.length = 0;
+      await boardApi.syncPreviewBoard("https://8000-worker-beta.e2b.app", "arena/beta2222-clankers", "clankers", { passive: false });
+      assert.equal(
+        wireCalls.some(c => c.method === "POST"),
+        false,
+        "non-passive sync also skips POST /v1/board and POST /api/board when GET already matches",
+      );
+
+      // Local write on :8000 triggers POST /v1/board, BroadcastChannel wake, and skips echo POST /api/board when merged matches:
+      wireCalls.length = 0;
+      receivedBroadcasts.length = 0;
+      previewBoardState = Object.assign({}, previewBoardState, {
+        entries: [{ id: "pnew1", branch: "arena/beta2222-clankers", to: "arena/alpha111-clankers", at: "2026-10-28T11:00:00Z", payload: { text: "done" } }],
+      });
+      await boardApi.syncPreviewBoard("https://8000-worker-beta.e2b.app", "arena/beta2222-clankers", "clankers", { passive: true });
+      assert.equal(
+        wireCalls.filter(c => c.method === "POST" && c.url === "https://arena-proxy.example.ts.net/v1/board").length,
+        1,
+        "new local diff on :8000 sends POST /v1/board",
+      );
+      assert.equal(receivedBroadcasts.length, 1, "passive local diff push wakes sibling tabs immediately");
+      assert.equal(
+        wireCalls.filter(c => c.method === "POST" && c.url.startsWith("https://8000-worker-beta.e2b.app/api/board")).length,
+        0,
+        "skips redundant echo POST /api/board when merged proxy state matches local GET",
+      );
+      broadcastSpy.close();
     });
   }
 

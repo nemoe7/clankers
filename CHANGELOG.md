@@ -55,7 +55,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- Sync opted-in preview boards every 3s and send wake up once per idle board wake (`arena.user.js`).
+- Poll preview and proxy boards every `60s +- 2.5s`, sending `POST` requests only on new diffs. Wake sibling tabs on passive advances and strip tombstoned branches from client diffs (`arena.user.js`, `assets/app.js`).
 - Seed local `/api/board` on first preview connect from read-only `/v1/board` pulls without registering unopted sessions (`arena.user.js`).
 - Normalize `@role` board recipients in `resolveBoardTarget` and `normalizeBoard` so `-t @main` attachments hydrate cleanly (`arena.user.js`).
 - Wake same-origin tabs via `BroadcastChannel` and `visibilitychange`, queue trailing board sync reruns, and drop redundant `pullProxyBoard` requests while keeping preview jitter (`arena.user.js`).
