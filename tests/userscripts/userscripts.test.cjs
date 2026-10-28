@@ -3991,9 +3991,64 @@ for raw in sys.stdin:
         "already-hydrated file blob is not fetched a second time for the same target session",
       );
       assert.equal(
-        httpCalls.some(c => c.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=")),
+        httpCalls.some(c => c.url.startsWith("https://arena-proxy.example.ts.net/v1/board?since=") && c.url.includes("branch=alpha111-clankers")),
         true,
-        "subsequent sync uses ?since=<revision> conditional poll",
+        "subsequent sync uses ?since=<revision> conditional poll with branch query param",
+      );
+
+      // Acked entries and unreachable :8000 sandboxes never trigger /v1/board/files downloads:
+      const ackedSha = "b".repeat(64);
+      const unackedDeadSha = "c".repeat(64);
+      const ackedAndUnackedBoard = boardApi.normalizeBoard({
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          { branch: "alpha111-clankers", repo: "clankers", status: "active" },
+          { branch: "beta2222-clankers", repo: "clankers", status: "active" },
+        ],
+        entries: [
+          {
+            id: "acked-file-entry",
+            branch: "beta2222-clankers",
+            to: "alpha111-clankers",
+            at: "2026-10-27T04:01:00Z",
+            acknowledged_at: "2026-10-27T04:02:00Z",
+            payload: { text: "already acked" },
+            file: { name: "old.patch", sha256: ackedSha, size: 11, encoding: "utf-8" },
+          },
+          {
+            id: "unacked-file-entry",
+            branch: "beta2222-clankers",
+            to: "alpha111-clankers",
+            at: "2026-10-27T04:03:00Z",
+            payload: { text: "pending file" },
+            file: { name: "new.patch", sha256: unackedDeadSha, size: 11, encoding: "utf-8" },
+          },
+        ],
+      });
+      httpCalls.length = 0;
+      const ackedOnlyHydrated = await boardApi.hydrateBoardFilesForTarget(
+        boardApi.normalizeBoard(Object.assign({}, ackedAndUnackedBoard, { entries: [ackedAndUnackedBoard.entries[0]] })),
+        "alpha111-clankers",
+      );
+      assert.equal(ackedOnlyHydrated.keys.length, 0, "acknowledged_at entries are skipped by hydrateBoardFilesForTarget");
+      assert.equal(
+        httpCalls.some(c => c.url.includes("/v1/board/files")),
+        false,
+        "acknowledged_at attachment does not hit /v1/board/files",
+      );
+
+      httpCalls.length = 0;
+      await boardApi.syncPreviewBoard(
+        "https://8000-dead-sandbox.e2b.app",
+        "alpha111-clankers",
+        "clankers",
+        { pushOnly: true, scopedBoard: ackedAndUnackedBoard },
+      );
+      assert.equal(
+        httpCalls.some(c => c.url.includes("/v1/board/files")),
+        false,
+        "pushOnly sync probes :8000 /api/board before downloading /v1/board/files",
       );
 
       httpCalls.length = 0;

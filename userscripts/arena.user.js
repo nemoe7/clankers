@@ -5367,12 +5367,12 @@
     return proxyBoardCache;
   }
 
-  function pullProxyBoard(force) {
+  function pullProxyBoard(force, branchHint, repoHint) {
     if (!boardProxyConfig()) return Promise.resolve(null);
     if (proxyBoardPullInFlight) return proxyBoardPullInFlight;
     var docScope = typeof document !== "undefined" ? stateScope(document) : { repo: "", branch: "" };
-    var pullBranch = boardBranch(previewUiBranch || docScope.branch || "");
-    var pullRepo = cleanBoardRepo(previewUiRepo || docScope.repo || "", pullBranch);
+    var pullBranch = boardBranch(branchHint || previewUiBranch || docScope.branch || "");
+    var pullRepo = cleanBoardRepo(repoHint || previewUiRepo || docScope.repo || "", pullBranch);
     var params = [];
     if (!force && proxyBoardRevision > 0 && proxyBoardCache) {
       params.push("since=" + String(proxyBoardRevision));
@@ -5422,7 +5422,7 @@
     return proxyBoardPullInFlight;
   }
 
-  function hydrateBoardFilesForTarget(scopedBoard, targetSid) {
+  function hydrateBoardFilesForTarget(scopedBoard, targetSid, previewBaseUrl) {
     if (!boardProxyConfig() || !targetSid || !scopedBoard || !Array.isArray(scopedBoard.entries)) {
       return Promise.resolve({ board: scopedBoard, keys: [] });
     }
@@ -5430,7 +5430,7 @@
     var seenSha = new Set();
     var deliveredKeys = [];
     scopedBoard.entries.forEach(function (entry) {
-      if (!entry || typeof entry !== "object" || !entry.file || typeof entry.file !== "object") return;
+      if (!entry || typeof entry !== "object" || entry.acknowledged_at || !entry.file || typeof entry.file !== "object") return;
       var sha = String(entry.file.sha256 || "").trim().toLowerCase();
       if (!/^[0-9a-f]{64}$/.test(sha) || entry.file.content) return;
       var entryTo = String(entry.to || "");
@@ -5448,42 +5448,54 @@
     if (!neededItems.length) {
       return Promise.resolve({ board: scopedBoard, keys: [] });
     }
-    var fetchedBySha = new Map();
-    return Promise.all(neededItems.map(function (item) {
-      var q = "sha256=" + encodeURIComponent(item.sha);
-      if (item.branch && item.name) {
-        q += "&branch=" + encodeURIComponent(item.branch) + "&name=" + encodeURIComponent(item.name);
-      }
-      return proxyBoardJson("/v1/board/files?" + q).then(function (res) {
-        var fileContent = res && res.status === 200 && res.body
-          ? (res.body.file && typeof res.body.file.content === "string" ? res.body.file.content : res.body.content)
-          : null;
-        if (typeof fileContent === "string") {
-          fetchedBySha.set(item.sha, fileContent);
+    function fetchNeededFiles() {
+      var fetchedBySha = new Map();
+      return Promise.all(neededItems.map(function (item) {
+        var q = "sha256=" + encodeURIComponent(item.sha);
+        if (item.branch && item.name) {
+          q += "&branch=" + encodeURIComponent(item.branch) + "&name=" + encodeURIComponent(item.name);
         }
-      });
-    })).then(function () {
-      var hydratedEntries = scopedBoard.entries.map(function (entry) {
-        if (!entry || typeof entry !== "object" || !entry.file || typeof entry.file !== "object") return entry;
-        var sha = String(entry.file.sha256 || "").trim().toLowerCase();
-        if (!sha || entry.file.content || !fetchedBySha.has(sha)) return entry;
-        var entryTo = String(entry.to || "");
-        if (entryTo && entryTo !== "*" && entryTo !== targetSid) return entry;
-        if (boardBranch(entry.branch || entry.session_id || "") === targetSid) return entry;
-        var hKey = targetSid + ":" + String(entry.id || "") + ":" + sha;
-        if (hydratedBoardFilesByBranch.has(hKey)) return entry;
-        return Object.assign({}, entry, {
-          file: Object.assign({}, entry.file, { content: fetchedBySha.get(sha) }),
+        return proxyBoardJson("/v1/board/files?" + q).then(function (res) {
+          var fileContent = res && res.status === 200 && res.body
+            ? (res.body.file && typeof res.body.file.content === "string" ? res.body.file.content : res.body.content)
+            : null;
+          if (typeof fileContent === "string") {
+            fetchedBySha.set(item.sha, fileContent);
+          }
         });
+      })).then(function () {
+        var hydratedEntries = scopedBoard.entries.map(function (entry) {
+          if (!entry || typeof entry !== "object" || entry.acknowledged_at || !entry.file || typeof entry.file !== "object") return entry;
+          var sha = String(entry.file.sha256 || "").trim().toLowerCase();
+          if (!sha || entry.file.content || !fetchedBySha.has(sha)) return entry;
+          var entryTo = String(entry.to || "");
+          if (entryTo && entryTo !== "*" && entryTo !== targetSid) return entry;
+          if (boardBranch(entry.branch || entry.session_id || "") === targetSid) return entry;
+          var hKey = targetSid + ":" + String(entry.id || "") + ":" + sha;
+          if (hydratedBoardFilesByBranch.has(hKey)) return entry;
+          return Object.assign({}, entry, {
+            file: Object.assign({}, entry.file, { content: fetchedBySha.get(sha) }),
+          });
+        });
+        var confirmedKeys = deliveredKeys.filter(function (k) {
+          var shaPart = k.slice(k.lastIndexOf(":") + 1);
+          return fetchedBySha.has(shaPart);
+        });
+        return {
+          board: Object.assign({}, scopedBoard, { entries: hydratedEntries }),
+          keys: confirmedKeys,
+        };
       });
-      var confirmedKeys = deliveredKeys.filter(function (k) {
-        var shaPart = k.slice(k.lastIndexOf(":") + 1);
-        return fetchedBySha.has(shaPart);
-      });
-      return {
-        board: Object.assign({}, scopedBoard, { entries: hydratedEntries }),
-        keys: confirmedKeys,
-      };
+    }
+    var probeBase = typeof previewBaseUrl === "string" ? previewBaseUrl.replace(/\/+$/, "") : "";
+    if (!probeBase) {
+      return fetchNeededFiles();
+    }
+    return stateJson(probeBase + "/api/board").then(function (probeAns) {
+      if (!probeAns || probeAns.status !== 200 || !probeAns.body) {
+        return { board: scopedBoard, keys: [], unreachable: probeAns || { status: 0, body: null } };
+      }
+      return fetchNeededFiles();
     });
   }
 
@@ -5628,7 +5640,10 @@
       var directScoped = (opts && opts.scopedBoard && typeof opts.scopedBoard === "object")
         ? normalizeBoard(opts.scopedBoard)
         : buildScopedSyncBoard(targetSid, targetRepo);
-      return hydrateBoardFilesForTarget(directScoped, targetSid).then(function (hydrated) {
+      return hydrateBoardFilesForTarget(directScoped, targetSid, base).then(function (hydrated) {
+        if (hydrated && hydrated.unreachable !== undefined) {
+          return handleMemberFailure(hydrated.unreachable, targetSid);
+        }
         return postConsolidatedOnce(hydrated.board, hydrated.keys, targetSid);
       });
     }
@@ -5745,7 +5760,7 @@
             syncedScoped = normalizeBoard(syncRes.body.scoped_board);
           }
         }
-        return pullProxyBoard(false).then(function (pulled) {
+        return pullProxyBoard(false, memberSid, memberRepo).then(function (pulled) {
           var consolidatedScoped = (pulled && pulled.changed && pulled.scoped_board)
             ? normalizeBoard(pulled.scoped_board)
             : ((!pulled || !pulled.changed) && syncedScoped)
