@@ -3595,7 +3595,22 @@ function taskRow(task) {
       parts.push(answers);
     }
     details.replaceChildren(...parts);
-    if (taskSearch && parts.slice(1).some(part => part.textContent.toLowerCase().includes(taskSearch))) details.open = true;
+    const searchMatched = Boolean(taskSearch && parts.slice(1).some(part => part.textContent.toLowerCase().includes(taskSearch)));
+    if (openTaskDetails.has(task.id)) {
+      details.open = true;
+    } else if (searchMatched) {
+      details.open = true;
+      details.dataset.searchOpen = 'true';
+    }
+    summary.addEventListener('click', () => { delete details.dataset.searchOpen; });
+    details.addEventListener('toggle', () => {
+      if (details.open) {
+        if (details.dataset.searchOpen !== 'true') openTaskDetails.add(task.id);
+      } else {
+        delete details.dataset.searchOpen;
+        openTaskDetails.delete(task.id);
+      }
+    });
     rows.push(details);
   }
   item.replaceChildren(...rows);
@@ -3605,11 +3620,25 @@ function taskRow(task) {
 
 // Guard task rendering with a payload signature because rebuilding rows closes open <details> elements.
 let taskSignature = Symbol('tasks not yet rendered');
+const openTaskDetails = new Set();
 // Changing the filter re-renders the last tasks immediately, and later polls keep the filter applied.
 let taskTypeFilter = 'all';
 // Typing in search re-renders the last tasks immediately, and later polls keep both filters applied.
 let taskSearch = '';
 let lastTasksPayload = null;
+
+function syncOpenTaskDetailsFromDom() {
+  for (const row of [...$('#tasks-current-body').children, ...$('#tasks-upcoming-body').children, ...$('#tasks-finished-body').children]) {
+    const id = rowTaskId(row);
+    const details = row.children?.find?.(child => child.className === 'task-details') || row.querySelector?.('.task-details');
+    if (!id || !details) continue;
+    if (details.open) {
+      if (details.dataset.searchOpen !== 'true') openTaskDetails.add(id);
+    } else {
+      openTaskDetails.delete(id);
+    }
+  }
+}
 
 function renderTasksIfChanged(tasks) {
   const published = new Set((getState()?.reports || []).map(report => report.id));
@@ -3647,17 +3676,23 @@ function taskHaystack(task) {
 }
 
 function renderTasks(tasks) {
+  syncOpenTaskDetailsFromDom();
   const status = $('#tasks-status');
   const current = $('#tasks-current');
   const finished = $('#tasks-finished');
   const upcoming = $('#tasks-upcoming');
   lastTasksPayload = tasks;
   if (!tasks) {
+    openTaskDetails.clear();
     status.textContent = 'No task list yet.';
     current.hidden = true;
     finished.hidden = true;
     upcoming.hidden = true;
     return;
+  }
+  const liveIds = new Set([...tasks.upcoming, ...tasks.finished].map(task => task.id));
+  for (const id of [...openTaskDetails]) {
+    if (!liveIds.has(id)) openTaskDetails.delete(id);
   }
   status.textContent = `Updated ${time(tasks.updated_at)}`;
   const visible = task =>

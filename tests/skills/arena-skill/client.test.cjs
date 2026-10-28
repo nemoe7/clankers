@@ -1630,6 +1630,72 @@ test('preview client', async (t) => {
     assert.equal(opened.open, true);
   });
 
+  await t.test('Expanded task details stay open across task updates and report state changes', async () => {
+    const priorTasks = JSON.parse(JSON.stringify(state.tasks));
+    const priorReports = JSON.parse(JSON.stringify(state.reports || []));
+    const stamp1 = '2026-10-28T06:00:00';
+    const stamp2 = '2026-10-28T06:01:00';
+    const stamp3 = '2026-10-28T06:02:00';
+    state.reports = [];
+    state.tasks = {
+      updated_at: stamp1,
+      finished: [],
+      upcoming: [
+        {
+          id: 'persist-open',
+          title: 'Keep details open',
+          details: ['Step one'],
+          type: 'code',
+          status: 'upcoming',
+          order: 1,
+          updated_at: stamp1,
+          answers: [{ id: 'ans-persist', report_id: 'rep-persist', at: stamp1, text: 'Approved' }],
+        },
+      ],
+    };
+    await refresh();
+    try {
+      const firstDetails = taskPart(get('#tasks-current-body').children[0], 'task-details');
+      assert.ok(!firstDetails.open);
+      firstDetails.open = true;
+
+      state.tasks = {
+        ...state.tasks,
+        updated_at: stamp2,
+        upcoming: [
+          {
+            ...state.tasks.upcoming[0],
+            details: ['Step one', 'Step two'],
+            updated_at: stamp2,
+          },
+        ],
+      };
+      await refresh();
+      const updatedDetails = taskPart(get('#tasks-current-body').children[0], 'task-details');
+      assert.notEqual(updatedDetails, firstDetails, 'changed task payload rebuilds the row');
+      assert.equal(updatedDetails.open, true, 'expanded details stay open when task details update');
+
+      state.reports = [{ id: 'rep-persist', title: 'Linked report', updated_at: stamp2 }];
+      await refresh();
+      const reportDetails = taskPart(get('#tasks-current-body').children[0], 'task-details');
+      assert.equal(reportDetails.open, true, 'expanded details stay open when linked report state changes');
+
+      reportDetails.open = false;
+      state.tasks = {
+        ...state.tasks,
+        updated_at: stamp3,
+        upcoming: [{ ...state.tasks.upcoming[0], details: ['Step one', 'Step two', 'Step three'], updated_at: stamp3 }],
+      };
+      await refresh();
+      assert.ok(!taskPart(get('#tasks-current-body').children[0], 'task-details').open,
+        'collapsed details remain collapsed on subsequent updates');
+    } finally {
+      state.reports = priorReports;
+      state.tasks = priorTasks;
+      await refresh();
+    }
+  });
+
   await t.test("The log and the tasks lost their own copy buttons", async () => {
     // One button copies notes, tasks, and live answers as restorable NDJSON. Reports keep a separate copy button.
     // Copy only state data. Exclude rendered HTML, tokens, sequences, uploads, and last checks. Poll stamps already use seconds.
