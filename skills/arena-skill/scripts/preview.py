@@ -2273,7 +2273,7 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False,scop
 	for item in data.get('linked_repos')if isinstance(data.get('linked_repos'),list)else[]:
 		slug=clean_board_repo(item)
 		if slug and slug not in linked_repos:linked_repos.append(slug)
-	multi_repo=bool(data.get('multi_repo')or linked_repos);allowed=[]
+	egress_version=str(data.get('egress_version')or'').strip();multi_repo=bool(data.get('multi_repo')or linked_repos);allowed=[]
 	for item in data.get('allowed_sessions')if isinstance(data.get('allowed_sessions'),list)else[]:
 		norm=board_session_id(item)
 		if norm and norm not in allowed:allowed.append(norm)
@@ -2402,7 +2402,7 @@ def normalize_board_state(raw,session_id='',repo='',branch='',polling=False,scop
 	if scope_repos and base_repo_slug:linked_set=set(linked_repos);sessions=[row for row in sessions if row['session_id']==sid or _is_repo_visible_on_board(clean_board_repo(row.get('repo')or'',row['session_id']),base_repo_slug,multi_repo,linked_set)]
 	effective_main_sid=repo_has_main.get(base_repo_slug,'')if base_repo_slug else main_sid
 	if sid and sid not in allowed and not effective_main_sid:effective_main_sid=''
-	return{'version':1,'session_id':sid,'board_id':self_board_id,'worker_id':self_wid,'multi_repo':multi_repo,'linked_repos':linked_repos,'known_repos':known_repos,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'repo':str(repo or''),'branch':str(branch or''),'removed_sessions':removed_sessions,'allowed_sessions':allowed,'main_session_id':effective_main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
+	return{'version':1,'egress_version':egress_version,'session_id':sid,'board_id':self_board_id,'worker_id':self_wid,'multi_repo':multi_repo,'linked_repos':linked_repos,'known_repos':known_repos,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'repo':str(repo or''),'branch':str(branch or''),'removed_sessions':removed_sessions,'allowed_sessions':allowed,'main_session_id':effective_main_sid,'board_role':self_role,'can_push_or_pr':bool(is_main),'sessions':sessions,'entries':entries,'wakes':wakes}
 def board_main_session_warning(state_dir,command):
 	if not isinstance(command,str)or not command.strip():return None
 	if not re.search('(?:^|[;&|()\\s])(?:git\\s+(?:-\\S+\\s+)*push\\b|gh\\s+pr\\s+(?:create|edit|merge|close|ready|reopen)\\b)',command):return None
@@ -3229,7 +3229,7 @@ class Store:
 		action_type=str(payload.get('action')or payload.get('type')or'').strip().lower();raw_text=self.meta_value(BOARD_STATE_META)
 		try:raw_stored=json.loads(raw_text)if raw_text else{}
 		except Exception:raw_stored={}
-		ack_wakes=dict(raw_stored.get('ack_wakes'))if isinstance(raw_stored,dict)and isinstance(raw_stored.get('ack_wakes'),dict)else{};state=self.board_state(_scope_repos=False);sid=state['session_id'];linked_repos=[str(x)for x in state.get('linked_repos')or[]if x];known_repos=[str(x)for x in state.get('known_repos')or[]if x];multi_repo=bool(state.get('multi_repo')or linked_repos);worker_ids=dict(state.get('worker_ids')or{});worker_tasks={k:[dict(item)for item in v if isinstance(item,dict)]for(k,v)in(state.get('worker_tasks')or{}).items()if isinstance(v,list)};task_ops=[dict(row)for row in state.get('task_ops')or[]];worker_reports={k:[dict(item)for item in v if isinstance(item,dict)]for(k,v)in(state.get('worker_reports')or{}).items()if isinstance(v,list)};report_ops=[dict(row)for row in state.get('report_ops')or[]];removed_sessions=[str(x)for x in state.get('removed_sessions')or[]if x and x!=sid];allowed=list(state['allowed_sessions']);main_sid=state['main_session_id'];sessions=[dict(row)for row in state['sessions']];entries=[dict(row)for row in state['entries']];wakes=dict(state['wakes'])
+		ack_wakes=dict(raw_stored.get('ack_wakes'))if isinstance(raw_stored,dict)and isinstance(raw_stored.get('ack_wakes'),dict)else{};state=self.board_state(_scope_repos=False);sid=state['session_id'];linked_repos=[str(x)for x in state.get('linked_repos')or[]if x];known_repos=[str(x)for x in state.get('known_repos')or[]if x];egress_version=str(state.get('egress_version')or'').strip();multi_repo=bool(state.get('multi_repo')or linked_repos);worker_ids=dict(state.get('worker_ids')or{});worker_tasks={k:[dict(item)for item in v if isinstance(item,dict)]for(k,v)in(state.get('worker_tasks')or{}).items()if isinstance(v,list)};task_ops=[dict(row)for row in state.get('task_ops')or[]];worker_reports={k:[dict(item)for item in v if isinstance(item,dict)]for(k,v)in(state.get('worker_reports')or{}).items()if isinstance(v,list)};report_ops=[dict(row)for row in state.get('report_ops')or[]];removed_sessions=[str(x)for x in state.get('removed_sessions')or[]if x and x!=sid];allowed=list(state['allowed_sessions']);main_sid=state['main_session_id'];sessions=[dict(row)for row in state['sessions']];entries=[dict(row)for row in state['entries']];wakes=dict(state['wakes'])
 		if action_type=='sync':
 			if'board_diff'in payload and payload.get('board_diff')is not None:
 				diff_obj=payload.get('board_diff')
@@ -3247,6 +3247,8 @@ class Store:
 				for item in incoming['linked_repos']:
 					slug=clean_board_repo(item)
 					if slug and slug not in linked_repos:linked_repos.append(slug)
+			if isinstance(incoming,dict)and str(incoming.get('egress_version')or'').strip():egress_version=str(incoming.get('egress_version')or'').strip()
+			elif str(payload.get('egress_version')or'').strip():egress_version=str(payload.get('egress_version')or'').strip()
 			if isinstance(incoming,dict)and'multi_repo'in incoming:multi_repo=bool(incoming.get('multi_repo')or linked_repos)
 			merged=normalize_board_state(incoming,session_id=sid,repo=state['repo'],branch=state['branch'],polling=any(r['session_id']==sid and r.get('polling')for r in sessions),scope_repos=False)
 			if isinstance(incoming,dict)and isinstance(incoming.get('known_repos'),list):known_repos=list(merged.get('known_repos')or[])
@@ -3491,7 +3493,7 @@ class Store:
 					if norm_target in allowed:wakes[norm_target]=stamp;ack_wakes.pop(norm_target,None)
 		elif action_type=='clear':entries=[]
 		else:raise ValueError(f"Unknown board action: {action_type}")
-		report_ops=trim_report_ops(report_ops);stored={'version':1,'local_session_id':sid,'multi_repo':multi_repo,'linked_repos':linked_repos,'known_repos':known_repos,'removed_sessions':removed_sessions,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
+		report_ops=trim_report_ops(report_ops);stored={'version':1,'egress_version':egress_version,'local_session_id':sid,'multi_repo':multi_repo,'linked_repos':linked_repos,'known_repos':known_repos,'removed_sessions':removed_sessions,'worker_ids':worker_ids,'worker_tasks':worker_tasks,'task_ops':task_ops,'worker_reports':worker_reports,'report_ops':report_ops,'allowed_sessions':allowed,'main_session_id':main_sid,'sessions':sessions,'entries':entries,'wakes':wakes,'ack_wakes':ack_wakes};encoded=json.dumps(stored,ensure_ascii=False)
 		if encoded!=raw_text:
 			with self.transaction(autosave=False)as db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(BOARD_STATE_META,encoded))
 		if payload.get('reply_mode')=='diff'and payload.get('reply_since')is not None:return self.board_state_sync(since=int(payload['reply_since']),mode='diff')

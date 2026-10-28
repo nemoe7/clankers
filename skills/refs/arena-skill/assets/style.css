@@ -765,6 +765,8 @@ body[data-board-role="worker"] :is(#notes-tab, #tasks-tab, #reports-tab, #downlo
 #board-panel { flex: 1 1 auto; min-height: 0; width: 100%; overflow-y: auto; padding-inline: 5vw; }
 #board-panel > .card { background: transparent; border: 0; padding-inline: 0; padding-top: 0; width: min(900px, 90vw); max-width: 900px; margin-left: max(0px, calc((100vw - 900px) / 2 - 5vw)); margin-right: 0; }
 .board-layout { display: flex; flex-direction: column; gap: 16px; }
+.board-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+#board-egress-version { font-size: 13px; }
 .board-layout > .row { flex-wrap: wrap; gap: 12px; align-items: flex-start; }
 .board-layout > .row > .row { flex-wrap: wrap; gap: 8px; min-width: 0; }
 #board-repo-links { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }

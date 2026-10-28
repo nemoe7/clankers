@@ -1129,6 +1129,7 @@ def test_private_board_sync_merges_persists_isolates_and_stages_files(tmp_path):
       "ok": True,
       "unchanged": True,
       "revision": rev1,
+      "egress_version": core.VERSION,
     }
 
     st, file_raw = call(
@@ -1784,3 +1785,7 @@ def test_private_state_route_master_auth_diff_sync_and_ndjson_hydration(tmp_path
     hist_rows = [row for row in lines if row.get("type") == "userscript-autosave"]
     assert len(hist_rows) == 2
     assert isinstance(hist_rows[-1]["core"], list) and len(hist_rows[-1]["core"]) == 3
+
+    st_board, raw_board = call(handle.port, "/v1/board", headers)
+    assert st_board == 200
+    assert json.loads(raw_board)["egress_version"] == core.VERSION

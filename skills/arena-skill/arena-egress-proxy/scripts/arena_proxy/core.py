@@ -915,7 +915,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         wakes = len(board.get("wakes") or {})
         extra = f"{repo + ', ' if repo else ''}{sessions} sessions, {entries} entries, {wakes} wakes"
         self._log_detail = f"served rev {rev} to {who} ({extra})"
-      self._send_json(200, snap)
+      self._send_json(200, {**snap, "egress_version": VERSION})
       return
     session_id = params.get("session_id", [""])[0].strip()
     name = params.get("name", [""])[0].strip()
@@ -1042,7 +1042,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         self._log_detail = (
           f"stale board diff from {who} at rev {result.get('revision', before_rev)}"
         )
-        self._send_json(409, result)
+        self._send_json(409, {**result, "egress_version": VERSION})
         return
       after_rev = result.get("revision", before_rev)
       who = session_id or "anonymous"
@@ -1067,7 +1067,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         wakes = len(board.get("wakes") or {})
         extra = f"{repo + ', ' if repo else ''}{sessions} sessions, {entries} entries, {wakes} wakes"
         self._log_detail = f"synced {who} -> rev {after_rev} ({extra})"
-      self._send_json(200, result)
+      self._send_json(200, {**result, "egress_version": VERSION})
       return
     action_body = (
       payload.get("board_action")
@@ -1093,11 +1093,11 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       target_note = f" targeting {target}" if target else ""
       repo_note = f" ({repo})" if repo else ""
       self._log_detail = f"{act_name} by {actor}{target_note}{repo_note} -> rev {rev}"
-      self._send_json(200, result)
+      self._send_json(200, {**result, "egress_version": VERSION})
     else:
       reason = result.get("error") or "rejected"
       self._log_detail = f"{act_name} by {actor} rejected ({reason})"
-      self._send_json(400, result)
+      self._send_json(400, {**result, "egress_version": VERSION})
 
   def _send(self, status, body, content_type="application/json; charset=utf-8"):
     self.send_response(status)

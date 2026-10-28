@@ -6201,6 +6201,7 @@ def normalize_board_state(
     slug = clean_board_repo(item)
     if slug and slug not in linked_repos:
       linked_repos.append(slug)
+  egress_version = str(data.get("egress_version") or "").strip()
   multi_repo = bool(data.get("multi_repo") or linked_repos)
   allowed = []
   for item in (
@@ -6731,6 +6732,7 @@ def normalize_board_state(
     effective_main_sid = ""
   return {
     "version": 1,
+    "egress_version": egress_version,
     "session_id": sid,
     "board_id": self_board_id,
     "worker_id": self_wid,
@@ -9490,6 +9492,7 @@ class Store:
     sid = state["session_id"]
     linked_repos = [str(x) for x in (state.get("linked_repos") or []) if x]
     known_repos = [str(x) for x in (state.get("known_repos") or []) if x]
+    egress_version = str(state.get("egress_version") or "").strip()
     multi_repo = bool(state.get("multi_repo") or linked_repos)
     worker_ids = dict(state.get("worker_ids") or {})
     worker_tasks = {
@@ -9543,6 +9546,12 @@ class Store:
           slug = clean_board_repo(item)
           if slug and slug not in linked_repos:
             linked_repos.append(slug)
+      if (
+        isinstance(incoming, dict) and str(incoming.get("egress_version") or "").strip()
+      ):
+        egress_version = str(incoming.get("egress_version") or "").strip()
+      elif str(payload.get("egress_version") or "").strip():
+        egress_version = str(payload.get("egress_version") or "").strip()
       if isinstance(incoming, dict) and "multi_repo" in incoming:
         multi_repo = bool(incoming.get("multi_repo") or linked_repos)
       merged = normalize_board_state(
@@ -10369,6 +10378,7 @@ class Store:
     report_ops = trim_report_ops(report_ops)
     stored = {
       "version": 1,
+      "egress_version": egress_version,
       "local_session_id": sid,
       "multi_repo": multi_repo,
       "linked_repos": linked_repos,

@@ -6141,5 +6141,7 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /wake_id:\s*String\(stamp\)/);
   assert.match(appSource, /rRawTurnEndedAt\s*>=\s*rLatestActiveAt/);
   assert.match(appSource, /const\s+reportsSig\s*=/);
+  assert.match(htmlSource, /id="board-egress-version"/);
+  assert.match(appSource, /egressVerEl\.textContent\s*=\s*rawVer\s*\?\s*`Egress proxy v\$\{rawVer\}`\s*:\s*''/);
 });
 

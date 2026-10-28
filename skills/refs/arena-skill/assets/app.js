@@ -4438,6 +4438,12 @@ function renderBoard() {
   const board = getState()?.board;
   const boardTab = $('#board-tab');
   const sessionsEl = $('#board-sessions');
+  const egressVerEl = $('#board-egress-version');
+  if (egressVerEl) {
+    const rawVer = String(board?.egress_version || '').trim().replace(/^v/i, '');
+    egressVerEl.textContent = rawVer ? `Egress proxy v${rawVer}` : '';
+    egressVerEl.hidden = !rawVer;
+  }
   const sessions = Array.isArray(board?.sessions) ? board.sessions : [];
   const allowed = new Set(Array.isArray(board?.allowed_sessions) ? board.allowed_sessions : []);
   const mainSid = board?.main_session_id || '';

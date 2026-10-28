@@ -5262,6 +5262,7 @@
   var BOARD_PROXY_POLL_MS = 3000;
   var proxyBoardCache = null;
   var proxyBoardRevision = 0;
+  var proxyBoardEgressVersion = "";
   var proxyBoardPullInFlight = null;
   var lastProxyBoardPullAtMs = 0;
   var hydratedBoardFilesBySid = new Set();
@@ -5334,6 +5335,9 @@
           var body = null;
           var failure = null;
           try { body = JSON.parse(answer.responseText); } catch (err) { failure = "parse"; }
+          if (body && typeof body.egress_version === "string" && body.egress_version.trim()) {
+            proxyBoardEgressVersion = body.egress_version.trim();
+          }
           resolve({ status: answer.status, body: body, failure: failure });
         },
         onerror: function () { resolve({ status: 0, body: null, failure: "error" }); },
@@ -5351,6 +5355,9 @@
       normalized.allowed_sessions.length === 0
     ) {
       return proxyBoardCache;
+    }
+    if (proxyBoardEgressVersion && !normalized.egress_version) {
+      normalized.egress_version = proxyBoardEgressVersion;
     }
     proxyBoardCache = normalized;
     if (typeof revision === "number" && isFinite(revision) && revision >= 0) {
@@ -7538,6 +7545,7 @@
     }
     if (!data || typeof data !== "object") data = {};
     var multiRepo = Boolean(data.multi_repo);
+    var egressVersion = typeof data.egress_version === "string" ? data.egress_version.trim() : "";
     var allowed = Array.isArray(data.allowed_sessions)
       ? data.allowed_sessions.map(boardSessionId).filter(Boolean)
       : [];
@@ -7790,6 +7798,7 @@
       });
     }
     return {
+      egress_version: egressVersion,
       multi_repo: multiRepo,
       linked_repos: linkedRepos,
       removed_sessions: removedList.slice(),
@@ -7864,6 +7873,7 @@
       })];
     });
     return JSON.stringify({
+      ev: norm.egress_version || "",
       mr: Boolean(norm.multi_repo),
       lr: norm.linked_repos || [],
       main: norm.main_session_id || "",
@@ -7894,6 +7904,9 @@
 
   function scopeBoardForTarget(board, sessionId, repoHint) {
     var normalized = normalizeBoard(board);
+    if (proxyBoardEgressVersion && !normalized.egress_version) {
+      normalized.egress_version = proxyBoardEgressVersion;
+    }
     var sid = boardSessionId(sessionId);
     var targetRepo = cleanBoardRepo(repoHint || "", sid);
     var isAllowed = Boolean(sid && normalized.allowed_sessions.indexOf(sid) !== -1);
