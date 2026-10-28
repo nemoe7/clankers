@@ -4665,6 +4665,21 @@ test('preview client', async (t) => {
     }
   });
 
+  await t.test('The Messages header names the last file tool and its time', async () => {
+    state.last_tool = { tool: 'edit', at: '2026-10-05T05:02:00' };
+    await refresh();
+    const row = get('#last-tool');
+    assert.equal(row.hidden, false, 'the line shows once a tool ran');
+    assert.match(row.textContent, /^edit \d{2}:\d{2}$/, 'the line reads <tool> <stamp>');
+    assert.match(row.title, /^Last file tool edit at /, 'the tooltip names the tool');
+    assert.equal(get('#notes-panel .stack').children.at(-1), row,
+      'the line sits in the Messages header');
+    state.last_tool = null;
+    await refresh();
+    assert.equal(row.hidden, true, 'the line hides with no probe');
+    assert.equal(row.textContent, '');
+  });
+
   await t.test('Skip poll toggles one flag, and a poll consumes the arm', async () => {
     // The press must write no note: the agent reads the flag, ends its wait, and no stale
     // "skip poll" line waits in the log for a later turn to misread.

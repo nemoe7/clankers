@@ -308,6 +308,10 @@ AGENT_KEY_EXPIRY_SECONDS = 1200
 AGENT_KEY_TTL_SECONDS = 900
 AGENT_KEY_EXPIRY_META = "agent_key_expired_at"
 AGENT_SEEN_META = "agent_seen_at"
+# File tools stamp these two keys. The Messages header names the last one and its time.
+TOOL_NAME_META = "last_tool_name"
+TOOL_AT_META = "last_tool_at"
+TOOL_PROBE_NAMES = ("read", "edit", "write")
 AGENT_INTERRUPT_META = "agent_interrupt"
 AGENT_INTERRUPT_FLAG_META = "agent_interrupt_flag"
 # The flag modal offers these types per tab. The server refuses a type outside its tab's tuple.
@@ -1630,6 +1634,14 @@ def seconds_since(value):
 def clip_stamp(value):
   "Cut an ISO stamp to seconds. A restore needs no milliseconds or offset."
   return value[:19] if value else value
+
+
+def tool_activity(meta):
+  "Return the last file tool and its stamp, or None before the first probe."
+  name = meta.get(TOOL_NAME_META)
+  if name not in TOOL_PROBE_NAMES:
+    return None
+  return {"tool": name, "at": clip_stamp(meta.get(TOOL_AT_META))}
 
 
 def at_or_after(value, other):
@@ -7426,6 +7438,21 @@ def autosave_record(record):
   return out
 
 
+def tool_probe_command(state_dir, name):
+  """Record one file tool with no output, no counter bump, and no failed shell.
+
+  The installer hook rides every shell call, so a missing database or a closed inbox
+  must stay silent: the probe never prints, and its error never reaches the caller.
+  """
+  if not (Path(state_dir).resolve() / "state.sqlite3").is_file():
+    return 0
+  try:
+    Store(state_dir).record_tool(name)
+  except Exception:
+    return 0
+  return 0
+
+
 def survey_command(state_dir, answers, smallest_image=False, root=None):
   import survey
 
@@ -9077,6 +9104,8 @@ class Store:
         "userscript_version": self.userscript_version(),
         # The header turns amber when this stamp ages, so a stale preview shows itself.
         "agent_seen_at": clip_stamp(meta.get(AGENT_SEEN_META)),
+        # The Messages header names the last file tool, so the page shows the work between calls.
+        "last_tool": tool_activity(meta),
         # The header suppresses the long call text after this mark and turns amber past the
         # quiet window, since silence after a returned poll is not a running call.
         "turn_ended_at": clip_stamp(meta.get(TURN_ENDED_META)),
@@ -13203,6 +13232,14 @@ class Store:
     """Drop one meta value, leaving the rest alone."""
     with closing(self.connect()) as db, db:
       db.execute("DELETE FROM meta WHERE key = ?", (key,))
+
+  def record_tool(self, name):
+    """Stamp one file tool: the call signal plus its own name and time, with no output."""
+    if name not in TOOL_PROBE_NAMES:
+      raise ValueError(f"unknown tool probe: {name}")
+    self.touch_agent()
+    self.set_meta(TOOL_NAME_META, name)
+    self.set_meta(TOOL_AT_META, now())
 
   def touch_agent(self):
     """Stamp the agent's own call: the liveness signal the preview header reads.
@@ -17879,6 +17916,15 @@ def main():
     default=None,
     help=argparse.SUPPRESS,
   )
+  # The EXIT hook probes file tools here. The flag prints nothing, so a probe
+  # never looks like guidance in an agent shell.
+  parser.add_argument(
+    "-P",
+    "--tool-probe",
+    choices=TOOL_PROBE_NAMES,
+    default=None,
+    help=argparse.SUPPRESS,
+  )
   commands = parser.add_subparsers(dest="command", required=False)
   serve = commands.add_parser("serve", help="Serve preview page; -p names port")
   serve.add_argument(
@@ -18424,6 +18470,8 @@ def main():
       ):
         print(reminder, file=sys.stderr, flush=True)
       return 0
+    if args.tool_probe:
+      return tool_probe_command(state_dir, args.tool_probe)
     if not args.command:
       parser.error("Command required. Run arena-preview --help.")
     if args.command == "pre":

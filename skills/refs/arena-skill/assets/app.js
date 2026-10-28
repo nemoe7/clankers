@@ -103,6 +103,8 @@ let showQuietNotes = false;
 function visibleNotes(notes) {
   return (notes || []).filter(item => showQuietNotes || !item.quiet);
 }
+// The header line the first poll adds. A later render reuses it.
+let lastToolRow = null;
 const historyAtEnd = history =>
   history.scrollHeight - history.scrollTop - history.clientHeight < 80;
 
@@ -1677,6 +1679,8 @@ function renderState() {
   }
   // The ack writes the same stamp as a read does, so the label is true.
   $('#last-check').textContent = state.last_check ? `Last read/ack: ${time(state.last_check)}` : 'No read or ack yet.';
+  // File tool activity rides its own line under that stamp, so the header shows the work.
+  paintLastTool(state.last_tool);
   showHistory(logNotes);
   renderTasksIfChanged(state.tasks);
   renderFetchIfChanged(state.fetch_jobs || []);
@@ -5415,6 +5419,22 @@ $('#agent-interrupt').addEventListener('click', async () => {
     },
   });
 });
+// The Messages header names the last file tool the agent ran and its time.
+// The page owns the line, so the panel carries no extra markup.
+function paintLastTool(lastTool) {
+  if (!lastToolRow) {
+    lastToolRow = document.createElement('p');
+    lastToolRow.id = 'last-tool';
+    lastToolRow.className = 'muted';
+    $('#notes-panel .stack').append(lastToolRow);
+  }
+  const tool = lastTool && typeof lastTool.tool === 'string' ? lastTool.tool : '';
+  const stamp = tool && lastTool.at ? clock(lastTool.at) : '';
+  lastToolRow.hidden = !stamp;
+  lastToolRow.textContent = stamp ? `${tool} ${stamp}` : '';
+  lastToolRow.title = stamp ? `Last file tool ${tool} at ${clockTime(lastTool.at)}` : '';
+}
+
 // Skip poll toggles a one-shot flag that ends the agent's wait without leaving a note for a later turn.
 // A second press cancels the skip, so an early press cannot force the wait to end.
 function paintSkipPoll(skipPoll) {

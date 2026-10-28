@@ -18041,3 +18041,71 @@ def test_board_patch_attachment_prints_git_apply_hint_on_read_poll_note_and_ack(
   assert preview.main() == 0
   poll_out = capsys.readouterr().out
   assert poll_out.count(expected_handoff) == 1
+
+
+def test_tool_probe_records_activity_without_printing_or_counting(capsys):
+  """A file tool probe stamps the header line, and no shell call sees output."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    script = str(Path(preview.__file__))
+    calls = store.calls_since_message()
+
+    with (
+      patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": directory}),
+      patch.object(sys, "argv", [script, "--tool-probe", "edit"]),
+    ):
+      assert preview.main() == 0
+    output = capsys.readouterr()
+    assert (output.out, output.err) == ("", ""), "a probe never prints"
+    state = store.state()
+    assert state["last_tool"]["tool"] == "edit"
+    assert state["last_tool"]["at"], "the probe stamps its time"
+    assert state["agent_seen_at"], "a probe proves the agent is alive"
+    assert store.calls_since_message() == calls, "a probe never counts as a call"
+    assert state["notes"] == [], "a probe never writes a note"
+
+    with (
+      patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": directory}),
+      patch.object(sys, "argv", [script, "--tool-probe", "write"]),
+    ):
+      assert preview.main() == 0
+    output = capsys.readouterr()
+    assert (output.out, output.err) == ("", "")
+    assert store.state()["last_tool"]["tool"] == "write", "the newest tool wins"
+
+    with tempfile.TemporaryDirectory() as empty:
+      with (
+        patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": empty}),
+        patch.object(sys, "argv", [script, "--tool-probe", "read"]),
+      ):
+        assert preview.main() == 0
+      output = capsys.readouterr()
+      assert (output.out, output.err) == ("", "")
+      assert not (Path(empty) / "state.sqlite3").exists(), (
+        "a probe never creates an inbox"
+      )
+      assert store.state()["last_tool"]["tool"] == "write", "no database, no change"
+
+
+def test_installer_hook_probes_platform_shells_before_the_early_exit():
+  """A platform shell probes file tools before returning early."""
+  installer_path = preview.ASSETS.parent / "scripts" / "install.sh"
+  if not installer_path.exists():
+    installer_path = (
+      Path.cwd() / "skills" / "refs" / "arena-skill" / "scripts" / "install.sh"
+    )
+  hook = installer_path.read_text(encoding="utf-8")
+  probe_fn = "_arena_preview_probe"
+  probe_flag = "--tool-probe"
+  db_name = "state.sqlite3"
+  silent_redirect = ">/dev/null 2>&1"
+  reminder_flag = "--reminder"
+  branch = hook.index("*arena-workspace*)")
+  branch_exit = hook.index('exit "\\$rc" ;;', branch)
+  assert probe_fn in hook[branch:branch_exit]
+  helper_start = hook.index("_arena_preview_probe() {")
+  helper = hook[helper_start : hook.index("\n}\n", helper_start)]
+  assert probe_flag in helper
+  assert db_name in helper
+  assert silent_redirect in helper
+  assert reminder_flag in hook[branch_exit:]

@@ -113,13 +113,36 @@ cat > "$HOOK" <<EOF || fail "cannot write $HOOK"
 # arena-preview-hook: poll the steering inbox after every agent call.
 rc=\$?
 cmd="\$(tr '\\0' ' ' < /proc/\$PPID/cmdline 2>/dev/null)"
-# The platform runs processes and probes through login shells. Those shells would otherwise count as agent calls and stamp call ends.
+# The probe names the file tool the hook saw. It prints nothing, exits 0, and stays off until the state database exists.
+_arena_preview_probe() {
+  [ -n "\$1" ] && [ -f "$REPO_ROOT/$STATE_REL/state.sqlite3" ] || return 0
+  "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" --tool-probe "\$1" >/dev/null 2>&1 || :
+}
+# The platform runs processes and file tools through login shells. Those shells would otherwise count as agent calls and stamp call ends.
 # These are the shapes the gate already ignores, so the count and the stamp answer for the agent's own calls. The hook is a child of the shell that exits, so its parent carries that shell's line.
 # case: platform-shell
 case "\$cmd" in
-  *arena-workspace*|*"ss -ltn"*|*"netstat -ltn"*|*"source ~/.profile"*|*"mkdir -p '/home/user'"*|*"/bin/bash -l -c mkdir -p '"*|*"/bin/bash -l -c [ -e '"*|*"python3 -I - <<'PY'"*)
+  *arena-workspace*)
+    # This branch exits, so the platform file tools probe here, before the shell returns.
+    for _arena_preview_word in \$cmd; do
+      case "\$_arena_preview_word" in
+        read|edit|write) _arena_preview_probe "\$_arena_preview_word"; break ;;
+      esac
+    done
+    exit "\$rc" ;;
+  *"ss -ltn"*|*"netstat -ltn"*|*"source ~/.profile"*|*"mkdir -p '/home/user'"*|*"/bin/bash -l -c mkdir -p '"*|*"/bin/bash -l -c [ -e '"*|*"python3 -I - <<'PY'"*)
     exit "\$rc" ;;
 esac
+# File tools ride ordinary shell commands too, so the hook names the verb and probes the preview.
+for _arena_preview_word in \$cmd; do
+  case "\$_arena_preview_word" in
+    cat|head|tail|grep|rg) _arena_preview_probe read ;;
+    sed|patch) _arena_preview_probe edit ;;
+    tee|cp|mv) _arena_preview_probe write ;;
+    *) continue ;;
+  esac
+  break
+done
 "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" --reminder --rc "\$rc" --elapsed "\$SECONDS" --line "\$cmd" >&2
 exit "\$rc"
 EOF
