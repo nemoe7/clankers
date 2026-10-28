@@ -17674,3 +17674,74 @@ def test_main_receives_one_ack_required_note_per_worker_idle_transition(
     }
   )
   assert worker_store.read()["pending"] == []
+
+
+def test_main_receives_one_ack_required_note_per_worker_disconnect_transition(
+  tmp_path, monkeypatch
+):
+  repo_root = tmp_path / "clankers"
+  repo_root.mkdir()
+  alpha = "arena/alpha0001-clankers"
+  beta = "arena/beta0002-clankers"
+  monkeypatch.setattr(preview, "workspace_branch", lambda _r=None: alpha)
+  main_store = preview.Store(repo_root / "arena-state", create=True)
+  monkeypatch.setattr(main_store, "repository_root", lambda: repo_root)
+  main_store.board_action({"action": "set-main", "branch": alpha})
+  main_store.board_action({"action": "allow", "branch": beta, "worker_id": "beta"})
+
+  def sync_beta(disconnected, agent_seen_at=None, polling=False):
+    row = {
+      "branch": beta,
+      "repo": "clankers",
+      "status": "disconnected"
+      if disconnected
+      else ("polling" if polling else "active"),
+      "disconnected": disconnected,
+      "polling": False if disconnected else polling,
+    }
+    if agent_seen_at:
+      row["agent_seen_at"] = agent_seen_at
+    return main_store.board_action(
+      {
+        "action": "sync",
+        "board": {
+          "allowed_sessions": [alpha, beta],
+          "main_session_id": alpha,
+          "sessions": [
+            {"branch": alpha, "repo": "clankers", "status": "active", "polling": False},
+            row,
+          ],
+        },
+      }
+    )
+
+  sync_beta(False, "2026-10-28T09:40:00")
+  assert main_store.read()["pending"] == []
+
+  # Disconnect emits one ack-required note on main that wakes poll without violation gating.
+  sync_beta(True, "2026-10-28T09:40:00")
+  pending = main_store.read()["pending"]
+  assert len(pending) == 1
+  disc_note = pending[0]
+  assert disc_note["quiet"] == 1 and disc_note["blocking"] == 1
+  assert "@beta" in disc_note["text"] and beta in disc_note["text"]
+  assert "disconnected" in disc_note["text"]
+  assert main_store.pending_violation_note() is None
+  assert len(main_store.read(include_quiet=False)["pending"]) == 1
+
+  # Repeated syncs or stale active flaps with unchanged agent_seen_at never duplicate it.
+  sync_beta(True, "2026-10-28T09:40:00")
+  assert [n["id"] for n in main_store.read()["pending"]] == [disc_note["id"]]
+  main_store.acknowledge([disc_note["id"]], "Reassigning task from @beta.")
+  assert main_store.read()["pending"] == []
+  sync_beta(True, "2026-10-28T09:40:00")
+  sync_beta(False, "2026-10-28T09:40:00")
+  sync_beta(True, "2026-10-28T09:40:00")
+  assert main_store.read()["pending"] == []
+
+  # Genuine reconnect (newer agent_seen_at) followed by a later disconnect emits a new note.
+  sync_beta(False, "2026-10-28T09:50:00")
+  assert main_store.read()["pending"] == []
+  sync_beta(True, "2026-10-28T09:55:00")
+  pending2 = main_store.read()["pending"]
+  assert len(pending2) == 1 and pending2[0]["id"] != disc_note["id"]

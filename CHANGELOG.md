@@ -27,7 +27,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
-- Inform `main` via one `ack`-required `worker-idle` quiet note per idle transition when an allowlisted worker enters `poll` (`scripts/preview.py`).
+- Inform `main` via one `ack`-required quiet note per transition when an allowlisted worker enters idle `poll` or disconnects from the board (`scripts/preview.py`).
 - Rename survey `I4M6G` to `V1S0N` (`vision`), accept unsorted JSON with `S0R7D` tracking, and add `survey -i` PNG fallback (`SKILL.md`, `references/survey.json`, `scripts/survey.py`, `scripts/preview.py`).
 - Show `@sender to @target` headers on initial board posts in the Messages UI while keeping acks without `to` (`assets/app.js`).
 - Replace the Board tab's separate `Revoke` and `Dismiss` buttons with one `Dismiss` button (`assets/app.js`, `scripts/preview.py`).

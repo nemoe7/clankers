@@ -49,7 +49,9 @@ def __getattr__(name):
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
-VIOLATION_NOTES = "type NOT IN ('', 'survey', 'state-backup', 'worker-idle')"
+VIOLATION_NOTES = (
+  "type NOT IN ('', 'survey', 'state-backup', 'worker-idle', 'worker-disconnected')"
+)
 PENDING_SUBMISSIONS = (
   "acknowledged_at IS NULL"
   " AND seq IN (SELECT MAX(seq) FROM submissions GROUP BY report_id)"
@@ -10710,7 +10712,12 @@ class Store:
     idle_seen = (
       dict(ack_wakes.get(idle_key)) if isinstance(ack_wakes.get(idle_key), dict) else {}
     )
+    disc_key = f"{sid}:disconnected_workers"
+    disc_seen = (
+      dict(ack_wakes.get(disc_key)) if isinstance(ack_wakes.get(disc_key), dict) else {}
+    )
     pending_idle_notes = []
+    pending_disc_notes = []
     if sid and sid in allowed and normalized.get("board_role") == "main":
       unacked_targets = {
         str(e.get("to") or "")
@@ -10731,9 +10738,43 @@ class Store:
         ):
           continue
         active_worker_sids.add(w_sid)
+        w_label = str(w_row.get("worker_id") or w_row.get("board_id") or w_sid).strip()
         is_disc = bool(
           w_row.get("disconnected") or w_row.get("status") == "disconnected"
         )
+        raw_disc = disc_seen.get(w_sid)
+        prev_disc_seen = (
+          str(raw_disc.get("seen") or "") if isinstance(raw_disc, dict) else ""
+        )
+        was_disc_active = (
+          bool(raw_disc.get("active"))
+          if isinstance(raw_disc, dict)
+          else raw_disc is not None
+        )
+        cur_seen = str(w_row.get("agent_seen_at") or "")
+        if is_disc:
+          eff_seen = cur_seen or prev_disc_seen
+          already_disc = (
+            was_disc_active
+            and (not cur_seen or not prev_disc_seen or cur_seen <= prev_disc_seen)
+          ) or (
+            not was_disc_active
+            and bool(prev_disc_seen)
+            and (not cur_seen or cur_seen <= prev_disc_seen)
+          )
+          disc_seen[w_sid] = {"active": True, "seen": eff_seen}
+          if not already_disc:
+            pending_disc_notes.append((w_sid, w_label))
+        elif raw_disc is not None:
+          if (
+            not prev_disc_seen
+            or not cur_seen
+            or cur_seen > prev_disc_seen
+            or bool(w_row.get("polling"))
+          ):
+            disc_seen.pop(w_sid, None)
+          else:
+            disc_seen[w_sid] = {"active": False, "seen": prev_disc_seen}
         is_idle = bool(
           not is_disc
           and w_row.get("polling")
@@ -10768,15 +10809,21 @@ class Store:
           idle_seen[w_sid] = {"active": True, "since": effective_since}
           continue
         idle_seen[w_sid] = {"active": True, "since": effective_since}
-        w_label = str(w_row.get("worker_id") or w_row.get("board_id") or w_sid).strip()
         pending_idle_notes.append((w_sid, w_label))
       for stale_sid in list(idle_seen):
         if stale_sid not in active_worker_sids:
           idle_seen.pop(stale_sid, None)
+      for stale_sid in list(disc_seen):
+        if stale_sid not in active_worker_sids:
+          disc_seen.pop(stale_sid, None)
       if idle_seen:
         ack_wakes[idle_key] = idle_seen
       else:
         ack_wakes.pop(idle_key, None)
+      if disc_seen:
+        ack_wakes[disc_key] = disc_seen
+      else:
+        ack_wakes.pop(disc_key, None)
     encoded = json.dumps(stored, ensure_ascii=False)
     if encoded != raw_text:
       with self.transaction(autosave=False) as db:
@@ -10799,6 +10846,23 @@ class Store:
         quiet=True,
         blocking=True,
         type="worker-idle",
+      )
+    for w_sid, w_label in pending_disc_notes:
+      with closing(self.connect()) as db:
+        dup = db.execute(
+          "SELECT 1 FROM notes WHERE type = 'worker-disconnected'"
+          " AND acknowledged_at IS NULL AND instr(text, ?) > 0 LIMIT 1",
+          (f"({w_sid})",),
+        ).fetchone()
+      if dup is not None:
+        continue
+      tag = w_label if w_label.startswith("@") else f"@{w_label}"
+      self.note(
+        self.free_id(),
+        f"Worker {tag} ({w_sid}) disconnected from the board. Reassign its task or ack this note.",
+        quiet=True,
+        blocking=True,
+        type="worker-disconnected",
       )
     if payload.get("reply_mode") == "diff" and payload.get("reply_since") is not None:
       return self.board_state_sync(since=int(payload["reply_since"]), mode="diff")
@@ -13281,8 +13345,9 @@ class Store:
       " AND (quiet = 0 OR blocking = 1 OR seen_at IS NULL)"
       if include_quiet
       else (
-        " AND (quiet = 0 OR (type IN ('state-backup', 'survey', 'worker-idle')"
-        " AND blocking = 1))"
+        " AND (quiet = 0 OR (type IN ("
+        "'state-backup', 'survey', 'worker-idle', 'worker-disconnected'"
+        ") AND blocking = 1))"
       )
     )
     with self.transaction(autosave=False) as db:
