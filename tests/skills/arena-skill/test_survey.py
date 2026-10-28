@@ -188,3 +188,16 @@ def test_smallest_image_writes_a_temp_png_without_repo_images(tmp_path):
   image.write_bytes(payload)
   assert survey.smallest_image(tmp_path) == "only.png"
   assert survey.smallest_image(tmp_path / "absent") is None
+
+
+def test_survey_instructions_omit_reuse_and_answer_key_mentions():
+  import survey
+
+  assert "reuse" not in survey.INSTRUCTIONS
+  assert "answer key" not in survey.INSTRUCTIONS
+  assert "answer-key" not in survey.INSTRUCTIONS
+  assert "NEVER research answers" in survey.INSTRUCTIONS
+  assert "knowledge questions" not in survey.INSTRUCTIONS
+  assert "arena-preview survey -i" in survey.INSTRUCTIONS
+  assert "--smallest-image" not in survey.INSTRUCTIONS
+  assert "V1S0N" in survey.INSTRUCTIONS

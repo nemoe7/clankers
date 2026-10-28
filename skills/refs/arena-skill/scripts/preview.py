@@ -305,6 +305,7 @@ USERSCRIPT_VERSION_RE = re.compile(r"^[0-9A-Za-z._+-]{1,32}$")
 # The userscript replaces the record inside its 15-minute rotation window, so an older
 # record means no key post arrived and the agent's key is dead until a new one lands.
 AGENT_KEY_EXPIRY_SECONDS = 1200
+AGENT_KEY_TTL_SECONDS = 900
 AGENT_KEY_EXPIRY_META = "agent_key_expired_at"
 AGENT_SEEN_META = "agent_seen_at"
 AGENT_INTERRUPT_META = "agent_interrupt"
@@ -356,6 +357,20 @@ def now():
 
 TIMEZONE_META = "display_tz"
 DISPLAY_ZONE = None
+MONTH_ABBREVIATIONS = (
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+)
 
 
 def zone_exists(name):
@@ -375,17 +390,27 @@ def resolve_display_zone(store):
   return ZoneInfo(name)
 
 
-def local_stamp(value):
+def local_stamp(value, moment=None):
   """Print one stored UTC stamp in the set zone. Storage and exports keep UTC."""
-  if not value or DISPLAY_ZONE is None:
+  if not value:
     return value
+  if DISPLAY_ZONE is None:
+    return clip_stamp(value)
   try:
     parsed = datetime.fromisoformat(value)
   except ValueError:
-    return value
+    return clip_stamp(value)
   if parsed.tzinfo is None:
     parsed = parsed.replace(tzinfo=UTC)
-  return parsed.astimezone(DISPLAY_ZONE).isoformat()
+  local = parsed.astimezone(DISPLAY_ZONE)
+  current = moment or datetime.now(DISPLAY_ZONE)
+  if current.tzinfo is None:
+    current = current.replace(tzinfo=UTC)
+  current = current.astimezone(DISPLAY_ZONE)
+  time_text = f"{local.hour:02d}:{local.minute:02d}"
+  if local.date() == current.date():
+    return time_text
+  return f"{MONTH_ABBREVIATIONS[local.month - 1]} {local.day:02d} {time_text}"
 
 
 def workspace_branch(root=None):
@@ -3004,7 +3029,34 @@ def print_task_row(store, task_id):
   print(format_task(record, full=True))
 
 
-def format_key(record):
+def _countdown_duration(total_seconds):
+  """Format a non-negative duration with its largest whole unit."""
+  if total_seconds >= 86400:
+    return f"{total_seconds // 86400}d"
+  if total_seconds >= 3600:
+    return f"{total_seconds // 3600}h"
+  if total_seconds >= 60:
+    return f"{total_seconds // 60}m"
+  return f"{total_seconds}s"
+
+
+def key_countdown(value, moment=None):
+  """Format a key record stamp as its remaining or elapsed expiry time."""
+  stamp = import_stamp(value)
+  if stamp is None:
+    return f"at {local_stamp(value, moment)}"
+  current = moment or datetime.now(UTC)
+  if current.tzinfo is None:
+    current = current.replace(tzinfo=UTC)
+  remaining = int(
+    (stamp + timedelta(seconds=AGENT_KEY_TTL_SECONDS) - current).total_seconds()
+  )
+  if remaining >= 0:
+    return f"expires in {_countdown_duration(remaining)}"
+  return f"expired {_countdown_duration(-remaining)} ago"
+
+
+def format_key(record, moment=None):
   lines = []
   if record.get("key"):
     lines.append(f"key {record['key']}")
@@ -3014,7 +3066,7 @@ def format_key(record):
     # Naming the tool here stops a session from retrying the read through bash.
     lines.append(f"use fetch_page on {record['host']}/v1/<route>?key=<key>, never bash")
   if record.get("at"):
-    lines.append(f"at {local_stamp(record['at'])}")
+    lines.append(key_countdown(record["at"], moment))
   if record.get("egress_version"):
     lines.append(f"egress {record['egress_version']}")
   if record.get("userscript_version"):
@@ -8602,16 +8654,12 @@ class Store:
       else:
         raise RuntimeError("The state holds no free six-character ID for a bible note")
       listed = "\n".join(f"- `{path}`" for path in paths)
-      prefix = (
-        "Bible checkpoint."
-        if manual
-        else f"Bible checkpoint after a {READ_SET_INTERVAL_MINUTES}-minute interval."
-      )
+      prefix = "Bible checkpoint. " if manual else "15min bible check\n"
       import survey
 
       text = (
         f"{prefix}"
-        " Read each listed path fully"
+        "Read each listed path fully"
         " with the read tool only when its full text is absent from context, then"
         " acknowledge this note.\n"
         "Answer the survey only when required bible text was absent before this check.\n"
@@ -11652,9 +11700,9 @@ class Store:
         )
         created.append(Path(record["path"]))
         note_body = (
-          f"{summary_text} State backup `{record['name']}` uploaded to `{record['path']}`.\n"
-          "Run `arena-preview state compare` against live state, then "
-          f"`arena-preview state import {record['path']} -r` if newer. Acknowledge this note after."
+          f"{summary_text} Backup saved to {record['path']}. "
+          "Run arena-preview state compare, import with -r if newer, "
+          "then ack this note."
         )
         note = self.note(
           note_id,
@@ -12915,10 +12963,7 @@ class Store:
       [
         heading,
         *evidence,
-        "The call-count gate blocks after 6 unacknowledged calls.",
-        "Think about which clause was violated.",
-        "Read the bible if absent from context.",
-        "Fix the violation, then ack with `file:ln: clause`.",
+        "Fix the cause, then ack with only file:ln: clause.",
       ]
     )
     return self.flag_violation_note(notice, reason, clause_file, cited)
@@ -13059,8 +13104,8 @@ class Store:
     """Tell the agent once per record when the recorded key outlives the rotation window.
 
     A new key overwrites the record by itself, so nothing here removes one. The note
-    names no key: `arena-preview key` prints the live one, and the record is already
-    stored. One note per record stamp, so a later read never repeats it.
+    names only the first five key characters. One note per record stamp, so a later
+    read never repeats it.
     """
     record = self.agent_key()
     if not record:
@@ -13076,8 +13121,7 @@ class Store:
     self.set_meta(AGENT_KEY_EXPIRY_META, record["at"])
     return self.note(
       self.free_id(),
-      f"The agent key expired (set {record['at']}). Run `arena-preview key`"
-      " for the live key. A new post replaces this record.",
+      f"Proxy key {record['key'][:5]} expired. Run arena-preview key for new key.",
       quiet=True,
     )
 
@@ -13985,7 +14029,7 @@ class Store:
             "INSERT INTO notes (id, text, at, quiet, blocking) VALUES (?, ?, ?, 1, 0)",
             (
               new_id(),
-              f"The owner dismissed the report {report_id} ({mirrored['title']}).",
+              f"Owner dismissed report {report_id}.",
               now(),
             ),
           )
@@ -14009,7 +14053,7 @@ class Store:
             "INSERT INTO notes (id, text, at, quiet, blocking) VALUES (?, ?, ?, 1, 0)",
             (
               new_id(),
-              f"The owner dismissed the report {report_id} ({row['title']}).",
+              f"Owner dismissed report {report_id}.",
               now(),
             ),
           )
@@ -15784,7 +15828,7 @@ def handler(store, reload_event=None):
 
                 store.note(
                   uuid.uuid4().hex[:6],
-                  "Acknowledge this note, then follow the arena-skill survey procedure.\n"
+                  "Ack this note, then submit fresh answers via arena-preview survey.\n"
                   f"{survey.INSTRUCTIONS}",
                   quiet=True,
                   blocking=True,
@@ -17676,7 +17720,7 @@ def main():
     "-i",
     "--smallest-image",
     action="store_true",
-    help="Print the smallest image path in the repository tree, or exit 1 when none exists",
+    help="Print the smallest image path in the repository tree, or a temporary image path when none exists",
   )
   survey_parser.add_argument("answers", nargs="?", help="Ordered answer JSON")
   commands.add_parser("read", help="Print every pending note, answer and upload")

@@ -74,6 +74,9 @@ def test_survey_transport_keeps_grades_in_server_memory(tmp_path, monkeypatch, c
       token in survey.INSTRUCTIONS
       for token in ("NEVER", "web_search", "fetch_page", "image_search")
     )
+    assert pending[0]["text"].startswith(
+      "Ack this note, then submit fresh answers via arena-preview survey.\n"
+    )
     assert survey.INSTRUCTIONS in pending[0]["text"]
     snapshot = store.save_path.read_bytes()
     for body in ("[]", payload.replace('"confidence": 0', '"confidence": 2')):
@@ -697,6 +700,9 @@ def test_report_unpublish():
     store.submission("answer-1", "select", "REPORT select: one")
     # The owner can dismiss an unseen report even while its answer remains unacknowledged.
     store.unpublish("select", dismissed_by_owner=True)
+    assert "Owner dismissed report select." in {
+      row["text"] for row in store.state()["notes"]
+    }
     assert store.state()["reports"] == []
     try:
       store.report("select")
@@ -7766,7 +7772,7 @@ def test_repeat_polls_raise_a_violation(monkeypatch):
     assert note["type"] == "self-raised"
     assert note["quiet"] and note["blocking"]
     assert note["text"].startswith("VIOLATION")
-    assert "The call-count gate blocks after 6 unacknowledged calls." in note["text"]
+    assert "Fix the cause, then ack with only file:ln: clause." in note["text"]
     assert store.meta_value(preview.AGENT_INTERRUPT_META) is None
     # A poll that waited for a run does not arm the next one.
     preview.clear_poll_repeat(store)
@@ -8708,7 +8714,7 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     assert len(pending) == 1
     checkpoint = pending[0]
     assert checkpoint["text"].startswith(
-      "Bible checkpoint after a 15-minute interval. Read each listed path fully "
+      "15min bible check\nRead each listed path fully "
       "with the read tool only when its full text is absent from context, then "
       "acknowledge this note.\n"
     )
@@ -9235,10 +9241,7 @@ def test_expired_agent_key_tells_the_agent_once():
     first = store.notice_expired_key()
     assert first is not None and first["quiet"] == 1
     assert [item["text"] for item in store.read()["pending"]] == [
-      (
-        "The agent key expired (set 2020-01-01T00:00:00). Run `arena-preview key`"
-        " for the live key. A new post replaces this record."
-      )
+      "Proxy key old-k expired. Run arena-preview key for new key."
     ]
     assert store.notice_expired_key() is None, "one note per record"
     assert len(store.read()["pending"]) == 1
@@ -9259,6 +9262,21 @@ def test_expired_agent_key_tells_the_agent_once():
     retained = store.notes_matching(first["id"])[0]
     assert retained["quiet"] == 1 and retained["seen_at"] is not None
     assert retained["acknowledged_at"] is None
+
+
+def test_state_backup_note_uses_terse_text(tmp_path):
+  store = preview.Store(tmp_path / "state", create=True)
+  offer = store.offer_userscript_backup(
+    {
+      "name": "backup.ndjson",
+      "text": json.dumps({"id": "b1a2c3", "text": "backed up note"}) + "\n",
+    }
+  )
+  note = store.notes_matching(offer["note_id"])[0]
+  assert note["text"] == (
+    f"State mismatch detected. Backup saved to {offer['path']}. "
+    "Run arena-preview state compare, import with -r if newer, then ack this note."
+  )
 
 
 def test_agent_seen_at_is_stamped_by_the_cli():
@@ -10294,14 +10312,19 @@ def test_rename_refuses_an_id_another_record_holds():
 
 def test_key_output_names_fetch_page_over_bash():
   """The key line says which tool carries it, so a session does not retry through a shell."""
+  record = {"key": "a-key", "host": "https://proxy.example", "at": "2026-10-10T09:00Z"}
   lines = preview.format_key(
-    {"key": "a-key", "host": "https://proxy.example", "at": "2026-10-10T09:00Z"}
+    record, moment=datetime(2026, 10, 10, 9, 3, tzinfo=UTC)
   ).splitlines()
   assert lines[0] == "key a-key"
   assert lines[1] == "host https://proxy.example"
   assert "fetch_page" in lines[2] and "never bash" in lines[2]
   assert "https://proxy.example/v1/" in lines[2]
-  assert lines[3] == f"at {preview.local_stamp('2026-10-10T09:00Z')}"
+  assert lines[3] == "expires in 12m"
+  expired = preview.format_key(
+    record, moment=datetime(2026, 10, 10, 9, 18, tzinfo=UTC)
+  ).splitlines()
+  assert expired[3] == "expired 3m ago"
 
   # No host means no route to name, so the line stays out.
   bare = preview.format_key({"key": "a-key"}).splitlines()
@@ -11416,16 +11439,18 @@ def test_cli_stamps_print_in_the_display_zone_while_storage_stays_utc(monkeypatc
   from zoneinfo import ZoneInfo
 
   monkeypatch.setattr(preview, "DISPLAY_ZONE", None)
-  stamp = "2026-10-15T00:39:00+00:00"
-  assert preview.local_stamp(stamp) == stamp, "no zone keeps the stored UTC stamp"
-  monkeypatch.setattr(preview, "DISPLAY_ZONE", ZoneInfo("Asia/Manila"))
-  assert preview.local_stamp(stamp) == "2026-10-15T08:39:00+08:00"
-  listing = {"checked_at": stamp, "pending": []}
-  assert (
-    preview.format_read(listing)
-    .splitlines()[0]
-    .startswith("Inbox 2026-10-15T08:39:00+08:00:")
+  stamp = "2026-10-15T00:39:00.123456+00:00"
+  assert preview.local_stamp(stamp) == "2026-10-15T00:39:00", (
+    "no zone falls back to clipped ISO seconds"
   )
+  stamp = "2026-10-15T00:39:00+00:00"
+  monkeypatch.setattr(preview, "DISPLAY_ZONE", ZoneInfo("Asia/Manila"))
+  same_day = datetime(2026, 10, 15, 12, 0, tzinfo=ZoneInfo("Asia/Manila"))
+  assert preview.local_stamp(stamp, moment=same_day) == "08:39"
+  next_day = datetime(2026, 10, 16, 12, 0, tzinfo=ZoneInfo("Asia/Manila"))
+  assert preview.local_stamp(stamp, moment=next_day) == "Oct 15 08:39"
+  listing = {"checked_at": stamp, "pending": []}
+  assert preview.format_read(listing).splitlines()[0].startswith("Inbox Oct 15 08:39:")
   row = {
     "id": "zone",
     "title": "Zone",
@@ -11450,7 +11475,7 @@ def test_report_state_cli_reads_publication_and_answers(tmp_path):
   store.publish("one", "First report", src)
   text = preview.format_report_state(store.report_state())
   assert "one First report" in text
-  assert "published: 20" in text, "a published report carries its stamp"
+  assert "published: never" not in text, "a published report carries its stamp"
   assert "viewed: never" in text, "an unviewed report says so"
   assert "stale: no" in text and "answers: none" in text
   solo = preview.format_report_state(store.report_state("one"))
@@ -12209,10 +12234,7 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
       assert note["text"].splitlines() == [
         "The user flagged a violation.",
         "The task list is empty. Maybe a task should have spawned.",
-        "The call-count gate blocks after 6 unacknowledged calls.",
-        "Think about which clause was violated.",
-        "Read the bible if absent from context.",
-        "Fix the violation, then ack with `file:ln: clause`.",
+        "Fix the cause, then ack with only file:ln: clause.",
       ]
       assert store.meta_value(preview.AGENT_INTERRUPT_META) is None
       store.acknowledge([note["id"]], "ARENA.md:1: rules")
@@ -12271,12 +12293,7 @@ def test_flag_carries_type_clause_file_and_cited_reason():
       read_set = ["ARENA.md", "AGENTS.md", "pkg/AGENTS.md"]
       assert preview.read_set_files(store.repository_root()) == read_set
       assert store.state()["read_set"] == read_set
-      closing = [
-        "The call-count gate blocks after 6 unacknowledged calls.",
-        "Think about which clause was violated.",
-        "Read the bible if absent from context.",
-        "Fix the violation, then ack with `file:ln: clause`.",
-      ]
+      closing = ["Fix the cause, then ack with only file:ln: clause."]
 
       def clear_flag():
         """Ack the pending violation note, which clears the page flag with it."""
@@ -12959,10 +12976,7 @@ def test_user_flagged_report_violation_mints_a_quiet_note(capsys):
     assert note["quiet"] == 1 and note["blocking"] == 1
     assert note["text"].splitlines() == [
       "The user flagged a violation: report flagged-report formatting is wrong.",
-      "The call-count gate blocks after 6 unacknowledged calls.",
-      "Think about which clause was violated.",
-      "Read the bible if absent from context.",
-      "Fix the violation, then ack with `file:ln: clause`.",
+      "Fix the cause, then ack with only file:ln: clause.",
     ]
 
 
@@ -13024,7 +13038,7 @@ def test_repeat_poll_notice_keeps_system_wording_and_stderr(capsys, monkeypatch)
     note = store.pending_violation_note()
     assert note["text"].startswith("VIOLATION\n")
     assert "This Bash call was blocked" not in note["text"]
-    assert "The call-count gate blocks after 6 unacknowledged calls." in note["text"]
+    assert "Fix the cause, then ack with only file:ln: clause." in note["text"]
 
 
 @pytest.mark.parametrize("already_pending", (False, True))
@@ -15023,7 +15037,8 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
   )
   assert preview.main() == 1
   assert "--smallest-image" in capsys.readouterr().err
-  assert "--smallest-image" in survey.INSTRUCTIONS
+  assert "arena-preview survey -i" in survey.INSTRUCTIONS
+  assert "--smallest-image" not in survey.INSTRUCTIONS
 
   adversarial_ticks = "".join(f"{'`' * idx}x" for idx in range(2, 150))
   assert (

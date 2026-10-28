@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.8
+// @name         Arena.ai | NemoUtils | v1.13.9
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.8
+// @version      1.13.9
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -26,7 +26,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.8";
+  var USERSCRIPT_VERSION = "1.13.9";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
   var proxyBoardEgressVersion = "";
   var USERSCRIPT_BOOT_VERSION = (function () {
@@ -1090,18 +1090,33 @@
       return base + "/api/key";
     }
 
-    function keyNote(type, key, atIso, host) {
+    function countdownDuration(totalSeconds) {
+      if (totalSeconds >= 86400) return Math.floor(totalSeconds / 86400) + "d";
+      if (totalSeconds >= 3600) return Math.floor(totalSeconds / 3600) + "h";
+      if (totalSeconds >= 60) return Math.floor(totalSeconds / 60) + "m";
+      return totalSeconds + "s";
+    }
+
+    function keyCountdown(atIso, nowMs) {
+      var parsed = Date.parse(String(atIso || ""));
+      if (!Number.isFinite(parsed)) return String(atIso || "");
+      var refMs = Number.isFinite(nowMs) ? nowMs : Date.now();
+      var remaining = Math.floor((parsed + ROTATE_INTERVAL_MS - refMs) / 1000);
+      if (remaining >= 0) {
+        return "expires in " + countdownDuration(remaining);
+      }
+      return "expired " + countdownDuration(-remaining) + " ago";
+    }
+
+    function keyNote(type, key, atIso, host, nowMs) {
       return (
-        "Arena proxy " +
+        "Proxy " +
         host +
         " key " +
         type +
-        " at " +
-        atIso +
-        ". New key: " +
-        key +
-        ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
-        + " skills/arena-skill/arena-egress-proxy holds the map. Never print it."
+        " (" +
+        keyCountdown(atIso, nowMs) +
+        "). Run arena-preview key to read it."
       );
     }
 
@@ -1109,13 +1124,13 @@
       return base ? NOTED_KEY + "::" + base : NOTED_KEY;
     }
 
-    function noteKey(key, host, type) {
+    function noteKey(key, host, type, atIso) {
       var base = previewBase(document);
       var scopedKey = notedKeyFor(base);
       if (GM_getValue(scopedKey, "") === key) return;
       GM_setValue(scopedKey, key);
       GM_setValue(NOTED_KEY, key);
-      postKeyNote(keyNote(type, key, new Date().toISOString(), host));
+      postKeyNote(keyNote(type, key, atIso || new Date().toISOString(), host));
     }
 
     function keyChanged(held, incoming) {
@@ -1337,7 +1352,7 @@
           if (key) {
             heldKey = key;
             postAgentKey(key, host);
-            noteKey(key, host, "ready");
+            noteKey(key, host, "ready", body && body.at);
           }
           return null;
         })
@@ -1605,7 +1620,7 @@
           if (key) {
             heldKey = key;
             keyTried = true;
-            noteKey(key, pair.host, "replaced");
+            noteKey(key, pair.host, "replaced", body && body.at);
             if (isComposerUrl(location.href) && readSlug(document)) {
               sync();
             }

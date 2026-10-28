@@ -263,6 +263,21 @@ function duration(ms) {
   const seconds = total % 60;
   return minutes ? `${minutes}m ${String(seconds).padStart(2, '0')}s` : `${seconds}s`;
 }
+const AGENT_KEY_TTL_MS = 900 * 1000;
+function countdownDuration(seconds) {
+  if (seconds >= 86400) return `${Math.floor(seconds / 86400)}d`;
+  if (seconds >= 3600) return `${Math.floor(seconds / 3600)}h`;
+  if (seconds >= 60) return `${Math.floor(seconds / 60)}m`;
+  return `${seconds}s`;
+}
+function keyCountdown(value, nowMs = Date.now()) {
+  const stamp = stampMs(value);
+  if (stamp === null) return clock(value);
+  const remaining = Math.floor((stamp + AGENT_KEY_TTL_MS - nowMs) / 1000);
+  return remaining >= 0
+    ? `expires in ${countdownDuration(remaining)}`
+    : `expired ${countdownDuration(-remaining)} ago`;
+}
 function sessionStatusInfo(row, selfSid = getState()?.board?.branch || '') {
   if (!row || typeof row !== 'object') {
     return { dotState: 'ok', statusWord: 'Connected', statusText: 'Connected' };
@@ -4985,10 +5000,10 @@ function renderAgentKey(record, repo, userscriptVersion) {
     line.title = ver ? `Userscript ${ver}` : '';
     return;
   }
-  // Only the key characters are monospace, so the label and the hour read as prose.
+  // Only the key characters are monospace, so the label and countdown read as prose.
   const key = document.createElement('code');
   key.textContent = record.key.slice(0, 7);
-  line.replaceChildren(`${prefix}Key `, key, ` · ${clock(record.at)}`);
+  line.replaceChildren(`${prefix}Key `, key, ` · ${keyCountdown(record.at)}`);
   const tipParts = [];
   if (ver) tipParts.push(`Userscript ${ver}`);
   if (record.host) tipParts.push(record.host);
@@ -5896,6 +5911,7 @@ setInterval(paintConnection, 1000);
 // Render mints each age label once, so a long-open page keeps a stale minute count.
 // A half-minute timer repaints every receipt age from its stored stamp.
 function repaintReceiptAges() {
+  if (lastState) renderAgentKey(lastState.agent_key, lastState.repo, lastState.userscript_version || connectedUserscriptVersion);
   for (const row of messageNodes.values()) {
     const receipt = row.children[2];
     const stamp = receipt && receipt.children[3];

@@ -353,15 +353,11 @@ function checkPromptFill(api) {
     [keyPostDue("https://sbx.example", "https://sbx.example", false), false],
     [keyPostDue("https://sbx.example", "https://sbx.example", true), true],
     [NOTED_KEY, "clankers-arena-noted-key"],
-    // The note names the host, because the composer no longer carries it.
-    [keyNote("replaced", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),
-      "Arena proxy https://h.example key replaced at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
-      ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
-      + " skills/arena-skill/arena-egress-proxy holds the map. Never print it."],
-    [keyNote("ready", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),
-      "Arena proxy https://h.example key ready at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
-      ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
-      + " skills/arena-skill/arena-egress-proxy holds the map. Never print it."],
+    // The note names the host and expiry countdown while omitting the raw secret.
+    [keyNote("replaced", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example", Date.parse("2026-10-03T15:03:00+00:00")),
+      "Proxy https://h.example key replaced (expires in 12m). Run arena-preview key to read it."],
+    [keyNote("ready", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example", Date.parse("2026-10-03T15:18:00+00:00")),
+      "Proxy https://h.example key ready (expired 3m ago). Run arena-preview key to read it."],
     // The older two-line fill is rebuilt once, without the rules text.
     [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", "clankers"), false],

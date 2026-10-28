@@ -4523,7 +4523,7 @@ test('preview client', async (t) => {
       'the highlight clears after the delay without touching the row');
   });
 
-  await t.test("The composer footer names the key and its hour, and the tooltip keeps the host", async () => {
+  await t.test("The composer footer names the key and its expiry countdown, and the tooltip keeps the host", async () => {
     state.repo = 'clankers';
     state.agent_key = {
       key: 'K'.repeat(43),
@@ -4531,8 +4531,8 @@ test('preview client', async (t) => {
       at: '2026-10-03T15:00:00+00:00',
     };
     await refresh();
-    assert.match(get('#agent-key').textContent, /^clankers · Key K{7} · \d{2}:\d{2}$/,
-      'repo, seven characters, and the hour name the key');
+    assert.match(get('#agent-key').textContent, /^clankers · Key K{7} · (expires in \d+[dhms]|expired \d+[dhms] ago)$/,
+      'repo, seven characters, and the expiry countdown name the key');
     assert.doesNotMatch(get('#agent-key').textContent, /K{8}/, 'the full key never prints');
     assert.equal(get('#agent-key').children.find(child => child.tagName === 'code')?.textContent,
       'KKKKKKK', 'only the key characters carry the code element');
@@ -4556,10 +4556,10 @@ test('preview client', async (t) => {
     state.agent_key = {
       key: 'K'.repeat(43),
       host: 'https://arena-proxy.example.ts.net',
-      at: '2026-10-03T15:00:00+00:00',
+      at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
     };
     await refresh();
-    assert.match(get('#agent-key').textContent, /^clankers · v1\.13\.0 · Key K{7} · \d{2}:\d{2}$/);
+    assert.match(get('#agent-key').textContent, /^clankers · v1\.13\.0 · Key K{7} · expires in (11m|12m)$/);
     assert.match(get('#agent-key').title, /^Userscript v1\.13\.0 · https:\/\/arena-proxy\.example\.ts\.net · set /);
     state.userscript_version = null;
     state.agent_key = null;

@@ -27,6 +27,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Shorten quiet notes, format configured-timezone CLI stamps, and display key expiry countdowns (`assets/app.js`, `scripts/preview.py`, `scripts/survey.py`).
 - Inform `main` via one `ack`-required quiet note per transition when an allowlisted worker enters idle `poll` or disconnects from the board (`scripts/preview.py`).
 - Rename survey `I4M6G` to `V1S0N` (`vision`), accept unsorted JSON with `S0R7D` tracking, and add `survey -i` PNG fallback (`SKILL.md`, `references/survey.json`, `scripts/survey.py`, `scripts/preview.py`).
 - Show `@sender to @target` headers on initial board posts in the Messages UI while keeping acks without `to` (`assets/app.js`).
@@ -37,6 +38,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Inset scrollbar thumbs to `6px` inside a `10px` track on `var(--bg)` (`SKILL.md`, `references/nuu.md`, `references/recipes/scrollbars.md`, `references/style.css`, `references/examples/scrollbars.png`).
 - Pair top-right `.close-button` (`X`) with footer `Cancel` by default on confirmation, form, and unsaved-edit modals (`references/recipes/modal-manager.md`, `references/examples/modal-close-button.png`).
+
+#### userscripts
+
+- Omit raw secrets from `keyNote()` and report proxy key expiry countdowns (`arena.user.js`).
 
 ### Fixed
 

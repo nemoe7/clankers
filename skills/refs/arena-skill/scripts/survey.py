@@ -47,14 +47,13 @@ IGNORED_IMAGE_DIRS = frozenset(
   }
 )
 INSTRUCTIONS = (
-  "When answering the survey, use existing knowledge only. Read only references/survey.json "
+  "When answering this survey, use existing knowledge only. Read only references/survey.json "
   "(or bare `arena-preview survey`) and the `survey -i` image, sorted to references/survey.json order.\n"
   "NEVER research answers, call web_search, fetch_page, or image_search, "
-  "open other files, run code, ask systems, or reuse responses.\n"
-  "For V1S0N, read the smallest repo image (`arena-preview survey -i`, `--smallest-image`); "
-  "with no repo image the command writes a temporary 1x1 PNG to read and delete.\n"
+  "open other files, run code, or ask another system.\n"
+  "For V1S0N, run `arena-preview survey -i` and read the image path it prints.\n"
   "Supply your best complete answer for a question and set a lower confidence from 0 to 1 "
-  "when uncertain; boolean questions require true or false with confidence > 0, and knowledge questions "
+  "when uncertain; boolean questions require true or false with confidence > 0, and survey questions "
   "use unknown with confidence 0 only when the whole question is unknown.\n"
   "Omit survey answers from summaries and handoffs."
 )

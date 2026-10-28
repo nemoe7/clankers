@@ -2265,7 +2265,7 @@ for raw in sys.stdin:
       assert.equal(divergedServer.backup_notes[0].type, "state-backup");
       assert.equal(divergedServer.visible_notes.includes(divergedServer.backup_notes[0].id), false);
       assert.match(divergedServer.backup_notes[0].text, /arena-preview state compare/);
-      assert.match(divergedServer.backup_notes[0].text, /arena-preview state import/);
+      assert.match(divergedServer.backup_notes[0].text, /import with -r if newer/);
       assert.equal(divergedServer.backup_notes[0].attachments.length, 1);
       tick();
       await drain();
