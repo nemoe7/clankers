@@ -4273,7 +4273,19 @@ for raw in sys.stdin:
       assert.ok(scopedClankers.known_repos.includes("otherrepo"));
       assert.ok(!scopedClankers.known_repos.includes("daedalus"));
     });
+
+    test("DOM caches use WeakMap, state caches stay bounded without storing core in pendingKey, and observers coalesce via rAF", async () => {
+      const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+      assert.match(source, /var\s+spacerStyles\s*=\s*new\s+WeakMap\(\)/);
+      assert.match(source, /var\s+editorStates\s*=\s*new\s+WeakMap\(\)/);
+      assert.match(source, /function\s+setBoundedMap\(/);
+      assert.match(source, /function\s+readPendingReceipt\(/);
+      assert.match(source, /titleMutationFrame\s*=\s*requestAnimationFrame\(/);
+      assert.match(source, /mutationFrame\s*=\s*requestAnimationFrame\(/);
+      assert.equal(/[\u2013\u2014]/.test(source), false, "arena.user.js contains no en-dash or em-dash");
+    });
   }
+
 
 
 

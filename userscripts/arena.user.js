@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.4
+// @name         Arena.ai | NemoUtils | v1.13.5
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.4
+// @version      1.13.5
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -26,7 +26,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.4";
+  var USERSCRIPT_VERSION = "1.13.5";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
 
   function userscriptVersion() {
@@ -3909,8 +3909,8 @@
       "md:pt-12",
     ];
     var fixedSpacers = new WeakSet();
-    var spacerStyles = new Map();
-    var editorStates = new Map();
+    var spacerStyles = new WeakMap();
+    var editorStates = new WeakMap();
 
     function shouldHideComposer(session, stopGenerating) {
       return Boolean(session) && Boolean(stopGenerating);
@@ -4122,15 +4122,34 @@
       }
     }
 
-    function handleMutations(mutations) {
-      enforceCurrentSpacerHeight(mutations);
+    var pendingMutations = [];
+    var mutationFrame = null;
+    function flushMutations() {
+      mutationFrame = null;
+      var batch = pendingMutations;
+      pendingMutations = [];
+      enforceCurrentSpacerHeight(batch);
       var i;
-      for (i = 0; i < mutations.length; i += 1) {
-        if (mutations[i].type !== "attributes" || mutations[i].attributeName !== "style") {
+      for (i = 0; i < batch.length; i += 1) {
+        if (batch[i].type !== "attributes" || batch[i].attributeName !== "style") {
           sync();
           return;
         }
       }
+    }
+    function handleMutations(mutations) {
+      if (mutations && mutations.length) {
+        for (var mi = 0; mi < mutations.length; mi += 1) {
+          pendingMutations.push(mutations[mi]);
+        }
+      }
+      if (typeof requestAnimationFrame === "function") {
+        if (mutationFrame === null) {
+          mutationFrame = requestAnimationFrame(flushMutations);
+        }
+        return;
+      }
+      flushMutations();
     }
 
     var observer = new MutationObserver(handleMutations);
@@ -4158,15 +4177,28 @@
           else if (styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
         }
       }
-      editorStates.forEach(function (_, editor) { showEditor(editor); });
-      spacerStyles.forEach(function (prior, spacer) {
-        if (typeof spacer.removeAttribute === "function") spacer.removeAttribute(SPACER_MARK);
-        if (spacer.style.getPropertyValue("height") === SPACER_HEIGHT && spacer.style.getPropertyPriority("height") === "important") {
-          if (prior[0]) spacer.style.setProperty("height", prior[0], prior[1]);
-          else spacer.style.removeProperty("height");
+      if (mutationFrame !== null && typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(mutationFrame);
+        mutationFrame = null;
+      }
+      pendingMutations = [];
+      if (typeof document.querySelectorAll === "function") {
+        var hiddenEditors = document.querySelectorAll("[" + HIDE_MARK + "]");
+        for (var ei = 0; ei < hiddenEditors.length; ei += 1) {
+          showEditor(hiddenEditors[ei]);
         }
-      });
-      spacerStyles.clear();
+        var markedSpacers = document.querySelectorAll("[" + SPACER_MARK + "]");
+        for (var si = 0; si < markedSpacers.length; si += 1) {
+          var sp = markedSpacers[si];
+          var prior = spacerStyles.get(sp);
+          if (typeof sp.removeAttribute === "function") sp.removeAttribute(SPACER_MARK);
+          if (prior && sp.style.getPropertyValue("height") === SPACER_HEIGHT && sp.style.getPropertyPriority("height") === "important") {
+            if (prior[0]) sp.style.setProperty("height", prior[0], prior[1]);
+            else sp.style.removeProperty("height");
+          }
+          spacerStyles.delete(sp);
+        }
+      }
     };
   });
 
@@ -5238,6 +5270,28 @@
   var previewScopedPushByBase = new Map();
   var previewAutosavePullByBase = new Map();
   var proxyStateCacheByScope = new Map();
+  var MAX_ORIGIN_STATE_CACHE = 2;
+  var MAX_HYDRATED_FILE_KEYS = 256;
+
+  function setBoundedMap(map, key, value, maxSize) {
+    if (map.has(key)) map.delete(key);
+    map.set(key, value);
+    while (map.size > maxSize) {
+      var oldest = map.keys().next();
+      if (oldest.done) break;
+      map.delete(oldest.value);
+    }
+  }
+
+  function addBoundedSet(set, value, maxSize) {
+    if (set.has(value)) set.delete(value);
+    set.add(value);
+    while (set.size > maxSize) {
+      var oldest = set.values().next();
+      if (oldest.done) break;
+      set.delete(oldest.value);
+    }
+  }
 
   function normalizeBoardProxyHost(raw) {
     var host = String(raw || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
@@ -5522,15 +5576,15 @@
           : { action: "sync", board: boardToSend });
       function finishConsolidated(answer, nextPushRev) {
         if (answer && answer.status === 200 && answer.body) {
-          hydratedKeys.forEach(function (k) { hydratedBoardFilesBySid.add(k); });
+          hydratedKeys.forEach(function (k) { addBoundedSet(hydratedBoardFilesBySid, k, MAX_HYDRATED_FILE_KEYS); });
           if (supportsPreviewDiff) {
-            previewScopedPushByBase.set(base, { rev: nextPushRev, board: boardToSend });
+            setBoundedMap(previewScopedPushByBase, base, { rev: nextPushRev, board: boardToSend }, MAX_ORIGIN_STATE_CACHE);
           }
           if (typeof answer.body.revision === "number" && answer.body.sessions) {
-            previewBoardPullByBase.set(base, {
+            setBoundedMap(previewBoardPullByBase, base, {
               rev: Number(answer.body.revision),
               board: answer.body,
-            });
+            }, MAX_ORIGIN_STATE_CACHE);
           }
           recordMemberMetadata(answer.body, sid);
           return answer;
@@ -5899,6 +5953,22 @@
 
     function receiptKey(storeKey) { return "clankers-arena-state-receipt-" + storeKey; }
     function pendingKey(storeKey) { return "clankers-arena-state-pending-" + storeKey; }
+    function readPendingReceipt(storeKey) {
+      var raw = GM_getValue(pendingKey(storeKey), null);
+      if (!raw || typeof raw !== "object") return raw;
+      if ("core" in raw || "text" in raw || (raw.receipt && typeof raw.receipt === "object" && "core" in raw.receipt)) {
+        var nextReceipt = raw.receipt && typeof raw.receipt === "object"
+          ? Object.assign({}, raw.receipt)
+          : raw.receipt;
+        if (nextReceipt && typeof nextReceipt === "object") delete nextReceipt.core;
+        var slim = Object.assign({}, raw, { receipt: nextReceipt });
+        delete slim.core;
+        delete slim.text;
+        GM_setValue(pendingKey(storeKey), slim);
+        return slim;
+      }
+      return raw;
+    }
     function offerKey(storeKey) { return "clankers-arena-state-offered-" + storeKey; }
 
     async function confirmPending(base, storeKey, pending) {
@@ -6179,7 +6249,7 @@
           : (rawBody.diff ? applyStateDiff(cur.core, rawBody.diff) : null);
         if (Array.isArray(nextCore)) {
           var nextRev = Number(rawBody.revision) || cur.rev;
-          previewAutosavePullByBase.set(base, { rev: nextRev, core: nextCore });
+          setBoundedMap(previewAutosavePullByBase, base, { rev: nextRev, core: nextCore }, MAX_ORIGIN_STATE_CACHE);
           return {
             status: 200,
             failure: null,
@@ -6191,10 +6261,10 @@
       }
       if (Array.isArray(rawBody.core)) {
         if (typeof rawBody.revision === "number" && rawBody.revision > 0) {
-          previewAutosavePullByBase.set(base, {
+          setBoundedMap(previewAutosavePullByBase, base, {
             rev: Number(rawBody.revision),
             core: rawBody.core,
-          });
+          }, MAX_ORIGIN_STATE_CACHE);
         } else {
           previewAutosavePullByBase.delete(base);
         }
@@ -6219,7 +6289,7 @@
         var unchangedSnap = (typeof rb.revision === "number" && rb.revision > 0)
           ? Object.assign({}, cached, { rev: Number(rb.revision) })
           : cached;
-        proxyStateCacheByScope.set(scopeId, unchangedSnap);
+        setBoundedMap(proxyStateCacheByScope, scopeId, unchangedSnap, MAX_ORIGIN_STATE_CACHE);
         return { ok: true, res: res, snap: unchangedSnap };
       }
       if (rb.mode === "diff" && rb.diff && cached && Array.isArray(cached.core)) {
@@ -6237,7 +6307,7 @@
           core: mergedCore,
           text: "",
         };
-        proxyStateCacheByScope.set(scopeId, updatedSnap);
+        setBoundedMap(proxyStateCacheByScope, scopeId, updatedSnap, MAX_ORIGIN_STATE_CACHE);
         return { ok: true, res: res, snap: updatedSnap };
       }
       if (rb.exists) {
@@ -6253,10 +6323,16 @@
           beforelastsave: rb.beforelastsave !== undefined ? rb.beforelastsave : null,
           counts: rb.counts || coreCounts(fullCore),
           core: fullCore,
-          text: typeof rb.text === "string" ? rb.text : "",
+          text: "",
         };
-        proxyStateCacheByScope.set(scopeId, fullSnap);
-        return { ok: true, res: res, snap: fullSnap };
+        setBoundedMap(proxyStateCacheByScope, scopeId, fullSnap, MAX_ORIGIN_STATE_CACHE);
+        return {
+          ok: true,
+          res: res,
+          snap: typeof rb.text === "string" && rb.text
+            ? Object.assign({}, fullSnap, { text: rb.text })
+            : fullSnap,
+        };
       }
       proxyStateCacheByScope.delete(scopeId);
       return {
@@ -6302,7 +6378,7 @@
         }));
       }
       if (putRes && putRes.status === 200 && putRes.body && putRes.body.ok !== false) {
-        proxyStateCacheByScope.set(scopeId, {
+        setBoundedMap(proxyStateCacheByScope, scopeId, {
           exists: true,
           rev: Number(putRes.body.revision) || ((prevSnap && prevSnap.rev ? prevSnap.rev : 0) + 1),
           scope: targetScope,
@@ -6314,7 +6390,7 @@
           counts: body.counts || coreCounts(body.core),
           core: body.core,
           text: "",
-        });
+        }, MAX_ORIGIN_STATE_CACHE);
       }
       return putRes;
     }
@@ -6344,7 +6420,7 @@
           ? ""
           : GM_getValue(lastScopeKey(scope.repo), "");
         var storeKey = scope.branch ? stateScopeKey(scope.repo, scope.branch) : lastScope || stateScopeKey(scope.repo, "");
-        var pending = scope.branch ? GM_getValue(pendingKey(storeKey), null) : null;
+        var pending = scope.branch ? readPendingReceipt(storeKey) : null;
         if (pending) {
           await confirmPending(base, storeKey, pending);
           return;
@@ -6382,7 +6458,7 @@
           lastScope = "";
         }
         if (!pending) {
-          pending = GM_getValue(pendingKey(storeKey), null);
+          pending = readPendingReceipt(storeKey);
           if (pending) {
             await confirmPending(base, storeKey, pending);
             return;
@@ -7160,7 +7236,17 @@
 
     priorTitle = document.title;
     var observedRoot = null;
+    var titleMutationFrame = null;
     var observer = new MutationObserver(function () {
+      if (typeof requestAnimationFrame === "function") {
+        if (titleMutationFrame === null) {
+          titleMutationFrame = requestAnimationFrame(function () {
+            titleMutationFrame = null;
+            syncTitle(document);
+          });
+        }
+        return;
+      }
       syncTitle(document);
     });
     function observeRoot() {
@@ -7286,6 +7372,10 @@
       if (titleEntry !== null) {
         menuDrop(titleEntry);
         titleEntry = null;
+      }
+      if (titleMutationFrame !== null && typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(titleMutationFrame);
+        titleMutationFrame = null;
       }
       observer.disconnect();
       window.removeEventListener("popstate", onRoute);
