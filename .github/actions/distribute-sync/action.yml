@@ -34,10 +34,6 @@ inputs:
     description: Directory that holds the skills in the target repository
     required: false
     default: .agents/skills
-  legacy:
-    description: Retired skill directory names to remove from the target
-    required: false
-    default: ""
   files:
     description: File names under the source workflow root to copy; empty copies none
     required: false
@@ -64,7 +60,6 @@ runs:
         SKILLS: ${{ inputs.skills }}
         SKILL_ROOT: ${{ inputs.skill-root }}
         SKILL_DEST_ROOT: ${{ inputs.skill-dest-root }}
-        LEGACY: ${{ inputs.legacy }}
         FILES: ${{ inputs.files }}
         SRC_ROOT: ${{ inputs.src-root }}
         DEST_ROOT: ${{ inputs.dest-root }}

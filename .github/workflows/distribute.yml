@@ -27,8 +27,8 @@ on:
         description: Space-separated owner/repo list for the Gemini list
         required: false
         default: ""
-      nemo_ui_ux_repos:
-        description: Space-separated owner/repo list for the Nemo UI/UX list
+      nuu_repos:
+        description: Space-separated owner/repo list for the nuu list
         required: false
         default: ""
       nemoizer_repos:
@@ -56,7 +56,7 @@ jobs:
         env:
           ARENA_REPOS: ${{ inputs.repos }}
           GEMINI_REPOS: ${{ inputs.gemini_repos }}
-          NEMO_UI_UX_REPOS: ${{ inputs.nemo_ui_ux_repos }}
+          NUU_REPOS: ${{ inputs.nuu_repos }}
           NEMOIZER_REPOS: ${{ inputs.nemoizer_repos }}
         run: python3 .github/actions/distribute-sync/plan.py
   domains:
@@ -79,7 +79,6 @@ jobs:
           rule-src: ${{ matrix.rule_src }}
           rule-dest: ${{ matrix.rule_dest }}
           skills: ${{ matrix.skills }}
-          legacy: ${{ matrix.legacy }}
           files: ${{ matrix.files }}
   push:
     name: Push and Verify Targets

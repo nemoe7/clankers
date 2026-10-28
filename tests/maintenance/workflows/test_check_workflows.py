@@ -44,13 +44,13 @@ def test_distribution_plan_groups_domains_and_keeps_one_writer(monkeypatch):
 
   planner = distribution_planner()
   profiles = {row["domain"]: row["repos"].split() for row in planner.PROFILES}
-  assert "nemoe7/wiki" in profiles["nemo-ui-ux"]
+  assert "nemoe7/wiki" in profiles["nuu"]
   assert "nemoe7/wiki" in profiles["nemoizer"]
   path = Path(planner.__file__)
   overrides = {
     "arena": "example/shared example/arena",
     "gemini": "example/shared example/gemini",
-    "nemo-ui-ux": "example/shared example/ui",
+    "nuu": "example/shared example/ui",
     "nemoizer": "example/shared example/text",
   }
   plan = planner.build_plan(overrides)
@@ -62,7 +62,7 @@ def test_distribution_plan_groups_domains_and_keeps_one_writer(monkeypatch):
   assert set(shared["domains"]) == set(overrides)
   assert shared["rule_src"] == "rules/ARENA.md"
   assert set(shared["skills"].split()) == {"arena-skill", "nuu", "nemoizer"}
-  assert {"nemo-ui", "nemo-ui-ux"} <= set(shared["legacy"].split())
+  assert "legacy" not in shared
   assert set(shared["files"].split()) == {"gemini-release.yml", "gemini_release.py"}
   for domain, repos in overrides.items():
     for target in plan["targets"]:
@@ -357,7 +357,7 @@ def test_distribute_triggers_and_inputs():
   ]
   assert triggers["schedule"] == [{"cron": "17 3 * * *"}]
   inputs = triggers["workflow_dispatch"]["inputs"]
-  assert set(inputs) == {"repos", "gemini_repos", "nemo_ui_ux_repos", "nemoizer_repos"}
+  assert set(inputs) == {"repos", "gemini_repos", "nuu_repos", "nemoizer_repos"}
   assert all(value.get("default") == "" for value in inputs.values())
   assert document["concurrency"]["cancel-in-progress"] is False
   assert "${{ github.repository }}" in document["concurrency"]["group"]
@@ -374,14 +374,12 @@ def test_distribute_jobs_share_one_action_and_keep_their_own_lists(monkeypatch):
       "rule_src": "fixture/rule.md",
       "rule_dest": "RULE.md",
       "skills": "fixture-arena",
-      "legacy": "retired-arena",
     },
     {"domain": "gemini", "repos": "example/gemini", "files": "fixture.yml fixture.py"},
     {
-      "domain": "nemo-ui-ux",
+      "domain": "nuu",
       "repos": "example/ui",
       "skills": "fixture-ui",
-      "legacy": "retired-ui",
     },
     {
       "domain": "nemoizer",
@@ -412,7 +410,7 @@ def test_distribute_jobs_share_one_action_and_keep_their_own_lists(monkeypatch):
   manual = {
     "arena": "repos",
     "gemini": "gemini_repos",
-    "nemo-ui-ux": "nemo_ui_ux_repos",
+    "nuu": "nuu_repos",
     "nemoizer": "nemoizer_repos",
   }
   steps = [step for job in jobs.values() for step in job["steps"]]

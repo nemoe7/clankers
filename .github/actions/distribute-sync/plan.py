@@ -15,7 +15,6 @@ PROFILES = (
     "rule_src": "rules/ARENA.md",
     "rule_dest": "ARENA.md",
     "skills": "arena-skill",
-    "legacy": "arena-live-steering arena-preview-reporting arena-preview-steering arena-proxy arena",
   },
   {
     "domain": "gemini",
@@ -23,10 +22,9 @@ PROFILES = (
     "files": "gemini-release.yml gemini_release.py",
   },
   {
-    "domain": "nemo-ui-ux",
+    "domain": "nuu",
     "repos": "nemoe7/request-tracker nemoe7/daedalus nemoe7/clankers nemoe7/arena-cleanup nemoe7/wiki",
     "skills": "nuu",
-    "legacy": "nemo-ui nemo-ui-ux",
   },
   {
     "domain": "nemoizer",
@@ -34,11 +32,11 @@ PROFILES = (
     "skills": "nemoizer",
   },
 )
-FIELDS = ("rule_src", "rule_dest", "skills", "legacy", "files")
+FIELDS = ("rule_src", "rule_dest", "skills", "files")
 INPUTS = {
   "arena": "ARENA_REPOS",
   "gemini": "GEMINI_REPOS",
-  "nemo-ui-ux": "NEMO_UI_UX_REPOS",
+  "nuu": "NUU_REPOS",
   "nemoizer": "NEMOIZER_REPOS",
 }
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
@@ -72,7 +70,7 @@ def build_plan(overrides=None):
         if target[field] and domain[field] and target[field] != domain[field]:
           raise ValueError("A target has conflicting rule paths")
         target[field] = target[field] or domain[field]
-      for field in ("skills", "legacy", "files"):
+      for field in ("skills", "files"):
         target[field] = " ".join(
           dict.fromkeys(target[field].split() + domain[field].split())
         )

@@ -1,4 +1,4 @@
-"""Tests for the Nemo UI/UX measure helper."""
+"""Tests for the nuu measure helper."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ SHEET = {
 
 
 def load_measure():
-  spec = importlib.util.spec_from_file_location("nemo_measure", MEASURE)
+  spec = importlib.util.spec_from_file_location("nuu_measure", MEASURE)
   assert spec is not None and spec.loader is not None
   module = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(module)

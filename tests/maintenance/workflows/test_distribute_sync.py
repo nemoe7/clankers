@@ -136,12 +136,12 @@ def fixture(tmp_path, scenario):
 
 def run_action(tmp_path, remote, seed, scenario, *, validate_only=False, payload=None):
   workspace = tmp_path / "source"
-  workspace.mkdir()
+  workspace.mkdir(exist_ok=True)
   (workspace / "rule.md").write_text("old\n" if scenario == "unchanged" else "new\n")
   if payload:
     for skill in payload.get("SKILLS", "").split():
       folder = workspace / "skills" / skill
-      folder.mkdir(parents=True)
+      folder.mkdir(parents=True, exist_ok=True)
       (folder / "SKILL.md").write_text(skill + "\n")
     for name in payload.get("FILES", "").split():
       path = workspace / "github/workflows" / name
@@ -185,7 +185,6 @@ def run_action(tmp_path, remote, seed, scenario, *, validate_only=False, payload
     "SKILLS": "",
     "SKILL_ROOT": "skills",
     "SKILL_DEST_ROOT": ".agents/skills",
-    "LEGACY": "",
     "FILES": "",
     "SRC_ROOT": "github/workflows",
     "DEST_ROOT": ".github/workflows",
@@ -266,12 +265,12 @@ def test_distribution_preserves_history_and_reports_only_remote_success(
 
 def test_matching_domain_payloads_share_one_push(tmp_path):
   remote, seed, before, _ = fixture(tmp_path, "bot")
-  retired = seed / ".agents/skills/nemo-ui-ux/SKILL.md"
-  retired.parent.mkdir(parents=True)
-  retired.write_text("Retired skill\n")
+  stale = seed / ".agents/skills/nuu/stale.md"
+  stale.parent.mkdir(parents=True)
+  stale.write_text("Stale target file\n")
   commit(
     seed,
-    "feat: add a retired skill",
+    "feat: add stale skill file",
     GIT_AUTHOR_NAME="Person",
     GIT_AUTHOR_EMAIL="person@example.test",
     GIT_COMMITTER_NAME="Person",
@@ -281,26 +280,37 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
   before = git(remote, "rev-parse", "refs/heads/main")
   payload = {
     "SKILLS": "arena-skill nuu nemoizer",
-    "LEGACY": "nemo-ui-ux",
     "FILES": "gemini-release.yml gemini_release.py",
   }
+  source = tmp_path / "source"
+  for skill in payload["SKILLS"].split():
+    for repo_only in (
+      "README.md",
+      "INSTALL.md",
+      "AGENTS.md",
+      "arena-egress-proxy/server.py",
+      "arena-preview-proxy/server.py",
+      "tests/test_unit.py",
+    ):
+      extra = source / "skills" / skill / repo_only
+      extra.parent.mkdir(parents=True, exist_ok=True)
+      extra.write_text("repo-only\n")
   result, pushes = run_action(tmp_path, remote, seed, "bot", payload=payload)
   assert result.returncode == 0, result.stderr
   assert len(pushes) == 1
   after = git(remote, "rev-parse", "refs/heads/main")
   assert after != before
   assert not git(
-    remote, "ls-tree", "-r", "--name-only", after, ".agents/skills/nemo-ui-ux"
+    remote, "ls-tree", "-r", "--name-only", after, ".agents/skills/nuu/stale.md"
   )
-  source = tmp_path / "source"
   for skill in payload["SKILLS"].split():
     assert (
       git(remote, "show", f"{after}:.agents/skills/{skill}/SKILL.md")
       == (source / "skills" / skill / "SKILL.md").read_text().strip()
     )
-    assert not git(
-      remote, "ls-tree", "-r", "--name-only", after, f".agents/skills/{skill}/scripts"
-    )
+    assert git(
+      remote, "ls-tree", "-r", "--name-only", after, f".agents/skills/{skill}"
+    ).splitlines() == [f".agents/skills/{skill}/SKILL.md"]
   for name in payload["FILES"].split():
     assert (
       git(remote, "show", f"{after}:.github/workflows/{name}")

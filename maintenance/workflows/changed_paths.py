@@ -134,7 +134,7 @@ MODULE_TESTS = {
   "Nemoizer": ("tests/skills/nemoizer/test_nemoize.py",),  # nonemo: NMO100
   "UI/UX": (
     "tests/skills/nuu/test_nuu.py",
-    "tests/skills/nuu/test_nemo_ui_ux.py",
+    "tests/skills/nuu/test_measure.py",
   ),
   "Userscripts": (),
   "GPT Plugins": (

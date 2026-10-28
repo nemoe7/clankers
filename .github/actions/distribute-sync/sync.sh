@@ -62,18 +62,23 @@ for repo in $REPOS; do
       mkdir -p "$work/$(dirname "$RULE_DEST")"
       cp "$GITHUB_WORKSPACE/$RULE_SRC" "$work/$RULE_DEST"
     fi
-    for legacy in $LEGACY; do
-      rm -rf "$work/$SKILL_DEST_ROOT/$legacy"
-    done
     for skill in $SKILLS; do
       files=$(skill_files "$skill")
       [ -n "$files" ] || continue
-      # The whole directory goes, so a page that this repository keeps leaves the target repo on the same run.
+      # Delete the old skill directory, copy the new skill tree, and prune repo-only files.
       rm -rf "$work/$SKILL_DEST_ROOT/$skill"
-      for f in $files; do
-        mkdir -p "$work/$SKILL_DEST_ROOT/$skill/$(dirname "$f")"
-        cp "$GITHUB_WORKSPACE/$SKILL_ROOT/$skill/$f" "$work/$SKILL_DEST_ROOT/$skill/$f"
-      done
+      mkdir -p "$work/$SKILL_DEST_ROOT"
+      cp -R "$GITHUB_WORKSPACE/$SKILL_ROOT/$skill" "$work/$SKILL_DEST_ROOT/$skill"
+      # shellcheck disable=SC2086  # The word split lists one path per line.
+      while IFS= read -r extra; do
+        [ -n "$extra" ] || continue
+        rm -f "$work/$SKILL_DEST_ROOT/$skill/$extra"
+      done < <(
+        comm -23 \
+          <(cd "$work/$SKILL_DEST_ROOT/$skill" && find . -type f | sed 's|^\./||' | sort) \
+          <(printf '%s\n' $files | sort)
+      )
+      find "$work/$SKILL_DEST_ROOT/$skill" -depth -type d -empty -delete
     done
     for f in $FILES; do
       mkdir -p "$work/$DEST_ROOT/$(dirname "$f")"
@@ -119,11 +124,6 @@ for repo in $REPOS; do
         echo "::error::$repo: $RULE_DEST differs after sync"; exit 1;
       }
     fi
-    for legacy in $LEGACY; do
-      [ -z "$(git ls-tree -r --name-only HEAD -- "$SKILL_DEST_ROOT/$legacy")" ] || {
-        echo "::error::$repo: retired skill $legacy remains"; exit 1;
-      }
-    done
     for skill in $SKILLS; do
       files=$(skill_files "$skill")
       [ -n "$files" ] || continue
