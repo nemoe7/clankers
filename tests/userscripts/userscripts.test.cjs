@@ -3577,17 +3577,43 @@ for raw in sys.stdin:
       sync();
       assert.equal(page.title, "Arena | clankers \u03B1 \uD83D\uDDA5\uFE0F");
 
-      // Main session's OWN fielded report awaiting submission prepends '* '.
+      // Main session's OWN unseen fielded report awaiting submission prepends '* ', and viewing clears '* '.
       const boardWithMainWaiting = boardApi.normalizeBoard(
         Object.assign({}, boardWithWorkerWaiting, {
           worker_reports: Object.assign({}, boardWithWorkerWaiting.worker_reports, {
             "arena/11111111-clankers": boardWithWorkerWaiting.worker_reports["arena/11111111-clankers"].concat([
-              { id: "main-proposal", fields: [{ id: "approve-main" }], answered: false, needs_answer: true },
+              { id: "info-only", fields: [], answered: false, needs_answer: false, seen_at: null },
+              { id: "main-proposal", fields: [{ id: "approve-main" }], answered: false, needs_answer: true, seen_at: null },
             ]),
           }),
         }),
       );
       stop = false;
+      await pushProxyBoard(boardWithMainWaiting);
+      assert.equal(page.title, "* Arena | clankers \u03B1");
+
+      const boardWithMainSeen = boardApi.normalizeBoard(
+        Object.assign({}, boardWithMainWaiting, {
+          worker_reports: Object.assign({}, boardWithMainWaiting.worker_reports, {
+            "arena/11111111-clankers": [
+              { id: "info-only", fields: [], answered: false, needs_answer: false, seen_at: null },
+              { id: "main-proposal", fields: [{ id: "approve-main" }], answered: false, needs_answer: true, seen_at: "2026-10-27T01:04:00Z" },
+            ],
+          }),
+        }),
+      );
+      assert.equal(
+        boardApi.boardHasWaitingReportFor(boardWithMainSeen, "arena/11111111-clankers"),
+        true,
+        "seen unanswered report still counts as waiting for auto-sync",
+      );
+      assert.equal(
+        boardApi.boardHasWaitingReportFor(boardWithMainSeen, "arena/11111111-clankers", null, true),
+        false,
+        "seen unanswered report clears the unseen tab-title star",
+      );
+      await pushProxyBoard(boardWithMainSeen);
+      assert.equal(page.title, "Arena | clankers \u03B1");
       await pushProxyBoard(boardWithMainWaiting);
       assert.equal(page.title, "* Arena | clankers \u03B1");
 

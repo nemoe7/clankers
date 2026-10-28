@@ -1595,6 +1595,7 @@ def material_signature(board):
           r.get("updated_at") or "",
           bool(r.get("answered")),
           bool(r.get("needs_answer")),
+          r.get("seen_at") or "",
           r.get("latest_answer_id") or "",
         ]
         for r in norm["worker_reports"][k]

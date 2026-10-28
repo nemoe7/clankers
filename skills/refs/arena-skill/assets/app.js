@@ -3982,7 +3982,7 @@ function syncBoardHeartbeat(state) {
   const reportOps = Array.isArray(state.board.report_ops) ? state.board.report_ops : [];
   const taskOps = Array.isArray(state.board.task_ops) ? state.board.task_ops : [];
   const reportsSig = (Array.isArray(state.reports) ? state.reports : [])
-    .map(r => r && r.id ? `${r.id}:${r.updated_at || ''}:${r.answered ? 1 : 0}` : '')
+    .map(r => r && r.id ? `${r.id}:${r.updated_at || ''}:${r.answered ? 1 : 0}:${r.seen_at || ''}` : '')
     .join(',');
   const wakesSig = state.board.wakes && typeof state.board.wakes === 'object'
     ? Object.entries(state.board.wakes).map(([k, v]) => `${k}:${v || ''}`).sort().join(',')

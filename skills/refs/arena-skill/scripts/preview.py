@@ -9438,7 +9438,7 @@ class Store:
         with closing(self.connect()) as db:
           rep_rows = db.execute(
             "SELECT id, title, markdown, updated_at, published_at, "
-            "agent_seen_at, ack_seen_at, "
+            "seen_at, ever_seen, agent_seen_at, ack_seen_at, "
             "EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered, "
             "EXISTS(SELECT 1 FROM tasks JOIN notes ON notes.task_id = tasks.id "
             "WHERE tasks.report_id = reports.id AND notes.quiet = 0) AS owner_requested "
@@ -9480,6 +9480,8 @@ class Store:
               "fields": fields,
               "answered": answered_flag,
               "needs_answer": bool(fields) and not answered_flag,
+              "seen_at": clip_stamp(r_row["seen_at"]) if r_row["seen_at"] else None,
+              "ever_seen": bool(r_row["ever_seen"]),
               "latest_answer_id": latest_sub["id"] if latest_sub else None,
               "latest_answer_at": clip_stamp(latest_sub["at"]) if latest_sub else None,
               "latest_answer_acknowledged_at": clip_stamp(latest_sub["acknowledged_at"])

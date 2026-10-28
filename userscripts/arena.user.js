@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.9
+// @name         Arena.ai | NemoUtils | v1.13.10
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.9
+// @version      1.13.10
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -26,7 +26,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.9";
+  var USERSCRIPT_VERSION = "1.13.10";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
   var proxyBoardEgressVersion = "";
   var USERSCRIPT_BOOT_VERSION = (function () {
@@ -7556,7 +7556,7 @@
       var board = readGlobalBoard();
       var sid = boardBranch(previewUiBranch || stateBranch(doc) || "");
       var greek = sid ? boardGreekSymbolFor(board, sid) : "";
-      var star = sid && boardHasWaitingReportFor(board, sid) ? "* " : "";
+      var star = sid && boardHasWaitingReportFor(board, sid, null, true) ? "* " : "";
       var emoji = heldEmojiFor(doc);
       titleEmoji = emoji || "";
       var base = greek ? TITLE_PREFIX + name + " " + greek : TITLE_PREFIX + name;
@@ -8451,7 +8451,7 @@
     var wrKeys = Object.keys(norm.worker_reports || {}).sort();
     var wrSig = wrKeys.map(function (k) {
       return [k, (norm.worker_reports[k] || []).map(function (r) {
-        return [r.id, r.updated_at || "", Boolean(r.answered), Boolean(r.needs_answer), r.latest_answer_id || ""];
+        return [r.id, r.updated_at || "", Boolean(r.answered), Boolean(r.needs_answer), r.seen_at || "", r.latest_answer_id || ""];
       })];
     });
     return JSON.stringify({
@@ -8646,7 +8646,7 @@
     return false;
   }
 
-  function boardHasWaitingReportFor(board, sessionId, localReportsMap) {
+  function boardHasWaitingReportFor(board, sessionId, localReportsMap, unseenOnly) {
     var normalized = normalizeBoard(board);
     var sid = boardBranch(sessionId);
     if (!isSafeRecordKey(sid) || isBoardWorkerSession(normalized, sid)) return false;
@@ -8673,6 +8673,7 @@
       }
     }
     for (var i = 0; i < ownReports.length; i += 1) {
+      if (unseenOnly && ownReports[i] && ownReports[i].seen_at) continue;
       if (reportWaitingOnSubmission(ownReports[i], normalized.report_ops, sid)) return true;
     }
     return false;
