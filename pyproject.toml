@@ -26,6 +26,7 @@ indent-width = 2
 # Check generated Python through minify.py. Lint and format its readable refs.
 extend-exclude = [
   ".agents/skills",
+  "skills/arena-skill/scripts/mermaid_check.py",
   "skills/arena-skill/scripts/preview.py",
   "skills/arena-skill/scripts/survey.py",
 ]

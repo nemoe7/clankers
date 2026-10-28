@@ -130,6 +130,7 @@ MODULE_TESTS = {
     "tests/skills/arena-skill/test_preview.py",
     "tests/skills/arena-skill/test_survey.py",
     "tests/skills/arena-skill/test_preview_gate.py",
+    "tests/skills/arena-skill/test_mermaid_check.py",
   ),
   "Nemoizer": ("tests/skills/nemoizer/test_nemoize.py",),  # nonemo: NMO100
   "UI/UX": (

@@ -7475,6 +7475,22 @@ def survey_command(state_dir, answers, smallest_image=False, root=None):
   return 0
 
 
+def mermaid_report_warnings(source_label, markdown):
+  import importlib.util
+
+  checker = Path(__file__).resolve().with_name("mermaid_check.py")
+  if not checker.is_file():
+    return []
+  spec = importlib.util.spec_from_file_location("mermaid_check", checker)
+  if spec is None or spec.loader is None:
+    return []
+  module = importlib.util.module_from_spec(spec)
+  spec.loader.exec_module(module)
+  return module.format_mermaid_warnings(
+    source_label, module.check_mermaid_markdown(markdown)
+  )
+
+
 def verify_publication(store, report_id, revision, count):
   from http.client import HTTPConnection, HTTPException
 
@@ -18838,6 +18854,8 @@ def main():
           "Literal marker text can be intentional.",
           file=sys.stderr,
         )
+      for warning in mermaid_report_warnings(str(args.source), src_text):
+        print(warning, file=sys.stderr)
       if not count and "{#" in src_text:
         # A `{#id}` marker on its own parses as prose. The owner then sees no answer form.
         print(

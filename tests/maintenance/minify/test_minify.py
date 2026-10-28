@@ -330,6 +330,7 @@ def test_compact_copies_drift_and_runtime():
     "assets/index.html",
     "scripts/preview.py",
     "scripts/survey.py",
+    "scripts/mermaid_check.py",
   }
   for relative, (source, compact) in sources.items():
     if relative in minify.COPIED_ASSETS:

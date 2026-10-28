@@ -2707,6 +2707,12 @@ def survey_command(state_dir,answers,smallest_image=False,root=None):
 			if response.status!=200:error=json.loads(body).get('error','Request rejected');raise ValueError(f"Survey submission: HTTP {response.status}: {error}")
 	except HTTPException as error:raise ValueError(f"Survey submission failed: {error}")from None
 	print('Survey received.');return 0
+def mermaid_report_warnings(source_label,markdown):
+	import importlib.util;checker=Path(__file__).resolve().with_name('mermaid_check.py')
+	if not checker.is_file():return[]
+	spec=importlib.util.spec_from_file_location('mermaid_check',checker)
+	if spec is None or spec.loader is None:return[]
+	module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module.format_mermaid_warnings(source_label,module.check_mermaid_markdown(markdown))
 def verify_publication(store,report_id,revision,count):
 	from http.client import HTTPConnection,HTTPException;failure='Publication verification failed. Check the preview before retrying.'
 	try:
@@ -5921,6 +5927,7 @@ def main():
 			missing_recommended=[question['id']for question in parsed_questions if question.get('type')in{'choice','checkbox'}and not question.get('default')]
 			if missing_recommended:print('Warning: no recommended answer supplied for question ID(s): '+', '.join(missing_recommended)+'. Preselect a recommended option with (x) or [x].',file=sys.stderr)
 			for warning in warnings or():print(f"{args.source}:{warning['line']}: Warning: possible unparsed {warning['marker']} marker. Keep spaces outside the markers. Literal marker text can be intentional.",file=sys.stderr)
+			for warning in mermaid_report_warnings(str(args.source),src_text):print(warning,file=sys.stderr)
 			if not count and'{#'in src_text:print('Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then the `- ( ) option` lines follow.',file=sys.stderr)
 		elif args.command=='report-answer':answers=json.loads(args.answers_json);res=store.answer_worker_report(args.worker,args.report_id,answers);print(f"Answered {res['report_id']} for {res['worker']}.")
 		elif args.command=='report-forward':res=store.forward_worker_report(args.worker,args.report_id,local_id=args.local_id,title_override=args.local_title);plural=''if res['fields']==1 else's';print(f"Forwarded {res['worker_report_id']} from {res['worker']} as {res['id']} ({res['fields']} field{plural}).")

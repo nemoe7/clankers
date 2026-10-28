@@ -13849,6 +13849,57 @@ def test_recommended_options_prefix_ui_and_print_on_publish(
   )
 
 
+def test_report_publish_warns_on_invalid_mermaid_and_still_publishes(
+  tmp_path, monkeypatch, capsys
+):
+  state = tmp_path / "state"
+  preview.Store(state, create=True)
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: state)
+  monkeypatch.setattr(preview, "require_server", lambda store: None)
+  monkeypatch.setattr(preview, "verify_publication", lambda *args: [])
+
+  def publish(report, report_id):
+    monkeypatch.setattr(
+      sys,
+      "argv",
+      [
+        "arena-preview",
+        "report",
+        "publish",
+        str(report),
+        "--id",
+        report_id,
+        "--title",
+        "Mermaid Report",
+      ],
+    )
+    assert preview.main() == 0
+    return capsys.readouterr()
+
+  warning_prefix = "Mermaid warning"
+  invalid = tmp_path / "invalid-mermaid.md"
+  invalid.write_text(
+    "# Report\n\n```mermaid\nflowchart TD\n  A -->\n```\n", encoding="utf-8"
+  )
+  output = publish(invalid, "invalid-mermaid-report")
+  expected_warning = f"{warning_prefix} ({invalid}:5): dangling arrow operator"
+  assert [
+    line for line in output.err.splitlines() if line.startswith(warning_prefix)
+  ] == [expected_warning]
+  assert preview.Store(state).report("invalid-mermaid-report")["id"] == (
+    "invalid-mermaid-report"
+  )
+
+  valid = tmp_path / "valid-mermaid.md"
+  valid.write_text(
+    "# Report\n\n```mermaid\nflowchart TD\n  A --> B\n```\n", encoding="utf-8"
+  )
+  output = publish(valid, "valid-mermaid-report")
+  assert [
+    line for line in output.err.splitlines() if line.startswith(warning_prefix)
+  ] == []
+
+
 def test_python_outline_command_parses_symbols_and_enforces_guards(
   tmp_path, monkeypatch, capsys
 ):
