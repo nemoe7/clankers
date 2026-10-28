@@ -3101,7 +3101,7 @@ for raw in sys.stdin:
       wakes: {},
     });
     assert.equal(afterWakeConsumed.wakes["arena/work0002-clankers"], undefined);
-    checks.board.writeGlobalBoard(afterWakeConsumed, { fromProxy: true, revision: 1 });
+    checks.board.updateProxyBoardCache(afterWakeConsumed, 1);
     assert.deepEqual(
       JSON.parse(
         JSON.stringify(
@@ -4248,19 +4248,13 @@ for raw in sys.stdin:
         coldCalls.some(c => c.method === "POST" && c.url === "https://8000-beta.e2b.app/api/board"),
         "revision delta on /v1/board immediately delivers wake to member POST /api/board",
       );
-      const patchedProto = boardApi.applyBoardDiff(
-        { allowed_sessions: ["alpha111-clankers"], sessions: [], entries: [] },
-        {
-          base_rev: 1,
-          rev: 2,
-          upserts: [
-            { type: "meta", key: "scalars", value: JSON.parse('{"__proto__":{"polluted":true},"multi_repo":true}') },
-            { type: "wake", key: "__proto__", value: { reason: "polluted" } },
-          ],
-          tombstones: [],
-        },
+      assert.equal(boardApi.computeBoardDiff, undefined, "thin board relay strips client computeBoardDiff");
+      assert.equal(boardApi.applyBoardDiff, undefined, "thin board relay strips client applyBoardDiff");
+      assert.equal(boardApi.writeGlobalBoard, undefined, "thin board relay strips client writeGlobalBoard merge");
+      const patchedProto = boardApi.normalizeBoard(
+        JSON.parse('{"__proto__":{"polluted":true},"multi_repo":true,"allowed_sessions":["alpha111-clankers"],"sessions":[],"entries":[],"wakes":{"__proto__":"polluted"}}'),
       );
-      assert.strictEqual(({}).polluted, undefined, "applyBoardDiff never pollutes Object.prototype");
+      assert.strictEqual(({}).polluted, undefined, "normalizeBoard never pollutes Object.prototype");
       assert.strictEqual(patchedProto.multi_repo, true);
       assert.strictEqual(Object.prototype.hasOwnProperty.call(patchedProto.wakes, "__proto__"), false);
     });

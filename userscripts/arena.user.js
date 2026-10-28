@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.10
+// @name         Arena.ai | NemoUtils | v1.13.11
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.10
+// @version      1.13.11
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -26,7 +26,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.10";
+  var USERSCRIPT_VERSION = "1.13.11";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
   var proxyBoardEgressVersion = "";
   var USERSCRIPT_BOOT_VERSION = (function () {
@@ -4858,16 +4858,6 @@
     noProxy: "Configure proxy host and master key in Settings.",
   };
 
-  var BOARD_COLLECTION_KEYS_MAP = {
-    sessions: true,
-    entries: true,
-    task_ops: true,
-    report_ops: true,
-    worker_tasks: true,
-    worker_reports: true,
-    wakes: true,
-  };
-
   function canonicalDiffJson(val) {
     if (val === null || typeof val !== "object") return JSON.stringify(val);
     if (Array.isArray(val)) {
@@ -4988,192 +4978,6 @@
       if (index[order[i]] && !removed[order[i]]) out.push(index[order[i]]);
     }
     return out;
-  }
-
-  function decomposeBoardRecords(board) {
-    var data = board && typeof board === "object" ? board : {};
-    var records = Object.create(null);
-    var meta = Object.create(null);
-    Object.keys(data).forEach(function (k) {
-      if (isSafeRecordKey(k) && !BOARD_COLLECTION_KEYS_MAP[k]) meta[k] = data[k];
-    });
-    records["meta\u0000scalars"] = { type: "meta", key: "scalars", value: meta };
-    if (Array.isArray(data.sessions)) {
-      data.sessions.forEach(function (row, idx) {
-        if (!row || typeof row !== "object") return;
-        var br = String(row.branch || row.session_id || ("idx:" + idx)).trim();
-        if (br) records["session\u0000" + br] = { type: "session", key: br, value: row };
-      });
-    }
-    if (Array.isArray(data.entries)) {
-      data.entries.forEach(function (row, idx) {
-        if (!row || typeof row !== "object") return;
-        var eid = String(row.id || ("idx:" + idx)).trim();
-        if (eid) records["entry\u0000" + eid] = { type: "entry", key: eid, value: row };
-      });
-    }
-    if (Array.isArray(data.task_ops)) {
-      data.task_ops.forEach(function (row, idx) {
-        if (!row || typeof row !== "object") return;
-        var oid = String(row.id || ("idx:" + idx)).trim();
-        if (oid) records["task_op\u0000" + oid] = { type: "task_op", key: oid, value: row };
-      });
-    }
-    if (Array.isArray(data.report_ops)) {
-      data.report_ops.forEach(function (row, idx) {
-        if (!row || typeof row !== "object") return;
-        var oid = String(row.id || ("idx:" + idx)).trim();
-        if (oid) records["report_op\u0000" + oid] = { type: "report_op", key: oid, value: row };
-      });
-    }
-    if (data.worker_tasks && typeof data.worker_tasks === "object") {
-      Object.keys(data.worker_tasks).forEach(function (sid) {
-        var cleanSid = String(sid || "").trim();
-        if (isSafeRecordKey(cleanSid) && Array.isArray(data.worker_tasks[sid])) {
-          records["worker_tasks\u0000" + cleanSid] = {
-            type: "worker_tasks",
-            key: cleanSid,
-            value: data.worker_tasks[sid],
-          };
-        }
-      });
-    }
-    if (data.worker_reports && typeof data.worker_reports === "object") {
-      Object.keys(data.worker_reports).forEach(function (sid) {
-        var cleanSid = String(sid || "").trim();
-        if (isSafeRecordKey(cleanSid) && Array.isArray(data.worker_reports[sid])) {
-          records["worker_reports\u0000" + cleanSid] = {
-            type: "worker_reports",
-            key: cleanSid,
-            value: data.worker_reports[sid],
-          };
-        }
-      });
-    }
-    if (data.wakes && typeof data.wakes === "object") {
-      Object.keys(data.wakes).forEach(function (sid) {
-        var cleanSid = String(sid || "").trim();
-        if (isSafeRecordKey(cleanSid) && data.wakes[sid]) {
-          records["wake\u0000" + cleanSid] = { type: "wake", key: cleanSid, value: data.wakes[sid] };
-        }
-      });
-    }
-    return records;
-  }
-
-  function recomposeBoardRecords(records) {
-    var out = {
-      multi_repo: false,
-      linked_repos: [],
-      removed_sessions: [],
-      worker_ids: Object.create(null),
-      worker_tasks: Object.create(null),
-      task_ops: [],
-      worker_reports: Object.create(null),
-      report_ops: [],
-      allowed_sessions: [],
-      main_session_id: "",
-      sessions: [],
-      entries: [],
-      wakes: Object.create(null),
-    };
-    var metaEntry = records["meta\u0000scalars"];
-    if (metaEntry && metaEntry.value && typeof metaEntry.value === "object") {
-      Object.keys(metaEntry.value).forEach(function (k) {
-        if (isSafeRecordKey(k)) out[k] = metaEntry.value[k];
-      });
-    }
-    Object.keys(records).forEach(function (pairKey) {
-      var item = records[pairKey];
-      if (!item || item.type === "meta") return;
-      if (item.type === "session" && item.value && typeof item.value === "object") {
-        out.sessions.push(Object.assign({}, item.value));
-      } else if (item.type === "entry" && item.value && typeof item.value === "object") {
-        out.entries.push(Object.assign({}, item.value));
-      } else if (item.type === "task_op" && item.value && typeof item.value === "object") {
-        out.task_ops.push(Object.assign({}, item.value));
-      } else if (item.type === "report_op" && item.value && typeof item.value === "object") {
-        out.report_ops.push(Object.assign({}, item.value));
-      } else if (item.type === "worker_tasks" && isSafeRecordKey(item.key) && Array.isArray(item.value)) {
-        out.worker_tasks[item.key] = item.value.slice();
-      } else if (item.type === "worker_reports" && isSafeRecordKey(item.key) && Array.isArray(item.value)) {
-        out.worker_reports[item.key] = item.value.slice();
-      } else if (item.type === "wake" && isSafeRecordKey(item.key) && item.value) {
-        out.wakes[item.key] = item.value;
-      }
-    });
-    out.entries.sort(function (a, b) {
-      var ta = String((a && (a.created_at || a.at)) || "");
-      var tb = String((b && (b.created_at || b.at)) || "");
-      if (ta !== tb) return ta < tb ? -1 : 1;
-      var ia = String((a && a.id) || "");
-      var ib = String((b && b.id) || "");
-      return ia < ib ? -1 : ia > ib ? 1 : 0;
-    });
-    out.task_ops.sort(function (a, b) {
-      var ta = String((a && a.at) || "");
-      var tb = String((b && b.at) || "");
-      if (ta !== tb) return ta < tb ? -1 : 1;
-      var ia = String((a && a.id) || "");
-      var ib = String((b && b.id) || "");
-      return ia < ib ? -1 : ia > ib ? 1 : 0;
-    });
-    out.report_ops.sort(function (a, b) {
-      var ta = String((a && a.at) || "");
-      var tb = String((b && b.at) || "");
-      if (ta !== tb) return ta < tb ? -1 : 1;
-      var ia = String((a && a.id) || "");
-      var ib = String((b && b.id) || "");
-      return ia < ib ? -1 : ia > ib ? 1 : 0;
-    });
-    return out;
-  }
-
-  function computeBoardDiff(prevBoard, nextBoard, baseRev, nextRev) {
-    var prevRecs = decomposeBoardRecords(prevBoard);
-    var nextRecs = decomposeBoardRecords(nextBoard);
-    var upserts = [];
-    Object.keys(nextRecs).forEach(function (pairKey) {
-      var nItem = nextRecs[pairKey];
-      var pItem = prevRecs[pairKey];
-      if (!pItem || canonicalDiffJson(pItem.value) !== canonicalDiffJson(nItem.value)) {
-        upserts.push({ type: nItem.type, key: nItem.key, value: nItem.value });
-      }
-    });
-    var tombstones = [];
-    Object.keys(prevRecs).sort().forEach(function (pairKey) {
-      if (!nextRecs[pairKey]) {
-        tombstones.push({ type: prevRecs[pairKey].type, key: prevRecs[pairKey].key });
-      }
-    });
-    return {
-      base_rev: Number(baseRev) || 0,
-      rev: Number(nextRev) || 0,
-      upserts: upserts,
-      tombstones: tombstones,
-    };
-  }
-
-  function applyBoardDiff(baseBoard, diffObj) {
-    if (!diffObj || typeof diffObj !== "object") return baseBoard;
-    var records = decomposeBoardRecords(baseBoard);
-    var tombstones = Array.isArray(diffObj.tombstones) ? diffObj.tombstones : [];
-    var upserts = Array.isArray(diffObj.upserts) ? diffObj.upserts : [];
-    tombstones.forEach(function (tomb) {
-      if (!tomb || typeof tomb !== "object") return;
-      var recType = String(tomb.type || "").trim();
-      var key = String(tomb.key || "").trim();
-      if (recType && key) delete records[recType + "\u0000" + key];
-    });
-    upserts.forEach(function (item) {
-      if (!item || typeof item !== "object") return;
-      var recType = String(item.type || "").trim();
-      var key = String(item.key || "").trim();
-      if (recType && key && "value" in item) {
-        records[recType + "\u0000" + key] = { type: recType, key: key, value: item.value };
-      }
-    });
-    return recomposeBoardRecords(records);
   }
 
   var STATE_WATCH_MS = 60 * 1000;
@@ -5454,8 +5258,6 @@
   var seededPreviewBoardBases = new Set();
   var seedPreviewBoardInFlightByBase = new Set();
   var previewBoardPullByBase = new Map();
-  var previewBoardPushByBranch = new Map();
-  var previewScopedPushByBase = new Map();
   var lastSyncedMemberSigByBase = new Map();
   var previewAutosavePullByBase = new Map();
   var proxyStateCacheByScope = new Map();
@@ -5565,7 +5367,6 @@
     var params = [];
     if (!force && proxyBoardRevision > 0 && proxyBoardCache) {
       params.push("since=" + String(proxyBoardRevision));
-      params.push("mode=diff");
     }
     if (pullBranch) params.push("branch=" + encodeURIComponent(pullBranch));
     if (pullRepo) params.push("repo=" + encodeURIComponent(pullRepo));
@@ -5583,16 +5384,6 @@
             proxyBoardRevision = Number(res.body.revision);
           }
           return { changed: false, board: proxyBoardCache, scoped_board: null };
-        }
-        if (res.body.mode === "diff" && res.body.diff && proxyBoardCache) {
-          var patched = applyBoardDiff(proxyBoardCache, res.body.diff);
-          return {
-            changed: true,
-            board: updateProxyBoardCache(patched, Number(res.body.revision)),
-            scoped_board: res.body.scoped_board && typeof res.body.scoped_board === "object"
-              ? res.body.scoped_board
-              : null,
-          };
         }
         if (res.body.board) {
           return {
@@ -5767,31 +5558,12 @@
       try { GM_setValue(docPathKey, base); } catch (err) {}
     }
     var targetRepo = cleanBoardRepo(targetRepoHint || previewUiRepo || docScope.repo || "", targetSid);
-    function buildScopedSyncBoard(sidOverride, repoOverride) {
+    function resolveScopedBoard(scopedCandidate, sidOverride, repoOverride) {
       var sid = sidOverride !== undefined ? sidOverride : targetSid;
       var repo = repoOverride !== undefined ? repoOverride : targetRepo;
-      var scopedBoard = scopeBoardForTarget(readGlobalBoard(), sid, repo);
-      var syncIso = new Date().toISOString();
-      if (sid && Array.isArray(scopedBoard.sessions)) {
-        scopedBoard.sessions = scopedBoard.sessions.map(function (row) {
-          if (!row || typeof row !== "object") return row;
-          var rSid = boardBranch(row.branch || row.session_id || "");
-          if (rSid === sid) {
-            var nextUpdatedAt = passive && row.updated_at ? row.updated_at : syncIso;
-            return Object.assign({}, row, { updated_at: nextUpdatedAt });
-          }
-          return row;
-        });
-      }
-      if (Array.isArray(scopedBoard.removed_sessions)) {
-        var targetIsScopedAllowed = scopedBoard.allowed_sessions.indexOf(sid) !== -1;
-        scopedBoard.removed_sessions = scopedBoard.removed_sessions.filter(function (remSid) {
-          if (scopedBoard.allowed_sessions.indexOf(remSid) !== -1) return false;
-          if (remSid === sid && targetIsScopedAllowed) return false;
-          return true;
-        });
-      }
-      return scopedBoard;
+      return (scopedCandidate && typeof scopedCandidate === "object")
+        ? normalizeBoard(scopedCandidate)
+        : scopeBoardForTarget(readGlobalBoard(), sid, repo);
     }
     function recordMemberMetadata(body, fallbackBranch) {
       var br = boardBranch((body && body.branch) || fallbackBranch || "");
@@ -5817,45 +5589,16 @@
         board_action: { type: "disconnect-session", branch: br },
       }).then(function (discProxy) {
         if (discProxy && discProxy.status === 200 && discProxy.body && discProxy.body.board) {
-          writeGlobalBoard(discProxy.body.board, {
-            fromProxy: true,
-            revision: Number(discProxy.body.revision),
-          });
+          updateProxyBoardCache(discProxy.body.board, Number(discProxy.body.revision));
         }
         return failedAns;
       });
     }
     function postConsolidatedOnce(boardToSend, hydratedKeys, sid) {
-      var pullCur = previewBoardPullByBase.get(base);
-      var supportsPreviewDiff = Boolean(pullCur && pullCur.rev > 0);
-      var scopedCur = supportsPreviewDiff ? previewScopedPushByBase.get(base) : null;
-      var syncPayload = (scopedCur && scopedCur.board)
-        ? {
-          action: "sync",
-          board_diff: computeBoardDiff(scopedCur.board, boardToSend, scopedCur.rev, scopedCur.rev + 1),
-        }
-        : (supportsPreviewDiff
-          ? { action: "sync", board: boardToSend, client_rev: 1 }
-          : { action: "sync", board: boardToSend });
-      if (
-        scopedCur &&
-        scopedCur.board &&
-        !hydratedKeys.length &&
-        syncPayload.board_diff &&
-        !syncPayload.board_diff.upserts.length &&
-        !syncPayload.board_diff.tombstones.length
-      ) {
-        addBoundedSet(seededPreviewBoardBases, base, MAX_ORIGIN_STATE_CACHE);
-        setBoundedMap(lastSyncedMemberSigByBase, base, boardMaterialSignature(boardToSend), MAX_ORIGIN_STATE_CACHE);
-        return Promise.resolve({ status: 200, body: boardToSend, failure: null });
-      }
-      function finishConsolidated(answer, nextPushRev) {
+      return stateJson(base + "/api/board", { action: "sync", board: boardToSend }).then(function (answer) {
         if (answer && answer.status === 200 && answer.body) {
           addBoundedSet(seededPreviewBoardBases, base, MAX_ORIGIN_STATE_CACHE);
           hydratedKeys.forEach(function (k) { addBoundedSet(hydratedBoardFilesByBranch, k, MAX_HYDRATED_FILE_KEYS); });
-          if (supportsPreviewDiff) {
-            setBoundedMap(previewScopedPushByBase, base, { rev: nextPushRev, board: boardToSend }, MAX_ORIGIN_STATE_CACHE);
-          }
           if (typeof answer.body.revision === "number" && answer.body.sessions) {
             setBoundedMap(previewBoardPullByBase, base, {
               rev: Number(answer.body.revision),
@@ -5870,29 +5613,10 @@
           return answer;
         }
         return handleMemberFailure(answer, sid);
-      }
-      return stateJson(base + "/api/board", syncPayload).then(function (answer) {
-        if (
-          scopedCur &&
-          answer &&
-          (answer.status === 409 || (answer.body && answer.body.need_full))
-        ) {
-          previewScopedPushByBase.delete(base);
-          return stateJson(base + "/api/board", {
-            action: "sync",
-            board: boardToSend,
-            client_rev: 1,
-          }).then(function (retryAns) {
-            return finishConsolidated(retryAns, 1);
-          });
-        }
-        return finishConsolidated(answer, scopedCur ? scopedCur.rev + 1 : 1);
       });
     }
     if (pushOnly) {
-      var directScoped = (opts && opts.scopedBoard && typeof opts.scopedBoard === "object")
-        ? normalizeBoard(opts.scopedBoard)
-        : buildScopedSyncBoard(targetSid, targetRepo);
+      var directScoped = resolveScopedBoard(opts && opts.scopedBoard, targetSid, targetRepo);
       return hydrateBoardFilesForTarget(directScoped, targetSid, base).then(function (hydrated) {
         if (hydrated && hydrated.unreachable !== undefined) {
           return handleMemberFailure(hydrated.unreachable, targetSid);
@@ -5902,7 +5626,7 @@
     }
     var memberPullCur = previewBoardPullByBase.get(base);
     var memberGetUrl = (memberPullCur && memberPullCur.rev > 0 && memberPullCur.board)
-      ? (base + "/api/board?since=" + String(memberPullCur.rev) + "&mode=diff")
+      ? (base + "/api/board?since=" + String(memberPullCur.rev))
       : (base + "/api/board");
     return stateJson(memberGetUrl).then(function (memberAns) {
       if (!memberAns || memberAns.status !== 200 || !memberAns.body) {
@@ -5913,26 +5637,20 @@
       if (rawMemberBody.unchanged && memberPullCur && memberPullCur.board) {
         memberBody = memberPullCur.board;
         if (typeof rawMemberBody.revision === "number") {
-          previewBoardPullByBase.set(base, {
+          setBoundedMap(previewBoardPullByBase, base, {
             rev: Number(rawMemberBody.revision),
             board: memberBody,
-          });
+          }, MAX_ORIGIN_STATE_CACHE);
         }
-      } else if (rawMemberBody.mode === "diff" && rawMemberBody.diff && memberPullCur && memberPullCur.board) {
-        memberBody = applyBoardDiff(memberPullCur.board, rawMemberBody.diff);
-        previewBoardPullByBase.set(base, {
-          rev: Number(rawMemberBody.revision) || (memberPullCur.rev + 1),
-          board: memberBody,
-        });
       } else {
         memberBody = rawMemberBody.board && typeof rawMemberBody.board === "object"
           ? rawMemberBody.board
           : rawMemberBody;
         if (typeof rawMemberBody.revision === "number" && rawMemberBody.revision > 0) {
-          previewBoardPullByBase.set(base, {
+          setBoundedMap(previewBoardPullByBase, base, {
             rev: Number(rawMemberBody.revision),
             board: memberBody,
-          });
+          }, MAX_ORIGIN_STATE_CACHE);
         } else {
           previewBoardPullByBase.delete(base);
         }
@@ -5945,42 +5663,6 @@
       return ensureBoardCacheForAllow().then(function () {
         var allowCheckBoard = readGlobalBoard();
         var memberAllowed = Boolean(memberSid && allowCheckBoard.allowed_sessions.indexOf(memberSid) !== -1);
-        if (!memberAllowed) {
-          var unoptedPull = (!proxyBoardCache || Date.now() - lastProxyBoardPullAtMs >= nextProxyBoardPollDelayMs)
-            ? pullProxyBoard(!proxyBoardCache, memberSid, memberRepo)
-            : Promise.resolve({ board: proxyBoardCache, scoped_board: null });
-          return unoptedPull.then(function (pulledUnopted) {
-            var unoptedScoped = (pulledUnopted && pulledUnopted.scoped_board)
-              ? normalizeBoard(pulledUnopted.scoped_board)
-              : buildScopedSyncBoard(memberSid, memberRepo);
-            return hydrateBoardFilesForTarget(unoptedScoped, memberSid).then(function (hydratedUnopted) {
-              if (
-                !hydratedUnopted.keys.length &&
-                boardMaterialSignature(hydratedUnopted.board) === boardMaterialSignature(memberBody)
-              ) {
-                addBoundedSet(seededPreviewBoardBases, base, MAX_ORIGIN_STATE_CACHE);
-                setBoundedMap(lastSyncedMemberSigByBase, base, boardMaterialSignature(memberBody), MAX_ORIGIN_STATE_CACHE);
-                return memberAns;
-              }
-              return postConsolidatedOnce(hydratedUnopted.board, hydratedUnopted.keys, memberSid);
-            });
-          });
-        }
-        var cleanMemberBody = stripTombstonedBranches(memberBody, allowCheckBoard);
-        var cleanMemberSig = boardMaterialSignature(cleanMemberBody);
-        var prevPreviewSig = lastSyncedMemberSigByBase.get(base) || "";
-        var proxyPushCur = memberSid ? previewBoardPushByBranch.get(memberSid) : null;
-        var cleanPrevPush = (proxyPushCur && proxyPushCur.board)
-          ? stripTombstonedBranches(proxyPushCur.board, allowCheckBoard)
-          : null;
-        var memberDiff = cleanPrevPush
-          ? computeBoardDiff(cleanPrevPush, cleanMemberBody, proxyPushCur.rev, proxyPushCur.rev + 1)
-          : null;
-        var hasNewMemberDiff = Boolean(
-          !prevPreviewSig ||
-          !cleanPrevPush ||
-          ((memberDiff.upserts.length > 0 || memberDiff.tombstones.length > 0) && cleanMemberSig !== prevPreviewSig)
-        );
         function finishPreviewSync(consolidatedScoped) {
           return hydrateBoardFilesForTarget(consolidatedScoped, memberSid).then(function (hydrated) {
             if (
@@ -5994,6 +5676,20 @@
             return postConsolidatedOnce(hydrated.board, hydrated.keys, memberSid);
           });
         }
+        if (!memberAllowed) {
+          var unoptedPull = (!proxyBoardCache || Date.now() - lastProxyBoardPullAtMs >= nextProxyBoardPollDelayMs)
+            ? pullProxyBoard(!proxyBoardCache, memberSid, memberRepo)
+            : Promise.resolve({ board: proxyBoardCache, scoped_board: null });
+          return unoptedPull.then(function (pulledUnopted) {
+            return finishPreviewSync(
+              resolveScopedBoard(pulledUnopted && pulledUnopted.scoped_board, memberSid, memberRepo),
+            );
+          });
+        }
+        var cleanMemberBody = stripTombstonedBranches(memberBody, allowCheckBoard);
+        var cleanMemberSig = boardMaterialSignature(cleanMemberBody);
+        var prevPreviewSig = lastSyncedMemberSigByBase.get(base) || "";
+        var hasNewMemberDiff = Boolean(!prevPreviewSig || cleanMemberSig !== prevPreviewSig);
         if (!hasNewMemberDiff) {
           var prevRevIdle = proxyBoardRevision;
           var shouldPollIdleProxy = Boolean(
@@ -6009,82 +5705,30 @@
             if (pulledIdle && pulledIdle.changed && proxyBoardRevision > prevRevIdle) {
               emitBoardBroadcast(proxyBoardRevision, memberSid);
             }
-            var idleScoped = (pulledIdle && pulledIdle.changed && pulledIdle.scoped_board)
-              ? normalizeBoard(pulledIdle.scoped_board)
-              : buildScopedSyncBoard(memberSid, memberRepo);
+            var idleScoped = resolveScopedBoard(
+              pulledIdle && pulledIdle.changed ? pulledIdle.scoped_board : null,
+              memberSid,
+              memberRepo,
+            );
             return finishPreviewSync(idleScoped);
           });
         }
-        var proxySyncReq = cleanPrevPush
-          ? {
-            action: "sync",
-            board_diff: memberDiff,
-            branch: memberSid,
-            repo: memberRepo,
-            passive: passive,
-            reply_since: proxyBoardRevision > 0 && proxyBoardCache ? proxyBoardRevision : undefined,
-            reply_mode: proxyBoardRevision > 0 && proxyBoardCache ? "diff" : undefined,
-          }
-          : {
-            action: "sync",
-            board: cleanMemberBody,
-            client_rev: 1,
-            branch: memberSid,
-            repo: memberRepo,
-            passive: passive,
-          };
-        function sendMemberToProxy() {
-          return proxyBoardJson("/v1/board", proxySyncReq).then(function (syncRes) {
-            if (
-              proxyPushCur &&
-              syncRes &&
-              (syncRes.status === 409 || (syncRes.body && syncRes.body.need_full))
-            ) {
-              if (memberSid) previewBoardPushByBranch.delete(memberSid);
-              proxyPushCur = null;
-              return proxyBoardJson("/v1/board", {
-                action: "sync",
-                board: cleanMemberBody,
-                client_rev: 1,
-                branch: memberSid,
-                repo: memberRepo,
-                passive: passive,
-              }).then(function (retryRes) {
-                if (memberSid && retryRes && retryRes.status === 200) {
-                  previewBoardPushByBranch.set(memberSid, { rev: 1, board: cleanMemberBody });
-                }
-                return retryRes;
-              });
-            }
-            if (memberSid && syncRes && syncRes.status === 200) {
-              previewBoardPushByBranch.set(memberSid, {
-                rev: proxyPushCur ? proxyPushCur.rev + 1 : 1,
-                board: cleanMemberBody,
-              });
-            }
-            return syncRes;
-          });
-        }
-        return sendMemberToProxy().then(function (syncRes) {
+        return proxyBoardJson("/v1/board", {
+          action: "sync",
+          board: cleanMemberBody,
+          branch: memberSid,
+          repo: memberRepo,
+          passive: passive,
+          reply_since: proxyBoardRevision > 0 && proxyBoardCache ? proxyBoardRevision : undefined,
+        }).then(function (syncRes) {
           var syncedScoped = null;
           var prevRev = proxyBoardRevision;
           var syncOk = Boolean(syncRes && syncRes.status === 200 && syncRes.body);
           if (syncOk) {
             lastProxyBoardPullAtMs = Date.now();
             nextProxyBoardPollDelayMs = sampleBoardPollDelayMs();
-            if (syncRes.body.mode === "diff" && syncRes.body.diff && proxyBoardCache) {
-              var nextGlobal = applyBoardDiff(proxyBoardCache, syncRes.body.diff);
-              writeGlobalBoard(nextGlobal, {
-                passive: passive,
-                fromProxy: true,
-                revision: Number(syncRes.body.revision),
-              });
-            } else if (syncRes.body.board) {
-              writeGlobalBoard(syncRes.body.board, {
-                passive: passive,
-                fromProxy: true,
-                revision: Number(syncRes.body.revision),
-              });
+            if (syncRes.body.board) {
+              updateProxyBoardCache(syncRes.body.board, Number(syncRes.body.revision));
             } else if (syncRes.body.unchanged && typeof syncRes.body.revision === "number") {
               proxyBoardRevision = Number(syncRes.body.revision);
             }
@@ -6096,11 +5740,9 @@
             }
           }
           var readyScopedPromise = syncOk
-            ? Promise.resolve(syncedScoped || buildScopedSyncBoard(memberSid, memberRepo))
+            ? Promise.resolve(syncedScoped || resolveScopedBoard(null, memberSid, memberRepo))
             : pullProxyBoard(false, memberSid, memberRepo).then(function (pulled) {
-              return (pulled && pulled.changed && pulled.scoped_board)
-                ? normalizeBoard(pulled.scoped_board)
-                : buildScopedSyncBoard(memberSid, memberRepo);
+              return resolveScopedBoard(pulled && pulled.changed ? pulled.scoped_board : null, memberSid, memberRepo);
             });
           return readyScopedPromise.then(function (consolidatedScoped) {
             return finishPreviewSync(consolidatedScoped);
@@ -6226,11 +5868,7 @@
         repo: syncActionRepo,
       }).then(function (actRes) {
         if (actRes && actRes.status === 200 && actRes.body && actRes.body.board) {
-          writeGlobalBoard(actRes.body.board, {
-            passive: isHeartbeatAction,
-            fromProxy: true,
-            revision: Number(actRes.body.revision),
-          });
+          updateProxyBoardCache(actRes.body.board, Number(actRes.body.revision));
           if (!isHeartbeatAction) {
             emitBoardBroadcast(proxyBoardRevision, syncActionBranch);
           }
@@ -8472,19 +8110,6 @@
     });
   }
 
-  function writeGlobalBoard(board, opts) {
-    var proxyNext = updateProxyBoardCache(board, opts && opts.revision);
-    if (boardProxyConfig() && (!opts || !opts.fromProxy)) {
-      proxyBoardJson("/v1/board", { action: "merge", board: proxyNext }).then(function (res) {
-        if (res && res.status === 200 && res.body && res.body.board) {
-          updateProxyBoardCache(res.body.board, Number(res.body.revision));
-          emitBoardBroadcast(proxyBoardRevision, previewUiBranch || "");
-        }
-      });
-    }
-    return proxyNext;
-  }
-
   function scopeBoardForTarget(board, sessionId, repoHint) {
     var normalized = normalizeBoard(board);
     if (proxyBoardEgressVersion && !normalized.egress_version) {
@@ -8700,8 +8325,6 @@
     hasSeededPreviewBoard: function (base) {
       return seededPreviewBoardBases.has(String(base || "").replace(/\/+$/, ""));
     },
-    computeBoardDiff: computeBoardDiff,
-    applyBoardDiff: applyBoardDiff,
     computeStateDiff: computeStateDiff,
     applyStateDiff: applyStateDiff,
     resetBoardProxyCache: function () {
@@ -8715,8 +8338,6 @@
       seededPreviewBoardBases.clear();
       seedPreviewBoardInFlightByBase.clear();
       previewBoardPullByBase.clear();
-      previewBoardPushByBranch.clear();
-      previewScopedPushByBase.clear();
       lastSyncedMemberSigByBase.clear();
       previewAutosavePullByBase.clear();
       proxyStateCacheByScope.clear();
@@ -8730,7 +8351,6 @@
     normalizeBoard: normalizeBoard,
     boardMaterialSignature: boardMaterialSignature,
     readGlobalBoard: readGlobalBoard,
-    writeGlobalBoard: writeGlobalBoard,
     scopeBoardForTarget: scopeBoardForTarget,
     boardRoleFor: boardRoleFor,
     boardGreekSymbolFor: boardGreekSymbolFor,

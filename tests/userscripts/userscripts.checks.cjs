@@ -2897,30 +2897,9 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
   assert.equal(boardApi.BOARD_KEY, undefined);
   assert.equal(boardApi.applyBoardAction, undefined);
   assert.equal(boardApi.mergePreviewBoard, undefined);
-  const bBase = {
-    main_session_id: "main0001-clankers",
-    allowed_sessions: ["main0001-clankers"],
-    sessions: [{ branch: "main0001-clankers", repo: "clankers", status: "active" }],
-    entries: [{ id: "e-1", branch: "main0001-clankers", to: "*", text: "first" }],
-    wakes: {},
-    worker_tasks: {},
-    files: {},
-  };
-  const bNext = {
-    ...bBase,
-    entries: [
-      ...bBase.entries,
-      { id: "e-2", branch: "main0001-clankers", to: "*", text: "second" },
-    ],
-    wakes: { "main0001-clankers": "w-1" },
-  };
-  const bDiff = boardApi.computeBoardDiff(bBase, bNext, 4, 5);
-  assert.equal(bDiff.base_rev, 4);
-  assert.equal(bDiff.rev, 5);
-  assert.ok(bDiff.upserts.some((u) => u.type === "entry" && u.key === "e-2"));
-  const bApplied = boardApi.applyBoardDiff(bBase, bDiff);
-  assert.equal(bApplied.entries.length, 2);
-  assert.equal(bApplied.wakes["main0001-clankers"], "w-1");
+  assert.equal(boardApi.computeBoardDiff, undefined);
+  assert.equal(boardApi.applyBoardDiff, undefined);
+  assert.equal(boardApi.writeGlobalBoard, undefined);
 
   const manySessions = Array.from({ length: 70 }, (_, idx) => ({
     branch: `${String(idx + 1).padStart(8, "0")}-clankers`,
@@ -2942,7 +2921,7 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
   let state = boardApi.readGlobalBoard();
   assert.deepEqual([...state.allowed_sessions], []);
 
-  state = boardApi.writeGlobalBoard(
+  state = boardApi.updateProxyBoardCache(
     {
       allowed_sessions: ["arena/main0001-clankers", "arena/work0002-clankers"],
       main_session_id: "arena/main0001-clankers",
@@ -2968,7 +2947,7 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
       ],
       wakes: { "arena/main0001-clankers": "2026-10-25T12:01:00Z" },
     },
-    { fromProxy: true, revision: 1 },
+    1,
   );
   assert.deepEqual([...state.allowed_sessions], ["arena/main0001-clankers", "arena/work0002-clankers"]);
   assert.equal(state.main_session_id, "arena/main0001-clankers");
