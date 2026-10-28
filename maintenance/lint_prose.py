@@ -114,9 +114,14 @@ def _nemoizer_findings(label: str, text: str, strict: bool = False) -> list[dict
   if not strict:
     blocking |= {"STE200", "NMP100", "NMO003"}
   findings: list[dict] = []
-  for row in module.prose_review(
-    Path(label), text, "description", module.PARAGRAPH_CAP
-  ):
+  with module.file_scope(Path(label), None if strict else text):
+    rows = module.prose_review(
+      Path(label),
+      text,
+      module.ACTIVE_CONFIG.get("context") or "description",
+      module.ACTIVE_CONFIG.get("paragraph_cap") or module.PARAGRAPH_CAP,
+    )
+  for row in rows:
     rule = row["rule"]
     if rule in blocking:
       findings.append(
@@ -214,7 +219,11 @@ def nemoizer_scope(path: Path, text: str) -> tuple[str, str]:
 
 def nemoizer_linter():
   """Load the bundled scanner beside its shared prose parser."""
-  path = Path(__file__).resolve().parents[1] / "skills/nemoizer/scripts/nemoize.py"
+  global _NEMOIZER
+  if _NEMOIZER is not None:
+    return _NEMOIZER
+  root = Path(__file__).resolve().parents[1]
+  path = root / "skills/nemoizer/scripts/nemoize.py"
   spec = importlib.util.spec_from_file_location("repository_nemoizer", path)
   module = importlib.util.module_from_spec(spec)
   sys.path.insert(0, str(path.parent))
@@ -222,6 +231,9 @@ def nemoizer_linter():
     spec.loader.exec_module(module)
   finally:
     sys.path.pop(0)
+  module.BASE_CONFIG = module.load_config([str(root)])
+  module.ACTIVE_CONFIG = module.BASE_CONFIG
+  _NEMOIZER = module
   return module
 
 
@@ -232,6 +244,8 @@ def nemoizer_main(argv: list[str]) -> int:
   parser.add_argument("targets", nargs="*", default=["."])
   args = parser.parse_args(argv)
   module = nemoizer_linter()
+  module.BASE_CONFIG = module.load_config(args.targets)
+  module.ACTIVE_CONFIG = module.BASE_CONFIG
   findings, _ = module.scan(args.targets, args.ignore)
   errors, tests = [], []
   for path in module.walk(args.targets, args.ignore):
@@ -244,6 +258,7 @@ def nemoizer_main(argv: list[str]) -> int:
       context, scoped = nemoizer_scope(path, text)
       if not scoped:
         continue
+      file_cfg = module.file_config(path, scoped)
       scoped_lines = scoped.splitlines()
       findings.extend(
         module.format_finding(
@@ -256,7 +271,12 @@ def nemoizer_main(argv: list[str]) -> int:
           else None,
           status=row.get("status"),
         )
-        for row in module.source_prose(path, scoped, context, module.PARAGRAPH_CAP)
+        for row in module.source_prose(
+          path,
+          scoped,
+          file_cfg.get("context") or context,
+          file_cfg.get("paragraph_cap") or module.PARAGRAPH_CAP,
+        )
       )
     except (
       SyntaxError,

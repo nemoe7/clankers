@@ -39,3 +39,9 @@ extend-safe-fixes = ["C408", "PERF102", "RUF059"]
 
 [tool.ruff.lint.pycodestyle]
 max-line-length = 120
+
+[tool.nemoizer]
+
+[[tool.nemoizer.files]]
+paths = ["CHANGELOG.md"]
+list-sentence-cap = 3

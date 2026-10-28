@@ -25,8 +25,8 @@ python3 skills/nemoizer/scripts/nemoize.py --ignores .
 python skills/nemoizer/scripts/nemoizer collect .
 ```
 
-Print each finding as `path:line: [ID] (advisory-free|advisory) description` with its indented source line and `Summary` footer; exit 1 only for mandatory findings, and mark advisory findings for manual review by agent or user. Vendored and generated
-trees are skipped; `--ignore` or repo-root `nemoizer.toml` / `[tool.nemoizer]` in `pyproject.toml` ([references/nemoizer.toml](references/nemoizer.toml)) sets exclusions, rules, and caps.
+Print each finding as `path:line: [ID] (advisory-free|advisory) description` with its indented source line and `Summary` footer; exit 1 only for mandatory findings, and mark advisory findings for manual review by agent or user. Skip vendored and generated
+trees; repo-root `nemoizer.toml` or `[tool.nemoizer]` in `pyproject.toml` ([references/nemoizer.toml](references/nemoizer.toml)) sets `[[files]]` glob rules, exclusions, rules, and caps.
 
 `--format` rewrites the tree and prints each changed line as it was and as it
 becomes:
@@ -38,7 +38,7 @@ python3 skills/nemoizer/scripts/nemoize.py --format .
 Do not rewrite exclusion markers or the rotation table; apply only unsuppressed rotations and straight-quote replacements for curly quotation marks.
 
 - Use `nonemo: <id>` to suppress only that rule on the line.
-- For file scope, place `nonemo: <id>` in the first three lines with no avoided word before the marker.
+- For file scope, place `nonemo: <id>` or `nemoizer: key=value` in the first three lines with no avoided word before the marker.
 - Use any comment syntax for `nonemo: <id>`; scanning reads text, not syntax.
 - Apply an exclusion only to a known matching rule ID.
 - With `nemoizer collect` or `--ignores`, print every nonemo marker: path, line, rule ID, scope, and text; with `nemoizer audit` or `--audit`, print every `nonemo` marker and manual-review finding.

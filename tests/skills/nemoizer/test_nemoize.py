@@ -8,6 +8,7 @@ import sys
 from pathlib import Path, PureWindowsPath
 
 import nemoize
+import pytest
 
 SCRIPT = Path(nemoize.__file__).resolve()
 
@@ -1834,3 +1835,165 @@ def test_nmu200_honors_inline_and_file_suppressions():
     '# nonemo: NMU200\nvalue = f"{size / 1024} KB"\n',
   )
   assert file_level == []
+
+
+def test_files_globs_scope_caps_rules_and_context(tmp_path):
+  (tmp_path / "nemoizer.toml").write_text(
+    "[[files]]\n"
+    'paths = ["relaxed.md"]\n'
+    "list-sentence-cap = 3\n"
+    "\n"
+    "[[files]]\n"
+    'path = "quiet.md"\n'
+    "\n"
+    "[files.lint]\n"
+    'ignore = ["STE100"]\n'
+    "\n"
+    "[[files]]\n"
+    'paths = ["long.md"]\n'
+    'context = "description"\n',
+    encoding="utf-8",
+  )
+  list_item = "- Alpha one. Beta two. Gamma three.\n"
+  (tmp_path / "relaxed.md").write_text(list_item, encoding="utf-8")
+  (tmp_path / "tight.md").write_text(list_item, encoding="utf-8")
+  (tmp_path / "quiet.md").write_text("Alpha; beta.\n", encoding="utf-8")
+  (tmp_path / "semi.md").write_text("Alpha; beta.\n", encoding="utf-8")
+  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + ".\n"
+  (tmp_path / "long.md").write_text(sentence, encoding="utf-8")
+  (tmp_path / "brief.md").write_text(sentence, encoding="utf-8")
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stdout + result.stderr
+  assert "relaxed.md:1: [NMP100]" not in result.stdout
+  assert "tight.md:1: [NMP100]" in result.stdout
+  assert "quiet.md" not in result.stdout
+  assert "semi.md:1: [STE100]" in result.stdout
+  assert "long.md:1: [STE200]" not in result.stdout
+  assert "brief.md:1: [STE200]" in result.stdout
+
+
+def test_a_file_header_beats_files_globs_inside_three_lines(tmp_path):
+  (tmp_path / "nemoizer.toml").write_text(
+    '[[files]]\npaths = ["*.md"]\nlist-sentence-cap = 9\n',
+    encoding="utf-8",
+  )
+  item = "- Alpha one. Beta two. Gamma three.\n"
+  (tmp_path / "plain.md").write_text(item, encoding="utf-8")
+  (tmp_path / "strict.md").write_text(
+    "<!-- nemoizer: list-sentence-cap=2 -->\n\n" + item, encoding="utf-8"
+  )
+  (tmp_path / "late.md").write_text(
+    "<!-- One. -->\n\n<!-- Two. -->\n<!-- nemoizer: list-sentence-cap=2 -->\n\n" + item,
+    encoding="utf-8",
+  )
+  (tmp_path / "kind.md").write_text(
+    "<!-- kind nemoizer: list-sentence-cap=2 -->\n\n" + item, encoding="utf-8"
+  )
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stdout + result.stderr
+  assert "plain.md:1: [NMP100]" not in result.stdout
+  assert "strict.md:3: [NMP100]" in result.stdout
+  assert "late.md:6: [NMP100]" not in result.stdout
+  assert "kind.md:3: [NMP100]" not in result.stdout
+
+
+def test_invalid_header_and_files_keys_exit_two(tmp_path):
+  bad_key = tmp_path / "bad_key.md"
+  bad_key.write_text("<!-- nemoizer: bogus=1 -->\n\nText.\n", encoding="utf-8")
+  result = run(str(bad_key), cwd=tmp_path)
+  assert result.returncode == 2
+  assert "bogus" in result.stderr
+
+  bad_value = tmp_path / "bad_value.md"
+  bad_value.write_text(
+    "<!-- nemoizer: paragraph-cap=wide -->\n\nText.\n", encoding="utf-8"
+  )
+  value_result = run(str(bad_value), cwd=tmp_path)
+  assert value_result.returncode == 2
+  assert "paragraph-cap" in value_result.stderr
+
+  (tmp_path / "nemoizer.toml").write_text(
+    '[[files]]\npaths = ["*.md"]\nexclude = ["vendor"]\n',
+    encoding="utf-8",
+  )
+  unknown = run(cwd=tmp_path)
+  assert unknown.returncode == 2
+  assert "exclude" in unknown.stderr
+
+  (tmp_path / "nemoizer.toml").write_text(
+    "[[files]]\nlist-sentence-cap = 3\n", encoding="utf-8"
+  )
+  missing = run(cwd=tmp_path)
+  assert missing.returncode == 2
+  assert "paths" in missing.stderr
+
+
+def test_pyproject_files_table_scopes_rules(tmp_path):
+  (tmp_path / "pyproject.toml").write_text(
+    "[tool.nemoizer]\n"
+    "\n"
+    "[[tool.nemoizer.files]]\n"
+    'paths = ["quiet.md"]\n'
+    "\n"
+    "[tool.nemoizer.files.lint]\n"
+    'ignore = ["STE100"]\n',
+    encoding="utf-8",
+  )
+  (tmp_path / "quiet.md").write_text("Alpha; beta.\n", encoding="utf-8")
+  (tmp_path / "noisy.md").write_text("Alpha; beta.\n", encoding="utf-8")
+  result = run(cwd=tmp_path)
+  assert result.returncode == 1, result.stdout + result.stderr
+  assert "quiet.md" not in result.stdout
+  assert "noisy.md:1: [STE100]" in result.stdout
+
+
+def test_file_config_merges_a_glob_entry_then_a_file_header(tmp_path, monkeypatch):
+  config = tmp_path / "nemoizer.toml"
+  (tmp_path / "docs").mkdir()
+  config.write_text(
+    "list-sentence-cap = 2\n"
+    "\n"
+    "[[files]]\n"
+    'paths = ["docs/*.md"]\n'
+    "list-sentence-cap = 3\n"
+    'context = "description"\n',
+    encoding="utf-8",
+  )
+  loaded = nemoize.load_config(config_path=config)
+  assert loaded["files"] == (
+    {
+      "paths": ("docs/*.md",),
+      "overrides": {"list_sentence_cap": 3, "context": "description"},
+    },
+  )
+  monkeypatch.setattr(nemoize, "BASE_CONFIG", loaded)
+  page = tmp_path / "docs" / "page.md"
+  merged = nemoize.file_config(page)
+  assert merged["list_sentence_cap"] == 3
+  assert merged["context"] == "description"
+  headed = nemoize.file_config(page, "# nemoizer: list-sentence-cap=5\n\nText.\n")
+  assert headed["list_sentence_cap"] == 5
+  assert headed["context"] == "description"
+  elsewhere = nemoize.file_config(tmp_path / "elsewhere.md")
+  assert elsewhere["list_sentence_cap"] == nemoize.LIST_SENTENCE_CAP
+  assert elsewhere["context"] is None
+
+
+def test_a_file_header_reads_lines_one_to_three_only(tmp_path):
+  assert nemoize.header_config("# nemoizer: list-sentence-cap=4\n") == {
+    "list_sentence_cap": 4
+  }
+  assert nemoize.header_config("<!-- nemoizer: list-sentence-cap=4 --!>\n") == {
+    "list_sentence_cap": 4
+  }
+  assert (
+    nemoize.header_config("Return overrides from a `nemoizer:` header on lines 1-3.\n")
+    == {}
+  )
+  assert nemoize.header_config(
+    "One.\nTwo.\nThree.\n# nemoizer: list-sentence-cap=4\n"
+  ) == ({})
+  with pytest.raises(ValueError):
+    nemoize.header_config("# nemoizer: paragraph-cap=9\n")
+  with pytest.raises(ValueError):
+    nemoize.header_config("# nemoizer: select=STE100\n")

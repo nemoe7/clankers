@@ -1,4 +1,3 @@
-<!-- nonemo: NMP100 -->
 <!-- nonemo: NMO100 -->
 
 # Changelog
@@ -14,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### nemoizer
 
 - Add decimal `KB`/`MB`/`GB` vs binary `KiB`/`MiB`/`GiB` guidance and deterministic `NMU200` byte-unit divisor mismatch checks (`SKILL.md`, `references/nmu200.md`, `references/rules.md`, `scripts/nemoize.py`).
+- Add `[[files]]` glob overrides in `nemoizer.toml` / `pyproject.toml` and `nemoizer: key=value` file headers on lines 1-3 (`SKILL.md`, `references/nemoizer.toml`, `scripts/nemoize.py`).
 
 ### Changed
 
@@ -2435,7 +2435,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The Message log toolbar carries a Skip poll button beside the refresh and composer controls.
   A press arms one flag and writes no note. A second press clears the flag, so the owner can take the skip back.
-  The agent's poll consumes an armed flag and the wait ends at once. No stale line waits in the log for a later turn to misread.
+- The agent's poll consumes an armed flag and the wait ends at once. No stale line waits in the log for a later turn to misread.
 
 #### arena
 
@@ -2557,7 +2557,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The Gemini release runner keeps one diff per commit. One base-to-target diff cuts the input tokens by 14% to 54%, and the owner keeps the per-commit diffs for attribution.
 - The runner puts a commit message and its diff in one evidence item. It counts every payload with the Count Tokens API, and an oversized list halves until every part fits the 230,000-token ceiling. A model that answers or spends its tokens cools down for 60 seconds plus 5 seconds of safety.
-  The next request starts at the highest ready rung.
+- The next request starts at the highest ready rung.
 
 #### skills
 
@@ -2603,7 +2603,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The read gate blocks after ten calls while notes wait. The owner raised the number from three.
 - The gate exempts a command line only when every command on it is an inbox call or an inert prefix. A read beside work no longer exempts the work, so the work meets the gate. Quoted text is an argument, so a reply may span lines.
 - The blocked line names a bare `arena-preview ack <id>` call with its `--reply` and `--note` flags. Earlier the line named only the read.
-  A redirect that sends the read to `/dev/null` ends the exemption too. `preview.py inbox-line` answers the question and `maintenance/workflows/test_preview_gate.py` covers it.
+- A redirect that sends the read to `/dev/null` ends the exemption too. `preview.py inbox-line` answers the question and `maintenance/workflows/test_preview_gate.py` covers it.
 - `saved-state.ndjson` carries each report's markdown, and `import-state` rebuilds the report pages from it.
 - `/api/copy-state` returns the save-file text and its counts. The copy button copies that text in one fetch. The cached assembly stays as the fallback.
 - A report the owner unpublishes from the page writes one inbox note that names it. The CLI form stays silent.
@@ -2612,7 +2612,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The blocked gate prints that the only call that passes is a bare `arena-preview read`. Work beside the read ends the exemption.
 - `import-state` reads the newest message stamp in the payload and in the database. It refuses the import when the database is fresher, and names both stamps. `--force` overrides the guard and the receipt says `forced`.
 - The steering reference bans the `_arena_preview_platform` mark. NEVER set or export it. NEVER bypass a blocked gate.
-  The owner approved the line.
+- The owner approved the line.
 - `skills/amending-violations` amends the NEMOGPT prompt after a violation. The skill file holds the system-prompt guidelines and the model's five-point amendment format, and the prompt points at the skill by name.
 
 #### arena
@@ -2624,7 +2624,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - ARENA.md names the first seven characters of a note ID as the prose reference, never the sequence number. The steering skill already carries the rule.
 - The amendment clause in the root `AGENTS.md` fixes the proposal opening lines, names the `Citation:` line, and puts the decision list under each table. This clause landed on the owner's approval.
 - The NEMOGPT prompt holds a second verification line. Search official documentation before a claim about a tool or an interface, and mark the advice unverified when verification is impossible. This line landed on the owner's approval.
-  The owner rejected the first long-answer line, so a compact answer shape is a separate proposal.
+- The owner rejected the first long-answer line, so a compact answer shape is a separate proposal.
 - A rebase onto `main`, or a new `main` change to a rule or skill file, forces a full re-read.
   Every affected file comes before the next work step.
 
@@ -2675,7 +2675,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - A new first-party skill pairs the `fetch_page` tool with an owner-run backend that holds a provider credential. The backend answers `/v1/ping`, `/v1/github`, and `/v1/logs`, checks a generated agent key, and removes the query string from its log lines. `maintenance/workflows/test_arena_proxy.py` covers auth, forwarding, the log tail, and key redaction.
 - The backend becomes an `arena_proxy` package of five modules with a thin `server.py` launcher. `/v1/health` answers without a key. `/v1/fetch` returns text, base64, base85 or gzip, and stages large bytes for chunked reads.
-  `/v1/llm` queues an OpenAI-compatible job and returns its result on a poll. Staged bytes and jobs expire after one hour. The backend accepts loopback HTTP for a local service.
+- `/v1/llm` queues an OpenAI-compatible job and returns its result on a poll. Staged bytes and jobs expire after one hour. The backend accepts loopback HTTP for a local service.
 - `skills/arena-proxy/Dockerfile` builds a `python:3.12-alpine` image with no build step, runs as a non-root user, and keeps secrets in the environment.
 - The skill records Cloudflare Tunnel and Tailscale Funnel as the HTTPS options, with the agent key as the only gate. The shipped scripts stay readable, not minified, because the owner hosts and debugs them.
 - The fetch route refuses private and link-local addresses, the cloud metadata address, single-label names, and internal suffixes. Public HTTPS and the owner's loopback stay open. `maintenance/workflows/test_arena_proxy.py` covers the blocked and allowed shapes.
@@ -2686,7 +2686,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The server makes a new random key on every start and prints it once. It never reads the key from the environment, on owner direction.
 - `publish-arena-proxy-image.yml` builds `skills/arena-proxy/Dockerfile` for amd64 and arm64, and pushes `ghcr.io/nemoe7/arena-proxy` under the one mutable tag `latest`. The skill ships a compose file with a Tailscale sidecar and the funnel serve config.
 - ARENA.md now requires the preview installer from the repository root before activation, never a manual copy. It holds in every session, the ntfy and no-steering cases included. It lands in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy, on the approved proposal in report `install-cadence-proposal`.
-  The duplicate-message check found the rule already present at refs line 112, so no second clause landed.
+- The duplicate-message check found the rule already present at refs line 112, so no second clause landed.
 - The preview serves `POST /api/key`, which stores the key and the proxy host the userscript holds. The Downloads tab shows both with the arrival time, and `/api/state` carries them.
 
 ### Changed
@@ -2698,7 +2698,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The bundle saves the rotation due time. A reload therefore resumes the countdown instead of waiting a fresh 15 minutes. A second tab that asks early reads the key's age and waits.
-  The key note is quiet, so it wakes no poll and stops no command. The script posts the key it holds to the preview.
+- The key note is quiet, so it wakes no poll and stops no command. The script posts the key it holds to the preview.
 - The bundle asks the key route every minute. A container restart therefore reaches the agent inside a minute, not at the next rotation. A changed key swaps the composer line, posts one quiet note, and shows in the Downloads panel.
 - The bundle carries `@connect arena.site`, so the userscript manager stops asking the owner about each new preview host. The rotation call moves to `fetch`, which keeps the owner's proxy host out of the file.
 - The composer keeps the rules line only. The script posts the proxy host with the key, and the quiet note names both.
@@ -2745,13 +2745,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The push-check rule now requires reading the passed or failed line of every gate. A pipe that hides the verdict counts as skipping the gate, after one local sweep let a hard STE violation ride to CI. The rule lands in `rules/refs/ARENA.md`, `rules/ARENA.md` and the byte-identical root copy.
 - Four rules hold the pull request history small. Minimize it and keep commits intentional. Never commit intermediate fixes or debugging.
-  Keep unrelated changes separate, with no merge commits. Review the final list and diff before pushing. The rules land in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy.
+- Keep unrelated changes separate, with no merge commits. Review the final list and diff before pushing. The rules land in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy.
 
 #### gpt-plugins
 
 - The `gpt-handoff` output tells the receiving agent to check material claims before applying them. The collection version steps to `1.5.1`.
 - The output disclaimer now names both output forms, handoff, and audit. Independent verification of material claims stays a condition before the receiving agent applies either output. The output also carries every source and reference the verification needs: relative paths inside the repository, direct links outside it, and nothing else.
-  The plugin version is `1.5.2`.
+- The plugin version is `1.5.2`.
 
 #### house
 
@@ -2795,7 +2795,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The `preview-tests` job installs `pytest`, which `maintenance/minify/gate_minify.py` runs on the minified runtime. The workflow contract check now refuses a job that runs the script without the install.
 - `actionlint` reports shellcheck findings. The plugin validation step takes its base commit through the environment. Four scripts in `distribute.yml` carry a scoped disable directive.
-  No command changes.
+- No command changes.
 
 #### maintenance
 
@@ -2807,7 +2807,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - A rotating tail line names the `gh pr checks` command for pull request checks.
 - The count gate leaves a shell quiet when its command line holds an inbox read. A chain that starts with `cd` reaches the read, and the push rule still runs for every push. The installer carries the same guard into the source, live, and installed copies.
 - The submission dot compared clipped stamps with a strict greater check. An answer the agent read inside the answer's own second kept the sent dot. The dot now takes an equal stamp as seen.
-  The refs app.js and both minified copies change.
+- The refs app.js and both minified copies change.
 - `REPORT_LIST_TAG` and `REPORT_LIST_TAGS` had no callers, and the nested quantifier of the second tripped a redos alert. Both go with their two stale comments.
 - `reply()` put the raw file name into the header, and a CR or LF in a name splits the response. It now replaces CR, LF, and double quote with `_` before the header goes out.
 - Two field-label lookups built attribute selectors with only quotes escaped. One `byDataAttr` helper now compares attribute values, and the incomplete-sanitization findings go.
@@ -2815,14 +2815,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The live anchor matched `svg.animate-pulse` only. A collapsed edit row pulses its label span, so the title never read as editing. The anchor takes any pulsing element.
-  The label reader falls back to the pulsing element text. A class-aware checks case guards both tag forms.
+- The label reader falls back to the pulsing element text. A class-aware checks case guards both tag forms.
 - The fill wrote the plain line first and the file second. The second write put a line break after `AGENTS.md`. The editor reads that break as the end of a bare domain and links the name.
-  The fill now waits for the one fetch of `rules/ARENA.md` to settle and writes the composer once per page. A failed fetch writes the plain prompt.
+- The fill now waits for the one fetch of `rules/ARENA.md` to settle and writes the composer once per page. A failed fetch writes the plain prompt.
 - The read line ends with a space after `AGENTS.md`, on owner direction. Without a character between the name and the line break, the editor links the name.
 - The trailing space did not hold, and the editor still linked the name. A full stop after `AGENTS.md` stops the link, on the owner's live test.
 - The read and edit group fallback waited on a button whose aria-label reads exactly Stop generating. One label drift therefore silenced every read and write in the title. The fallback now bounds to the newest transcript message, which a new user message clears without any button.
 - The group fallback lost the stop bound at 1.1.32. A finished group label then kept the title alive after the turn ended. The fallback now bounds by a loose stop word match on the button aria-label.
-  The whole title reverts when no row, no held emoji and no stop control remain.
+- The whole title reverts when no row, no held emoji and no stop control remain.
 - The tab title matches a poll call as the script name followed by `poll`. A `polling` or `polls` word in another command no longer shows the waiting emoji. The Arena bundle moves to `1.1.30`.
 
 ## 2026-10-01

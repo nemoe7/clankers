@@ -37,7 +37,7 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 
 - Every text file is read, including comments and Markdown prose.
 - Print each finding as `path:line: [ID] (advisory-free|advisory) description` with its indented source line and a `Summary` footer, exit 1 only for mandatory findings, and mark advisory findings for manual review by the agent or user.
-- Vendored and generated trees are skipped, and `--ignore` or repo-root `nemoizer.toml` / `[tool.nemoizer]` in `pyproject.toml` (see [references/nemoizer.toml](references/nemoizer.toml) for defaults) configures exclusions, rule selection, and caps.
+- Skip vendored and generated trees. Configure repo or `[[files]]` glob rules, exclusions, and caps in `nemoizer.toml` or `pyproject.toml`.
 
 - Run word rotations and serial-comma checks (`NMO`), semicolon, sentence-length, nominalization, and manual-review style checks (`STE`), human-prose checks (`HMN`), paragraph-length checks (`NMP`), UI and byte-unit divisor checks (`NMU`), and test-assertion reviews (`NMT`) by default.
 - Use decimal `KB`, `MB`, `GB`, and `Mbps` for storage marketing, network rates, and SI data, and binary `KiB`, `MiB`, and `GiB` for OS file sizes, RAM, caches, and buffers.
@@ -62,7 +62,7 @@ and the new one.
 ## Ignore markers
 
 - Use `nonemo: <id>` to suppress only the named rule on that line.
-- For file scope, place `nonemo: <id>` in the first three lines with no avoided word before the marker.
+- For file scope, place `nonemo: <id>` or `nemoizer: key=value` in the first three lines with no avoided word before the marker.
 - Use any comment syntax for `nonemo: <id>`; the scanner reads text, not syntax.
 - Apply an exclusion only to a known matching rule ID.
 - Print every nonemo marker with its path, line, rule ID, scope, and text when `nemoizer collect` or `--ignores` is used, and print every `nonemo` marker and manual-review finding when `nemoizer audit` or `--audit` is used.
