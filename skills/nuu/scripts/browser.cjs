@@ -121,7 +121,7 @@ async function metrics(page, selector) {
   return page.evaluate(selector => {
     const properties = ['height', 'width', 'max-width', 'padding-top', 'padding-right', 'padding-bottom',
       'padding-left', 'padding-inline-start', 'margin-top', 'margin-bottom', 'gap', 'font-size', 'font-weight',
-      'line-height', 'letter-spacing', 'text-align', 'border-radius', 'color', 'background-color', 'outline-style',
+      'font-family', 'line-height', 'letter-spacing', 'text-align', 'text-transform', 'border-radius', 'color', 'background-color', 'outline-style',
       'outline-width', 'transition-duration', 'animation-duration', '--indent',
       'list-style-position', 'list-style-type', 'overflow', 'overflow-x', 'overflow-y',
       'text-overflow', 'white-space'];
@@ -189,6 +189,28 @@ async function metrics(page, selector) {
       }
       if (maxIntra <= 0) return undefined;
       return {inter_px: Number(inter.toFixed(2)), intra_px: Number(maxIntra.toFixed(2))};
+    }
+    function cardInlineInsetsFor(element) {
+      const role = (element.getAttribute('role') || '').toLowerCase();
+      const isCardOrDialog = element.tagName === 'DIALOG' ||
+        role === 'dialog' || role === 'alertdialog' ||
+        Boolean(element.classList?.contains('card'));
+      if (!isCardOrDialog) return undefined;
+      const cardRect = element.getBoundingClientRect();
+      if (cardRect.width <= 0 || cardRect.height <= 0) return undefined;
+      const children = [...element.children].filter(child => {
+        const cs = getComputedStyle(child);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position === 'absolute' || cs.position === 'fixed') return false;
+        if (cs.justifyContent === 'flex-end' || cs.alignSelf === 'flex-end') return false;
+        const r = child.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+      if (children.length < 2) return undefined;
+      const rects = children.map(child => child.getBoundingClientRect());
+      for (let i = 1; i < rects.length; i++) {
+        if (rects[i].top < rects[i - 1].bottom - 2) return undefined;
+      }
+      return rects.map(r => Number((r.left - cardRect.left).toFixed(2)));
     }
     function selectorFor(element) {
       if (element.id) return `#${CSS.escape(element.id)}`;
@@ -338,6 +360,7 @@ async function metrics(page, selector) {
         in_card_or_dialog: Boolean(element.closest && element.closest('.card, dialog, [role="dialog"], [role="alertdialog"], aside, nav, table')),
         card_font_sizes: cardFontSizesFor(element),
         group_proximity: groupProximityFor(element, style),
+        card_inline_insets: cardInlineInsetsFor(element),
         values: Object.fromEntries(properties.map(name => [name, style.getPropertyValue(name)])),
         list_indent: listIndentFor(element, style)};
     });

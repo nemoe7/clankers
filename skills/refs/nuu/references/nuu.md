@@ -27,6 +27,7 @@ Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved hous
 | `NUI001`–`NUI003` | Icons (`audit`) | Missing icon license (`NUI001`), non-ladder icon (`NUI002`), or mixed inline icon sizes (`NUI003`) |
 | `NUL001`–`NUL006` | Source (`lint`) | Missing `alt` (`NUL001`), unnamed control (`NUL002`), `outline: 0` (`NUL003`), missing `design.md` (`NUL004`), hover shift (`NUL005`), raw timestamp (`NUL006`) |
 | `NUL007` | Source (`lint`) | List CSS uses `list-style-position: inside` or omits the `2ch` hanging-indent reset |
+| `NUL008` | Source (`lint`) | Multiple primary buttons or vague Yes/No/Okay labels |
 | `NUB101`–`NUB103` | Browser (`inspect`, `flow`) | Horizontal overflow (`NUB101`), uncaught `pageerror` or `console.error` during load, resize, or flow (`NUB102`), or flow step timeout, missing selector, or failed assertion (`NUB103`) |
 | `NUB104` | Browser (`--ready`) | Declared `--ready SELECTOR` did not match a visible element within the timeout |
 | `NUM201`–`NUM203` | Measure (`--measure`) | Off-scale spacing except validated `2ch` list padding under `NUM211` (`NUM201`), off-ramp typography (`NUM202`), or unapproved border radius (`0/4/6/10/9999 px`) (`NUM203`) |
@@ -39,6 +40,7 @@ Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved hous
 | `NUM215` | Measure (`--measure`) | Multi-line prose or standalone prose container outside 50 to 75ch on desktop |
 | `NUM216` | Measure (`--measure`) | Card or dialog mixes more than 3 distinct font sizes |
 | `NUM217` | Measure (`--measure`) | Inter-group gap is smaller than 1.5x the adjacent intra-group gap |
+| `NUM218` | Measure (`--measure`) | Ragged inline card insets, non-house font families, or uppercase text outside .eyebrow |
 | `NUA301` | Rendered `a11y` | Visible interactive control without an accessible name |
 | `NUA302` | Rendered `a11y` | Broken `aria-labelledby`, `aria-describedby`, `aria-controls`, or `aria-owns` ID target |
 | `NUA303` | Rendered `a11y` | Interactive control nested inside another interactive control |

@@ -1993,3 +1993,62 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     tokens,
   )
   assert len([f for f in prox_bad if f.startswith("NUM217 ")]) == 1
+  core_ok = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "section.card",
+          "tag": "section",
+          "card_inline_insets": [16.0, 16.0, 16.0],
+          "values": {"font-family": "system-ui, sans-serif", "text-transform": "none"},
+        },
+        {
+          "selector": "span.eyebrow",
+          "tag": "span",
+          "values": {"text-transform": "uppercase"},
+        },
+      ],
+    },
+    tokens,
+  )
+  assert core_ok == []
+  core_bad = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {
+          "selector": "section.card",
+          "tag": "section",
+          "card_inline_insets": [16.0, 28.0],
+          "values": {"font-family": "Papyrus, fantasy", "text-transform": "uppercase"},
+        }
+      ],
+    },
+    tokens,
+  )
+  assert len([f for f in core_bad if f.startswith("NUM218 ")]) == 3
+
+  lint_proj = tmp_path / "nul008_proj"
+  (lint_proj / "docs").mkdir(parents=True)
+  (lint_proj / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
+  (lint_proj / "bad.html").write_text(
+    '<dialog><button class="button primary">Yes</button>'
+    '<button class="button button--accent">Delete repo</button></dialog>\n',
+    encoding="utf-8",
+  )
+  (lint_proj / "good.html").write_text(
+    '<dialog><button class="button">Cancel</button>'
+    '<button class="button button--accent">Delete repo</button></dialog>\n',
+    encoding="utf-8",
+  )
+  lint_res = subprocess.run(
+    [sys.executable, str(SCRIPT), "lint", "--project", str(lint_proj)],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  lint_payload = json.loads(lint_res.stdout)
+  nul008 = [f for f in lint_payload["findings"] if f["rule"] == "NUL008"]
+  assert len(nul008) == 2
+  assert all(Path(f["path"]).name == "bad.html" for f in nul008)

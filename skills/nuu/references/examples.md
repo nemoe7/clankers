@@ -114,6 +114,12 @@ Pass: inter-group gaps at least `1.5x` intra-group gaps while both snap to the C
 
 ![Clause 21](examples/proximity-spacing.png)
 
+## 22 & 23. Inline card alignment, house fonts, uppercase discipline, and primary actions
+
+Pass: stacked card items aligned on one inline edge, house font tokens (`--font-sans`, `--font-mono`), uppercase limited to `.eyebrow`, and one explicit primary verb button (`Delete repo`). Fail: ragged inline insets, decorative fonts, uppercase prose, or competing `Yes`/`No` primary buttons (`NUM218`, `NUL008`).
+
+![Clauses 22 and 23](examples/core-principles.png)
+
 ## Recipe and Audit-Rule Examples
 
 - **Modal `.close-button` and confirmation (`recipes/modal-manager.md`):**

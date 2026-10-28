@@ -170,10 +170,10 @@ def load_rule_descriptions(home: Path = HOME) -> dict[str, str]:
 VERSION = _load_version()
 RULE_DESCRIPTIONS = load_rule_descriptions()
 KNOWN_NUU_RULES = {
-  *(f"NUL00{i}" for i in range(1, 8)),
+  *(f"NUL00{i}" for i in range(1, 9)),
   *(f"NUI00{i}" for i in range(1, 4)),
   *(f"NUB10{i}" for i in range(1, 5)),
-  *(f"NUM{i}" for i in range(201, 218) if i != 204),
+  *(f"NUM{i}" for i in range(201, 219) if i != 204),
   *(f"NUA{i}" for i in range(301, 311)),
   *RULE_DESCRIPTIONS,
 }
@@ -386,6 +386,33 @@ def extract(root):
 
 class SourcePage(HTMLParser):
   RAW_TEXT_TAGS = ("script", "style", "code", "pre", "textarea", "template")
+  VAGUE_BUTTON_LABELS = frozenset({"yes", "no", "okay", "ok"})
+  PRIMARY_BUTTON_CLASSES = frozenset(
+    {
+      "primary",
+      "button--accent",
+      "btn-primary",
+      "button-primary",
+    }
+  )
+  VOID_TAGS = frozenset(
+    {
+      "area",
+      "base",
+      "br",
+      "col",
+      "embed",
+      "hr",
+      "img",
+      "input",
+      "link",
+      "meta",
+      "param",
+      "source",
+      "track",
+      "wbr",
+    }
+  )
 
   def __init__(self, path):
     super().__init__(convert_charrefs=True)
@@ -393,6 +420,9 @@ class SourcePage(HTMLParser):
     self.labels, self.ids, self.controls = set(), set(), []
     self.label_depth = 0
     self.raw_text_depth = 0
+    self.tag_depth = 0
+    self.card_scopes = []
+    self.button_stack = []
 
   def finding(self, rule, criterion, evidence, position):
     line, column = position
@@ -409,8 +439,34 @@ class SourcePage(HTMLParser):
       }
     )
 
+  @classmethod
+  def _is_primary_button(cls, attrs: dict) -> bool:
+    classes = set((attrs.get("class") or "").split())
+    if classes & cls.PRIMARY_BUTTON_CLASSES:
+      return True
+    return (attrs.get("data-variant") or "").strip().lower() == "primary"
+
+  def _check_button_action(self, attrs: dict, label_text: str, pos: tuple[int, int]):
+    cleaned = re.sub(r"[.!?\s]+$", "", label_text.strip())
+    if cleaned and cleaned.casefold() in self.VAGUE_BUTTON_LABELS:
+      self.finding(
+        "NUL008",
+        "action-hierarchy",
+        f"Button uses vague label '{label_text.strip()}' instead of an explicit action",
+        pos,
+      )
+    if self.card_scopes and self._is_primary_button(attrs):
+      self.card_scopes[-1][2].append(pos)
+
   def handle_starttag(self, tag, attributes):
     attrs = dict(attributes)
+    pos = self.getpos()
+    classes = set((attrs.get("class") or "").split())
+    role = (attrs.get("role") or "").strip().lower()
+    if tag not in self.VOID_TAGS:
+      self.tag_depth += 1
+      if tag == "dialog" or role in {"dialog", "alertdialog"} or "card" in classes:
+        self.card_scopes.append((tag, self.tag_depth, []))
     if tag in self.RAW_TEXT_TAGS:
       self.raw_text_depth += 1
     if attrs.get("id"):
@@ -420,17 +476,48 @@ class SourcePage(HTMLParser):
       if attrs.get("for"):
         self.labels.add(attrs["for"])
     if tag == "img" and "alt" not in attrs:
-      self.finding("NUL001", "1.1.1", "Image has no alt attribute", self.getpos())
+      self.finding("NUL001", "1.1.1", "Image has no alt attribute", pos)
+    if tag == "button":
+      self.button_stack.append((attrs, pos, []))
     if tag in {"input", "select", "textarea"}:
-      self.controls.append((attrs, bool(self.label_depth), self.getpos()))
+      self.controls.append((attrs, bool(self.label_depth), pos))
+      if tag == "input" and (attrs.get("type") or "").lower() in {
+        "button",
+        "submit",
+        "reset",
+      }:
+        self._check_button_action(
+          attrs, attrs.get("value") or attrs.get("aria-label") or "", pos
+        )
 
   def handle_endtag(self, tag):
+    if tag == "button" and self.button_stack:
+      attrs, pos, chunks = self.button_stack.pop()
+      label = "".join(chunks).strip() or (attrs.get("aria-label") or "").strip()
+      self._check_button_action(attrs, label, pos)
+    if (
+      self.card_scopes
+      and self.card_scopes[-1][0] == tag
+      and self.card_scopes[-1][1] == self.tag_depth
+    ):
+      _, _, primaries = self.card_scopes.pop()
+      if len(primaries) > 1:
+        self.finding(
+          "NUL008",
+          "action-hierarchy",
+          f"Card or dialog contains {len(primaries)} primary buttons (at most 1 allowed)",
+          primaries[1],
+        )
+    if tag not in self.VOID_TAGS:
+      self.tag_depth = max(0, self.tag_depth - 1)
     if tag in self.RAW_TEXT_TAGS:
       self.raw_text_depth = max(0, self.raw_text_depth - 1)
     if tag == "label":
       self.label_depth = max(0, self.label_depth - 1)
 
   def handle_data(self, data):
+    if self.button_stack and data:
+      self.button_stack[-1][2].append(data)
     if self.raw_text_depth > 0 or not data:
       return
     match = RAW_UI_TIMESTAMP_RE.search(data)
@@ -443,6 +530,15 @@ class SourcePage(HTMLParser):
       )
 
   def finish(self):
+    while self.card_scopes:
+      _, _, primaries = self.card_scopes.pop()
+      if len(primaries) > 1:
+        self.finding(
+          "NUL008",
+          "action-hierarchy",
+          f"Card or dialog contains {len(primaries)} primary buttons (at most 1 allowed)",
+          primaries[1],
+        )
     for attrs, nested, position in self.controls:
       direct = any((attrs.get(name) or "").strip() for name in ("aria-label", "title"))
       references = set((attrs.get("aria-labelledby") or "").split()) & self.ids

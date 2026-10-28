@@ -492,6 +492,71 @@ def _proximity_spacing_finding(element: dict) -> str | None:
   return None
 
 
+HOUSE_FONT_FALLBACKS = frozenset(
+  {
+    "system-ui",
+    "-apple-system",
+    "blinkmacsystemfont",
+    "segoe ui",
+    "roboto",
+    "helvetica neue",
+    "arial",
+    "sans-serif",
+    "ui-monospace",
+    "sfmono-regular",
+    "menlo",
+    "monaco",
+    "consolas",
+    "liberation mono",
+    "monospace",
+    "inter",
+    "inherit",
+  }
+)
+
+
+def _approved_font_families(tokens: dict[str, str]) -> set[str]:
+  allowed = set(HOUSE_FONT_FALLBACKS)
+  for key in ("font-sans", "font-mono"):
+    raw = tokens.get(key) or ""
+    for part in raw.split(","):
+      cleaned = part.strip().strip("\"'").lower()
+      if cleaned:
+        allowed.add(cleaned)
+  return allowed
+
+
+def _core_principles_findings(element: dict, tokens: dict[str, str]) -> list[str]:
+  out: list[str] = []
+  selector = str(element.get("selector") or "?")
+  classes = element.get("classes") or []
+  values = element.get("values") or {}
+  insets = element.get("card_inline_insets", element.get("cardInlineInsets"))
+  if isinstance(insets, list):
+    nums = [float(x) for x in insets if isinstance(x, (int, float))]
+    if len(nums) >= 2 and max(nums) - min(nums) > 2.0:
+      joined = ", ".join(f"{val:g}px" for val in nums)
+      out.append(
+        f"NUM218 {selector}: stacked card children have ragged inline-start insets ({joined})"
+      )
+  raw_ff = str(values.get("font-family") or "").strip()
+  if raw_ff:
+    families = [
+      part.strip().strip("\"'").lower() for part in raw_ff.split(",") if part.strip()
+    ]
+    allowed = _approved_font_families(tokens)
+    if families and not any(fam in allowed for fam in families):
+      out.append(
+        f"NUM218 {selector}: font-family {raw_ff} is outside the house font tokens"
+      )
+  transform = str(values.get("text-transform") or "").strip().lower()
+  if transform == "uppercase" and not (
+    "eyebrow" in classes or bool(re.search(r"\beyebrow\b", selector, re.IGNORECASE))
+  ):
+    out.append(f"NUM218 {selector}: text-transform uppercase is reserved for .eyebrow")
+  return out
+
+
 def check(
   report: dict, tokens: dict[str, str], scale: float = DEFAULT_SCALE
 ) -> list[str]:
@@ -511,6 +576,7 @@ def check(
       _body_width_finding(element, report_width),
       _card_font_hierarchy_finding(element, elements),
       _proximity_spacing_finding(element),
+      *_core_principles_findings(element, tokens),
     ):
       if extra:
         findings.append(extra)

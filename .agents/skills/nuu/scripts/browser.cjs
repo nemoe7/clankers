@@ -119,12 +119,99 @@ async function overlaps(page, selector) {
 
 async function metrics(page, selector) {
   return page.evaluate(selector => {
-    const properties = ['height', 'width', 'padding-top', 'padding-right', 'padding-bottom',
+    const properties = ['height', 'width', 'max-width', 'padding-top', 'padding-right', 'padding-bottom',
       'padding-left', 'padding-inline-start', 'margin-top', 'margin-bottom', 'gap', 'font-size', 'font-weight',
-      'line-height', 'border-radius', 'color', 'background-color', 'outline-style',
+      'font-family', 'line-height', 'letter-spacing', 'text-align', 'text-transform', 'border-radius', 'color', 'background-color', 'outline-style',
       'outline-width', 'transition-duration', 'animation-duration', '--indent',
       'list-style-position', 'list-style-type', 'overflow', 'overflow-x', 'overflow-y',
       'text-overflow', 'white-space'];
+    const measureCanvas = document.createElement('canvas');
+    const measureCtx = measureCanvas.getContext('2d');
+    function chPxFor(style) {
+      if (!measureCtx) return null;
+      measureCtx.font = style.font;
+      const width = measureCtx.measureText('0').width;
+      return Number.isFinite(width) && width > 0 ? Number(width.toFixed(2)) : null;
+    }
+    function lineCountFor(element) {
+      const proseTags = new Set(['P', 'LI', 'BLOCKQUOTE', 'DD', 'FIGCAPTION', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+      if (!proseTags.has(element.tagName)) return undefined;
+      const tops = [];
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        if (!node.nodeValue?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const rect of range.getClientRects()) {
+          if (rect.width <= 0 || rect.height <= 0) continue;
+          if (!tops.some(y => Math.abs(y - rect.y) < 3)) tops.push(rect.y);
+        }
+      }
+      return tops.length || undefined;
+    }
+    function cardFontSizesFor(element) {
+      const role = (element.getAttribute('role') || '').toLowerCase();
+      const isCardOrDialog = element.tagName === 'DIALOG' ||
+        role === 'dialog' || role === 'alertdialog' ||
+        Boolean(element.classList?.contains('card'));
+      if (!isCardOrDialog) return undefined;
+      const sizes = new Set();
+      for (const child of element.querySelectorAll('*')) {
+        if (child.closest('.card, dialog, [role="dialog"], [role="alertdialog"]') !== element) continue;
+        const hasDirectText = [...child.childNodes].some(n => n.nodeType === Node.TEXT_NODE && n.nodeValue?.trim());
+        if (!hasDirectText) continue;
+        const cs = getComputedStyle(child);
+        if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+        const fs = cs.getPropertyValue('font-size').trim();
+        if (fs) sizes.add(fs);
+      }
+      return [...sizes];
+    }
+    function groupProximityFor(element, style) {
+      const inter = Number.parseFloat(style.getPropertyValue('gap')) ||
+        Number.parseFloat(style.getPropertyValue('row-gap')) ||
+        Number.parseFloat(style.getPropertyValue('column-gap'));
+      if (!Number.isFinite(inter) || inter <= 0) return undefined;
+      const groupChildren = [...element.children].filter(child =>
+        child.tagName === 'FIELDSET' || child.tagName === 'LABEL' ||
+        (child.getAttribute('role') || '').toLowerCase() === 'group' ||
+        Boolean(child.classList?.contains('field'))
+      );
+      if (groupChildren.length < 2) return undefined;
+      let maxIntra = 0;
+      for (const child of groupChildren) {
+        const cs = getComputedStyle(child);
+        const intra = Number.parseFloat(cs.getPropertyValue('gap')) ||
+          Number.parseFloat(cs.getPropertyValue('row-gap')) ||
+          Number.parseFloat(cs.getPropertyValue('column-gap')) || 0;
+        if (Number.isFinite(intra) && intra > maxIntra) maxIntra = intra;
+      }
+      if (maxIntra <= 0) return undefined;
+      return {inter_px: Number(inter.toFixed(2)), intra_px: Number(maxIntra.toFixed(2))};
+    }
+    function cardInlineInsetsFor(element) {
+      const role = (element.getAttribute('role') || '').toLowerCase();
+      const isCardOrDialog = element.tagName === 'DIALOG' ||
+        role === 'dialog' || role === 'alertdialog' ||
+        Boolean(element.classList?.contains('card'));
+      if (!isCardOrDialog) return undefined;
+      const cardRect = element.getBoundingClientRect();
+      if (cardRect.width <= 0 || cardRect.height <= 0) return undefined;
+      const children = [...element.children].filter(child => {
+        const cs = getComputedStyle(child);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position === 'absolute' || cs.position === 'fixed') return false;
+        if (cs.justifyContent === 'flex-end' || cs.alignSelf === 'flex-end') return false;
+        const r = child.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+      if (children.length < 2) return undefined;
+      const rects = children.map(child => child.getBoundingClientRect());
+      for (let i = 1; i < rects.length; i++) {
+        if (rects[i].top < rects[i - 1].bottom - 2) return undefined;
+      }
+      return rects.map(r => Number((r.left - cardRect.left).toFixed(2)));
+    }
     function selectorFor(element) {
       if (element.id) return `#${CSS.escape(element.id)}`;
       const parent = element.parentElement;
@@ -268,6 +355,12 @@ async function metrics(page, selector) {
         maxSiblingGap,
         row_slack: rowSlack,
         rowSlack,
+        line_count: lineCountFor(element),
+        ch_px: chPxFor(style),
+        in_card_or_dialog: Boolean(element.closest && element.closest('.card, dialog, [role="dialog"], [role="alertdialog"], aside, nav, table')),
+        card_font_sizes: cardFontSizesFor(element),
+        group_proximity: groupProximityFor(element, style),
+        card_inline_insets: cardInlineInsetsFor(element),
         values: Object.fromEntries(properties.map(name => [name, style.getPropertyValue(name)])),
         list_indent: listIndentFor(element, style)};
     });
