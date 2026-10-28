@@ -3,7 +3,6 @@
 import argparse
 import configparser
 import importlib.util
-import re
 import subprocess
 import sys
 import tokenize
@@ -13,10 +12,6 @@ from extract_prose import extract_files
 
 SKIP_PARTS = {".git", ".venv", "node_modules", ".agents", "arena-state", "__pycache__"}
 _NEMOIZER = None
-STRICT_PASSIVE_RE = re.compile(
-  r"\b(?:is|are|was|were|been|being)\s+[a-z]{3,}ed\b",
-  re.IGNORECASE,
-)
 
 
 def markdown_targets() -> list[Path]:
@@ -58,27 +53,21 @@ def _nemoizer_findings(label: str, text: str, strict: bool = False) -> list[dict
     )
   for row in rows:
     rule = row["rule"]
-    if rule in blocking:
-      findings.append(
-        {
-          "line": row["line"],
-          "col": row["column"],
-          "level": "advisory-free",
-          "rule": rule,
-          "message": f"{row['count']} -> {row['cap']}",
-        }
-      )
-  for line_no, line in enumerate(text.splitlines(), start=1):
-    for match in STRICT_PASSIVE_RE.finditer(line):
-      findings.append(
-        {
-          "line": line_no,
-          "col": match.start() + 1,
-          "level": "advisory",
-          "rule": "STE901",
-          "message": f"passive voice '{match.group(0)}'",
-        }
-      )
+    if rule not in blocking and rule != "STE901":
+      continue
+    findings.append(
+      {
+        "line": row["line"],
+        "col": row["column"],
+        "level": "advisory-free" if rule in blocking else "advisory",
+        "rule": rule,
+        "message": (
+          f"{row['count']} -> {row['cap']}"
+          if rule in blocking
+          else "passive voice (manual review)"
+        ),
+      }
+    )
   return findings
 
 

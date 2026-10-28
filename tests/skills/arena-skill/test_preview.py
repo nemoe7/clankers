@@ -2277,12 +2277,6 @@ def test_http_boundaries():
       assert " Other: " not in markup and "<textarea" in markup
       assert 'aria-label="Other"' in markup
       assert 'aria-label="Other, your own answer"' in markup
-      assert preview.custom_answer(verdict, "Other: make it blue")
-      assert not preview.custom_answer(verdict, "Other:   ")
-      assert preview.custom_answer(verdict, "Other: " + "x" * 2000)
-      assert preview.custom_answer(verdict, "Other: " + "x" * 2001)
-      assert not preview.custom_answer(verdict, "nonsense")
-      assert not preview.custom_answer(verdict, 7)
       record = store.submit(
         "custom",
         "Custom",
@@ -8767,7 +8761,9 @@ def test_scheduled_read_set_note_is_blocking_for_agent_and_quiet_for_poll(
     sub.mkdir()
     sub_agents = sub / "AGENTS.md"
     sub_agents.write_text("sub agents\n", encoding="utf-8")
-    assert [str(path) for path in preview.agents_paths(sub, root=root)] == [
+    assert [
+      str(path) for path in preview.resolve_agents_chain(target=sub, root=root)[1]
+    ] == [
       str(root / "AGENTS.md"),
       str(nested),
       str(sub_agents),
@@ -10944,7 +10940,7 @@ def test_pr_check_wait_needs_no_required_check_settings():
     assert not any("refUpdateRule" in str(call) for call in calls)
 
 
-def test_pr_check_rollup_uses_latest_check_and_status_runs():
+def test_pr_check_latest_uses_latest_check_and_status_runs():
   old = {
     "type": "check",
     "name": "Contract",
@@ -10953,34 +10949,37 @@ def test_pr_check_rollup_uses_latest_check_and_status_runs():
     "at": "2026-10-18T08:00:00Z",
   }
   new = {**old, "state": "SUCCESS", "at": "2026-10-18T09:00:00Z"}
-  for nodes, expected in [
-    ([old, new], ("SUCCESS", 1)),
-    ([new, old], ("SUCCESS", 1)),
-    ([new, {**new, "state": "QUEUED", "at": "2026-10-18T10:00:00Z"}], ("PENDING", 1)),
-    ([new, {**old, "workflow": "Other"}], ("FAILURE", 2)),
+  for nodes, expected_count, expected_states in [
+    ([old, new], 1, {"SUCCESS"}),
+    ([new, old], 1, {"SUCCESS"}),
+    ([new, {**new, "state": "QUEUED", "at": "2026-10-18T10:00:00Z"}], 1, {"QUEUED"}),
+    ([new, {**old, "workflow": "Other"}], 2, {"SUCCESS", "FAILURE"}),
     (
       [
         {**old, "type": "status", "workflow": ""},
         {**new, "type": "status", "workflow": ""},
       ],
-      ("SUCCESS", 1),
+      1,
+      {"SUCCESS"},
     ),
-    ([old, {**new, "type": "status", "workflow": ""}], ("FAILURE", 2)),
-    ([{**old, "at": "2026-10-18T10:00:00+02:00"}, new], ("SUCCESS", 1)),
+    ([old, {**new, "type": "status", "workflow": ""}], 2, {"FAILURE", "SUCCESS"}),
+    ([{**old, "at": "2026-10-18T10:00:00+02:00"}, new], 1, {"SUCCESS"}),
   ]:
     with patch("preview.gh_check_json", return_value=nodes):
-      assert preview.pr_check_rollup(".", "owner/repo", "sha") == expected
+      latest = preview.pr_check_latest(".", "owner/repo", "sha")
+      assert len(latest) == expected_count
+      assert {node["state"] for node in latest} == expected_states
 
 
-def test_pr_check_rollup_boundaries():
+def test_pr_check_latest_boundaries():
   for error in (OSError("gh missing"), subprocess.TimeoutExpired("gh", 5)):
     with patch("preview.subprocess.run", side_effect=error):
       assert preview.pr_head_sha(".", "branch", "owner/repo") is None
-      assert preview.pr_check_rollup(".", "owner/repo", "sha") is None
+      assert preview.pr_check_latest(".", "owner/repo", "sha") is None
   for code, output in ((1, "auth failed"), (0, "not JSON")):
     result = subprocess.CompletedProcess([], code, stdout=output, stderr="")
     with patch("preview.subprocess.run", return_value=result):
-      assert preview.pr_check_rollup(".", "owner/repo", "sha") is None
+      assert preview.pr_check_latest(".", "owner/repo", "sha") is None
   node = {
     "type": "check",
     "name": "test",
@@ -10988,28 +10987,34 @@ def test_pr_check_rollup_boundaries():
     "state": "SUCCESS",
     "at": "2026-10-18T00:00:00Z",
   }
-  for data, expected in [
-    ([], ("PENDING", 0)),
-    ([{**node, "name": f"test-{i}"} for i in range(201)], ("SUCCESS", 201)),
-    (None, None),
-    ({}, None),
-    ([None], None),
-    ([{}], None),
-    ([{**node, "state": []}], None),
-    ([{**node, "state": "UNKNOWN"}], ("PENDING", 1)),
-    ([{**node, "at": "bad timestamp"}], None),
-    ([{**node, "at": "2026-10-18T00:00:00"}], None),
-    ([{**node, "workflow": []}], None),
-    ([{**node, "name": 1}], None),
-    ([{**node, "state": "SKIPPED"}], ("SUCCESS", 1)),
-    ([{**node, "state": "NEUTRAL"}], ("SUCCESS", 1)),
+  for data, expected_count, expected_states in [
+    ([], 0, set()),
+    ([{**node, "name": f"test-{i}"} for i in range(201)], 201, {"SUCCESS"}),
+    (None, None, None),
+    ({}, None, None),
+    ([None], None, None),
+    ([{}], None, None),
+    ([{**node, "state": []}], None, None),
+    ([{**node, "state": "UNKNOWN"}], 1, {"UNKNOWN"}),
+    ([{**node, "at": "bad timestamp"}], None, None),
+    ([{**node, "at": "2026-10-18T00:00:00"}], None, None),
+    ([{**node, "workflow": []}], None, None),
+    ([{**node, "name": 1}], None, None),
+    ([{**node, "state": "SKIPPED"}], 1, {"SKIPPED"}),
+    ([{**node, "state": "NEUTRAL"}], 1, {"NEUTRAL"}),
   ]:
     with patch("preview.gh_check_json", return_value=data):
-      assert preview.pr_check_rollup(".", "owner/repo", "sha") == expected
+      latest = preview.pr_check_latest(".", "owner/repo", "sha")
+      if expected_count is None:
+        assert latest is None
+      else:
+        assert len(latest) == expected_count
+        assert {node["state"] for node in latest} == expected_states
   output = "\n".join(json.dumps({**node, "name": f"test-{i}"}) for i in range(201))
   result = subprocess.CompletedProcess([], 0, stdout=output, stderr="")
   with patch("preview.subprocess.run", return_value=result) as run:
-    assert preview.pr_check_rollup(".", "owner/repo", "sha") == ("SUCCESS", 201)
+    latest = preview.pr_check_latest(".", "owner/repo", "sha")
+    assert len(latest) == 201
     command = run.call_args.args[0]
     assert "--paginate" in command
     assert any("pageInfo{hasNextPage endCursor}" in arg for arg in command)
@@ -14356,76 +14361,6 @@ def test_survey_rejects_null_partial_and_zero_confidence_known_answers():
   assert isinstance(graded[2]["correct"], bool)
 
 
-def test_portable_parser_installer_handles_fresh_reuse_missing_npm_and_failure(
-  tmp_path,
-):
-  tool_dir = tmp_path / "parsers"
-  missing = preview.discover_portable_parsers(tool_dir)
-  assert not missing["available"]
-  assert "install.sh" in missing["message"]
-
-  no_npm = preview.install_portable_parsers(tool_dir, which=lambda name: None)
-  assert no_npm["status"] == "skipped"
-  assert not no_npm["available"]
-  assert (tool_dir / "package.json").is_file()
-  assert (tool_dir / "package-lock.json").is_file()
-  manifest = json.loads((tool_dir / "package.json").read_text(encoding="utf-8"))
-  assert manifest["dependencies"] == {"acorn": "8.18.0", "css-tree": "3.2.1"}
-
-  calls = []
-
-  def fake_failed_runner(cmd, **kwargs):
-    calls.append(cmd)
-    return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="registry offline")
-
-  failed = preview.install_portable_parsers(
-    tool_dir,
-    which=lambda name: f"/usr/bin/{name}",
-    runner=fake_failed_runner,
-  )
-  assert failed["status"] == "failed"
-  assert not failed["available"]
-  assert "registry offline" in failed["message"]
-  assert len(calls) == 1
-
-  def fake_success_runner(cmd, **kwargs):
-    calls.append(cmd)
-    acorn_dir = tool_dir / "node_modules" / "acorn" / "dist"
-    acorn_dir.mkdir(parents=True, exist_ok=True)
-    (acorn_dir / "acorn.js").write_text("module.exports = {};\n", encoding="utf-8")
-    (tool_dir / "node_modules" / "acorn" / "package.json").write_text(
-      json.dumps({"name": "acorn", "version": "8.18.0", "main": "dist/acorn.js"}),
-      encoding="utf-8",
-    )
-    csstree_dir = tool_dir / "node_modules" / "css-tree" / "lib"
-    csstree_dir.mkdir(parents=True, exist_ok=True)
-    (csstree_dir / "index.cjs").write_text("module.exports = {};\n", encoding="utf-8")
-    (tool_dir / "node_modules" / "css-tree" / "package.json").write_text(
-      json.dumps({"name": "css-tree", "version": "3.2.1", "main": "lib/index.cjs"}),
-      encoding="utf-8",
-    )
-    return subprocess.CompletedProcess(cmd, 0, stdout="added 4 packages", stderr="")
-
-  installed = preview.install_portable_parsers(
-    tool_dir,
-    which=lambda name: f"/usr/bin/{name}",
-    runner=fake_success_runner,
-  )
-  assert installed["status"] == "installed"
-  assert installed["available"]
-  assert installed["versions"] == {"acorn": "8.18.0", "css-tree": "3.2.1"}
-  assert len(calls) == 2
-
-  reused = preview.install_portable_parsers(
-    tool_dir,
-    which=lambda name: f"/usr/bin/{name}",
-    runner=fake_success_runner,
-  )
-  assert reused["status"] == "reused"
-  assert reused["available"]
-  assert len(calls) == 2
-
-
 def test_gate_exempts_mkdir_publish_tasks_and_help(tmp_path):
   state = tmp_path / "state"
   store = preview.Store(state, create=True)
@@ -17266,8 +17201,8 @@ def test_preview_board_and_autosave_revision_diff_sync(tmp_path, monkeypatch):
   assert snap_diff["mode"] == "diff"
   assert snap_diff["revision"] == 2
   assert "text" not in snap_diff
-  rebuilt_core = preview.apply_preview_state_diff(snap1["core"], snap_diff["diff"])
-  assert preview.autosave_digest(rebuilt_core) == snap_diff["digest"]
+  current_core = store.userscript_snapshot()["core"]
+  assert preview.autosave_digest(current_core) == snap_diff["digest"]
 
   # confirm_userscript_save resolves omitted core from cached/live snapshot:
   confirmed = store.confirm_userscript_save(

@@ -23,6 +23,24 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Add theme-specific scrollbar tokens and coarse-pointer hit areas (`SKILL.md`, `references/style.css`).
 - Align eyebrow tracking, recipe motion, range ticks, and modal padding with approved scales (`SKILL.md`, `references/recipes/`).
 
+### Removed
+
+#### maintenance
+
+- Remove unused helpers and duplicate passive-voice scanning (`maintenance/`).
+
+#### arena-skill
+
+- Remove unused preview helpers and the board stamp registry (`skills/refs/arena-skill/`).
+
+#### nuu
+
+- Remove the unused named-breakpoint resolver (`scripts/nuu.py`).
+
+#### userscripts
+
+- Remove the unused HTTP jitter helper (`arena.user.js`).
+
 ## 2026-10-28
 
 ### Added

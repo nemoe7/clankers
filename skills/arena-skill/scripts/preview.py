@@ -450,13 +450,6 @@ def pr_check_latest(root,slug,sha):
 		active=node['state']not in PR_CHECK_SUCCESS_STATES+PR_CHECK_FAILURE_STATES;rank=1 if active else 0,stamp;key=node['type'],node['name'],node['workflow']
 		if key not in latest or rank>latest[key][0]:latest[key]=rank,node
 	return[node for(_stamp,node)in sorted(latest.values(),key=lambda entry:(entry[1]['workflow'],entry[1]['name'],entry[1]['type']))]
-def pr_check_rollup(root,slug,sha):
-	latest=pr_check_latest(root,slug,sha)
-	if latest is None:return None
-	states={node['state']for node in latest}
-	if states&set(PR_CHECK_FAILURE_STATES):return'FAILURE',len(latest)
-	if not states or states-set(PR_CHECK_SUCCESS_STATES):return'PENDING',len(latest)
-	return'SUCCESS',len(latest)
 def gh_api_lines(root,path,projection):
 	try:result=subprocess.run(['gh','api',path,'--jq',projection],cwd=root,capture_output=True,text=True,check=False,timeout=PR_STEP_TIMEOUT)
 	except(OSError,subprocess.TimeoutExpired):return None
@@ -685,14 +678,6 @@ def slug(text,used):
 	used.add(candidate);return candidate
 def prompt_text(line):text=re.sub('^\\s*(?:[-*+]\\s+|#+\\s+|>\\s+|\\d+[.)]\\s+)','',line).strip();return text.strip('*_` ').rstrip(':').strip()
 def custom_label(option):found=BLANK.match(option);return None if not found else prompt_text(found.group(1)or'')or'Other'
-def custom_answer(field,value):
-	if not isinstance(value,str):return False
-	for option in field['options']:
-		label=custom_label(option)
-		if label is None or not value.startswith(f"{label}: "):continue
-		typed=value[len(label)+2:]
-		if typed.strip():return True
-	return False
 FORMAT_SLOT=re.compile('\\{([^{}]+)\\}')
 def validate_submission_format(value,fields):
 	if value is None:return None
@@ -1275,7 +1260,6 @@ def resolve_agents_chain(target=None,root=None):
 	current=base;chain=[current]
 	for part in rel.parts:current=current/part;chain.append(current)
 	return base,[directory/'AGENTS.md'for directory in chain if(directory/'AGENTS.md').is_file()]
-def agents_paths(target=None,root=None):return resolve_agents_chain(target=target,root=root)[1]
 INERT_COMMANDS='cd','mkdir','[','test','export','set','unset','true',':','source','.','trap','shopt','umask'
 def unquote_commands(line):
 	kept=[];quote='';index=0;text=str(line or'').replace('\r','\n')
@@ -2600,27 +2584,6 @@ def compute_preview_state_diff(prev_core,next_core,base_rev,next_rev):
 		pair=_preview_state_record_group(row),_preview_state_record_key(row);encoded=_preview_canonical_json(row);next_map[pair]=row,encoded;prev_item=prev_map.get(pair)
 		if prev_item is None or prev_item[1]!=encoded:upserts.append(row)
 	tombstones=[{'group':grp,'key':rec_key}for(grp,rec_key)in sorted(prev_map)if(grp,rec_key)not in next_map];return{'base_rev':int(base_rev),'rev':int(next_rev),'upserts':upserts,'tombstones':tombstones}
-def apply_preview_state_diff(base_core,diff_obj):
-	if not isinstance(diff_obj,dict):raise TypeError('State diff must be an object')
-	upserts=diff_obj.get('upserts');tombstones=diff_obj.get('tombstones')
-	if not isinstance(upserts,list)or not isinstance(tombstones,list):raise TypeError('State diff requires upserts and tombstones arrays')
-	index={};order=[]
-	for row in base_core or[]:
-		if not isinstance(row,dict)or row.get('type')=='userscript-autosave':continue
-		pair=_preview_state_record_group(row),_preview_state_record_key(row)
-		if pair not in index:order.append(pair)
-		index[pair]=dict(row)
-	removed=set()
-	for tomb in tombstones:
-		if not isinstance(tomb,dict):continue
-		grp=str(tomb.get('group')or'').strip();rec_key=str(tomb.get('key')or'').strip()
-		if grp and rec_key:removed.add((grp,rec_key));index.pop((grp,rec_key),None)
-	for row in upserts:
-		if not isinstance(row,dict)or row.get('type')=='userscript-autosave':continue
-		pair=_preview_state_record_group(row),_preview_state_record_key(row);removed.discard(pair)
-		if pair not in index:order.append(pair)
-		index[pair]=dict(row)
-	return[index[pair]for pair in order if pair in index and pair not in removed]
 def _decompose_preview_board(board):
 	data=board if isinstance(board,dict)else{};records={('meta','scalars'):{key:val for(key,val)in data.items()if key not in _PREVIEW_BOARD_COLLECTION_KEYS}}
 	for(idx,row)in enumerate(data.get('sessions')or[]):
@@ -5420,16 +5383,6 @@ def _check_parser_package(base_dir,package_name,expected_version):
 	if version_str!=expected_version or not entry.is_file():return None,version_str
 	return str(entry),version_str
 def discover_portable_parsers(tool_dir=None):target=parser_tool_dir(tool_dir);acorn_entry,acorn_ver=_check_parser_package(target,'acorn',PARSER_PACKAGES['acorn']);csstree_entry,csstree_ver=_check_parser_package(target,'css-tree',PARSER_PACKAGES['css-tree']);available=bool(acorn_entry and csstree_entry);message=f"Pinned Acorn {acorn_ver} and CSS-tree {csstree_ver} ready in {target}"if available else f"Local Acorn/CSS-tree parsers are not installed in {target}; rerun .agents/skills/arena-skill/scripts/install.sh with Node and npm available.";return{'available':available,'directory':str(target),'acorn':acorn_entry,'css_tree':csstree_entry,'versions':{'acorn':acorn_ver,'css-tree':csstree_ver},'message':message}
-def install_portable_parsers(tool_dir=None,which=shutil.which,runner=subprocess.run):
-	target=parser_tool_dir(tool_dir);target.mkdir(parents=True,exist_ok=True);manifest_path=target/'package.json';lockfile_path=target/'package-lock.json';manifest_text=json.dumps(PARSER_MANIFEST,indent=2)+'\n';lockfile_text=json.dumps(PARSER_LOCKFILE,indent=2)+'\n'
-	if not manifest_path.is_file()or manifest_path.read_text(encoding='utf-8')!=manifest_text:manifest_path.write_text(manifest_text,encoding='utf-8')
-	if not lockfile_path.is_file()or lockfile_path.read_text(encoding='utf-8')!=lockfile_text:lockfile_path.write_text(lockfile_text,encoding='utf-8')
-	existing=discover_portable_parsers(target)
-	if existing['available']:return{**existing,'status':'reused'}
-	if not which('node')or not which('npm'):return{**existing,'status':'skipped','message':'Node or npm is unavailable; skipping portable parser install (preview remains usable).'}
-	completed=runner(['npm','ci','--ignore-scripts','--no-audit','--no-fund'],cwd=str(target),capture_output=True,text=True,check=False);after=discover_portable_parsers(target)
-	if completed.returncode!=0 or not after['available']:detail=(completed.stderr or completed.stdout or'npm ci failed').strip();return{**after,'status':'failed','message':f"Portable parser install failed ({detail}); preview remains usable."}
-	return{**after,'status':'installed'}
 def _outline_repo_root(repo_root=None):
 	if repo_root is not None:return Path(repo_root).resolve()
 	cwd=Path.cwd().resolve()

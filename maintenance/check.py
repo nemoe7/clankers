@@ -346,12 +346,6 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
   }, []
 
 
-def workflow_description(text: str) -> str:
-  """Return a workflow file's frontmatter description, ignoring comments."""
-  values, _ = parse_frontmatter(text)
-  return values.get("description", "")
-
-
 def markdown_inline_text(token: Any) -> str:
   """Reconstruct inline text while preserving text around code spans."""
   if not token.children:

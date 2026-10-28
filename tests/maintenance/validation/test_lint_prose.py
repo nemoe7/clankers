@@ -136,7 +136,8 @@ def test_strict_lint_accepts_synonyms_without_rotation_report(capsys):
 
 def test_strict_lint_keeps_passive_findings_advisory(capsys):
   assert lint_prose.strict_lint("passive.py", ["The state was saved."]) == 0
-  assert "STE901" in capsys.readouterr().out
+  output = capsys.readouterr().out
+  assert output.count("STE901") == 1
 
 
 def test_extract_prose_cli_groups_comments_and_docstrings(tmp_path):

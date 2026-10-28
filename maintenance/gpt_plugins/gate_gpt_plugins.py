@@ -30,7 +30,7 @@ PLUGIN = ROOT / "gpt-plugins"
 MANIFEST = PLUGIN / "plugin.json"
 ASSETS = PLUGIN / "assets"
 # The collection README documents the layout for a human reader, so the tree allows it
-# and shipped_paths() leaves it out of the archive.
+# and archive_members() leaves it out of the archive.
 README = PLUGIN / "README.md"
 REFS = PLUGIN / "refs" / "skills"
 SHIPPED = PLUGIN / "skills"
@@ -123,11 +123,6 @@ def skill_openai_yaml(name: str) -> bytes:
 def skill_roots(name: str) -> tuple[Path, Path]:
   """Return the (refs, shipped) directories for a collection skill."""
   return MOUNTED_SKILLS.get(name, (REFS / name, SHIPPED / name))
-
-
-def shipped_paths() -> list[Path]:
-  """Return the collection files the archive carries, in a stable order."""
-  return list(archive_members().values())
 
 
 def archive_members() -> dict[str, Path]:

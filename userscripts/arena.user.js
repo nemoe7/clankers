@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.11
+// @name         Arena.ai | NemoUtils | v1.13.12
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.11
+// @version      1.13.12
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -26,7 +26,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.11";
+  var USERSCRIPT_VERSION = "1.13.12";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
   var proxyBoardEgressVersion = "";
   var USERSCRIPT_BOOT_VERSION = (function () {
@@ -599,11 +599,6 @@
       String(url || "").trim(),
     );
     return match ? match[1].toLowerCase() : "";
-  }
-
-  function randomHttpJitterWindowMs() {
-    var span = httpJitterMs();
-    return span > 0 ? Math.floor(Math.random() * (span + 1)) : 0;
   }
 
   function randomSkillHttpJitterMs() {
