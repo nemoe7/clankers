@@ -9,6 +9,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-28
 
+### Added
+
+#### nemoizer
+
+- Add decimal `KB`/`MB`/`GB` vs binary `KiB`/`MiB`/`GiB` guidance and deterministic `NMU200` byte-unit divisor mismatch checks (`SKILL.md`, `references/nmu200.md`, `references/rules.md`, `scripts/nemoize.py`).
+
 ### Changed
 
 #### arena-skill

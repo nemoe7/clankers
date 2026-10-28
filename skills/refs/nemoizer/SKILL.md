@@ -39,7 +39,8 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 - Print each finding as `path:line: [ID] (advisory-free|advisory) description` with its indented source line and a `Summary` footer, exit 1 only for mandatory findings, and mark advisory findings for manual review by the agent or user.
 - Vendored and generated trees are skipped, and `--ignore` or repo-root `nemoizer.toml` / `[tool.nemoizer]` in `pyproject.toml` (see [references/nemoizer.toml](references/nemoizer.toml) for defaults) configures exclusions, rule selection, and caps.
 
-- Run word rotations and serial-comma checks (`NMO`), semicolon, sentence-length, nominalization, and manual-review style checks (`STE`), human-prose checks (`HMN`), paragraph-length checks (`NMP`), and test-assertion reviews (`NMT`) by default.
+- Run word rotations and serial-comma checks (`NMO`), semicolon, sentence-length, nominalization, and manual-review style checks (`STE`), human-prose checks (`HMN`), paragraph-length checks (`NMP`), UI and byte-unit divisor checks (`NMU`), and test-assertion reviews (`NMT`) by default.
+- Use decimal `KB`, `MB`, `GB`, and `Mbps` for storage marketing, network rates, and SI data, and binary `KiB`, `MiB`, and `GiB` for OS file sizes, RAM, caches, and buffers.
 - Use 20 words per sentence for unclassified prose and 25 for an explicit description scope.
 
 ## Writing the rotation

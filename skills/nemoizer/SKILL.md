@@ -45,7 +45,8 @@ Do not rewrite exclusion markers or the rotation table; apply only unsuppressed 
 - Review target prose manually against the Prose rules and check docs against code, CLI flags, configs, and paths for docs drift alongside `nemoizer audit`, and format audit reports with [references/audit-report.md](references/audit-report.md), one section per file (`Rule | Before | After | Verdict | Reason`), rule-applied `After` even when `Verdict` is `keep`, no empty sections, and 0 in Counts.
 
 
-Run rotations and serial-comma checks (`NMO`), semicolon/sentence/nominalization/manual-review style checks (`STE`), human-prose checks (`HMN`), paragraph checks (`NMP`), and test reviews (`NMT`) by default.
+Run rotations and serial-comma checks (`NMO`), semicolon/sentence/nominalization/manual-review style checks (`STE`), human-prose checks (`HMN`), paragraph checks (`NMP`), UI and byte-unit divisor checks (`NMU`), and test reviews (`NMT`) by default.
+Use decimal `KB`/`MB`/`GB`/`Mbps` for storage marketing, network rates, and SI data, and binary `KiB`/`MiB`/`GiB` for OS file sizes, RAM, caches, and buffers.
 Limit sentences to 20 words for unclassified prose, 25 for explicit description scope.
 
 ## Prose review

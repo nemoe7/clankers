@@ -1,5 +1,6 @@
 # nonemo: NMO100
 # nonemo: NMO901
+# nonemo: NMU200
 """The nemoizer linter reads every text file, honors markers, and lists them."""
 
 import subprocess
@@ -1763,3 +1764,73 @@ def test_js_ui_prose_checks_run_beyond_nmu100_word_cap(tmp_path):
   )
   clean = run(str(ui_js), cwd=tmp_path)
   assert clean.returncode == 0, clean.stderr
+
+
+def _nmu200_rows(path, source):
+  findings = nemoize.source_prose(Path(path), source, "unknown", 4)
+  return [row for row in findings if row["rule"] == "NMU200"]
+
+
+def test_nmu200_flags_python_binary_and_decimal_mismatches(tmp_path):
+  # nonemo: NMU200
+  sample = (
+    'label = f"{size / 1024:.1f} KB"\n'
+    'label = f"{size / (1024 * 1024)} MB"\n'
+    'label = f"{size / (1 << 20)} MB"\n'
+    'label = f"{size / 1_000_000:.1f} MiB"\n'
+    'label = f"{size / 1048576} GB"\n'
+    'label = f"{size / 1073741824} TB"\n'
+    'label = f"{size / 1e6} GiB"\n'
+    'label = f"{size / 1e9} TiB"\n'
+  )
+  rows = _nmu200_rows("sizes.py", sample)
+  assert [(row["line"], row["scale"]) for row in rows] == [
+    (1, "binary"),
+    (2, "binary"),
+    (3, "binary"),
+    (4, "decimal"),
+    (5, "binary"),
+    (6, "binary"),
+    (7, "decimal"),
+    (8, "decimal"),
+  ]
+  sample_py = tmp_path / "sizes.py"
+  sample_py.write_text(sample, encoding="utf-8")
+  cli = run(str(sample_py), cwd=tmp_path)
+  assert cli.returncode == 1, cli.stderr
+  assert cli.stdout.count("[NMU200] (advisory-free)") == 8
+
+
+def test_nmu200_flags_javascript_template_literal():
+  rows = _nmu200_rows(
+    "sizes.js", "const label = `${bytes / 1024} KB`;\n"
+  )  # nonemo: NMU200
+  assert [(row["line"], row["scale"]) for row in rows] == [(1, "binary")]
+
+
+def test_nmu200_accepts_matching_labels_bitrates_and_non_divisors():
+  rows = _nmu200_rows(
+    "matching.py",
+    'binary = f"{size / 1024:.1f} KiB"\n'
+    'decimal = f"{size / 1_000_000:.1f} MB"\n'
+    'rate = f"{size / 1024:.1f} Mbps"\n'
+    'raw = f"{max(1024, size)} KB"\n',
+  )
+  assert rows == []
+
+
+def test_nmu200_honors_inline_and_file_suppressions():
+  # nonemo: NMU200
+  inline = _nmu200_rows(
+    "inline.py",
+    "first = 0\nsecond = 0\nthird = 0\n"
+    'hidden = f"{size / 1024} KB"  # nonemo: NMU200\n'
+    'visible = f"{size / 1_000_000} MiB"\n',
+  )
+  assert [row["line"] for row in inline] == [5]
+
+  file_level = _nmu200_rows(
+    "file_level.py",
+    '# nonemo: NMU200\nvalue = f"{size / 1024} KB"\n',
+  )
+  assert file_level == []
