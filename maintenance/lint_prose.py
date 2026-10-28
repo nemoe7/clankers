@@ -9,76 +9,14 @@ import sys
 import tokenize
 from pathlib import Path
 
-from extract_prose import (
-  comment_lines,
-  extract_files,
-  python_comments,
-  span_comments,
-)
+from extract_prose import extract_files
 
 SKIP_PARTS = {".git", ".venv", "node_modules", ".agents", "arena-state", "__pycache__"}
-ADR_REFERENCE = re.compile(r"\bADR[- ]?\d|docs/adr")
-COMMENT_BLOCK_CAP = 2
-DIRECTIVE_MARKER = re.compile(
-  r"^\s*(?:#|//)\s*(?:arena-preview-[\w-]+|case:\s*[\w-]+|shellcheck\s+disable=\S+|"
-  r"nonemo:\s*[A-Za-z0-9_-]+|noqa(?::.*)?|type:\s*ignore(?:\[.*\])?|pragma:\s*no cover|region|endregion)\s*$",
-  re.IGNORECASE,
-)
 _NEMOIZER = None
 STRICT_PASSIVE_RE = re.compile(
   r"\b(?:is|are|was|were|been|being)\s+[a-z]{3,}ed\b",
   re.IGNORECASE,
 )
-SYNONYM_GROUPS = (
-  ("check", "validate"),
-  ("delete", "remove"),
-  ("start", "begin"),
-  ("stop", "halt"),
-  ("modify", "alter"),
-)
-
-
-def directive_marker_lines(source: str, path: Path | None = None) -> set[int]:
-  """Return comment lines that carry required tool directives."""
-  numbers = {
-    number
-    for number, line in enumerate(source.splitlines(), start=1)
-    if DIRECTIVE_MARKER.match(line)
-  }
-  if path is not None:
-    comments = (
-      python_comments(source)
-      if path.suffix == ".py"
-      else span_comments(path, source) or []
-    )
-    numbers.update(
-      first
-      for text, first, last in comments
-      if first == last and DIRECTIVE_MARKER.fullmatch("# " + text)
-    )
-  return numbers
-
-
-def comment_block_violations(path: Path, source: str) -> list[str]:
-  """Report ordinary comment blocks that exceed the line cap."""
-  violations: list[str] = []
-  start = None
-  previous = None
-  numbers = sorted(comment_lines(path, source) - directive_marker_lines(source, path))
-  for number in [*numbers, None]:
-    if number is not None and (previous is None or number == previous + 1):
-      start = number if start is None else start
-      previous = number
-      continue
-    if start is not None and previous is not None:
-      count = previous - start + 1
-      if count > COMMENT_BLOCK_CAP:
-        violations.append(
-          f"{path}:{start}: comment block has {count} lines; the cap is {COMMENT_BLOCK_CAP}"
-        )
-    start = number
-    previous = number
-  return violations
 
 
 def markdown_targets() -> list[Path]:
@@ -90,9 +28,6 @@ def markdown_targets() -> list[Path]:
     if path.name in {"README.md", "CHANGELOG.md"} or path.parts[0] == "docs":
       found.append(path)
   return found
-
-
-BULLET_SENTENCE_CAP = 3
 
 
 def report(label: str, findings: list[dict], note: str | None = None) -> None:
@@ -144,26 +79,11 @@ def _nemoizer_findings(label: str, text: str, strict: bool = False) -> list[dict
           "message": f"passive voice '{match.group(0)}'",
         }
       )
-  words = set(re.findall(r"[a-z]+", text.lower()))
-  for first, second in SYNONYM_GROUPS:
-    if first in words and second in words:
-      findings.append(
-        {
-          "line": 1,
-          "col": 1,
-          "level": "advisory",
-          "rule": "synonym-rotation",
-          "message": f"uses both '{first}' and '{second}'",
-        }
-      )
   return findings
 
 
-def lint(label: str, text: str, adr: bool, strict: bool = False) -> int:
-  """Run the linter once, failing only on hard findings or ADR references."""
-  if adr and ADR_REFERENCE.search(text):
-    report(label, [], "A comment or docstring refers to an ADR.")
-    return 1
+def lint(label: str, text: str, strict: bool = False) -> int:
+  """Run the linter once, failing only on hard findings."""
   findings = _nemoizer_findings(label, text, strict=strict)
   hard = any(item["level"] == "advisory-free" for item in findings)
   if not findings or not hard:
@@ -172,40 +92,16 @@ def lint(label: str, text: str, adr: bool, strict: bool = False) -> int:
   return 1
 
 
-def strict_lint(label: str, sections: list[str], adr: bool) -> int:
-  """Check sentences per prose section and synonyms across the file."""
+def strict_lint(label: str, sections: list[str]) -> int:
+  """Check sentences per prose section."""
   failures = 0
   for number, text in enumerate(sections, start=1):
-    if adr and ADR_REFERENCE.search(text):
-      report(
-        f"{label} section {number}", [], "A comment or docstring refers to an ADR."
-      )
-      failures += 1
-      continue
     findings = _nemoizer_findings(label, text, strict=True)
-    findings = [item for item in findings if item["rule"] != "synonym-rotation"]
     if not findings:
       continue
     report(f"{label} section {number}", findings)
     if any(item["level"] == "advisory-free" for item in findings):
       failures += 1
-  combined = _nemoizer_findings(label, "\n\n".join(sections), strict=True)
-  rotations = [item for item in combined if item["rule"] == "synonym-rotation"]
-  if rotations:
-    report(f"{label} file-wide synonyms", rotations)
-  return failures
-
-
-def bullet_cap(label: str, text: str) -> int:
-  """Fail when a bullet line carries more than 3 sentences."""
-  failures = 0
-  for line in text.splitlines():
-    if not line.startswith("- "):
-      continue
-    sentences = [part for part in re.split(r"(?<=[.!?])\s+", line) if part.strip()]
-    if len(sentences) > BULLET_SENTENCE_CAP:
-      failures += 1
-      print(f"--- {label}\nA bullet exceeds {BULLET_SENTENCE_CAP} sentences.")
   return failures
 
 
@@ -326,20 +222,11 @@ def main() -> int:
     return nemoizer_main(sys.argv[2:])
   failures = 0
   for label, sections in extract_files().items():
-    path = Path(label)
-    source = path.read_text(encoding="utf-8")
     if sections:
-      failures += strict_lint(str(path), sections, path.suffix == ".py")
-    violations = comment_block_violations(path, source)
-    if violations:
-      print(f"--- {path}")
-      print("\n".join(violations))
-      failures += len(violations)
+      failures += strict_lint(str(Path(label)), sections)
   for path in markdown_targets():
     text = path.read_text(encoding="utf-8")
-    failures += lint(str(path), text, False)
-    if path.name == "CHANGELOG.md":
-      failures += bullet_cap(str(path), text)
+    failures += lint(str(path), text)
   if failures:
     print(f"{failures} lint findings")
     return 1

@@ -17,6 +17,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### maintenance
+
+- Remove the `ADR_REFERENCE` ban, `SYNONYM_GROUPS` 5-pair check, and duplicate comment and bullet caps from `maintenance/lint_prose.py`.
+
 #### arena-skill
 
 - Replace the Board tab's separate `Revoke` and `Dismiss` buttons with one `Dismiss` button (`assets/app.js`, `scripts/preview.py`).
