@@ -49,7 +49,7 @@ Route every modal through one native `<dialog>` element opened with `showModal()
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: 20px;
+  padding: var(--space-5);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);

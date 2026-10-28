@@ -19,7 +19,7 @@
   --warn: #8a5a00;
   --ok: #1c7a3f;
   --focus: #2b53d6;
-  --scrollbar-thumb: #302e2c;
+  --scrollbar-thumb: #767682;
 
   /* Type: one family, four weights, a seven-step ramp */
   --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -96,7 +96,7 @@ ul {
     --warn: #f0bb4a;
     --ok: #6fd08c;
     --focus: #8fa8ff;
-    --scrollbar-thumb: #302e2c;
+    --scrollbar-thumb: #62626e;
   }
 }
 
@@ -117,7 +117,7 @@ ul {
   --warn: #8a5a00;
   --ok: #1c7a3f;
   --focus: #2b53d6;
-  --scrollbar-thumb: #302e2c;
+  --scrollbar-thumb: #767682;
 }
 
 :root[data-theme="dark"] {
@@ -136,7 +136,7 @@ ul {
   --warn: #f0bb4a;
   --ok: #6fd08c;
   --focus: #8fa8ff;
-  --scrollbar-thumb: #302e2c;
+  --scrollbar-thumb: #62626e;
 }
 
 *,
@@ -375,6 +375,19 @@ article {
   border-bottom: 1px solid var(--line);
 }
 
+@media (pointer: coarse) {
+  .row {
+    min-height: var(--touch);
+  }
+
+  .icon-button {
+    width: var(--touch);
+    height: var(--touch);
+    min-width: var(--touch);
+    min-height: var(--touch);
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .row:hover {
     background: var(--surface);
@@ -425,7 +438,7 @@ article {
   content: "";
   width: var(--space-1);
   height: var(--space-1);
-  border-radius: 50%;
+  border-radius: 9999px;
   background: currentColor;
 }
 

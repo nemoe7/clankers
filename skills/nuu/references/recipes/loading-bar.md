@@ -32,7 +32,7 @@ Render a subtle `2px` edge loading bar after a `200ms` delay with `aria-busy="tr
   pointer-events: none;
   transform-origin: left center;
   transform: scaleX(0);
-  animation: nuu-edge-loading 1.6s 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: nuu-edge-loading 1.6s 200ms var(--ease) forwards;
 }
 
 @keyframes nuu-edge-loading {
@@ -100,9 +100,9 @@ async function loadPanel(panel, task) {
 .btn[aria-busy="true"] .dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 9999px;
   background: currentColor;
-  animation: pulse 1.4s ease-in-out infinite;
+  animation: pulse 1.4s var(--ease) infinite;
 }
 
 @keyframes nuu-spin {
