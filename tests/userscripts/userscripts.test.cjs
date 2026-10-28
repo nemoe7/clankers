@@ -41,15 +41,14 @@ const bundles = {
     // The prompt fill owns the four proxy entries. The state download owns its two. The auto
     // trim gates its interval line behind the switch alone.
     extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 2, "tab-title": 1 },
-    // The keep-rows plan, the trim cap and the trim-now press stay on the menu whatever
-    // the switch says.
+    // Keep-rows plan, trim cap, and trim-now press stay on menu regardless of switch state.
     alwaysMenus: { "transcript-trim": 3 },
     // Logging, global pause, and show-settings-button stay outside the feature switches.
     globalMenus: 3,
     countMenu: "Transcript - keep ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
-    // The prompt fill owns two timers: the paint and the key watch. Both ride the one switch.
+    // Prompt fill owns two timers: paint and key watch. Both ride one switch.
     featureIntervals: {
       "tab-title": 1,
       "prompt-fill": 2,
@@ -487,7 +486,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   // The global pause stops every feature where it stands, with no reload, and the resume
   // brings back the features whose own switch is ON.
   if (domain === "arena") {
-    // The storage-failure check above leaves the writes refused. The pause writes again.
+    // Storage-failure check above keeps write rejection active. Pause writes again.
     refuseWrite = false;
     stored.clear();
     const live = load();
@@ -527,7 +526,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       [...reloaded.menus.values()].some((item) => item.label.includes("resume all")),
       "A paused reload offers the resume",
     );
-    // The pause leaves the switches alone: the next unpaused load runs them again.
+    // Pause leaves switches alone, so next unpaused load runs them again.
     stored.set(pauseKey, false);
     const after = load();
     assert.deepEqual(
@@ -660,8 +659,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 }
 {
   const { test } = require("node:test");
-  // The security check owns the page while it shows: the fill, the steering click and the
-  // proxy posts wait for it, and the tab title keeps its shield.
+  // Security check owns page while visible: fill, steering click, and proxy posts wait.
+  // Tab title keeps its shield.
   test("captcha hold", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const promptFillUrl = "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/userscripts/arena-prompt-fill.txt";
@@ -788,7 +787,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       prompt() { return null; },
       GM_getValue(key, fallback) { return stored.has(key) ? stored.get(key) : fallback; },
       GM_setValue(key, value) { stored.set(key, value); },
-      // The menu map lets one case press the pause entry, as the manager would.
+      // Menu map lets one case press pause entry like a manager.
       GM_registerMenuCommand(label, fn) {
         menus.set(label, fn);
         return label;
@@ -913,7 +912,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     function classOf(node, name) {
       return (" " + (node.className || "") + " ").indexOf(" " + name + " ") !== -1;
     }
-    // The selectors the tab-title read uses, answered the way a real tree answers them.
+    // Answer tab-title selectors like a real tree.
     function matches(node, selector) {
       if (!node || !node.attrs) return false;
       if (selector === "[data-agent-transcript-message]") return node.attrs["data-agent-transcript-message"] !== undefined;
@@ -958,8 +957,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       el.children.forEach((kid) => { kid.parentElement = el; });
       return el;
     }
-    // Both shapes follow the session dump: the agent root ends in the row container, and the
-    // user root ends in the raised card with the `prose` body three levels down.
+    // Session dump shapes both roots: agent root ends at row container. User root ends
+    // at raised card with `prose` body three levels down.
     function agentRoot(rowList) {
       const container = node("div", "flex flex-col gap-2", rowList);
       const root = node("div", "", [
@@ -1077,11 +1076,11 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     roots = [agentRoot([labelRow("Bash sleep 25", "$ npm test")])];
     sync();
     assert.equal(page.title, "Arena | clankers", `A finished turn drops the row mark: ${page.title}`);
-    // The same page with the turn open raises the bash mark.
+    // Open turn on same page raises bash mark.
     stop = true;
     sync();
     assert.equal(page.title, "Arena | clankers \uD83D\uDDA5\uFE0F", `The bash row raises its mark: ${page.title}`);
-    // The generating-questions action row takes the question mark, like the card.
+    // Generating-questions action row takes question mark like card.
     roots = [agentRoot([labelRow("Generating questions\u2026", "")])];
     sync();
     assert.equal(page.title, "Arena | clankers \u2753", `The question row raises the mark: ${page.title}`);

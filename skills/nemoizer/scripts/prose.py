@@ -151,6 +151,24 @@ def javascript_comments(
   return tuple(comments)
 
 
+@lru_cache(maxsize=128)
+def javascript_comment_spans(
+  source: str,
+) -> tuple[tuple[tuple[int, int], tuple[int, int]], ...]:
+  """Collect exact JavaScript comment spans with the parser."""
+  result = subprocess.run(
+    ["node", str(Path(__file__).with_name("javascript-comments.cjs")), "--spans"],
+    input=source,
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  return tuple(
+    ((first_line, first_column), (last_line, last_column))
+    for first_line, first_column, last_line, last_column in json.loads(result.stdout)
+  )
+
+
 def clean_comment(text: str) -> str:
   """Strip line decoration and outer whitespace from one comment block."""
   return "\n".join(

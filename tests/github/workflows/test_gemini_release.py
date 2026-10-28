@@ -842,7 +842,7 @@ def test_release_pipeline():
   )
   assert release.INITIAL_TEMPLATE.startswith("## Summary\n")
   assert release.INITIAL_TEMPLATE.count("{{") == 2
-  # Sections may be dropped, never reordered or duplicated. Summary and the range link stay.
+  # Drop sections without reordering or duplicating them. Summary and range link stay.
   full = {"template": release.TEMPLATE, "comparison_url": "https://x/compare/a...b"}
   release.check_body(
     "## Summary\n\ns\n\n## Fixes\n\nf\n\n## Commit comparison\n\nhttps://x/compare/a...b\n",

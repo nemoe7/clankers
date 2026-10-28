@@ -2007,7 +2007,7 @@ def test_board_polling_heartbeat_post_wake_and_consumed_wake_anti_resurrection(
         "needs_answer": True,
       }
     ]
-    # 2026-10-28T17:00:00+08:00 == 09:00:00Z (older than 10:30:00Z -> stale unpublish is ignored)
+    # 2026-10-28T17:00:00+08:00 == 09:00:00Z (older than 10:30:00Z -> stale unpublish leaves report)
     kept = board_module.apply_report_op_to_list(
       rep_items,
       {"op": "unpublish", "report_id": "tz-rep", "at": "2026-10-28T17:00:00+08:00"},
