@@ -4687,19 +4687,31 @@ test('preview client', async (t) => {
     }
   });
 
-  await t.test('The Messages header names the last file tool and its time', async () => {
-    state.last_tool = { tool: 'edit', at: '2026-10-05T05:02:00' };
-    await refresh();
-    const row = get('#last-tool');
-    assert.equal(row.hidden, false, 'the line shows once a tool ran');
-    assert.match(row.textContent, /^edit \d{2}:\d{2}$/, 'the line reads <tool> <stamp>');
-    assert.match(row.title, /^Last file tool edit at /, 'the tooltip names the tool');
-    assert.equal(get('#notes-panel .stack').children.at(-1), row,
-      'the line sits in the Messages header');
-    state.last_tool = null;
-    await refresh();
-    assert.equal(row.hidden, true, 'the line hides with no probe');
-    assert.equal(row.textContent, '');
+  await t.test('The connection header folds Bash, Read, Edit, and Write with live relative stamps', async () => {
+    const priorCallEnd = state.agent_call_ended_at;
+    try {
+      const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString().slice(0, 19);
+      const twoSecondsAgo = new Date(Date.now() - 2000).toISOString().slice(0, 19);
+      state.agent_call_ended_at = fiveSecondsAgo;
+      state.last_tool = { tool: 'edit', at: twoSecondsAgo };
+      await refresh();
+      assert.equal(elements.has('#last-tool'), false, 'no separate #last-tool row is rendered');
+      assert.match(get('#connection-text').textContent, /^Edit (\d+ seconds ago|a second ago|just now)/);
+      assert.match(get('#connection-text').title, /^Edit (\d+ seconds ago|a second ago|just now)/);
+
+      state.last_tool = { tool: 'read', at: twoSecondsAgo };
+      await refresh();
+      assert.match(get('#connection-text').textContent, /^Read /);
+
+      state.last_tool = { tool: 'write', at: fiveSecondsAgo };
+      state.agent_call_ended_at = twoSecondsAgo;
+      await refresh();
+      assert.match(get('#connection-text').textContent, /^Bash /, 'newer Bash call wins over older file tool');
+    } finally {
+      state.last_tool = null;
+      state.agent_call_ended_at = priorCallEnd;
+      await refresh();
+    }
   });
 
   await t.test('Skip poll toggles one flag, and a poll consumes the arm', async () => {

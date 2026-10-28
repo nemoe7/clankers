@@ -104,8 +104,6 @@ let showQuietNotes = false;
 function visibleNotes(notes) {
   return (notes || []).filter(item => showQuietNotes || !item.quiet);
 }
-// The header line the first poll adds. A later render reuses it.
-let lastToolRow = null;
 const historyAtEnd = history =>
   history.scrollHeight - history.scrollTop - history.clientHeight < 80;
 
@@ -222,17 +220,29 @@ let agentSeenAt = null;
 let agentSeenStamp = null;
 let turnEndedAt = null;
 let turnEndedStamp = null;
+const TOOL_LABELS = { read: 'Read', edit: 'Edit', write: 'Write' };
 let callEndAt = null;
 let callEndStamp = null;
+let lastToolLabel = null;
+let lastToolAt = null;
+let lastToolStamp = null;
+function latestToolActivity() {
+  if (lastToolLabel && lastToolStamp !== null
+    && (callEndStamp === null || (lastToolAt !== null && callEndAt !== null && lastToolAt >= callEndAt))) {
+    return { label: lastToolLabel, stamp: lastToolStamp };
+  }
+  if (callEndStamp !== null) return { label: 'Bash', stamp: callEndStamp };
+  return null;
+}
 function agentSilentMs() {
   return agentSeenAt === null ? null : Date.now() - agentSeenAt;
 }
 function agentInCall() {
   // A returned poll ended the turn, so the silence that follows is not a running call.
   if (turnEndedAt !== null) return false;
-  // The hook stamps every bash call's end, so a call that finished is not a running one,
-  // whatever the agent does between calls.
-  if (callEndAt !== null && agentSeenAt !== null && agentSeenAt <= callEndAt) return false;
+  // Finished bash or file tools stamp their end, so completed work is not a running call.
+  const finishedAt = Math.max(callEndAt ?? -Infinity, lastToolAt ?? -Infinity);
+  if (Number.isFinite(finishedAt) && agentSeenAt !== null && agentSeenAt <= finishedAt) return false;
   const silent = agentSilentMs();
   return pollSince === null && silent !== null && silent > AGENT_QUIET_MS && silent <= AGENT_CALL_MS;
 }
@@ -244,7 +254,7 @@ function agentIdle() {
   return silent !== null && silent > AGENT_CALL_MS;
 }
 function connectionText() {
-  // The header names what the agent is doing: the wait while a poll runs, else the stamp of the last bash call.
+  // The header names what the agent is doing: the wait while a poll runs, else the stamp of the latest tool.
   // An absent agent carries its own marker in place of the sentence that stood here.
   const tail = agentIdle() ? ' · Agent 404' : '';
   // The tally ends every shape of the line: a poll, a finished call and the quiet line are all
@@ -254,13 +264,15 @@ function connectionText() {
       : getState()?.waiting_for_gates ? 'Running gates...' : 'Polling…';
     return `${label} ${duration(Date.now() - pollSince)}${tail}${callTally}`;
   }
-  if (callEndStamp !== null) return `Bash ${time(callEndStamp)}${tail}${callTally}`;
+  const activity = latestToolActivity();
+  if (activity !== null) return `${activity.label} ${time(activity.stamp)}${tail}${callTally}`;
   return agentIdle() ? `Agent 404${callTally}` : connectionBase + callTally;
 }
 function connectionTitle() {
-  if (callEndStamp === null) return connectionText();
+  const activity = latestToolActivity();
+  if (activity === null) return connectionText();
   const tail = agentIdle() ? ' · Agent 404' : '';
-  return `Bash ${fullRelativeTime(callEndStamp)}${tail}${callTally}`;
+  return `${activity.label} ${fullRelativeTime(activity.stamp)}${tail}${callTally}`;
 }
 function stampMs(value) {
   if (typeof value !== 'string') return null;
@@ -1698,6 +1710,10 @@ function renderState() {
   turnEndedStamp = state.turn_ended_at || null;
   callEndAt = stampMs(state.agent_call_ended_at);
   callEndStamp = state.agent_call_ended_at || null;
+  const toolKey = state.last_tool && typeof state.last_tool.tool === 'string' ? state.last_tool.tool : '';
+  lastToolLabel = TOOL_LABELS[toolKey] || null;
+  lastToolStamp = lastToolLabel && state.last_tool.at ? state.last_tool.at : null;
+  lastToolAt = stampMs(lastToolStamp);
   connectionBase = saved;
   setConnection(state.polling ? 'polling' : agentIdle() ? 'idle' : 'ok', connectionText());
   if (state.rendering_error) {
@@ -1707,8 +1723,6 @@ function renderState() {
   // The ack writes the same stamp as a read does, so the label is true.
   $('#last-check').textContent = state.last_check ? `Last read/ack: ${time(state.last_check)}` : 'No read or ack yet.';
   $('#last-check').title = state.last_check ? fullRelativeTime(state.last_check) : '';
-  // File tool activity rides its own line under that stamp, so the header shows the work.
-  paintLastTool(state.last_tool);
   showHistory(logNotes);
   renderTasksIfChanged(state.tasks);
   renderFetchIfChanged(state.fetch_jobs || []);
@@ -5466,22 +5480,6 @@ $('#agent-interrupt').addEventListener('click', async () => {
     },
   });
 });
-// The Messages header names the last file tool the agent ran and its time.
-// The page owns the line, so the panel carries no extra markup.
-function paintLastTool(lastTool) {
-  if (!lastToolRow) {
-    lastToolRow = document.createElement('p');
-    lastToolRow.id = 'last-tool';
-    lastToolRow.className = 'muted';
-    $('#notes-panel .stack').append(lastToolRow);
-  }
-  const tool = lastTool && typeof lastTool.tool === 'string' ? lastTool.tool : '';
-  const stamp = tool && lastTool.at ? clock(lastTool.at) : '';
-  lastToolRow.hidden = !stamp;
-  lastToolRow.textContent = stamp ? `${tool} ${stamp}` : '';
-  lastToolRow.title = stamp ? `Last file tool ${tool} at ${clockTime(lastTool.at)}` : '';
-}
-
 // Skip poll toggles a one-shot flag that ends the agent's wait without leaving a note for a later turn.
 // A second press cancels the skip, so an early press cannot force the wait to end.
 function paintSkipPoll(skipPoll) {

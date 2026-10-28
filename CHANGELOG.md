@@ -12,7 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
-- Probe file-tool activity via silent `preview.py --tool-probe` and show `<tool> <stamp>` in the Messages header (`scripts/install.sh`, `scripts/preview.py`, `assets/app.js`, `assets/style.css`).
+- Probe file-tool activity via silent `preview.py --tool-probe` and show `Bash`, `Read`, `Edit`, or `Write` with a relative timestamp in `#connection-text` (`scripts/install.sh`, `scripts/preview.py`, `assets/app.js`).
 - Print structural syntax warnings on `report publish` when fenced Mermaid blocks fail to parse (`scripts/mermaid_check.py`, `scripts/preview.py`).
 - Print a `git apply --3way` CLI hint when reading, polling, or acknowledging a board post with a `.patch` attachment (`scripts/preview.py`).
 - Vendor offline Mermaid (`assets/mermaid.min.js`, `assets/mermaid.LICENSE`) to render preview diagrams without network fetches (`skills/refs/arena-skill/`).
