@@ -248,6 +248,13 @@ p.muted { margin-block: 4px; }
 /* Every icon is an inline SVG, so the shape never takes a pointer event of its own and
    never stretches inside a flex row. */
 button svg, .icon-button svg { pointer-events: none; flex: none; }
+/* The quiet-notes eye sits beside Skip. It is muted while quiet notes stay hidden and filled when shown. */
+#quiet-notes { color: var(--muted); }
+@media (hover: hover) {
+  #quiet-notes:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+}
+#quiet-notes[aria-pressed="true"] { background: var(--panel-2); border-color: var(--focus); color: var(--text); }
+#quiet-notes:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #preview-note[aria-pressed="false"] { color: var(--muted); opacity: .55; }
 #preview-note[data-tooltip] { position: relative; opacity: 1; }
 #preview-note[data-tooltip][aria-pressed="false"] svg { opacity: .55; }

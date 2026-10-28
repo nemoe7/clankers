@@ -10,6 +10,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+#### arena-skill
+
+- Add a Lucide eye `#quiet-notes` toggle beside `Skip poll` to show or hide quiet notes in the Messages log (`assets/index.html`, `assets/style.css`, `assets/app.js`).
+
 #### nemoizer
 
 - Add decimal `KB`/`MB`/`GB` vs binary `KiB`/`MiB`/`GiB` guidance and deterministic `NMU200` byte-unit divisor mismatch checks (`SKILL.md`, `references/nmu200.md`, `references/rules.md`, `scripts/nemoize.py`).

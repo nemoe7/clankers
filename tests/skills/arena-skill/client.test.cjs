@@ -4579,6 +4579,26 @@ test('preview client', async (t) => {
     assert.equal(cached.notes.length, 2, 'the cached state keeps the quiet note');
   });
 
+  await t.test('The quiet-notes eye reveals quiet notes and hides them again', async () => {
+    const toggle = get('#quiet-notes');
+    const texts = () => get('#history').children.map(node => node.children[0].textContent);
+    assert.equal(toggle.getAttribute('aria-pressed'), 'false', 'quiet notes start hidden');
+    assert.match(toggle.getAttribute('aria-label'), /^Show quiet notes/, 'the label offers the reveal');
+    assert.equal(toggle.title, toggle.getAttribute('aria-label'), 'the tooltip matches the label');
+    assert.deepEqual(texts(), ['Owner-facing line'], 'the hidden row is absent by default');
+    toggle.events.click();
+    assert.equal(toggle.getAttribute('aria-pressed'), 'true', 'the press shows quiet notes');
+    assert.match(toggle.getAttribute('aria-label'), /^Hide quiet notes/, 'the label offers the hide');
+    assert.deepEqual(texts(), ['Owner-facing line', 'The recorded agent key expired.'],
+      'the revealed row renders in time order');
+    toggle.events.click();
+    assert.equal(toggle.getAttribute('aria-pressed'), 'false', 'a second press hides them again');
+    assert.match(toggle.getAttribute('aria-label'), /^Show quiet notes/, 'the label returns to the reveal');
+    assert.deepEqual(texts(), ['Owner-facing line'], 'the quiet row leaves the log again');
+    assert.equal(JSON.parse(storage.get('arena-preview-v1:state-cache')).notes.length, 2,
+      'the cached state keeps the quiet note through both presses');
+  });
+
   await t.test('Loading older filtered messages never inserts quiet-note placeholders', async () => {
     const keptNotes = state.notes;
     const history = get('#history');

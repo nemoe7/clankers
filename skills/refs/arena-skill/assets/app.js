@@ -98,6 +98,11 @@ let historyShown = HISTORY_PAGE;
 // Filters can shorten the log and clamp its scroll position, then leave the next view at the first message.
 // Restore the end when the owner followed it. Otherwise preserve the position they chose.
 let logPinned = true;
+// Quiet notes inform the agent, so the log hides them until the eye toggle asks for them.
+let showQuietNotes = false;
+function visibleNotes(notes) {
+  return (notes || []).filter(item => showQuietNotes || !item.quiet);
+}
 const historyAtEnd = history =>
   history.scrollHeight - history.scrollTop - history.clientHeight < 80;
 
@@ -1112,7 +1117,7 @@ async function markReplySeen(item, replyCount = (item.replies || []).length, onO
   } catch (error) {
     const button = $('#log-edited');
     button.dataset.error = `Could not save reply status: ${error.message}`;
-    updateEdits(combinedHistoryItems((getState()?.notes || []).filter(n => !n.quiet)));
+    updateEdits(combinedHistoryItems(visibleNotes(getState()?.notes)));
   } finally {
     if (pendingReplySeen.get(item.id) === replyCount) pendingReplySeen.delete(item.id);
   }
@@ -1251,7 +1256,7 @@ function combinedHistoryItems(notes, board = getState()?.board) {
 function revealMessage(id) {
   const row = messageNodes.get(id);
   if (!row || $('#history').contains(row)) return row;
-  const notes = combinedHistoryItems((getState()?.notes || []).filter(item => !item.quiet));
+  const notes = combinedHistoryItems(visibleNotes(getState()?.notes));
   const index = notes.findIndex(item => item.id === id);
   if (index < 0) return;
   historyShown = Math.max(historyShown, notes.length - index);
@@ -1464,7 +1469,7 @@ function renderHistoryWindow(notes) {
 
 function loadOlderMessages() {
   const state = getState();
-  const notes = combinedHistoryItems(((state && state.notes) || []).filter(item => !item.quiet));
+  const notes = combinedHistoryItems(visibleNotes(state && state.notes));
   if (notes.length <= historyShown) return;
   const history = $('#history');
   const before = history.scrollHeight;
@@ -1609,9 +1614,10 @@ function renderState() {
   // The copy exports notes, tasks, and report answers for the unified importer.
   save('state-cache', JSON.stringify({ notes: lastState.notes, tasks: lastState.tasks }));
   // Quiet notes inform the agent, not the log.
-  // They stay in the cache and state export while the log and its tally show owner messages.
-  const logNotes = state.notes.filter(item => !item.quiet);
-  const confirmed = logNotes.filter(item => !item.pending).length;
+  // They stay in the cache and state export while the tally counts owner messages.
+  const ownerNotes = state.notes.filter(item => !item.quiet);
+  const logNotes = visibleNotes(state.notes);
+  const confirmed = ownerNotes.filter(item => !item.pending).length;
   const saved = confirmed ? `${confirmed} messages saved` : 'No messages yet';
   // The header carries the same tally the gate keeps, so the owner sees the call count
   // the stderr banner names without leaving the page.
@@ -4392,7 +4398,7 @@ async function sendBoardAction(action, forwardToParent = true) {
         }
       }
       renderBoard();
-      showHistory(((lastState && lastState.notes) || []).filter(item => !item.quiet));
+      showHistory(visibleNotes(lastState && lastState.notes));
     }
     if (forwardToParent && typeof window !== 'undefined' && window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
       try {
@@ -5854,6 +5860,21 @@ $('#skip-poll').addEventListener('click', async () => {
   }
   finally { button.disabled = false; }
 });
+// The eye toggle reveals quiet notes in the log and hides them again.
+// The flag stays out of the state cache, so a reload starts hidden.
+function paintQuietNotes() {
+  const button = $('#quiet-notes');
+  button.setAttribute('aria-pressed', showQuietNotes ? 'true' : 'false');
+  label(button, showQuietNotes
+    ? 'Hide quiet notes and show owner messages only'
+    : 'Show quiet notes the agent reads without an owner message');
+}
+$('#quiet-notes').addEventListener('click', () => {
+  showQuietNotes = !showQuietNotes;
+  paintQuietNotes();
+  renderState();
+});
+paintQuietNotes();
 function restoreLastTab() {
   let saved = null;
   try { saved = localStorage.getItem(ACTIVE_TAB_KEY); } catch {}
