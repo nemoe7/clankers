@@ -528,6 +528,14 @@ def test_startup_and_log_lines_use_plain_human_format_without_secrets():
     "GH token: missing",
     "quiet polls: OK",
   ]
+  assert core.format_bytes(0) == "0 B"
+  assert core.format_bytes(1023) == "1023 B"
+  assert core.format_bytes(1024) == "1 KiB"
+  assert core.format_bytes(1536) == "1.5 KiB"
+  assert core.format_bytes(2047) == "1.9 KiB"
+  assert core.format_bytes(1024 * 1024) == "1 MiB"
+  assert core.format_bytes(int(2.79 * 1024 * 1024)) == "2.7 MiB"
+  assert core.format_bytes(1024**3 + 512 * 1024**2) == "1.5 GiB"
   assert core.log_line("GET", "/v1/gh?key=SECRET&path=x", 200) == "GET 200 /v1/gh"
   assert (
     core.log_line(

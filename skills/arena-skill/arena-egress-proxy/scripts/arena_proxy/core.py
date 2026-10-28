@@ -37,6 +37,24 @@ ROUTES = (
 )
 
 
+def format_bytes(count):
+  """Format a byte count as a floored binary size with at most one decimal."""
+  n = max(0, int(count))
+  if n < 1024:
+    return f"{n} B"
+  for unit_bytes, unit_name in (
+    (1024**4, "TiB"),
+    (1024**3, "GiB"),
+    (1024**2, "MiB"),
+    (1024, "KiB"),
+  ):
+    if n >= unit_bytes:
+      tenths = (n * 10) // unit_bytes
+      whole, frac = divmod(tenths, 10)
+      return f"{whole} {unit_name}" if frac == 0 else f"{whole}.{frac} {unit_name}"
+  return f"{n} B"
+
+
 def startup_lines(key, token, quiet_polls=False):
   """Format startup status lines without timestamps or secret token values."""
   lines = [
@@ -408,7 +426,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     )
     cap = transfers.DEFAULT_STAGE_CAP if logs else API_CAP_BYTES
     if len(body) > cap:
-      self._log_detail = f"{path} -> upstream response exceeded {cap} B cap"
+      self._log_detail = f"{path} -> upstream response exceeded {format_bytes(cap)} cap"
       self._send_json(
         502 if status == 200 else status,
         {
@@ -439,7 +457,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       scope_note = " (failed steps only)" if failed else ""
       self._log_detail = (
         f"{source_prefix}{scope_note} -> github {status}"
-        f" ({len(text.encode('utf-8'))} B tail, blob {new_blob})"
+        f" ({format_bytes(len(text.encode('utf-8')))} tail, blob {new_blob})"
       )
       self._gh_page(record, new_blob, dict(params, offset=["0"]))
       return
@@ -451,9 +469,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       text_body = body.decode("utf-8", "replace")
       record.update(kind="github-text", text=text_body)  # nonemo: NMO100
       new_blob = self._cache(record)
-      self._log_detail = (
-        f"{source_prefix} -> github {status} ({len(body)} B text, blob {new_blob})"
-      )
+      self._log_detail = f"{source_prefix} -> github {status} ({format_bytes(len(body))} text, blob {new_blob})"
       self._gh_page(record, new_blob, dict(params, offset=["0"]))
       return
     try:
@@ -605,7 +621,9 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       self._send_json(error.status, {"error": error.message})
       return
     if len(data) > self.server.fetch_cap:
-      self._log_detail = f"{url_label} exceeded {self.server.fetch_cap} B fetch cap"
+      self._log_detail = (
+        f"{url_label} exceeded {format_bytes(self.server.fetch_cap)} fetch cap"
+      )
       self._send_json(
         413, {"error": f"the resource is over the {self.server.fetch_cap} byte cap"}
       )
@@ -620,14 +638,14 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         return
       blob_id = self._put_blob(data)[0]
       self._log_detail = (
-        f"{url_label} -> upstream 200 text ({len(data)} B, blob {blob_id})"
+        f"{url_label} -> upstream 200 text ({format_bytes(len(data))}, blob {blob_id})"
       )
       self._fetch_text(data, blob_id, params)
       return
     if mode == "auto" and transfers.is_text(data) and not compress:
       blob_id = self._put_blob(data)[0]
       self._log_detail = (
-        f"{url_label} -> upstream 200 text ({len(data)} B, blob {blob_id})"
+        f"{url_label} -> upstream 200 text ({format_bytes(len(data))}, blob {blob_id})"
       )
       self._fetch_text(data, blob_id, params)
       return
@@ -646,9 +664,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
 
   def _stage(self, params, data, url_label=""):
     if len(data) > self.server.stage_cap:
-      self._log_detail = (
-        f"{url_label or 'resource'} exceeded {self.server.stage_cap} B stage cap"
-      )
+      self._log_detail = f"{url_label or 'resource'} exceeded {format_bytes(self.server.stage_cap)} stage cap"
       self._send_json(
         413,
         {"error": f"the resource is over the {self.server.stage_cap} byte stage cap"},
@@ -662,7 +678,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     noun = "chunk" if chunks == 1 else "chunks"
     if url_label:
       self._log_detail = (
-        f"{url_label} -> staged {size} B in {chunks} {enc_label} {noun}"
+        f"{url_label} -> staged {format_bytes(size)} in {chunks} {enc_label} {noun}"
         f" (blob {blob_id})"
       )
     self._send_json(
@@ -926,7 +942,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     size = found.get("size", 0)
     digest = str(found.get("sha256") or "")[:12]
     self._log_detail = (
-      f"served {file_name} from {owner_sid} ({size} B, sha256 {digest})"
+      f"served {file_name} from {owner_sid} ({format_bytes(size)}, sha256 {digest})"
     )
     self._send_json(200, {"ok": True, **found, "file": found})
 
@@ -977,9 +993,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       size = info.get("size", 0)
       digest = str(info.get("sha256") or "")[:12]
       rev = board_store.snapshot().get("revision", 0)
-      self._log_detail = (
-        f"staged {file_name} for {session_id} ({size} B, sha256 {digest}, rev {rev})"
-      )
+      self._log_detail = f"staged {file_name} for {session_id} ({format_bytes(size)}, sha256 {digest}, rev {rev})"
       self._send_json(200, {"ok": True, "file": info})
       return
     mode = str(payload.get("action") or payload.get("type") or "sync").strip().lower()
