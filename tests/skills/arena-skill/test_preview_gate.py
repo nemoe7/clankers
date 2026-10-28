@@ -712,6 +712,73 @@ def test_a_missing_shim_runs_the_installer():
     assert not marker.exists(), "a shim on PATH must skip the installer"
 
 
+def test_installer_next_action_matches_a_running_preview():
+  """The installer only tells the agent to start a server when none is up.
+
+  A live preview hot-reloads in-process, so the start line after a reinstall sent the
+  agent to boot a second server. The reachability probe is the venv python run, so the
+  stub answers for that one call while every other installer step runs for real.
+  """
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    home = root / "home"
+    repo = root / "repo"
+    scripts = repo / ".agents" / "skills" / "arena-skill" / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "preview.py").write_text("# installer target\n", encoding="utf-8")
+    shim = scripts / "arena-preview"
+    shim.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    shim.chmod(0o755)
+    venv_bin = home / ".agents" / ".arena-preview-venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    stub = venv_bin / "python"
+    stub.write_text(
+      "#!/bin/sh\n"
+      'case "$2" in\n'
+      '  *preview_server_available*) exit "${ARENA_PREVIEW_TEST_PROBE_RC:-1}" ;;\n'
+      "esac\n"
+      "exit 0\n",
+      encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    subprocess.run(
+      ["git", "init", "-q", str(repo)], capture_output=True, text=True, check=True
+    )
+
+    def install(probe_rc: str) -> subprocess.CompletedProcess[str]:
+      env = clean_env(HOME=str(home), ARENA_PREVIEW_TEST_PROBE_RC=probe_rc)
+      env.pop("BASH_ENV", None)
+      env.pop("GIT_CONFIG_GLOBAL", None)
+      return subprocess.run(
+        ["bash", str(INSTALLER)],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(repo),
+        env=env,
+      )
+
+    start_action = "next action: `start_process`: `arena-preview serve --port 8000`"
+    running_action = (
+      "next action: none (preview already running;"
+      " hot-reloads in-process - never stop_process)"
+    )
+
+    down = install("1")
+    assert down.returncode == 0, down.stderr
+    down_action = next(
+      ln for ln in down.stdout.splitlines() if ln.startswith("next action:")
+    )
+    assert down_action == start_action
+
+    up = install("0")
+    assert up.returncode == 0, up.stderr
+    up_action = next(
+      ln for ln in up.stdout.splitlines() if ln.startswith("next action:")
+    )
+    assert up_action == running_action
+
+
 def test_installed_exit_hook_marks_cli_children_and_preserves_exit_status() -> None:
   installer = INSTALLER.read_text(encoding="utf-8")
   match = re.search(r"# arena-preview-hook\n.*?\nEOF", installer, re.DOTALL)

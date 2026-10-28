@@ -49,6 +49,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Check the live preview port in `scripts/install.sh` and print an in-process hot-reload notice instead of a `start_process` hint when `serve` is already up.
 - Reject unrecognized non-`*` `-t` board post targets in CLI, `/api/board`, and `/v1/board`, listing valid targets (`scripts/preview.py`, `arena-egress-proxy/scripts/arena_proxy/board.py`).
 - Keep expanded task `<details>` open across task updates and preview state refreshes (`assets/app.js`).
 - Preserve live board polling state, stop consumed wake resurrection, and wake explicit post recipients (`scripts/preview.py`, `assets/app.js`, `arena-egress-proxy/scripts/arena_proxy/board.py`).

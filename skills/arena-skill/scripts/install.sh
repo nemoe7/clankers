@@ -205,12 +205,19 @@ unset _arena_preview_scripts
 EOF
 sed -i "s|__ARENA_PREVIEW_ROOT__|$REPO_ROOT|" "$PROFILE" || fail "cannot pin PATH root in $PROFILE"
 
+# A live server hot-reloads in-process, so only a down server earns the start line.
+if "$VENV/bin/python" -c 'import sys; sys.path.insert(0, "skills/refs/arena-skill/scripts"); sys.path.insert(0, ".agents/skills/arena-skill/scripts"); from pathlib import Path; import preview; sys.exit(0 if preview.preview_server_available(preview.Store(Path("arena-state"), create=False)) else 1)' >/dev/null 2>&1; then
+  NEXT_ACTION="next action: none (preview already running; hot-reloads in-process - never stop_process)"
+else
+  NEXT_ACTION='next action: `start_process`: `arena-preview serve --port 8000`'
+fi
+
 cat <<'EOF'
 commitlint: ok
 gitignore: ok
 arena-preview: ok
-next action: `start_process`: `arena-preview serve --port 8000`
 EOF
+printf '%s\n' "$NEXT_ACTION"
 
 # 8. Install the DEBUG gate trap last in ~/.bash_profile.
 GATE_TRAP_MARKER="# arena-preview-gate-trap"

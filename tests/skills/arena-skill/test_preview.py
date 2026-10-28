@@ -14404,6 +14404,8 @@ def test_gate_exempts_mkdir_publish_tasks_and_help(tmp_path):
     "gitignore: ok",
     "arena-preview: ok",
     "next action: `start_process`: `arena-preview serve --port 8000`",
+    "next action: none (preview already running; hot-reloads in-process - never stop_process)",
+    "preview_server_available",
     "--reminder --rc",
   ):
     assert expected in installer
