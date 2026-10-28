@@ -61,6 +61,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-skill
 
+- Skip `/v1/board` revisions on heartbeat counters, guard session status against peer snapshots, and prune orphan blobs (`board.py`, `sqlite_store.py`).
 - Tick all preview relative timestamps and hover `title` attributes every second on the client timer without WebSocket refreshes (`assets/app.js`).
 - Honor new unanswered `--report` waits on tasks with earlier submissions, and wait in `poll` when `blocked_by` tasks remain upcoming (`scripts/preview.py`).
 - Clear unread report-acknowledgement markers via `settleReportAck` when an ack arrives in view or when returning to an already-loaded report (`assets/app.js`).
@@ -73,6 +74,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Coalesce concurrent board syncs and file downloads per origin, and check state immediately on preview startup (`arena.user.js`).
 - Show `*` in the Arena tab title only when an unseen report needs answers (`arena.user.js`, `scripts/preview.py`, `assets/app.js`).
 - Poll preview and proxy boards every `60s +- 2.5s`, sending `POST` requests only on new diffs. Wake sibling tabs on passive advances and strip tombstoned branches from client diffs (`arena.user.js`, `assets/app.js`).
 - Seed local `/api/board` on first preview connect from read-only `/v1/board` pulls without registering unopted sessions (`arena.user.js`).

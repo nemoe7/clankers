@@ -470,6 +470,7 @@
   var restartTrimTimerHook = null;
   var trimNowHook = null;
   var forceSaveStateHook = null;
+  var checkStateHook = null;
   var setResetWindowHook = null;
   var restartTitleTimerHook = null;
   var notifyBoardBroadcastHook = null;
@@ -5133,8 +5134,11 @@
   var proxyBoardPullInFlight = null;
   var lastProxyBoardPullAtMs = 0;
   var hydratedBoardFilesByBranch = new Set();
+  var boardFileFetchInFlightBySha = new Map();
   var seededPreviewBoardBases = new Set();
   var seedPreviewBoardInFlightByBase = new Set();
+  var syncPreviewBoardInFlightByBase = new Map();
+  var syncPreviewBoardQueuedByBase = new Map();
   var previewBoardPullByBase = new Map();
   var lastSyncedMemberSigByBase = new Map();
   var proxyStateCacheByScope = new Map();
@@ -5312,14 +5316,24 @@
     function fetchNeededFiles() {
       var fetchedBySha = new Map();
       return Promise.all(neededItems.map(function (item) {
-        var q = "sha256=" + encodeURIComponent(item.sha);
-        if (item.branch && item.name) {
-          q += "&branch=" + encodeURIComponent(item.branch) + "&name=" + encodeURIComponent(item.name);
+        var existingFetch = boardFileFetchInFlightBySha.get(item.sha);
+        if (!existingFetch) {
+          var q = "sha256=" + encodeURIComponent(item.sha);
+          if (item.branch && item.name) {
+            q += "&branch=" + encodeURIComponent(item.branch) + "&name=" + encodeURIComponent(item.name);
+          }
+          existingFetch = proxyBoardJson("/v1/board/files?" + q).then(function (res) {
+            boardFileFetchInFlightBySha.delete(item.sha);
+            return res && res.status === 200 && res.body
+              ? (res.body.file && typeof res.body.file.content === "string" ? res.body.file.content : res.body.content)
+              : null;
+          }, function () {
+            boardFileFetchInFlightBySha.delete(item.sha);
+            return null;
+          });
+          setBoundedMap(boardFileFetchInFlightBySha, item.sha, existingFetch, MAX_HYDRATED_FILE_KEYS);
         }
-        return proxyBoardJson("/v1/board/files?" + q).then(function (res) {
-          var fileContent = res && res.status === 200 && res.body
-            ? (res.body.file && typeof res.body.file.content === "string" ? res.body.file.content : res.body.content)
-            : null;
+        return existingFetch.then(function (fileContent) {
           if (typeof fileContent === "string") {
             fetchedBySha.set(item.sha, fileContent);
           }
@@ -5420,8 +5434,7 @@
     return out;
   }
 
-  function syncPreviewBoard(base, targetSidHint, targetRepoHint, opts) {
-    if (!base || !boardProxyConfig()) return Promise.resolve(null);
+  function runSyncPreviewBoardOnce(base, targetSidHint, targetRepoHint, opts) {
     lastGlobalBoardPollAtMs = Date.now();
     var passive = Boolean(opts && opts.passive);
     var pushOnly = Boolean(opts && opts.pushOnly);
@@ -5629,6 +5642,45 @@
     });
   }
 
+  function syncPreviewBoard(base, targetSidHint, targetRepoHint, opts) {
+    var cleanBase = typeof base === "string" ? base.replace(/\/+$/, "") : "";
+    if (!cleanBase || !boardProxyConfig()) return Promise.resolve(null);
+    var isPushOnly = Boolean(opts && opts.pushOnly);
+    if (!isPushOnly) {
+      var existingSync = syncPreviewBoardInFlightByBase.get(cleanBase);
+      if (existingSync) {
+        var prevQueued = syncPreviewBoardQueuedByBase.get(cleanBase);
+        setBoundedMap(syncPreviewBoardQueuedByBase, cleanBase, {
+          sid: targetSidHint || (prevQueued && prevQueued.sid) || "",
+          repo: targetRepoHint || (prevQueued && prevQueued.repo) || "",
+          opts: {
+            passive: Boolean((prevQueued ? prevQueued.opts.passive : true) && (opts && opts.passive)),
+            forceProxyPull: Boolean((prevQueued && prevQueued.opts.forceProxyPull) || (opts && opts.forceProxyPull)),
+          },
+        }, MAX_ORIGIN_STATE_CACHE);
+        return existingSync;
+      }
+    }
+    var runPromise = runSyncPreviewBoardOnce(cleanBase, targetSidHint, targetRepoHint, opts);
+    if (!isPushOnly) {
+      runPromise = runPromise.then(function (res) {
+        syncPreviewBoardInFlightByBase.delete(cleanBase);
+        var queued = syncPreviewBoardQueuedByBase.get(cleanBase);
+        if (queued) {
+          syncPreviewBoardQueuedByBase.delete(cleanBase);
+          return syncPreviewBoard(cleanBase, queued.sid, queued.repo, queued.opts);
+        }
+        return res;
+      }, function (err) {
+        syncPreviewBoardInFlightByBase.delete(cleanBase);
+        syncPreviewBoardQueuedByBase.delete(cleanBase);
+        throw err;
+      });
+      setBoundedMap(syncPreviewBoardInFlightByBase, cleanBase, runPromise, MAX_ORIGIN_STATE_CACHE);
+    }
+    return runPromise;
+  }
+
   function seedPreviewBoardOnFirstConnect(base, targetSidHint, targetRepoHint) {
     var cleanBase = typeof base === "string" ? base.replace(/\/+$/, "") : "";
     if (
@@ -5712,6 +5764,7 @@
         }
       }
       notifyPreviewReady(document, true);
+      if (typeof checkStateHook === "function") checkStateHook();
       syncPreviewBoard(base, event.data.branch || "", event.data.repo || "").then(function () {
         boardSyncReadyForWake = true;
         if (typeof autoWakeNotify === "function") autoWakeNotify();
@@ -5883,6 +5936,7 @@
       GM_setValue(stampKey(storeKey), JSON.stringify(stateMemory(stamp, stamps)));
     }
     var stateBusy = false;
+    var stateCheckQueued = false;
 
     function receiptKey(storeKey) { return "clankers-arena-state-receipt-" + storeKey; }
     function pendingKey(storeKey) { return "clankers-arena-state-pending-" + storeKey; }
@@ -6246,7 +6300,10 @@
         syncPreviewBoard(boardBase, "", "", { passive: true });
       }
       if (!base) return;
-      if (stateBusy) return;
+      if (stateBusy) {
+        if (!manual && !force) stateCheckQueued = true;
+        return;
+      }
       stateBusy = true;
       try {
         var scope = stateScope(document);
@@ -6309,7 +6366,7 @@
         if (force) statePanel("Forcing save...");
         var rememberedBase = GM_getValue(baseKey(lastScope || storeKey), "");
         var rememberedBranch = GM_getValue(branchKey(lastScope || storeKey), "");
-        if (!scope.branch && !lastScope && !force && !serverBranch) {
+        if (!scope.branch && !lastScope && !force && !serverBranch && !previewUiBranch) {
           stateError(STATE_LINES.noBranch, "Force save", function () { fetchStateFile(true, true); }, "missing-branch");
           return;
         }
@@ -6318,7 +6375,7 @@
           return;
         }
         var effectiveRepo = scope.repo || serverRepo || previewUiRepo || "";
-        var effectiveBranch = scope.branch || serverBranch || rememberedBranch || "";
+        var effectiveBranch = scope.branch || serverBranch || rememberedBranch || previewUiBranch || "";
         var pulledState = await pullProxyStateSnapshot(effectiveRepo, effectiveBranch, Boolean(force));
         if (!pulledState.ok) {
           var getStatus = pulledState.res ? pulledState.res.status : 0;
@@ -6418,12 +6475,19 @@
         stateError(String(err.name || "unknown"), null, null, "autosave", undefined, undefined, String(err.message || "").slice(0, 160));
       } finally {
         stateBusy = false;
+        if (stateCheckQueued) {
+          stateCheckQueued = false;
+          fetchStateFile(false);
+        }
       }
     }
 
     var menus = [];
     forceSaveStateHook = function (manual) {
       fetchStateFile(manual !== false, true);
+    };
+    checkStateHook = function () {
+      fetchStateFile(false);
     };
     setResetWindowHook = function (next) {
       GM_setValue(RESET_WINDOW_KEY, Boolean(next));
@@ -6463,6 +6527,7 @@
     };
     return function () {
       forceSaveStateHook = null;
+      checkStateHook = null;
       restartStateWatchHook = null;
       stopStateWatch();
       menus.forEach(menuDrop);
@@ -7831,10 +7896,7 @@
         ps: s.polling_since || "",
         wg: Boolean(s.waiting_for_gates),
         cp: Boolean(s.checking_pr),
-        calls: Number(s.calls_since_message || 0),
-        seen: s.agent_seen_at || "",
         tend: s.turn_ended_at || "",
-        cend: s.agent_call_ended_at || "",
         rhead: s.remote_head || "",
         omhead: s.origin_main_head || "",
         surv: s.survey ? String(s.survey.answered_at || s.survey.answered || "") : "",

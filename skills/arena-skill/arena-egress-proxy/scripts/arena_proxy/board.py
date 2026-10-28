@@ -455,6 +455,8 @@ def normalize_board(raw):
         ]
       row_out["survey"] = survey
     for key in STATUS_KEYS:
+      if key == "polling_since" and not is_poll:
+        continue
       if row.get(key) is not None:
         row_out[key] = row[key]
     sessions.append(row_out)
@@ -941,7 +943,10 @@ def merge_preview_board(
     inc_ms = parse_stamp_ms(row.get("updated_at"))
     prev_ms = parse_stamp_ms(prev.get("updated_at")) if prev else None
     peer_fresher = bool(
-      prev is not None and inc_ms is not None and (prev_ms is None or inc_ms > prev_ms)
+      not preview_br
+      and prev is not None
+      and inc_ms is not None
+      and (prev_ms is None or inc_ms > prev_ms)
     )
     if row_br == preview_br or prev is None or peer_fresher:
       next_poll = bool(row.get("polling") or row.get("status") == "polling")
@@ -991,11 +996,11 @@ def merge_preview_board(
       if survey:
         next_row["survey"] = survey
       for key in STATUS_KEYS:
+        if key == "polling_since" and not next_poll:
+          continue
         if row.get(key) is not None:
           next_row[key] = row[key]
         elif row_br != preview_br and prev and prev.get(key) is not None:
-          if key == "polling_since" and not next_poll:
-            continue
           if key == "turn_ended_at":
             if next_poll:
               continue
@@ -1008,10 +1013,14 @@ def merge_preview_board(
               continue
           next_row[key] = prev[key]
       by_br[row_br] = next_row
-    else:
-      if isinstance(row.get("survey"), dict):
+    elif not preview_br:
+      if isinstance(row.get("survey"), dict) and not isinstance(
+        by_br[row_br].get("survey"), dict
+      ):
         by_br[row_br]["survey"] = row["survey"]
       for key in STATUS_KEYS:
+        if key == "polling_since" and not by_br[row_br].get("polling"):
+          continue
         if by_br[row_br].get(key) is None and row.get(key) is not None:
           by_br[row_br][key] = row[key]
   next_board["sessions"] = list(by_br.values())
@@ -1544,10 +1553,7 @@ def material_signature(board):
       "ps": s.get("polling_since") or "",
       "wg": bool(s.get("waiting_for_gates")),
       "cp": bool(s.get("checking_pr")),
-      "calls": int(s.get("calls_since_message") or 0),
-      "seen": s.get("agent_seen_at") or "",
       "tend": s.get("turn_ended_at") or "",
-      "cend": s.get("agent_call_ended_at") or "",
       "surv": str(
         (s.get("survey") or {}).get("answered_at")
         or (s.get("survey") or {}).get("answered")
@@ -1782,7 +1788,13 @@ class BoardStore:
     consumed_json = json.dumps(
       self.consumed_wakes, sort_keys=True, separators=(",", ":")
     )
-    if not changed_material and (passive or trimmed == self.state):
+    if not changed_material:
+      prev_consumed = self._get_meta_locked("consumed_wakes", "")
+      if consumed_json != prev_consumed:
+        self.engine.conn.execute(
+          "INSERT OR REPLACE INTO board_meta (key, value) VALUES ('consumed_wakes', ?)",
+          (consumed_json,),
+        )
       self.state = trimmed
       self.material_sig = next_sig
       return self.revision, self.state
@@ -1824,6 +1836,7 @@ class BoardStore:
     except Exception:
       self.engine.conn.execute("ROLLBACK")
       raise
+    self.engine.gc_orphan_blobs()
     self.revision = next_rev
     self.state = trimmed
     self.material_sig = next_sig
@@ -1999,22 +2012,26 @@ class BoardStore:
     reply_since=None,
     reply_mode="full",
   ):
-    if reply_mode == "diff" and reply_since is not None:
-      if reply_since == rev:
-        return {"ok": True, "unchanged": True, "revision": rev, "mode": "diff"}
-      if self.min_rev <= reply_since < rev:
-        out = {
-          "ok": True,
-          "unchanged": False,
-          "revision": rev,
-          "mode": "diff",
-          "diff": self._diff_since_locked(reply_since),
-        }
-        if target_branch or target_repo:
-          out["scoped_board"] = scope_board_for_target(
-            saved, target_branch, target_repo
-          )
-        return out
+    if reply_since is not None and reply_since == rev:
+      out = {"ok": True, "unchanged": True, "revision": rev}
+      if reply_mode == "diff":
+        out["mode"] = "diff"
+      return out
+    if (
+      reply_mode == "diff"
+      and reply_since is not None
+      and self.min_rev <= reply_since < rev
+    ):
+      out = {
+        "ok": True,
+        "unchanged": False,
+        "revision": rev,
+        "mode": "diff",
+        "diff": self._diff_since_locked(reply_since),
+      }
+      if target_branch or target_repo:
+        out["scoped_board"] = scope_board_for_target(saved, target_branch, target_repo)
+      return out
     return {
       "ok": True,
       "unchanged": False,

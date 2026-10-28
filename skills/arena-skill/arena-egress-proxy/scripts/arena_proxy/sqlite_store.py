@@ -378,6 +378,7 @@ class ProxySqliteEngine:
       self.conn.execute("PRAGMA synchronous=NORMAL")
       self.conn.execute("PRAGMA foreign_keys=ON")
       self._init_schema()
+      self.gc_orphan_blobs(scan_disk=True)
 
   def _init_schema(self):
     self.conn.executescript(
@@ -526,6 +527,93 @@ class ProxySqliteEngine:
     if value_json is None:
       return None
     return json.loads(value_json)
+
+  def _referenced_blob_digests_locked(self):
+    referenced = set()
+    for query in (
+      "SELECT blob_sha256 AS sha FROM board_records WHERE blob_sha256 != '' AND deleted = 0",
+      "SELECT sha256 AS sha FROM board_files WHERE sha256 != ''",
+      "SELECT blob_sha256 AS sha FROM board_client_cursors WHERE blob_sha256 != ''",
+      "SELECT blob_sha256 AS sha FROM state_records WHERE blob_sha256 != '' AND deleted = 0",
+    ):
+      for row in self.conn.execute(query).fetchall():
+        digest = str(row["sha"] or "").strip().lower()
+        if SHA256_RE.match(digest):
+          referenced.add(digest)
+    for row in self.conn.execute(
+      "SELECT history_meta_json FROM state_scopes"
+    ).fetchall():
+      try:
+        items = json.loads(row["history_meta_json"] or "[]")
+      except ValueError:
+        items = []
+      if not isinstance(items, list):
+        continue
+      for item in items:
+        if not isinstance(item, dict):
+          continue
+        digest = str(item.get("core_blob_sha256") or "").strip().lower()
+        if SHA256_RE.match(digest):
+          referenced.add(digest)
+    return referenced
+
+  def _unlink_blob_locked(self, digest):
+    try:
+      target = self.blob_path(digest)
+    except ValueError:
+      return False
+    removed = False
+    try:
+      if target.is_file():
+        target.unlink()
+        removed = True
+      if target.parent.is_dir() and not any(target.parent.iterdir()):
+        target.parent.rmdir()
+    except OSError:
+      pass
+    return removed
+
+  def gc_orphan_blobs(self, *, scan_disk=False):
+    """Delete unreferenced SQLite blob index rows and content-addressed files."""
+    with self.lock:
+      if self._closed:
+        return {"removed_rows": 0, "removed_files": 0}
+      referenced = self._referenced_blob_digests_locked()
+      indexed = [
+        str(row["sha256"] or "").strip().lower()
+        for row in self.conn.execute("SELECT sha256 FROM blobs").fetchall()
+      ]
+      orphan_rows = [sha for sha in indexed if sha and sha not in referenced]
+      removed_files = 0
+      for sha in orphan_rows:
+        if self._unlink_blob_locked(sha):
+          removed_files += 1
+      if orphan_rows:
+        placeholders = ",".join("?" for _ in orphan_rows)
+        self.conn.execute(
+          f"DELETE FROM blobs WHERE sha256 IN ({placeholders})",
+          tuple(orphan_rows),
+        )
+      if scan_disk and self.blobs_dir.is_dir():
+        for shard_dir in list(self.blobs_dir.iterdir()):
+          if not shard_dir.is_dir():
+            continue
+          for entry in list(shard_dir.iterdir()):
+            if not entry.is_file() or entry.name.endswith(".tmp"):
+              continue
+            name = entry.name.strip().lower()
+            if SHA256_RE.match(name) and name not in referenced:
+              try:
+                entry.unlink()
+                removed_files += 1
+              except OSError:
+                pass
+          try:
+            if not any(shard_dir.iterdir()):
+              shard_dir.rmdir()
+          except OSError:
+            pass
+      return {"removed_rows": len(orphan_rows), "removed_files": removed_files}
 
   def close(self):
     with self.lock:
@@ -909,6 +997,7 @@ class StateStore:
       except Exception:
         self.engine.conn.execute("ROLLBACK")
         raise
+      self.engine.gc_orphan_blobs()
 
       return {
         "ok": True,

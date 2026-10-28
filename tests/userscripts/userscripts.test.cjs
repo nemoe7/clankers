@@ -3757,11 +3757,19 @@ for raw in sys.stdin:
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         main_session_id: "alpha111-clankers",
         sessions: [
-          { branch: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:05Z", agent_call_ended_at: "2026-10-27T03:00:05Z" },
+          { branch: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:05Z", agent_call_ended_at: "2026-10-27T03:00:05Z", calls_since_message: 3, agent_seen_at: "2026-10-27T03:00:05Z" },
+        ],
+      });
+      const sigD = boardApi.boardMaterialSignature({
+        allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
+        main_session_id: "alpha111-clankers",
+        sessions: [
+          { branch: "alpha111-clankers", repo: "clankers", updated_at: "2026-10-27T03:00:05Z", turn_ended_at: "2026-10-27T03:00:05Z" },
         ],
       });
       assert.equal(sigA, sigB, "boardMaterialSignature ignores synthetic updated_at churn");
-      assert.notEqual(sigB, sigC, "boardMaterialSignature changes when agent_call_ended_at advances");
+      assert.equal(sigB, sigC, "boardMaterialSignature ignores non-material heartbeat call counters and timestamps");
+      assert.notEqual(sigB, sigD, "boardMaterialSignature changes when turn_ended_at advances");
 
       // normalizeBoard strips unpublished worker_reports via report_ops:
       const withUnpubOp = boardApi.normalizeBoard({
@@ -5169,6 +5177,19 @@ for raw in sys.stdin:
         wireCalls.filter(c => c.method === "POST" && c.url.startsWith("https://8000-worker-beta.e2b.app/api/board")).length,
         0,
         "skips redundant echo POST /api/board when merged proxy state matches local GET",
+      );
+
+      // Concurrent syncPreviewBoard calls for the same base coalesce to 1 in-flight run + at most 1 queued rerun:
+      wireCalls.length = 0;
+      const [c1, c2, c3] = await Promise.all([
+        boardApi.syncPreviewBoard("https://8000-worker-beta.e2b.app", "arena/beta2222-clankers", "clankers", { passive: true }),
+        boardApi.syncPreviewBoard("https://8000-worker-beta.e2b.app", "arena/beta2222-clankers", "clankers", { passive: true }),
+        boardApi.syncPreviewBoard("https://8000-worker-beta.e2b.app", "arena/beta2222-clankers", "clankers", { passive: false }),
+      ]);
+      assert.ok(c1 && c2 && c3, "coalesced syncPreviewBoard promises resolve cleanly");
+      assert.ok(
+        wireCalls.filter(c => c.method === "GET" && c.url.startsWith("https://8000-worker-beta.e2b.app/api/board")).length <= 2,
+        "3 concurrent syncPreviewBoard calls coalesce into 1 run plus 1 queued rerun",
       );
       broadcastSpy.close();
     });

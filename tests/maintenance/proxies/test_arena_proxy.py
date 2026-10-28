@@ -2000,3 +2000,166 @@ def test_board_polling_heartbeat_post_wake_and_consumed_wake_anti_resurrection(
     assert ok_broadcast["board"]["entries"][-1]["to"] == "*"
   finally:
     reopened.close()
+
+
+def test_board_rev_stability_peer_polling_guard_and_orphan_blob_gc(tmp_path):
+  sqlite_module = importlib.import_module("arena_proxy.sqlite_store")
+  alpha = "arena/91a01582-clankers"
+  beta = "arena/2b32ab78-clankers"
+  state_dir = tmp_path / "proxy-state"
+  engine = sqlite_module.ProxySqliteEngine(state_dir)
+  board_store = board_module.BoardStore(state_dir, engine=engine)
+  state_store = sqlite_module.StateStore(engine)
+  try:
+    init_res = board_store.apply(
+      {"action": "allow", "branch": alpha, "repo": "clankers"}
+    )
+    assert init_res["ok"] is True
+    board_store.apply({"action": "allow", "branch": beta, "repo": "clankers"})
+
+    # Beta enters polling with naive local wall-clock updated_at ahead of UTC.
+    beta_poll = board_store.sync(
+      {
+        "branch": beta,
+        "repo": "clankers",
+        "sessions": [
+          {
+            "branch": beta,
+            "repo": "clankers",
+            "status": "polling",
+            "polling": True,
+            "polling_since": "2026-10-28T14:40:00Z",
+            "updated_at": "2026-10-28T22:40:00",
+          }
+        ],
+      },
+      branch=beta,
+      repo="clankers",
+    )
+    rev_while_polling = beta_poll["revision"]
+
+    # Beta exits polling. Stale peer snapshot from alpha must not flip beta back to polling.
+    beta_active = board_store.sync(
+      {
+        "branch": beta,
+        "repo": "clankers",
+        "sessions": [
+          {
+            "branch": beta,
+            "repo": "clankers",
+            "status": "active",
+            "polling": False,
+            "updated_at": "2026-10-28T14:45:00Z",
+          }
+        ],
+      },
+      branch=beta,
+      repo="clankers",
+    )
+    beta_row_after = next(
+      s for s in beta_active["board"]["sessions"] if s["branch"] == beta
+    )
+    assert beta_row_after["polling"] is False
+    assert "polling_since" not in beta_row_after
+
+    board_store.sync(
+      {
+        "branch": alpha,
+        "repo": "clankers",
+        "sessions": [
+          {
+            "branch": alpha,
+            "repo": "clankers",
+            "status": "active",
+            "polling": False,
+          },
+          {
+            "branch": beta,
+            "repo": "clankers",
+            "status": "polling",
+            "polling": True,
+            "polling_since": "2026-10-28T14:40:00Z",
+            "updated_at": "2029-10-28T22:46:00",
+          },
+        ],
+      },
+      branch=alpha,
+      repo="clankers",
+      reply_since=beta_active["revision"],
+    )
+    snap_after_peer = board_store.snapshot()
+    beta_still_active = next(
+      s for s in snap_after_peer["board"]["sessions"] if s["branch"] == beta
+    )
+    assert beta_still_active["polling"] is False
+    assert "polling_since" not in beta_still_active
+
+    # Non-material heartbeat updates do not bump revision and reply_since returns unchanged:
+    cur_rev = snap_after_peer["revision"]
+    hb_sync = board_store.sync(
+      {
+        "branch": alpha,
+        "repo": "clankers",
+        "sessions": [
+          {
+            "branch": alpha,
+            "repo": "clankers",
+            "status": "active",
+            "polling": False,
+            "calls_since_message": 7,
+            "agent_seen_at": "2026-10-28T14:50:00Z",
+            "agent_call_ended_at": "2026-10-28T14:50:05Z",
+          }
+        ],
+      },
+      branch=alpha,
+      repo="clankers",
+      passive=False,
+      reply_since=cur_rev,
+    )
+    assert hb_sync["unchanged"] is True
+    assert hb_sync["revision"] == cur_rev
+    assert "board" not in hb_sync
+    assert cur_rev > rev_while_polling
+
+    # Repeated state puts prune superseded core history blobs while keeping live blobs:
+    for idx in range(5):
+      big_note = {
+        "id": f"n{idx:05d}",
+        "at": f"2026-10-28T14:5{idx}:00Z",
+        "text": ("x" * 5000) + str(idx),
+      }
+      state_store.put_state(
+        {
+          "scope": {"repo": "clankers", "branch": alpha},
+          "save_id": f"save-{idx}",
+          "stamp": f"2026-10-28T14:5{idx}:00Z",
+          "core": [big_note],
+        }
+      )
+    referenced = engine._referenced_blob_digests_locked()
+    indexed = {
+      row["sha256"]
+      for row in engine.conn.execute("SELECT sha256 FROM blobs").fetchall()
+    }
+    disk_files = {
+      p.name
+      for p in (state_dir / "blobs").rglob("*")
+      if p.is_file() and not p.name.endswith(".tmp")
+    }
+    assert indexed == referenced
+    assert disk_files == referenced
+
+    # Startup scan cleans stray unindexed blob files on disk:
+    stray_sha = "f" * 64
+    stray_path = state_dir / "blobs" / "ff" / stray_sha
+    stray_path.parent.mkdir(parents=True, exist_ok=True)
+    stray_path.write_bytes(b"orphan")
+  finally:
+    board_store.close()
+
+  reopened_engine = sqlite_module.ProxySqliteEngine(state_dir)
+  try:
+    assert not stray_path.exists()
+  finally:
+    reopened_engine.close()
