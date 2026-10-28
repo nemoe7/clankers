@@ -2,6 +2,8 @@
 
 Format relative timestamps with the singular, plural, and abbreviated forms below. Omit seconds (`< 1` minute -> `just now` / `now`) unless second-level resolution is explicitly requested. Keep the surrounding text face. Raw ISO or UTC timestamps trigger `NUL006` and `NUA310` unless marked `nonuu` on intentional log surfaces.
 
+Keep stored, synced, and DOM timestamps in UTC or with numeric offsets. Sort by epoch milliseconds, and localize only display text and hover titles.
+
 ![Relative Timestamps Dark-Mode Example](../examples/relative-timestamps.png)
 
 | Unit | Singular (1) | Plural (2+) | Abbreviated |

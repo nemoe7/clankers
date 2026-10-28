@@ -49,6 +49,7 @@ One short specification for every page we ship, paired with a small command-line
 21. Keep inter-group gaps at least 1.5x intra-group gaps while snapping both to the Clause 6 scale (NUM217).
 22. Align stacked card items on one inline edge, use only house fonts, and keep uppercase on .eyebrow (NUM218).
 23. Use at most one primary button per card or dialog and name the action instead of Yes/No (NUL008).
+24. Store and send timestamps in UTC or with numeric offsets, sort by epoch milliseconds, and localize only on display.
 
 Component and interaction patterns live in `references/recipes/`: [modal-manager.md](references/recipes/modal-manager.md) (top-right `.close-button` and delete confirmation), [range-sliders.md](references/recipes/range-sliders.md) (step ticks and `<output>` bubbles), [relative-timestamps.md](references/recipes/relative-timestamps.md) (relative ages, full or abbreviated by width), [loading-bar.md](references/recipes/loading-bar.md) (200 ms delayed edge bar and fixed-slot controls), [scrollbars.md](references/recipes/scrollbars.md) (`6 px` rounded thumb without arrow buttons), and [overflow-and-clipping.md](references/recipes/overflow-and-clipping.md) (unclipped focus rings, shadows, and tooltips).
 
