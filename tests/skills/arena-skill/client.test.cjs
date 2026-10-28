@@ -5840,6 +5840,32 @@ test('preview client', async (t) => {
     assert.equal(context.formatBoardSenderLabel('alpha'), '@alpha:');
     assert.equal(context.formatBoardSenderLabel('beta'), '@beta:');
     assert.equal(context.formatBoardSenderLabel('@alpha:'), '@alpha:');
+    assert.equal(context.formatBoardSenderLabel('alpha', 'beta'), '@alpha to @beta');
+    assert.equal(context.formatBoardSenderLabel('@alpha', '@beta:'), '@alpha to @beta');
+    const directedItems = context.combinedHistoryItems([], {
+      ...mockBoard,
+      entries: [
+        {
+          id: 'b-99999000',
+          branch: 'arena/alpha1111-clankers',
+          to: 'arena/beta2222-clankers',
+          repo: 'clankers',
+          text: 'text here',
+          ack_text: 'ack text',
+          ack_sender: 'clankers-beta',
+          acknowledged_at: '2026-10-27T04:01:00Z',
+          at: '2026-10-27T04:00:00Z',
+        },
+      ],
+    });
+    assert.equal(directedItems.length, 1);
+    assert.equal(directedItems[0].board_sender, 'alpha');
+    assert.equal(directedItems[0].board_target, 'beta');
+    assert.equal(
+      context.formatBoardSenderLabel(directedItems[0].board_sender, directedItems[0].board_target),
+      '@alpha to @beta',
+    );
+    assert.equal(context.formatBoardSenderLabel('beta'), '@beta:');
     assert.equal(
       context.resolveBoardMentions('Ready for review.\n@beta2222-clankers and @arena/alpha1111-clankers', mockBoard, 'clankers'),
       'Ready for review.\n@beta and @alpha',

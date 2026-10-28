@@ -1190,6 +1190,12 @@ function combinedHistoryItems(notes, board = getState()?.board) {
     const senderLabel = entry.from_owner
       ? ''
       : displayBoardId(rawSenderId, board, entryRepo || currentRepo);
+    const rawTargetId = String(entry.to || '').trim();
+    const targetRow = rawTargetId && rawTargetId !== '*' ? boardBySid.get(rawTargetId) : null;
+    const targetRepo = String(targetRow?.repo || entryRepo || currentRepo).trim().split('/').pop();
+    const targetLabel = entry.from_owner || !rawTargetId
+      ? ''
+      : (rawTargetId === '*' ? 'all' : displayBoardId(rawTargetId, board, targetRepo));
     const origText = String(
       entry.text
       || entry.payload?.text
@@ -1223,6 +1229,7 @@ function combinedHistoryItems(notes, board = getState()?.board) {
       is_board: true,
       is_agent_board: !entry.from_owner,
       board_sender: senderLabel,
+      ...(targetLabel ? { board_target: targetLabel } : {}),
       text: rawText,
       ack_text: resolvedAckText,
       html,
@@ -1304,7 +1311,7 @@ function showHistory(rawNotes) {
     if (item.board_sender) {
       const senderEl = document.createElement('div');
       senderEl.className = 'board-sender';
-      senderEl.textContent = formatBoardSenderLabel(item.board_sender);
+      senderEl.textContent = formatBoardSenderLabel(item.board_sender, item.board_target);
       text.insertBefore(senderEl, text.children?.[0] || text.firstChild || null);
     }
     const receipt = node.children[2];
@@ -4419,9 +4426,11 @@ function displayBoardId(rawId, board = getState()?.board, rowRepo = '') {
   }
   return text;
 }
-function formatBoardSenderLabel(label) {
+function formatBoardSenderLabel(label, target = '') {
   const clean = String(label || '').trim().replace(/^@+/, '').replace(/:+$/, '');
-  return clean ? `@${clean}:` : '';
+  if (!clean) return '';
+  const cleanTarget = String(target || '').trim().replace(/^@+/, '').replace(/:+$/, '');
+  return cleanTarget ? `@${clean} to @${cleanTarget}` : `@${clean}:`;
 }
 function resolveBoardAckSender(rawSender, item, board = getState()?.board, rowRepo = '') {
   const toTarget = (item?.to && item.to !== '*' && item.to !== item.branch) ? String(item.to) : '';
