@@ -756,6 +756,50 @@ def strip_fenced_md_comments(markdown,keep_anchors=False):
 		if opening:flush();fence=opening.group(1);out.append(line);continue
 		chunk.append(line)
 	flush();return''.join(out)
+def _replace_mark_outside_inline_code(text):
+	if'<mark'not in text.lower():return text
+	runs_by_len,offsets={},{};n=len(text)
+	if'`'in text:
+		pos=text.find('`')
+		while pos!=-1:
+			end_pos=pos+1
+			while end_pos<n and text[end_pos]=='`':end_pos+=1
+			runs_by_len.setdefault(end_pos-pos,[]).append((pos,end_pos));pos=text.find('`',end_pos)
+	out,cursor=[],0;lower=text.lower()
+	while cursor<n:
+		m_start=lower.find('<mark>',cursor)
+		if m_start==-1:out.append(text[cursor:]);break
+		t_start=text.find('`',cursor)if runs_by_len else-1
+		if t_start!=-1 and t_start<m_start:
+			t_end=t_start+1
+			while t_end<n and text[t_end]=='`':t_end+=1
+			run_len=t_end-t_start;spans=runs_by_len.get(run_len,());idx=offsets.get(run_len,0)
+			while idx<len(spans)and spans[idx][0]<t_end:idx+=1
+			if idx<len(spans):offsets[run_len]=idx+1;out.append(text[cursor:spans[idx][1]]);cursor=spans[idx][1]
+			else:offsets[run_len]=idx;out.append(text[cursor:t_end]);cursor=t_end
+			continue
+		m_end=lower.find('</mark>',m_start+6);nl=text.find('\n',m_start+6)
+		if m_end==-1 or nl!=-1 and nl<m_end:out.append(text[cursor:m_start+6]);cursor=m_start+6;continue
+		out.append(text[cursor:m_start]);inner=text[m_start+6:m_end];core=inner.strip()
+		if core:lead=inner[:len(inner)-len(inner.lstrip())];tail=inner[len(inner.rstrip()):];out.append(f"{lead}=={core}=={tail}")
+		else:out.append(inner)
+		cursor=m_end+7
+	return''.join(out)
+def normalize_report_mark_tags(markdown):
+	if'<mark'not in markdown.lower():return markdown
+	lines=markdown.splitlines(keepends=True);out,chunk,fence=[],[],None
+	def flush():
+		if not chunk:return
+		out.append(_replace_mark_outside_inline_code(''.join(chunk)));chunk.clear()
+	for line in lines:
+		if fence is not None:
+			out.append(line)
+			if line.strip().startswith(fence):fence=None
+			continue
+		opening=FENCE.match(line)
+		if opening:flush();fence=opening.group(1);out.append(line);continue
+		chunk.append(line)
+	flush();return''.join(out)
 def option_continuation(line):
 	cleaned=strip_md_comments(line)
 	if not cleaned.strip()or BLOCK_START.match(cleaned):return False
@@ -4454,13 +4498,13 @@ class Store:
 		if source.suffix.lower()!='.md':raise ValueError('Publish a UTF-8 .md source file')
 		with source.open('rb')as stream:data=stream.read(MAX_REPORT+1)
 		if len(data)>MAX_REPORT:raise ValueError('Report exceeds the 2 MB limit; split it into reports')
-		text=data.decode('utf-8');text=embed_report_images(text,source.resolve().parent)
+		raw_text=normalize_report_mark_tags(data.decode('utf-8'));text=embed_report_images(raw_text,source.resolve().parent)
 		if len(text.encode('utf-8'))>MAX_REPORT:raise ValueError('Report exceeds the 2 MB limit; split it into reports')
 		fields=parse_fields(text)[1];metadata=validate_submission_format(submission_format,fields)
 		if not allow_unparsed_markers:
 			warnings=report_marker_warnings(text)
 			if warnings:lines=[f"{source}:{warning['line']}: Error: possible unparsed {warning['marker']} marker. Keep spaces outside the markers, or pass -u / --allow-unparsed-markers if literal marker text is intentional."for warning in warnings];raise ValueError('\n'.join(lines))
-		check_report_nemoizer(source,data.decode('utf-8'),self.repository_root())
+		check_report_nemoizer(source,raw_text,self.repository_root())
 		with self.transaction()as db:
 			report=db.execute('SELECT ack_seen_at, viewed_at FROM reports WHERE id = ?',(report_id,)).fetchone()
 			if report is not None:self.guard_report_change(db,report_id,report)

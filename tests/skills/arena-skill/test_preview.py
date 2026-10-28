@@ -17293,3 +17293,33 @@ def test_slash_skill_lookup_prefers_installed_then_live_and_ignores_refs(tmp_pat
   recipe_res = preview.resolve_slash_command("/nuu recipe modal-manager", root=tmp_path)
   assert ".agents/skills/nuu/references/recipes/modal-manager.md" in recipe_res["text"]
   assert "skills/refs/" not in recipe_res["text"]
+
+
+def test_publish_report_normalizes_inline_mark_tags_outside_code(tmp_path):
+  store = preview.Store(tmp_path / "arena-state", create=True)
+  report_path = tmp_path / "proposal.md"
+  report_path.write_text(
+    "# Mark Tag Normalization\n\n"
+    "| Line | Diff | Reason |\n"
+    "| --- | --- | --- |\n"
+    "| 12 | Keep ~~old~~ <mark>new</mark> and <mark> padded </mark> | Inline mark |\n\n"
+    "Literal code span `<mark>stay-inline</mark>` stays literal.\n\n"
+    "```markdown\n"
+    "| 14 | <mark>stay-fenced</mark> | Example |\n"
+    "```\n",
+    encoding="utf-8",
+  )
+  store.publish(
+    "mark-norm",
+    "Mark Tag Normalization",
+    report_path,
+    allow_unparsed_markers=False,
+  )
+  stored = store.report("mark-norm")
+  assert "==new==" in stored["markdown"]
+  assert " ==padded== " in stored["markdown"]
+  assert "`<mark>stay-inline</mark>`" in stored["markdown"]
+  assert "<mark>stay-fenced</mark>" in stored["markdown"]
+  rendered = preview.render(stored["markdown"])
+  assert "<mark>new</mark>" in rendered
+  assert "<mark>padded</mark>" in rendered
