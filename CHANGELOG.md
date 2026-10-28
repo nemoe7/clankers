@@ -74,6 +74,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Raise the minimum Python floor to `3.11` across `nuu` package metadata, `minify.py` syntax checks, and skill READMEs (`skills/`, `maintenance/minify/minify.py`, `maintenance/README.md`, `tests/maintenance/minify/test_minify.py`).
 - Move all 25 Python and Node test suites into mirrored `tests/` subdirectories and align module routing, CI workflows, and `pyproject.toml`.
 - Exclude skill test files from `distribute-sync` and remove synced `.agents/skills/{nemoizer,nuu}/scripts/test_*.py` copies (`.github/actions/distribute-sync/sync.sh`, `.agents/skills/`, `maintenance/workflows/test_distribute_sync.py`).
 - Restrict `skills/refs/` to prose files unless nested `AGENTS.md` exempts minification (`AGENTS.md`, `skills/arena-skill/AGENTS.md`).

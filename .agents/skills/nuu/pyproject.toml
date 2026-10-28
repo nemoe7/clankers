@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "nuu"
 version = "0.1.66"
 description = "Design sheet and UI/UX inspection CLI."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [project.scripts]
 nuu = "nuu:main"

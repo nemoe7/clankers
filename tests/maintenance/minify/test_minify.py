@@ -296,9 +296,14 @@ def public(value: int, /, *, enabled: bool = True) -> int:
     raise AssertionError("Changed Python tree was accepted")
   except RuntimeError:
     pass
+  minify.check_python(
+    "try:\n  pass\nexcept* Exception:\n  pass",
+    "try:\n pass\nexcept* Exception:\n pass",
+    "py311.py",
+  )
   try:
-    minify.check_python("x = 1", "try:\n pass\nexcept* Exception:\n pass", "new.py")
-    raise AssertionError("Python 3.11-only syntax was accepted")
+    minify.check_python("x = 1", "type X = int", "new.py")
+    raise AssertionError("Python 3.12-only syntax was accepted")
   except SyntaxError:
     pass
   with patch("minify.version", return_value="0.0.0"):

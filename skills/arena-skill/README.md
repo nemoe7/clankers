@@ -4,7 +4,7 @@ Steer Arena coding sessions through one live preview inbox, task queue, and repo
 
 ## Setup
 
-Load [SKILL.md](SKILL.md) in an agent that supports skills. See [Skills](../README.md) for installation layout. The preview server needs Python 3.10+ and its standard library, plus `markdown-it-py` and `PyYAML`.
+Load [SKILL.md](SKILL.md) in an agent that supports skills. See [Skills](../README.md) for installation layout. The preview server needs Python 3.11+ and its standard library, plus `markdown-it-py` and `PyYAML`.
 
 ```bash
 bash .agents/skills/arena-skill/scripts/install.sh

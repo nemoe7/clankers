@@ -6,7 +6,7 @@ Build, refine, and review web interfaces. Tools cover briefs, local catalogs, de
 
 ## Setup
 
-Load [SKILL.md](SKILL.md) in an agent that supports skills. See [Skills](../README.md) for installation layout. Local tools need Python 3.10+ and its standard library. Browser tools also need Node, the floating `playwright` package, and an available browser.
+Load [SKILL.md](SKILL.md) in an agent that supports skills. See [Skills](../README.md) for installation layout. Local tools need Python 3.11+ and its standard library. Browser tools also need Node, the floating `playwright` package, and an available browser.
 
 The project supplies its page, running application, and browser. Tools capture pages but install no package or browser.
 

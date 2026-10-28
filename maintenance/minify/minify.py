@@ -99,9 +99,9 @@ def strip_string_statements(tree):
 
 
 def check_python(source: str, built: str, filename: str) -> None:
-  "Check Python 3.10 syntax and parsed-tree equality. Ignore bare string statements because the build removes them."
-  before = ast.parse(source, filename, feature_version=(3, 10), type_comments=True)
-  after = ast.parse(built, filename, feature_version=(3, 10), type_comments=True)
+  "Check Python 3.11 syntax and parsed-tree equality. Ignore bare string statements because the build removes them."
+  before = ast.parse(source, filename, feature_version=(3, 11), type_comments=True)
+  after = ast.parse(built, filename, feature_version=(3, 11), type_comments=True)
   if ast.dump(strip_string_statements(before)) != ast.dump(
     strip_string_statements(after)
   ):
