@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-28
+
+### Changed
+
+#### nuu
+
+- Pair top-right `.close-button` (`X`) with footer `Cancel` by default on confirmation, form, and unsaved-edit modals (`references/recipes/modal-manager.md`, `references/examples/modal-close-button.png`).
+
 ## 2026-10-27
 
 ### Added
