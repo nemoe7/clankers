@@ -15378,6 +15378,7 @@ def test_unescape_fences_handles_escaped_inline_code_and_state_compare_and_post_
     "app.js",
     "message-markdown.js",
     "markdown-it.min.js",
+    "mermaid.min.js",
   ):
     (fake_assets / name).write_text("v1", encoding="utf-8")
   sig1 = preview.assets_signature(fake_assets)

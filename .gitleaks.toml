@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore vendored third-party bundles"
+paths = [
+  '''(^|/)assets/mermaid\.min\.js$''',
+  '''(^|/)assets/markdown-it\.min\.js$''',
+]

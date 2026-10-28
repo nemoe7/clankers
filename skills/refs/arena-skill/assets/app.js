@@ -178,6 +178,7 @@ function setTheme(theme) {
   const button = $('#theme');
   setIcon(button, light ? 'moon' : 'sun', 17);
   label(button, `Switch to ${light ? 'dark' : 'light'} mode`);
+  initializeMermaid();
 }
 setTheme(stored('theme'));
 $('#theme').addEventListener('click', () => {
@@ -1326,7 +1327,22 @@ function showHistory(rawNotes) {
       text.textContent = item.text.replace(/\\n/g, '\n');
     } else {
       const withHeaders = typeof ensureCodeBlockHeaders === 'function' ? ensureCodeBlockHeaders(item.html) : item.html;
-      text.innerHTML = withHeaders.includes('language-mermaid') ? renderMermaidBlocksSync(withHeaders) : withHeaders;
+      if (withHeaders.includes('language-mermaid')) {
+        text.innerHTML = renderMermaidBlocksSync(withHeaders);
+        text._mermaidHtml = withHeaders;
+        renderMermaidBlocks(withHeaders).then(rendered => {
+          if (text._mermaidHtml !== withHeaders) return;
+          text.innerHTML = rendered;
+          if (item.board_sender) {
+            const senderEl = document.createElement('div');
+            senderEl.className = 'board-sender';
+            senderEl.textContent = formatBoardSenderLabel(item.board_sender, item.board_target);
+            text.insertBefore(senderEl, text.children?.[0] || text.firstChild || null);
+          }
+        }).catch(() => {});
+      } else {
+        text.innerHTML = withHeaders;
+      }
     }
     if (item.board_sender) {
       const senderEl = document.createElement('div');
@@ -2796,14 +2812,6 @@ $('#report-top').addEventListener('click', () => {
 function updateReportNavigation() {
   $('#next-report').disabled = !nextReportId();
 }
-const MERMAID_STRICT_CONFIG = Object.freeze({
-  startOnLoad: false,
-  securityLevel: 'strict',
-  htmlLabels: false,
-  maxTextSize: 50000,
-  maxEdges: 500,
-  suppressErrorRendering: true,
-});
 function escapeSvgText(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -2824,7 +2832,7 @@ function sanitizeMermaidSvg(svgText) {
   if (typeof svgText !== 'string') return null;
   const trimmed = svgText.trim();
   if (!/^<[s]vg\b[\s\S]*<\/svg>$/i.test(trimmed)) return null;
-  if (/<(script|foreignobject|iframe|object|embed|audio|video|canvas|applet|meta|link|style)\b/i.test(trimmed)) {
+  if (/<(script|foreignobject|iframe|object|embed|audio|video|canvas|applet|meta|link)\b/i.test(trimmed)) {
     return null;
   }
   if (/\bon[a-z]+\s*=|javascript:|vbscript:|data:text\/html|@import|\burl\s*\(\s*["']?\s*(?!#)/i.test(trimmed)) {
@@ -2838,490 +2846,27 @@ function sanitizeMermaidSvg(svgText) {
   }
   return trimmed;
 }
-function parseFlowNodeToken(token, nodes) {
-  const clean = token.trim();
-  if (!clean) return null;
-  const match = /^([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)(?:\[\[(.*?)\]\]|\[\((.*?)\)\]|\(\((.*?)\)\)|\(\[(.*?)\]\)|\[(.*?)\]|\((.*?)\)|\{(.*?)\})?$/.exec(clean);
-  if (!match) return null;
-  const id = match[1];
-  const rawLabel = match[2] ?? match[3] ?? match[4] ?? match[5] ?? match[6] ?? match[7] ?? match[8];
-  const shape = match[4] !== undefined ? 'circle' : match[8] !== undefined ? 'diamond' : match[3] !== undefined || match[5] !== undefined || match[7] !== undefined ? 'round' : 'rect';
-  const existing = nodes.get(id);
-  const normalizedLabel = rawLabel !== undefined
-    ? rawLabel.replace(/^"(.*)"$/, '$1').replace(/<br\s*\/?>/gi, '\n').trim()
-    : (existing?.label || id);
-  if (/<[a-z!/][^>]*>/i.test(normalizedLabel)) throw new Error('HTML labels are disabled in strict mode');
-  const record = { id, label: normalizedLabel, shape: rawLabel !== undefined ? shape : (existing?.shape || 'rect') };
-  nodes.set(id, record);
-  return id;
+function mermaidTheme() {
+  return document.documentElement?.dataset?.theme === 'light' ? 'default' : 'dark';
 }
-function wrapMermaidLabel(label, maxChars = 24) {
-  const text = String(label || '').trim();
-  if (!text) return [''];
-  if (text.includes('\n')) {
-    return text.split('\n').flatMap(segment => wrapMermaidLabel(segment, maxChars));
-  }
-  if (text.length <= maxChars) return [text];
-  const tokens = text.split(/\s+/).flatMap(word => {
-    if (word.length <= maxChars) return [word];
-    const parts = word.split(/(?<=[/-])/);
-    if (parts.length > 1 && parts.every(p => p.length <= maxChars)) return parts;
-    const chunks = [];
-    for (let i = 0; i < word.length; i += maxChars) chunks.push(word.slice(i, i + maxChars));
-    return chunks;
+function mermaidConfig() {
+  return Object.freeze({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    htmlLabels: false,
+    maxTextSize: 50000,
+    maxEdges: 500,
+    suppressErrorRendering: true,
+    theme: mermaidTheme(),
+    flowchart: { htmlLabels: false },
   });
-  const lines = [];
-  let current = '';
-  for (const token of tokens) {
-    const joiner = current && !current.endsWith('/') && !current.endsWith('-') ? ' ' : '';
-    if (current && (current + joiner + token).length > maxChars) {
-      lines.push(current);
-      current = token;
-    } else {
-      current = current ? current + joiner + token : token;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.length ? lines : [text];
 }
-function renderFlowchartSvg(lines, header, config, stateMarkers = null) {
-  const dirMatch = /^(?:flowchart|graph)(?:\s+(TD|TB|BT|LR|RL))?\s*$/.exec(header);
-  if (!dirMatch) throw new Error('Invalid flowchart header');
-  const dir = dirMatch[1] || 'TD';
-  const horizontal = dir === 'LR' || dir === 'RL';
-  const reverse = dir === 'BT' || dir === 'RL';
-  const nodes = new Map();
-  const edges = [];
-  for (const rawLine of lines) {
-    const line = rawLine.trim().replace(/;$/, '');
-    if (!line || line.startsWith('%%') || /^subgraph\b/i.test(line) || /^end$/i.test(line) || /^direction\s+(?:TD|TB|BT|LR|RL)$/i.test(line)) continue;
-    if (/^(?:click|callback)\b/i.test(line)) throw new Error('Interactive directives are disabled in strict mode');
-    const edgeMatch = /^(.+?)\s*(?:--\s*([^>-][^>]*?)\s*-->|-\.\s*(.*?)\s*\.->|==\s*(.*?)\s*==>|<--+>|<-+\.->|<==+>|--+>|-+\.+-+>|\.-+>|==+>|---+)\s*(?:\|([^|]*)\|\s*)?(.+)$/.exec(line);
-    if (edgeMatch) {
-      const fromId = parseFlowNodeToken(edgeMatch[1], nodes);
-      const toId = parseFlowNodeToken(edgeMatch[6], nodes);
-      if (!fromId || !toId) throw new Error(`Invalid flowchart edge: ${line}`);
-      const edgeLabel = (edgeMatch[2] ?? edgeMatch[3] ?? edgeMatch[4] ?? edgeMatch[5] ?? '')
-        .replace(/^"(.*)"$/, '$1')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .trim();
-      if (/<[a-z!/][^>]*>/i.test(edgeLabel)) throw new Error('HTML labels are disabled in strict mode');
-      const dotted = line.includes('-.');
-      const open = /---+$/.test(line.slice(edgeMatch[1].length, line.length - edgeMatch[6].length).trim());
-      const labelLines = edgeLabel ? wrapMermaidLabel(edgeLabel, 22) : [];
-      const longestLabel = labelLines.length ? Math.max(4, ...labelLines.map(l => l.length)) : 0;
-      const pillW = labelLines.length ? Math.round(longestLabel * 6.8 + 14) : 0;
-      const pillH = labelLines.length ? labelLines.length * 15 + 6 : 0;
-      edges.push({ from: fromId, to: toId, label: edgeLabel, labelLines, pillW, pillH, dotted, open });
-      if (edges.length > config.maxEdges) throw new Error('Mermaid edge limit exceeded');
-      continue;
-    }
-    if (!parseFlowNodeToken(line, nodes)) throw new Error(`Invalid flowchart statement: ${line}`);
-  }
-  if (!nodes.size) throw new Error('Empty flowchart');
-  const ordered = [...nodes.values()];
-  for (const node of ordered) {
-    node.marker = node.id === stateMarkers?.start ? 'start' : node.id === stateMarkers?.end ? 'end' : '';
-    node.lines = wrapMermaidLabel(node.label, node.shape === 'diamond' ? 20 : 26);
-    const longest = node.marker ? 0 : Math.max(6, ...node.lines.map(l => l.length));
-    node.w = Math.round(Math.max(148, longest * 7.6 + (node.shape === 'diamond' ? 64 : 28)));
-    node.h = Math.round(Math.max(44, node.lines.length * 18 + (node.shape === 'diamond' ? 28 : 18)));
-  }
-  const outgoing = new Map(ordered.map(node => [node.id, []]));
-  edges.forEach((edge, index) => outgoing.get(edge.from).push({ edge, index }));
-  const marks = new Map();
-  const backEdges = new Set();
-  function visit(id) {
-    marks.set(id, 1);
-    for (const { edge, index } of outgoing.get(id)) {
-      if (edge.from === edge.to) continue;
-      const mark = marks.get(edge.to) || 0;
-      if (mark === 1) backEdges.add(index);
-      else if (!mark) visit(edge.to);
-    }
-    marks.set(id, 2);
-  }
-  for (const node of ordered) if (!marks.has(node.id)) visit(node.id);
-  const depths = new Map(ordered.map(node => [node.id, 0]));
-  for (let pass = 0; pass < ordered.length; pass++) {
-    let changed = false;
-    edges.forEach((edge, index) => {
-      const from = backEdges.has(index) ? edge.to : edge.from;
-      const to = backEdges.has(index) ? edge.from : edge.to;
-      const next = depths.get(from) + 1;
-      if (from !== to && depths.get(to) < next) {
-        depths.set(to, next);
-        changed = true;
-      }
-    });
-    if (!changed) break;
-  }
-  const layers = [];
-  for (const node of ordered) {
-    const d = depths.get(node.id) || 0;
-    if (!layers[d]) layers[d] = [];
-    layers[d].push(node);
-  }
-  const denseLayers = layers.filter(Boolean);
-  if (reverse) denseLayers.reverse();
-  const maxBreadth = Math.max(1, ...denseLayers.map(layer => layer.length));
-  const boxW = Math.max(148, ...ordered.map(n => n.w));
-  const boxH = Math.max(44, ...ordered.map(n => n.h));
-  const pairKey = edge => [edge.from, edge.to].sort().join('|');
-  const pairGroups = new Map();
-  edges.forEach((edge, index) => {
-    const key = pairKey(edge);
-    if (!pairGroups.has(key)) pairGroups.set(key, []);
-    pairGroups.get(key).push(index);
-  });
-  const hasEdgeLabels = edges.some(e => Boolean(e.label));
-  const maxPillW = Math.max(0, ...edges.map(e => e.pillW || 0));
-  const maxPillH = Math.max(0, ...edges.map(e => e.pillH || 0));
-  const maxParallelLabels = Math.max(0, ...[...pairGroups.values()]
-    .map(group => group.filter(index => edges[index].label).length));
-  const labelStack = maxParallelLabels * (maxPillH + 8) + 8;
-  const mainGap = hasEdgeLabels
-    ? (horizontal ? Math.max(96, maxPillW + 28) : Math.max(76, maxPillH + 28, labelStack))
-    : 56;
-  const crossGap = 44;
-  const pad = 24;
-  const spanW = maxBreadth * boxW + (maxBreadth - 1) * crossGap;
-  const spanH = maxBreadth * boxH + (maxBreadth - 1) * crossGap;
-  const coords = new Map();
-  denseLayers.forEach((layer, layerIdx) => {
-    const layerW = layer.length * boxW + (layer.length - 1) * crossGap;
-    const layerH = layer.length * boxH + (layer.length - 1) * crossGap;
-    layer.forEach((node, slotIdx) => {
-      const x = horizontal
-        ? pad + layerIdx * (boxW + mainGap)
-        : pad + Math.round((spanW - layerW) / 2) + slotIdx * (boxW + crossGap);
-      const y = horizontal
-        ? pad + Math.round((spanH - layerH) / 2) + slotIdx * (boxH + crossGap)
-        : pad + layerIdx * (boxH + mainGap);
-      const cx = x + boxW / 2;
-      const cy = y + boxH / 2;
-      const radius = node.marker === 'start' ? 8 : node.marker === 'end' ? 10 : 0;
-      coords.set(node.id, {
-        x, y, cx, cy, layerIdx,
-        left: radius ? cx - radius : x - (node.shape === 'diamond' ? 6 : 0),
-        right: radius ? cx + radius : x + boxW + (node.shape === 'diamond' ? 6 : 0),
-        top: radius ? cy - radius : y - (node.shape === 'diamond' ? 4 : 0),
-        bottom: radius ? cy + radius : y + boxH + (node.shape === 'diamond' ? 4 : 0),
-      });
-    });
-  });
-  const feedbackSpace = backEdges.size ? Math.max(96, (horizontal ? maxPillH : maxPillW) + 48) : 0;
-  let width = horizontal
-    ? pad * 2 + denseLayers.length * boxW + (denseLayers.length - 1) * mainGap
-    : pad * 2 + Math.max(spanW, boxW + 40) + feedbackSpace;
-  let height = horizontal
-    ? pad * 2 + Math.max(spanH, boxH + 32) + feedbackSpace
-    : pad * 2 + denseLayers.length * boxH + (denseLayers.length - 1) * mainGap;
-  const parts = [
-    '',
-    '<defs><marker id="mermaid-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" /></marker></defs>',
-  ];
-  const edgeLineParts = [];
-  const edgeLabelParts = [];
-  const placedLabels = [];
-  const nodeRight = Math.max(...[...coords.values()].map(pos => pos.right));
-  const nodeBottom = Math.max(...[...coords.values()].map(pos => pos.bottom));
-  const feedbackOrder = [...backEdges];
-  function placeLabel(cx, cy, w, h) {
-    const clear = rect => {
-      if (rect.x < 4 || rect.y < 4 || rect.x + w > width - 4 || rect.y + h > height - 4) return false;
-      const overlaps = box => rect.x < box.right + 4 && rect.x + w > box.left - 4 &&
-        rect.y < box.bottom + 4 && rect.y + h > box.top - 4;
-      return ![...coords.values()].some(overlaps) && !placedLabels.some(overlaps);
-    };
-    const directions = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
-    for (let ring = 0; ring <= 12; ring++) {
-      for (const [dx, dy] of directions) {
-        if (ring && !dx && !dy) continue;
-        const rect = {
-          x: Math.round(cx - w / 2 + dx * ring * (w + 8) / 2),
-          y: Math.round(cy - h / 2 + dy * ring * (h + 8) / 2),
-        };
-        if (clear(rect)) return rect;
-      }
-    }
-    width = Math.max(width, w + 2 * pad);
-    const rect = { x: pad, y: height + 8 };
-    height = rect.y + h + 8;
-    return rect;
-  }
-  edges.forEach((edge, idx) => {
-    const a = coords.get(edge.from);
-    const b = coords.get(edge.to);
-    if (!a || !b) return;
-    const siblings = pairGroups.get(pairKey(edge));
-    const slot = siblings.indexOf(idx);
-    const shift = (slot - (siblings.length - 1) / 2) * 48;
-    const x1 = horizontal ? (a.cx <= b.cx ? a.right : a.left) : a.cx;
-    const y1 = horizontal ? a.cy : (a.cy <= b.cy ? a.bottom : a.top);
-    const x2 = horizontal ? (a.cx <= b.cx ? b.left : b.right) : b.cx;
-    const y2 = horizontal ? b.cy : (a.cy <= b.cy ? b.top : b.bottom);
-    const dash = edge.dotted ? ' stroke-dasharray="4 3"' : '';
-    const marker = edge.open ? '' : ' marker-end="url(#mermaid-arrow)"';
-    let mx = (x1 + x2) / 2;
-    let my = (y1 + y2) / 2;
-    if (edge.from === edge.to) {
-      const reach = 48 + slot * 24;
-      const side = Math.min(10, (a.bottom - a.top) / 3);
-      width = Math.max(width, a.right + reach + 12);
-      edgeLineParts.push(`<path class="mermaid-edge" d="M ${a.right} ${a.cy - side} C ${a.right + reach} ${a.cy - side * 3} ${a.right + reach} ${a.cy + side * 3} ${a.right} ${a.cy + side}" fill="none" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
-      mx = a.right + reach * 0.75;
-      my = a.cy;
-    } else if (backEdges.has(idx)) {
-      const feedbackSlot = feedbackOrder.indexOf(idx);
-      if (horizontal) {
-        const rail = nodeBottom + Math.max(32, edge.pillH / 2 + 16) + feedbackSlot * 28;
-        const direction = Math.sign(b.cx - a.cx) || 1;
-        const bend = Math.min(24, Math.abs(b.cx - a.cx) / 3);
-        height = Math.max(height, rail + edge.pillH / 2 + pad);
-        edgeLineParts.push(`<path class="mermaid-edge" d="M ${a.cx} ${a.bottom} C ${a.cx} ${rail} ${a.cx} ${rail} ${a.cx + direction * bend} ${rail} L ${b.cx - direction * bend} ${rail} C ${b.cx} ${rail} ${b.cx} ${rail} ${b.cx} ${b.bottom}" fill="none" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
-        mx = (a.cx + b.cx) / 2;
-        my = rail;
-      } else {
-        const rail = nodeRight + Math.max(32, edge.pillW / 2 + 16) + feedbackSlot * 28;
-        const direction = Math.sign(b.cy - a.cy) || 1;
-        const bend = Math.min(24, Math.abs(b.cy - a.cy) / 3);
-        width = Math.max(width, rail + edge.pillW / 2 + pad);
-        edgeLineParts.push(`<path class="mermaid-edge" d="M ${a.right} ${a.cy} C ${rail} ${a.cy} ${rail} ${a.cy} ${rail} ${a.cy + direction * bend} L ${rail} ${b.cy - direction * bend} C ${rail} ${b.cy} ${rail} ${b.cy} ${b.right} ${b.cy}" fill="none" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
-        mx = rail;
-        my = (a.cy + b.cy) / 2;
-      }
-    } else if (siblings.length > 1) {
-      const controlX = Math.max(4, Math.min(width - 4, mx + (horizontal ? 0 : shift)));
-      const controlY = Math.max(4, Math.min(height - 4, my + (horizontal ? shift : 0)));
-      edgeLineParts.push(`<path class="mermaid-edge" d="M ${x1} ${y1} Q ${controlX} ${controlY} ${x2} ${y2}" fill="none" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
-      mx = (x1 + 2 * controlX + x2) / 4;
-      my = (y1 + 2 * controlY + y2) / 4;
-    } else {
-      edgeLineParts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="1.5"${dash}${marker} />`);
-    }
-    if (edge.label && edge.labelLines.length) {
-      const labeledSiblings = siblings.filter(index => edges[index].label);
-      if (labeledSiblings.length > 1 && edge.from !== edge.to && !backEdges.has(idx)) {
-        const labelSlot = labeledSiblings.indexOf(idx);
-        my += (labelSlot - (labeledSiblings.length - 1) / 2) * (maxPillH + 8);
-      }
-      const { x: rectX, y: rectY } = placeLabel(mx, my, edge.pillW, edge.pillH);
-      placedLabels.push({ left: rectX, top: rectY, right: rectX + edge.pillW, bottom: rectY + edge.pillH });
-      mx = rectX + edge.pillW / 2;
-      my = rectY + edge.pillH / 2;
-      edgeLabelParts.push(`<rect class="mermaid-edge-label-bg" x="${rectX}" y="${rectY}" width="${edge.pillW}" height="${edge.pillH}" rx="4" fill="var(--bg)" stroke="var(--border)" stroke-width="1" />`);
-      if (edge.labelLines.length === 1) {
-        edgeLabelParts.push(`<text class="mermaid-edge-label" x="${mx}" y="${my + 4}" text-anchor="middle" fill="var(--text)" font-size="12">${escapeSvgText(edge.labelLines[0])}</text>`);
-      } else {
-        const startY = Math.round(my + 4 - ((edge.labelLines.length - 1) * 15) / 2);
-        const tspans = edge.labelLines.map((ln, lIdx) => `<tspan x="${mx}" dy="${lIdx === 0 ? 0 : 15}">${escapeSvgText(ln)}</tspan>`).join('');
-        edgeLabelParts.push(`<text class="mermaid-edge-label" x="${mx}" y="${startY}" text-anchor="middle" fill="var(--text)" font-size="12">${tspans}</text>`);
-      }
-    }
-  });
-  parts.push(...edgeLineParts);
-  for (const node of ordered) {
-    const pos = coords.get(node.id);
-    const rx = node.shape === 'round' ? 12 : node.shape === 'circle' ? 22 : 6;
-    parts.push(`<g class="mermaid-node" data-node-id="${escapeSvgText(node.id)}">`);
-    if (node.marker === 'start') {
-      parts.push(`<circle cx="${pos.cx}" cy="${pos.cy}" r="8" fill="var(--text)" /></g>`);
-      continue;
-    }
-    if (node.marker === 'end') {
-      parts.push(`<circle cx="${pos.cx}" cy="${pos.cy}" r="10" fill="var(--panel)" stroke="var(--text)" stroke-width="1.5" />`);
-      parts.push(`<circle cx="${pos.cx}" cy="${pos.cy}" r="5" fill="var(--text)" /></g>`);
-      continue;
-    }
-    if (node.shape === 'diamond') {
-      const pts = `${pos.cx},${pos.y - 4} ${pos.x + boxW + 6},${pos.cy} ${pos.cx},${pos.y + boxH + 4} ${pos.x - 6},${pos.cy}`;
-      parts.push(`<polygon points="${pts}" fill="var(--panel)" stroke="var(--border)" stroke-width="1.5" />`);
-    } else {
-      parts.push(`<rect x="${pos.x}" y="${pos.y}" width="${boxW}" height="${boxH}" rx="${rx}" fill="var(--panel)" stroke="var(--border)" stroke-width="1.5" />`);
-    }
-    if (node.lines.length === 1) {
-      parts.push(`<text x="${pos.cx}" y="${pos.cy + 4}" text-anchor="middle" fill="var(--text)" font-size="13">${escapeSvgText(node.lines[0])}</text></g>`);
-    } else {
-      const startY = Math.round(pos.cy + 4 - ((node.lines.length - 1) * 18) / 2);
-      const tspans = node.lines.map((ln, idx) => `<tspan x="${pos.cx}" dy="${idx === 0 ? 0 : 18}">${escapeSvgText(ln)}</tspan>`).join('');
-      parts.push(`<text x="${pos.cx}" y="${startY}" text-anchor="middle" fill="var(--text)" font-size="13">${tspans}</text></g>`);
-    }
-  }
-  parts.push(...edgeLabelParts);
-  parts.push('</svg>');
-  parts[0] = `<${'svg'} class="mermaid-svg" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" data-diagram-type="flowchart" data-direction="${dir}">`;
-  return parts.join('');
+function initializeMermaid() {
+  const lib = globalThis.mermaid;
+  if (!lib?.initialize) return null;
+  lib.initialize(mermaidConfig());
+  return lib;
 }
-function renderSequenceSvg(lines, config) {
-  const actors = new Map();
-  const messages = [];
-  const ensureActor = (id, label = id) => {
-    if (/<[a-z!/][^>]*>/i.test(label)) throw new Error('HTML labels are disabled in strict mode');
-    if (!actors.has(id)) actors.set(id, { id, label: label.replace(/^"(.*)"$/, '$1').trim() });
-  };
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('%%') || /^(?:autonumber|activate|deactivate|loop|alt|else|opt|par|end)\b/i.test(line)) continue;
-    const partMatch = /^(?:participant|actor)\s+([A-Za-z0-9_.-]+)(?:\s+as\s+(.+))?$/i.exec(line);
-    if (partMatch) {
-      ensureActor(partMatch[1], partMatch[2] || partMatch[1]);
-      continue;
-    }
-    const noteMatch = /^note\s+(over|left\s+of|right\s+of)\s+([A-Za-z0-9_.-]+)(?:\s*,\s*([A-Za-z0-9_.-]+))?\s*:\s*(.*)$/i.exec(line);
-    if (noteMatch) {
-      const placement = noteMatch[1].toLowerCase().split(/\s+/)[0];
-      if (placement !== 'over' && noteMatch[3]) throw new Error(`Invalid sequenceDiagram note: ${line}`);
-      const text = noteMatch[4].replace(/<br\s*\/?>/gi, '\n').trim();
-      if (/<[a-z!/][^>]*>/i.test(text)) throw new Error('HTML labels are disabled in strict mode');
-      ensureActor(noteMatch[2]);
-      if (noteMatch[3]) ensureActor(noteMatch[3]);
-      const noteLines = wrapMermaidLabel(text, 26);
-      const noteWidth = Math.max(120, Math.round(Math.max(...noteLines.map(value => value.length)) * 6.8 + 24));
-      messages.push({ type: 'note', placement, from: noteMatch[2], to: noteMatch[3] || noteMatch[2], lines: noteLines, width: noteWidth });
-      if (messages.length > config.maxEdges) throw new Error('Mermaid edge limit exceeded');
-      continue;
-    }
-    const msgMatch = /^([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)\s*(-->>|->>|-->|->|--x|-x)\s*([A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*)\s*:\s*(.*)$/.exec(line);
-    if (msgMatch) {
-      ensureActor(msgMatch[1]);
-      ensureActor(msgMatch[3]);
-      if (/<[a-z!/][^>]*>/i.test(msgMatch[4])) throw new Error('HTML labels are disabled in strict mode');
-      messages.push({ from: msgMatch[1], to: msgMatch[3], arrow: msgMatch[2], text: msgMatch[4].trim() });
-      if (messages.length > config.maxEdges) throw new Error('Mermaid edge limit exceeded');
-      continue;
-    }
-    throw new Error(`Invalid sequenceDiagram statement: ${line}`);
-  }
-  if (!actors.size) throw new Error('Empty sequenceDiagram');
-  const actorList = [...actors.values()];
-  const colW = 160;
-  const pad = 24;
-  const headH = 38;
-  const rowH = 44;
-  const notes = messages.filter(msg => msg.type === 'note');
-  const overMargin = Math.max(0, ...notes.filter(note => note.placement === 'over' && note.from === note.to)
-    .map(note => note.width / 2 - colW / 2 - pad + 4));
-  const leftExtra = Math.max(overMargin, ...notes.filter(note => note.placement === 'left').map(note => note.width), 0);
-  const rightExtra = Math.max(overMargin, ...notes.filter(note => note.placement === 'right').map(note => note.width), 0);
-  const width = Math.max(240, pad * 2 + actorList.length * colW + leftExtra + rightExtra);
-  const rowHeight = msg => msg.type === 'note' ? msg.lines.length * 16 + 28 : rowH;
-  const height = pad * 2 + headH + Math.max(rowH, messages.reduce((sum, msg) => sum + rowHeight(msg), 0)) + 24;
-  const parts = [
-    `<${'svg'} class="mermaid-svg" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" data-diagram-type="sequenceDiagram">`,
-    '<defs><marker id="mermaid-seq-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" /></marker></defs>',
-  ];
-  const xOf = new Map();
-  actorList.forEach((actor, idx) => {
-    const cx = pad + leftExtra + idx * colW + colW / 2;
-    xOf.set(actor.id, cx);
-    parts.push(`<g class="mermaid-actor" data-actor-id="${escapeSvgText(actor.id)}">`);
-    parts.push(`<line x1="${cx}" y1="${pad + headH}" x2="${cx}" y2="${height - pad}" stroke="var(--border)" stroke-dasharray="4 3" />`);
-    parts.push(`<rect x="${cx - 60}" y="${pad}" width="120" height="${headH}" rx="6" fill="var(--panel)" stroke="var(--border)" stroke-width="1.5" />`);
-    parts.push(`<text x="${cx}" y="${pad + 23}" text-anchor="middle" fill="var(--text)" font-size="13">${escapeSvgText(actor.label)}</text></g>`);
-  });
-  let cursor = pad + headH;
-  messages.forEach(msg => {
-    const x1 = xOf.get(msg.from);
-    const x2 = xOf.get(msg.to);
-    if (msg.type === 'note') {
-      const noteWidth = msg.placement === 'over' ? Math.max(msg.width, Math.abs(x2 - x1) + 80) : msg.width;
-      const x = msg.placement === 'left' ? x1 - 68 - noteWidth
-        : msg.placement === 'right' ? x1 + 68 : (x1 + x2 - noteWidth) / 2;
-      const y = cursor + 6;
-      const noteHeight = msg.lines.length * 16 + 16;
-      const center = x + noteWidth / 2;
-      const tspans = msg.lines.map((text, index) => `<tspan x="${center}" dy="${index ? 16 : 0}">${escapeSvgText(text)}</tspan>`).join('');
-      parts.push(`<g class="mermaid-note"><rect x="${x}" y="${y}" width="${noteWidth}" height="${noteHeight}" rx="4" fill="var(--bg)" stroke="var(--border)" />`);
-      parts.push(`<text x="${center}" y="${y + 16}" text-anchor="middle" fill="var(--text)" font-size="12">${tspans}</text></g>`);
-    } else {
-      const y = cursor + rowH - 8;
-      const dash = msg.arrow.startsWith('--') ? ' stroke-dasharray="4 3"' : '';
-      parts.push(`<line class="mermaid-edge" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="var(--muted)" stroke-width="1.5"${dash} marker-end="url(#mermaid-seq-arrow)" />`);
-      if (msg.text) {
-        parts.push(`<text class="mermaid-edge-label" x="${Math.round((x1 + x2) / 2)}" y="${y - 6}" text-anchor="middle" fill="var(--text)" font-size="12">${escapeSvgText(msg.text)}</text>`);
-      }
-    }
-    cursor += rowHeight(msg);
-  });
-  parts.push('</svg>');
-  return parts.join('');
-}
-function renderStateSvg(lines, config) {
-  const names = new Set(lines.flatMap(line => line.match(/[A-Za-z0-9_.-]+/g) || []));
-  function unusedId(base) {
-    let id = base;
-    while (names.has(id)) id += '_';
-    names.add(id);
-    return id;
-  }
-  const markers = { start: unusedId('__mermaid_start__'), end: unusedId('__mermaid_end__') };
-  const flowLines = [];
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('%%')) continue;
-    const tr = /^(\[\*\]|[A-Za-z0-9_.-]+)\s*-->\s*(\[\*\]|[A-Za-z0-9_.-]+)(?:\s*:\s*(.+))?$/.exec(line);
-    if (tr) {
-      const from = tr[1] === '[*]' ? markers.start : tr[1];
-      const to = tr[2] === '[*]' ? markers.end : tr[2];
-      const label = tr[3] ? `|${tr[3].trim()}| ` : '';
-      flowLines.push(`${from} --> ${label}${to}`);
-      continue;
-    }
-    throw new Error(`Invalid stateDiagram statement: ${line}`);
-  }
-  return renderFlowchartSvg(flowLines, 'flowchart TD', config, markers).replace('data-diagram-type="flowchart"', 'data-diagram-type="stateDiagram"');
-}
-function parseAndRenderMermaid(source, config = MERMAID_STRICT_CONFIG) {
-  if (typeof source !== 'string') throw new Error('Mermaid source must be a string');
-  if (source.length > config.maxTextSize) throw new Error('Mermaid source exceeds maxTextSize');
-  const rawLines = source.replace(/\r\n?/g, '\n').split('\n');
-  const bodyLines = [];
-  let header = '';
-  for (const line of rawLines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('%%')) continue;
-    if (!header) header = trimmed;
-    else bodyLines.push(line);
-  }
-  if (!header) throw new Error('Empty Mermaid diagram');
-  if (/^(?:flowchart|graph)\b/.test(header)) {
-    return { diagramType: 'flowchart', svg: renderFlowchartSvg(bodyLines, header, config) };
-  }
-  if (/^sequenceDiagram\s*$/.test(header)) {
-    return { diagramType: 'sequenceDiagram', svg: renderSequenceSvg(bodyLines, config) };
-  }
-  if (/^stateDiagram(?:-v2)?\s*$/.test(header)) {
-    return { diagramType: 'stateDiagram', svg: renderStateSvg(bodyLines, config) };
-  }
-  throw new Error(`Unsupported or invalid Mermaid diagram: ${header}`);
-}
-const mermaidRuntime = {
-  config: { ...MERMAID_STRICT_CONFIG },
-  initialize(overrides = {}) {
-    this.config = Object.freeze({
-      ...MERMAID_STRICT_CONFIG,
-      ...(overrides && typeof overrides === 'object' ? overrides : {}),
-      startOnLoad: false,
-      securityLevel: 'strict',
-      htmlLabels: false,
-      suppressErrorRendering: true,
-    });
-    return this.config;
-  },
-  parse(source) {
-    const { diagramType } = parseAndRenderMermaid(source, this.config);
-    return { diagramType };
-  },
-  async render(id, source) {
-    const { svg } = parseAndRenderMermaid(source, this.config);
-    const safe = sanitizeMermaidSvg(svg);
-    if (!safe) throw new Error('Unsafe Mermaid SVG rejected');
-    return { svg: safe, id };
-  },
-  sanitizeSvg: sanitizeMermaidSvg,
-};
-globalThis.mermaid = mermaidRuntime;
 const MERMAID_BLOCK_RE = /<div class="code-block">((?:\s*<button\b[^>]*class="(?:preview-code-mermaid|copy-code)"[\s\S]*?<\/button>)*)(\s*<div class="code-block-header">[\s\S]*?<\/div>)?\s*<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>\s*<\/div>/g;
 function formatMermaidBlockHtml(buttons, header, escapedSource, rawSource, safeSvg) {
   if (safeSvg) {
@@ -3345,14 +2890,7 @@ function renderMermaidBlocksSync(html) {
     out += html.slice(cursor, match.index);
     cursor = match.index + full.length;
     const rawSource = unescapeHtmlEntities(escapedSource);
-    let safeSvg = null;
-    try {
-      const { svg } = parseAndRenderMermaid(rawSource, globalThis.mermaid?.config || MERMAID_STRICT_CONFIG);
-      safeSvg = sanitizeMermaidSvg(svg);
-    } catch {
-      safeSvg = null;
-    }
-    out += formatMermaidBlockHtml(buttons, header, escapedSource, rawSource, safeSvg);
+    out += formatMermaidBlockHtml(buttons, header, escapedSource, rawSource, null);
   }
   out += html.slice(cursor);
   return out;
@@ -3361,6 +2899,7 @@ async function renderMermaidBlocks(html, sequence) {
   if (typeof html !== 'string' || !html.includes('language-mermaid')) return html;
   const matches = [...html.matchAll(MERMAID_BLOCK_RE)];
   if (!matches.length) return html;
+  const lib = initializeMermaid();
   let cursor = 0;
   let out = '';
   let index = 0;
@@ -3372,7 +2911,8 @@ async function renderMermaidBlocks(html, sequence) {
     const rawSource = unescapeHtmlEntities(escapedSource);
     let safeSvg = null;
     try {
-      const rendered = await globalThis.mermaid.render(`mermaid-report-${sequence || 0}-${index++}`, rawSource);
+      if (!lib?.render) throw new Error('Mermaid library unavailable');
+      const rendered = await lib.render(`mermaid-report-${sequence || 0}-${index++}`, rawSource);
       safeSvg = sanitizeMermaidSvg(typeof rendered === 'string' ? rendered : rendered?.svg);
     } catch {
       safeSvg = null;

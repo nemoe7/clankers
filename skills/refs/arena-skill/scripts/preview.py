@@ -1568,6 +1568,9 @@ def staged_session_id_hits(store, root="."):
 
     number += 1
 
+    if path and path.endswith(("assets/mermaid.min.js", "assets/markdown-it.min.js")):
+      continue
+
     for token, pattern in patterns.items():
       if pattern.search(line):
         type, ident = tokens[token]
@@ -7540,6 +7543,8 @@ NEMOIZER_COLLECT_IGNORES = (
   "LICENSE.md",
   "skills/arena-skill",
   "skills/refs/arena-skill/assets/markdown-it.min.js",
+  "skills/refs/arena-skill/assets/mermaid.min.js",
+  "skills/refs/arena-skill/assets/mermaid.LICENSE",
   "skills/refs/arena-skill/assets/gsap.LICENSE",
   "skills/squash/LICENSE.txt",
   "skills/refs/squash/LICENSE.txt",
@@ -15095,6 +15100,7 @@ def assets_signature(assets_dir=None):
       "app.js",
       "message-markdown.js",
       "markdown-it.min.js",
+      "mermaid.min.js",
     )
   )
 
@@ -15144,7 +15150,7 @@ def handler(store, reload_event=None):
       self.send_header("X-Content-Type-Options", "nosniff")
       self.send_header(
         "Content-Security-Policy",
-        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+        "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; "
         "font-src 'self' data:; "
         # Without this, default-src none blocks every image a report carries.
         "img-src 'self' data: https: blob:; "
@@ -15405,6 +15411,13 @@ def handler(store, reload_event=None):
             + (ASSETS / "app.js").read_text(encoding="utf-8"),
           )
           self.reply(200, page, "text/html; charset=utf-8")
+          return
+        if path == "/assets/mermaid.min.js":
+          bundle = ASSETS / "mermaid.min.js"
+          if not bundle.is_file():
+            self.problem(404, "Not found")
+            return
+          self.reply(200, bundle.read_bytes(), "text/javascript; charset=utf-8")
           return
         font_match = re.fullmatch(
           r"/assets/(Basel_Grotesk_(?:Book|Regular|Medium|Bold|Mono_Regular)\.woff2)",

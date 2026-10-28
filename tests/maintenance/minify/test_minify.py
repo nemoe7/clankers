@@ -321,6 +321,8 @@ def test_compact_copies_drift_and_runtime():
     "assets/message-markdown.js",
     "assets/markdown-it.min.js",
     "assets/markdown-it.LICENSE",
+    "assets/mermaid.min.js",
+    "assets/mermaid.LICENSE",
     "assets/lucide.LICENSE",
     "assets/sortable.LICENSE",
     "assets/gsap.LICENSE",

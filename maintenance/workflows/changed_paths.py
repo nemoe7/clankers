@@ -226,7 +226,10 @@ MODULE_PATHS = {
   ),
 }
 MODULE_NODE_TESTS = {
-  "Preview": ("tests/skills/arena-skill/client.test.cjs",),
+  "Preview": (
+    "tests/skills/arena-skill/client.test.cjs",
+    "tests/skills/arena-skill/mermaid.test.cjs",
+  ),
   "Userscripts": (
     "tests/userscripts/userscripts.checks.cjs",
     "tests/userscripts/userscripts.test.cjs",

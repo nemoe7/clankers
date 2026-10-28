@@ -5342,39 +5342,67 @@ test('preview client', async (t) => {
       'the original polling path starts again after disconnect');
   });
 
-  await t.test('offline mermaid rendering enforces strict config, safe svg, fallback, and copy source', async () => {
-    assert.equal(context.mermaid.config.securityLevel, 'strict');
-    assert.equal(context.mermaid.config.startOnLoad, false);
-    assert.equal(context.mermaid.config.htmlLabels, false);
-    assert.equal(context.mermaid.config.suppressErrorRendering, true);
-    const locked = context.mermaid.initialize({
-      securityLevel: 'loose',
-      startOnLoad: true,
-      htmlLabels: true,
-    });
-    assert.equal(locked.securityLevel, 'strict');
-    assert.equal(locked.startOnLoad, false);
-    assert.equal(locked.htmlLabels, false);
+  await t.test('offline mermaid rendering uses the vendored library with strict config, theme sync, safe svg, fallback, and copy source', async () => {
+    const indexHtml = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/index.html'), 'utf8');
+    assert.ok(indexHtml.indexOf('src="/assets/mermaid.min.js"') > indexHtml.indexOf('__MARKDOWN_SCRIPT__'));
+    assert.ok(indexHtml.indexOf('src="/assets/mermaid.min.js"') < indexHtml.indexOf('__SCRIPT__'));
+    const appSource = fs.readFileSync(path.join(__dirname, '../../../skills/refs/arena-skill/assets/app.js'), 'utf8');
+    assert.doesNotMatch(appSource, /parseAndRenderMermaid|mermaidRuntime|renderFlowchartSvg|renderSequenceSvg|renderStateSvg/);
+
+    const initializeCalls = [];
+    const renderCalls = [];
+    context.mermaid = {
+      initialize(config) {
+        initializeCalls.push(config);
+        this.config = config;
+      },
+      async render(id, source) {
+        renderCalls.push({ id, source });
+        if (source.includes('notValidMermaid')) throw new Error('Parse error');
+        if (source.includes('<script>')) return { svg: '<svg><script>alert(1)</script></svg>' };
+        const type = source.startsWith('sequenceDiagram')
+          ? 'sequenceDiagram'
+          : source.startsWith('stateDiagram') ? 'stateDiagram' : 'flowchart';
+        return { svg: `<svg data-diagram-type="${type}"><text>${type}</text></svg>` };
+      },
+    };
+    context.window.mermaid = context.mermaid;
 
     const flowSource = 'flowchart TD\n  A[Start] --> B{Check}\n  B -->|Yes| C[Done]';
     const copyBtn = `<button type="button" class="copy-code" data-code="${flowSource.replace(/\n/g, '&#10;')}"></button>`;
     const blockHtml = `<div class="code-block">${copyBtn}<pre><code class="language-mermaid">${flowSource}</code></pre></div>`;
     const renderedFlow = await context.renderMermaidBlocks(blockHtml);
+    assert.equal(initializeCalls[0].securityLevel, 'strict');
+    assert.equal(initializeCalls[0].startOnLoad, false);
+    assert.equal(initializeCalls[0].suppressErrorRendering, true);
+    assert.equal(initializeCalls[0].flowchart.htmlLabels, false);
+    assert.equal(initializeCalls[0].theme, root.dataset.theme === 'light' ? 'default' : 'dark');
+    assert.equal(renderCalls[0].source, flowSource);
     assert.match(renderedFlow, /data-mermaid-state="rendered"/);
-    assert.match(renderedFlow, /<svg class="mermaid-svg"[^>]*data-diagram-type="flowchart"/);
-    assert.match(renderedFlow, /data-node-id="A"/);
+    assert.match(renderedFlow, /<svg class="mermaid-svg" role="img" data-diagram-type="flowchart"/);
     assert.match(renderedFlow, /class="preview-code-mermaid"/);
     assert.match(renderedFlow, /class="copy-code"/);
     assert.match(renderedFlow, /<pre><code class="language-mermaid">/);
-    assert.ok(renderedFlow.lastIndexOf('class="mermaid-node"') < renderedFlow.indexOf('class="mermaid-edge-label"'));
 
-    const subFlow = '<div class="code-block"><button class="preview-code-mermaid" aria-pressed="false"></button><button class="copy-code"></button><pre><code class="language-mermaid">flowchart LR\n  subgraph S1["Tab_1"]\n    U1["arena.user.js&lt;br/&gt;repo: nemoe7/clankers"]\n    IDB[("IndexedDB&lt;br/&gt;peers_by_repo")]\n    U1 &lt;--&gt; IDB\n    BLK["Blocked Session"] -.->|dropped by filter| IDB\n  end</code></pre></div>';
+    const subFlow = '<div class="code-block"><button class="preview-code-mermaid" aria-pressed="false"></button><button class="copy-code"></button><pre><code class="language-mermaid">flowchart LR\n  subgraph S1["Tab_1"]\n    U1["arena.user.js&lt;br/&gt;repo: nemoe7/clankers"]\n    IDB[("IndexedDB&lt;br/&gt;peers_by_repo")]\n    U1 &lt;--&gt; IDB\n  end</code></pre></div>';
     const renderedSubFlow = await context.renderMermaidBlocks(subFlow);
     assert.match(renderedSubFlow, /data-mermaid-state="rendered"/);
-    assert.match(renderedSubFlow, /data-node-id="IDB"/);
-    assert.match(renderedSubFlow, /data-node-id="BLK"/);
-    assert.match(renderedSubFlow, /stroke-dasharray="4 3"/);
+    assert.match(renderCalls.at(-1).source, /arena\.user\.js<br\/>repo: nemoe7\/clankers/);
     assert.equal((renderedSubFlow.match(/class="preview-code-mermaid"/g) || []).length, 1);
+
+    const seqHtml = '<div class="code-block"><button class="copy-code" data-code="sequenceDiagram"></button><pre><code class="language-mermaid">sequenceDiagram\n  Alice-&gt;&gt;Bob: Hello</code></pre></div>';
+    root.dataset.theme = 'light';
+    const renderedSeq = await context.renderMermaidBlocks(seqHtml);
+    assert.equal(initializeCalls.at(-1).theme, 'default');
+    assert.match(renderedSeq, /data-mermaid-state="rendered"/);
+    assert.match(renderedSeq, /data-diagram-type="sequenceDiagram"/);
+
+    const stateHtml = '<div class="code-block"><pre><code class="language-mermaid">stateDiagram-v2\n  [*] --&gt; Active : boot</code></pre></div>';
+    root.dataset.theme = 'dark';
+    const renderedState = await context.renderMermaidBlocks(stateHtml);
+    assert.equal(initializeCalls.at(-1).theme, 'dark');
+    assert.match(renderedState, /data-mermaid-state="rendered"/);
+    assert.match(renderedState, /data-diagram-type="stateDiagram"/);
 
     const toggleBlock = new Element('div');
     toggleBlock.className = 'code-block';
@@ -5391,129 +5419,36 @@ test('preview client', async (t) => {
     assert.equal(toggleBlock.dataset.mermaidState, 'rendered');
     assert.equal(toggleBtn.getAttribute('aria-pressed'), 'false');
 
-    const longFlow = '<div class="code-block"><pre><code class="language-mermaid">flowchart TD\n  A["Write arena-state/backups/state-latest.ndjson and rotate 10 snapshots"] -->|state-latest.ndjson| B[Restore]\n  A -->|saved-state.ndjson| B</code></pre></div>';
-    const renderedLong = await context.renderMermaidBlocks(longFlow);
-    assert.match(renderedLong, /<tspan\b/);
-
-    const seqHtml = '<div class="code-block"><button class="copy-code" data-code="sequenceDiagram"></button><pre><code class="language-mermaid">sequenceDiagram\n  Alice-&gt;&gt;Bob: Hello</code></pre></div>';
-    const renderedSeq = await context.renderMermaidBlocks(seqHtml);
-    assert.match(renderedSeq, /data-mermaid-state="rendered"/);
-    assert.match(renderedSeq, /data-diagram-type="sequenceDiagram"/);
-
-    const stateHtml = '<div class="code-block"><pre><code class="language-mermaid">stateDiagram-v2\n  [*] --&gt; Active : boot</code></pre></div>';
-    const renderedState = await context.renderMermaidBlocks(stateHtml);
-    assert.match(renderedState, /data-mermaid-state="rendered"/);
-    assert.match(renderedState, /data-diagram-type="stateDiagram"/);
-
     const invalidHtml = '<div class="code-block"><button class="copy-code" data-code="notValidMermaid"></button><pre><code class="language-mermaid">notValidMermaid\n  ???</code></pre></div>';
     const fallback = await context.renderMermaidBlocks(invalidHtml);
     assert.match(fallback, /data-mermaid-state="fallback"/);
     assert.doesNotMatch(fallback, /<svg\b/);
     assert.match(fallback, /<pre><code class="language-mermaid">notValidMermaid/);
 
+    const unsafe = '<div class="code-block"><pre><code class="language-mermaid">' +
+      'sequenceDiagram\nNote over Alice: &lt;script&gt;alert(1)&lt;/script&gt;' +
+      '</code></pre></div>';
+    const unsafeFallback = await context.renderMermaidBlocks(unsafe);
+    assert.match(unsafeFallback, /data-mermaid-state="fallback"/);
+    assert.doesNotMatch(unsafeFallback, /<script\b/i);
+
+    const syncHtml = context.renderMermaidBlocksSync(blockHtml);
+    assert.match(syncHtml, /data-mermaid-state="fallback"/);
+    assert.doesNotMatch(syncHtml, /<svg\b/);
+
+    assert.match(
+      context.sanitizeMermaidSvg('<svg><style>.node rect { fill: #fff; }</style><rect/></svg>'),
+      /<style>\.node rect/
+    );
+    assert.equal(context.sanitizeMermaidSvg('<svg><style>@import "https://example.com/x.css";</style></svg>'), null);
     assert.equal(context.sanitizeMermaidSvg('<svg><script>alert(1)</script></svg>'), null);
     assert.equal(context.sanitizeMermaidSvg('<svg><foreignObject><div>x</div></foreignObject></svg>'), null);
     assert.equal(context.sanitizeMermaidSvg('<svg onload="alert(1)"><rect/></svg>'), null);
     assert.equal(context.sanitizeMermaidSvg('<svg><a href="https://example.com"><text>x</text></a></svg>'), null);
   });
 
-  await t.test('state diagrams draw compact start and end markers', () => {
-    const { svg } = context.parseAndRenderMermaid(
-      'stateDiagram-v2\n[*] --> Active\nActive --> [*]\nActive --> start_state\nend_state --> Active'
-    );
-    assert.match(svg, /<circle\b[^>]*\br="8"/);
-    assert.match(svg, /<circle\b[^>]*\br="10"/);
-    assert.match(svg, /<circle\b[^>]*\br="5"/);
-    assert.match(svg, />start_state<\/text>/);
-    assert.match(svg, />end_state<\/text>/);
-    assert.doesNotMatch(svg, />[●◉]<\/text>/);
-  });
-
-  await t.test('sequence notes render supported positions and reject HTML', async () => {
-    const source = 'sequenceDiagram\nparticipant Alice\nparticipant Bob\n' +
-      'Note over Alice: One<br>Two\nNote over Alice,Bob: Shared<br/>Second line\n' +
-      'Note left of Alice: Left note\nNote right of Bob: Right note\nAlice->>Bob: Hi';
-    const { svg } = context.parseAndRenderMermaid(source);
-    assert.equal((svg.match(/class="mermaid-note"/g) || []).length, 4);
-    assert.match(svg, /<tspan\b[^>]*>One<\/tspan>/);
-    assert.match(svg, /<tspan\b[^>]*>Two<\/tspan>/);
-    assert.match(svg, /<tspan\b[^>]*>Second line<\/tspan>/);
-    assert.throws(() => context.parseAndRenderMermaid(
-      'sequenceDiagram\nNote over Alice: <img src=x onerror=alert(1)>'
-    ), /HTML labels are disabled/);
-    const unsafe = '<div class="code-block"><pre><code class="language-mermaid">' +
-      'sequenceDiagram\nNote over Alice: &lt;script&gt;alert(1)&lt;/script&gt;' +
-      '</code></pre></div>';
-    const fallback = await context.renderMermaidBlocks(unsafe);
-    assert.match(fallback, /data-mermaid-state="fallback"/);
-    assert.doesNotMatch(fallback, /<script\b/i);
-  });
-
-  await t.test('feedback edges preserve forward flow ranks', () => {
-    const source = 'flowchart TD\nAssign --> Worker\nWorker --> Stage\nStage --> Audit\n' +
-      'Audit --> Correction\nCorrection --> Worker\nLegend[Independent]';
-    const { svg } = context.parseAndRenderMermaid(source);
-    const positions = new Map();
-    let id = null;
-    const parser = new Parser({
-      onopentag(name, attrs) {
-        if (name === 'g' && attrs.class === 'mermaid-node') id = attrs['data-node-id'];
-        if (name === 'rect' && id) positions.set(id, Number(attrs.y));
-      },
-      onclosetag(name) { if (name === 'g') id = null; },
-    }, { xmlMode: true });
-    parser.end(svg);
-    for (const [before, after] of [
-      ['Assign', 'Worker'], ['Worker', 'Stage'], ['Stage', 'Audit'], ['Audit', 'Correction'],
-    ]) {
-      assert.ok(positions.has(before) && positions.has(after));
-      assert.ok(positions.get(before) < positions.get(after), `${before} must precede ${after}`);
-    }
-  });
-
-  await t.test('parallel edges curve and labels avoid nodes and each other', () => {
-    const source = 'flowchart TD\nA[Assign] -->|First label| B[Worker]\n' +
-      'A -->|Second label| B\nA -->|Third label| B\nB --> C[Stage]\n' +
-      'C -->|Review update| D[Audit]\nD -->|Return to worker| B';
-    const { svg } = context.parseAndRenderMermaid(source);
-    assert.ok((svg.match(/<path\b[^>]*class="mermaid-edge"[^>]*\bd="[^"]*\bQ\b/g) || []).length >= 3);
-    const nodes = [];
-    const labels = [];
-    let nodeId = null;
-    let viewBox = null;
-    const rect = attrs => ({
-      x: Number(attrs.x), y: Number(attrs.y), width: Number(attrs.width), height: Number(attrs.height),
-    });
-    const parser = new Parser({
-      onopentag(name, attrs) {
-        if (name === 'svg') viewBox = attrs.viewBox.split(/\s+/).map(Number);
-        if (name === 'g' && attrs.class === 'mermaid-node') nodeId = attrs['data-node-id'];
-        if (name === 'rect' && nodeId) nodes.push({ id: nodeId, ...rect(attrs) });
-        if (name === 'rect' && attrs.class === 'mermaid-edge-label-bg') labels.push(rect(attrs));
-      },
-      onclosetag(name) { if (name === 'g') nodeId = null; },
-    }, { xmlMode: true });
-    parser.end(svg);
-    assert.equal(labels.length, 5);
-    const overlaps = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x &&
-      a.y < b.y + b.height && a.y + a.height > b.y;
-    labels.forEach((label, index) => {
-      assert.ok(label.x >= viewBox[0] && label.y >= viewBox[1]);
-      assert.ok(label.x + label.width <= viewBox[0] + viewBox[2]);
-      assert.ok(label.y + label.height <= viewBox[1] + viewBox[3]);
-      assert.ok(nodes.every(node => !overlaps(label, node)), `label ${index} overlaps a node`);
-      assert.ok(labels.slice(0, index).every(other => !overlaps(label, other)), `label ${index} overlaps another label`);
-    });
-    const from = nodes.find(node => node.id === 'A');
-    const to = nodes.find(node => node.id === 'B');
-    for (const label of labels.slice(0, 3)) {
-      assert.ok(label.y >= from.y + from.height && label.y + label.height <= to.y,
-        'parallel-edge labels stay between their source and target');
-    }
-  });
-
-  await t.test('rendered diagrams open the image viewer by click and keyboard', () => {
-    const html = context.renderMermaidBlocksSync(
+  await t.test('rendered diagrams open the image viewer by click and keyboard', async () => {
+    const html = await context.renderMermaidBlocks(
       '<div class="code-block"><pre><code class="language-mermaid">flowchart TD\nA --> B</code></pre></div>'
     );
     assert.match(html, /class="mermaid-diagram"[^>]*tabindex="0"/);

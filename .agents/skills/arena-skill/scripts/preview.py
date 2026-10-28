@@ -555,6 +555,7 @@ def staged_session_id_hits(store,root='.'):
 		if hunk:number=int(hunk.group(1))-1;continue
 		if not line.startswith('+')or line.startswith('+++'):continue
 		number+=1
+		if path and path.endswith(('assets/mermaid.min.js','assets/markdown-it.min.js')):continue
 		for(token,pattern)in patterns.items():
 			if pattern.search(line):type,ident=tokens[token];hits.append((path,number,token,type,ident))
 	return hits
@@ -2716,7 +2717,7 @@ def render_report(markdown,title=None):
 	if isinstance(title,str)and title.strip()and not re.match('^\\s*<h1\\b',rendered,re.IGNORECASE):rendered=f"<h1>{html.escape(title.strip())}</h1>\n{rendered}"
 	return rendered,questions
 SLASH_COMMAND_RE=re.compile('^/(nuu|nemoizer)(?:\\s+([\\s\\S]*))?$',re.IGNORECASE)
-NEMOIZER_COLLECT_IGNORES='arena-state','.agents','.git','node_modules','LICENSE.md','skills/arena-skill','skills/refs/arena-skill/assets/markdown-it.min.js','skills/refs/arena-skill/assets/gsap.LICENSE','skills/squash/LICENSE.txt','skills/refs/squash/LICENSE.txt','skills/refs/arena-skill/assets/lucide.LICENSE','skills/refs/arena-skill/assets/markdown-it.LICENSE','skills/refs/arena-skill/assets/sortable.LICENSE','skills/nuu/data/vendor','skills/refs/nuu/data/vendor'
+NEMOIZER_COLLECT_IGNORES='arena-state','.agents','.git','node_modules','LICENSE.md','skills/arena-skill','skills/refs/arena-skill/assets/markdown-it.min.js','skills/refs/arena-skill/assets/mermaid.min.js','skills/refs/arena-skill/assets/mermaid.LICENSE','skills/refs/arena-skill/assets/gsap.LICENSE','skills/squash/LICENSE.txt','skills/refs/squash/LICENSE.txt','skills/refs/arena-skill/assets/lucide.LICENSE','skills/refs/arena-skill/assets/markdown-it.LICENSE','skills/refs/arena-skill/assets/sortable.LICENSE','skills/nuu/data/vendor','skills/refs/nuu/data/vendor'
 def _find_skill_dir(root,name):
 	roots=[Path(root)];here=Path(__file__).resolve();roots.extend(here.parents);cwd=Path.cwd().resolve();roots.append(cwd);roots.extend(cwd.parents)
 	for base in roots:
@@ -4965,7 +4966,7 @@ def file_signature(paths):
 		try:stat=target.stat();entries.append((str(target),stat.st_mtime_ns,stat.st_size))
 		except OSError:entries.append((str(target),None,None))
 	return tuple(entries)
-def assets_signature(assets_dir=None):base=Path(assets_dir)if assets_dir is not None else ASSETS;return file_signature(base/name for name in('index.html','style.css','app.js','message-markdown.js','markdown-it.min.js'))
+def assets_signature(assets_dir=None):base=Path(assets_dir)if assets_dir is not None else ASSETS;return file_signature(base/name for name in('index.html','style.css','app.js','message-markdown.js','markdown-it.min.js','mermaid.min.js'))
 def scripts_signature(scripts_dir=None):base=Path(scripts_dir)if scripts_dir is not None else Path(__file__).resolve().parent;return file_signature(base/name for name in('preview.py','survey.py'))
 def handler(store,reload_event=None):
 	from http.server import BaseHTTPRequestHandler;survey_state={'results':None,'answered_at':None,'requested':False};survey_lock=threading.Lock()
@@ -4974,7 +4975,7 @@ def handler(store,reload_event=None):
 		def reply(self,status,body,content_type='application/json; charset=utf-8',filename=None):
 			data=body if isinstance(body,(bytes,bytearray))else body.encode('utf-8')
 			if getattr(self,'ws_request_id',None)is not None:self.ws_send(1,json.dumps({'type':'response','id':self.ws_request_id,'status':status,'body':data.decode('utf-8'),'contentType':content_type}).encode());return
-			self.send_response(status);self.send_header('Content-Type',content_type);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Security-Policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' https: ws: wss:; base-uri 'none'; form-action 'self'")
+			self.send_response(status);self.send_header('Content-Type',content_type);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Security-Policy',"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' https: ws: wss:; base-uri 'none'; form-action 'self'")
 			if filename:safe=header_filename(filename);self.send_header('Content-Disposition',f'attachment; filename="{safe}"')
 			self.end_headers();self.wfile.write(data)
 		def problem(self,status,error):self.reply(status,json.dumps({'error':str(error)}))
@@ -5061,6 +5062,10 @@ def handler(store,reload_event=None):
 				if path=='/api/ws':self.websocket();return
 				if path.startswith('/api/'):self.record_userscript_version()
 				if path=='/':page=(ASSETS/'index.html').read_text(encoding='utf-8');page=page.replace('<title>Workspace · Messages & reports</title>',f"<title>{html.escape(store.repository_root().name)} - Steering</title>");page=page.replace('__STYLE__',(ASSETS/'style.css').read_text(encoding='utf-8'));page=page.replace('__MARKDOWN_SCRIPT__',(ASSETS/'markdown-it.min.js').read_text(encoding='utf-8'));page=page.replace('__SCRIPT__',(ASSETS/'message-markdown.js').read_text(encoding='utf-8')+'\n'+(ASSETS/'app.js').read_text(encoding='utf-8'));self.reply(200,page,'text/html; charset=utf-8');return
+				if path=='/assets/mermaid.min.js':
+					bundle=ASSETS/'mermaid.min.js'
+					if not bundle.is_file():self.problem(404,'Not found');return
+					self.reply(200,bundle.read_bytes(),'text/javascript; charset=utf-8');return
 				font_match=re.fullmatch('/assets/(Basel_Grotesk_(?:Book|Regular|Medium|Bold|Mono_Regular)\\.woff2)',path)
 				if font_match:self.reply(200,(ASSETS/font_match.group(1)).read_bytes(),'font/woff2');return
 				if path=='/api/survey':

@@ -23,6 +23,8 @@ PYTHON_SCRIPTS = ("scripts/preview.py", "scripts/survey.py")
 COPIED_ASSETS = (
   "assets/markdown-it.min.js",
   "assets/markdown-it.LICENSE",
+  "assets/mermaid.min.js",
+  "assets/mermaid.LICENSE",
   "assets/lucide.LICENSE",
   "assets/sortable.LICENSE",
   "assets/gsap.LICENSE",
@@ -217,6 +219,7 @@ def build() -> dict[str, tuple[str, str]]:
     sources[name] = (source, source)
 
   check_javascript(sources["assets/markdown-it.min.js"][1])
+  check_javascript(sources["assets/mermaid.min.js"][1])
   check_javascript(sources["assets/app.js"][1])
   check_javascript(sources["assets/message-markdown.js"][1])
   check_stylesheet(sources["assets/style.css"][1])

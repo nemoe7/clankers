@@ -35,6 +35,9 @@ VENDORED_PARTS = (
   Path("skills/refs/arena-skill/assets/markdown-it.min.js"),
   Path("skills/arena-skill/assets/markdown-it.min.js"),
   Path(".agents/skills/arena-skill/assets/markdown-it.min.js"),
+  Path("skills/refs/arena-skill/assets/mermaid.min.js"),
+  Path("skills/arena-skill/assets/mermaid.min.js"),
+  Path(".agents/skills/arena-skill/assets/mermaid.min.js"),
 )
 
 
