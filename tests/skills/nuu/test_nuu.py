@@ -2052,3 +2052,29 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
   nul008 = [f for f in lint_payload["findings"] if f["rule"] == "NUL008"]
   assert len(nul008) == 2
   assert all(Path(f["path"]).name == "bad.html" for f in nul008)
+
+
+def test_house_style_amendments_stay_synced():
+  live_root = SCRIPT.parent.parent
+  ref_root = live_root.parent / "refs" / live_root.name
+  for root in (live_root, ref_root):
+    css = (root / "references/style.css").read_text(encoding="utf-8")
+    assert css.count("--scrollbar-thumb: #767682;") == 2
+    assert css.count("--scrollbar-thumb: #62626e;") == 2
+    assert "@media (pointer: coarse)" in css
+    assert "min-height: var(--touch);" in css
+    assert "border-radius: 50%;" not in css
+
+    skill = (root / "SKILL.md").read_text(encoding="utf-8")
+    assert "except .eyebrow labels at 0.06em" in skill
+    assert "44x44 px hit areas" in skill
+
+    modal = (root / "references/recipes/modal-manager.md").read_text(encoding="utf-8")
+    assert "padding: var(--space-5);" in modal
+    loading = (root / "references/recipes/loading-bar.md").read_text(encoding="utf-8")
+    assert "cubic-bezier(0.16" not in loading
+    assert "var(--ease)" in loading
+    live_dot = (root / "references/recipes/live-dot.md").read_text(encoding="utf-8")
+    assert "animation: none" in live_dot
+    ranges = (root / "references/recipes/range-sliders.md").read_text(encoding="utf-8")
+    assert "at most 11 major-division ticks" in ranges

@@ -18,6 +18,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Add the Oxford comma to the caveman register's verbatim-span list (`SKILL.md`).
 
+#### nuu
+
+- Add theme-specific scrollbar tokens and coarse-pointer hit areas (`SKILL.md`, `references/style.css`).
+- Align eyebrow tracking, recipe motion, range ticks, and modal padding with approved scales (`SKILL.md`, `references/recipes/`).
+
 ## 2026-10-28
 
 ### Added
