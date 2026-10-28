@@ -15,6 +15,16 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Pair top-right `.close-button` (`X`) with footer `Cancel` by default on confirmation, form, and unsaved-edit modals (`references/recipes/modal-manager.md`, `references/examples/modal-close-button.png`).
 
+### Fixed
+
+#### arena-skill
+
+- Preserve live board polling state, stop consumed wake resurrection, and wake explicit post recipients (`scripts/preview.py`, `assets/app.js`, `arena-egress-proxy/scripts/arena_proxy/board.py`).
+
+#### userscripts
+
+- Sync opted-in preview boards every 3s and send wake up once per idle board wake (`arena.user.js`).
+
 ## 2026-10-27
 
 ### Added

@@ -17323,3 +17323,52 @@ def test_publish_report_normalizes_inline_mark_tags_outside_code(tmp_path):
   rendered = preview.render(stored["markdown"])
   assert "<mark>new</mark>" in rendered
   assert "<mark>padded</mark>" in rendered
+
+
+def test_board_polling_not_masked_by_stale_wake_and_post_to_wakes_target(
+  tmp_path, monkeypatch
+):
+  alpha = "arena/11111111-clankers"
+  beta = "arena/22222222-clankers"
+  repo_root = tmp_path / "clankers"
+  repo_root.mkdir(parents=True)
+  monkeypatch.setattr(preview, "workspace_branch", lambda _r=None: alpha)
+  store = preview.Store(repo_root / "arena-state", create=True)
+  store.board_action({"action": "allow", "branch": alpha})
+  store.board_action({"action": "set-main", "branch": alpha})
+  store.board_action({"action": "allow", "branch": beta, "worker_id": "beta"})
+  store.board_action(
+    {
+      "action": "sync",
+      "board": {
+        "allowed_sessions": [alpha, beta],
+        "main_session_id": alpha,
+        "wakes": {alpha: "stale-wake-token"},
+        "sessions": [
+          {"branch": alpha, "repo": "clankers", "status": "active", "polling": False},
+          {"branch": beta, "repo": "clankers", "status": "polling", "polling": True},
+        ],
+      },
+    }
+  )
+  assert store.board_state()["wakes"].get(alpha) == "stale-wake-token"
+
+  # An early-return poll on open tasks consumes stale wakes so later waiting shows `polling`.
+  store.write_task("t1", "Open task", ["step"], task_type="code")
+  assert preview.poll_once(store, sleeper=lambda _: None) == 0
+  store.write_task("t1", status="finished")
+  store.start_poll()
+  b_state = store.board_state()
+  assert alpha not in b_state["wakes"]
+  self_row = next(s for s in b_state["sessions"] if s["branch"] == alpha)
+  assert self_row["polling"] is True
+  assert self_row["status"] == "polling"
+  store.clear_polling()
+
+  # Posting with explicit `to` (without `@beta` in text) wakes beta immediately.
+  after_post = store.board_action(
+    {"action": "post", "to": "beta", "text": "Task ready without at-mention"}
+  )
+  assert after_post["wakes"].get(beta) == after_post["entries"][-1]["id"]
+  beta_row = next(s for s in after_post["sessions"] if s["branch"] == beta)
+  assert beta_row["polling"] is False

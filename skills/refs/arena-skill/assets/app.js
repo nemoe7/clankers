@@ -4287,7 +4287,7 @@ function syncBoardHeartbeat(state) {
   const selfRow = Array.isArray(state.board.sessions)
     ? state.board.sessions.find(row => row && row.branch === branch)
     : null;
-  const isPolling = selfRow ? Boolean(selfRow.polling) : Boolean(state.polling);
+  const isPolling = Boolean(state.polling);
   const repo = String(state.repo || state.board.repo || '');
   const hbKey = `${branch}|${repo}|${isPolling ? '1' : '0'}`;
   const entries = Array.isArray(state.board.entries) ? state.board.entries : [];
@@ -4307,20 +4307,15 @@ function syncBoardHeartbeat(state) {
   try {
     if (hbChanged) {
       lastBoardHeartbeatKey = hbKey;
-      window.parent.postMessage({
-        type: 'clankers:board-action',
-        action: {
-          action: 'heartbeat',
-          branch,
-          repo,
-          status: isPolling ? 'polling' : 'active',
-          polling: isPolling,
-        },
-      }, targetOrigin);
     }
     if (hbChanged || entriesKey !== lastBoardEntriesKey) {
       lastBoardEntriesKey = entriesKey;
-      window.parent.postMessage({ type: 'clankers:board-request' }, targetOrigin);
+      window.parent.postMessage({
+        type: 'clankers:board-request',
+        branch,
+        repo,
+        active: hbChanged,
+      }, targetOrigin);
     }
     if (state.board.wakes && typeof state.board.wakes === 'object') {
       for (const [targetBranch, stamp] of Object.entries(state.board.wakes)) {

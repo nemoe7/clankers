@@ -640,7 +640,9 @@ def scope_board_for_target(board, branch="", repo_hint=""):
   return out
 
 
-def merge_preview_board(global_board, preview_board, passive=False):
+def merge_preview_board(
+  global_board, preview_board, passive=False, *, consumed_wakes=None
+):
   """Merge one preview session's `/api/board` snapshot into authoritative state."""
   next_board = normalize_board(global_board)
   if not isinstance(preview_board, dict):
@@ -699,6 +701,10 @@ def merge_preview_board(global_board, preview_board, passive=False):
       unopted_row
       and (unopted_row.get("polling") or unopted_row.get("status") == "polling")
     )
+    prev_unopted_poll = bool(
+      prev_unopted
+      and (prev_unopted.get("polling") or prev_unopted.get("status") == "polling")
+    )
     prev_updated = prev_unopted.get("updated_at") if prev_unopted else ""
     built_unopted = {
       "branch": preview_br,
@@ -711,7 +717,9 @@ def merge_preview_board(global_board, preview_board, passive=False):
       "status": "polling" if is_poll else "active",
       "polling": is_poll,
       "disconnected": False,
-      "updated_at": prev_updated if passive and prev_updated else sync_iso,
+      "updated_at": prev_updated
+      if (passive and prev_updated and prev_unopted_poll == is_poll)
+      else sync_iso,
     }
     survey = (unopted_row and unopted_row.get("survey")) or (
       prev_unopted and prev_unopted.get("survey")
@@ -894,13 +902,21 @@ def merge_preview_board(global_board, preview_board, passive=False):
     )
     if row_br == preview_br or prev is None or peer_fresher:
       next_poll = bool(row.get("polling") or row.get("status") == "polling")
+      prev_poll = (
+        bool(prev.get("polling") or prev.get("status") == "polling") if prev else False
+      )
+      poll_flipped = bool(
+        row_br == preview_br and prev is not None and prev_poll != next_poll
+      )
       is_disc = (
         False
         if row_br == preview_br
         else bool(row.get("disconnected") or row.get("status") == "disconnected")
       )
       prev_updated = prev.get("updated_at") if prev else ""
-      self_updated = prev_updated if passive and prev_updated else sync_iso
+      self_updated = (
+        prev_updated if (passive and prev_updated and not poll_flipped) else sync_iso
+      )
       next_row = {
         "branch": row_br,
         "repo": str(
@@ -1032,13 +1048,24 @@ def merge_preview_board(global_board, preview_board, passive=False):
   merged_entries.sort(key=lambda item: parse_stamp_ms(item.get("at")) or 0)
   next_board["entries"] = merged_entries
 
+  consumed_map = consumed_wakes if isinstance(consumed_wakes, dict) else None
   for wake_k, wake_v in incoming["wakes"].items():
     if wake_k != preview_br and wake_v:
+      wake_token_str = str(wake_v)
+      if consumed_map is not None and wake_token_str in (
+        consumed_map.get(wake_k) or ()
+      ):
+        continue
       next_board["wakes"][wake_k] = wake_v
   if preview_br and preview_br in next_board["wakes"]:
     raw_wakes = preview_board.get("wakes")
     if not isinstance(raw_wakes, dict) or not raw_wakes.get(preview_br):
-      next_board["wakes"].pop(preview_br, None)
+      consumed_val = str(next_board["wakes"].pop(preview_br, "") or "")
+      if consumed_val and consumed_map is not None:
+        hist = [str(x) for x in (consumed_map.get(preview_br) or []) if x]
+        if consumed_val not in hist:
+          hist.append(consumed_val)
+        consumed_map[preview_br] = hist[-32:]
   normalized_out = normalize_board(next_board)
   for m_row in normalized_out["sessions"]:
     if not (m_row.get("allowed") and m_row.get("role") == "main"):
@@ -1275,27 +1302,50 @@ def apply_board_action(board, action):
     next_board["removed_sessions"] = [
       item for item in next_board["removed_sessions"] if item != hb_br
     ]
+    is_poll = bool(action.get("polling") or action.get("status") == "polling")
+    next_status = (
+      "polling"
+      if is_poll
+      else (
+        "disconnected"
+        if str(action.get("status") or "") == "disconnected"
+        else "active"
+      )
+    )
     found = False
     for idx, row in enumerate(next_board["sessions"]):
       if _row_branch(row) == hb_br:
         found = True
-        next_board["sessions"][idx] = {
-          "branch": hb_br,
-          "repo": str(action.get("repo") or row.get("repo") or ""),
-          "status": str(action.get("status") or row.get("status") or "active"),
-          "polling": bool(action.get("polling")),
-          "updated_at": stamp,
-        }
+        updated_row = dict(row)
+        updated_row.pop("session_id", None)
+        updated_row["branch"] = hb_br
+        updated_row["repo"] = str(action.get("repo") or row.get("repo") or "")
+        updated_row["status"] = next_status
+        updated_row["polling"] = is_poll
+        updated_row["disconnected"] = next_status == "disconnected"
+        updated_row["updated_at"] = stamp
+        if is_poll:
+          updated_row["polling_since"] = str(
+            action.get("polling_since") or row.get("polling_since") or stamp
+          )
+        else:
+          updated_row.pop("polling_since", None)
+        for key in STATUS_KEYS:
+          if key != "polling_since" and action.get(key) is not None:
+            updated_row[key] = action[key]
+        next_board["sessions"][idx] = updated_row
     if not found:
-      next_board["sessions"].append(
-        {
-          "branch": hb_br,
-          "repo": str(action.get("repo") or ""),
-          "status": str(action.get("status") or "active"),
-          "polling": bool(action.get("polling")),
-          "updated_at": stamp,
-        }
-      )
+      new_row = {
+        "branch": hb_br,
+        "repo": str(action.get("repo") or ""),
+        "status": next_status,
+        "polling": is_poll,
+        "disconnected": next_status == "disconnected",
+        "updated_at": stamp,
+      }
+      if is_poll:
+        new_row["polling_since"] = str(action.get("polling_since") or stamp)
+      next_board["sessions"].append(new_row)
     return True, "", normalize_board(next_board)
   if action_type == "post":
     if not br or br not in next_board["allowed_sessions"]:
@@ -1314,18 +1364,73 @@ def apply_board_action(board, action):
         next_board["main_session_id"],
       )
     )
+    entry_id = str(action.get("id") or f"b-{int(time.time() * 1000)}")
+    entry_text = str(action.get("text") or "")
+    from_owner = bool(
+      action.get("from_owner")
+      or (
+        isinstance(action.get("payload"), dict) and action["payload"].get("from_owner")
+      )
+    )
+    mention_target = ""
+    raw_mention = str(action.get("mention_target") or "").strip()
+    if raw_mention:
+      mention_target = resolve_board_target(
+        raw_mention,
+        next_board["sessions"],
+        next_board["allowed_sessions"],
+        next_board["main_session_id"],
+      )
+    else:
+      for m_tok in re.findall(r"(?:^|\s)@([A-Za-z0-9._/-]+)", entry_text):
+        cand = resolve_board_target(
+          m_tok,
+          next_board["sessions"],
+          next_board["allowed_sessions"],
+          next_board["main_session_id"],
+        )
+        if cand and cand in next_board["allowed_sessions"]:
+          mention_target = cand
+          if resolved_to in ("", "*"):
+            resolved_to = cand
+          break
     next_board["entries"].append(
       {
-        "id": str(action.get("id") or f"b-{int(time.time() * 1000)}"),
+        "id": entry_id,
         "branch": br,
+        "from_owner": from_owner,
         "to": resolved_to,
+        "mention_target": mention_target,
         "repo": str(action.get("repo") or ""),
         "at": stamp,
-        "text": str(action.get("text") or ""),
+        "text": entry_text,
         "payload": action.get("payload"),
         "file": checked_file,
       }
     )
+    wake_iso = stamp if parse_stamp_ms(stamp) is not None else now_iso()
+    direct_target = mention_target or (
+      resolved_to if resolved_to and resolved_to != "*" else ""
+    )
+    if (
+      direct_target
+      and direct_target in next_board["allowed_sessions"]
+      and direct_target != br
+    ):
+      next_board["wakes"][direct_target] = entry_id
+      for row in next_board["sessions"]:
+        if _row_branch(row) == direct_target:
+          row["polling"] = False
+          row["status"] = "active"
+          row["updated_at"] = wake_iso
+    elif from_owner and resolved_to in ("", "*"):
+      for row in next_board["sessions"]:
+        target_sid = _row_branch(row)
+        if target_sid in next_board["allowed_sessions"] and target_sid != br:
+          next_board["wakes"][target_sid] = entry_id
+          row["polling"] = False
+          row["status"] = "active"
+          row["updated_at"] = wake_iso
     return True, "", normalize_board(next_board)
   if action_type == "wake":
     if br and br not in next_board["allowed_sessions"]:
@@ -1478,6 +1583,7 @@ class BoardStore:
     self.min_rev = 1
     self.state = normalize_board(None)
     self.material_sig = material_signature(self.state)
+    self.consumed_wakes = {}
     self._load()
 
   def close(self):
@@ -1505,6 +1611,18 @@ class BoardStore:
 
   def _load(self):
     with self.lock:
+      consumed_raw = self._get_meta_locked("consumed_wakes", "")
+      if consumed_raw:
+        try:
+          parsed_consumed = json.loads(consumed_raw)
+          if isinstance(parsed_consumed, dict):
+            self.consumed_wakes = {
+              board_branch(k): [str(x) for x in v if x][-32:]
+              for k, v in parsed_consumed.items()
+              if board_branch(k) and isinstance(v, list)
+            }
+        except ValueError:
+          self.consumed_wakes = {}
       rev_raw = self._get_meta_locked("revision", "")
       if rev_raw != "":
         self.revision = max(0, int(rev_raw or 0))
@@ -1600,6 +1718,9 @@ class BoardStore:
     trimmed = normalize_board(next_state)
     next_sig = material_signature(trimmed)
     changed_material = next_sig != self.material_sig
+    consumed_json = json.dumps(
+      self.consumed_wakes, sort_keys=True, separators=(",", ":")
+    )
     if not changed_material and (passive or trimmed == self.state):
       self.state = trimmed
       self.material_sig = next_sig
@@ -1635,8 +1756,8 @@ class BoardStore:
         )
       self.engine.conn.execute(
         "INSERT OR REPLACE INTO board_meta (key, value) VALUES ('revision', ?),"
-        " ('min_rev', ?), ('material_sig', ?)",
-        (str(next_rev), str(self.min_rev), next_sig),
+        " ('min_rev', ?), ('material_sig', ?), ('consumed_wakes', ?)",
+        (str(next_rev), str(self.min_rev), next_sig, consumed_json),
       )
       self.engine.conn.execute("COMMIT")
     except Exception:
@@ -1821,13 +1942,18 @@ class BoardStore:
       if reply_since == rev:
         return {"ok": True, "unchanged": True, "revision": rev, "mode": "diff"}
       if self.min_rev <= reply_since < rev:
-        return {
+        out = {
           "ok": True,
           "unchanged": False,
           "revision": rev,
           "mode": "diff",
           "diff": self._diff_since_locked(reply_since),
         }
+        if target_branch or target_repo:
+          out["scoped_board"] = scope_board_for_target(
+            saved, target_branch, target_repo
+          )
+        return out
     return {
       "ok": True,
       "unchanged": False,
@@ -1908,7 +2034,12 @@ class BoardStore:
         incoming["entries"] = self._extract_entry_files_locked(incoming["entries"], br)
       if br and client_rev is not None:
         self._save_client_cursor_locked(br, int(client_rev), incoming)
-      merged = merge_preview_board(self.state, incoming, passive=passive)
+      merged = merge_preview_board(
+        self.state,
+        incoming,
+        passive=passive,
+        consumed_wakes=self.consumed_wakes,
+      )
       rev, saved = self._persist_locked(merged, passive=passive)
       return self._build_reply_locked(
         rev,
@@ -1945,6 +2076,10 @@ class BoardStore:
           "revision": self.revision,
           "board": self.state,
         }
+      for wake_br, wake_val in (updated.get("wakes") or {}).items():
+        hist = self.consumed_wakes.get(wake_br)
+        if hist and str(wake_val) in hist:
+          self.consumed_wakes[wake_br] = [x for x in hist if x != str(wake_val)]
       rev, saved = self._persist_locked(updated, passive=passive)
       return self._build_reply_locked(
         rev,

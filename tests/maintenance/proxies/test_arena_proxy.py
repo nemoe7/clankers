@@ -1789,3 +1789,163 @@ def test_private_state_route_master_auth_diff_sync_and_ndjson_hydration(tmp_path
     st_board, raw_board = call(handle.port, "/v1/board", headers)
     assert st_board == 200
     assert json.loads(raw_board)["egress_version"] == core.VERSION
+
+
+def test_board_polling_heartbeat_post_wake_and_consumed_wake_anti_resurrection(
+  tmp_path,
+):
+  from arena_proxy import board as board_mod
+
+  alpha = "arena/11111111-clankers"
+  beta = "arena/22222222-clankers"
+  store = board_mod.BoardStore(tmp_path / "board-state")
+  try:
+    store.apply({"action": "allow", "branch": alpha})
+    store.apply({"action": "set-main", "branch": alpha, "repo": "clankers"})
+    store.apply({"action": "allow", "branch": beta, "worker_id": "beta"})
+    store.sync(
+      {
+        "branch": beta,
+        "repo": "clankers",
+        "sessions": [
+          {
+            "branch": beta,
+            "repo": "clankers",
+            "status": "polling",
+            "polling": True,
+            "polling_since": "2026-10-28T05:00:00Z",
+            "calls_since_message": 4,
+            "agent_seen_at": "2026-10-28T05:00:00Z",
+            "survey": {"answered_at": "2026-10-28T04:55:00Z", "results": []},
+          }
+        ],
+      },
+      branch=beta,
+      repo="clankers",
+    )
+    hb_res = store.apply(
+      {
+        "action": "heartbeat",
+        "branch": beta,
+        "repo": "clankers",
+        "status": "polling",
+        "polling": True,
+        "at": "2026-10-28T05:00:10Z",
+      },
+      branch=beta,
+      repo="clankers",
+    )
+    beta_row = next(s for s in hb_res["board"]["sessions"] if s["branch"] == beta)
+    assert beta_row["polling"] is True
+    assert beta_row["polling_since"] == "2026-10-28T05:00:00Z"
+    assert beta_row["calls_since_message"] == 4
+    assert beta_row["survey"]["answered_at"] == "2026-10-28T04:55:00Z"
+
+    # Direct `--to` post without `@beta` in text wakes beta and clears polling.
+    post_res = store.apply(
+      {
+        "action": "post",
+        "id": "p-wake1",
+        "branch": alpha,
+        "to": "beta",
+        "repo": "clankers",
+        "text": "Handoff ready",
+        "at": "2026-10-28T05:01:00Z",
+      },
+      branch=alpha,
+      repo="clankers",
+    )
+    assert post_res["board"]["wakes"].get(beta) == "p-wake1"
+    beta_after_post = next(
+      s for s in post_res["board"]["sessions"] if s["branch"] == beta
+    )
+    assert beta_after_post["polling"] is False
+
+    # Beta consumes wake locally and enters poll on a passive sync.
+    after_consume = store.sync(
+      {
+        "branch": beta,
+        "repo": "clankers",
+        "wakes": {},
+        "sessions": [
+          {
+            "branch": beta,
+            "repo": "clankers",
+            "status": "polling",
+            "polling": True,
+            "polling_since": "2026-10-28T05:01:05Z",
+            "updated_at": "2026-10-28T05:00:05Z",
+          }
+        ],
+      },
+      branch=beta,
+      repo="clankers",
+      passive=True,
+    )
+    assert beta not in after_consume["board"]["wakes"]
+    beta_polled = next(
+      s for s in after_consume["board"]["sessions"] if s["branch"] == beta
+    )
+    assert beta_polled["polling"] is True
+
+    # Stale peer alpha sync carrying old `p-wake1` must not resurrect it or clobber beta polling.
+    stale_alpha = store.sync(
+      {
+        "branch": alpha,
+        "repo": "clankers",
+        "wakes": {beta: "p-wake1"},
+        "sessions": [
+          {
+            "branch": alpha,
+            "repo": "clankers",
+            "status": "active",
+            "polling": False,
+            "updated_at": "2026-10-28T05:01:06Z",
+          },
+          {
+            "branch": beta,
+            "repo": "clankers",
+            "status": "active",
+            "polling": False,
+            "updated_at": "2026-10-28T05:01:00Z",
+          },
+        ],
+      },
+      branch=alpha,
+      repo="clankers",
+      passive=True,
+    )
+    assert beta not in stale_alpha["board"]["wakes"]
+    beta_still_polling = next(
+      s for s in stale_alpha["board"]["sessions"] if s["branch"] == beta
+    )
+    assert beta_still_polling["polling"] is True
+
+    # Fresh CLI wake token from alpha still propagates to beta, even across store reload.
+  finally:
+    store.close()
+
+  reopened = board_mod.BoardStore(tmp_path / "board-state")
+  try:
+    reopened_stale = reopened.sync(
+      {"branch": alpha, "repo": "clankers", "wakes": {beta: "p-wake1"}},
+      branch=alpha,
+      repo="clankers",
+      passive=True,
+    )
+    assert beta not in reopened_stale["board"]["wakes"]
+    fresh_wake = reopened.sync(
+      {
+        "branch": alpha,
+        "repo": "clankers",
+        "wakes": {beta: "2026-10-28T05:02:00-abc123"},
+      },
+      branch=alpha,
+      repo="clankers",
+      reply_since=reopened.revision,
+      reply_mode="diff",
+    )
+    assert fresh_wake["mode"] == "diff"
+    assert fresh_wake["scoped_board"]["wakes"].get(beta) == "2026-10-28T05:02:00-abc123"
+  finally:
+    reopened.close()

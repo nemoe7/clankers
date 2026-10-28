@@ -6143,5 +6143,8 @@ test('renderMessageMarkdown unescapes escaped backticks inside single-backtick c
   assert.match(appSource, /const\s+reportsSig\s*=/);
   assert.match(htmlSource, /id="board-egress-version"/);
   assert.match(appSource, /egressVerEl\.textContent\s*=\s*rawVer\s*\?\s*`Egress proxy v\$\{rawVer\}`\s*:\s*''/);
+  assert.match(appSource, /const\s+isPolling\s*=\s*Boolean\(state\.polling\);/);
+  assert.match(appSource, /type:\s*'clankers:board-request',\s*branch,\s*repo,\s*active:\s*hbChanged/);
+  assert.doesNotMatch(appSource, /action:\s*'heartbeat'/);
 });
 

@@ -2109,11 +2109,11 @@ def poll_inbox(store,sleeper=None):
 		for index in range(POLL_MAX_LOOPS):
 			if time.monotonic()>=deadline:break
 			violation=store.pending_violation_note();listing=store.read(include_quiet=False)
-			if violation or listing['pending']:print_read(store);return 0
+			if violation or listing['pending']:store.take_board_wake();print_read(store);return 0
 			if failures and'pr-checks'not in live_runs(store.path.parent):print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);return 0
 			if run_notices(store.path.parent):clear_poll_repeat(store);print('DO NOT END TURN. POLL AGAIN.',flush=True);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
-			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);idle=idle_board_workers(store.path.parent);worker_step=f"Delegate to idle board worker @{idle[0]} via arena-preview board post first, or start"if idle else'Start';continue_line=f"CONTINUE: UNBLOCKED TASK {names}. {worker_step} a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
+			if open_tasks:store.take_board_wake();listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);idle=idle_board_workers(store.path.parent);worker_step=f"Delegate to idle board worker @{idle[0]} via arena-preview board post first, or start"if idle else'Start';continue_line=f"CONTINUE: UNBLOCKED TASK {names}. {worker_step} a worktree with: arena-preview worktree start --gate <gate> <name> <destination>.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
 			board_woken=bool(store.take_board_wake());board_notices=store.take_board_notifications()
 			if board_woken or board_notices:
 				clear_poll_repeat(store);print('BOARD WAKE: session woken from the multi-session board. Read board entries and continue work before polling again.',flush=True)
@@ -3534,11 +3534,11 @@ class Store:
 			if mention_target and resolved_to=='*':resolved_to=mention_target
 			entry_text=normalize_board_mentions(entry_text,sessions,allowed=allowed,main_sid=main_sid,from_sid=sender,to_sid=resolved_to)
 			if entry_text and('text'in body or not body.get('tag')):body['text']=entry_text
-			entry_id=str(payload.get('id')or f"p{uuid.uuid4().hex[:5]}");sender_row=next((r for r in sessions if r['branch']==sender),{});from_owner=bool(payload.get('from_owner'));entries.append({'id':entry_id,'branch':sender,'board_id':str(payload.get('board_id')or sender_row.get('board_id')or sender),'from_owner':from_owner,'note_id':str(payload.get('note_id')or''),'to':resolved_to or'*','mention_target':mention_target,'repo':str(payload.get('repo')or sender_row.get('repo')or state['repo']),'at':clip_stamp(now()),'tag':str(payload.get('tag')or body.get('tag')or''),'text':entry_text,'seen_at':None,'acknowledged_at':None,'ack_type':None,'ack_text':None,'ack_edited_at':None,'replies':[],'payload':body,'file':staged_file})
-			if mention_target and mention_target in allowed:
+			entry_id=str(payload.get('id')or f"p{uuid.uuid4().hex[:5]}");sender_row=next((r for r in sessions if r['branch']==sender),{});from_owner=bool(payload.get('from_owner'));entries.append({'id':entry_id,'branch':sender,'board_id':str(payload.get('board_id')or sender_row.get('board_id')or sender),'from_owner':from_owner,'note_id':str(payload.get('note_id')or''),'to':resolved_to or'*','mention_target':mention_target,'repo':str(payload.get('repo')or sender_row.get('repo')or state['repo']),'at':clip_stamp(now()),'tag':str(payload.get('tag')or body.get('tag')or''),'text':entry_text,'seen_at':None,'acknowledged_at':None,'ack_type':None,'ack_text':None,'ack_edited_at':None,'replies':[],'payload':body,'file':staged_file});direct_target=mention_target or(resolved_to if resolved_to and resolved_to!='*'else'')
+			if direct_target and direct_target in allowed and direct_target!=sender:
 				for row in sessions:
-					if row['branch']==mention_target:row['polling']=False;row['status']='active'
-				wakes[mention_target]=entry_id;ack_wakes.pop(mention_target,None)
+					if row['branch']==direct_target:row['polling']=False;row['status']='active'
+				wakes[direct_target]=entry_id;ack_wakes.pop(direct_target,None)
 			elif from_owner and(resolved_to or'*')=='*':
 				for row in sessions:
 					target_sid=row['branch']
@@ -5685,7 +5685,7 @@ def main():
 		if args.command=='serve':
 			from http.server import ThreadingHTTPServer;require_renderer();reload_event=threading.Event();stop_event=threading.Event();ThreadingHTTPServer.allow_reuse_address=True
 			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store,reload_event=reload_event))as server:server.daemon_threads=True;store.set_meta('port',str(server.server_port));threading.Thread(target=watch_call_group,args=(store,stop_event),daemon=True).start();threading.Thread(target=watch_hot_reload,args=(server,reload_event,stop_event,1.,None,store),daemon=True).start();print(f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever();stop_event.set()
-		elif args.command=='read':require_server(store);store.notice_expired_key();print_read(store)
+		elif args.command=='read':require_server(store);store.notice_expired_key();print_read(store);store.take_board_wake()
 		elif args.command=='note-list':
 			ids,total=store.list_note_ids(args.page,args.page_size);pages=max(1,(total+args.page_size-1)//args.page_size)
 			if args.page>pages:print(f"Page {args.page} is past the last page ({pages}).",file=sys.stderr);return 1

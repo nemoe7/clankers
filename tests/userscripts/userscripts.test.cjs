@@ -4340,6 +4340,196 @@ for raw in sys.stdin:
       assert.match(source, /mutationFrame\s*=\s*requestAnimationFrame\(/);
       assert.equal(/[\u2013\u2014]/.test(source), false, "arena.user.js contains no en-dash or em-dash");
     });
+
+    test("opted-in idle session auto-sends wake up once per unseen board wake token after sync", async () => {
+      const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+      const betaBranch = "arena/22222222-clankers";
+      const saved = new Map([
+        ["auto-wake", true],
+        ["tab-title", true],
+        ["clankers-arena-show-settings-button", false],
+        ["clankers-arena-proxy-host", "https://arena-proxy.example.ts.net"],
+        ["clankers-arena-proxy-master", "master-secret"],
+        ["clankers-arena-wake-delay-min-ms", 10],
+        ["clankers-arena-wake-delay-ms", 10],
+      ]);
+      for (const key of Object.keys(bundles.arena.features)) {
+        if (key !== "auto-wake" && key !== "tab-title") saved.set(key, false);
+      }
+      const timeouts = [];
+      const intervals = [];
+      let sendClicks = 0;
+      let stopRunning = false;
+      let activeProxyRev = 1;
+      let activeProxyBoard = {
+        allowed_sessions: ["arena/11111111-clankers", betaBranch],
+        main_session_id: "arena/11111111-clankers",
+        wakes: { [betaBranch]: "wake-tok-1" },
+        sessions: [
+          { branch: betaBranch, repo: "clankers", status: "polling", polling: true },
+        ],
+        entries: [],
+      };
+      const sendBtn = {
+        disabled: false,
+        getAttribute: () => null,
+        getClientRects: () => [{ width: 40, height: 32 }],
+        click() { sendClicks += 1; },
+      };
+      const editorRoot = {
+        querySelector(sel) {
+          if (sel === 'button[aria-label="Send message"]') return sendBtn;
+          return null;
+        },
+      };
+      const editorBox = { parentElement: editorRoot };
+      const editor = {
+        innerText: "",
+        textContent: "",
+        focus() {},
+        getAttribute: () => null,
+        getClientRects: () => [{ width: 320, height: 48 }],
+        closest(sel) { return sel === ".editor-content" ? editorBox : null; },
+      };
+      const branchLink = {
+        getAttribute(name) {
+          if (name === "href") return "https://github.com/nemoe7/clankers/tree/" + betaBranch;
+          return "";
+        },
+      };
+      const headerBar = {
+        querySelectorAll(sel) {
+          if (sel === "a, [title]") return [branchLink];
+          return [];
+        },
+      };
+      const doc = {
+        title: "Arena",
+        visibilityState: "visible",
+        documentElement: { style: {} },
+        body: {},
+        createRange() { return { selectNodeContents() {} }; },
+        execCommand(cmd, _ui, val) {
+          if (cmd === "insertText") {
+            editor.innerText = String(val || "");
+            editor.textContent = String(val || "");
+            return true;
+          }
+          return false;
+        },
+        querySelector(sel) {
+          if (sel === 'div.tiptap.ProseMirror[contenteditable="true"]') return editor;
+          if (sel && sel.indexOf("md\\:top-full") !== -1) return headerBar;
+          if (sel && sel.indexOf("Stop") !== -1) return stopRunning ? { getClientRects: () => [{ width: 10, height: 10 }] } : null;
+          return null;
+        },
+        querySelectorAll() { return []; },
+      };
+      let fakeNow = 100000;
+      const ctx = {
+        globalThis: null,
+        URL,
+        window: {
+          location: { href: "https://arena.ai/agent/session-beta", pathname: "/agent/session-beta" },
+          getSelection() { return { removeAllRanges() {}, addRange() {} }; },
+          getComputedStyle: () => ({ display: "block", visibility: "visible" }),
+          addEventListener() {},
+          removeEventListener() {},
+        },
+        location: { href: "https://arena.ai/agent/session-beta", pathname: "/agent/session-beta" },
+        document: doc,
+        MutationObserver: function () { this.observe = () => {}; this.disconnect = () => {}; },
+        Date: Object.assign(function (...a) { return new Date(...a); }, { now: () => fakeNow, parse: Date.parse }),
+        Math,
+        Promise,
+        Map,
+        Set,
+        WeakMap,
+        Object,
+        Array,
+        String,
+        Number,
+        Boolean,
+        RegExp,
+        JSON,
+        isFinite,
+        encodeURIComponent,
+        decodeURIComponent,
+        console: { info() {}, warn() {}, error() {} },
+        setTimeout(fn, ms) { const item = { fn, ms, cleared: false }; timeouts.push(item); return item; },
+        clearTimeout(item) { if (item) item.cleared = true; },
+        setInterval(fn, ms) { const item = { fn, ms }; intervals.push(item); return item; },
+        clearInterval() {},
+        GM_getValue: (k, fb) => (saved.has(k) ? saved.get(k) : fb),
+        GM_setValue: (k, v) => saved.set(k, v),
+        GM_registerMenuCommand: () => 1,
+        GM_unregisterMenuCommand: () => {},
+        GM_xmlhttpRequest(req) {
+          if (String(req.url).indexOf("/v1/board") !== -1) {
+            req.onload({
+              status: 200,
+              responseText: JSON.stringify({
+                ok: true,
+                mode: "full",
+                revision: activeProxyRev,
+                board: activeProxyBoard,
+              }),
+            });
+            return;
+          }
+          req.onload({ status: 404, responseText: "{}" });
+        },
+      };
+      ctx.globalThis = ctx;
+      ctx.window.document = doc;
+      vm.runInNewContext(source, ctx, { filename: "arena.user.js" });
+
+      const tickIntervals = async () => {
+        fakeNow += 3100;
+        intervals.forEach((it) => it.fn());
+        await new Promise((r) => setImmediate(r));
+        await new Promise((r) => setImmediate(r));
+      };
+      const flushWakeTimers = () => {
+        while (timeouts.length) {
+          const t = timeouts.shift();
+          if (!t.cleared) t.fn();
+        }
+      };
+
+      // While beta is still marked polling: true, composer stays untouched.
+      await tickIntervals();
+      flushWakeTimers();
+      assert.equal(editor.innerText, "");
+      assert.equal(sendClicks, 0);
+
+      // Once beta's turn has ended (polling: false, no stop button), unseen wake-tok-1 triggers "wake up" once.
+      activeProxyRev += 1;
+      activeProxyBoard = Object.assign({}, activeProxyBoard, {
+        sessions: [{ branch: betaBranch, repo: "clankers", status: "active", polling: false }],
+      });
+      await tickIntervals();
+      assert.equal(editor.innerText, "wake up");
+      flushWakeTimers();
+      assert.equal(sendClicks, 1);
+
+      // Clearing composer after send does NOT re-send for the same wake-tok-1.
+      editor.innerText = "";
+      editor.textContent = "";
+      activeProxyRev += 1;
+      await tickIntervals();
+      flushWakeTimers();
+      assert.equal(sendClicks, 1);
+
+      // A brand-new wake token triggers a second wake up.
+      activeProxyRev += 1;
+      activeProxyBoard = Object.assign({}, activeProxyBoard, {
+        wakes: { [betaBranch]: "wake-tok-2" },
+      });
+      await tickIntervals();
+      flushWakeTimers();
+      assert.equal(sendClicks, 2);
+    });
   }
 
 

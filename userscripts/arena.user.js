@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.6
+// @name         Arena.ai | NemoUtils | v1.13.7
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.6
+// @version      1.13.7
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -26,7 +26,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.6";
+  var USERSCRIPT_VERSION = "1.13.7";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
   var proxyBoardEgressVersion = "";
   var USERSCRIPT_BOOT_VERSION = (function () {
@@ -4338,7 +4338,28 @@
 
   var autoWakeSentFor = null;
   var autoWakeRoots = new Set();
+  var autoWakeBoardTokens = new Map();
+  var boardSyncReadyForWake = false;
   var autoWakeNotify = null;
+  function consumePendingBoardComposerWake(doc) {
+    if (!doc || !isSessionUrl(location.href) || findStopGeneratingButton(doc)) return false;
+    var board = proxyBoardCache;
+    if (!board || !Array.isArray(board.allowed_sessions)) return false;
+    var sid = boardBranch(previewUiBranch || stateBranch(doc) || "");
+    if (!sid || !isSafeRecordKey(sid) || board.allowed_sessions.indexOf(sid) === -1) return false;
+    if (boardPreviewBase(doc) && !boardSyncReadyForWake) return false;
+    var wakeToken = board.wakes && Object.prototype.hasOwnProperty.call(board.wakes, sid)
+      ? String(board.wakes[sid] || "")
+      : "";
+    if (!wakeToken || autoWakeBoardTokens.get(sid) === wakeToken) return false;
+    var sessions = Array.isArray(board.sessions) ? board.sessions : [];
+    for (var idx = 0; idx < sessions.length; idx += 1) {
+      var sRow = sessions[idx];
+      if (sRow && sRow.branch === sid && sRow.polling) return false;
+    }
+    setBoundedMap(autoWakeBoardTokens, sid, wakeToken, 64);
+    return true;
+  }
   runFeature("auto-wake", "Composer - auto-send wake up", function () {
     if (typeof document === "undefined") return function () {};
     var timer = null;
@@ -4360,9 +4381,15 @@
           editor.getAttribute("aria-disabled") === "true") return null;
       if (editor.textContent === "") {
         var message = lastMessageRoot(document);
-        if (!message || !message.id || autoWakeRoots.has(message.id) ||
-            !message.querySelector(GENERATION_ALERT_SELECTOR)) return null;
-        autoWakeRoots.add(message.id);
+        var hasAlertWake = Boolean(
+          message && message.id && !autoWakeRoots.has(message.id) &&
+          message.querySelector(GENERATION_ALERT_SELECTOR)
+        );
+        if (hasAlertWake) {
+          autoWakeRoots.add(message.id);
+        } else if (!consumePendingBoardComposerWake(document)) {
+          return null;
+        }
         autoWakeSentFor = null;
         setComposerText(editor, "wake up");
         if (String(editor.innerText || "") === "wake up") logEvent("auto-wake", "filled");
@@ -5378,6 +5405,7 @@
       proxyBoardRevision = revision;
     }
     if (typeof syncTitleNowHook === "function") syncTitleNowHook();
+    if (typeof autoWakeNotify === "function") autoWakeNotify();
     return proxyBoardCache;
   }
 
@@ -5825,13 +5853,21 @@
         }
       }
       notifyPreviewReady(document, true);
-      syncPreviewBoard(base, event.data.branch || "", event.data.repo || "");
+      syncPreviewBoard(base, event.data.branch || "", event.data.repo || "").then(function () {
+        boardSyncReadyForWake = true;
+        if (typeof autoWakeNotify === "function") autoWakeNotify();
+      });
     } else if (event.data.type === "clankers:force-save") {
       if (typeof forceSaveStateHook === "function") {
         forceSaveStateHook(!event.data.save_id);
       }
     } else if (event.data.type === "clankers:board-request") {
-      syncPreviewBoard(base, event.data.branch || "", event.data.repo || "", { passive: true });
+      syncPreviewBoard(base, event.data.branch || "", event.data.repo || "", {
+        passive: !event.data.active,
+      }).then(function () {
+        boardSyncReadyForWake = true;
+        if (typeof autoWakeNotify === "function") autoWakeNotify();
+      });
     } else if (event.data.type === "clankers:board-action" && event.data.action && boardProxyConfig()) {
       var isHeartbeatAction = (event.data.action.action === "heartbeat" || event.data.action.type === "heartbeat");
       if (isHeartbeatAction && event.data.action.branch) {
@@ -7317,8 +7353,27 @@
     }
 
     var bootBoardSyncDone = false;
+    var titleBoardSyncInFlight = false;
     var lastTitleBoardSyncMs = Date.now();
-    var nextTitleBoardSyncDelayMs = 15000;
+    var nextTitleBoardSyncDelayMs = BOARD_PROXY_POLL_MS;
+    function runTitleBoardSync(baseUrl, sidVal, repoVal, passiveVal) {
+      if (titleBoardSyncInFlight || typeof syncPreviewBoardHook !== "function") return;
+      titleBoardSyncInFlight = true;
+      lastTitleBoardSyncMs = Date.now();
+      nextTitleBoardSyncDelayMs = BOARD_PROXY_POLL_MS;
+      Promise.resolve(
+        syncPreviewBoardHook(baseUrl, sidVal, repoVal, { passive: passiveVal })
+      ).then(
+        function () {
+          titleBoardSyncInFlight = false;
+          boardSyncReadyForWake = true;
+          if (typeof autoWakeNotify === "function") autoWakeNotify();
+        },
+        function () {
+          titleBoardSyncInFlight = false;
+        },
+      );
+    }
     function titleStep() {
       observeRoot();
       syncTitle(document);
@@ -7332,9 +7387,10 @@
           if (pulledBase && pulledSid && pulled.board.allowed_sessions.indexOf(pulledSid) !== -1) {
             var firstSync = !bootBoardSyncDone;
             bootBoardSyncDone = true;
-            lastTitleBoardSyncMs = Date.now();
-            nextTitleBoardSyncDelayMs = 15000 + randomHttpJitterWindowMs();
-            syncPreviewBoardHook(pulledBase, pulledSid, pulledScope.repo || "", { passive: !firstSync });
+            runTitleBoardSync(pulledBase, pulledSid, pulledScope.repo || "", !firstSync);
+          } else if (!pulledBase) {
+            boardSyncReadyForWake = true;
+            if (typeof autoWakeNotify === "function") autoWakeNotify();
           }
         });
       }
@@ -7346,13 +7402,9 @@
         if (tickBase && selfSidTick && curBoard.allowed_sessions.indexOf(selfSidTick) !== -1) {
           if (!bootBoardSyncDone) {
             bootBoardSyncDone = true;
-            lastTitleBoardSyncMs = nowTickMs;
-            nextTitleBoardSyncDelayMs = 15000 + randomHttpJitterWindowMs();
-            syncPreviewBoardHook(tickBase, selfSidTick, docScopeTick.repo || "", { passive: false });
+            runTitleBoardSync(tickBase, selfSidTick, docScopeTick.repo || "", false);
           } else if (nowTickMs - lastTitleBoardSyncMs >= nextTitleBoardSyncDelayMs) {
-            lastTitleBoardSyncMs = nowTickMs;
-            nextTitleBoardSyncDelayMs = 15000 + randomHttpJitterWindowMs();
-            syncPreviewBoardHook(tickBase, selfSidTick, docScopeTick.repo || "", { passive: true });
+            runTitleBoardSync(tickBase, selfSidTick, docScopeTick.repo || "", true);
           }
         }
       }

@@ -5725,6 +5725,7 @@ def poll_inbox(store, sleeper=None):
       violation = store.pending_violation_note()
       listing = store.read(include_quiet=False)
       if violation or listing["pending"]:
+        store.take_board_wake()
         print_read(store)
         return 0
       # A failed check on the branch pull request ends the wait, so the turn fixes it now.
@@ -5746,6 +5747,7 @@ def poll_inbox(store, sleeper=None):
         if item["status"] == "upcoming" and not item["blocked"]
       ]
       if open_tasks:
+        store.take_board_wake()
         listing["tasks"] = open_tasks
         names = ", ".join(item["id"] for item in open_tasks)
         # The early return continues the task. Process the still-up list before the next poll.
@@ -10443,13 +10445,16 @@ class Store:
           "file": staged_file,
         }
       )
-      if mention_target and mention_target in allowed:
+      direct_target = mention_target or (
+        resolved_to if resolved_to and resolved_to != "*" else ""
+      )
+      if direct_target and direct_target in allowed and direct_target != sender:
         for row in sessions:
-          if row["branch"] == mention_target:
+          if row["branch"] == direct_target:
             row["polling"] = False
             row["status"] = "active"
-        wakes[mention_target] = entry_id
-        ack_wakes.pop(mention_target, None)
+        wakes[direct_target] = entry_id
+        ack_wakes.pop(direct_target, None)
       elif from_owner and (resolved_to or "*") == "*":
         for row in sessions:
           target_sid = row["branch"]
@@ -17971,6 +17976,7 @@ def main():
       require_server(store)
       store.notice_expired_key()
       print_read(store)
+      store.take_board_wake()
     elif args.command == "note-list":
       ids, total = store.list_note_ids(args.page, args.page_size)
       pages = max(1, (total + args.page_size - 1) // args.page_size)
