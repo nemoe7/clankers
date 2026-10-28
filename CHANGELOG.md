@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### nuu
 
+- Inset scrollbar thumbs to `6px` inside a `10px` track on `var(--bg)` (`SKILL.md`, `references/nuu.md`, `references/recipes/scrollbars.md`, `references/style.css`, `references/examples/scrollbars.png`).
 - Pair top-right `.close-button` (`X`) with footer `Cancel` by default on confirmation, form, and unsaved-edit modals (`references/recipes/modal-manager.md`, `references/examples/modal-close-button.png`).
 
 ### Fixed

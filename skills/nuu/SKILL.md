@@ -50,7 +50,7 @@ One short specification for every page we ship, paired with a small command-line
 22. Align stacked card items on one inline edge, use only house fonts, and keep uppercase on .eyebrow (NUM218).
 23. Use at most one primary button per card or dialog and name the action instead of Yes/No (NUL008).
 
-Component and interaction patterns live in `references/recipes/`: [modal-manager.md](references/recipes/modal-manager.md) (top-right `.close-button` and delete confirmation), [range-sliders.md](references/recipes/range-sliders.md) (step ticks and `<output>` bubbles), [relative-timestamps.md](references/recipes/relative-timestamps.md) (relative ages, full or abbreviated by width), [loading-bar.md](references/recipes/loading-bar.md) (200 ms delayed edge bar and fixed-slot controls), [scrollbars.md](references/recipes/scrollbars.md) (`10 px` rounded thumb without arrow buttons), and [overflow-and-clipping.md](references/recipes/overflow-and-clipping.md) (unclipped focus rings, shadows, and tooltips).
+Component and interaction patterns live in `references/recipes/`: [modal-manager.md](references/recipes/modal-manager.md) (top-right `.close-button` and delete confirmation), [range-sliders.md](references/recipes/range-sliders.md) (step ticks and `<output>` bubbles), [relative-timestamps.md](references/recipes/relative-timestamps.md) (relative ages, full or abbreviated by width), [loading-bar.md](references/recipes/loading-bar.md) (200 ms delayed edge bar and fixed-slot controls), [scrollbars.md](references/recipes/scrollbars.md) (`6 px` rounded thumb without arrow buttons), and [overflow-and-clipping.md](references/recipes/overflow-and-clipping.md) (unclipped focus rings, shadows, and tooltips).
 
 ## Workflow
 
@@ -77,7 +77,7 @@ Component and interaction patterns live in `references/recipes/`: [modal-manager
 - `references/recipes/relative-timestamps.md`: singular, plural, and compact relative timestamp table (`just now`, `Xmin ago`, `yesterday`, `last week`, `last month`, `last year`).
 - `references/recipes/scroll-edge-fade.md`: scroll-driven CSS `mask-image` edge fade (`@supports (animation-timeline: scroll(self))`).
 - `references/recipes/floating-overlay-scroll-fade.md`: full-bleed scroll container fade behind floating header and composer overlays (`backdrop-filter: blur()`, `padding-inline`, and `@supports (animation-timeline: scroll(self))`).
-- `references/recipes/scrollbars.md`: thin `10px` rounded-thumb scrollbar (`#302e2c`) on `var(--bg)` without arrow buttons or hover highlights unless keyboard navigation is active.
+- `references/recipes/scrollbars.md`: thin `6px` rounded-thumb scrollbar (`#302e2c`) in a `10px` track on `var(--bg)` without arrow buttons or hover highlights unless keyboard navigation is active.
 - `references/recipes/overflow-and-clipping.md`: anti-clipping and anti-overlap rules (`NUM209`, `NUM210`, `NUA308`) for flex/grid rows, focus rings, sticky headers, and viewport-clamped tooltips.
 
 ## Learn
