@@ -30,6 +30,7 @@ try:
 except ImportError:
   MARKER = re.compile(r"\bnonemo:[ \t]*(.*?)(?=-->|\*/|;|\s|$|\bnonemo:)")
   MARKER_SPAN = re.compile(r"\bnonemo:[ \t]*.*?(?=-->|\*/|;|\s|$|\bnonemo:)[ \t]*;?")
+  INLINE_CODE = re.compile(r"(?P<fence>`+)(?!`).*?(?P=fence)(?!`)")
 
   def marker_head(line, position=None, rotations=()):
     marker = MARKER.search(line)
@@ -40,10 +41,47 @@ except ImportError:
       re.search(pattern, before, flags=re.IGNORECASE) for _, pattern, _ in rotations
     )
 
-  def collect_markers(path, lines, known_rule_ids, rotations=()):
+  def test_comment_spans(path, lines):
+    path = Path(path)
+    name = path.name
+    is_test = (
+      "tests" in path.parts
+      or name.startswith("test_")
+      or ".test." in name
+      or ".checks." in name
+    )
+    if not is_test:
+      return None
+    source = "\n".join(lines) + "\n"
+    if path.suffix.lower() == ".py":
+      spans = []
+      try:
+        tokens = tokenize.generate_tokens(iter(source.splitlines(True)).__next__)
+        for token in tokens:
+          if token.type == tokenize.COMMENT:
+            spans.append((token.start, token.end))
+      except (tokenize.TokenError, SyntaxError):
+        return None
+      return spans
+    if path.suffix.lower() in {".js", ".cjs", ".mjs"}:
+      from prose import javascript_comment_spans
+
+      return list(javascript_comment_spans(source))
+    return None
+
+  def in_spans(number, column, spans):
+    point = (number, column)
+    return any(start <= point <= end for start, end in spans)
+
+  def collect_markers(path, lines, known_rule_ids, rotations=(), audit=False):
     file_ids, line_ids, marks = set(), [], []
+    comment_spans = test_comment_spans(path, lines) if audit else None
     for number, line in enumerate(lines, 1):
       suppressed = set()
+      visible = (
+        INLINE_CODE.sub(lambda match: " " * len(match[0]), line) if audit else line
+      )
+      audit_positions = {marker.start() for marker in MARKER.finditer(visible)}
       for marker in MARKER.finditer(line):
         code = marker[1]
         scope = "unknown"
@@ -56,6 +94,14 @@ except ImportError:
           )
           if scope == "file":
             file_ids.add(code)
+        if audit and (
+          marker.start() not in audit_positions
+          or (
+            comment_spans is not None
+            and not in_spans(number, marker.start(), comment_spans)
+          )
+        ):
+          continue
         marks.append(f"{path}:{number}: {code or '<missing>'} {scope}: {line.strip()}")
       line_ids.append(suppressed)
     return file_ids, line_ids, marks
@@ -859,9 +905,11 @@ def head_marker(line, position=None):
   return marker_head(line, position, ROTATIONS)
 
 
-def exclusions(path, lines):
+def exclusions(path, lines, audit=False):
   """Collect every marker and the known rule IDs it suppresses."""
-  file_ids, line_ids, marks = collect_markers(path, lines, KNOWN_RULE_IDS, ROTATIONS)
+  file_ids, line_ids, marks = collect_markers(
+    path, lines, KNOWN_RULE_IDS, ROTATIONS, audit=audit
+  )
   return file_ids | config_file_exclusions(path), line_ids, marks
 
 
@@ -999,7 +1047,7 @@ def format_summary(findings):
   )
 
 
-def scan(targets, ignores):
+def scan(targets, ignores, audit=False):
   """Return findings and all exclusion markers with locations and rule IDs."""
   findings, marks = [], []
   for path in walk(targets, ignores):
@@ -1008,7 +1056,7 @@ def scan(targets, ignores):
       continue
     lines = text.splitlines()
     with file_scope(path, text):
-      file_ids, line_ids, found = exclusions(path, lines)
+      file_ids, line_ids, found = exclusions(path, lines, audit=audit)
     marks.extend(found)
     is_code = is_code_file(path)
     prose_map = _prose_line_map(path, text) if is_code else None
@@ -3087,7 +3135,7 @@ def main(argv=None):
     print(f"{changed} lines rotated", file=sys.stderr)
     return 0
   try:
-    findings, marks = scan(targets, arguments.ignore)
+    findings, marks = scan(targets, arguments.ignore, audit=arguments.audit)
   except ValueError as error:
     parser.error(str(error))
   if arguments.ignores:

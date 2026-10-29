@@ -1115,25 +1115,6 @@ class AssetRedirect(urllib.request.HTTPRedirectHandler):
     return super().redirect_request(request, fp, code, message, headers, newurl)
 
 
-def resolve_named_breakpoints(
-  project_root: Path | None = None,
-) -> tuple[str, ...]:
-  cfg_info = load_nuu_config(project_root or Path.cwd())
-  cfg = cfg_info["config"]
-  cfg_audit = cfg.get("audit") if isinstance(cfg.get("audit"), dict) else {}
-  raw = (
-    cfg_audit.get("named_breakpoints")
-    or cfg_audit.get("breakpoints")
-    or cfg.get("named_breakpoints")
-    or cfg.get("breakpoints")
-  )
-  if isinstance(raw, list):
-    items = [str(x).strip() for x in raw if str(x).strip()]
-    if items:
-      return tuple(items)
-  return NAMED_BREAKPOINTS
-
-
 def browser(args):
   if args.timeout <= 0 or any(width <= 0 for width in args.widths):
     raise ValueError("timeout and widths must be positive")
