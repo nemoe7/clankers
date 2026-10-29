@@ -134,6 +134,9 @@ def test_resolve_asset_serves_report_gifs_and_images(tmp_path: Path) -> None:
   assert resolved_png == (png_bytes, "image/png")
 
   assert app.resolve_asset("/../secret.gif") is None
+  mermaid_asset = app.resolve_asset("/mermaid.min.js")
+  assert mermaid_asset is not None
+  assert mermaid_asset[1] == "application/javascript; charset=utf-8"
   store.close()
 
 

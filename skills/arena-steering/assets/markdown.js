@@ -111,8 +111,13 @@ function renderCodeFence(lang, codeLines) {
     langKey === "diff" || langKey === "patch"
       ? highlightDiffLines(codeLines)
       : escapedCode;
+  const mermaidBtn =
+    langKey === "mermaid"
+      ? `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${dataCode}">${BRACES_SVG}</button>`
+      : "";
   return `
     <div class="code-block">
+      ${mermaidBtn}
       <button type="button" class="copy-code" aria-label="Copy code" title="Copy code" data-code="${dataCode}">${COPY_SVG}</button>
       <div class="code-block-header">
         <span class="code-block-lang">${BRACES_SVG}<span>${langLabel}</span></span>
@@ -120,6 +125,126 @@ function renderCodeFence(lang, codeLines) {
       <pre><code${langClass}>${innerHtml}</code></pre>
     </div>
   `;
+}
+
+export function sanitizeMermaidSvg(svgText) {
+  if (typeof svgText !== "string") return null;
+  const trimmed = svgText.trim();
+  if (!/^<svg\b[\s\S]*<\/svg>$/i.test(trimmed)) return null;
+  if (
+    /<(script|foreignobject|iframe|object|embed|audio|video|canvas|applet|meta|link)\b/i.test(
+      trimmed
+    )
+  ) {
+    return null;
+  }
+  if (
+    /\bon[a-z]+\s*=|javascript:|vbscript:|data:text\/html|@import|\burl\s*\(\s*["']?\s*(?!#)/i.test(
+      trimmed
+    )
+  ) {
+    return null;
+  }
+  if (/\b(?:xlink:)?href\s*=\s*["']?\s*(?!#)/i.test(trimmed)) {
+    return null;
+  }
+  if (!/\bclass\s*=\s*["'][^"']*mermaid-svg/i.test(trimmed)) {
+    return trimmed.replace(/^<svg\b/i, '<svg class="mermaid-svg" role="img"');
+  }
+  return trimmed;
+}
+
+let mermaidSeq = 0;
+
+export function initializeMermaid() {
+  const lib = globalThis.mermaid;
+  if (!lib?.initialize) return null;
+  lib.initialize({
+    startOnLoad: false,
+    securityLevel: "strict",
+    htmlLabels: false,
+    maxTextSize: 50000,
+    maxEdges: 500,
+    suppressErrorRendering: true,
+    theme: "dark",
+    flowchart: { htmlLabels: false },
+  });
+  return lib;
+}
+
+export async function hydrateMermaidBlocks(rootEl = document) {
+  if (!rootEl?.querySelectorAll) return;
+  const codeNodes = rootEl.querySelectorAll(
+    ".code-block > pre > code.language-mermaid"
+  );
+  if (!codeNodes.length) return;
+  const lib = initializeMermaid();
+  for (const codeEl of codeNodes) {
+    const block = codeEl.closest(".code-block");
+    if (!block || block.dataset.mermaidState) continue;
+    const rawSource = (codeEl.textContent || "").trim();
+    if (!rawSource || !lib?.render) {
+      block.dataset.mermaidState = "fallback";
+      block.querySelector(".preview-code-mermaid")?.remove();
+      continue;
+    }
+    try {
+      mermaidSeq += 1;
+      const rendered = await lib.render(
+        `mermaid-steering-${mermaidSeq}`,
+        rawSource
+      );
+      const svgRaw = typeof rendered === "string" ? rendered : rendered?.svg;
+      const safeSvg = sanitizeMermaidSvg(svgRaw);
+      if (!safeSvg) {
+        block.dataset.mermaidState = "fallback";
+        block.querySelector(".preview-code-mermaid")?.remove();
+        continue;
+      }
+      if (!block.isConnected) continue;
+      if (!block.querySelector(".preview-code-mermaid")) {
+        const dataCode = escapeHtml(rawSource).replace(/\n/g, "&#10;");
+        block.insertAdjacentHTML(
+          "afterbegin",
+          `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${dataCode}">${BRACES_SVG}</button>`
+        );
+      }
+      const diagramDiv = document.createElement("div");
+      diagramDiv.className = "mermaid-diagram";
+      diagramDiv.setAttribute("role", "img");
+      diagramDiv.setAttribute("aria-label", "Mermaid diagram");
+      diagramDiv.innerHTML = safeSvg;
+      const preEl = codeEl.closest("pre");
+      block.insertBefore(diagramDiv, preEl);
+      block.dataset.mermaidState = "rendered";
+    } catch {
+      block.dataset.mermaidState = "fallback";
+      block.querySelector(".preview-code-mermaid")?.remove();
+    }
+  }
+}
+
+export function toggleCodeMermaid(button) {
+  const block = button?.closest?.(".code-block");
+  if (
+    !block ||
+    !block.dataset.mermaidState ||
+    block.dataset.mermaidState === "fallback"
+  ) {
+    return;
+  }
+  const showingCode = block.dataset.mermaidState === "code";
+  if (showingCode) {
+    block.dataset.mermaidState = "rendered";
+    button.setAttribute("aria-pressed", "false");
+    button.setAttribute("aria-label", "Show Mermaid code");
+    button.title = "Show Mermaid code";
+  } else {
+    block.dataset.mermaidState = "code";
+    button.setAttribute("aria-pressed", "true");
+    button.setAttribute("aria-label", "Show Mermaid diagram");
+    button.title = "Show Mermaid diagram";
+  }
 }
 
 export function renderInlineMarkdown(text) {

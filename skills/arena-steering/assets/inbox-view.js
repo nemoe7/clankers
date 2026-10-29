@@ -2,7 +2,11 @@
  * Messages (Inbox) tab view for Arena Steering.
  */
 
-import { escapeHtml, renderMarkdownBlock } from "./markdown.js";
+import {
+  escapeHtml,
+  hydrateMermaidBlocks,
+  renderMarkdownBlock,
+} from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 
 const seenAckCounts = new Map();
@@ -293,6 +297,7 @@ export function renderInboxView(container, state, handlers) {
     previewBtn.setAttribute("aria-pressed", next ? "true" : "false");
     if (draftPreview && noteEl) {
       draftPreview.innerHTML = renderMarkdownBlock(noteEl.value);
+      hydrateMermaidBlocks(draftPreview);
       draftPreview.hidden = !next;
       noteEl.hidden = next;
     }
