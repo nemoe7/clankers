@@ -10,7 +10,7 @@ Render a subtle `2px` edge loading bar after a `200ms` delay with `aria-busy="tr
 - Default to a subtle `2px` edge loading bar anchored along the bottom of the top bar or panel toolbar; use an in-flow loud `<progress>` bar only when requested.
 - Delay visual appearance by `200ms` (`150–300ms`) so fast operations complete without flashing a transient indicator.
 - Set `aria-busy="true"` on the region whose content is being updated (`section`, `article`, or `main`) while loading and reset to `aria-busy="false"` in `finally`; never put `role="progressbar"` on a decorative edge pseudo-element.
-- Grow the bar from left to right with `transform-origin: left center` and `transform: scaleX(...)` instead of a pulsing sweep. Animate only compositor properties (`transform` and `opacity`), never `width`, `left`, or `margin`, so layout never reflows during loading.
+- Grow the bar from left to right with `transform-origin: left center` and `transform: scaleX(...)` on `var(--accent)`. Snap to `scaleX(1)` and fade `opacity` to `0` over `220ms` (`data-loading="done"`) when finished. Animate only compositor properties (`transform` and `opacity`), never `width`, `left`, or `margin`, so layout never reflows during loading.
 - Under `@media (prefers-reduced-motion: reduce)`, replace growth animation with a static full-width subtle bar (`width: 100%`, `opacity: 0.45`, `animation: none`, `transform: none`).
 
 ## Subtle edge loading bar (default)
@@ -27,26 +27,58 @@ Render a subtle `2px` edge loading bar after a `200ms` delay with `aria-busy="tr
   bottom: -1px;
   width: 100%;
   height: 2px;
-  background: var(--focus);
+  background: var(--accent);
   opacity: 0;
   pointer-events: none;
   transform-origin: left center;
   transform: scaleX(0);
-  animation: nuu-edge-loading 1.6s 200ms var(--ease) forwards;
+  animation: nuu-edge-loading 2.4s 200ms var(--ease) forwards;
+}
+
+.topbar:has(~ main [data-loading="done"]:not([hidden]))::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  transform-origin: left center;
+  animation: nuu-edge-loading-done 220ms var(--ease) forwards;
 }
 
 @keyframes nuu-edge-loading {
   0% {
-    opacity: 0.85;
+    opacity: 0.92;
     transform: scaleX(0.05);
   }
-  40% {
-    opacity: 0.85;
-    transform: scaleX(0.55);
+  15% {
+    opacity: 0.92;
+    transform: scaleX(0.35);
+  }
+  45% {
+    opacity: 0.92;
+    transform: scaleX(0.65);
   }
   100% {
-    opacity: 0.85;
+    opacity: 0.92;
     transform: scaleX(0.92);
+  }
+}
+
+@keyframes nuu-edge-loading-done {
+  0% {
+    opacity: 0.92;
+    transform: scaleX(0.92);
+  }
+  45% {
+    opacity: 0.92;
+    transform: scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
   }
 }
 
@@ -67,8 +99,13 @@ async function loadPanel(panel, task) {
   try {
     return await task();
   } finally {
-    delete panel.dataset.loading;
+    panel.dataset.loading = 'done';
     panel.setAttribute('aria-busy', 'false');
+    setTimeout(() => {
+      if (panel.dataset.loading === 'done') {
+        delete panel.dataset.loading;
+      }
+    }, 220);
   }
 }
 ```
@@ -118,21 +155,3 @@ async function loadPanel(panel, task) {
   }
 }
 ```
-
-```js
-async function runButtonFetch(button, task) {
-  button.disabled = true;
-  button.setAttribute('aria-busy', 'true');
-  try {
-    return await task();
-  } finally {
-    button.setAttribute('aria-busy', 'false');
-    button.disabled = false;
-  }
-}
-```
-
-## Loud loading bar (opt-in on request only)
-
-- Use a native `<progress class="loading-bar-loud">` element inside the active card or dialog when the user explicitly asks for a prominent progress bar or when a multi-step job reports determinate progress (`value` and `max`).
-- Pair determinate progress with an accessible label (`aria-label` or `<label>`) and update `value` at coarse milestones so assistive technology is not flooded.
