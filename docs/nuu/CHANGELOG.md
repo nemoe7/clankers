@@ -8,8 +8,13 @@ This log has no Unreleased section.
 
 ## [0.1.69] - 2026-10-29
 
+### Added
+
+- **Equal-size button groups (`NUM208`, `SKILL.md` Clause 6, `measure.py`, `examples.md`)**: Require buttons in the same group to share identical width and height (`examples/button-group-equal-size.png`).
+
 ### Changed
 
+- **Audit report workflow (`SKILL.md` step 5, `audit-report.md`)**: Use `## Findings` and `## Visual Judgements` headings and pair open findings with cropped 2-column `nuu board` panels.
 - **Recipes**: Schedule relative timestamps at unit boundaries (`relative-timestamps.md`).
 - **Recipes**: Add `--scrollbar-carve` and `28px`/`36px` fade ramp (`scroll-edge-fade.md`).
 - **Recipes**: Extend `#history` past `.card.compose` to `100%` (`floating-overlay-scroll-fade.md`).

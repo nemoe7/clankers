@@ -2073,3 +2073,45 @@ def test_house_style_amendments_stay_synced():
     assert "animation: none" in live_dot
     ranges = (root / "references/recipes/range-sliders.md").read_text(encoding="utf-8")
     assert "at most 11 major-division ticks" in ranges
+
+
+def test_num208_button_group_equal_size():
+  ragged_report = {
+    "width": 1280,
+    "elements": [
+      {
+        "selector": ".tab-nav",
+        "tag": "nav",
+        "role": "tablist",
+        "toolbar_exempt": True,
+        "bounds": {"x": 0, "y": 0, "width": 300, "height": 32},
+        "button_group_sizes": [
+          {"width": 99, "height": 32},
+          {"width": 84, "height": 32},
+          {"width": 68, "height": 32},
+        ],
+      }
+    ],
+  }
+  findings = measure.check_density(ragged_report)
+  assert [row["rule"] for row in findings] == ["NUM208"]
+  assert "buttons in group do not share identical size" in findings[0]["evidence"]
+
+  equal_report = {
+    "width": 1280,
+    "elements": [
+      {
+        "selector": ".tab-nav",
+        "tag": "nav",
+        "role": "tablist",
+        "toolbar_exempt": True,
+        "bounds": {"x": 0, "y": 0, "width": 300, "height": 32},
+        "button_group_sizes": [
+          {"width": 99, "height": 32},
+          {"width": 99, "height": 32},
+          {"width": 99, "height": 32},
+        ],
+      }
+    ],
+  }
+  assert measure.check_density(equal_report) == []

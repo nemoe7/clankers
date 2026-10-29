@@ -36,9 +36,11 @@ Pass: `11, 12, 14, 16, 18, 22, and 28 px` sizes, weights `400, 500, 600, 700`, `
 
 ## 6. Four-pixel spacing scale and concentric radii
 
-Pass: `4 px` scale (`4, 8, 12, 16, 24, 32, 48 px`), `32 px` row, `6 px` radius, no box-shadow, and `32x32 px` symmetric icon buttons (`>= 24x24 px` floor, `NUA303`). Fail: off-scale `13 px` gap, `9 px` radius, drop shadow, and `18x18 px` icon button.
+Pass: `4 px` scale (`4, 8, 12, 16, 24, 32, 48 px`), `32 px` row, `6 px` radius, no box-shadow, `32x32 px` symmetric icon buttons (`>= 24x24 px` floor, `NUA303`), and equal-size buttons within each button group (`grid-auto-columns: 1fr`, `NUM208`). Fail: off-scale `13 px` gap, `9 px` radius, drop shadow, `18x18 px` icon button, and ragged button widths in a group.
 
 ![Clause 6](examples/one-spacing-scale.png)
+
+![Clause 6 Equal-Size Button Groups](examples/button-group-equal-size.png)
 
 ## 7. Compact named breakpoints
 
