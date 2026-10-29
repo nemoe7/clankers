@@ -10,6 +10,7 @@ const COPY_SVG = `<svg class="lucide lucide-copy" width="16" height="16" viewBox
 const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
 const DISMISS_SVG = `<svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`;
 const SEND_SVG = `<svg class="lucide lucide-send" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>`;
+const UNANSWERED_SVG = `<svg class="lucide lucide-circle-help report-picker-help-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>`;
 
 const CUSTOM_SENTINEL = "__custom__";
 
@@ -109,14 +110,24 @@ export function renderReportsView(container, state, handlers) {
   const pickerItemsHtml = reports
     .map((rep, idx) => {
       const isActive = rep.id === activeReport.id;
+      const isUnseen = !rep.seen;
+      const needsAnswer = Boolean(
+        rep.needs_answer ??
+          ((rep.fields || []).length > 0 && (rep.answers || []).length === 0)
+      );
+      const markersHtml =
+        isUnseen || needsAnswer
+          ? `<span class="report-picker-markers">${needsAnswer ? `<span class="report-picker-unanswered" title="Needs answers" aria-label="Needs answers">${UNANSWERED_SVG}</span>` : ""}${isUnseen ? `<span class="report-picker-unseen-dot" title="Unseen report" aria-label="Unseen report"></span>` : ""}</span>`
+          : "";
       return `
         <button
           type="button"
-          class="report-picker-link report-nav-item ${isActive ? "is-active active" : ""}"
+          class="report-picker-link report-nav-item ${isActive ? "is-active active" : ""} ${isUnseen ? "is-unseen" : "is-seen"} ${needsAnswer ? "needs-answer" : ""}"
           data-report-id="${escapeHtml(rep.id)}"
           aria-current="${isActive ? "true" : "false"}"
         >
           <span class="report-picker-title">${idx + 1}. ${escapeHtml(rep.title)}</span>
+          ${markersHtml}
         </button>
       `;
     })
