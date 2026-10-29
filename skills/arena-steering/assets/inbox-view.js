@@ -152,6 +152,17 @@ export function renderInboxView(container, state, handlers) {
         Math.max(0, filteredMessages.length - visibleMessageCount)
       );
 
+  const linkedTasksByMsg = new Map();
+  for (const task of state.tasks || []) {
+    const msgIds = task.links?.msg_ids || task.msg_ids || [];
+    for (const mid of msgIds) {
+      if (!linkedTasksByMsg.has(mid)) {
+        linkedTasksByMsg.set(mid, []);
+      }
+      linkedTasksByMsg.get(mid).push(task.id);
+    }
+  }
+
   const historyHtml = visibleMessages.length
     ? visibleMessages
         .map((msg) => {
@@ -174,6 +185,10 @@ export function renderInboxView(container, state, handlers) {
           const flagsSuffix = extraFlags.length
             ? ` · ${escapeHtml(extraFlags.join(", "))}`
             : "";
+          const linkedTasks = linkedTasksByMsg.get(msg.id) || [];
+          const tasksSuffix = linkedTasks.length
+            ? ` · ${linkedTasks.map((tid) => `<code class="task-link">${escapeHtml(tid)}</code>`).join(", ")}`
+            : "";
 
           return `
             <li class="message" data-msg-id="${escapeHtml(msg.id)}" data-hidden="${msg.hidden ? "true" : "false"}">
@@ -182,7 +197,7 @@ export function renderInboxView(container, state, handlers) {
               <p class="receipt">
                 <span class="state-dot" data-state="${dotState}" title="Status: ${escapeHtml(msg.status)}"></span>
                 <code class="note-id" title="Copy message ID">${escapeHtml(msg.id)}</code>
-                · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${flagsSuffix}
+                · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${flagsSuffix}${tasksSuffix}
               </p>
             </li>
           `;
