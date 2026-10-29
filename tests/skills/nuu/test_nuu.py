@@ -208,6 +208,20 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
     check=False,
   )
   assert check_proc.returncode == 0
+  audit_measured = run("audit", "-M", str(measured))
+  assert audit_measured["rendered"]["status"] == "checked"
+  assert not audit_measured["findings"]
+  assert (
+    run(
+      "search",
+      "-f",
+      "https://example.com/art.svg",
+      "-d",
+      "new.svg",
+      expected=2,
+    )["status"]
+    == "error"
+  )
   ruler_proc = subprocess.run(
     [sys.executable, str(SCRIPT), "ruler", "-f", "0,0", "-t", "16,24", "-k", "8"],
     cwd=tmp_path,
