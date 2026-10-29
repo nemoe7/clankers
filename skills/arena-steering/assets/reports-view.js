@@ -1,29 +1,35 @@
 /**
- * Reports tab view with inline Markdown fields and built-in "Something else..." custom input.
+ * Reports tab view with left TOC rail, center report column with field cards,
+ * inline custom option input, and right scrollable report picker rail.
  */
 
 import { escapeHtml, renderMarkdownBlock } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 
-const COPY_SVG = `<svg class="lucide lucide-copy" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`;
-const DISMISS_SVG = `<svg class="lucide lucide-x" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`;
-const SEND_SVG = `<svg class="lucide lucide-send" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>`;
+const COPY_SVG = `<svg class="lucide lucide-copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`;
+const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
+const DISMISS_SVG = `<svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`;
+const SEND_SVG = `<svg class="lucide lucide-send" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>`;
 
 const CUSTOM_SENTINEL = "__custom__";
 
-function renderFieldBlock(field) {
+function renderFieldBlock(field, headings) {
   const fieldId = escapeHtml(field.id);
   const label = escapeHtml(field.label);
+  const anchorId = `field-${field.id}`;
+  if (Array.isArray(headings)) {
+    headings.push({ id: anchorId, level: 3, text: field.label });
+  }
   const recommended = new Set(field.recommended || []);
 
   if (field.type === "text") {
     return `
-      <div class="field-card" data-field-id="${fieldId}" data-field-type="text">
+      <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="text">
         <div class="field-header">
           <span class="field-label">${label}</span>
-          <span class="meta-pill">${fieldId}</span>
+          <code class="field-id-chip note-id">${fieldId}</code>
         </div>
-        <input type="text" class="input field-text-input" name="field-${fieldId}" placeholder="Enter response...">
+        <input type="text" class="input field-text-input" name="field-${fieldId}" placeholder="Enter response..." aria-label="${label}">
       </div>
     `;
   }
@@ -42,18 +48,17 @@ function renderFieldBlock(field) {
     .join("");
 
   return `
-    <div class="field-card" data-field-id="${fieldId}" data-field-type="${escapeHtml(field.type)}">
+    <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="${escapeHtml(field.type)}">
       <div class="field-header">
         <span class="field-label">${label}</span>
-        <span class="meta-pill">${fieldId}</span>
+        <code class="field-id-chip note-id">${fieldId}</code>
       </div>
-      ${optionsHtml}
-      <label class="option-row">
-        <input type="${inputType}" name="field-${fieldId}" value="${CUSTOM_SENTINEL}" class="custom-toggle">
-        <span>Something else...</span>
-      </label>
-      <div class="custom-input-wrap" hidden>
-        <input type="text" class="input custom-text-input" placeholder="Specify something else...">
+      <div class="options">
+        ${optionsHtml}
+        <label class="option-row option-custom">
+          <input type="${inputType}" name="field-${fieldId}" value="${CUSTOM_SENTINEL}" class="custom-toggle" aria-label="Something else for ${label}">
+          <input type="text" class="input custom-text-input" placeholder="Something else..." aria-label="Custom response for ${label}">
+        </label>
       </div>
     </div>
   `;
@@ -62,7 +67,7 @@ function renderFieldBlock(field) {
 export function renderReportsView(container, state, handlers) {
   const reports = state.reports || [];
   if (!reports.length) {
-    container.innerHTML = `<div class="card"><p>No published reports.</p></div>`;
+    container.innerHTML = `<div class="reports-layout"><p class="muted" id="report-status">No report published yet.</p></div>`;
     return;
   }
 
@@ -70,116 +75,189 @@ export function renderReportsView(container, state, handlers) {
     state.selectedReportId && reports.some((r) => r.id === state.selectedReportId)
       ? state.selectedReportId
       : reports[0].id;
-  const activeReport = reports.find((r) => r.id === selectedId) || reports[0];
-
-  const navHtml = reports
-    .map((rep) => {
-      const isActive = rep.id === activeReport.id ? "is-active" : "";
-      return `
-        <button type="button" class="report-nav-item ${isActive}" data-report-id="${escapeHtml(rep.id)}">
-          <div style="display: flex; justify-content: space-between; gap: 6px; align-items: center;">
-            <strong>${escapeHtml(rep.title)}</strong>
-            <span class="status-pill status-${escapeHtml(rep.status)}">${escapeHtml(rep.status)}</span>
-          </div>
-          <div style="margin-top: 4px;">
-            <span class="meta-pill">${escapeHtml(rep.id)}</span>
-          </div>
-        </button>
-      `;
-    })
-    .join("");
+  const activeReport =
+    reports.find((r) => r.id === selectedId) || reports[0];
 
   const blocks = activeReport.blocks || [
     { type: "markdown", markdown: activeReport.body || "" },
   ];
   const hasFields = (activeReport.fields || []).length > 0;
+  const headings = [];
 
   const renderedBlocks = blocks
     .map((block) => {
       if (block.type === "field") {
-        return renderFieldBlock(block.field);
+        return renderFieldBlock(block.field, headings);
       }
-      return `<div class="prose-block">${renderMarkdownBlock(block.markdown)}</div>`;
+      return `<div class="prose-block">${renderMarkdownBlock(block.markdown, { headings })}</div>`;
+    })
+    .join("");
+
+  const tocLinksHtml = headings
+    .map(
+      (h, idx) => `
+      <a
+        href="#${escapeHtml(h.id)}"
+        class="report-toc-link ${idx === 0 ? "active" : ""}"
+        data-toc-target="${escapeHtml(h.id)}"
+        data-level="${h.level}"
+      >${escapeHtml(h.text)}</a>
+    `
+    )
+    .join("");
+
+  const pickerItemsHtml = reports
+    .map((rep) => {
+      const isActive = rep.id === activeReport.id;
+      const modIso = escapeHtml(rep.modified_at || "");
+      const modRel = escapeHtml(
+        relativeTime(rep.modified_at, { compact: true })
+      );
+      return `
+        <button
+          type="button"
+          class="report-picker-link report-nav-item ${isActive ? "is-active active" : ""}"
+          data-report-id="${escapeHtml(rep.id)}"
+          aria-current="${isActive ? "true" : "false"}"
+        >
+          <span class="report-picker-title">${escapeHtml(rep.title)}</span>
+          <span class="report-picker-meta"><code class="note-id">${escapeHtml(rep.id)}</code> · ${escapeHtml(rep.status)} · <time datetime="${modIso}" data-timestamp="${modIso}" data-compact="true">${modRel}</time></span>
+        </button>
+      `;
     })
     .join("");
 
   const answersHtml = (activeReport.answers || []).length
-    ? activeReport.answers
-        .map(
-          (ans) => `
-            <div class="ack-box">
-              <div style="display: flex; justify-content: space-between; gap: 8px;">
-                <span class="meta-pill">answer ${escapeHtml(ans.id)}</span>
-                <time class="meta-pill" datetime="${escapeHtml(ans.modified_at)}" data-timestamp="${escapeHtml(ans.modified_at)}">
-                  ${escapeHtml(relativeTime(ans.modified_at))}
-                </time>
-              </div>
-              <pre class="mono" style="margin: 6px 0 0; font-size: 12px;">${escapeHtml(JSON.stringify(ans.values, null, 2))}</pre>
-              ${
-                ans.ack
-                  ? `<div style="margin-top: 6px;">${renderMarkdownBlock(ans.ack)}</div>`
-                  : ""
-              }
+    ? `<div id="report-ack-history" class="answer reply message-text">${activeReport.answers
+        .map((ans, idx) => {
+          const iso = escapeHtml(ans.modified_at || "");
+          const rel = escapeHtml(relativeTime(ans.modified_at));
+          const entries = Object.entries(ans.values || {})
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+            .join(" · ");
+          return `
+            <div class="${idx > 0 ? "reply-block" : ""}">
+              <p><strong>Submission <code class="note-id">${escapeHtml(ans.id)}</code></strong> · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time> — ${escapeHtml(entries)}</p>
+              ${ans.ack ? renderMarkdownBlock(ans.ack) : `<p class="muted">Awaiting agent acknowledgement.</p>`}
             </div>
-          `
-        )
-        .join("")
+          `;
+        })
+        .join("")}</div>`
     : "";
+
+  const modIso = escapeHtml(activeReport.modified_at || "");
+  const modRel = escapeHtml(relativeTime(activeReport.modified_at));
 
   container.innerHTML = `
     <div class="reports-layout">
-      <aside>${navHtml}</aside>
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <span class="meta-pill">${escapeHtml(activeReport.id)}</span>
-            <h2 class="card-title" style="margin-top: 4px;">${escapeHtml(activeReport.title)}</h2>
-          </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <span class="status-pill status-${escapeHtml(activeReport.status)}">${escapeHtml(activeReport.status)}</span>
-            <button type="button" class="icon-button" id="copy-report-btn" data-copy-report="${escapeHtml(activeReport.id)}" aria-label="Copy report ${escapeHtml(activeReport.id)}" title="Copy report Markdown">${COPY_SVG}</button>
-            <button type="button" class="icon-button" id="dismiss-report-btn" data-dismiss-report="${escapeHtml(activeReport.id)}" aria-label="Dismiss report ${escapeHtml(activeReport.id)}" title="Dismiss report">${DISMISS_SVG}</button>
+      <aside id="report-toc" class="report-toc scroll-panel" aria-label="Report contents" ${headings.length ? "" : "hidden"}>
+        <p class="report-toc-title">On this page</p>
+        <div class="report-toc-list">
+          ${tocLinksHtml}
+        </div>
+      </aside>
+
+      <aside id="report-rail" class="report-rail" aria-label="Report picker and actions">
+        <div class="report-rail-bar">
+          <span class="report-toc-title">Reports (${reports.length})</span>
+          <div class="report-rail-actions">
+            <button
+              type="button"
+              class="icon-button"
+              id="copy-report-btn"
+              data-copy-report="${escapeHtml(activeReport.id)}"
+              aria-label="Copy report ${escapeHtml(activeReport.id)}"
+              title="Copy report Markdown"
+            >${COPY_SVG}</button>
+            <button
+              type="button"
+              class="icon-button"
+              id="dismiss-report-btn"
+              data-dismiss-report="${escapeHtml(activeReport.id)}"
+              aria-label="Dismiss report ${escapeHtml(activeReport.id)}"
+              title="Dismiss report"
+            >${DISMISS_SVG}</button>
           </div>
         </div>
+        <div id="report-picker" class="report-picker scroll-panel" role="region" aria-label="Published reports">
+          ${pickerItemsHtml}
+        </div>
+        ${answersHtml}
+      </aside>
+
+      <div id="report-main" class="report-main">
+        <p id="report-status" class="muted" role="status">
+          Report <code class="note-id">${escapeHtml(activeReport.id)}</code> · ${escapeHtml(activeReport.status)} · Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time>
+        </p>
+
         <form id="report-answer-form">
-          ${renderedBlocks}
+          <article id="report" class="report" aria-label="Selected report">
+            ${renderedBlocks}
+          </article>
           ${
             hasFields
-              ? `<div class="composer-row"><button type="submit" class="btn btn-primary">${SEND_SVG} Submit Answers</button></div>`
+              ? `<div class="report-submit-row"><button type="submit" class="btn btn-primary">${SEND_SVG} Submit Answers</button></div>`
               : ""
           }
         </form>
-        ${answersHtml}
       </div>
     </div>
   `;
 
-  for (const navBtn of container.querySelectorAll(".report-nav-item")) {
-    navBtn.addEventListener("click", () => {
-      handlers.onSelectReport(navBtn.dataset.reportId);
+  for (const btn of container.querySelectorAll("[data-report-id]")) {
+    btn.addEventListener("click", () => {
+      handlers.onSelectReport(btn.dataset.reportId);
     });
   }
 
-  for (const card of container.querySelectorAll(".field-card")) {
-    const customToggle = card.querySelector(".custom-toggle");
-    const customWrap = card.querySelector(".custom-input-wrap");
-    if (!customToggle || !customWrap) continue;
-    card.addEventListener("change", () => {
-      customWrap.hidden = !customToggle.checked;
-      if (customToggle.checked) {
-        customWrap.querySelector(".custom-text-input")?.focus();
+  for (const link of container.querySelectorAll("[data-toc-target]")) {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      const targetId = link.dataset.tocTarget;
+      const targetEl = container.querySelector(`#${CSS.escape(targetId)}`);
+      targetEl?.scrollIntoView({ behavior: "smooth", block: "start" });
+      for (const item of container.querySelectorAll(".report-toc-link")) {
+        item.classList.toggle("active", item === link);
       }
     });
   }
 
-  const copyBtn = container.querySelector("[data-copy-report]");
+  for (const question of container.querySelectorAll(".question")) {
+    const customToggle = question.querySelector(".custom-toggle");
+    const customInput = question.querySelector(".custom-text-input");
+    if (!customToggle || !customInput) continue;
+    customInput.addEventListener("focus", () => {
+      customToggle.checked = true;
+    });
+    customInput.addEventListener("input", () => {
+      if (customInput.value.trim()) {
+        customToggle.checked = true;
+      }
+    });
+  }
+
+  const copyBtn = container.querySelector("#copy-report-btn");
   copyBtn?.addEventListener("click", async () => {
+    try {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(activeReport.body || "");
+      await navigator.clipboard
+        .writeText(activeReport.body || "")
+        .catch(() => {});
+    }
+      copyBtn.dataset.state = "good";
+      copyBtn.innerHTML = CHECK_SVG;
+      setTimeout(() => {
+        if (copyBtn.isConnected) {
+          delete copyBtn.dataset.state;
+          copyBtn.innerHTML = COPY_SVG;
+        }
+      }, 1400);
+    } catch {
+      copyBtn.dataset.state = "bad";
     }
   });
 
-  const dismissBtn = container.querySelector("[data-dismiss-report]");
+  const dismissBtn = container.querySelector("#dismiss-report-btn");
   dismissBtn?.addEventListener("click", async () => {
     await handlers.onDismissReport(activeReport.id, dismissBtn);
   });
@@ -188,35 +266,40 @@ export function renderReportsView(container, state, handlers) {
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const values = {};
-    for (const card of form.querySelectorAll(".field-card")) {
-      const fieldId = card.dataset.fieldId;
-      const fieldType = card.dataset.fieldType;
-      if (fieldType === "text") {
-        values[fieldId] = card.querySelector(".field-text-input").value.trim();
-      } else if (fieldType === "choice") {
-        const checked = card.querySelector("input[type='radio']:checked");
+    for (const question of container.querySelectorAll(
+      ".question[data-field-id]"
+    )) {
+      const fid = question.dataset.fieldId;
+      const ftype = question.dataset.fieldType;
+      if (ftype === "text") {
+        const val =
+          question.querySelector(".field-text-input")?.value.trim() || "";
+        if (val) values[fid] = val;
+      } else if (ftype === "choice") {
+        const checked = question.querySelector('input[type="radio"]:checked');
         if (!checked) continue;
         if (checked.value === CUSTOM_SENTINEL) {
-          values[fieldId] = card.querySelector(".custom-text-input").value.trim();
+          const customVal =
+            question.querySelector(".custom-text-input")?.value.trim() || "";
+          if (customVal) values[fid] = customVal;
         } else {
-          values[fieldId] = checked.value;
+          values[fid] = checked.value;
         }
-      } else if (fieldType === "checkbox") {
-        const checkedBoxes = [
-          ...card.querySelectorAll("input[type='checkbox']:checked"),
+      } else if (ftype === "checkbox") {
+        const checkedList = [
+          ...question.querySelectorAll('input[type="checkbox"]:checked'),
         ];
-        const list = [];
-        for (const box of checkedBoxes) {
+        const selected = [];
+        for (const box of checkedList) {
           if (box.value === CUSTOM_SENTINEL) {
-            const customVal = card
-              .querySelector(".custom-text-input")
-              .value.trim();
-            if (customVal) list.push(customVal);
+            const customVal =
+              question.querySelector(".custom-text-input")?.value.trim() || "";
+            if (customVal) selected.push(customVal);
           } else {
-            list.push(box.value);
+            selected.push(box.value);
           }
         }
-        values[fieldId] = list;
+        if (selected.length) values[fid] = selected;
       }
     }
     await handlers.onSubmitReportAnswer(activeReport.id, values);

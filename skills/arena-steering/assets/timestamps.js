@@ -4,7 +4,7 @@
 
 export function relativeTime(
   value,
-  { compact = false, includeSeconds = false, now = Date.now() } = {}
+  { compact = false, includeSeconds = true, now = Date.now() } = {}
 ) {
   const stamp =
     value instanceof Date ? value.getTime() : new Date(value).getTime();
@@ -87,7 +87,7 @@ export function mountRelativeTimers(root = document) {
       if (Number.isNaN(stamp.getTime())) continue;
       node.textContent = relativeTime(stamp, {
         compact: node.getAttribute("data-compact") === "true",
-        includeSeconds: node.getAttribute("data-include-seconds") === "true",
+        includeSeconds: node.getAttribute("data-include-seconds") !== "false",
         now,
       });
       node.title = stamp.toLocaleString();
@@ -95,11 +95,6 @@ export function mountRelativeTimers(root = document) {
   };
   refresh();
   if (!nodes.length) return () => {};
-  const interval = nodes.some(
-    (node) => node.getAttribute("data-include-seconds") === "true"
-  )
-    ? 1000
-    : 15000;
-  const timer = setInterval(refresh, interval);
+  const timer = setInterval(refresh, 1000);
   return () => clearInterval(timer);
 }

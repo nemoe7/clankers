@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
+import html
+import importlib
+import importlib.util
 import json
 import mimetypes
+import os
 import re
-from collections.abc import Callable
+import sys
+import threading
+import time
+from collections.abc import Callable, Iterable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -56,6 +64,21 @@ class Router:
     return None, {}, allowed
 
 
+def _detect_repo_name(store: SqliteStore) -> str:
+  """Resolve repository directory name from store path or current working directory."""
+  candidates: list[Path] = []
+  db_path = getattr(store, "db_path", "")
+  if db_path and db_path != ":memory:":
+    candidates.append(Path(db_path).resolve())
+  candidates.append(Path.cwd().resolve())
+  for start in candidates:
+    cur = start if start.is_dir() else start.parent
+    for parent in (cur, *cur.parents):
+      if (parent / ".git").exists():
+        return parent.name
+  return Path.cwd().resolve().name or "Workspace"
+
+
 class SteeringApp:
   """Application facade wiring services and REST endpoints."""
 
@@ -63,10 +86,12 @@ class SteeringApp:
     self,
     store: SqliteStore,
     assets_dir: str | Path | None = None,
+    repo_name: str | None = None,
   ) -> None:
     self.store = store
     default_assets = Path(__file__).resolve().parents[2] / "assets"
     self.assets_dir = Path(assets_dir) if assets_dir is not None else default_assets
+    self.repo_name = repo_name or _detect_repo_name(store)
     self.messages = MessageService(store, store, store)
     self.tasks = TaskService(store, store)
     self.reports = ReportService(
@@ -76,6 +101,36 @@ class SteeringApp:
     )
     self.router = Router()
     self._register_routes()
+    self._maybe_reseed_demo(store)
+
+  @staticmethod
+  def _maybe_reseed_demo(store: SqliteStore) -> None:
+    """Re-seed the live demo SQLite store when demo.py changes on disk."""
+    db_path_str = str(getattr(store, "db_path", ""))
+    demo_script = Path(__file__).resolve().parents[1] / "demo.py"
+    if (
+      "arena-steering-demo-" not in db_path_str
+      or not demo_script.is_file()
+      or getattr(store, "_seeding_demo", False)
+    ):
+      return
+    try:
+      mtime = demo_script.stat().st_mtime_ns
+    except OSError:
+      return
+    if getattr(store, "_demo_mtime_ns", None) == mtime:
+      return
+    store._seeding_demo = True  # type: ignore[attr-defined]
+    store._demo_mtime_ns = mtime  # type: ignore[attr-defined]
+    try:
+      spec = importlib.util.spec_from_file_location("_arena_steering_demo", demo_script)
+      if spec and spec.loader:
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        if hasattr(mod, "reseed_demo_store"):
+          mod.reseed_demo_store(store)
+    finally:
+      store._seeding_demo = False  # type: ignore[attr-defined]
 
   def _register_routes(self) -> None:
     self.router.add("GET", "/health", self._handle_health)
@@ -146,12 +201,32 @@ class SteeringApp:
       or mimetypes.guess_type(candidate.name)[0]
       or "application/octet-stream"
     )
+    if candidate.name == "index.html":
+      page = candidate.read_text(encoding="utf-8").replace(
+        "<title>Arena Steering</title>",
+        f"<title>{html.escape(self.repo_name)} - Steering</title>",
+      )
+      return page.encode("utf-8"), content_type
     return candidate.read_bytes(), content_type
+
+  def asset_signature_hash(self) -> str:
+    """Return a short hash of current asset file mtimes and sizes."""
+    sig = assets_signature(self.assets_dir)
+    digest = hashlib.sha256(repr(sig).encode("utf-8")).hexdigest()
+    return digest[:12]
 
   def _handle_health(
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
-    return (int(HTTPStatus.OK), {"ok": True, "version": __version__})
+    return (
+      int(HTTPStatus.OK),
+      {
+        "ok": True,
+        "version": __version__,
+        "repo": self.repo_name,
+        "asset_version": self.asset_signature_hash(),
+      },
+    )
 
   def _handle_list_messages(
     self, _params: dict[str, str], query: dict[str, list[str]], _body: Any
@@ -346,10 +421,55 @@ class SteeringApp:
     return payload
 
 
-def create_http_server(
-  app: SteeringApp, host: str = "0.0.0.0", port: int = 8100
-) -> ThreadingHTTPServer:
-  """Create a ThreadingHTTPServer bound to host:port for SteeringApp."""
+def file_signature(
+  paths: Iterable[Path],
+) -> tuple[tuple[str, int | None, int | None], ...]:
+  """Return a tuple of (path, mtime_ns, size) for each target file."""
+  entries: list[tuple[str, int | None, int | None]] = []
+  for target in paths:
+    try:
+      st = target.stat()
+      entries.append((str(target), st.st_mtime_ns, st.st_size))
+    except OSError:
+      entries.append((str(target), None, None))
+  return tuple(entries)
+
+
+def assets_signature(
+  assets_dir: str | Path | None = None,
+) -> tuple[tuple[str, int | None, int | None], ...]:
+  """Return the hot-reload signature for bundled web assets."""
+  base = (
+    Path(assets_dir)
+    if assets_dir is not None
+    else Path(__file__).resolve().parents[2] / "assets"
+  )
+  if not base.is_dir():
+    return ()
+  targets = sorted(
+    p for p in base.iterdir() if p.suffix.lower() in {".html", ".css", ".js", ".mjs"}
+  )
+  return file_signature(targets)
+
+
+def scripts_signature(
+  scripts_dir: str | Path | None = None,
+) -> tuple[tuple[str, int | None, int | None], ...]:
+  """Return the hot-reload signature for Arena Steering Python modules."""
+  base = (
+    Path(scripts_dir) if scripts_dir is not None else Path(__file__).resolve().parent
+  )
+  if not base.is_dir():
+    return ()
+  targets = sorted(base.glob("*.py"))
+  demo_py = base.parent / "demo.py"
+  if demo_py.is_file():
+    targets.append(demo_py)
+  return file_signature(targets)
+
+
+def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
+  """Create a BaseHTTPRequestHandler bound to `app`."""
 
   class SteeringRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
@@ -430,4 +550,74 @@ def create_http_server(
       )
       self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
-  return ThreadingHTTPServer((host, port), SteeringRequestHandler)
+  return SteeringRequestHandler
+
+
+def reload_server_handler(server: ThreadingHTTPServer, app: SteeringApp) -> SteeringApp:
+  """Reload arena_steering modules and swap server.RequestHandlerClass in-process."""
+  pkg = __package__ or "arena_steering"
+  for sub in ("models", "ports", "store", "markdown_fields", "services", "server"):
+    mod_name = f"{pkg}.{sub}"
+    if mod_name in sys.modules:
+      importlib.reload(sys.modules[mod_name])
+  server_mod = sys.modules.get(f"{pkg}.server")
+  store_mod = sys.modules.get(f"{pkg}.store")
+  db_path = getattr(app.store, "db_path", ":memory:")
+  new_store = (
+    store_mod.SqliteStore(db_path)
+    if store_mod is not None and db_path != ":memory:"
+    else app.store
+  )
+  app_cls = getattr(server_mod, "SteeringApp", SteeringApp)
+  handler_fn = getattr(server_mod, "make_request_handler", make_request_handler)
+  new_app = app_cls(
+    new_store,
+    assets_dir=app.assets_dir,
+    repo_name=app.repo_name,
+  )
+  server.RequestHandlerClass = handler_fn(new_app)
+  return new_app
+
+
+def watch_hot_reload(
+  server: ThreadingHTTPServer,
+  app: SteeringApp,
+  stop: threading.Event | None = None,
+  interval: float = 1.0,
+  scripts_dir: str | Path | None = None,
+) -> None:
+  """Watch Python modules and swap server.RequestHandlerClass without closing TCP socket."""
+  baseline = scripts_signature(scripts_dir)
+  current_app = app
+  while stop is None or not stop.is_set():
+    if stop is None:
+      time.sleep(interval)
+    elif stop.wait(interval):
+      return
+    current = scripts_signature(scripts_dir)
+    if current != baseline:
+      baseline = current
+      try:
+        current_app = reload_server_handler(server, current_app)
+      except Exception as exc:
+        print(f"Hot-reload skipped: {exc}", file=sys.stderr, flush=True)
+
+
+def create_http_server(
+  app: SteeringApp,
+  host: str = "0.0.0.0",
+  port: int = 8100,
+  *,
+  hot_reload: bool = True,
+) -> ThreadingHTTPServer:
+  """Create a ThreadingHTTPServer bound to host:port for SteeringApp."""
+  server = ThreadingHTTPServer((host, port), make_request_handler(app))
+  if hot_reload and not os.environ.get("PYTEST_CURRENT_TEST"):
+    stop_event = threading.Event()
+    server._hot_reload_stop = stop_event  # type: ignore[attr-defined]
+    threading.Thread(
+      target=watch_hot_reload,
+      args=(server, app, stop_event),
+      daemon=True,
+    ).start()
+  return server

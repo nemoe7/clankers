@@ -10,12 +10,38 @@ import { createStore } from "./state.js";
 import { renderTasksView } from "./tasks-view.js";
 import { mountRelativeTimers } from "./timestamps.js";
 
-const SUN_SVG = `<svg class="lucide lucide-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>`;
-const MOON_SVG = `<svg class="lucide lucide-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg>`;
+const CHECK_SVG = `<svg class="lucide lucide-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
 
 const store = createStore();
 const modal = createModalManager();
 let cleanupTimers = () => {};
+let knownAssetVersion = null;
+let lastDataSignature = "";
+let lastViewportHeight = 0;
+
+function syncViewportHeight() {
+  const vv = window.visualViewport;
+  const vvScale = vv?.scale > 0 ? vv.scale : 1;
+  const vvHeight = (vv?.height || 0) * vvScale;
+  const innerHeight = window.innerHeight || 0;
+  const docHeight = document.documentElement?.clientHeight || 0;
+  const heights = [vvHeight, innerHeight, docHeight].filter((h) => h > 0);
+  const nextHeight = heights.length ? Math.round(Math.min(...heights)) : 0;
+  if (!nextHeight) return;
+  if (nextHeight !== lastViewportHeight) {
+    lastViewportHeight = nextHeight;
+    document.documentElement.style?.setProperty?.(
+      "--app-height",
+      `${nextHeight}px`
+    );
+  }
+  if (
+    ((vvScale <= 1.01 && vv?.offsetTop) || window.scrollY) &&
+    typeof window.scrollTo === "function"
+  ) {
+    window.scrollTo(0, 0);
+  }
+}
 
 function setLoading(active) {
   const main = document.getElementById("main-root");
@@ -24,33 +50,7 @@ function setLoading(active) {
   }
 }
 
-function showBanner(text) {
-  const banner = document.getElementById("status-banner");
-  if (!banner) return;
-  if (!text) {
-    banner.hidden = true;
-    banner.textContent = "";
-    return;
-  }
-  banner.hidden = false;
-  banner.textContent = text;
-}
-
-function applyTheme(next) {
-  const root = document.documentElement;
-  root.classList.toggle("dark", next === "dark");
-  root.classList.toggle("light", next === "light");
-  root.dataset.theme = next;
-  const btn = document.getElementById("theme-toggle");
-  if (!btn) return;
-  const isLight = next === "light";
-  btn.innerHTML = isLight ? MOON_SVG : SUN_SVG;
-  const label = `Switch to ${isLight ? "dark" : "light"} mode`;
-  btn.setAttribute("aria-label", label);
-  btn.title = label;
-}
-
-async function refreshAll() {
+async function refreshAll(force = false) {
   setLoading(true);
   try {
     const curState = store.getState();
@@ -60,17 +60,46 @@ async function refreshAll() {
       api.listTasks({ full: true }),
       api.listReports({ stale: false }),
     ]);
-    const pill = document.getElementById("version-pill");
-    if (pill && health.version) {
-      pill.textContent = `v${health.version}`;
+    if (health.asset_version) {
+      if (knownAssetVersion && knownAssetVersion !== health.asset_version) {
+        window.location.reload();
+        return;
+      }
+      knownAssetVersion = health.asset_version;
     }
+    if (health.repo) {
+      const expectedTitle = `${health.repo} - Steering`;
+      if (document.title !== expectedTitle) {
+        document.title = expectedTitle;
+      }
+    }
+    const messages = msgRes.messages || [];
+    const tasks = taskRes.tasks || [];
+    const reports = repRes.reports || [];
+    const selectedReportId =
+      curState.selectedReportId &&
+      reports.some((r) => r.id === curState.selectedReportId)
+        ? curState.selectedReportId
+        : reports[0]?.id || null;
+    const nextSignature = JSON.stringify({
+      messages,
+      tasks,
+      reports,
+      selectedReportId,
+      showHidden: Boolean(curState.showHidden),
+    });
+    if (!force && nextSignature === lastDataSignature) {
+      return;
+    }
+    lastDataSignature = nextSignature;
     store.setState({
-      messages: msgRes.messages || [],
-      tasks: taskRes.tasks || [],
-      reports: repRes.reports || [],
+      messages,
+      tasks,
+      reports,
+      selectedReportId,
     });
   } catch (err) {
-    showBanner(err.message || "Failed to load steering data.");
+    console.error(err);
   } finally {
     setLoading(false);
   }
@@ -79,46 +108,18 @@ async function refreshAll() {
 const handlers = {
   async onSendMessage(payload) {
     await api.sendMessage(payload);
-    showBanner("Message queued for agent.");
-    await refreshAll();
+    await refreshAll(true);
   },
   async onSkipPoll() {
     await api.skipPoll();
-    showBanner("Skip-poll stamp recorded.");
   },
   async onToggleHidden() {
     const nextHidden = !store.getState().showHidden;
     store.setState({ showHidden: nextHidden });
-    await refreshAll();
+    await refreshAll(true);
   },
   onSearchChange(query) {
     store.setState({ searchQuery: query });
-  },
-  async onCreateTask(task) {
-    await api.createTask(task);
-    showBanner(`Task ${task.id} created.`);
-    await refreshAll();
-  },
-  onToggleEditTask(taskId) {
-    const cur = store.getState().editingTaskId;
-    store.setState({ editingTaskId: cur === taskId ? null : taskId });
-  },
-  async onPatchTask(taskId, changes) {
-    await api.patchTask(taskId, changes);
-    store.setState({ editingTaskId: null });
-    showBanner(`Task ${taskId} updated.`);
-    await refreshAll();
-  },
-  async onDeleteTask(taskId, trigger) {
-    const decision = await modal.open("confirm-delete", {
-      title: `Delete task ${taskId}?`,
-      slots: { message: `Remove task "${taskId}" from the queue?` },
-      trigger,
-    });
-    if (decision !== "confirm") return;
-    await api.deleteTask(taskId);
-    showBanner(`Task ${taskId} removed.`);
-    await refreshAll();
   },
   onSelectReport(reportId) {
     store.setState({ selectedReportId: reportId });
@@ -131,28 +132,33 @@ const handlers = {
     });
     if (decision !== "confirm") return;
     await api.dismissReport(reportId);
-    showBanner(`Report ${reportId} dismissed.`);
-    await refreshAll();
+    await refreshAll(true);
   },
   async onSubmitReportAnswer(reportId, values) {
     await api.submitReportAnswer(reportId, values);
-    showBanner(`Submitted answers for ${reportId}.`);
-    await refreshAll();
+    await refreshAll(true);
   },
 };
 
 function renderApp(state) {
   cleanupTimers();
 
-  const unreadCount = state.messages.filter((m) => m.status !== "acked").length;
-  const openTasks = state.tasks.filter((t) => t.status !== "finished").length;
-  const openReports = state.reports.filter(
+  const unreadCount = (state.messages || []).filter(
+    (m) => m.status !== "acked"
+  ).length;
+  const openTasks = (state.tasks || []).filter(
+    (t) => t.status !== "finished"
+  ).length;
+  const openReports = (state.reports || []).filter(
     (r) => r.status === "published"
   ).length;
 
-  document.getElementById("badge-inbox").textContent = String(unreadCount);
-  document.getElementById("badge-tasks").textContent = String(openTasks);
-  document.getElementById("badge-reports").textContent = String(openReports);
+  const badgeInbox = document.getElementById("badge-inbox");
+  const badgeTasks = document.getElementById("badge-tasks");
+  const badgeReports = document.getElementById("badge-reports");
+  if (badgeInbox) badgeInbox.textContent = String(unreadCount);
+  if (badgeTasks) badgeTasks.textContent = String(openTasks);
+  if (badgeReports) badgeReports.textContent = String(openReports);
 
   for (const btn of document.querySelectorAll(".tab-btn")) {
     const active = btn.dataset.tab === state.activeTab;
@@ -164,15 +170,15 @@ function renderApp(state) {
   const tasksEl = document.getElementById("view-tasks");
   const reportsEl = document.getElementById("view-reports");
 
-  inboxEl.hidden = state.activeTab !== "inbox";
-  tasksEl.hidden = state.activeTab !== "tasks";
-  reportsEl.hidden = state.activeTab !== "reports";
+  if (inboxEl) inboxEl.hidden = state.activeTab !== "inbox";
+  if (tasksEl) tasksEl.hidden = state.activeTab !== "tasks";
+  if (reportsEl) reportsEl.hidden = state.activeTab !== "reports";
 
-  if (state.activeTab === "inbox") {
+  if (state.activeTab === "inbox" && inboxEl) {
     renderInboxView(inboxEl, state, handlers);
-  } else if (state.activeTab === "tasks") {
+  } else if (state.activeTab === "tasks" && tasksEl) {
     renderTasksView(tasksEl, state, handlers);
-  } else if (state.activeTab === "reports") {
+  } else if (state.activeTab === "reports" && reportsEl) {
     renderReportsView(reportsEl, state, handlers);
   }
 
@@ -180,14 +186,32 @@ function renderApp(state) {
 }
 
 function initEvents() {
-  window.addEventListener("keydown", (event) => {
-    if (event.key === "Tab") {
-      document.documentElement.setAttribute("data-keyboard-nav", "true");
-    }
-  });
-  window.addEventListener("pointerdown", () => {
-    document.documentElement.removeAttribute("data-keyboard-nav");
-  });
+  syncViewportHeight();
+  window.addEventListener("resize", syncViewportHeight);
+  window.visualViewport?.addEventListener("resize", syncViewportHeight);
+  window.visualViewport?.addEventListener("scroll", syncViewportHeight);
+
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        event.key === "Tab" ||
+        event.key.startsWith("Arrow") ||
+        event.key === "Enter" ||
+        event.key === " "
+      ) {
+        document.documentElement.setAttribute("data-keyboard-nav", "true");
+      }
+    },
+    true
+  );
+  window.addEventListener(
+    "pointerdown",
+    () => {
+      document.documentElement.removeAttribute("data-keyboard-nav");
+    },
+    true
+  );
 
   for (const btn of document.querySelectorAll(".tab-btn")) {
     btn.addEventListener("click", () => {
@@ -195,14 +219,45 @@ function initEvents() {
     });
   }
 
-  document.getElementById("theme-toggle")?.addEventListener("click", () => {
-    const next = store.getState().theme === "dark" ? "light" : "dark";
-    applyTheme(next);
-    store.setState({ theme: next });
+  document.addEventListener("click", async (event) => {
+    const copyBtn = event.target.closest?.(".copy-code");
+    if (copyBtn) {
+      const code = (copyBtn.dataset.code || "").replace(/&#10;/g, "\n");
+      const originalHtml = copyBtn.innerHTML;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code).catch(() => {});
+      }
+      copyBtn.dataset.state = "good";
+      copyBtn.innerHTML = CHECK_SVG;
+      setTimeout(() => {
+        if (copyBtn.isConnected) {
+          delete copyBtn.dataset.state;
+          copyBtn.innerHTML = originalHtml;
+        }
+      }, 1400);
+      return;
+    }
+    if (event.target.closest?.(".report-picker-link")) {
+      return;
+    }
+    const noteChip = event.target.closest?.("code.note-id");
+    if (noteChip) {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard
+          .writeText(noteChip.textContent || "")
+          .catch(() => {});
+      }
+      noteChip.dataset.state = "good";
+      setTimeout(() => {
+        if (noteChip.isConnected) {
+          delete noteChip.dataset.state;
+        }
+      }, 1000);
+    }
   });
 }
 
 store.subscribe(renderApp);
 initEvents();
-refreshAll();
-setInterval(refreshAll, 5000);
+refreshAll(true);
+setInterval(() => refreshAll(false), 5000);
