@@ -1,0 +1,213 @@
+"""Tests for Arena Steering HTTP router (`server.py`) and `steer` CLI (`cli.py`)."""
+
+from __future__ import annotations
+
+import io
+from http import HTTPStatus
+from pathlib import Path
+
+from arena_steering import __version__
+from arena_steering.cli import main as cli_main
+from arena_steering.server import SteeringApp
+from arena_steering.store import SqliteStore
+
+MSG_ID_CLI = "a0b1c2"
+ACK_MARKDOWN = "ack-token-verified"
+SECOND_DETAIL_TOKEN = "detail-token-two"
+REPORT_ID_PORT = "port-report"
+TASK_ID_CLI = "cli-task"
+TASK_ID_BASE = "base-task"
+
+
+def _run_cli(state_dir: Path, *args: str) -> tuple[int, str, str]:
+  out = io.StringIO()
+  err = io.StringIO()
+  code = cli_main(["--state-dir", str(state_dir), *args], out=out, err=err)
+  return code, out.getvalue(), err.getvalue()
+
+
+def test_cli_version_flags() -> None:
+  out = io.StringIO()
+  code = cli_main(["--version"], out=out)
+  assert code == 0
+  assert out.getvalue().strip() == f"steer {__version__}"
+
+
+def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "http.sqlite3")
+  app = SteeringApp(store)
+
+  status, created = app.dispatch(
+    "POST",
+    "/messages",
+    {"id": "12ab34", "body": "Ship the router", "hidden": False, "blocking": True},
+  )
+  assert status == int(HTTPStatus.CREATED)
+  assert created["message"]["id"] == "12ab34"
+
+  status, unread = app.dispatch("GET", "/messages")
+  assert status == int(HTTPStatus.OK)
+  assert [item["id"] for item in unread["messages"]] == ["12ab34"]
+
+  status, single = app.dispatch("GET", "/messages/12ab34")
+  assert status == int(HTTPStatus.OK)
+  assert single["message"]["body"] == "Ship the router"
+
+  status, acked = app.dispatch(
+    "POST", "/messages/12ab34/ack", {"markdown": "Router shipped."}
+  )
+  assert status == int(HTTPStatus.OK)
+  assert acked["message"]["status"] == "acked"
+  assert acked["message"]["acks"] == ["Router shipped."]
+
+  status, t_created = app.dispatch(
+    "POST",
+    "/tasks",
+    {"id": "build-router", "title": "Build HTTP router", "type": "code"},
+  )
+  assert status == int(HTTPStatus.CREATED)
+  assert t_created["task"]["id"] == "build-router"
+
+  status, t_patched = app.dispatch(
+    "PATCH",
+    "/tasks/build-router",
+    {"status": "in_progress", "details": ["Registered REST endpoints."]},
+  )
+  assert status == int(HTTPStatus.OK)
+  assert t_patched["task"]["status"] == "in_progress"
+
+  status, r_created = app.dispatch(
+    "POST",
+    "/reports",
+    {
+      "id": "router-spec",
+      "title": "Router Spec",
+      "body": "We should bind to this host\n- (x) 0.0.0.0\n- ( ) 127.0.0.1\n",
+    },
+  )
+  assert status == int(HTTPStatus.CREATED)
+  assert len(r_created["report"]["fields"]) == 1
+
+  status, r_ans = app.dispatch(
+    "POST",
+    "/reports/router-spec/answers",
+    {"id": "cafe01", "values": {"we-should-bind-to-this-host": "0.0.0.0"}},
+  )
+  assert status == int(HTTPStatus.CREATED)
+  assert r_ans["answer"]["id"] == "cafe01"
+
+  status, r_acked = app.dispatch(
+    "POST",
+    "/reports/router-spec/answers/cafe01/ack",
+    {"markdown": "Confirmed 0.0.0.0."},
+  )
+  assert status == int(HTTPStatus.OK)
+  assert r_acked["answer"]["status"] == "acked"
+
+  status, deleted = app.dispatch("DELETE", "/tasks/build-router")
+  assert status == int(HTTPStatus.OK)
+  assert deleted["deleted"] == "build-router"
+  store.close()
+
+
+def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
+  state_dir = tmp_path / "state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  app.dispatch("POST", "/messages", {"id": MSG_ID_CLI, "body": "Add CLI tests"})
+  store.close()
+
+  code, out, _ = _run_cli(state_dir, "read")
+  assert code == 0
+  assert MSG_ID_CLI in out
+
+  code, out, _ = _run_cli(
+    state_dir,
+    "ack",
+    MSG_ID_CLI,
+    ACK_MARKDOWN,
+    "-i",
+    TASK_ID_CLI,
+    "-t",
+    "Build steer CLI",
+    "-T",
+    "code",
+    "-S",
+    "skills/arena-steering/",
+    "-d",
+    "Initial CLI setup.",
+  )
+  assert code == 0
+  assert MSG_ID_CLI in out
+  assert TASK_ID_CLI in out
+
+  code, out, _ = _run_cli(state_dir, "msg", "show", MSG_ID_CLI)
+  assert code == 0
+  assert ACK_MARKDOWN in out
+
+  code, out, _ = _run_cli(state_dir, "task", "new", TASK_ID_BASE, "Base task")
+  assert code == 0
+  assert TASK_ID_BASE in out
+
+  code, out, _ = _run_cli(state_dir, "task", "mod", TASK_ID_CLI, "deps", TASK_ID_BASE)
+  assert code == 0
+  assert TASK_ID_BASE in out
+
+  code, out, _ = _run_cli(state_dir, "tasks")
+  assert code == 0
+  assert out.index(TASK_ID_BASE) < out.index(TASK_ID_CLI)
+
+  code, out, _ = _run_cli(
+    state_dir, "task", "mod", TASK_ID_CLI, "deets", SECOND_DETAIL_TOKEN
+  )
+  assert code == 0
+  assert SECOND_DETAIL_TOKEN in out
+
+  code, out, _ = _run_cli(state_dir, "task", "mod", TASK_ID_CLI, "deets", "rm", "2")
+  assert code == 0
+  assert SECOND_DETAIL_TOKEN not in out
+
+  report_md = tmp_path / "sample.md"
+  report_md.write_text(
+    "# Sample\n\nWe should use this port\n- (x) 8000\n- ( ) 9000\n",
+    encoding="utf-8",
+  )
+  code, out, _ = _run_cli(
+    state_dir,
+    "report",
+    "pub",
+    str(report_md),
+    "-i",
+    REPORT_ID_PORT,
+    "-t",
+    "Port Report",
+  )
+  assert code == 0
+  assert REPORT_ID_PORT in out
+
+  code, out, _ = _run_cli(
+    state_dir, "task", "mod", TASK_ID_CLI, "links", REPORT_ID_PORT
+  )
+  assert code == 0
+  assert REPORT_ID_PORT in out
+
+  code, out, _ = _run_cli(
+    state_dir,
+    "task",
+    "mod",
+    TASK_ID_CLI,
+    "links",
+    "rm",
+    "report",
+    REPORT_ID_PORT,
+  )
+  assert code == 0
+  assert REPORT_ID_PORT not in out
+
+  code, out, _ = _run_cli(state_dir, "report", "rm", REPORT_ID_PORT)
+  assert code == 0
+  assert REPORT_ID_PORT in out
+
+  code, out, _ = _run_cli(state_dir, "task", "rm", TASK_ID_CLI)
+  assert code == 0
+  assert TASK_ID_CLI in out

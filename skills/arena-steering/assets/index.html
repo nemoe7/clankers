@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" class="dark" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arena Steering</title>
+  <link rel="preload" href="/Basel_Grotesk_Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/Basel_Grotesk_Book.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/Basel_Grotesk_Medium.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/Basel_Grotesk_Bold.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/Basel_Grotesk_Mono_Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="modulepreload" href="/timestamps.js">
+  <link rel="modulepreload" href="/markdown.js">
+  <link rel="modulepreload" href="/api.js">
+  <link rel="modulepreload" href="/state.js">
+  <link rel="modulepreload" href="/modal.js">
+  <link rel="modulepreload" href="/inbox-view.js">
+  <link rel="modulepreload" href="/tasks-view.js">
+  <link rel="modulepreload" href="/reports-view.js">
+  <link rel="modulepreload" href="/app.js">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-brand">
+        <span class="ico-svg" aria-hidden="true"><i class="dot live"></i></span>
+        <h1 class="brand-title">Arena Steering</h1>
+        <span class="meta-pill" id="version-pill">v2.0.0</span>
+      </div>
+
+      <nav class="tab-nav" role="tablist" aria-label="Steering sections">
+        <button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-tab="inbox" id="tab-inbox">
+          Messages <span class="tab-badge" id="badge-inbox">0</span>
+        </button>
+        <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tasks" id="tab-tasks">
+          Tasks <span class="tab-badge" id="badge-tasks">0</span>
+        </button>
+        <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="reports" id="tab-reports">
+          Reports <span class="tab-badge" id="badge-reports">0</span>
+        </button>
+      </nav>
+
+      <div class="topbar-actions">
+        <button type="button" class="icon-button" id="theme-toggle" aria-label="Switch to light mode" title="Switch to light mode">
+          <svg class="lucide lucide-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
+
+    <main class="main-content" id="main-root" data-loading="false">
+      <section id="view-inbox" role="tabpanel" aria-labelledby="tab-inbox"></section>
+      <section id="view-tasks" role="tabpanel" aria-labelledby="tab-tasks" hidden></section>
+      <section id="view-reports" role="tabpanel" aria-labelledby="tab-reports" hidden></section>
+    </main>
+  </div>
+
+  <dialog id="modal-shell" class="modal-shell" aria-labelledby="modal-title">
+    <form method="dialog" class="modal-card">
+      <header class="modal-header">
+        <h2 id="modal-title" class="modal-title"></h2>
+        <button class="close-button icon-button" id="modal-close" type="submit" value="cancel" aria-label="Close dialog" title="Close dialog">
+          <svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        </button>
+      </header>
+      <div id="modal-body" class="modal-body"></div>
+      <footer id="modal-actions" class="modal-actions"></footer>
+    </form>
+  </dialog>
+
+  <template data-modal-template="confirm-delete">
+    <p data-slot="message"></p>
+    <div data-slot="actions">
+      <button type="submit" value="cancel" class="btn btn-secondary">Cancel</button>
+      <button type="submit" value="confirm" class="btn btn-danger">Confirm</button>
+    </div>
+  </template>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

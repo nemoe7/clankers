@@ -752,3 +752,35 @@ def test_recent_options_allows_userscript_version_header():
     "'access-control-allow-headers': 'content-type, x-clankers-userscript-version'"
     in src
   )
+
+
+def test_service_worker_attaches_client_url_as_referrer_for_module_subrequests():
+  """Sub-requests whose Referer is a module path (/app.js) use the window client's /?url=."""
+  script = (
+    "const sw = require('./assets/service-worker.js');"
+    "const origin = 'https://proxy.example';"
+    "const viewer = 'https://proxy.example/?url=https%3A%2F%2Fsbx-demo.arena.site%2F';"
+    "const out = {};"
+    "out.moduleImport = sw.shouldAttachClientReferer("
+    "  { url: 'https://proxy.example/api.js', mode: 'cors', referrer: 'https://proxy.example/app.js' },"
+    "  'client-1', origin"
+    ");"
+    "out.alreadyRoot = sw.shouldAttachClientReferer("
+    "  { url: 'https://proxy.example/app.js', mode: 'cors', referrer: viewer },"
+    "  'client-1', origin"
+    ");"
+    "out.navigate = sw.shouldAttachClientReferer("
+    "  { url: viewer, mode: 'navigate', referrer: '' },"
+    "  'client-1', origin"
+    ");"
+    "out.pwaAsset = sw.shouldAttachClientReferer("
+    "  { url: 'https://proxy.example/pwa/recent.js', mode: 'no-cors', referrer: 'https://proxy.example/app.js' },"
+    "  'client-1', origin"
+    ");"
+    "console.log(JSON.stringify(out));"
+  )
+  result = json.loads(node(script))
+  assert result["moduleImport"] is True
+  assert result["alreadyRoot"] is False
+  assert result["navigate"] is False
+  assert result["pwaAsset"] is False
