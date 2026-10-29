@@ -1,12 +1,12 @@
 # Recipe: Loading bar and fixed-slot control loading
 
-Render a subtle `2px` edge loading bar after a `200ms` delay with `aria-busy="true"` on the loading region, compositor-only `transform`/`opacity` motion, and a fixed `16x16 px` indicator slot (`8x8 px` `.dot` or `14x14 px` `.btn-spinner`) centered with the label inside inline controls so switching between idle and loading causes `0 px` width or height shift (`NUA309`, `NUL005`).
+Render a subtle `2px` edge loading bar after a `200ms` delay with `aria-busy="true"` on the loading region, compositor-only `transform`/`opacity` motion, and a fixed `16x16 px` indicator slot (`8x8 px` `.dot` or `14x14 px` `.btn-spinner`) centered with the label inside inline controls so switching between idle and loading causes `0 px` width or height shift (`ACC205`, `ACC204`).
 
 ![Loading Bar Dark-Mode Example](../examples/loading-bar.png)
 
 ## Rules
 
-- Keep a fixed `16x16 px` indicator slot (`8x8 px` `.dot` or `14x14 px` `.btn-spinner`) centered with the label inside controls so switching between idle and loading (`aria-busy="true"`) causes `0 px` width or height shift (`NUA309`, `NUL005`).
+- Keep a fixed `16x16 px` indicator slot (`8x8 px` `.dot` or `14x14 px` `.btn-spinner`) centered with the label inside controls so switching between idle and loading (`aria-busy="true"`) causes `0 px` width or height shift (`ACC205`, `ACC204`).
 - Default to a subtle `2px` edge loading bar anchored along the bottom of the top bar or panel toolbar; use an in-flow loud `<progress>` bar only when requested.
 - Delay visual appearance by `200ms` (`150–300ms`) so fast operations complete without flashing a transient indicator.
 - Set `aria-busy="true"` on the region whose content is being updated (`section`, `article`, or `main`) while loading and reset to `aria-busy="false"` in `finally`; never put `role="progressbar"` on a decorative edge pseudo-element.

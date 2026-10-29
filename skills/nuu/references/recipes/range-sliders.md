@@ -8,7 +8,7 @@ Pair every `<input type="range">` with visible `min` and `max` endpoint labels, 
 
 - Declare explicit `min`, `max`, and `step` attributes on `<input type="range">`. Render at most 11 major-division ticks, keep `step` for value selection, and preserve `min`/`max` endpoint labels (`<datalist>` or `.range-ticks`).
 - Render tabular `min` and `max` endpoint labels and a live `<output for="...">` value bubble that updates on `input` without shifting adjacent controls.
-- Keep the thumb hit target at least `24x24 px` with a `2 px` solid `var(--focus)` outline and `2 px` offset on `:focus-visible` (`NUA307`, `NUA308`).
+- Keep the thumb hit target at least `24x24 px` with a `2 px` solid `var(--focus)` outline and `2 px` offset on `:focus-visible` (`ACC202`, `ACC203`).
 
 ## Markup and styles
 

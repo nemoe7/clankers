@@ -16,41 +16,49 @@
 
 ## Audit Coverage
 
-Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved house-style deviation note for maintainers (without a rule ID) with `nuu-deviation: <reason>`. Agents MUST NEVER add `nuu-deviation:` automatically and ALWAYS require explicit user approval.
+Suppress a rule-ID finding on a line with `nonuu: <ID>` (legacy `NU*` aliases remain supported). Record an approved house-style deviation note for maintainers (without a rule ID) with `nuu-deviation: <reason>`. Agents MUST NEVER add `nuu-deviation:` automatically and ALWAYS require explicit user approval.
 
 | Code | Pass | Condition |
 | --- | --- | --- |
-| `NUI001`–`NUI003` | Icons (`lint`, `audit`) | Missing icon license (`NUI001`), non-ladder icon (`NUI002`), or mixed inline icon sizes (`NUI003`) |
-| `NUL001`–`NUL006` | Source (`lint`) | Missing `alt` (`NUL001`), unnamed control (`NUL002`), `outline: 0` (`NUL003`), missing `design.md` (`NUL004`), hover shift (`NUL005`), raw timestamp (`NUL006`) |
-| `NUL007` | Source (`lint`) | List CSS uses `list-style-position: inside` or omits the `2ch` hanging-indent reset |
-| `NUL008` | Source (`lint`) | Multiple primary buttons or vague Yes/No/Okay labels |
-| `NUB101`–`NUB103` | Browser (`audit`) | Horizontal overflow (`NUB101`), uncaught `pageerror` or `console.error` (`NUB102`), or flow step failure (`NUB103`) |
-| `NUB104` | Browser (`--ready`) | Declared `--ready SELECTOR` did not match a visible element within the timeout |
-| `NUM201`–`NUM203` | Measure (`--measure`) | Off-scale spacing except validated `2ch` list padding under `NUM211` (`NUM201`), off-ramp typography (`NUM202`), or unapproved border radius (`0/4/6/10/9999 px`) (`NUM203`) |
-| `NUM205`–`NUM208` | Density (`audit`) | Low row ink ratio (`NUM205`), sibling gap > 320 px (`NUM206`), short form input (`NUM207`), or unequal button size (`NUM208`) |
-| `NUM209`–`NUM210` | Density (`-C`, `-O`) | Non-scrolling container clips child content (`NUM209`) or sibling boxes overlap (`NUM210`) |
-| `NUM211` | Measure (`--measure`) | List markers sit outside in a `2ch` hanging-indent slot, and wrapped lines align with the first line |
-| `NUM212` | Measure (`--measure`) | Heading (h1-h6) line-height outside 1.1-1.3x font-size or non-heading line-height outside 1.3-1.5x |
-| `NUM213` | Measure (`--measure`) | Heading (h1-h6) letter-spacing outside -0.005em to -0.02em or non-zero letter-spacing on non-headings |
-| `NUM214` | Measure (`--measure`) | Centered prose over 3 lines, justified text, or mismatched heading/body alignment |
-| `NUM215` | Measure (`--measure`) | Multi-line prose or standalone prose container outside 50 to 75ch on desktop |
-| `NUM216` | Measure (`--measure`) | Card or dialog mixes more than 2 font sizes or inverts heading/body hierarchy |
-| `NUM217` | Measure (`--measure`) | Inter-group gap is smaller than 1.5x the adjacent intra-group gap or 0px touching |
-| `NUM218` | Measure (`--measure`) | Ragged card insets, asymmetric inline padding, non-house/italic body fonts, or non-eyebrow uppercase |
-| `NUA301` | Rendered `a11y` | Visible interactive control without an accessible name |
-| `NUA302` | Rendered `a11y` | Broken `aria-labelledby`, `aria-describedby`, `aria-controls`, or `aria-owns` ID target |
-| `NUA303` | Rendered `a11y` | Interactive control nested inside another interactive control |
-| `NUA304` | Rendered `a11y` | Duplicate `id` attribute across elements in the document |
-| `NUA305` | Rendered `a11y` | Heading hierarchy skips one or more heading levels |
-| `NUA306` | Rendered `a11y` | Rendered text contrast below `4.5:1` (`3:1` on large text) |
-| `NUA307` | Rendered `a11y` | Interactive control shows a visible focus outline on pointer focus before keyboard navigation |
-| `NUA308` | Rendered `a11y` | Focus halo or visible tooltip extends outside an overflow-clipping ancestor |
-| `NUA309` | Rendered `a11y` | Interactive control changes dimensions on focus, `aria-busy`, disabled state, or a measured flow action |
-| `NUA310` | Rendered `a11y` | Visible raw ISO or unadjusted UTC or offset timestamp in rendered text |
+| `ICN001`–`ICN002` | Icons (`lint`, `audit`) | Missing icon license (`ICN001`) or non-ladder icon (`ICN002`) |
+| `ICN101` | Icons (`lint`, `audit`) | Mixed inline icon sizes on one surface |
+| `DOC001` | Source (`lint`) | Missing `docs/design.md` or configured `[design].path` |
+| `TYP001` | Measure (`--measure`) | Off-ramp typography (`font-size` or `font-weight`) |
+| `TYP002`–`TYP003` | Measure (`--measure`) | Non-house or italic body font (`TYP002`), or non-eyebrow `text-transform: uppercase` (`TYP003`) |
+| `TYP101` | Measure (`--measure`) | Heading (`h1`–`h6`) `line-height` outside `1.1–1.3x` or non-heading `line-height` outside `1.3–1.5x` |
+| `TYP102` | Measure (`--measure`) | Heading (`h1`–`h6`) `letter-spacing` outside `-0.005em` to `-0.02em` or non-zero `letter-spacing` on non-headings |
+| `TYP103` | Measure (`--measure`) | Centered prose over 3 lines, justified text, or mismatched heading/body alignment |
+| `TYP201` | Measure (`--measure`) | Multi-line prose or standalone prose container outside `50` to `75ch` on desktop |
+| `TYP202` | Source (`lint`) | List CSS uses `list-style-position: inside` or omits the `2ch` hanging-indent reset |
+| `TYP203` | Measure (`--measure`) | List markers sit outside in a `2ch` hanging-indent slot, or wrapped lines fail to align with the first line |
+| `SPC001`–`SPC002` | Measure (`--measure`) | Off-scale spacing except validated `2ch` list padding under `TYP203` (`SPC001`), or unapproved border radius (`0/4/6/10/9999 px`) (`SPC002`) |
+| `SPC101` | Measure (`--measure`) | Inter-group gap is smaller than `1.5x` the adjacent intra-group gap or `0px` touching |
+| `SPC102` | Measure (`--measure`) | Ragged stacked card child insets or asymmetric card inline padding |
+| `SPC201`–`SPC203` | Density (`audit`) | Low row ink ratio (`SPC201`), sibling gap > `320 px` (`SPC202`), or excess container slack / short form input (`SPC203`) |
+| `SPC204`–`SPC205` | Density (`-C`, `-O`) | Non-scrolling container clips child content (`SPC204`) or sibling boxes overlap (`SPC205`) |
+| `SPC206` | Browser (`audit`) | Horizontal viewport overflow |
+| `HRC001` | Source & Measure | Multiple primary buttons or vague `Yes`/`No`/`Okay` labels |
+| `HRC101` | Measure (`--measure`) | Card or dialog mixes more than 2 font sizes or inverts heading/body hierarchy |
+| `HRC102` | Density & Browser | Buttons in the same group have unequal width or height, or asymmetric icon-only button |
+| `HRC201`–`HRC202` | Source & `a11y` | Raw ISO or unadjusted UTC/offset timestamp in source (`HRC201`) or rendered text (`HRC202`) |
+| `ACC001`–`ACC002` | Source (`lint`) | Missing `alt` attribute (`ACC001`) or unnamed interactive control in source (`ACC002`) |
+| `ACC003` | Rendered `a11y` | Visible interactive control without an accessible name |
+| `ACC004` | Rendered `a11y` | Broken `aria-labelledby`, `aria-describedby`, `aria-controls`, or `aria-owns` ID target |
+| `ACC005` | Rendered `a11y` | Interactive control nested inside another interactive control |
+| `ACC006` | Rendered `a11y` | Duplicate `id` attribute across elements in the document |
+| `ACC007` | Rendered `a11y` | Heading hierarchy skips one or more heading levels |
+| `ACC101` | Rendered `a11y` | Rendered text contrast below `4.5:1` (`3:1` on large text) |
+| `ACC201` | Source (`lint`) | CSS suppresses focus outline (`outline: 0` or `outline: none`) |
+| `ACC202` | Rendered `a11y` | Interactive control shows a visible focus outline on pointer focus before keyboard navigation |
+| `ACC203` | Rendered `a11y` | Focus halo or visible tooltip extends outside an overflow-clipping ancestor |
+| `ACC204` | Source (`lint`) | CSS `:hover`, `:focus`, or `:active` rule shifts layout dimensions |
+| `ACC205` | Rendered `a11y` | Interactive control changes dimensions on focus, `aria-busy`, disabled state, or a measured flow action |
+| `RUN001` | Browser (`audit`) | Uncaught `pageerror` or `console.error` during capture |
+| `RUN101`–`RUN102` | Browser (`audit`) | Flow step failure (`RUN101`) or `--ready SELECTOR` timeout (`RUN102`) |
 
-![Measure Rules NUM201-NUM204 Dark-Mode Example](examples/rule-num201-204.png)
+![Measure Rules SPC001-SPC002 and TYP001 Dark-Mode Example](examples/rule-num201-204.png)
 
-![Density Rules NUM205-NUM208 Dark-Mode Example](examples/rule-num205-208.png)
+![Density Rules SPC201-SPC203 and HRC102 Dark-Mode Example](examples/rule-num205-208.png)
 
 ## Recipes (Mandatory in Audits When Applicable)
 
