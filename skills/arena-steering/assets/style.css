@@ -580,6 +580,13 @@ code.note-id[data-state="good"] {
   color: hsl(var(--text-primary));
 }
 
+mark.search-hit {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  color: hsl(var(--text-primary));
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
 .survey-modal-content {
   --survey-success: #45b36b;
   --survey-warning: #e5a93b;

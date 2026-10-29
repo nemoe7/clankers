@@ -42,7 +42,63 @@ export function trackMessageAcks(messages, activeTab) {
   }
 }
 
+function highlightSearchMatches(root, rawQuery) {
+  const query = (rawQuery || "").trim();
+  if (!root || !query) return;
+  const lowerQuery = query.toLowerCase();
+  const qLen = lowerQuery.length;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!parent) return NodeFilter.FILTER_REJECT;
+      if (
+        parent.closest("script, style, svg, .mermaid, mark.search-hit") ||
+        !parent.closest(".message-text, code.note-id")
+      ) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return (node.nodeValue || "").toLowerCase().includes(lowerQuery)
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_SKIP;
+    },
+  });
+  const textNodes = [];
+  let current = walker.nextNode();
+  while (current) {
+    textNodes.push(current);
+    current = walker.nextNode();
+  }
+  for (const textNode of textNodes) {
+    const text = textNode.nodeValue || "";
+    const lower = text.toLowerCase();
+    const frag = document.createDocumentFragment();
+    let cursor = 0;
+    let idx = lower.indexOf(lowerQuery, cursor);
+    while (idx !== -1) {
+      if (idx > cursor) {
+        frag.appendChild(document.createTextNode(text.slice(cursor, idx)));
+      }
+      const mark = document.createElement("mark");
+      mark.className = "search-hit";
+      mark.textContent = text.slice(idx, idx + qLen);
+      frag.appendChild(mark);
+      cursor = idx + qLen;
+      idx = lower.indexOf(lowerQuery, cursor);
+    }
+    if (cursor < text.length) {
+      frag.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+    textNode.parentNode?.replaceChild(frag, textNode);
+  }
+}
+
 export function renderInboxView(container, state, handlers) {
+  const activeEl = document.activeElement;
+  const searchWasFocused =
+    Boolean(activeEl && activeEl.id === "log-search" && container.contains(activeEl));
+  const searchSelStart = searchWasFocused ? activeEl.selectionStart : null;
+  const searchSelEnd = searchWasFocused ? activeEl.selectionEnd : null;
+
   const prevHistory = container.querySelector("#history");
   if (prevHistory) {
     const dist =
@@ -239,6 +295,9 @@ export function renderInboxView(container, state, handlers) {
   }
 
   if (historyEl) {
+    if (query) {
+      highlightSearchMatches(historyEl, state.searchQuery);
+    }
     if (pinnedToBottom || savedScrollTop === null) {
       historyEl.scrollTop = historyEl.scrollHeight;
     } else {
@@ -246,6 +305,19 @@ export function renderInboxView(container, state, handlers) {
     }
     syncScrollControls();
     historyEl.addEventListener("scroll", syncScrollControls, { passive: true });
+  }
+
+  const searchInput = container.querySelector("#log-search");
+  if (searchWasFocused && searchInput) {
+    searchInput.focus();
+    const len = searchInput.value.length;
+    const start = searchSelStart ?? len;
+    const end = searchSelEnd ?? len;
+    try {
+      searchInput.setSelectionRange(start, end);
+    } catch {
+      // Ignore if input type does not support selection range.
+    }
   }
 
   logNewestBtn?.addEventListener("click", () => {
@@ -281,7 +353,6 @@ export function renderInboxView(container, state, handlers) {
     handlers.onOpenSurvey?.(ev.currentTarget);
   });
 
-  const searchInput = container.querySelector("#log-search");
   searchInput?.addEventListener("input", () => {
     handlers.onSearchChange?.(searchInput.value);
   });
