@@ -121,7 +121,7 @@ async function metrics(page, selector) {
   return page.evaluate(selector => {
     const properties = ['height', 'width', 'max-width', 'padding-top', 'padding-right', 'padding-bottom',
       'padding-left', 'padding-inline-start', 'margin-top', 'margin-bottom', 'gap', 'font-size', 'font-weight',
-      'font-family', 'line-height', 'letter-spacing', 'text-align', 'text-transform', 'border-radius', 'color', 'background-color', 'outline-style',
+      'font-family', 'font-style', 'line-height', 'letter-spacing', 'text-align', 'text-transform', 'border-radius', 'color', 'background-color', 'outline-style',
       'outline-width', 'transition-duration', 'animation-duration', '--indent',
       'list-style-position', 'list-style-type', 'overflow', 'overflow-x', 'overflow-y',
       'text-overflow', 'white-space'];
@@ -168,7 +168,90 @@ async function metrics(page, selector) {
       }
       return [...sizes];
     }
+    function headingBodyAlignFor(element, style) {
+      if (!/^H[1-6]$/.test(element.tagName) || !element.parentElement) return undefined;
+      const norm = v => {
+        const s = (v || '').trim().toLowerCase();
+        if (s === 'left' || s === 'start') return 'start';
+        if (s === 'right' || s === 'end') return 'end';
+        return s;
+      };
+      const hAlign = norm(style.getPropertyValue('text-align'));
+      const sib = [...element.parentElement.children].find(
+        c => c !== element && c.tagName === 'P' && getComputedStyle(c).display !== 'none'
+      );
+      if (!sib) return undefined;
+      const bAlign = norm(getComputedStyle(sib).getPropertyValue('text-align'));
+      if (hAlign && bAlign && hAlign !== bAlign) {
+        return {heading_align: hAlign, body_align: bAlign};
+      }
+      return undefined;
+    }
+    function headingHierarchyFor(element) {
+      const role = (element.getAttribute('role') || '').toLowerCase();
+      const isCardOrDialog = element.tagName === 'DIALOG' ||
+        role === 'dialog' || role === 'alertdialog' ||
+        Boolean(element.classList?.contains('card'));
+      if (!isCardOrDialog) return undefined;
+      const heading = [...element.querySelectorAll('h1, h2, h3, h4, h5, h6')].find(
+        h => h.closest('.card, dialog, [role="dialog"], [role="alertdialog"]') === element
+      );
+      const body = [...element.querySelectorAll('p')].find(
+        p => p.closest('.card, dialog, [role="dialog"], [role="alertdialog"]') === element
+      );
+      if (!heading || !body) return undefined;
+      const hCs = getComputedStyle(heading), bCs = getComputedStyle(body);
+      const hSize = Number.parseFloat(hCs.getPropertyValue('font-size'));
+      const bSize = Number.parseFloat(bCs.getPropertyValue('font-size'));
+      const hWeight = Number.parseFloat(hCs.getPropertyValue('font-weight')) || 400;
+      const bWeight = Number.parseFloat(bCs.getPropertyValue('font-weight')) || 400;
+      if (!Number.isFinite(hSize) || !Number.isFinite(bSize)) return undefined;
+      if (hSize < bSize - 0.1 || (Math.abs(hSize - bSize) <= 0.1 && hWeight <= bWeight)) {
+        return {heading_size: hSize, heading_weight: hWeight, sub_size: bSize, sub_weight: bWeight};
+      }
+      return undefined;
+    }
+    function buttonFillColorsFor(element) {
+      const role = (element.getAttribute('role') || '').toLowerCase();
+      const classAndId = `${element.id || ''} ${typeof element.className === 'string' ? element.className : ''}`;
+      const isContainer = element.tagName === 'DIALOG' ||
+        role === 'dialog' || role === 'alertdialog' ||
+        Boolean(element.classList?.contains('card')) ||
+        /(?:^|[-_\s])(btn-group|button-group|modal-actions)(?:$|[-_\s])/i.test(classAndId);
+      if (!isContainer) return undefined;
+      const fills = new Set();
+      for (const btn of element.querySelectorAll('button, [role="button"]')) {
+        const bg = getComputedStyle(btn).getPropertyValue('background-color').trim();
+        const m = bg.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
+        if (!m) continue;
+        const r = Number(m[1]), g = Number(m[2]), b = Number(m[3]);
+        const a = m[4] === undefined ? 1 : Number(m[4]);
+        if (a > 0.1 && Math.max(r, g, b) - Math.min(r, g, b) > 30) {
+          fills.add(`rgb(${r}, ${g}, ${b})`);
+        }
+      }
+      return fills.size >= 2 ? [...fills] : undefined;
+    }
     function groupProximityFor(element, style) {
+      const role = (element.getAttribute('role') || '').toLowerCase();
+      const isCardOrDialog = element.tagName === 'DIALOG' ||
+        role === 'dialog' || role === 'alertdialog' ||
+        Boolean(element.classList?.contains('card'));
+      if (isCardOrDialog) {
+        const heading = [...element.children].find(c => /^H[1-6]$/.test(c.tagName));
+        const body = [...element.children].find(c => c.tagName === 'P');
+        const action = [...element.children].find(c =>
+          c.tagName === 'BUTTON' || /(?:^|[-_\s])(btn-group|button-group|modal-actions)(?:$|[-_\s])/i.test(c.className || '')
+        );
+        if (heading && body && action) {
+          const hRect = heading.getBoundingClientRect();
+          const bRect = body.getBoundingClientRect();
+          const aRect = action.getBoundingClientRect();
+          const intra = Math.max(0, Number((bRect.top - hRect.bottom).toFixed(2)));
+          const inter = Math.max(0, Number((aRect.top - bRect.bottom).toFixed(2)));
+          if (intra > 0 || inter === 0) return {inter_px: inter, intra_px: intra};
+        }
+      }
       const inter = Number.parseFloat(style.getPropertyValue('gap')) ||
         Number.parseFloat(style.getPropertyValue('row-gap')) ||
         Number.parseFloat(style.getPropertyValue('column-gap'));
@@ -375,6 +458,9 @@ async function metrics(page, selector) {
         ch_px: chPxFor(style),
         in_card_or_dialog: Boolean(element.closest && element.closest('.card, dialog, [role="dialog"], [role="alertdialog"], aside, nav, table')),
         card_font_sizes: cardFontSizesFor(element),
+        heading_body_alignment: headingBodyAlignFor(element, style),
+        heading_hierarchy: headingHierarchyFor(element),
+        button_fill_colors: buttonFillColorsFor(element),
         group_proximity: groupProximityFor(element, style),
         card_inline_insets: cardInlineInsetsFor(element),
         values: Object.fromEntries(properties.map(name => [name, style.getPropertyValue(name)])),

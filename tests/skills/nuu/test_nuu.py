@@ -1898,11 +1898,17 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
           "line_count": 3,
           "values": {"text-align": "justify"},
         },
+        {
+          "selector": "h2.card-title",
+          "tag": "h2",
+          "heading_body_alignment": {"heading_align": "center", "body_align": "start"},
+          "values": {"text-align": "center"},
+        },
       ],
     },
     tokens,
   )
-  assert len([f for f in align_bad if f.startswith("NUM214 ")]) == 2
+  assert len([f for f in align_bad if f.startswith("NUM214 ")]) == 3
   width_ok = measure.check(
     {
       "width": 1280,
@@ -1958,7 +1964,13 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
         {
           "selector": "section.card",
           "tag": "section",
-          "card_font_sizes": ["16px", "14px", "12px"],
+          "card_font_sizes": ["18px", "14px"],
+          "heading_hierarchy": {
+            "heading_size": 18.0,
+            "heading_weight": 600.0,
+            "sub_size": 14.0,
+            "sub_weight": 400.0,
+          },
           "values": {},
         }
       ],
@@ -1973,14 +1985,25 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
         {
           "selector": "dialog#settings",
           "tag": "dialog",
-          "card_font_sizes": ["20px", "16px", "14px", "12px"],
+          "card_font_sizes": ["18px", "16px", "14px"],
           "values": {},
-        }
+        },
+        {
+          "selector": "section.card-flat",
+          "tag": "section",
+          "heading_hierarchy": {
+            "heading_size": 14.0,
+            "heading_weight": 400.0,
+            "sub_size": 14.0,
+            "sub_weight": 400.0,
+          },
+          "values": {},
+        },
       ],
     },
     tokens,
   )
-  assert len([f for f in hier_bad if f.startswith("NUM216 ")]) == 1
+  assert len([f for f in hier_bad if f.startswith("NUM216 ")]) == 2
   prox_ok = measure.check(
     {
       "width": 1280,
@@ -2005,12 +2028,18 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
           "tag": "form",
           "group_proximity": {"inter_px": 8.0, "intra_px": 8.0},
           "values": {"gap": "8px"},
-        }
+        },
+        {
+          "selector": "section.card",
+          "tag": "section",
+          "group_proximity": {"inter_px": 0.0, "intra_px": 8.0},
+          "values": {},
+        },
       ],
     },
     tokens,
   )
-  assert len([f for f in prox_bad if f.startswith("NUM217 ")]) == 1
+  assert len([f for f in prox_bad if f.startswith("NUM217 ")]) == 2
   core_ok = measure.check(
     {
       "width": 1280,
@@ -2019,7 +2048,12 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
           "selector": "section.card",
           "tag": "section",
           "card_inline_insets": [16.0, 16.0, 16.0],
-          "values": {"font-family": "system-ui, sans-serif", "text-transform": "none"},
+          "values": {
+            "font-family": "system-ui, sans-serif",
+            "text-transform": "none",
+            "padding-left": "16px",
+            "padding-right": "16px",
+          },
         },
         {
           "selector": "span.eyebrow",
@@ -2039,13 +2073,25 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
           "selector": "section.card",
           "tag": "section",
           "card_inline_insets": [16.0, 28.0],
-          "values": {"font-family": "Papyrus, fantasy", "text-transform": "uppercase"},
-        }
+          "button_fill_colors": ["rgb(43, 83, 214)", "rgb(28, 122, 63)"],
+          "values": {
+            "font-family": "Papyrus, fantasy",
+            "text-transform": "uppercase",
+            "padding-left": "32px",
+            "padding-right": "16px",
+          },
+        },
+        {
+          "selector": "p.body",
+          "tag": "p",
+          "values": {"font-style": "italic"},
+        },
       ],
     },
     tokens,
   )
-  assert len([f for f in core_bad if f.startswith("NUM218 ")]) == 3
+  assert len([f for f in core_bad if f.startswith("NUM218 ")]) == 5
+  assert len([f for f in core_bad if f.startswith("NUL008 ")]) == 1
 
   lint_proj = tmp_path / "nul008_proj"
   (lint_proj / "docs").mkdir(parents=True)

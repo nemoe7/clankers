@@ -11,6 +11,7 @@ This log has no Unreleased section.
 ### Added
 
 - **Equal-size button groups (`NUM208`, `SKILL.md` Clause 6, `measure.py`, `examples.md`)**: Require buttons in the same group to share identical width and height (`examples/button-group-equal-size.png`).
+- **UI/UX guideline checks (`SKILL.md`, `style.css`, `measure.py`, `browser.cjs`)**: Add `--size-32` (`32px`) and check alignment, card hierarchy, proximity, padding, italic body, and button fills.
 
 ### Changed
 
