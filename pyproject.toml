@@ -14,6 +14,7 @@ pythonpath = [
   "maintenance/pr",
   "maintenance/publish",
   "maintenance/workflows",
+  "skills/arena-steering/scripts",
   "skills/nemoizer/scripts",
   "skills/nuu/scripts",
   "skills/refs/arena-skill/scripts",
@@ -42,7 +43,12 @@ extend-safe-fixes = ["C408", "PERF102", "RUF059"]
 max-line-length = 120
 
 [tool.nemoizer]
-extend-exclude = ["skills/**", "rules/**", "**/*.min.js"]
+extend-exclude = [
+  "skills/**/*.md",
+  "!skills/**/README.md",
+  "rules/**",
+  "**/*.min.js",
+]
 
 [[tool.nemoizer.files]]
 paths = ["docs/CHANGELOG.md", "docs/**/CHANGELOG.md"]

@@ -2038,3 +2038,18 @@ def test_a_file_header_reads_lines_one_to_three_only(tmp_path):
     nemoize.header_config("# nemoizer: paragraph-cap=9\n")
   with pytest.raises(ValueError):
     nemoize.header_config("# nemoizer: select=STE100\n")
+
+
+def test_extend_exclude_supports_globstar_and_negation(tmp_path, monkeypatch):
+  monkeypatch.setitem(
+    nemoize.ACTIVE_CONFIG,
+    "extend_exclude",
+    ("skills/**/*.md", "!skills/**/README.md", "rules/**"),
+  )
+  assert nemoize.skipped(tmp_path / "skills" / "demo" / "SKILL.md", tmp_path, ())
+  assert not nemoize.skipped(tmp_path / "skills" / "README.md", tmp_path, ())
+  assert not nemoize.skipped(tmp_path / "skills" / "demo" / "README.md", tmp_path, ())
+  assert not nemoize.skipped(
+    tmp_path / "skills" / "demo" / "scripts" / "tool.py", tmp_path, ()
+  )
+  assert nemoize.skipped(tmp_path / "rules" / "CORE.md", tmp_path, ())
