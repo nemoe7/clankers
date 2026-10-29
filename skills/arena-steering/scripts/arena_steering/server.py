@@ -503,6 +503,7 @@ class SteeringApp:
     new_status = str(body.get("status", "")).strip()
     if new_status == "dismissed":
       self.reports.remove_report(report.id)
+      _REPORT_RENDER_CACHE.pop(report.id, None)
       report = self.reports.get_report(report.id)
     return (int(HTTPStatus.OK), {"report": self._serialize_report(report)})
 
@@ -510,6 +511,7 @@ class SteeringApp:
     self, params: dict[str, str], _query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
     removed = self.reports.remove_report(params["id"])
+    _REPORT_RENDER_CACHE.pop(params["id"], None)
     return (int(HTTPStatus.OK), {"dismissed": removed})
 
   def _handle_mark_report_seen(
@@ -555,8 +557,14 @@ class SteeringApp:
         render_markdown(ans["ack"], breaks=True) if ans.get("ack") else ""
       )
       ans["acks_html"] = [render_markdown(a, breaks=True) for a in ans.get("acks", [])]
+    if getattr(report, "status", "") == "dismissed":
+      _REPORT_RENDER_CACHE.pop(report.id, None)
     if not include_body:
       payload.pop("body", None)
+      return payload
+    cached = _REPORT_RENDER_CACHE.get(report.id)
+    if cached is not None and cached[0] == report.body:
+      payload["blocks"] = cached[1]
       return payload
     blocks, _ = parse_report_markdown(report.body)
     serialized_blocks: list[dict[str, Any]] = []
@@ -574,8 +582,13 @@ class SteeringApp:
         )
       else:
         serialized_blocks.append({"type": "field", "field": val.to_dict()})
+    if getattr(report, "status", "") != "dismissed":
+      _REPORT_RENDER_CACHE[report.id] = (report.body, serialized_blocks)
     payload["blocks"] = serialized_blocks
     return payload
+
+
+_REPORT_RENDER_CACHE: dict[str, tuple[str, list[dict[str, Any]]]] = {}
 
 
 def file_signature(
