@@ -71,6 +71,7 @@ Read these first:
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
 2. `ruff check .` and `ruff format --diff .` at the version `pyproject.toml` pins.
 3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements. It gates the root copy: `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute.yml` pushes to the target repositories.
+4. Run only the tests and validators that cover the changed files instead of a repository-wide validation.
 
 ## Rules
 
