@@ -105,10 +105,20 @@ function renderCodeFence(lang, codeLines) {
   const langKey = String(lang || "").trim().toLowerCase();
   const langLabel = escapeHtml(formatCodeLang(langKey));
   const langClass = langKey ? ` class="language-${escapeHtml(langKey)}"` : "";
+  const prismGrammar =
+    langKey &&
+    langKey !== "mermaid" &&
+    langKey !== "diff" &&
+    langKey !== "patch"
+      ? globalThis.Prism?.languages?.[langKey]
+      : null;
   const innerHtml =
     langKey === "diff" || langKey === "patch"
       ? highlightDiffLines(codeLines)
-      : escapedCode;
+      : prismGrammar && typeof globalThis.Prism?.highlight === "function"
+        ? globalThis.Prism.highlight(rawCode, prismGrammar, langKey)
+        : escapedCode;
+  const highlightedAttr = prismGrammar ? ` data-highlighted="true"` : "";
   const mermaidBtn =
     langKey === "mermaid"
       ? `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${dataCode}">${BRACES_SVG}</button>`
@@ -122,9 +132,29 @@ function renderCodeFence(lang, codeLines) {
       <div class="code-block-header">
         <span class="code-block-lang">${BRACES_SVG}<span>${langLabel}</span></span>
       </div>
-      <pre><code${langClass}>${innerHtml}</code></pre>
+      <pre><code${langClass}${highlightedAttr}>${innerHtml}</code></pre>
     </div>
   `;
+}
+
+export function highlightCodeBlocks(rootEl = document) {
+  if (!rootEl?.querySelectorAll) return;
+  const prism = globalThis.Prism;
+  if (!prism?.languages || typeof prism.highlight !== "function") return;
+  const codeNodes = rootEl.querySelectorAll(".code-block > pre > code[class*='language-']");
+  for (const codeEl of codeNodes) {
+    if (codeEl.dataset.highlighted === "true") continue;
+    const match = (codeEl.className || "").match(/\blanguage-([\w+-]+)/);
+    const langKey = match ? match[1].toLowerCase() : "";
+    if (!langKey || langKey === "mermaid" || langKey === "diff" || langKey === "patch") {
+      continue;
+    }
+    const grammar = prism.languages[langKey];
+    if (!grammar) continue;
+    const rawCode = codeEl.textContent || "";
+    codeEl.innerHTML = prism.highlight(rawCode, grammar, langKey);
+    codeEl.dataset.highlighted = "true";
+  }
 }
 
 export function sanitizeMermaidSvg(svgText) {

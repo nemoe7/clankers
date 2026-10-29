@@ -4,6 +4,7 @@ import { api, connectWebSocket } from "./api.js";
 import { renderInboxView, trackMessageAcks } from "./inbox-view.js";
 import {
   escapeHtml,
+  highlightCodeBlocks,
   hydrateMermaidBlocks,
   toggleCodeMermaid,
 } from "./markdown.js";
@@ -425,11 +426,13 @@ function renderApp(state) {
 
   if (state.activeTab === "inbox" && inboxEl) {
     renderInboxView(inboxEl, state, handlers);
+    highlightCodeBlocks(inboxEl);
     hydrateMermaidBlocks(inboxEl);
   } else if (state.activeTab === "tasks" && tasksEl) {
     renderTasksView(tasksEl, state, handlers);
   } else if (state.activeTab === "reports" && reportsEl) {
     renderReportsView(reportsEl, state, handlers);
+    highlightCodeBlocks(reportsEl);
     hydrateMermaidBlocks(reportsEl);
   }
 
