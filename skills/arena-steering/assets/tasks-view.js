@@ -5,13 +5,14 @@
 import { escapeHtml } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 
-const LOCK_SVG = `<svg class="lucide lucide-lock" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
 const CHEVRON_DOWN_SVG = `<svg class="lucide lucide-chevron-down select-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"></path></svg>`;
 
 const TASK_TYPES = ["report", "code", "docs", "ops", "misc"];
+const FINISHED_TASK_PAGE_SIZE = 10;
 
 let taskSearchQuery = "";
 let taskTypeFilter = "all";
+let visibleFinishedCount = FINISHED_TASK_PAGE_SIZE;
 const openTaskDetails = new Set();
 
 function formatTypeBadge(type) {
@@ -31,15 +32,11 @@ function taskDetailLines(task) {
   const links = task.links || {};
   const taskIds = links.task_ids || task.task_ids || task.deps || [];
   const reportIds = links.report_ids || task.report_ids || [];
-  const msgIds = links.msg_ids || task.msg_ids || [];
   for (const dep of taskIds) {
-    lines.push(`Depends on: ${dep}`);
+    lines.push(`Needs: ${dep}`);
   }
   for (const rep of reportIds) {
-    lines.push(`Waiting on report: ${rep}`);
-  }
-  for (const mid of msgIds) {
-    lines.push(`Linked message: ${mid}`);
+    lines.push(`Report: ${rep}`);
   }
   for (const d of task.details || []) {
     lines.push(d);
@@ -75,10 +72,6 @@ function renderTaskRow(task) {
         details.some((d) => d.toLowerCase().includes(taskSearchQuery))
     );
 
-  const blockedBadge = task.blocked
-    ? `<span class="task-blocked-badge" title="Blocked by unanswered report or unfinished dependency">${LOCK_SVG} blocked</span>`
-    : "";
-
   const detailsHtml = count
     ? `
       <details class="task-details" data-task-id="${escapeHtml(task.id)}" ${isOpen ? "open" : ""}>
@@ -94,13 +87,13 @@ function renderTaskRow(task) {
     <li class="task" data-task-id="${escapeHtml(task.id)}" title="Task ${escapeHtml(task.id)}">
       <span class="task-title" data-blocked="${task.blocked ? "true" : "false"}">${escapeHtml(task.title)}</span>
       ${formatTypeBadge(task.type)}
-      ${blockedBadge}
       ${detailsHtml}
     </li>
   `;
 }
 
 export function renderTasksView(container, state) {
+  const prevScrollTop = container.scrollTop || 0;
   const allTasks = state.tasks || [];
 
   const activeTasks = allTasks.filter((t) => t.status !== "finished");
@@ -126,7 +119,15 @@ export function renderTasksView(container, state) {
   const upcomingTasks = activeTasks
     .filter((t) => !currentSet.has(t.id))
     .filter(taskMatchesFilter);
-  const shownFinished = finishedTasks.filter(taskMatchesFilter);
+  const filteredFinished = finishedTasks.filter(taskMatchesFilter);
+  const hasMoreFinished =
+    !taskSearchQuery &&
+    taskTypeFilter === "all" &&
+    filteredFinished.length > visibleFinishedCount;
+  const shownFinished =
+    taskSearchQuery || taskTypeFilter !== "all"
+      ? filteredFinished
+      : filteredFinished.slice(0, visibleFinishedCount);
 
   const latestModified = allTasks.reduce(
     (acc, t) => (t.modified_at && t.modified_at > acc ? t.modified_at : acc),
@@ -212,4 +213,16 @@ export function renderTasksView(container, state) {
       }
     });
   }
+
+  container.scrollTop = prevScrollTop;
+  container.onscroll = () => {
+    if (!hasMoreFinished) return;
+    if (
+      container.scrollTop + container.clientHeight >=
+      container.scrollHeight - 64
+    ) {
+      visibleFinishedCount += FINISHED_TASK_PAGE_SIZE;
+      renderTasksView(container, state);
+    }
+  };
 }

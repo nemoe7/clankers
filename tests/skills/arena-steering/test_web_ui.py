@@ -138,7 +138,9 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert MANUAL_HIDDEN_INPUT not in inbox_js
 
   tasks_js = (ASSETS_DIR / "tasks-view.js").read_text(encoding="utf-8")
-  assert LUCIDE_LOCK_ICON in tasks_js
+  assert LUCIDE_LOCK_ICON not in tasks_js
+  assert "Report: " in tasks_js
+  assert "Needs: " in tasks_js
   assert LUCIDE_CHEVRON_DOWN_ICON in tasks_js
   assert SELECT_CHEVRON_CLASS in tasks_js
 
