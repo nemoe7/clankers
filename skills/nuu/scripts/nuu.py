@@ -1439,10 +1439,12 @@ def main(argv=None):
       command.add_argument("-C", "--columns", type=int)
       command.add_argument("-W", "--wireframe", action="store_true")
     if name == "search":
-      command.add_argument("query")
-      command.add_argument("-d", "--dataset")
+      command.add_argument("query", nargs="?")
+      command.add_argument("-d", "--dataset", "--destination", dest="dataset")
       command.add_argument("-s", "--stack")
       command.add_argument("-l", "--limit", type=int, default=10)
+      command.add_argument("-f", "--fetch")
+      command.add_argument("-A", "--authorize-fetch", action="store_true")
     if name == "doctor":
       command.add_argument("-m", "--manifest", type=Path)
       command.add_argument("-c", "--config", type=Path)
@@ -1459,6 +1461,7 @@ def main(argv=None):
       command.add_argument("-A", "--authorize-fetch", action="store_true")
     if name in {"inspect", "flow", "audit", "collect", "a11y", "live"}:
       command.add_argument("-u", "--url", required=name not in {"audit", "collect"})
+      command.add_argument("-M", "--measured", type=Path)
       command.add_argument("-d", "--artifacts", default="ui-evidence")
       command.add_argument("-w", "--widths", nargs="*", type=int, default=[])
       command.add_argument(
@@ -1484,9 +1487,16 @@ def main(argv=None):
     parser.error("project directory does not exist")
   try:
     if args.command == "search":
-      if not 0 < args.limit <= 100:
-        raise ValueError("limit must be from 1 through 100")
-      result = search(args.query, args.dataset, args.stack, args.limit)
+      if args.fetch:
+        if not args.dataset:
+          raise ValueError("fetch requires --destination (-d)")
+        result = fetch_asset(root, args.fetch, args.dataset, args.authorize_fetch)
+      elif args.query:
+        if not 0 < args.limit <= 100:
+          raise ValueError("limit must be from 1 through 100")
+        result = search(args.query, args.dataset, args.stack, args.limit)
+      else:
+        raise ValueError("search requires a query or --fetch")
     elif args.command == "assets":
       if args.fetch:
         if not args.destination:
@@ -1572,6 +1582,38 @@ def main(argv=None):
         if args.url
         else {"status": "not_checked", "reason": "url_missing"}
       )
+      if getattr(args, "measured", None):
+        measured_data = load(args.measured)
+        sheet = parse_sheet((HOME / "references/style.css").read_text(encoding="utf-8"))
+        house_m = check_measurements(measured_data, sheet)
+        density_m = check_density(measured_data)
+        measured_findings = [
+          {
+            "rule": (
+              item.split()[0]
+              if re.match(r"^NUM2\d\d\b", item)
+              else "NUM202"
+              if ": font-size is " in item
+              else "NUM203"
+              if ": border-radius" in item
+              else "NUM201"
+            ),
+            "severity": "review",
+            "evidence": item,
+          }
+          for item in house_m
+        ] + [
+          {
+            "rule": row["rule"],
+            "severity": "review",
+            "selector": row["selector"],
+            "evidence": row["evidence"],
+          }
+          for row in density_m
+        ]
+        rendered_res.setdefault("findings", []).extend(measured_findings)
+        if not args.url:
+          rendered_res["status"] = "findings" if measured_findings else "checked"
       for finding in rendered_res.get("findings", []):
         if isinstance(finding, dict):
           enrich_finding_rule(finding)

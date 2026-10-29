@@ -14,6 +14,7 @@ This log has no Unreleased section.
 
 ### Changed
 
+- **CLI consolidation (`nuu.py`, `references/nuu.md`)**: Consolidate `nuu` into 7 subcommands (`lint`, `audit`, `walk`, `board`, `annotate`, `search`, `doctor`) and fold static checks into `lint`.
 - **Audit report workflow (`SKILL.md` step 5, `audit-report.md`)**: Use `## Findings` and `## Visual Judgements` headings and pair open findings with cropped 2-column `nuu board` panels.
 - **Recipes**: Schedule relative timestamps at unit boundaries (`relative-timestamps.md`).
 - **Recipes**: Add `--scrollbar-carve` and `28px`/`36px` fade ramp (`scroll-edge-fade.md`).

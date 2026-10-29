@@ -6,17 +6,13 @@
 
 | Subcommand | Purpose | Arguments and Shorthands |
 | --- | --- | --- |
-| `search` | Search vendored design catalogs | `<query>`, `-p, --project <path>`, `-o, --output <path>`, `-d, --dataset <name>`, `-s, --stack <name>`, `-l, --limit <n>` |
-| `assets` | Verify or fetch licensed assets | `-p, --project <path>`, `-o, --output <path>`, `-m, --manifest <path>`, `-f, --fetch <id>`, `-d, --destination <rel>`, `-A, --authorize-fetch` |
-| `lint`, `extract` | Run static source checks or extract candidate tokens | `-p, --project <path>`, `-o, --output <path>` |
+| `search` | Search vendored design catalogs or fetch an authorized external asset | `<query>`, `-p, --project <path>`, `-o, --output <path>`, `-d, --dataset <name>`, `-s, --stack <name>`, `-l, --limit <n>`, `-f, --fetch <url>`, `-A, --authorize-fetch` |
+| `lint` | Run static source, icon, ruler, and manifest checks and extract candidate tokens | `-p, --project <path>`, `-o, --output <path>`, `-m, --manifest <path>`, `-f, --from <x,y>`, `-t, --to <x,y>`, `-s, --sheet <path>`, `-k, --scale <px>` |
 | `doctor` | Check browser engine, manifest, and `nuu.toml` | `-p, --project <path>`, `-o, --output <path>`, `-m, --manifest <path>`, `-c, --config <path>` |
-| `check` | Check computed-style measure JSON against the sheet | `<report>`, `-s, --sheet <path>`, `-k, --scale <px>`, `-d, --density` |
-| `density` | Check row/card ink ratio (`NUM205`), sibling gaps (`NUM206`), form inputs that leave row space unused (`NUM207`), and symmetric icon buttons (`NUM208`) | `<report>` |
-| `ruler` | Measure pixel distance between two `x,y` guides | `-f, --from <x,y>`, `-t, --to <x,y>`, `-s, --sheet <path>`, `-k, --scale <px>` |
 | `annotate` | Render boxes, arrows, labels, callouts, and crops (`--crop`) in dark mode by default | `-i, --input <png>`, `-o, --output <png>`, `-p, --project <path>`, `-b, --box <spec>`, `-l, --label <spec>`, `-a, --arrow <spec>`, `-c, --callout <spec>`, `-C, --crop <x,y,w,h>`, `-s, --spec <json>`, `-S, --scale <1-6>` |
 | `board` | Render multi-panel or HTML design comparison boards in dark mode by default | `-o, --output <png>`, `--project <path>`, `-T, --type <panels\|design>`, `-O, --only <name>`, `-t, --title <text>`, `-p, --panel <spec>`, `-c, --callout <spec>`, `-s, --spec <json>`, `-S, --scale <1-6>`, `-C, --columns <n>`, `-W, --wireframe` |
 | `walk` | Run deterministic dark-mode browser walk steps or capture named view PNGs for `nuu board` | `[target]`, `-s, --script <py>`, `-V, --views`, `-o, --out <dir>` |
-| `inspect`, `flow`, `a11y`, `live`, `audit`, `collect` | Run source, measure, flow, deviation (`--deviations`), and rendered a11y checks | `-p, --project <path>`, `-o, --output <path>`, `-u, --url <url>`, `-d, --artifacts <dir>`, `-w, --widths <px...>`, `-s, --selector <css>`, `-r, --ready <selector>`, `-a, --a11y`, `-e, --engine <name>`, `-x, --executable <path>`, `-t, --timeout <s>`, `-f, --flow <json>`, `-P, --profile <project\|house>`, `-E, --edit <path>`, `-A, --authorize-edit`, `-O, --overlaps`, `-W, --wireframe`, `-D, --deviations` |
+| `audit` | Run source, measure, density, ruler, flow, deviation (`--deviations`), and rendered a11y checks | `-p, --project <path>`, `-o, --output <path>`, `-u, --url <url>`, `-M, --measured <json>`, `-d, --artifacts <dir>`, `-w, --widths <px...>`, `-s, --selector <css>`, `-r, --ready <selector>`, `-a, --a11y`, `-e, --engine <name>`, `-x, --executable <path>`, `-t, --timeout <s>`, `-f, --flow <json>`, `-P, --profile <project\|house>`, `-E, --edit <path>`, `-A, --authorize-edit`, `-O, --overlaps`, `-W, --wireframe`, `-D, --deviations` |
 
 ## Audit Coverage
 
@@ -24,14 +20,14 @@ Suppress a rule-ID finding on a line with `nonuu: <ID>`. Record an approved hous
 
 | Code | Pass | Condition |
 | --- | --- | --- |
-| `NUI001`–`NUI003` | Icons (`audit`) | Missing icon license (`NUI001`), non-ladder icon (`NUI002`), or mixed inline icon sizes (`NUI003`) |
+| `NUI001`–`NUI003` | Icons (`lint`, `audit`) | Missing icon license (`NUI001`), non-ladder icon (`NUI002`), or mixed inline icon sizes (`NUI003`) |
 | `NUL001`–`NUL006` | Source (`lint`) | Missing `alt` (`NUL001`), unnamed control (`NUL002`), `outline: 0` (`NUL003`), missing `design.md` (`NUL004`), hover shift (`NUL005`), raw timestamp (`NUL006`) |
 | `NUL007` | Source (`lint`) | List CSS uses `list-style-position: inside` or omits the `2ch` hanging-indent reset |
 | `NUL008` | Source (`lint`) | Multiple primary buttons or vague Yes/No/Okay labels |
-| `NUB101`–`NUB103` | Browser (`inspect`, `flow`) | Horizontal overflow (`NUB101`), uncaught `pageerror` or `console.error` during load, resize, or flow (`NUB102`), or flow step timeout, missing selector, or failed assertion (`NUB103`) |
+| `NUB101`–`NUB103` | Browser (`audit`) | Horizontal overflow (`NUB101`), uncaught `pageerror` or `console.error` (`NUB102`), or flow step failure (`NUB103`) |
 | `NUB104` | Browser (`--ready`) | Declared `--ready SELECTOR` did not match a visible element within the timeout |
 | `NUM201`–`NUM203` | Measure (`--measure`) | Off-scale spacing except validated `2ch` list padding under `NUM211` (`NUM201`), off-ramp typography (`NUM202`), or unapproved border radius (`0/4/6/10/9999 px`) (`NUM203`) |
-| `NUM205`–`NUM208` | Density (`density`, `--density`) | Main-layout (`<main>`, `[role="main"]`) ink ratio < 0.40 or other row ink ratio < 0.75 (`NUM205`), sibling gap > 320 px (`NUM206`), form input ending more than 24 px before its row edge with no control after it (`NUM207`), or non-symmetric icon button (`NUM208`) |
+| `NUM205`–`NUM208` | Density (`audit`) | Low row ink ratio (`NUM205`), sibling gap > 320 px (`NUM206`), short form input (`NUM207`), or unequal button size (`NUM208`) |
 | `NUM209`–`NUM210` | Density (`-C`, `-O`) | Non-scrolling container clips child content (`NUM209`) or sibling boxes overlap (`NUM210`) |
 | `NUM211` | Measure (`--measure`) | List markers sit outside in a `2ch` hanging-indent slot, and wrapped lines align with the first line |
 | `NUM212` | Measure (`--measure`) | Heading (h1-h6) line-height outside 1.1-1.3x font-size or non-heading line-height outside 1.3-1.5x |
