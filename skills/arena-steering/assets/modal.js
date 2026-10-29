@@ -44,6 +44,12 @@ export function createModalManager(
         const node = frag.querySelector(`[data-slot="${slot}"]`);
         if (node) node.textContent = text;
       }
+      if (arguments[1]?.htmlSlots) {
+        for (const [slot, html] of Object.entries(arguments[1].htmlSlots)) {
+          const node = frag.querySelector(`[data-slot="${slot}"]`);
+          if (node) node.innerHTML = html;
+        }
+      }
       const actionSlot = frag.querySelector('[data-slot="actions"]');
       actionsEl.replaceChildren(...(actionSlot ? actionSlot.childNodes : []));
       if (actionSlot) actionSlot.remove();

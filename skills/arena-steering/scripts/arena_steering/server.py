@@ -35,8 +35,15 @@ MIME_OVERRIDES = {
   ".mjs": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
+  ".gif": "image/gif",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
   ".woff2": "font/woff2",
 }
+
+REPORT_IMAGE_EXTS = frozenset({".gif", ".png", ".jpg", ".jpeg", ".webp", ".svg"})
 
 
 class Router:
@@ -152,12 +159,16 @@ class SteeringApp:
     self.router.add("GET", "/reports/{id}", self._handle_get_report)
     self.router.add("PATCH", "/reports/{id}", self._handle_patch_report)
     self.router.add("DELETE", "/reports/{id}", self._handle_delete_report)
+    self.router.add("POST", "/reports/{id}/seen", self._handle_mark_report_seen)
     self.router.add("POST", "/reports/{id}/answers", self._handle_submit_answer)
     self.router.add(
       "POST",
       "/reports/{id}/answers/{answer_id}/ack",
       self._handle_ack_report_answer,
     )
+    self.router.add("GET", "/survey", self._handle_get_survey)
+    self.router.add("POST", "/survey", self._handle_submit_survey)
+    self.router.add("POST", "/survey/interrupt", self._handle_survey_interrupt)
 
   def dispatch(
     self, method: str, raw_url: str, body: dict[str, Any] | None = None
@@ -185,7 +196,7 @@ class SteeringApp:
       return (int(HTTPStatus.BAD_REQUEST), {"error": str(exc)})
 
   def resolve_asset(self, request_path: str) -> tuple[bytes, str] | None:
-    """Resolve a static file inside assets_dir without path traversal."""
+    """Resolve a static file inside assets_dir or report images without path traversal."""
     clean = request_path.split("?", 1)[0].lstrip("/")
     if not clean or clean in {"index.html", "inbox", "tasks", "reports"}:
       clean = "index.html"
@@ -194,7 +205,9 @@ class SteeringApp:
     base = self.assets_dir.resolve()
     candidate = (base / clean).resolve()
     if not candidate.is_relative_to(base) or not candidate.is_file():
-      return None
+      candidate = self._resolve_report_image(clean)
+      if candidate is None:
+        return None
     suffix = candidate.suffix.lower()
     content_type = (
       MIME_OVERRIDES.get(suffix)
@@ -209,6 +222,23 @@ class SteeringApp:
       return page.encode("utf-8"), content_type
     return candidate.read_bytes(), content_type
 
+  def _resolve_report_image(self, clean_path: str) -> Path | None:
+    """Resolve an image or GIF inside <state_dir>/reports/ without path traversal."""
+    db_path = getattr(self.store, "db_path", "")
+    if not db_path or db_path == ":memory:":
+      return None
+    rel = clean_path.removeprefix("reports/")
+    suffix = Path(rel).suffix.lower()
+    if suffix not in REPORT_IMAGE_EXTS:
+      return None
+    state_dir = Path(db_path).resolve().parent
+    for root in (state_dir / "reports", state_dir):
+      root_resolved = root.resolve()
+      candidate = (root_resolved / rel).resolve()
+      if candidate.is_relative_to(root_resolved) and candidate.is_file():
+        return candidate
+    return None
+
   def asset_signature_hash(self) -> str:
     """Return a short hash of current asset file mtimes and sizes."""
     sig = assets_signature(self.assets_dir)
@@ -218,6 +248,7 @@ class SteeringApp:
   def _handle_health(
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
+    survey = self.messages.get_survey()
     return (
       int(HTTPStatus.OK),
       {
@@ -225,8 +256,28 @@ class SteeringApp:
         "version": __version__,
         "repo": self.repo_name,
         "asset_version": self.asset_signature_hash(),
+        "survey": survey,
       },
     )
+
+  def _handle_get_survey(
+    self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    return (int(HTTPStatus.OK), {"survey": self.messages.get_survey()})
+
+  def _handle_submit_survey(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+  ) -> tuple[int, Any]:
+    values = body.get("answers", body)
+    survey = self.messages.submit_survey(values)
+    return (int(HTTPStatus.OK), {"survey": survey})
+
+  def _handle_survey_interrupt(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+  ) -> tuple[int, Any]:
+    active = body.get("active") if isinstance(body, dict) and "active" in body else None
+    survey = self.messages.trigger_bible_check(active=active)
+    return (int(HTTPStatus.OK), {"survey": survey})
 
   def _handle_list_messages(
     self, _params: dict[str, str], query: dict[str, list[str]], _body: Any
@@ -304,6 +355,7 @@ class SteeringApp:
   def _handle_create_task(
     self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
   ) -> tuple[int, Any]:
+    raw_links = body.get("links")
     task = self.tasks.create_task(
       str(body.get("id", "")),
       str(body.get("title", "")),
@@ -311,9 +363,11 @@ class SteeringApp:
       status=str(body.get("status", "upcoming")),
       scope=str(body.get("scope", "")),
       details=[str(x) for x in body.get("details", [])],
-      msg_ids=[str(x) for x in body.get("msg_ids", [])],
-      report_ids=[str(x) for x in body.get("report_ids", [])],
-      deps=[str(x) for x in body.get("deps", [])],
+      links=raw_links if isinstance(raw_links, dict) else None,
+      msg_ids=[str(x) for x in body["msg_ids"]] if "msg_ids" in body else None,
+      report_ids=[str(x) for x in body["report_ids"]] if "report_ids" in body else None,
+      task_ids=[str(x) for x in body["task_ids"]] if "task_ids" in body else None,
+      deps=[str(x) for x in body["deps"]] if "deps" in body else None,
     )
     _, blocked = self.tasks.get_task(task.id)
     return (int(HTTPStatus.CREATED), {"task": task.to_dict(blocked=blocked)})
@@ -385,6 +439,12 @@ class SteeringApp:
   ) -> tuple[int, Any]:
     removed = self.reports.remove_report(params["id"])
     return (int(HTTPStatus.OK), {"dismissed": removed})
+
+  def _handle_mark_report_seen(
+    self, params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    report = self.reports.mark_seen(params["id"])
+    return (int(HTTPStatus.OK), {"report": self._serialize_report(report)})
 
   def _handle_submit_answer(
     self, params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]

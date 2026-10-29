@@ -35,6 +35,11 @@
           Tasks
         </button>
       </nav>
+      <div class="topbar-actions row tight">
+        <button id="agent-interrupt" aria-pressed="false" aria-busy="false" class="icon-button" type="button" aria-label="Ask the agent to read files missing from context" title="Ask the agent to read files missing from context">
+          <svg class="lucide lucide-flag" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"></path></svg>
+        </button>
+      </div>
     </header>
 
     <main class="main-content" id="main-root" data-loading="false">
@@ -62,6 +67,17 @@
     <div data-slot="actions">
       <button type="submit" value="cancel" class="btn btn-secondary">Cancel</button>
       <button type="submit" value="confirm" class="btn btn-danger">Confirm</button>
+    </div>
+  </template>
+
+  <template data-modal-template="survey-results">
+    <div data-slot="content" class="survey-modal-content"></div>
+    <div data-slot="actions">
+      <button id="survey-again" type="submit" value="bible-check" class="btn btn-secondary">
+        <svg class="lucide lucide-book-bookmark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 2v7.751a.25.25 0 0 0 .407.195l2.28-1.834a.5.5 0 0 1 .627 0l2.28 1.834A.25.25 0 0 0 16 9.751V2"></path><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"></path></svg>
+        Bible Check
+      </button>
+      <button type="submit" value="cancel" class="btn btn-secondary">Close</button>
     </div>
   </template>
 

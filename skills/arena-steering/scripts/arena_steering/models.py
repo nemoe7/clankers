@@ -175,33 +175,49 @@ class Message:
     )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, init=False)
 class Task:
-  """Mutable-queue task item with dependency and report links."""
+  """Mutable-queue task item with unified links (msg_ids, report_ids, task_ids)."""
 
   id: str
   title: str
-  type: str = "code"
-  status: str = "upcoming"
-  scope: str = ""
-  details: list[str] = field(default_factory=list)
-  msg_ids: list[str] = field(default_factory=list)
-  report_ids: list[str] = field(default_factory=list)
-  deps: list[str] = field(default_factory=list)
-  modified_at: str = ""
+  type: str
+  status: str
+  scope: str
+  details: list[str]
+  links: dict[str, list[str]]
+  modified_at: str
 
-  def __post_init__(self) -> None:
-    validate_entity_id(self.id, "Task.id")
-    if not isinstance(self.title, str) or not self.title.strip():
+  def __init__(
+    self,
+    id: str,
+    title: str,
+    type: str = "code",
+    status: str = "upcoming",
+    scope: str = "",
+    details: list[str] | None = None,
+    links: dict[str, list[str]] | None = None,
+    *,
+    msg_ids: list[str] | None = None,
+    report_ids: list[str] | None = None,
+    task_ids: list[str] | None = None,
+    deps: list[str] | None = None,
+    modified_at: str = "",
+  ) -> None:
+    validate_entity_id(id, "Task.id")
+    if not isinstance(title, str) or not title.strip():
       raise ValueError("Task.title must be a non-empty string")
-    self.title = self.title.strip()
-    if self.type not in TASK_TYPES:
-      raise ValueError(f"Invalid Task.type: {self.type!r}")
-    if self.status not in TASK_STATUSES:
-      raise ValueError(f"Invalid Task.status: {self.status!r}")
-    self.scope = str(self.scope or "").strip()
+    self.id = id
+    self.title = title.strip()
+    if type not in TASK_TYPES:
+      raise ValueError(f"Invalid Task.type: {type!r}")
+    self.type = type
+    if status not in TASK_STATUSES:
+      raise ValueError(f"Invalid Task.status: {status!r}")
+    self.status = status
+    self.scope = str(scope or "").strip()
     cleaned_details: list[str] = []
-    for line in self.details:
+    for line in details or []:
       if not isinstance(line, str) or not line.strip():
         raise ValueError("Task detail line must be a non-empty string")
       text = line.strip()
@@ -211,12 +227,75 @@ class Task:
         )
       cleaned_details.append(text)
     self.details = cleaned_details
-    self.msg_ids = _dedupe_strings(self.msg_ids)
-    self.report_ids = _dedupe_strings(self.report_ids)
-    self.deps = _dedupe_strings(self.deps)
-    if self.id in self.deps:
+
+    raw_links = dict(links) if isinstance(links, dict) else {}
+    resolved_msgs = (
+      msg_ids
+      if msg_ids is not None
+      else raw_links.get("msg_ids", raw_links.get("msg_id", []))
+    )
+    resolved_reports = (
+      report_ids
+      if report_ids is not None
+      else raw_links.get("report_ids", raw_links.get("report_id", []))
+    )
+    resolved_tasks = (
+      task_ids
+      if task_ids is not None
+      else (
+        deps
+        if deps is not None
+        else raw_links.get(
+          "task_ids", raw_links.get("task_id", raw_links.get("deps", []))
+        )
+      )
+    )
+    cleaned_msgs = _dedupe_strings([str(x) for x in (resolved_msgs or [])])
+    cleaned_reports = _dedupe_strings([str(x) for x in (resolved_reports or [])])
+    cleaned_tasks = _dedupe_strings([str(x) for x in (resolved_tasks or [])])
+    if self.id in cleaned_tasks:
       raise ValueError(f"Task {self.id!r} cannot depend on itself")
-    self.modified_at = str(self.modified_at or "")
+    self.links = {
+      "msg_ids": cleaned_msgs,
+      "report_ids": cleaned_reports,
+      "task_ids": cleaned_tasks,
+    }
+    self.modified_at = str(modified_at or "")
+
+  @property
+  def msg_ids(self) -> list[str]:
+    return self.links["msg_ids"]
+
+  @msg_ids.setter
+  def msg_ids(self, value: list[str]) -> None:
+    self.links["msg_ids"] = _dedupe_strings([str(x) for x in value])
+
+  @property
+  def report_ids(self) -> list[str]:
+    return self.links["report_ids"]
+
+  @report_ids.setter
+  def report_ids(self, value: list[str]) -> None:
+    self.links["report_ids"] = _dedupe_strings([str(x) for x in value])
+
+  @property
+  def task_ids(self) -> list[str]:
+    return self.links["task_ids"]
+
+  @task_ids.setter
+  def task_ids(self, value: list[str]) -> None:
+    cleaned = _dedupe_strings([str(x) for x in value])
+    if self.id in cleaned:
+      raise ValueError(f"Task {self.id!r} cannot depend on itself")
+    self.links["task_ids"] = cleaned
+
+  @property
+  def deps(self) -> list[str]:
+    return self.links["task_ids"]
+
+  @deps.setter
+  def deps(self, value: list[str]) -> None:
+    self.task_ids = value
 
   def to_dict(self, *, blocked: bool | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {
@@ -226,9 +305,11 @@ class Task:
       "status": self.status,
       "scope": self.scope,
       "details": list(self.details),
-      "msg_ids": list(self.msg_ids),
-      "report_ids": list(self.report_ids),
-      "deps": list(self.deps),
+      "links": {
+        "msg_ids": list(self.msg_ids),
+        "report_ids": list(self.report_ids),
+        "task_ids": list(self.task_ids),
+      },
       "modified_at": self.modified_at,
     }
     if blocked is not None:
@@ -237,6 +318,7 @@ class Task:
 
   @classmethod
   def from_dict(cls, data: dict[str, Any]) -> Task:
+    raw_links = data.get("links")
     return cls(
       id=str(data["id"]),
       title=str(data["title"]),
@@ -244,9 +326,15 @@ class Task:
       status=str(data.get("status", "upcoming")),
       scope=str(data.get("scope", "")),
       details=[str(item) for item in data.get("details", [])],
-      msg_ids=[str(item) for item in data.get("msg_ids", [])],
-      report_ids=[str(item) for item in data.get("report_ids", [])],
-      deps=[str(item) for item in data.get("deps", [])],
+      links=raw_links if isinstance(raw_links, dict) else None,
+      msg_ids=([str(item) for item in data["msg_ids"]] if "msg_ids" in data else None),
+      report_ids=(
+        [str(item) for item in data["report_ids"]] if "report_ids" in data else None
+      ),
+      task_ids=(
+        [str(item) for item in data["task_ids"]] if "task_ids" in data else None
+      ),
+      deps=([str(item) for item in data["deps"]] if "deps" in data else None),
       modified_at=str(data.get("modified_at", "")),
     )
 
@@ -377,6 +465,7 @@ class Report:
   fields: list[ReportField] = field(default_factory=list)
   status: str = "published"
   answers: list[ReportAnswer] = field(default_factory=list)
+  seen: bool = False
   modified_at: str = ""
 
   def __post_init__(self) -> None:
@@ -401,6 +490,7 @@ class Report:
       ans if isinstance(ans, ReportAnswer) else ReportAnswer.from_dict(ans)
       for ans in self.answers
     ]
+    self.seen = bool(self.seen)
     self.modified_at = str(self.modified_at or "")
 
   @property
@@ -424,6 +514,8 @@ class Report:
       "fields": [item.to_dict() for item in self.fields],
       "status": self.status,
       "answers": [item.to_dict() for item in self.answers],
+      "seen": self.seen,
+      "needs_answer": self.needs_answer,
       "modified_at": self.modified_at,
     }
 
@@ -436,6 +528,7 @@ class Report:
       fields=[ReportField.from_dict(raw) for raw in data.get("fields", [])],
       status=str(data.get("status", "published")),
       answers=[ReportAnswer.from_dict(raw) for raw in data.get("answers", [])],
+      seen=bool(data.get("seen", False)),
       modified_at=str(data.get("modified_at", "")),
     )
 

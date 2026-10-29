@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 from typing import Any
 
@@ -25,6 +26,25 @@ from .ports import (
   SecretsHexIdGenerator,
   TaskRepository,
   UtcClock,
+)
+
+# Answer key entries (`expected`) are left blank until populated by the owner.
+DEFAULT_SURVEY_QUESTIONS: tuple[dict[str, str], ...] = (
+  {
+    "id": "preview_port",
+    "prompt": "Which port does the steering preview server bind to?",
+    "expected": "",
+  },
+  {
+    "id": "task_sizing",
+    "prompt": "How should each new user request be queued in the task list?",
+    "expected": "",
+  },
+  {
+    "id": "report_usage",
+    "prompt": "When should a fielded report be published instead of asking in prose?",
+    "expected": "",
+  },
 )
 
 
@@ -204,6 +224,51 @@ class MessageService:
     with self._cond:
       self._cond.notify_all()
 
+  def get_survey(self) -> dict[str, Any]:
+    """Return current survey state, questions, and submitted answers."""
+    raw_answers = self._meta.get_meta("survey_answers_json", "{}") or "{}"
+    try:
+      answers = json.loads(raw_answers)
+      if not isinstance(answers, dict):
+        answers = {}
+    except json.JSONDecodeError:
+      answers = {}
+    return {
+      "pending": self._meta.get_meta("bible_interrupt", "0") == "1",
+      "checked_at": self._meta.get_meta("survey_checked_at", "") or "",
+      "questions": [dict(item) for item in DEFAULT_SURVEY_QUESTIONS],
+      "answers": {str(k): str(v) for k, v in answers.items()},
+    }
+
+  def submit_survey(self, values: dict[str, Any]) -> dict[str, Any]:
+    """Record agent survey answers and clear any pending bible interrupt."""
+    if not isinstance(values, dict) or not values:
+      raise ValueError("Survey submission must be a non-empty dictionary")
+    current = self.get_survey()["answers"]
+    for key, val in values.items():
+      text = str(val or "").strip()
+      if not text:
+        raise ValueError(f"Survey answer for {key!r} cannot be empty")
+      current[str(key).strip()] = text
+    now = self._clock.now_iso()
+    with self._cond:
+      self._meta.set_meta("survey_answers_json", json.dumps(current))
+      self._meta.set_meta("survey_checked_at", now)
+      self._meta.set_meta("bible_interrupt", "0")
+      self._cond.notify_all()
+    return self.get_survey()
+
+  def trigger_bible_check(self, active: bool | None = None) -> dict[str, Any]:
+    """Toggle or set the bible check interrupt flag and wake any waiting poll."""
+    with self._cond:
+      cur = self._meta.get_meta("bible_interrupt", "0") == "1"
+      next_state = (not cur) if active is None else bool(active)
+      self._meta.set_meta("bible_interrupt", "1" if next_state else "0")
+      if next_state:
+        self._meta.set_meta("skip_poll", "1")
+      self._cond.notify_all()
+    return self.get_survey()
+
   def _resolve_single_pending_id(self) -> str:
     candidates: list[str] = [
       msg.id
@@ -305,8 +370,10 @@ class TaskService:
     status: str = "upcoming",
     scope: str = "",
     details: list[str] | None = None,
+    links: dict[str, list[str]] | None = None,
     msg_ids: list[str] | None = None,
     report_ids: list[str] | None = None,
+    task_ids: list[str] | None = None,
     deps: list[str] | None = None,
   ) -> Task:
     if self._tasks.get_task(task_id) is not None:
@@ -319,9 +386,11 @@ class TaskService:
       status=status,
       scope=scope,
       details=list(details or []),
-      msg_ids=list(msg_ids or []),
-      report_ids=list(report_ids or []),
-      deps=list(deps or []),
+      links=links,
+      msg_ids=list(msg_ids) if msg_ids is not None else None,
+      report_ids=list(report_ids) if report_ids is not None else None,
+      task_ids=list(task_ids) if task_ids is not None else None,
+      deps=list(deps) if deps is not None else None,
       modified_at=now,
     )
     queue = self._tasks.list_tasks()
@@ -338,8 +407,8 @@ class TaskService:
       return False
     now = self._clock.now_iso()
     for item in remaining:
-      if task_id in item.deps:
-        item.deps = [dep for dep in item.deps if dep != task_id]
+      if task_id in item.task_ids:
+        item.task_ids = [dep for dep in item.task_ids if dep != task_id]
         item.modified_at = now
     self._tasks.save_task_queue(remaining)
     return True
@@ -353,9 +422,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=[*target.details, detail],
-      msg_ids=target.msg_ids,
-      report_ids=target.report_ids,
-      deps=target.deps,
+      links=target.links,
       modified_at=self._clock.now_iso(),
     )
     self._replace_in_queue(queue, updated)
@@ -376,26 +443,45 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=new_details,
-      msg_ids=target.msg_ids,
-      report_ids=target.report_ids,
-      deps=target.deps,
+      links=target.links,
       modified_at=self._clock.now_iso(),
     )
     self._replace_in_queue(queue, updated)
     return updated
 
-  def mod_links_add(self, task_id: str, link_id: str) -> Task:
+  def mod_links_add(
+    self, task_id: str, link_id: str, *, link_type: str | None = None
+  ) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     cleaned = link_id.strip()
+    explicit_type = link_type.strip().lower() if link_type else None
     msg_ids = list(target.msg_ids)
     report_ids = list(target.report_ids)
-    if MESSAGE_ID_RE.fullmatch(cleaned) and self._reports.get_report(cleaned) is None:
+    task_ids = list(target.task_ids)
+    known_task_ids = {item.id for item in queue}
+
+    if explicit_type in {"task", "dep", "deps"} or (
+      explicit_type is None and cleaned in known_task_ids
+    ):
+      validate_entity_id(cleaned, "Dependency task ID")
+      if cleaned not in task_ids:
+        task_ids.append(cleaned)
+    elif explicit_type == "msg" or (
+      explicit_type is None
+      and MESSAGE_ID_RE.fullmatch(cleaned)
+      and self._reports.get_report(cleaned) is None
+    ):
       if cleaned not in msg_ids:
         msg_ids.append(cleaned)
-    else:
+    elif explicit_type in {None, "report"}:
       validate_entity_id(cleaned, "Report or message link ID")
       if cleaned not in report_ids:
         report_ids.append(cleaned)
+    else:
+      raise ValueError(
+        f"Link type must be 'msg', 'report', or 'task', got {link_type!r}"
+      )
+
     updated = Task(
       id=target.id,
       title=target.title,
@@ -403,11 +489,14 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
-      msg_ids=msg_ids,
-      report_ids=report_ids,
-      deps=target.deps,
+      links={
+        "msg_ids": msg_ids,
+        "report_ids": report_ids,
+        "task_ids": task_ids,
+      },
       modified_at=self._clock.now_iso(),
     )
+    self._validate_deps_exist(updated, queue)
     self._replace_in_queue(queue, updated)
     return updated
 
@@ -415,8 +504,10 @@ class TaskService:
     queue, target = self._load_queue_and_target(task_id)
     cleaned_type = link_type.strip().lower()
     cleaned_id = link_id.strip()
-    if cleaned_type not in {"msg", "report"}:
-      raise ValueError(f"Link type must be 'msg' or 'report', got {link_type!r}")
+    if cleaned_type not in {"msg", "report", "task", "dep", "deps"}:
+      raise ValueError(
+        f"Link type must be 'msg', 'report', or 'task', got {link_type!r}"
+      )
     msg_ids = (
       [item for item in target.msg_ids if item != cleaned_id]
       if cleaned_type == "msg"
@@ -427,6 +518,11 @@ class TaskService:
       if cleaned_type == "report"
       else list(target.report_ids)
     )
+    task_ids = (
+      [item for item in target.task_ids if item != cleaned_id]
+      if cleaned_type in {"task", "dep", "deps"}
+      else list(target.task_ids)
+    )
     updated = Task(
       id=target.id,
       title=target.title,
@@ -434,53 +530,21 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
-      msg_ids=msg_ids,
-      report_ids=report_ids,
-      deps=target.deps,
+      links={
+        "msg_ids": msg_ids,
+        "report_ids": report_ids,
+        "task_ids": task_ids,
+      },
       modified_at=self._clock.now_iso(),
     )
     self._replace_in_queue(queue, updated)
     return updated
 
   def mod_deps_add(self, task_id: str, dep_task_id: str) -> Task:
-    queue, target = self._load_queue_and_target(task_id)
-    cleaned_dep = validate_entity_id(dep_task_id, "Dependency task ID")
-    deps = list(target.deps)
-    if cleaned_dep not in deps:
-      deps.append(cleaned_dep)
-    updated = Task(
-      id=target.id,
-      title=target.title,
-      type=target.type,
-      status=target.status,
-      scope=target.scope,
-      details=target.details,
-      msg_ids=target.msg_ids,
-      report_ids=target.report_ids,
-      deps=deps,
-      modified_at=self._clock.now_iso(),
-    )
-    self._validate_deps_exist(updated, queue)
-    self._replace_in_queue(queue, updated)
-    return updated
+    return self.mod_links_add(task_id, dep_task_id, link_type="task")
 
   def mod_deps_rm(self, task_id: str, dep_task_id: str) -> Task:
-    queue, target = self._load_queue_and_target(task_id)
-    cleaned_dep = dep_task_id.strip()
-    updated = Task(
-      id=target.id,
-      title=target.title,
-      type=target.type,
-      status=target.status,
-      scope=target.scope,
-      details=target.details,
-      msg_ids=target.msg_ids,
-      report_ids=target.report_ids,
-      deps=[item for item in target.deps if item != cleaned_dep],
-      modified_at=self._clock.now_iso(),
-    )
-    self._replace_in_queue(queue, updated)
-    return updated
+    return self.mod_links_rm(task_id, "task", dep_task_id)
 
   def mod_scalar(self, task_id: str, field_name: str, value: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
@@ -494,9 +558,7 @@ class TaskService:
       "status": target.status,
       "scope": target.scope,
       "details": target.details,
-      "msg_ids": target.msg_ids,
-      "report_ids": target.report_ids,
-      "deps": target.deps,
+      "links": target.links,
       "modified_at": self._clock.now_iso(),
     }
     kwargs[key] = value
@@ -509,6 +571,36 @@ class TaskService:
   ) -> Task:
     """Apply partial updates and optional queue position change for HTTP PATCH."""
     queue, target = self._load_queue_and_target(task_id)
+    raw_links = changes.get("links")
+    merged_links = {
+      "msg_ids": list(
+        changes.get(
+          "msg_ids",
+          raw_links.get("msg_ids", target.msg_ids)
+          if isinstance(raw_links, dict)
+          else target.msg_ids,
+        )
+      ),
+      "report_ids": list(
+        changes.get(
+          "report_ids",
+          raw_links.get("report_ids", target.report_ids)
+          if isinstance(raw_links, dict)
+          else target.report_ids,
+        )
+      ),
+      "task_ids": list(
+        changes.get(
+          "task_ids",
+          changes.get(
+            "deps",
+            raw_links.get("task_ids", target.task_ids)
+            if isinstance(raw_links, dict)
+            else target.task_ids,
+          ),
+        )
+      ),
+    }
     updated = Task(
       id=target.id,
       title=str(changes.get("title", target.title)),
@@ -516,9 +608,7 @@ class TaskService:
       status=str(changes.get("status", target.status)),
       scope=str(changes.get("scope", target.scope)),
       details=list(changes.get("details", target.details)),
-      msg_ids=list(changes.get("msg_ids", target.msg_ids)),
-      report_ids=list(changes.get("report_ids", target.report_ids)),
-      deps=list(changes.get("deps", target.deps)),
+      links=merged_links,
       modified_at=self._clock.now_iso(),
     )
     self._validate_deps_exist(updated, queue)
@@ -610,9 +700,17 @@ class ReportService:
       fields=fields,
       status="published",
       answers=list(existing.answers) if existing is not None else [],
+      seen=False,
       modified_at=now,
     )
     self._reports.save_report(report)
+    return report
+
+  def mark_seen(self, report_id: str) -> Report:
+    report = self.get_report(report_id)
+    if not report.seen:
+      report.seen = True
+      self._reports.save_report(report)
     return report
 
   def get_report(self, report_id: str) -> Report:
@@ -659,6 +757,7 @@ class ReportService:
     )
     report.answers.append(answer)
     report.status = "answered"
+    report.seen = True
     report.modified_at = now
     self._reports.save_report(report)
     self._append_answer_details_to_linked_tasks(report, cleaned_values, now)

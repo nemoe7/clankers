@@ -37,19 +37,17 @@ steer msg show <id>
 ```bash
 steer tasks [-f, --full]
 steer task <id>
-steer task new <id> "<title>" [-T <type>] [-s <status>] [-S <scope>] [-d "<detail>"] [-m <msg-id>] [-r <report-id>] [-D <dep-id>]
+steer task new <id> "<title>" [-T <type>] [-s <status>] [-S <scope>] [-d "<detail>"] [-m <msg-id>] [-r <report-id>] [-k <task-id>]
 steer task mod <id> deets <text>
 steer task mod <id> deets rm <1-based-index>
-steer task mod <id> links <msg-id|report-id>
-steer task mod <id> links rm msg|report <id>
-steer task mod <id> deps <task-id>
-steer task mod <id> deps rm <task-id>
+steer task mod <id> links [msg|report|task] <id>
+steer task mod <id> links rm msg|report|task <id>
 steer task mod <id> status|title|type|scope <value>
 steer task rm <id>
 ```
 
-- Tasks sit in a mutable queue where dependents automatically follow their dependencies (`deps[]`).
-- Blocking state derives automatically from unanswered `report_ids[]` and unfinished `deps[]`.
+- Tasks sit in a mutable queue where dependents automatically follow their task links (`links.task_ids[]`).
+- Blocking state derives automatically from unanswered `links.report_ids[]` and unfinished `links.task_ids[]`.
 
 ## Reports (`Reports`)
 

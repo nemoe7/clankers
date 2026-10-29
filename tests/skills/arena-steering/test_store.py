@@ -56,19 +56,31 @@ def test_task_validation_and_detail_limit() -> None:
     status="upcoming",
     scope="skills/arena-steering/",
     details=["Define models.py and store.py."],
-    msg_ids=["a1b2c3", "a1b2c3"],
-    report_ids=["steering-spec"],
-    deps=["prep-task"],
+    links={
+      "msg_ids": ["a1b2c3", "a1b2c3"],
+      "report_ids": ["steering-spec"],
+      "task_ids": ["prep-task"],
+    },
     modified_at="2026-10-29T06:00:00Z",
   )
   assert task.msg_ids == ["a1b2c3"]
+  assert task.links == {
+    "msg_ids": ["a1b2c3"],
+    "report_ids": ["steering-spec"],
+    "task_ids": ["prep-task"],
+  }
+  assert task.to_dict()["links"] == {
+    "msg_ids": ["a1b2c3"],
+    "report_ids": ["steering-spec"],
+    "task_ids": ["prep-task"],
+  }
   assert Task.from_dict(task.to_dict()) == task
 
   with pytest.raises(ValueError, match="120 characters"):
     Task(id="bad-detail", title="Too long", details=["x" * 121])
 
   with pytest.raises(ValueError, match="depend on itself"):
-    Task(id="self-dep", title="Cycle", deps=["self-dep"])
+    Task(id="self-dep", title="Cycle", links={"task_ids": ["self-dep"]})
 
 
 def test_report_field_auto_kebab_id_and_choice_rules() -> None:
