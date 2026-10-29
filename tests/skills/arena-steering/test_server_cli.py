@@ -294,7 +294,7 @@ def test_websocket_upgrade_and_rpc() -> None:
 
   store = SqliteStore(":memory:")
   app = SteeringApp(store)
-  server = create_http_server(app, host="127.0.0.1", port=0, hot_reload=False)
+  server = create_http_server(app, host="127.0.0.1", port=0)
   port = server.server_address[1]
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()

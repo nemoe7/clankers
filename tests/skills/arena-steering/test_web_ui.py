@@ -192,7 +192,7 @@ def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert root_asset is not None
   assert b"<title>clankers - Steering</title>" in root_asset[0]
 
-  server = create_http_server(app, host="127.0.0.1", port=0, hot_reload=False)
+  server = create_http_server(app, host="127.0.0.1", port=0)
   try:
     sock_fd = server.socket.fileno()
     reloaded_app = reload_server_handler(server, app)

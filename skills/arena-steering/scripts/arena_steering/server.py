@@ -922,12 +922,10 @@ def create_http_server(
   app: SteeringApp,
   host: str = "0.0.0.0",
   port: int = 8100,
-  *,
-  hot_reload: bool = True,
 ) -> ThreadingHTTPServer:
   """Create a ThreadingHTTPServer bound to host:port for SteeringApp."""
   server = ThreadingHTTPServer((host, port), make_request_handler(app))
-  if hot_reload and not os.environ.get("PYTEST_CURRENT_TEST"):
+  if not os.environ.get("PYTEST_CURRENT_TEST"):
     stop_event = threading.Event()
     server._hot_reload_stop = stop_event  # type: ignore[attr-defined]
     threading.Thread(
