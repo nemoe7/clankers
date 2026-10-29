@@ -564,6 +564,12 @@ def _match_glob(rel_posix, name, pattern):
   if pat.endswith("/**"):
     prefix = pat[:-3].rstrip("/")
     return rel_posix == prefix or rel_posix.startswith(prefix + "/")
+  if "/**/" in pat:
+    collapsed = pat
+    while "/**/" in collapsed:
+      collapsed = collapsed.replace("/**/", "/")
+    if _match_glob(rel_posix, name, collapsed):
+      return True
   if pat.startswith("**/"):
     suffix = pat[3:]
     return (
@@ -831,6 +837,11 @@ def text_file(path):
     return None
 
 
+def _matches_ignore_item(text, name, item):
+  """True when relative POSIX path `text` or filename `name` matches `item`."""
+  return text == item or text.startswith(item + "/") or _match_glob(text, name, item)
+
+
 def skipped(path, root, ignores):
   """True when a path sits under a skipped directory or an ignored prefix."""
   if is_license_file(path):
@@ -846,11 +857,19 @@ def skipped(path, root, ignores):
   if custom_exclude is None and any(part in SKIP_DIRS for part in Path(text).parts):
     return True
   base_skips = custom_exclude if custom_exclude is not None else SKIP_PATHS
-  all_ignores = (*base_skips, *ignores, *ACTIVE_CONFIG.get("extend_exclude", ()))
-  return any(
-    text == item or text.startswith(item + "/") or _match_glob(text, path.name, item)
-    for item in all_ignores
-  )
+  all_ignores = (*base_skips, *ACTIVE_CONFIG.get("extend_exclude", ()), *ignores)
+  excluded = False
+  for raw in all_ignores:
+    item = str(raw).strip()
+    if not item:
+      continue
+    if item.startswith("!"):
+      target = item[1:].strip()
+      if target and _matches_ignore_item(text, path.name, target):
+        excluded = False
+    elif _matches_ignore_item(text, path.name, item):
+      excluded = True
+  return excluded
 
 
 def git_ignored(root, candidates):
