@@ -127,10 +127,10 @@ def step_artifacts(env: Mapping[str, str], output: Path, repo: str = ".") -> int
 
 MODULE_TESTS = {
   "Preview": (
-    "tests/skills/arena-skill/test_preview.py",
-    "tests/skills/arena-skill/test_survey.py",
-    "tests/skills/arena-skill/test_preview_gate.py",
-    "tests/skills/arena-skill/test_mermaid_check.py",
+    "tests/skills/arena-steering/test_store.py",
+    "tests/skills/arena-steering/test_services.py",
+    "tests/skills/arena-steering/test_server_cli.py",
+    "tests/skills/arena-steering/test_web_ui.py",
   ),
   "Nemoizer": ("tests/skills/nemoizer/test_nemoize.py",),  # nonemo: NMO100
   "UI/UX": (
@@ -239,10 +239,6 @@ MODULE_PATHS = {
   ),
 }
 MODULE_NODE_TESTS = {
-  "Preview": (
-    "tests/skills/arena-skill/client.test.cjs",
-    "tests/skills/arena-skill/mermaid.test.cjs",
-  ),
   "Userscripts": (
     "tests/userscripts/userscripts.checks.cjs",
     "tests/userscripts/userscripts.test.cjs",

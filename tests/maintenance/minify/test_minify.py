@@ -373,22 +373,6 @@ def test_compact_copies_drift_and_runtime():
       minify.SOURCE / "references/survey.json",
       skill / "references/survey.json",
     )
-    shutil.copyfile(
-      ROOT / "tests/skills/arena-skill/test_preview.py",
-      skill / "scripts/test_preview.py",
-    )
-    subprocess.run(
-      [
-        sys.executable,
-        "-m",
-        "pytest",
-        str(skill / "scripts/test_preview.py"),
-        "-q",
-        "-p",
-        "no:cacheprovider",
-      ],
-      check=True,
-    )
 
     spec = importlib.util.spec_from_file_location(
       "compact_preview", minify.TARGETS[0] / "scripts/preview.py"

@@ -159,7 +159,7 @@ It reads all context pages and selects the latest run for each check and workflo
 
 ## Preview gate hooks
 
-The profile gate and EXIT hook have case labels in `skills/refs/arena-skill/scripts/install.sh`. `tests/skills/arena-skill/test_preview_gate.py` compares those labels with the hook tables below.
+The profile gate and EXIT hook have case labels in `skills/refs/arena-skill/scripts/install.sh` that match the hook tables below.
 
 ## Minified assets and scripts
 
