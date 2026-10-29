@@ -2,7 +2,7 @@
  * Main ES module controller for Arena Steering.
  */
 
-import { api } from "./api.js";
+import { api, connectWebSocket } from "./api.js";
 import { renderInboxView, trackMessageAcks } from "./inbox-view.js";
 import {
   escapeHtml,
@@ -35,15 +35,20 @@ async function ensureReportCached(reportId, expectedModifiedAt = null) {
   ) {
     return cached.report;
   }
-  const res = await api.getReport(reportId);
-  if (res?.report) {
-    reportCache.set(reportId, {
-      modified_at: res.report.modified_at,
-      report: res.report,
-    });
-    return res.report;
+  setLoading(true);
+  try {
+    const res = await api.getReport(reportId);
+    if (res?.report) {
+      reportCache.set(reportId, {
+        modified_at: res.report.modified_at,
+        report: res.report,
+      });
+      return res.report;
+    }
+    return null;
+  } finally {
+    setLoading(false);
   }
-  return null;
 }
 
 function hydrateReportsWithCache(summaries) {
@@ -105,41 +110,40 @@ let loadingStartAt = 0;
 let loadingDoneTimer = null;
 
 function setLoading(active) {
-  const main = document.getElementById("main-root");
-  if (!main) return;
+  const panel = document.getElementById("view-reports");
+  if (!panel) return;
   if (active) {
     loadingCount += 1;
     if (loadingDoneTimer) {
       clearTimeout(loadingDoneTimer);
       loadingDoneTimer = null;
     }
-    if (main.getAttribute("data-loading") !== "true") {
+    if (panel.getAttribute("data-loading") !== "true") {
       loadingStartAt = Date.now();
-      main.setAttribute("data-loading", "true");
+      panel.setAttribute("data-loading", "true");
     }
   } else {
     loadingCount = Math.max(0, loadingCount - 1);
     if (loadingCount === 0) {
       const elapsed = Date.now() - loadingStartAt;
       if (elapsed >= 200) {
-        main.setAttribute("data-loading", "done");
+        panel.setAttribute("data-loading", "done");
         loadingDoneTimer = setTimeout(() => {
           if (
             loadingCount === 0 &&
-            main.getAttribute("data-loading") === "done"
+            panel.getAttribute("data-loading") === "done"
           ) {
-            main.setAttribute("data-loading", "false");
+            panel.setAttribute("data-loading", "false");
           }
         }, 220);
       } else {
-        main.setAttribute("data-loading", "false");
+        panel.setAttribute("data-loading", "false");
       }
     }
   }
 }
 
 async function refreshAll(force = false) {
-  setLoading(true);
   try {
     const curState = store.getState();
     const [health, msgRes, taskRes, repRes] = await Promise.all([
@@ -199,8 +203,6 @@ async function refreshAll(force = false) {
     });
   } catch (err) {
     console.error(err);
-  } finally {
-    setLoading(false);
   }
 }
 
@@ -429,4 +431,7 @@ function initEvents() {
 store.subscribe(renderApp);
 initEvents();
 refreshAll(true);
-setInterval(() => refreshAll(false), 5000);
+connectWebSocket({
+  onChange: () => refreshAll(false),
+  onReload: () => window.location.reload(),
+});

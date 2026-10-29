@@ -158,6 +158,9 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert "report-picker-unanswered" in reports_js
   assert "reportCache" in app_js
   assert "ensureReportCached" in app_js
+  assert "connectWebSocket" in app_js
+  assert '#view-reports[data-loading="true"]:not([hidden])' in style_css
+  assert "margin: -67px calc(50% - 50vw) -84px;" in style_css
   assert "hydrateMermaidBlocks" in app_js
   assert "toggleCodeMermaid" in app_js
   assert "/mermaid.min.js" in index_html

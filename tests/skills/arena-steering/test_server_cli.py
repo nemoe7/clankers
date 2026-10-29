@@ -282,3 +282,72 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   code, out, _ = _run_cli(state_dir, "task", "rm", TASK_ID_CLI)
   assert code == 0
   assert TASK_ID_CLI in out
+
+
+def test_websocket_upgrade_and_rpc() -> None:
+  import base64
+  import json
+  import socket
+  import threading
+
+  from arena_steering.server import create_http_server
+
+  store = SqliteStore(":memory:")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="127.0.0.1", port=0, hot_reload=False)
+  port = server.server_address[1]
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with socket.create_connection(("127.0.0.1", port), timeout=5.0) as sock:
+      key = base64.b64encode(b"0123456789abcdef").decode("ascii")
+      req = (
+        f"GET /api/ws HTTP/1.1\r\n"
+        f"Host: 127.0.0.1:{port}\r\n"
+        f"Upgrade: websocket\r\n"
+        f"Connection: Upgrade\r\n"
+        f"Sec-WebSocket-Key: {key}\r\n"
+        f"Sec-WebSocket-Version: 13\r\n\r\n"
+      )
+      sock.sendall(req.encode("ascii"))
+      resp = b""
+      while b"\r\n\r\n" not in resp:
+        resp += sock.recv(4096)
+      header_part, leftover = resp.split(b"\r\n\r\n", 1)
+      assert b"101 Switching Protocols" in header_part
+      while len(leftover) < 2:
+        leftover += sock.recv(4096)
+      size = leftover[1] & 127
+      while len(leftover) < 2 + size:
+        leftover += sock.recv(4096)
+      first_msg = json.loads(leftover[2 : 2 + size].decode("utf-8"))
+      assert first_msg == {"type": "change"}
+
+      rpc_payload = json.dumps({"id": "1", "method": "GET", "path": "/health"}).encode(
+        "utf-8"
+      )
+      mask = b"\x01\x02\x03\x04"
+      masked = bytes(b ^ mask[i % 4] for i, b in enumerate(rpc_payload))
+      frame = bytes([0x81, 0x80 | len(rpc_payload)]) + mask + masked
+      sock.sendall(frame)
+      reply_buf = leftover[2 + size :]
+      while len(reply_buf) < 2:
+        reply_buf += sock.recv(4096)
+      r_size = reply_buf[1] & 127
+      offset = 2
+      if r_size == 126:
+        while len(reply_buf) < 4:
+          reply_buf += sock.recv(4096)
+        r_size = int.from_bytes(reply_buf[2:4], "big")
+        offset = 4
+      while len(reply_buf) < offset + r_size:
+        reply_buf += sock.recv(4096)
+      rpc_reply = json.loads(reply_buf[offset : offset + r_size].decode("utf-8"))
+      assert rpc_reply["type"] == "response"
+      assert rpc_reply["id"] == "1"
+      assert rpc_reply["status"] == 200
+      assert json.loads(rpc_reply["body"])["ok"] is True
+  finally:
+    server.shutdown()
+    server.server_close()
+    store.close()

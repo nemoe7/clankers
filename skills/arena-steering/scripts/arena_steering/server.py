@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import html
 import importlib
@@ -10,15 +11,17 @@ import json
 import mimetypes
 import os
 import re
+import sqlite3
 import sys
 import threading
 import time
 from collections.abc import Callable, Iterable
+from contextlib import closing
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, urlsplit
 
 from . import __version__
 from .markdown import render_markdown
@@ -28,6 +31,12 @@ from .services import MessageService, ReportService, TaskService
 from .store import SqliteStore
 
 RouteHandler = Callable[[dict[str, str], dict[str, list[str]], Any], tuple[int, Any]]
+
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+WS_TICK_SECONDS = 0.25
+WS_HEARTBEAT_SECONDS = 10.0
+WS_IDLE_SECONDS = 35.0
+WS_MAX_MESSAGE = 16 * 1024 * 1024
 
 MIME_OVERRIDES = {
   ".html": "text/html; charset=utf-8",
@@ -178,6 +187,8 @@ class SteeringApp:
     """Dispatch a request and return (status_code, json_payload)."""
     parsed = urlparse(raw_url)
     path = parsed.path.rstrip("/") or "/"
+    if path.startswith("/api/") and path != "/api":
+      path = path[len("/api") :] or "/"
     query = parse_qs(parsed.query)
     handler, params, allowed = self.router.match(method, path)
     if handler is None:
@@ -188,7 +199,10 @@ class SteeringApp:
         )
       return (int(HTTPStatus.NOT_FOUND), {"error": f"Unknown route: {path}"})
     try:
-      return handler(params, query, body or {})
+      status, payload = handler(params, query, body or {})
+      if method.upper() in {"POST", "PATCH", "DELETE"} and 200 <= status < 300:
+        self._state_version = getattr(self, "_state_version", 0) + 1
+      return (status, payload)
     except KeyError as exc:
       return (
         int(HTTPStatus.NOT_FOUND),
@@ -196,6 +210,20 @@ class SteeringApp:
       )
     except ValueError as exc:
       return (int(HTTPStatus.BAD_REQUEST), {"error": str(exc)})
+
+  def data_version(self) -> tuple[int, int]:
+    """Return a version tuple reflecting SQLite PRAGMA data_version and in-process mutations."""
+    in_proc = int(getattr(self, "_state_version", 0))
+    db_path = str(getattr(self.store, "db_path", ""))
+    if not db_path or db_path == ":memory:":
+      return (0, in_proc)
+    try:
+      with closing(sqlite3.connect(db_path, timeout=2.0)) as conn:
+        row = conn.execute("PRAGMA data_version").fetchone()
+        pragma_ver = int(row[0]) if row else 0
+        return (pragma_ver, in_proc)
+    except sqlite3.Error:
+      return (0, in_proc)
 
   def resolve_asset(self, request_path: str) -> tuple[bytes, str] | None:
     """Resolve a static file inside assets_dir or report images without path traversal."""
@@ -594,7 +622,15 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
     def do_GET(self) -> None:
       parsed = urlparse(self.path)
       path = parsed.path.rstrip("/") or "/"
-      handler, _, allowed = app.router.match("GET", path)
+      if path in {"/api/ws", "/ws"}:
+        self._handle_websocket()
+        return
+      route_path = (
+        (path[len("/api") :] or "/")
+        if path.startswith("/api/") and path != "/api"
+        else path
+      )
+      handler, _, allowed = app.router.match("GET", route_path)
       if handler is not None or allowed:
         status, payload = app.dispatch("GET", self.path)
         self._write_json(status, payload)
@@ -610,6 +646,174 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       self._send_common_headers(content_type, len(raw_bytes))
       self.end_headers()
       self.wfile.write(raw_bytes)
+
+    def ws_send(self, opcode: int, data: bytes) -> None:
+      size = len(data)
+      length = (
+        bytes([size])
+        if size < 126
+        else (
+          b"\x7e" + size.to_bytes(2, "big")
+          if size < 65536
+          else b"\x7f" + size.to_bytes(8, "big")
+        )
+      )
+      self.connection.sendall(bytes([0x80 | opcode]) + length + data)
+
+    def ws_dispatch(self, value: Any) -> None:
+      if not isinstance(value, dict):
+        raise TypeError("Expected an object")
+      if value.get("type") == "pong":
+        return
+      request_id = value.get("id")
+      method = str(value.get("method", "GET")).upper()
+      path = str(value.get("path", ""))
+      raw_body = value.get("body", "")
+      if (
+        type(request_id) not in (str, int)
+        or len(str(request_id)) > 80
+        or method not in ("GET", "POST", "PATCH", "DELETE")
+        or not path.startswith("/")
+        or urlsplit(path).path in {"/api/ws", "/ws"}
+        or not isinstance(raw_body, str)
+      ):
+        raise ValueError("Invalid WebSocket request")
+      body_dict: dict[str, Any] = {}
+      if raw_body.strip():
+        parsed_body = json.loads(raw_body)
+        if not isinstance(parsed_body, dict):
+          raise ValueError("JSON request body must be an object")
+        body_dict = parsed_body
+      status, payload = app.dispatch(method, path, body_dict)
+      reply = json.dumps(
+        {
+          "type": "response",
+          "id": request_id,
+          "status": status,
+          "contentType": "application/json; charset=utf-8",
+          "body": json.dumps(payload),
+        }
+      ).encode("utf-8")
+      self.ws_send(1, reply)
+
+    def _handle_websocket(self) -> None:
+      if (
+        self.headers.get("Upgrade", "").lower() != "websocket"
+        or "upgrade"
+        not in {
+          part.strip() for part in self.headers.get("Connection", "").lower().split(",")
+        }
+        or self.headers.get("Sec-WebSocket-Version") != "13"
+      ):
+        self._write_json(
+          int(HTTPStatus.BAD_REQUEST),
+          {"error": "Expected a version 13 WebSocket upgrade"},
+        )
+        return
+      key = self.headers.get("Sec-WebSocket-Key", "")
+      try:
+        if len(base64.b64decode(key, validate=True)) != 16:
+          raise ValueError("Invalid WebSocket key")
+      except ValueError as exc:
+        self._write_json(int(HTTPStatus.BAD_REQUEST), {"error": str(exc)})
+        return
+      self.protocol_version = "HTTP/1.1"
+      self.send_response(101)
+      self.send_header("Upgrade", "websocket")
+      self.send_header("Connection", "Upgrade")
+      accept = base64.b64encode(
+        hashlib.sha1(
+          (key + WS_GUID).encode("utf-8"),
+          usedforsecurity=False,
+        ).digest()
+      ).decode("ascii")
+      self.send_header("Sec-WebSocket-Accept", accept)
+      self.end_headers()
+      self.close_connection = True
+      self.connection.settimeout(WS_TICK_SECONDS)
+      buffer = bytearray()
+      message = bytearray()
+      fragmented = False
+      last_seen = last_heartbeat = time.monotonic()
+      try:
+        version = app.data_version()
+        asset_ver = assets_signature(app.assets_dir)
+        self.ws_send(1, b'{"type":"change"}')
+        while True:
+          try:
+            chunk = self.connection.recv(65536)
+            if not chunk:
+              return
+            buffer.extend(chunk)
+            last_seen = time.monotonic()
+          except TimeoutError:
+            pass
+          while len(buffer) >= 2:
+            first, second = buffer[:2]
+            opcode, final = first & 15, bool(first & 128)
+            if first & 112 or not (second & 128) or opcode not in (0, 1, 2, 8, 9, 10):
+              raise ValueError("Invalid frame")
+            size, offset = second & 127, 2
+            if size in (126, 127):
+              width = 2 if size == 126 else 8
+              if len(buffer) < 2 + width:
+                break
+              size = int.from_bytes(buffer[2 : 2 + width], "big")
+              offset += width
+            if opcode >= 8 and (not final or size > 125):
+              raise ValueError("Invalid control frame")
+            if size + (len(message) if opcode < 8 else 0) > WS_MAX_MESSAGE:
+              self.ws_send(8, (1009).to_bytes(2, "big"))
+              return
+            if len(buffer) < offset + 4 + size:
+              break
+            mask = buffer[offset : offset + 4]
+            data = bytes(
+              v ^ mask[i % 4]
+              for i, v in enumerate(buffer[offset + 4 : offset + 4 + size])
+            )
+            del buffer[: offset + 4 + size]
+            if opcode == 8:
+              self.ws_send(8, data[:2] if len(data) >= 2 else b"")
+              return
+            if opcode == 9:
+              self.ws_send(10, data)
+              continue
+            if opcode == 10:
+              continue
+            if opcode == 2:
+              self.ws_send(8, (1003).to_bytes(2, "big"))
+              return
+            if (opcode == 0) != fragmented:
+              raise ValueError("Invalid continuation")
+            message.extend(data)
+            fragmented = not final
+            if final:
+              self.ws_dispatch(json.loads(message.decode("utf-8")))
+              message.clear()
+          current = app.data_version()
+          if current != version:
+            version = current
+            self.ws_send(1, b'{"type":"change"}')
+          current_assets = assets_signature(app.assets_dir)
+          if current_assets != asset_ver:
+            asset_ver = current_assets
+            self.ws_send(1, b'{"type":"reload"}')
+          now = time.monotonic()
+          if now - last_seen > WS_IDLE_SECONDS:
+            self.ws_send(8, (1001).to_bytes(2, "big"))
+            return
+          if now - last_heartbeat >= WS_HEARTBEAT_SECONDS:
+            self.ws_send(1, b'{"type":"heartbeat"}')
+            last_heartbeat = now
+      except (ValueError, TypeError) as error:
+        code = 1007 if isinstance(error, UnicodeDecodeError) else 1002
+        try:
+          self.ws_send(8, code.to_bytes(2, "big"))
+        except OSError:
+          pass
+      except (OSError, sqlite3.Error):
+        return
 
     def do_POST(self) -> None:
       self._handle_json_method("POST")
