@@ -341,9 +341,25 @@ async function metrics(page, selector) {
         Boolean(element.closest && element.closest('header, nav, [role="banner"], [role="toolbar"], [role="navigation"]')) ||
         /(?:^|[-_\s])(topbar|toolbar|header|navbar|menubar|statusbar|action-bar|tab-bar)(?:$|[-_\s])/i.test(classAndId) ||
         (box.height > 0 && box.height <= 64 && style.getPropertyValue('justify-content') === 'space-between');
+      const isButtonGroup = (role || '').toLowerCase() === 'tablist' ||
+        /(?:^|[-_\s])(tab-nav|btn-group|button-group|modal-actions)(?:$|[-_\s])/i.test(classAndId);
+      const buttonGroupSizes = isButtonGroup
+        ? [...(element.children || [])]
+            .filter(child => child.tagName === 'BUTTON' || (child.getAttribute('role') || '').toLowerCase() === 'tab')
+            .map(child => {
+              const cs = getComputedStyle(child);
+              if (cs.display === 'none' || cs.visibility === 'hidden') return null;
+              const r = child.getBoundingClientRect();
+              return r.width > 0 && r.height > 0
+                ? {width: Number(r.width.toFixed(2)), height: Number(r.height.toFixed(2))}
+                : null;
+            })
+            .filter(Boolean)
+        : undefined;
       return {selector: selectorFor(element),
         tag, inputType, role,
         toolbarExempt,
+        ...(buttonGroupSizes && buttonGroupSizes.length >= 2 ? {button_group_sizes: buttonGroupSizes, buttonGroupSizes} : {}),
         label: element.getAttribute('aria-label'),
         labelledBy: element.getAttribute('aria-labelledby'),
         labels: element.labels ? [...element.labels].map(label => label.textContent) : [],

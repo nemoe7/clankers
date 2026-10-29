@@ -709,6 +709,33 @@ def check_density(report: dict) -> list[dict]:
           **b_extra,
         }
       )
+    group_sizes = element.get("button_group_sizes", element.get("buttonGroupSizes"))
+    if isinstance(group_sizes, list) and len(group_sizes) >= 2:
+      widths: list[float] = []
+      heights: list[float] = []
+      for item in group_sizes:
+        if isinstance(item, dict):
+          w = float(item.get("width", 0) or 0)
+          h = float(item.get("height", 0) or 0)
+          if w > 0 and h > 0:
+            widths.append(w)
+            heights.append(h)
+      if len(widths) >= 2 and (
+        max(widths) - min(widths) > 1.0 or max(heights) - min(heights) > 1.0
+      ):
+        dims = ", ".join(
+          f"{w:g}x{h:g}px" for w, h in zip(widths, heights, strict=False)
+        )
+        findings.append(
+          {
+            "rule": "NUM208",
+            "selector": selector,
+            "evidence": (
+              f"{selector}: buttons in group do not share identical size ({dims})"
+            ),
+            **b_extra,
+          }
+        )
     values = element.get("values") or {}
     overflow_x = str(values.get("overflow-x") or values.get("overflow") or "").lower()
     overflow_y = str(values.get("overflow-y") or values.get("overflow") or "").lower()
