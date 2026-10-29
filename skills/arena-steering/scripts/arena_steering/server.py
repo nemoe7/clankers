@@ -337,9 +337,27 @@ class SteeringApp:
       unread_only=not include_all,
       include_hidden=include_hidden,
     )
+    total = len(items)
+    before_id = (query.get("before", [""])[0] or "").strip()
+    if before_id:
+      for idx, item in enumerate(items):
+        if item.id == before_id:
+          items = items[:idx]
+          break
+    limit_raw = (query.get("limit", [""])[0] or "").strip()
+    has_more = False
+    if limit_raw.isdigit() and int(limit_raw) > 0:
+      limit = int(limit_raw)
+      if len(items) > limit:
+        has_more = True
+        items = items[-limit:]
     return (
       int(HTTPStatus.OK),
-      {"messages": [self._serialize_message(item) for item in items]},
+      {
+        "messages": [self._serialize_message(item) for item in items],
+        "total": total,
+        "has_more": has_more,
+      },
     )
 
   def _handle_create_message(

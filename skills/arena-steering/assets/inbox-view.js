@@ -14,12 +14,15 @@ const EYE_CLOSED_SVG = `<svg class="lucide lucide-eye-off" width="16" height="16
 const SKIP_FORWARD_SVG = `<svg class="lucide lucide-skip-forward" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4v16"></path><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"></path></svg>`;
 const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`;
 
+const MESSAGE_PAGE_SIZE = 15;
 const seenAckCounts = new Map();
 let initializedAckCounts = false;
 let unreadEditedMsgId = null;
 let savedScrollTop = null;
 let pinnedToBottom = true;
 let skipPollFeedbackUntil = 0;
+let visibleMessageCount = MESSAGE_PAGE_SIZE;
+let loadingMoreMessages = false;
 
 function stateDotForStatus(status) {
   if (status === "acked") return "said";
@@ -132,7 +135,7 @@ export function renderInboxView(container, state, handlers) {
   const query = (state.searchQuery || "").trim().toLowerCase();
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
 
-  const visibleMessages = (state.messages || []).filter((msg) => {
+  const filteredMessages = (state.messages || []).filter((msg) => {
     if (!showHidden && msg.hidden) return false;
     if (!query) return true;
     const haystack = [msg.id, msg.body, ...(msg.acks || [])]
@@ -140,6 +143,14 @@ export function renderInboxView(container, state, handlers) {
       .toLowerCase();
     return haystack.includes(query);
   });
+
+  const hasOlderMessages =
+    !query && filteredMessages.length > visibleMessageCount;
+  const visibleMessages = query
+    ? filteredMessages
+    : filteredMessages.slice(
+        Math.max(0, filteredMessages.length - visibleMessageCount)
+      );
 
   const historyHtml = visibleMessages.length
     ? visibleMessages
@@ -312,6 +323,36 @@ export function renderInboxView(container, state, handlers) {
         unreadEditedMsgId = null;
         if (logEditedBtn) logEditedBtn.hidden = true;
       }
+    }
+    if (
+      hasOlderMessages &&
+      !loadingMoreMessages &&
+      historyEl.scrollTop <= 48 &&
+      historyEl.scrollHeight > historyEl.clientHeight
+    ) {
+      loadingMoreMessages = true;
+      const firstCard = historyEl.querySelector(".message");
+      const topAnchorId = firstCard?.dataset.msgId || null;
+      const prevRectTop = firstCard
+        ? firstCard.getBoundingClientRect().top -
+          historyEl.getBoundingClientRect().top
+        : 0;
+      visibleMessageCount += MESSAGE_PAGE_SIZE;
+      renderInboxView(container, state, handlers);
+      const nextHistory = container.querySelector("#history");
+      if (nextHistory && topAnchorId) {
+        const nextCard = nextHistory.querySelector(
+          `.message[data-msg-id="${CSS.escape(topAnchorId)}"]`
+        );
+        if (nextCard) {
+          const curRectTop =
+            nextCard.getBoundingClientRect().top -
+            nextHistory.getBoundingClientRect().top;
+          nextHistory.scrollTop += curRectTop - prevRectTop;
+          savedScrollTop = nextHistory.scrollTop;
+        }
+      }
+      loadingMoreMessages = false;
     }
   }
 
