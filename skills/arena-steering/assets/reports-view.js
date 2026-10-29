@@ -11,8 +11,17 @@ const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewB
 const DISMISS_SVG = `<svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`;
 const SEND_SVG = `<svg class="lucide lucide-send" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>`;
 const UNANSWERED_SVG = `<svg class="lucide lucide-circle-help report-picker-help-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>`;
+const CHEVRON_DOWN_SVG = `<svg class="lucide lucide-chevron-down" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"></path></svg>`;
+const ARROW_UP_SVG = `<svg class="lucide lucide-arrow-up" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>`;
 
 const CUSTOM_SENTINEL = "__custom__";
+const TOC_TOP_THRESHOLD_PX = 48;
+const TOC_BOTTOM_CLAMP_PX = 8;
+const TOC_CLICK_LOCK_MS = 650;
+
+let lastRenderedReportId = null;
+let mobilePickerCollapsed = false;
+let activeScrollCleanup = null;
 
 function renderFieldBlock(field, headings) {
   const fieldId = escapeHtml(field.id);
@@ -66,8 +75,15 @@ function renderFieldBlock(field, headings) {
 }
 
 export function renderReportsView(container, state, handlers) {
+  if (typeof activeScrollCleanup === "function") {
+    activeScrollCleanup();
+    activeScrollCleanup = null;
+  }
+
   const reports = state.reports || [];
   if (!reports.length) {
+    lastRenderedReportId = null;
+    container.dataset.scrollable = "false";
     container.innerHTML = `<div class="reports-layout"><p class="muted" id="report-status">No report published yet.</p></div>`;
     return;
   }
@@ -78,6 +94,9 @@ export function renderReportsView(container, state, handlers) {
       : reports[0].id;
   const activeReport =
     reports.find((r) => r.id === selectedId) || reports[0];
+  const swappedReport =
+    lastRenderedReportId !== null && lastRenderedReportId !== activeReport.id;
+  lastRenderedReportId = activeReport.id;
 
   const blocks = activeReport.blocks || [
     { type: "markdown", markdown: activeReport.body || "" },
@@ -110,6 +129,7 @@ export function renderReportsView(container, state, handlers) {
         class="report-toc-link ${idx === 0 ? "active" : ""}"
         data-toc-target="${escapeHtml(h.id)}"
         data-level="${h.level}"
+        aria-current="${idx === 0 ? "true" : "false"}"
       >${escapeHtml(h.text)}</a>
     `
     )
@@ -179,9 +199,18 @@ export function renderReportsView(container, state, handlers) {
         </div>
       </aside>
 
-      <aside id="report-rail" class="report-rail" aria-label="Report picker and actions">
+      <aside id="report-rail" class="report-rail" aria-label="Report picker and actions" data-mobile-collapsed="${mobilePickerCollapsed ? "true" : "false"}">
         <div class="report-rail-bar">
-          <span class="report-toc-title">Reports (${reports.length})</span>
+          <button
+            type="button"
+            id="report-picker-toggle"
+            class="report-picker-toggle"
+            aria-expanded="${mobilePickerCollapsed ? "false" : "true"}"
+            aria-controls="report-picker"
+          >
+            ${CHEVRON_DOWN_SVG}
+            <span class="report-toc-title">Reports (${reports.length})</span>
+          </button>
           <div class="report-rail-actions">
             <button
               type="button"
@@ -219,8 +248,105 @@ export function renderReportsView(container, state, handlers) {
           }
         </form>
       </div>
+      <button
+        type="button"
+        id="report-scroll-top"
+        class="report-scroll-top"
+        aria-label="Scroll to top"
+        title="Scroll to top"
+        hidden
+      >${ARROW_UP_SVG}</button>
     </div>
   `;
+
+  if (swappedReport) {
+    container.scrollTop = 0;
+    if (container.style) {
+      container.style.animation = "none";
+      void container.offsetHeight;
+      container.style.animation = "";
+    }
+  }
+
+  const railEl = container.querySelector("#report-rail");
+  const pickerToggleBtn = container.querySelector("#report-picker-toggle");
+  pickerToggleBtn?.addEventListener("click", () => {
+    mobilePickerCollapsed = !mobilePickerCollapsed;
+    if (railEl) {
+      railEl.dataset.mobileCollapsed = mobilePickerCollapsed ? "true" : "false";
+    }
+    pickerToggleBtn.setAttribute(
+      "aria-expanded",
+      mobilePickerCollapsed ? "false" : "true"
+    );
+  });
+
+  const scrollTopBtn = container.querySelector("#report-scroll-top");
+  scrollTopBtn?.addEventListener("click", () => {
+    if (typeof container.scrollTo === "function") {
+      container.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      container.scrollTop = 0;
+    }
+  });
+
+  let tocClickLockId = null;
+  let tocClickLockUntil = 0;
+  let tocFlashTimer = null;
+
+  const setActiveTocLink = (targetId) => {
+    for (const item of container.querySelectorAll(".report-toc-link")) {
+      const isMatch = item.dataset.tocTarget === targetId;
+      item.classList.toggle("active", isMatch);
+      item.setAttribute("aria-current", isMatch ? "true" : "false");
+    }
+  };
+
+  const syncScrollState = () => {
+    const scrollable =
+      (container.scrollHeight || 0) > (container.clientHeight || 0) + 1;
+    container.dataset.scrollable = scrollable ? "true" : "false";
+    if (scrollTopBtn) {
+      scrollTopBtn.hidden = (container.scrollTop || 0) <= 160;
+    }
+    if (!headings.length) return;
+    if (tocClickLockId && Date.now() < tocClickLockUntil) {
+      setActiveTocLink(tocClickLockId);
+      return;
+    }
+    tocClickLockId = null;
+    if (
+      scrollable &&
+      container.scrollTop + container.clientHeight >=
+        container.scrollHeight - TOC_BOTTOM_CLAMP_PX
+    ) {
+      setActiveTocLink(headings[headings.length - 1].id);
+      return;
+    }
+    const containerTop = container.getBoundingClientRect?.().top || 0;
+    let activeId = headings[0].id;
+    for (const h of headings) {
+      const el = container.querySelector(`#${CSS.escape(h.id)}`);
+      if (!el?.getBoundingClientRect) continue;
+      const relTop = el.getBoundingClientRect().top - containerTop;
+      if (relTop <= TOC_TOP_THRESHOLD_PX) {
+        activeId = h.id;
+      } else {
+        break;
+      }
+    }
+    setActiveTocLink(activeId);
+  };
+
+  container.addEventListener?.("scroll", syncScrollState, { passive: true });
+  activeScrollCleanup = () => {
+    container.removeEventListener?.("scroll", syncScrollState);
+    if (tocFlashTimer) {
+      clearTimeout(tocFlashTimer);
+      tocFlashTimer = null;
+    }
+  };
+  syncScrollState();
 
   for (const btn of container.querySelectorAll("[data-report-id]")) {
     btn.addEventListener("click", () => {
@@ -232,10 +358,22 @@ export function renderReportsView(container, state, handlers) {
     link.addEventListener("click", (event) => {
       event.preventDefault();
       const targetId = link.dataset.tocTarget;
+      tocClickLockId = targetId;
+      tocClickLockUntil = Date.now() + TOC_CLICK_LOCK_MS;
+      setActiveTocLink(targetId);
       const targetEl = container.querySelector(`#${CSS.escape(targetId)}`);
-      targetEl?.scrollIntoView({ behavior: "smooth", block: "start" });
-      for (const item of container.querySelectorAll(".report-toc-link")) {
-        item.classList.toggle("active", item === link);
+      if (targetEl) {
+        targetEl.scrollIntoView?.({ behavior: "smooth", block: "start" });
+        for (const flashed of container.querySelectorAll("[data-toc-flash]")) {
+          delete flashed.dataset.tocFlash;
+        }
+        targetEl.dataset.tocFlash = "true";
+        if (tocFlashTimer) clearTimeout(tocFlashTimer);
+        tocFlashTimer = setTimeout(() => {
+          if (targetEl.isConnected) {
+            delete targetEl.dataset.tocFlash;
+          }
+        }, 1200);
       }
     });
   }
