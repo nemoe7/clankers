@@ -1,6 +1,4 @@
-/**
- * Shared native `<dialog>` modal manager (`nuu` modal-manager recipe).
- */
+// Shared native `<dialog>` modal manager (`nuu` modal-manager recipe).
 
 export function createModalManager(
   shell = typeof document !== "undefined"

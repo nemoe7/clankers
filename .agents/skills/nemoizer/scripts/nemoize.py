@@ -2409,7 +2409,7 @@ def _source_prose(path, text, context, paragraph_cap):
           ids |= line_ids[ln - 1]
       if not suppressed(row["rule"], ids):
         findings.append(row)
-  if path.name.endswith(".user.js"):
+  if path.suffix.lower() in {".js", ".mjs", ".cjs"}:
     code = PROSE_RULE_IDS["prose_dash"]
     if not suppressed(code, file_ids):
       seen_lines = {row["line"] for row in findings if row["rule"] == code}

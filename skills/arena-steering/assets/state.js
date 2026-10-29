@@ -1,6 +1,4 @@
-/**
- * Reactive UI store for Arena Steering.
- */
+// Reactive UI store for Arena Steering.
 
 const TAB_STORAGE_KEY = "steer:activeTab";
 const REPORT_STORAGE_KEY = "steer:selectedReportId";

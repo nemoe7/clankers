@@ -1,6 +1,4 @@
-/**
- * Tasks tab view for Arena Steering (`Current`, `Upcoming`, `Finished`).
- */
+// Tasks tab view for Arena Steering (`Current`, `Upcoming`, `Finished`).
 
 import { escapeHtml } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
@@ -147,7 +145,7 @@ export function renderTasksView(container, state) {
           class="input"
           value="${escapeHtml(taskSearchQuery)}"
           placeholder="Search tasks"
-          aria-label="Search the task list"
+          aria-label="Search task list"
         />
         <div class="select-wrap task-filter">
           <select id="task-type-filter" class="select" aria-label="Filter tasks by type">

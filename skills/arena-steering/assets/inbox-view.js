@@ -1,6 +1,4 @@
-/**
- * Messages (Inbox) tab view for Arena Steering.
- */
+// Messages (Inbox) tab view for Arena Steering.
 
 import {
   escapeHtml,
@@ -239,7 +237,7 @@ export function renderInboxView(container, state, handlers) {
               type="search"
               value="${escapeHtml(state.searchQuery || "")}"
               placeholder="Search messages"
-              aria-label="Search the message log"
+              aria-label="Search message log"
             />
             <button
               id="skip-poll"
@@ -273,7 +271,7 @@ export function renderInboxView(container, state, handlers) {
         <p id="log-empty" class="receipt" role="status" ${visibleMessages.length ? "hidden" : ""}>No messages yet.</p>
       </section>
 
-      <section class="card compose" id="compose" aria-label="Send a message">
+      <section class="card compose" id="compose" aria-label="Send message">
         <form id="form">
           <div class="composer-shell">
             <button
