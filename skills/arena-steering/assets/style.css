@@ -289,8 +289,10 @@ pre > code {
   padding-right: 62px;
 }
 
+.code-block[data-mermaid-state="pending"] > pre,
 .code-block[data-mermaid-state="rendered"] > pre,
-.code-block[data-md-state="rendered"] > pre {
+.code-block[data-md-state="rendered"] > pre,
+.code-block:not([data-mermaid-state="code"]):not([data-mermaid-state="fallback"]) > pre:has(> code.language-mermaid) {
   display: none;
 }
 
@@ -299,7 +301,8 @@ pre > code {
 }
 
 .mermaid-diagram {
-  padding: 12px;
+  width: 100%;
+  padding: 16px;
   border-radius: 0;
   overflow-x: auto;
   background-color: hsl(var(--surface-secondary));
@@ -307,8 +310,10 @@ pre > code {
 
 .mermaid-svg {
   display: block;
+  width: 100%;
   max-width: 100%;
   height: auto;
+  margin-inline: auto;
   color: hsl(var(--text-primary));
   font-family: inherit;
 }
@@ -399,9 +404,12 @@ code.note-id[data-state="good"] {
   width: max-content;
   max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border-collapse: collapse;
+  border: 1px solid hsl(var(--border-faint));
+  border-radius: 6px;
   font-size: 14px;
-  margin: 8px 0;
+  margin: 10px 0;
 }
 
 .report th,
@@ -410,8 +418,38 @@ code.note-id[data-state="good"] {
 .message-text td {
   text-align: left;
   border-bottom: 1px solid hsl(var(--border-faint));
-  padding: 6px 10px;
+  border-right: 1px solid hsl(var(--border-faint));
+  padding: 6px 12px;
   overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.report th:last-child,
+.report td:last-child,
+.message-text th:last-child,
+.message-text td:last-child {
+  border-right: 0;
+}
+
+.report tr:last-child td,
+.message-text tr:last-child td {
+  border-bottom: 0;
+}
+
+.report th,
+.message-text th {
+  background-color: hsl(var(--surface-secondary));
+  color: hsl(var(--header-primary));
+  font-weight: 600;
+}
+
+.task-list-item {
+  list-style: none;
+}
+
+.task-list-item-checkbox {
+  margin-right: 6px;
+  vertical-align: middle;
 }
 
 .report blockquote,
@@ -1938,7 +1976,26 @@ code.note-id {
 }
 
 .prose-block {
+  width: 100%;
+  max-width: none;
+}
+
+.prose-block > p,
+.prose-block > ul,
+.prose-block > ol,
+.prose-block > blockquote,
+.prose-block > h1,
+.prose-block > h2,
+.prose-block > h3,
+.prose-block > h4,
+.prose-block > h5,
+.prose-block > h6 {
   max-width: 72ch;
+}
+
+.prose-block > .code-block {
+  width: 100%;
+  max-width: 100%;
 }
 
 .prose-block h1,

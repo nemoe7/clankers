@@ -115,8 +115,10 @@ function renderCodeFence(lang, codeLines) {
     langKey === "mermaid"
       ? `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${dataCode}">${BRACES_SVG}</button>`
       : "";
+  const mermaidStateAttr =
+    langKey === "mermaid" ? ` data-mermaid-state="pending"` : "";
   return `
-    <div class="code-block">
+    <div class="code-block"${mermaidStateAttr}>
       ${mermaidBtn}
       <button type="button" class="copy-code" aria-label="Copy code" title="Copy code" data-code="${dataCode}">${COPY_SVG}</button>
       <div class="code-block-header">
@@ -155,21 +157,86 @@ export function sanitizeMermaidSvg(svgText) {
 }
 
 let mermaidSeq = 0;
+let mermaidInitialized = false;
+const mermaidSvgCache = new Map();
 
 export function initializeMermaid() {
   const lib = globalThis.mermaid;
   if (!lib?.initialize) return null;
-  lib.initialize({
-    startOnLoad: false,
-    securityLevel: "strict",
-    htmlLabels: false,
-    maxTextSize: 50000,
-    maxEdges: 500,
-    suppressErrorRendering: true,
-    theme: "dark",
-    flowchart: { htmlLabels: false },
-  });
+  if (!mermaidInitialized) {
+    lib.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      htmlLabels: false,
+      maxTextSize: 50000,
+      maxEdges: 500,
+      suppressErrorRendering: true,
+      theme: "base",
+      themeVariables: {
+        darkMode: true,
+        background: "#22252b",
+        fontFamily:
+          '"Basel Grotesk", -apple-system, BlinkMacSystemFont, sans-serif',
+        fontSize: "13px",
+        primaryColor: "#2b2f37",
+        primaryTextColor: "#f3f4f6",
+        primaryBorderColor: "#68b5f8",
+        secondaryColor: "#242830",
+        secondaryTextColor: "#f3f4f6",
+        secondaryBorderColor: "#4a505c",
+        tertiaryColor: "#1b1e23",
+        tertiaryTextColor: "#9da3ae",
+        tertiaryBorderColor: "#373b44",
+        lineColor: "#9da3ae",
+        textColor: "#f3f4f6",
+        mainBkg: "#2b2f37",
+        secondBkg: "#242830",
+        nodeBorder: "#68b5f8",
+        clusterBkg: "#1b1e23",
+        clusterBorder: "#373b44",
+        defaultLinkColor: "#9da3ae",
+        titleColor: "#f9fafb",
+        edgeLabelBackground: "#22252b",
+        actorBkg: "#2b2f37",
+        actorBorder: "#68b5f8",
+        actorTextColor: "#f3f4f6",
+        actorLineColor: "#9da3ae",
+        signalColor: "#f3f4f6",
+        signalTextColor: "#f3f4f6",
+        labelBoxBkgColor: "#242830",
+        labelBoxBorderColor: "#4a505c",
+        labelTextColor: "#f3f4f6",
+        loopTextColor: "#9da3ae",
+        noteBkgColor: "#242830",
+        noteTextColor: "#f3f4f6",
+        noteBorderColor: "#68b5f8",
+      },
+      flowchart: { htmlLabels: false },
+    });
+    mermaidInitialized = true;
+  }
   return lib;
+}
+
+function mountMermaidDiagram(block, codeEl, rawSource, safeSvg) {
+  if (!block.querySelector(".preview-code-mermaid")) {
+    const dataCode = escapeHtml(rawSource).replace(/\n/g, "&#10;");
+    block.insertAdjacentHTML(
+      "afterbegin",
+      `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${dataCode}">${BRACES_SVG}</button>`
+    );
+  }
+  let diagramDiv = block.querySelector(":scope > .mermaid-diagram");
+  if (!diagramDiv) {
+    diagramDiv = document.createElement("div");
+    diagramDiv.className = "mermaid-diagram";
+    diagramDiv.setAttribute("role", "img");
+    diagramDiv.setAttribute("aria-label", "Mermaid diagram");
+    const preEl = codeEl.closest("pre");
+    block.insertBefore(diagramDiv, preEl);
+  }
+  diagramDiv.innerHTML = safeSvg;
+  block.dataset.mermaidState = "rendered";
 }
 
 export async function hydrateMermaidBlocks(rootEl = document) {
@@ -181,9 +248,25 @@ export async function hydrateMermaidBlocks(rootEl = document) {
   const lib = initializeMermaid();
   for (const codeEl of codeNodes) {
     const block = codeEl.closest(".code-block");
-    if (!block || block.dataset.mermaidState) continue;
+    if (
+      !block ||
+      (block.dataset.mermaidState &&
+        block.dataset.mermaidState !== "pending")
+    ) {
+      continue;
+    }
     const rawSource = (codeEl.textContent || "").trim();
-    if (!rawSource || !lib?.render) {
+    if (!rawSource) {
+      block.dataset.mermaidState = "fallback";
+      block.querySelector(".preview-code-mermaid")?.remove();
+      continue;
+    }
+    const cachedSvg = mermaidSvgCache.get(rawSource);
+    if (cachedSvg) {
+      mountMermaidDiagram(block, codeEl, rawSource, cachedSvg);
+      continue;
+    }
+    if (!lib?.render) {
       block.dataset.mermaidState = "fallback";
       block.querySelector(".preview-code-mermaid")?.remove();
       continue;
@@ -201,22 +284,9 @@ export async function hydrateMermaidBlocks(rootEl = document) {
         block.querySelector(".preview-code-mermaid")?.remove();
         continue;
       }
+      mermaidSvgCache.set(rawSource, safeSvg);
       if (!block.isConnected) continue;
-      if (!block.querySelector(".preview-code-mermaid")) {
-        const dataCode = escapeHtml(rawSource).replace(/\n/g, "&#10;");
-        block.insertAdjacentHTML(
-          "afterbegin",
-          `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${dataCode}">${BRACES_SVG}</button>`
-        );
-      }
-      const diagramDiv = document.createElement("div");
-      diagramDiv.className = "mermaid-diagram";
-      diagramDiv.setAttribute("role", "img");
-      diagramDiv.setAttribute("aria-label", "Mermaid diagram");
-      diagramDiv.innerHTML = safeSvg;
-      const preEl = codeEl.closest("pre");
-      block.insertBefore(diagramDiv, preEl);
-      block.dataset.mermaidState = "rendered";
+      mountMermaidDiagram(block, codeEl, rawSource, safeSvg);
     } catch {
       block.dataset.mermaidState = "fallback";
       block.querySelector(".preview-code-mermaid")?.remove();
@@ -229,7 +299,8 @@ export function toggleCodeMermaid(button) {
   if (
     !block ||
     !block.dataset.mermaidState ||
-    block.dataset.mermaidState === "fallback"
+    block.dataset.mermaidState === "fallback" ||
+    block.dataset.mermaidState === "pending"
   ) {
     return;
   }
@@ -250,6 +321,19 @@ export function toggleCodeMermaid(button) {
 export function renderInlineMarkdown(text) {
   let out = escapeHtml(text);
   out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  out = out.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+|#[^\s)]+)\)/g,
+    (_m, label, url) => {
+      const ext = url.startsWith("#")
+        ? ""
+        : ' target="_blank" rel="noopener noreferrer"';
+      return `<a href="${url}"${ext}>${label}</a>`;
+    }
+  );
+  out = out.replace(
+    /(^|[\s(])(https?:\/\/[^\s<>()]+?)(?=[.,;:!?]?(?:[\s)]|$))/g,
+    '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>'
+  );
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   out = out.replace(/~~([^~]+)~~/g, "<del>$1</del>");
@@ -360,7 +444,16 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
         html.push("<ul>");
         inList = true;
       }
-      html.push(`<li>${renderInlineMarkdown(bullet[1])}</li>`);
+      const taskMatch = bullet[1].match(/^\[([ xX])\]\s+(.+)$/);
+      if (taskMatch) {
+        const checkedAttr =
+          taskMatch[1].toLowerCase() === "x" ? " checked" : "";
+        html.push(
+          `<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled${checkedAttr}> ${renderInlineMarkdown(taskMatch[2])}</li>`
+        );
+      } else {
+        html.push(`<li>${renderInlineMarkdown(bullet[1])}</li>`);
+      }
       continue;
     }
     closeList();
