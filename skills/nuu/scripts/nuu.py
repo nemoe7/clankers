@@ -33,6 +33,7 @@ from measure import (
   check_density,
   parse_sheet,
   point,
+  ruler,
 )
 from measure import check as check_measurements
 from measure import main as measure_main
@@ -637,7 +638,14 @@ def _has_design_doc(root: Path, design_doc_rel: str | None = None) -> bool:
   return False
 
 
-def lint(root):
+def lint(
+  root,
+  *,
+  manifest=None,
+  ruler_start=None,
+  ruler_end=None,
+  scale=DEFAULT_SCALE,
+):
   findings, coverage, marks, suppressions, deviations = [], [], [], [], []
   nonuu_by_path = {}
   list_rules = []
@@ -867,10 +875,37 @@ def lint(root):
         "criterion": "clause-11",
       }
     )
+  icons_res = check_icons(root)
+  for icon_finding in icons_res.get("findings", []):
+    if isinstance(icon_finding, dict):
+      enrich_finding_rule(icon_finding)
+  design_res = extract(root)
+  extra: dict[str, object] = {}
+  if manifest is not None:
+    asset_res = assets(root, manifest)
+    extra["assets"] = asset_res
+    findings.extend(asset_res.get("findings", []))
+  if ruler_start is not None and ruler_end is not None:
+    gap = ruler(ruler_start, ruler_end, scale)
+    extra["ruler"] = gap
+    if not gap["on_scale"]:
+      findings.append(
+        {
+          "rule": "NUM201",
+          "severity": "review",
+          "evidence": f"gap {gap['dx']:g} x {gap['dy']:g} px is off the {scale:g} px scale",
+        }
+      )
   for finding in findings:
-    enrich_finding_rule(finding)
+    if isinstance(finding, dict):
+      enrich_finding_rule(finding)
   return {
     "findings": findings,
+    "icons": icons_res,
+    "design": design_res,
+    "tokens": design_res["tokens"],
+    "breakpoints": design_res["breakpoints"],
+    "components": design_res["components"],
     "marks": marks,
     "suppressions": suppressions,
     "deviations": deviations,
@@ -879,6 +914,7 @@ def lint(root):
       "Source patterns do not prove accessible names or WCAG conformance.",
       "Visual quality and task success need rendered and interaction evidence.",
     ],
+    **extra,
   }
 
 
@@ -1410,6 +1446,12 @@ def main(argv=None):
     if name == "doctor":
       command.add_argument("-m", "--manifest", type=Path)
       command.add_argument("-c", "--config", type=Path)
+    if name == "lint":
+      command.add_argument("-m", "--manifest", type=Path)
+      command.add_argument("-f", "--from", dest="ruler_start", type=point)
+      command.add_argument("-t", "--to", dest="ruler_end", type=point)
+      command.add_argument("-s", "--sheet", type=Path, default=DEFAULT_SHEET)
+      command.add_argument("-k", "--scale", type=float, default=DEFAULT_SCALE)
     if name == "assets":
       command.add_argument("-m", "--manifest", type=Path)
       command.add_argument("-f", "--fetch")
@@ -1455,7 +1497,15 @@ def main(argv=None):
       else:
         raise ValueError("assets requires --manifest or --fetch")
     elif args.command == "lint":
-      result = lint(root)
+      if (args.ruler_start is None) ^ (args.ruler_end is None):
+        raise ValueError("ruler requires both --from and --to")
+      result = lint(
+        root,
+        manifest=args.manifest,
+        ruler_start=args.ruler_start,
+        ruler_end=args.ruler_end,
+        scale=args.scale,
+      )
     elif args.command == "extract":
       result = extract(root)
     elif args.command == "annotate":
@@ -1527,8 +1577,8 @@ def main(argv=None):
           enrich_finding_rule(finding)
       result = {
         "source": source_res,
-        "icons": check_icons(root),
-        "design": extract(root),
+        "icons": source_res.get("icons") or check_icons(root),
+        "design": source_res.get("design") or extract(root),
         "marks": source_res.get("marks", []),
         "suppressions": source_res.get("suppressions", []),
         "deviations": deviations,

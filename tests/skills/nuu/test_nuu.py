@@ -113,6 +113,15 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
     "NUI003",
   }
   assert all(row["blocking"] is False for row in icon_audit["icons"]["findings"])
+  icon_lint = run("lint", "-f", "0,0", "-t", "16,24", "-k", "8")
+  assert icon_lint["icons"]["counts"] == {"lucide": 1, "custom": 1}
+  assert {row["rule"] for row in icon_lint["icons"]["findings"]} == {
+    "NUI001",
+    "NUI002",
+    "NUI003",
+  }
+  assert icon_lint["tokens"]
+  assert icon_lint["ruler"]["on_scale"] is True
   css_icon = root / "select-icon.css"
   css_icon.write_text(
     "select { background-image: linear-gradient(to top right, transparent 38%, currentColor 38%); }\n"
