@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from arena_steering.server import create_http_server, reload_server_handler
 from arena_steering.store import SqliteStore
 from demo import main as demo_main
 from demo import seed_demo_store
@@ -38,6 +39,16 @@ MODAL_SHELL_ID = 'id="modal-shell"'
 CONFIRM_DELETE_TPL = 'data-modal-template="confirm-delete"'
 SURFACE_TOKEN = "--surface-primary:"
 CTA_TOKEN = "--interactive-cta:"
+CODE_BG_TOKEN = "--code-bg:"
+INLINE_CODE_RULE = ":not(pre) > code:not(.note-id)"
+MAIN_MAX_WIDTH = "max-width: 900px;"
+MESSAGE_TEXT_FONT_SIZE = "font-size: 16px;"
+STATUS_BANNER_ID = "status-banner"
+THEME_TOGGLE_ID = "theme-toggle"
+TOPBAR_BRAND_CLASS = "topbar-brand"
+ARENA_SCROLLBAR_RULE = (
+  "scrollbar-color: hsl(var(--surface-raised-alt) / 0.4) transparent;"
+)
 FONT_DISPLAY_BLOCK = "font-display: block;"
 EDGE_LOADING_KEYFRAME = "nuu-edge-loading"
 CUSTOM_OPTION_MARKER = "__custom__"
@@ -45,15 +56,16 @@ HISTORY_LIST_ID = 'id="history"'
 COMPOSER_SHELL_CLASS = 'class="composer-shell"'
 MANUAL_BLOCKING_INPUT = "inbox-blocking"
 MANUAL_HIDDEN_INPUT = "inbox-hidden"
-LUCIDE_SUN_ICON = "lucide-sun"
-LUCIDE_MOON_ICON = "lucide-moon"
 LUCIDE_CLOSE_ICON = "lucide-x"
-LUCIDE_PLUS_ICON = "lucide-plus"
-LUCIDE_PENCIL_ICON = "lucide-pencil"
-LUCIDE_TRASH_ICON = "lucide-trash-2"
 LUCIDE_LOCK_ICON = "lucide-lock"
+LUCIDE_CHEVRON_DOWN_ICON = "lucide-chevron-down"
+SELECT_CHEVRON_CLASS = "select-chevron"
 LUCIDE_COPY_ICON = "lucide-copy"
 LUCIDE_SEND_ICON = "lucide-send"
+REPORT_TOC_ID = 'id="report-toc"'
+REPORT_PICKER_ID = 'id="report-picker"'
+REPORT_RAIL_ID = 'id="report-rail"'
+OPTION_CUSTOM_CLASS = "option-custom"
 
 
 def test_assets_bundle_fonts_styles_and_es_modules() -> None:
@@ -80,18 +92,27 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
     assert f'rel="modulepreload" href="/{js_file}"' in index_html
   assert MODAL_SHELL_ID in index_html
   assert CONFIRM_DELETE_TPL in index_html
-  assert LUCIDE_SUN_ICON in index_html
   assert LUCIDE_CLOSE_ICON in index_html
+  assert STATUS_BANNER_ID not in index_html
+  assert THEME_TOGGLE_ID not in index_html
+  assert TOPBAR_BRAND_CLASS not in index_html
 
   app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
-  assert LUCIDE_SUN_ICON in app_js
-  assert LUCIDE_MOON_ICON in app_js
+  assert STATUS_BANNER_ID not in app_js
+  assert THEME_TOGGLE_ID not in app_js
 
   style_css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
   assert SURFACE_TOKEN in style_css
   assert CTA_TOKEN in style_css
+  assert CODE_BG_TOKEN in style_css
+  assert INLINE_CODE_RULE in style_css
+  assert MAIN_MAX_WIDTH in style_css
+  assert MESSAGE_TEXT_FONT_SIZE in style_css
+  assert ARENA_SCROLLBAR_RULE in style_css
+  assert STATUS_BANNER_ID not in style_css
   assert FONT_DISPLAY_BLOCK in style_css
   assert EDGE_LOADING_KEYFRAME in style_css
+  assert SELECT_CHEVRON_CLASS in style_css
 
   inbox_js = (ASSETS_DIR / "inbox-view.js").read_text(encoding="utf-8")
   assert HISTORY_LIST_ID in inbox_js
@@ -100,16 +121,19 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert MANUAL_HIDDEN_INPUT not in inbox_js
 
   tasks_js = (ASSETS_DIR / "tasks-view.js").read_text(encoding="utf-8")
-  assert LUCIDE_PLUS_ICON in tasks_js
-  assert LUCIDE_PENCIL_ICON in tasks_js
-  assert LUCIDE_TRASH_ICON in tasks_js
   assert LUCIDE_LOCK_ICON in tasks_js
+  assert LUCIDE_CHEVRON_DOWN_ICON in tasks_js
+  assert SELECT_CHEVRON_CLASS in tasks_js
 
   reports_js = (ASSETS_DIR / "reports-view.js").read_text(encoding="utf-8")
   assert CUSTOM_OPTION_MARKER in reports_js
   assert LUCIDE_COPY_ICON in reports_js
   assert LUCIDE_CLOSE_ICON in reports_js
   assert LUCIDE_SEND_ICON in reports_js
+  assert REPORT_TOC_ID in reports_js
+  assert REPORT_PICKER_ID in reports_js
+  assert REPORT_RAIL_ID in reports_js
+  assert OPTION_CUSTOM_CLASS in reports_js
 
 
 def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
@@ -118,7 +142,22 @@ def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
 
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = seed_demo_store(store)
-  assert len(app.messages.list_messages(unread_only=False)) >= 2
-  assert len(app.tasks.list_tasks(include_finished=True)) >= 2
-  assert len(app.reports.list_reports(stale_only=False)) >= 1
+  assert len(app.messages.list_messages(unread_only=False, include_hidden=True)) >= 10
+  assert len(app.tasks.list_tasks(include_finished=True)) >= 10
+  assert len(app.reports.list_reports(stale_only=False)) >= 3
+  root_asset = app.resolve_asset("/")
+  assert root_asset is not None
+  assert b"<title>clankers - Steering</title>" in root_asset[0]
+
+  server = create_http_server(app, host="127.0.0.1", port=0, hot_reload=False)
+  try:
+    sock_fd = server.socket.fileno()
+    reloaded_app = reload_server_handler(server, app)
+    assert server.socket.fileno() == sock_fd
+    status, health = reloaded_app.dispatch("GET", "/health")
+    assert status == 200
+    assert health["ok"] is True
+    assert "asset_version" in health
+  finally:
+    server.server_close()
   store.close()

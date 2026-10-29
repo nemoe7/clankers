@@ -143,6 +143,12 @@ def parse_report_markdown(
           recommended.append(opt_text)
 
       label = last_prompt or f"Field {len(fields) + 1}"
+      if (
+        chunk
+        and not HEADING_PREFIX_RE.match(chunk[-1])
+        and clean_label_text(chunk[-1]) == label
+      ):
+        chunk.pop()
       field_id = _resolve_field_id(pending_anchor, label, used_ids)
       pending_anchor = None
       report_field = ReportField(
@@ -162,6 +168,12 @@ def parse_report_markdown(
         label = clean_label_text(inline_label)
       else:
         label = last_prompt or f"Field {len(fields) + 1}"
+        if (
+          chunk
+          and not HEADING_PREFIX_RE.match(chunk[-1])
+          and clean_label_text(chunk[-1]) == label
+        ):
+          chunk.pop()
       if comment_anchor:
         pending_anchor = comment_anchor.group(1).rstrip("-")
       field_id = _resolve_field_id(pending_anchor, label, used_ids)

@@ -23,32 +23,19 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="topbar-brand">
-        <span class="ico-svg" aria-hidden="true"><i class="dot live"></i></span>
-        <h1 class="brand-title">Arena Steering</h1>
-        <span class="meta-pill" id="version-pill">v2.0.0</span>
-      </div>
-
+      <h1 class="sr-only">Arena Steering</h1>
       <nav class="tab-nav" role="tablist" aria-label="Steering sections">
         <button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-tab="inbox" id="tab-inbox">
           Messages <span class="tab-badge" id="badge-inbox">0</span>
         </button>
-        <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tasks" id="tab-tasks">
-          Tasks <span class="tab-badge" id="badge-tasks">0</span>
-        </button>
         <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="reports" id="tab-reports">
           Reports <span class="tab-badge" id="badge-reports">0</span>
         </button>
-      </nav>
-
-      <div class="topbar-actions">
-        <button type="button" class="icon-button" id="theme-toggle" aria-label="Switch to light mode" title="Switch to light mode">
-          <svg class="lucide lucide-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+        <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tasks" id="tab-tasks">
+          Tasks <span class="tab-badge" id="badge-tasks">0</span>
         </button>
-      </div>
+      </nav>
     </header>
-
-    <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
 
     <main class="main-content" id="main-root" data-loading="false">
       <section id="view-inbox" role="tabpanel" aria-labelledby="tab-inbox"></section>

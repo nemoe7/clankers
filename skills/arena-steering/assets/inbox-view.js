@@ -67,7 +67,7 @@ export function renderInboxView(container, state, handlers) {
         <div class="row log-toolbar">
           <div class="stack">
             <p id="connection" role="status">
-              <span class="ico-svg" aria-hidden="true"><i class="dot live"></i></span>
+              <span class="ico-svg" aria-hidden="true"><i class="dot live animate-pulse"></i></span>
               <span id="connection-text">Connected</span>
             </p>
             <p id="last-check" class="muted">Live steering active.</p>

@@ -251,6 +251,8 @@ class TaskService:
     report_map: dict[str, Report] | None = None,
   ) -> bool:
     """Derive blocking from unanswered linked reports and unfinished dependencies."""
+    if task.status == "finished":
+      return False
     if task.status == "blocked":
       return True
     tasks_by_id = (
