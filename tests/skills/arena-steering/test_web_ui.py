@@ -66,6 +66,14 @@ REPORT_TOC_ID = 'id="report-toc"'
 REPORT_PICKER_ID = 'id="report-picker"'
 REPORT_RAIL_ID = 'id="report-rail"'
 OPTION_CUSTOM_CLASS = "option-custom"
+ON_THIS_PAGE_TEXT = "On this page"
+REPORT_PICKER_META_CLASS = "report-picker-meta"
+TASK_SECTION_TITLE_FONT_SIZE = "font-size: 18px;"
+
+
+NOTES_PIP_ID = 'id="notes-pip"'
+REPORT_PIP_ID = 'id="report-pip"'
+TAB_BADGE_CLASS = "tab-badge"
 
 
 def test_assets_bundle_fonts_styles_and_es_modules() -> None:
@@ -93,6 +101,9 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert MODAL_SHELL_ID in index_html
   assert CONFIRM_DELETE_TPL in index_html
   assert LUCIDE_CLOSE_ICON in index_html
+  assert NOTES_PIP_ID not in index_html
+  assert REPORT_PIP_ID in index_html
+  assert TAB_BADGE_CLASS not in index_html
   assert STATUS_BANNER_ID not in index_html
   assert THEME_TOGGLE_ID not in index_html
   assert TOPBAR_BRAND_CLASS not in index_html
@@ -108,6 +119,7 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert INLINE_CODE_RULE in style_css
   assert MAIN_MAX_WIDTH in style_css
   assert MESSAGE_TEXT_FONT_SIZE in style_css
+  assert TASK_SECTION_TITLE_FONT_SIZE in style_css
   assert ARENA_SCROLLBAR_RULE in style_css
   assert STATUS_BANNER_ID not in style_css
   assert FONT_DISPLAY_BLOCK in style_css
@@ -134,6 +146,8 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert REPORT_PICKER_ID in reports_js
   assert REPORT_RAIL_ID in reports_js
   assert OPTION_CUSTOM_CLASS in reports_js
+  assert ON_THIS_PAGE_TEXT not in reports_js
+  assert REPORT_PICKER_META_CLASS not in reports_js
 
 
 def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
