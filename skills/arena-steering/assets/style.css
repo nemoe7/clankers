@@ -134,13 +134,18 @@
 *::before,
 *::after {
   box-sizing: border-box;
-  scrollbar-width: thin; /* nonuu: NUM201 */
-  scrollbar-color: hsl(var(--surface-raised-alt) / 0.4) transparent; /* nonuu: NUM201 */
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin; /* nonuu: SPC001 */
+    scrollbar-color: hsl(var(--surface-raised-alt) / 0.4) transparent; /* nonuu: SPC001 */
+  }
 }
 
 ::-webkit-scrollbar {
-  width: 6px; /* nonuu: NUM201 */
-  height: 6px; /* nonuu: NUM201 */
+  width: 6px; /* nonuu: SPC001 */
+  height: 6px; /* nonuu: SPC001 */
 }
 
 ::-webkit-scrollbar-track {
@@ -157,10 +162,12 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--surface-raised-alt) / 0.4);
   background-clip: padding-box;
+  border-radius: 9999px;
 }
 
 :not(:hover)::-webkit-scrollbar-thumb {
   background: hsl(var(--surface-raised-alt) / 0.4);
+  border-radius: 9999px;
 }
 
 html,
