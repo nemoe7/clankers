@@ -10,5 +10,6 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
-- `maintenance/workflows/changed_paths.py`, `maintenance/README.md`: Route the `Preview` test group to `tests/skills/arena-steering/` and remove legacy `tests/skills/arena-skill/` test references.
+#### maintenance
 
+- Route the `Preview` test group to `tests/skills/arena-steering/` and remove legacy `tests/skills/arena-skill/` test references (`workflows/changed_paths.py`, `README.md`).
