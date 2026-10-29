@@ -511,7 +511,7 @@ code.note-id[data-state="good"] {
   height: 20px;
   min-height: 0;
   padding: 0;
-  margin-right: 4px;
+  margin: 0 -6px;
   border: 0;
   border-radius: 9999px;
   background: transparent;
@@ -1199,8 +1199,8 @@ select,
 
 #log-search {
   flex: 0 1 auto;
-  width: 100%;
-  max-width: 13em;
+  width: clamp(13em, 28vw, 22em);
+  max-width: 22em;
   min-width: 0;
   height: 34px;
   padding: 0 10px;
@@ -1210,6 +1210,11 @@ select,
   color: hsl(var(--text-primary));
   font-family: inherit;
   font-size: 14px;
+}
+
+.icon-button[data-state="good"] {
+  color: var(--dot-said);
+  border-color: color-mix(in srgb, var(--dot-said) 55%, hsl(var(--border-medium)));
 }
 
 #quiet-notes[aria-pressed="false"] {
@@ -1243,6 +1248,7 @@ select,
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .message {
@@ -1406,8 +1412,8 @@ code.note-id {
 #task-search {
   justify-self: end;
   flex: 0 1 auto;
-  width: 100%;
-  max-width: 13em;
+  width: clamp(13em, 28vw, 22em);
+  max-width: 22em;
   min-width: 0;
   height: 34px;
   padding: 0 10px;
