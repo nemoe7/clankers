@@ -26,16 +26,16 @@
 
 ## Component Inventory
 
-- Centered segmented `.tab-nav` with live unread/open counts (`#badge-inbox`, `#badge-reports`, `#badge-tasks`).
+- Centered equal-width `.tab-nav` (`grid-auto-columns: 1fr`) with plain-text `.tab-btn` items and `#report-pip` (`--accent: #e5bb8b`) on `Reports` when unseen or unanswered reports exist.
 - `Messages` log toolbar (`#connection` live pulse dot, `#log-search`, `#skip-poll`, `#quiet-notes`), `.message` cards, `.code-block` copy headers, and `.card.compose`.
-- `Reports` 3-column layout (`#report-toc`, `#report-main` with `.field-card` question cards and inline custom inputs, and `#report-rail` picker + `Copy`/`Dismiss` actions).
-- `Tasks` borderless sectioned list (`Current`, `Upcoming`, `Finished`) with `.select-wrap` type filter (`#task-type-filter`), search input, type badges, and expandable `<details>`.
-- Shared `<dialog id="modal-shell">` confirmation modal (`createModalManager`).
+- `Reports` 3-column layout (`#report-toc`, `#report-main` with two-line `#report-status` under `<h1>` and `.field-card` question cards, and `#report-rail` numbered `#report-picker` with top-right unseen dot and unanswered icon plus `Copy`/`Dismiss` actions).
+- `Tasks` borderless sectioned list (`Current` `18px`, `Upcoming` `18px`, `Finished` `18px`) with `16px` task rows/titles, `14px` badges/details, `.select-wrap` type filter (`#task-type-filter`), and search input.
+- Shared `<dialog id="modal-shell">` confirmation modal (`createModalManager`) with equal-width `.modal-actions` buttons.
 
 ## States & Feedback
 
 - Live connection indicator uses Arena's `2s cubic-bezier(0.4, 0, 0.6, 1)` `.animate-pulse` animation and pauses under `prefers-reduced-motion: reduce`.
-- Message status dots reflect `sent` (neutral), `seen` (blue), and `acked` (green) states alongside second-resolution relative timestamps.
+- Message status dots reflect `sent` (neutral), `seen` (`#7fa7d1`), and `acked` (`#8dc07f`) states alongside boundary-scheduled relative timestamps (`nextRelativeDelay`).
 - Copy buttons (`.copy-code`, `#report-copy`) and ID chips (`code.note-id`) swap to a green check / `data-state="good"` confirmation state on click.
 
 ## Accessibility Contract
