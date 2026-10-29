@@ -171,10 +171,20 @@ def test_main_needs_an_output_file(tmp_path, monkeypatch):
 
 
 def test_module_matrix_selects_owners_and_shared_changes():
-  path = "tests/maintenance/measurements/test_measurements.py"
-  owners = [name for name, tests in changed_paths.MODULE_TESTS.items() if path in tests]
-  selected = changed_paths.module_matrix([path])
-  assert [row["name"] for row in selected] == owners
+  paths = (
+    "tests/maintenance/measurements/test_measurements.py",
+    "tests/gpt-plugins/test_release_artifact.py",
+    "tests/github/workflows/test_check_workflows.py",
+    "tests/github/workflows/test_gemini_release.py",
+    "tests/skills/arena-skill/arena-egress-proxy/test_arena_proxy.py",
+    "tests/skills/arena-skill/arena-preview-proxy/test_preview_proxy.py",
+  )
+  for path in paths:
+    owners = [
+      name for name, tests in changed_paths.MODULE_TESTS.items() if path in tests
+    ]
+    selected = changed_paths.module_matrix([path])
+    assert [row["name"] for row in selected] == owners
   assert not changed_paths.module_matrix(["CHANGELOG.md"])
   all_names = set(changed_paths.MODULE_TESTS)
   for shared in (
