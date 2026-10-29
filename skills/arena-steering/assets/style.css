@@ -787,6 +787,10 @@ code.note-id[data-state="good"] {
   overflow: hidden;
 }
 
+.main-content:has(> #view-inbox:not([hidden])) {
+  padding-bottom: 0;
+}
+
 .main-content > section[role="tabpanel"]:not([hidden]) {
   flex: 1 1 auto;
   min-height: 0;
@@ -948,7 +952,7 @@ select,
 }
 
 .log-card > .row:first-child {
-  margin-block: 0;
+  margin-block: 0 8px;
   row-gap: 2px;
   position: relative;
   z-index: 2;

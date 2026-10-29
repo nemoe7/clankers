@@ -124,6 +124,8 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert ARENA_SCROLLBAR_RULE in style_css
   assert SCROLLBAR_NO_HIGHLIGHT_RULE in style_css
   assert "grid-auto-columns: 1fr;" in style_css
+  assert ".main-content:has(> #view-inbox:not([hidden]))" in style_css
+  assert "margin-block: 0 8px;" in style_css
   assert STATUS_BANNER_ID not in style_css
   assert FONT_DISPLAY_BLOCK in style_css
   assert EDGE_LOADING_KEYFRAME in style_css
