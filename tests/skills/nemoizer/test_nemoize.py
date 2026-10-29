@@ -2053,3 +2053,15 @@ def test_extend_exclude_supports_globstar_and_negation(tmp_path, monkeypatch):
     tmp_path / "skills" / "demo" / "scripts" / "tool.py", tmp_path, ()
   )
   assert nemoize.skipped(tmp_path / "rules" / "CORE.md", tmp_path, ())
+
+
+def test_js_html_template_extracts_ui_prose_and_flags_em_dash(tmp_path):
+  view = tmp_path / "reports-view.js"
+  source = (
+    "export function render(ans) {\n"
+    "  return `<p><strong>Submission ${ans.id}</strong> · <time>${ans.time}</time> — ${ans.entries}</p>`;\n"
+    "}\n"
+  )
+  view.write_text(source, encoding="utf-8")
+  rows = nemoize.source_prose(view, source, "description", nemoize.PARAGRAPH_CAP)
+  assert any(row["rule"] == "HMN905" and row["line"] == 2 for row in rows)

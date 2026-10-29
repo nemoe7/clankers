@@ -1,7 +1,4 @@
-/**
- * Reports tab view with left TOC rail, center report column with field cards,
- * inline custom option input, and right scrollable report picker rail.
- */
+// Reports tab view with left TOC rail, center report column, and right report selector rail.
 
 import { escapeHtml, renderMarkdownBlock } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
@@ -171,7 +168,7 @@ export function renderReportsView(container, state, handlers) {
             .join(" · ");
           return `
             <div class="${idx > 0 ? "reply-block" : ""}">
-              <p><strong>Submission <code class="note-id">${escapeHtml(ans.id)}</code></strong> · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time> — ${escapeHtml(entries)}</p>
+              <p><strong>Submission <code class="note-id">${escapeHtml(ans.id)}</code></strong> · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time> · ${escapeHtml(entries)}</p>
               ${ans.ack ? ans.ack_html || renderMarkdownBlock(ans.ack) : `<p class="muted">Awaiting agent acknowledgement.</p>`}
             </div>
           `;
@@ -199,7 +196,7 @@ export function renderReportsView(container, state, handlers) {
         </div>
       </aside>
 
-      <aside id="report-rail" class="report-rail" aria-label="Report picker and actions" data-mobile-collapsed="${mobilePickerCollapsed ? "true" : "false"}">
+      <aside id="report-rail" class="report-rail" aria-label="Report selector and actions" data-mobile-collapsed="${mobilePickerCollapsed ? "true" : "false"}">
         <div class="report-rail-bar">
           <button
             type="button"

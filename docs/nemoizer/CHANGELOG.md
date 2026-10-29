@@ -11,3 +11,4 @@ This log has no Unreleased section.
 ### Added
 
 - `scripts/nemoize.py` (`_match_glob`, `skipped`): Support `/**/` zero-or-more directory globs and `!pattern` negation rules in `exclude`, `extend-exclude`, and `--ignore`.
+- `scripts/prose.py` (`_iter_js_masked_templates`, `js_ui_prose_spans`) and `scripts/nemoize.py` (`_source_prose`): Extract visible HTML template-literal prose from `.js` and `.mjs` files and flag prose dashes (`HMN905`) in JavaScript UI strings.

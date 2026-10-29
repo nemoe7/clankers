@@ -1,6 +1,4 @@
-/**
- * Relative timestamp formatting and periodic DOM timer (`nuu` relative-timestamps recipe).
- */
+// Relative timestamp formatting and periodic DOM timer (`nuu` relative-timestamps recipe).
 
 export function relativeTime(
   value,

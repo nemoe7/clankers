@@ -1,7 +1,5 @@
-/**
- * REST and WebSocket client for Arena Steering endpoints.
- * All requests use relative paths so the preview proxy works from any browser origin.
- */
+// REST and WebSocket client for Arena Steering endpoints.
+// Relative paths keep the preview proxy working from any browser origin.
 
 let liveSocket = null;
 let socketSequence = 0;

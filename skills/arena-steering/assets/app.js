@@ -1,6 +1,4 @@
-/**
- * Main ES module controller for Arena Steering.
- */
+// Main ES module controller for Arena Steering.
 
 import { api, connectWebSocket } from "./api.js";
 import { renderInboxView, trackMessageAcks } from "./inbox-view.js";
