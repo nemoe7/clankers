@@ -21,6 +21,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from . import __version__
+from .markdown import render_markdown
 from .markdown_fields import parse_report_markdown
 from .models import Attachment
 from .services import MessageService, ReportService, TaskService
@@ -169,6 +170,7 @@ class SteeringApp:
     self.router.add("GET", "/survey", self._handle_get_survey)
     self.router.add("POST", "/survey", self._handle_submit_survey)
     self.router.add("POST", "/survey/interrupt", self._handle_survey_interrupt)
+    self.router.add("POST", "/markdown", self._handle_render_markdown)
 
   def dispatch(
     self, method: str, raw_url: str, body: dict[str, Any] | None = None
@@ -279,6 +281,15 @@ class SteeringApp:
     survey = self.messages.trigger_bible_check(active=active)
     return (int(HTTPStatus.OK), {"survey": survey})
 
+  def _handle_render_markdown(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+  ) -> tuple[int, Any]:
+    markdown = str(body.get("markdown", ""))
+    breaks = bool(body.get("breaks", True))
+    headings: list[dict[str, Any]] = []
+    rendered = render_markdown(markdown, breaks=breaks, headings=headings)
+    return (int(HTTPStatus.OK), {"html": rendered, "headings": headings})
+
   def _handle_list_messages(
     self, _params: dict[str, str], query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
@@ -290,7 +301,7 @@ class SteeringApp:
     )
     return (
       int(HTTPStatus.OK),
-      {"messages": [item.to_dict() for item in items]},
+      {"messages": [self._serialize_message(item) for item in items]},
     )
 
   def _handle_create_message(
@@ -304,20 +315,20 @@ class SteeringApp:
       attachments=attachments,
       msg_id=body.get("id"),
     )
-    return (int(HTTPStatus.CREATED), {"message": msg.to_dict()})
+    return (int(HTTPStatus.CREATED), {"message": self._serialize_message(msg)})
 
   def _handle_get_message(
     self, params: dict[str, str], _query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
     msg = self.messages.get_message(params["id"])
-    return (int(HTTPStatus.OK), {"message": msg.to_dict()})
+    return (int(HTTPStatus.OK), {"message": self._serialize_message(msg)})
 
   def _handle_ack_message(
     self, params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
   ) -> tuple[int, Any]:
     markdown = str(body.get("markdown", body.get("ack", "")))
     _, acked = self.messages.ack(params["id"], markdown)
-    return (int(HTTPStatus.OK), {"message": acked.to_dict()})
+    return (int(HTTPStatus.OK), {"message": self._serialize_message(acked)})
 
   def _handle_poll(
     self, _params: dict[str, str], query: dict[str, list[str]], _body: Any
@@ -402,10 +413,15 @@ class SteeringApp:
     self, _params: dict[str, str], query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
     stale_only = query.get("stale", ["0"])[0] in {"1", "true"}
+    summary_only = query.get("summary", ["0"])[0] in {"1", "true"}
     items = self.reports.list_reports(stale_only=stale_only)
     return (
       int(HTTPStatus.OK),
-      {"reports": [self._serialize_report(item) for item in items]},
+      {
+        "reports": [
+          self._serialize_report(item, include_body=not summary_only) for item in items
+        ]
+      },
     )
 
   def _handle_publish_report(
@@ -469,15 +485,40 @@ class SteeringApp:
     return (int(HTTPStatus.OK), {"answer": answer.to_dict()})
 
   @staticmethod
-  def _serialize_report(report: Any) -> dict[str, Any]:
+  def _serialize_message(msg: Any) -> dict[str, Any]:
+    payload = msg.to_dict()
+    payload["body_html"] = render_markdown(msg.body, breaks=True)
+    payload["acks_html"] = [render_markdown(ack, breaks=True) for ack in msg.acks]
+    return payload
+
+  @staticmethod
+  def _serialize_report(report: Any, *, include_body: bool = True) -> dict[str, Any]:
     payload = report.to_dict()
+    for ans in payload.get("answers", []):
+      ans["ack_html"] = (
+        render_markdown(ans["ack"], breaks=True) if ans.get("ack") else ""
+      )
+      ans["acks_html"] = [render_markdown(a, breaks=True) for a in ans.get("acks", [])]
+    if not include_body:
+      payload.pop("body", None)
+      return payload
     blocks, _ = parse_report_markdown(report.body)
-    payload["blocks"] = [
-      {"type": "markdown", "markdown": val}
-      if btype == "markdown"
-      else {"type": "field", "field": val.to_dict()}
-      for btype, val in blocks
-    ]
+    serialized_blocks: list[dict[str, Any]] = []
+    for btype, val in blocks:
+      if btype == "markdown":
+        block_headings: list[dict[str, Any]] = []
+        block_html = render_markdown(val, breaks=False, headings=block_headings)
+        serialized_blocks.append(
+          {
+            "type": "markdown",
+            "markdown": val,
+            "html": block_html,
+            "headings": block_headings,
+          }
+        )
+      else:
+        serialized_blocks.append({"type": "field", "field": val.to_dict()})
+    payload["blocks"] = serialized_blocks
     return payload
 
 

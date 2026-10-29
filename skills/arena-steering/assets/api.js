@@ -49,12 +49,17 @@ export const api = {
   deleteTask(taskId) {
     return requestJson("DELETE", `/tasks/${encodeURIComponent(taskId)}`);
   },
-  listReports({ stale = false } = {}) {
-    const q = new URLSearchParams({ stale: stale ? "1" : "0" });
+  listReports({ stale = false, summary = false } = {}) {
+    const params = { stale: stale ? "1" : "0" };
+    if (summary) params.summary = "1";
+    const q = new URLSearchParams(params);
     return requestJson("GET", `/reports?${q.toString()}`);
   },
   getReport(reportId) {
     return requestJson("GET", `/reports/${encodeURIComponent(reportId)}`);
+  },
+  renderMarkdown(markdown, { breaks = true } = {}) {
+    return requestJson("POST", "/markdown", { markdown, breaks });
   },
   dismissReport(reportId) {
     return requestJson("DELETE", `/reports/${encodeURIComponent(reportId)}`);

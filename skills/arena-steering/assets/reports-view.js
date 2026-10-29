@@ -90,6 +90,14 @@ export function renderReportsView(container, state, handlers) {
       if (block.type === "field") {
         return renderFieldBlock(block.field, headings);
       }
+      if (typeof block.html === "string") {
+        if (Array.isArray(block.headings)) {
+          for (const h of block.headings) {
+            headings.push(h);
+          }
+        }
+        return `<div class="prose-block">${block.html}</div>`;
+      }
       return `<div class="prose-block">${renderMarkdownBlock(block.markdown, { headings })}</div>`;
     })
     .join("");
@@ -144,7 +152,7 @@ export function renderReportsView(container, state, handlers) {
           return `
             <div class="${idx > 0 ? "reply-block" : ""}">
               <p><strong>Submission <code class="note-id">${escapeHtml(ans.id)}</code></strong> · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time> — ${escapeHtml(entries)}</p>
-              ${ans.ack ? renderMarkdownBlock(ans.ack) : `<p class="muted">Awaiting agent acknowledgement.</p>`}
+              ${ans.ack ? ans.ack_html || renderMarkdownBlock(ans.ack) : `<p class="muted">Awaiting agent acknowledgement.</p>`}
             </div>
           `;
         })

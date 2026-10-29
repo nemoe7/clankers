@@ -15,10 +15,62 @@ const CHECK_SVG = `<svg class="lucide lucide-check" width="14" height="14" viewB
 
 const store = createStore();
 const modal = createModalManager();
+const reportCache = new Map();
 let cleanupTimers = () => {};
 let knownAssetVersion = null;
 let lastDataSignature = "";
 let lastViewportHeight = 0;
+
+async function ensureReportCached(reportId, expectedModifiedAt = null) {
+  if (!reportId) return null;
+  const cached = reportCache.get(reportId);
+  if (
+    cached &&
+    (!expectedModifiedAt || cached.modified_at === expectedModifiedAt) &&
+    Array.isArray(cached.report?.blocks)
+  ) {
+    return cached.report;
+  }
+  const res = await api.getReport(reportId);
+  if (res?.report) {
+    reportCache.set(reportId, {
+      modified_at: res.report.modified_at,
+      report: res.report,
+    });
+    return res.report;
+  }
+  return null;
+}
+
+function hydrateReportsWithCache(summaries) {
+  const activeIds = new Set();
+  const merged = (summaries || []).map((summary) => {
+    activeIds.add(summary.id);
+    if (Array.isArray(summary.blocks)) {
+      reportCache.set(summary.id, {
+        modified_at: summary.modified_at,
+        report: summary,
+      });
+      return summary;
+    }
+    const cached = reportCache.get(summary.id);
+    if (cached && cached.modified_at === summary.modified_at) {
+      return {
+        ...cached.report,
+        ...summary,
+        body: cached.report.body,
+        blocks: cached.report.blocks,
+      };
+    }
+    return summary;
+  });
+  for (const key of reportCache.keys()) {
+    if (!activeIds.has(key)) {
+      reportCache.delete(key);
+    }
+  }
+  return merged;
+}
 
 function syncViewportHeight() {
   const vv = window.visualViewport;
@@ -90,7 +142,7 @@ async function refreshAll(force = false) {
       api.getHealth(),
       api.listMessages({ all: true, hidden: Boolean(curState.showHidden) }),
       api.listTasks({ full: true }),
-      api.listReports({ stale: false }),
+      api.listReports({ stale: false, summary: true }),
     ]);
     if (health.asset_version) {
       if (knownAssetVersion && knownAssetVersion !== health.asset_version) {
@@ -107,14 +159,21 @@ async function refreshAll(force = false) {
     }
     const messages = msgRes.messages || [];
     const tasks = taskRes.tasks || [];
-    const reports = repRes.reports || [];
+    const reportSummaries = repRes.reports || [];
     const survey = health.survey || {};
     trackMessageAcks(messages, curState.activeTab);
     const selectedReportId =
       curState.selectedReportId &&
-      reports.some((r) => r.id === curState.selectedReportId)
+      reportSummaries.some((r) => r.id === curState.selectedReportId)
         ? curState.selectedReportId
-        : reports[0]?.id || null;
+        : reportSummaries[0]?.id || null;
+    if (selectedReportId) {
+      const selectedSummary = reportSummaries.find(
+        (r) => r.id === selectedReportId
+      );
+      await ensureReportCached(selectedReportId, selectedSummary?.modified_at);
+    }
+    const reports = hydrateReportsWithCache(reportSummaries);
     const nextSignature = JSON.stringify({
       messages,
       tasks,
@@ -181,14 +240,23 @@ const handlers = {
     }
   },
   async onSelectReport(reportId) {
-    store.setState({ selectedReportId: reportId });
-    const target = (store.getState().reports || []).find(
-      (r) => r.id === reportId
-    );
+    const curReports = store.getState().reports || [];
+    const target = curReports.find((r) => r.id === reportId);
     if (target && !target.seen) {
-      await api.markReportSeen(reportId).catch(() => {});
+      const seenRes = await api.markReportSeen(reportId).catch(() => null);
+      if (seenRes?.report) {
+        reportCache.set(reportId, {
+          modified_at: seenRes.report.modified_at,
+          report: seenRes.report,
+        });
+      }
+      store.setState({ selectedReportId: reportId });
       await refreshAll(true);
+      return;
     }
+    await ensureReportCached(reportId, target?.modified_at);
+    const hydrated = hydrateReportsWithCache(store.getState().reports || []);
+    store.setState({ selectedReportId: reportId, reports: hydrated });
   },
   async onDismissReport(reportId, trigger) {
     const decision = await modal.open("confirm-delete", {
@@ -197,11 +265,18 @@ const handlers = {
       trigger,
     });
     if (decision !== "confirm") return;
+    reportCache.delete(reportId);
     await api.dismissReport(reportId);
     await refreshAll(true);
   },
   async onSubmitReportAnswer(reportId, values) {
-    await api.submitReportAnswer(reportId, values);
+    const ansRes = await api.submitReportAnswer(reportId, values);
+    if (ansRes?.report) {
+      reportCache.set(reportId, {
+        modified_at: ansRes.report.modified_at,
+        report: ansRes.report,
+      });
+    }
     await refreshAll(true);
   },
 };

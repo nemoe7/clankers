@@ -8,6 +8,7 @@ from pathlib import Path
 
 from arena_steering import __version__
 from arena_steering.cli import main as cli_main
+from arena_steering.markdown import render_markdown
 from arena_steering.server import SteeringApp
 from arena_steering.store import SqliteStore
 
@@ -133,6 +134,47 @@ def test_resolve_asset_serves_report_gifs_and_images(tmp_path: Path) -> None:
   assert resolved_png == (png_bytes, "image/png")
 
   assert app.resolve_asset("/../secret.gif") is None
+  store.close()
+
+
+def test_server_markdown_it_diff_and_report_summary_cache(tmp_path: Path) -> None:
+  headings: list[dict[str, object]] = []
+  rendered = render_markdown(
+    "# Patch Notes\n\nHighlighted ==token== and ~~removed~~:\n\n```diff\n@@ -1,2 +1,2 @@\n-old_line\n+new_line\n```\n",
+    headings=headings,
+  )
+  assert '<h1 id="sec-patch-notes">Patch Notes</h1>' in rendered
+  assert "<mark>token</mark>" in rendered
+  assert "<s>removed</s>" in rendered
+  assert '<span class="token coord">@@ -1,2 +1,2 @@</span>' in rendered
+  assert '<span class="token deleted">-old_line</span>' in rendered
+  assert '<span class="token inserted">+new_line</span>' in rendered
+  assert headings == [{"id": "sec-patch-notes", "level": 1, "text": "Patch Notes"}]
+
+  store = SqliteStore(tmp_path / "md.sqlite3")
+  app = SteeringApp(store)
+  app.dispatch(
+    "POST",
+    "/reports",
+    {
+      "id": "diff-report",
+      "title": "Diff Report",
+      "body": "# Diff Report\n\n```diff\n-old\n+new\n```\n",
+    },
+  )
+  status_sum, summary_res = app.dispatch("GET", "/reports?summary=1")
+  assert status_sum == int(HTTPStatus.OK)
+  assert "blocks" not in summary_res["reports"][0]
+  assert "body" not in summary_res["reports"][0]
+  assert "modified_at" in summary_res["reports"][0]
+
+  status_full, full_res = app.dispatch("GET", "/reports/diff-report")
+  assert status_full == int(HTTPStatus.OK)
+  assert "blocks" in full_res["report"]
+  assert (
+    '<span class="token inserted">+new</span>'
+    in full_res["report"]["blocks"][0]["html"]
+  )
   store.close()
 
 

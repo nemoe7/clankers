@@ -266,6 +266,22 @@ pre > code {
   background-color: hsl(var(--surface-secondary));
 }
 
+.code-block .token.comment {
+  color: hsl(var(--text-tertiary));
+}
+
+.code-block .token.coord {
+  color: var(--accent);
+}
+
+.code-block .token.inserted {
+  color: var(--dot-said);
+}
+
+.code-block .token.deleted {
+  color: hsl(var(--interactive-negative));
+}
+
 .copy-code {
   position: absolute;
   top: 2px;

@@ -65,11 +65,12 @@ export function renderInboxView(container, state, handlers) {
     ? visibleMessages
         .map((msg) => {
           const acks = msg.acks || [];
+          const acksHtmlList = msg.acks_html || [];
           const acksHtml = acks.length
             ? `<div class="answer reply message-text">${acks
                 .map(
                   (ack, idx) =>
-                    `<div class="${idx > 0 ? "reply-block" : ""}">${renderMarkdownBlock(ack)}</div>`
+                    `<div class="${idx > 0 ? "reply-block" : ""}">${acksHtmlList[idx] || renderMarkdownBlock(ack)}</div>`
                 )
                 .join("")}</div>`
             : "";
@@ -85,7 +86,7 @@ export function renderInboxView(container, state, handlers) {
 
           return `
             <li class="message" data-msg-id="${escapeHtml(msg.id)}">
-              <div class="message-text">${renderMarkdownBlock(msg.body)}</div>
+              <div class="message-text">${msg.body_html || renderMarkdownBlock(msg.body)}</div>
               ${acksHtml}
               <p class="receipt">
                 <span class="state-dot" data-state="${dotState}" title="Status: ${escapeHtml(msg.status)}"></span>
