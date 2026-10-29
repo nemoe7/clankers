@@ -5,13 +5,50 @@
 import { escapeHtml, renderMarkdownBlock } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 
+const seenAckCounts = new Map();
+let initializedAckCounts = false;
+let unreadEditedMsgId = null;
+let savedScrollTop = null;
+let pinnedToBottom = true;
+
 function stateDotForStatus(status) {
   if (status === "acked") return "said";
   if (status === "seen") return "seen";
   return "sent";
 }
 
+export function trackMessageAcks(messages, activeTab) {
+  const list = messages || [];
+  if (!initializedAckCounts) {
+    for (const msg of list) {
+      seenAckCounts.set(msg.id, (msg.acks || []).length);
+    }
+    initializedAckCounts = true;
+    return;
+  }
+  for (const msg of list) {
+    const prev = seenAckCounts.get(msg.id);
+    const cur = (msg.acks || []).length;
+    if (prev !== undefined && cur > prev) {
+      if (activeTab !== "inbox" || !pinnedToBottom) {
+        unreadEditedMsgId = msg.id;
+      }
+    }
+    seenAckCounts.set(msg.id, cur);
+  }
+}
+
 export function renderInboxView(container, state, handlers) {
+  const prevHistory = container.querySelector("#history");
+  if (prevHistory) {
+    const dist =
+      prevHistory.scrollHeight -
+      prevHistory.scrollTop -
+      prevHistory.clientHeight;
+    pinnedToBottom = dist <= 24;
+    savedScrollTop = prevHistory.scrollTop;
+  }
+
   const showHidden = Boolean(state.showHidden);
   const query = (state.searchQuery || "").trim().toLowerCase();
 
@@ -61,16 +98,24 @@ export function renderInboxView(container, state, handlers) {
         .join("")
     : "";
 
+  const survey = state.survey || {};
+  const checkedAt = survey.checked_at || "";
+  const lastCheckHtml = checkedAt
+    ? `Checked <time datetime="${escapeHtml(checkedAt)}" data-timestamp="${escapeHtml(checkedAt)}">${escapeHtml(relativeTime(checkedAt))}</time>`
+    : "Live steering active.";
+
   container.innerHTML = `
     <div class="notes-layout">
       <section class="card log-card" aria-label="Message log">
         <div class="row log-toolbar">
           <div class="stack">
             <p id="connection" role="status">
-              <span class="ico-svg" aria-hidden="true"><i class="dot live animate-pulse"></i></span>
+              <button id="survey-open" type="button" aria-label="Open survey results" title="Open survey results">
+                <span id="connection-dot" class="dot live animate-pulse" role="img" aria-label="Connected"></span>
+              </button>
               <span id="connection-text">Connected</span>
             </p>
-            <p id="last-check" class="muted">Live steering active.</p>
+            <p id="last-check" class="muted">${lastCheckHtml}</p>
           </div>
           <span class="row tight">
             <input
@@ -102,7 +147,11 @@ export function renderInboxView(container, state, handlers) {
           </span>
         </div>
         <div class="log-scroll">
+          <button id="log-edited" class="log-edited" type="button" aria-live="polite" ${unreadEditedMsgId ? "" : "hidden"}>New reply</button>
           <ol id="history" aria-label="Messages, oldest first">${historyHtml}</ol>
+          <button id="log-newest" class="log-newest" type="button" aria-label="Scroll to bottom" title="Scroll to bottom" hidden>
+            <svg class="lucide lucide-arrow-down" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+          </button>
         </div>
         <p id="log-empty" class="receipt" role="status" ${visibleMessages.length ? "hidden" : ""}>No messages yet.</p>
       </section>
@@ -154,9 +203,69 @@ export function renderInboxView(container, state, handlers) {
   `;
 
   const historyEl = container.querySelector("#history");
-  if (historyEl) {
-    historyEl.scrollTop = historyEl.scrollHeight;
+  const logNewestBtn = container.querySelector("#log-newest");
+  const logEditedBtn = container.querySelector("#log-edited");
+
+  function syncScrollControls() {
+    if (!historyEl) return;
+    const dist =
+      historyEl.scrollHeight - historyEl.scrollTop - historyEl.clientHeight;
+    pinnedToBottom = dist <= 24;
+    savedScrollTop = historyEl.scrollTop;
+    if (logNewestBtn) {
+      logNewestBtn.hidden = pinnedToBottom;
+    }
+    if (pinnedToBottom && unreadEditedMsgId) {
+      const lastId = visibleMessages[visibleMessages.length - 1]?.id;
+      if (unreadEditedMsgId === lastId) {
+        unreadEditedMsgId = null;
+        if (logEditedBtn) logEditedBtn.hidden = true;
+      }
+    }
   }
+
+  if (historyEl) {
+    if (pinnedToBottom || savedScrollTop === null) {
+      historyEl.scrollTop = historyEl.scrollHeight;
+    } else {
+      historyEl.scrollTop = savedScrollTop;
+    }
+    syncScrollControls();
+    historyEl.addEventListener("scroll", syncScrollControls, { passive: true });
+  }
+
+  logNewestBtn?.addEventListener("click", () => {
+    if (!historyEl) return;
+    pinnedToBottom = true;
+    historyEl.scrollTo({ top: historyEl.scrollHeight, behavior: "smooth" });
+    logNewestBtn.hidden = true;
+  });
+
+  logEditedBtn?.addEventListener("click", () => {
+    const targetId = unreadEditedMsgId;
+    unreadEditedMsgId = null;
+    logEditedBtn.hidden = true;
+    if (!historyEl) return;
+    const row = targetId
+      ? historyEl.querySelector(`.message[data-msg-id="${CSS.escape(targetId)}"]`)
+      : null;
+    if (row) {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      const reply = row.querySelector(".answer.reply");
+      if (reply) {
+        reply.dataset.highlight = "true";
+        setTimeout(() => {
+          if (reply.isConnected) delete reply.dataset.highlight;
+        }, 1200);
+      }
+    } else {
+      historyEl.scrollTo({ top: historyEl.scrollHeight, behavior: "smooth" });
+    }
+  });
+
+  container.querySelector("#survey-open")?.addEventListener("click", (ev) => {
+    handlers.onOpenSurvey?.(ev.currentTarget);
+  });
 
   const searchInput = container.querySelector("#log-search");
   searchInput?.addEventListener("input", () => {
@@ -200,6 +309,7 @@ export function renderInboxView(container, state, handlers) {
     event.preventDefault();
     const body = (noteEl?.value || "").trim();
     if (!body) return;
+    pinnedToBottom = true;
     await handlers.onSendMessage({ body });
     if (noteEl) noteEl.value = "";
   });

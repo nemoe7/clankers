@@ -3,7 +3,8 @@
  */
 
 import { api } from "./api.js";
-import { renderInboxView } from "./inbox-view.js";
+import { renderInboxView, trackMessageAcks } from "./inbox-view.js";
+import { escapeHtml } from "./markdown.js";
 import { createModalManager } from "./modal.js";
 import { renderReportsView } from "./reports-view.js";
 import { createStore } from "./state.js";
@@ -43,10 +44,41 @@ function syncViewportHeight() {
   }
 }
 
+let loadingCount = 0;
+let loadingStartAt = 0;
+let loadingDoneTimer = null;
+
 function setLoading(active) {
   const main = document.getElementById("main-root");
-  if (main) {
-    main.setAttribute("data-loading", active ? "true" : "false");
+  if (!main) return;
+  if (active) {
+    loadingCount += 1;
+    if (loadingDoneTimer) {
+      clearTimeout(loadingDoneTimer);
+      loadingDoneTimer = null;
+    }
+    if (main.getAttribute("data-loading") !== "true") {
+      loadingStartAt = Date.now();
+      main.setAttribute("data-loading", "true");
+    }
+  } else {
+    loadingCount = Math.max(0, loadingCount - 1);
+    if (loadingCount === 0) {
+      const elapsed = Date.now() - loadingStartAt;
+      if (elapsed >= 200) {
+        main.setAttribute("data-loading", "done");
+        loadingDoneTimer = setTimeout(() => {
+          if (
+            loadingCount === 0 &&
+            main.getAttribute("data-loading") === "done"
+          ) {
+            main.setAttribute("data-loading", "false");
+          }
+        }, 220);
+      } else {
+        main.setAttribute("data-loading", "false");
+      }
+    }
   }
 }
 
@@ -76,6 +108,8 @@ async function refreshAll(force = false) {
     const messages = msgRes.messages || [];
     const tasks = taskRes.tasks || [];
     const reports = repRes.reports || [];
+    const survey = health.survey || {};
+    trackMessageAcks(messages, curState.activeTab);
     const selectedReportId =
       curState.selectedReportId &&
       reports.some((r) => r.id === curState.selectedReportId)
@@ -85,6 +119,7 @@ async function refreshAll(force = false) {
       messages,
       tasks,
       reports,
+      survey,
       selectedReportId,
       showHidden: Boolean(curState.showHidden),
     });
@@ -96,6 +131,7 @@ async function refreshAll(force = false) {
       messages,
       tasks,
       reports,
+      survey,
       selectedReportId,
     });
   } catch (err) {
@@ -121,8 +157,38 @@ const handlers = {
   onSearchChange(query) {
     store.setState({ searchQuery: query });
   },
-  onSelectReport(reportId) {
+  async onOpenSurvey(trigger) {
+    const res = await api.getSurvey().catch(() => ({ survey: store.getState().survey || {} }));
+    const survey = res.survey || {};
+    const questions = survey.questions || [];
+    const answers = survey.answers || {};
+    const rowsHtml = questions.length
+      ? questions
+          .map((q) => {
+            const ans = answers[q.id] || "(not answered yet)";
+            return `<div class="survey-item"><p class="survey-item-prompt">${escapeHtml(q.prompt)}</p><p class="survey-item-answer">${escapeHtml(ans)}</p></div>`;
+          })
+          .join("")
+      : `<p class="muted">No survey questions configured.</p>`;
+    const decision = await modal.open("survey-results", {
+      title: "Survey Results & Bible Check",
+      htmlSlots: { content: rowsHtml },
+      trigger,
+    });
+    if (decision === "bible-check") {
+      await api.triggerBibleCheck(true).catch(() => {});
+      await refreshAll(true);
+    }
+  },
+  async onSelectReport(reportId) {
     store.setState({ selectedReportId: reportId });
+    const target = (store.getState().reports || []).find(
+      (r) => r.id === reportId
+    );
+    if (target && !target.seen) {
+      await api.markReportSeen(reportId).catch(() => {});
+      await refreshAll(true);
+    }
   },
   async onDismissReport(reportId, trigger) {
     const decision = await modal.open("confirm-delete", {
@@ -140,41 +206,13 @@ const handlers = {
   },
 };
 
-const SEEN_REPORTS_KEY = "steer.seenReports";
-
-function loadSeenReports() {
-  try {
-    const raw = window.localStorage?.getItem(SEEN_REPORTS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveSeenReports(seen) {
-  try {
-    window.localStorage?.setItem(SEEN_REPORTS_KEY, JSON.stringify(seen));
-  } catch {
-    // Ignore storage quota or privacy mode errors.
-  }
-}
-
-function markReportSeen(report) {
-  if (!report?.id) return;
-  const seen = loadSeenReports();
-  const stamp = report.modified_at || "seen";
-  if (seen[report.id] !== stamp) {
-    seen[report.id] = stamp;
-    saveSeenReports(seen);
-  }
-}
-
-function reportNeedsAttention(report, seen) {
+function reportNeedsAttention(report) {
   if (!report || report.status === "dismissed") return false;
-  const stamp = report.modified_at || "seen";
-  const notYetSeen = seen[report.id] !== stamp;
-  const hasUnansweredFields =
-    (report.fields || []).length > 0 && (report.answers || []).length === 0;
+  const notYetSeen = !report.seen;
+  const hasUnansweredFields = Boolean(
+    report.needs_answer ??
+      ((report.fields || []).length > 0 && (report.answers || []).length === 0)
+  );
   return notYetSeen || hasUnansweredFields;
 }
 
@@ -182,15 +220,7 @@ function renderApp(state) {
   cleanupTimers();
 
   const reports = state.reports || [];
-  if (state.activeTab === "reports" && reports.length) {
-    const activeReport =
-      reports.find((r) => r.id === state.selectedReportId) || reports[0];
-    markReportSeen(activeReport);
-  }
-  const seenReports = loadSeenReports();
-  const pendingReports = reports.filter((r) =>
-    reportNeedsAttention(r, seenReports)
-  ).length;
+  const pendingReports = reports.filter((r) => reportNeedsAttention(r)).length;
 
   const reportPip = document.getElementById("report-pip");
   if (reportPip) {
@@ -260,6 +290,17 @@ function initEvents() {
       store.setState({ activeTab: btn.dataset.tab });
     });
   }
+
+  const interruptBtn = document.getElementById("agent-interrupt");
+  interruptBtn?.addEventListener("click", async () => {
+    interruptBtn.setAttribute("aria-busy", "true");
+    try {
+      await api.triggerBibleCheck();
+      await refreshAll(true);
+    } finally {
+      interruptBtn.setAttribute("aria-busy", "false");
+    }
+  });
 
   document.addEventListener("click", async (event) => {
     const copyBtn = event.target.closest?.(".copy-code");

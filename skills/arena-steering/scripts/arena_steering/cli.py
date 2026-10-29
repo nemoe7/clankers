@@ -102,6 +102,10 @@ def main(
 
   sub.add_parser("report", help="Show, publish, or remove a report.")
 
+  survey_p = sub.add_parser("survey", help="Inspect or submit bible survey answers.")
+  survey_p.add_argument("entries", nargs="*", help="[<key=value> ...]")
+  survey_p.add_argument("--interrupt", action="store_true", help="Trigger bible check.")
+
   state_dir, remaining = _extract_global_state_dir(args_list)
   if not remaining:
     parser.print_help(file=stdout)
@@ -148,6 +152,9 @@ def main(
       return 0
     if cmd == "report":
       return _run_report(cmd_args, reports, stdout)
+    if cmd == "survey":
+      parsed = survey_p.parse_args(cmd_args)
+      return _run_survey(parsed, messages, stdout)
 
     parsed_root = parser.parse_args(remaining)
     if not parsed_root.command:
@@ -258,7 +265,9 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     new_p.add_argument("-d", "--detail", action="append", default=[])
     new_p.add_argument("-m", "--msg", action="append", default=[])
     new_p.add_argument("-r", "--report", action="append", default=[])
-    new_p.add_argument("--dep", action="append", default=[])
+    new_p.add_argument(
+      "-k", "--task", "--dep", dest="task_ids", action="append", default=[]
+    )
     parsed = new_p.parse_args(args[1:])
     task = tasks.create_task(
       parsed.id,
@@ -267,9 +276,11 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
       status=parsed.status,
       scope=parsed.scope,
       details=parsed.detail,
-      msg_ids=parsed.msg,
-      report_ids=parsed.report,
-      deps=parsed.dep,
+      links={
+        "msg_ids": parsed.msg,
+        "report_ids": parsed.report,
+        "task_ids": parsed.task_ids,
+      },
     )
     _, blocked = tasks.get_task(task.id)
     _print_single_task(task, blocked, out)
@@ -311,11 +322,13 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
   elif field == "links":
     if rest[0] == "rm":
       if len(rest) != 3:
-        raise ValueError("Usage: steer task mod <id> links rm <msg|report> <id>")
+        raise ValueError("Usage: steer task mod <id> links rm <msg|report|task> <id>")
       updated = tasks.mod_links_rm(task_id, rest[1], rest[2])
+    elif len(rest) == 2 and rest[0].lower() in {"msg", "report", "task", "dep"}:
+      updated = tasks.mod_links_add(task_id, rest[1], link_type=rest[0])
     else:
       if len(rest) != 1:
-        raise ValueError("Usage: steer task mod <id> links <msg-or-report-id>")
+        raise ValueError("Usage: steer task mod <id> links [msg|report|task] <link-id>")
       updated = tasks.mod_links_add(task_id, rest[0])
   elif field == "deps":
     if rest[0] == "rm":
@@ -463,3 +476,36 @@ def _print_single_report(rep: Report, out: TextIO) -> None:
     print(f"  field {field.id} ({field.type}): {field.label}", file=out)
   for ans in rep.answers:
     print(f"  answer {ans.id} [{ans.status}]: {ans.values}", file=out)
+
+
+def _run_survey(
+  parsed: argparse.Namespace, messages: MessageService, out: TextIO
+) -> int:
+  if parsed.interrupt:
+    survey = messages.trigger_bible_check(active=True)
+    print(f"Survey bible check pending={survey['pending']}", file=out)
+    return 0
+  entries: list[str] = list(parsed.entries or [])
+  if entries:
+    values: dict[str, str] = {}
+    for entry in entries:
+      if "=" not in entry:
+        raise ValueError(f"Expected <key=value> survey entry, got {entry!r}")
+      key, _, val = entry.partition("=")
+      values[key.strip()] = val.strip()
+    survey = messages.submit_survey(values)
+    print(
+      f"Submitted {len(values)} survey answer(s) at {survey['checked_at']}",
+      file=out,
+    )
+    return 0
+  survey = messages.get_survey()
+  print(
+    f"Survey: pending={survey['pending']} checked_at={survey['checked_at'] or 'never'}",
+    file=out,
+  )
+  for q in survey["questions"]:
+    qid = q["id"]
+    ans = survey["answers"].get(qid, "(unanswered)")
+    print(f"- {qid}: {q['prompt']} -> {ans}", file=out)
+  return 0

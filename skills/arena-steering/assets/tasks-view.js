@@ -28,13 +28,17 @@ function taskDetailLines(task) {
   if (task.scope) {
     lines.push(`Scope: ${task.scope}`);
   }
-  for (const dep of task.deps || []) {
+  const links = task.links || {};
+  const taskIds = links.task_ids || task.task_ids || task.deps || [];
+  const reportIds = links.report_ids || task.report_ids || [];
+  const msgIds = links.msg_ids || task.msg_ids || [];
+  for (const dep of taskIds) {
     lines.push(`Depends on: ${dep}`);
   }
-  for (const rep of task.report_ids || []) {
+  for (const rep of reportIds) {
     lines.push(`Waiting on report: ${rep}`);
   }
-  for (const mid of task.msg_ids || []) {
+  for (const mid of msgIds) {
     lines.push(`Linked message: ${mid}`);
   }
   for (const d of task.details || []) {

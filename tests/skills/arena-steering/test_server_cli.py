@@ -110,6 +110,32 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   store.close()
 
 
+def test_resolve_asset_serves_report_gifs_and_images(tmp_path: Path) -> None:
+  state_dir = tmp_path / "state"
+  reports_dir = state_dir / "reports"
+  reports_dir.mkdir(parents=True)
+  gif_bytes = (
+    b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff"
+    b"!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+  )
+  png_bytes = b"\x89PNG\r\n\x1a\n"
+  (reports_dir / "scroll-fade.gif").write_bytes(gif_bytes)
+  (reports_dir / "board.png").write_bytes(png_bytes)
+
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  resolved_gif = app.resolve_asset("/scroll-fade.gif")
+  assert resolved_gif is not None
+  assert resolved_gif == (gif_bytes, "image/gif")
+
+  resolved_png = app.resolve_asset("/reports/board.png")
+  assert resolved_png is not None
+  assert resolved_png == (png_bytes, "image/png")
+
+  assert app.resolve_asset("/../secret.gif") is None
+  store.close()
+
+
 def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   state_dir = tmp_path / "state"
   store = SqliteStore(state_dir / "state.sqlite3")

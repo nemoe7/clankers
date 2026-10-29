@@ -59,11 +59,28 @@ export const api = {
   dismissReport(reportId) {
     return requestJson("DELETE", `/reports/${encodeURIComponent(reportId)}`);
   },
+  markReportSeen(reportId) {
+    return requestJson(
+      "POST",
+      `/reports/${encodeURIComponent(reportId)}/seen`,
+      {}
+    );
+  },
   submitReportAnswer(reportId, values) {
     return requestJson(
       "POST",
       `/reports/${encodeURIComponent(reportId)}/answers`,
       { values }
     );
+  },
+  getSurvey() {
+    return requestJson("GET", "/survey");
+  },
+  submitSurvey(answers) {
+    return requestJson("POST", "/survey", { answers });
+  },
+  triggerBibleCheck(active = undefined) {
+    const body = active === undefined ? {} : { active: Boolean(active) };
+    return requestJson("POST", "/survey/interrupt", body);
   },
 };

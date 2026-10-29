@@ -49,6 +49,7 @@ TOPBAR_BRAND_CLASS = "topbar-brand"
 ARENA_SCROLLBAR_RULE = (
   "scrollbar-color: hsl(var(--surface-raised-alt) / 0.4) transparent;"
 )
+SCROLLBAR_NO_HIGHLIGHT_RULE = "::-webkit-scrollbar-thumb:hover"
 FONT_DISPLAY_BLOCK = "font-display: block;"
 EDGE_LOADING_KEYFRAME = "nuu-edge-loading"
 CUSTOM_OPTION_MARKER = "__custom__"
@@ -121,6 +122,8 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert MESSAGE_TEXT_FONT_SIZE in style_css
   assert TASK_SECTION_TITLE_FONT_SIZE in style_css
   assert ARENA_SCROLLBAR_RULE in style_css
+  assert SCROLLBAR_NO_HIGHLIGHT_RULE in style_css
+  assert "grid-auto-columns: 1fr;" in style_css
   assert STATUS_BANNER_ID not in style_css
   assert FONT_DISPLAY_BLOCK in style_css
   assert EDGE_LOADING_KEYFRAME in style_css
@@ -148,6 +151,14 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert OPTION_CUSTOM_CLASS in reports_js
   assert ON_THIS_PAGE_TEXT not in reports_js
   assert REPORT_PICKER_META_CLASS not in reports_js
+  assert "report-picker-markers" in reports_js
+  assert "report-picker-unseen-dot" in reports_js
+  assert "report-picker-unanswered" in reports_js
+
+  timestamps_js = (ASSETS_DIR / "timestamps.js").read_text(encoding="utf-8")
+  assert "nextRelativeDelay" in timestamps_js
+  assert "node.textContent !== nextText" in timestamps_js
+  assert "setInterval" not in timestamps_js
 
 
 def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
@@ -158,7 +169,15 @@ def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
   app = seed_demo_store(store)
   assert len(app.messages.list_messages(unread_only=False, include_hidden=True)) >= 10
   assert len(app.tasks.list_tasks(include_finished=True)) >= 10
-  assert len(app.reports.list_reports(stale_only=False)) >= 3
+  reports = app.reports.list_reports(stale_only=False)
+  assert len(reports) >= 3
+  assert reports[0].seen is False
+  assert reports[0].needs_answer is True
+  assert reports[1].seen is True
+  assert reports[1].needs_answer is False
+  status_seen, payload_seen = app.dispatch("POST", f"/reports/{reports[0].id}/seen")
+  assert status_seen == 200
+  assert payload_seen["report"]["seen"] is True
   root_asset = app.resolve_asset("/")
   assert root_asset is not None
   assert b"<title>clankers - Steering</title>" in root_asset[0]

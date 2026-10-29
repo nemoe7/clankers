@@ -49,6 +49,7 @@ class SqliteStore:
           status TEXT NOT NULL,
           scope TEXT NOT NULL,
           details_json TEXT NOT NULL DEFAULT '[]',
+          links_json TEXT NOT NULL DEFAULT '{"msg_ids":[],"report_ids":[],"task_ids":[]}',
           msg_ids_json TEXT NOT NULL DEFAULT '[]',
           report_ids_json TEXT NOT NULL DEFAULT '[]',
           deps_json TEXT NOT NULL DEFAULT '[]',
@@ -63,6 +64,7 @@ class SqliteStore:
           fields_json TEXT NOT NULL DEFAULT '[]',
           status TEXT NOT NULL DEFAULT 'published',
           answers_json TEXT NOT NULL DEFAULT '[]',
+          seen INTEGER NOT NULL DEFAULT 0,
           modified_at TEXT NOT NULL
         );
 
@@ -72,6 +74,21 @@ class SqliteStore:
         );
         """
       )
+      task_cols = {
+        row["name"] for row in self._conn.execute("PRAGMA table_info(tasks)").fetchall()
+      }
+      if "links_json" not in task_cols:
+        self._conn.execute(
+          "ALTER TABLE tasks ADD COLUMN links_json TEXT NOT NULL DEFAULT ''"
+        )
+      cols = {
+        row["name"]
+        for row in self._conn.execute("PRAGMA table_info(reports)").fetchall()
+      }
+      if "seen" not in cols:
+        self._conn.execute(
+          "ALTER TABLE reports ADD COLUMN seen INTEGER NOT NULL DEFAULT 0"
+        )
 
   def close(self) -> None:
     """Close the underlying SQLite connection."""
@@ -168,8 +185,8 @@ class SqliteStore:
           """
           INSERT INTO tasks (
             position, id, title, type, status, scope,
-            details_json, msg_ids_json, report_ids_json, deps_json, modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            details_json, links_json, msg_ids_json, report_ids_json, deps_json, modified_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             index,
@@ -179,9 +196,10 @@ class SqliteStore:
             task.status,
             task.scope,
             json.dumps(task.details),
+            json.dumps(task.links),
             json.dumps(task.msg_ids),
             json.dumps(task.report_ids),
-            json.dumps(task.deps),
+            json.dumps(task.task_ids),
             task.modified_at,
           ),
         )
@@ -222,8 +240,8 @@ class SqliteStore:
         self._conn.execute(
           """
           INSERT INTO reports (
-            id, title, body, fields_json, status, answers_json, modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            id, title, body, fields_json, status, answers_json, seen, modified_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             report.id,
@@ -232,6 +250,7 @@ class SqliteStore:
             fields_json,
             report.status,
             answers_json,
+            int(report.seen),
             report.modified_at,
           ),
         )
@@ -244,6 +263,7 @@ class SqliteStore:
               fields_json = ?,
               status = ?,
               answers_json = ?,
+              seen = ?,
               modified_at = ?
           WHERE id = ?
           """,
@@ -253,6 +273,7 @@ class SqliteStore:
             fields_json,
             report.status,
             answers_json,
+            int(report.seen),
             report.modified_at,
             report.id,
           ),
@@ -294,6 +315,20 @@ class SqliteStore:
 
   @staticmethod
   def _row_to_task(row: sqlite3.Row) -> Task:
+    keys = row.keys()
+    raw_links = row["links_json"] if "links_json" in keys else ""
+    parsed_links = json.loads(raw_links) if raw_links else None
+    if isinstance(parsed_links, dict):
+      return Task(
+        id=str(row["id"]),
+        title=str(row["title"]),
+        type=str(row["type"]),
+        status=str(row["status"]),
+        scope=str(row["scope"]),
+        details=[str(item) for item in json.loads(row["details_json"] or "[]")],
+        links=parsed_links,
+        modified_at=str(row["modified_at"]),
+      )
     return Task(
       id=str(row["id"]),
       title=str(row["title"]),
@@ -303,7 +338,7 @@ class SqliteStore:
       details=[str(item) for item in json.loads(row["details_json"] or "[]")],
       msg_ids=[str(item) for item in json.loads(row["msg_ids_json"] or "[]")],
       report_ids=[str(item) for item in json.loads(row["report_ids_json"] or "[]")],
-      deps=[str(item) for item in json.loads(row["deps_json"] or "[]")],
+      task_ids=[str(item) for item in json.loads(row["deps_json"] or "[]")],
       modified_at=str(row["modified_at"]),
     )
 
@@ -320,5 +355,6 @@ class SqliteStore:
       answers=[
         ReportAnswer.from_dict(item) for item in json.loads(row["answers_json"] or "[]")
       ],
+      seen=bool(dict(row).get("seen", 0)),
       modified_at=str(row["modified_at"]),
     )
