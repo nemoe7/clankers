@@ -190,6 +190,7 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
 
   code, out, _ = _run_cli(state_dir, "read")
   assert code == 0
+  assert "Inbox " in out
   assert MSG_ID_CLI in out
 
   code, out, _ = _run_cli(
@@ -278,6 +279,28 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   code, out, _ = _run_cli(state_dir, "report", "rm", REPORT_ID_PORT)
   assert code == 0
   assert REPORT_ID_PORT in out
+
+  # Dismissed report is evicted from active store while answers survive on republish.
+  recheck_store = SqliteStore(state_dir / "state.sqlite3")
+  assert recheck_store.get_report(REPORT_ID_PORT) is None
+  recheck_store.close()
+
+  code, out, _ = _run_cli(state_dir, "msg", "list", "--page", "1")
+  assert code == 0
+  assert MSG_ID_CLI in out
+
+  code, out, _ = _run_cli(state_dir, "task", "mod", TASK_ID_BASE, "status", "finished")
+  assert code == 0
+
+  code, out_upcoming, _ = _run_cli(state_dir, "tasks")
+  assert code == 0
+  assert f"{TASK_ID_BASE} [" not in out_upcoming
+  assert f"{TASK_ID_CLI} [" in out_upcoming
+
+  code, out_finished, _ = _run_cli(state_dir, "tasks", "--finished", "--page", "1")
+  assert code == 0
+  assert f"{TASK_ID_BASE} [finished]" in out_finished
+  assert f"{TASK_ID_CLI} [" not in out_finished
 
   code, out, _ = _run_cli(state_dir, "task", "rm", TASK_ID_CLI)
   assert code == 0

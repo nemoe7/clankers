@@ -229,6 +229,36 @@ class SqliteStore:
       rows = self._conn.execute("SELECT * FROM reports ORDER BY seq ASC").fetchall()
     return [self._row_to_report(row) for row in rows]
 
+  def delete_report(self, report_id: str) -> bool:
+    """Evict a report row from `reports` while preserving its answers in `meta`."""
+    with self._lock, self._conn:
+      row = self._conn.execute(
+        "SELECT answers_json FROM reports WHERE id = ?", (report_id,)
+      ).fetchone()
+      if row is None:
+        return False
+      answers_json = str(row["answers_json"] or "[]")
+      self._conn.execute(
+        """
+        INSERT INTO meta (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        (f"report_answers:{report_id}", answers_json),
+      )
+      self._conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+    return True
+
+  def get_archived_report_answers(self, report_id: str) -> list[ReportAnswer]:
+    """Return preserved answers for a previously dismissed report."""
+    raw = self.get_meta(f"report_answers:{report_id}", "[]") or "[]"
+    try:
+      items = json.loads(raw)
+      if isinstance(items, list):
+        return [ReportAnswer.from_dict(item) for item in items]
+    except json.JSONDecodeError:
+      pass
+    return []
+
   def save_report(self, report: Report) -> Report:
     with self._lock, self._conn:
       existing = self._conn.execute(
