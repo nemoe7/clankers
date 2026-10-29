@@ -342,12 +342,34 @@ def _element_line_count(element: dict) -> int | None:
   return max(1, round(content_h / lh_px)) if content_h > 0 else None
 
 
+def _normalize_text_align(raw: str) -> str:
+  cleaned = raw.strip().lower()
+  if cleaned in {"left", "start"}:
+    return "start"
+  if cleaned in {"right", "end"}:
+    return "end"
+  return cleaned
+
+
 def _text_alignment_finding(element: dict) -> str | None:
   values = element.get("values") or {}
   align = str(values.get("text-align") or "").strip().lower()
+  selector = str(element.get("selector") or "?")
+  mismatch = element.get("heading_body_alignment", element.get("headingBodyAlignment"))
+  if isinstance(mismatch, dict):
+    h_align = _normalize_text_align(
+      str(mismatch.get("heading_align", mismatch.get("headingAlign")) or align)
+    )
+    b_align = _normalize_text_align(
+      str(mismatch.get("body_align", mismatch.get("bodyAlign")) or "")
+    )
+    if h_align and b_align and h_align != b_align:
+      return (
+        f"NUM214 {selector}: heading text-align ({h_align}) "
+        f"mismatches body text-align ({b_align})"
+      )
   if not align:
     return None
-  selector = str(element.get("selector") or "?")
   if align == "justify":
     return f"NUM214 {selector}: text-align justify creates uneven word gaps"
   if align == "center":
@@ -427,10 +449,27 @@ def _is_card_or_dialog(element: dict) -> bool:
 
 
 def _card_font_hierarchy_finding(element: dict, all_elements: list[dict]) -> str | None:
+  selector = str(element.get("selector") or "?")
+  hier = element.get("heading_hierarchy", element.get("headingHierarchy"))
+  if isinstance(hier, dict):
+    h_fs = _numeric_value(hier.get("heading_size", hier.get("headingSize")))
+    s_fs = _numeric_value(hier.get("sub_size", hier.get("subSize")))
+    h_wt = (
+      _numeric_value(hier.get("heading_weight", hier.get("headingWeight"))) or 400.0
+    )
+    s_wt = _numeric_value(hier.get("sub_weight", hier.get("subWeight"))) or 400.0
+    if (
+      h_fs is not None
+      and s_fs is not None
+      and (h_fs < s_fs - 0.1 or (abs(h_fs - s_fs) <= 0.1 and h_wt <= s_wt))
+    ):
+      return (
+        f"NUM216 {selector}: heading ({h_fs:g}px/{h_wt:g}) lacks visual "
+        f"hierarchy over subordinate text ({s_fs:g}px/{s_wt:g})"
+      )
   explicit = element.get("card_font_sizes", element.get("cardFontSizes"))
   if explicit is None and not _is_card_or_dialog(element):
     return None
-  selector = str(element.get("selector") or "?")
   sizes: set[float] = set()
   if isinstance(explicit, list):
     for item in explicit:
@@ -448,11 +487,11 @@ def _card_font_hierarchy_finding(element: dict, all_elements: list[dict]) -> str
       fs = _numeric_value(str((other.get("values") or {}).get("font-size") or ""))
       if fs is not None and fs > 0:
         sizes.add(round(fs, 2))
-  if len(sizes) > 3:
+  if len(sizes) > 2:
     ordered = ", ".join(f"{val:g}px" for val in sorted(sizes))
     return (
       f"NUM216 {selector}: card or dialog mixes {len(sizes)} font sizes "
-      f"({ordered}, at most 3 allowed)"
+      f"({ordered}, at most 2 allowed)"
     )
   return None
 
@@ -480,10 +519,12 @@ def _proximity_spacing_finding(element: dict) -> str | None:
         if isinstance(raw_intra, (int, float))
         else _numeric_value(str(raw_intra))
       )
-  if inter_px is None or intra_px is None or intra_px <= 0:
+  if inter_px is None or intra_px is None or intra_px < 0:
     return None
   selector = str(element.get("selector") or "?")
-  if inter_px + 1e-6 < 1.5 * intra_px:
+  if inter_px <= 0:
+    return f"NUM217 {selector}: inter-group gap is 0px (elements touch)"
+  if intra_px > 0 and inter_px + 1e-6 < 1.5 * intra_px:
     ratio = inter_px / intra_px
     return (
       f"NUM217 {selector}: inter-group gap {inter_px:g}px is {ratio:.2f}x "
@@ -529,6 +570,7 @@ def _approved_font_families(tokens: dict[str, str]) -> set[str]:
 def _core_principles_findings(element: dict, tokens: dict[str, str]) -> list[str]:
   out: list[str] = []
   selector = str(element.get("selector") or "?")
+  tag = str(element.get("tag") or "").strip().lower()
   classes = element.get("classes") or []
   values = element.get("values") or {}
   insets = element.get("card_inline_insets", element.get("cardInlineInsets"))
@@ -538,6 +580,13 @@ def _core_principles_findings(element: dict, tokens: dict[str, str]) -> list[str
       joined = ", ".join(f"{val:g}px" for val in nums)
       out.append(
         f"NUM218 {selector}: stacked card children have ragged inline-start insets ({joined})"
+      )
+  if _is_card_or_dialog(element):
+    pad_l = _numeric_value(str(values.get("padding-left") or ""))
+    pad_r = _numeric_value(str(values.get("padding-right") or ""))
+    if pad_l is not None and pad_r is not None and abs(pad_l - pad_r) > 2.0:
+      out.append(
+        f"NUM218 {selector}: asymmetric card inline padding ({values['padding-left']} vs {values['padding-right']})"
       )
   raw_ff = str(values.get("font-family") or "").strip()
   if raw_ff:
@@ -549,11 +598,26 @@ def _core_principles_findings(element: dict, tokens: dict[str, str]) -> list[str
       out.append(
         f"NUM218 {selector}: font-family {raw_ff} is outside the house font tokens"
       )
+  if tag in PROSE_BLOCK_TAGS:
+    font_style = str(values.get("font-style") or "").strip().lower()
+    if font_style in {"italic", "oblique"}:
+      out.append(
+        f"NUM218 {selector}: font-style {font_style} on body block reduces readability"
+      )
   transform = str(values.get("text-transform") or "").strip().lower()
   if transform == "uppercase" and not (
     "eyebrow" in classes or bool(re.search(r"\beyebrow\b", selector, re.IGNORECASE))
   ):
     out.append(f"NUM218 {selector}: text-transform uppercase is reserved for .eyebrow")
+  fills = element.get("button_fill_colors", element.get("buttonFillColors"))
+  if (
+    isinstance(fills, list)
+    and len({str(x).strip().lower() for x in fills if str(x).strip()}) >= 2
+  ):
+    unique_fills = sorted({str(x).strip().lower() for x in fills if str(x).strip()})
+    out.append(
+      f"NUL008 {selector}: multiple distinct colored action buttons ({', '.join(unique_fills)})"
+    )
   return out
 
 

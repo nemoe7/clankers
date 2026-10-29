@@ -21,7 +21,7 @@
   --focus: #2b53d6;
   --scrollbar-thumb: #767682;
 
-  /* Type: one family, four weights, a seven-step ramp */
+  /* Type: one family, four weights, an eight-step ramp */
   --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Monaspace Neon", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --size-11: 11px;
@@ -31,6 +31,7 @@
   --size-18: 18px;
   --size-22: 22px;
   --size-28: 28px;
+  --size-32: 32px;
   --eyebrow: 11px;
   --weight-regular: 400;
   --weight-medium: 500;
