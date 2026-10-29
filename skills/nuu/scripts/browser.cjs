@@ -578,7 +578,7 @@ async function a11yChecks(page) {
       if (!isVisible(control)) continue;
       if (!accessibleName(control)) {
         findings.push({
-          rule: 'NUA301',
+          rule: 'ACC003',
           severity: 'review',
           criterion: '4.1.2',
           selector: selectorFor(control),
@@ -591,7 +591,7 @@ async function a11yChecks(page) {
         const box = control.getBoundingClientRect();
         if (box.width > 0 && box.height > 0 && Math.abs(box.width - box.height) > 1) {
           findings.push({
-            rule: 'NUM208',
+            rule: 'HRC102',
             severity: 'review',
             criterion: '2.5.8',
             selector: selectorFor(control),
@@ -602,7 +602,7 @@ async function a11yChecks(page) {
       const nested = control.querySelector(interactiveSelector);
       if (nested && isVisible(nested)) {
         findings.push({
-          rule: 'NUA303',
+          rule: 'ACC005',
           severity: 'review',
           criterion: '4.1.2',
           selector: selectorFor(control),
@@ -619,7 +619,7 @@ async function a11yChecks(page) {
         const missing = raw.split(/\s+/).filter(id => id && !document.getElementById(id));
         if (missing.length) {
           findings.push({
-            rule: 'NUA302',
+            rule: 'ACC004',
             severity: 'review',
             criterion: '1.3.1',
             selector: selectorFor(element),
@@ -638,7 +638,7 @@ async function a11yChecks(page) {
     for (const [id, count] of idCounts.entries()) {
       if (count > 1) {
         findings.push({
-          rule: 'NUA304',
+          rule: 'ACC006',
           severity: 'review',
           criterion: '4.1.1',
           selector: `#${CSS.escape(id)}`,
@@ -656,7 +656,7 @@ async function a11yChecks(page) {
       if (!Number.isInteger(level) || level < 1) continue;
       if (previousLevel > 0 && level > previousLevel + 1) {
         findings.push({
-          rule: 'NUA305',
+          rule: 'ACC007',
           severity: 'review',
           criterion: '1.3.1',
           selector: selectorFor(heading),
@@ -681,7 +681,7 @@ async function a11yChecks(page) {
         if (tsMatch) {
           checkedTimestampElements.add(parent);
           findings.push({
-            rule: 'NUA310',
+            rule: 'HRC202',
             severity: 'review',
             criterion: 'relative-timestamps',
             selector: selectorFor(parent),
@@ -703,7 +703,7 @@ async function a11yChecks(page) {
       const threshold = large ? 3.0 : 4.5;
       if (ratio + 1e-4 < threshold) {
         findings.push({
-          rule: 'NUA306',
+          rule: 'ACC101',
           severity: 'review',
           criterion: '1.4.3',
           selector: selectorFor(parent),
@@ -742,7 +742,7 @@ async function a11yChecks(page) {
           const outlineW = parseFloat(fStyle.outlineWidth) || 0;
           if (outlineW > 0 && fStyle.outlineStyle !== 'none') {
             findings.push({
-              rule: 'NUA307',
+              rule: 'ACC202',
               severity: 'review',
               criterion: '2.4.7',
               selector: selectorFor(control),
@@ -802,7 +802,7 @@ async function a11yChecks(page) {
             rect.bottom + halo > aRect.bottom + 0.5
           ) {
             findings.push({
-              rule: 'NUA308',
+              rule: 'ACC203',
               severity: 'review',
               criterion: '2.4.11',
               selector: selectorFor(node),
@@ -828,7 +828,7 @@ async function a11yChecks(page) {
         const nextRect = control.getBoundingClientRect();
         if (Math.abs(nextRect.width - baseRect.width) > 0.5 || Math.abs(nextRect.height - baseRect.height) > 0.5) {
           findings.push({
-            rule: 'NUA309',
+            rule: 'ACC205',
             severity: 'review',
             criterion: 'clause-9',
             selector: selectorFor(control),
@@ -1238,13 +1238,13 @@ async function run() {
   const findings = [];
   for (const row of captures) {
     const location = {url: target, width: row.width, scheme: row.scheme, motion: row.motion};
-    if (row.status === 'failed') findings.push({rule: 'NUB104', severity: 'error', location, evidence: row.error});
-    if (row.flow.status === 'failed') findings.push({rule: 'NUB103', severity: 'error', location, evidence: row.flow});
+    if (row.status === 'failed') findings.push({rule: 'RUN102', severity: 'error', location, evidence: row.error});
+    if (row.flow.status === 'failed') findings.push({rule: 'RUN101', severity: 'error', location, evidence: row.flow});
     if (Array.isArray(row.flow?.steps)) {
       for (const stepRow of row.flow.steps) {
         if (stepRow.dimensionShift) {
           findings.push({
-            rule: 'NUA309',
+            rule: 'ACC205',
             severity: 'review',
             criterion: 'clause-9',
             selector: stepRow.selector,
@@ -1254,8 +1254,8 @@ async function run() {
         }
       }
     }
-    if (row.errors.length) findings.push({rule: 'NUB102', severity: 'review', location, evidence: row.errors});
-    if (row.measurements?.overflow) findings.push({rule: 'NUB101', severity: 'review', location, evidence: 'Horizontal overflow'});
+    if (row.errors.length) findings.push({rule: 'RUN001', severity: 'review', location, evidence: row.errors});
+    if (row.measurements?.overflow) findings.push({rule: 'SPC206', severity: 'review', location, evidence: 'Horizontal overflow'});
     if (row.a11y?.findings?.length) {
       for (const item of row.a11y.findings) {
         findings.push({...item, location});

@@ -63,7 +63,67 @@ SKIP = {
   ".pytest_cache",
   ".ruff_cache",
 }
-RULE_CODE_RE = re.compile(r"\b(?:NUL|NUI|NUB|NUM|NUA)\d{3}\b")
+RULE_CODE_RE = re.compile(
+  r"\b(?:TYP|SPC|HRC|ACC|ICN|DOC|RUN|NUL|NUI|NUB|NUM|NUA)\d{3}\b"
+)
+LEGACY_RULE_ALIASES = {
+  "NUI001": "ICN001",
+  "NUI002": "ICN002",
+  "NUI003": "ICN101",
+  "NUL001": "ACC001",
+  "NUL002": "ACC002",
+  "NUL003": "ACC201",
+  "NUL004": "DOC001",
+  "NUL005": "ACC204",
+  "NUL006": "HRC201",
+  "NUL007": "TYP202",
+  "NUL008": "HRC001",
+  "NUB101": "SPC206",
+  "NUB102": "RUN001",
+  "NUB103": "RUN101",
+  "NUB104": "RUN102",
+  "NUM201": "SPC001",
+  "NUM202": "TYP001",
+  "NUM203": "SPC002",
+  "NUM205": "SPC201",
+  "NUM206": "SPC202",
+  "NUM207": "SPC203",
+  "NUM208": "HRC102",
+  "NUM209": "SPC204",
+  "NUM210": "SPC205",
+  "NUM211": "TYP203",
+  "NUM212": "TYP101",
+  "NUM213": "TYP102",
+  "NUM214": "TYP103",
+  "NUM215": "TYP201",
+  "NUM216": "HRC101",
+  "NUM217": "SPC101",
+  "NUM218": "SPC102",
+  "NUA301": "ACC003",
+  "NUA302": "ACC004",
+  "NUA303": "ACC005",
+  "NUA304": "ACC006",
+  "NUA305": "ACC007",
+  "NUA306": "ACC101",
+  "NUA307": "ACC202",
+  "NUA308": "ACC203",
+  "NUA309": "ACC205",
+  "NUA310": "HRC202",
+}
+REVERSE_RULE_ALIASES = {v: k for k, v in LEGACY_RULE_ALIASES.items()}
+
+
+def expand_rule_aliases(code: str) -> set[str]:
+  aliases = {code}
+  if code in LEGACY_RULE_ALIASES:
+    aliases.add(LEGACY_RULE_ALIASES[code])
+    if code == "NUM218":
+      aliases.update({"TYP002", "TYP003"})
+  if code in REVERSE_RULE_ALIASES:
+    aliases.add(REVERSE_RULE_ALIASES[code])
+  if code in {"TYP002", "TYP003"}:
+    aliases.add("NUM218")
+  return aliases
 
 
 def _load_version(home: Path = HOME) -> str:
@@ -112,7 +172,8 @@ def load_rule_descriptions(home: Path = HOME) -> dict[str, str]:
         continue
       tagged = list(
         re.finditer(
-          r"(.*?)\(\s*`?((?:NUL|NUI|NUB|NUM|NUA)\d{3})`?\s*\)", condition_cell
+          r"(.*?)\(\s*`?((?:TYP|SPC|HRC|ACC|ICN|DOC|RUN|NUL|NUI|NUB|NUM|NUA)\d{3})`?\s*\)",
+          condition_cell,
         )
       )
       if tagged:
@@ -155,27 +216,29 @@ def load_rule_descriptions(home: Path = HOME) -> dict[str, str]:
     if 1 in clauses:
       sentences = [s.strip() for s in clauses[1].split(". ") if s.strip()]
       if len(sentences) >= 2:
-        descriptions.setdefault("NUI001", _clean_md(sentences[1]))
-        descriptions.setdefault("NUI002", _clean_md(sentences[0]))
+        descriptions.setdefault("ICN001", _clean_md(sentences[1]))
+        descriptions.setdefault("ICN002", _clean_md(sentences[0]))
     if 2 in clauses:
-      descriptions.setdefault("NUI003", _clean_md(clauses[2]))
+      descriptions.setdefault("ICN101", _clean_md(clauses[2]))
   descriptions.setdefault(
-    "NUL006", "Raw ISO or unadjusted UTC/offset timestamp in UI text or source"
+    "HRC201", "Raw ISO or unadjusted UTC/offset timestamp in UI text or source"
   )
   descriptions.setdefault(
-    "NUA310", "Visible raw ISO or unadjusted UTC/offset timestamp in rendered UI text"
+    "HRC202", "Visible raw ISO or unadjusted UTC/offset timestamp in rendered UI text"
   )
   return descriptions
 
 
 VERSION = _load_version()
 RULE_DESCRIPTIONS = load_rule_descriptions()
+for _leg, _sem in LEGACY_RULE_ALIASES.items():
+  if _sem in RULE_DESCRIPTIONS:
+    RULE_DESCRIPTIONS.setdefault(_leg, RULE_DESCRIPTIONS[_sem])
 KNOWN_NUU_RULES = {
-  *(f"NUL00{i}" for i in range(1, 9)),
-  *(f"NUI00{i}" for i in range(1, 4)),
-  *(f"NUB10{i}" for i in range(1, 5)),
-  *(f"NUM{i}" for i in range(201, 219) if i != 204),
-  *(f"NUA{i}" for i in range(301, 311)),
+  *LEGACY_RULE_ALIASES.keys(),
+  *LEGACY_RULE_ALIASES.values(),
+  "TYP002",
+  "TYP003",
   *RULE_DESCRIPTIONS,
 }
 RAW_UI_TIMESTAMP_RE = re.compile(
@@ -236,7 +299,8 @@ def collect_nonuu_markers(path, lines):
       code = marker[1]
       scope = "unknown"
       if code in KNOWN_NUU_RULES:
-        suppressed.add(code)
+        aliases = expand_rule_aliases(code)
+        suppressed.update(aliases)
         before = line[: marker.start()].strip()
         scope = (
           "file"
@@ -244,7 +308,7 @@ def collect_nonuu_markers(path, lines):
           else "line"
         )
         if scope == "file":
-          file_ids.add(code)
+          file_ids.update(aliases)
       mark_str = f"{path}:{number}: {code or '<missing>'} {scope}: {line.strip()}"
       marks.append(mark_str)
       suppressions.append(
@@ -451,7 +515,7 @@ class SourcePage(HTMLParser):
     cleaned = re.sub(r"[.!?\s]+$", "", label_text.strip())
     if cleaned and cleaned.casefold() in self.VAGUE_BUTTON_LABELS:
       self.finding(
-        "NUL008",
+        "HRC001",
         "action-hierarchy",
         f"Button uses vague label '{label_text.strip()}' instead of an explicit action",
         pos,
@@ -477,7 +541,7 @@ class SourcePage(HTMLParser):
       if attrs.get("for"):
         self.labels.add(attrs["for"])
     if tag == "img" and "alt" not in attrs:
-      self.finding("NUL001", "1.1.1", "Image has no alt attribute", pos)
+      self.finding("ACC001", "1.1.1", "Image has no alt attribute", pos)
     if tag == "button":
       self.button_stack.append((attrs, pos, []))
     if tag in {"input", "select", "textarea"}:
@@ -504,7 +568,7 @@ class SourcePage(HTMLParser):
       _, _, primaries = self.card_scopes.pop()
       if len(primaries) > 1:
         self.finding(
-          "NUL008",
+          "HRC001",
           "action-hierarchy",
           f"Card or dialog contains {len(primaries)} primary buttons (at most 1 allowed)",
           primaries[1],
@@ -524,7 +588,7 @@ class SourcePage(HTMLParser):
     match = RAW_UI_TIMESTAMP_RE.search(data)
     if match:
       self.finding(
-        "NUL006",
+        "HRC201",
         "relative-timestamps",
         f"Raw or unadjusted timestamp in UI text: {match[0]}",
         self.getpos(),
@@ -535,7 +599,7 @@ class SourcePage(HTMLParser):
       _, _, primaries = self.card_scopes.pop()
       if len(primaries) > 1:
         self.finding(
-          "NUL008",
+          "HRC001",
           "action-hierarchy",
           f"Card or dialog contains {len(primaries)} primary buttons (at most 1 allowed)",
           primaries[1],
@@ -556,7 +620,7 @@ class SourcePage(HTMLParser):
         or attrs.get("id") in self.labels
       ):
         self.finding(
-          "NUL002", "4.1.2", "Control has no source naming evidence", position
+          "ACC002", "4.1.2", "Control has no source naming evidence", position
         )
 
 
@@ -725,7 +789,7 @@ def lint(
           line = text.count("\n", 0, list_match.start(2) + inside_match.start()) + 1
           current.append(
             {
-              "rule": "NUL007",
+              "rule": "TYP202",
               "path": str(path),
               "line": line,
               "column": 1,
@@ -748,7 +812,7 @@ def lint(
           line = text.count("\n", 0, list_match.start(2) + indent_match.start(1)) + 1
           current.append(
             {
-              "rule": "NUL007",
+              "rule": "TYP202",
               "path": str(path),
               "line": line,
               "column": 1,
@@ -764,7 +828,7 @@ def lint(
         ):
           current.append(
             {
-              "rule": "NUL003",
+              "rule": "ACC201",
               "path": str(path),
               "line": text.count("\n", 0, match.start()) + 1,
               "column": 1,
@@ -789,7 +853,7 @@ def lint(
           prop_pos = body_start + prop_match.start(1)
           current.append(
             {
-              "rule": "NUL005",
+              "rule": "ACC204",
               "path": str(path),
               "line": text.count("\n", 0, prop_pos) + 1,
               "column": 1,
@@ -812,7 +876,7 @@ def lint(
         if ts_match:
           current.append(
             {
-              "rule": "NUL006",
+              "rule": "HRC201",
               "path": str(path),
               "line": number,
               "column": ts_match.start() + 1,
@@ -829,7 +893,7 @@ def lint(
         findings.append(finding)
   if list_rules and not all(list_reset.values()):
     reported_paths = {
-      finding["path"] for finding in findings if finding.get("rule") == "NUL007"
+      finding["path"] for finding in findings if finding.get("rule") == "TYP202"
     }
     for list_path, list_line in list_rules:
       if str(list_path) in reported_paths:
@@ -838,11 +902,11 @@ def lint(
       ignored = file_ids | (
         line_ids[list_line - 1] if 0 < list_line <= len(line_ids) else set()
       )
-      if "NUL007" in ignored:
+      if "TYP202" in ignored:
         continue
       findings.append(
         {
-          "rule": "NUL007",
+          "rule": "TYP202",
           "path": str(list_path),
           "line": list_line,
           "column": 1,
@@ -865,7 +929,7 @@ def lint(
   if not _has_design_doc(root, design_doc_rel):
     findings.append(
       {
-        "rule": "NUL004",
+        "rule": "DOC001",
         "path": str(design_doc_path),
         "line": 1,
         "column": 1,
@@ -891,7 +955,7 @@ def lint(
     if not gap["on_scale"]:
       findings.append(
         {
-          "rule": "NUM201",
+          "rule": "SPC001",
           "severity": "review",
           "evidence": f"gap {gap['dx']:g} x {gap['dy']:g} px is off the {scale:g} px scale",
         }
@@ -963,7 +1027,7 @@ def check_icons(root):
         icon_source = "custom"
         current.append(
           {
-            "rule": "NUI002",
+            "rule": "ICN002",
             "path": str(path),
             "line": line_no,
             "column": 1,
@@ -982,7 +1046,7 @@ def check_icons(root):
       first_line = min(sizes.values())
       current.append(
         {
-          "rule": "NUI003",
+          "rule": "ICN101",
           "path": str(path),
           "line": first_line,
           "column": 1,
@@ -1035,10 +1099,10 @@ def check_icons(root):
       for check_ln in range(max(1, rule_line), min(len(lines), line_no) + 1):
         ignored.update(re.findall(r"\bnonuu:\s*([A-Za-z0-9_-]+)", lines[check_ln - 1]))
       counts["custom"] += 1
-      if "NUI002" not in ignored:
+      if "ICN002" not in ignored and "NUI002" not in ignored:
         findings.append(
           {
-            "rule": "NUI002",
+            "rule": "ICN002",
             "path": str(path),
             "line": line_no,
             "column": 1,
@@ -1054,7 +1118,7 @@ def check_icons(root):
   if sum(counts.values()) > 0 and not license_files:
     findings.append(
       {
-        "rule": "NUI001",
+        "rule": "ICN001",
         "path": str(root),
         "line": 1,
         "column": 1,
@@ -1263,12 +1327,12 @@ def browser(args):
         {
           "rule": (
             finding.split()[0]
-            if re.match(r"^NUM2\d\d\b", finding)
-            else "NUM202"
+            if re.match(r"^(?:TYP|SPC|HRC|ACC|ICN|DOC|RUN|NUM|NUL)\d{3}\b", finding)
+            else "TYP001"
             if ": font-size is " in finding
-            else "NUM203"
+            else "SPC002"
             if ": border-radius" in finding
-            else "NUM201"
+            else "SPC001"
           ),
           "severity": "review",
           "evidence": finding,
@@ -1591,12 +1655,12 @@ def main(argv=None):
           {
             "rule": (
               item.split()[0]
-              if re.match(r"^NUM2\d\d\b", item)
-              else "NUM202"
+              if re.match(r"^(?:TYP|SPC|HRC|ACC|ICN|DOC|RUN|NUM|NUL)\d{3}\b", item)
+              else "TYP001"
               if ": font-size is " in item
-              else "NUM203"
+              else "SPC002"
               if ": border-radius" in item
-              else "NUM201"
+              else "SPC001"
             ),
             "severity": "review",
             "evidence": item,
