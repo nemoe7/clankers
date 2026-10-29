@@ -74,7 +74,6 @@
   --text-placeholder: 33 31% 94% / 32%;
   --interactive-active: 0 0% 100%;
   --interactive-normal: 35 20% 88%;
-  --interactive-link: 208 100% 58%;
   --interactive-positive: 125 49% 50%;
   --interactive-negative: 2 86% 63%;
   --interactive-warning: 48 95% 49%;
@@ -82,7 +81,6 @@
   --interactive-cta: 36 45% 98%;
   --interactive-cta-hover: 33 31% 94%;
   --interactive-cta-active: 33 18% 90%;
-  --interactive-cta-focus: 208 100% 58%;
   --interactive-cta-secondary: 27 6% 15%;
   --interactive-cta-secondary-hover: 24 5% 24%;
   --interactive-cta-secondary-active: 24 4% 49%;
@@ -108,7 +106,8 @@
   --muted: hsl(var(--text-tertiary));
   --line: hsl(var(--border-medium));
   --focus: hsl(var(--border-strong));
-  --accent: hsl(var(--interactive-link));
+  --accent: #e5bb8b;
+  --dot-seen: #7fa7d1;
   --scrollbar-thumb: hsl(var(--surface-raised-alt) / 0.4);
   --space-1: 4px;
   --space-2: 8px;
@@ -427,17 +426,17 @@ code.note-id[data-state="good"] {
   display: flex;
   align-items: center;
   gap: 4px;
-  background-color: hsl(var(--surface-tertiary));
-  padding: 4px;
-  border-radius: 6px;
-  border: 1px solid hsl(var(--border-faint));
 }
 
 .tab-btn {
+  position: relative;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 4px 12px;
+  padding: 6px 14px;
+  white-space: nowrap;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
@@ -452,25 +451,27 @@ code.note-id[data-state="good"] {
     border-color var(--fast) var(--ease);
 }
 
-.tab-btn:hover {
-  color: hsl(var(--text-primary));
+@media (hover: hover) and (pointer: fine) {
+  .tab-btn:hover {
+    color: hsl(var(--text-primary));
+    background-color: hsl(var(--surface-highlight));
+  }
 }
 
 .tab-btn.is-active {
-  background-color: hsl(var(--surface-secondary));
   color: hsl(var(--header-primary));
-  border-color: hsl(var(--border-faint));
 }
 
-.tab-badge {
-  font-family: var(--font-basel-grotesk-mono);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  padding: 0 6px;
+#report-pip,
+.tab-pip {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
   border-radius: 9999px;
-  background-color: hsl(var(--surface-raised));
-  color: hsl(var(--text-primary));
-  border: 1px solid hsl(var(--border-faint));
+  background-color: var(--accent);
 }
 
 .btn {
@@ -821,7 +822,7 @@ select,
 }
 
 .state-dot[data-state="seen"] {
-  background-color: hsl(var(--interactive-link));
+  background-color: var(--dot-seen);
 }
 
 .state-dot[data-state="said"] {
@@ -878,13 +879,14 @@ code.note-id {
 
 /* Tasks tab (`#view-tasks`) */
 .tasks-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
   width: min(900px, 90vw);
   max-width: 900px;
   margin-left: max(0px, calc((100vw - 900px) / 2 - 5vw));
   margin-right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  font-size: 16px;
 }
 
 .tasks-layout > .row.tight {
@@ -903,6 +905,7 @@ code.note-id {
 
 #tasks-status {
   margin: 0;
+  font-size: 16px;
 }
 
 #task-search {
@@ -931,7 +934,7 @@ code.note-id {
 
 .task-section-title {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   color: hsl(var(--header-primary));
 }
@@ -953,6 +956,7 @@ code.note-id {
 }
 
 .task-title {
+  font-size: 16px;
   font-weight: 400;
   color: hsl(var(--text-primary));
 }
@@ -967,7 +971,7 @@ code.note-id {
   padding: 2px 8px;
   border-radius: 6px;
   border: 1px solid hsl(var(--border-medium));
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.4;
   background-color: hsl(var(--surface-raised));
   color: hsl(var(--text-secondary));
@@ -1004,7 +1008,7 @@ code.note-id {
   align-items: center;
   gap: 4px;
   margin-left: 6px;
-  font-size: 12px;
+  font-size: 14px;
   color: hsl(var(--interactive-negative));
   vertical-align: middle;
 }
@@ -1013,7 +1017,7 @@ code.note-id {
   display: block;
   margin-top: 2px;
   color: hsl(var(--text-tertiary));
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .task-details > summary {
@@ -1164,9 +1168,18 @@ code.note-id {
   min-width: 0;
 }
 
+.report h1:first-child {
+  margin: 0 0 2px;
+}
+
 #report-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
   margin: 0 0 12px;
-  line-height: 1.3;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 #report-ack-history {

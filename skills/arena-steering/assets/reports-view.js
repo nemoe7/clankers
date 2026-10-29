@@ -107,12 +107,8 @@ export function renderReportsView(container, state, handlers) {
     .join("");
 
   const pickerItemsHtml = reports
-    .map((rep) => {
+    .map((rep, idx) => {
       const isActive = rep.id === activeReport.id;
-      const modIso = escapeHtml(rep.modified_at || "");
-      const modRel = escapeHtml(
-        relativeTime(rep.modified_at, { compact: true })
-      );
       return `
         <button
           type="button"
@@ -120,8 +116,7 @@ export function renderReportsView(container, state, handlers) {
           data-report-id="${escapeHtml(rep.id)}"
           aria-current="${isActive ? "true" : "false"}"
         >
-          <span class="report-picker-title">${escapeHtml(rep.title)}</span>
-          <span class="report-picker-meta"><code class="note-id">${escapeHtml(rep.id)}</code> · ${escapeHtml(rep.status)} · <time datetime="${modIso}" data-timestamp="${modIso}" data-compact="true">${modRel}</time></span>
+          <span class="report-picker-title">${idx + 1}. ${escapeHtml(rep.title)}</span>
         </button>
       `;
     })
@@ -147,11 +142,19 @@ export function renderReportsView(container, state, handlers) {
 
   const modIso = escapeHtml(activeReport.modified_at || "");
   const modRel = escapeHtml(relativeTime(activeReport.modified_at));
+  const statusBlockHtml = `
+    <div id="report-status" class="report-meta muted" role="status">
+      <code class="note-id">${escapeHtml(activeReport.id)}</code>
+      <span>Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time></span>
+    </div>
+  `;
+  const renderedWithMeta = renderedBlocks.includes("</h1>")
+    ? renderedBlocks.replace("</h1>", `</h1>${statusBlockHtml}`)
+    : `<div class="prose-block"><h1>${escapeHtml(activeReport.title)}</h1>${statusBlockHtml}</div>${renderedBlocks}`;
 
   container.innerHTML = `
     <div class="reports-layout">
       <aside id="report-toc" class="report-toc scroll-panel" aria-label="Report contents" ${headings.length ? "" : "hidden"}>
-        <p class="report-toc-title">On this page</p>
         <div class="report-toc-list">
           ${tocLinksHtml}
         </div>
@@ -186,13 +189,9 @@ export function renderReportsView(container, state, handlers) {
       </aside>
 
       <div id="report-main" class="report-main">
-        <p id="report-status" class="muted" role="status">
-          Report <code class="note-id">${escapeHtml(activeReport.id)}</code> · ${escapeHtml(activeReport.status)} · Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time>
-        </p>
-
         <form id="report-answer-form">
           <article id="report" class="report" aria-label="Selected report">
-            ${renderedBlocks}
+            ${renderedWithMeta}
           </article>
           ${
             hasFields

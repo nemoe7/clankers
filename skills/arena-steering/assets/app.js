@@ -140,25 +140,67 @@ const handlers = {
   },
 };
 
+const SEEN_REPORTS_KEY = "steer.seenReports";
+
+function loadSeenReports() {
+  try {
+    const raw = window.localStorage?.getItem(SEEN_REPORTS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSeenReports(seen) {
+  try {
+    window.localStorage?.setItem(SEEN_REPORTS_KEY, JSON.stringify(seen));
+  } catch {
+    // Ignore storage quota or privacy mode errors.
+  }
+}
+
+function markReportSeen(report) {
+  if (!report?.id) return;
+  const seen = loadSeenReports();
+  const stamp = report.modified_at || "seen";
+  if (seen[report.id] !== stamp) {
+    seen[report.id] = stamp;
+    saveSeenReports(seen);
+  }
+}
+
+function reportNeedsAttention(report, seen) {
+  if (!report || report.status === "dismissed") return false;
+  const stamp = report.modified_at || "seen";
+  const notYetSeen = seen[report.id] !== stamp;
+  const hasUnansweredFields =
+    (report.fields || []).length > 0 && (report.answers || []).length === 0;
+  return notYetSeen || hasUnansweredFields;
+}
+
 function renderApp(state) {
   cleanupTimers();
 
-  const unreadCount = (state.messages || []).filter(
-    (m) => m.status !== "acked"
-  ).length;
-  const openTasks = (state.tasks || []).filter(
-    (t) => t.status !== "finished"
-  ).length;
-  const openReports = (state.reports || []).filter(
-    (r) => r.status === "published"
+  const reports = state.reports || [];
+  if (state.activeTab === "reports" && reports.length) {
+    const activeReport =
+      reports.find((r) => r.id === state.selectedReportId) || reports[0];
+    markReportSeen(activeReport);
+  }
+  const seenReports = loadSeenReports();
+  const pendingReports = reports.filter((r) =>
+    reportNeedsAttention(r, seenReports)
   ).length;
 
-  const badgeInbox = document.getElementById("badge-inbox");
-  const badgeTasks = document.getElementById("badge-tasks");
-  const badgeReports = document.getElementById("badge-reports");
-  if (badgeInbox) badgeInbox.textContent = String(unreadCount);
-  if (badgeTasks) badgeTasks.textContent = String(openTasks);
-  if (badgeReports) badgeReports.textContent = String(openReports);
+  const reportPip = document.getElementById("report-pip");
+  if (reportPip) {
+    reportPip.hidden = pendingReports === 0;
+    const label = pendingReports
+      ? "Unread or unanswered report"
+      : "No unread reports";
+    reportPip.title = label;
+    reportPip.setAttribute("aria-label", label);
+  }
 
   for (const btn of document.querySelectorAll(".tab-btn")) {
     const active = btn.dataset.tab === state.activeTab;
