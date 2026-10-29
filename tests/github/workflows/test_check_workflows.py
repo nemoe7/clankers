@@ -294,6 +294,10 @@ def test_ci_triggers_main_push_and_all_branch_pull_requests():
   triggers = gate_workflows.triggers_of(load_workflow("ci.yml"))
   assert triggers["push"]["branches"] == ["main"]
   assert triggers["pull_request"]["branches"] == ["**"]
+  ignored = triggers["pull_request"]["paths-ignore"]
+  assert "docs/CHANGELOG.md" in ignored
+  assert "docs/**/CHANGELOG.md" in ignored
+  assert "CHANGELOG.md" not in ignored
 
 
 def test_artifacts_triggers_keep_both_path_families():

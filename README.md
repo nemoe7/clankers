@@ -4,9 +4,9 @@ Rules, skills, and workflows for AI agents.
 
 - [rules/](rules/): shared and platform-specific instructions, both ChatGPT fields, and commit rules. See [specification and setup](rules/README.md).
 - [skills/](skills/README.md): UI reviews, text compression, and a shared Arena steering/reporting preview. Each skill has `SKILL.md` and supporting files.
-- [github/workflows/](github/workflows/README.md): reusable AI GitHub Actions sources without instruction budgets. The Gemini workflow proposes a version and notes, and an approved run creates the tag and draft.
+- [github/workflows/](docs/workflows/gemini-release/README.md): reusable AI GitHub Actions sources without instruction budgets. The Gemini workflow proposes a version and notes, and an approved run creates the tag and draft.
 - [automations/](automations/DAILIES.md): recurring prompts, currently combined daily monitoring through ChatGPT scheduled tasks. Each self-contained Markdown prompt runs in one pass and supplies state/evidence rules because runtime state is unreliable.
-- [userscripts/](userscripts/README.md): Tampermonkey userscripts for Arena and ChatGPT with two domain bundles that provide saved feature switches. Arena fills `/agent`, opens `{repo} - Steering`, and hides the composer while generating, while ChatGPT hides promo/nav elements and clicks Think every second.
+- [userscripts/](userscripts/): Tampermonkey userscripts for [Arena](docs/userscripts/arena/README.md) and [ChatGPT](docs/userscripts/chatgpt/README.md) with two domain bundles that provide saved feature switches. Arena fills `/agent`, opens `{repo} - Steering`, and hides the composer while generating, while ChatGPT hides promo/nav elements and clicks Think every second.
 - [maintenance/](maintenance/README.md): validation, synchronization, and README measurement tooling, requiring `markdown-it-py` and the npm package `gpt-tokenizer`.
 - [rules/refs/](rules/refs/README.md): uncompressed originals and AGENTS.md writing guidelines.
 - [skills/refs/](skills/refs/): complete unsquashed source trees for skills with baselines.

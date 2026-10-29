@@ -1,28 +1,26 @@
-# Userscripts
+# Arena userscript
 
-Tampermonkey userscripts for Arena.ai and chatgpt.com.
+Tampermonkey userscript for Arena.ai. See [ChatGPT userscript](../chatgpt/README.md) for the `chatgpt.com` bundle.
 
 | Bundle | Features |
 | --- | --- |
-| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Auto-send wake up, Keep working, Transcript auto-scroll, Transcript trim, Preview state download, Tab title, Keep awake |
-| [chatgpt.user.js](chatgpt.user.js) | Hide elements, Auto Think |
+| [arena.user.js](../../../userscripts/arena.user.js) | Prompt fill, Open Steering, Hide composer, Auto-send wake up, Keep working, Transcript auto-scroll, Transcript trim, Preview state download, Tab title, Keep awake |
 
 ## Install
 
 1. Install Tampermonkey in the browser.
 2. Open its dashboard and create a new script.
-3. Paste one bundle's `.user.js` contents and save.
-4. Repeat for the other domain if needed.
+3. Paste `userscripts/arena.user.js` contents and save.
 
-To migrate, disable or remove the five old scripts before enabling the bundles. Reload open Arena and ChatGPT tabs to stop old timers and observers. Old installations do not become bundles automatically.
+To migrate, disable or remove old standalone scripts before enabling the bundle. Reload open Arena tabs to stop old timers and observers. Old installations do not become bundles automatically.
 
-Each bundle has its own version and raw GitHub update URL. A saved feature setting belongs to its bundle.
+The bundle has its own version and raw GitHub update URL. A saved feature setting belongs to its bundle.
 
 The baseline is `refs/arena-prompt-fill.txt`. The served `arena-prompt-fill.txt` uses meaning-preserving compression with an `o200k_base` token budget.
 
 ## Feature switches
 
-Twelve switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer - fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON - toggle` shape.
+Switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer - fill (ON)`.
 
 Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. One module's entries stay together. The modules sit in one order:
 
@@ -36,7 +34,7 @@ Every Arena entry leads with its module, and a switch shows its saved setting in
 
 Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature's observers, timers, and listeners.
 
-The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal, and they hold no check code. Switches never reload the page. Disabling a hiding feature restores its own DOM changes where the page has not replaced them. Earlier automatic clicks and inserted prompt text remain.
+The bundle uses `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal, and it holds no check code. Switches never reload the page. Disabling a hiding feature restores its own DOM changes where the page has not replaced them. Earlier automatic clicks and inserted prompt text remain.
 
 ## Console log
 
@@ -44,7 +42,7 @@ Arena uses `[NemoUtils][module][level] event` with allowlisted fields. Default `
 
 Only debug mode includes repository names and filenames. Keys, message text, page labels, URLs, and raw error text stay out. The logger does not suppress repeated events, save records, or send records.
 
-Title logs require a title or emoji change. Debug adds decision conditions for that change. ChatGPT keeps its existing `[NemoUtils]` output.
+Title logs require a title or emoji change. Debug adds decision conditions for that change.
 
 ## Arena prompt fill
 
@@ -173,37 +171,14 @@ A finished row keeps its shimmer or its pulse in the page, so a row counts only 
 
 A process card carries a play icon and the process name, so it takes 🖥️ as the newest message of a live turn.
 
-## ChatGPT hide elements
-
-On any `chatgpt.com` path, the feature adds `hidden` to twelve managed targets:
-
-- The div that holds the Claim offer button.
-- The div that holds the Free offer button.
-- The Chat and Work header toggle.
-- The Codex sidebar entry.
-- The Images sidebar entry.
-- The Library sidebar entries, in the collapsed rail and in the open nav list.
-- The Free badge.
-- The prompt textarea header banner.
-- The header Upgrade and Share controls.
-- The sidebar Upgrade control.
-- The Upgrade to Plus row, without hiding adjacent actions.
-
-Each target has a saved, default-on menu switch. The Hide elements switch controls all targets without changing their saved preferences or Auto Think. One MutationObserver repeats the work when the page changes, and turning hiding off restores only nodes the script hid.
-
-## ChatGPT auto think
-
-On any `chatgpt.com` path, the feature clicks the Think pill every second while `aria-pressed` is `false`.
-
 ## Check
 
 From the repository root:
 
 ```bash
 node userscripts/arena.user.js
-node userscripts/chatgpt.user.js
 node --test tests/userscripts/userscripts.checks.cjs
 node --test tests/userscripts/userscripts.test.cjs
 ```
 
-Each command prints `ok` when its checks pass. The bundles carry runtime code only: outside a browser each feature publishes its helpers through `exposeChecks`, and the feature checks run from `tests/userscripts/userscripts.checks.cjs`. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, forced follow, live cleanup and navigation.
+Each command prints `ok` when its checks pass. The bundle carries runtime code only: outside a browser each feature publishes its helpers through `exposeChecks`, and the feature checks run from `tests/userscripts/userscripts.checks.cjs`. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, forced follow, live cleanup and navigation.

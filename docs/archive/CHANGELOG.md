@@ -3714,7 +3714,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - ChatGPT custom rules require a PR, a rebase merge and green tests before any turn ends. They replace the conditional PR rule that contradicted them.
 - The 2026-09-20 chat asked for `NEVER end turn until tests are green`, `ALWAYS PR` and `ALWAYS rebase merge`.
 - Project history runs newest first, one entry per pull request with the open entry extended until merge. Each entry opens with at most three summary bullets — change and deferred. Entries below 2026-09-12 keep their older form.
-- [README.md](README.md#instruction-budgets) carries current measurements.
+- [README.md](../../README.md#instruction-budgets) carries current measurements.
 - The approved Arena merge wording becomes `fast-forward/rebase`, with merge authorization and rebase-first-on-divergence unchanged.
 - `ARENA.md` refs, live, and root plus root `AGENTS.md` adopt the preview inbox and report pipeline with work-boundary reads and literal `ACK:`. Setup starts the server, blocks on the visibility question, then reads the answer, and a visible preview reuses without asking. Failed reads error instead of reading empty, acknowledgement records only visible-chat IDs, and the experiment's 21 saved notes import without ID changes.
 

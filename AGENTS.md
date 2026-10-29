@@ -23,11 +23,11 @@
 - Deleted clause: attempt one squash and keep whichever budget is lower.
 - Use a Conventional Commit subject, no body.
 - Stage only task-related files; leave unrelated and user-owned files unstaged.
-- Keep one CHANGELOG entry per date, extending it while the date holds.
-- Use dates as versions: a date heading reads `## YYYY-MM-DD`, with no bracket and no repeated date.
+- Keep one dated entry per date in `docs/CHANGELOG.md` for `rules/`, `automations/`, `system-prompts/`, and `maintenance/`, extending it while the date holds.
+- Use dates as versions in `docs/CHANGELOG.md` (`## YYYY-MM-DD`, with no bracket and no repeated date), and use SemVer headings in each module's `docs/**/CHANGELOG.md`.
 - Group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain.
 - Omit Unreleased.
-- Omit version numbers from CHANGELOG entries.
+- Omit version numbers from `docs/CHANGELOG.md` entries.
 
 ## Precedence
 
@@ -51,7 +51,7 @@
 Read these first:
 
 - [README.md](README.md) — budgets, compression procedure, layout
-- [CHANGELOG.md](CHANGELOG.md) — rule history
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) — rule, prompt, automation, and maintenance history
 - [rules/README.md](rules/README.md) — rule structure, installation, maintenance
 - [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md) — the standard for writing an AGENTS.md; audit rule files against it
 - [skills/README.md](skills/README.md) — skill format, upstream sources, install notes
@@ -81,8 +81,8 @@ Read these first:
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, and for the ChatGPT fields also into `rules/wenyan/`, then squash only the new or affected line.
   - On a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
-- The CHANGELOG is the only ledger, with no separate amendment file.
-- No size diffs or budget changes in CHANGELOG.md.
+- The `docs/` changelogs are the only ledgers, with no separate amendment file.
+- No size diffs or budget changes in `docs/CHANGELOG.md` or `docs/**/CHANGELOG.md`.
 - Before suggesting any amendment, read [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md), cite at least one of its sections in the proposal, and draft the line to its section 4 (one rule per line, imperative, testable); write every rule file to that standard.
 
 ## Reports and approval
@@ -136,7 +136,7 @@ Read these first:
 - `name` matches its directory.
 - Record `metadata.upstream` for adapted skills.
 - The file stays under 500 lines.
-- A skill holds only what an agent needs to use it. NEVER add a design decision, background, rationale or history; those go to [CHANGELOG.md](CHANGELOG.md) or [docs/archive/arena-quirks.md](docs/archive/arena-quirks.md).
+- A skill holds only what an agent needs to use it. NEVER add a design decision, background, rationale or history; those go to `docs/<skill>/CHANGELOG.md` or [docs/arena-quirks.md](docs/arena-quirks.md).
 
 ## Automations
 
@@ -157,7 +157,7 @@ Read these first:
 - markdownlint covers `rules/**/*.md` — 11 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`.
   - **MD060 enabled**, **MD013 disabled**.
 - Python: Ruff, configured by `pyproject.toml`, which owns the selection and the pinned version; run `ruff format` before other local gates.
-- Prose style: write and edit the documentation prose of this repository (`docs/`, every `README.md`, and `CHANGELOG.md`) with `nemoizer` (`skills/nemoizer/scripts/nemoizer`), falling back to ASD-STE100 (`.agents/skills/asd-ste100/scripts/ste-lint.py`) and Humanizer when `nemoizer` is unavailable; both linters MUST pass on changed text.
+- Prose style: write and edit the documentation prose of this repository (`docs/` and every `README.md`) with `nemoizer` (`skills/nemoizer/scripts/nemoizer`), falling back to ASD-STE100 (`.agents/skills/asd-ste100/scripts/ste-lint.py`) and Humanizer when `nemoizer` is unavailable; both linters MUST pass on changed text.
   - Rules, skills and agent-facing files such as this one stay outside the linter's scope.
   - A copy of a third-party file stays outside it too, because the copy belongs to its upstream: no rewrite of a vendored file, and no path into the gate for one.
 

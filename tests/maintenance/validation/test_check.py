@@ -118,11 +118,15 @@ def test_core_source_installs_to_agents(tmp_path):
 def test_internal_links_checks_docs_and_skill_readmes(tmp_path, monkeypatch):
   docs = tmp_path / "docs"
   docs.mkdir()
-  (docs / "note.md").write_text("[missing](missing.md)\n", encoding="utf-8")
+  (docs / "note.md").write_text(
+    "```text\nexample\n```\n`![alt](src =320x200)` and [missing](missing.md)\n",
+    encoding="utf-8",
+  )
   monkeypatch.setattr(check, "DOCS", docs)
   errors = []
   check.validate(errors)
   assert any("broken internal link missing.md" in error for error in errors)
+  assert not any("src =320x200" in error for error in errors)
 
 
 def test_ste_linter_keeps_the_tool_standalone(tmp_path):
@@ -201,3 +205,30 @@ def test_main_enforces_rotation_findings(monkeypatch, capsys):
   )
   assert check.main() == 1
   assert "rotation-data" in capsys.readouterr().out
+
+
+def test_ste_docs_cover_moved_module_docs_and_changelogs():
+  expected = {
+    "docs/CHANGELOG.md",
+    "docs/archive/CHANGELOG.md",
+    "docs/arena-skill/README.md",
+    "docs/arena-skill/CHANGELOG.md",
+    "docs/nemoizer/README.md",
+    "docs/nemoizer/CHANGELOG.md",
+    "docs/nuu/README.md",
+    "docs/nuu/CHANGELOG.md",
+    "docs/squash/README.md",
+    "docs/squash/CHANGELOG.md",
+    "docs/gpt-plugins/README.md",
+    "docs/gpt-plugins/CHANGELOG.md",
+    "docs/userscripts/arena/README.md",
+    "docs/userscripts/arena/CHANGELOG.md",
+    "docs/userscripts/chatgpt/README.md",
+    "docs/userscripts/chatgpt/CHANGELOG.md",
+    "docs/workflows/gemini-release/README.md",
+    "docs/workflows/gemini-release/CHANGELOG.md",
+  }
+  assert expected <= set(check.STE_DOCS)
+  assert "CHANGELOG.md" not in check.STE_DOCS
+  assert not (check.ROOT / "CHANGELOG.md").exists()
+  assert all((check.ROOT / doc).is_file() for doc in check.STE_DOCS)

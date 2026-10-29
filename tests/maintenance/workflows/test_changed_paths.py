@@ -185,7 +185,14 @@ def test_module_matrix_selects_owners_and_shared_changes():
     ]
     selected = changed_paths.module_matrix([path])
     assert [row["name"] for row in selected] == owners
-  assert not changed_paths.module_matrix(["CHANGELOG.md"])
+  for doc in (
+    "docs/CHANGELOG.md",
+    "docs/archive/CHANGELOG.md",
+    "docs/arena-skill/CHANGELOG.md",
+    "docs/userscripts/arena/CHANGELOG.md",
+    "docs/workflows/gemini-release/CHANGELOG.md",
+  ):
+    assert not changed_paths.module_matrix([doc])
   all_names = set(changed_paths.MODULE_TESTS)
   for shared in (
     "requirements.txt",

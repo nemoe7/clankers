@@ -15,19 +15,19 @@ One Agent Plugins 1.0.0 collection and seven single-skill plugins for GPT-specif
 
 | Skill | Purpose |
 | --- | --- |
-| [gpt-quirks](skills/gpt-quirks/SKILL.md) | Apply verified GPT and connected tool quirks when they are relevant |
-| [gpt-handoff](skills/gpt-handoff/SKILL.md) | Audit agent work and human-facing docs. Use Ponytail for code and docs audits. Own the final format or draft a handoff. |
-| [gpt-planning](skills/gpt-planning/SKILL.md) | Check requirements and completion before each plan, handoff, execution, and final report. |
-| [gpt-github](skills/gpt-github/SKILL.md) | Apply the owner's git and GitHub rules to every git or GitHub action. |
-| [gpt-display](skills/gpt-display/SKILL.md) | Choose and author supported response representations: DIL interfaces, source bindings, charts, maps, host actions, and Mermaid diagrams. |
-| [gpt-question](skills/gpt-question/SKILL.md) | Ask for needed user input with supported interactive forms and visible custom answers. |
-| [nemoizer](../skills/nemoizer/SKILL.md) | Write and edit prose, comments, and documentation with ASD-STE100 and Humanizer rules, and audit code comments and tests. |
+| [gpt-quirks](../../gpt-plugins/skills/gpt-quirks/SKILL.md) | Apply verified GPT and connected tool quirks when they are relevant |
+| [gpt-handoff](../../gpt-plugins/skills/gpt-handoff/SKILL.md) | Audit agent work and human-facing docs. Use Ponytail for code and docs audits. Own the final format or draft a handoff. |
+| [gpt-planning](../../gpt-plugins/skills/gpt-planning/SKILL.md) | Check requirements and completion before each plan, handoff, execution, and final report. |
+| [gpt-github](../../gpt-plugins/skills/gpt-github/SKILL.md) | Apply the owner's git and GitHub rules to every git or GitHub action. |
+| [gpt-display](../../gpt-plugins/skills/gpt-display/SKILL.md) | Choose and author supported response representations: DIL interfaces, source bindings, charts, maps, host actions, and Mermaid diagrams. |
+| [gpt-question](../../gpt-plugins/skills/gpt-question/SKILL.md) | Ask for needed user input with supported interactive forms and visible custom answers. |
+| [nemoizer](../../skills/nemoizer/SKILL.md) | Write and edit prose, comments, and documentation with ASD-STE100 and Humanizer rules, and audit code comments and tests. |
 
 ## Edit a skill
 
 Skill sources live under `refs/skills/`. Compress shipped copies manually, preserving every rule, condition, exception, command, and heading. Review each clause against its source. Increase the plugin version for every update.
 
-See [maintenance/README.md](../maintenance/README.md) for synchronization and validation.
+See [maintenance/README.md](../../maintenance/README.md) for synchronization and validation.
 
 ## Package
 

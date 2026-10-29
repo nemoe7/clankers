@@ -4,9 +4,9 @@ Find and replace AI-flavored synonyms with plain words from one rotation table. 
 
 ## Setup
 
-The tools need Python 3.11 or later, with no extra Python packages. JavaScript checks need Node.js and Acorn. Use the repository paths below, or install the agent payload as described in [Skills](../README.md).
+The tools need Python 3.11 or later, with no extra Python packages. JavaScript checks need Node.js and Acorn. Use the repository paths below, or install the agent payload as described in [Skills](../../skills/README.md).
 
-[SKILL.md](SKILL.md) holds the agent instructions. [Rule reference](references/rules.md) holds the rotations, concrete lint IDs, exclusion syntax, and prose limits.
+[SKILL.md](../../skills/nemoizer/SKILL.md) holds the agent instructions. [Rule reference](../../skills/nemoizer/references/rules.md) holds the rotations, concrete lint IDs, exclusion syntax, and prose limits.
 
 ## Quick start
 

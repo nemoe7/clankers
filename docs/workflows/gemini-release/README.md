@@ -4,7 +4,7 @@ Reusable GitHub Actions sources, with no instruction budget. This directory does
 
 ## Gemini release proposal and draft
 
-Copy [gemini-release.yml](gemini-release.yml), [gemini_release.py](gemini_release.py) and [gemini-release-evidence.json](gemini-release-evidence.json) to `.github/workflows/` on the target repository's default branch. Replace `CHANGE-ME/**` with the target product paths, and add `GEMINI_API_KEY` as an Actions secret. Keep the policy target-owned: distribution does not synchronize it.
+Copy [gemini-release.yml](../../../github/workflows/gemini-release.yml), [gemini_release.py](../../../github/workflows/gemini_release.py) and [gemini-release-evidence.json](../../../github/workflows/gemini-release-evidence.json) to `.github/workflows/` on the target repository's default branch. Replace `CHANGE-ME/**` with the target product paths, and add `GEMINI_API_KEY` as an Actions secret. Keep the policy target-owned: distribution does not synchronize it.
 
 Run **Gemini Release Draft** with no proposal run ID to propose a release. The proposal shows the version, SHA, and notes in the Actions summary, and it creates no tag or release. Review the notes and target, then run the workflow again with the successful proposal run ID. That run reuses the saved notes and does not call Gemini.
 

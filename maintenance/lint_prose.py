@@ -15,7 +15,7 @@ _NEMOIZER = None
 
 
 def markdown_targets() -> list[Path]:
-  """Collect docs, CHANGELOG and every README outside the skip set."""
+  """Collect docs and every README outside the skip set."""
   found: list[Path] = []
   for path in sorted(Path(".").rglob("*.md")):
     if any(part in SKIP_PARTS for part in path.parts):

@@ -45,5 +45,5 @@ max-line-length = 120
 extend-exclude = ["skills/**", "rules/**", "**/*.min.js"]
 
 [[tool.nemoizer.files]]
-paths = ["CHANGELOG.md"]
+paths = ["docs/CHANGELOG.md", "docs/**/CHANGELOG.md"]
 list-sentence-cap = 3

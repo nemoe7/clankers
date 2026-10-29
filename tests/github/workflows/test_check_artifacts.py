@@ -28,7 +28,13 @@ def upload_step(document: dict) -> dict:
 
 
 def test_the_repository_workflow_passes():
-  assert findings(workflow()) == []
+  document = workflow()
+  assert findings(document) == []
+  runs = check_artifacts.step_runs(document["jobs"]["validate-gpt-plugins"])
+  assert (
+    "skills/nemoizer/SKILL.md skills/nemoizer/references skills/nemoizer/scripts"
+    in runs
+  )
 
 
 def test_the_command_reports_the_workflow(capsys):

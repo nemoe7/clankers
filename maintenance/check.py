@@ -115,16 +115,31 @@ EXPECTED_LINTED = (
 # This comment identifies the documented markdownlint count. Root AGENTS.md is agent-facing and excluded.
 # Add a path only when it has no STE violations. CI and `check.py --ste` use this same list.
 STE_DOCS = (
-  "userscripts/README.md",
+  "docs/userscripts/arena/README.md",
+  "docs/userscripts/chatgpt/README.md",
   "maintenance/README.md",
   "skills/README.md",
+  "docs/arena-skill/README.md",
+  "docs/nemoizer/README.md",
+  "docs/nuu/README.md",
+  "docs/squash/README.md",
+  "docs/workflows/gemini-release/README.md",
   "README.md",
   ".agents/skills/README.md",
   "docs/arena-quirks.md",
   "rules/README.md",
   "rules/refs/README.md",
-  "gpt-plugins/README.md",
-  "CHANGELOG.md",
+  "docs/gpt-plugins/README.md",
+  "docs/CHANGELOG.md",
+  "docs/archive/CHANGELOG.md",
+  "docs/arena-skill/CHANGELOG.md",
+  "docs/nemoizer/CHANGELOG.md",
+  "docs/nuu/CHANGELOG.md",
+  "docs/squash/CHANGELOG.md",
+  "docs/gpt-plugins/CHANGELOG.md",
+  "docs/userscripts/arena/CHANGELOG.md",
+  "docs/userscripts/chatgpt/CHANGELOG.md",
+  "docs/workflows/gemini-release/CHANGELOG.md",
 )
 STE_LINT = "skills/nemoizer/scripts/nemoize.py"
 # The prose lint covers the code comments and the documents outside the STE list.
@@ -152,7 +167,7 @@ NEMOIZER_IGNORES = (
 
 # One paragraph carries at most this many sentences. A longer one splits.
 PARAGRAPH_SENTENCE_CAP = 4
-CODE_SPAN_RE = re.compile(r"`[^`]*`")
+CODE_SPAN_RE = re.compile(r"(`+)[^`\n]*?\1")
 SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?:\s+|$)")
 LIST_OR_BLOCK_RE = re.compile(r"^(?:[-*+>|#]|\d+[.)] )")
 
@@ -530,7 +545,7 @@ def check_internal_links(
   path: Path,
   errors: list[str],
 ) -> None:
-  text = path.read_text(encoding="utf-8")
+  text = CODE_SPAN_RE.sub("", path.read_text(encoding="utf-8"))
 
   for target in re.findall(
     r"\[[^\]]+\]\(([^)]+)\)",

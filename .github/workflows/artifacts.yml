@@ -114,7 +114,7 @@ jobs:
         run: |
           BASE="$PR_BASE"
           git show "$BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
-          changed="$(git diff --name-only "$BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills skills/nemoizer)"
+          changed="$(git diff --name-only "$BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills skills/nemoizer/SKILL.md skills/nemoizer/references skills/nemoizer/scripts)"
           if [ -n "$changed" ]; then
             python maintenance/gpt_plugins/gate_gpt_plugins.py --base-manifest "$RUNNER_TEMP/base-plugin.json" --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
           else

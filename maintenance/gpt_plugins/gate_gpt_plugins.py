@@ -29,9 +29,8 @@ ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "gpt-plugins"
 MANIFEST = PLUGIN / "plugin.json"
 ASSETS = PLUGIN / "assets"
-# The collection README documents the layout for a human reader, so the tree allows it
-# and archive_members() leaves it out of the archive.
-README = PLUGIN / "README.md"
+# The collection README documents the layout for a human reader under docs/gpt-plugins/.
+README = ROOT / "docs" / "gpt-plugins" / "README.md"
 REFS = PLUGIN / "refs" / "skills"
 SHIPPED = PLUGIN / "skills"
 PLUGIN_NAME = "gpt-plugins"

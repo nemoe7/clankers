@@ -2710,7 +2710,7 @@ for raw in sys.stdin:
     assert.equal(modalNode, null, "clicking the Lucide X close button closes the modal");
     assert.equal(settingsButton.attrs["aria-pressed"], "false", "settings button resets aria-pressed on close");
 
-    for (const rel of ["userscripts/arena.user.js", "userscripts/chatgpt.user.js", "userscripts/README.md"]) {
+    for (const rel of ["userscripts/arena.user.js", "userscripts/chatgpt.user.js", "docs/userscripts/arena/README.md", "docs/userscripts/chatgpt/README.md"]) {
       const content = fs.readFileSync(path.join(__dirname, "../..", rel), "utf8");
       assert.ok(!new RegExp("[\\u2013\\u2014]|\\\\u201[34]", "i").test(content), `${rel} must not contain long dashes`);
     }

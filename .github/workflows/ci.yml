@@ -12,7 +12,8 @@ on:
       - '.gitignore'
       - 'apply.bat'
       - 'automations/**'
-      - 'CHANGELOG.md'
+      - 'docs/CHANGELOG.md'
+      - 'docs/**/CHANGELOG.md'
       - 'maintenance/README.md'
 
 permissions:

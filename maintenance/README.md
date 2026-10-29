@@ -124,7 +124,7 @@ python3 maintenance/lint_prose.py
 
 `maintenance/check.py` runs the same lint, so the local gate and CI cover it.
 
-The prose linter runs the nemoizer rules over the covered scope: `docs/`, every `README.md`, and `CHANGELOG.md`. It also checks each tracked first-party code comment and Python docstring. It reads `.bat`, `.cjs`, `.css`, `.html`, `.ini`, `.js`, `.jsonc`, `.py`, `.sh`, `.svg`, `.toml`, and `.yml` files, plus `Dockerfile` and `arena-preview`.
+The prose linter runs the nemoizer rules over the covered scope: `docs/` and every `README.md`. It also checks each tracked first-party code comment and Python docstring. It reads `.bat`, `.cjs`, `.css`, `.html`, `.ini`, `.js`, `.jsonc`, `.py`, `.sh`, `.svg`, `.toml`, and `.yml` files, plus `Dockerfile` and `arena-preview`.
 
 `maintenance/extract_prose.py` groups code prose by file in JSON. With no path arguments it selects tracked first-party code. `lint_prose.py` consumes these groups. Sentence rules apply per section, and synonym rules span each file.
 
@@ -132,7 +132,7 @@ Identifiers and ordinary code strings remain outside the extracted prose, while 
 
 Vendored code stays outside the code target. Required userscript metadata stays, and the linter checks prose in `@name` and `@description`. Every ordinary code-comment block has a two-line limit. Required directive markers stay outside that limit.
 
-`CHANGELOG.md` bullets cap at 3 sentences.
+`docs/CHANGELOG.md` and `docs/**/CHANGELOG.md` bullets cap at 3 sentences.
 
 ## Update README measurements
 
@@ -230,7 +230,7 @@ python3 -m pip install -r requirements.txt
 python3 maintenance/gpt_plugins/gate_gpt_plugins.py            # report drift, write nothing
 ```
 
-The checker checks `plugin.json` against the canonical schema at `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`, which it downloads on every run. Pass `--schema <path>` to check against a local copy offline. It also checks the plugin name, shipped skill names, the Agent Skills frontmatter limits, and the collection tree. `gpt-plugins/README.md` documents the collection and never ships.
+The checker checks `plugin.json` against the canonical schema at `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`, which it downloads on every run. Pass `--schema <path>` to check against a local copy offline. It also checks the plugin name, shipped skill names, the Agent Skills frontmatter limits, and the collection tree. `docs/gpt-plugins/README.md` documents the collection and never ships.
 
 `--archive <zip>` compares a packaged archive with the collection. The archive must carry `plugin.json` and `skills/` only, with byte-identical content, so `refs/` never ships. On pull requests, `.github/workflows/artifacts.yml` runs the collection check and requires a higher `plugin.json` version when shipped files change. On `main`, it packages and publishes `gpt-plugins.zip`.
 

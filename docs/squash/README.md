@@ -4,7 +4,7 @@ Compress existing text to a token, word, character, or byte budget without losin
 
 ## Setup
 
-Load [SKILL.md](SKILL.md) in an agent that supports skills. See [Skills](../README.md) for installation layout. This skill needs no runtime script or package install.
+Load [SKILL.md](../../skills/squash/SKILL.md) in an agent that supports skills. See [Skills](../../skills/README.md) for installation layout. This skill needs no runtime script or package install.
 
 ## Quick start
 
@@ -47,4 +47,4 @@ Normal use retains structure, audience, voice, and register. Caveman style is an
 
 The skill does not supply a tokenizer or prove that every edit preserves meaning. Its final comparison checks the source's required points and rejects unsafe cuts.
 
-This README is human documentation and is not part of the installed skill payload. The complete rules and license are in [SKILL.md](SKILL.md) and [LICENSE.txt](LICENSE.txt).
+This README is human documentation and is not part of the installed skill payload. The complete rules and license are in [SKILL.md](../../skills/squash/SKILL.md) and [LICENSE.txt](../../skills/squash/LICENSE.txt).

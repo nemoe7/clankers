@@ -6,16 +6,16 @@ Build, refine, and review web interfaces. Tools cover briefs, local catalogs, de
 
 ## Setup
 
-Load [SKILL.md](SKILL.md) in an agent that supports skills. See [Skills](../README.md) for installation layout. Local tools need Python 3.11+ and its standard library. Browser tools also need Node, the floating `playwright` package, and an available browser.
+Load [SKILL.md](../../skills/nuu/SKILL.md) in an agent that supports skills. See [Skills](../../skills/README.md) for installation layout. Local tools need Python 3.11+ and its standard library. Browser tools also need Node, the floating `playwright` package, and an available browser.
 
 The project supplies its page, running application, and browser. Tools capture pages but install no package or browser.
 
 ## Working flow
 
-1. Read the project's design record, or start from [the template](references/design-document.md).
-2. Preserve the product system, or select the house [sheet](references/style.css) and [examples](references/examples.md).
+1. Read the project's design record, or start from [the template](../../skills/nuu/references/design-document.md).
+2. Preserve the product system, or select the house [sheet](../../skills/nuu/references/style.css) and [examples](../../skills/nuu/references/examples.md).
 3. Change the page and inspect rendered states at `68em` (`1088`), `60em` (`960`), `30em` (`480`), and `24em` (`384`) breakpoints.
-4. Collect computed values with [the browser snippet](references/measure.md), check them, and retain the reports and screenshots.
+4. Collect computed values with [the browser snippet](../../skills/nuu/references/measure.md), check them, and retain the reports and screenshots.
 5. Update the project design record with settled decisions and evidence.
 
 The skill holds the complete house constraints. The record and screenshots describe the consuming project, not this skill's source files.
@@ -78,7 +78,7 @@ flowchart TB
   R --> D[Review and design record]
 ```
 
-[Tool contracts](references/nuu.md) describe assets, live edits, eight review modes, inputs, exit codes, and missing coverage. Review modes supply evidence and task-specific checks. Visual judgment and repairs remain agent work. Search uses licensed local CSV data with source hashes, not external page content.
+[Tool contracts](../../skills/nuu/references/nuu.md) describe assets, live edits, eight review modes, inputs, exit codes, and missing coverage. Review modes supply evidence and task-specific checks. Visual judgment and repairs remain agent work. Search uses licensed local CSV data with source hashes, not external page content.
 
 Read-only tools keep product files unchanged. Record creation, asset fetches, and transient live edits need their explicit command flags. Existing output files and design records are not overwritten.
 

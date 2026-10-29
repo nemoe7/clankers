@@ -4,7 +4,7 @@ Steer Arena coding sessions through one live preview inbox, task queue, and repo
 
 ## Setup
 
-Load [SKILL.md](SKILL.md) in an agent that supports skills. See [Skills](../README.md) for installation layout. The preview server needs Python 3.11+ and its standard library, plus `markdown-it-py` and `PyYAML`.
+Load [SKILL.md](../../skills/arena-skill/SKILL.md) in an agent that supports skills. See [Skills](../../skills/README.md) for installation layout. The preview server needs Python 3.11+ and its standard library, plus `markdown-it-py` and `PyYAML`.
 
 ```bash
 bash .agents/skills/arena-skill/scripts/install.sh
@@ -34,10 +34,10 @@ The installer creates the preview virtual environment, configures shell hooks, a
 
 ## Companion proxies
 
-Two optional Docker services sit beside the skill for features beyond the sandbox. [arena-egress-proxy](arena-egress-proxy/INSTALL.md) provides authenticated GitHub and HTTP reads plus SQLite board and state sync. [arena-preview-proxy](arena-preview-proxy/INSTALL.md) serves an installable web app for opening shared Arena preview URLs.
+Two optional Docker services sit beside the skill for features beyond the sandbox. [arena-egress-proxy](../../skills/arena-skill/arena-egress-proxy/INSTALL.md) provides authenticated GitHub and HTTP reads plus SQLite board and state sync. [arena-preview-proxy](../../skills/arena-skill/arena-preview-proxy/INSTALL.md) serves an installable web app for opening shared Arena preview URLs.
 
 ## Limits
 
-Preview state lives in ignored local files and resets when the sandbox resets unless restored. State sync and board sharing require a configured `arena-egress-proxy` host and master key in the Arena userscript. Browser download approvals guard the UI workflow rather than enforcing a server security boundary. Complete operating rules live in [SKILL.md](SKILL.md) and [references/reference.md](references/reference.md).
+Preview state lives in ignored local files and resets when the sandbox resets unless restored. State sync and board sharing require a configured `arena-egress-proxy` host and master key in the Arena userscript. Browser download approvals guard the UI workflow rather than enforcing a server security boundary. Complete operating rules live in [SKILL.md](../../skills/arena-skill/SKILL.md) and [references/reference.md](../../skills/arena-skill/references/reference.md).
 
 This README is human documentation and is not part of the installed skill payload.

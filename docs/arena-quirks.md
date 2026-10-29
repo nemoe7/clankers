@@ -2,7 +2,7 @@
 
 Observed Arena.ai platform behaviours, not repository defects. Linked rules are authoritative. Each entry records an observation, its consequence and the current rule. Dates are sandbox observation dates, and unknown days stay unspecified.
 
-Restores deleted the original steering notes, so [CHANGELOG.md](../CHANGELOG.md) is the durable record.
+Restores deleted the original steering notes, so [CHANGELOG.md](CHANGELOG.md) is the durable record.
 
 ## GitHub session
 

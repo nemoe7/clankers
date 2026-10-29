@@ -251,9 +251,14 @@ def test_repository_scope_classifies_only_human_documentation():
   source = "The tool checks the saved state."
   for name in (
     "README.md",
-    "skills/example/README.md",
+    "skills/README.md",
     "INSTALL.md",
-    "CHANGELOG.md",
+    "docs/CHANGELOG.md",
+    "docs/archive/CHANGELOG.md",
+    "docs/arena-skill/CHANGELOG.md",
+    "docs/arena-skill/README.md",
+    "docs/userscripts/arena/README.md",
+    "docs/workflows/gemini-release/CHANGELOG.md",
     "docs/history.md",
   ):
     context, scoped = lint_prose.nemoizer_scope(Path(name), source)
@@ -262,3 +267,26 @@ def test_repository_scope_classifies_only_human_documentation():
   context, scoped = lint_prose.nemoizer_scope(Path("unknown.txt"), source)
   assert context == "unknown"
   assert not scoped
+
+
+def test_changelog_list_sentence_cap_covers_docs_changelogs():
+  targets = {path.as_posix() for path in lint_prose.markdown_targets()}
+  expected = {
+    "docs/CHANGELOG.md",
+    "docs/archive/CHANGELOG.md",
+    "docs/arena-skill/CHANGELOG.md",
+    "docs/nemoizer/CHANGELOG.md",
+    "docs/nuu/CHANGELOG.md",
+    "docs/squash/CHANGELOG.md",
+    "docs/gpt-plugins/CHANGELOG.md",
+    "docs/userscripts/arena/CHANGELOG.md",
+    "docs/userscripts/chatgpt/CHANGELOG.md",
+    "docs/workflows/gemini-release/CHANGELOG.md",
+  }
+  assert expected <= targets
+  assert "CHANGELOG.md" not in targets
+  module = lint_prose.nemoizer_linter()
+  module.BASE_CONFIG = module.load_config(["."])
+  for rel in expected:
+    cfg = module.file_config(Path(rel))
+    assert cfg["list_sentence_cap"] > module.LIST_SENTENCE_CAP
