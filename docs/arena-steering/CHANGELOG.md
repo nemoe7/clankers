@@ -10,5 +10,5 @@ This log has no Unreleased section.
 
 ### Added
 
-- `scripts/arena_steering/` and `scripts/steer`: Add the `arena-steering` skill and `steer` CLI with domain models, SQLite storage, Markdown forms, SHA-256 survey grading, and HTTP/WebSocket routes.
-- `assets/`, `references/survey.json`, and `scripts/demo.py`: Add unminified ES module web UI for Inbox, Tasks, Reports, and Survey verification using Arena tokens, `Basel_Grotesk` fonts, `nuu` recipes, and `demo.py`.
+- `scripts/arena_steering/` and `scripts/steer`: Add the `arena-steering` skill and `steer` CLI with domain models, SQLite storage, server-cached Markdown forms, SHA-256 survey grading, and HTTP/WebSocket routes.
+- `assets/`, `references/survey.json`, and `scripts/demo.py`: Add ES module web UI for Inbox, Tasks, Reports, and Survey with PrismJS, Mermaid, Arena tokens, `Basel_Grotesk` fonts, and `demo.py`.

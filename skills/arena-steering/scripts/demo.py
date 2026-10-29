@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -31,9 +32,11 @@ def _set_demo_timestamps(store: SqliteStore) -> None:
     "a00006": 420,
     "a00007": 150,
     "a00008": 75,
-    "a00009": 28,
-    "a00010": 9,
+    "a00009": 65,
+    "a00010": 55,
   }
+  for idx in range(11, 36):
+    msg_offsets[f"a{idx:05d}"] = 10800 + (36 - idx) * 600
   with store._lock, store._conn as conn:
     for mid, secs in msg_offsets.items():
       stamp = iso_ago(secs)
@@ -43,11 +46,11 @@ def _set_demo_timestamps(store: SqliteStore) -> None:
       )
     conn.execute(
       "UPDATE reports SET modified_at = ? WHERE id = 'steering-architecture'",
-      (iso_ago(45),),
+      (iso_ago(120),),
     )
     conn.execute(
       "UPDATE reports SET modified_at = ? WHERE id = 'ui-layout-audit'",
-      (iso_ago(18),),
+      (iso_ago(60),),
     )
     conn.execute(
       "UPDATE reports SET modified_at = ? WHERE id = 'runtime-metrics'",
@@ -55,7 +58,7 @@ def _set_demo_timestamps(store: SqliteStore) -> None:
     )
     conn.execute(
       "UPDATE tasks SET modified_at = ? WHERE status = 'in_progress'",
-      (iso_ago(12),),
+      (iso_ago(60),),
     )
 
 
@@ -72,6 +75,20 @@ def reseed_demo_store(store: SqliteStore) -> None:
     app = SteeringApp(store)
   finally:
     store._seeding_demo = False  # type: ignore[attr-defined]
+
+  # Seed historical messages (a00011..a00035) before recent messages so upward scroll paginates cleanly.
+  for idx in range(11, 36):
+    mid = f"a{idx:05d}"
+    m_hist = app.messages.send_message(
+      f"Historical steering checkpoint #{idx - 10}: verified schema migration step `{mid}`.",
+      blocking=(idx % 3 != 0),
+      hidden=(idx % 5 == 0),
+      msg_id=mid,
+    )
+    app.messages.ack(
+      m_hist.id,
+      f"Completed checkpoint `{mid}` and updated validation fixtures.",
+    )
 
   # 1. Messages covering sent, seen, acked (single + multi-ack), attachments (present + missing),
   #    fenced code blocks (bash, python, json), tables, blockquotes, and hidden notes.
@@ -222,25 +239,57 @@ def reseed_demo_store(store: SqliteStore) -> None:
     "Arena Steering: Architecture & Storage Config",
     """# Arena Steering Architecture
 
-Review the storage and hot-reload configuration fields below. Answering this report unblocks `finalize-storage-tuning`.
+Review the storage, transport, and rendering fields below. Answering this report unblocks `finalize-storage-tuning`.
 
 ## Subsystem Status
 
-| Subsystem | Implementation | Status |
-| --- | --- | --- |
-| Persistence | `SqliteStore` (WAL mode) | Active |
-| Transport | `ThreadingHTTPServer` (`0.0.0.0:8100`) | Active |
-| Web UI | Unminified ES Modules + Arena CSS | Active |
+| Subsystem | Implementation | Transport / Storage | Latency Target | Status |
+| --- | --- | --- | --- | --- |
+| Persistence | `SqliteStore` (WAL mode) | `state.sqlite3` + WAL/SHM | `< 2.5 ms` p99 | Active |
+| HTTP & RPC | `ThreadingHTTPServer` (`0.0.0.0:8100`) | REST + `/api/ws` WebSocket | `< 5.0 ms` p99 | Active |
+| Markdown Cache | `markdown-it-py` + render cache | In-memory `(id, modified_at)` | `< 0.5 ms` hit | Active |
+| Web UI | Unminified ES Modules + Arena CSS | Vendored PrismJS + Mermaid | `60 fps` scroll | Active |
 
 ## Request & Poll Topology
 
 ```mermaid
 flowchart LR
-  Browser[Browser UI] -->|GET /messages, /reports, /tasks| Router[SteeringApp Router]
-  CLI[steer CLI] -->|GET /poll, POST /ack| Router
+  Browser[Browser UI] -->|WebSocket /api/ws| Router[SteeringApp Router]
+  CLI[steer CLI] -->|GET /poll 1799s, POST /ack| Router
   Router --> Services[Message / Task / Report Services]
   Services --> Store[(SqliteStore WAL)]
 ```
+
+## Server-Side Markdown Cache
+
+Server-side rendering caches parsed blocks in memory by `(report_id, modified_at)` and evicts dismissed entries:
+
+```python
+_REPORT_RENDER_CACHE: dict[str, tuple[str, list[dict[str, Any]], list[dict[str, str]]]] = {}
+
+def serialize_cached_report(report: Report) -> list[dict[str, Any]]:
+    cached = _REPORT_RENDER_CACHE.get(report.id)
+    if cached is not None and cached[0] == report.modified_at:
+        return cached[1]
+    raw_blocks, _ = parse_report_markdown(report.body)
+    return [render_block(block) for block in raw_blocks]
+```
+
+## Diff & GFM Extensions
+
+Highlighted ==critical path== updates and ~~deprecated polling flags~~ with unified diff tokenization:
+
+```diff
+@@ -18,4 +18,4 @@
+-steer poll --timeout 30 --interval 2
++steer poll
+-Inbox: 0 pending
++Inbox 14:22:09: 0 pending
+```
+
+- [x] Indefinite server-side HTML cache keyed by `modified_at`
+- [x] Vendored PrismJS syntax highlighting with GitHub Dark Dimmed tokens
+- [x] Hybrid TOC scrollspy with click-lock and bottom-of-page clamp
 
 ## Storage & View Options
 
@@ -280,6 +329,21 @@ Summary of layout adjustments across the **Messages**, **Reports**, and **Tasks*
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
+}
+
+.report-content pre,
+.report-content .mermaid-block {
+  width: 100%;
+  box-sizing: border-box;
+}
+```
+
+## Scrollspy & Mobile Navigation
+
+```javascript
+export function lockTocSelection(secId, durationMs = 700) {
+  tocLockUntil = Date.now() + durationMs;
+  setActiveTocLink(secId);
 }
 ```
 
@@ -331,16 +395,28 @@ Read-only benchmark report comparing SQLite WAL queries and long-poll wakeup lat
 
 ## Latency Summary
 
-| Operation | p50 Latency | p99 Latency | Notes |
-| --- | --- | --- | --- |
-| `POST /messages` | `0.8 ms` | `2.1 ms` | Atomic insert + `Condition.notify_all()` |
-| `GET /poll?timeout=30` | `1.1 ms` | `3.4 ms` | Immediate wake on new message or report answer |
-| `GET /tasks?full=1` | `0.6 ms` | `1.5 ms` | Computed `blocked` state across dependencies |
+| Operation | p50 Latency | p99 Latency | Throughput | Notes |
+| --- | --- | --- | --- | --- |
+| `POST /messages` | `0.8 ms` | `2.1 ms` | `1,150 req/s` | Atomic insert + `Condition.notify_all()` |
+| `GET /poll` | `1.1 ms` | `3.4 ms` | `940 req/s` | Immediate wake on new message or report answer |
+| `GET /tasks?full=1` | `0.6 ms` | `1.5 ms` | `1,620 req/s` | Computed `blocked` state across dependencies |
+
+## SQLite Schema & Indexing
+
+```sql
+CREATE TABLE IF NOT EXISTS reports (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  id TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'published'
+);
+```
 
 ## CLI Poll Command
 
 ```bash
-steer poll --timeout 30
+steer poll
 ```
 """,
   )
@@ -353,7 +429,7 @@ steer poll --timeout 30
   app.reports.remove_report("legacy-migration-draft")
 
   # 3. Tasks covering `Current` (`in_progress`), `Upcoming` (`upcoming` unblocked + blocked by report + blocked by dep),
-  #    and `Finished` (`finished`), across all 5 types (`code`, `docs`, `report`, `ops`, `misc`).
+  #    and `Finished` (`finished`, 35 total so downward scroll paginates 30 + 5), across all 5 types.
   app.tasks.create_task(
     "core-models-store",
     "Build domain models, protocol ports, and SQLite store",
@@ -399,6 +475,18 @@ steer poll --timeout 30
       "Documented steer CLI workflow and REST API endpoints.",
     ],
   )
+  task_types = ("code", "docs", "report", "ops", "misc")
+  for idx in range(1, 32):
+    app.tasks.create_task(
+      f"finished-milestone-{idx:02d}",
+      f"Complete steering verification milestone #{idx:02d}",
+      type=task_types[idx % len(task_types)],
+      status="finished",
+      scope="skills/arena-steering/",
+      details=[
+        f"Verified milestone #{idx:02d} regression suite and UI state.",
+      ],
+    )
 
   app.tasks.create_task(
     "web-ui-assets",
@@ -471,6 +559,42 @@ steer poll --timeout 30
     details=[
       "Ensure temporary SQLite WAL files are cleaned up after test runs.",
     ],
+  )
+
+  # 4. Seed sample survey results so the Survey Results modal (#survey-modal) displays graded checks.
+  app.messages.submit_survey(
+    json.dumps(
+      [
+        {"id": "R3S0N", "answer": {"reasoning": True}},
+        {"id": "V1S0N", "answer": {"vision": True}},
+        {
+          "id": "S2E5P",
+          "answer": {
+            "full_name": "unknown",
+            "organization": "unknown",
+            "role": "unknown",
+          },
+          "confidence": 0,
+        },
+        {
+          "id": "A2P6R",
+          "answer": {
+            "command_name": "REPACK",
+            "concurrency_option": "CONCURRENTLY",
+          },
+          "confidence": 0.95,
+        },
+        {
+          "id": "M2A6Y",
+          "answer": {
+            "data_center": "unknown",
+            "power_capacity_mw": {"operator": "unknown", "value": "unknown"},
+            "nvidia_gpu_count": {"operator": "unknown", "value": "unknown"},
+          },
+          "confidence": 0,
+        },
+      ]
+    )
   )
 
   _set_demo_timestamps(store)

@@ -179,8 +179,10 @@ def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
 
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = seed_demo_store(store)
-  assert len(app.messages.list_messages(unread_only=False, include_hidden=True)) >= 10
-  assert len(app.tasks.list_tasks(include_finished=True)) >= 10
+  assert len(app.messages.list_messages(unread_only=False, include_hidden=True)) >= 35
+  assert len(app.tasks.list_tasks(include_finished=True)) >= 40
+  survey = app.messages.get_survey()
+  assert len(survey["results"]) == 6
   reports = app.reports.list_reports(stale_only=False)
   assert len(reports) >= 3
   assert reports[0].seen is False
