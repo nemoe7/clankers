@@ -139,26 +139,28 @@
 }
 
 ::-webkit-scrollbar {
-  width: 15px; /* nonuu: NUM201 */
+  width: 6px; /* nonuu: NUM201 */
+  height: 6px; /* nonuu: NUM201 */
 }
 
 ::-webkit-scrollbar-track {
-  background: 0px 0px;
+  background: transparent;
   margin: 8px 0px;
 }
 
 ::-webkit-scrollbar-thumb {
+  background: hsl(var(--surface-raised-alt) / 0.4);
   background-clip: padding-box;
-  border: 1px solid rgba(0, 0, 0, 0);
-  border-radius: 0px; /* nonuu: NUM203 */
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--surface-raised-alt) / 0.4);
   background-clip: padding-box;
 }
 
 :not(:hover)::-webkit-scrollbar-thumb {
-  background: hsl(var(--surface-raised-alt) / 0.2);
+  background: hsl(var(--surface-raised-alt) / 0.4);
 }
 
 html,
@@ -1537,7 +1539,14 @@ code.note-id {
   }
 
   #history {
+    --edge-stop-start: 63px;
+    --edge-fade-start: 91px;
+    padding-top: 63px;
     padding-left: max(16px, calc((100vw - 900px) / 2));
+  }
+
+  .log-scroll {
+    margin-top: -63px;
   }
 
   .message {
@@ -1574,6 +1583,16 @@ code.note-id {
   #log-search {
     flex: 1 1 auto;
     max-width: none;
+  }
+
+  .log-scroll {
+    margin-top: -78px;
+  }
+
+  #history {
+    --edge-stop-start: 78px;
+    --edge-fade-start: 106px;
+    padding-top: 78px;
   }
 }
 
