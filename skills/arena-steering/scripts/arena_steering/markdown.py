@@ -182,6 +182,85 @@ def _highlight_mark_plugin(parser: MarkdownIt) -> None:
   parser.inline.ruler2.before("emphasis", "mark", post_process)
 
 
+AUTOLINK_URL_RE = re.compile(r"(?<![\"'=])(https?://[^\s<>()]+)")
+TASK_ITEM_RE = re.compile(r"^\[([ xX])\]\s+(.*)$", re.DOTALL)
+
+
+def _gfm_extensions_plugin(parser: MarkdownIt) -> None:
+  """Register GFM task-list checkboxes and bare-URL autolinks on `parser`."""
+
+  def transform(state: Any) -> None:
+    tokens = state.tokens
+    for idx, token in enumerate(tokens):
+      if token.type != "inline":
+        continue
+      if (
+        idx >= 2
+        and tokens[idx - 1].type == "paragraph_open"
+        and tokens[idx - 2].type == "list_item_open"
+      ):
+        match = TASK_ITEM_RE.match(token.content)
+        if match and token.children:
+          checked = match.group(1).lower() == "x"
+          token.content = match.group(2)
+          first_child = token.children[0]
+          if first_child.type == "text":
+            first_child.content = TASK_ITEM_RE.sub(r"\2", first_child.content, count=1)
+          checkbox = state.Token("html_inline", "", 0)
+          checked_attr = " checked" if checked else ""
+          checkbox.content = (
+            '<input type="checkbox" class="task-list-item-checkbox" '
+            f"disabled{checked_attr}> "
+          )
+          token.children.insert(0, checkbox)
+          li_tok = tokens[idx - 2]
+          existing_cls = li_tok.attrGet("class") or ""
+          li_tok.attrSet("class", f"{existing_cls} task-list-item".strip())
+      if not token.children:
+        continue
+      new_children = []
+      in_link = 0
+      for child in token.children:
+        if child.type == "link_open":
+          in_link += 1
+          new_children.append(child)
+          continue
+        if child.type == "link_close":
+          in_link = max(0, in_link - 1)
+          new_children.append(child)
+          continue
+        if in_link == 0 and child.type == "text" and "http" in child.content:
+          last_end = 0
+          text_val = child.content
+          for m in AUTOLINK_URL_RE.finditer(text_val):
+            start, end = m.span(1)
+            url = m.group(1).rstrip(".,;:!?")
+            end = start + len(url)
+            if start > last_end:
+              before_tok = state.Token("text", "", 0)
+              before_tok.content = text_val[last_end:start]
+              new_children.append(before_tok)
+            open_tok = state.Token("link_open", "a", 1)
+            open_tok.attrSet("href", url)
+            open_tok.attrSet("target", "_blank")
+            open_tok.attrSet("rel", "noopener noreferrer")
+            text_tok = state.Token("text", "", 0)
+            text_tok.content = url
+            close_tok = state.Token("link_close", "a", -1)
+            new_children.extend([open_tok, text_tok, close_tok])
+            last_end = end
+          if last_end > 0:
+            if last_end < len(text_val):
+              after_tok = state.Token("text", "", 0)
+              after_tok.content = text_val[last_end:]
+              new_children.append(after_tok)
+            continue
+        new_children.append(child)
+      token.children = new_children
+
+  parser.core.ruler.after("inline", "gfm_extensions", transform)
+
+
 def render_code_block(raw_lang: str, raw_code: str) -> str:
   """Render a fenced or indented code block with header, copy button, and diff tokens."""
   lang_key = str(raw_lang or "").strip().split(None, 1)[0].lower() if raw_lang else ""
@@ -208,6 +287,7 @@ def render_code_block(raw_lang: str, raw_code: str) -> str:
     if lang_key == "mermaid"
     else ""
   )
+  mermaid_state_attr = ' data-mermaid-state="pending"' if lang_key == "mermaid" else ""
   copy_button = (
     f'<button type="button" class="copy-code" aria-label="Copy code" '
     f'title="Copy code" data-code="{payload}">{ICON_COPY}</button>'
@@ -218,7 +298,7 @@ def render_code_block(raw_lang: str, raw_code: str) -> str:
     f"{ICON_BRACES}<span>{lang_label}</span></span></div>"
   )
   return (
-    f'<div class="code-block">{md_button}{mermaid_button}{copy_button}{header}'
+    f'<div class="code-block"{mermaid_state_attr}>{md_button}{mermaid_button}{copy_button}{header}'
     f"<pre><code{lang_attr}>{inner_code}</code></pre></div>"
   )
 
@@ -228,6 +308,7 @@ def _create_parser(*, breaks: bool = False) -> MarkdownIt:
     ["table", "strikethrough"]
   )
   _highlight_mark_plugin(parser)
+  _gfm_extensions_plugin(parser)
 
   def _render_link_open(
     renderer: Any, tokens: Any, idx: int, options: Any, env: Any
