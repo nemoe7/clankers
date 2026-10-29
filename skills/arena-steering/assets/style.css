@@ -986,12 +986,12 @@ select,
 }
 
 #history {
-  --edge-fade-start: 76px;
-  --edge-stop-start: 56px;
+  --edge-fade-start: 95px;
+  --edge-stop-start: 67px;
   --edge-fade-end: 96px;
   --edge-stop-end: 0px;
   list-style: none;
-  padding: 76px 0 88px max(5vw, calc((100vw - 900px) / 2));
+  padding: 67px 0 88px max(5vw, calc((100vw - 900px) / 2));
   margin: 0;
   flex: 1 1 auto;
   min-height: 0;
@@ -1762,7 +1762,7 @@ code.note-id {
 
     @keyframes edge-start {
       from {
-        --edge-start: 0px;
+        --edge-start: var(--edge-stop-start, 0px);
       }
       to {
         --edge-start: var(--edge-fade-start, var(--edge-fade));
@@ -1774,7 +1774,7 @@ code.note-id {
         --edge-end: var(--edge-fade-end, var(--edge-fade));
       }
       to {
-        --edge-end: 0px;
+        --edge-end: var(--edge-stop-end, 0px);
       }
     }
   }
