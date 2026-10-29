@@ -9,11 +9,17 @@ import {
 } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 
+const EYE_OPEN_SVG = `<svg class="lucide lucide-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+const EYE_CLOSED_SVG = `<svg class="lucide lucide-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path><path d="m2 2 20 20"></path></svg>`;
+const SKIP_FORWARD_SVG = `<svg class="lucide lucide-skip-forward" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4v16"></path><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"></path></svg>`;
+const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`;
+
 const seenAckCounts = new Map();
 let initializedAckCounts = false;
 let unreadEditedMsgId = null;
 let savedScrollTop = null;
 let pinnedToBottom = true;
+let skipPollFeedbackUntil = 0;
 
 function stateDotForStatus(status) {
   if (status === "acked") return "said";
@@ -99,6 +105,8 @@ export function renderInboxView(container, state, handlers) {
   const searchSelStart = searchWasFocused ? activeEl.selectionStart : null;
   const searchSelEnd = searchWasFocused ? activeEl.selectionEnd : null;
 
+  let anchorMsgId = null;
+  let anchorOffsetTop = 0;
   const prevHistory = container.querySelector("#history");
   if (prevHistory) {
     const dist =
@@ -107,10 +115,22 @@ export function renderInboxView(container, state, handlers) {
       prevHistory.clientHeight;
     pinnedToBottom = dist <= 24;
     savedScrollTop = prevHistory.scrollTop;
+    const historyRect = prevHistory.getBoundingClientRect();
+    const visibleCards = prevHistory.querySelectorAll(".message:not([data-hidden='true'])");
+    for (let i = visibleCards.length - 1; i >= 0; i -= 1) {
+      const card = visibleCards[i];
+      const rect = card.getBoundingClientRect();
+      if (rect.bottom > historyRect.top + 40 && rect.top < historyRect.bottom - 40) {
+        anchorMsgId = card.dataset.msgId || null;
+        anchorOffsetTop = rect.top - historyRect.top;
+        break;
+      }
+    }
   }
 
   const showHidden = Boolean(state.showHidden);
   const query = (state.searchQuery || "").trim().toLowerCase();
+  const skipPollGood = Date.now() < skipPollFeedbackUntil;
 
   const visibleMessages = (state.messages || []).filter((msg) => {
     if (!showHidden && msg.hidden) return false;
@@ -145,7 +165,7 @@ export function renderInboxView(container, state, handlers) {
             : "";
 
           return `
-            <li class="message" data-msg-id="${escapeHtml(msg.id)}">
+            <li class="message" data-msg-id="${escapeHtml(msg.id)}" data-hidden="${msg.hidden ? "true" : "false"}">
               <div class="message-text">${msg.body_html || renderMarkdownBlock(msg.body)}</div>
               ${acksHtml}
               <p class="receipt">
@@ -199,20 +219,21 @@ export function renderInboxView(container, state, handlers) {
               id="skip-poll"
               class="icon-button"
               type="button"
+              ${skipPollGood ? 'data-state="good"' : ""}
               aria-label="Ask the agent to end its wait now"
               title="Ask the agent to end its wait now"
             >
-              <svg class="lucide lucide-skip-forward" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4v16"></path><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"></path></svg>
+              ${skipPollGood ? CHECK_SVG : SKIP_FORWARD_SVG}
             </button>
             <button
               id="quiet-notes"
               class="icon-button"
               type="button"
               aria-pressed="${showHidden ? "true" : "false"}"
-              aria-label="Show hidden messages"
-              title="Show hidden messages"
+              aria-label="${showHidden ? "Hide hidden messages" : "Show hidden messages"}"
+              title="${showHidden ? "Hide hidden messages" : "Show hidden messages"}"
             >
-              <svg class="lucide lucide-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              ${showHidden ? EYE_OPEN_SVG : EYE_CLOSED_SVG}
             </button>
           </span>
         </div>
@@ -298,7 +319,21 @@ export function renderInboxView(container, state, handlers) {
     if (query) {
       highlightSearchMatches(historyEl, state.searchQuery);
     }
-    if (pinnedToBottom || savedScrollTop === null) {
+    if (anchorMsgId) {
+      const anchorCard = historyEl.querySelector(
+        `.message[data-msg-id="${CSS.escape(anchorMsgId)}"]`
+      );
+      if (anchorCard) {
+        historyEl.scrollTop = savedScrollTop ?? 0;
+        const historyRect = historyEl.getBoundingClientRect();
+        const curOffset = anchorCard.getBoundingClientRect().top - historyRect.top;
+        historyEl.scrollTop += curOffset - anchorOffsetTop;
+      } else if (pinnedToBottom || savedScrollTop === null) {
+        historyEl.scrollTop = historyEl.scrollHeight;
+      } else {
+        historyEl.scrollTop = savedScrollTop;
+      }
+    } else if (pinnedToBottom || savedScrollTop === null) {
       historyEl.scrollTop = historyEl.scrollHeight;
     } else {
       historyEl.scrollTop = savedScrollTop;
@@ -357,11 +392,20 @@ export function renderInboxView(container, state, handlers) {
     handlers.onSearchChange?.(searchInput.value);
   });
 
-  container
-    .querySelector("#skip-poll")
-    ?.addEventListener("click", async () => {
-      await handlers.onSkipPoll?.();
-    });
+  const skipBtn = container.querySelector("#skip-poll");
+  skipBtn?.addEventListener("click", async () => {
+    skipPollFeedbackUntil = Date.now() + 1000;
+    skipBtn.dataset.state = "good";
+    skipBtn.innerHTML = CHECK_SVG;
+    await handlers.onSkipPoll?.();
+    setTimeout(() => {
+      const curBtn = container.querySelector("#skip-poll");
+      if (curBtn && Date.now() >= skipPollFeedbackUntil) {
+        delete curBtn.dataset.state;
+        curBtn.innerHTML = SKIP_FORWARD_SVG;
+      }
+    }, 1000);
+  });
 
   container.querySelector("#quiet-notes")?.addEventListener("click", () => {
     handlers.onToggleHidden?.();
