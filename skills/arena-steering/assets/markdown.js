@@ -74,19 +74,50 @@ function formatCodeLang(raw) {
   return CODE_LANG_NAMES[key] || key.charAt(0).toUpperCase() + key.slice(1);
 }
 
+function highlightDiffLines(lines) {
+  return lines
+    .map((line) => {
+      const escaped = escapeHtml(line);
+      if (
+        line.startsWith("diff ") ||
+        line.startsWith("index ") ||
+        line.startsWith("--- ") ||
+        line.startsWith("+++ ")
+      ) {
+        return `<span class="token comment">${escaped}</span>`;
+      }
+      if (line.startsWith("@@")) {
+        return `<span class="token coord">${escaped}</span>`;
+      }
+      if (line.startsWith("+")) {
+        return `<span class="token inserted">${escaped}</span>`;
+      }
+      if (line.startsWith("-")) {
+        return `<span class="token deleted">${escaped}</span>`;
+      }
+      return escaped;
+    })
+    .join("\n");
+}
+
 function renderCodeFence(lang, codeLines) {
   const rawCode = codeLines.join("\n");
   const escapedCode = escapeHtml(rawCode);
   const dataCode = escapedCode.replace(/\n/g, "&#10;");
-  const langLabel = escapeHtml(formatCodeLang(lang));
-  const langClass = lang ? ` class="language-${escapeHtml(lang.toLowerCase())}"` : "";
+  const langKey = String(lang || "").trim().toLowerCase();
+  const langLabel = escapeHtml(formatCodeLang(langKey));
+  const langClass = langKey ? ` class="language-${escapeHtml(langKey)}"` : "";
+  const innerHtml =
+    langKey === "diff" || langKey === "patch"
+      ? highlightDiffLines(codeLines)
+      : escapedCode;
   return `
     <div class="code-block">
       <button type="button" class="copy-code" aria-label="Copy code" title="Copy code" data-code="${dataCode}">${COPY_SVG}</button>
       <div class="code-block-header">
         <span class="code-block-lang">${BRACES_SVG}<span>${langLabel}</span></span>
       </div>
-      <pre><code${langClass}>${escapedCode}</code></pre>
+      <pre><code${langClass}>${innerHtml}</code></pre>
     </div>
   `;
 }
