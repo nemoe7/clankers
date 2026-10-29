@@ -504,7 +504,11 @@ class SteeringApp:
     if new_status == "dismissed":
       self.reports.remove_report(report.id)
       _REPORT_RENDER_CACHE.pop(report.id, None)
-      report = self.reports.get_report(report.id)
+      report.status = "dismissed"
+      return (
+        int(HTTPStatus.OK),
+        {"report": self._serialize_report(report, include_body=False)},
+      )
     return (int(HTTPStatus.OK), {"report": self._serialize_report(report)})
 
   def _handle_delete_report(

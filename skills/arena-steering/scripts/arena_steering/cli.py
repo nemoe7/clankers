@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
@@ -13,6 +14,17 @@ from .models import MESSAGE_ID_RE, Message, Report, ReportAnswer, Task
 from .server import SteeringApp, create_http_server
 from .services import MessageService, ReportService, TaskService
 from .store import SqliteStore
+
+HISTORICAL_PAGE_SIZE = 10
+
+
+def _snippet_words(text: str, max_words: int = 6) -> str:
+  words = str(text or "").split()
+  if not words:
+    return ""
+  if len(words) <= max_words:
+    return " ".join(words)
+  return " ".join(words[:max_words]) + "..."
 
 
 def resolve_state_dir(explicit: str | None = None) -> Path:
@@ -74,7 +86,6 @@ def main(
   sub.add_parser("read", help="Read pending messages and report answers.")
 
   poll_p = sub.add_parser("poll", help="Wait for pending messages or skip_poll.")
-  poll_p.add_argument("-t", "--timeout", type=float, default=1799.0)
 
   ack_p = sub.add_parser("ack", help="Acknowledge a message or report answer.")
   ack_p.add_argument("parts", nargs="+", help="[<id>] <markdown>")
@@ -86,19 +97,22 @@ def main(
 
   msg_p = sub.add_parser("msg", help="List or inspect stored messages.")
   msg_sub = msg_p.add_subparsers(dest="msg_cmd")
-  msg_list_p = msg_sub.add_parser("list", help="List messages newest-first.")
+  msg_list_p = msg_sub.add_parser("list", help="List messages newest-first (10/page).")
   msg_list_p.add_argument("-p", "--page", type=int, default=1)
-  msg_list_p.add_argument("-s", "--size", type=int, default=20)
   msg_show_p = msg_sub.add_parser("show", help="Show one message by ID.")
   msg_show_p.add_argument("id")
 
-  tasks_p = sub.add_parser("tasks", help="List tasks in queue order.")
-  tasks_p.add_argument("-f", "--full", action="store_true")
+  tasks_p = sub.add_parser("tasks", help="List upcoming tasks (or finished with -f).")
+  tasks_p.add_argument(
+    "-f", "--finished", "--full", dest="finished", action="store_true"
+  )
+  tasks_p.add_argument("-p", "--page", type=int, default=1)
 
   sub.add_parser("task", help="Show, create, remove, or modify a task.")
 
-  reports_p = sub.add_parser("reports", help="List active or stale reports.")
+  reports_p = sub.add_parser("reports", help="List active or stale reports (10/page).")
   reports_p.add_argument("-s", "--stale", action="store_true")
+  reports_p.add_argument("-p", "--page", type=int, default=1)
 
   sub.add_parser("report", help="Show, publish, or remove a report.")
 
@@ -148,8 +162,8 @@ def main(
       _print_delivered(delivered, stdout)
       return 0
     if cmd == "poll":
-      parsed = poll_p.parse_args(cmd_args)
-      delivered = messages.poll(timeout_seconds=parsed.timeout)
+      poll_p.parse_args(cmd_args)
+      delivered = messages.poll(timeout_seconds=1799.0)
       _print_delivered(delivered, stdout)
       return 0
     if cmd == "ack":
@@ -159,13 +173,24 @@ def main(
       return _run_msg(cmd_args, msg_list_p, msg_show_p, messages, stdout)
     if cmd == "tasks":
       parsed = tasks_p.parse_args(cmd_args)
-      _print_task_list(tasks.list_tasks(include_finished=parsed.full), stdout)
+      all_items = tasks.list_tasks(include_finished=parsed.finished)
+      if parsed.finished:
+        finished_only = [(t, b) for t, b in all_items if t.status == "finished"]
+        page = max(1, int(parsed.page))
+        start = (page - 1) * HISTORICAL_PAGE_SIZE
+        paged = finished_only[start : start + HISTORICAL_PAGE_SIZE]
+        _print_task_list(paged, stdout)
+      else:
+        _print_task_list(all_items, stdout)
       return 0
     if cmd == "task":
       return _run_task(cmd_args, tasks, stdout)
     if cmd == "reports":
       parsed = reports_p.parse_args(cmd_args)
-      _print_reports_list(reports.list_reports(stale_only=parsed.stale), stdout)
+      all_reports = reports.list_reports(stale_only=parsed.stale)
+      page = max(1, int(parsed.page))
+      start = (page - 1) * HISTORICAL_PAGE_SIZE
+      _print_reports_list(all_reports[start : start + HISTORICAL_PAGE_SIZE], stdout)
       return 0
     if cmd == "report":
       return _run_report(cmd_args, reports, stdout)
@@ -252,13 +277,14 @@ def _run_msg(
       include_hidden=True,
       newest_first=True,
       page=parsed.page,
-      page_size=parsed.size,
+      page_size=HISTORICAL_PAGE_SIZE,
     )
     if not items:
       print("No messages.", file=out)
       return 0
     for item in items:
-      _print_message(item, out)
+      snippet = _snippet_words(item.body, max_words=6)
+      print(f"{item.id} {snippet}".rstrip(), file=out)
     return 0
   if args[0] == "show":
     parsed = show_parser.parse_args(args[1:])
@@ -411,10 +437,11 @@ def _print_delivered(delivered: dict[str, list], out: TextIO) -> None:
   msgs: list[Message] = delivered["messages"]
   ans_pairs: list[tuple[Report, ReportAnswer]] = delivered["report_answers"]
   total = len(msgs) + len(ans_pairs)
+  stamp = datetime.now(UTC).strftime("%H:%M:%S")
   if total == 0:
-    print("Inbox: 0 pending", file=out)
+    print(f"Inbox {stamp}: 0 pending", file=out)
     return
-  print(f"Inbox: {total} pending", file=out)
+  print(f"Inbox {stamp}: {total} pending", file=out)
   for msg in msgs:
     _print_message(msg, out)
   for report, ans in ans_pairs:

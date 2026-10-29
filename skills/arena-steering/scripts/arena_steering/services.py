@@ -713,6 +713,11 @@ class ReportService:
     existing = self._reports.get_report(report_id)
     if existing is not None and existing.latest_unacked_answer is not None:
       raise ValueError("Report has an unacknowledged answer")
+    preserved_answers: list[ReportAnswer] = []
+    if existing is not None:
+      preserved_answers = list(existing.answers)
+    elif hasattr(self._reports, "get_archived_report_answers"):
+      preserved_answers = list(self._reports.get_archived_report_answers(report_id))
     now = self._clock.now_iso()
     report = Report(
       id=report_id,
@@ -720,7 +725,7 @@ class ReportService:
       body=body,
       fields=fields,
       status="published",
-      answers=list(existing.answers) if existing is not None else [],
+      answers=preserved_answers,
       seen=False,
       modified_at=now,
     )
@@ -810,17 +815,23 @@ class ReportService:
       candidates = self.list_reports(stale_only=True)
       for rep in candidates:
         if rep.status != "dismissed":
-          rep.status = "dismissed"
-          rep.modified_at = now
-          self._reports.save_report(rep)
+          if hasattr(self._reports, "delete_report"):
+            self._reports.delete_report(rep.id)
+          else:
+            rep.status = "dismissed"
+            rep.modified_at = now
+            self._reports.save_report(rep)
           removed.append(rep.id)
     else:
       rep = self.get_report(target)
       if rep.latest_unacked_answer is not None:
         raise ValueError("Cannot remove a report with an unacknowledged answer")
-      rep.status = "dismissed"
-      rep.modified_at = now
-      self._reports.save_report(rep)
+      if hasattr(self._reports, "delete_report"):
+        self._reports.delete_report(rep.id)
+      else:
+        rep.status = "dismissed"
+        rep.modified_at = now
+        self._reports.save_report(rep)
       removed.append(rep.id)
 
     if removed:
