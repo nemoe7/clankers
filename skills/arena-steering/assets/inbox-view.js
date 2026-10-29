@@ -105,6 +105,15 @@ export function renderInboxView(container, state, handlers) {
 
   const survey = state.survey || {};
   const checkedAt = survey.checked_at || "";
+  const surveyResults = Array.isArray(survey.results) ? survey.results : [];
+  let dotStateClass = "live animate-pulse";
+  if (surveyResults.length > 0) {
+    if (surveyResults.some((item) => item.correct === false)) {
+      dotStateClass = "survey-bad";
+    } else if (surveyResults.some((item) => item.correct !== true)) {
+      dotStateClass = "survey-warn";
+    }
+  }
   const lastCheckHtml = checkedAt
     ? `Checked <time datetime="${escapeHtml(checkedAt)}" data-timestamp="${escapeHtml(checkedAt)}">${escapeHtml(relativeTime(checkedAt))}</time>`
     : "Live steering active.";
@@ -116,7 +125,7 @@ export function renderInboxView(container, state, handlers) {
           <div class="stack">
             <p id="connection" role="status">
               <button id="survey-open" type="button" aria-label="Open survey results" title="Open survey results">
-                <span id="connection-dot" class="dot live animate-pulse" role="img" aria-label="Connected"></span>
+                <span id="connection-dot" class="dot ${dotStateClass}" role="img" aria-label="Connected"></span>
               </button>
               <span id="connection-text">Connected</span>
             </p>

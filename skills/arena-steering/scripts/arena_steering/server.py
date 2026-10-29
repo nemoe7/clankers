@@ -306,9 +306,9 @@ class SteeringApp:
     return (int(HTTPStatus.OK), {"survey": self.messages.get_survey()})
 
   def _handle_submit_survey(
-    self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: Any
   ) -> tuple[int, Any]:
-    values = body.get("answers", body)
+    values = body.get("answers", body) if isinstance(body, dict) else body
     survey = self.messages.submit_survey(values)
     return (int(HTTPStatus.OK), {"survey": survey})
 

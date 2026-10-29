@@ -13,9 +13,116 @@ import { createModalManager } from "./modal.js";
 import { renderReportsView } from "./reports-view.js";
 import { createStore } from "./state.js";
 import { renderTasksView } from "./tasks-view.js";
-import { mountRelativeTimers } from "./timestamps.js";
+import { mountRelativeTimers, relativeTime } from "./timestamps.js";
 
 const CHECK_SVG = `<svg class="lucide lucide-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
+const SURVEY_OK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
+const SURVEY_BAD_SVG = `<svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`;
+const SURVEY_WARN_SVG = `<svg class="lucide lucide-circle-question-mark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>`;
+const CAPABILITY_LABELS = {
+  R3S0N: "Reasoning",
+  V1S0N: "Vision",
+  S0R7D: "Sorted",
+};
+
+function formatSurveyFieldValue(val) {
+  if (val && typeof val === "object" && !Array.isArray(val)) {
+    const op = String(val.operator || "");
+    if (op === "unknown") return "unknown";
+    const symbol = op === "gt" ? ">" : op === "lt" ? "<" : "=";
+    return `${symbol} ${val.value}`;
+  }
+  return String(val);
+}
+
+function renderAnswerTooltip(answer) {
+  const entries = answer && typeof answer === "object" ? Object.entries(answer) : [];
+  if (!entries.length) return "";
+  return `<div class="survey-answer-tooltip" role="tooltip">${entries
+    .map(
+      ([k, v]) =>
+        `<div class="survey-answer-row"><span class="survey-answer-key">${escapeHtml(k)}</span><span class="survey-answer-val">${escapeHtml(formatSurveyFieldValue(v))}</span></div>`,
+    )
+    .join("")}</div>`;
+}
+
+function renderSurveyModalContent(survey) {
+  const results = Array.isArray(survey.results) ? survey.results : [];
+  const checkedAt = survey.checked_at || survey.answered_at || "";
+  if (results.length > 0) {
+    const passed = results.filter((r) => r.correct === true).length;
+    const capItems = results.filter((r) => r.id in CAPABILITY_LABELS);
+    const calItems = results.filter((r) => !(r.id in CAPABILITY_LABELS));
+    const subtitle = checkedAt
+      ? `<p class="survey-subtitle muted">Answered <time datetime="${escapeHtml(checkedAt)}" data-timestamp="${escapeHtml(checkedAt)}">${escapeHtml(relativeTime(checkedAt))}</time> · ${passed} of ${results.length} verified</p>`
+      : `<p class="survey-subtitle muted">${passed} of ${results.length} verified</p>`;
+    const capHtml = capItems
+      .map((item) => {
+        const state = item.correct === true ? "ok" : item.correct === false ? "bad" : "warn";
+        const icon = item.correct === true ? SURVEY_OK_SVG : item.correct === false ? SURVEY_BAD_SVG : SURVEY_WARN_SVG;
+        const label = CAPABILITY_LABELS[item.id] || item.id;
+        return `<div class="survey-cap-pill ${state}" tabindex="0"><span class="survey-status ${state}">${icon}</span><div class="survey-cap-text"><code>${escapeHtml(item.id)}</code><span class="survey-cap-label">${escapeHtml(label)}</span></div>${renderAnswerTooltip(item.answer)}</div>`;
+      })
+      .join("");
+    const calRows = calItems
+      .map((item) => {
+        const state = item.correct === true ? "ok" : item.correct === false ? "bad" : "warn";
+        const icon = item.correct === true ? SURVEY_OK_SVG : item.correct === false ? SURVEY_BAD_SVG : SURVEY_WARN_SVG;
+        const entries = item.answer && typeof item.answer === "object" ? Object.entries(item.answer) : [];
+        const knownCount = entries.filter(([, v]) => formatSurveyFieldValue(v).toLowerCase() !== "unknown").length;
+        const fieldLabel = knownCount === 0 ? "unknown" : `${knownCount}/${entries.length} fields`;
+        const pct = Math.max(0, Math.min(100, Math.round(Number(item.confidence || 0) * 100)));
+        return `<tr>
+          <td>
+            <div class="survey-result-id">
+              <span class="survey-status ${state}">${icon}</span>
+              <span class="survey-id-wrap">
+                <button type="button" class="survey-id-trigger"><code>${escapeHtml(item.id)}</code></button>
+                ${renderAnswerTooltip(item.answer)}
+              </span>
+            </div>
+          </td>
+          <td><span class="survey-field-chip">${escapeHtml(fieldLabel)}</span></td>
+          <td>
+            <div class="survey-confidence" style="--confidence-pct: ${pct}%">
+              <div class="survey-confidence-track"><span class="survey-confidence-fill"></span></div>
+              <span class="survey-confidence-value">${pct}%</span>
+            </div>
+          </td>
+        </tr>`;
+      })
+      .join("");
+    return `${subtitle}
+      <div>
+        <p class="eyebrow survey-section-label">Deterministic checks</p>
+        <div class="survey-cap-grid">${capHtml}</div>
+      </div>
+      <div>
+        <p class="eyebrow survey-section-label">Knowledge calibration</p>
+        <table class="survey-results">
+          <thead>
+            <tr>
+              <th scope="col">ID</th>
+              <th scope="col">Fields</th>
+              <th scope="col">Confidence</th>
+            </tr>
+          </thead>
+          <tbody>${calRows}</tbody>
+        </table>
+      </div>`;
+  }
+  const questions = survey.questions || [];
+  const answers = survey.answers || {};
+  if (Object.keys(answers).length > 0 && questions.length > 0) {
+    return questions
+      .map((q) => {
+        const ans = answers[q.id] || "(not answered yet)";
+        return `<div class="survey-item"><p class="survey-item-prompt">${escapeHtml(q.prompt)}</p><p class="survey-item-answer">${escapeHtml(ans)}</p></div>`;
+      })
+      .join("");
+  }
+  return `<p class="muted">No survey submission recorded yet.</p>`;
+}
 
 const store = createStore();
 const modal = createModalManager();
@@ -225,18 +332,9 @@ const handlers = {
   async onOpenSurvey(trigger) {
     const res = await api.getSurvey().catch(() => ({ survey: store.getState().survey || {} }));
     const survey = res.survey || {};
-    const questions = survey.questions || [];
-    const answers = survey.answers || {};
-    const rowsHtml = questions.length
-      ? questions
-          .map((q) => {
-            const ans = answers[q.id] || "(not answered yet)";
-            return `<div class="survey-item"><p class="survey-item-prompt">${escapeHtml(q.prompt)}</p><p class="survey-item-answer">${escapeHtml(ans)}</p></div>`;
-          })
-          .join("")
-      : `<p class="muted">No survey questions configured.</p>`;
+    const rowsHtml = renderSurveyModalContent(survey);
     const decision = await modal.open("survey-results", {
-      title: "Survey Results & Bible Check",
+      title: "Survey Verification",
       htmlSlots: { content: rowsHtml },
       trigger,
     });
