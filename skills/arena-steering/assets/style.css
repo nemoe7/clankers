@@ -282,6 +282,72 @@ pre > code {
   color: hsl(var(--interactive-negative));
 }
 
+.code-block:has(> .preview-code-md, > .preview-code-mermaid) > .code-block-header {
+  padding-right: 62px;
+}
+
+.code-block[data-mermaid-state="rendered"] > pre,
+.code-block[data-md-state="rendered"] > pre {
+  display: none;
+}
+
+.code-block[data-mermaid-state="code"] > .mermaid-diagram {
+  display: none;
+}
+
+.mermaid-diagram {
+  padding: 12px;
+  border-radius: 0;
+  overflow-x: auto;
+  background-color: hsl(var(--surface-secondary));
+}
+
+.mermaid-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  color: hsl(var(--text-primary));
+  font-family: inherit;
+}
+
+.preview-code-mermaid,
+.preview-code-md {
+  position: absolute;
+  top: 2px;
+  right: 30px;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--text-tertiary));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    background-color var(--fast) var(--ease);
+}
+
+.preview-code-mermaid:hover,
+.preview-code-mermaid[aria-pressed="true"],
+.preview-code-md:hover,
+.preview-code-md[aria-pressed="true"] {
+  color: hsl(var(--text-primary));
+  border-color: hsl(var(--border-strong));
+}
+
+.preview-code-mermaid[aria-pressed="true"],
+.preview-code-md[aria-pressed="true"] {
+  background-color: hsl(var(--surface-raised));
+}
+
 .copy-code {
   position: absolute;
   top: 2px;

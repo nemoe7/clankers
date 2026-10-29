@@ -207,7 +207,7 @@ class SteeringApp:
     base = self.assets_dir.resolve()
     candidate = (base / clean).resolve()
     if not candidate.is_relative_to(base) or not candidate.is_file():
-      candidate = self._resolve_report_image(clean)
+      candidate = self._resolve_shared_or_report_asset(clean)
       if candidate is None:
         return None
     suffix = candidate.suffix.lower()
@@ -223,6 +223,16 @@ class SteeringApp:
       )
       return page.encode("utf-8"), content_type
     return candidate.read_bytes(), content_type
+
+  def _resolve_shared_or_report_asset(self, clean_path: str) -> Path | None:
+    """Resolve shared vendor assets (`mermaid.min.js`) or report images without path traversal."""
+    if clean_path in {"mermaid.min.js", "mermaid.LICENSE"}:
+      shared = (
+        Path(__file__).resolve().parents[3] / "arena-skill" / "assets" / clean_path
+      ).resolve()
+      if shared.is_file():
+        return shared
+    return self._resolve_report_image(clean_path)
 
   def _resolve_report_image(self, clean_path: str) -> Path | None:
     """Resolve an image or GIF inside <state_dir>/reports/ without path traversal."""

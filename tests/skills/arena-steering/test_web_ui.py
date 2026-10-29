@@ -156,6 +156,9 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert "report-picker-unanswered" in reports_js
   assert "reportCache" in app_js
   assert "ensureReportCached" in app_js
+  assert "hydrateMermaidBlocks" in app_js
+  assert "toggleCodeMermaid" in app_js
+  assert "/mermaid.min.js" in index_html
 
   timestamps_js = (ASSETS_DIR / "timestamps.js").read_text(encoding="utf-8")
   assert "nextRelativeDelay" in timestamps_js

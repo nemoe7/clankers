@@ -4,7 +4,11 @@
 
 import { api } from "./api.js";
 import { renderInboxView, trackMessageAcks } from "./inbox-view.js";
-import { escapeHtml } from "./markdown.js";
+import {
+  escapeHtml,
+  hydrateMermaidBlocks,
+  toggleCodeMermaid,
+} from "./markdown.js";
 import { createModalManager } from "./modal.js";
 import { renderReportsView } from "./reports-view.js";
 import { createStore } from "./state.js";
@@ -323,10 +327,12 @@ function renderApp(state) {
 
   if (state.activeTab === "inbox" && inboxEl) {
     renderInboxView(inboxEl, state, handlers);
+    hydrateMermaidBlocks(inboxEl);
   } else if (state.activeTab === "tasks" && tasksEl) {
     renderTasksView(tasksEl, state, handlers);
   } else if (state.activeTab === "reports" && reportsEl) {
     renderReportsView(reportsEl, state, handlers);
+    hydrateMermaidBlocks(reportsEl);
   }
 
   cleanupTimers = mountRelativeTimers(document);
@@ -378,6 +384,11 @@ function initEvents() {
   });
 
   document.addEventListener("click", async (event) => {
+    const mermaidBtn = event.target.closest?.(".preview-code-mermaid");
+    if (mermaidBtn) {
+      toggleCodeMermaid(mermaidBtn);
+      return;
+    }
     const copyBtn = event.target.closest?.(".copy-code");
     if (copyBtn) {
       const code = (copyBtn.dataset.code || "").replace(/&#10;/g, "\n");

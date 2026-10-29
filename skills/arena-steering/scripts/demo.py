@@ -232,6 +232,16 @@ Review the storage and hot-reload configuration fields below. Answering this rep
 | Transport | `ThreadingHTTPServer` (`0.0.0.0:8100`) | Active |
 | Web UI | Unminified ES Modules + Arena CSS | Active |
 
+## Request & Poll Topology
+
+```mermaid
+flowchart LR
+  Browser[Browser UI] -->|GET /messages, /reports, /tasks| Router[SteeringApp Router]
+  CLI[steer CLI] -->|GET /poll, POST /ack| Router
+  Router --> Services[Message / Task / Report Services]
+  Services --> Store[(SqliteStore WAL)]
+```
+
 ## Storage & View Options
 
 <!-- storage-mode -->
