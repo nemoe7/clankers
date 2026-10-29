@@ -103,7 +103,24 @@ def main(
   sub.add_parser("report", help="Show, publish, or remove a report.")
 
   survey_p = sub.add_parser("survey", help="Inspect or submit bible survey answers.")
-  survey_p.add_argument("entries", nargs="*", help="[<key=value> ...]")
+  survey_p.add_argument("entries", nargs="*", help="[<json-array> | <key=value> ...]")
+  survey_p.add_argument(
+    "-i",
+    "--smallest-image",
+    action="store_true",
+    help="Print path to smallest image in workspace for V1S0N check.",
+  )
+  survey_p.add_argument(
+    "-f",
+    "--file",
+    default=None,
+    help="Read survey JSON array submission from file.",
+  )
+  survey_p.add_argument(
+    "--template",
+    action="store_true",
+    help="Print the unfilled JSON array template.",
+  )
   survey_p.add_argument("--interrupt", action="store_true", help="Trigger bible check.")
 
   state_dir, remaining = _extract_global_state_dir(args_list)
@@ -481,16 +498,43 @@ def _print_single_report(rep: Report, out: TextIO) -> None:
 def _run_survey(
   parsed: argparse.Namespace, messages: MessageService, out: TextIO
 ) -> int:
+  import json
+
+  from . import survey as survey_mod
+
+  if getattr(parsed, "smallest_image", False):
+    print(survey_mod.smallest_image(), file=out)
+    return 0
+  if getattr(parsed, "template", False):
+    print(json.dumps(survey_mod.template(), indent=2), file=out)
+    return 0
   if parsed.interrupt:
     survey = messages.trigger_bible_check(active=True)
     print(f"Survey bible check pending={survey['pending']}", file=out)
     return 0
+  if getattr(parsed, "file", None):
+    payload = Path(parsed.file).read_text(encoding="utf-8")
+    survey = messages.submit_survey(payload)
+    print(
+      f"Submitted {len(survey['results'])} survey answer(s) at {survey['checked_at']}",
+      file=out,
+    )
+    return 0
   entries: list[str] = list(parsed.entries or [])
   if entries:
+    if len(entries) == 1 and entries[0].lstrip().startswith("["):
+      survey = messages.submit_survey(entries[0])
+      print(
+        f"Submitted {len(survey['results'])} survey answer(s) at {survey['checked_at']}",
+        file=out,
+      )
+      return 0
     values: dict[str, str] = {}
     for entry in entries:
       if "=" not in entry:
-        raise ValueError(f"Expected <key=value> survey entry, got {entry!r}")
+        raise ValueError(
+          f"Expected JSON array or <key=value> survey entry, got {entry!r}"
+        )
       key, _, val = entry.partition("=")
       values[key.strip()] = val.strip()
     survey = messages.submit_survey(values)
@@ -508,4 +552,6 @@ def _run_survey(
     qid = q["id"]
     ans = survey["answers"].get(qid, "(unanswered)")
     print(f"- {qid}: {q['prompt']} -> {ans}", file=out)
+  print("\nSubmission template:", file=out)
+  print(json.dumps(survey_mod.template(), indent=2), file=out)
   return 0

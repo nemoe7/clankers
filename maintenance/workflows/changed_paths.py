@@ -130,6 +130,7 @@ MODULE_TESTS = {
     "tests/skills/arena-steering/test_store.py",
     "tests/skills/arena-steering/test_services.py",
     "tests/skills/arena-steering/test_server_cli.py",
+    "tests/skills/arena-steering/test_survey.py",
     "tests/skills/arena-steering/test_web_ui.py",
   ),
   "Nemoizer": ("tests/skills/nemoizer/test_nemoize.py",),  # nonemo: NMO100

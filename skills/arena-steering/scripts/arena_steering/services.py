@@ -6,6 +6,7 @@ import json
 import threading
 from typing import Any
 
+from . import survey as survey_mod
 from .markdown_fields import format_answer_for_task_detail, parse_report_markdown
 from .models import (
   MESSAGE_ID_RE,
@@ -28,23 +29,15 @@ from .ports import (
   UtcClock,
 )
 
-# Answer key entries (`expected`) are left blank until populated by the owner.
-DEFAULT_SURVEY_QUESTIONS: tuple[dict[str, str], ...] = (
+DEFAULT_SURVEY_QUESTIONS: tuple[dict[str, Any], ...] = tuple(
   {
-    "id": "preview_port",
-    "prompt": "Which port does the steering preview server bind to?",
-    "expected": "",
-  },
-  {
-    "id": "task_sizing",
-    "prompt": "How should each new user request be queued in the task list?",
-    "expected": "",
-  },
-  {
-    "id": "report_usage",
-    "prompt": "When should a fielded report be published instead of asking in prose?",
-    "expected": "",
-  },
+    "id": q["id"],
+    "prompt": q["question"],
+    "question": q["question"],
+    "deterministic": bool(q.get("deterministic")),
+    "answer_fields": dict(q["answer_fields"]),
+  }
+  for q in survey_mod.SPEC["questions"]
 )
 
 
@@ -225,34 +218,62 @@ class MessageService:
       self._cond.notify_all()
 
   def get_survey(self) -> dict[str, Any]:
-    """Return current survey state, questions, and submitted answers."""
+    """Return current survey state, questions, template, and graded results."""
     raw_answers = self._meta.get_meta("survey_answers_json", "{}") or "{}"
+    raw_results = self._meta.get_meta("survey_results_json", "[]") or "[]"
     try:
       answers = json.loads(raw_answers)
       if not isinstance(answers, dict):
         answers = {}
     except json.JSONDecodeError:
       answers = {}
+    try:
+      results = json.loads(raw_results)
+      if not isinstance(results, list):
+        results = []
+    except json.JSONDecodeError:
+      results = []
+    checked_at = self._meta.get_meta("survey_checked_at", "") or ""
     return {
       "pending": self._meta.get_meta("bible_interrupt", "0") == "1",
-      "checked_at": self._meta.get_meta("survey_checked_at", "") or "",
+      "checked_at": checked_at,
+      "answered_at": checked_at,
       "questions": [dict(item) for item in DEFAULT_SURVEY_QUESTIONS],
+      "template": survey_mod.template(),
+      "results": results,
       "answers": {str(k): str(v) for k, v in answers.items()},
     }
 
-  def submit_survey(self, values: dict[str, Any]) -> dict[str, Any]:
-    """Record agent survey answers and clear any pending bible interrupt."""
-    if not isinstance(values, dict) or not values:
-      raise ValueError("Survey submission must be a non-empty dictionary")
+  def submit_survey(self, values: Any) -> dict[str, Any]:
+    """Grade and record agent survey answers, rejecting any null values."""
     current = self.get_survey()["answers"]
-    for key, val in values.items():
-      text = str(val or "").strip()
-      if not text:
-        raise ValueError(f"Survey answer for {key!r} cannot be empty")
-      current[str(key).strip()] = text
+    results: list[dict[str, Any]] = self.get_survey()["results"]
+    if isinstance(values, list):
+      raw_text = json.dumps(values, ensure_ascii=False)
+      results = survey_mod.grade(raw_text)
+      for row in results:
+        current[str(row["id"])] = json.dumps(row["answer"], ensure_ascii=False)
+    elif isinstance(values, str):
+      stripped = values.strip()
+      if not stripped:
+        raise ValueError("Survey submission must not be empty")
+      results = survey_mod.grade(stripped)
+      for row in results:
+        current[str(row["id"])] = json.dumps(row["answer"], ensure_ascii=False)
+    elif isinstance(values, dict) and values:
+      for key, val in values.items():
+        if val is None:
+          raise ValueError(f"Survey answer for {key!r} must not be null; use 'unknown'")
+        text = str(val).strip()
+        if not text:
+          raise ValueError(f"Survey answer for {key!r} cannot be empty")
+        current[str(key).strip()] = text
+    else:
+      raise ValueError("Survey submission must be a JSON array or non-empty dictionary")
     now = self._clock.now_iso()
     with self._cond:
       self._meta.set_meta("survey_answers_json", json.dumps(current))
+      self._meta.set_meta("survey_results_json", json.dumps(results))
       self._meta.set_meta("survey_checked_at", now)
       self._meta.set_meta("bible_interrupt", "0")
       self._cond.notify_all()
