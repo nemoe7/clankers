@@ -17,6 +17,7 @@ description: >
 license: MIT. LICENSE.txt has complete terms
 metadata:
   argument-hint: "[tokens|words|chars|bytes] [target]"
+  version: "0.1.0"
   baseline: >-
     Unsquashed original of `SKILL.md` in this directory. Amend this file first,
     then squash it into `SKILL.md` and re-measure that file against its budget

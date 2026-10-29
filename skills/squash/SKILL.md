@@ -16,6 +16,7 @@ description: >
 license: MIT. LICENSE.txt has complete terms
 metadata:
   argument-hint: "[tokens|words|chars|bytes] [target]"
+  version: "0.1.0"
 ---
 
 # Squash
