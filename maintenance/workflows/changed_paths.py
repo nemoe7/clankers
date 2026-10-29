@@ -139,8 +139,8 @@ MODULE_TESTS = {
   ),
   "Userscripts": (),
   "GPT Plugins": (
-    "tests/maintenance/gpt_plugins/test_individual_assets.py",
-    "tests/maintenance/gpt_plugins/test_release_artifact.py",
+    "tests/gpt-plugins/test_individual_assets.py",
+    "tests/gpt-plugins/test_release_artifact.py",
   ),
   "Gemini Release": ("tests/github/workflows/test_gemini_release.py",),
   "Measurements": ("tests/maintenance/measurements/test_measurements.py",),
@@ -152,13 +152,13 @@ MODULE_TESTS = {
   "Rules Publishing": ("tests/maintenance/publish/test_publish.py",),
   "Workflow and Distribution": (
     "tests/maintenance/workflows/test_changed_paths.py",
-    "tests/maintenance/workflows/test_check_artifacts.py",
-    "tests/maintenance/workflows/test_check_workflows.py",
-    "tests/maintenance/workflows/test_distribute_sync.py",
+    "tests/github/workflows/test_check_artifacts.py",
+    "tests/github/workflows/test_check_workflows.py",
+    "tests/github/workflows/test_distribute_sync.py",
   ),
   "Proxies": (
-    "tests/maintenance/proxies/test_arena_proxy.py",
-    "tests/maintenance/proxies/test_preview_proxy.py",
+    "tests/skills/arena-skill/arena-egress-proxy/test_arena_proxy.py",
+    "tests/skills/arena-skill/arena-preview-proxy/test_preview_proxy.py",
   ),
   "Repository Prose and Validation": (
     "tests/maintenance/validation/test_lint_prose.py",
@@ -176,7 +176,12 @@ ARENA_RUNTIME_PATHS = tuple(
   for directory in ("scripts", "assets", "references")
 )
 MODULE_PATHS = {
-  "Preview": (*ARENA_RUNTIME_PATHS, "tests/skills/arena-skill/*"),
+  "Preview": (
+    *ARENA_RUNTIME_PATHS,
+    "tests/skills/arena-skill/test_*",
+    "tests/skills/arena-skill/client.test.cjs",
+    "tests/skills/arena-skill/mermaid.test.cjs",
+  ),
   "Nemoizer": (  # nonemo: NMO100
     "skills/*nemoizer/*",
     ".agents/skills/nemoizer/*",
@@ -188,9 +193,12 @@ MODULE_PATHS = {
     "gpt-plugins/*",
     "maintenance/gpt_plugins/*",
     ".github/workflows/artifacts.yml",
-    "tests/maintenance/gpt_plugins/*",
+    "tests/gpt-plugins/*",
   ),
-  "Gemini Release": ("github/workflows/*", "tests/github/workflows/*"),
+  "Gemini Release": (
+    "github/workflows/*",
+    "tests/github/workflows/test_gemini_release.py",
+  ),
   "Measurements": ("maintenance/check.py", "tests/maintenance/measurements/*"),
   "Minifier": (
     *ARENA_RUNTIME_PATHS,
@@ -209,10 +217,14 @@ MODULE_PATHS = {
     "maintenance/workflows/check_artifacts.py",
     "maintenance/workflows/gate_workflows.py",
     "tests/maintenance/workflows/*",
+    "tests/github/workflows/test_check_artifacts.py",
+    "tests/github/workflows/test_check_workflows.py",
+    "tests/github/workflows/test_distribute_sync.py",
   ),
   "Proxies": (
     *(f"{root}/arena-*-proxy/*" for root in ARENA_SKILL_PATHS),
-    "tests/maintenance/proxies/*",
+    "tests/skills/arena-skill/arena-egress-proxy/*",
+    "tests/skills/arena-skill/arena-preview-proxy/*",
   ),
   "Repository Prose and Validation": (
     "maintenance/check.py",

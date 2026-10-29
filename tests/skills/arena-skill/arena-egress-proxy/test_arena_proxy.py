@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 SCRIPTS = ROOT / "skills/arena-skill/arena-egress-proxy/scripts"
 KEY = "test-agent-key-0123456789"
 MASTER = "test-master-key-0123456789"

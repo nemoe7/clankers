@@ -9,7 +9,7 @@ import pytest
 
 SPEC = importlib.util.spec_from_file_location(
   "gpt_assets",
-  Path(__file__).resolve().parents[3] / "maintenance/gpt_plugins/gate_gpt_plugins.py",
+  Path(__file__).resolve().parents[2] / "maintenance/gpt_plugins/gate_gpt_plugins.py",
 )
 gate = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(gate)
