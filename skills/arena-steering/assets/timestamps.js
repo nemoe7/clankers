@@ -4,7 +4,7 @@
 
 export function relativeTime(
   value,
-  { compact = false, includeSeconds = true, now = Date.now() } = {}
+  { compact = false, includeSeconds = false, now = Date.now() } = {}
 ) {
   const stamp =
     value instanceof Date ? value.getTime() : new Date(value).getTime();
@@ -73,7 +73,7 @@ export function relativeTime(
 
 export function nextRelativeDelay(
   stampMs,
-  { includeSeconds = true, now = Date.now() } = {}
+  { includeSeconds = false, now = Date.now() } = {}
 ) {
   if (Number.isNaN(stampMs)) return Infinity;
   const ageMs = Math.max(0, now - stampMs);
@@ -107,7 +107,7 @@ export function mountRelativeTimers(root = document) {
       const stampMs = stamp.getTime();
       if (Number.isNaN(stampMs)) continue;
       const includeSeconds =
-        node.getAttribute("data-include-seconds") !== "false";
+        node.getAttribute("data-include-seconds") === "true";
       const nextText = relativeTime(stamp, {
         compact: node.getAttribute("data-compact") === "true",
         includeSeconds,
