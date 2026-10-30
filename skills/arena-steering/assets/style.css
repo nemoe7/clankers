@@ -107,6 +107,7 @@
   --line: hsl(var(--border-medium));
   --focus: hsl(var(--border-strong));
   --accent: #e5bb8b;
+  --link: #6ea3d6;
   --dot-seen: #7fa7d1;
   --scrollbar-thumb: hsl(var(--surface-raised-alt) / 0.4);
   --space-1: 4px;
@@ -129,6 +130,11 @@
   display: none !important;
 }
 
+a {
+  color: var(--link);
+  text-underline-offset: 3px;
+}
+
 /* nuu-deviation: arena-scrollbar: Match Arena stylesheet scrollbar rules. */
 *,
 *::before,
@@ -144,8 +150,8 @@
 }
 
 ::-webkit-scrollbar {
-  width: 6px; /* nonuu: SPC001 */
-  height: 6px; /* nonuu: SPC001 */
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -155,6 +161,7 @@
 
 ::-webkit-scrollbar-thumb {
   background: hsl(var(--surface-raised-alt) / 0.4);
+  border: 2px solid var(--bg); /* nonuu: SPC002 */
   background-clip: padding-box;
   border-radius: 9999px;
 }
@@ -167,6 +174,7 @@
 
 :not(:hover)::-webkit-scrollbar-thumb {
   background: hsl(var(--surface-raised-alt) / 0.4);
+  background-clip: padding-box;
   border-radius: 9999px;
 }
 
@@ -2493,7 +2501,7 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   margin: 0;
   padding: 0;
   border: 0;
-  background: rgba(0, 0, 0, 0.88);
+  background: transparent;
 }
 
 .image-modal::backdrop {
@@ -2540,8 +2548,9 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--accent);
+  color: var(--link);
   font: inherit;
   text-decoration: underline;
+  text-underline-offset: 3px;
   cursor: pointer;
 }
