@@ -66,6 +66,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/messages-view.js`, `assets/style.css`: Show an instant scroll-edge fade for reduced motion and keep boundary messages visible.
+
 - `assets/style.css`: Inset the scrollbar thumb by 2px inside a 10px track and color links blue.
 
 - `assets/style.css`: Dim the page behind the image viewer with a translucent backdrop.
