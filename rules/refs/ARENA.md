@@ -195,7 +195,7 @@
 - Keep Python Ruff settings in `pyproject.toml` (else `ruff.toml`) with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, and `required-version = "0.17.3"` until flagged.
 - For a Python project with no Ruff configuration, create it with exactly that in the selected file before running gates.
 - For a Python project, run `ruff format` before other local gates, and run `ruff check` and `ruff format` before every commit, with no CLI rule overrides.
-- Add code or configuration comments only when method complexity requires them.
+- Add code or configuration comments only when complexity requires them, and ALWAYS use the established contract as comments.
 
 ## Git
 

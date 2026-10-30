@@ -150,7 +150,7 @@
 ## Style
 
 - `nemoe7` repos: 2-space indent beats formatter defaults; Markdown: markdownlint defaults + MD060, MD013 off; Python: Ruff defaults in `pyproject.toml` (else `ruff.toml`) with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.17.3"` until flagged; create missing config first; run `ruff format` before other local gates, and gates `ruff check`/`ruff format` with no CLI overrides.
-- Add code/config comments ONLY when method complexity needs them.
+- Add code/config comments ONLY when complexity needs them, and ALWAYS use the established contract as comments.
 
 ## Git
 

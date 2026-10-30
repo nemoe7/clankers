@@ -108,7 +108,7 @@
 - 2-space indentation (overrides formatter defaults).
 - Markdown: markdownlint defaults + MD060; MD013 disabled.
 - For a Python project, MUST use Ruff with its default rule selection plus `E501` at 120 characters, keep the formatter's 88-column width, and run `ruff format` before other local gates.
-- Add code or configuration comments only when method complexity requires them.
+- Add code or configuration comments only when complexity requires them, and ALWAYS use the established contract as comments.
 - Leave unrelated code untouched.
 - MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and leave them out of every commit.
 
