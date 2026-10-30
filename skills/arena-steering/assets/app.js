@@ -126,6 +126,7 @@ function renderSurveyModalContent(survey) {
 const store = createStore();
 const modal = createModalManager();
 const reportCache = new Map();
+const ackSeenRequests = new Set();
 let cleanupTimers = () => {};
 let knownAssetVersion = null;
 let lastDataSignature = "";
@@ -384,6 +385,49 @@ const handlers = {
   },
 };
 
+function maybeMarkAckSeen(report) {
+  if (!report || report.ack_seen) return;
+  const answers = report.answers || [];
+  const latest = answers[answers.length - 1];
+  if (!latest || latest.status !== "acked") return;
+  const key = `${report.id}:${latest.id}:${(latest.acks || []).length}`;
+  if (ackSeenRequests.has(key)) return;
+  ackSeenRequests.add(key);
+  api
+    .markReportAckSeen(report.id)
+    .then((res) => {
+      if (res?.report) {
+        reportCache.set(report.id, {
+          modified_at: res.report.modified_at,
+          report: res.report,
+        });
+        const hydrated = hydrateReportsWithCache(store.getState().reports || []);
+        store.setState({ reports: hydrated });
+      }
+    })
+    .catch(() => {
+      ackSeenRequests.delete(key);
+    });
+}
+
+function handleReportAcked(event) {
+  const report = event?.report;
+  if (!report?.id) {
+    refreshAll(false);
+    return;
+  }
+  reportCache.set(report.id, {
+    modified_at: report.modified_at,
+    report,
+  });
+  const reports = store.getState().reports || [];
+  const nextReports = reports.some((r) => r.id === report.id)
+    ? reports.map((r) => (r.id === report.id ? report : r))
+    : [...reports, report];
+  lastDataSignature = "";
+  store.setState({ reports: nextReports });
+}
+
 function reportNeedsAttention(report) {
   if (!report || report.status === "dismissed") return false;
   const notYetSeen = !report.seen;
@@ -391,7 +435,10 @@ function reportNeedsAttention(report) {
     report.needs_answer ??
       ((report.fields || []).length > 0 && (report.answers || []).length === 0)
   );
-  return notYetSeen || hasUnansweredFields;
+  const answers = report.answers || [];
+  const latest = answers[answers.length - 1];
+  const hasUnseenAck = latest?.status === "acked" && !report.ack_seen;
+  return notYetSeen || hasUnansweredFields || hasUnseenAck;
 }
 
 function renderApp(state) {
@@ -434,6 +481,7 @@ function renderApp(state) {
     renderReportsView(reportsEl, state, handlers);
     highlightCodeBlocks(reportsEl);
     hydrateMermaidBlocks(reportsEl);
+    maybeMarkAckSeen(reports.find((r) => r.id === state.selectedReportId));
   }
 
   cleanupTimers = mountRelativeTimers(document);
@@ -533,4 +581,5 @@ refreshAll(true);
 connectWebSocket({
   onChange: () => refreshAll(false),
   onReload: () => window.location.reload(),
+  onReportAcked: handleReportAcked,
 });

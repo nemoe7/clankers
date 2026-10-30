@@ -8,6 +8,7 @@ let socketRetry = null;
 const socketCalls = new Map();
 let changeHandler = () => {};
 let reloadHandler = () => {};
+let reportAckedHandler = () => {};
 let disconnectPollTimer = null;
 
 function startFallbackPoll() {
@@ -26,9 +27,10 @@ function stopFallbackPoll() {
   }
 }
 
-export function connectWebSocket({ onChange, onReload } = {}) {
+export function connectWebSocket({ onChange, onReload, onReportAcked } = {}) {
   if (typeof onChange === "function") changeHandler = onChange;
   if (typeof onReload === "function") reloadHandler = onReload;
+  if (typeof onReportAcked === "function") reportAckedHandler = onReportAcked;
   if (
     typeof WebSocket !== "function" ||
     (liveSocket && liveSocket.readyState < 2)
@@ -73,6 +75,10 @@ export function connectWebSocket({ onChange, onReload } = {}) {
         changeHandler();
         return;
       }
+      if (value.type === "report.acked") {
+        reportAckedHandler(value);
+        return;
+      }
       if (value.type === "reload") {
         reloadHandler();
         return;
@@ -112,7 +118,12 @@ export function connectWebSocket({ onChange, onReload } = {}) {
     startFallbackPoll();
     clearTimeout(socketRetry);
     socketRetry = setTimeout(
-      () => connectWebSocket({ onChange: changeHandler, onReload: reloadHandler }),
+      () =>
+        connectWebSocket({
+          onChange: changeHandler,
+          onReload: reloadHandler,
+          onReportAcked: reportAckedHandler,
+        }),
       1000
     );
   });
@@ -226,6 +237,13 @@ export const api = {
     return requestJson(
       "POST",
       `/reports/${encodeURIComponent(reportId)}/seen`,
+      {}
+    );
+  },
+  markReportAckSeen(reportId) {
+    return requestJson(
+      "POST",
+      `/reports/${encodeURIComponent(reportId)}/ack-seen`,
       {}
     );
   },

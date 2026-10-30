@@ -466,6 +466,7 @@ class Report:
   status: str = "published"
   answers: list[ReportAnswer] = field(default_factory=list)
   seen: bool = False
+  ack_seen: bool = False
   modified_at: str = ""
 
   def __post_init__(self) -> None:
@@ -491,6 +492,7 @@ class Report:
       for ans in self.answers
     ]
     self.seen = bool(self.seen)
+    self.ack_seen = bool(self.ack_seen)
     self.modified_at = str(self.modified_at or "")
 
   @property
@@ -515,6 +517,7 @@ class Report:
       "status": self.status,
       "answers": [item.to_dict() for item in self.answers],
       "seen": self.seen,
+      "ack_seen": self.ack_seen,
       "needs_answer": self.needs_answer,
       "modified_at": self.modified_at,
     }
@@ -529,6 +532,7 @@ class Report:
       status=str(data.get("status", "published")),
       answers=[ReportAnswer.from_dict(raw) for raw in data.get("answers", [])],
       seen=bool(data.get("seen", False)),
+      ack_seen=bool(data.get("ack_seen", False)),
       modified_at=str(data.get("modified_at", "")),
     )
 

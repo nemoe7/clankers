@@ -75,6 +75,10 @@ TASK_SECTION_TITLE_FONT_SIZE = "font-size: 18px;"
 NOTES_PIP_ID = 'id="notes-pip"'
 REPORT_PIP_ID = 'id="report-pip"'
 TAB_BADGE_CLASS = "tab-badge"
+REPORT_ACKED_EVENT = "report.acked"
+REPORT_ACK_SEEN_API = "markReportAckSeen"
+REPORT_ACK_SEEN_PATH = "/ack-seen"
+REPORT_ACKED_HANDLER = "onReportAcked"
 
 # Hex values of the warm Arena tokens in `assets/style.css` `:root`
 # (HSL token channels converted to sRGB, plus its literal hex tokens).
@@ -314,3 +318,16 @@ def test_mermaid_and_demo_media_use_warm_arena_tokens() -> None:
   assert WARM_DOT_SAID in TOKENS_SWATCH_SVG
   assert WARM_ACCENT in SCROLLSPY_ZONES_SVG
   assert WARM_DOT_SAID in SCROLLSPY_ZONES_SVG
+
+
+def test_report_ack_seen_live_update_assets() -> None:
+  api_js = (ASSETS_DIR / "api.js").read_text(encoding="utf-8")
+  assert REPORT_ACKED_EVENT in api_js
+  assert REPORT_ACK_SEEN_API in api_js
+  assert REPORT_ACK_SEEN_PATH in api_js
+  assert REPORT_ACKED_HANDLER in api_js
+
+  app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  assert REPORT_ACKED_HANDLER in app_js
+  assert REPORT_ACK_SEEN_API in app_js
+  assert "ack_seen" in app_js
