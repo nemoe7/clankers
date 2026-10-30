@@ -14,6 +14,7 @@ const SKIP_FORWARD_SVG = `<svg class="lucide lucide-skip-forward" width="16" hei
 const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`;
 
 const MESSAGE_PAGE_SIZE = 15;
+const OLDER_PAGE_TRIGGER_PX = 320;
 const PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500;
 const PASTE_ATTACHMENT_LINE_THRESHOLD = 15;
 let unreadEditedMsgId = null;
@@ -413,7 +414,7 @@ export function renderMessagesView(container, state, handlers) {
     if (logNewestBtn) {
       logNewestBtn.hidden = pinnedToBottom;
     }
-    if (hasOlderMessages && !loadingMoreMessages && historyEl.scrollTop <= 48 && historyEl.scrollHeight > historyEl.clientHeight) {
+    if (hasOlderMessages && !loadingMoreMessages && historyEl.scrollTop <= OLDER_PAGE_TRIGGER_PX && historyEl.scrollHeight > historyEl.clientHeight) {
       loadingMoreMessages = true;
       Promise.resolve(handlers.onLoadOlderMessages?.()).finally(() => { loadingMoreMessages = false; });
     }

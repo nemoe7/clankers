@@ -18,6 +18,8 @@ This log has no Unreleased section.
 
 - `assets/style.css`: Dim the page behind the image viewer with a translucent backdrop.
 
+- `assets/messages-view.js`: Fetch the older message page before the top is reached.
+
 ## [2.0.0]
 
 ### Added
