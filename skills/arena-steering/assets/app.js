@@ -128,6 +128,7 @@ function renderSurveyModalContent(survey) {
 const store = createStore();
 const modal = createModalManager();
 const reportCache = new Map();
+const pendingReportLoads = new Map();
 const ackSeenRequests = new Set();
 let cleanupTimers = () => {};
 let knownAssetVersion = null;
@@ -135,7 +136,7 @@ let reportedTimezone = null;
 let lastDataSignature = "";
 let lastViewportHeight = 0;
 
-async function ensureReportCached(reportId, expectedModifiedAt = null) {
+async function ensureReportCached(reportId, expectedModifiedAt = null, { quiet = false } = {}) {
   if (!reportId) return null;
   const cached = reportCache.get(reportId);
   if (
@@ -145,20 +146,27 @@ async function ensureReportCached(reportId, expectedModifiedAt = null) {
   ) {
     return cached.report;
   }
-  setLoading(true);
-  try {
-    const res = await api.getReport(reportId);
-    if (res?.report) {
-      reportCache.set(reportId, {
-        modified_at: res.report.modified_at,
-        report: res.report,
-      });
-      return res.report;
+  const loadKey = `${reportId}:${expectedModifiedAt || ""}`;
+  if (pendingReportLoads.has(loadKey)) return pendingReportLoads.get(loadKey);
+  const load = (async () => {
+    if (!quiet) setLoading(true);
+    try {
+      const res = await api.getReport(reportId);
+      if (res?.report) {
+        reportCache.set(reportId, {
+          modified_at: res.report.modified_at,
+          report: res.report,
+        });
+        return res.report;
+      }
+      return null;
+    } finally {
+      if (!quiet) setLoading(false);
+      pendingReportLoads.delete(loadKey);
     }
-    return null;
-  } finally {
-    setLoading(false);
-  }
+  })();
+  pendingReportLoads.set(loadKey, load);
+  return load;
 }
 
 function hydrateReportsWithCache(summaries) {
@@ -720,6 +728,16 @@ function initEvents() {
       interruptBtn.setAttribute("aria-busy", "false");
     }
   });
+
+  const preloadReport = (event) => {
+    const target = event.target.closest?.(".report-picker-link[data-report-id], [data-reference-type=report]");
+    const reportId = target?.dataset.reportId || target?.dataset.referenceId;
+    if (!reportId) return;
+    const summary = (store.getState().reports || []).find((item) => item.id === reportId);
+    ensureReportCached(reportId, summary?.modified_at, { quiet: true }).catch(console.error);
+  };
+  document.addEventListener("pointerover", preloadReport);
+  document.addEventListener("focusin", preloadReport);
 
   document.addEventListener("click", async (event) => {
     const reference = event.target.closest?.("[data-reference-type]");

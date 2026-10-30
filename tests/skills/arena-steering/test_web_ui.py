@@ -617,3 +617,11 @@ assert.equal(index.has('unknown'), false);
     check=False,
   )
   assert result.returncode == 0, result.stderr
+
+
+def test_report_navigation_preloads_on_pointer_and_keyboard_intent():
+  app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  assert 'addEventListener("pointerover", preloadReport)' in app_js
+  assert 'addEventListener("focusin", preloadReport)' in app_js
+  assert "pendingReportLoads" in app_js
+  assert "quiet: true" in app_js

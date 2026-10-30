@@ -31,6 +31,7 @@ Keep session state outside version control.
 - See sent, seen, and acknowledged states. Show or hide hidden messages, and ask a waiting agent to skip its poll.
 - Write Markdown, preview the draft, expand the composer, attach files, remove staged attachments, and drop files into the messages area.
 - Open unambiguous message, report, and task references in their views. Parent navigation does not change the selected reply parents.
+- Report links preload content on pointer hover or keyboard focus without marking the report seen.
 - Staged files show uploading, ready, or failed states. Retry or remove failed files before sending.
 - An unconfirmed send retains its draft and offers a retry. With session storage available, the retry uses the original request ID and payload after reload.
 - The server deduplicates request IDs atomically. Discarding a retry does not undo a send that may already have succeeded.
