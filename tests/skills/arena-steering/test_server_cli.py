@@ -1770,3 +1770,66 @@ def test_cli_task_unlink_removes_one_answer_snapshot(tmp_path: Path) -> None:
 
   code, _, err = _run_cli(state_dir, "task", "unlink", "ab8802")
   assert code == 1 and "ab8802" in err
+
+
+def test_cli_gate_blocks_until_the_inbox_is_acked() -> None:
+  state_dir = cli.resolve_state_dir()
+  state_dir.mkdir(parents=True, exist_ok=True)
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  service = cli.MessageService(store, store, store)
+  service.send_message("gate me", msg_id="ab12cd")
+  store.close()
+
+  code, out, _ = _run_cli(state_dir, "gate", "-l", "git push origin main")
+  assert code == 1
+  assert "BASH BLOCKED" in out
+  assert "Pending: ab12cd" in out
+  assert "git push origin main" in out
+
+  _run_cli(state_dir, "ack", "ab12cd", "acked")
+
+  code, out, _ = _run_cli(state_dir, "gate")
+  assert code == 0 and out == ""
+
+
+def test_cli_gate_names_a_push_block() -> None:
+  state_dir = cli.resolve_state_dir()
+  state_dir.mkdir(parents=True, exist_ok=True)
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  service = cli.MessageService(store, store, store)
+  service.send_message("gate me", msg_id="ab12ce")
+  store.close()
+
+  code, out, _ = _run_cli(state_dir, "gate", "--push")
+  assert code == 1
+  assert "PUSH BLOCKED" in out
+  assert "Pending: ab12ce" in out
+
+
+def test_cli_skills_lists_repo_and_installed_skills(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  root = tmp_path / "repo"
+  (root / "skills" / "alpha-skill").mkdir(parents=True)
+  (root / "skills" / "alpha-skill" / "SKILL.md").write_text(
+    "---\nname: alpha-skill\ndescription: Alpha description.\n---\n\n# Alpha\n",
+    encoding="utf-8",
+  )
+  (root / ".agents" / "skills" / "beta-skill").mkdir(parents=True)
+  (root / ".agents" / "skills" / "beta-skill" / "SKILL.md").write_text(
+    "---\nname: beta-skill\ndescription: Beta description.\n---\n", encoding="utf-8"
+  )
+  monkeypatch.setattr(cli, "_repo_root", lambda: root)
+
+  code, out, _ = _run_cli(cli.resolve_state_dir(), "skills")
+  assert code == 0
+  assert "alpha-skill [repo]" in out and "Alpha description." in out
+  assert "beta-skill [installed]" in out and "Beta description." in out
+
+  code, out, _ = _run_cli(cli.resolve_state_dir(), "skills", "--json")
+  assert code == 0
+  entries = json.loads(out)
+  assert [entry["name"] for entry in entries] == ["alpha-skill", "beta-skill"]
+  assert all(
+    set(entry) == {"name", "source", "path", "description"} for entry in entries
+  )

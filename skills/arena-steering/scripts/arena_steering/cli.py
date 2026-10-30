@@ -161,6 +161,21 @@ def main(
   job_log_p.add_argument("-j", "--job", dest="job_id", default=None)
   job_log_p.add_argument("-r", "--run", dest="run_id", default=None)
 
+  gate_p = sub.add_parser(
+    "gate", help="Refuse a shell command while the inbox has pending items."
+  )
+  gate_p.add_argument(
+    "-p", "--push", action="store_true", help="Gate a push instead of a command."
+  )
+  gate_p.add_argument(
+    "-l", "--line", default="", help="Command line passed by the shell hook."
+  )
+
+  skills_p = sub.add_parser("skills", help="List skill names, descriptions, and paths.")
+  skills_p.add_argument(
+    "-j", "--json", dest="as_json", action="store_true", help="Print JSON."
+  )
+
   sub.add_parser("worktree", help="Manage native git worktrees under .worktrees/.")
   sub.add_parser("run", help="Start detached runs and read their logs.")
 
@@ -185,6 +200,12 @@ def main(
       )
       httpd.serve_forever()
       return 0
+    if cmd == "gate":
+      parsed = gate_p.parse_args(cmd_args)
+      return _run_gate(messages, parsed, stdout)
+    if cmd == "skills":
+      parsed = skills_p.parse_args(cmd_args)
+      return _run_skills(parsed, stdout)
     if cmd == "read":
       read_p.parse_args(cmd_args)
       delivered = messages.read_pending(mark_seen=True)
@@ -549,6 +570,81 @@ def _safe_local_name(name: str) -> str:
   if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", cleaned):
     raise ValueError(f"Invalid name: {name!r}")
   return cleaned
+
+
+def _run_gate(messages: MessageService, parsed: argparse.Namespace, out: TextIO) -> int:
+  """Refuse a command while a message or report answer waits for an acknowledgement."""
+  pending = messages.read_pending(mark_seen=False)
+  waiting = [message.id for message in pending["messages"]]
+  waiting += [answer.id for _, answer in pending["report_answers"]]
+  if not waiting:
+    return 0
+  if parsed.push:
+    print(
+      "PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox.",
+      file=out,
+    )
+  else:
+    print("BASH BLOCKED: a note or answer awaits an ack.", file=out)
+  print(
+    "Read the inbox, then ack every item: `steer read`, then `steer ack <id> <markdown>`.",
+    file=out,
+  )
+  print("Pending: " + ", ".join(waiting), file=out)
+  blocker = parsed.line.strip()
+  if blocker:
+    print(
+      f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",
+      file=out,
+    )
+  return 1
+
+
+def _skill_description(skill_md: Path) -> str:
+  """Read the frontmatter description without loading the skill body."""
+  lines = skill_md.read_text(encoding="utf-8", errors="replace").splitlines()
+  if not lines or lines[0].strip() != "---":
+    return ""
+  for line in lines[1:]:
+    if line.strip() == "---":
+      break
+    if line.startswith("description:"):
+      return line.split(":", 1)[1].strip()
+  return ""
+
+
+def _run_skills(parsed: argparse.Namespace, out: TextIO) -> int:
+  """List repository and installed skills, preferring the installed copy of a name."""
+  root = _repo_root()
+  found: dict[str, dict[str, str]] = {}
+  for source, base in (
+    ("repo", root / "skills"),
+    ("installed", root / ".agents" / "skills"),
+  ):
+    if not base.is_dir():
+      continue
+    for skill_md in sorted(base.glob("*/SKILL.md")):
+      name = skill_md.parent.name
+      if name in found and source == "repo":
+        continue
+      found[name] = {
+        "name": name,
+        "source": source,
+        "path": str(skill_md),
+        "description": _skill_description(skill_md),
+      }
+  entries = [found[name] for name in sorted(found)]
+  if parsed.as_json:
+    print(json.dumps(entries, indent=2), file=out)
+    return 0
+  if not entries:
+    print("No skills found.", file=out)
+    return 0
+  for entry in entries:
+    print(f"{entry['name']} [{entry['source']}] {entry['path']}", file=out)
+    if entry["description"]:
+      print(f"  {entry['description']}", file=out)
+  return 0
 
 
 def _repo_root() -> Path:
