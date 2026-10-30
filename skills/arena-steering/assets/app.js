@@ -261,12 +261,58 @@ function setLoading(active) {
   }
 }
 
+let messageEpoch = 0;
+let messageLoadingOlder = false;
+let loadedMessageKey = null;
+let historyCache = null;
+
+function currentMessageKey(state) {
+  return JSON.stringify([Boolean(state.showHidden), (state.searchQuery || "").trim()]);
+}
+
+async function fetchMessagePage({ before = "", reset = false } = {}) {
+  const state = store.getState();
+  const key = currentMessageKey(state);
+  const epoch = ++messageEpoch;
+  const previous = reset || loadedMessageKey !== key ? [] : [...(state.messages || [])];
+  if (reset || loadedMessageKey !== key) {
+    loadedMessageKey = key;
+    store.setState({ messages: [], messagesHasMore: false, messagesError: "", messagesLoading: true });
+  }
+  try {
+    const options = { all: true, hidden: Boolean(state.showHidden), query: (state.searchQuery || "").trim() };
+    const result = await api.listMessages({ ...options, before });
+    if (epoch !== messageEpoch || currentMessageKey(store.getState()) !== key) return null;
+    let fresh = result.messages || [];
+    let hasMore = result.has_more;
+    if (!before && previous.length) {
+      while (hasMore && fresh.length < previous.length) {
+        const older = await api.listMessages({ ...options, before: fresh[0].id });
+        if (epoch !== messageEpoch || currentMessageKey(store.getState()) !== key) return null;
+        fresh = [...(older.messages || []), ...fresh];
+        hasMore = older.has_more;
+      }
+    }
+    const ids = new Set(fresh.map((item) => item.id));
+    const merged = before
+      ? [...fresh, ...previous.filter((item) => !ids.has(item.id))]
+      : fresh;
+    store.setState({ messages: merged, messagesHasMore: hasMore, messagesError: "", messagesLoading: false });
+    return merged;
+  } catch (error) {
+    if (epoch === messageEpoch && currentMessageKey(store.getState()) === key) {
+      store.setState({ messagesError: `Could not load messages: ${error.message}`, messagesLoading: false });
+    }
+    return null;
+  }
+}
+
 async function refreshAll(force = false) {
   try {
     const curState = store.getState();
     const [health, msgRes, taskRes, repRes] = await Promise.all([
       api.getHealth(),
-      api.listMessages({ all: true, hidden: true }),
+      fetchMessagePage(),
       api.listTasks({ full: true }),
       api.listReports({ stale: false, summary: true }),
     ]);
@@ -295,7 +341,7 @@ async function refreshAll(force = false) {
         reportedTimezone = null;
       });
     }
-    const messages = msgRes.messages || [];
+    const messages = msgRes || store.getState().messages || [];
     const tasks = taskRes.tasks || [];
     const reportSummaries = repRes.reports || [];
     const survey = health.survey || {};
@@ -312,10 +358,7 @@ async function refreshAll(force = false) {
       await ensureReportCached(selectedReportId, selectedSummary?.modified_at);
     }
     const reports = hydrateReportsWithCache(reportSummaries);
-    const messageIds = new Set(messages.map((msg) => msg.id));
-    const replyParentIds = (curState.replyParentIds || []).filter((id) =>
-      messageIds.has(id)
-    );
+    const replyParentIds = curState.replyParentIds || [];
     const nextSignature = JSON.stringify({
       messages,
       tasks,
@@ -330,7 +373,6 @@ async function refreshAll(force = false) {
     }
     lastDataSignature = nextSignature;
     store.setState({
-      messages,
       tasks,
       reports,
       survey,
@@ -457,11 +499,36 @@ const handlers = {
   },
   async onToggleHidden() {
     const nextHidden = !store.getState().showHidden;
+    historyCache = null;
     store.setState({ showHidden: nextHidden });
-    await refreshAll(true);
+    await fetchMessagePage({ reset: true });
   },
   onSearchChange(query) {
+    const state = store.getState();
+    const wasSearching = Boolean((state.searchQuery || "").trim());
+    const searching = Boolean(query.trim());
+    if (!wasSearching && searching) {
+      historyCache = { messages: [...(state.messages || [])], hasMore: state.messagesHasMore };
+    }
     store.setState({ searchQuery: query });
+    if (wasSearching && !searching && historyCache) {
+      loadedMessageKey = currentMessageKey(store.getState());
+      store.setState({ messages: historyCache.messages, messagesHasMore: historyCache.hasMore, messagesError: "" });
+      historyCache = null;
+      fetchMessagePage();
+    } else {
+      fetchMessagePage({ reset: true });
+    }
+  },
+  async onLoadOlderMessages() {
+    const state = store.getState();
+    if (messageLoadingOlder || !state.messagesHasMore || !state.messages.length) return;
+    messageLoadingOlder = true;
+    try {
+      await fetchMessagePage({ before: state.messages[0].id });
+    } finally {
+      messageLoadingOlder = false;
+    }
   },
   async onOpenSurvey(trigger) {
     const res = await api.getSurvey().catch(() => ({ survey: store.getState().survey || {} }));

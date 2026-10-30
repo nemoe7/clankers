@@ -25,6 +25,9 @@ class SqliteStore:
     self._lock = threading.RLock()
     self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
     self._conn.row_factory = sqlite3.Row
+    self._conn.create_function(
+      "casefold", 1, lambda value: str(value or "").casefold(), deterministic=True
+    )
     self._init_schema()
 
   def _init_schema(self) -> None:
@@ -246,6 +249,58 @@ class SqliteStore:
     if unread_only:
       messages = [msg for msg in messages if msg.is_unread]
     return messages
+
+  def list_message_page(
+    self,
+    *,
+    unread_only: bool,
+    include_hidden: bool,
+    query: str,
+    before: str,
+    limit: int,
+  ) -> tuple[list[Message], int, bool]:
+    filters = []
+    params: list[object] = []
+    if not include_hidden:
+      filters.append("hidden = 0")
+    if unread_only:
+      filters.append(
+        "((blocking = 1 AND status != 'acked') OR (blocking = 0 AND status = 'sent'))"
+      )
+    if query:
+      filters.append("""(
+        instr(casefold(id), ?) > 0 OR instr(casefold(body), ?) > 0 OR
+        EXISTS (SELECT 1 FROM json_each(parent_ids_json) WHERE instr(casefold(value), ?) > 0) OR
+        EXISTS (SELECT 1 FROM json_each(acks_json) WHERE instr(casefold(value), ?) > 0)
+      )""")
+      params.extend([query.casefold()] * 4)
+    where = " AND ".join(filters) if filters else "1"
+    with self._lock:
+      total = self._conn.execute(
+        f"SELECT count(*) FROM messages WHERE {where}", params
+      ).fetchone()[0]
+      cursor = None
+      if before:
+        row = self._conn.execute(
+          f"SELECT seq FROM messages WHERE id = ? AND {where}", [before, *params]
+        ).fetchone()
+        if row is None:
+          raise ValueError(
+            "Message page cursor is missing or does not match the filters"
+          )
+        cursor = row[0]
+      page_where = where + (" AND seq < ?" if cursor is not None else "")
+      page_params = [*params, *([cursor] if cursor is not None else []), limit + 1]
+      rows = self._conn.execute(
+        f"SELECT * FROM messages WHERE {page_where} ORDER BY seq DESC LIMIT ?",
+        page_params,
+      ).fetchall()
+    has_more = len(rows) > limit
+    return (
+      [self._row_to_message(row) for row in reversed(rows[:limit])],
+      total,
+      has_more,
+    )
 
   def save_message(self, message: Message) -> Message:
     with self.transaction():

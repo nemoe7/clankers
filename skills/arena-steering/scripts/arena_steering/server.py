@@ -633,24 +633,13 @@ class SteeringApp:
   ) -> tuple[int, Any]:
     include_all = query.get("all", ["0"])[0] in {"1", "true"}
     include_hidden = query.get("hidden", ["0"])[0] in {"1", "true"}
-    items = self.messages.list_messages(
+    items, total, has_more = self.messages.list_message_page(
       unread_only=not include_all,
       include_hidden=include_hidden,
+      query=(query.get("q", [""])[0] or "").strip(),
+      before=(query.get("before", [""])[0] or "").strip(),
+      limit=20,
     )
-    total = len(items)
-    before_id = (query.get("before", [""])[0] or "").strip()
-    if before_id:
-      for idx, item in enumerate(items):
-        if item.id == before_id:
-          items = items[:idx]
-          break
-    limit_raw = (query.get("limit", [""])[0] or "").strip()
-    has_more = False
-    if limit_raw.isdigit() and int(limit_raw) > 0:
-      limit = int(limit_raw)
-      if len(items) > limit:
-        has_more = True
-        items = items[-limit:]
     return (
       int(HTTPStatus.OK),
       {

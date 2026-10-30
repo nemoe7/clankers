@@ -269,11 +269,13 @@ export const api = {
   setTimezone(timezone) {
     return requestJson("POST", "/timezone", { timezone });
   },
-  listMessages({ all = true, hidden = false } = {}) {
+  listMessages({ all = true, hidden = false, query = "", before = "" } = {}) {
     const q = new URLSearchParams({
       all: all ? "1" : "0",
       hidden: hidden ? "1" : "0",
     });
+    if (query) q.set("q", query);
+    if (before) q.set("before", before);
     return requestJson("GET", `/messages?${q.toString()}`);
   },
   getMessage(id) {

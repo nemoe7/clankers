@@ -133,6 +133,23 @@ class MessageService:
       raise KeyError(f"Unknown message ID: {msg_id}")
     return msg
 
+  def list_message_page(
+    self,
+    *,
+    unread_only: bool,
+    include_hidden: bool,
+    query: str,
+    before: str,
+    limit: int,
+  ) -> tuple[list[Message], int, bool]:
+    return self._messages.list_message_page(
+      unread_only=unread_only,
+      include_hidden=include_hidden,
+      query=query,
+      before=before,
+      limit=limit,
+    )
+
   def list_messages(
     self,
     *,

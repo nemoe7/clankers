@@ -54,6 +54,10 @@ export function createStore(initial = {}) {
   const state = {
     activeTab: VALID_TABS.has(savedTab) ? savedTab : "messages",
     messages: [],
+    searchQuery: "",
+    messagesHasMore: false,
+    messagesError: "",
+    messagesLoading: false,
     tasks: [],
     reports: [],
     replyParentIds: [],

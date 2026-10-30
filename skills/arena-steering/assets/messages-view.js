@@ -149,22 +149,8 @@ export function renderMessagesView(container, state, handlers) {
   const pendingSend = state.pendingSend;
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
 
-  const filteredMessages = (state.messages || []).filter((msg) => {
-    if (!showHidden && msg.hidden) return false;
-    if (!query) return true;
-    const haystack = [msg.id, msg.body, ...(msg.parent_ids || []), ...(msg.acks || [])]
-      .join("\n")
-      .toLowerCase();
-    return haystack.includes(query);
-  });
-
-  const hasOlderMessages =
-    !query && filteredMessages.length > visibleMessageCount;
-  const visibleMessages = query
-    ? filteredMessages
-    : filteredMessages.slice(
-        Math.max(0, filteredMessages.length - visibleMessageCount)
-      );
+  const visibleMessages = state.messages || [];
+  const hasOlderMessages = Boolean(state.messagesHasMore);
 
   const linkedTasksByMsg = new Map();
   for (const task of state.tasks || []) {
@@ -303,12 +289,16 @@ export function renderMessagesView(container, state, handlers) {
         </div>
         <div class="log-scroll">
           <button id="log-edited" class="log-edited" type="button" aria-live="polite" ${unreadEditedMsgId ? "" : "hidden"}>New reply</button>
-          <ol id="history" aria-label="Messages, oldest first">${historyHtml}</ol>
+          <ol id="history" aria-label="Messages, oldest first">
+            <li ${hasOlderMessages ? "" : "hidden"}><button id="load-older-messages" type="button">Show older messages</button></li>
+            <li role="alert" ${state.messagesError ? "" : "hidden"}>${escapeHtml(state.messagesError || "")}</li>
+            ${historyHtml}
+          </ol>
           <button id="log-newest" class="log-newest" type="button" aria-label="Scroll to bottom" title="Scroll to bottom" hidden>
             <svg class="lucide lucide-arrow-down" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
           </button>
         </div>
-        <p id="log-empty" class="receipt" role="status" ${visibleMessages.length ? "hidden" : ""}>No messages yet.</p>
+        <p id="log-empty" class="receipt" role="status" ${visibleMessages.length || state.messagesError || state.messagesLoading ? "hidden" : ""}>${query ? "No matching messages." : "No messages yet."}</p>
       </section>
 
       <section class="card compose ${composerExpanded ? "composer-expanded" : ""}" id="compose" aria-label="Send message">
@@ -409,6 +399,7 @@ export function renderMessagesView(container, state, handlers) {
     </div>
   `;
 
+  container.querySelector("#load-older-messages")?.addEventListener("click", () => handlers.onLoadOlderMessages?.());
   const historyEl = container.querySelector("#history");
   const logNewestBtn = container.querySelector("#log-newest");
   const logEditedBtn = container.querySelector("#log-edited");
@@ -422,35 +413,9 @@ export function renderMessagesView(container, state, handlers) {
     if (logNewestBtn) {
       logNewestBtn.hidden = pinnedToBottom;
     }
-    if (
-      hasOlderMessages &&
-      !loadingMoreMessages &&
-      historyEl.scrollTop <= 48 &&
-      historyEl.scrollHeight > historyEl.clientHeight
-    ) {
+    if (hasOlderMessages && !loadingMoreMessages && historyEl.scrollTop <= 48 && historyEl.scrollHeight > historyEl.clientHeight) {
       loadingMoreMessages = true;
-      const firstCard = historyEl.querySelector(".message");
-      const topAnchorId = firstCard?.dataset.msgId || null;
-      const prevRectTop = firstCard
-        ? firstCard.getBoundingClientRect().top -
-          historyEl.getBoundingClientRect().top
-        : 0;
-      visibleMessageCount += MESSAGE_PAGE_SIZE;
-      renderMessagesView(container, state, handlers);
-      const nextHistory = container.querySelector("#history");
-      if (nextHistory && topAnchorId) {
-        const nextCard = nextHistory.querySelector(
-          `.message[data-msg-id="${CSS.escape(topAnchorId)}"]`
-        );
-        if (nextCard) {
-          const curRectTop =
-            nextCard.getBoundingClientRect().top -
-            nextHistory.getBoundingClientRect().top;
-          nextHistory.scrollTop += curRectTop - prevRectTop;
-          savedScrollTop = nextHistory.scrollTop;
-        }
-      }
-      loadingMoreMessages = false;
+      Promise.resolve(handlers.onLoadOlderMessages?.()).finally(() => { loadingMoreMessages = false; });
     }
   }
 

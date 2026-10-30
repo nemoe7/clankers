@@ -49,6 +49,17 @@ class MessageRepository(Protocol):
   ) -> list[Message]:
     """List stored messages in creation order."""
 
+  def list_message_page(
+    self,
+    *,
+    unread_only: bool,
+    include_hidden: bool,
+    query: str,
+    before: str,
+    limit: int,
+  ) -> tuple[list[Message], int, bool]:
+    """Search and page stored messages."""
+
   def save_message(self, message: Message) -> Message:
     """Insert or update a message."""
 
