@@ -30,6 +30,7 @@ Keep session state outside version control.
 - View messages oldest first, search their content and acknowledgements, load older history, and jump to the newest message or a new reply.
 - See sent, seen, and acknowledged states. Show or hide hidden messages, and ask a waiting agent to skip its poll.
 - Write Markdown, preview the draft, expand the composer, attach files, remove staged attachments, and drop files into the messages area.
+- Open unambiguous message, report, and task references in their views. Parent navigation does not change the selected reply parents.
 - Staged files show uploading, ready, or failed states. Retry or remove failed files before sending.
 - An unconfirmed send retains its draft and offers a retry. With session storage available, the retry uses the original request ID and payload after reload.
 - The server deduplicates request IDs atomically. Discarding a retry does not undo a send that may already have succeeded.
@@ -227,7 +228,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Start and configuration | `init`, `serve`, state directory, installed wrapper, and restore installer | `serve`, fixed `arena-state` directory, and browser timezone | No v2 `init --tz` or equivalent install and restore workflow. |
 | Inbox | Read and poll, note history, quiet notes, seen receipts, and acknowledgement receipts | Read and poll, message history, hidden messages, non-blocking messages, and acknowledgement replies | Names and paging differ. |
 | Message composer | Markdown preview, staging, paste, drop, expansion, reply links, search, and jumps | Preview, staging, paste, drop, expansion, multi-parent replies, search, and jumps | Both use the same paste thresholds and Ctrl+Shift+V bypass, protect Enter during IME composition, and leave Enter to the textarea on coarse-pointer devices. |
-| Message extras | Slash commands, reference navigation, and persisted reply-seen counts | Parent chips jump to loaded messages, and a boolean reply-seen flag persists | Both persist reply-seen state. V2 omits slash commands and does not store or show unread-reply counts. |
+| Message extras | Slash commands, reference navigation, and persisted reply-seen counts | Reference navigation, multi-parent replies, and persisted boolean reply receipts | V2 omits slash commands and does not store or show unread-reply counts. |
 | Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report and dependency blocking, details, search, and filters | Both require task details. V2 intentionally omits drag reorder. Answer IDs can be stored as message links, and acknowledgement plus task creation is not atomic. |
 | Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Multiple-answer delivery has the defect above. |
 | Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal | No pin, visibility-state, worker answer, or forward routes. Guards and republish contract differ. |

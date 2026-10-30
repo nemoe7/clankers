@@ -13,6 +13,13 @@ let taskTypeFilter = "all";
 let visibleFinishedCount = FINISHED_TASK_PAGE_SIZE;
 const openTaskDetails = new Set();
 
+export function expandTaskTarget(id) {
+  taskSearchQuery = "";
+  taskTypeFilter = "all";
+  visibleFinishedCount = Infinity;
+  openTaskDetails.add(id);
+}
+
 function formatTypeBadge(type) {
   const normalized = (type || "misc").toLowerCase();
   const label =

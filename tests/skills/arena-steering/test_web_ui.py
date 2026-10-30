@@ -592,3 +592,28 @@ assert.equal(state.composerAttachments.length, 0);
     check=False,
   )
   assert result.returncode == 0, result.stderr
+
+
+def test_reference_index_omits_ambiguous_ids():
+  script = r"""
+import assert from 'node:assert/strict';
+import { referenceTargets } from './skills/arena-steering/assets/references.js';
+const index = referenceTargets({
+  messages: [{id:'a1b2c3'}, {id:'shared'}],
+  reports: [{id:'report-one'}, {id:'shared'}],
+  tasks: [{id:'task-one'}],
+});
+assert.equal(index.get('a1b2c3'), 'message');
+assert.equal(index.get('report-one'), 'report');
+assert.equal(index.get('task-one'), 'task');
+assert.equal(index.get('shared'), null);
+assert.equal(index.has('unknown'), false);
+"""
+  result = subprocess.run(
+    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
+    cwd=SKILL_DIR.parents[1],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr

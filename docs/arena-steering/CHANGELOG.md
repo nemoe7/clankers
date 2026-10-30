@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `references.js`: Navigate known message, report, and task references.
+
 - `store.py`: Deduplicate message retries by client request ID.
 
 - `composer-uploads.js`: Show upload progress and recover from failed uploads.

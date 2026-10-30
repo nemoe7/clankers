@@ -21,6 +21,11 @@ let savedScrollTop = null;
 let pinnedToBottom = true;
 let skipPollFeedbackUntil = 0;
 let visibleMessageCount = MESSAGE_PAGE_SIZE;
+
+export function expandMessageHistory() {
+  visibleMessageCount = Infinity;
+  pinnedToBottom = false;
+}
 let loadingMoreMessages = false;
 let draftRevision = 0;
 let replyObserver = null;
@@ -209,7 +214,7 @@ export function renderMessagesView(container, state, handlers) {
             : "";
           const linkedTasks = linkedTasksByMsg.get(msg.id) || [];
           const tasksSuffix = linkedTasks.length
-            ? ` · ${linkedTasks.map((tid) => `<code class="task-link">${escapeHtml(tid)}</code>`).join(", ")}`
+            ? ` · ${linkedTasks.map((tid) => `<button type="button" class="reference-link" data-reference-type="task" data-reference-id="${escapeHtml(tid)}">${escapeHtml(tid)}</button>`).join(", ")}`
             : "";
           const parentIds = Array.isArray(msg.parent_ids) ? msg.parent_ids : [];
           const parentsSuffix = parentIds.length
@@ -514,44 +519,11 @@ export function renderMessagesView(container, state, handlers) {
   });
 
   logEditedBtn?.addEventListener("click", () => {
-    const targetId = unreadEditedMsgId;
-    if (!historyEl) return;
-    let row = targetId
-      ? historyEl.querySelector(`.message[data-msg-id="${CSS.escape(targetId)}"]`)
-      : null;
-    if (!row && targetId && !query) {
-      visibleMessageCount = filteredMessages.length;
-      renderMessagesView(container, state, handlers);
-      row = container.querySelector(`.message[data-msg-id="${CSS.escape(targetId)}"]`);
-    }
-    if (row) {
-      row.scrollIntoView({ behavior: "smooth", block: "center" });
-      const reply = row.querySelector(".answer.reply");
-      if (reply) {
-        reply.dataset.highlight = "true";
-        setTimeout(() => {
-          if (reply.isConnected) delete reply.dataset.highlight;
-        }, 1200);
-      }
-    } else {
-      historyEl.scrollTo({ top: historyEl.scrollHeight, behavior: "smooth" });
-    }
+    if (unreadEditedMsgId) handlers.onNavigateReference?.("message", unreadEditedMsgId);
   });
 
   for (const chip of container.querySelectorAll(".reply-parent-chip")) {
-    chip.addEventListener("click", () => {
-      const parentId = chip.dataset.parentId;
-      if (!historyEl || !parentId) return;
-      const row = historyEl.querySelector(
-        `.message[data-msg-id="${CSS.escape(parentId)}"]`
-      );
-      if (!row) return;
-      row.scrollIntoView({ behavior: "smooth", block: "center" });
-      row.dataset.highlight = "true";
-      setTimeout(() => {
-        if (row.isConnected) delete row.dataset.highlight;
-      }, 1200);
-    });
+    chip.addEventListener("click", () => handlers.onNavigateReference?.("message", chip.dataset.parentId));
   }
 
   for (const chip of container.querySelectorAll("[data-remove-reply-parent]")) {
