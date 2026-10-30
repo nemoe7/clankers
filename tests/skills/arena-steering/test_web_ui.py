@@ -79,6 +79,12 @@ REPORT_ACKED_EVENT = "report.acked"
 REPORT_ACK_SEEN_API = "markReportAckSeen"
 REPORT_ACK_SEEN_PATH = "/ack-seen"
 REPORT_ACKED_HANDLER = "onReportAcked"
+REPORT_SUBMIT_ID = 'id="report-submit"'
+REPORT_SUBMIT_FLOAT_ID = 'id="report-submit-float"'
+REPORT_SUBMIT_FLOAT_CLASS = "report-submit-float"
+REPORT_SUBMIT_SPACER_RULE = ".report-submit-row > #report-submit"
+REPORT_SUBMIT_FLOAT_RULE = ".report-submit-float {"
+CLOCK_ID = 'id="clock"'
 
 # Hex values of the warm Arena tokens in `assets/style.css` `:root`
 # (HSL token channels converted to sRGB, plus its literal hex tokens).
@@ -331,3 +337,20 @@ def test_report_ack_seen_live_update_assets() -> None:
   assert REPORT_ACKED_HANDLER in app_js
   assert REPORT_ACK_SEEN_API in app_js
   assert "ack_seen" in app_js
+
+
+def test_report_floating_submit_assets() -> None:
+  reports_js = (ASSETS_DIR / "reports-view.js").read_text(encoding="utf-8")
+  assert REPORT_SUBMIT_ID in reports_js
+  assert REPORT_SUBMIT_FLOAT_ID in reports_js
+  assert REPORT_SUBMIT_FLOAT_CLASS in reports_js
+  assert "requestSubmit" in reports_js
+
+  style_css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
+  assert REPORT_SUBMIT_SPACER_RULE in style_css
+  assert "visibility: hidden;" in style_css
+  assert REPORT_SUBMIT_FLOAT_RULE in style_css
+  assert "position: fixed;" in style_css
+
+  index_html = (ASSETS_DIR / "index.html").read_text(encoding="utf-8")
+  assert CLOCK_ID not in index_html

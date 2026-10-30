@@ -2117,6 +2117,25 @@ code.msg-id {
   margin-top: 14px;
 }
 
+.report-submit-row > #report-submit {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.report-submit-float {
+  position: fixed;
+  right: max(16px, calc((100vw - 900px) / 2));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  z-index: 6;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.3);
+}
+
+@media (max-width: 74.99em) {
+  .report-submit-float {
+    bottom: max(64px, env(safe-area-inset-bottom));
+  }
+}
+
 .prose-block {
   width: 100%;
   max-width: none;
