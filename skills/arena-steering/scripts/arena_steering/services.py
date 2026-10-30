@@ -213,6 +213,21 @@ class MessageService:
       "report_answers": delivered_answers,
     }
 
+  def pending_ids(self) -> list[str]:
+    """Return unacked message and report-answer IDs without marking anything seen."""
+    ids = [
+      message.id
+      for message in self._messages.list_messages(
+        unread_only=False, include_hidden=True
+      )
+      if message.status != "acked"
+    ]
+    for report in self._reports.list_reports():
+      latest = report.latest_unacked_answer
+      if latest is not None:
+        ids.append(latest.id)
+    return ids
+
   def resolve_ack_target(
     self, target_id: str | None
   ) -> tuple[str, Message | ReportAnswer]:

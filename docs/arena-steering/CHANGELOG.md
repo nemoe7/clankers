@@ -14,6 +14,12 @@ This log has no Unreleased section.
 
 ### Added
 
+- `pre.py`: Block `cat`, `grep`, `head`, `tail`, and `rg` on the bible, because those commands read a file in part.
+
+- `pre.py`, `cli.py`: Run the shell hook through a step registry. Each check is its own class, and `PIPELINE` orders them, so a check can be added, dropped, or tweaked in one line.
+
+- `services.py`: List pending message and answer IDs without marking them seen.
+
 - `cli.py`, `services.py`: Unlink one stored answer snapshot from every task that holds it, keeping the answer and its receipts.
 
 - `assets/app.js`: Filter loaded messages in the browser after the first search query.

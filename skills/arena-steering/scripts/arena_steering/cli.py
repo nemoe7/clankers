@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import TextIO
 
 from . import __version__
+from . import pre as pre_mod
 from .gates import FileGateStatus
 from .models import MESSAGE_ID_RE, Message, Report, ReportAnswer, Task
 from .server import SteeringApp, create_http_server
@@ -173,6 +174,16 @@ def main(
     "-l", "--line", default="", help="Command line passed by the shell hook."
   )
 
+  pre_p = sub.add_parser("pre", help="Run the pre-command pipeline for a shell line.")
+  pre_p.add_argument("-l", "--line", default="", help="Whole shell line.")
+  pre_p.add_argument(
+    "-c", "--command", dest="command_text", default="", help="Command the trap reached."
+  )
+  pre_p.add_argument("-s", "--shell", default="", help="Shell name, such as bash.")
+  pre_p.add_argument(
+    "-d", "--done", default="", help="Steps this shell already finished."
+  )
+
   skills_p = sub.add_parser("skills", help="List skill names, descriptions, and paths.")
   skills_p.add_argument(
     "-j", "--json", dest="as_json", action="store_true", help="Print JSON."
@@ -212,6 +223,9 @@ def main(
     if cmd == "gate":
       parsed = gate_p.parse_args(cmd_args)
       return _run_gate(messages, parsed, stdout)
+    if cmd == "pre":
+      parsed = pre_p.parse_args(cmd_args)
+      return _run_pre(parsed, messages, store, stdout)
     if cmd == "skills":
       parsed = skills_p.parse_args(cmd_args)
       return _run_skills(parsed, stdout)
@@ -220,12 +234,14 @@ def main(
       _print_restore_notice(store, stdout)
       delivered = messages.read_pending(mark_seen=True)
       _print_delivered(delivered, stdout)
+      _reset_call_count(store)
       return 0
     if cmd == "poll":
       poll_p.parse_args(cmd_args)
       _print_restore_notice(store, stdout)
       delivered = messages.poll(timeout_seconds=1799.0)
       _print_delivered(delivered, stdout)
+      _reset_call_count(store)
       return 0
     if cmd == "ack":
       parsed = ack_p.parse_args(cmd_args)
@@ -628,11 +644,59 @@ def _safe_local_name(name: str) -> str:
   return cleaned
 
 
+def _call_count(store: SqliteStore) -> int:
+  """Read how many shell lines ran since the inbox was last read."""
+  raw = store.get_meta(pre_mod.CALL_COUNT_META, "0") or "0"
+  try:
+    return int(raw)
+  except ValueError:
+    return 0
+
+
+def _bump_call_count(store: SqliteStore) -> int:
+  """Record one more shell line and return the new count."""
+  count = _call_count(store) + 1
+  store.set_meta(pre_mod.CALL_COUNT_META, str(count))
+  return count
+
+
+def _reset_call_count(store: SqliteStore) -> None:
+  """Restart the countdown after the agent works the inbox."""
+  store.set_meta(pre_mod.CALL_COUNT_META, "0")
+
+
+def _run_pre(
+  parsed: argparse.Namespace,
+  messages: MessageService,
+  store: SqliteStore,
+  out: TextIO,
+) -> int:
+  """Run the pre-command pipeline and return its verdict."""
+  pending_ids = messages.pending_ids()
+  count = _call_count(store) if pending_ids else 0
+  ctx = pre_mod.PreContext(
+    line=str(parsed.line or ""),
+    command=str(parsed.command_text or ""),
+    shell=str(parsed.shell or ""),
+    done=tuple(str(parsed.done or "").split()),
+    pending_ids=pending_ids,
+    call_count=count,
+  )
+  result = pre_mod.run_pipeline(ctx)
+  for message in result.messages:
+    print(message, file=out)
+  if parsed.shell and set(result.done) - set(ctx.done):
+    # The shell evals this line, so a later command in the same shell skips
+    # the steps that already ran.
+    print(f'_arena_preview_done="{" ".join(result.done)}"', file=out)
+  if pending_ids and parsed.shell:
+    _bump_call_count(store)
+  return result.verdict
+
+
 def _run_gate(messages: MessageService, parsed: argparse.Namespace, out: TextIO) -> int:
   """Refuse a command while a message or report answer waits for an acknowledgement."""
-  pending = messages.read_pending(mark_seen=False)
-  waiting = [message.id for message in pending["messages"]]
-  waiting += [answer.id for _, answer in pending["report_answers"]]
+  waiting = messages.pending_ids()
   if not waiting:
     return 0
   if parsed.push:
