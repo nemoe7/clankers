@@ -30,6 +30,7 @@ Keep session state outside version control.
 - View messages oldest first, search their content and acknowledgements, load older history, and jump to the newest message or a new reply.
 - See sent, seen, and acknowledged states. Show or hide hidden messages, and ask a waiting agent to skip its poll.
 - Write Markdown, preview the draft, expand the composer, attach files, remove staged attachments, and drop files into the messages area.
+- Message text persists in session storage across reloads and tab changes. File objects do not persist across reloads.
 - A paste over 1,500 Unicode characters or at least 15 lines becomes a text attachment. Ctrl+Shift+V pastes plain text without staging.
 - Choose one or more parent messages by clicking their IDs. Shift-click copies an ID, and parent chips jump to their messages.
 - Open message images and Mermaid diagrams in a lightbox. Use the wheel to zoom, drag to pan, and Escape or the close button to exit.

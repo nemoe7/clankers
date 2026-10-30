@@ -2,6 +2,7 @@
 
 const TAB_STORAGE_KEY = "steer:activeTab";
 const REPORT_STORAGE_KEY = "steer:selectedReportId";
+const DRAFT_STORAGE_KEY = "steer:messageDraft";
 const VALID_TABS = new Set(["messages", "tasks", "reports"]);
 
 function readSessionValue(key) {
@@ -23,6 +24,14 @@ function writeSessionValue(key, value) {
   } catch {
     // Ignore storage quota or privacy-mode errors.
   }
+}
+
+export function readComposerDraft() {
+  return readSessionValue(DRAFT_STORAGE_KEY) || "";
+}
+
+export function writeComposerDraft(value) {
+  writeSessionValue(DRAFT_STORAGE_KEY, value);
 }
 
 export function createStore(initial = {}) {

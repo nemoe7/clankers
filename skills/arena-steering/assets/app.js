@@ -344,7 +344,11 @@ const handlers = {
     if ((payload.parent_ids || []).length) {
       store.setState({ replyParentIds: [] });
     }
-    await refreshAll(true);
+    try {
+      await refreshAll(true);
+    } catch (error) {
+      console.error(error);
+    }
   },
   async onStageComposerFiles(files) {
     const current = store.getState().composerAttachments || [];

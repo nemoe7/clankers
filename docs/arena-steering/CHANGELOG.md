@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `assets/messages-view.js`: Preserve unsent composer text in browser session storage.
+
 - `services.py`: Require at least one detail for new and updated tasks.
 
 - `assets/messages-view.js`: Leave Enter to the textarea on coarse-pointer devices.
