@@ -451,7 +451,8 @@ def test_composer_upload_drop_expand_assets() -> None:
   assert "FormData" in api_js
 
   app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
-  assert COMPOSER_ATTACHMENTS_STATE in app_js
+  uploads_js = (ASSETS_DIR / "composer-uploads.js").read_text(encoding="utf-8")
+  assert COMPOSER_ATTACHMENTS_STATE in uploads_js
   assert "onStageComposerFiles" in app_js
   assert "onRemoveComposerAttachment" in app_js
   assert "onToggleComposerExpanded" in app_js
@@ -544,6 +545,45 @@ assert.equal(stage.firstElementChild, null);
 """
   result = subprocess.run(
     ["node", "--input-type=module", "-e", script],
+    cwd=SKILL_DIR.parents[1],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
+
+
+def test_composer_upload_manager_handles_failures_and_concurrent_changes():
+  script = r"""
+import assert from 'node:assert/strict';
+import { createComposerUploads } from './skills/arena-steering/assets/composer-uploads.js';
+let state = { composerAttachments: [] }, rejectFirst, calls = 0;
+const store = { getState: () => state, setState: (patch) => { state = {...state, ...patch}; } };
+const uploads = createComposerUploads(store, async (file) => {
+  calls++;
+  if (file.name === 'first' && calls === 1) return new Promise((resolve, reject) => { rejectFirst = reject; });
+  return {name: file.name};
+});
+const first = uploads.stage([{name:'first'}]);
+assert.equal(state.composerAttachments[0].status, 'uploading');
+await uploads.stage([{name:'second'}]);
+assert.deepEqual(state.composerAttachments.map(x => x.status), ['uploading', 'ready']);
+rejectFirst(new Error('offline'));
+await first;
+assert.equal(state.composerAttachments[0].status, 'failed');
+await uploads.retry('1');
+assert.deepEqual(state.composerAttachments.map(x => x.status), ['ready', 'ready']);
+uploads.clearSent(['1']);
+assert.deepEqual(state.composerAttachments.map(x => x.name), ['second']);
+uploads.remove('2');
+assert.equal(state.composerAttachments.length, 0);
+const pending = uploads.stage([{name:'first'}]);
+uploads.remove('3');
+await pending;
+assert.equal(state.composerAttachments.length, 0);
+"""
+  result = subprocess.run(
+    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,

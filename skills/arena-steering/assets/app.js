@@ -1,3 +1,4 @@
+import { createComposerUploads } from "./composer-uploads.js";
 // Main ES module controller for Arena Steering.
 
 import { api, connectWebSocket } from "./api.js";
@@ -332,12 +333,14 @@ async function refreshAll(force = false) {
   }
 }
 
+const composerUploads = createComposerUploads(store, (file) => api.uploadFile(file));
+
 const handlers = {
   async onSendMessage(payload) {
     const attachments = payload.attachments || [];
     if (attachments.length) {
       await api.sendMessageWithFile(payload);
-      store.setState({ composerAttachments: [] });
+      composerUploads.clearSent(payload.attachmentIds || []);
     } else {
       await api.sendMessage(payload);
     }
@@ -358,21 +361,14 @@ const handlers = {
     }
     await refreshAll(true);
   },
-  async onStageComposerFiles(files) {
-    const current = store.getState().composerAttachments || [];
-    const uploaded = [];
-    for (const file of files || []) {
-      uploaded.push(await api.uploadFile(file));
-    }
-    store.setState({
-      composerAttachments: [...current, ...uploaded.filter(Boolean)],
-    });
+  onStageComposerFiles(files) {
+    return composerUploads.stage(files);
   },
-  onRemoveComposerAttachment(index) {
-    const current = store.getState().composerAttachments || [];
-    store.setState({
-      composerAttachments: current.filter((_, idx) => idx !== Number(index)),
-    });
+  onRetryComposerAttachment(id) {
+    return composerUploads.retry(id);
+  },
+  onRemoveComposerAttachment(id) {
+    composerUploads.remove(id);
   },
   onToggleComposerExpanded() {
     store.setState({

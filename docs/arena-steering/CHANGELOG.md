@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `composer-uploads.js`: Show upload progress and recover from failed uploads.
+
 - `store.py`: Persist reply-seen flags with atomic revision checks.
 
 - `assets/messages-view.js`: Preserve unsent composer text in browser session storage.

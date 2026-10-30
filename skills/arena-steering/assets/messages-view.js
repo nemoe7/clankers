@@ -329,8 +329,12 @@ export function renderMessagesView(container, state, handlers) {
           >
             ${composerAttachments
               .map(
-                (att, idx) =>
-                  `<button type="button" class="composer-attachment-chip" data-remove-composer-attachment="${idx}" title="Remove attachment">${escapeHtml(att.name || "attachment")} ×</button>`
+                (att) =>
+                  `<span class="composer-attachment-chip" data-upload-status="${escapeHtml(att.status)}">
+                    <span>${escapeHtml(att.name || "attachment")} · ${escapeHtml(att.status)}</span>
+                    ${att.status === "failed" ? `<button type="button" data-retry-composer-attachment="${escapeHtml(att.id)}" aria-label="Retry ${escapeHtml(att.name)}">Retry</button>` : ""}
+                    <button type="button" data-remove-composer-attachment="${escapeHtml(att.id)}" aria-label="Remove ${escapeHtml(att.name)}">×</button>
+                  </span>`
               )
               .join("")}
           </div>
@@ -388,6 +392,7 @@ export function renderMessagesView(container, state, handlers) {
               aria-label="Send message"
               title="Send message"
               aria-busy="false"
+              ${composerAttachments.some((item) => item.status !== "ready") ? "disabled" : ""}
             >
               <svg class="lucide lucide-arrow-up" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>
             </button>
@@ -563,6 +568,12 @@ export function renderMessagesView(container, state, handlers) {
     });
   }
 
+  for (const button of container.querySelectorAll("[data-retry-composer-attachment]")) {
+    button.addEventListener("click", () => {
+      handlers.onRetryComposerAttachment?.(button.dataset.retryComposerAttachment);
+    });
+  }
+
   const attachBtn = container.querySelector("#attach-file");
   const fileInput = container.querySelector("#composer-file-input");
   attachBtn?.addEventListener("click", () => {
@@ -705,12 +716,14 @@ export function renderMessagesView(container, state, handlers) {
     const submittedRevision = draftRevision;
     const body = submittedDraft.trim();
     if (!body && !composerAttachments.length) return;
+    if (composerAttachments.some((item) => item.status !== "ready")) return;
     pinnedToBottom = true;
     try {
       await handlers.onSendMessage({
         body,
         parent_ids: [...selectedReplyParentIds],
-        attachments: [...composerAttachments],
+        attachments: composerAttachments.map((item) => item.attachment),
+        attachmentIds: composerAttachments.map((item) => item.id),
       });
     } catch (error) {
       console.error(error);

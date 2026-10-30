@@ -1506,12 +1506,18 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.composer-attachment-chip button {
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
 }
 
-.composer-attachment-chip:hover {
+.composer-attachment-chip button:hover {
   color: var(--accent);
-  border-color: var(--accent);
 }
 
 .card.compose.composer-expanded #msg {
