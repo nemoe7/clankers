@@ -16,6 +16,7 @@ This log has no Unreleased section.
 - `assets/reports-view.js` and `assets/style.css`: Pair fielded reports' bottom submit spacer with a fixed `#report-submit-float` that stays reachable while scrolling.
 - `scripts/arena_steering/` and `assets/`: Store `parent_ids[]` on messages, toggle composer reply parents from receipt IDs, copy IDs on Shift+Click, and render clickable `↪ <id>` parent chips.
 - `scripts/arena_steering/server.py` and `assets/`: Serve nested UI assets, report files and raw Markdown, and uploads under `/static/assets/`, `/static/reports/`, and `/static/uploads/`.
+- `scripts/arena_steering/server.py`: Add JSON and multipart `POST /api/uploads` and `POST /api/messages/with-file`, storing uploads under `/static/uploads/` and converting pasted text over 2,400 characters or 40 lines into a `.txt` attachment.
 
 ### Fixed
 

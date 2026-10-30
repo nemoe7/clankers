@@ -9,7 +9,11 @@ from pathlib import Path
 from arena_steering import __version__
 from arena_steering.cli import main as cli_main
 from arena_steering.markdown import render_markdown
-from arena_steering.server import SteeringApp
+from arena_steering.server import (
+  PASTE_ATTACHMENT_CHAR_THRESHOLD,
+  PASTE_ATTACHMENT_LINE_THRESHOLD,
+  SteeringApp,
+)
 from arena_steering.store import SqliteStore
 
 MSG_ID_CLI = "a0b1c2"
@@ -533,6 +537,141 @@ def test_websocket_upgrade_and_rpc() -> None:
       assert rpc_reply["id"] == "1"
       assert rpc_reply["status"] == 200
       assert json.loads(rpc_reply["body"])["ok"] is True
+  finally:
+    server.shutdown()
+    server.server_close()
+    store.close()
+
+
+def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> None:
+  import base64
+
+  state_dir = tmp_path / "state"
+  state_dir.mkdir()
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+
+  payload = base64.b64encode(b"hello upload").decode("ascii")
+  status, uploaded = app.dispatch(
+    "POST",
+    "/api/uploads",
+    {"name": "../notes.txt", "content_base64": payload},
+  )
+  assert status == int(HTTPStatus.CREATED)
+  attachment = uploaded["attachment"]
+  assert attachment["name"] == "notes.txt"
+  assert attachment["size_bytes"] == len(b"hello upload")
+  assert attachment["url"].startswith("/static/uploads/")
+  stored = Path(attachment["path"])
+  assert stored.parent == state_dir / "uploads"
+  assert stored.read_bytes() == b"hello upload"
+  assert app.resolve_asset(attachment["url"].lstrip("/")) == (
+    b"hello upload",
+    "text/plain; charset=utf-8",
+  )
+
+  long_paste = "x" * (PASTE_ATTACHMENT_CHAR_THRESHOLD + 1)
+  status, created = app.dispatch(
+    "POST",
+    "/api/messages/with-file",
+    {"body": "See attached paste.", "pasted_text": long_paste},
+  )
+  assert status == int(HTTPStatus.CREATED)
+  msg = created["message"]
+  assert msg["body"] == "See attached paste."
+  assert len(msg["attachments"]) == 1
+  paste_attachment = msg["attachments"][0]
+  assert paste_attachment["name"] == "pasted-text.txt"
+  assert Path(paste_attachment["path"]).read_text(encoding="utf-8") == long_paste
+
+  many_lines = "\n".join(
+    f"line {idx}" for idx in range(PASTE_ATTACHMENT_LINE_THRESHOLD + 1)
+  )
+  status, created = app.dispatch(
+    "POST",
+    "/api/messages/with-file",
+    {"pasted_text": many_lines},
+  )
+  assert status == int(HTTPStatus.CREATED)
+  assert created["message"]["body"] == "Pasted text attached."
+  assert len(created["message"]["attachments"]) == 1
+
+  status, created = app.dispatch(
+    "POST",
+    "/api/messages/with-file",
+    {
+      "file": {"name": "spec.md", "content_base64": payload},
+      "parent_ids": [msg["id"]],
+    },
+  )
+  assert status == int(HTTPStatus.CREATED)
+  assert created["message"]["parent_ids"] == [msg["id"]]
+  assert created["message"]["attachments"][0]["name"] == "spec.md"
+  store.close()
+
+
+def test_http_multipart_upload_and_message_with_file(tmp_path: Path) -> None:
+  import http.client
+  import json
+  import threading
+
+  from arena_steering.server import create_http_server
+
+  state_dir = tmp_path / "state"
+  state_dir.mkdir()
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  port = server.server_address[1]
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+
+  def post_multipart(path: str, fields: dict[str, str], file_name: str, data: bytes):
+    boundary = "arena-test-boundary"
+    chunks: list[bytes] = []
+    for key, value in fields.items():
+      chunks.append(f"--{boundary}\r\n".encode())
+      chunks.append(f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode())
+      chunks.append(value.encode("utf-8") + b"\r\n")
+    chunks.append(f"--{boundary}\r\n".encode())
+    chunks.append(
+      (
+        'Content-Disposition: form-data; name="file"; '
+        f'filename="{file_name}"\r\nContent-Type: text/plain\r\n\r\n'
+      ).encode()
+    )
+    chunks.append(data + b"\r\n")
+    chunks.append(f"--{boundary}--\r\n".encode())
+    body = b"".join(chunks)
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5.0)
+    try:
+      conn.request(
+        "POST",
+        path,
+        body=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+      )
+      response = conn.getresponse()
+      return response.status, json.loads(response.read().decode("utf-8"))
+    finally:
+      conn.close()
+
+  try:
+    status, uploaded = post_multipart("/api/uploads", {}, "multi.txt", b"multi body")
+    assert status == int(HTTPStatus.CREATED)
+    assert uploaded["attachment"]["name"] == "multi.txt"
+    assert Path(uploaded["attachment"]["path"]).read_bytes() == b"multi body"
+
+    status, created = post_multipart(
+      "/api/messages/with-file",
+      {"body": "Multipart note", "blocking": "false"},
+      "note.txt",
+      b"attached note",
+    )
+    assert status == int(HTTPStatus.CREATED)
+    assert created["message"]["body"] == "Multipart note"
+    assert created["message"]["blocking"] is False
+    assert created["message"]["attachments"][0]["name"] == "note.txt"
   finally:
     server.shutdown()
     server.server_close()
