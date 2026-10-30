@@ -51,6 +51,15 @@ class MessageRepository(Protocol):
   def save_message(self, message: Message) -> Message:
     """Insert or update a message."""
 
+  def append_message_ack(self, msg_id: str, reply: str, now: str) -> Message:
+    """Atomically append a reply and reset its receipt."""
+
+  def mark_message_seen(self, msg_id: str, now: str) -> Message:
+    """Mark message delivery without overwriting concurrent replies."""
+
+  def mark_replies_seen(self, msg_id: str, revision: str) -> bool:
+    """Set the receipt if the supplied reply revision is current."""
+
 
 class TaskRepository(Protocol):
   """Persistence port for the mutable task queue."""

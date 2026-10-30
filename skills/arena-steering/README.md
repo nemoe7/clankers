@@ -103,6 +103,10 @@ Use `python skills/arena-steering/scripts/steer` in place of `steer` in the tabl
 - Message IDs use six lowercase hexadecimal characters. Parent IDs are deduplicated in order and must name existing messages.
 - Blocking messages move from `sent` to `seen` to `acked`. Non-blocking messages need no acknowledgement.
 - An acknowledgement contains nonempty Markdown. Repeated acknowledgements append replies.
+- Reply receipts use a persisted seen flag and a reply-list digest. Viewing the end of a rendered reply list marks that revision seen.
+- A newer reply resets the flag.
+- Existing replies start unseen after upgrade. Stale receipt updates return HTTP 409 and do not hide newer replies.
+- No unread-reply count is stored or shown.
 - `read` and `poll` mark delivered items seen rather than acknowledging them.
 
 ## Runs and worktrees
@@ -171,6 +175,7 @@ Successful creates return HTTP 201. Other successful route operations return 200
 
 | Operation | Request or query | Response |
 | --- | --- | --- |
+| Mark message replies seen | `revision` is the rendered reply-list digest. | `message` and `matched`. Stale revisions return HTTP 409. |
 | List messages | `all=1`, `hidden=1`, `before=ID`, and `limit=N` are optional. | `messages`, `total`, and `has_more`. |
 | Create message | `body`, optional `id`, `hidden`, `blocking`, `parent_ids`, and `attachments`. | `message`, including rendered body and acknowledgement HTML. |
 | Upload | JSON `file` object with `name` and `content_base64` or `text`, or multipart `file`. | `attachment` with name, path, size, presence, and static URL. |
@@ -219,7 +224,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Start and configuration | `init`, `serve`, state directory, installed wrapper, and restore installer | `serve`, fixed `arena-state` directory, and browser timezone | No v2 `init --tz` or equivalent install and restore workflow. |
 | Inbox | Read and poll, note history, quiet notes, seen receipts, and acknowledgement receipts | Read and poll, message history, hidden messages, non-blocking messages, and acknowledgement replies | Names and paging differ. |
 | Message composer | Markdown preview, staging, paste, drop, expansion, reply links, search, and jumps | Preview, staging, paste, drop, expansion, multi-parent replies, search, and jumps | Both use the same paste thresholds and Ctrl+Shift+V bypass, protect Enter during IME composition, and leave Enter to the textarea on coarse-pointer devices. |
-| Message extras | Slash commands, reference navigation, and server-persisted reply-seen counts | Parent chips jump to loaded messages. New-reply counts stay in browser memory. | V2 intentionally omits slash commands and does not persist message reply-seen counts. |
+| Message extras | Slash commands, reference navigation, and persisted reply-seen counts | Parent chips jump to loaded messages, and a boolean reply-seen flag persists | Both persist reply-seen state. V2 omits slash commands and does not store or show unread-reply counts. |
 | Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report and dependency blocking, details, search, and filters | Both require task details. V2 intentionally omits drag reorder. Answer IDs can be stored as message links, and acknowledgement plus task creation is not atomic. |
 | Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Multiple-answer delivery has the defect above. |
 | Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal | No pin, visibility-state, worker answer, or forward routes. Guards and republish contract differ. |

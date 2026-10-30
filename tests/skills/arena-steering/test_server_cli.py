@@ -72,6 +72,16 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert status == int(HTTPStatus.OK)
   assert acked["message"]["status"] == "acked"
   assert acked["message"]["acks"] == ["Router shipped."]
+  old_revision = acked["message"]["replies_revision"]
+  status, seen = app.dispatch(
+    "POST", "/messages/12ab34/replies-seen", {"revision": old_revision}
+  )
+  assert status == int(HTTPStatus.OK) and seen["message"]["replies_seen"]
+  app.dispatch("POST", "/messages/12ab34/ack", {"markdown": "Another reply."})
+  status, stale = app.dispatch(
+    "POST", "/messages/12ab34/replies-seen", {"revision": old_revision}
+  )
+  assert status == int(HTTPStatus.CONFLICT) and not stale["message"]["replies_seen"]
 
   status, _ = app.dispatch("POST", "/tasks", {"id": "empty-task", "title": "Empty"})
   assert status == int(HTTPStatus.BAD_REQUEST)

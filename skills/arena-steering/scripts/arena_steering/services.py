@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 from typing import Any
 
@@ -144,9 +145,7 @@ class MessageService:
     delivered_messages: list[Message] = []
     for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
       if mark_seen and msg.status == "sent":
-        msg.status = "seen"
-        msg.modified_at = now
-        self._messages.save_message(msg)
+        msg = self._messages.mark_message_seen(msg.id, now)
       delivered_messages.append(msg)
 
     delivered_answers: list[tuple[Report, ReportAnswer]] = []
@@ -180,11 +179,7 @@ class MessageService:
     validate_hex_id(target_id, "Acknowledgement target ID")
     msg = self._messages.get_message(target_id)
     if msg is not None:
-      msg.acks.append(reply)
-      msg.status = "acked"
-      msg.modified_at = now
-      self._messages.save_message(msg)
-      return ("message", msg)
+      return ("message", self._messages.append_message_ack(target_id, reply, now))
 
     for report in self._reports.list_reports():
       for ans in report.answers:
@@ -198,6 +193,12 @@ class MessageService:
           return ("report_answer", ans)
 
     raise KeyError(f"Unknown message or answer ID: {target_id}")
+
+  def mark_replies_seen(self, msg_id: str, revision: str) -> bool:
+    validate_hex_id(msg_id, "Message.id")
+    if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{64}", revision):
+      raise ValueError("Reply revision must be a SHA-256 hex digest")
+    return self._messages.mark_replies_seen(msg_id, revision)
 
   def trigger_skip_poll(self) -> None:
     with self._cond:

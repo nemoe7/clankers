@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -117,6 +119,7 @@ class Message:
   parent_ids: list[str] = field(default_factory=list)
   status: str = "sent"
   acks: list[str] = field(default_factory=list)
+  replies_seen: bool = False
   modified_at: str = ""
 
   def __post_init__(self) -> None:
@@ -149,6 +152,11 @@ class Message:
     self.modified_at = str(self.modified_at or "")
 
   @property
+  def replies_revision(self) -> str:
+    """Digest the reply list for conditional seen updates."""
+    return hashlib.sha256(json.dumps(self.acks).encode("utf-8")).hexdigest()
+
+  @property
   def requires_ack(self) -> bool:
     """Return True when this message requires an acknowledgement."""
     return self.blocking and self.status != "acked"
@@ -170,6 +178,8 @@ class Message:
       "parent_ids": list(self.parent_ids),
       "status": self.status,
       "acks": list(self.acks),
+      "replies_seen": self.replies_seen,
+      "replies_revision": self.replies_revision,
       "modified_at": self.modified_at,
     }
 
@@ -184,6 +194,7 @@ class Message:
       parent_ids=[str(item) for item in data.get("parent_ids", [])],
       status=str(data.get("status", "sent")),
       acks=[str(item) for item in data.get("acks", [])],
+      replies_seen=bool(data.get("replies_seen", False)),
       modified_at=str(data.get("modified_at", "")),
     )
 

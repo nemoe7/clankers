@@ -16,8 +16,6 @@ const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewB
 const MESSAGE_PAGE_SIZE = 15;
 const PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500;
 const PASTE_ATTACHMENT_LINE_THRESHOLD = 15;
-const seenAckCounts = new Map();
-let initializedAckCounts = false;
 let unreadEditedMsgId = null;
 let savedScrollTop = null;
 let pinnedToBottom = true;
@@ -25,6 +23,16 @@ let skipPollFeedbackUntil = 0;
 let visibleMessageCount = MESSAGE_PAGE_SIZE;
 let loadingMoreMessages = false;
 let draftRevision = 0;
+let replyObserver = null;
+const pendingReplyReceipts = new Set();
+
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible" || !replyObserver) return;
+  for (const target of document.querySelectorAll(".reply-seen-sentinel")) {
+    replyObserver.unobserve(target);
+    replyObserver.observe(target);
+  }
+});
 
 function stateDotForStatus(status) {
   if (status === "acked") return "said";
@@ -32,25 +40,9 @@ function stateDotForStatus(status) {
   return "sent";
 }
 
-export function trackMessageAcks(messages, activeTab) {
-  const list = messages || [];
-  if (!initializedAckCounts) {
-    for (const msg of list) {
-      seenAckCounts.set(msg.id, (msg.acks || []).length);
-    }
-    initializedAckCounts = true;
-    return;
-  }
-  for (const msg of list) {
-    const prev = seenAckCounts.get(msg.id);
-    const cur = (msg.acks || []).length;
-    if (prev !== undefined && cur > prev) {
-      if (activeTab !== "messages" || !pinnedToBottom) {
-        unreadEditedMsgId = msg.id;
-      }
-    }
-    seenAckCounts.set(msg.id, cur);
-  }
+export function trackMessageAcks(messages) {
+  const unseen = (messages || []).filter((msg) => (msg.acks || []).length && !msg.replies_seen);
+  unreadEditedMsgId = unseen.at(-1)?.id || null;
 }
 
 function highlightSearchMatches(root, rawQuery) {
@@ -104,6 +96,8 @@ function highlightSearchMatches(root, rawQuery) {
 }
 
 export function renderMessagesView(container, state, handlers) {
+  replyObserver?.disconnect();
+  replyObserver = null;
   const activeEl = document.activeElement;
   const searchWasFocused =
     Boolean(activeEl && activeEl.id === "log-search" && container.contains(activeEl));
@@ -231,6 +225,7 @@ export function renderMessagesView(container, state, handlers) {
             <li class="message" data-msg-id="${escapeHtml(msg.id)}" data-hidden="${msg.hidden ? "true" : "false"}">
               <div class="message-text">${msg.body_html || renderMarkdownBlock(msg.body)}</div>
               ${acksHtml}
+              ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
               <p class="receipt">
                 <span class="state-dot" data-state="${dotState}" title="Status: ${escapeHtml(msg.status)}"></span>
                 <code class="msg-id receipt-id" data-msg-id="${escapeHtml(msg.id)}" data-reply-selected="${replySelected ? "true" : "false"}" title="Reply to message; Shift+Click copies ID">${escapeHtml(msg.id)}</code>
@@ -415,13 +410,6 @@ export function renderMessagesView(container, state, handlers) {
     if (logNewestBtn) {
       logNewestBtn.hidden = pinnedToBottom;
     }
-    if (pinnedToBottom && unreadEditedMsgId) {
-      const lastId = visibleMessages[visibleMessages.length - 1]?.id;
-      if (unreadEditedMsgId === lastId) {
-        unreadEditedMsgId = null;
-        if (logEditedBtn) logEditedBtn.hidden = true;
-      }
-    }
     if (
       hasOlderMessages &&
       !loadingMoreMessages &&
@@ -481,6 +469,23 @@ export function renderMessagesView(container, state, handlers) {
     historyEl.addEventListener("scroll", syncScrollControls, { passive: true });
   }
 
+  if (historyEl && typeof IntersectionObserver === "function") {
+    replyObserver = new IntersectionObserver((entries) => {
+      if (document.visibilityState !== "visible" || container.hidden) return;
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const id = entry.target.dataset.replyId;
+        const revision = entry.target.dataset.revision;
+        const key = `${id}:${revision}`;
+        if (!id || !revision || pendingReplyReceipts.has(key)) continue;
+        pendingReplyReceipts.add(key);
+        Promise.resolve(handlers.onMarkRepliesSeen?.(id, revision))
+          .finally(() => pendingReplyReceipts.delete(key));
+      }
+    }, { root: historyEl });
+    historyEl.querySelectorAll(".reply-seen-sentinel").forEach((el) => replyObserver.observe(el));
+  }
+
   const searchInput = container.querySelector("#log-search");
   if (searchWasFocused && searchInput) {
     searchInput.focus();
@@ -503,12 +508,15 @@ export function renderMessagesView(container, state, handlers) {
 
   logEditedBtn?.addEventListener("click", () => {
     const targetId = unreadEditedMsgId;
-    unreadEditedMsgId = null;
-    logEditedBtn.hidden = true;
     if (!historyEl) return;
-    const row = targetId
+    let row = targetId
       ? historyEl.querySelector(`.message[data-msg-id="${CSS.escape(targetId)}"]`)
       : null;
+    if (!row && targetId && !query) {
+      visibleMessageCount = filteredMessages.length;
+      renderMessagesView(container, state, handlers);
+      row = container.querySelector(`.message[data-msg-id="${CSS.escape(targetId)}"]`);
+    }
     if (row) {
       row.scrollIntoView({ behavior: "smooth", block: "center" });
       const reply = row.querySelector(".answer.reply");

@@ -186,6 +186,7 @@ class SteeringApp:
     self.router.add("POST", "/uploads", self._handle_upload_file)
     self.router.add("GET", "/messages/{id}", self._handle_get_message)
     self.router.add("POST", "/messages/{id}/ack", self._handle_ack_message)
+    self.router.add("POST", "/messages/{id}/replies-seen", self._handle_replies_seen)
     self.router.add("GET", "/poll", self._handle_poll)
     self.router.add("POST", "/poll/skip", self._handle_skip_poll)
 
@@ -655,6 +656,17 @@ class SteeringApp:
     markdown = str(body.get("markdown", body.get("ack", "")))
     _, acked = self.messages.ack(params["id"], markdown)
     return (int(HTTPStatus.OK), {"message": self._serialize_message(acked)})
+
+  def _handle_replies_seen(
+    self, params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+  ) -> tuple[int, Any]:
+    revision = body.get("revision")
+    matched = self.messages.mark_replies_seen(params["id"], revision)
+    msg = self.messages.get_message(params["id"])
+    return (
+      int(HTTPStatus.OK if matched else HTTPStatus.CONFLICT),
+      {"message": self._serialize_message(msg), "matched": matched},
+    )
 
   def _handle_poll(
     self, _params: dict[str, str], query: dict[str, list[str]], _body: Any

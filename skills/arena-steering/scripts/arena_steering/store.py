@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import sqlite3
 import threading
@@ -50,6 +52,7 @@ class SqliteStore:
           parent_ids_json TEXT NOT NULL DEFAULT '[]',
           status TEXT NOT NULL DEFAULT 'sent',
           acks_json TEXT NOT NULL DEFAULT '[]',
+          replies_seen INTEGER NOT NULL DEFAULT 0,
           modified_at TEXT NOT NULL
         );
 
@@ -94,6 +97,10 @@ class SqliteStore:
       if "parent_ids_json" not in message_cols:
         self._conn.execute(
           "ALTER TABLE messages ADD COLUMN parent_ids_json TEXT NOT NULL DEFAULT '[]'"
+        )
+      if "replies_seen" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN replies_seen INTEGER NOT NULL DEFAULT 0"
         )
       task_cols = {
         row["name"] for row in self._conn.execute("PRAGMA table_info(tasks)").fetchall()
@@ -176,6 +183,7 @@ class SqliteStore:
               attachments_json = ?,
               parent_ids_json = ?,
               status = ?,
+              replies_seen = CASE WHEN acks_json = ? THEN replies_seen ELSE 0 END,
               acks_json = ?,
               modified_at = ?
           WHERE id = ?
@@ -188,11 +196,63 @@ class SqliteStore:
             parent_ids_json,
             message.status,
             acks_json,
+            acks_json,
             message.modified_at,
             message.id,
           ),
         )
     return message
+
+  def append_message_ack(self, msg_id: str, reply: str, now: str) -> Message:
+    """Append under a database write lock and reset the receipt atomically."""
+    with self._lock, self._conn:
+      self._conn.execute("BEGIN IMMEDIATE")
+      row = self._conn.execute(
+        "SELECT * FROM messages WHERE id = ?", (msg_id,)
+      ).fetchone()
+      if row is None:
+        raise KeyError(f"Unknown message ID: {msg_id}")
+      message = self._row_to_message(row)
+      message.acks.append(reply)
+      self._conn.execute(
+        "UPDATE messages SET acks_json = ?, replies_seen = 0, status = 'acked', modified_at = ? WHERE id = ?",
+        (json.dumps(message.acks), now, msg_id),
+      )
+      message.status = "acked"
+      message.replies_seen = False
+      message.modified_at = now
+      return message
+
+  def mark_message_seen(self, msg_id: str, now: str) -> Message:
+    """Mark delivery without writing a stale reply list."""
+    with self._lock, self._conn:
+      self._conn.execute(
+        "UPDATE messages SET status = 'seen', modified_at = ? WHERE id = ? AND status = 'sent'",
+        (now, msg_id),
+      )
+      row = self._conn.execute(
+        "SELECT * FROM messages WHERE id = ?", (msg_id,)
+      ).fetchone()
+      if row is None:
+        raise KeyError(f"Unknown message ID: {msg_id}")
+      return self._row_to_message(row)
+
+  def mark_replies_seen(self, msg_id: str, revision: str) -> bool:
+    """Mark replies seen only if the rendered revision is still current."""
+    with self._lock, self._conn:
+      self._conn.execute("BEGIN IMMEDIATE")
+      row = self._conn.execute(
+        "SELECT acks_json FROM messages WHERE id = ?", (msg_id,)
+      ).fetchone()
+      if row is None:
+        raise KeyError(f"Unknown message ID: {msg_id}")
+      raw = row["acks_json"] or "[]"
+      canonical = json.dumps(json.loads(raw))
+      actual = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+      if not hmac.compare_digest(actual, revision):
+        return False
+      self._conn.execute("UPDATE messages SET replies_seen = 1 WHERE id = ?", (msg_id,))
+      return True
 
   def get_task(self, task_id: str) -> Task | None:
     with self._lock:
@@ -376,6 +436,7 @@ class SqliteStore:
       parent_ids=[str(item) for item in json.loads(parent_ids_json or "[]")],
       status=str(row["status"]),
       acks=[str(item) for item in json.loads(row["acks_json"] or "[]")],
+      replies_seen=bool(row["replies_seen"]) if "replies_seen" in keys else False,
       modified_at=str(row["modified_at"]),
     )
 

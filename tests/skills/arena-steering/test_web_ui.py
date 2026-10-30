@@ -425,6 +425,9 @@ def test_composer_upload_drop_expand_assets() -> None:
   assert "readComposerDraft" in messages_js
   assert "writeComposerDraft" in messages_js
   assert "submittedDraft" in messages_js
+  assert "reply-seen-sentinel" in messages_js
+  assert "replies_revision" in messages_js
+  assert "seenAckCounts" not in messages_js
   assert COMPOSER_ATTACHMENTS_ID in messages_js
   assert ATTACH_FILE_ID in messages_js
   assert COMPOSER_EXPAND_ID in messages_js

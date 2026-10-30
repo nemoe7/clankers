@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `store.py`: Persist reply-seen flags with atomic revision checks.
+
 - `assets/messages-view.js`: Preserve unsent composer text in browser session storage.
 
 - `services.py`: Require at least one detail for new and updated tasks.

@@ -2510,3 +2510,9 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   object-fit: contain;
   user-select: none;
 }
+
+/* A visible end marker records a rendered reply list, not a reply count. */
+.reply-seen-sentinel {
+  display: block;
+  height: 1px;
+}

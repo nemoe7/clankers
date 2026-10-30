@@ -257,3 +257,87 @@ def test_store_wal_retry_stops_on_persistent_lock(
   with pytest.raises(sqlite3.OperationalError, match="database is locked"):
     SqliteStore(tmp_path / "locked.sqlite3")
   assert attempts == 1
+
+
+def test_reply_seen_revision_rejects_stale_views_and_survives_restart(tmp_path):
+  from arena_steering.services import MessageService
+
+  path = tmp_path / "replies.sqlite3"
+  first = SqliteStore(path)
+  second = SqliteStore(path)
+  messages = MessageService(first, first, first)
+  messages.send_message("Review", msg_id="aa1234")
+  messages.ack("aa1234", "First reply")
+  old = first.get_message("aa1234")
+  assert old is not None and not old.replies_seen
+  assert second.mark_replies_seen("aa1234", old.replies_revision)
+  assert first.get_message("aa1234").replies_seen
+  messages.ack("aa1234", "Second reply")
+  assert not second.mark_replies_seen("aa1234", old.replies_revision)
+  newest = second.get_message("aa1234")
+  assert newest is not None and not newest.replies_seen
+  assert second.mark_replies_seen("aa1234", newest.replies_revision)
+  first.close()
+  second.close()
+  reopened = SqliteStore(path)
+  assert reopened.get_message("aa1234").replies_seen
+  reopened.close()
+
+
+def test_concurrent_reply_and_seen_never_hide_the_new_reply(tmp_path):
+  from concurrent.futures import ThreadPoolExecutor
+  from threading import Barrier
+
+  from arena_steering.services import MessageService
+
+  path = tmp_path / "race.sqlite3"
+  first, second = SqliteStore(path), SqliteStore(path)
+  service = MessageService(first, first, first)
+  service.send_message("Review", msg_id="aa1234")
+  service.ack("aa1234", "Initial")
+  for index in range(10):
+    revision = first.get_message("aa1234").replies_revision
+    barrier = Barrier(2)
+
+    def mark(barrier=barrier, revision=revision):
+      barrier.wait()
+      return second.mark_replies_seen("aa1234", revision)
+
+    def reply(barrier=barrier, index=index):
+      barrier.wait()
+      service.ack("aa1234", f"Reply {index}")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+      futures = [pool.submit(mark), pool.submit(reply)]
+      for future in futures:
+        future.result()
+    assert not first.get_message("aa1234").replies_seen
+  first.close()
+  second.close()
+
+
+def test_reply_seen_migration_marks_legacy_replies_unseen(tmp_path):
+  import sqlite3
+
+  path = tmp_path / "legacy.sqlite3"
+  conn = sqlite3.connect(path)
+  conn.execute(
+    """CREATE TABLE messages (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, body TEXT NOT NULL,
+      hidden INTEGER NOT NULL DEFAULT 0, blocking INTEGER NOT NULL DEFAULT 1,
+      attachments_json TEXT NOT NULL DEFAULT '[]', parent_ids_json TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'sent', acks_json TEXT NOT NULL DEFAULT '[]', modified_at TEXT NOT NULL
+    )"""
+  )
+  conn.execute(
+    "INSERT INTO messages (id, body, status, acks_json, modified_at) VALUES (?, ?, ?, ?, ?)",
+    ("aa1234", "Legacy", "acked", '[ "Prior reply" ]', "2026-01-01T00:00:00Z"),
+  )
+  conn.commit()
+  conn.close()
+  store = SqliteStore(path)
+  message = store.get_message("aa1234")
+  assert message is not None and message.acks == ["Prior reply"]
+  assert not message.replies_seen
+  assert store.mark_replies_seen("aa1234", message.replies_revision)
+  store.close()
