@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `cli.py`, `services.py`: Block linked tasks while named runs are active.
+
 - `models.py`: Preserve distinct report-answer snapshots on linked tasks.
 
 - `app.js`: Preload report content on pointer or keyboard intent.

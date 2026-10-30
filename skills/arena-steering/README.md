@@ -75,7 +75,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer msg show ID` | Show a message and its acknowledgements and attachments. |
 | `steer tasks [-f] [-p PAGE]` | List upcoming tasks, or page through finished tasks with `-f`. |
 | `steer task ID` | Show a task, its details, and blocking state. |
-| `steer task new ID TITLE` | Create a task. Requires at least one `-d` detail. Options include `-T` type, `-s` status, `-S` scope, `-m` message, `-r` report, and `-k` dependency. |
+| `steer task new ID TITLE` | Create a task. Requires at least one `-d` detail. Options include `-T` type, `-s` status, `-S` scope, `-m` message, `-r` report, `-k` dependency, and `-g` gate. |
 | `steer task mod ID FIELD VALUE` | Update `status`, `title`, `type`, or `scope`. Use `deets`, `links`, or `deps` to add or remove details and links. |
 | `steer task unlink ID [TYPE] LINK` | Remove an inferred or explicit `msg`, `report`, or `task` link. |
 | `steer task rm ID` | Remove a task. |
@@ -89,7 +89,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer job-log -j JOB` or `steer job-log -r RUN` | Print a GitHub Actions log with `gh`. Supply exactly one ID. |
 | `steer worktree add NAME [-b BRANCH]` | Add a native Git worktree under `.worktrees/`. |
 | `steer worktree list`, `remove NAME`, or `prune` | List, remove, or prune worktrees. |
-| `steer run start NAME [--after NAME] -- COMMAND` | Start a detached named run. A dependency must exist and pass before its dependent starts. |
+| `steer run start [-t TASK] [-a NAME] NAME -- COMMAND` | Start a detached named run and optionally link it to a task. A dependency must exist and pass before its dependent starts. |
 | `steer run logs NAME [-n LINES]` | Show run status and log tail. |
 | `steer run pr-checks [-n NUMBER]` | Start a detached `gh pr checks --watch` run. |
 
@@ -107,7 +107,7 @@ Use `python skills/arena-steering/scripts/steer` in place of `steer` in the tabl
 - On upgrade, linked historical answers are backfilled. Legacy answers use their last recorded modification time and current field labels when original metadata is unavailable.
 - Removing a task removes its dependency links from other tasks.
 - Use `steer task mod ID deets TEXT` to append a detail and `steer task mod ID deets rm NUMBER` to remove one. Detail numbers are displayed from 1.
-- Use `steer task mod ID links [msg|report|task] LINK` to add a link. Use `steer task mod ID links rm TYPE LINK` to remove one, or `steer task mod ID deps [rm] TASK` for dependencies.
+- Use `steer task mod ID links [msg|report|task|gate] LINK` to add a link. Use `steer task mod ID links rm TYPE LINK` to remove one, or `steer task mod ID deps [rm] TASK` for dependencies.
 - Message IDs use six lowercase hexadecimal characters. Parent IDs are deduplicated in order and must name existing messages.
 - Blocking messages move from `sent` to `seen` to `acked`. Non-blocking messages need no acknowledgement.
 - An acknowledgement contains nonempty Markdown. Repeated acknowledgements append replies.
@@ -121,6 +121,10 @@ Use `python skills/arena-steering/scripts/steer` in place of `steer` in the tabl
 ## Runs and worktrees
 
 Run names use letters, digits, dots, underscores, and hyphens and start with a letter or digit. Active duplicate names and missing dependencies are rejected. If a dependency fails, the waiting run exits with code 125 without starting its command.
+
+A linked gate blocks a task while its run is active. A stopped run unblocks the task even if it failed. Review the verdict with `run logs`. A missing run is not active.
+
+The task view refreshes linked gate state while open.
 
 Run records, logs, and exit files live under the state directory's `runs/` folder. `run logs` defaults to 50 lines. A completed name can be reused. `poll` waits up to 1,799 seconds, while the HTTP poll accepts a `timeout` query parameter capped at the same limit.
 
@@ -234,7 +238,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Inbox | Read and poll, note history, quiet notes, seen receipts, and acknowledgement receipts | Read and poll, message history, hidden messages, non-blocking messages, and acknowledgement replies | Names and paging differ. |
 | Message composer | Markdown preview, staging, paste, drop, expansion, reply links, search, and jumps | Preview, staging, paste, drop, expansion, multi-parent replies, search, and jumps | Both use the same paste thresholds and Ctrl+Shift+V bypass, protect Enter during IME composition, and leave Enter to the textarea on coarse-pointer devices. |
 | Message extras | Slash commands, reference navigation, and persisted reply-seen counts | Reference navigation, multi-parent replies, and persisted boolean reply receipts | V2 omits slash commands and does not store or show unread-reply counts. |
-| Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report and dependency blocking, details, search, and filters | Both require task details. V2 intentionally omits drag reorder. Both retain answer snapshots. V2 creates tasks and acknowledges their targets atomically. |
+| Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report, dependency, and running-gate blocking, details, search, and filters | Both require task details. V2 intentionally omits drag reorder. Both retain answer snapshots. V2 creates tasks and acknowledges their targets atomically. |
 | Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Multiple-answer delivery has the defect above. |
 | Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal | No pin, visibility-state, worker answer, or forward routes. Guards and republish contract differ. |
 | Report publication | Local image embedding, diff marker validation, optional submission format, and publication verification | Markdown publication and field parsing | No matching image embedding, marker-validation flag, schema option, or explicit rendered verification step in the CLI. |
@@ -242,7 +246,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | State recovery | Import, compare, save, restore, clear, size status, clean, and userscript autosave | SQLite persists normal state | No matching state-management or userscript-autosave CLI commands. Backups do not imply attachment bytes are preserved. |
 | Downloads | Browser download queue, approval for agent requests, retries, and optional proxy fallback | Upload staging and static attachment serving | No Downloads tab or fetch-job routes. |
 | Multi-session | Board, allowlist, main session, heartbeat, messages, attachments, and wake | Native Git worktrees | No Board tab or board routes. Worktrees do not replace coordination. |
-| Runs | Detached named runs, dependency gating, task links, and later verdict notifications | Detached named runs, logs, dependencies, and PR check watching | No v1 task-link option or later CLI verdict notices. |
+| Runs | Detached named runs, dependency gating, task links, and later verdict notifications | Detached named runs, task links, logs, dependencies, and PR check watching | Both block linked tasks while a run is active. V2 does not provide later CLI verdict notices. |
 | Worktrees | Tracked detached worktrees with gate and allowed-patch collection | Native Git add, list, remove, and prune under `.worktrees` | Different contract from gated patch collection. |
 | Rename and unlink | Rename note, answer, task, or report. Unlink submissions from task answer lists | Rename task or report and unlink task links by ID and type | Note and answer rename and v1 submission-unlink semantics differ. |
 | GitHub helpers | PR update with verification and job-log URL resolution, including proxy fallback | PR update with verification and job-log output via `gh` | Log return format and proxy fallback differ. |

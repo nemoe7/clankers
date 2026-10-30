@@ -227,6 +227,7 @@ class Task:
     report_ids: list[str] | None = None,
     task_ids: list[str] | None = None,
     deps: list[str] | None = None,
+    gate_names: list[str] | None = None,
     answer_snapshots: list[dict[str, Any]] | None = None,
     modified_at: str = "",
   ) -> None:
@@ -279,12 +280,20 @@ class Task:
     cleaned_msgs = _dedupe_strings([str(x) for x in (resolved_msgs or [])])
     cleaned_reports = _dedupe_strings([str(x) for x in (resolved_reports or [])])
     cleaned_tasks = _dedupe_strings([str(x) for x in (resolved_tasks or [])])
+    resolved_gates = (
+      gate_names if gate_names is not None else raw_links.get("gate_names", [])
+    )
+    cleaned_gates = _dedupe_strings([str(x) for x in (resolved_gates or [])])
+    for gate in cleaned_gates:
+      if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", gate):
+        raise ValueError(f"Invalid gate name: {gate!r}")
     if self.id in cleaned_tasks:
       raise ValueError(f"Task {self.id!r} cannot depend on itself")
     self.links = {
       "msg_ids": cleaned_msgs,
       "report_ids": cleaned_reports,
       "task_ids": cleaned_tasks,
+      "gate_names": cleaned_gates,
     }
     self.answer_snapshots = [dict(item) for item in (answer_snapshots or [])]
     self.modified_at = str(modified_at or "")
@@ -317,6 +326,10 @@ class Task:
     self.links["task_ids"] = cleaned
 
   @property
+  def gate_names(self) -> list[str]:
+    return self.links["gate_names"]
+
+  @property
   def deps(self) -> list[str]:
     return self.links["task_ids"]
 
@@ -336,6 +349,7 @@ class Task:
         "msg_ids": list(self.msg_ids),
         "report_ids": list(self.report_ids),
         "task_ids": list(self.task_ids),
+        "gate_names": list(self.gate_names),
       },
       "answer_snapshots": [dict(item) for item in self.answer_snapshots],
       "modified_at": self.modified_at,
@@ -363,6 +377,9 @@ class Task:
         [str(item) for item in data["task_ids"]] if "task_ids" in data else None
       ),
       deps=([str(item) for item in data["deps"]] if "deps" in data else None),
+      gate_names=(
+        [str(item) for item in data["gate_names"]] if "gate_names" in data else None
+      ),
       answer_snapshots=[dict(item) for item in data.get("answer_snapshots", [])],
       modified_at=str(data.get("modified_at", "")),
     )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 from http import HTTPStatus
 from pathlib import Path
 
@@ -1247,4 +1248,143 @@ def test_message_ack_route_returns_report_answer(tmp_path: Path) -> None:
   assert payload["answer"]["id"] == answer.id
   assert payload["answer"]["acks"] == ["Read"]
   assert app.reports.get_report("decision").answers[0].status == "acked"
+  store.close()
+
+
+def test_gate_links_block_only_while_run_is_active() -> None:
+  state_dir = cli.resolve_state_dir()
+  state_dir.mkdir(parents=True)
+  runs = state_dir / "runs"
+  runs.mkdir()
+  marker = runs / "verify.exit"
+  (runs / "verify.json").write_text(json.dumps({"exit_path": str(marker)}))
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  app = SteeringApp(store)
+  status, created = app.dispatch(
+    "POST",
+    "/tasks",
+    {
+      "id": "gate-task",
+      "title": "Gate task",
+      "details": ["Check it"],
+      "gate_names": ["verify"],
+    },
+  )
+  assert status == HTTPStatus.CREATED and created["task"]["blocked"]
+  status, patched = app.dispatch("PATCH", "/tasks/gate-task", {"scope": "code"})
+  assert status == HTTPStatus.OK and patched["task"]["links"]["gate_names"] == [
+    "verify"
+  ]
+  code, output, _ = _run_cli(state_dir, "task", "gate-task")
+  assert code == 0 and "Gates: verify" in output and "blocked" in output.lower()
+  for result in ("1", "0"):
+    marker.write_text(result)
+    assert not app.dispatch("GET", "/tasks/gate-task")[1]["task"]["blocked"]
+  store.close()
+  reopened = SqliteStore(state_dir / "steering-v2.sqlite3")
+  assert reopened.get_task("gate-task").gate_names == ["verify"]
+  reopened.close()
+  assert (
+    _run_cli(state_dir, "task", "mod", "gate-task", "links", "rm", "gate", "verify")[0]
+    == 0
+  )
+
+
+def test_run_start_rolls_back_link_on_launch_failure(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  state_dir = cli.resolve_state_dir()
+  assert (
+    _run_cli(state_dir, "task", "new", "gate-task", "Gate task", "-d", "Check it")[0]
+    == 0
+  )
+
+  def fail_start(*_args: object, **_kwargs: object) -> int:
+    raise ValueError("launch failed")
+
+  monkeypatch.setattr(cli, "_start_detached_run", fail_start)
+  assert (
+    _run_cli(state_dir, "run", "start", "-t", "gate-task", "verify", "--", "true")[0]
+    != 0
+  )
+  store, _, tasks, _ = cli.open_services(state_dir)
+  assert tasks.get_task("gate-task")[0].gate_names == []
+  store.close()
+
+
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_linked_run_blocks_until_verdict(tmp_path: Path, exit_code: int) -> None:
+  import sys
+  import time
+
+  state_dir = cli.resolve_state_dir()
+  release = tmp_path / "release"
+  assert (
+    _run_cli(state_dir, "task", "new", "gate-task", "Gate task", "-d", "Check it")[0]
+    == 0
+  )
+  command = (
+    "import pathlib,time,sys; p=pathlib.Path(sys.argv[1]); "
+    "exec('while not p.exists():\\n time.sleep(0.02)'); "
+    "print('gate verdict'); sys.exit(int(sys.argv[2]))"
+  )
+  code, _, err = _run_cli(
+    state_dir,
+    "run",
+    "start",
+    "-t",
+    "gate-task",
+    "verify",
+    "--",
+    sys.executable,
+    "-c",
+    command,
+    str(release),
+    str(exit_code),
+  )
+  assert code == 0, err
+  try:
+    store, _, tasks, _ = cli.open_services(state_dir)
+    assert tasks.get_task("gate-task")[1]
+    store.close()
+  finally:
+    release.touch()
+  record = json.loads((state_dir / "runs" / "verify.json").read_text())
+  marker = Path(record["exit_path"])
+  deadline = time.monotonic() + 10
+  while not marker.exists() and time.monotonic() < deadline:
+    time.sleep(0.02)
+  assert marker.read_text().strip() == str(exit_code)
+  store, _, tasks, _ = cli.open_services(state_dir)
+  assert not tasks.get_task("gate-task")[1]
+  store.close()
+  code, output, _ = _run_cli(state_dir, "run", "logs", "verify")
+  assert code == 0 and "gate verdict" in output and f"exit {exit_code}" in output
+
+
+def test_gate_links_survive_concurrent_task_edits() -> None:
+  from concurrent.futures import ThreadPoolExecutor
+  from threading import Barrier
+
+  state_dir = cli.resolve_state_dir()
+  assert (
+    _run_cli(state_dir, "task", "new", "gate-task", "Gate task", "-d", "Check it")[0]
+    == 0
+  )
+  barrier = Barrier(2)
+
+  def update(gate: bool) -> None:
+    store, _, tasks, _ = cli.open_services(state_dir)
+    barrier.wait()
+    if gate:
+      tasks.mod_links_add("gate-task", "verify", link_type="gate")
+    else:
+      tasks.mod_scalar("gate-task", "scope", "code")
+    store.close()
+
+  with ThreadPoolExecutor(max_workers=2) as pool:
+    list(pool.map(update, [True, False]))
+  store, _, tasks, _ = cli.open_services(state_dir)
+  task, _ = tasks.get_task("gate-task")
+  assert task.gate_names == ["verify"] and task.scope == "code"
   store.close()

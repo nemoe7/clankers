@@ -67,6 +67,13 @@ class MessageRepository(Protocol):
     """Set the receipt if the supplied reply revision is current."""
 
 
+class GateStatus(Protocol):
+  """Read the current state of named gates."""
+
+  def is_running(self, name: str) -> bool:
+    """Return whether the named gate is running."""
+
+
 class TaskRepository(Protocol):
   """Persistence port for the mutable task queue."""
 

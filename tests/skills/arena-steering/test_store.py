@@ -76,11 +76,13 @@ def test_task_validation_and_detail_limit() -> None:
     "msg_ids": ["a1b2c3"],
     "report_ids": ["steering-spec"],
     "task_ids": ["prep-task"],
+    "gate_names": [],
   }
   assert task.to_dict()["links"] == {
     "msg_ids": ["a1b2c3"],
     "report_ids": ["steering-spec"],
     "task_ids": ["prep-task"],
+    "gate_names": [],
   }
   assert Task.from_dict(task.to_dict()) == task
 

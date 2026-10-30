@@ -27,6 +27,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse, urlsplit
 
 from . import __version__
+from .gates import FileGateStatus
 from .markdown import render_markdown
 from .markdown_fields import parse_report_markdown
 from .models import Attachment
@@ -137,7 +138,13 @@ class SteeringApp:
     self.assets_dir = Path(assets_dir) if assets_dir is not None else default_assets
     self.repo_name = repo_name or _detect_repo_name(store)
     self.messages = MessageService(store, store, store)
-    self.tasks = TaskService(store, store)
+    self.tasks = TaskService(
+      store,
+      store,
+      gates=FileGateStatus(Path(store.db_path).parent)
+      if store.db_path != ":memory:"
+      else None,
+    )
     self.reports = ReportService(
       store,
       store,
@@ -742,6 +749,7 @@ class SteeringApp:
       report_ids=[str(x) for x in body["report_ids"]] if "report_ids" in body else None,
       task_ids=[str(x) for x in body["task_ids"]] if "task_ids" in body else None,
       deps=[str(x) for x in body["deps"]] if "deps" in body else None,
+      gate_names=[str(x) for x in body["gate_names"]] if "gate_names" in body else None,
     )
     _, blocked = self.tasks.get_task(task.id)
     return (int(HTTPStatus.CREATED), {"task": task.to_dict(blocked=blocked)})
