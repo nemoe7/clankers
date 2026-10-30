@@ -69,7 +69,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer msg show ID` | Show a message and its acknowledgements and attachments. |
 | `steer tasks [-f] [-p PAGE]` | List upcoming tasks, or page through finished tasks with `-f`. |
 | `steer task ID` | Show a task, its details, and blocking state. |
-| `steer task new ID TITLE` | Create a task. Options include `-T` type, `-s` status, `-S` scope, repeatable `-d` details, `-m` message, `-r` report, and `-k` dependency. |
+| `steer task new ID TITLE` | Create a task. Requires at least one `-d` detail. Options include `-T` type, `-s` status, `-S` scope, `-m` message, `-r` report, and `-k` dependency. |
 | `steer task mod ID FIELD VALUE` | Update `status`, `title`, `type`, or `scope`. Use `deets`, `links`, or `deps` to add or remove details and links. |
 | `steer task unlink ID [TYPE] LINK` | Remove an inferred or explicit `msg`, `report`, or `task` link. |
 | `steer task rm ID` | Remove a task. |
@@ -93,7 +93,9 @@ Use `python skills/arena-steering/scripts/steer` in place of `steer` in the tabl
 
 - Task types are `report`, `code`, `docs`, `ops`, and `misc`. Statuses are `upcoming`, `in_progress`, `blocked`, and `finished`.
 - New tasks default to `code` and `upcoming`.
-- Each detail must be nonempty and at most 120 characters. Dependencies must exist, and self-dependencies and cycles are rejected.
+- New and updated tasks require at least one nonempty detail of at most 120 characters.
+- Existing empty tasks remain readable but need a detail on their next update.
+- Dependencies must exist. Self-dependencies and cycles are rejected.
 - Removing a task removes its dependency links from other tasks.
 - Use `steer task mod ID deets TEXT` to append a detail and `steer task mod ID deets rm NUMBER` to remove one. Detail numbers are displayed from 1.
 - Use `steer task mod ID links [msg|report|task] LINK` to add a link. Use `steer task mod ID links rm TYPE LINK` to remove one, or `steer task mod ID deps [rm] TASK` for dependencies.
@@ -217,7 +219,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Inbox | Read and poll, note history, quiet notes, seen receipts, and acknowledgement receipts | Read and poll, message history, hidden messages, non-blocking messages, and acknowledgement replies | Names and paging differ. |
 | Message composer | Markdown preview, staging, paste, drop, expansion, reply links, search, and jumps | Preview, staging, paste, drop, expansion, multi-parent replies, search, and jumps | Both use the same paste thresholds and Ctrl+Shift+V bypass, protect Enter during IME composition, and leave Enter to the textarea on coarse-pointer devices. |
 | Message extras | Slash commands, reference navigation, and server-persisted reply-seen counts | Parent chips jump to loaded messages. New-reply counts stay in browser memory. | V2 intentionally omits slash commands and does not persist message reply-seen counts. |
-| Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report and dependency blocking, details, search, and filters | No drag reorder. Task commands differ, answer IDs can be stored as message links, and acknowledgement plus task creation is not atomic. |
+| Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report and dependency blocking, details, search, and filters | Both require task details. V2 intentionally omits drag reorder. Answer IDs can be stored as message links, and acknowledgement plus task creation is not atomic. |
 | Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Multiple-answer delivery has the defect above. |
 | Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal | No pin, visibility-state, worker answer, or forward routes. Guards and republish contract differ. |
 | Report publication | Local image embedding, diff marker validation, optional submission format, and publication verification | Markdown publication and field parsing | No matching image embedding, marker-validation flag, schema option, or explicit rendered verification step in the CLI. |

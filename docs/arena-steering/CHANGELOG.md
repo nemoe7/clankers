@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `services.py`: Require at least one detail for new and updated tasks.
+
 - `assets/messages-view.js`: Leave Enter to the textarea on coarse-pointer devices.
 
 - `assets/style.css`: Use the existing positive token for success icons.

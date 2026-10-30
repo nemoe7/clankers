@@ -425,6 +425,7 @@ class TaskService:
       deps=list(deps) if deps is not None else None,
       modified_at=now,
     )
+    self._validate_details(task)
     queue = self._tasks.list_tasks()
     self._validate_deps_exist(task, queue)
     ordered = self._enforce_dependency_order([*queue, task])
@@ -465,6 +466,7 @@ class TaskService:
       links=target.links,
       modified_at=now,
     )
+    self._validate_details(renamed)
     updated_queue: list[Task] = []
     for item in queue:
       if item.id == old_task_id:
@@ -704,6 +706,7 @@ class TaskService:
       links=merged_links,
       modified_at=self._clock.now_iso(),
     )
+    self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
     new_queue = [updated if item.id == task_id else item for item in queue]
     if position is not None:
@@ -723,9 +726,15 @@ class TaskService:
     raise KeyError(f"Unknown task ID: {task_id}")
 
   def _replace_in_queue(self, queue: list[Task], updated: Task) -> None:
+    self._validate_details(updated)
     replaced = [updated if item.id == updated.id else item for item in queue]
     ordered = self._enforce_dependency_order(replaced)
     self._tasks.save_task_queue(ordered)
+
+  @staticmethod
+  def _validate_details(task: Task) -> None:
+    if not task.details:
+      raise ValueError("Task requires at least one detail")
 
   @staticmethod
   def _validate_deps_exist(task: Task, existing_queue: list[Task]) -> None:

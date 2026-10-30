@@ -102,8 +102,8 @@ def test_task_service_mutable_dependency_queue_and_derived_blocking() -> None:
   tasks = TaskService(store, store)
   reports = ReportService(store, store)
 
-  tasks.create_task("task-b", "Build consumer")
-  tasks.create_task("task-a", "Build foundation")
+  tasks.create_task("task-b", "Build consumer", details=["Build consumer."])
+  tasks.create_task("task-a", "Build foundation", details=["Build foundation."])
   tasks.mod_deps_add("task-b", "task-a")
 
   ordered = tasks.list_tasks(include_finished=True)
@@ -179,4 +179,26 @@ def test_report_ack_seen_lifecycle() -> None:
     "ack-doc", {"we-should-use-this-mode": "Manual"}, answer_id="dead03"
   )
   assert reports.get_report("ack-doc").ack_seen is False
+  store.close()
+
+
+def test_task_details_required_for_create_and_legacy_update(tmp_path) -> None:
+  from arena_steering.models import Task
+
+  path = tmp_path / "legacy.sqlite3"
+  store = SqliteStore(path)
+  store.save_task_queue([Task(id="legacy-task", title="Legacy", details=[])])
+  store.close()
+  store = SqliteStore(path)
+  tasks = TaskService(store, store)
+  assert tasks.get_task("legacy-task")[0].details == []
+  with pytest.raises(ValueError, match="at least one detail"):
+    tasks.create_task("empty-task", "Empty")
+  with pytest.raises(ValueError, match="at least one detail"):
+    tasks.patch_task("legacy-task", {"title": "Changed"})
+  assert tasks.get_task("legacy-task")[0].title == "Legacy"
+  tasks.mod_deets("legacy-task", "Add a detail")
+  with pytest.raises(ValueError, match="at least one detail"):
+    tasks.mod_deets_rm("legacy-task", 1)
+  assert tasks.get_task("legacy-task")[0].details == ["Add a detail"]
   store.close()
