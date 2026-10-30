@@ -240,11 +240,16 @@ export function renderReportsView(container, state, handlers) {
           </article>
           ${
             hasFields
-              ? `<div class="report-submit-row"><button type="submit" class="btn btn-primary">${SEND_SVG} Submit Answers</button></div>`
+              ? `<div class="report-submit-row"><button type="submit" id="report-submit" class="btn btn-primary">${SEND_SVG} Submit Answers</button></div>`
               : ""
           }
         </form>
       </div>
+      ${
+        hasFields
+          ? `<button type="button" id="report-submit-float" class="btn btn-primary report-submit-float">${SEND_SVG} Submit Answers</button>`
+          : ""
+      }
       <button
         type="button"
         id="report-scroll-top"
@@ -416,6 +421,15 @@ export function renderReportsView(container, state, handlers) {
   });
 
   const form = container.querySelector("#report-answer-form");
+  const submitBtn = container.querySelector("#report-submit");
+  const submitFloat = container.querySelector("#report-submit-float");
+  submitFloat?.addEventListener("click", () => {
+    if (typeof form?.requestSubmit === "function") {
+      form.requestSubmit(submitBtn || undefined);
+    } else {
+      submitBtn?.click();
+    }
+  });
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const values = {};
