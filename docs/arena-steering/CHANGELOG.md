@@ -8,6 +8,10 @@ This log has no Unreleased section.
 
 ## [2.1.0] - 2026-10-30
 
+### Removed
+
+- `scripts/hooks`: Drop the hook wrapper, because the trap line calls `steer gate` alone.
+
 ### Added
 
 - `cli.py`, `services.py`: Unlink one stored answer snapshot from every task that holds it, keeping the answer and its receipts.
@@ -42,7 +46,7 @@ This log has no Unreleased section.
 - `scripts/arena_steering/store.py`: Export, stamp, and merge stored rows.
 - `scripts/arena_steering/cli.py`: Print a one-line restore notice when a merge changed state.
 - `scripts/arena_steering/cli.py`: Register `steer gate` and `steer skills`.
-- `scripts/hooks/gate.sh`: Ship the pre-command hook wrapper for the inbox gate.
+- `scripts/arena_steering/cli.py`: Add the `gate` trap target, with no wrapper script.
 - `scripts/arena_steering/cli.py`: Add `worktree collect` to print a worktree patch against its merge base.
 - `assets/app.js`: Pinch the image viewer with two pointers.
 - `scripts/arena_steering/server.py`: Stamp finished runs into `data_version` so clients refresh on completion.
