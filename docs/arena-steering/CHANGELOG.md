@@ -16,6 +16,12 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `assets/app.js`: Drop the three-second task refresh, because finished runs now push a change event.
+
+- `scripts/arena_steering/services.py`: Keep survey answers, results, and the check stamp in memory instead of SQLite.
+
+- `scripts/arena_steering/cli.py`: Post survey answers to the running server recorded in `server.json`.
+
 - `assets/app.js`: Pan the image viewer without a native image drag and close it from the backdrop.
 
 - `assets/app.js`: Keep diagram colors and scale in the image viewer.
@@ -34,6 +40,10 @@ This log has no Unreleased section.
 - `scripts/hooks/gate.sh`: Ship the pre-command hook wrapper for the inbox gate.
 - `scripts/arena_steering/cli.py`: Add `worktree collect` to print a worktree patch against its merge base.
 - `assets/app.js`: Pinch the image viewer with two pointers.
+- `scripts/arena_steering/server.py`: Stamp finished runs into `data_version` so clients refresh on completion.
+- `scripts/arena_steering/cli.py`: Record the listening port in `server.json` while `steer serve` runs.
+- `assets/markdown.js`: Nest list items and render horizontal rules.
+- `assets/style.css`: Indent task items by 2ch and style horizontal rules.
 
 ### Fixed
 

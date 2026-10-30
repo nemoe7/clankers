@@ -263,8 +263,8 @@ def _set_demo_timestamps(store: SqliteStore) -> None:
     )
 
 
-def reseed_demo_store(store: SqliteStore) -> None:
-  """Clear and populate exhaustive Messages, Tasks, Reports, Survey, and media assets."""
+def reseed_demo_store(store: SqliteStore) -> SteeringApp:
+  """Clear and populate Messages, Tasks, Reports, Survey, and media assets."""
   with store._lock, store._conn as conn:
     conn.execute("DELETE FROM messages")
     conn.execute("DELETE FROM tasks")
@@ -957,16 +957,13 @@ steer poll
   )
 
   _set_demo_timestamps(store)
+  return app
 
 
 def seed_demo_store(store: SqliteStore) -> SteeringApp:
-  """Populate realistic Inbox, Tasks, and Reports records for UI inspection."""
-  reseed_demo_store(store)
-  store._seeding_demo = True  # type: ignore[attr-defined]
-  try:
-    return SteeringApp(store)
-  finally:
-    store._seeding_demo = False  # type: ignore[attr-defined]
+  """Populate Inbox, Tasks, Reports, and in-memory survey answers for UI inspection."""
+  # The survey lives in memory only, so the served app must be the one that answered it.
+  return reseed_demo_store(store)
 
 
 def main(argv: list[str] | None = None) -> int:

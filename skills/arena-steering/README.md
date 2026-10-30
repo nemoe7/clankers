@@ -86,7 +86,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer report pub FILE -i ID -t TITLE [-u]` | Publish and verify a UTF-8 Markdown report. `-u` allows unparsed strike markers. |
 | `steer report rm ID` | Dismiss one report. Use `--stale` to remove stale reports. |
 | `steer rename OLD NEW` | Rename a task or report and update its links. |
-| `steer survey` | Show the survey and submission template. Use `-i` for the smallest image, `--template` for the template, `-f FILE` for a submission, or `--interrupt` to request a check. |
+| `steer survey` | Show the survey and submission template. Use `-i` for the smallest image, `--template` for the template, `-f FILE` for a submission, or `--interrupt` to request a check. Submissions go to the running server when one is recorded. |
 | `steer pr-update -n NUMBER -t TITLE -f FILE` | Update a pull request with `gh`, then verify its title and body. |
 | `steer job-log -j JOB` or `steer job-log -r RUN` | Print a GitHub Actions log with `gh`. Supply exactly one ID. |
 | `steer worktree add NAME [-b BRANCH]` | Add a native Git worktree under `.worktrees/`. |
@@ -252,7 +252,9 @@ WebSocket RPC requests carry an `id`, `method`, `path`, and JSON-encoded string 
 
 The server sends `change`, `reload`, `heartbeat`, and `report.acked` events. Respond to a heartbeat with `{"type":"pong"}`. Messages are limited to 16 MiB, and an idle connection closes after 35 seconds.
 
-The survey accepts a graded JSON array, a JSON array string, or a nonempty key-value object. Array submissions use the schema in [`references/survey.json`](references/survey.json). Submitting clears the bible-check interrupt. The CLI also accepts `key=value` entries or a JSON array.
+A survey takes a graded JSON array, a JSON array string, or a nonempty key-value object. Array submissions follow [`references/survey.json`](references/survey.json). Answers, graded results, and a check stamp live only in server memory, so a restart clears them.
+
+`steer serve` writes its port to `server.json` inside a state directory, and the CLI posts submissions there. When no server answers, grading happens in that CLI process. Submitting clears a bible-check interrupt.
 
 The server rejects paths that escape the relevant static directory. The v2 assets include Mermaid and its license.
 
