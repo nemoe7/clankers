@@ -422,6 +422,9 @@ def test_static_asset_contract_assets() -> None:
 
 def test_composer_upload_drop_expand_assets() -> None:
   messages_js = (ASSETS_DIR / "messages-view.js").read_text(encoding="utf-8")
+  assert "readComposerDraft" in messages_js
+  assert "writeComposerDraft" in messages_js
+  assert "submittedDraft" in messages_js
   assert COMPOSER_ATTACHMENTS_ID in messages_js
   assert ATTACH_FILE_ID in messages_js
   assert COMPOSER_EXPAND_ID in messages_js

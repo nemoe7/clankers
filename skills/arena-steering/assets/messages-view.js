@@ -6,6 +6,7 @@ import {
   renderMarkdownBlock,
 } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
+import { readComposerDraft, writeComposerDraft } from "./state.js";
 
 const EYE_OPEN_SVG = `<svg class="lucide lucide-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
 const EYE_CLOSED_SVG = `<svg class="lucide lucide-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path><path d="m2 2 20 20"></path></svg>`;
@@ -23,6 +24,7 @@ let pinnedToBottom = true;
 let skipPollFeedbackUntil = 0;
 let visibleMessageCount = MESSAGE_PAGE_SIZE;
 let loadingMoreMessages = false;
+let draftRevision = 0;
 
 function stateDotForStatus(status) {
   if (status === "acked") return "said";
@@ -109,7 +111,7 @@ export function renderMessagesView(container, state, handlers) {
   const searchSelEnd = searchWasFocused ? activeEl.selectionEnd : null;
   const prevMsgEl = container.querySelector("#msg");
   const draftWasFocused = Boolean(prevMsgEl && activeEl === prevMsgEl);
-  const draftValue = prevMsgEl?.value || "";
+  const draftValue = prevMsgEl?.value ?? readComposerDraft();
   const draftSelStart = draftWasFocused ? prevMsgEl.selectionStart : null;
   const draftSelEnd = draftWasFocused ? prevMsgEl.selectionEnd : null;
 
@@ -612,6 +614,10 @@ export function renderMessagesView(container, state, handlers) {
       }
     }
   }
+  msgEl?.addEventListener("input", () => {
+    draftRevision += 1;
+    writeComposerDraft(msgEl.value);
+  });
   const previewBtn = container.querySelector("#preview-msg");
   const draftPreview = container.querySelector("#draft-preview");
 
@@ -687,15 +693,25 @@ export function renderMessagesView(container, state, handlers) {
   const form = container.querySelector("#form");
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const body = (msgEl?.value || "").trim();
+    const submittedDraft = msgEl?.value || "";
+    const submittedRevision = draftRevision;
+    const body = submittedDraft.trim();
     if (!body && !composerAttachments.length) return;
     pinnedToBottom = true;
-    await handlers.onSendMessage({
-      body,
-      parent_ids: [...selectedReplyParentIds],
-      attachments: [...composerAttachments],
-    });
+    try {
+      await handlers.onSendMessage({
+        body,
+        parent_ids: [...selectedReplyParentIds],
+        attachments: [...composerAttachments],
+      });
+    } catch (error) {
+      console.error(error);
+      return;
+    }
     const currentMsgEl = container.querySelector("#msg");
-    if (currentMsgEl) currentMsgEl.value = "";
+    if (draftRevision === submittedRevision && (!currentMsgEl || currentMsgEl.value === submittedDraft)) {
+      writeComposerDraft("");
+      if (currentMsgEl && currentMsgEl.value === submittedDraft) currentMsgEl.value = "";
+    }
   });
 }
