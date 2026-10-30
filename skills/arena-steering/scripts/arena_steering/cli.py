@@ -96,7 +96,7 @@ def main(
   poll_p = sub.add_parser("poll", help="Wait for pending messages or skip_poll.")
 
   ack_p = sub.add_parser("ack", help="Acknowledge a message or report answer.")
-  ack_p.add_argument("parts", nargs="+", help="[<id>] <markdown>")
+  ack_p.add_argument("parts", nargs="+", help="[<id> ...] <markdown>")
   ack_p.add_argument("-i", "--id", dest="task_id", default=None)
   ack_p.add_argument("-t", "--title", dest="task_title", default=None)
   ack_p.add_argument("-T", "--type", dest="task_type", default="code")
@@ -313,21 +313,21 @@ def _run_ack(
   out: TextIO,
 ) -> int:
   parts: list[str] = parsed.parts
-  if len(parts) == 1:
-    target_id = None
-    markdown = parts[0]
-  elif len(parts) == 2 and MESSAGE_ID_RE.fullmatch(parts[0]):
-    target_id = parts[0]
-    markdown = parts[1]
-  else:
-    raise ValueError("Usage: steer ack [<6-char-hex-id>] '<markdown>'")
+  target_ids: list[str | None] = list(parts[:-1]) or [None]
+  markdown = parts[-1]
+  if any(
+    target is not None and not MESSAGE_ID_RE.fullmatch(target) for target in target_ids
+  ):
+    raise ValueError("Usage: steer ack [<6-char-hex-id> ...] '<markdown>'")
 
   created = None
-  if parsed.task_id:
-    if not parsed.task_title:
-      raise ValueError("Task creation on ack requires -t/--title")
-    with store.transaction():
-      target_type, target = messages.resolve_ack_target(target_id)
+  with store.transaction():
+    if parsed.task_id:
+      if len(target_ids) != 1:
+        raise ValueError("Task creation on ack requires one target")
+      if not parsed.task_title:
+        raise ValueError("Task creation on ack requires -t/--title")
+      target_type, target = messages.resolve_ack_target(target_ids[0])
       created = tasks.create_task(
         parsed.task_id,
         parsed.task_title,
@@ -337,10 +337,9 @@ def _run_ack(
         msg_ids=[target.id] if target_type == "message" else [],
         report_ids=[target.report_id] if target_type == "report_answer" else [],
       )
-      _, acked = messages.ack(target.id, markdown)
-  else:
-    _, acked = messages.ack(target_id, markdown)
-  print(f"ok {acked.id}", file=out)
+      target_ids = [target.id]
+    acked_ids = [messages.ack(target, markdown)[1].id for target in target_ids]
+  print(f"ok {' '.join(acked_ids)}", file=out)
   if created:
     _, blocked = tasks.get_task(created.id)
     _print_single_task(created, blocked, out)
