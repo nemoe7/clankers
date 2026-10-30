@@ -202,3 +202,82 @@ def test_task_details_required_for_create_and_legacy_update(tmp_path) -> None:
     tasks.mod_deets_rm("legacy-task", 1)
   assert tasks.get_task("legacy-task")[0].details == ["Add a detail"]
   store.close()
+
+
+def test_task_answer_snapshots_survive_report_removal_and_edits(tmp_path) -> None:
+  from io import StringIO
+
+  from arena_steering.cli import _print_single_task, _print_task_list
+
+  path = tmp_path / "snapshots.sqlite3"
+  store = SqliteStore(path)
+  reports = ReportService(store, store)
+  tasks = TaskService(store, store)
+  reports.publish_report(
+    "decision", "Original decision", "Choice? {#choice}\n- ( ) A\n- ( ) B\n"
+  )
+  tasks.create_task(
+    "work", "Do work", details=["Act on the answer"], report_ids=["decision"]
+  )
+  first = reports.submit_answer("decision", {"choice": "A"}, answer_id="ab0001")
+  reports.ack_answer("decision", first.id, "Read")
+  second = reports.submit_answer("decision", {"choice": "A"}, answer_id="ab0002")
+  reports.ack_answer("decision", second.id, "Read")
+  snapshots = tasks.get_task("work")[0].answer_snapshots
+  assert [item["id"] for item in snapshots] == [first.id, second.id]
+  assert all(item["fields"][0]["value"] == "A" for item in snapshots)
+  assert snapshots[0]["created_at"] == first.created_at
+  tasks.mod_scalar("work", "title", "Updated work")
+  tasks.mod_deets("work", "Another detail")
+  tasks.patch_task("work", {"scope": "test"})
+  tasks.rename_task("work", "renamed")
+  reports.remove_report("decision")
+  store.close()
+
+  reopened = SqliteStore(path)
+  task = reopened.get_task("renamed")
+  assert task is not None and task.answer_snapshots == snapshots
+  assert task.report_ids == []
+  out = StringIO()
+  _print_task_list([(task, False)], out)
+  _print_single_task(task, False, out)
+  text = out.getvalue()
+  assert first.id in text and second.id in text and "Original decision" in text
+  assert "Choice" in text and '"A"' in text and first.created_at in text
+  reopened.close()
+
+
+def test_existing_report_answers_are_snapshotted_when_linked(tmp_path) -> None:
+  store = SqliteStore(tmp_path / "link.sqlite3")
+  reports = ReportService(store, store)
+  tasks = TaskService(store, store)
+  reports.publish_report(
+    "decision", "Decision", "Choice? {#choice}\n- ( ) A\n- ( ) B\n"
+  )
+  answer = reports.submit_answer("decision", {"choice": "B"}, answer_id="cd0001")
+  reports.ack_answer("decision", answer.id, "Read")
+  tasks.create_task("work", "Do work", details=["Act on the answer"])
+  tasks.mod_links_add("work", "decision", link_type="report")
+  assert tasks.get_task("work")[0].answer_snapshots[0]["id"] == answer.id
+  store.close()
+
+
+def test_snapshot_keeps_original_report_labels_after_republish(tmp_path) -> None:
+  store = SqliteStore(tmp_path / "labels.sqlite3")
+  reports = ReportService(store, store)
+  tasks = TaskService(store, store)
+  reports.publish_report(
+    "decision", "Original title", "Original label? {#field}\n- ( ) A\n- ( ) B\n"
+  )
+  answer = reports.submit_answer("decision", {"field": "A"}, answer_id="ba1001")
+  reports.ack_answer("decision", answer.id, "Read")
+  reports.publish_report(
+    "decision", "New title", "New label? {#field}\n- ( ) A\n- ( ) B\n"
+  )
+  task = tasks.create_task(
+    "work", "Do work", details=["Review"], report_ids=["decision"]
+  )
+  assert task.answer_snapshots[0]["report_title"] == "Original title"
+  assert task.answer_snapshots[0]["fields"][0]["label"] == "Original label?"
+  assert task.answer_snapshots[0]["created_at"] == answer.created_at
+  store.close()

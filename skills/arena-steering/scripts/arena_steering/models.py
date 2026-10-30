@@ -210,6 +210,7 @@ class Task:
   scope: str
   details: list[str]
   links: dict[str, list[str]]
+  answer_snapshots: list[dict[str, Any]]
   modified_at: str
 
   def __init__(
@@ -226,6 +227,7 @@ class Task:
     report_ids: list[str] | None = None,
     task_ids: list[str] | None = None,
     deps: list[str] | None = None,
+    answer_snapshots: list[dict[str, Any]] | None = None,
     modified_at: str = "",
   ) -> None:
     validate_entity_id(id, "Task.id")
@@ -284,6 +286,7 @@ class Task:
       "report_ids": cleaned_reports,
       "task_ids": cleaned_tasks,
     }
+    self.answer_snapshots = [dict(item) for item in (answer_snapshots or [])]
     self.modified_at = str(modified_at or "")
 
   @property
@@ -334,6 +337,7 @@ class Task:
         "report_ids": list(self.report_ids),
         "task_ids": list(self.task_ids),
       },
+      "answer_snapshots": [dict(item) for item in self.answer_snapshots],
       "modified_at": self.modified_at,
     }
     if blocked is not None:
@@ -359,6 +363,7 @@ class Task:
         [str(item) for item in data["task_ids"]] if "task_ids" in data else None
       ),
       deps=([str(item) for item in data["deps"]] if "deps" in data else None),
+      answer_snapshots=[dict(item) for item in data.get("answer_snapshots", [])],
       modified_at=str(data.get("modified_at", "")),
     )
 
@@ -441,6 +446,9 @@ class ReportAnswer:
   status: str = "sent"
   acks: list[str] = field(default_factory=list)
   modified_at: str = ""
+  created_at: str = ""
+  report_title: str = ""
+  field_labels: dict[str, str] = field(default_factory=dict)
 
   def __post_init__(self) -> None:
     validate_hex_id(self.id, "ReportAnswer.id")
@@ -456,6 +464,23 @@ class ReportAnswer:
       raise ValueError("ReportAnswer.acks must be a list of non-empty Markdown strings")
     self.acks = list(self.acks)
     self.modified_at = str(self.modified_at or "")
+    self.created_at = str(self.created_at or self.modified_at)
+    self.report_title = str(self.report_title or "")
+    self.field_labels = dict(self.field_labels)
+
+  def snapshot(self, report: Report) -> dict[str, Any]:
+    """Preserve submitted values and their labels for a linked task."""
+    labels = self.field_labels or {field.id: field.label for field in report.fields}
+    return {
+      "id": self.id,
+      "report_id": report.id,
+      "report_title": self.report_title or report.title,
+      "created_at": self.created_at,
+      "fields": [
+        {"label": labels.get(field_id, field_id), "value": value}
+        for field_id, value in self.values.items()
+      ],
+    }
 
   def to_dict(self) -> dict[str, Any]:
     return {
@@ -465,6 +490,9 @@ class ReportAnswer:
       "status": self.status,
       "acks": list(self.acks),
       "modified_at": self.modified_at,
+      "created_at": self.created_at,
+      "report_title": self.report_title,
+      "field_labels": dict(self.field_labels),
     }
 
   @classmethod
@@ -476,6 +504,9 @@ class ReportAnswer:
       status=str(data.get("status", "sent")),
       acks=[str(item) for item in data.get("acks", [])],
       modified_at=str(data.get("modified_at", "")),
+      created_at=str(data.get("created_at", "")),
+      report_title=str(data.get("report_title", "")),
+      field_labels=dict(data.get("field_labels", {})),
     )
 
 

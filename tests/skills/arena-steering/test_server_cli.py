@@ -1114,3 +1114,28 @@ def test_attachment_message_retry_uses_original_message(tmp_path: Path) -> None:
   status, _ = app.dispatch("POST", "/messages", payload)
   assert status == HTTPStatus.BAD_REQUEST
   store.close()
+
+
+def test_cli_lists_persisted_answer_snapshots(tmp_path: Path) -> None:
+  from arena_steering.services import ReportService, TaskService
+
+  state_dir = cli.resolve_state_dir()
+  store, _, tasks, reports = cli.open_services(state_dir)
+  assert isinstance(tasks, TaskService) and isinstance(reports, ReportService)
+  reports.publish_report(
+    "decision", "Decision", "Select? {#select}\n- ( ) Yes\n- ( ) No\n"
+  )
+  tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  answer = reports.submit_answer("decision", {"select": "Yes"}, answer_id="aa5511")
+  reports.ack_answer("decision", answer.id, "Read")
+  reports.remove_report("decision")
+  store.close()
+  for args in [("tasks",), ("task", "work")]:
+    code, out, err = _run_cli(state_dir, *args)
+    assert code == 0, err
+    assert (
+      answer.id in out
+      and answer.created_at in out
+      and "Yes" in out
+      and "Decision" in out
+    )

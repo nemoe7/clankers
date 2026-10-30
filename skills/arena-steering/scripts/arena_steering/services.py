@@ -42,6 +42,14 @@ DEFAULT_SURVEY_QUESTIONS: tuple[dict[str, Any], ...] = tuple(
 )
 
 
+def _append_snapshot(task: Task, report: Report, answer: ReportAnswer) -> None:
+  if not any(
+    item.get("id") == answer.id and item.get("report_id") == report.id
+    for item in task.answer_snapshots
+  ):
+    task.answer_snapshots.append(json.loads(json.dumps(answer.snapshot(report))))
+
+
 class MessageService:
   """Manage steering messages, status transitions, acknowledgements, and polling."""
 
@@ -432,6 +440,7 @@ class TaskService:
       modified_at=now,
     )
     self._validate_details(task)
+    self._add_report_snapshots(task)
     queue = self._tasks.list_tasks()
     self._validate_deps_exist(task, queue)
     ordered = self._enforce_dependency_order([*queue, task])
@@ -469,6 +478,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
+      answer_snapshots=target.answer_snapshots,
       links=target.links,
       modified_at=now,
     )
@@ -502,6 +512,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
+      answer_snapshots=target.answer_snapshots,
       links={
         "msg_ids": [item for item in target.msg_ids if item != cleaned_id],
         "report_ids": [item for item in target.report_ids if item != cleaned_id],
@@ -523,6 +534,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=[*target.details, detail],
+      answer_snapshots=target.answer_snapshots,
       links=target.links,
       modified_at=self._clock.now_iso(),
     )
@@ -544,6 +556,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=new_details,
+      answer_snapshots=target.answer_snapshots,
       links=target.links,
       modified_at=self._clock.now_iso(),
     )
@@ -590,6 +603,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
+      answer_snapshots=target.answer_snapshots,
       links={
         "msg_ids": msg_ids,
         "report_ids": report_ids,
@@ -631,6 +645,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
+      answer_snapshots=target.answer_snapshots,
       links={
         "msg_ids": msg_ids,
         "report_ids": report_ids,
@@ -659,6 +674,7 @@ class TaskService:
       "status": target.status,
       "scope": target.scope,
       "details": target.details,
+      "answer_snapshots": target.answer_snapshots,
       "links": target.links,
       "modified_at": self._clock.now_iso(),
     }
@@ -709,10 +725,12 @@ class TaskService:
       status=str(changes.get("status", target.status)),
       scope=str(changes.get("scope", target.scope)),
       details=list(changes.get("details", target.details)),
+      answer_snapshots=target.answer_snapshots,
       links=merged_links,
       modified_at=self._clock.now_iso(),
     )
     self._validate_details(updated)
+    self._add_report_snapshots(updated)
     self._validate_deps_exist(updated, queue)
     new_queue = [updated if item.id == task_id else item for item in queue]
     if position is not None:
@@ -731,8 +749,16 @@ class TaskService:
         return queue, item
     raise KeyError(f"Unknown task ID: {task_id}")
 
+  def _add_report_snapshots(self, task: Task) -> None:
+    for report_id in task.report_ids:
+      report = self._reports.get_report(report_id)
+      if report is not None:
+        for answer in report.answers:
+          _append_snapshot(task, report, answer)
+
   def _replace_in_queue(self, queue: list[Task], updated: Task) -> None:
     self._validate_details(updated)
+    self._add_report_snapshots(updated)
     replaced = [updated if item.id == updated.id else item for item in queue]
     ordered = self._enforce_dependency_order(replaced)
     self._tasks.save_task_queue(ordered)
@@ -873,6 +899,8 @@ class ReportService:
       id=ans_id,
       report_id=report.id,
       values=cleaned_values,
+      report_title=report.title,
+      field_labels={field.id: field.label for field in report.fields},
       status="sent",
       acks=[],
       modified_at=now,
@@ -883,7 +911,7 @@ class ReportService:
     report.ack_seen = False
     report.modified_at = now
     self._reports.save_report(report)
-    self._append_answer_details_to_linked_tasks(report, cleaned_values, now)
+    self._append_answer_details_to_linked_tasks(report, answer, now)
     if self._on_answer is not None:
       self._on_answer()
     return answer
@@ -922,6 +950,9 @@ class ReportService:
         status=answer.status,
         acks=answer.acks,
         modified_at=answer.modified_at,
+        created_at=answer.created_at,
+        report_title=answer.report_title,
+        field_labels=answer.field_labels,
       )
       for answer in existing.answers
     ]
@@ -942,6 +973,10 @@ class ReportService:
     queue = self._tasks.list_tasks()
     changed = False
     for task in queue:
+      for snapshot in task.answer_snapshots:
+        if snapshot.get("report_id") == old_report_id:
+          snapshot["report_id"] = new_report_id
+          changed = True
       if old_report_id in task.report_ids:
         task.report_ids = [
           new_report_id if report_id == old_report_id else report_id
@@ -1020,12 +1055,12 @@ class ReportService:
     return cleaned
 
   def _append_answer_details_to_linked_tasks(
-    self, report: Report, cleaned_values: dict[str, Any], now: str
+    self, report: Report, answer: ReportAnswer, now: str
   ) -> None:
     lines = [
-      format_answer_for_task_detail(field, cleaned_values[field.id])
+      format_answer_for_task_detail(field, answer.values[field.id])
       for field in report.fields
-      if field.id in cleaned_values
+      if field.id in answer.values
     ]
     if not lines:
       return
@@ -1033,6 +1068,7 @@ class ReportService:
     changed = False
     for task in queue:
       if report.id in task.report_ids:
+        _append_snapshot(task, report, answer)
         for line in lines:
           if line not in task.details:
             task.details.append(line)

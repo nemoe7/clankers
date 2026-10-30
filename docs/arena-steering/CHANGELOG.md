@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `models.py`: Preserve distinct report-answer snapshots on linked tasks.
+
 - `app.js`: Preload report content on pointer or keyboard intent.
 
 - `references.js`: Navigate known message, report, and task references.

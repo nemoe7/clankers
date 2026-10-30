@@ -785,6 +785,17 @@ def _print_message(msg: Message, out: TextIO) -> None:
     print(f"ack: {ack_text}", file=out)
 
 
+def _print_answer_snapshot(snapshot: dict, out: TextIO, prefix: str) -> None:
+  print(
+    f"{prefix}Answer {snapshot['id']} at {snapshot['created_at']} ({snapshot['report_title']}):",
+    file=out,
+  )
+  for item in snapshot.get("fields", []):
+    print(
+      f"  {item['label']}: {json.dumps(item['value'], ensure_ascii=False)}", file=out
+    )
+
+
 def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
   if not items:
     print("Tasks: 0", file=out)
@@ -799,6 +810,8 @@ def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
       print(f"   Deps: {', '.join(task.deps)}", file=out)
     if task.report_ids:
       print(f"   Reports: {', '.join(task.report_ids)}", file=out)
+    for snapshot in task.answer_snapshots:
+      _print_answer_snapshot(snapshot, out, "   ")
     for detail_idx, line in enumerate(task.details, 1):
       print(f"   {detail_idx}. {line}", file=out)
 
@@ -815,6 +828,8 @@ def _print_single_task(task: Task, blocked: bool, out: TextIO) -> None:
     print(f"- Reports: {', '.join(task.report_ids)}", file=out)
   if task.msg_ids:
     print(f"- Messages: {', '.join(task.msg_ids)}", file=out)
+  for snapshot in task.answer_snapshots:
+    _print_answer_snapshot(snapshot, out, "- ")
   for idx, line in enumerate(task.details, 1):
     print(f"- [{idx}] {line}", file=out)
 
