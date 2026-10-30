@@ -725,6 +725,8 @@ function initImageModal() {
   let x = 0;
   let y = 0;
   let drag = null;
+  let panDistance = 0;
+  let viewerSeq = 0;
   const update = () => {
     const media = stage.firstElementChild;
     if (media) media.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
@@ -735,8 +737,9 @@ function initImageModal() {
     drag = null;
   });
   dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) dialog.close();
+    if (event.target === dialog || (event.target === stage && panDistance <= 4)) dialog.close();
   });
+  stage.addEventListener("dragstart", (event) => event.preventDefault());
   stage.addEventListener("wheel", (event) => {
     event.preventDefault();
     scale = Math.min(8, Math.max(0.25, scale * Math.exp(-event.deltaY * 0.001)));
@@ -744,11 +747,22 @@ function initImageModal() {
   }, { passive: false });
   stage.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
-    drag = { pointer: event.pointerId, x: event.clientX - x, y: event.clientY - y };
+    drag = {
+      pointer: event.pointerId,
+      x: event.clientX - x,
+      y: event.clientY - y,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    panDistance = 0;
     stage.setPointerCapture(event.pointerId);
   });
   stage.addEventListener("pointermove", (event) => {
     if (!drag || drag.pointer !== event.pointerId) return;
+    panDistance = Math.max(
+      panDistance,
+      Math.abs(event.clientX - drag.startX) + Math.abs(event.clientY - drag.startY),
+    );
     x = event.clientX - drag.x;
     y = event.clientY - drag.y;
     update();
@@ -768,8 +782,21 @@ function initImageModal() {
     x = 0;
     y = 0;
     const clone = media.cloneNode(true);
+    const sourceId = clone.getAttribute("id");
     clone.removeAttribute("id");
     clone.setAttribute("draggable", "false");
+    if (media.tagName.toLowerCase() === "svg") {
+      const sourceBox = media.getBoundingClientRect();
+      clone.setAttribute("class", "mermaid-svg");
+      if (sourceBox.width) clone.style.width = `${Math.round(sourceBox.width)}px`;
+      // Mermaid scopes its embedded styles to the diagram ID, so the copy keeps a unique one.
+      if (sourceId) {
+        const viewerId = `${sourceId}-viewer-${++viewerSeq}`;
+        clone.setAttribute("id", viewerId);
+        const style = clone.querySelector("style");
+        if (style) style.textContent = style.textContent.split(`#${sourceId}`).join(`#${viewerId}`);
+      }
+    }
     stage.replaceChildren(clone);
     update();
     dialog.showModal();

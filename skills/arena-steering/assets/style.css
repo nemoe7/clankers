@@ -2505,7 +2505,7 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
 }
 
 .image-modal::backdrop {
-  background: rgba(0, 0, 0, 0.88);
+  background: rgba(0, 0, 0, 0.82);
 }
 
 .image-modal-close {
@@ -2513,6 +2513,8 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   z-index: 1;
   top: 16px;
   right: 16px;
+  border: 0;
+  background: transparent;
   color: white;
 }
 
@@ -2536,6 +2538,7 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   max-height: 90%;
   object-fit: contain;
   user-select: none;
+  -webkit-user-drag: none;
 }
 
 /* A visible end marker records a rendered reply list, not a reply count. */

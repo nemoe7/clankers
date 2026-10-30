@@ -14,6 +14,14 @@ This log has no Unreleased section.
 
 - `assets/app.js`: Filter loaded messages in the browser after the first search query.
 
+### Changed
+
+- `assets/app.js`: Pan the image viewer without a native image drag and close it from the backdrop.
+
+- `assets/app.js`: Keep diagram colors and scale in the image viewer.
+
+- `assets/style.css`: Clear the image viewer close-button background and lighten its scrim.
+
 ### Fixed
 
 - `assets/style.css`: Inset the scrollbar thumb by 2px inside a 10px track and color links blue.
