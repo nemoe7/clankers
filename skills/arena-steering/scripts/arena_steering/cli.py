@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shlex
 import sqlite3
@@ -25,6 +24,8 @@ from .server import SteeringApp, create_http_server
 from .services import MessageService, ReportService, TaskService
 from .store import SqliteStore
 
+BIND_HOST = "0.0.0.0"
+SERVE_PORT = 8000
 HISTORICAL_PAGE_SIZE = 10
 MESSAGE_PAGE_MIN = 5
 MESSAGE_PAGE_MAX = 50
@@ -85,10 +86,10 @@ def main(
   )
   sub = parser.add_subparsers(dest="command")
 
-  default_port = int(os.environ.get("STEER_PORT", "8100"))
   serve_p = sub.add_parser("serve", help="Start the local steering HTTP server.")
-  serve_p.add_argument("--host", default="0.0.0.0")
-  serve_p.add_argument("--port", type=int, default=default_port)
+  serve_p.add_argument(
+    "--port", type=int, default=SERVE_PORT, help="Port to bind (default: 8000)."
+  )
 
   read_p = sub.add_parser("read", help="Read pending messages and report answers.")
 
@@ -206,14 +207,14 @@ def main(
     if cmd == "serve":
       parsed = serve_p.parse_args(cmd_args)
       app = SteeringApp(store)
-      httpd = create_http_server(app, host=parsed.host, port=parsed.port)
+      httpd = create_http_server(app, host=BIND_HOST, port=parsed.port)
       port = int(httpd.server_address[1])
       server_file = resolved_state_dir / "server.json"
       server_file.write_text(
-        json.dumps({"host": parsed.host, "port": port}, indent=2),
+        json.dumps({"host": BIND_HOST, "port": port}, indent=2),
         encoding="utf-8",
       )
-      print(f"Steering server listening on http://{parsed.host}:{port}", file=stdout)
+      print(f"Steering server listening on http://{BIND_HOST}:{port}", file=stdout)
       try:
         httpd.serve_forever()
       finally:

@@ -69,7 +69,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 
 | Command | Purpose |
 | --- | --- |
-| `steer serve [--host HOST] [--port PORT]` | Start the server. `STEER_PORT` sets the default port. |
+| `steer serve` | Start the server on `0.0.0.0:8000`, the same port v1 used. |
 | `steer read` | Deliver pending messages and report answers. |
 | `steer poll` | Wait for work or a skip-poll request. |
 | `steer ack [ID] MARKDOWN` | Acknowledge one message or report answer. Omit the ID only when one pending item exists. Optional `-i`, `-t`, `-T`, `-S`, and repeatable `-d` create a linked task. |
