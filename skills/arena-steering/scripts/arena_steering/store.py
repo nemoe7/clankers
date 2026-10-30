@@ -8,7 +8,7 @@ import json
 import sqlite3
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -91,6 +91,13 @@ class SqliteStore:
           request_id TEXT PRIMARY KEY,
           fingerprint TEXT NOT NULL,
           message_id TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS browser_write_requests (
+          request_id TEXT PRIMARY KEY,
+          fingerprint TEXT NOT NULL,
+          status INTEGER NOT NULL,
+          response_json TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS meta (
@@ -188,6 +195,38 @@ class SqliteStore:
         raise
       else:
         self._conn.commit()
+
+  def execute_browser_write_once(
+    self,
+    request_id: str,
+    fingerprint: str,
+    action: Callable[[], tuple[int, dict]],
+  ) -> tuple[int, dict]:
+    """Commit a browser action and its replay result together."""
+    with self.transaction():
+      row = self._conn.execute(
+        "SELECT fingerprint, status, response_json FROM browser_write_requests WHERE request_id = ?",
+        (request_id,),
+      ).fetchone()
+      if row is not None:
+        if row["fingerprint"] != fingerprint:
+          raise ValueError("Request ID already used for a different action")
+        return int(row["status"]), json.loads(row["response_json"])
+      status, response = action()
+      if 200 <= status < 300:
+        self._conn.execute(
+          "INSERT INTO browser_write_requests VALUES (?, ?, ?, ?)",
+          (request_id, fingerprint, status, json.dumps(response)),
+        )
+      return status, response
+
+  def browser_write_ids(self) -> list[str]:
+    """Return IDs with committed browser write results."""
+    with self._lock:
+      return [
+        row[0]
+        for row in self._conn.execute("SELECT request_id FROM browser_write_requests")
+      ]
 
   def get_message(self, msg_id: str) -> Message | None:
     with self._lock:

@@ -164,37 +164,102 @@ function socketRequest(method, path, bodyStr, timeoutMs = 15000) {
   });
 }
 
-async function requestJson(method, path, body = undefined) {
-  const bodyStr = body !== undefined ? JSON.stringify(body) : undefined;
-  if (liveSocket?.readyState === 1) {
-    try {
-      return await socketRequest(method, path, bodyStr);
-    } catch {
-      // Fall back to HTTP fetch if socket closed mid-flight.
-    }
-  }
-  const options = {
-    method,
-    headers: { "Content-Type": "application/json" },
-  };
-  if (bodyStr !== undefined) {
-    options.body = bodyStr;
-  }
-  const response = await fetch(path, options);
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || `Request failed (${response.status})`);
-  }
-  return payload;
+const PENDING_WRITES_KEY = "steer:pendingWrites";
+const activeWrites = new Set();
+let pendingWrites = [];
+let pendingStorageAvailable = true;
+try {
+  const saved = JSON.parse(sessionStorage.getItem(PENDING_WRITES_KEY) || "[]");
+  if (Array.isArray(saved)) pendingWrites = saved;
+} catch {
+  pendingStorageAvailable = false;
 }
 
-async function requestForm(path, formData) {
-  const response = await fetch(path, { method: "POST", body: formData });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || `Request failed (${response.status})`);
+function savePendingWrites() {
+  try {
+    sessionStorage.setItem(PENDING_WRITES_KEY, JSON.stringify(pendingWrites));
+  } catch {
+    pendingStorageAvailable = false;
+    throw new Error("Cannot safely send: browser session storage is unavailable");
   }
-  return payload;
+}
+
+function beginWrite(key, interactive = false) {
+  if (!pendingStorageAvailable) throw new Error("Cannot safely send: browser session storage is unavailable");
+  const pending = pendingWrites.find((item) => item.key === key && !activeWrites.has(item.id));
+  let id = pending?.id;
+  if (id && interactive && !window.confirm("This action may already have succeeded. Retry the same action?")) {
+    if (!window.confirm("Start a separate action instead? This may repeat the earlier action.")) {
+      throw new Error("Action canceled");
+    }
+    id = null;
+  }
+  if (!id) {
+    id = crypto.randomUUID();
+    pendingWrites.push({ key, id });
+    savePendingWrites();
+  }
+  activeWrites.add(id);
+  return id;
+}
+
+function finishWrite(id, confirmed) {
+  activeWrites.delete(id);
+  if (confirmed) {
+    pendingWrites = pendingWrites.filter((item) => item.id !== id);
+    savePendingWrites();
+  }
+}
+
+async function requestJson(method, path, body = undefined, interactive = false) {
+  const write = ["POST", "PATCH", "DELETE"].includes(method) && path !== "/markdown";
+  const id = write ? beginWrite(JSON.stringify([method, path, body || {}]), interactive) : null;
+  const requestBody = write ? { ...(body || {}), _request_id: id } : body;
+  const bodyStr = requestBody !== undefined ? JSON.stringify(requestBody) : undefined;
+  let confirmed = false;
+  try {
+    if (liveSocket?.readyState === 1) {
+      try {
+        const payload = await socketRequest(method, path, bodyStr);
+        confirmed = true;
+        return payload;
+      } catch {
+        // A lost response can mean the write succeeded. Reuse the request ID.
+      }
+    }
+    const options = { method, headers: { "Content-Type": "application/json" } };
+    if (bodyStr !== undefined) options.body = bodyStr;
+    const response = await fetch(path, options);
+    const payload = await response.json();
+    if (!response.ok) {
+      confirmed = response.status < 500;
+      throw new Error(payload.error || `Request failed (${response.status})`);
+    }
+    confirmed = true;
+    return payload;
+  } finally {
+    if (id) finishWrite(id, confirmed);
+  }
+}
+
+async function requestForm(path, formData, file) {
+  const hash = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  const digest = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const id = beginWrite(JSON.stringify(["POST", path, file.name, digest]), true);
+  formData.append("_request_id", id);
+  let confirmed = false;
+  try {
+    const response = await fetch(path, { method: "POST", body: formData });
+    const payload = await response.json();
+    if (!response.ok) {
+      confirmed = response.status < 500;
+      throw new Error(payload.error || `Request failed (${response.status})`);
+    }
+    confirmed = true;
+    return payload;
+  } finally {
+    finishWrite(id, confirmed);
+  }
 }
 
 export const api = {
@@ -223,7 +288,7 @@ export const api = {
   async uploadFile(file) {
     const formData = new FormData();
     formData.append("file", file, file.name || "upload.bin");
-    const payload = await requestForm("/uploads", formData);
+    const payload = await requestForm("/uploads", formData, file);
     return payload.attachment;
   },
   sendMessageWithFile({
@@ -246,7 +311,7 @@ export const api = {
     });
   },
   skipPoll() {
-    return requestJson("POST", "/poll/skip", {});
+    return requestJson("POST", "/poll/skip", {}, true);
   },
   listTasks({ full = true } = {}) {
     const q = new URLSearchParams({ full: full ? "1" : "0" });
@@ -256,13 +321,13 @@ export const api = {
     return requestJson("GET", `/tasks/${encodeURIComponent(id)}`);
   },
   createTask(task) {
-    return requestJson("POST", "/tasks", task);
+    return requestJson("POST", "/tasks", task, true);
   },
   patchTask(taskId, changes) {
-    return requestJson("PATCH", `/tasks/${encodeURIComponent(taskId)}`, changes);
+    return requestJson("PATCH", `/tasks/${encodeURIComponent(taskId)}`, changes, true);
   },
   deleteTask(taskId) {
-    return requestJson("DELETE", `/tasks/${encodeURIComponent(taskId)}`);
+    return requestJson("DELETE", `/tasks/${encodeURIComponent(taskId)}`, undefined, true);
   },
   listReports({ stale = false, summary = false } = {}) {
     const params = { stale: stale ? "1" : "0" };
@@ -277,7 +342,7 @@ export const api = {
     return requestJson("POST", "/markdown", { markdown, breaks });
   },
   dismissReport(reportId) {
-    return requestJson("DELETE", `/reports/${encodeURIComponent(reportId)}`);
+    return requestJson("DELETE", `/reports/${encodeURIComponent(reportId)}`, undefined, true);
   },
   markReportSeen(reportId) {
     return requestJson(
@@ -297,17 +362,18 @@ export const api = {
     return requestJson(
       "POST",
       `/reports/${encodeURIComponent(reportId)}/answers`,
-      { values }
+      { values },
+      true
     );
   },
   getSurvey() {
     return requestJson("GET", "/survey");
   },
   submitSurvey(answers) {
-    return requestJson("POST", "/survey", { answers });
+    return requestJson("POST", "/survey", { answers }, true);
   },
   triggerBibleCheck(active = undefined) {
     const body = active === undefined ? {} : { active: Boolean(active) };
-    return requestJson("POST", "/survey/interrupt", body);
+    return requestJson("POST", "/survey/interrupt", body, true);
   },
 };
