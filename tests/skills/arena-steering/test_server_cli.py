@@ -1971,3 +1971,11 @@ def test_cli_worktree_collect_prints_the_patch(
   code, _, err = _run_cli(cli.resolve_state_dir(), "worktree", "collect", "missing")
   assert code == 1
   assert "missing" in err
+
+
+def test_serve_binds_a_fixed_host_on_the_v1_port() -> None:
+  """Serve keeps one host and defaults to v1's port."""
+  assert cli.BIND_HOST == "0.0.0.0"
+  assert cli.SERVE_PORT == 8000
+  with pytest.raises(SystemExit):
+    cli.main(["serve", "--host", "127.0.0.1"], out=io.StringIO(), err=io.StringIO())

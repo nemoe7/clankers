@@ -26,6 +26,10 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `cli.py`: Bind `steer serve` to `0.0.0.0:8000` by default, matching the v1 port, and keep `--port` for a caller that needs another one.
+
+- `assets/reports-view.js`: Render the stored answer as the selected option, and keep the star as a recommendation mark only.
+
 - `assets/reports-view.js`: Prefill a published report with its stored answer and mark a recommended option with `*`.
 - `assets/reports-view.js`: Keep an unsent answer per field in `localStorage` and clear it after submit.
 - `assets/app.js`: Drop the three-second task refresh, because finished runs now push a change event.
