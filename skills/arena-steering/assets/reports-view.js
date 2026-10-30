@@ -22,10 +22,10 @@ let activeScrollCleanup = null;
 
 function renderFieldBlock(field, headings) {
   const fieldId = escapeHtml(field.id);
-  const label = escapeHtml(field.label);
+  const label = escapeHtml(field.question || field.label);
   const anchorId = `field-${field.id}`;
   if (Array.isArray(headings)) {
-    headings.push({ id: anchorId, level: 3, text: field.label });
+    headings.push({ id: anchorId, level: 3, text: field.question || field.label });
   }
   const recommended = new Set(field.recommended || []);
 
@@ -36,7 +36,7 @@ function renderFieldBlock(field, headings) {
           <span class="field-label">${label}</span>
           <code class="field-id-chip msg-id">${fieldId}</code>
         </div>
-        <input type="text" class="input field-text-input" name="field-${fieldId}" placeholder="Enter response..." aria-label="${label}">
+        <input type="text" class="input field-text-input" name="field-${fieldId}" placeholder="Something else..." aria-label="${label}">
       </div>
     `;
   }
@@ -164,7 +164,14 @@ export function renderReportsView(container, state, handlers) {
           const iso = escapeHtml(ans.modified_at || "");
           const rel = escapeHtml(relativeTime(ans.modified_at));
           const entries = Object.entries(ans.values || {})
-            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+            .map(([k, v]) => {
+              const label = ans.field_labels?.[k] || k;
+              if (v && typeof v === "object" && !Array.isArray(v)) {
+                const selected = Array.isArray(v.selected) ? v.selected : (v.custom ? [] : [v.selected]);
+                v = [...selected.filter(Boolean), ...(v.custom ? [v.custom] : [])];
+              }
+              return `${label}: ${Array.isArray(v) ? v.join(", ") : v}`;
+            })
             .join(" · ");
           return `
             <div class="${idx > 0 ? "reply-block" : ""}">

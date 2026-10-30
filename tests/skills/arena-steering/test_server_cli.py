@@ -164,7 +164,12 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
     {
       "id": "router-spec",
       "title": "Router Spec",
-      "body": "We should bind to this host\n- (x) 0.0.0.0\n- ( ) 127.0.0.1\n",
+      "body": (
+        '<!-- question {"id": "we-should-bind-to-this-host", "label": "We should bind to this host"} -->\n'
+        "We should bind to this host\n"
+        '- (x) 0.0.0.0 <!-- option {"label": "0.0.0.0"} -->\n'
+        '- ( ) 127.0.0.1 <!-- option {"label": "127.0.0.1"} -->\n'
+      ),
     },
   )
   assert status == int(HTTPStatus.CREATED)
@@ -225,7 +230,12 @@ def test_report_acked_events_fire_once_per_ack() -> None:
   app.reports.publish_report(
     "live-ack",
     "Live Ack",
-    "We should push this event\n- (x) report.acked\n- ( ) Poll\n",
+    (
+      '<!-- question {"id": "we-should-push-this-event", "label": "We should push this event"} -->\n'
+      "We should push this event\n"
+      '- (x) report.acked <!-- option {"label": "report.acked"} -->\n'
+      '- ( ) Poll <!-- option {"label": "Poll"} -->\n'
+    ),
   )
   app.reports.submit_answer(
     "live-ack", {"we-should-push-this-event": "report.acked"}, answer_id="cafe02"
@@ -501,7 +511,14 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
 
   report_md = tmp_path / "sample.md"
   report_md.write_text(
-    "# Sample\n\nWe should use this port\n- (x) 8000\n- ( ) 9000\n",
+    (
+      "# Sample\n"
+      "\n"
+      '<!-- question {"id": "we-should-use-this-port", "label": "We should use this port"} -->\n'
+      "We should use this port\n"
+      '- (x) 8000 <!-- option {"label": "8000"} -->\n'
+      '- ( ) 9000 <!-- option {"label": "9000"} -->\n'
+    ),
     encoding="utf-8",
   )
   code, out, _ = _run_cli(
@@ -1183,7 +1200,14 @@ def test_cli_lists_persisted_answer_snapshots(tmp_path: Path) -> None:
   store, _, tasks, reports = cli.open_services(state_dir)
   assert isinstance(tasks, TaskService) and isinstance(reports, ReportService)
   reports.publish_report(
-    "decision", "Decision", "Select? {#select}\n- ( ) Yes\n- ( ) No\n"
+    "decision",
+    "Decision",
+    (
+      '<!-- question {"id": "select", "label": "Select?"} -->\n'
+      "Select?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- ( ) No <!-- option {"label": "No"} -->\n'
+    ),
   )
   tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
   answer = reports.submit_answer("decision", {"select": "Yes"}, answer_id="aa5511")
@@ -1238,7 +1262,16 @@ def test_ack_task_rolls_back_both_on_failure(
 def test_ack_answer_creates_linked_task_with_answer_snapshot(tmp_path: Path) -> None:
   state_dir = cli.resolve_state_dir()
   store, _, _, reports = cli.open_services(state_dir)
-  reports.publish_report("choice", "Choice", "Select? {#select}\n- ( ) Yes\n- ( ) No\n")
+  reports.publish_report(
+    "choice",
+    "Choice",
+    (
+      '<!-- question {"id": "select", "label": "Select?"} -->\n'
+      "Select?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- ( ) No <!-- option {"label": "No"} -->\n'
+    ),
+  )
   answer = reports.submit_answer("choice", {"select": "Yes"}, answer_id="ab7702")
   store.close()
   code, out, err = _run_cli(
@@ -1297,7 +1330,14 @@ def test_message_ack_route_returns_report_answer(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "answer-ack.sqlite3")
   app = SteeringApp(store)
   app.reports.publish_report(
-    "decision", "Decision", "Choose? {#choice}\n- ( ) Yes\n- ( ) No\n"
+    "decision",
+    "Decision",
+    (
+      '<!-- question {"id": "choice", "label": "Choose?"} -->\n'
+      "Choose?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- ( ) No <!-- option {"label": "No"} -->\n'
+    ),
   )
   answer = app.reports.submit_answer("decision", {"choice": "Yes"}, answer_id="ab9911")
   status, payload = app.dispatch(
@@ -1454,7 +1494,14 @@ def test_browser_write_replay_survives_restart(tmp_path: Path) -> None:
   store = SqliteStore(db_path)
   app = SteeringApp(store)
   app.reports.publish_report(
-    "retry-report", "Retry", "Choose? {#choice}\n- ( ) Yes\n- ( ) No\n"
+    "retry-report",
+    "Retry",
+    (
+      '<!-- question {"id": "choice", "label": "Choose?"} -->\n'
+      "Choose?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- ( ) No <!-- option {"label": "No"} -->\n'
+    ),
   )
   request = {"_request_id": "action-001", "values": {"choice": "Yes"}}
   first = app.dispatch("POST", "/reports/retry-report/answers", request)
@@ -1481,7 +1528,14 @@ def test_browser_write_replay_concurrent(tmp_path: Path) -> None:
   store = SqliteStore(db_path)
   app = SteeringApp(store)
   app.reports.publish_report(
-    "retry-report", "Retry", "Choose? {#choice}\n- ( ) Yes\n- ( ) No\n"
+    "retry-report",
+    "Retry",
+    (
+      '<!-- question {"id": "choice", "label": "Choose?"} -->\n'
+      "Choose?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- ( ) No <!-- option {"label": "No"} -->\n'
+    ),
   )
   store.close()
   barrier = Barrier(2)
@@ -1545,4 +1599,140 @@ def test_browser_upload_replay_and_orphan_cleanup(tmp_path: Path) -> None:
   )
   assert status == HTTPStatus.CREATED
   assert Path(long_upload["attachment"]["path"]).read_text() == "long name"
+  store.close()
+
+
+def test_annotated_report_submission_and_trusted_html(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "report-contract.sqlite3")
+  app = SteeringApp(store)
+  body = (
+    '<mark data-example="yes">trusted</mark> ==plain==\n\n'
+    '<!-- question {"id":"decision","label":"Decision"} -->\n'
+    "Which path?\n\n"
+    '- ( ) A <!-- option {"label":"Use A"} -->\n'
+    '- ( ) B <!-- option {"label":"Use B"} -->\n'
+  )
+  status, result = app.dispatch(
+    "POST", "/reports", {"id": "new-contract", "title": "Contract", "body": body}
+  )
+  assert status == HTTPStatus.CREATED
+  report = result["report"]
+  assert report["fields"][0]["question"] == "Which path?"
+  assert report["fields"][0]["label"] == "Decision"
+  markup = "".join(block.get("html", "") for block in report["blocks"])
+  assert '<mark data-example="yes">trusted</mark>' in markup
+  assert "==plain==" in markup
+  status, answer = app.dispatch(
+    "POST", "/reports/new-contract/answers", {"values": {"decision": "A"}}
+  )
+  assert status == HTTPStatus.CREATED
+  assert answer["answer"]["values"]["decision"] == "Use A"
+  assert answer["answer"]["field_labels"]["decision"] == "Decision"
+  status, custom = app.dispatch(
+    "POST",
+    "/reports/new-contract/answers",
+    {"values": {"decision": {"selected": "Something else...", "custom": "Use C"}}},
+  )
+  assert status == HTTPStatus.CREATED
+  assert custom["answer"]["values"]["decision"] == "Use C"
+  store.close()
+
+
+def test_annotated_report_rejects_bad_metadata_and_preserves_code_fences(
+  tmp_path: Path,
+) -> None:
+  store = SqliteStore(tmp_path / "report-validation.sqlite3")
+  app = SteeringApp(store)
+  legacy = "Question?\n- ( ) Old\n- ( ) Other\n"
+  status, _ = app.dispatch(
+    "POST", "/reports", {"id": "legacy-new", "title": "Legacy", "body": legacy}
+  )
+  assert status == HTTPStatus.BAD_REQUEST
+  mixed = (
+    '<!-- question {"id":"choice","label":"Choice"} -->\nQuestion?\n'
+    '- ( ) A <!-- option {"label":"A"} -->\n'
+    '- [ ] B <!-- option {"label":"B"} -->\n'
+  )
+  status, _ = app.dispatch(
+    "POST", "/reports", {"id": "mixed", "title": "Mixed", "body": mixed}
+  )
+  assert status == HTTPStatus.BAD_REQUEST
+  text = "```diff\n+ ~~literal~~\n```\n\n<mark>Marked</mark> ==plain=="
+  status, result = app.dispatch(
+    "POST", "/reports", {"id": "code", "title": "Code", "body": text}
+  )
+  assert status == HTTPStatus.CREATED and result["report"]["fields"] == []
+  store.close()
+
+
+def test_report_marker_override_and_verification_failure(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  store = SqliteStore(tmp_path / "report-marker.sqlite3")
+  app = SteeringApp(store)
+  body = "Safe ~~struck~~ and `~~ ignored ~~`.\n\n~~ unparsed ~~"
+  request = {"id": "marker", "title": "Marker", "body": body}
+  status, result = app.dispatch("POST", "/reports", request)
+  assert status == HTTPStatus.BAD_REQUEST and "3" in result["error"]
+  status, result = app.dispatch(
+    "POST", "/reports", {**request, "allow_unparsed_markers": True}
+  )
+  assert status == HTTPStatus.CREATED
+  status, _ = app.dispatch(
+    "POST",
+    "/reports",
+    {**request, "id": "bad-override", "allow_unparsed_markers": "false"},
+  )
+  assert status == HTTPStatus.BAD_REQUEST
+  monkeypatch.setattr(
+    app, "_handle_get_report", lambda *_: (HTTPStatus.OK, {"report": {}})
+  )
+  status, result = app.dispatch(
+    "POST", "/reports", {"id": "verification", "title": "Verify", "body": "text"}
+  )
+  assert status == HTTPStatus.INTERNAL_SERVER_ERROR
+  assert "verification failed" in result["error"]
+  assert store.get_report("verification") is not None
+  store.close()
+
+
+def test_annotated_checkbox_labels_and_legacy_saved_report(tmp_path: Path) -> None:
+  from arena_steering.markdown_fields import parse_report_markdown
+  from arena_steering.models import Report
+
+  db = tmp_path / "old-report.sqlite3"
+  store = SqliteStore(db)
+  legacy = "Choice? {#choice}\n- ( ) Yes\n- ( ) No\n"
+  _, fields = parse_report_markdown(legacy)
+  store.save_report(Report(id="old", title="Old", body=legacy, fields=fields))
+  app = SteeringApp(store)
+  status, read = app.dispatch("GET", "/reports/old", None)
+  assert status == HTTPStatus.OK and read["report"]["fields"][0]["options"] == [
+    "Yes",
+    "No",
+  ]
+  body = (
+    '<!-- question {"id":"features","label":"Features"} -->\n'
+    "Which features?\n"
+    '- [ ] A <!-- option {"label":"Use A"} -->\n'
+    '- [ ] B <!-- option {"label":"Use B"} -->\n'
+  )
+  status, _ = app.dispatch(
+    "POST", "/reports", {"id": "features", "title": "Features", "body": body}
+  )
+  assert status == HTTPStatus.CREATED
+  status, result = app.dispatch(
+    "POST",
+    "/reports/features/answers",
+    {"values": {"features": {"selected": ["A", "B"], "custom": "Use C"}}},
+  )
+  assert status == HTTPStatus.CREATED
+  assert result["answer"]["values"]["features"] == ["Use A", "Use B", "Use C"]
+  store.close()
+  store = SqliteStore(db)
+  assert store.get_report("features").answers[-1].values["features"] == [
+    "Use A",
+    "Use B",
+    "Use C",
+  ]
   store.close()

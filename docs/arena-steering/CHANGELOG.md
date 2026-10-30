@@ -62,6 +62,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Reports use embedded question and option labels, trusted HTML, strike-marker checks, and post-save verification.
+
 - `assets/`: Bundle Mermaid and its license without a v1 asset dependency.
 
 - `steer msg list` defaults to 5 items and accepts page sizes from 5 to 50.

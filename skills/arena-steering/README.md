@@ -53,7 +53,7 @@ Keep session state outside version control.
 - Select a report, navigate its headings, copy its Markdown, dismiss it, and return to the top.
 - Answer radio, checkbox, and free-text fields, including custom choices. The floating submit button remains available while scrolling.
 - View submitted answers and agent acknowledgements. New acknowledgements update an open report through WebSocket, and viewing an acknowledgement marks it seen.
-- Open report images and Mermaid diagrams in the same lightbox as messages. Markdown supports tables, strikethrough, highlights, task lists, links, code copying, syntax highlighting, and Mermaid rendering.
+- Open report images and Mermaid diagrams in the same lightbox as messages. Report Markdown supports tables, strikethrough, HTML, task lists, links, code copying, syntax highlighting, and Mermaid rendering.
 - Mermaid needs its vendor asset. Code blocks also support diff highlighting and a Mermaid source toggle.
 
 ### Session controls
@@ -83,7 +83,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer task rm ID` | Remove a task. |
 | `steer reports [-s] [-p PAGE]` | List reports, or stale reports with `-s`, 10 per page. |
 | `steer report ID` | Show report fields and answers. |
-| `steer report pub FILE -i ID -t TITLE` | Publish a UTF-8 Markdown report. |
+| `steer report pub FILE -i ID -t TITLE [-u]` | Publish and verify a UTF-8 Markdown report. `-u` allows unparsed strike markers. |
 | `steer report rm ID` | Dismiss one report. Use `--stale` to remove stale reports. |
 | `steer rename OLD NEW` | Rename a task or report and update its links. |
 | `steer survey` | Show the survey and submission template. Use `-i` for the smallest image, `--template` for the template, `-f FILE` for a submission, or `--interrupt` to request a check. |
@@ -134,27 +134,40 @@ Run records, logs, and exit files live under the state directory's `runs/` folde
 
 ## Report fields
 
-A field has a label followed by radio or checkbox options, or a labeled text blank. Mark a recommended option with `x`. A choice or checkbox field also offers a custom response in the UI. Field IDs derive from labels, or from an explicit anchor.
+New fielded reports use question and option comments. The question comment supplies its unique ID and submitted label. Each option comment supplies its submitted label.
 
 ```markdown
-Choose a storage format {#storage-format}
+<!-- question {"id":"storage-format","label":"Storage"} -->
+Choose a storage format
 
-- (x) SQLite
-- ( ) JSON
+- (x) SQLite <!-- option {"label":"Use SQLite"} -->
+- ( ) JSON <!-- option {"label":"Use JSON"} -->
 
-Select checks {#checks}
+<!-- question {"id":"checks","label":"Checks"} -->
+Select checks
 
-- [x] Unit tests
-- [ ] Integration tests
+- [x] Unit tests <!-- option {"label":"Run unit tests"} -->
+- [ ] Integration tests <!-- option {"label":"Run integration tests"} -->
 
-Notes: ___
+<!-- question {"id":"notes","label":"Notes"} -->
+Notes
 ```
+
+Radio options use `( )`, and checkbox options use `[ ]`. A question without options is a text field. V2 adds a `Something else...` input automatically.
+
+Selecting SQLite produces `Storage: Use SQLite`. Custom answers use the entered text.
 
 Field options must be unique, with 1 to 20 options and at most 200 characters per option. Reports retain answer history. Like v1, the inbox requires acknowledgement only for the latest answer to each report. Earlier answers remain in history.
 
 ### Report lifecycle
 
-- Field IDs can also come from a preceding `<!-- field-id -->` comment. Field markers inside fenced code blocks are not parsed.
+- Existing saved reports retain their original fields. New and republished fielded reports require question and option comments.
+- Code fences are not parsed as fields.
+- Reports allow arbitrary HTML from trusted authors. Active HTML can access the viewer's origin and data.
+- Do not open untrusted reports.
+- `==text==` stays plain in reports. Use `<mark>` for highlights and fenced `diff` blocks for diffs.
+- Publication rejects likely unparsed paired `~~` markers unless `-u` or `allow_unparsed_markers: true` is supplied. It verifies the saved report and rendered output.
+- A verification failure does not guarantee rollback.
 - Each submission must answer every field. Text and choice answers must be nonempty.
 - Checkbox answers need at least one selected or custom value.
 - Submissions append history, mark the report seen, reset acknowledgement visibility, and add formatted answers to linked task details. An acknowledgement can be appended more than once.
@@ -200,7 +213,7 @@ Successful creates return HTTP 201. Other successful route operations return 200
 | List tasks | `full=0` excludes finished tasks. | `tasks`, each with derived `blocked`. |
 | Create or patch task | `id`, `title`, `type`, `status`, `scope`, `details`, and link lists. PATCH also accepts zero-based `position`. | `task`. Dependency ordering is enforced. |
 | List reports | `stale=1` selects stale reports. `summary=1` omits report bodies. | `reports`. |
-| Publish report | `id`, `title`, and Markdown `body`. | `report`, including parsed fields and rendered blocks. |
+| Publish report | `id`, `title`, Markdown `body`, and optional boolean `allow_unparsed_markers`. | Verified `report`, including parsed fields and rendered blocks. |
 | Patch report | `status` set to `dismissed`. Other values leave it unchanged. | `report`. |
 | Submit answers | `values` keyed by field ID, with an optional answer `id`. | `answer` and updated `report`. |
 | Set timezone | `timezone`, an IANA zone such as `Asia/Manila`. | `timezone`. |
