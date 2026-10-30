@@ -30,8 +30,8 @@ def _build_demo_board_png(width: int = 480, height: int = 140) -> bytes:
   for y in range(height):
     row = bytearray([0])  # filter type 0 (None)
     for x in range(width):
-      # Outer dark canvas (#14171c)
-      r, g, b = (20, 23, 28)
+      # Outer dark canvas (#1b1a19)
+      r, g, b = (27, 26, 25)
       in_left = 12 <= x <= mid_x - 8 and 10 <= y <= height - 11
       in_right = mid_x + 8 <= x <= width - 13 and 10 <= y <= height - 11
       if in_left or in_right:
@@ -39,25 +39,25 @@ def _build_demo_board_png(width: int = 480, height: int = 140) -> bytes:
         pw = (mid_x - 20) if in_left else (width - mid_x - 21)
         py = y - 10
         ph = height - 21
-        # Panel border (#343944)
+        # Panel border (#413d39)
         if px in (0, pw) or py in (0, ph):
-          r, g, b = (52, 57, 68)
-        # Panel top header bar (#242830)
+          r, g, b = (65, 61, 57)
+        # Panel top header bar (#2c2b28)
         elif py < 24:
-          r, g, b = (36, 40, 48)
+          r, g, b = (44, 43, 40)
           # Status badge pill in header
           if 10 <= px <= 54 and 7 <= py <= 16:
-            r, g, b = (245, 158, 11) if in_left else (52, 211, 153)
+            r, g, b = (244, 196, 6) if in_left else (65, 190, 75)
         else:
-          # Panel body (#1c2026)
-          r, g, b = (28, 32, 38)
+          # Panel body (#252523)
+          r, g, b = (37, 37, 35)
           # Simulated content cards inside each panel
           if 12 <= px <= pw - 12 and (
             34 <= py <= 58 or 66 <= py <= 90 or 98 <= py <= 112
           ):
-            r, g, b = (36, 40, 48)
+            r, g, b = (44, 43, 40)
             if px <= 15:
-              r, g, b = (104, 181, 248) if in_right else (120, 128, 142)
+              r, g, b = (229, 187, 139) if in_right else (103, 98, 91)
       row.extend((r, g, b))
     rows.append(bytes(row))
 
@@ -72,12 +72,12 @@ def _build_demo_board_png(width: int = 480, height: int = 140) -> bytes:
 
 
 def _build_animated_gif(
-  width: int = 120, height: int = 24, accent_rgb: tuple[int, int, int] = (104, 181, 248)
+  width: int = 120, height: int = 24, accent_rgb: tuple[int, int, int] = (229, 187, 139)
 ) -> bytes:
   """Build a valid 4-frame looping GIF89a animation using uncompressed 4-color LZW blocks."""
-  bg = (24, 27, 32)
-  track = (42, 47, 56)
-  glow = (52, 211, 153)
+  bg = (27, 26, 25)
+  track = (65, 60, 58)
+  glow = (141, 192, 127)
   palette = bytes([*bg, *track, *accent_rgb, *glow])
 
   def encode_uncompressed_lzw(indices: list[int]) -> bytes:
@@ -138,34 +138,34 @@ def _build_animated_gif(
 
 
 TOKENS_SWATCH_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="640" height="110" viewBox="0 0 640 110">
-  <rect width="640" height="110" rx="8" fill="#171a20" stroke="#2e3440"/>
-  <g font-family="monospace" font-size="11" fill="#e5e7eb">
-    <rect x="16" y="16" width="112" height="54" rx="6" fill="#191c22" stroke="#343944"/>
+  <rect width="640" height="110" rx="8" fill="#1b1a19" stroke="#413d39"/>
+  <g font-family="monospace" font-size="11" fill="#f4f0eb">
+    <rect x="16" y="16" width="112" height="54" rx="6" fill="#252523" stroke="#413d39"/>
     <text x="24" y="88">--surface-primary</text>
-    <rect x="142" y="16" width="112" height="54" rx="6" fill="#242830" stroke="#343944"/>
+    <rect x="142" y="16" width="112" height="54" rx="6" fill="#413c3a" stroke="#413d39"/>
     <text x="150" y="88">--surface-raised</text>
-    <rect x="268" y="16" width="112" height="54" rx="6" fill="#68b5f8" stroke="#343944"/>
+    <rect x="268" y="16" width="112" height="54" rx="6" fill="#e5bb8b" stroke="#413d39"/>
     <text x="292" y="88">--accent</text>
-    <rect x="394" y="16" width="112" height="54" rx="6" fill="#f59e0b" stroke="#343944"/>
+    <rect x="394" y="16" width="112" height="54" rx="6" fill="#7fa7d1" stroke="#413d39"/>
     <text x="412" y="88">--dot-seen</text>
-    <rect x="520" y="16" width="104" height="54" rx="6" fill="#34d399" stroke="#343944"/>
+    <rect x="520" y="16" width="104" height="54" rx="6" fill="#8dc07f" stroke="#413d39"/>
     <text x="536" y="88">--dot-said</text>
   </g>
 </svg>
 """
 
 SCROLLSPY_ZONES_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="640" height="120" viewBox="0 0 640 120">
-  <rect width="640" height="120" rx="8" fill="#171a20" stroke="#2e3440"/>
-  <rect x="16" y="14" width="608" height="24" rx="4" fill="#242830" stroke="#68b5f8"/>
-  <text x="28" y="30" font-family="monospace" font-size="12" fill="#68b5f8">
+  <rect width="640" height="120" rx="8" fill="#1b1a19" stroke="#413d39"/>
+  <rect x="16" y="14" width="608" height="24" rx="4" fill="#2c2b28" stroke="#e5bb8b"/>
+  <text x="28" y="30" font-family="monospace" font-size="12" fill="#e5bb8b">
     Top Scrollspy Threshold (48px) + Edge Fade Mask (24px)
   </text>
-  <rect x="16" y="46" width="608" height="36" rx="4" fill="#1c2026" stroke="#343944"/>
-  <text x="28" y="68" font-family="monospace" font-size="12" fill="#e5e7eb">
+  <rect x="16" y="46" width="608" height="36" rx="4" fill="#252523" stroke="#413d39"/>
+  <text x="28" y="68" font-family="monospace" font-size="12" fill="#f4f0eb">
     Active Viewport Region (Click-Lock 700ms + Section Flash)
   </text>
-  <rect x="16" y="90" width="608" height="18" rx="4" fill="#242830" stroke="#34d399"/>
-  <text x="28" y="103" font-family="monospace" font-size="11" fill="#34d399">
+  <rect x="16" y="90" width="608" height="18" rx="4" fill="#2c2b28" stroke="#8dc07f"/>
+  <text x="28" y="103" font-family="monospace" font-size="11" fill="#8dc07f">
     Bottom Clamp Zone (8px from scrollHeight)
   </text>
 </svg>
@@ -184,8 +184,8 @@ def _write_demo_media_files(store: SqliteStore) -> None:
   uploads_dir.mkdir(parents=True, exist_ok=True)
 
   board_png = _build_demo_board_png()
-  scroll_gif = _build_animated_gif(accent_rgb=(104, 181, 248))
-  loading_gif = _build_animated_gif(accent_rgb=(245, 158, 11))
+  scroll_gif = _build_animated_gif(accent_rgb=(229, 187, 139))
+  loading_gif = _build_animated_gif(accent_rgb=(244, 196, 6))
 
   (reports_dir / "layout-board.png").write_bytes(board_png)
   (reports_dir / "scroll-fade-demo.gif").write_bytes(scroll_gif)
@@ -200,9 +200,9 @@ def _write_demo_media_files(store: SqliteStore) -> None:
   (uploads_dir / "arena-tokens.json").write_text(
     json.dumps(
       {
-        "surface-primary": "220 15% 11%",
-        "surface-raised": "220 14% 16%",
-        "accent": "#68b5f8",
+        "surface-primary": "60 3% 14%",
+        "surface-raised": "24 6% 24%",
+        "accent": "#e5bb8b",
       },
       indent=2,
     ),

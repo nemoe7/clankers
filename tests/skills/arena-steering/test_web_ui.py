@@ -7,8 +7,8 @@ from pathlib import Path
 
 from arena_steering.server import create_http_server, reload_server_handler
 from arena_steering.store import SqliteStore
+from demo import SCROLLSPY_ZONES_SVG, TOKENS_SWATCH_SVG, seed_demo_store
 from demo import main as demo_main
-from demo import seed_demo_store
 
 SKILL_DIR = Path(__file__).resolve().parents[3] / "skills" / "arena-steering"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -75,6 +75,61 @@ TASK_SECTION_TITLE_FONT_SIZE = "font-size: 18px;"
 NOTES_PIP_ID = 'id="notes-pip"'
 REPORT_PIP_ID = 'id="report-pip"'
 TAB_BADGE_CLASS = "tab-badge"
+
+# Hex values of the warm Arena tokens in `assets/style.css` `:root`
+# (HSL token channels converted to sRGB, plus its literal hex tokens).
+WARM_SURFACE_PRIMARY = "#252523"
+WARM_SURFACE_SECONDARY = "#2c2b28"
+WARM_SURFACE_TERTIARY = "#1b1a19"
+WARM_SURFACE_RAISED_TERTIARY = "#292624"
+WARM_TEXT_PRIMARY = "#f4f0eb"
+WARM_TEXT_TERTIARY = "#c7c2bc"
+WARM_BORDER_FAINT = "#413d39"
+WARM_BORDER_MEDIUM = "#524c47"
+WARM_ACCENT = "#e5bb8b"
+WARM_DOT_SEEN = "#7fa7d1"
+WARM_DOT_SAID = "#8dc07f"
+WARM_ACCENT_RGB = "(229, 187, 139)"
+WARM_SURFACE_PRIMARY_HSL = '"60 3% 14%"'
+WARM_SURFACE_RAISED_HSL = '"24 6% 24%"'
+
+SLATE_MERMAID_COLORS = (
+  "#22252b",
+  "#2b2f37",
+  "#242830",
+  "#68b5f8",
+  "#4a505c",
+  "#1b1e23",
+  "#373b44",
+  "#9da3ae",
+  "#f3f4f6",
+  "#f9fafb",
+)
+SLATE_DEMO_COLORS = (
+  "#14171c",
+  "#343944",
+  "#242830",
+  "#1c2026",
+  "#171a20",
+  "#191c22",
+  "#2e3440",
+  "#68b5f8",
+  "#f59e0b",
+  "#34d399",
+  "#e5e7eb",
+  '"220 15% 11%"',
+  '"220 14% 16%"',
+  "(20, 23, 28)",
+  "(52, 57, 68)",
+  "(36, 40, 48)",
+  "(28, 32, 38)",
+  "(104, 181, 248)",
+  "(120, 128, 142)",
+  "(24, 27, 32)",
+  "(42, 47, 56)",
+  "(245, 158, 11)",
+  "(52, 211, 153)",
+)
 
 
 def test_assets_bundle_fonts_styles_and_es_modules() -> None:
@@ -215,3 +270,47 @@ def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
   finally:
     server.server_close()
   store.close()
+
+
+def test_mermaid_and_demo_media_use_warm_arena_tokens() -> None:
+  markdown_js = (ASSETS_DIR / "markdown.js").read_text(encoding="utf-8")
+  theme_start = markdown_js.index("themeVariables:")
+  theme_end = markdown_js.index("flowchart:", theme_start)
+  theme = markdown_js[theme_start:theme_end]
+  for colour in (
+    WARM_SURFACE_PRIMARY,
+    WARM_SURFACE_SECONDARY,
+    WARM_SURFACE_TERTIARY,
+    WARM_SURFACE_RAISED_TERTIARY,
+    WARM_TEXT_PRIMARY,
+    WARM_TEXT_TERTIARY,
+    WARM_BORDER_FAINT,
+    WARM_BORDER_MEDIUM,
+    WARM_ACCENT,
+  ):
+    assert colour in theme
+  for colour in SLATE_MERMAID_COLORS:
+    assert colour not in theme
+
+  demo_py = (SKILL_DIR / "scripts" / "demo.py").read_text(encoding="utf-8")
+  for colour in (
+    WARM_SURFACE_PRIMARY,
+    WARM_SURFACE_SECONDARY,
+    WARM_SURFACE_TERTIARY,
+    WARM_TEXT_PRIMARY,
+    WARM_BORDER_FAINT,
+    WARM_ACCENT,
+    WARM_ACCENT_RGB,
+    WARM_SURFACE_PRIMARY_HSL,
+    WARM_SURFACE_RAISED_HSL,
+  ):
+    assert colour in demo_py
+  for colour in SLATE_DEMO_COLORS:
+    assert colour not in demo_py
+
+  assert WARM_SURFACE_PRIMARY in TOKENS_SWATCH_SVG
+  assert WARM_ACCENT in TOKENS_SWATCH_SVG
+  assert WARM_DOT_SEEN in TOKENS_SWATCH_SVG
+  assert WARM_DOT_SAID in TOKENS_SWATCH_SVG
+  assert WARM_ACCENT in SCROLLSPY_ZONES_SVG
+  assert WARM_DOT_SAID in SCROLLSPY_ZONES_SVG
