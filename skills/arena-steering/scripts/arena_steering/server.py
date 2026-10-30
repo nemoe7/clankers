@@ -1300,6 +1300,7 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
         version = app.data_version()
         ack_snapshot = app.report_ack_snapshot()
         asset_ver = assets_signature(app.assets_dir)
+        restore_notice = app.store.get_meta("state_restore_notice", "")
         self.ws_send(1, b'{"type":"change"}')
         while True:
           try:
@@ -1360,6 +1361,15 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
             for ack_event in ack_events:
               self.ws_send(1, json.dumps(ack_event).encode("utf-8"))
             self.ws_send(1, b'{"type":"change"}')
+          current_notice = app.store.get_meta("state_restore_notice", "")
+          if current_notice and current_notice != restore_notice:
+            restore_notice = current_notice
+            self.ws_send(
+              1,
+              json.dumps({"type": "state_restored", "notice": current_notice}).encode(
+                "utf-8"
+              ),
+            )
           current_assets = assets_signature(app.assets_dir)
           if current_assets != asset_ver:
             asset_ver = current_assets
