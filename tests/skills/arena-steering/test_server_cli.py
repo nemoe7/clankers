@@ -1231,3 +1231,20 @@ def test_concurrent_ack_task_creation_preserves_both(tmp_path: Path) -> None:
   assert messages.get_message("ab7703").acks == ["Received"]
   assert messages.get_message("ab7704").acks == ["Received"]
   store.close()
+
+
+def test_message_ack_route_returns_report_answer(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "answer-ack.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "decision", "Decision", "Choose? {#choice}\n- ( ) Yes\n- ( ) No\n"
+  )
+  answer = app.reports.submit_answer("decision", {"choice": "Yes"}, answer_id="ab9911")
+  status, payload = app.dispatch(
+    "POST", f"/messages/{answer.id}/ack", {"markdown": "Read"}
+  )
+  assert status == HTTPStatus.OK
+  assert payload["answer"]["id"] == answer.id
+  assert payload["answer"]["acks"] == ["Read"]
+  assert app.reports.get_report("decision").answers[0].status == "acked"
+  store.close()

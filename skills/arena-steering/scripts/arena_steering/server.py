@@ -677,7 +677,9 @@ class SteeringApp:
     self, params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
   ) -> tuple[int, Any]:
     markdown = str(body.get("markdown", body.get("ack", "")))
-    _, acked = self.messages.ack(params["id"], markdown)
+    target_type, acked = self.messages.ack(params["id"], markdown)
+    if target_type == "report_answer":
+      return (int(HTTPStatus.OK), {"answer": acked.to_dict()})
     return (int(HTTPStatus.OK), {"message": self._serialize_message(acked)})
 
   def _handle_replies_seen(

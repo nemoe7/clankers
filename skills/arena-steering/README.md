@@ -111,6 +111,7 @@ Use `python skills/arena-steering/scripts/steer` in place of `steer` in the tabl
 - Message IDs use six lowercase hexadecimal characters. Parent IDs are deduplicated in order and must name existing messages.
 - Blocking messages move from `sent` to `seen` to `acked`. Non-blocking messages need no acknowledgement.
 - An acknowledgement contains nonempty Markdown. Repeated acknowledgements append replies.
+- The message acknowledgement route returns an answer object when its target is a report answer.
 - Reply receipts use a persisted seen flag and a reply-list digest. Viewing the end of a rendered reply list marks that revision seen.
 - A newer reply resets the flag.
 - Existing replies start unseen after upgrade. Stale receipt updates return HTTP 409 and do not hide newer replies.
