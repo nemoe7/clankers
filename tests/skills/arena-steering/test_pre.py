@@ -147,6 +147,18 @@ def test_working_the_inbox_restarts_the_countdown(_isolate_state: Path) -> None:
   assert _count(_isolate_state) == "1"
 
 
+def test_a_quiet_note_does_not_gate(_isolate_state: Path) -> None:
+  _isolate_state.mkdir(parents=True, exist_ok=True)
+  store, messages, _tasks, _reports = cli.open_services(_isolate_state)
+  messages.send_message("Quiet note.", hidden=True)
+  assert messages.pending_ids() == []
+  store.close()
+
+  code, out = _run("pre", "-c", "git push", "-s", "bash")
+  assert code == pre.CONTINUE
+  assert out == ""
+
+
 def test_a_clear_inbox_passes_the_gate(_isolate_state: Path) -> None:
   _seed(_isolate_state, "Acked already.", acked=True)
   code, out = _run("pre", "-c", "git push", "-s", "bash")
