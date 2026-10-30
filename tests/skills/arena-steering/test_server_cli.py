@@ -1398,6 +1398,97 @@ def test_ack_answer_creates_linked_task_with_answer_snapshot(tmp_path: Path) -> 
   store.close()
 
 
+def _seed_report_removal_batch(state_dir: Path) -> str:
+  body = (
+    '<!-- question {"id":"choice", "label":"Choice"} -->\n'
+    "Choose one\n"
+    '- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+    '- ( ) No <!-- option {"label":"No"} -->\n'
+  )
+  store, _, tasks, reports = cli.open_services(state_dir)
+  reports.publish_report("ready", "Ready", body)
+  reports.publish_report("protected", "Protected", body)
+  reports.publish_report("empty", "Empty", "# Empty")
+  tasks.create_task(
+    "linked-work",
+    "Linked work",
+    details=["Review reports"],
+    report_ids=["ready", "protected", "empty"],
+  )
+  reports.submit_answer("ready", {"choice": "Yes"}, answer_id="bc1001")
+  reports.ack_answer("ready", "bc1001", "Read")
+  reports.submit_answer("protected", {"choice": "No"}, answer_id="bc1002")
+  store.close()
+  return body
+
+
+def test_cli_report_rm_batches_ids_and_preserves_answers(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  body = _seed_report_removal_batch(state_dir)
+  code, out, err = _run_cli(state_dir, "report", "rm", "ready", "empty")
+  assert code == 0, err
+  assert "ready, empty" in out
+  store, _, tasks, reports = cli.open_services(state_dir)
+  assert store.get_report("ready") is None
+  assert store.get_report("empty") is None
+  assert store.get_report("protected") is not None
+  assert tasks.get_task("linked-work")[0].report_ids == ["protected"]
+  restored = reports.publish_report("ready", "Ready", body)
+  assert restored.answers[-1].id == "bc1001"
+  assert restored.answers[-1].acks == ["Read"]
+  store.close()
+
+
+@pytest.mark.parametrize("bad_id", ["protected", "missing"])
+def test_cli_report_rm_batch_failure_rolls_back_all(
+  tmp_path: Path, bad_id: str
+) -> None:
+  state_dir = cli.resolve_state_dir()
+  _seed_report_removal_batch(state_dir)
+  code, out, _ = _run_cli(state_dir, "report", "rm", "ready", bad_id, "empty")
+  assert code != 0
+  assert "Dismissed" not in out
+  store, _, tasks, _ = cli.open_services(state_dir)
+  assert all(
+    store.get_report(report_id) is not None
+    for report_id in ("ready", "protected", "empty")
+  )
+  assert tasks.get_task("linked-work")[0].report_ids == ["ready", "protected", "empty"]
+  store.close()
+
+
+def test_cli_report_rm_deduplicates_ids_and_keeps_stale_separate(
+  tmp_path: Path,
+) -> None:
+  state_dir = cli.resolve_state_dir()
+  _seed_report_removal_batch(state_dir)
+  code, _, _ = _run_cli(state_dir, "report", "rm", "ready", "--stale")
+  assert code != 0
+  store, _, _, _ = cli.open_services(state_dir)
+  assert store.get_report("ready") is not None
+  store.close()
+  code, out, err = _run_cli(state_dir, "report", "rm", "ready", "ready")
+  assert code == 0, err
+  assert out.count("ready") == 1
+  code, _, _ = _run_cli(state_dir, "report", "rm")
+  assert code != 0
+
+
+def test_cli_report_rm_stale_keeps_unacknowledged_answers(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  _seed_report_removal_batch(state_dir)
+  store, _, tasks, _ = cli.open_services(state_dir)
+  tasks.mod_scalar("linked-work", "status", "finished")
+  store.close()
+  code, out, err = _run_cli(state_dir, "report", "rm", "--stale")
+  assert code == 0, err
+  assert "ready" in out and "protected" not in out
+  store, _, _, _ = cli.open_services(state_dir)
+  assert store.get_report("ready") is None
+  assert store.get_report("protected") is not None
+  store.close()
+
+
 def _seed_ack_batch(state_dir: Path) -> None:
   store, messages, _, reports = cli.open_services(state_dir)
   messages.send_message("First", msg_id="ab1001")
