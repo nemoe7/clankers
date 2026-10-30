@@ -12,6 +12,12 @@ import zlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+SCRIPTS_DIR = (
+  Path(__file__).resolve().parents[1] / "skills" / "arena-steering" / "scripts"
+)
+if str(SCRIPTS_DIR) not in sys.path:
+  sys.path.insert(0, str(SCRIPTS_DIR))
+
 from arena_steering.models import Attachment
 from arena_steering.server import SteeringApp, create_http_server
 from arena_steering.store import SqliteStore
@@ -342,7 +348,7 @@ def reseed_demo_store(store: SqliteStore) -> SteeringApp:
   )
 
   m3 = app.messages.send_message(
-    "Keep the server port configurable so the live demo can run alongside port 8000.",
+    "Keep the demo port configurable so it can run alongside the server on port 8000.",
     blocking=True,
     hidden=False,
     msg_id="a00003",
@@ -350,8 +356,8 @@ def reseed_demo_store(store: SqliteStore) -> SteeringApp:
   app.messages.ack(
     m3.id,
     (
-      "Configured `steer serve --port` and `STEER_PORT` with default port `8100` (`hot-reload-server`):\n"
-      "```bash\nsteer serve --port 8100\n```"
+      "Configured `steer serve` on fixed port `8000` (`hot-reload-server`):\n"
+      "```bash\nsteer serve\n```"
     ),
   )
 
@@ -442,8 +448,8 @@ def reseed_demo_store(store: SqliteStore) -> SteeringApp:
   )
   app.messages.send_message(
     (
-      "Also document the `STEER_PORT` and `STEER_STATE_DIR` environment "
-      "variables in `SKILL.md` (`document-cli-reference`)."
+      "Also document the fixed server port and state directory in "
+      "`SKILL.md` (`document-cli-reference`)."
     ),
     blocking=False,
     hidden=False,
@@ -904,7 +910,7 @@ steer poll
     status="upcoming",
     scope="skills/arena-steering/SKILL.md",
     details=[
-      "Cover STEER_PORT, STEER_STATE_DIR, and fixed 1799s poll behavior.",
+      "Cover the fixed server port, state directory, and 1799s poll behavior.",
     ],
     msg_ids=["a00008"],
     deps=["web-ui-assets"],

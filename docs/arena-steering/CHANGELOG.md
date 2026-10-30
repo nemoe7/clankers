@@ -18,6 +18,8 @@ This log has no Unreleased section.
 
 - `cli.py`: Remove multiple reports atomically in one command.
 
+- `scripts/install.sh`: Put `steer` on PATH with its Python dependency.
+
 - `pre.py`: Block `cat`, `grep`, `head`, `tail`, and `rg` on the bible, because those commands read a file in part.
 
 - `pre.py`, `cli.py`: Run the shell hook through a step registry. Each check is its own class, and `PIPELINE` orders them, so a check can be added, dropped, or tweaked in one line.
@@ -30,7 +32,9 @@ This log has no Unreleased section.
 
 ### Changed
 
-- `cli.py`: Bind `steer serve` to `0.0.0.0:8000` by default, matching the v1 port, and keep `--port` for a caller that needs another one.
+- `cli.py`: Bind `steer serve` to `0.0.0.0:8000` without a port option.
+
+- `maintenance/demo-arena-steer.py`: Move the configurable demo out of the shipped skill.
 
 - `assets/reports-view.js`: Render the stored answer as the selected option, and keep the star as a recommendation mark only.
 

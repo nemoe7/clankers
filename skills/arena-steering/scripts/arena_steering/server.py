@@ -160,9 +160,11 @@ class SteeringApp:
 
   @staticmethod
   def _maybe_reseed_demo(store: SqliteStore) -> None:
-    """Re-seed the live demo SQLite store when demo.py changes on disk."""
+    """Re-seed a repository demo SQLite store when its script changes on disk."""
     db_path_str = str(getattr(store, "db_path", ""))
-    demo_script = Path(__file__).resolve().parents[1] / "demo.py"
+    demo_script = (
+      Path(__file__).resolve().parents[4] / "maintenance" / "demo-arena-steer.py"
+    )
     if (
       "arena-steering-demo-" not in db_path_str
       or not demo_script.is_file()
@@ -1149,9 +1151,10 @@ def scripts_signature(
   if not base.is_dir():
     return ()
   targets = sorted(base.glob("*.py"))
-  demo_py = base.parent / "demo.py"
-  if demo_py.is_file():
-    targets.append(demo_py)
+  if len(base.parents) > 3:
+    demo_py = base.parents[3] / "maintenance" / "demo-arena-steer.py"
+    if demo_py.is_file():
+      targets.append(demo_py)
   return file_signature(targets)
 
 

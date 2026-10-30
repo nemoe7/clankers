@@ -52,7 +52,7 @@
 
 ## Visual Reference
 
-- Live server preview runs via `skills/arena-steering/scripts/demo.py` on port `8100` (`http://127.0.0.1:8100`).
+- The repository demo runs via `maintenance/demo-arena-steer.py` on port `8100` by default.
 - Verified via headless Chromium screenshots at `1372x883` desktop and `411x799` mobile viewports across `Messages`, `Reports`, and `Tasks`.
 
 ## Deviations & Suppressions
