@@ -22,6 +22,8 @@ This log has no Unreleased section.
 
 - `assets/style.css`: Clear the image viewer close-button background and lighten its scrim.
 
+- `assets/messages-view.js`: Use the current Lucide paperclip path for the attach button.
+
 ### Fixed
 
 - `assets/style.css`: Inset the scrollbar thumb by 2px inside a 10px track and color links blue.

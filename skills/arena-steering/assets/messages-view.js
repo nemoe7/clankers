@@ -355,7 +355,7 @@ export function renderMessagesView(container, state, handlers) {
               aria-label="Attach file"
               title="Attach file"
             >
-              <svg class="lucide lucide-paperclip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 12.765-4.122 4.122a3 3 0 0 1-4.243-4.243L12.88 7.4a4.5 4.5 0 0 1 6.364 6.364l-5.89 5.89a6.75 6.75 0 0 1-9.546-9.547l6.01-6.01"></path></svg>
+              <svg class="lucide lucide-paperclip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"></path></svg>
             </button>
             <input id="composer-file-input" type="file" multiple hidden />
             <button
