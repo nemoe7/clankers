@@ -4,7 +4,7 @@ description: Steer an Arena.ai agent mid-turn through a local preview inbox, dep
 license: MIT
 compatibility: Arena.ai Agent Mode, Python 3.11+, persisted workspace and long-lived process tools.
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 
 # Arena Steering
@@ -43,11 +43,14 @@ steer task mod <id> deets rm <1-based-index>
 steer task mod <id> links [msg|report|task] <id>
 steer task mod <id> links rm msg|report|task <id>
 steer task mod <id> status|title|type|scope <value>
+steer task unlink <id> [msg|report|task] <link-id>
+steer task unlink <answer-id>
 steer task rm <id>
 ```
 
 - Tasks sit in a mutable queue where dependents automatically follow their task links (`links.task_ids[]`).
 - Blocking state derives automatically from unanswered `links.report_ids[]` and unfinished `links.task_ids[]`.
+- `steer task unlink <answer-id>` drops one stored answer snapshot from every task that holds it. The answer, its text, its receipts, and the report link stay; relinking the report does not restore the snapshot.
 
 ## Reports (`Reports`)
 

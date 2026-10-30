@@ -1736,3 +1736,37 @@ def test_annotated_checkbox_labels_and_legacy_saved_report(tmp_path: Path) -> No
     "Use C",
   ]
   store.close()
+
+
+def test_cli_task_unlink_removes_one_answer_snapshot(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  store, _, tasks, reports = cli.open_services(state_dir)
+  reports.publish_report(
+    "decision",
+    "Decision",
+    (
+      '<!-- question {"id": "select", "label": "Select?"} -->\n'
+      "Select?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- ( ) No <!-- option {"label": "No"} -->\n'
+    ),
+  )
+  tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  answer = reports.submit_answer("decision", {"select": "Yes"}, answer_id="ab8801")
+  reports.ack_answer("decision", answer.id, "Read")
+  store.close()
+
+  code, out, err = _run_cli(state_dir, "task", "unlink", answer.id)
+  assert code == 0, err
+  assert answer.id in out and "1 task" in out
+
+  code, out, _ = _run_cli(state_dir, "task", "work")
+  assert code == 0 and answer.id not in out
+
+  store, _, tasks, reports = cli.open_services(state_dir)
+  assert tasks.get_task("work")[0].answer_snapshots == []
+  assert [item.id for item in reports.get_report("decision").answers] == [answer.id]
+  store.close()
+
+  code, _, err = _run_cli(state_dir, "task", "unlink", "ab8802")
+  assert code == 1 and "ab8802" in err

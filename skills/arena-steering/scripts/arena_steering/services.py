@@ -596,6 +596,29 @@ class TaskService:
     return updated
 
   @_transactional_task_write
+  def unlink_answer(self, answer_id: str) -> list[str]:
+    """Drop one stored answer snapshot from every task that holds it."""
+    validate_hex_id(answer_id, "ReportAnswer.id")
+    queue = self._tasks.list_tasks()
+    affected = [
+      item
+      for item in queue
+      if any(snapshot.get("id") == answer_id for snapshot in item.answer_snapshots)
+    ]
+    if not affected:
+      raise KeyError(f"Unknown answer ID: {answer_id}")
+    now = self._clock.now_iso()
+    for item in affected:
+      item.answer_snapshots = [
+        snapshot
+        for snapshot in item.answer_snapshots
+        if snapshot.get("id") != answer_id
+      ]
+      item.modified_at = now
+    self._tasks.save_task_queue(queue)
+    return [item.id for item in affected]
+
+  @_transactional_task_write
   def mod_deets(self, task_id: str, detail: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     updated = Task(
@@ -690,6 +713,8 @@ class TaskService:
       modified_at=self._clock.now_iso(),
     )
     self._validate_deps_exist(updated, queue)
+    if cleaned in report_ids:
+      self._add_report_snapshots(updated, [cleaned])
     self._replace_in_queue(queue, updated)
     return updated
 
@@ -827,7 +852,10 @@ class TaskService:
       modified_at=self._clock.now_iso(),
     )
     self._validate_details(updated)
-    self._add_report_snapshots(updated)
+    self._add_report_snapshots(
+      updated,
+      [item for item in updated.report_ids if item not in target.report_ids],
+    )
     self._validate_deps_exist(updated, queue)
     new_queue = [updated if item.id == task_id else item for item in queue]
     if position is not None:
@@ -846,8 +874,10 @@ class TaskService:
         return queue, item
     raise KeyError(f"Unknown task ID: {task_id}")
 
-  def _add_report_snapshots(self, task: Task) -> None:
-    for report_id in task.report_ids:
+  def _add_report_snapshots(
+    self, task: Task, report_ids: list[str] | None = None
+  ) -> None:
+    for report_id in task.report_ids if report_ids is None else report_ids:
       report = self._reports.get_report(report_id)
       if report is not None:
         for answer in report.answers:
@@ -855,7 +885,11 @@ class TaskService:
 
   def _replace_in_queue(self, queue: list[Task], updated: Task) -> None:
     self._validate_details(updated)
-    self._add_report_snapshots(updated)
+    stored = next((item for item in queue if item.id == updated.id), None)
+    linked_ids = stored.report_ids if stored is not None else []
+    self._add_report_snapshots(
+      updated, [item for item in updated.report_ids if item not in linked_ids]
+    )
     replaced = [updated if item.id == updated.id else item for item in queue]
     ordered = self._enforce_dependency_order(replaced)
     self._tasks.save_task_queue(ordered)

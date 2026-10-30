@@ -379,6 +379,13 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     return _run_task_mod(args[1:], tasks, out)
 
   if subcmd == "unlink":
+    if len(args) == 2 and MESSAGE_ID_RE.fullmatch(args[1]):
+      affected = tasks.unlink_answer(args[1])
+      summary = ", ".join(affected)
+      print(
+        f"Unlinked answer {args[1]} from {len(affected)} task(s): {summary}", file=out
+      )
+      return 0
     if len(args) == 3:
       updated = tasks.unlink_task(args[1], args[2])
     elif len(args) == 4:
