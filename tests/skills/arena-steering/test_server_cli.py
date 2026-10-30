@@ -1398,6 +1398,101 @@ def test_ack_answer_creates_linked_task_with_answer_snapshot(tmp_path: Path) -> 
   store.close()
 
 
+def _seed_ack_batch(state_dir: Path) -> None:
+  store, messages, _, reports = cli.open_services(state_dir)
+  messages.send_message("First", msg_id="ab1001")
+  messages.send_message("Second", msg_id="ab1002", hidden=True)
+  reports.publish_report(
+    "batch-choice",
+    "Batch Choice",
+    (
+      '<!-- question {"id":"choice", "label":"Choice"} -->\n'
+      "Choose one\n"
+      '- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+      '- ( ) No <!-- option {"label":"No"} -->\n'
+    ),
+  )
+  reports.submit_answer("batch-choice", {"choice": "Yes"}, answer_id="ab1003")
+  store.close()
+
+
+def test_cli_ack_batches_messages_and_report_answers(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  _seed_ack_batch(state_dir)
+  code, out, err = _run_cli(
+    state_dir, "ack", "ab1001", "ab1002", "ab1003", "One shared reply"
+  )
+  assert code == 0, err
+  assert out == "ok ab1001 ab1002 ab1003\n"
+  store, _, _, reports = cli.open_services(state_dir)
+  assert store.get_message("ab1001").acks == ["One shared reply"]
+  assert store.get_message("ab1002").acks == ["One shared reply"]
+  assert reports.get_report("batch-choice").answers[-1].acks == ["One shared reply"]
+  store.close()
+
+
+@pytest.mark.parametrize("bad_id", ["abffff", "invalid-id"])
+def test_cli_ack_batch_failure_rolls_back_every_target(
+  tmp_path: Path, bad_id: str
+) -> None:
+  state_dir = cli.resolve_state_dir()
+  _seed_ack_batch(state_dir)
+  code, out, _ = _run_cli(
+    state_dir, "ack", "ab1001", "ab1003", bad_id, "One shared reply"
+  )
+  assert code != 0
+  assert "ok " not in out
+  store, _, _, reports = cli.open_services(state_dir)
+  assert store.get_message("ab1001").acks == []
+  assert reports.get_report("batch-choice").answers[-1].acks == []
+  store.close()
+
+
+def test_cli_ack_without_id_still_requires_one_pending_item(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  store, messages, _, _ = cli.open_services(state_dir)
+  messages.send_message("Only one", msg_id="ab1011")
+  store.close()
+  code, out, err = _run_cli(state_dir, "ack", "Received")
+  assert code == 0, err
+  assert out == "ok ab1011\n"
+  store, messages, _, _ = cli.open_services(state_dir)
+  assert store.get_message("ab1011").acks == ["Received"]
+  messages.send_message("First pending", msg_id="ab1012")
+  messages.send_message("Second pending", msg_id="ab1013")
+  store.close()
+  code, _, _ = _run_cli(state_dir, "ack", "Not sent")
+  assert code != 0
+  store, _, _, _ = cli.open_services(state_dir)
+  assert store.get_message("ab1012").acks == []
+  assert store.get_message("ab1013").acks == []
+  store.close()
+
+
+def test_cli_ack_batch_rejects_task_creation_without_changes(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  _seed_ack_batch(state_dir)
+  code, _, err = _run_cli(
+    state_dir,
+    "ack",
+    "ab1001",
+    "ab1003",
+    "One shared reply",
+    "-i",
+    "batch-task",
+    "-t",
+    "Batch task",
+    "-d",
+    "Do the work",
+  )
+  assert code != 0 and "one" in err.lower()
+  store, _, _, reports = cli.open_services(state_dir)
+  assert store.get_task("batch-task") is None
+  assert store.get_message("ab1001").acks == []
+  assert reports.get_report("batch-choice").answers[-1].acks == []
+  store.close()
+
+
 def test_concurrent_ack_task_creation_preserves_both(tmp_path: Path) -> None:
   from concurrent.futures import ThreadPoolExecutor
   from threading import Barrier

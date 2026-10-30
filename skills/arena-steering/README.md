@@ -72,7 +72,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer serve` | Start the server on `0.0.0.0:8000`, the same port v1 used. |
 | `steer read` | Deliver pending messages and report answers. |
 | `steer poll` | Wait for work or a skip-poll request. |
-| `steer ack [ID] MARKDOWN` | Acknowledge one message or report answer. Omit the ID only when one pending item exists. Optional `-i`, `-t`, `-T`, `-S`, and repeatable `-d` create a linked task. |
+| `steer ack [ID ...] MARKDOWN` | Acknowledge one or more messages or report answers with one reply. Omit IDs only when one item is pending. |
 | `steer msg list [-p PAGE] [-s SIZE]` | List message history. Page size defaults to 5 and ranges from 5 to 50. |
 | `steer msg ID` | Show a message and its acknowledgements and attachments. |
 | `steer tasks [-f] [-p PAGE]` | List upcoming tasks, or page through finished tasks with `-f`. |
@@ -132,7 +132,8 @@ The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. Only 
 - Existing empty tasks remain readable but need a detail on their next update.
 - Dependencies must exist. Self-dependencies and cycles are rejected.
 - Linked report answers are stored as distinct task snapshots, with their values, labels, and timestamps. They survive unlinking and report removal.
-- Acknowledgement with task options creates the task first and commits both changes together. Failed validation leaves the target unacknowledged.
+- With one target, `-i ID -t TITLE -d DETAIL` commits a linked task and acknowledgement together. `-T` and `-S` set task type and scope.
+- Multi-ID acknowledgement is atomic. A bad ID leaves every target unchanged.
 - On upgrade, linked historical answers are backfilled. Legacy answers use their last recorded modification time and current field labels when original metadata is unavailable.
 - Removing a task removes its dependency links from other tasks.
 - Use `steer task mod ID deets TEXT` to append a detail and `steer task mod ID deets rm NUMBER` to remove one. Detail numbers are displayed from 1.
