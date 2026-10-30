@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `skills/arena-steering/README.md`: Document the message retry duplication risk found during the parity audit.
+
 - `assets/messages-view.js` and `scripts/arena_steering/server.py`: Match v1 paste thresholds and support Ctrl+Shift+V plain-text bypass.
 
 - `scripts/arena_steering/cli.py`: Fix state under `arena-state` and use a separate v2 database filename while v1 remains active. Keep demo state in `arena-state/demo/`.
