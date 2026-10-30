@@ -229,7 +229,7 @@ The server sends `change`, `reload`, `heartbeat`, and `report.acked` events. Res
 
 The survey accepts a graded JSON array, a JSON array string, or a nonempty key-value object. Array submissions use the schema in [`references/survey.json`](references/survey.json). Submitting clears the bible-check interrupt. The CLI also accepts `key=value` entries or a JSON array.
 
-The server rejects paths that escape the relevant static directory. The server loads Mermaid from sibling `arena-skill/assets`, which must be present for diagram rendering.
+The server rejects paths that escape the relevant static directory. The v2 assets include Mermaid and its license.
 
 ## v1 and v2 parity
 
@@ -245,7 +245,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Both require acknowledgement only for the latest answer. |
 | Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal | No pin, visibility-state, worker answer, or forward routes. Guards and republish contract differ. |
 | Report publication | Local image embedding, diff marker validation, optional submission format, and publication verification | Markdown publication and field parsing | Local image embedding is intentionally dropped. No marker-validation flag, schema option, or explicit rendered verification step is present. |
-| Markdown and images | Markdown, code controls, Mermaid, images, and zoomable preview | Markdown, code copying, Mermaid, images, and a lightbox | Mermaid uses sibling v1 assets. Standalone packaging and renderer compatibility need verification. |
+| Markdown and images | Markdown, code controls, Mermaid, images, and zoomable preview | Markdown, code copying, Mermaid, images, and a lightbox | V2 bundles Mermaid. Renderer compatibility needs verification. |
 | State recovery | Import, compare, save, restore, clear, size status, clean, and userscript autosave | SQLite persists normal state | No matching state-management or userscript-autosave CLI commands. Backups do not imply attachment bytes are preserved. |
 | Downloads | Browser download queue, approval for agent requests, retries, and optional proxy fallback | Upload staging and static attachment serving | V2 intentionally drops browser downloads and agent download requests. |
 | Multi-session | Board, allowlist, main session, heartbeat, messages, attachments, and wake | Native Git worktrees | V2 intentionally drops the multi-session board. Worktrees do not replace coordination. |
