@@ -141,6 +141,7 @@ export function renderMessagesView(container, state, handlers) {
     ? state.composerAttachments
     : [];
   const composerExpanded = Boolean(state.composerExpanded);
+  const pendingSend = state.pendingSend;
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
 
   const filteredMessages = (state.messages || []).filter((msg) => {
@@ -338,6 +339,7 @@ export function renderMessagesView(container, state, handlers) {
               )
               .join("")}
           </div>
+          ${pendingSend && !state.sending ? `<div class="composer-send-status" role="status">Send unconfirmed. The original may have been sent. <button type="button" id="retry-send">Retry previous send</button> <button type="button" id="discard-send" title="The original send might have succeeded">Discard retry</button></div>` : ""}
           <div class="composer-shell">
             <button
               id="preview-msg"
@@ -392,7 +394,7 @@ export function renderMessagesView(container, state, handlers) {
               aria-label="Send message"
               title="Send message"
               aria-busy="false"
-              ${composerAttachments.some((item) => item.status !== "ready") ? "disabled" : ""}
+              ${state.sending || composerAttachments.some((item) => item.status !== "ready") ? "disabled" : ""}
             >
               <svg class="lucide lucide-arrow-up" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>
             </button>
@@ -709,30 +711,42 @@ export function renderMessagesView(container, state, handlers) {
     await handlers.onStageComposerFiles?.(files);
   });
 
-  const form = container.querySelector("#form");
-  form?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const submittedDraft = msgEl?.value || "";
+  async function submitPayload(payload, submittedDraft) {
     const submittedRevision = draftRevision;
-    const body = submittedDraft.trim();
-    if (!body && !composerAttachments.length) return;
-    if (composerAttachments.some((item) => item.status !== "ready")) return;
-    pinnedToBottom = true;
     try {
-      await handlers.onSendMessage({
-        body,
-        parent_ids: [...selectedReplyParentIds],
-        attachments: composerAttachments.map((item) => item.attachment),
-        attachmentIds: composerAttachments.map((item) => item.id),
-      });
+      await handlers.onSendMessage(payload);
     } catch (error) {
       console.error(error);
       return;
     }
     const currentMsgEl = container.querySelector("#msg");
-    if (draftRevision === submittedRevision && (!currentMsgEl || currentMsgEl.value === submittedDraft)) {
+    if (draftRevision === submittedRevision && (currentMsgEl ? currentMsgEl.value === submittedDraft : readComposerDraft() === submittedDraft)) {
       writeComposerDraft("");
       if (currentMsgEl && currentMsgEl.value === submittedDraft) currentMsgEl.value = "";
     }
+  }
+
+  container.querySelector("#discard-send")?.addEventListener("click", () => handlers.onDiscardPendingSend?.());
+
+  container.querySelector("#retry-send")?.addEventListener("click", () => {
+    if (!pendingSend) return;
+    submitPayload({ ...pendingSend.content, attachmentIds: pendingSend.attachmentIds, rawDraft: pendingSend.rawDraft }, pendingSend.rawDraft);
+  });
+
+  const form = container.querySelector("#form");
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const submittedDraft = msgEl?.value || "";
+    const body = submittedDraft.trim();
+    if (!body && !composerAttachments.length) return;
+    if (state.sending || composerAttachments.some((item) => item.status !== "ready")) return;
+    pinnedToBottom = true;
+    submitPayload({
+      body,
+      parent_ids: [...selectedReplyParentIds],
+      attachments: composerAttachments.map((item) => item.attachment),
+      attachmentIds: composerAttachments.map((item) => item.id),
+      rawDraft: submittedDraft,
+    }, pendingSend ? pendingSend.rawDraft : submittedDraft);
   });
 }

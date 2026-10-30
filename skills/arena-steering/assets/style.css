@@ -1483,6 +1483,19 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   border-color: hsl(var(--border-strong));
 }
 
+.composer-send-status {
+  margin-bottom: 8px;
+  color: hsl(var(--text-secondary));
+  font-size: 12px;
+}
+
+.composer-send-status button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
 .composer-attachments {
   display: flex;
   flex-wrap: wrap;

@@ -51,6 +51,11 @@ class MessageRepository(Protocol):
   def save_message(self, message: Message) -> Message:
     """Insert or update a message."""
 
+  def save_message_once(
+    self, message: Message, request_id: str, fingerprint: str
+  ) -> Message:
+    """Atomically create or retrieve a message for a client request."""
+
   def append_message_ack(self, msg_id: str, reply: str, now: str) -> Message:
     """Atomically append a reply and reset its receipt."""
 

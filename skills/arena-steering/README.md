@@ -31,6 +31,8 @@ Keep session state outside version control.
 - See sent, seen, and acknowledged states. Show or hide hidden messages, and ask a waiting agent to skip its poll.
 - Write Markdown, preview the draft, expand the composer, attach files, remove staged attachments, and drop files into the messages area.
 - Staged files show uploading, ready, or failed states. Retry or remove failed files before sending.
+- An unconfirmed send retains its draft and offers a retry. With session storage available, the retry uses the original request ID and payload after reload.
+- The server deduplicates request IDs atomically. Discarding a retry does not undo a send that may already have succeeded.
 - Message text persists in session storage across reloads and tab changes. File objects do not persist across reloads.
 - A paste over 1,500 Unicode characters or at least 15 lines becomes a text attachment. Ctrl+Shift+V pastes plain text without staging.
 - Choose one or more parent messages by clicking their IDs. Shift-click copies an ID, and parent chips jump to their messages.
@@ -178,7 +180,7 @@ Successful creates return HTTP 201. Other successful route operations return 200
 | --- | --- | --- |
 | Mark message replies seen | `revision` is the rendered reply-list digest. | `message` and `matched`. Stale revisions return HTTP 409. |
 | List messages | `all=1`, `hidden=1`, `before=ID`, and `limit=N` are optional. | `messages`, `total`, and `has_more`. |
-| Create message | `body`, optional `id`, `hidden`, `blocking`, `parent_ids`, and `attachments`. | `message`, including rendered body and acknowledgement HTML. |
+| Create message | `body`, optional `id`, `request_id`, `hidden`, `blocking`, `parent_ids`, and `attachments`. | `message`, including rendered body and acknowledgement HTML. |
 | Upload | JSON `file` object with `name` and `content_base64` or `text`, or multipart `file`. | `attachment` with name, path, size, presence, and static URL. |
 | Message with file | Message fields plus `file`, `attachments`, or `pasted_text`. | `message`. A long paste uses `pasted-text.txt`. |
 | Acknowledge | `markdown` or `ack`. | `message` or `answer`, depending on the route. |
@@ -239,7 +241,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Rename and unlink | Rename note, answer, task, or report. Unlink submissions from task answer lists | Rename task or report and unlink task links by ID and type | Note and answer rename and v1 submission-unlink semantics differ. |
 | GitHub helpers | PR update with verification and job-log URL resolution, including proxy fallback | PR update with verification and job-log output via `gh` | Log return format and proxy fallback differ. |
 | Utilities and gate | `skills`, `agents`, `key`, `gate`, `outline`, and `image-data-uri` | No corresponding v2 commands registered | Utilities and gate are separate from the core inbox. |
-| Live transport | WebSocket, heartbeat, and polling fallback | WebSocket, heartbeat, reconnect, polling fallback, and typed report acknowledgement events | V2 retries WebSocket failures over HTTP, including writes. Replayed message POSTs created duplicate messages in an in-memory simulation. |
+| Live transport | WebSocket, heartbeat, and polling fallback | WebSocket, heartbeat, reconnect, polling fallback, and typed report acknowledgement events | V2 deduplicates message sends by request ID. Other retried writes may still duplicate operations. |
 | Survey and interrupt | Survey, image prompt, results, and bible check | Survey CLI, image prompt, results modal, and interrupt | Storage, timing, and schema behavior need a contract-level comparison. |
 | Appearance and navigation | Theme control, tab state, mobile navigation, and pinch zoom | Responsive tabs, image wheel zoom, and drag | V1 theme control and pinch gesture are not present in v2 page controls. |
 | Proxy and external channel | Separate egress proxy routes and an opt-in external-channel recipe | No egress proxy or external-channel recipe | Separate from the browser steering server. |

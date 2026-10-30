@@ -566,19 +566,21 @@ const uploads = createComposerUploads(store, async (file) => {
 });
 const first = uploads.stage([{name:'first'}]);
 assert.equal(state.composerAttachments[0].status, 'uploading');
+const firstId = state.composerAttachments[0].id;
 await uploads.stage([{name:'second'}]);
+const secondId = state.composerAttachments[1].id;
 assert.deepEqual(state.composerAttachments.map(x => x.status), ['uploading', 'ready']);
 rejectFirst(new Error('offline'));
 await first;
 assert.equal(state.composerAttachments[0].status, 'failed');
-await uploads.retry('1');
+await uploads.retry(firstId);
 assert.deepEqual(state.composerAttachments.map(x => x.status), ['ready', 'ready']);
-uploads.clearSent(['1']);
+uploads.clearSent([firstId]);
 assert.deepEqual(state.composerAttachments.map(x => x.name), ['second']);
-uploads.remove('2');
+uploads.remove(secondId);
 assert.equal(state.composerAttachments.length, 0);
 const pending = uploads.stage([{name:'first'}]);
-uploads.remove('3');
+uploads.remove(state.composerAttachments[0].id);
 await pending;
 assert.equal(state.composerAttachments.length, 0);
 """

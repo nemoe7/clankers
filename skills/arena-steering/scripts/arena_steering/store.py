@@ -84,6 +84,12 @@ class SqliteStore:
           modified_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS message_requests (
+          request_id TEXT PRIMARY KEY,
+          fingerprint TEXT NOT NULL,
+          message_id TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS meta (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
@@ -202,6 +208,47 @@ class SqliteStore:
           ),
         )
     return message
+
+  def save_message_once(
+    self, message: Message, request_id: str, fingerprint: str
+  ) -> Message:
+    """Atomically create or retrieve a message for a client request."""
+    with self._lock, self._conn:
+      self._conn.execute("BEGIN IMMEDIATE")
+      row = self._conn.execute(
+        "SELECT fingerprint, message_id FROM message_requests WHERE request_id = ?",
+        (request_id,),
+      ).fetchone()
+      if row is not None:
+        if row["fingerprint"] != fingerprint:
+          raise ValueError("Request ID was already used for different content")
+        existing = self._conn.execute(
+          "SELECT * FROM messages WHERE id = ?", (row["message_id"],)
+        ).fetchone()
+        if existing is None:
+          raise ValueError("Original message for request ID is missing")
+        return self._row_to_message(existing)
+      self._conn.execute(
+        """INSERT INTO messages
+          (id, body, hidden, blocking, attachments_json, parent_ids_json, status, acks_json, modified_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+          message.id,
+          message.body,
+          int(message.hidden),
+          int(message.blocking),
+          json.dumps([item.to_dict() for item in message.attachments]),
+          json.dumps(message.parent_ids),
+          message.status,
+          json.dumps(message.acks),
+          message.modified_at,
+        ),
+      )
+      self._conn.execute(
+        "INSERT INTO message_requests (request_id, fingerprint, message_id) VALUES (?, ?, ?)",
+        (request_id, fingerprint, message.id),
+      )
+      return message
 
   def append_message_ack(self, msg_id: str, reply: str, now: str) -> Message:
     """Append under a database write lock and reset the receipt atomically."""

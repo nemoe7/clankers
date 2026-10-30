@@ -211,8 +211,8 @@ export const api = {
     });
     return requestJson("GET", `/messages?${q.toString()}`);
   },
-  sendMessage({ body, hidden = false, blocking = true, parent_ids = [] }) {
-    return requestJson("POST", "/messages", { body, hidden, blocking, parent_ids });
+  sendMessage({ body, hidden = false, blocking = true, parent_ids = [], request_id }) {
+    return requestJson("POST", "/messages", { body, hidden, blocking, parent_ids, request_id });
   },
   markRepliesSeen(id, revision) {
     return requestJson("POST", `/messages/${encodeURIComponent(id)}/replies-seen`, { revision });
@@ -230,6 +230,7 @@ export const api = {
     parent_ids = [],
     attachments = [],
     pasted_text = undefined,
+    request_id = undefined,
   }) {
     return requestJson("POST", "/messages/with-file", {
       body,
@@ -238,6 +239,7 @@ export const api = {
       parent_ids,
       attachments,
       pasted_text,
+      request_id,
     });
   },
   skipPoll() {
