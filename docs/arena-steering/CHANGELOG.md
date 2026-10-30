@@ -56,6 +56,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `server.py`: Return report-answer acknowledgements from the message route.
+
 - `cli.py`: Create acknowledgement tasks and replies in one transaction.
 
 - `assets/markdown.js` and `scripts/demo.py`: Use warm Arena colors for the Mermaid theme and the demo PNG, GIF, and SVG files.
