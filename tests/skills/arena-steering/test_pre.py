@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import io
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 from arena_steering import cli, pre
 from arena_steering.cli import main as cli_main
+from arena_steering.server import scripts_signature
 
 
 @pytest.fixture(autouse=True)
@@ -171,3 +176,143 @@ def test_pipeline_order_is_the_registry_order() -> None:
   assert names.index("sleep") < names.index("gate")
   assert names.index("bible") > names.index("gate")
   assert names.index("bare") > names.index("gate")
+
+
+def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
+  root = Path(__file__).resolve().parents[3]
+  project = tmp_path / "project with spaces"
+  scripts = project / ".agents" / "skills" / "arena-steering" / "scripts"
+  shutil.copytree(root / "skills" / "arena-steering" / "scripts", scripts)
+  shutil.copytree(
+    root / "skills" / "arena-steering" / "references", scripts.parent / "references"
+  )
+  home = tmp_path / "home with spaces"
+  python = home / ".agents" / ".steer-venv" / "bin" / "python"
+  python.parent.mkdir(parents=True)
+  python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+  python.chmod(0o755)
+  profile = home / ".bash_profile"
+  profile.write_text("# Existing profile content\n", encoding="utf-8")
+  env = {**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin"}
+  install = scripts / "install.sh"
+  for _ in range(2):
+    result = subprocess.run(
+      ["bash", str(install)],
+      check=False,
+      cwd=project,
+      env=env,
+      capture_output=True,
+      text=True,
+    )
+    assert result.returncode == 0, result.stderr
+  profile_text = profile.read_text(encoding="utf-8")
+  assert profile_text.count("# Existing profile content") == 1
+  result = subprocess.run(
+    ["bash", "-c", 'source "$HOME/.bash_profile"; command -v steer; steer --version'],
+    check=False,
+    cwd=project,
+    env=env,
+    capture_output=True,
+    text=True,
+  )
+  assert result.returncode == 0, result.stderr
+  assert str(home / ".local" / "bin" / "steer") in result.stdout
+  assert "steer 2.1.0" in result.stdout
+
+
+def test_installer_does_not_overwrite_an_unrelated_steer(tmp_path: Path) -> None:
+  root = Path(__file__).resolve().parents[3]
+  home = tmp_path / "home"
+  command = home / ".local" / "bin" / "steer"
+  command.parent.mkdir(parents=True)
+  command.write_text("unrelated command\n", encoding="utf-8")
+  env = {**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin"}
+  result = subprocess.run(
+    ["bash", str(root / "skills" / "arena-steering" / "scripts" / "install.sh")],
+    check=False,
+    cwd=root,
+    env=env,
+    capture_output=True,
+    text=True,
+  )
+  assert result.returncode != 0
+  assert "already exists" in result.stderr
+  assert command.read_text(encoding="utf-8") == "unrelated command\n"
+  target = home / "existing"
+  target.write_text("# arena-steering-installed\nother content\n", encoding="utf-8")
+  command.unlink()
+  command.symlink_to(target)
+  result = subprocess.run(
+    ["bash", str(root / "skills" / "arena-steering" / "scripts" / "install.sh")],
+    check=False,
+    cwd=root,
+    env=env,
+    capture_output=True,
+    text=True,
+  )
+  assert result.returncode != 0 and "already exists" in result.stderr
+  assert (
+    target.read_text(encoding="utf-8") == "# arena-steering-installed\nother content\n"
+  )
+
+
+def test_serve_uses_fixed_port_and_rejects_overrides(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  seen: list[tuple[str, int]] = []
+
+  class FakeServer:
+    server_address = ("0.0.0.0", 8000)
+
+    def serve_forever(self) -> None:
+      assert (_isolate_state / "server.json").is_file()
+
+    def server_close(self) -> None:
+      pass
+
+  def create(_app, *, host: str, port: int):
+    seen.append((host, port))
+    return FakeServer()
+
+  monkeypatch.setattr(cli, "create_http_server", create)
+  code, _ = _run("serve")
+  assert code == 0 and seen == [("0.0.0.0", 8000)]
+  assert not (_isolate_state / "server.json").exists()
+  with pytest.raises(SystemExit) as error:
+    _run("serve", "--port", "8101")
+  assert error.value.code == 2
+  assert seen == [("0.0.0.0", 8000)]
+
+
+def test_demo_lives_in_maintenance_and_retains_port_option(tmp_path: Path) -> None:
+  root = Path(__file__).resolve().parents[3]
+  demo = root / "maintenance" / "demo-arena-steer.py"
+  assert demo.is_file()
+  assert not (root / "skills" / "arena-steering" / "scripts" / "demo.py").exists()
+  assert str(demo) in {item[0] for item in scripts_signature()}
+  help_result = subprocess.run(
+    [sys.executable, str(demo), "--help"],
+    check=False,
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+  )
+  assert help_result.returncode == 0, help_result.stderr
+  assert "--port" in help_result.stdout
+  seed_result = subprocess.run(
+    [sys.executable, str(demo), "--seed-only", "--port", "8135"],
+    check=False,
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+  )
+  assert seed_result.returncode == 0, seed_result.stderr
+  assert (tmp_path / "arena-state" / "demo" / "state.sqlite3").is_file()
+
+
+def test_moved_demo_reseeds_a_demo_store_on_reload(tmp_path: Path) -> None:
+  store = cli.SqliteStore(tmp_path / "arena-steering-demo-fixture" / "state.sqlite3")
+  app = cli.SteeringApp(store)
+  assert len(app.messages.list_messages(unread_only=False, include_hidden=True)) >= 35
+  assert len(app.tasks.list_tasks(include_finished=True)) >= 40
+  store.close()

@@ -87,9 +87,6 @@ def main(
   sub = parser.add_subparsers(dest="command")
 
   serve_p = sub.add_parser("serve", help="Start the local steering HTTP server.")
-  serve_p.add_argument(
-    "--port", type=int, default=SERVE_PORT, help="Port to bind (default: 8000)."
-  )
 
   read_p = sub.add_parser("read", help="Read pending messages and report answers.")
 
@@ -205,9 +202,9 @@ def main(
   store, messages, tasks, reports = open_services(resolved_state_dir)
   try:
     if cmd == "serve":
-      parsed = serve_p.parse_args(cmd_args)
+      serve_p.parse_args(cmd_args)
       app = SteeringApp(store)
-      httpd = create_http_server(app, host=BIND_HOST, port=parsed.port)
+      httpd = create_http_server(app, host=BIND_HOST, port=SERVE_PORT)
       port = int(httpd.server_address[1])
       server_file = resolved_state_dir / "server.json"
       server_file.write_text(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import runpy
 import subprocess
 from pathlib import Path
 
@@ -12,11 +13,16 @@ from arena_steering.server import (
   reload_server_handler,
 )
 from arena_steering.store import SqliteStore
-from demo import SCROLLSPY_ZONES_SVG, TOKENS_SWATCH_SVG, seed_demo_store
-from demo import main as demo_main
 
-SKILL_DIR = Path(__file__).resolve().parents[3] / "skills" / "arena-steering"
+ROOT = Path(__file__).resolve().parents[3]
+SKILL_DIR = ROOT / "skills" / "arena-steering"
 ASSETS_DIR = SKILL_DIR / "assets"
+DEMO_PATH = ROOT / "maintenance" / "demo-arena-steer.py"
+DEMO = runpy.run_path(str(DEMO_PATH))
+SCROLLSPY_ZONES_SVG = DEMO["SCROLLSPY_ZONES_SVG"]
+TOKENS_SWATCH_SVG = DEMO["TOKENS_SWATCH_SVG"]
+seed_demo_store = DEMO["seed_demo_store"]
+demo_main = DEMO["main"]
 
 EXPECTED_FONTS = (
   "Basel_Grotesk_Bold.woff2",
@@ -363,7 +369,7 @@ def test_mermaid_and_demo_media_use_warm_arena_tokens() -> None:
   for colour in SLATE_MERMAID_COLORS:
     assert colour not in theme
 
-  demo_py = (SKILL_DIR / "scripts" / "demo.py").read_text(encoding="utf-8")
+  demo_py = DEMO_PATH.read_text(encoding="utf-8")
   for colour in (
     WARM_SURFACE_PRIMARY,
     WARM_SURFACE_SECONDARY,

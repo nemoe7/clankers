@@ -14,9 +14,9 @@ Use one `steer` server and one state directory per session (`arena-state` by def
 ## Server and version
 
 ```bash
-skills/arena-steering/scripts/steer --version
-skills/arena-steering/scripts/steer serve --port 8100
-skills/arena-steering/scripts/demo.py --port 8100
+.agents/skills/arena-steering/scripts/install.sh
+steer --version
+steer serve
 ```
 
 ## Messages (`Inbox`)

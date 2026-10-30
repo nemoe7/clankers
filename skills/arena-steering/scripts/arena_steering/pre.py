@@ -126,7 +126,7 @@ class BarePathReminder:
   name = "bare"
 
   def applies(self, ctx: PreContext) -> bool:
-    return "/scripts/steer" in ctx.line or "/scripts/demo.py" in ctx.line
+    return "/scripts/steer" in ctx.line
 
   def run(self, ctx: PreContext) -> PreResult:
     return PreResult(["Use bare `steer` from any directory. Drop full path."])

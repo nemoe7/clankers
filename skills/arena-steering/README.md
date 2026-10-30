@@ -4,17 +4,23 @@ Arena Steering lets an Arena.ai agent and its owner exchange messages, track dep
 
 ## Start
 
-Requirements: Python 3.11 or later, a persistent workspace, and a process tool that can keep the server running. Run commands from the repo root. The server defaults to port 8100 and listens on all interfaces, so expose it only in a trusted preview environment.
+Requirements: Python 3.11 or later, Bash, a persistent workspace, and a process tool that can keep the server running. After installing the skill under `.agents/skills/`, run:
 
-```cmd
-python skills/arena-steering/scripts/steer --version
-python skills/arena-steering/scripts/steer serve --port 8100
+```bash
+.agents/skills/arena-steering/scripts/install.sh
 ```
 
-Open the preview URL supplied by the host. The demo starts a separate server with sample data:
+The installer prepares `markdown-it-py`, installs `steer` in `~/.local/bin`, and adds that directory to `~/.bash_profile`. Open a new login shell or source that profile, then run:
 
 ```cmd
-python skills/arena-steering/scripts/demo.py --port 8100
+steer --version
+steer serve
+```
+
+The server listens on all interfaces at port 8000. Expose it only in a trusted preview environment, and open the preview URL supplied by the host. The repository demo starts a separate server with sample data and a configurable port:
+
+```cmd
+python maintenance/demo-arena-steer.py --port 8100
 ```
 
 The state directory is `arena-state` in the working directory. V2 uses `steering-v2.sqlite3` there so its database does not collide with v1 `state.sqlite3`. Existing databases are not migrated or deleted. Uploaded files live in `arena-state/uploads/`.
