@@ -211,6 +211,7 @@ class SteeringApp:
     self.router.add("GET", "/survey", self._handle_get_survey)
     self.router.add("POST", "/survey", self._handle_submit_survey)
     self.router.add("POST", "/survey/interrupt", self._handle_survey_interrupt)
+    self.router.add("POST", "/timezone", self._handle_set_timezone)
     self.router.add("POST", "/markdown", self._handle_render_markdown)
 
   def dispatch(
@@ -524,9 +525,25 @@ class SteeringApp:
         "version": __version__,
         "repo": self.repo_name,
         "asset_version": self.asset_signature_hash(),
+        "timezone": self.store.get_meta("timezone", "") or "",
         "survey": survey,
       },
     )
+
+  def _handle_set_timezone(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+  ) -> tuple[int, Any]:
+    timezone_name = str(body.get("timezone", "")).strip()
+    if not timezone_name:
+      raise ValueError("timezone is required")
+    try:
+      from zoneinfo import ZoneInfo
+
+      ZoneInfo(timezone_name)
+    except Exception as exc:
+      raise ValueError(f"Unknown timezone: {timezone_name}") from exc
+    self.store.set_meta("timezone", timezone_name)
+    return (int(HTTPStatus.OK), {"timezone": timezone_name})
 
   def _handle_get_survey(
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any

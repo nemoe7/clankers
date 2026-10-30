@@ -192,6 +192,9 @@ export const api = {
   getHealth() {
     return requestJson("GET", "/health");
   },
+  setTimezone(timezone) {
+    return requestJson("POST", "/timezone", { timezone });
+  },
   listMessages({ all = true, hidden = false } = {}) {
     const q = new URLSearchParams({
       all: all ? "1" : "0",
