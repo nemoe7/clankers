@@ -209,19 +209,29 @@ The server rejects paths that escape the relevant static directory. The server l
 
 V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table describes the current repo implementations, not identical interfaces.
 
-| Area | v1 | v2 |
-| --- | --- | --- |
-| Inbox and composer | Notes, acknowledgement receipts, search, Markdown preview, uploads, paste, and reply navigation. | Messages, acknowledgement replies, search, Markdown preview, uploads, paste, and multiple reply parents. |
-| Tasks | Queue, task types, dependencies, report waits, filtering, and drag reorder. | Queue, types, dependencies, report waits, filtering, and API position updates. The browser view does not offer drag reorder. |
-| Reports | Fielded reports, drafts, answer history, acknowledgements, stale listing, pinning, and visibility state. | Fielded reports, answer history, acknowledgements, seen states, and stale listing. No pin command or equivalent visibility-state command is exposed. |
-| Report publication | CLI publication supports local-image embedding, marker checks, and optional submission schema. | CLI publication parses Markdown fields. It does not expose those publication options. |
-| State recovery | Import, compare, save, restore, clear, status, cleanup, and userscript autosave. | SQLite persistence and uploaded files. No equivalent state-management CLI or userscript autosave is exposed. |
-| Downloads and board | Browser download queue with agent approval and a multi-session board. | No Downloads or Board tab, or corresponding routes. |
-| Runs and worktrees | Task-linked detached runs and tracked worktrees with allowed-patch collection. | Named detached runs with dependencies and logs, plus native Git worktree lifecycle commands. |
-| Other CLI tools | Skill and agent discovery, inbox gate, key, outline, image data URI, and broader rename. | Task and report rename, task unlink, PR update, and job-log helpers. It does not expose those v1 discovery and gate utilities. |
-| Rendering and transport | Markdown, Mermaid, image preview, WebSocket, and polling fallback. | Markdown, Mermaid, a lightbox, WebSocket, and polling fallback. Mermaid uses the sibling v1 vendor asset. |
-| Survey and session | Survey results in server memory, interrupt, browser timezone, theme control, and mobile controls. | Survey data persists in SQLite. V2 has an interrupt and responsive views, but no theme selector. |
-| Egress | Separate proxy routes and an opt-in external-channel recipe. | Neither is included in this skill. |
+| Area | v1 | v2 | Parity |
+| --- | --- | --- | --- |
+| Start and configuration | `init`, `serve`, state directory, installed wrapper, and restore installer | `serve`, `--state-dir`, and `ARENA_STATE_DIR`, plus browser timezone | No v2 `init --tz` or equivalent install and restore workflow. |
+| Inbox | Read and poll, note history, quiet notes, seen receipts, and acknowledgement receipts | Read and poll, message history, hidden messages, non-blocking messages, and acknowledgement replies | Names and paging differ. |
+| Message composer | Markdown preview, staging, paste, drop, expansion, reply links, search, and jumps | Preview, staging, paste, drop, expansion, multi-parent replies, search, and jumps | V1 stages text at 15 lines or over 1,500 characters and protects IME and touch Enter. V2 stages over 40 lines or 2,400 characters and submits Enter during IME composition. |
+| Message extras | Slash commands, reference navigation, and server-persisted reply-seen counts | Parent chips jump to loaded messages. New-reply counts stay in browser memory. | V2 intentionally omits slash commands and does not persist message reply-seen counts. |
+| Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report and dependency blocking, details, search, and filters | No drag reorder. Task commands differ, answer IDs can be stored as message links, and acknowledgement plus task creation is not atomic. |
+| Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Multiple-answer delivery has the defect above. |
+| Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal | No pin, visibility-state, worker answer, or forward routes. Guards and republish contract differ. |
+| Report publication | Local image embedding, diff marker validation, optional submission format, and publication verification | Markdown publication and field parsing | No matching image embedding, marker-validation flag, schema option, or explicit rendered verification step in the CLI. |
+| Markdown and images | Markdown, code controls, Mermaid, images, and zoomable preview | Markdown, code copying, Mermaid, images, and a lightbox | Mermaid uses sibling v1 assets. Standalone packaging and renderer compatibility need verification. |
+| State recovery | Import, compare, save, restore, clear, size status, clean, and userscript autosave | SQLite persists normal state | No matching state-management or userscript-autosave CLI commands. Backups do not imply attachment bytes are preserved. |
+| Downloads | Browser download queue, approval for agent requests, retries, and optional proxy fallback | Upload staging and static attachment serving | No Downloads tab or fetch-job routes. |
+| Multi-session | Board, allowlist, main session, heartbeat, messages, attachments, and wake | Native Git worktrees | No Board tab or board routes. Worktrees do not replace coordination. |
+| Runs | Detached named runs, dependency gating, task links, and later verdict notifications | Detached named runs, logs, dependencies, and PR check watching | No v1 task-link option or later CLI verdict notices. |
+| Worktrees | Tracked detached worktrees with gate and allowed-patch collection | Native Git add, list, remove, and prune under `.worktrees` | Different contract from gated patch collection. |
+| Rename and unlink | Rename note, answer, task, or report. Unlink submissions from task answer lists | Rename task or report and unlink task links by ID and type | Note and answer rename and v1 submission-unlink semantics differ. |
+| GitHub helpers | PR update with verification and job-log URL resolution, including proxy fallback | PR update with verification and job-log output via `gh` | Log return format and proxy fallback differ. |
+| Utilities and gate | `skills`, `agents`, `key`, `gate`, `outline`, and `image-data-uri` | No corresponding v2 commands registered | Utilities and gate are separate from the core inbox. |
+| Live transport | WebSocket, heartbeat, and polling fallback | WebSocket, heartbeat, reconnect, polling fallback, and typed report acknowledgement events | Both retry after some failures. V2 falls back from WebSocket to HTTP, including mutations. Idempotence needs testing. |
+| Survey and interrupt | Survey, image prompt, results, and bible check | Survey CLI, image prompt, results modal, and interrupt | Storage, timing, and schema behavior need a contract-level comparison. |
+| Appearance and navigation | Theme control, tab state, mobile navigation, and pinch zoom | Responsive tabs, image wheel zoom, and drag | V1 theme control and pinch gesture are not present in v2 page controls. |
+| Proxy and external channel | Separate egress proxy routes and an opt-in external-channel recipe | No egress proxy or external-channel recipe | Separate from the browser steering server. |
 
 V2 is not a drop-in CLI or state-format replacement for v1. Its current multiple-answer delivery limitation is described above. Consult [v1 commands](../arena-skill/references/commands.md), [v1 reports](../arena-skill/references/reports.md), and the v2 source and tests for edge cases.
 
