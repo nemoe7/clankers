@@ -32,6 +32,8 @@ This log has no Unreleased section.
 
 - `scripts/arena_steering/cli.py`: Register `steer gate` and `steer skills`.
 - `scripts/hooks/gate.sh`: Ship the pre-command hook wrapper for the inbox gate.
+- `scripts/arena_steering/cli.py`: Add `worktree collect` to print a worktree patch against its merge base.
+- `assets/app.js`: Pinch the image viewer with two pointers.
 
 ### Fixed
 

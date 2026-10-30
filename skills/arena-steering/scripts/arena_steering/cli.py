@@ -654,7 +654,7 @@ def _repo_root() -> Path:
 
 def _run_worktree(args: list[str], out: TextIO) -> int:
   if not args:
-    raise ValueError("Usage: steer worktree <add|list|remove|prune> ...")
+    raise ValueError("Usage: steer worktree <add|list|remove|prune|collect> ...")
   subcmd = args[0]
   if subcmd == "list":
     print(_run_git(["git", "worktree", "list", "--porcelain"]), end="", file=out)
@@ -676,6 +676,28 @@ def _run_worktree(args: list[str], out: TextIO) -> int:
     git_args.append(str(target))
     _run_git(git_args)
     print(f"Added worktree {name} at {target}", file=out)
+    return 0
+  if subcmd == "collect":
+    if len(args) != 2:
+      raise ValueError("Usage: steer worktree collect <name>")
+    name = _safe_local_name(args[1])
+    target = _repo_root() / ".worktrees" / name
+    if not target.is_dir():
+      raise ValueError(f"No worktree at {target}")
+    head = _run_git(["git", "-C", str(target), "rev-parse", "HEAD"]).strip()
+    base = _run_git(["git", "merge-base", head, "HEAD"]).strip()
+    if not base:
+      raise ValueError(
+        f"No shared base between {name} and HEAD; refuse to guess a diff"
+      )
+    patch = _run_git(["git", "-C", str(target), "diff", base])
+    print(patch, end="", file=out)
+    untracked = _run_git(
+      ["git", "-C", str(target), "ls-files", "--others", "--exclude-standard"]
+    ).strip()
+    if untracked:
+      print("Untracked files, not in the patch:", file=out)
+      print(untracked, file=out)
     return 0
   if subcmd == "remove":
     if len(args) != 2:

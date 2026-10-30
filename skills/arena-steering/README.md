@@ -90,7 +90,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer pr-update -n NUMBER -t TITLE -f FILE` | Update a pull request with `gh`, then verify its title and body. |
 | `steer job-log -j JOB` or `steer job-log -r RUN` | Print a GitHub Actions log with `gh`. Supply exactly one ID. |
 | `steer worktree add NAME [-b BRANCH]` | Add a native Git worktree under `.worktrees/`. |
-| `steer worktree list`, `remove NAME`, or `prune` | List, remove, or prune worktrees. |
+| `steer worktree list`, `remove NAME`, `prune`, or `collect NAME` | List, remove, or prune worktrees, or print the patch a worktree carries against its merge base. |
 | `steer run start [-t TASK] [-a NAME] NAME -- COMMAND` | Start a detached named run and optionally link it to a task. A dependency must exist and pass before its dependent starts. |
 | `steer run logs NAME [-n LINES]` | Show run status and log tail. |
 | `steer run pr-checks [-n NUMBER]` | Start a detached `gh pr checks --watch` run. |

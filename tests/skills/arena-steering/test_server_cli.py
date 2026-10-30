@@ -1833,3 +1833,37 @@ def test_cli_skills_lists_repo_and_installed_skills(
   assert all(
     set(entry) == {"name", "source", "path", "description"} for entry in entries
   )
+
+
+def test_cli_worktree_collect_prints_the_patch(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  import subprocess
+
+  repo = tmp_path / "repo"
+  repo.mkdir()
+  (repo / "note.txt").write_text("one\n", encoding="utf-8")
+  commits = (
+    ["init"],
+    ["add", "note.txt"],
+    ["-c", "user.email=t@example.com", "-c", "user.name=T", "commit", "-m", "init"],
+  )
+  for args in commits:
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+  monkeypatch.chdir(repo)
+
+  code, out, _ = _run_cli(cli.resolve_state_dir(), "worktree", "add", "probe")
+  assert code == 0 and "Added worktree probe" in out
+
+  worktree = repo / ".worktrees" / "probe"
+  (worktree / "note.txt").write_text("one\ntwo\n", encoding="utf-8")
+  (worktree / "fresh.txt").write_text("new file\n", encoding="utf-8")
+
+  code, out, _ = _run_cli(cli.resolve_state_dir(), "worktree", "collect", "probe")
+  assert code == 0
+  assert "+two" in out
+  assert "Untracked files, not in the patch:" in out
+  assert "fresh.txt" in out
+
+  code, _, err = _run_cli(cli.resolve_state_dir(), "worktree", "collect", "missing")
+  assert code == 1 and "No worktree at" in err
