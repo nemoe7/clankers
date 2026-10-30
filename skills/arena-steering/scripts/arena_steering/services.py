@@ -220,7 +220,7 @@ class MessageService:
       for message in self._messages.list_messages(
         unread_only=False, include_hidden=True
       )
-      if message.status != "acked"
+      if message.status != "acked" and not message.hidden
     ]
     for report in self._reports.list_reports():
       latest = report.latest_unacked_answer
