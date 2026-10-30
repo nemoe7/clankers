@@ -799,3 +799,171 @@ def test_cli_pr_update_and_job_log_use_gh_seam(tmp_path: Path, monkeypatch) -> N
     "123877772372",
     "--log",
   ]
+
+
+def test_cli_worktree_lifecycle_uses_native_git(tmp_path: Path, monkeypatch) -> None:
+  import subprocess
+
+  repo = tmp_path / "repo"
+  repo.mkdir()
+  state_dir = tmp_path / "state"
+  state_dir.mkdir()
+
+  def git(*args: str) -> None:
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+
+  git("init", "-b", "main")
+  git("config", "user.email", "steer@example.test")
+  git("config", "user.name", "Steer Test")
+  (repo / "README.md").write_text("readme\n", encoding="utf-8")
+  git("add", "README.md")
+  git("commit", "-m", "init")
+  monkeypatch.chdir(repo)
+
+  code, out, _ = _run_cli(
+    state_dir, "worktree", "add", "feat-one", "-b", "feat/feat-one"
+  )
+  assert code == 0
+  assert "feat-one" in out
+  worktree_path = repo / ".worktrees" / "feat-one"
+  assert (worktree_path / "README.md").is_file()
+
+  code, out, _ = _run_cli(state_dir, "worktree", "list")
+  assert code == 0
+  assert str(worktree_path) in out
+  assert "branch refs/heads/feat/feat-one" in out
+
+  code, out, _ = _run_cli(state_dir, "worktree", "remove", "feat-one")
+  assert code == 0
+  assert "feat-one" in out
+  assert not worktree_path.exists()
+
+
+def _wait_for_run(state_dir: Path, name: str) -> str:
+  import time
+
+  for _ in range(50):
+    code, out, _ = _run_cli(state_dir, "run", "logs", name)
+    assert code == 0
+    if "run " + name + " exit " in out:
+      return out
+    time.sleep(0.1)
+  raise AssertionError(f"run {name} did not finish")
+
+
+def test_cli_run_start_logs_and_after_chaining(tmp_path: Path) -> None:
+  state_dir = tmp_path / "state"
+  state_dir.mkdir()
+
+  code, out, _ = _run_cli(
+    state_dir, "run", "start", "first", "--", "sh", "-c", "echo first-done"
+  )
+  assert code == 0
+  expected_start = "Started run first"
+  assert expected_start in out
+  assert (_wait_for_run(state_dir, "first")).count("first-done") == 1
+
+  code, out, _ = _run_cli(
+    state_dir,
+    "run",
+    "start",
+    "second",
+    "--after",
+    "first",
+    "--",
+    "sh",
+    "-c",
+    "echo second-done",
+  )
+  assert code == 0
+  second_log = _wait_for_run(state_dir, "second")
+  assert "second-done" in second_log
+  assert "exit 0" in second_log
+
+  code, _, _ = _run_cli(state_dir, "run", "start", "bad", "--", "sh", "-c", "exit 3")
+  assert code == 0
+  assert "exit 3" in _wait_for_run(state_dir, "bad")
+
+  code, _, _ = _run_cli(
+    state_dir,
+    "run",
+    "start",
+    "never",
+    "--after",
+    "bad",
+    "--",
+    "sh",
+    "-c",
+    "echo should-not-run",
+  )
+  assert code == 0
+  never_log = _wait_for_run(state_dir, "never")
+  expected_marker = "should-not" + "-run"
+  assert expected_marker not in never_log
+  assert "exit 125" in never_log
+
+
+def test_cli_run_pr_checks_uses_detached_gh_watch(tmp_path: Path, monkeypatch) -> None:
+  import arena_steering.cli as cli_module
+
+  state_dir = tmp_path / "state"
+  state_dir.mkdir()
+  spawned: list[list[str]] = []
+
+  class FakeProcess:
+    pid = 4242
+
+  def fake_popen(args, **_kwargs):
+    spawned.append(list(args))
+    return FakeProcess()
+
+  monkeypatch.setattr(cli_module.subprocess, "Popen", fake_popen)
+
+  code, out, _ = _run_cli(state_dir, "run", "pr-checks", "-n", "122")
+  assert code == 0
+  assert "Started run pr-checks" in out
+  assert spawned
+  assert "gh pr checks 122 --watch" in " ".join(spawned[0])
+  assert (state_dir / "runs" / "pr-checks.json").is_file()
+
+
+def test_run_rejects_missing_dependency_and_active_duplicate(tmp_path: Path) -> None:
+  state_dir = tmp_path / "state"
+  state_dir.mkdir()
+  code, _, error = _run_cli(
+    state_dir, "run", "start", "child", "--after", "missing", "--", "true"
+  )
+  assert code != 0
+  assert "missing" in error
+  assert not (state_dir / "runs" / "child.json").exists()
+
+  code, _, _ = _run_cli(
+    state_dir, "run", "start", "active", "--", "sh", "-c", "sleep 2"
+  )
+  assert code == 0
+  code, _, error = _run_cli(state_dir, "run", "start", "active", "--", "true")
+  assert code != 0
+  assert "active" in error
+
+
+def test_run_records_shell_builtin_exit(tmp_path: Path) -> None:
+  state_dir = tmp_path / "state"
+  state_dir.mkdir()
+  code, _, _ = _run_cli(state_dir, "run", "start", "builtin", "--", "exit", "7")
+  assert code == 0
+  assert "exit 7" in _wait_for_run(state_dir, "builtin")
+
+
+def test_run_concurrent_starts_have_one_winner(tmp_path: Path) -> None:
+  from concurrent.futures import ThreadPoolExecutor
+
+  state_dir = tmp_path / "state"
+  state_dir.mkdir()
+
+  def start() -> int:
+    return _run_cli(state_dir, "run", "start", "race", "--", "sleep", "2")[0]
+
+  with ThreadPoolExecutor(max_workers=2) as pool:
+    results = list(pool.map(lambda _: start(), range(2)))
+  assert results.count(0) == 1
+  assert sum(result != 0 for result in results) == 1

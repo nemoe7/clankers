@@ -5,8 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shlex
+import sqlite3
 import subprocess
 import sys
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
@@ -154,6 +158,9 @@ def main(
   job_log_p.add_argument("-j", "--job", dest="job_id", default=None)
   job_log_p.add_argument("-r", "--run", dest="run_id", default=None)
 
+  sub.add_parser("worktree", help="Manage native git worktrees under .worktrees/.")
+  sub.add_parser("run", help="Start detached runs and read their logs.")
+
   state_dir, remaining = _extract_global_state_dir(args_list)
   if not remaining:
     parser.print_help(file=stdout)
@@ -162,7 +169,8 @@ def main(
   cmd = remaining[0]
   cmd_args = remaining[1:]
 
-  store, messages, tasks, reports = open_services(resolve_state_dir(state_dir))
+  resolved_state_dir = resolve_state_dir(state_dir)
+  store, messages, tasks, reports = open_services(resolved_state_dir)
   try:
     if cmd == "serve":
       parsed = serve_p.parse_args(cmd_args)
@@ -223,6 +231,10 @@ def main(
     if cmd == "job-log":
       parsed = job_log_p.parse_args(cmd_args)
       return _run_job_log(parsed, stdout)
+    if cmd == "worktree":
+      return _run_worktree(cmd_args, stdout)
+    if cmd == "run":
+      return _run_run(cmd_args, resolved_state_dir, stdout)
     if cmd == "init":
       raise ValueError(
         "steer has no init --tz; the browser sets timezone with POST /api/timezone"
@@ -509,6 +521,220 @@ def _run_job_log(parsed: argparse.Namespace, out: TextIO) -> int:
     args = ["gh", "run", "view", "--job", str(parsed.job_id), "--log"]
   print(_run_gh(args), end="", file=out)
   return 0
+
+
+def _run_git(args: list[str]) -> str:
+  result = subprocess.run(
+    args,
+    check=False,
+    capture_output=True,
+    text=True,
+  )
+  if result.returncode != 0:
+    detail = (result.stderr or result.stdout or "").strip()
+    raise ValueError(f"{' '.join(args)} failed: {detail}")
+  return result.stdout
+
+
+def _safe_local_name(name: str) -> str:
+  cleaned = str(name or "").strip()
+  if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", cleaned):
+    raise ValueError(f"Invalid name: {name!r}")
+  return cleaned
+
+
+def _repo_root() -> Path:
+  top = _run_git(["git", "rev-parse", "--show-toplevel"]).strip()
+  return Path(top) if top else Path.cwd()
+
+
+def _run_worktree(args: list[str], out: TextIO) -> int:
+  if not args:
+    raise ValueError("Usage: steer worktree <add|list|remove|prune> ...")
+  subcmd = args[0]
+  if subcmd == "list":
+    print(_run_git(["git", "worktree", "list", "--porcelain"]), end="", file=out)
+    return 0
+  if subcmd == "prune":
+    _run_git(["git", "worktree", "prune"])
+    print("Pruned worktree records", file=out)
+    return 0
+  if subcmd == "add":
+    add_p = argparse.ArgumentParser(prog="steer worktree add")
+    add_p.add_argument("name")
+    add_p.add_argument("-b", "--branch", default=None)
+    parsed = add_p.parse_args(args[1:])
+    name = _safe_local_name(parsed.name)
+    target = _repo_root() / ".worktrees" / name
+    git_args = ["git", "worktree", "add"]
+    if parsed.branch:
+      git_args += ["-b", parsed.branch]
+    git_args.append(str(target))
+    _run_git(git_args)
+    print(f"Added worktree {name} at {target}", file=out)
+    return 0
+  if subcmd == "remove":
+    if len(args) != 2:
+      raise ValueError("Usage: steer worktree remove <name>")
+    name = _safe_local_name(args[1])
+    target = _repo_root() / ".worktrees" / name
+    _run_git(["git", "worktree", "remove", str(target)])
+    _run_git(["git", "worktree", "prune"])
+    print(f"Removed worktree {name}", file=out)
+    return 0
+  raise ValueError(f"Unknown worktree subcommand: {subcmd!r}")
+
+
+def _runs_dir(state_dir: Path) -> Path:
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True, exist_ok=True)
+  return runs
+
+
+def _start_detached_run(
+  state_dir: Path,
+  name: str,
+  command: list[str],
+  *,
+  after: str | None = None,
+  out: TextIO,
+) -> int:
+  runs = _runs_dir(state_dir).resolve()
+  with sqlite3.connect(runs / ".launch.sqlite3") as lock:
+    lock.execute("BEGIN IMMEDIATE")
+    return _start_locked_run(runs, name, command, after=after, out=out)
+
+
+def _start_locked_run(
+  runs: Path,
+  name: str,
+  command: list[str],
+  *,
+  after: str | None,
+  out: TextIO,
+) -> int:
+  record_path = runs / f"{name}.json"
+  if record_path.exists():
+    previous = json.loads(record_path.read_text(encoding="utf-8"))
+    if not Path(previous["exit_path"]).is_file():
+      raise ValueError(f"Run {name} is already active")
+  dependency = None
+  if after:
+    dep_record_path = runs / f"{after}.json"
+    if not dep_record_path.is_file():
+      raise ValueError(f"Unknown dependency: {after}")
+    dependency = json.loads(dep_record_path.read_text(encoding="utf-8"))
+  run_id = uuid.uuid4().hex
+  log_path = runs / f"{name}-{run_id}.log"
+  exit_path = runs / f"{name}-{run_id}.exit"
+  exit_file = shlex.quote(str(exit_path))
+  temp_exit_file = shlex.quote(str(exit_path) + ".tmp")
+  write_exit = (
+    f'printf "%s\\n" "$status" > {temp_exit_file} && mv {temp_exit_file} {exit_file}'
+  )
+  script_lines: list[str] = []
+  if dependency:
+    dep_exit = shlex.quote(dependency["exit_path"])
+    script_lines.append(f"while [ ! -f {dep_exit} ]; do sleep 0.2; done")
+    script_lines.append(
+      f'if [ "$(cat {dep_exit})" != "0" ]; then '
+      f'echo "dependency {after} did not pass"; '
+      f"status=125; {write_exit}; exit 125; fi"
+    )
+  script_lines.append(f"( {shlex.join(command)} )")
+  script_lines.append(f"status=$?; {write_exit}")
+  log_handle = log_path.open("ab")
+  try:
+    proc = subprocess.Popen(
+      ["/bin/sh", "-c", "\n".join(script_lines)],
+      stdout=log_handle,
+      stderr=subprocess.STDOUT,
+      stdin=subprocess.DEVNULL,
+      start_new_session=True,
+    )
+  finally:
+    log_handle.close()
+  temp_record = runs / f".{name}-{run_id}.json"
+  try:
+    temp_record.write_text(
+      json.dumps(
+        {
+          "name": name,
+          "pid": proc.pid,
+          "command": command,
+          "after": after,
+          "log_path": str(log_path),
+          "exit_path": str(exit_path),
+        }
+      ),
+      encoding="utf-8",
+    )
+    temp_record.replace(record_path)
+  except OSError:
+    proc.terminate()
+    raise
+  print(f"Started run {name} (pid {proc.pid})", file=out)
+  return 0
+
+
+def _run_run(args: list[str], state_dir: Path, out: TextIO) -> int:
+  if not args:
+    raise ValueError("Usage: steer run <start|logs|pr-checks> ...")
+  subcmd = args[0]
+  if subcmd == "start":
+    raw_args = args[1:]
+    if "--" in raw_args:
+      split_at = raw_args.index("--")
+      option_args = raw_args[:split_at]
+      command = raw_args[split_at + 1 :]
+    else:
+      option_args = raw_args
+      command = []
+    start_p = argparse.ArgumentParser(prog="steer run start")
+    start_p.add_argument("name")
+    start_p.add_argument("-a", "--after", default=None)
+    parsed = start_p.parse_args(option_args)
+    if not command:
+      raise ValueError("Usage: steer run start <name> [--after <run>] -- <command...>")
+    return _start_detached_run(
+      state_dir,
+      _safe_local_name(parsed.name),
+      command,
+      after=_safe_local_name(parsed.after) if parsed.after else None,
+      out=out,
+    )
+  if subcmd == "logs":
+    logs_p = argparse.ArgumentParser(prog="steer run logs")
+    logs_p.add_argument("name")
+    logs_p.add_argument("-n", "--lines", type=int, default=50)
+    parsed = logs_p.parse_args(args[1:])
+    name = _safe_local_name(parsed.name)
+    runs = _runs_dir(state_dir)
+    if not (runs / f"{name}.json").is_file():
+      raise KeyError(f"Unknown run: {name}")
+    record = json.loads((runs / f"{name}.json").read_text(encoding="utf-8"))
+    exit_path = Path(record["exit_path"])
+    if exit_path.is_file():
+      status = f"exit {exit_path.read_text(encoding='utf-8').strip()}"
+    else:
+      status = "running"
+    print(f"run {name} {status}", file=out)
+    log_path = Path(record["log_path"])
+    if log_path.is_file():
+      lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+      for line in lines[-parsed.lines :]:
+        print(line, file=out)
+    return 0
+  if subcmd == "pr-checks":
+    checks_p = argparse.ArgumentParser(prog="steer run pr-checks")
+    checks_p.add_argument("-n", "--number", type=int, default=None)
+    parsed = checks_p.parse_args(args[1:])
+    command = ["gh", "pr", "checks"]
+    if parsed.number is not None:
+      command.append(str(parsed.number))
+    command.append("--watch")
+    return _start_detached_run(state_dir, "pr-checks", command, out=out)
+  raise ValueError(f"Unknown run subcommand: {subcmd!r}")
 
 
 def _run_report(args: list[str], reports: ReportService, out: TextIO) -> int:
