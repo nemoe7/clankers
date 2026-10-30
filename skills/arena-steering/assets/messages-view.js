@@ -13,8 +13,8 @@ const SKIP_FORWARD_SVG = `<svg class="lucide lucide-skip-forward" width="16" hei
 const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`;
 
 const MESSAGE_PAGE_SIZE = 15;
-const PASTE_ATTACHMENT_CHAR_THRESHOLD = 2400;
-const PASTE_ATTACHMENT_LINE_THRESHOLD = 40;
+const PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500;
+const PASTE_ATTACHMENT_LINE_THRESHOLD = 15;
 const seenAckCounts = new Map();
 let initializedAckCounts = false;
 let unreadEditedMsgId = null;
@@ -627,14 +627,21 @@ export function renderMessagesView(container, state, handlers) {
     }
   });
 
+  let pasteAsText = false;
   msgEl?.addEventListener("keydown", (event) => {
+    pasteAsText = event.key.toLowerCase() === "v" && event.ctrlKey && event.shiftKey;
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       container.querySelector("#form")?.requestSubmit();
     }
   });
 
+  msgEl?.addEventListener("keyup", () => { pasteAsText = false; });
+  msgEl?.addEventListener("focusout", () => { pasteAsText = false; });
   msgEl?.addEventListener("paste", async (event) => {
+    const plainPaste = pasteAsText;
+    pasteAsText = false;
+    if (plainPaste) return;
     const files = Array.from(event.clipboardData?.files || []);
     if (files.length) {
       event.preventDefault();
@@ -642,10 +649,10 @@ export function renderMessagesView(container, state, handlers) {
       return;
     }
     const pastedText = event.clipboardData?.getData("text/plain") || "";
-    const lineCount = pastedText.split(/\r\n|\r|\n/).length;
+    const lineCount = pastedText.split("\n").length;
     if (
-      pastedText.length > PASTE_ATTACHMENT_CHAR_THRESHOLD ||
-      lineCount > PASTE_ATTACHMENT_LINE_THRESHOLD
+      Array.from(pastedText).length > PASTE_ATTACHMENT_CHAR_THRESHOLD ||
+      lineCount >= PASTE_ATTACHMENT_LINE_THRESHOLD
     ) {
       event.preventDefault();
       const pasteFile = new File([pastedText], "pasted-text.txt", {
