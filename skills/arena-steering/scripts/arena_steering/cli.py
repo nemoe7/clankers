@@ -23,6 +23,8 @@ from .services import MessageService, ReportService, TaskService
 from .store import SqliteStore
 
 HISTORICAL_PAGE_SIZE = 10
+MESSAGE_PAGE_MIN = 5
+MESSAGE_PAGE_MAX = 50
 
 
 def _snippet_words(text: str, max_words: int = 6) -> str:
@@ -100,9 +102,10 @@ def main(
   msg_p = sub.add_parser("msg", help="List or inspect stored messages.")
   msg_p.add_argument("id", nargs="?", help="Message ID, or list for history.")
   msg_list_p = argparse.ArgumentParser(
-    prog="steer msg list", description="List messages newest-first (10/page)."
+    prog="steer msg list", description="List messages newest-first."
   )
   msg_list_p.add_argument("-p", "--page", type=int, default=1)
+  msg_list_p.add_argument("-s", "--page-size", type=int, default=MESSAGE_PAGE_MIN)
   msg_show_p = argparse.ArgumentParser(
     prog="steer msg", description="Show one message by ID."
   )
@@ -304,12 +307,14 @@ def _run_msg(
 ) -> int:
   if not args or args[0] == "list":
     parsed = list_parser.parse_args(args[1:] if args else [])
+    if not MESSAGE_PAGE_MIN <= parsed.page_size <= MESSAGE_PAGE_MAX:
+      raise ValueError("Message page size must be between 5 and 50")
     items = messages.list_messages(
       unread_only=False,
       include_hidden=True,
       newest_first=True,
       page=parsed.page,
-      page_size=HISTORICAL_PAGE_SIZE,
+      page_size=parsed.page_size,
     )
     if not items:
       print("No messages.", file=out)

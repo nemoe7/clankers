@@ -73,7 +73,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer read` | Deliver pending messages and report answers. |
 | `steer poll` | Wait for work or a skip-poll request. |
 | `steer ack [ID] MARKDOWN` | Acknowledge one message or report answer. Omit the ID only when one pending item exists. Optional `-i`, `-t`, `-T`, `-S`, and repeatable `-d` create a linked task. |
-| `steer msg list [-p PAGE]` | List message history, 10 items per page. |
+| `steer msg list [-p PAGE] [-s SIZE]` | List message history. Page size defaults to 5 and ranges from 5 to 50. |
 | `steer msg ID` | Show a message and its acknowledgements and attachments. |
 | `steer tasks [-f] [-p PAGE]` | List upcoming tasks, or page through finished tasks with `-f`. |
 | `steer task ID` | Show a task, its details, and blocking state. |
