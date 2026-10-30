@@ -334,11 +334,38 @@ async function refreshAll(force = false) {
 
 const handlers = {
   async onSendMessage(payload) {
-    await api.sendMessage(payload);
+    const attachments = payload.attachments || [];
+    if (attachments.length) {
+      await api.sendMessageWithFile(payload);
+      store.setState({ composerAttachments: [] });
+    } else {
+      await api.sendMessage(payload);
+    }
     if ((payload.parent_ids || []).length) {
       store.setState({ replyParentIds: [] });
     }
     await refreshAll(true);
+  },
+  async onStageComposerFiles(files) {
+    const current = store.getState().composerAttachments || [];
+    const uploaded = [];
+    for (const file of files || []) {
+      uploaded.push(await api.uploadFile(file));
+    }
+    store.setState({
+      composerAttachments: [...current, ...uploaded.filter(Boolean)],
+    });
+  },
+  onRemoveComposerAttachment(index) {
+    const current = store.getState().composerAttachments || [];
+    store.setState({
+      composerAttachments: current.filter((_, idx) => idx !== Number(index)),
+    });
+  },
+  onToggleComposerExpanded() {
+    store.setState({
+      composerExpanded: !store.getState().composerExpanded,
+    });
   },
   onToggleReplyParent(parentId) {
     if (!parentId) return;

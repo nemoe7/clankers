@@ -13,6 +13,8 @@ const SKIP_FORWARD_SVG = `<svg class="lucide lucide-skip-forward" width="16" hei
 const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`;
 
 const MESSAGE_PAGE_SIZE = 15;
+const PASTE_ATTACHMENT_CHAR_THRESHOLD = 2400;
+const PASTE_ATTACHMENT_LINE_THRESHOLD = 40;
 const seenAckCounts = new Map();
 let initializedAckCounts = false;
 let unreadEditedMsgId = null;
@@ -139,6 +141,10 @@ export function renderMessagesView(container, state, handlers) {
   const selectedReplyParentIds = Array.isArray(state.replyParentIds)
     ? state.replyParentIds
     : [];
+  const composerAttachments = Array.isArray(state.composerAttachments)
+    ? state.composerAttachments
+    : [];
+  const composerExpanded = Boolean(state.composerExpanded);
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
 
   const filteredMessages = (state.messages || []).filter((msg) => {
@@ -302,7 +308,7 @@ export function renderMessagesView(container, state, handlers) {
         <p id="log-empty" class="receipt" role="status" ${visibleMessages.length ? "hidden" : ""}>No messages yet.</p>
       </section>
 
-      <section class="card compose" id="compose" aria-label="Send message">
+      <section class="card compose ${composerExpanded ? "composer-expanded" : ""}" id="compose" aria-label="Send message">
         <form id="form">
           <div
             id="composer-reply-bar"
@@ -318,6 +324,19 @@ export function renderMessagesView(container, state, handlers) {
               )
               .join("")}
           </div>
+          <div
+            id="composer-attachments"
+            class="composer-attachments"
+            aria-label="Staged attachments"
+            ${composerAttachments.length ? "" : "hidden"}
+          >
+            ${composerAttachments
+              .map(
+                (att, idx) =>
+                  `<button type="button" class="composer-attachment-chip" data-remove-composer-attachment="${idx}" title="Remove attachment">${escapeHtml(att.name || "attachment")} ×</button>`
+              )
+              .join("")}
+          </div>
           <div class="composer-shell">
             <button
               id="preview-msg"
@@ -330,13 +349,32 @@ export function renderMessagesView(container, state, handlers) {
             >
               <svg class="markdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z" fill="currentColor" stroke="none"></path></svg>
             </button>
+            <button
+              id="attach-file"
+              class="icon-button"
+              type="button"
+              aria-label="Attach file"
+              title="Attach file"
+            >
+              <svg class="lucide lucide-paperclip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 12.765-4.122 4.122a3 3 0 0 1-4.243-4.243L12.88 7.4a4.5 4.5 0 0 1 6.364 6.364l-5.89 5.89a6.75 6.75 0 0 1-9.546-9.547l6.01-6.01"></path></svg>
+            </button>
+            <input id="composer-file-input" type="file" multiple hidden />
+            <button
+              id="composer-expand"
+              class="icon-button"
+              type="button"
+              aria-expanded="${composerExpanded ? "true" : "false"}"
+              aria-label="${composerExpanded ? "Collapse composer" : "Expand composer"}"
+              title="${composerExpanded ? "Collapse composer" : "Expand composer"}"
+            >
+              <svg class="lucide lucide-maximize-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="m3 21 7-7"></path><path d="M9 21H3v-6"></path></svg>
+            </button>
             <textarea
               id="msg"
               name="msg"
-              rows="1"
+              rows="${composerExpanded ? 8 : 1}"
               aria-label="Your message"
               placeholder="What should happen next?"
-              required
             ></textarea>
             <div
               id="draft-preview"
@@ -505,6 +543,33 @@ export function renderMessagesView(container, state, handlers) {
     });
   }
 
+  for (const chip of container.querySelectorAll(
+    "[data-remove-composer-attachment]"
+  )) {
+    chip.addEventListener("click", () => {
+      handlers.onRemoveComposerAttachment?.(
+        chip.dataset.removeComposerAttachment
+      );
+    });
+  }
+
+  const attachBtn = container.querySelector("#attach-file");
+  const fileInput = container.querySelector("#composer-file-input");
+  attachBtn?.addEventListener("click", () => {
+    fileInput?.click();
+  });
+  fileInput?.addEventListener("change", async () => {
+    const files = Array.from(fileInput.files || []);
+    fileInput.value = "";
+    if (files.length) {
+      await handlers.onStageComposerFiles?.(files);
+    }
+  });
+
+  container.querySelector("#composer-expand")?.addEventListener("click", () => {
+    handlers.onToggleComposerExpanded?.();
+  });
+
   container.querySelector("#survey-open")?.addEventListener("click", (ev) => {
     handlers.onOpenSurvey?.(ev.currentTarget);
   });
@@ -569,15 +634,56 @@ export function renderMessagesView(container, state, handlers) {
     }
   });
 
+  msgEl?.addEventListener("paste", async (event) => {
+    const files = Array.from(event.clipboardData?.files || []);
+    if (files.length) {
+      event.preventDefault();
+      await handlers.onStageComposerFiles?.(files);
+      return;
+    }
+    const pastedText = event.clipboardData?.getData("text/plain") || "";
+    const lineCount = pastedText.split(/\r\n|\r|\n/).length;
+    if (
+      pastedText.length > PASTE_ATTACHMENT_CHAR_THRESHOLD ||
+      lineCount > PASTE_ATTACHMENT_LINE_THRESHOLD
+    ) {
+      event.preventDefault();
+      const pasteFile = new File([pastedText], "pasted-text.txt", {
+        type: "text/plain",
+      });
+      await handlers.onStageComposerFiles?.([pasteFile]);
+    }
+  });
+
+  const composeSection = container.querySelector("#compose");
+  container.addEventListener("dragover", (event) => {
+    if (!event.dataTransfer?.types?.includes("Files")) return;
+    event.preventDefault();
+    composeSection?.classList.add("composer-drop-active");
+  });
+  container.addEventListener("dragleave", (event) => {
+    if (event.target === container) {
+      composeSection?.classList.remove("composer-drop-active");
+    }
+  });
+  container.addEventListener("drop", async (event) => {
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (!files.length) return;
+    event.preventDefault();
+    composeSection?.classList.remove("composer-drop-active");
+    await handlers.onStageComposerFiles?.(files);
+  });
+
   const form = container.querySelector("#form");
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const body = (msgEl?.value || "").trim();
-    if (!body) return;
+    if (!body && !composerAttachments.length) return;
     pinnedToBottom = true;
     await handlers.onSendMessage({
       body,
       parent_ids: [...selectedReplyParentIds],
+      attachments: [...composerAttachments],
     });
     const currentMsgEl = container.querySelector("#msg");
     if (currentMsgEl) currentMsgEl.value = "";

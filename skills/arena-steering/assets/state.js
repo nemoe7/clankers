@@ -34,6 +34,8 @@ export function createStore(initial = {}) {
     tasks: [],
     reports: [],
     replyParentIds: [],
+    composerAttachments: [],
+    composerExpanded: false,
     selectedReportId: savedReportId || null,
     ...initial,
   };

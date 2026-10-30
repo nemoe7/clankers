@@ -18,6 +18,7 @@ This log has no Unreleased section.
 - `scripts/arena_steering/server.py` and `assets/`: Serve nested UI assets, report files and raw Markdown, and uploads under `/static/assets/`, `/static/reports/`, and `/static/uploads/`.
 - `scripts/arena_steering/server.py`: Add JSON and multipart `POST /api/uploads` and `POST /api/messages/with-file`, storing uploads under `/static/uploads/` and converting pasted text over 2,400 characters or 40 lines into a `.txt` attachment.
 - `scripts/arena_steering/`, `assets/api.js`, and `assets/app.js`: Add `steer rename`, `steer task unlink`, `steer pr-update`, and `steer job-log`, plus browser `POST /api/timezone` instead of `init --tz`.
+- `assets/`: Stage full-page file drops, `#attach-file` picks, and long pastes as removable chips in `#composer-attachments`, with `#composer-expand` for a taller composer.
 
 ### Fixed
 

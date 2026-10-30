@@ -188,6 +188,15 @@ async function requestJson(method, path, body = undefined) {
   return payload;
 }
 
+async function requestForm(path, formData) {
+  const response = await fetch(path, { method: "POST", body: formData });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed (${response.status})`);
+  }
+  return payload;
+}
+
 export const api = {
   getHealth() {
     return requestJson("GET", "/health");
@@ -204,6 +213,29 @@ export const api = {
   },
   sendMessage({ body, hidden = false, blocking = true, parent_ids = [] }) {
     return requestJson("POST", "/messages", { body, hidden, blocking, parent_ids });
+  },
+  async uploadFile(file) {
+    const formData = new FormData();
+    formData.append("file", file, file.name || "upload.bin");
+    const payload = await requestForm("/uploads", formData);
+    return payload.attachment;
+  },
+  sendMessageWithFile({
+    body,
+    hidden = false,
+    blocking = true,
+    parent_ids = [],
+    attachments = [],
+    pasted_text = undefined,
+  }) {
+    return requestJson("POST", "/messages/with-file", {
+      body,
+      hidden,
+      blocking,
+      parent_ids,
+      attachments,
+      pasted_text,
+    });
   },
   skipPoll() {
     return requestJson("POST", "/poll/skip", {});
