@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `scripts/arena_steering/store.py`: Retry transient SQLite lock errors during concurrent WAL initialization.
+
 - `skills/arena-steering/README.md`: Document the message retry duplication risk found during the parity audit.
 
 - `assets/messages-view.js` and `scripts/arena_steering/server.py`: Match v1 paste thresholds and support Ctrl+Shift+V plain-text bypass.
