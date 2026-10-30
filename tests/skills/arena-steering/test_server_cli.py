@@ -409,9 +409,12 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert MSG_ID_CLI in out
   assert TASK_ID_CLI in out
 
-  code, out, _ = _run_cli(state_dir, "msg", "show", MSG_ID_CLI)
+  code, out, _ = _run_cli(state_dir, "msg", MSG_ID_CLI)
   assert code == 0
   assert ACK_MARKDOWN in out
+  with pytest.raises(SystemExit) as invalid_args:
+    _run_cli(state_dir, "msg", "show", MSG_ID_CLI)
+  assert invalid_args.value.code == 2
 
   code, _, err = _run_cli(state_dir, "task", "new", "empty-task", "Empty")
   expected_error = "at least one detail"

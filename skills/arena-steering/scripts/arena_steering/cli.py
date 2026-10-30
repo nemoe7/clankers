@@ -98,10 +98,14 @@ def main(
   ack_p.add_argument("-d", "--detail", dest="task_details", action="append", default=[])
 
   msg_p = sub.add_parser("msg", help="List or inspect stored messages.")
-  msg_sub = msg_p.add_subparsers(dest="msg_cmd")
-  msg_list_p = msg_sub.add_parser("list", help="List messages newest-first (10/page).")
+  msg_p.add_argument("id", nargs="?", help="Message ID, or list for history.")
+  msg_list_p = argparse.ArgumentParser(
+    prog="steer msg list", description="List messages newest-first (10/page)."
+  )
   msg_list_p.add_argument("-p", "--page", type=int, default=1)
-  msg_show_p = msg_sub.add_parser("show", help="Show one message by ID.")
+  msg_show_p = argparse.ArgumentParser(
+    prog="steer msg", description="Show one message by ID."
+  )
   msg_show_p.add_argument("id")
 
   tasks_p = sub.add_parser("tasks", help="List upcoming tasks (or finished with -f).")
@@ -314,12 +318,10 @@ def _run_msg(
       snippet = _snippet_words(item.body, max_words=6)
       print(f"{item.id} {snippet}".rstrip(), file=out)
     return 0
-  if args[0] == "show":
-    parsed = show_parser.parse_args(args[1:])
-    item = messages.get_message(parsed.id)
-    _print_message(item, out)
-    return 0
-  raise ValueError(f"Unknown msg subcommand: {args[0]!r}")
+  parsed = show_parser.parse_args(args)
+  item = messages.get_message(parsed.id)
+  _print_message(item, out)
+  return 0
 
 
 def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:

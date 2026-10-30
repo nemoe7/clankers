@@ -58,6 +58,10 @@ This log has no Unreleased section.
 - `assets/messages-view.js`: Fix message rendering when a task links to a message.
 - `assets/`: Open message and report images and Mermaid diagrams in a zoomable, pannable lightbox.
 
+### Changed
+
+- `steer msg ID` inspects a message without a `show` subcommand.
+
 ### Fixed
 
 - `README.md`: Mark local image embedding as intentionally dropped.

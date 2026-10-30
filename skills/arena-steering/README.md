@@ -74,7 +74,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer poll` | Wait for work or a skip-poll request. |
 | `steer ack [ID] MARKDOWN` | Acknowledge one message or report answer. Omit the ID only when one pending item exists. Optional `-i`, `-t`, `-T`, `-S`, and repeatable `-d` create a linked task. |
 | `steer msg list [-p PAGE]` | List message history, 10 items per page. |
-| `steer msg show ID` | Show a message and its acknowledgements and attachments. |
+| `steer msg ID` | Show a message and its acknowledgements and attachments. |
 | `steer tasks [-f] [-p PAGE]` | List upcoming tasks, or page through finished tasks with `-f`. |
 | `steer task ID` | Show a task, its details, and blocking state. |
 | `steer task new ID TITLE` | Create a task. Requires at least one `-d` detail. Options include `-T` type, `-s` status, `-S` scope, `-m` message, `-r` report, `-k` dependency, and `-g` gate. |
