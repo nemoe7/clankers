@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `assets/messages-view.js`: Leave Enter to the textarea on coarse-pointer devices.
+
 - `assets/style.css`: Use the existing positive token for success icons.
 
 - `assets/messages-view.js`: Ignore Enter during active text composition.
