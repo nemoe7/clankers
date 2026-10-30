@@ -2539,6 +2539,16 @@ async function copyFrom(button, text, what, glyph = 'copy', failure = null) {
     copyTimers.delete(button);
   }, 1500));
 }
+$('#copy-state').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  try {
+    const state = await (await request('/api/copy-state')).json();
+    if (typeof state.text !== 'string') throw new Error('Invalid state export');
+    await copyFrom(button, state.text, 'state', 'copy', 'Clipboard blocked');
+  } catch {
+    await copyFrom(button, null, 'state', 'copy', 'Could not load state');
+  }
+});
 function growSlot(area) {
   // Include the border so the field does not need a scrollbar.
   area.style.height = 'auto';
