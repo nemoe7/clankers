@@ -171,7 +171,7 @@ export function renderMessagesView(container, state, handlers) {
       if (!linkedTasksByMsg.has(mid)) {
         linkedTasksByMsg.set(mid, []);
       }
-      linkedTasksByMsg.set(mid).push(task.id);
+      linkedTasksByMsg.get(mid).push(task.id);
     }
   }
 
