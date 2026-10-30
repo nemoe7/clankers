@@ -94,8 +94,20 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer run start [-t TASK] [-a NAME] NAME -- COMMAND` | Start a detached named run and optionally link it to a task. A dependency must exist and pass before its dependent starts. |
 | `steer run logs NAME [-n LINES]` | Show run status and log tail. |
 | `steer run pr-checks [-n NUMBER]` | Start a detached `gh pr checks --watch` run. |
+| `steer gate [-p] [-l LINE]` | Refuse a command or push while a message or report answer waits for an acknowledgement. |
+| `steer skills [-j]` | List skill names, sources, paths, and descriptions. Installed copies win over repo copies. |
 
 Use `python skills/arena-steering/scripts/steer` in place of `steer` in the table when the entry point is not on `PATH`. Message and answer IDs are six lowercase hexadecimal characters. Task and report IDs use lowercase kebab-case.
+
+## Inbox gate
+
+`steer gate` is the pre-command check for a shell hook. It exits 1 while a message or report answer awaits an acknowledgement, prints the pending IDs, and names the blocked part of the line. Exit 0 means the inbox is clear.
+
+```sh
+trap 'skills/arena-steering/scripts/hooks/gate.sh "$BASH_COMMAND"' DEBUG
+```
+
+Set `STEER` to the entry point when `steer` is not on `PATH`. `-p` words the refusal for a push. The hook wrapper ships as `scripts/hooks/gate.sh`, and how a shell installs it is left to `install.sh`.
 
 ## Task and message contracts
 

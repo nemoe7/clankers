@@ -28,6 +28,11 @@ This log has no Unreleased section.
 
 - `assets/messages-view.js`, `assets/style.css`: Match the v1 composer layout, icon buttons, and text size.
 
+### Added
+
+- `scripts/arena_steering/cli.py`: Register `steer gate` and `steer skills`.
+- `scripts/hooks/gate.sh`: Ship the pre-command hook wrapper for the inbox gate.
+
 ### Fixed
 
 - `assets/style.css`: Inset the scrollbar thumb by 2px inside a 10px track and color links blue.
