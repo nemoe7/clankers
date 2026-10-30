@@ -66,10 +66,19 @@ class MessageService:
     hidden: bool = False,
     blocking: bool = True,
     attachments: list[Attachment] | None = None,
+    parent_ids: list[str] | None = None,
     msg_id: str | None = None,
   ) -> Message:
     if not isinstance(body, str) or (not body.strip() and not attachments):
       raise ValueError("Message body or attachment is required")
+    resolved_parent_ids: list[str] = []
+    for parent_id in parent_ids or []:
+      validate_hex_id(parent_id, "Message.parent_ids")
+      if parent_id in resolved_parent_ids:
+        continue
+      if self._messages.get_message(parent_id) is None:
+        raise KeyError(f"Unknown parent message ID: {parent_id}")
+      resolved_parent_ids.append(parent_id)
     resolved_id = (
       validate_hex_id(msg_id, "Message.id")
       if msg_id is not None
@@ -82,6 +91,7 @@ class MessageService:
       hidden=hidden,
       blocking=blocking,
       attachments=list(attachments or []),
+      parent_ids=resolved_parent_ids,
       status="sent",
       acks=[],
       modified_at=now,

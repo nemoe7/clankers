@@ -32,10 +32,12 @@ def test_message_strict_hex_id_and_status_ladder() -> None:
     hidden=False,
     blocking=True,
     attachments=[Attachment(name="spec.md", path="/tmp/spec.md", size_bytes=42)],
+    parent_ids=["beef01", "cafe02", "beef01"],
     status="sent",
     acks=["Initial ack"],
     modified_at="2026-10-29T06:00:00Z",
   )
+  assert msg.parent_ids == ["beef01", "cafe02"]
   assert msg.requires_ack is True
   assert msg.is_unread is True
   round_trip = Message.from_dict(msg.to_dict())
@@ -46,6 +48,12 @@ def test_message_strict_hex_id_and_status_ladder() -> None:
 
   with pytest.raises(ValueError, match="6 lowercase hex"):
     Message(id="A1B2C3", body="Uppercase hex rejected")
+
+  with pytest.raises(ValueError, match="6 lowercase hex"):
+    Message(id="a1b2c3", body="Bad parent", parent_ids=["nope"])
+
+  with pytest.raises(ValueError, match="cannot reply to itself"):
+    Message(id="a1b2c3", body="Self parent", parent_ids=["a1b2c3"])
 
 
 def test_task_validation_and_detail_limit() -> None:
@@ -115,6 +123,7 @@ def test_sqlite_store_crud_for_messages_tasks_reports_and_meta(tmp_path: Path) -
     body="Hello steering store",
     hidden=False,
     blocking=True,
+    parent_ids=["a1b2c3", "d4e5f6"],
     status="sent",
     acks=[],
     modified_at=now,

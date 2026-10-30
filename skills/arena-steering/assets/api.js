@@ -199,8 +199,8 @@ export const api = {
     });
     return requestJson("GET", `/messages?${q.toString()}`);
   },
-  sendMessage({ body, hidden = false, blocking = true }) {
-    return requestJson("POST", "/messages", { body, hidden, blocking });
+  sendMessage({ body, hidden = false, blocking = true, parent_ids = [] }) {
+    return requestJson("POST", "/messages", { body, hidden, blocking, parent_ids });
   },
   skipPoll() {
     return requestJson("POST", "/poll/skip", {});

@@ -411,6 +411,7 @@ class SteeringApp:
       hidden=bool(body.get("hidden", False)),
       blocking=bool(body.get("blocking", True)),
       attachments=attachments,
+      parent_ids=[str(item) for item in (body.get("parent_ids") or [])],
       msg_id=body.get("id"),
     )
     return (int(HTTPStatus.CREATED), {"message": self._serialize_message(msg)})

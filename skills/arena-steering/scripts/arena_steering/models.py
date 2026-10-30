@@ -114,6 +114,7 @@ class Message:
   hidden: bool = False
   blocking: bool = True
   attachments: list[Attachment] = field(default_factory=list)
+  parent_ids: list[str] = field(default_factory=list)
   status: str = "sent"
   acks: list[str] = field(default_factory=list)
   modified_at: str = ""
@@ -130,6 +131,16 @@ class Message:
       item if isinstance(item, Attachment) else Attachment.from_dict(item)
       for item in self.attachments
     ]
+    if not isinstance(self.parent_ids, list):
+      raise TypeError("Message.parent_ids must be a list of message IDs")
+    cleaned_parent_ids: list[str] = []
+    for parent_id in self.parent_ids:
+      validate_hex_id(parent_id, "Message.parent_ids")
+      if parent_id not in cleaned_parent_ids:
+        cleaned_parent_ids.append(parent_id)
+    if self.id in cleaned_parent_ids:
+      raise ValueError("Message cannot reply to itself")
+    self.parent_ids = cleaned_parent_ids
     if not isinstance(self.acks, list) or any(
       not isinstance(ack, str) or not ack.strip() for ack in self.acks
     ):
@@ -156,6 +167,7 @@ class Message:
       "hidden": self.hidden,
       "blocking": self.blocking,
       "attachments": [item.to_dict() for item in self.attachments],
+      "parent_ids": list(self.parent_ids),
       "status": self.status,
       "acks": list(self.acks),
       "modified_at": self.modified_at,
@@ -169,6 +181,7 @@ class Message:
       hidden=bool(data.get("hidden", False)),
       blocking=bool(data.get("blocking", True)),
       attachments=[Attachment.from_dict(raw) for raw in data.get("attachments", [])],
+      parent_ids=[str(item) for item in data.get("parent_ids", [])],
       status=str(data.get("status", "sent")),
       acks=[str(item) for item in data.get("acks", [])],
       modified_at=str(data.get("modified_at", "")),

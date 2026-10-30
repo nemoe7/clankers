@@ -33,6 +33,7 @@ export function createStore(initial = {}) {
     messages: [],
     tasks: [],
     reports: [],
+    replyParentIds: [],
     selectedReportId: savedReportId || null,
     ...initial,
   };

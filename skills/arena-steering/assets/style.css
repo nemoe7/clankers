@@ -1413,6 +1413,61 @@ code.msg-id {
   transition: color var(--fast) var(--ease);
 }
 
+code.msg-id.receipt-id[data-reply-selected="true"] {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.reply-parent-chip,
+.composer-reply-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  padding: 1px 6px;
+  border: 1px solid hsl(var(--border-medium));
+  border-radius: 9999px;
+  background: hsl(var(--surface-tertiary));
+  color: hsl(var(--text-tertiary));
+  font-family: var(--font-basel-grotesk-mono);
+  font-size: 12px;
+  line-height: 1.35;
+  cursor: pointer;
+  transition:
+    color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    background-color var(--fast) var(--ease);
+}
+
+.reply-parent-chip:hover,
+.composer-reply-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.composer-reply-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.composer-reply-bar[hidden] {
+  display: none;
+}
+
+.composer-reply-label {
+  color: hsl(var(--text-tertiary));
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.message[data-highlight="true"] {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
 .card.compose {
   position: relative;
   z-index: 3;

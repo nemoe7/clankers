@@ -105,6 +105,11 @@ export function renderMessagesView(container, state, handlers) {
     Boolean(activeEl && activeEl.id === "log-search" && container.contains(activeEl));
   const searchSelStart = searchWasFocused ? activeEl.selectionStart : null;
   const searchSelEnd = searchWasFocused ? activeEl.selectionEnd : null;
+  const prevMsgEl = container.querySelector("#msg");
+  const draftWasFocused = Boolean(prevMsgEl && activeEl === prevMsgEl);
+  const draftValue = prevMsgEl?.value || "";
+  const draftSelStart = draftWasFocused ? prevMsgEl.selectionStart : null;
+  const draftSelEnd = draftWasFocused ? prevMsgEl.selectionEnd : null;
 
   let anchorMsgId = null;
   let anchorOffsetTop = 0;
@@ -131,12 +136,15 @@ export function renderMessagesView(container, state, handlers) {
 
   const showHidden = Boolean(state.showHidden);
   const query = (state.searchQuery || "").trim().toLowerCase();
+  const selectedReplyParentIds = Array.isArray(state.replyParentIds)
+    ? state.replyParentIds
+    : [];
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
 
   const filteredMessages = (state.messages || []).filter((msg) => {
     if (!showHidden && msg.hidden) return false;
     if (!query) return true;
-    const haystack = [msg.id, msg.body, ...(msg.acks || [])]
+    const haystack = [msg.id, msg.body, ...(msg.parent_ids || []), ...(msg.acks || [])]
       .join("\n")
       .toLowerCase();
     return haystack.includes(query);
@@ -200,6 +208,16 @@ export function renderMessagesView(container, state, handlers) {
           const tasksSuffix = linkedTasks.length
             ? ` · ${linkedTasks.map((tid) => `<code class="task-link">${escapeHtml(tid)}</code>`).join(", ")}`
             : "";
+          const parentIds = Array.isArray(msg.parent_ids) ? msg.parent_ids : [];
+          const parentsSuffix = parentIds.length
+            ? ` · ${parentIds
+                .map(
+                  (pid) =>
+                    `<button type="button" class="reply-parent-chip" data-parent-id="${escapeHtml(pid)}" title="Go to parent message">↪ ${escapeHtml(pid)}</button>`
+                )
+                .join(" ")}`
+            : "";
+          const replySelected = selectedReplyParentIds.includes(msg.id);
 
           return `
             <li class="message" data-msg-id="${escapeHtml(msg.id)}" data-hidden="${msg.hidden ? "true" : "false"}">
@@ -207,8 +225,8 @@ export function renderMessagesView(container, state, handlers) {
               ${acksHtml}
               <p class="receipt">
                 <span class="state-dot" data-state="${dotState}" title="Status: ${escapeHtml(msg.status)}"></span>
-                <code class="msg-id" title="Copy message ID">${escapeHtml(msg.id)}</code>
-                · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${flagsSuffix}${filesSuffix}${tasksSuffix}
+                <code class="msg-id receipt-id" data-msg-id="${escapeHtml(msg.id)}" data-reply-selected="${replySelected ? "true" : "false"}" title="Reply to message; Shift+Click copies ID">${escapeHtml(msg.id)}</code>
+                · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${parentsSuffix}${flagsSuffix}${filesSuffix}${tasksSuffix}
               </p>
             </li>
           `;
@@ -286,6 +304,20 @@ export function renderMessagesView(container, state, handlers) {
 
       <section class="card compose" id="compose" aria-label="Send message">
         <form id="form">
+          <div
+            id="composer-reply-bar"
+            class="composer-reply-bar"
+            aria-label="Replying to messages"
+            ${selectedReplyParentIds.length ? "" : "hidden"}
+          >
+            <span class="composer-reply-label">Replying to</span>
+            ${selectedReplyParentIds
+              .map(
+                (pid) =>
+                  `<button type="button" class="composer-reply-chip" data-remove-reply-parent="${escapeHtml(pid)}" title="Remove reply parent">↪ ${escapeHtml(pid)} ×</button>`
+              )
+              .join("")}
+          </div>
           <div class="composer-shell">
             <button
               id="preview-msg"
@@ -451,6 +483,28 @@ export function renderMessagesView(container, state, handlers) {
     }
   });
 
+  for (const chip of container.querySelectorAll(".reply-parent-chip")) {
+    chip.addEventListener("click", () => {
+      const parentId = chip.dataset.parentId;
+      if (!historyEl || !parentId) return;
+      const row = historyEl.querySelector(
+        `.message[data-msg-id="${CSS.escape(parentId)}"]`
+      );
+      if (!row) return;
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      row.dataset.highlight = "true";
+      setTimeout(() => {
+        if (row.isConnected) delete row.dataset.highlight;
+      }, 1200);
+    });
+  }
+
+  for (const chip of container.querySelectorAll("[data-remove-reply-parent]")) {
+    chip.addEventListener("click", () => {
+      handlers.onToggleReplyParent?.(chip.dataset.removeReplyParent);
+    });
+  }
+
   container.querySelector("#survey-open")?.addEventListener("click", (ev) => {
     handlers.onOpenSurvey?.(ev.currentTarget);
   });
@@ -479,6 +533,20 @@ export function renderMessagesView(container, state, handlers) {
   });
 
   const msgEl = container.querySelector("#msg");
+  if (msgEl && draftValue && !msgEl.value) {
+    msgEl.value = draftValue;
+    if (draftWasFocused) {
+      msgEl.focus();
+      try {
+        msgEl.setSelectionRange(
+          draftSelStart ?? draftValue.length,
+          draftSelEnd ?? draftValue.length
+        );
+      } catch {
+        // Ignore if textarea selection is unavailable.
+      }
+    }
+  }
   const previewBtn = container.querySelector("#preview-msg");
   const draftPreview = container.querySelector("#draft-preview");
 
@@ -507,7 +575,11 @@ export function renderMessagesView(container, state, handlers) {
     const body = (msgEl?.value || "").trim();
     if (!body) return;
     pinnedToBottom = true;
-    await handlers.onSendMessage({ body });
-    if (msgEl) msgEl.value = "";
+    await handlers.onSendMessage({
+      body,
+      parent_ids: [...selectedReplyParentIds],
+    });
+    const currentMsgEl = container.querySelector("#msg");
+    if (currentMsgEl) currentMsgEl.value = "";
   });
 }

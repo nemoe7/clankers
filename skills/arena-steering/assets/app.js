@@ -289,12 +289,17 @@ async function refreshAll(force = false) {
       await ensureReportCached(selectedReportId, selectedSummary?.modified_at);
     }
     const reports = hydrateReportsWithCache(reportSummaries);
+    const messageIds = new Set(messages.map((msg) => msg.id));
+    const replyParentIds = (curState.replyParentIds || []).filter((id) =>
+      messageIds.has(id)
+    );
     const nextSignature = JSON.stringify({
       messages,
       tasks,
       reports,
       survey,
       selectedReportId,
+      replyParentIds,
       showHidden: Boolean(curState.showHidden),
     });
     if (!force && nextSignature === lastDataSignature) {
@@ -307,6 +312,7 @@ async function refreshAll(force = false) {
       reports,
       survey,
       selectedReportId,
+      replyParentIds,
     });
   } catch (err) {
     console.error(err);
@@ -316,7 +322,18 @@ async function refreshAll(force = false) {
 const handlers = {
   async onSendMessage(payload) {
     await api.sendMessage(payload);
+    if ((payload.parent_ids || []).length) {
+      store.setState({ replyParentIds: [] });
+    }
     await refreshAll(true);
+  },
+  onToggleReplyParent(parentId) {
+    if (!parentId) return;
+    const current = store.getState().replyParentIds || [];
+    const next = current.includes(parentId)
+      ? current.filter((id) => id !== parentId)
+      : [...current, parentId];
+    store.setState({ replyParentIds: next });
   },
   async onSkipPoll() {
     await api.skipPoll();
@@ -556,6 +573,28 @@ function initEvents() {
       return;
     }
     if (event.target.closest?.(".report-picker-link")) {
+      return;
+    }
+    const receiptChip = event.target.closest?.("code.msg-id.receipt-id");
+    if (receiptChip) {
+      const parentId = (
+        receiptChip.dataset.msgId ||
+        receiptChip.textContent ||
+        ""
+      ).trim();
+      if (!event.shiftKey) {
+        handlers.onToggleReplyParent(parentId);
+        return;
+      }
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(parentId).catch(() => {});
+      }
+      receiptChip.dataset.state = "good";
+      setTimeout(() => {
+        if (receiptChip.isConnected) {
+          delete receiptChip.dataset.state;
+        }
+      }, 1000);
       return;
     }
     const msgChip = event.target.closest?.("code.msg-id");
