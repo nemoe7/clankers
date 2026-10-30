@@ -544,7 +544,68 @@ function renderApp(state) {
   cleanupTimers = mountRelativeTimers(document);
 }
 
+function initImageModal() {
+  const dialog = document.getElementById("image-modal");
+  const stage = document.getElementById("image-modal-stage");
+  const close = document.getElementById("image-modal-close");
+  if (!dialog || !stage || !close) return;
+  let scale = 1;
+  let x = 0;
+  let y = 0;
+  let drag = null;
+  const update = () => {
+    const media = stage.firstElementChild;
+    if (media) media.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+  };
+  close.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => {
+    stage.replaceChildren();
+    drag = null;
+  });
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  stage.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    scale = Math.min(8, Math.max(0.25, scale * Math.exp(-event.deltaY * 0.001)));
+    update();
+  }, { passive: false });
+  stage.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    drag = { pointer: event.pointerId, x: event.clientX - x, y: event.clientY - y };
+    stage.setPointerCapture(event.pointerId);
+  });
+  stage.addEventListener("pointermove", (event) => {
+    if (!drag || drag.pointer !== event.pointerId) return;
+    x = event.clientX - drag.x;
+    y = event.clientY - drag.y;
+    update();
+  });
+  const endDrag = (event) => {
+    if (drag?.pointer === event.pointerId) drag = null;
+  };
+  stage.addEventListener("pointerup", endDrag);
+  stage.addEventListener("pointercancel", endDrag);
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!target.closest?.("#view-messages, #view-reports")) return;
+    const media = target.closest(".mermaid-diagram svg, .mermaid-block svg, img");
+    if (!media) return;
+    event.preventDefault();
+    scale = 1;
+    x = 0;
+    y = 0;
+    const clone = media.cloneNode(true);
+    clone.removeAttribute("id");
+    clone.setAttribute("draggable", "false");
+    stage.replaceChildren(clone);
+    update();
+    dialog.showModal();
+  });
+}
+
 function initEvents() {
+  initImageModal();
   syncViewportHeight();
   window.addEventListener("resize", syncViewportHeight);
   window.visualViewport?.addEventListener("resize", syncViewportHeight);
