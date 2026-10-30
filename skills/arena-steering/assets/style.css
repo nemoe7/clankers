@@ -1484,6 +1484,7 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   flex: 0 0 auto;
   padding: 8px;
   margin-bottom: 18px;
+  border-radius: 12px;
   background-color: hsl(var(--surface-secondary));
 }
 
@@ -1555,21 +1556,34 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
 
 .composer-shell {
   display: grid;
-  grid-template-columns: 34px 34px 34px minmax(0, 1fr) 34px;
-  gap: 8px;
+  grid-template-columns: 30px 30px minmax(0, 1fr) 30px 30px;
+  gap: 6px;
   align-items: center;
+}
+
+.composer-shell .icon-button {
+  width: 30px;
+  height: 30px;
+  border-color: transparent;
+  background-color: transparent;
+}
+
+.composer-shell #send {
+  border-color: hsl(var(--border-medium));
+  background-color: hsl(var(--surface-secondary));
 }
 
 #msg {
   width: 100%;
-  min-height: 34px;
+  min-height: 31px;
   max-height: 180px;
-  padding: 6px 8px;
+  padding: 4px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
   color: hsl(var(--text-primary));
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.45;
   resize: none;
 }
@@ -2333,9 +2347,6 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
 
   @supports (animation-timeline: scroll(self)) {
     #history,
-    .scroll-panel,
-    #view-reports,
-    #view-tasks,
     textarea {
       scroll-padding-block: var(--edge-fade);
       -webkit-mask-image:
@@ -2373,6 +2384,47 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
       animation-range:
         0px var(--edge-ramp),
         calc(100% - var(--edge-ramp)) 100%;
+    }
+
+    .reports-layout::before,
+    .reports-layout::after,
+    .tasks-layout::before,
+    .tasks-layout::after {
+      content: "";
+      position: sticky;
+      z-index: 3;
+      display: block;
+      flex: 0 0 auto;
+      height: var(--edge-fade);
+      pointer-events: none;
+    }
+
+    .reports-layout::before,
+    .tasks-layout::before {
+      top: 0;
+      margin-bottom: calc(-1 * var(--edge-fade));
+      background: linear-gradient(to bottom, var(--bg), transparent);
+    }
+
+    .reports-layout::after,
+    .tasks-layout::after {
+      bottom: 0;
+      margin-top: calc(-1 * var(--edge-fade));
+      background: linear-gradient(to top, var(--bg), transparent);
+    }
+
+    .tasks-toolbar {
+      position: relative;
+    }
+
+    .tasks-toolbar::after {
+      content: "";
+      position: absolute;
+      inset-inline: 0;
+      bottom: calc(-1 * var(--edge-fade));
+      height: var(--edge-fade);
+      pointer-events: none;
+      background: linear-gradient(to bottom, var(--bg), transparent);
     }
 
     @keyframes edge-start {

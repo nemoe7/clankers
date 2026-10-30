@@ -24,6 +24,10 @@ This log has no Unreleased section.
 
 - `assets/messages-view.js`: Use the current Lucide paperclip path for the attach button.
 
+- `assets/style.css`: Fade the report and task columns only, leaving sidebars unblurred, and give the task toolbar its own edge fade.
+
+- `assets/messages-view.js`, `assets/style.css`: Match the v1 composer layout, icon buttons, and text size.
+
 ### Fixed
 
 - `assets/style.css`: Inset the scrollbar thumb by 2px inside a 10px track and color links blue.
