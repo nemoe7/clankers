@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 from .models import Attachment, Message, Report, ReportAnswer, ReportField, Task
@@ -24,7 +25,17 @@ class SqliteStore:
 
   def _init_schema(self) -> None:
     with self._lock, self._conn:
-      self._conn.execute("PRAGMA journal_mode=WAL")
+      deadline = time.monotonic() + 5
+      while True:
+        try:
+          self._conn.execute("PRAGMA journal_mode=WAL")
+          break
+        except sqlite3.OperationalError as exc:
+          if getattr(exc, "sqlite_errorcode", None) != sqlite3.SQLITE_BUSY:
+            raise
+          if time.monotonic() >= deadline:
+            raise
+          time.sleep(0.01)
       self._conn.execute("PRAGMA synchronous=NORMAL")
       self._conn.execute("PRAGMA foreign_keys=ON")
       self._conn.executescript(

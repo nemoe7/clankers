@@ -178,3 +178,82 @@ def test_sqlite_store_crud_for_messages_tasks_reports_and_meta(tmp_path: Path) -
   store.set_meta("skip_poll", "1")
   assert store.get_meta("skip_poll") == "1"
   store.close()
+
+
+def test_concurrent_first_store_opens(tmp_path: Path) -> None:
+  from concurrent.futures import ThreadPoolExecutor
+  from threading import Barrier
+
+  for attempt in range(20):
+    db = tmp_path / f"race-{attempt}.sqlite3"
+    barrier = Barrier(4)
+
+    def open_store(path: Path = db, start: Barrier = barrier) -> None:
+      start.wait()
+      store = SqliteStore(path)
+      store.close()
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+      list(pool.map(lambda _: open_store(), range(4)))
+
+
+def test_store_retries_busy_wal_initialization(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  import sqlite3
+
+  real_connect = sqlite3.connect
+  attempts = 0
+
+  class BusyOnceConnection(sqlite3.Connection):
+    def execute(self, sql, *args, **kwargs):
+      nonlocal attempts
+      if sql == "PRAGMA journal_mode=WAL":
+        attempts += 1
+        if attempts == 1:
+          error = sqlite3.OperationalError("database is locked")
+          error.sqlite_errorcode = sqlite3.SQLITE_BUSY
+          raise error
+      return super().execute(sql, *args, **kwargs)
+
+  def connect(*args, **kwargs):
+    return real_connect(*args, factory=BusyOnceConnection, **kwargs)
+
+  monkeypatch.setattr(sqlite3, "connect", connect)
+  store = SqliteStore(tmp_path / "busy.sqlite3")
+  store.close()
+  assert attempts == 2
+
+
+def test_store_wal_retry_stops_on_persistent_lock(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  import sqlite3
+  from types import SimpleNamespace
+
+  import arena_steering.store as store_module
+
+  real_connect = sqlite3.connect
+  ticks = iter([0.0, 6.0])
+  attempts = 0
+
+  class AlwaysBusyConnection(sqlite3.Connection):
+    def execute(self, sql, *args, **kwargs):
+      nonlocal attempts
+      if sql == "PRAGMA journal_mode=WAL":
+        attempts += 1
+        error = sqlite3.OperationalError("database is locked")
+        error.sqlite_errorcode = sqlite3.SQLITE_BUSY
+        raise error
+      return super().execute(sql, *args, **kwargs)
+
+  def connect(*args, **kwargs):
+    return real_connect(*args, factory=AlwaysBusyConnection, **kwargs)
+
+  monkeypatch.setattr(sqlite3, "connect", connect)
+  monkeypatch.setattr(
+    store_module, "time", SimpleNamespace(monotonic=lambda: next(ticks))
+  )
+  with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+    SqliteStore(tmp_path / "locked.sqlite3")
+  assert attempts == 1
