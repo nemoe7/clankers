@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+from functools import wraps
 from typing import Any
 
 from . import survey as survey_mod
@@ -48,6 +49,15 @@ def _append_snapshot(task: Task, report: Report, answer: ReportAnswer) -> None:
     for item in task.answer_snapshots
   ):
     task.answer_snapshots.append(json.loads(json.dumps(answer.snapshot(report))))
+
+
+def _transactional_report_write(method: Any) -> Any:
+  @wraps(method)
+  def wrapped(self: Any, *args: Any, **kwargs: Any) -> Any:
+    with self._reports.transaction():
+      return method(self, *args, **kwargs)
+
+  return wrapped
 
 
 class MessageService:
@@ -152,6 +162,7 @@ class MessageService:
         return True
     return False
 
+  @_transactional_report_write
   def read_pending(self, *, mark_seen: bool = True) -> dict[str, Any]:
     """Return pending unread messages and unacknowledged report answers."""
     now = self._clock.now_iso()
@@ -177,6 +188,23 @@ class MessageService:
       "report_answers": delivered_answers,
     }
 
+  def resolve_ack_target(
+    self, target_id: str | None
+  ) -> tuple[str, Message | ReportAnswer]:
+    """Resolve an acknowledgement target without changing it."""
+    if target_id is None:
+      target_id = self._resolve_single_pending_id()
+    validate_hex_id(target_id, "Acknowledgement target ID")
+    message = self._messages.get_message(target_id)
+    if message is not None:
+      return "message", message
+    for report in self._reports.list_reports():
+      for answer in report.answers:
+        if answer.id == target_id:
+          return "report_answer", answer
+    raise KeyError(f"Unknown message or answer ID: {target_id}")
+
+  @_transactional_report_write
   def ack(
     self, target_id: str | None, markdown: str
   ) -> tuple[str, Message | ReportAnswer]:
@@ -341,6 +369,15 @@ class MessageService:
     raise RuntimeError("Unable to allocate unique 6-character hex ID")
 
 
+def _transactional_task_write(method: Any) -> Any:
+  @wraps(method)
+  def wrapped(self: Any, *args: Any, **kwargs: Any) -> Any:
+    with self._tasks.transaction():
+      return method(self, *args, **kwargs)
+
+  return wrapped
+
+
 class TaskService:
   """Manage the mutable task queue, dependency ordering, and derived blocking."""
 
@@ -407,6 +444,7 @@ class TaskService:
       raise KeyError(f"Unknown task ID: {task_id}")
     return (task, self.is_task_blocked(task))
 
+  @_transactional_task_write
   def create_task(
     self,
     task_id: str,
@@ -447,6 +485,7 @@ class TaskService:
     self._tasks.save_task_queue(ordered)
     return task
 
+  @_transactional_task_write
   def remove_task(self, task_id: str) -> bool:
     validate_entity_id(task_id, "Task.id")
     queue = self._tasks.list_tasks()
@@ -461,6 +500,7 @@ class TaskService:
     self._tasks.save_task_queue(remaining)
     return True
 
+  @_transactional_task_write
   def rename_task(self, old_task_id: str, new_task_id: str) -> Task:
     validate_entity_id(old_task_id, "Task.id")
     validate_entity_id(new_task_id, "Task.id")
@@ -498,6 +538,7 @@ class TaskService:
     self._tasks.save_task_queue(ordered)
     return renamed
 
+  @_transactional_task_write
   def unlink_task(
     self, task_id: str, link_id: str, *, link_type: str | None = None
   ) -> Task:
@@ -525,6 +566,7 @@ class TaskService:
     self._replace_in_queue(queue, updated)
     return updated
 
+  @_transactional_task_write
   def mod_deets(self, task_id: str, detail: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     updated = Task(
@@ -541,6 +583,7 @@ class TaskService:
     self._replace_in_queue(queue, updated)
     return updated
 
+  @_transactional_task_write
   def mod_deets_rm(self, task_id: str, number: int) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     idx = number - 1 if number >= 1 else number
@@ -563,6 +606,7 @@ class TaskService:
     self._replace_in_queue(queue, updated)
     return updated
 
+  @_transactional_task_write
   def mod_links_add(
     self, task_id: str, link_id: str, *, link_type: str | None = None
   ) -> Task:
@@ -615,6 +659,7 @@ class TaskService:
     self._replace_in_queue(queue, updated)
     return updated
 
+  @_transactional_task_write
   def mod_links_rm(self, task_id: str, link_type: str, link_id: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     cleaned_type = link_type.strip().lower()
@@ -656,12 +701,15 @@ class TaskService:
     self._replace_in_queue(queue, updated)
     return updated
 
+  @_transactional_task_write
   def mod_deps_add(self, task_id: str, dep_task_id: str) -> Task:
     return self.mod_links_add(task_id, dep_task_id, link_type="task")
 
+  @_transactional_task_write
   def mod_deps_rm(self, task_id: str, dep_task_id: str) -> Task:
     return self.mod_links_rm(task_id, "task", dep_task_id)
 
+  @_transactional_task_write
   def mod_scalar(self, task_id: str, field_name: str, value: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     key = field_name.strip().lower()
@@ -683,6 +731,7 @@ class TaskService:
     self._replace_in_queue(queue, updated)
     return updated
 
+  @_transactional_task_write
   def patch_task(
     self, task_id: str, changes: dict[str, Any], *, position: int | None = None
   ) -> Task:
@@ -820,6 +869,7 @@ class ReportService:
     self._id_gen = id_gen or SecretsHexIdGenerator()
     self._on_answer = on_answer_callback
 
+  @_transactional_task_write
   def publish_report(self, report_id: str, title: str, body: str) -> Report:
     validate_entity_id(report_id, "Report.id")
     _, fields = parse_report_markdown(body)
@@ -845,6 +895,7 @@ class ReportService:
     self._reports.save_report(report)
     return report
 
+  @_transactional_task_write
   def mark_seen(self, report_id: str) -> Report:
     report = self.get_report(report_id)
     if not report.seen:
@@ -852,6 +903,7 @@ class ReportService:
       self._reports.save_report(report)
     return report
 
+  @_transactional_task_write
   def mark_ack_seen(self, report_id: str) -> Report:
     report = self.get_report(report_id)
     latest = report.answers[-1] if report.answers else None
@@ -879,6 +931,15 @@ class ReportService:
     return [rep for rep in all_reports if rep.status != "dismissed"]
 
   def submit_answer(
+    self, report_id: str, values: dict[str, Any], *, answer_id: str | None = None
+  ) -> ReportAnswer:
+    answer = self._submit_answer(report_id, values, answer_id=answer_id)
+    if self._on_answer is not None:
+      self._on_answer()
+    return answer
+
+  @_transactional_task_write
+  def _submit_answer(
     self,
     report_id: str,
     values: dict[str, Any],
@@ -912,10 +973,9 @@ class ReportService:
     report.modified_at = now
     self._reports.save_report(report)
     self._append_answer_details_to_linked_tasks(report, answer, now)
-    if self._on_answer is not None:
-      self._on_answer()
     return answer
 
+  @_transactional_task_write
   def ack_answer(self, report_id: str, answer_id: str, markdown: str) -> ReportAnswer:
     report = self.get_report(report_id)
     validate_hex_id(answer_id, "ReportAnswer.id")
@@ -933,6 +993,7 @@ class ReportService:
         return ans
     raise KeyError(f"Unknown answer ID {answer_id!r} on report {report_id!r}")
 
+  @_transactional_task_write
   def rename_report(self, old_report_id: str, new_report_id: str) -> Report:
     validate_entity_id(old_report_id, "Report.id")
     validate_entity_id(new_report_id, "Report.id")
@@ -988,6 +1049,7 @@ class ReportService:
       self._tasks.save_task_queue(queue)
     return renamed
 
+  @_transactional_task_write
   def remove_report(self, target: str) -> list[str]:
     """Dismiss one report by ID or all stale reports when target == '--stale'."""
     now = self._clock.now_iso()

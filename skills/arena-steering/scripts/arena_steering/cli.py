@@ -189,7 +189,7 @@ def main(
       return 0
     if cmd == "ack":
       parsed = ack_p.parse_args(cmd_args)
-      return _run_ack(parsed, messages, tasks, stdout)
+      return _run_ack(parsed, messages, tasks, store, stdout)
     if cmd == "msg":
       return _run_msg(cmd_args, msg_list_p, msg_show_p, messages, stdout)
     if cmd == "tasks":
@@ -252,6 +252,7 @@ def _run_ack(
   parsed: argparse.Namespace,
   messages: MessageService,
   tasks: TaskService,
+  store: SqliteStore,
   out: TextIO,
 ) -> int:
   parts: list[str] = parsed.parts
@@ -264,19 +265,26 @@ def _run_ack(
   else:
     raise ValueError("Usage: steer ack [<6-char-hex-id>] '<markdown>'")
 
-  _, acked = messages.ack(target_id, markdown)
-  print(f"ok {acked.id}", file=out)
+  created = None
   if parsed.task_id:
     if not parsed.task_title:
       raise ValueError("Task creation on ack requires -t/--title")
-    created = tasks.create_task(
-      parsed.task_id,
-      parsed.task_title,
-      type=parsed.task_type,
-      scope=parsed.task_scope,
-      details=parsed.task_details,
-      msg_ids=[acked.id],
-    )
+    with store.transaction():
+      target_type, target = messages.resolve_ack_target(target_id)
+      created = tasks.create_task(
+        parsed.task_id,
+        parsed.task_title,
+        type=parsed.task_type,
+        scope=parsed.task_scope,
+        details=parsed.task_details,
+        msg_ids=[target.id] if target_type == "message" else [],
+        report_ids=[target.report_id] if target_type == "report_answer" else [],
+      )
+      _, acked = messages.ack(target.id, markdown)
+  else:
+    _, acked = messages.ack(target_id, markdown)
+  print(f"ok {acked.id}", file=out)
+  if created:
     _, blocked = tasks.get_task(created.id)
     _print_single_task(created, blocked, out)
   return 0

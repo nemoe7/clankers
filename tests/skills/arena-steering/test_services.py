@@ -281,3 +281,33 @@ def test_snapshot_keeps_original_report_labels_after_republish(tmp_path) -> None
   assert task.answer_snapshots[0]["fields"][0]["label"] == "Original label?"
   assert task.answer_snapshots[0]["created_at"] == answer.created_at
   store.close()
+
+
+def test_concurrent_report_answers_preserve_distinct_snapshots(tmp_path) -> None:
+  from concurrent.futures import ThreadPoolExecutor
+  from threading import Barrier
+
+  path = tmp_path / "parallel-answers.sqlite3"
+  stores = [SqliteStore(path), SqliteStore(path)]
+  reports = [ReportService(store, store) for store in stores]
+  tasks = TaskService(stores[0], stores[0])
+  reports[0].publish_report(
+    "choice", "Choice", "Select? {#select}\n- ( ) Yes\n- ( ) No\n"
+  )
+  tasks.create_task("work", "Work", details=["Review"], report_ids=["choice"])
+  barrier = Barrier(2)
+
+  def submit(index):
+    barrier.wait()
+    return reports[index].submit_answer(
+      "choice", {"select": "Yes"}, answer_id=f"ab44{index:02d}"
+    )
+
+  with ThreadPoolExecutor(max_workers=2) as pool:
+    answers = list(pool.map(submit, range(2)))
+  report = reports[0].get_report("choice")
+  task = tasks.get_task("work")[0]
+  assert {item.id for item in report.answers} == {item.id for item in answers}
+  assert {item["id"] for item in task.answer_snapshots} == {item.id for item in answers}
+  for store in stores:
+    store.close()

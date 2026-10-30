@@ -1139,3 +1139,95 @@ def test_cli_lists_persisted_answer_snapshots(tmp_path: Path) -> None:
       and "Yes" in out
       and "Decision" in out
     )
+
+
+def test_ack_task_rolls_back_both_on_failure(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  state_dir = cli.resolve_state_dir()
+  store, messages, _, _ = cli.open_services(state_dir)
+  messages.send_message("Need action", msg_id="ab7701")
+  store.close()
+  original = SqliteStore.append_message_ack
+
+  def fail_after_task(self, msg_id, reply, now):
+    assert self.get_task("new-task") is not None
+    raise ValueError("Simulated acknowledgement failure")
+
+  monkeypatch.setattr(SqliteStore, "append_message_ack", fail_after_task)
+  code, out, _ = _run_cli(
+    state_dir,
+    "ack",
+    "ab7701",
+    "Received",
+    "-i",
+    "new-task",
+    "-t",
+    "Task",
+    "-d",
+    "Do work",
+  )
+  assert code != 0 and "ok ab7701" not in out
+  monkeypatch.setattr(SqliteStore, "append_message_ack", original)
+  store, messages, _, _ = cli.open_services(state_dir)
+  assert messages.get_message("ab7701").acks == []
+  assert store.get_task("new-task") is None
+  store.close()
+
+
+def test_ack_answer_creates_linked_task_with_answer_snapshot(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  store, _, _, reports = cli.open_services(state_dir)
+  reports.publish_report("choice", "Choice", "Select? {#select}\n- ( ) Yes\n- ( ) No\n")
+  answer = reports.submit_answer("choice", {"select": "Yes"}, answer_id="ab7702")
+  store.close()
+  code, out, err = _run_cli(
+    state_dir,
+    "ack",
+    answer.id,
+    "Received",
+    "-i",
+    "new-task",
+    "-t",
+    "Task",
+    "-d",
+    "Do work",
+  )
+  assert code == 0, err
+  assert answer.id in out and "Yes" in out
+  store, _, tasks, reports = cli.open_services(state_dir)
+  task = tasks.get_task("new-task")[0]
+  assert task.msg_ids == [] and task.report_ids == ["choice"]
+  assert task.answer_snapshots[0]["id"] == answer.id
+  assert reports.get_report("choice").answers[0].status == "acked"
+  store.close()
+
+
+def test_concurrent_ack_task_creation_preserves_both(tmp_path: Path) -> None:
+  from concurrent.futures import ThreadPoolExecutor
+  from threading import Barrier
+
+  state_dir = cli.resolve_state_dir()
+  store, messages, _, _ = cli.open_services(state_dir)
+  messages.send_message("First", msg_id="ab7703")
+  messages.send_message("Second", msg_id="ab7704")
+  store.close()
+  start = Barrier(2)
+
+  def create(pair):
+    start.wait()
+    msg_id, task_id = pair
+    return _run_cli(
+      state_dir, "ack", msg_id, "Received", "-i", task_id, "-t", "Task", "-d", "Do work"
+    )
+
+  with ThreadPoolExecutor(max_workers=2) as pool:
+    results = list(
+      pool.map(create, [("ab7703", "first-task"), ("ab7704", "second-task")])
+    )
+  assert all(code == 0 for code, _, _ in results), results
+  store, messages, _, _ = cli.open_services(state_dir)
+  assert {task.id for task in store.list_tasks()} == {"first-task", "second-task"}
+  assert messages.get_message("ab7703").acks == ["Received"]
+  assert messages.get_message("ab7704").acks == ["Received"]
+  store.close()
