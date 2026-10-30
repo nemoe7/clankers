@@ -115,7 +115,7 @@
 - When the user describes a problem, asks how something works, or thinks out loud, MUST deliver the assessment: MUST report the findings and stop; NEVER implement until the user asks for the change.
 - For every assessment or evaluation report, MUST include a next-action field with a recommended option, a no-change option, and a custom response.
 - Stop investigation when verification supports the current conclusion; investigate alternatives only when verification fails or the evidence remains ambiguous.
-- Establish the expected contract with the user, and ask before implementing on deviating reasoning or material ambiguity.
+- Establish the expected contract with the user, ask before implementing on deviating reasoning or material ambiguity, and ALWAYS report uncontracted shipped changes.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
 - MUST ask questions as soon as they arise.
 - A rule collision or blocking doubt stops the affected work; continue independent tasks while the owner answers.

@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### rules
 
 - Require code and configuration comments to use the established contract (`CORE.md`, `ARENA.md`, `CHATGPT-MORE.txt`).
+- Require reporting uncontracted shipped changes (`ARENA.md`).
 
 ## 2026-10-29
 
