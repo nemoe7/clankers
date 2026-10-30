@@ -480,3 +480,60 @@ assert.match(container.innerHTML, /linked-task/);
     check=False,
   )
   assert result.returncode == 0, result.stderr
+
+
+def test_image_lightbox_assets() -> None:
+  index = (ASSETS_DIR / "index.html").read_text(encoding="utf-8")
+  app = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
+  image_modal_id = 'id="image-modal"'
+  assert image_modal_id in index
+  assert "image-modal" in app
+  assert "wheel" in app
+  assert "pointerdown" in app
+  assert ".mermaid-diagram svg" in app
+  assert ".mermaid-block svg" in app
+  assert ".image-modal" in css
+
+
+def test_image_lightbox_interactions() -> None:
+  script = r"""
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+const source = readFileSync('skills/arena-steering/assets/app.js', 'utf8');
+const code = source.slice(source.indexOf('function initImageModal()'), source.indexOf('function initEvents()'));
+function element() {
+  return { handlers: {}, addEventListener(type, fn) { this.handlers[type] = fn; },
+    setPointerCapture() {}, replaceChildren(...children) { this.firstElementChild = children[0] || null; } };
+}
+const dialog = element(), stage = element(), close = element(), doc = element();
+dialog.showModal = () => { dialog.open = true; };
+dialog.close = () => { dialog.open = false; dialog.handlers.close(); };
+doc.getElementById = id => ({ 'image-modal': dialog, 'image-modal-stage': stage, 'image-modal-close': close })[id];
+vm.runInNewContext(code + '\ninitImageModal();', { document: doc, Math });
+const clone = { style: {}, removeAttribute() {}, setAttribute() {} };
+const media = { cloneNode() { return clone; } };
+const target = { closest(selector) { return selector.startsWith('#') ? {} : media; } };
+doc.handlers.click({ target, preventDefault() {} });
+assert.equal(dialog.open, true);
+assert.equal(stage.firstElementChild, clone);
+const initial = clone.style.transform;
+stage.handlers.wheel({ preventDefault() {}, deltaY: -200 });
+assert.notEqual(clone.style.transform, initial);
+const zoomed = clone.style.transform;
+stage.handlers.pointerdown({ button: 0, pointerId: 1, clientX: 10, clientY: 10 });
+stage.handlers.pointermove({ pointerId: 1, clientX: 50, clientY: 35 });
+assert.notEqual(clone.style.transform, zoomed);
+close.handlers.click();
+assert.equal(dialog.open, false);
+assert.equal(stage.firstElementChild, null);
+"""
+  result = subprocess.run(
+    ["node", "--input-type=module", "-e", script],
+    cwd=SKILL_DIR.parents[1],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr

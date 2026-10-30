@@ -21,6 +21,7 @@ This log has no Unreleased section.
 - `assets/`: Stage full-page file drops, `#attach-file` picks, and long pastes as removable chips in `#composer-attachments`, with `#composer-expand` for a taller composer.
 - `scripts/arena_steering/cli.py`: Add native `git worktree` lifecycle commands under `.worktrees/`, detached `steer run start` with `--after` chaining and `steer run logs`, plus a `steer run pr-checks` watcher.
 - `assets/messages-view.js`: Fix message rendering when a task links to a message.
+- `assets/`: Open message and report images and Mermaid diagrams in a zoomable, pannable lightbox.
 
 ### Fixed
 
