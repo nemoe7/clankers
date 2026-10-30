@@ -99,15 +99,30 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 
 Use `python skills/arena-steering/scripts/steer` in place of `steer` in the table when the entry point is not on `PATH`. Message and answer IDs are six lowercase hexadecimal characters. Task and report IDs use lowercase kebab-case.
 
-## Inbox gate
+## Pre-command pipeline
 
-`steer gate` is the pre-command check for a shell hook. It exits 1 while a message or report answer awaits an acknowledgement, prints the pending IDs, and names the blocked part of the line. Exit 0 means the inbox is clear.
+`steer pre` runs the shell-hook pipeline from `arena_steering/pre.py`. Each check is a small class with `applies` and `run`. `PIPELINE` lists them in order, so adding, dropping, or reordering a check is a one-line edit there. A step returns `0` to continue, prints warnings, or returns a verdict: `2` ends the call clean and `130` blocks it.
 
 ```sh
-trap 'python skills/arena-steering/scripts/steer gate -l "$BASH_COMMAND"' DEBUG
+_arena_preview_pre() {
+  local reply
+  reply="$(steer pre --shell "${0##*/}" --line "$_arena_preview_line" \
+    --command "$BASH_COMMAND" --done "${_arena_preview_done:-}")"
+  local status=$?
+  while IFS= read -r step; do
+    case "$step" in
+      _arena_preview_done=*) eval "$step" ;;
+      *) printf '%s\n' "$step" ;;
+    esac
+  done <<< "$reply"
+  case $status in 2) exit 0 ;; 130) exit 130 ;; esac
+}
+trap '_arena_preview_pre' DEBUG
 ```
 
-`-p` words the refusal for a push. The trap line carries the entry path, so no wrapper script ships. How a shell installs the line is left to `install.sh`.
+The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. Only `gate` reads the store: it blocks a `git push` at once, otherwise it counts shell lines while an inbox item waits and blocks after six. Working the inbox resets that count.
+
+`bible` blocks `cat`, `grep`, `head`, `tail`, and `rg` on ARENA.md, AGENTS.md, and a skill SKILL.md. A passing step prints nothing and lands in `_arena_preview_done`, so a later command in one shell skips it. `steer gate` still runs its inbox check alone for an older hook. `install.sh` holds the profile block that installs this line.
 
 ## Task and message contracts
 
