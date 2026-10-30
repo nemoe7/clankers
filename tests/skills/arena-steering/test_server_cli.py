@@ -73,10 +73,18 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert acked["message"]["status"] == "acked"
   assert acked["message"]["acks"] == ["Router shipped."]
 
+  status, _ = app.dispatch("POST", "/tasks", {"id": "empty-task", "title": "Empty"})
+  assert status == int(HTTPStatus.BAD_REQUEST)
+
   status, t_created = app.dispatch(
     "POST",
     "/tasks",
-    {"id": "build-router", "title": "Build HTTP router", "type": "code"},
+    {
+      "id": "build-router",
+      "title": "Build HTTP router",
+      "type": "code",
+      "details": ["Build routes."],
+    },
   )
   assert status == int(HTTPStatus.CREATED)
   assert t_created["task"]["id"] == "build-router"
@@ -88,6 +96,8 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   )
   assert status == int(HTTPStatus.OK)
   assert t_patched["task"]["status"] == "in_progress"
+  status, _ = app.dispatch("PATCH", "/tasks/build-router", {"details": []})
+  assert status == int(HTTPStatus.BAD_REQUEST)
 
   status, r_created = app.dispatch(
     "POST",
@@ -392,7 +402,12 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert code == 0
   assert ACK_MARKDOWN in out
 
-  code, out, _ = _run_cli(state_dir, "task", "new", TASK_ID_BASE, "Base task")
+  code, _, err = _run_cli(state_dir, "task", "new", "empty-task", "Empty")
+  expected_error = "at least one detail"
+  assert code != 0 and expected_error in err
+  code, out, _ = _run_cli(
+    state_dir, "task", "new", TASK_ID_BASE, "Base task", "-d", "Build the base."
+  )
   assert code == 0
   assert TASK_ID_BASE in out
 
@@ -691,7 +706,15 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
   state_dir.mkdir()
 
   code, out, _ = _run_cli(
-    state_dir, "task", "new", "base-task", "Base task", "-T", "code"
+    state_dir,
+    "task",
+    "new",
+    "base-task",
+    "Base task",
+    "-T",
+    "code",
+    "-d",
+    "Build the base.",
   )
   assert code == 0
   assert "base-task" in out
@@ -701,6 +724,8 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
     "new",
     "child-task",
     "Child task",
+    "-d",
+    "Build the child.",
     "-T",
     "code",
     "-k",
