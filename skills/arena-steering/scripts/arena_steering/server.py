@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import html
 import importlib
@@ -11,8 +12,10 @@ import json
 import mimetypes
 import os
 import re
+import secrets
 import sqlite3
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable, Iterable
@@ -60,6 +63,24 @@ REPORT_STATIC_EXTS = REPORT_IMAGE_EXTS | frozenset({".md", ".txt"})
 STATIC_ASSETS_PREFIX = "static/assets/"
 STATIC_REPORTS_PREFIX = "static/reports/"
 STATIC_UPLOADS_PREFIX = "static/uploads/"
+PASTE_ATTACHMENT_CHAR_THRESHOLD = 2400
+PASTE_ATTACHMENT_LINE_THRESHOLD = 40
+PASTE_ATTACHMENT_NAME = "pasted-text.txt"
+PASTE_ATTACHMENT_BODY = "Pasted text attached."
+
+
+def _body_bool(value: Any, default: bool) -> bool:
+  if isinstance(value, bool):
+    return value
+  if isinstance(value, str):
+    lowered = value.strip().lower()
+    if lowered in {"true", "1", "yes", "on"}:
+      return True
+    if lowered in {"false", "0", "no", "off", ""}:
+      return False
+  if value is None:
+    return default
+  return bool(value)
 
 
 class Router:
@@ -159,6 +180,10 @@ class SteeringApp:
     self.router.add("GET", "/health", self._handle_health)
     self.router.add("GET", "/messages", self._handle_list_messages)
     self.router.add("POST", "/messages", self._handle_create_message)
+    self.router.add(
+      "POST", "/messages/with-file", self._handle_create_message_with_file
+    )
+    self.router.add("POST", "/uploads", self._handle_upload_file)
     self.router.add("GET", "/messages/{id}", self._handle_get_message)
     self.router.add("POST", "/messages/{id}/ack", self._handle_ack_message)
     self.router.add("GET", "/poll", self._handle_poll)
@@ -353,6 +378,94 @@ class SteeringApp:
     state_dir = Path(db_path).resolve().parent
     return self._resolve_under(state_dir / directory_name, rel_path)
 
+  def _uploads_dir(self) -> Path:
+    db_path = getattr(self.store, "db_path", "")
+    if db_path and db_path != ":memory:":
+      uploads_dir = Path(db_path).resolve().parent / "uploads"
+    else:
+      cached = getattr(self, "_memory_uploads_dir", None)
+      if cached is None:
+        cached = Path(tempfile.mkdtemp(prefix="arena-steering-uploads-"))
+        self._memory_uploads_dir = cached  # type: ignore[attr-defined]
+      uploads_dir = cached
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    return uploads_dir
+
+  @staticmethod
+  def _safe_upload_name(name: Any) -> str:
+    raw_name = Path(str(name or "")).name.strip()
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", raw_name).strip(".-")
+    return safe_name or "upload.bin"
+
+  @staticmethod
+  def _upload_bytes(file_body: dict[str, Any]) -> bytes:
+    for field_name in ("content_base64", "base64", "data_base64"):
+      encoded = file_body.get(field_name)
+      if isinstance(encoded, str) and encoded:
+        try:
+          return base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as exc:
+          raise ValueError("Upload content_base64 is invalid") from exc
+    for field_name in ("text", "content"):
+      text = file_body.get(field_name)
+      if isinstance(text, str):
+        return text.encode("utf-8")
+    raise ValueError("Upload file content is required")
+
+  def _store_upload(self, file_body: dict[str, Any]) -> Attachment:
+    if not isinstance(file_body, dict):
+      raise TypeError("Upload file must be an object")
+    safe_name = self._safe_upload_name(
+      file_body.get("name") or file_body.get("filename") or "upload.bin"
+    )
+    data = self._upload_bytes(file_body)
+    stored_name = f"{secrets.token_hex(3)}-{int(time.time())}-{safe_name}"
+    stored_path = self._uploads_dir() / stored_name
+    stored_path.write_bytes(data)
+    return Attachment(
+      name=safe_name,
+      path=str(stored_path),
+      size_bytes=len(data),
+      present=True,
+    )
+
+  def _serialize_attachment(self, attachment: Attachment) -> dict[str, Any]:
+    data = attachment.to_dict()
+    stored_path = Path(attachment.path)
+    try:
+      relative = stored_path.resolve().relative_to(self._uploads_dir().resolve())
+    except ValueError:
+      return data
+    data["url"] = f"/static/uploads/{relative.as_posix()}"
+    return data
+
+  @staticmethod
+  def _paste_needs_attachment(text: str) -> bool:
+    return (
+      len(text) > PASTE_ATTACHMENT_CHAR_THRESHOLD
+      or len(text.splitlines()) > PASTE_ATTACHMENT_LINE_THRESHOLD
+    )
+
+  def _message_attachments_from_body(
+    self, body: dict[str, Any]
+  ) -> tuple[str, list[Attachment]]:
+    attachments = [Attachment.from_dict(raw) for raw in body.get("attachments", [])]
+    message_body = str(body.get("body", ""))
+    file_body = body.get("file") or body.get("upload")
+    if file_body is not None:
+      attachments.append(self._store_upload(file_body))
+    pasted_text = body.get("pasted_text", body.get("paste_text"))
+    if isinstance(pasted_text, str) and pasted_text:
+      if self._paste_needs_attachment(pasted_text):
+        attachments.append(
+          self._store_upload({"name": PASTE_ATTACHMENT_NAME, "text": pasted_text})
+        )
+        if not message_body.strip():
+          message_body = PASTE_ATTACHMENT_BODY
+      elif not message_body.strip():
+        message_body = pasted_text
+    return message_body, attachments
+
   def _report_markdown_bytes(self, rel_path: str) -> bytes | None:
     rel = Path(rel_path)
     if rel.suffix.lower() != ".md" or rel.parent != Path("."):
@@ -483,6 +596,30 @@ class SteeringApp:
       str(body.get("body", "")),
       hidden=bool(body.get("hidden", False)),
       blocking=bool(body.get("blocking", True)),
+      attachments=attachments,
+      parent_ids=[str(item) for item in (body.get("parent_ids") or [])],
+      msg_id=body.get("id"),
+    )
+    return (int(HTTPStatus.CREATED), {"message": self._serialize_message(msg)})
+
+  def _handle_upload_file(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+  ) -> tuple[int, Any]:
+    file_body = body.get("file") or body.get("upload") or body
+    attachment = self._store_upload(file_body)
+    return (
+      int(HTTPStatus.CREATED),
+      {"attachment": self._serialize_attachment(attachment)},
+    )
+
+  def _handle_create_message_with_file(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+  ) -> tuple[int, Any]:
+    message_body, attachments = self._message_attachments_from_body(body)
+    msg = self.messages.send_message(
+      message_body,
+      hidden=_body_bool(body.get("hidden", False), False),
+      blocking=_body_bool(body.get("blocking", True), True),
       attachments=attachments,
       parent_ids=[str(item) for item in (body.get("parent_ids") or [])],
       msg_id=body.get("id"),
@@ -1000,12 +1137,57 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
 
     def _handle_json_method(self, method: str) -> None:
       try:
-        body = self._read_json_body()
-      except ValueError as exc:
+        content_type = self.headers.get("Content-Type", "")
+        if content_type.lower().startswith("multipart/form-data"):
+          body = self._read_multipart_body(content_type)
+        else:
+          body = self._read_json_body()
+      except (TypeError, ValueError) as exc:
         self._write_json(int(HTTPStatus.BAD_REQUEST), {"error": str(exc)})
         return
       status, payload = app.dispatch(method, self.path, body)
       self._write_json(status, payload)
+
+    def _read_multipart_body(self, content_type: str) -> dict[str, Any]:
+      boundary_match = re.search(r"boundary=(?:\"([^\"]+)\"|([^;]+))", content_type)
+      if boundary_match is None:
+        raise ValueError("Multipart boundary is required")
+      boundary = (boundary_match.group(1) or boundary_match.group(2)).strip()
+      length = int(self.headers.get("Content-Length", "0") or "0")
+      raw = self.rfile.read(length) if length > 0 else b""
+      body: dict[str, Any] = {}
+      marker = b"--" + boundary.encode("utf-8")
+      for part in raw.split(marker):
+        if part in (b"", b"--", b"--\r\n", b"\r\n"):
+          continue
+        if part.startswith(b"\r\n"):
+          part = part[2:]
+        if part.endswith(b"\r\n"):
+          part = part[:-2]
+        if part.endswith(b"--"):
+          part = part[:-2].rstrip(b"\r\n")
+        header_blob, separator, data = part.partition(b"\r\n\r\n")
+        if not separator:
+          continue
+        headers = header_blob.decode("utf-8", errors="replace")
+        disposition = ""
+        for line in headers.split("\r\n"):
+          if line.lower().startswith("content-disposition:"):
+            disposition = line
+            break
+        name_match = re.search(r'name="([^"]+)"', disposition)
+        if name_match is None:
+          continue
+        field_name = name_match.group(1)
+        filename_match = re.search(r'filename="([^"]*)"', disposition)
+        if filename_match is not None and filename_match.group(1):
+          body["file"] = {
+            "name": filename_match.group(1),
+            "content_base64": base64.b64encode(data).decode("ascii"),
+          }
+        else:
+          body[field_name] = data.decode("utf-8")
+      return body
 
     def _read_json_body(self) -> dict[str, Any]:
       length = int(self.headers.get("Content-Length", "0") or "0")
