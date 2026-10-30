@@ -453,3 +453,30 @@ def test_composer_upload_drop_expand_assets() -> None:
   assert ".composer-attachment-chip" in style_css
   assert ".composer-expanded" in style_css
   assert ".composer-drop-active" in style_css
+
+
+def test_linked_tasks_do_not_break_message_rendering() -> None:
+  script = """
+import assert from 'node:assert/strict';
+import { renderMessagesView } from './skills/arena-steering/assets/messages-view.js';
+globalThis.document = { activeElement: null };
+const container = {
+  innerHTML: '',
+  querySelector() { return null; },
+  querySelectorAll() { return []; },
+  addEventListener() {},
+};
+renderMessagesView(container, {
+  messages: [{ id: 'abc123', body: 'hello', acks: [], created_at: '2026-01-01T00:00:00Z' }],
+  tasks: [{ id: 'linked-task', links: { msg_ids: ['abc123'] } }],
+}, {});
+assert.match(container.innerHTML, /linked-task/);
+"""
+  result = subprocess.run(
+    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
+    cwd=SKILL_DIR.parents[1],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
