@@ -115,6 +115,29 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   store.close()
 
 
+def test_router_create_message_accepts_parent_ids() -> None:
+  store = SqliteStore(":memory:")
+  app = SteeringApp(store)
+
+  status, _created = app.dispatch(
+    "POST", "/messages", {"id": "aa1001", "body": "Parent note"}
+  )
+  assert status == int(HTTPStatus.CREATED)
+
+  status, created = app.dispatch(
+    "POST",
+    "/messages",
+    {"id": "bb2002", "body": "Child note", "parent_ids": ["aa1001"]},
+  )
+  assert status == int(HTTPStatus.CREATED)
+  assert created["message"]["parent_ids"] == ["aa1001"]
+
+  status, single = app.dispatch("GET", "/messages/bb2002")
+  assert status == int(HTTPStatus.OK)
+  assert single["message"]["parent_ids"] == ["aa1001"]
+  store.close()
+
+
 def test_report_acked_events_fire_once_per_ack() -> None:
   store = SqliteStore(":memory:")
   app = SteeringApp(store)

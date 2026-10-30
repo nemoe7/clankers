@@ -85,6 +85,13 @@ REPORT_SUBMIT_FLOAT_CLASS = "report-submit-float"
 REPORT_SUBMIT_SPACER_RULE = ".report-submit-row > #report-submit"
 REPORT_SUBMIT_FLOAT_RULE = ".report-submit-float {"
 CLOCK_ID = 'id="clock"'
+RECEIPT_ID_CLASS = "receipt-id"
+REPLY_PARENT_CHIP_CLASS = "reply-parent-chip"
+COMPOSER_REPLY_BAR_ID = 'id="composer-reply-bar"'
+COMPOSER_REPLY_CHIP_CLASS = "composer-reply-chip"
+PARENT_IDS_FIELD = "parent_ids"
+REPLY_PARENT_IDS_STATE = "replyParentIds"
+TOGGLE_REPLY_PARENT_HANDLER = "onToggleReplyParent"
 
 # Hex values of the warm Arena tokens in `assets/style.css` `:root`
 # (HSL token channels converted to sRGB, plus its literal hex tokens).
@@ -354,3 +361,29 @@ def test_report_floating_submit_assets() -> None:
 
   index_html = (ASSETS_DIR / "index.html").read_text(encoding="utf-8")
   assert CLOCK_ID not in index_html
+
+
+def test_multi_message_reply_assets() -> None:
+  messages_js = (ASSETS_DIR / "messages-view.js").read_text(encoding="utf-8")
+  assert RECEIPT_ID_CLASS in messages_js
+  assert REPLY_PARENT_CHIP_CLASS in messages_js
+  assert COMPOSER_REPLY_BAR_ID in messages_js
+  assert COMPOSER_REPLY_CHIP_CLASS in messages_js
+  assert PARENT_IDS_FIELD in messages_js
+  assert "↪" in messages_js
+
+  app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  assert REPLY_PARENT_IDS_STATE in app_js
+  assert TOGGLE_REPLY_PARENT_HANDLER in app_js
+  assert "event.shiftKey" in app_js
+
+  api_js = (ASSETS_DIR / "api.js").read_text(encoding="utf-8")
+  assert PARENT_IDS_FIELD in api_js
+
+  state_js = (ASSETS_DIR / "state.js").read_text(encoding="utf-8")
+  assert REPLY_PARENT_IDS_STATE in state_js
+
+  style_css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
+  assert ".composer-reply-bar" in style_css
+  assert ".reply-parent-chip" in style_css
+  assert ".receipt-id" in style_css

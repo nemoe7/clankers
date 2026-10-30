@@ -36,6 +36,7 @@ class SqliteStore:
           hidden INTEGER NOT NULL DEFAULT 0,
           blocking INTEGER NOT NULL DEFAULT 1,
           attachments_json TEXT NOT NULL DEFAULT '[]',
+          parent_ids_json TEXT NOT NULL DEFAULT '[]',
           status TEXT NOT NULL DEFAULT 'sent',
           acks_json TEXT NOT NULL DEFAULT '[]',
           modified_at TEXT NOT NULL
@@ -75,6 +76,14 @@ class SqliteStore:
         );
         """
       )
+      message_cols = {
+        row["name"]
+        for row in self._conn.execute("PRAGMA table_info(messages)").fetchall()
+      }
+      if "parent_ids_json" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN parent_ids_json TEXT NOT NULL DEFAULT '[]'"
+        )
       task_cols = {
         row["name"] for row in self._conn.execute("PRAGMA table_info(tasks)").fetchall()
       }
@@ -125,13 +134,14 @@ class SqliteStore:
         "SELECT seq FROM messages WHERE id = ?", (message.id,)
       ).fetchone()
       attachments_json = json.dumps([item.to_dict() for item in message.attachments])
+      parent_ids_json = json.dumps(message.parent_ids)
       acks_json = json.dumps(message.acks)
       if existing is None:
         self._conn.execute(
           """
           INSERT INTO messages (
-            id, body, hidden, blocking, attachments_json, status, acks_json, modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            id, body, hidden, blocking, attachments_json, parent_ids_json, status, acks_json, modified_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             message.id,
@@ -139,6 +149,7 @@ class SqliteStore:
             int(message.hidden),
             int(message.blocking),
             attachments_json,
+            parent_ids_json,
             message.status,
             acks_json,
             message.modified_at,
@@ -152,6 +163,7 @@ class SqliteStore:
               hidden = ?,
               blocking = ?,
               attachments_json = ?,
+              parent_ids_json = ?,
               status = ?,
               acks_json = ?,
               modified_at = ?
@@ -162,6 +174,7 @@ class SqliteStore:
             int(message.hidden),
             int(message.blocking),
             attachments_json,
+            parent_ids_json,
             message.status,
             acks_json,
             message.modified_at,
@@ -338,6 +351,8 @@ class SqliteStore:
 
   @staticmethod
   def _row_to_message(row: sqlite3.Row) -> Message:
+    keys = row.keys()
+    parent_ids_json = row["parent_ids_json"] if "parent_ids_json" in keys else "[]"
     return Message(
       id=str(row["id"]),
       body=str(row["body"]),
@@ -347,6 +362,7 @@ class SqliteStore:
         Attachment.from_dict(item)
         for item in json.loads(row["attachments_json"] or "[]")
       ],
+      parent_ids=[str(item) for item in json.loads(parent_ids_json or "[]")],
       status=str(row["status"]),
       acks=[str(item) for item in json.loads(row["acks_json"] or "[]")],
       modified_at=str(row["modified_at"]),

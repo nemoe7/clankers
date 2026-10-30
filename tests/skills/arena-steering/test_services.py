@@ -76,6 +76,27 @@ def test_message_service_lifecycle_and_acks() -> None:
   store.close()
 
 
+def test_message_service_stores_parent_ids_for_multi_message_replies() -> None:
+  store = SqliteStore(":memory:")
+  svc = MessageService(store, store, store)
+
+  svc.send_message("First parent", msg_id="aa1001")
+  svc.send_message("Second parent", msg_id="bb2002")
+  reply = svc.send_message(
+    "Reply to both",
+    parent_ids=["bb2002", "aa1001", "bb2002"],
+    msg_id="cc3003",
+  )
+
+  assert reply.parent_ids == ["bb2002", "aa1001"]
+  assert svc.get_message("cc3003").parent_ids == ["bb2002", "aa1001"]
+
+  with pytest.raises(KeyError, match="Unknown parent message ID"):
+    svc.send_message("Missing parent", parent_ids=["dd4004"], msg_id="ee5005")
+
+  store.close()
+
+
 def test_task_service_mutable_dependency_queue_and_derived_blocking() -> None:
   store = SqliteStore(":memory:")
   tasks = TaskService(store, store)
