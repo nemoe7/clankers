@@ -8,7 +8,6 @@ import json
 import os
 import struct
 import sys
-import tempfile
 import zlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -968,22 +967,13 @@ def main(argv: list[str] | None = None) -> int:
   parser.add_argument("--host", default="0.0.0.0")
   parser.add_argument("--port", type=int, default=default_port)
   parser.add_argument(
-    "--state-dir",
-    default=None,
-    help="Directory for demo state.sqlite3 (default: temporary directory).",
-  )
-  parser.add_argument(
     "--seed-only",
     action="store_true",
     help="Seed the state database and exit without starting the HTTP server.",
   )
   args = parser.parse_args(argv)
 
-  state_dir = (
-    Path(args.state_dir)
-    if args.state_dir
-    else Path(tempfile.mkdtemp(prefix="arena-steering-demo-"))
-  )
+  state_dir = Path("arena-state/demo")
   state_dir.mkdir(parents=True, exist_ok=True)
   db_path = state_dir / "state.sqlite3"
   store = SqliteStore(db_path)

@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `scripts/arena_steering/cli.py`: Fix state under `arena-state` and use a separate v2 database filename while v1 remains active. Keep demo state in `arena-state/demo/`.
+
 - `skills/arena-steering/README.md`: Document v2 features, commands, routes, and current limits. Expand interface and lifecycle contracts, and align the v1/v2 parity matrix with the feature inventory.
 - `scripts/arena_steering/` and `scripts/steer`: Add the `arena-steering` skill and `steer` CLI with domain models, SQLite storage, server-cached Markdown forms, SHA-256 survey grading, and HTTP/WebSocket routes.
 - `assets/`, `references/survey.json`, and `scripts/demo.py`: Add ES module web UI for Inbox, Tasks, Reports, and Survey with PrismJS, Mermaid, Arena tokens, `Basel_Grotesk` fonts, and `demo.py`.

@@ -33,10 +33,9 @@ def _snippet_words(text: str, max_words: int = 6) -> str:
   return " ".join(words[:max_words]) + "..."
 
 
-def resolve_state_dir(explicit: str | None = None) -> Path:
-  """Return the configured state directory path."""
-  raw = explicit or os.environ.get("ARENA_STATE_DIR") or "arena-state"
-  path = Path(raw)
+def resolve_state_dir() -> Path:
+  """Return the fixed state directory for this working directory."""
+  path = Path("arena-state")
   path.mkdir(parents=True, exist_ok=True)
   return path
 
@@ -45,7 +44,8 @@ def open_services(
   state_dir: Path,
 ) -> tuple[SqliteStore, MessageService, TaskService, ReportService]:
   """Open SqliteStore and domain services for a state directory."""
-  store = SqliteStore(state_dir / "state.sqlite3")
+  # Restore state.sqlite3 after v1 is retired and its database no longer collides.
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
   messages = MessageService(store, store, store)
   tasks = TaskService(store, store)
   reports = ReportService(store, store, on_answer_callback=messages.notify_new_work)
@@ -77,11 +77,6 @@ def main(
     action="version",
     version=f"steer {__version__}",
   )
-  parser.add_argument(
-    "--state-dir",
-    default=None,
-    help="State directory holding state.sqlite3 (default: arena-state).",
-  )
   sub = parser.add_subparsers(dest="command")
 
   default_port = int(os.environ.get("STEER_PORT", "8100"))
@@ -89,7 +84,7 @@ def main(
   serve_p.add_argument("--host", default="0.0.0.0")
   serve_p.add_argument("--port", type=int, default=default_port)
 
-  sub.add_parser("read", help="Read pending messages and report answers.")
+  read_p = sub.add_parser("read", help="Read pending messages and report answers.")
 
   poll_p = sub.add_parser("poll", help="Wait for pending messages or skip_poll.")
 
@@ -161,7 +156,7 @@ def main(
   sub.add_parser("worktree", help="Manage native git worktrees under .worktrees/.")
   sub.add_parser("run", help="Start detached runs and read their logs.")
 
-  state_dir, remaining = _extract_global_state_dir(args_list)
+  remaining = args_list
   if not remaining:
     parser.print_help(file=stdout)
     return 0
@@ -169,7 +164,7 @@ def main(
   cmd = remaining[0]
   cmd_args = remaining[1:]
 
-  resolved_state_dir = resolve_state_dir(state_dir)
+  resolved_state_dir = resolve_state_dir()
   store, messages, tasks, reports = open_services(resolved_state_dir)
   try:
     if cmd == "serve":
@@ -183,6 +178,7 @@ def main(
       httpd.serve_forever()
       return 0
     if cmd == "read":
+      read_p.parse_args(cmd_args)
       delivered = messages.read_pending(mark_seen=True)
       _print_delivered(delivered, stdout)
       return 0
@@ -250,25 +246,6 @@ def main(
     return 1
   finally:
     store.close()
-
-
-def _extract_global_state_dir(argv: list[str]) -> tuple[str | None, list[str]]:
-  state_dir: str | None = None
-  remaining: list[str] = []
-  idx = 0
-  while idx < len(argv):
-    token = argv[idx]
-    if token == "--state-dir" and idx + 1 < len(argv):
-      state_dir = argv[idx + 1]
-      idx += 2
-      continue
-    if token.startswith("--state-dir="):
-      state_dir = token.split("=", 1)[1]
-      idx += 1
-      continue
-    remaining.append(token)
-    idx += 1
-  return state_dir, remaining
 
 
 def _run_ack(

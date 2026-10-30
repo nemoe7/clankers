@@ -7,14 +7,21 @@ import json
 from pathlib import Path
 
 import pytest
-from arena_steering import survey
+from arena_steering import cli, survey
 from arena_steering.cli import main as cli_main
 
 
+@pytest.fixture(autouse=True)
+def _isolate_cli_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+  state_dir = tmp_path / "arena-state"
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: state_dir)
+
+
 def _run_cli(state_dir: Path, *args: str) -> tuple[int, str, str]:
+  assert state_dir == cli.resolve_state_dir()
   out = io.StringIO()
   err = io.StringIO()
-  code = cli_main(["--state-dir", str(state_dir), *args], out=out, err=err)
+  code = cli_main(list(args), out=out, err=err)
   return code, out.getvalue(), err.getvalue()
 
 
@@ -77,7 +84,7 @@ def test_deterministic_boolean_checks_accept_true_and_unknown() -> None:
 
 
 def test_cli_survey_smallest_image_and_submission(tmp_path: Path) -> None:
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   code, out, _err = _run_cli(state_dir, "survey", "-i")
   assert code == 0
   assert out.strip().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"))

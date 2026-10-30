@@ -17,7 +17,9 @@ Open the preview URL supplied by the host. The demo starts a separate server wit
 python skills/arena-steering/scripts/demo.py --port 8100
 ```
 
-The default state directory is `arena-state`. Set `ARENA_STATE_DIR` or pass `--state-dir` to use another directory. The SQLite database is `state.sqlite3`. Uploaded files live in its `uploads/` directory.
+The state directory is `arena-state` in the working directory. V2 uses `steering-v2.sqlite3` there so its database does not collide with v1 `state.sqlite3`. Existing databases are not migrated or deleted. Uploaded files live in `arena-state/uploads/`.
+
+The demo uses `arena-state/demo/` and reseeds its own database on startup.
 
 Keep session state outside version control.
 
@@ -55,7 +57,7 @@ Keep session state outside version control.
 
 ## CLI
 
-Examples use the repo entry point. Use `--state-dir` with any command to select a session. Run a long-lived server separately from one-shot commands.
+Examples use the repo entry point. Run a long-lived server separately from one-shot commands.
 
 | Command | Purpose |
 | --- | --- |
@@ -211,7 +213,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 
 | Area | v1 | v2 | Parity |
 | --- | --- | --- | --- |
-| Start and configuration | `init`, `serve`, state directory, installed wrapper, and restore installer | `serve`, `--state-dir`, and `ARENA_STATE_DIR`, plus browser timezone | No v2 `init --tz` or equivalent install and restore workflow. |
+| Start and configuration | `init`, `serve`, state directory, installed wrapper, and restore installer | `serve`, fixed `arena-state` directory, and browser timezone | No v2 `init --tz` or equivalent install and restore workflow. |
 | Inbox | Read and poll, note history, quiet notes, seen receipts, and acknowledgement receipts | Read and poll, message history, hidden messages, non-blocking messages, and acknowledgement replies | Names and paging differ. |
 | Message composer | Markdown preview, staging, paste, drop, expansion, reply links, search, and jumps | Preview, staging, paste, drop, expansion, multi-parent replies, search, and jumps | V1 stages text at 15 lines or over 1,500 characters and protects IME and touch Enter. V2 stages over 40 lines or 2,400 characters and submits Enter during IME composition. |
 | Message extras | Slash commands, reference navigation, and server-persisted reply-seen counts | Parent chips jump to loaded messages. New-reply counts stay in browser memory. | V2 intentionally omits slash commands and does not persist message reply-seen counts. |
