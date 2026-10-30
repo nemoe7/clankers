@@ -228,7 +228,7 @@ class SteeringApp:
   def resolve_asset(self, request_path: str) -> tuple[bytes, str] | None:
     """Resolve a static file inside assets_dir or report images without path traversal."""
     clean = request_path.split("?", 1)[0].lstrip("/")
-    if not clean or clean in {"index.html", "inbox", "tasks", "reports"}:
+    if not clean or clean in {"index.html", "messages", "tasks", "reports"}:
       clean = "index.html"
     elif clean.startswith("assets/"):
       clean = clean[len("assets/") :]

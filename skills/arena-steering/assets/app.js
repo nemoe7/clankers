@@ -1,7 +1,7 @@
 // Main ES module controller for Arena Steering.
 
 import { api, connectWebSocket } from "./api.js";
-import { renderInboxView, trackMessageAcks } from "./inbox-view.js";
+import { renderMessagesView, trackMessageAcks } from "./messages-view.js";
 import {
   escapeHtml,
   highlightCodeBlocks,
@@ -416,18 +416,18 @@ function renderApp(state) {
     btn.setAttribute("aria-selected", active ? "true" : "false");
   }
 
-  const inboxEl = document.getElementById("view-inbox");
+  const messagesEl = document.getElementById("view-messages");
   const tasksEl = document.getElementById("view-tasks");
   const reportsEl = document.getElementById("view-reports");
 
-  if (inboxEl) inboxEl.hidden = state.activeTab !== "inbox";
+  if (messagesEl) messagesEl.hidden = state.activeTab !== "messages";
   if (tasksEl) tasksEl.hidden = state.activeTab !== "tasks";
   if (reportsEl) reportsEl.hidden = state.activeTab !== "reports";
 
-  if (state.activeTab === "inbox" && inboxEl) {
-    renderInboxView(inboxEl, state, handlers);
-    highlightCodeBlocks(inboxEl);
-    hydrateMermaidBlocks(inboxEl);
+  if (state.activeTab === "messages" && messagesEl) {
+    renderMessagesView(messagesEl, state, handlers);
+    highlightCodeBlocks(messagesEl);
+    hydrateMermaidBlocks(messagesEl);
   } else if (state.activeTab === "tasks" && tasksEl) {
     renderTasksView(tasksEl, state, handlers);
   } else if (state.activeTab === "reports" && reportsEl) {
@@ -510,17 +510,17 @@ function initEvents() {
     if (event.target.closest?.(".report-picker-link")) {
       return;
     }
-    const noteChip = event.target.closest?.("code.note-id");
-    if (noteChip) {
+    const msgChip = event.target.closest?.("code.msg-id");
+    if (msgChip) {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard
-          .writeText(noteChip.textContent || "")
+          .writeText(msgChip.textContent || "")
           .catch(() => {});
       }
-      noteChip.dataset.state = "good";
+      msgChip.dataset.state = "good";
       setTimeout(() => {
-        if (noteChip.isConnected) {
-          delete noteChip.dataset.state;
+        if (msgChip.isConnected) {
+          delete msgChip.dataset.state;
         }
       }, 1000);
     }

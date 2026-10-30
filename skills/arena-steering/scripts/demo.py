@@ -209,7 +209,7 @@ def _write_demo_media_files(store: SqliteStore) -> None:
     encoding="utf-8",
   )
   (uploads_dir / "modulepreload-trace.txt").write_text(
-    "GET /app.js 200\nGET /inbox-view.js 200\nGET /reports-view.js 200\n",
+    "GET /app.js 200\nGET /messages-view.js 200\nGET /reports-view.js 200\n",
     encoding="utf-8",
   )
 

@@ -24,7 +24,7 @@ EXPECTED_FONTS = (
 EXPECTED_JS_MODULES = (
   "api.js",
   "app.js",
-  "inbox-view.js",
+  "messages-view.js",
   "markdown.js",
   "modal.js",
   "reports-view.js",
@@ -40,7 +40,7 @@ CONFIRM_DELETE_TPL = 'data-modal-template="confirm-delete"'
 SURFACE_TOKEN = "--surface-primary:"
 CTA_TOKEN = "--interactive-cta:"
 CODE_BG_TOKEN = "--code-bg:"
-INLINE_CODE_RULE = ":not(pre) > code:not(.note-id)"
+INLINE_CODE_RULE = ":not(pre) > code:not(.msg-id)"
 MAIN_MAX_WIDTH = "max-width: 900px;"
 MESSAGE_TEXT_FONT_SIZE = "font-size: 16px;"
 STATUS_BANNER_ID = "status-banner"
@@ -124,18 +124,18 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert ARENA_SCROLLBAR_RULE in style_css
   assert SCROLLBAR_NO_HIGHLIGHT_RULE in style_css
   assert "grid-auto-columns: 1fr;" in style_css
-  assert ".main-content:has(> #view-inbox:not([hidden]))" in style_css
+  assert ".main-content:has(> #view-messages:not([hidden]))" in style_css
   assert "margin-block: 0 8px;" in style_css
   assert STATUS_BANNER_ID not in style_css
   assert FONT_DISPLAY_BLOCK in style_css
   assert EDGE_LOADING_KEYFRAME in style_css
   assert SELECT_CHEVRON_CLASS in style_css
 
-  inbox_js = (ASSETS_DIR / "inbox-view.js").read_text(encoding="utf-8")
-  assert HISTORY_LIST_ID in inbox_js
-  assert COMPOSER_SHELL_CLASS in inbox_js
-  assert MANUAL_BLOCKING_INPUT not in inbox_js
-  assert MANUAL_HIDDEN_INPUT not in inbox_js
+  messages_js = (ASSETS_DIR / "messages-view.js").read_text(encoding="utf-8")
+  assert HISTORY_LIST_ID in messages_js
+  assert COMPOSER_SHELL_CLASS in messages_js
+  assert MANUAL_BLOCKING_INPUT not in messages_js
+  assert MANUAL_HIDDEN_INPUT not in messages_js
 
   tasks_js = (ASSETS_DIR / "tasks-view.js").read_text(encoding="utf-8")
   assert LUCIDE_LOCK_ICON not in tasks_js

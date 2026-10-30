@@ -34,7 +34,7 @@ function renderFieldBlock(field, headings) {
       <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="text">
         <div class="field-header">
           <span class="field-label">${label}</span>
-          <code class="field-id-chip note-id">${fieldId}</code>
+          <code class="field-id-chip msg-id">${fieldId}</code>
         </div>
         <input type="text" class="input field-text-input" name="field-${fieldId}" placeholder="Enter response..." aria-label="${label}">
       </div>
@@ -58,7 +58,7 @@ function renderFieldBlock(field, headings) {
     <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="${escapeHtml(field.type)}">
       <div class="field-header">
         <span class="field-label">${label}</span>
-        <code class="field-id-chip note-id">${fieldId}</code>
+        <code class="field-id-chip msg-id">${fieldId}</code>
       </div>
       <div class="options">
         ${optionsHtml}
@@ -168,7 +168,7 @@ export function renderReportsView(container, state, handlers) {
             .join(" · ");
           return `
             <div class="${idx > 0 ? "reply-block" : ""}">
-              <p><strong>Submission <code class="note-id">${escapeHtml(ans.id)}</code></strong> · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time> · ${escapeHtml(entries)}</p>
+              <p><strong>Answer <code class="msg-id">${escapeHtml(ans.id)}</code></strong> · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time> · ${escapeHtml(entries)}</p>
               ${ans.ack ? ans.ack_html || renderMarkdownBlock(ans.ack) : `<p class="muted">Awaiting agent acknowledgement.</p>`}
             </div>
           `;
@@ -180,7 +180,7 @@ export function renderReportsView(container, state, handlers) {
   const modRel = escapeHtml(relativeTime(activeReport.modified_at));
   const statusBlockHtml = `
     <div id="report-status" class="report-meta muted" role="status">
-      <code class="note-id">${escapeHtml(activeReport.id)}</code>
+      <code class="msg-id">${escapeHtml(activeReport.id)}</code>
       <span>Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time></span>
     </div>
   `;
