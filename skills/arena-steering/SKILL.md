@@ -26,7 +26,7 @@ steer read
 steer poll
 steer ack <id> '<Markdown>' [-i <task-id> -t "<title>" -T <type> -S <scope> -d "<detail>"]
 steer msg list [-a, --all] [-H, --hidden]
-steer msg show <id>
+steer msg <id>
 ```
 
 - Every message ID matches `^[0-9a-f]{6}$`.
