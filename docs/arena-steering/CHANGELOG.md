@@ -58,6 +58,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `README.md`: Correct the comparison of report-answer acknowledgement.
+
 - `server.py`: Return report-answer acknowledgements from the message route.
 
 - `cli.py`: Create acknowledgement tasks and replies in one transaction.
