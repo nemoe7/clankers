@@ -8,6 +8,8 @@ import json
 import sqlite3
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from .models import Attachment, Message, Report, ReportAnswer, ReportField, Task
@@ -163,6 +165,30 @@ class SqliteStore:
     with self._lock:
       self._conn.close()
 
+  @contextmanager
+  def transaction(self) -> Iterator[None]:
+    """Run nested repository writes in one SQLite transaction."""
+    with self._lock:
+      if self._conn.in_transaction:
+        self._conn.execute("SAVEPOINT nested")
+        try:
+          yield
+        except BaseException:
+          self._conn.execute("ROLLBACK TO nested")
+          self._conn.execute("RELEASE nested")
+          raise
+        else:
+          self._conn.execute("RELEASE nested")
+        return
+      self._conn.execute("BEGIN IMMEDIATE")
+      try:
+        yield
+      except BaseException:
+        self._conn.rollback()
+        raise
+      else:
+        self._conn.commit()
+
   def get_message(self, msg_id: str) -> Message | None:
     with self._lock:
       row = self._conn.execute(
@@ -183,7 +209,7 @@ class SqliteStore:
     return messages
 
   def save_message(self, message: Message) -> Message:
-    with self._lock, self._conn:
+    with self.transaction():
       existing = self._conn.execute(
         "SELECT seq FROM messages WHERE id = ?", (message.id,)
       ).fetchone()
@@ -243,8 +269,7 @@ class SqliteStore:
     self, message: Message, request_id: str, fingerprint: str
   ) -> Message:
     """Atomically create or retrieve a message for a client request."""
-    with self._lock, self._conn:
-      self._conn.execute("BEGIN IMMEDIATE")
+    with self.transaction():
       row = self._conn.execute(
         "SELECT fingerprint, message_id FROM message_requests WHERE request_id = ?",
         (request_id,),
@@ -282,8 +307,7 @@ class SqliteStore:
 
   def append_message_ack(self, msg_id: str, reply: str, now: str) -> Message:
     """Append under a database write lock and reset the receipt atomically."""
-    with self._lock, self._conn:
-      self._conn.execute("BEGIN IMMEDIATE")
+    with self.transaction():
       row = self._conn.execute(
         "SELECT * FROM messages WHERE id = ?", (msg_id,)
       ).fetchone()
@@ -302,7 +326,7 @@ class SqliteStore:
 
   def mark_message_seen(self, msg_id: str, now: str) -> Message:
     """Mark delivery without writing a stale reply list."""
-    with self._lock, self._conn:
+    with self.transaction():
       self._conn.execute(
         "UPDATE messages SET status = 'seen', modified_at = ? WHERE id = ? AND status = 'sent'",
         (now, msg_id),
@@ -316,8 +340,7 @@ class SqliteStore:
 
   def mark_replies_seen(self, msg_id: str, revision: str) -> bool:
     """Mark replies seen only if the rendered revision is still current."""
-    with self._lock, self._conn:
-      self._conn.execute("BEGIN IMMEDIATE")
+    with self.transaction():
       row = self._conn.execute(
         "SELECT acks_json FROM messages WHERE id = ?", (msg_id,)
       ).fetchone()
@@ -344,7 +367,7 @@ class SqliteStore:
     return [self._row_to_task(row) for row in rows]
 
   def save_task_queue(self, tasks: list[Task]) -> list[Task]:
-    with self._lock, self._conn:
+    with self.transaction():
       self._conn.execute("DELETE FROM tasks")
       for index, task in enumerate(tasks):
         self._conn.execute(
@@ -373,7 +396,7 @@ class SqliteStore:
     return list(tasks)
 
   def delete_task(self, task_id: str) -> bool:
-    with self._lock, self._conn:
+    with self.transaction():
       cur = self._conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
       if cur.rowcount == 0:
         return False
@@ -398,7 +421,7 @@ class SqliteStore:
 
   def delete_report(self, report_id: str) -> bool:
     """Evict a report row from `reports` while preserving its answers in `meta`."""
-    with self._lock, self._conn:
+    with self.transaction():
       row = self._conn.execute(
         "SELECT answers_json FROM reports WHERE id = ?", (report_id,)
       ).fetchone()
@@ -427,7 +450,7 @@ class SqliteStore:
     return []
 
   def save_report(self, report: Report) -> Report:
-    with self._lock, self._conn:
+    with self.transaction():
       existing = self._conn.execute(
         "SELECT seq FROM reports WHERE id = ?", (report.id,)
       ).fetchone()
@@ -489,7 +512,7 @@ class SqliteStore:
     return str(row["value"]) if row is not None else default
 
   def set_meta(self, key: str, value: str) -> None:
-    with self._lock, self._conn:
+    with self.transaction():
       self._conn.execute(
         """
         INSERT INTO meta (key, value) VALUES (?, ?)

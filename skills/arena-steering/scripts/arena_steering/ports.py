@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -69,6 +70,9 @@ class MessageRepository(Protocol):
 class TaskRepository(Protocol):
   """Persistence port for the mutable task queue."""
 
+  def transaction(self) -> AbstractContextManager[None]:
+    """Group queue reads and writes in a transaction."""
+
   def get_task(self, task_id: str) -> Task | None:
     """Fetch one task by ID."""
 
@@ -84,6 +88,9 @@ class TaskRepository(Protocol):
 
 class ReportRepository(Protocol):
   """Persistence port for reports and their answers."""
+
+  def transaction(self) -> AbstractContextManager[None]:
+    """Group report reads and writes in a transaction."""
 
   def get_report(self, report_id: str) -> Report | None:
     """Fetch one report by ID."""

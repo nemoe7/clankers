@@ -409,3 +409,18 @@ def test_snapshot_migration_backfills_linked_report_answers(tmp_path):
   assert task.answer_snapshots[0]["id"] == answer.id
   assert task.answer_snapshots[0]["fields"][0]["value"] == "Yes"
   migrated.close()
+
+
+def test_nested_store_transaction_rolls_back_only_inner_changes():
+  store = SqliteStore()
+  with store.transaction():
+    store.set_meta("outer", "saved")
+    try:
+      with store.transaction():
+        store.set_meta("inner", "discarded")
+        raise ValueError("rollback")
+    except ValueError:
+      pass
+  assert store.get_meta("outer") == "saved"
+  assert store.get_meta("inner") is None
+  store.close()
