@@ -199,6 +199,103 @@ def test_resolve_asset_serves_report_gifs_and_images(tmp_path: Path) -> None:
   store.close()
 
 
+def test_resolve_asset_serves_static_contract_paths(tmp_path: Path) -> None:
+  state_dir = tmp_path / "state"
+  reports_dir = state_dir / "reports"
+  uploads_dir = state_dir / "uploads"
+  assets_dir = tmp_path / "assets"
+  (assets_dir / "css").mkdir(parents=True)
+  (assets_dir / "js").mkdir(parents=True)
+  reports_dir.mkdir(parents=True)
+  uploads_dir.mkdir(parents=True)
+  (assets_dir / "index.html").write_text(
+    "<title>Arena Steering</title>", encoding="utf-8"
+  )
+  (assets_dir / "css" / "site.css").write_text("body { color: red; }", encoding="utf-8")
+  (assets_dir / "js" / "app.js").write_text("export {};", encoding="utf-8")
+  png_bytes = b"\x89PNG\r\n\x1a\n"
+  (reports_dir / "board.png").write_bytes(png_bytes)
+  (uploads_dir / "shot.png").write_bytes(png_bytes)
+
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store, assets_dir=assets_dir)
+  app.reports.publish_report("static-spec", "Static Spec", "# Static Spec\n")
+
+  assert app.resolve_asset("/static/assets/css/site.css") == (
+    b"body { color: red; }",
+    "text/css; charset=utf-8",
+  )
+  assert app.resolve_asset("/static/assets/js/app.js") == (
+    b"export {};",
+    "application/javascript; charset=utf-8",
+  )
+  assert app.resolve_asset("/static/reports/board.png") == (png_bytes, "image/png")
+  assert app.resolve_asset("/static/reports/static-spec.md") == (
+    b"# Static Spec\n",
+    "text/markdown; charset=utf-8",
+  )
+  assert app.resolve_asset("/static/uploads/shot.png") == (png_bytes, "image/png")
+  assert app.resolve_asset("/static/assets/../secret.css") is None
+  assert app.resolve_asset("/static/reports/../state.sqlite3") is None
+  assert app.resolve_asset("/static/uploads/../reports/board.png") is None
+  store.close()
+
+
+def test_http_static_paths_do_not_collide_with_report_routes(tmp_path: Path) -> None:
+  import http.client
+  import threading
+
+  from arena_steering.server import create_http_server
+
+  state_dir = tmp_path / "state"
+  reports_dir = state_dir / "reports"
+  reports_dir.mkdir(parents=True)
+  png_bytes = b"\x89PNG\r\n\x1a\n"
+  (reports_dir / "board.png").write_bytes(png_bytes)
+
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report("static-spec", "Static Spec", "# Static Spec\n")
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  port = server.server_address[1]
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+
+    def get(path: str) -> tuple[int, str | None, bytes]:
+      conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5.0)
+      try:
+        conn.request("GET", path)
+        response = conn.getresponse()
+        return response.status, response.getheader("Content-Type"), response.read()
+      finally:
+        conn.close()
+
+    status, content_type, body = get("/reports/board.png")
+    assert status == int(HTTPStatus.OK)
+    assert content_type == "image/png"
+    assert body == png_bytes
+
+    status, content_type, body = get("/static/reports/static-spec.md")
+    assert status == int(HTTPStatus.OK)
+    assert content_type == "text/markdown; charset=utf-8"
+    assert body == b"# Static Spec\n"
+
+    status, content_type, body = get("/static/assets/style.css")
+    assert status == int(HTTPStatus.OK)
+    assert content_type == "text/css; charset=utf-8"
+    assert body
+
+    status, content_type, body = get("/reports/static-spec")
+    assert status == int(HTTPStatus.OK)
+    assert content_type == "application/json; charset=utf-8"
+    assert b"static-spec" in body
+  finally:
+    server.shutdown()
+    server.server_close()
+    store.close()
+
+
 def test_server_markdown_it_diff_and_report_summary_cache(tmp_path: Path) -> None:
   headings: list[dict[str, object]] = []
   rendered = render_markdown(

@@ -51,9 +51,15 @@ MIME_OVERRIDES = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
   ".woff2": "font/woff2",
+  ".md": "text/markdown; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
 }
 
 REPORT_IMAGE_EXTS = frozenset({".gif", ".png", ".jpg", ".jpeg", ".webp", ".svg"})
+REPORT_STATIC_EXTS = REPORT_IMAGE_EXTS | frozenset({".md", ".txt"})
+STATIC_ASSETS_PREFIX = "static/assets/"
+STATIC_REPORTS_PREFIX = "static/reports/"
+STATIC_UPLOADS_PREFIX = "static/uploads/"
 
 
 class Router:
@@ -268,18 +274,54 @@ class SteeringApp:
     return (events, current)
 
   def resolve_asset(self, request_path: str) -> tuple[bytes, str] | None:
-    """Resolve a static file inside assets_dir or report images without path traversal."""
+    """Resolve a static file inside assets_dir or state files without path traversal."""
     clean = request_path.split("?", 1)[0].lstrip("/")
+    clean = clean.removeprefix("api/")
+    if clean.startswith(STATIC_ASSETS_PREFIX):
+      rel = clean[len(STATIC_ASSETS_PREFIX) :] or "index.html"
+      candidate = self._resolve_under(self.assets_dir, rel)
+      if candidate is None:
+        candidate = self._resolve_shared_asset(rel)
+      return self._file_response(candidate) if candidate is not None else None
+    if clean.startswith(STATIC_REPORTS_PREFIX):
+      rel = clean[len(STATIC_REPORTS_PREFIX) :]
+      if Path(rel).suffix.lower() not in REPORT_STATIC_EXTS:
+        return None
+      candidate = self._resolve_state_file("reports", rel)
+      if candidate is not None:
+        return self._file_response(candidate)
+      markdown = self._report_markdown_bytes(rel)
+      return (markdown, MIME_OVERRIDES[".md"]) if markdown is not None else None
+    if clean.startswith(STATIC_UPLOADS_PREFIX):
+      rel = clean[len(STATIC_UPLOADS_PREFIX) :]
+      candidate = self._resolve_state_file("uploads", rel)
+      return self._file_response(candidate) if candidate is not None else None
+
     if not clean or clean in {"index.html", "messages", "tasks", "reports"}:
       clean = "index.html"
     elif clean.startswith("assets/"):
       clean = clean[len("assets/") :]
-    base = self.assets_dir.resolve()
-    candidate = (base / clean).resolve()
-    if not candidate.is_relative_to(base) or not candidate.is_file():
+    candidate = self._resolve_under(self.assets_dir, clean)
+    if candidate is None:
       candidate = self._resolve_shared_or_report_asset(clean)
       if candidate is None:
         return None
+    return self._file_response(candidate)
+
+  @staticmethod
+  def is_static_request(request_path: str) -> bool:
+    """Return True for file paths that must not be routed as JSON resources."""
+    clean = request_path.split("?", 1)[0].lstrip("/")
+    clean = clean.removeprefix("api/")
+    if clean.startswith("static/"):
+      return True
+    if clean.startswith("uploads/"):
+      return True
+    if clean.startswith("reports/"):
+      return Path(clean).suffix.lower() in REPORT_STATIC_EXTS
+    return False
+
+  def _file_response(self, candidate: Path) -> tuple[bytes, str]:
     suffix = candidate.suffix.lower()
     content_type = (
       MIME_OVERRIDES.get(suffix)
@@ -294,32 +336,63 @@ class SteeringApp:
       return page.encode("utf-8"), content_type
     return candidate.read_bytes(), content_type
 
+  @staticmethod
+  def _resolve_under(root: Path, rel_path: str) -> Path | None:
+    if not rel_path:
+      return None
+    root_resolved = root.resolve()
+    candidate = (root_resolved / rel_path).resolve()
+    if candidate.is_relative_to(root_resolved) and candidate.is_file():
+      return candidate
+    return None
+
+  def _resolve_state_file(self, directory_name: str, rel_path: str) -> Path | None:
+    db_path = getattr(self.store, "db_path", "")
+    if not db_path or db_path == ":memory:":
+      return None
+    state_dir = Path(db_path).resolve().parent
+    return self._resolve_under(state_dir / directory_name, rel_path)
+
+  def _report_markdown_bytes(self, rel_path: str) -> bytes | None:
+    rel = Path(rel_path)
+    if rel.suffix.lower() != ".md" or rel.parent != Path("."):
+      return None
+    try:
+      report = self.reports.get_report(rel.stem)
+    except (KeyError, ValueError):
+      return None
+    return report.body.encode("utf-8")
+
+  def _resolve_shared_asset(self, clean_path: str) -> Path | None:
+    if clean_path not in {"mermaid.min.js", "mermaid.LICENSE"}:
+      return None
+    shared = (
+      Path(__file__).resolve().parents[3] / "arena-skill" / "assets" / clean_path
+    ).resolve()
+    return shared if shared.is_file() else None
+
   def _resolve_shared_or_report_asset(self, clean_path: str) -> Path | None:
     """Resolve shared vendor assets (`mermaid.min.js`) or report images without path traversal."""
-    if clean_path in {"mermaid.min.js", "mermaid.LICENSE"}:
-      shared = (
-        Path(__file__).resolve().parents[3] / "arena-skill" / "assets" / clean_path
-      ).resolve()
-      if shared.is_file():
-        return shared
+    shared = self._resolve_shared_asset(clean_path)
+    if shared is not None:
+      return shared
+    if clean_path.startswith("uploads/"):
+      return self._resolve_state_file("uploads", clean_path[len("uploads/") :])
     return self._resolve_report_image(clean_path)
 
   def _resolve_report_image(self, clean_path: str) -> Path | None:
     """Resolve an image or GIF inside <state_dir>/reports/ without path traversal."""
-    db_path = getattr(self.store, "db_path", "")
-    if not db_path or db_path == ":memory:":
-      return None
     rel = clean_path.removeprefix("reports/")
     suffix = Path(rel).suffix.lower()
     if suffix not in REPORT_IMAGE_EXTS:
       return None
-    state_dir = Path(db_path).resolve().parent
-    for root in (state_dir / "reports", state_dir):
-      root_resolved = root.resolve()
-      candidate = (root_resolved / rel).resolve()
-      if candidate.is_relative_to(root_resolved) and candidate.is_file():
-        return candidate
-    return None
+    candidate = self._resolve_state_file("reports", rel)
+    if candidate is not None:
+      return candidate
+    db_path = getattr(self.store, "db_path", "")
+    if not db_path or db_path == ":memory:":
+      return None
+    return self._resolve_under(Path(db_path).resolve().parent, rel)
 
   def asset_signature_hash(self) -> str:
     """Return a short hash of current asset file mtimes and sizes."""
@@ -714,6 +787,19 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
         if path.startswith("/api/") and path != "/api"
         else path
       )
+      if app.is_static_request(route_path):
+        asset = app.resolve_asset(route_path)
+        if asset is None:
+          self._write_json(
+            int(HTTPStatus.NOT_FOUND), {"error": f"Asset not found: {parsed.path}"}
+          )
+          return
+        raw_bytes, content_type = asset
+        self.send_response(int(HTTPStatus.OK))
+        self._send_common_headers(content_type, len(raw_bytes))
+        self.end_headers()
+        self.wfile.write(raw_bytes)
+        return
       handler, _, allowed = app.router.match("GET", route_path)
       if handler is not None or allowed:
         status, payload = app.dispatch("GET", self.path)
