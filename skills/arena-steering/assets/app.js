@@ -2,17 +2,18 @@ import { createComposerUploads } from "./composer-uploads.js";
 // Main ES module controller for Arena Steering.
 
 import { api, connectWebSocket } from "./api.js";
-import { renderMessagesView, trackMessageAcks } from "./messages-view.js";
+import { expandMessageHistory, renderMessagesView, trackMessageAcks } from "./messages-view.js";
 import {
   escapeHtml,
   highlightCodeBlocks,
   hydrateMermaidBlocks,
   toggleCodeMermaid,
 } from "./markdown.js";
+import { linkReferences } from "./references.js";
 import { createModalManager } from "./modal.js";
 import { renderReportsView } from "./reports-view.js";
 import { createStore, writePendingSend } from "./state.js";
-import { renderTasksView } from "./tasks-view.js";
+import { expandTaskTarget, renderTasksView } from "./tasks-view.js";
 import { mountRelativeTimers, relativeTime } from "./timestamps.js";
 
 const CHECK_SVG = `<svg class="lucide lucide-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
@@ -257,7 +258,7 @@ async function refreshAll(force = false) {
     const curState = store.getState();
     const [health, msgRes, taskRes, repRes] = await Promise.all([
       api.getHealth(),
-      api.listMessages({ all: true, hidden: Boolean(curState.showHidden) }),
+      api.listMessages({ all: true, hidden: true }),
       api.listTasks({ full: true }),
       api.listReports({ stale: false, summary: true }),
     ]);
@@ -290,7 +291,7 @@ async function refreshAll(force = false) {
     const tasks = taskRes.tasks || [];
     const reportSummaries = repRes.reports || [];
     const survey = health.survey || {};
-    trackMessageAcks(messages);
+    trackMessageAcks(messages.filter((msg) => curState.showHidden || !msg.hidden));
     const selectedReportId =
       curState.selectedReportId &&
       reportSummaries.some((r) => r.id === curState.selectedReportId)
@@ -370,6 +371,48 @@ const handlers = {
   onDiscardPendingSend() {
     writePendingSend(null);
     store.setState({ pendingSend: null });
+  },
+  async onNavigateReference(type, id) {
+    if (!id) return;
+    try {
+      const current = store.getState();
+      if (type === "message") {
+        let target = (current.messages || []).find((item) => item.id === id);
+        if (!target) target = (await api.getMessage(id)).message;
+        if (!target) throw new Error("Message not found");
+        expandMessageHistory();
+        const latest = store.getState();
+        store.setState({ activeTab: "messages", searchQuery: "", showHidden: latest.showHidden || target.hidden,
+          messages: (latest.messages || []).some((item) => item.id === id) ? latest.messages : [...(latest.messages || []), target] });
+      } else if (type === "task") {
+        let target = (current.tasks || []).find((item) => item.id === id);
+        if (!target) target = (await api.getTask(id)).task;
+        if (!target) throw new Error("Task not found");
+        expandTaskTarget(id);
+        const latest = store.getState();
+        store.setState({ activeTab: "tasks", tasks: (latest.tasks || []).some((item) => item.id === id) ? latest.tasks : [...(latest.tasks || []), target] });
+      } else if (type === "report") {
+        let target = (current.reports || []).find((item) => item.id === id);
+        if (!target) target = (await api.getReport(id)).report;
+        if (!target) throw new Error("Report not found");
+        if (!(current.reports || []).some((item) => item.id === id)) {
+          store.setState({ reports: [...(current.reports || []), target] });
+        }
+        store.setState({ activeTab: "reports" });
+        await handlers.onSelectReport(id);
+        return;
+      } else return;
+      const selector = type === "message" ? `.message[data-msg-id="${CSS.escape(id)}"]` : `.task[data-task-id="${CSS.escape(id)}"]`;
+      const row = document.querySelector(selector);
+      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (row) {
+        row.dataset.highlight = "true";
+        setTimeout(() => { if (row.isConnected) delete row.dataset.highlight; }, 1200);
+      }
+    } catch (error) {
+      console.error(error);
+      window.alert(`Could not open ${type} ${id}.`);
+    }
   },
   async onMarkRepliesSeen(id, revision) {
     try {
@@ -567,6 +610,8 @@ function renderApp(state) {
     maybeMarkAckSeen(reports.find((r) => r.id === state.selectedReportId));
   }
 
+  const activeView = { messages: messagesEl, tasks: tasksEl, reports: reportsEl }[state.activeTab];
+  if (activeView) linkReferences(activeView, state);
   cleanupTimers = mountRelativeTimers(document);
 }
 
@@ -677,6 +722,11 @@ function initEvents() {
   });
 
   document.addEventListener("click", async (event) => {
+    const reference = event.target.closest?.("[data-reference-type]");
+    if (reference) {
+      await handlers.onNavigateReference(reference.dataset.referenceType, reference.dataset.referenceId);
+      return;
+    }
     const mermaidBtn = event.target.closest?.(".preview-code-mermaid");
     if (mermaidBtn) {
       toggleCodeMermaid(mermaidBtn);

@@ -211,6 +211,9 @@ export const api = {
     });
     return requestJson("GET", `/messages?${q.toString()}`);
   },
+  getMessage(id) {
+    return requestJson("GET", `/messages/${encodeURIComponent(id)}`);
+  },
   sendMessage({ body, hidden = false, blocking = true, parent_ids = [], request_id }) {
     return requestJson("POST", "/messages", { body, hidden, blocking, parent_ids, request_id });
   },
@@ -248,6 +251,9 @@ export const api = {
   listTasks({ full = true } = {}) {
     const q = new URLSearchParams({ full: full ? "1" : "0" });
     return requestJson("GET", `/tasks?${q.toString()}`);
+  },
+  getTask(id) {
+    return requestJson("GET", `/tasks/${encodeURIComponent(id)}`);
   },
   createTask(task) {
     return requestJson("POST", "/tasks", task);
