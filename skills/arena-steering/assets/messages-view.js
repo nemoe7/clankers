@@ -1,4 +1,4 @@
-// Messages (Inbox) tab view for Arena Steering.
+// Messages tab view for Arena Steering.
 
 import {
   escapeHtml,
@@ -41,7 +41,7 @@ export function trackMessageAcks(messages, activeTab) {
     const prev = seenAckCounts.get(msg.id);
     const cur = (msg.acks || []).length;
     if (prev !== undefined && cur > prev) {
-      if (activeTab !== "inbox" || !pinnedToBottom) {
+      if (activeTab !== "messages" || !pinnedToBottom) {
         unreadEditedMsgId = msg.id;
       }
     }
@@ -60,7 +60,7 @@ function highlightSearchMatches(root, rawQuery) {
       if (!parent) return NodeFilter.FILTER_REJECT;
       if (
         parent.closest("script, style, svg, .mermaid, mark.search-hit") ||
-        !parent.closest(".message-text, code.note-id")
+        !parent.closest(".message-text, code.msg-id")
       ) {
         return NodeFilter.FILTER_REJECT;
       }
@@ -99,7 +99,7 @@ function highlightSearchMatches(root, rawQuery) {
   }
 }
 
-export function renderInboxView(container, state, handlers) {
+export function renderMessagesView(container, state, handlers) {
   const activeEl = document.activeElement;
   const searchWasFocused =
     Boolean(activeEl && activeEl.id === "log-search" && container.contains(activeEl));
@@ -157,7 +157,7 @@ export function renderInboxView(container, state, handlers) {
       if (!linkedTasksByMsg.has(mid)) {
         linkedTasksByMsg.set(mid, []);
       }
-      linkedTasksByMsg.get(mid).push(task.id);
+      linkedTasksByMsg.set(mid).push(task.id);
     }
   }
 
@@ -207,7 +207,7 @@ export function renderInboxView(container, state, handlers) {
               ${acksHtml}
               <p class="receipt">
                 <span class="state-dot" data-state="${dotState}" title="Status: ${escapeHtml(msg.status)}"></span>
-                <code class="note-id" title="Copy message ID">${escapeHtml(msg.id)}</code>
+                <code class="msg-id" title="Copy message ID">${escapeHtml(msg.id)}</code>
                 · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${flagsSuffix}${filesSuffix}${tasksSuffix}
               </p>
             </li>
@@ -232,7 +232,7 @@ export function renderInboxView(container, state, handlers) {
     : "Live steering active.";
 
   container.innerHTML = `
-    <div class="notes-layout">
+    <div class="msgs-layout">
       <section class="card log-card" aria-label="Message log">
         <div class="row log-toolbar">
           <div class="stack">
@@ -263,7 +263,7 @@ export function renderInboxView(container, state, handlers) {
               ${skipPollGood ? CHECK_SVG : SKIP_FORWARD_SVG}
             </button>
             <button
-              id="quiet-notes"
+              id="quiet-msgs"
               class="icon-button"
               type="button"
               aria-pressed="${showHidden ? "true" : "false"}"
@@ -288,7 +288,7 @@ export function renderInboxView(container, state, handlers) {
         <form id="form">
           <div class="composer-shell">
             <button
-              id="preview-note"
+              id="preview-msg"
               class="icon-button"
               type="button"
               aria-pressed="false"
@@ -299,8 +299,8 @@ export function renderInboxView(container, state, handlers) {
               <svg class="markdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z" fill="currentColor" stroke="none"></path></svg>
             </button>
             <textarea
-              id="note"
-              name="note"
+              id="msg"
+              name="msg"
               rows="1"
               aria-label="Your message"
               placeholder="What should happen next?"
@@ -364,7 +364,7 @@ export function renderInboxView(container, state, handlers) {
           historyEl.getBoundingClientRect().top
         : 0;
       visibleMessageCount += MESSAGE_PAGE_SIZE;
-      renderInboxView(container, state, handlers);
+      renderMessagesView(container, state, handlers);
       const nextHistory = container.querySelector("#history");
       if (nextHistory && topAnchorId) {
         const nextCard = nextHistory.querySelector(
@@ -474,27 +474,27 @@ export function renderInboxView(container, state, handlers) {
     }, 1000);
   });
 
-  container.querySelector("#quiet-notes")?.addEventListener("click", () => {
+  container.querySelector("#quiet-msgs")?.addEventListener("click", () => {
     handlers.onToggleHidden?.();
   });
 
-  const noteEl = container.querySelector("#note");
-  const previewBtn = container.querySelector("#preview-note");
+  const msgEl = container.querySelector("#msg");
+  const previewBtn = container.querySelector("#preview-msg");
   const draftPreview = container.querySelector("#draft-preview");
 
   previewBtn?.addEventListener("click", () => {
     const active = previewBtn.getAttribute("aria-pressed") === "true";
     const next = !active;
     previewBtn.setAttribute("aria-pressed", next ? "true" : "false");
-    if (draftPreview && noteEl) {
-      draftPreview.innerHTML = renderMarkdownBlock(noteEl.value);
+    if (draftPreview && msgEl) {
+      draftPreview.innerHTML = renderMarkdownBlock(msgEl.value);
       hydrateMermaidBlocks(draftPreview);
       draftPreview.hidden = !next;
-      noteEl.hidden = next;
+      msgEl.hidden = next;
     }
   });
 
-  noteEl?.addEventListener("keydown", (event) => {
+  msgEl?.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       container.querySelector("#form")?.requestSubmit();
@@ -504,10 +504,10 @@ export function renderInboxView(container, state, handlers) {
   const form = container.querySelector("#form");
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const body = (noteEl?.value || "").trim();
+    const body = (msgEl?.value || "").trim();
     if (!body) return;
     pinnedToBottom = true;
     await handlers.onSendMessage({ body });
-    if (noteEl) noteEl.value = "";
+    if (msgEl) msgEl.value = "";
   });
 }

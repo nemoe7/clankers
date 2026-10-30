@@ -14,7 +14,7 @@
   <link rel="modulepreload" href="/api.js">
   <link rel="modulepreload" href="/state.js">
   <link rel="modulepreload" href="/modal.js">
-  <link rel="modulepreload" href="/inbox-view.js">
+  <link rel="modulepreload" href="/messages-view.js">
   <link rel="modulepreload" href="/tasks-view.js">
   <link rel="modulepreload" href="/reports-view.js">
   <link rel="modulepreload" href="/app.js">
@@ -25,7 +25,7 @@
     <header class="topbar">
       <h1 class="sr-only">Arena Steering</h1>
       <nav class="tab-nav" role="tablist" aria-label="Steering sections">
-        <button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-tab="inbox" id="tab-inbox">
+        <button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-tab="messages" id="tab-messages">
           Messages
         </button>
         <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="reports" id="tab-reports">
@@ -43,7 +43,7 @@
     </header>
 
     <main class="main-content" id="main-root" data-loading="false">
-      <section id="view-inbox" role="tabpanel" aria-labelledby="tab-inbox"></section>
+      <section id="view-messages" role="tabpanel" aria-labelledby="tab-messages"></section>
       <section id="view-tasks" role="tabpanel" aria-labelledby="tab-tasks" hidden></section>
       <section id="view-reports" role="tabpanel" aria-labelledby="tab-reports" hidden></section>
     </main>

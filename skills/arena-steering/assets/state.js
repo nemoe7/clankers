@@ -2,7 +2,7 @@
 
 const TAB_STORAGE_KEY = "steer:activeTab";
 const REPORT_STORAGE_KEY = "steer:selectedReportId";
-const VALID_TABS = new Set(["inbox", "tasks", "reports"]);
+const VALID_TABS = new Set(["messages", "tasks", "reports"]);
 
 function readSessionValue(key) {
   try {
@@ -29,7 +29,7 @@ export function createStore(initial = {}) {
   const savedTab = readSessionValue(TAB_STORAGE_KEY);
   const savedReportId = readSessionValue(REPORT_STORAGE_KEY);
   const state = {
-    activeTab: VALID_TABS.has(savedTab) ? savedTab : "inbox",
+    activeTab: VALID_TABS.has(savedTab) ? savedTab : "messages",
     messages: [],
     tasks: [],
     reports: [],
