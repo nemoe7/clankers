@@ -83,7 +83,7 @@ Limit sentences to 20 words for unclassified prose, 25 for explicit description 
 - List three or more steps or conditions, preserving their order and grouping.
 - Define uncommon technical terms when needed, and use them consistently.
 - Prefer simple tenses unless compound forms carry confidence or current relevance that must survive.
-- Add comments or docstrings only for non-obvious logic, omit them when names are self-explanatory, and cap blocks at two lines.
+- Add comments or docstrings only for non-obvious logic, use the established contract, and cap blocks at two lines.
 - Match length and structure to task complexity, omitting unrequested examples, sections, tables, background, and follow-ups.
 - Provide requested finished text without meta commentary.
 

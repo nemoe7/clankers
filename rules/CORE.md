@@ -96,7 +96,7 @@
 
 - In `nemoe7` repositories: 2-space indentation overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off.
 - Python: MUST use Ruff default selection plus `E501` at 120 chars; keep formatter width 88; run `ruff format` before other local gates.
-- Add code/config comments ONLY when complexity needs them.
+- Add code/config comments ONLY when complexity needs them, and ALWAYS use the established contract as comments.
 - Leave unrelated code alone.
 - Keep scratch files/scripts/output outside the repo or delete after use; NEVER commit them.
 

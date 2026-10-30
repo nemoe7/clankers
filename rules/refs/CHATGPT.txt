@@ -28,7 +28,7 @@ NEVER weaken a test to pass.
 MUST ask during planning whether SOLID reuse or YAGNI/KISS/DRY simplicity governs the task, and follow the answer.
 MUST apply these code-style rules only in repositories owned by `nemoe7`.
 FORMAT: Use 2-space indent, or keep external repo conventions. Put Ruff `0.17.3` (`indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`) in `pyproject.toml` or `ruff.toml`, run `ruff format` first, and use markdownlint defaults plus `MD060` without `MD013`.
-Add code or configuration comments only when method complexity requires them.
+Add code or configuration comments only when complexity requires them, and ALWAYS use the established contract as comments.
 DOCS: Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.
 DOCS: Open on the substance, no preamble or postamble.
 DOCS: Cite code, diffs and tool output by path and line instead of repeating.
