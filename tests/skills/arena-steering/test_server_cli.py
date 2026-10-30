@@ -143,12 +143,19 @@ def test_resolve_asset_serves_report_gifs_and_images(tmp_path: Path) -> None:
 def test_server_markdown_it_diff_and_report_summary_cache(tmp_path: Path) -> None:
   headings: list[dict[str, object]] = []
   rendered = render_markdown(
-    "# Patch Notes\n\nHighlighted ==token== and ~~removed~~:\n\n```diff\n@@ -1,2 +1,2 @@\n-old_line\n+new_line\n```\n",
+    (
+      "# Patch Notes\n\n"
+      "Highlighted ==token== and ~~removed~~ and https://example.com:\n\n"
+      "- [x] Ship task list\n- [ ] Pending item\n\n"
+      "```diff\n@@ -1,2 +1,2 @@\n-old_line\n+new_line\n```\n"
+    ),
     headings=headings,
   )
   assert '<h1 id="sec-patch-notes">Patch Notes</h1>' in rendered
   assert "<mark>token</mark>" in rendered
   assert "<s>removed</s>" in rendered
+  assert 'href="https://example.com"' in rendered
+  assert 'class="task-list-item-checkbox" disabled checked' in rendered
   assert '<span class="token coord">@@ -1,2 +1,2 @@</span>' in rendered
   assert '<span class="token deleted">-old_line</span>' in rendered
   assert '<span class="token inserted">+new_line</span>' in rendered

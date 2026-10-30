@@ -183,6 +183,19 @@ export function renderInboxView(container, state, handlers) {
           const flagsSuffix = extraFlags.length
             ? ` · ${escapeHtml(extraFlags.join(", "))}`
             : "";
+          const attachments = Array.isArray(msg.attachments)
+            ? msg.attachments
+            : [];
+          const filesSuffix = attachments.length
+            ? `<span class="receipt-file">${attachments
+                .map((att) => {
+                  const name = escapeHtml(att.name || "");
+                  return att.present === false
+                    ? ` · ${name} (missing)`
+                    : ` · ${name}`;
+                })
+                .join("")}</span>`
+            : "";
           const linkedTasks = linkedTasksByMsg.get(msg.id) || [];
           const tasksSuffix = linkedTasks.length
             ? ` · ${linkedTasks.map((tid) => `<code class="task-link">${escapeHtml(tid)}</code>`).join(", ")}`
@@ -195,7 +208,7 @@ export function renderInboxView(container, state, handlers) {
               <p class="receipt">
                 <span class="state-dot" data-state="${dotState}" title="Status: ${escapeHtml(msg.status)}"></span>
                 <code class="note-id" title="Copy message ID">${escapeHtml(msg.id)}</code>
-                · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${flagsSuffix}${tasksSuffix}
+                · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${flagsSuffix}${filesSuffix}${tasksSuffix}
               </p>
             </li>
           `;

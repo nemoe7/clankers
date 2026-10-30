@@ -350,11 +350,16 @@ export function renderInlineMarkdown(text) {
   let out = escapeHtml(text);
   out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>");
   out = out.replace(
-    /\[([^\]]+)\]\((https?:\/\/[^\s)]+|#[^\s)]+)\)/g,
+    /!\[([^\]]*)\]\(((?:https?:\/\/|\/|data:image\/)[^\s)]+)\)/g,
+    (_m, alt, src) => `<img src="${src}" alt="${alt}" loading="lazy">`
+  );
+  out = out.replace(
+    /\[([^\]]+)\]\(((?:https?:\/\/|\/|#)[^\s)]+)\)/g,
     (_m, label, url) => {
-      const ext = url.startsWith("#")
-        ? ""
-        : ' target="_blank" rel="noopener noreferrer"';
+      const ext =
+        url.startsWith("#") || url.startsWith("/")
+          ? ""
+          : ' target="_blank" rel="noopener noreferrer"';
       return `<a href="${url}"${ext}>${label}</a>`;
     }
   );

@@ -8,6 +8,7 @@ from typing import Any
 
 from markdown_it import MarkdownIt
 from markdown_it.rules_inline.state_inline import Delimiter
+from markdown_it.token import Token
 
 ICON_COPY = (
   '<svg class="lucide lucide-copy" width="14" height="14" viewBox="0 0 24 24" '
@@ -206,7 +207,7 @@ def _gfm_extensions_plugin(parser: MarkdownIt) -> None:
           first_child = token.children[0]
           if first_child.type == "text":
             first_child.content = TASK_ITEM_RE.sub(r"\2", first_child.content, count=1)
-          checkbox = state.Token("html_inline", "", 0)
+          checkbox = Token("html_inline", "", 0)
           checked_attr = " checked" if checked else ""
           checkbox.content = (
             '<input type="checkbox" class="task-list-item-checkbox" '
@@ -237,21 +238,21 @@ def _gfm_extensions_plugin(parser: MarkdownIt) -> None:
             url = m.group(1).rstrip(".,;:!?")
             end = start + len(url)
             if start > last_end:
-              before_tok = state.Token("text", "", 0)
+              before_tok = Token("text", "", 0)
               before_tok.content = text_val[last_end:start]
               new_children.append(before_tok)
-            open_tok = state.Token("link_open", "a", 1)
+            open_tok = Token("link_open", "a", 1)
             open_tok.attrSet("href", url)
             open_tok.attrSet("target", "_blank")
             open_tok.attrSet("rel", "noopener noreferrer")
-            text_tok = state.Token("text", "", 0)
+            text_tok = Token("text", "", 0)
             text_tok.content = url
-            close_tok = state.Token("link_close", "a", -1)
+            close_tok = Token("link_close", "a", -1)
             new_children.extend([open_tok, text_tok, close_tok])
             last_end = end
           if last_end > 0:
             if last_end < len(text_val):
-              after_tok = state.Token("text", "", 0)
+              after_tok = Token("text", "", 0)
               after_tok.content = text_val[last_end:]
               new_children.append(after_tok)
             continue
