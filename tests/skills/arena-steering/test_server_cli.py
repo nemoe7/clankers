@@ -251,6 +251,14 @@ def test_resolve_asset_serves_report_gifs_and_images(tmp_path: Path) -> None:
   mermaid_asset = app.resolve_asset("/mermaid.min.js")
   assert mermaid_asset is not None
   assert mermaid_asset[1] == "application/javascript; charset=utf-8"
+  bundled = app.assets_dir / "mermaid.min.js"
+  assert mermaid_asset[0] == bundled.read_bytes()
+  assert app.resolve_asset("/static/assets/mermaid.LICENSE") is not None
+  empty_assets = tmp_path / "empty-assets"
+  empty_assets.mkdir()
+  standalone_app = SteeringApp(store, assets_dir=empty_assets)
+  assert standalone_app.resolve_asset("/static/assets/mermaid.min.js") is None
+  assert standalone_app.resolve_asset("/mermaid.min.js") is None
   store.close()
 
 

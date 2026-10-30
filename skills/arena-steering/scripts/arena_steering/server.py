@@ -353,8 +353,6 @@ class SteeringApp:
     if clean.startswith(STATIC_ASSETS_PREFIX):
       rel = clean[len(STATIC_ASSETS_PREFIX) :] or "index.html"
       candidate = self._resolve_under(self.assets_dir, rel)
-      if candidate is None:
-        candidate = self._resolve_shared_asset(rel)
       return self._file_response(candidate) if candidate is not None else None
     if clean.startswith(STATIC_REPORTS_PREFIX):
       rel = clean[len(STATIC_REPORTS_PREFIX) :]
@@ -376,7 +374,7 @@ class SteeringApp:
       clean = clean[len("assets/") :]
     candidate = self._resolve_under(self.assets_dir, clean)
     if candidate is None:
-      candidate = self._resolve_shared_or_report_asset(clean)
+      candidate = self._resolve_report_asset(clean)
       if candidate is None:
         return None
     return self._file_response(candidate)
@@ -546,19 +544,7 @@ class SteeringApp:
       return None
     return report.body.encode("utf-8")
 
-  def _resolve_shared_asset(self, clean_path: str) -> Path | None:
-    if clean_path not in {"mermaid.min.js", "mermaid.LICENSE"}:
-      return None
-    shared = (
-      Path(__file__).resolve().parents[3] / "arena-skill" / "assets" / clean_path
-    ).resolve()
-    return shared if shared.is_file() else None
-
-  def _resolve_shared_or_report_asset(self, clean_path: str) -> Path | None:
-    """Resolve shared vendor assets (`mermaid.min.js`) or report images without path traversal."""
-    shared = self._resolve_shared_asset(clean_path)
-    if shared is not None:
-      return shared
+  def _resolve_report_asset(self, clean_path: str) -> Path | None:
     if clean_path.startswith("uploads/"):
       return self._resolve_state_file("uploads", clean_path[len("uploads/") :])
     return self._resolve_report_image(clean_path)

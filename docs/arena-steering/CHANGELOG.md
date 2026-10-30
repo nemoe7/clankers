@@ -60,6 +60,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `assets/`: Bundle Mermaid and its license without a v1 asset dependency.
+
 - `steer msg list` defaults to 5 items and accepts page sizes from 5 to 50.
 
 - `steer msg ID` inspects a message without a `show` subcommand.
