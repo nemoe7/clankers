@@ -58,6 +58,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `README.md`: Mark local image embedding as intentionally dropped.
+
 - `README.md`: Record intentionally dropped v1 features.
 
 - `README.md`: Correct the comparison of report-answer acknowledgement.
