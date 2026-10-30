@@ -462,21 +462,13 @@ code.msg-id[data-state="good"] {
 .message-text td {
   text-align: left;
   border-bottom: 1px solid hsl(var(--border-faint));
-  border-right: 1px solid hsl(var(--border-faint));
-  padding: 6px 12px;
+  padding: 6px 13px;
   overflow-wrap: normal;
   white-space: nowrap;
 }
 
-.report th:last-child,
-.report td:last-child,
-.message-text th:last-child,
-.message-text td:last-child {
-  border-right: 0;
-}
-
-.report tr:last-child td,
-.message-text tr:last-child td {
+.report tbody tr:last-child td,
+.message-text tbody tr:last-child td {
   border-bottom: 0;
 }
 
@@ -489,11 +481,20 @@ code.msg-id[data-state="good"] {
 
 .task-list-item {
   list-style: none;
+  margin-inline-start: 2ch;
 }
 
 .task-list-item-checkbox {
   margin-right: 6px;
   vertical-align: middle;
+}
+
+.report hr,
+.message-text hr {
+  height: 1px;
+  margin: 16px 0;
+  border: 0;
+  background-color: hsl(var(--border-strong));
 }
 
 .report blockquote,
