@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `store.py`, `assets/`: Search message history in SQLite and page browser results.
+
 - `api.js`, `server.py`, `store.py`: Deduplicate browser writes and uploads across retries.
 
 - `cli.py`, `services.py`: Block linked tasks while named runs are active.

@@ -192,7 +192,7 @@ Successful creates return HTTP 201. Other successful route operations return 200
 | Operation | Request or query | Response |
 | --- | --- | --- |
 | Mark message replies seen | `revision` is the rendered reply-list digest. | `message` and `matched`. Stale revisions return HTTP 409. |
-| List messages | `all=1`, `hidden=1`, `before=ID`, and `limit=N` are optional. | `messages`, `total`, and `has_more`. |
+| List messages | `all=1`, `hidden=1`, `before=ID`, and `q=TEXT` are optional. Pages contain at most 20 messages. | `messages`, `total`, and `has_more`. |
 | Create message | `body`, optional `id`, `request_id`, `hidden`, `blocking`, `parent_ids`, and `attachments`. | `message`, including rendered body and acknowledgement HTML. |
 | Upload | JSON `file` object with `name` and `content_base64` or `text`, or multipart `file`. | `attachment` with name, path, size, presence, and static URL. |
 | Message with file | Message fields plus `file`, `attachments`, or `pasted_text`. | `message`. A long paste uses `pasted-text.txt`. |

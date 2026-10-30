@@ -69,6 +69,32 @@ def test_cli_message_page_size(tmp_path: Path) -> None:
     assert code != 0 and "between 5 and 50" in error
 
 
+def test_http_message_pages_and_database_search(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "search.sqlite3")
+  app = SteeringApp(store)
+  for index in range(43):
+    body = "Old MATCH éLÉPHANT" if index == 0 else f"message {index}"
+    app.messages.send_message(body, msg_id=f"{index:06x}", hidden=index == 1)
+  first_status, first = app.dispatch("GET", "/messages?all=1&hidden=1&limit=2", None)
+  assert first_status == HTTPStatus.OK
+  assert first["total"] == 43 and len(first["messages"]) == 20 and first["has_more"]
+  before = first["messages"][0]["id"]
+  _, older = app.dispatch("GET", f"/messages?all=1&hidden=1&before={before}", None)
+  assert len(older["messages"]) == 20 and older["has_more"]
+  assert {m["id"] for m in first["messages"]}.isdisjoint(
+    m["id"] for m in older["messages"]
+  )
+  _, search = app.dispatch("GET", "/messages?all=1&q=%C3%A9l%C3%A9phant", None)
+  assert search["total"] == 1 and search["messages"][0]["id"] == "000000"
+  _, hidden = app.dispatch("GET", "/messages?all=1&q=000001", None)
+  assert hidden["total"] == 0
+  _, hidden = app.dispatch("GET", "/messages?all=1&hidden=1&q=000001", None)
+  assert hidden["total"] == 1
+  status, _ = app.dispatch("GET", "/messages?all=1&before=ffffff", None)
+  assert status == HTTPStatus.BAD_REQUEST
+  store.close()
+
+
 def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "http.sqlite3")
   app = SteeringApp(store)
