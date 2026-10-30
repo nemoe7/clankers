@@ -122,3 +122,40 @@ def test_task_service_mutable_dependency_queue_and_derived_blocking() -> None:
     tasks.mod_deps_add("task-a", "task-b")
 
   store.close()
+
+
+def test_report_ack_seen_lifecycle() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  messages = MessageService(store, store, store)
+
+  reports.publish_report(
+    "ack-doc",
+    "Ack Doc",
+    "We should use this mode\n- (x) Live\n- ( ) Manual\n",
+  )
+  reports.submit_answer(
+    "ack-doc", {"we-should-use-this-mode": "Live"}, answer_id="dead02"
+  )
+  assert reports.get_report("ack-doc").ack_seen is False
+  assert reports.mark_ack_seen("ack-doc").ack_seen is False
+
+  reports.ack_answer("ack-doc", "dead02", "Confirmed live.")
+  assert reports.get_report("ack-doc").ack_seen is False
+  assert reports.mark_ack_seen("ack-doc").ack_seen is True
+  assert reports.mark_ack_seen("ack-doc").ack_seen is True
+
+  reports.ack_answer("ack-doc", "dead02", "Second reply.")
+  assert reports.get_report("ack-doc").ack_seen is False
+  assert reports.mark_ack_seen("ack-doc").ack_seen is True
+
+  target_type, _ = messages.ack("dead02", "Third reply.")
+  assert target_type == "report_answer"
+  assert reports.get_report("ack-doc").ack_seen is False
+  assert reports.mark_ack_seen("ack-doc").ack_seen is True
+
+  reports.submit_answer(
+    "ack-doc", {"we-should-use-this-mode": "Manual"}, answer_id="dead03"
+  )
+  assert reports.get_report("ack-doc").ack_seen is False
+  store.close()

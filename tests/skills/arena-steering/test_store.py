@@ -159,6 +159,7 @@ def test_sqlite_store_crud_for_messages_tasks_reports_and_meta(tmp_path: Path) -
         modified_at=now,
       )
     ],
+    ack_seen=True,
     modified_at=now,
   )
   store.save_report(report)

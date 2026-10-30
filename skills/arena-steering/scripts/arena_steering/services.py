@@ -182,6 +182,7 @@ class MessageService:
           ans.acks.append(reply)
           ans.status = "acked"
           ans.modified_at = now
+          report.ack_seen = False
           report.modified_at = now
           self._reports.save_report(report)
           return ("report_answer", ans)
@@ -739,6 +740,15 @@ class ReportService:
       self._reports.save_report(report)
     return report
 
+  def mark_ack_seen(self, report_id: str) -> Report:
+    report = self.get_report(report_id)
+    latest = report.answers[-1] if report.answers else None
+    if latest is not None and latest.status == "acked" and not report.ack_seen:
+      report.ack_seen = True
+      report.modified_at = self._clock.now_iso()
+      self._reports.save_report(report)
+    return report
+
   def get_report(self, report_id: str) -> Report:
     validate_entity_id(report_id, "Report.id")
     report = self._reports.get_report(report_id)
@@ -784,6 +794,7 @@ class ReportService:
     report.answers.append(answer)
     report.status = "answered"
     report.seen = True
+    report.ack_seen = False
     report.modified_at = now
     self._reports.save_report(report)
     self._append_answer_details_to_linked_tasks(report, cleaned_values, now)
@@ -802,6 +813,7 @@ class ReportService:
         ans.acks.append(markdown.strip())
         ans.status = "acked"
         ans.modified_at = now
+        report.ack_seen = False
         report.modified_at = now
         self._reports.save_report(report)
         return ans

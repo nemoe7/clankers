@@ -170,6 +170,7 @@ class SteeringApp:
     self.router.add("PATCH", "/reports/{id}", self._handle_patch_report)
     self.router.add("DELETE", "/reports/{id}", self._handle_delete_report)
     self.router.add("POST", "/reports/{id}/seen", self._handle_mark_report_seen)
+    self.router.add("POST", "/reports/{id}/ack-seen", self._handle_mark_ack_seen)
     self.router.add("POST", "/reports/{id}/answers", self._handle_submit_answer)
     self.router.add(
       "POST",
@@ -224,6 +225,47 @@ class SteeringApp:
         return (pragma_ver, in_proc)
     except sqlite3.Error:
       return (0, in_proc)
+
+  def report_ack_snapshot(self) -> dict[str, tuple[str, str, int]]:
+    """Return the latest answer ID, status, and ack count for each live report."""
+    snapshot: dict[str, tuple[str, str, int]] = {}
+    for report in self.reports.list_reports():
+      if not report.answers:
+        continue
+      latest = report.answers[-1]
+      snapshot[report.id] = (latest.id, latest.status, len(latest.acks))
+    return snapshot
+
+  def report_acked_events(
+    self, previous: dict[str, tuple[str, str, int]]
+  ) -> tuple[list[dict[str, Any]], dict[str, tuple[str, str, int]]]:
+    """Return one `report.acked` event per report whose latest ack changed."""
+    current_reports = {report.id: report for report in self.reports.list_reports()}
+    current: dict[str, tuple[str, str, int]] = {}
+    for report in current_reports.values():
+      if not report.answers:
+        continue
+      latest = report.answers[-1]
+      current[report.id] = (latest.id, latest.status, len(latest.acks))
+    events: list[dict[str, Any]] = []
+    for report_id, snap in current.items():
+      if snap[1] != "acked":
+        continue
+      prev = previous.get(report_id)
+      if (
+        prev is not None
+        and prev[0] == snap[0]
+        and prev[1] == "acked"
+        and prev[2] >= snap[2]
+      ):
+        continue
+      events.append(
+        {
+          "type": "report.acked",
+          "report": self._serialize_report(current_reports[report_id]),
+        }
+      )
+    return (events, current)
 
   def resolve_asset(self, request_path: str) -> tuple[bytes, str] | None:
     """Resolve a static file inside assets_dir or report images without path traversal."""
@@ -524,6 +566,12 @@ class SteeringApp:
     report = self.reports.mark_seen(params["id"])
     return (int(HTTPStatus.OK), {"report": self._serialize_report(report)})
 
+  def _handle_mark_ack_seen(
+    self, params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    report = self.reports.mark_ack_seen(params["id"])
+    return (int(HTTPStatus.OK), {"report": self._serialize_report(report)})
+
   def _handle_submit_answer(
     self, params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
   ) -> tuple[int, Any]:
@@ -772,6 +820,7 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       last_seen = last_heartbeat = time.monotonic()
       try:
         version = app.data_version()
+        ack_snapshot = app.report_ack_snapshot()
         asset_ver = assets_signature(app.assets_dir)
         self.ws_send(1, b'{"type":"change"}')
         while True:
@@ -829,6 +878,9 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
           current = app.data_version()
           if current != version:
             version = current
+            ack_events, ack_snapshot = app.report_acked_events(ack_snapshot)
+            for ack_event in ack_events:
+              self.ws_send(1, json.dumps(ack_event).encode("utf-8"))
             self.ws_send(1, b'{"type":"change"}')
           current_assets = assets_signature(app.assets_dir)
           if current_assets != asset_ver:

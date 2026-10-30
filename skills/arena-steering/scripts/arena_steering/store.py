@@ -65,6 +65,7 @@ class SqliteStore:
           status TEXT NOT NULL DEFAULT 'published',
           answers_json TEXT NOT NULL DEFAULT '[]',
           seen INTEGER NOT NULL DEFAULT 0,
+          ack_seen INTEGER NOT NULL DEFAULT 0,
           modified_at TEXT NOT NULL
         );
 
@@ -88,6 +89,10 @@ class SqliteStore:
       if "seen" not in cols:
         self._conn.execute(
           "ALTER TABLE reports ADD COLUMN seen INTEGER NOT NULL DEFAULT 0"
+        )
+      if "ack_seen" not in cols:
+        self._conn.execute(
+          "ALTER TABLE reports ADD COLUMN ack_seen INTEGER NOT NULL DEFAULT 0"
         )
 
   def close(self) -> None:
@@ -270,8 +275,9 @@ class SqliteStore:
         self._conn.execute(
           """
           INSERT INTO reports (
-            id, title, body, fields_json, status, answers_json, seen, modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            id, title, body, fields_json, status, answers_json, seen, ack_seen,
+            modified_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             report.id,
@@ -281,6 +287,7 @@ class SqliteStore:
             report.status,
             answers_json,
             int(report.seen),
+            int(report.ack_seen),
             report.modified_at,
           ),
         )
@@ -294,6 +301,7 @@ class SqliteStore:
               status = ?,
               answers_json = ?,
               seen = ?,
+              ack_seen = ?,
               modified_at = ?
           WHERE id = ?
           """,
@@ -304,6 +312,7 @@ class SqliteStore:
             report.status,
             answers_json,
             int(report.seen),
+            int(report.ack_seen),
             report.modified_at,
             report.id,
           ),
@@ -386,5 +395,6 @@ class SqliteStore:
         ReportAnswer.from_dict(item) for item in json.loads(row["answers_json"] or "[]")
       ],
       seen=bool(dict(row).get("seen", 0)),
+      ack_seen=bool(dict(row).get("ack_seen", 0)),
       modified_at=str(row["modified_at"]),
     )

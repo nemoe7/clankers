@@ -105,9 +105,45 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert status == int(HTTPStatus.OK)
   assert r_acked["answer"]["status"] == "acked"
 
+  status, r_ack_seen = app.dispatch("POST", "/reports/router-spec/ack-seen")
+  assert status == int(HTTPStatus.OK)
+  assert r_ack_seen["report"]["ack_seen"] is True
+
   status, deleted = app.dispatch("DELETE", "/tasks/build-router")
   assert status == int(HTTPStatus.OK)
   assert deleted["deleted"] == "build-router"
+  store.close()
+
+
+def test_report_acked_events_fire_once_per_ack() -> None:
+  store = SqliteStore(":memory:")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "live-ack",
+    "Live Ack",
+    "We should push this event\n- (x) report.acked\n- ( ) Poll\n",
+  )
+  app.reports.submit_answer(
+    "live-ack", {"we-should-push-this-event": "report.acked"}, answer_id="cafe02"
+  )
+  snapshot = app.report_ack_snapshot()
+  events, snapshot = app.report_acked_events(snapshot)
+  assert events == []
+
+  app.reports.ack_answer("live-ack", "cafe02", "Pushed live.")
+  events, snapshot = app.report_acked_events(snapshot)
+  assert len(events) == 1
+  assert events[0]["type"] == "report.acked"
+  assert events[0]["report"]["id"] == "live-ack"
+  assert events[0]["report"]["ack_seen"] is False
+  assert events[0]["report"]["answers"][-1]["status"] == "acked"
+
+  events, snapshot = app.report_acked_events(snapshot)
+  assert events == []
+
+  app.reports.ack_answer("live-ack", "cafe02", "Second reply.")
+  events, _snapshot = app.report_acked_events(snapshot)
+  assert len(events) == 1
   store.close()
 
 
