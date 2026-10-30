@@ -727,6 +727,12 @@ function initImageModal() {
   let drag = null;
   let panDistance = 0;
   let viewerSeq = 0;
+  const pointers = new Map();
+  let pinch = null;
+  const pinchDistance = () => {
+    const [a, b] = [...pointers.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y) || 1;
+  };
   const update = () => {
     const media = stage.firstElementChild;
     if (media) media.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
@@ -735,6 +741,8 @@ function initImageModal() {
   dialog.addEventListener("close", () => {
     stage.replaceChildren();
     drag = null;
+    pointers.clear();
+    pinch = null;
   });
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog || (event.target === stage && panDistance <= 4)) dialog.close();
@@ -747,6 +755,13 @@ function initImageModal() {
   }, { passive: false });
   stage.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.size === 2) {
+      drag = null;
+      pinch = { distance: pinchDistance(), scale };
+      panDistance = Number.POSITIVE_INFINITY;
+      return;
+    }
     drag = {
       pointer: event.pointerId,
       x: event.clientX - x,
@@ -758,6 +773,13 @@ function initImageModal() {
     stage.setPointerCapture(event.pointerId);
   });
   stage.addEventListener("pointermove", (event) => {
+    if (!pointers.has(event.pointerId)) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pinch && pointers.size >= 2) {
+      scale = Math.min(8, Math.max(0.25, (pinch.scale * pinchDistance()) / pinch.distance));
+      update();
+      return;
+    }
     if (!drag || drag.pointer !== event.pointerId) return;
     panDistance = Math.max(
       panDistance,
@@ -768,6 +790,8 @@ function initImageModal() {
     update();
   });
   const endDrag = (event) => {
+    pointers.delete(event.pointerId);
+    if (pointers.size < 2) pinch = null;
     if (drag?.pointer === event.pointerId) drag = null;
   };
   stage.addEventListener("pointerup", endDrag);
