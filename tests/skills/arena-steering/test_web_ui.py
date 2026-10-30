@@ -184,11 +184,18 @@ def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
   survey = app.messages.get_survey()
   assert len(survey["results"]) == 6
   reports = app.reports.list_reports(stale_only=False)
-  assert len(reports) >= 3
+  assert len(reports) >= 4
   assert reports[0].seen is False
   assert reports[0].needs_answer is True
   assert reports[1].seen is True
   assert reports[1].needs_answer is False
+  assert app.resolve_asset("/reports/layout-board.png") is not None
+  assert app.resolve_asset("/reports/scroll-fade-demo.gif") is not None
+  assert app.resolve_asset("/reports/loading-bar-demo.gif") is not None
+  assert app.resolve_asset("/reports/tokens-swatch.svg") is not None
+  assert app.resolve_asset("/reports/scrollspy-zones.svg") is not None
+  assert app.resolve_asset("/uploads/inbox-capture.png") is not None
+  assert app.resolve_asset("/uploads/ui-motion-preview.gif") is not None
   status_seen, payload_seen = app.dispatch("POST", f"/reports/{reports[0].id}/seen")
   assert status_seen == 200
   assert payload_seen["report"]["seen"] is True
