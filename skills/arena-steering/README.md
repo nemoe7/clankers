@@ -207,6 +207,8 @@ Write requests may include `_request_id` to replay the original result safely. T
 | `POST /reports/{id}/answers` and `/reports/{id}/answers/{answer_id}/ack` | Submit and acknowledge report answers. |
 | `GET, POST /survey` and `POST /survey/interrupt` | Inspect or submit a survey and request a bible check. |
 | `POST /timezone` and `POST /markdown` | Set the display timezone and render Markdown. |
+| `GET /state/snapshot`, `GET /state/changes?since=`, and `POST /state/merge` | Export every row, export newer rows, and merge a document by ID. |
+| `GET, POST /state/assets` | List upload paths with sizes and hashes, and store one asset by hash. |
 | `/api/ws` | WebSocket requests, change notifications, heartbeat, reload, and `report.acked` events. |
 | `/static/assets/`, `/static/reports/`, and `/static/uploads/` | Serve UI assets, report files and Markdown, and uploaded files. |
 

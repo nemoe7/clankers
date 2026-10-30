@@ -217,11 +217,13 @@ def main(
       return _run_skills(parsed, stdout)
     if cmd == "read":
       read_p.parse_args(cmd_args)
+      _print_restore_notice(store, stdout)
       delivered = messages.read_pending(mark_seen=True)
       _print_delivered(delivered, stdout)
       return 0
     if cmd == "poll":
       poll_p.parse_args(cmd_args)
+      _print_restore_notice(store, stdout)
       delivered = messages.poll(timeout_seconds=1799.0)
       _print_delivered(delivered, stdout)
       return 0
@@ -968,6 +970,22 @@ def _run_report(
     return 0
 
   raise ValueError(f"Unrecognized report arguments: {args}")
+
+
+def _print_restore_notice(store: SqliteStore, out: TextIO) -> None:
+  """Print and clear the one-line notice left by a state merge."""
+  raw = store.get_meta("state_restore_notice", "")
+  if not raw:
+    return
+  store.set_meta("state_restore_notice", "")
+  try:
+    notice = json.loads(raw)
+  except json.JSONDecodeError:
+    return
+  source = str(notice.get("source") or "a container")
+  added = int(notice.get("added") or 0)
+  updated = int(notice.get("updated") or 0)
+  print(f"State restored from {source}: {added} added, {updated} updated.", file=out)
 
 
 def _print_delivered(delivered: dict[str, list], out: TextIO) -> None:

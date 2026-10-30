@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 from http import HTTPStatus
@@ -199,6 +200,68 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert status == int(HTTPStatus.OK)
   assert deleted["deleted"] == "build-router"
   store.close()
+
+
+def test_state_endpoints_snapshot_changes_merge_and_assets(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state-sync.sqlite3")
+  app = SteeringApp(store)
+  app.dispatch("POST", "/messages", {"id": "aa11bb", "body": "Snapshot me."})
+
+  status, snapshot = app.dispatch("GET", "/state/snapshot")
+  assert status == int(HTTPStatus.OK)
+  assert snapshot["schema"] == 1
+  assert [row["id"] for row in snapshot["messages"]] == ["aa11bb"]
+  stamp = snapshot["state_version"]
+  assert stamp
+
+  status, quiet = app.dispatch("GET", "/state/changes?since=" + stamp)
+  assert status == int(HTTPStatus.OK)
+  assert quiet["messages"] == []
+
+  incoming = {
+    "schema": 1,
+    "source": "test container",
+    "messages": [
+      {
+        "id": "cc22dd",
+        "body": "Merged from elsewhere.",
+        "modified_at": "2099-01-01T00:00:00Z",
+      },
+      {
+        "id": "aa11bb",
+        "body": "Older copy.",
+        "modified_at": "1999-01-01T00:00:00Z",
+      },
+    ],
+  }
+  status, merged = app.dispatch("POST", "/state/merge", incoming)
+  assert status == int(HTTPStatus.OK)
+  assert merged["added"] == ["cc22dd"]
+  assert merged["skipped"] == ["aa11bb"]
+  assert store.get_meta("state_restore_notice")
+
+  status, later = app.dispatch("GET", "/state/changes?since=" + stamp)
+  assert [row["id"] for row in later["messages"]] == ["cc22dd"]
+
+  status, _bad = app.dispatch("POST", "/state/merge", {"schema": 99, "messages": []})
+  assert status >= int(HTTPStatus.BAD_REQUEST)
+
+  uploads = app._uploads_dir()
+  (uploads / "note.txt").write_bytes(b"hello")
+  status, listed = app.dispatch("GET", "/state/assets")
+  assert status == int(HTTPStatus.OK)
+  entry = next(item for item in listed["assets"] if item["path"] == "uploads/note.txt")
+  assert entry["size"] == 5
+
+  payload = {
+    "path": "uploads/copy.txt",
+    "sha256": entry["sha256"],
+    "content": base64.b64encode(b"hello").decode("ascii"),
+  }
+  status, pushed = app.dispatch("POST", "/state/assets", payload)
+  assert status == int(HTTPStatus.OK) and pushed["stored"] is True
+  status, again = app.dispatch("POST", "/state/assets", payload)
+  assert again["stored"] is False
 
 
 def test_router_create_message_accepts_parent_ids() -> None:
