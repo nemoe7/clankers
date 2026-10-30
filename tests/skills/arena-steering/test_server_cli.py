@@ -676,3 +676,126 @@ def test_http_multipart_upload_and_message_with_file(tmp_path: Path) -> None:
     server.shutdown()
     server.server_close()
     store.close()
+
+
+def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
+  state_dir = tmp_path / "state"
+  state_dir.mkdir()
+
+  code, out, _ = _run_cli(
+    state_dir, "task", "new", "base-task", "Base task", "-T", "code"
+  )
+  assert code == 0
+  assert "base-task" in out
+  code, out, _ = _run_cli(
+    state_dir,
+    "task",
+    "new",
+    "child-task",
+    "Child task",
+    "-T",
+    "code",
+    "-k",
+    "base-task",
+    "-r",
+    "spec-report",
+  )
+  assert code == 0
+  assert "child-task" in out
+
+  code, out, _ = _run_cli(state_dir, "rename", "base-task", "root-task")
+  assert code == 0
+  assert "root-task" in out
+  code, out, _ = _run_cli(state_dir, "task", "child-task")
+  assert code == 0
+  assert "root-task" in out
+  assert "base-task" not in out
+  code, _, err = _run_cli(state_dir, "task", "base-task")
+  assert code == 1
+  expected_error = "Unknown task ID: base-task"
+  assert expected_error in err
+
+  code, out, _ = _run_cli(
+    state_dir, "task", "unlink", "child-task", "report", "spec-report"
+  )
+  assert code == 0
+  assert "spec-report" not in out
+  code, out, _ = _run_cli(state_dir, "task", "unlink", "child-task", "root-task")
+  assert code == 0
+  assert "root-task" not in out
+
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  status, payload = app.dispatch("POST", "/api/timezone", {"timezone": "Asia/Manila"})
+  assert status == int(HTTPStatus.OK)
+  assert payload == {"timezone": "Asia/Manila"}
+  status, health = app.dispatch("GET", "/health")
+  assert status == int(HTTPStatus.OK)
+  assert health["timezone"] == "Asia/Manila"
+  status, payload = app.dispatch("POST", "/api/timezone", {"timezone": "Not/AZone"})
+  assert status == int(HTTPStatus.BAD_REQUEST)
+  store.close()
+
+  code, _, err = _run_cli(state_dir, "init", "--tz", "Asia/Manila")
+  assert code == 1
+  assert "--tz" in err or "init" in err
+
+
+def test_cli_pr_update_and_job_log_use_gh_seam(tmp_path: Path, monkeypatch) -> None:
+  import subprocess
+
+  import arena_steering.cli as cli_module
+
+  state_dir = tmp_path / "state"
+  state_dir.mkdir()
+  body_file = tmp_path / "pr-body.md"
+  body_file.write_text("## Summary\n\nBody text.\n", encoding="utf-8")
+  calls: list[list[str]] = []
+
+  def fake_run(args, **_kwargs):
+    calls.append(list(args))
+    if args[:3] == ["gh", "pr", "view"]:
+      return subprocess.CompletedProcess(
+        args,
+        0,
+        stdout='{"title":"New title","body":"## Summary\\n\\nBody text.\\n"}',
+        stderr="",
+      )
+    if args[:3] == ["gh", "run", "view"]:
+      return subprocess.CompletedProcess(args, 0, stdout="job log text\n", stderr="")
+    return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+  monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+
+  code, out, _ = _run_cli(
+    state_dir,
+    "pr-update",
+    "-n",
+    "122",
+    "-t",
+    "New title",
+    "-f",
+    str(body_file),
+  )
+  assert code == 0
+  assert "Updated PR #122" in out
+  assert calls[0][:3] == ["gh", "pr", "edit"]
+  assert "--body-file" in calls[0]
+  assert calls[1][:3] == ["gh", "pr", "view"]
+
+  code, out, _ = _run_cli(state_dir, "job-log", "-r", "41000725677")
+  assert code == 0
+  assert out == "job log text\n"
+  assert calls[-1] == ["gh", "run", "view", "41000725677", "--log"]
+
+  code, out, _ = _run_cli(state_dir, "job-log", "-j", "123877772372")
+  assert code == 0
+  assert out == "job log text\n"
+  assert calls[-1] == [
+    "gh",
+    "run",
+    "view",
+    "--job",
+    "123877772372",
+    "--log",
+  ]

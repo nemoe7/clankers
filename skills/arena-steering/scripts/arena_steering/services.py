@@ -445,6 +445,67 @@ class TaskService:
     self._tasks.save_task_queue(remaining)
     return True
 
+  def rename_task(self, old_task_id: str, new_task_id: str) -> Task:
+    validate_entity_id(old_task_id, "Task.id")
+    validate_entity_id(new_task_id, "Task.id")
+    if old_task_id == new_task_id:
+      task, _blocked = self.get_task(old_task_id)
+      return task
+    queue, target = self._load_queue_and_target(old_task_id)
+    if any(item.id == new_task_id for item in queue):
+      raise ValueError(f"Task {new_task_id!r} already exists")
+    now = self._clock.now_iso()
+    renamed = Task(
+      id=new_task_id,
+      title=target.title,
+      type=target.type,
+      status=target.status,
+      scope=target.scope,
+      details=target.details,
+      links=target.links,
+      modified_at=now,
+    )
+    updated_queue: list[Task] = []
+    for item in queue:
+      if item.id == old_task_id:
+        updated_queue.append(renamed)
+        continue
+      if old_task_id in item.task_ids:
+        item.task_ids = [
+          new_task_id if dep_id == old_task_id else dep_id for dep_id in item.task_ids
+        ]
+        item.modified_at = now
+      updated_queue.append(item)
+    ordered = self._enforce_dependency_order(updated_queue)
+    self._tasks.save_task_queue(ordered)
+    return renamed
+
+  def unlink_task(
+    self, task_id: str, link_id: str, *, link_type: str | None = None
+  ) -> Task:
+    if link_type is not None:
+      return self.mod_links_rm(task_id, link_type, link_id)
+    queue, target = self._load_queue_and_target(task_id)
+    cleaned_id = link_id.strip()
+    updated = Task(
+      id=target.id,
+      title=target.title,
+      type=target.type,
+      status=target.status,
+      scope=target.scope,
+      details=target.details,
+      links={
+        "msg_ids": [item for item in target.msg_ids if item != cleaned_id],
+        "report_ids": [item for item in target.report_ids if item != cleaned_id],
+        "task_ids": [item for item in target.task_ids if item != cleaned_id],
+      },
+      modified_at=self._clock.now_iso(),
+    )
+    if updated.links == target.links:
+      raise ValueError(f"Task {task_id!r} has no link {cleaned_id!r}")
+    self._replace_in_queue(queue, updated)
+    return updated
+
   def mod_deets(self, task_id: str, detail: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     updated = Task(
@@ -828,6 +889,54 @@ class ReportService:
         self._reports.save_report(report)
         return ans
     raise KeyError(f"Unknown answer ID {answer_id!r} on report {report_id!r}")
+
+  def rename_report(self, old_report_id: str, new_report_id: str) -> Report:
+    validate_entity_id(old_report_id, "Report.id")
+    validate_entity_id(new_report_id, "Report.id")
+    if old_report_id == new_report_id:
+      return self.get_report(old_report_id)
+    existing = self.get_report(old_report_id)
+    if self._reports.get_report(new_report_id) is not None:
+      raise ValueError(f"Report {new_report_id!r} already exists")
+    now = self._clock.now_iso()
+    renamed_answers = [
+      ReportAnswer(
+        id=answer.id,
+        report_id=new_report_id,
+        values=answer.values,
+        status=answer.status,
+        acks=answer.acks,
+        modified_at=answer.modified_at,
+      )
+      for answer in existing.answers
+    ]
+    renamed = Report(
+      id=new_report_id,
+      title=existing.title,
+      body=existing.body,
+      fields=existing.fields,
+      status=existing.status,
+      answers=renamed_answers,
+      seen=existing.seen,
+      ack_seen=existing.ack_seen,
+      modified_at=now,
+    )
+    self._reports.save_report(renamed)
+    if hasattr(self._reports, "delete_report"):
+      self._reports.delete_report(old_report_id)
+    queue = self._tasks.list_tasks()
+    changed = False
+    for task in queue:
+      if old_report_id in task.report_ids:
+        task.report_ids = [
+          new_report_id if report_id == old_report_id else report_id
+          for report_id in task.report_ids
+        ]
+        task.modified_at = now
+        changed = True
+    if changed:
+      self._tasks.save_task_queue(queue)
+    return renamed
 
   def remove_report(self, target: str) -> list[str]:
     """Dismiss one report by ID or all stale reports when target == '--stale'."""

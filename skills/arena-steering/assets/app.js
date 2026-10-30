@@ -129,6 +129,7 @@ const reportCache = new Map();
 const ackSeenRequests = new Set();
 let cleanupTimers = () => {};
 let knownAssetVersion = null;
+let reportedTimezone = null;
 let lastDataSignature = "";
 let lastViewportHeight = 0;
 
@@ -271,6 +272,18 @@ async function refreshAll(force = false) {
       if (document.title !== expectedTitle) {
         document.title = expectedTitle;
       }
+    }
+    const browserTimezone =
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    if (
+      browserTimezone &&
+      health.timezone !== browserTimezone &&
+      reportedTimezone !== browserTimezone
+    ) {
+      reportedTimezone = browserTimezone;
+      api.setTimezone(browserTimezone).catch(() => {
+        reportedTimezone = null;
+      });
     }
     const messages = msgRes.messages || [];
     const tasks = taskRes.tasks || [];

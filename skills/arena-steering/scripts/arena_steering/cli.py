@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -137,6 +139,21 @@ def main(
   )
   survey_p.add_argument("--interrupt", action="store_true", help="Trigger bible check.")
 
+  rename_p = sub.add_parser("rename", help="Move a task or report to a new ID.")
+  rename_p.add_argument("old_id")
+  rename_p.add_argument("new_id")
+
+  pr_update_p = sub.add_parser(
+    "pr-update", help="Update a pull request title and body via gh and verify parity."
+  )
+  pr_update_p.add_argument("-n", "--number", type=int, required=True)
+  pr_update_p.add_argument("-t", "--title", required=True)
+  pr_update_p.add_argument("-f", "--body-file", required=True)
+
+  job_log_p = sub.add_parser("job-log", help="Print a GitHub Actions log via gh.")
+  job_log_p.add_argument("-j", "--job", dest="job_id", default=None)
+  job_log_p.add_argument("-r", "--run", dest="run_id", default=None)
+
   state_dir, remaining = _extract_global_state_dir(args_list)
   if not remaining:
     parser.print_help(file=stdout)
@@ -197,6 +214,19 @@ def main(
     if cmd == "survey":
       parsed = survey_p.parse_args(cmd_args)
       return _run_survey(parsed, messages, stdout)
+    if cmd == "rename":
+      parsed = rename_p.parse_args(cmd_args)
+      return _run_rename(parsed, tasks, reports, stdout)
+    if cmd == "pr-update":
+      parsed = pr_update_p.parse_args(cmd_args)
+      return _run_pr_update(parsed, stdout)
+    if cmd == "job-log":
+      parsed = job_log_p.parse_args(cmd_args)
+      return _run_job_log(parsed, stdout)
+    if cmd == "init":
+      raise ValueError(
+        "steer has no init --tz; the browser sets timezone with POST /api/timezone"
+      )
 
     parsed_root = parser.parse_args(remaining)
     if not parsed_root.command:
@@ -341,6 +371,17 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
   if subcmd == "mod":
     return _run_task_mod(args[1:], tasks, out)
 
+  if subcmd == "unlink":
+    if len(args) == 3:
+      updated = tasks.unlink_task(args[1], args[2])
+    elif len(args) == 4:
+      updated = tasks.unlink_task(args[1], args[3], link_type=args[2])
+    else:
+      raise ValueError("Usage: steer task unlink <id> [<msg|report|task>] <link-id>")
+    _, blocked = tasks.get_task(updated.id)
+    _print_single_task(updated, blocked, out)
+    return 0
+
   if len(args) == 1:
     task, blocked = tasks.get_task(subcmd)
     _print_single_task(task, blocked, out)
@@ -391,6 +432,82 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
 
   _, blocked = tasks.get_task(updated.id)
   _print_single_task(updated, blocked, out)
+  return 0
+
+
+def _run_rename(
+  parsed: argparse.Namespace,
+  tasks: TaskService,
+  reports: ReportService,
+  out: TextIO,
+) -> int:
+  try:
+    renamed = tasks.rename_task(parsed.old_id, parsed.new_id)
+  except KeyError:
+    renamed_report = reports.rename_report(parsed.old_id, parsed.new_id)
+    print(f"Renamed report {parsed.old_id} -> {renamed_report.id}", file=out)
+    return 0
+  print(f"Renamed task {parsed.old_id} -> {renamed.id}", file=out)
+  _, blocked = tasks.get_task(renamed.id)
+  _print_single_task(renamed, blocked, out)
+  return 0
+
+
+def _run_gh(args: list[str]) -> str:
+  result = subprocess.run(
+    args,
+    check=False,
+    capture_output=True,
+    text=True,
+  )
+  if result.returncode != 0:
+    detail = (result.stderr or result.stdout or "").strip()
+    raise ValueError(f"{' '.join(args)} failed: {detail}")
+  return result.stdout
+
+
+def _run_pr_update(parsed: argparse.Namespace, out: TextIO) -> int:
+  body_path = Path(parsed.body_file)
+  if not body_path.is_file():
+    raise ValueError(f"PR body file does not exist: {body_path}")
+  expected_body = body_path.read_text(encoding="utf-8")
+  _run_gh(
+    [
+      "gh",
+      "pr",
+      "edit",
+      str(parsed.number),
+      "--title",
+      parsed.title,
+      "--body-file",
+      str(body_path),
+    ]
+  )
+  raw = _run_gh(
+    [
+      "gh",
+      "pr",
+      "view",
+      str(parsed.number),
+      "--json",
+      "title,body",
+    ]
+  )
+  current = json.loads(raw)
+  if current.get("title") != parsed.title or current.get("body") != expected_body:
+    raise ValueError(f"PR #{parsed.number} title/body did not verify after update")
+  print(f"Updated PR #{parsed.number}: {parsed.title}", file=out)
+  return 0
+
+
+def _run_job_log(parsed: argparse.Namespace, out: TextIO) -> int:
+  if bool(parsed.job_id) == bool(parsed.run_id):
+    raise ValueError("Usage: steer job-log -j <job-id> or -r <run-id>")
+  if parsed.run_id:
+    args = ["gh", "run", "view", str(parsed.run_id), "--log"]
+  else:
+    args = ["gh", "run", "view", "--job", str(parsed.job_id), "--log"]
+  print(_run_gh(args), end="", file=out)
   return 0
 
 
