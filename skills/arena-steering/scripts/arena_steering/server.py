@@ -20,6 +20,7 @@ import threading
 import time
 from collections.abc import Callable, Iterable
 from contextlib import closing
+from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -64,6 +65,7 @@ REPORT_STATIC_EXTS = REPORT_IMAGE_EXTS | frozenset({".md", ".txt"})
 STATIC_ASSETS_PREFIX = "static/assets/"
 STATIC_REPORTS_PREFIX = "static/reports/"
 STATIC_UPLOADS_PREFIX = "static/uploads/"
+STATE_SCHEMA_VERSION = 1
 PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500
 PASTE_ATTACHMENT_LINE_THRESHOLD = 15
 PASTE_ATTACHMENT_NAME = "pasted-text.txt"
@@ -223,6 +225,11 @@ class SteeringApp:
     self.router.add("POST", "/survey/interrupt", self._handle_survey_interrupt)
     self.router.add("POST", "/timezone", self._handle_set_timezone)
     self.router.add("POST", "/markdown", self._handle_render_markdown)
+    self.router.add("GET", "/state/snapshot", self._handle_state_snapshot)
+    self.router.add("GET", "/state/changes", self._handle_state_changes)
+    self.router.add("POST", "/state/merge", self._handle_state_merge)
+    self.router.add("GET", "/state/assets", self._handle_state_assets)
+    self.router.add("POST", "/state/assets", self._handle_state_asset_push)
 
   def dispatch(
     self, method: str, raw_url: str, body: dict[str, Any] | None = None
@@ -620,6 +627,117 @@ class SteeringApp:
       raise ValueError(f"Unknown timezone: {timezone_name}") from exc
     self.store.set_meta("timezone", timezone_name)
     return (int(HTTPStatus.OK), {"timezone": timezone_name})
+
+  def _handle_state_snapshot(
+    self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    rows = self.store.export_rows()
+    return (
+      int(HTTPStatus.OK),
+      {
+        "schema": STATE_SCHEMA_VERSION,
+        "state_version": self.store.state_stamp(),
+        "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        **rows,
+      },
+    )
+
+  def _handle_state_changes(
+    self, _params: dict[str, str], query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    since = (query.get("since") or [""])[0].strip()
+    rows = self.store.export_rows(since=since or None)
+    return (
+      int(HTTPStatus.OK),
+      {
+        "schema": STATE_SCHEMA_VERSION,
+        "since": since,
+        "state_version": self.store.state_stamp(),
+        **rows,
+      },
+    )
+
+  def _handle_state_merge(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: Any
+  ) -> tuple[int, Any]:
+    if not isinstance(body, dict):
+      raise TypeError("A merge document must be a JSON object")
+    schema = body.get("schema", STATE_SCHEMA_VERSION)
+    if schema != STATE_SCHEMA_VERSION:
+      raise ValueError(f"Unknown state schema: {schema!r}")
+    source = str(body.get("source") or "unknown container")
+    counts = self.store.merge_rows(body)
+    total = len(counts["added"]) + len(counts["updated"])
+    if total:
+      self._state_version = int(getattr(self, "_state_version", 0)) + 1
+      self.store.set_meta(
+        "state_restore_notice",
+        json.dumps(
+          {
+            "source": source,
+            "added": len(counts["added"]),
+            "updated": len(counts["updated"]),
+          }
+        ),
+      )
+    return (
+      int(HTTPStatus.OK),
+      {
+        "schema": STATE_SCHEMA_VERSION,
+        "state_version": self.store.state_stamp(),
+        "source": source,
+        "added": counts["added"],
+        "updated": counts["updated"],
+        "skipped": counts["skipped"],
+      },
+    )
+
+  def _handle_state_assets(
+    self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    uploads = self._uploads_dir()
+    assets = []
+    for path in sorted(uploads.rglob("*")):
+      if not path.is_file():
+        continue
+      assets.append(
+        {
+          "path": f"uploads/{path.relative_to(uploads).as_posix()}",
+          "size": path.stat().st_size,
+          "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+      )
+    return (int(HTTPStatus.OK), {"assets": assets})
+
+  def _handle_state_asset_push(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: Any
+  ) -> tuple[int, Any]:
+    if not isinstance(body, dict):
+      raise TypeError("An asset push must be a JSON object")
+    rel = str(body.get("path") or "").strip()
+    if not rel.startswith("uploads/") or ".." in rel.split("/"):
+      raise ValueError("An asset path must live under uploads/")
+    encoded = body.get("content")
+    if not isinstance(encoded, str) or not encoded:
+      raise ValueError("An asset push needs base64 content")
+    try:
+      data = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as exc:
+      raise ValueError(f"Invalid base64 content: {exc}") from exc
+    digest = hashlib.sha256(data).hexdigest()
+    expected = str(body.get("sha256") or "").strip()
+    if expected and expected != digest:
+      raise ValueError("The asset hash does not match its content")
+    uploads = self._uploads_dir()
+    target = (uploads / rel[len("uploads/") :]).resolve()
+    if uploads.resolve() not in target.parents and target.parent != uploads.resolve():
+      raise ValueError("An asset path must stay inside the uploads directory")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_file() and hashlib.sha256(target.read_bytes()).hexdigest() == digest:
+      return (int(HTTPStatus.OK), {"path": rel, "sha256": digest, "stored": False})
+    target.write_bytes(data)
+    self._state_version = int(getattr(self, "_state_version", 0)) + 1
+    return (int(HTTPStatus.OK), {"path": rel, "sha256": digest, "stored": True})
 
   def _handle_get_survey(
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any

@@ -14,6 +14,8 @@ from pathlib import Path
 
 from .models import Attachment, Message, Report, ReportAnswer, ReportField, Task
 
+STATE_TABLES = ("messages", "tasks", "reports")
+
 
 class SqliteStore:
   """Thread-safe SQLite store for messages, tasks, reports, and metadata."""
@@ -597,6 +599,73 @@ class SqliteStore:
           ),
         )
     return report
+
+  def export_rows(self, since: str | None = None) -> dict[str, list[dict[str, object]]]:
+    """Return every stored row per table, or only rows newer than a stamp."""
+    with self._lock:
+      out: dict[str, list[dict[str, object]]] = {}
+      for table in STATE_TABLES:
+        if since:
+          rows = self._conn.execute(
+            f"SELECT * FROM {table} WHERE modified_at > ? ORDER BY rowid", (since,)
+          ).fetchall()
+        else:
+          rows = self._conn.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
+        out[table] = [dict(row) for row in rows]
+      return out
+
+  def state_stamp(self) -> str:
+    """Return the newest `modified_at` across every stored row."""
+    with self._lock:
+      stamps: list[str] = []
+      for table in STATE_TABLES:
+        row = self._conn.execute(
+          f"SELECT MAX(modified_at) AS stamp FROM {table}"
+        ).fetchone()
+        if row is not None and row["stamp"]:
+          stamps.append(str(row["stamp"]))
+      return max(stamps, default="")
+
+  def merge_rows(
+    self, document: dict[str, list[dict[str, object]]]
+  ) -> dict[str, list[str]]:
+    """Merge rows by ID in one transaction, keeping the newer `modified_at`."""
+    result: dict[str, list[str]] = {"added": [], "updated": [], "skipped": []}
+    with self.transaction():
+      for table in STATE_TABLES:
+        columns = [
+          str(row["name"])
+          for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+          if str(row["name"]) not in {"seq"}
+        ]
+        allowed = set(columns)
+        for raw in document.get(table, []) or []:
+          data = {key: value for key, value in dict(raw).items() if key in allowed}
+          row_id = str(data.get("id") or "")
+          if not row_id:
+            result["skipped"].append("")
+            continue
+          current = self._conn.execute(
+            f"SELECT modified_at FROM {table} WHERE id=?", (row_id,)
+          ).fetchone()
+          incoming_stamp = str(data.get("modified_at") or "")
+          if current is None:
+            names = ",".join(data)
+            marks = ",".join("?" for _ in data)
+            self._conn.execute(
+              f"INSERT INTO {table} ({names}) VALUES ({marks})", tuple(data.values())
+            )
+            result["added"].append(row_id)
+          elif incoming_stamp > str(current["modified_at"]):
+            sets = ",".join(f"{key}=?" for key in data if key != "id")
+            values = [value for key, value in data.items() if key != "id"]
+            self._conn.execute(
+              f"UPDATE {table} SET {sets} WHERE id=?", (*values, row_id)
+            )
+            result["updated"].append(row_id)
+          else:
+            result["skipped"].append(row_id)
+    return result
 
   def get_meta(self, key: str, default: str | None = None) -> str | None:
     with self._lock:

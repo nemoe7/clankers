@@ -36,6 +36,9 @@ This log has no Unreleased section.
 
 ### Added
 
+- `scripts/arena_steering/server.py`: Serve state snapshot, change, merge, and asset routes for an external container.
+- `scripts/arena_steering/store.py`: Export, stamp, and merge stored rows.
+- `scripts/arena_steering/cli.py`: Print a one-line restore notice when a merge changed state.
 - `scripts/arena_steering/cli.py`: Register `steer gate` and `steer skills`.
 - `scripts/hooks/gate.sh`: Ship the pre-command hook wrapper for the inbox gate.
 - `scripts/arena_steering/cli.py`: Add `worktree collect` to print a worktree patch against its merge base.
