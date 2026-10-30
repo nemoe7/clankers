@@ -625,3 +625,36 @@ def test_report_navigation_preloads_on_pointer_and_keyboard_intent():
   assert 'addEventListener("focusin", preloadReport)' in app_js
   assert "pendingReportLoads" in app_js
   assert "quiet: true" in app_js
+
+
+def test_message_search_narrows_loaded_results_without_requerying():
+  script = r"""
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+const source = readFileSync('skills/arena-steering/assets/app.js', 'utf8');
+const start = source.indexOf('export function messageMatchesQuery');
+const end = source.indexOf('async function fetchMessagePage');
+const code = source.slice(start, end).replace('export ', '');
+const context = {};
+vm.runInNewContext(`${code}\nthis.messageMatchesQuery = messageMatchesQuery;`, context);
+const message = { id: 'a1b2c3', body: 'Refactor the composer', parent_ids: ['dd0001'], acks: ['Agreed'] };
+assert.equal(context.messageMatchesQuery(message, ''), true);
+assert.equal(context.messageMatchesQuery(message, 'C'), true);
+assert.equal(context.messageMatchesQuery(message, 'KK'), false);
+assert.equal(context.messageMatchesQuery(message, 'com'), true);
+assert.equal(context.messageMatchesQuery(message, 'dd00'), true);
+assert.equal(context.messageMatchesQuery(message, 'agreed'), true);
+assert.equal(context.messageMatchesQuery(message, 'zzz'), false);
+"""
+  result = subprocess.run(
+    ["node", "--input-type=module", "-e", script],
+    cwd=SKILL_DIR.parents[1],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
+  app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  assert "searchBase && needle.startsWith(searchBase.query)" in app_js
+  assert "searchBase = { query: activeQuery, messages: merged, hasMore }" in app_js

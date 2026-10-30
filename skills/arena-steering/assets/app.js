@@ -265,9 +265,17 @@ let messageEpoch = 0;
 let messageLoadingOlder = false;
 let loadedMessageKey = null;
 let historyCache = null;
+let searchBase = null;
 
 function currentMessageKey(state) {
   return JSON.stringify([Boolean(state.showHidden), (state.searchQuery || "").trim()]);
+}
+
+export function messageMatchesQuery(message, query) {
+  const needle = String(query || "").trim().toLowerCase();
+  if (!needle) return true;
+  const haystacks = [message.id, message.body, ...(message.parent_ids || []), ...(message.acks || [])];
+  return haystacks.some((item) => String(item || "").toLowerCase().includes(needle));
 }
 
 async function fetchMessagePage({ before = "", reset = false } = {}) {
@@ -298,6 +306,10 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
       ? [...fresh, ...previous.filter((item) => !ids.has(item.id))]
       : fresh;
     store.setState({ messages: merged, messagesHasMore: hasMore, messagesError: "", messagesLoading: false });
+    const activeQuery = (store.getState().searchQuery || "").trim().toLowerCase();
+    if (activeQuery && !before) {
+      searchBase = { query: activeQuery, messages: merged, hasMore };
+    }
     return merged;
   } catch (error) {
     if (epoch === messageEpoch && currentMessageKey(store.getState()) === key) {
@@ -512,13 +524,27 @@ const handlers = {
     }
     store.setState({ searchQuery: query });
     if (wasSearching && !searching && historyCache) {
+      searchBase = null;
       loadedMessageKey = currentMessageKey(store.getState());
       store.setState({ messages: historyCache.messages, messagesHasMore: historyCache.hasMore, messagesError: "" });
       historyCache = null;
       fetchMessagePage();
-    } else {
-      fetchMessagePage({ reset: true });
+      return;
     }
+    const needle = query.trim().toLowerCase();
+    if (searchBase && needle.startsWith(searchBase.query)) {
+      messageEpoch += 1;
+      loadedMessageKey = currentMessageKey(store.getState());
+      store.setState({
+        messages: searchBase.messages.filter((item) => messageMatchesQuery(item, needle)),
+        messagesHasMore: searchBase.hasMore,
+        messagesError: "",
+        messagesLoading: false,
+      });
+      return;
+    }
+    searchBase = null;
+    fetchMessagePage({ reset: true });
   },
   async onLoadOlderMessages() {
     const state = store.getState();
