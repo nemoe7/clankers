@@ -426,8 +426,8 @@ def test_composer_upload_drop_expand_assets() -> None:
   assert COMPOSER_EXPAND_ID in messages_js
   assert "data-remove-composer-attachment" in messages_js
   assert "composer-attachment-chip" in messages_js
-  assert "PASTE_ATTACHMENT_CHAR_THRESHOLD = 2400" in messages_js
-  assert "PASTE_ATTACHMENT_LINE_THRESHOLD = 40" in messages_js
+  assert "PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500" in messages_js
+  assert "PASTE_ATTACHMENT_LINE_THRESHOLD = 15" in messages_js
   assert "pasted-text.txt" in messages_js
   assert 'addEventListener("paste"' in messages_js
   assert 'addEventListener("drop"' in messages_js

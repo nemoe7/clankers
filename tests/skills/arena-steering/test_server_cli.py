@@ -593,7 +593,7 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   assert Path(paste_attachment["path"]).read_text(encoding="utf-8") == long_paste
 
   many_lines = "\n".join(
-    f"line {idx}" for idx in range(PASTE_ATTACHMENT_LINE_THRESHOLD + 1)
+    f"line {idx}" for idx in range(PASTE_ATTACHMENT_LINE_THRESHOLD)
   )
   status, created = app.dispatch(
     "POST",
@@ -1013,3 +1013,13 @@ def test_fixed_state_location_preserves_v1_database(tmp_path: Path) -> None:
   )
   assert rejected.returncode != 0
   assert not override.exists()
+
+
+def test_paste_attachment_threshold_boundaries() -> None:
+  assert not SteeringApp._paste_needs_attachment("x" * 1500)
+  assert SteeringApp._paste_needs_attachment("x" * 1501)
+  assert not SteeringApp._paste_needs_attachment("😀" * 1500)
+  assert SteeringApp._paste_needs_attachment("😀" * 1501)
+  assert not SteeringApp._paste_needs_attachment("\n".join(["x"] * 14))
+  assert SteeringApp._paste_needs_attachment("\n".join(["x"] * 15))
+  assert SteeringApp._paste_needs_attachment("x\n" * 14)

@@ -63,8 +63,8 @@ REPORT_STATIC_EXTS = REPORT_IMAGE_EXTS | frozenset({".md", ".txt"})
 STATIC_ASSETS_PREFIX = "static/assets/"
 STATIC_REPORTS_PREFIX = "static/reports/"
 STATIC_UPLOADS_PREFIX = "static/uploads/"
-PASTE_ATTACHMENT_CHAR_THRESHOLD = 2400
-PASTE_ATTACHMENT_LINE_THRESHOLD = 40
+PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500
+PASTE_ATTACHMENT_LINE_THRESHOLD = 15
 PASTE_ATTACHMENT_NAME = "pasted-text.txt"
 PASTE_ATTACHMENT_BODY = "Pasted text attached."
 
@@ -444,7 +444,7 @@ class SteeringApp:
   def _paste_needs_attachment(text: str) -> bool:
     return (
       len(text) > PASTE_ATTACHMENT_CHAR_THRESHOLD
-      or len(text.splitlines()) > PASTE_ATTACHMENT_LINE_THRESHOLD
+      or len(text.split("\n")) >= PASTE_ATTACHMENT_LINE_THRESHOLD
     )
 
   def _message_attachments_from_body(
