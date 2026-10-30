@@ -104,10 +104,10 @@ Use `python skills/arena-steering/scripts/steer` in place of `steer` in the tabl
 `steer gate` is the pre-command check for a shell hook. It exits 1 while a message or report answer awaits an acknowledgement, prints the pending IDs, and names the blocked part of the line. Exit 0 means the inbox is clear.
 
 ```sh
-trap 'skills/arena-steering/scripts/hooks/gate.sh "$BASH_COMMAND"' DEBUG
+trap 'python skills/arena-steering/scripts/steer gate -l "$BASH_COMMAND"' DEBUG
 ```
 
-Set `STEER` to the entry point when `steer` is not on `PATH`. `-p` words the refusal for a push. The hook wrapper ships as `scripts/hooks/gate.sh`, and how a shell installs it is left to `install.sh`.
+`-p` words the refusal for a push. The trap line carries the entry path, so no wrapper script ships. How a shell installs the line is left to `install.sh`.
 
 ## Task and message contracts
 
