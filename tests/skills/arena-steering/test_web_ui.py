@@ -6,7 +6,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from arena_steering.server import create_http_server, reload_server_handler
+from arena_steering.server import (
+  SteeringApp,
+  create_http_server,
+  reload_server_handler,
+)
 from arena_steering.store import SqliteStore
 from demo import SCROLLSPY_ZONES_SVG, TOKENS_SWATCH_SVG, seed_demo_store
 from demo import main as demo_main
@@ -256,6 +260,33 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert "nextRelativeDelay" in timestamps_js
   assert "node.textContent !== nextText" in timestamps_js
   assert "setInterval" not in timestamps_js
+
+  # Finished runs arrive as a server change event, so the Tasks tab never polls.
+  assert "setInterval" not in app_js
+
+  markdown_js = (ASSETS_DIR / "markdown.js").read_text(encoding="utf-8")
+  assert "const renderList = () =>" in markdown_js
+  assert "listItems.push({" in markdown_js
+  assert 'html.push("<hr>")' in markdown_js
+  # Tables follow the GitHub shape: a single bottom rule per row, no vertical rules.
+  assert "padding: 6px 13px;" in style_css
+  assert "border-right: 1px solid hsl(var(--border-faint));" not in style_css
+  assert "margin-inline-start: 2ch;" in style_css
+
+
+def test_served_app_pushes_finished_runs(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  before = app.data_version()
+  runs = tmp_path / "runs"
+  runs.mkdir()
+  exit_path = runs / "gate-1.exit"
+  exit_path.write_text("0\n", encoding="utf-8")
+  assert app.data_version() != before
+
+  after_first = app.data_version()
+  (runs / "gate-2.exit").write_text("0\n", encoding="utf-8")
+  assert app.data_version() != after_first
 
 
 def test_demo_script_seeds_messages_tasks_and_reports(

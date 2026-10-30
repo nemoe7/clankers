@@ -10,6 +10,8 @@ import shlex
 import sqlite3
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -194,11 +196,18 @@ def main(
       parsed = serve_p.parse_args(cmd_args)
       app = SteeringApp(store)
       httpd = create_http_server(app, host=parsed.host, port=parsed.port)
-      print(
-        f"Steering server listening on http://{parsed.host}:{parsed.port}",
-        file=stdout,
+      port = int(httpd.server_address[1])
+      server_file = resolved_state_dir / "server.json"
+      server_file.write_text(
+        json.dumps({"host": parsed.host, "port": port}, indent=2),
+        encoding="utf-8",
       )
-      httpd.serve_forever()
+      print(f"Steering server listening on http://{parsed.host}:{port}", file=stdout)
+      try:
+        httpd.serve_forever()
+      finally:
+        server_file.unlink(missing_ok=True)
+        httpd.server_close()
       return 0
     if cmd == "gate":
       parsed = gate_p.parse_args(cmd_args)
@@ -246,7 +255,7 @@ def main(
       return _run_report(cmd_args, reports, store, stdout)
     if cmd == "survey":
       parsed = survey_p.parse_args(cmd_args)
-      return _run_survey(parsed, messages, stdout)
+      return _run_survey(parsed, messages, stdout, resolved_state_dir)
     if cmd == "rename":
       parsed = rename_p.parse_args(cmd_args)
       return _run_rename(parsed, tasks, reports, stdout)
@@ -1028,8 +1037,68 @@ def _print_single_report(rep: Report, out: TextIO) -> None:
     print(f"  answer {ans.id} [{ans.status}]: {ans.values}", file=out)
 
 
+def _survey_server_url(state_dir: Path) -> str | None:
+  """Return the running server base URL recorded in the state directory."""
+  server_file = state_dir / "server.json"
+  if not server_file.is_file():
+    return None
+  try:
+    data = json.loads(server_file.read_text(encoding="utf-8"))
+    host = str(data.get("host") or "127.0.0.1")
+    port = int(data.get("port") or 0)
+  except (OSError, ValueError, TypeError):
+    return None
+  if not port:
+    return None
+  return f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}"
+
+
+def _post_survey(url: str, payload: str) -> dict | None:
+  """Submit survey answers to the running server so its memory holds them."""
+  # The HTTP layer takes objects only, so array submissions travel under "answers".
+  try:
+    decoded = json.loads(payload)
+  except json.JSONDecodeError:
+    decoded = payload
+  body = json.dumps({"answers": decoded}).encode("utf-8")
+  request = urllib.request.Request(
+    f"{url}/survey",
+    data=body,
+    headers={"Content-Type": "application/json"},
+    method="POST",
+  )
+  opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+  try:
+    with opener.open(request, timeout=5) as response:
+      body = json.loads(response.read().decode("utf-8"))
+  except (urllib.error.URLError, OSError, ValueError):
+    return None
+  survey = body.get("survey") if isinstance(body, dict) else None
+  return survey if isinstance(survey, dict) else None
+
+
+def _submit_survey(
+  payload: str,
+  messages: MessageService,
+  state_dir: Path,
+  out: TextIO,
+) -> dict:
+  """Send answers to the live server, or grade them locally when none runs."""
+  url = _survey_server_url(state_dir)
+  survey = _post_survey(url, payload) if url else None
+  if survey is not None:
+    print("survey-source=server", file=out)
+    return survey
+  if url:
+    print("survey-source=local", file=out)
+  return messages.submit_survey(payload)
+
+
 def _run_survey(
-  parsed: argparse.Namespace, messages: MessageService, out: TextIO
+  parsed: argparse.Namespace,
+  messages: MessageService,
+  out: TextIO,
+  state_dir: Path | None = None,
 ) -> int:
   import json
 
@@ -1045,9 +1114,10 @@ def _run_survey(
     survey = messages.trigger_bible_check(active=True)
     print(f"Survey bible check pending={survey['pending']}", file=out)
     return 0
+  state_dir = state_dir or resolve_state_dir()
   if getattr(parsed, "file", None):
     payload = Path(parsed.file).read_text(encoding="utf-8")
-    survey = messages.submit_survey(payload)
+    survey = _submit_survey(payload, messages, state_dir, out)
     print(
       f"Submitted {len(survey['results'])} survey answer(s) at {survey['checked_at']}",
       file=out,
@@ -1056,7 +1126,7 @@ def _run_survey(
   entries: list[str] = list(parsed.entries or [])
   if entries:
     if len(entries) == 1 and entries[0].lstrip().startswith("["):
-      survey = messages.submit_survey(entries[0])
+      survey = _submit_survey(entries[0], messages, state_dir, out)
       print(
         f"Submitted {len(survey['results'])} survey answer(s) at {survey['checked_at']}",
         file=out,
@@ -1070,7 +1140,7 @@ def _run_survey(
         )
       key, _, val = entry.partition("=")
       values[key.strip()] = val.strip()
-    survey = messages.submit_survey(values)
+    survey = _submit_survey(json.dumps(values), messages, state_dir, out)
     print(
       f"Submitted {len(values)} survey answer(s) at {survey['checked_at']}",
       file=out,

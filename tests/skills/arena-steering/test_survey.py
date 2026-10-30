@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import io
 import json
+import threading
 from pathlib import Path
 
 import pytest
 from arena_steering import cli, survey
 from arena_steering.cli import main as cli_main
+from arena_steering.server import SteeringApp, create_http_server
+from arena_steering.store import SqliteStore
 
 
 @pytest.fixture(autouse=True)
@@ -96,3 +99,44 @@ def test_cli_survey_smallest_image_and_submission(tmp_path: Path) -> None:
   code3, out3, _err3 = _run_cli(state_dir, "survey")
   assert code3 == 0
   assert "R3S0N" in out3
+
+
+def test_survey_results_stay_in_memory(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.submit_survey(json.dumps(survey.template()))
+  assert len(app.messages.get_survey()["results"]) == 6
+  assert store.get_meta("survey_results", "") == ""
+
+  restarted = SteeringApp(store)
+  fresh = restarted.messages.get_survey()
+  assert fresh["results"] == []
+  assert fresh["answers"] == {}
+  assert fresh["checked_at"] == ""
+
+
+def test_cli_survey_posts_to_the_running_server(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  state_dir.mkdir(parents=True)
+  assert state_dir == cli.resolve_state_dir()
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    port = int(server.server_address[1])
+    (state_dir / "server.json").write_text(
+      json.dumps({"host": "127.0.0.1", "port": port}), encoding="utf-8"
+    )
+    out = io.StringIO()
+    code = cli_main(
+      ["survey", json.dumps(survey.template())], out=out, err=io.StringIO()
+    )
+    assert code == 0
+    assert "survey-source=server" in out.getvalue()
+    assert len(app.messages.get_survey()["results"]) == 6
+  finally:
+    server.shutdown()
+    server.server_close()
+    store.close()

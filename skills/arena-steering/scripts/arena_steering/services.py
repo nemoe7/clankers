@@ -80,6 +80,11 @@ class MessageService:
     self._clock = clock or UtcClock()
     self._id_gen = id_gen or SecretsHexIdGenerator()
     self._cond = threading.Condition()
+    # Survey answers, results, and the check stamp live in memory only, so a restart clears them.
+    self._survey_answers: dict[str, str] = {}
+    self._survey_results: list[dict[str, Any]] = []
+    self._survey_checked_at = ""
+    self._survey_pending = False
 
   def send_message(
     self,
@@ -291,48 +296,33 @@ class MessageService:
       self._cond.notify_all()
 
   def get_survey(self) -> dict[str, Any]:
-    """Return current survey state, questions, template, and graded results."""
-    raw_answers = self._meta.get_meta("survey_answers_json", "{}") or "{}"
-    raw_results = self._meta.get_meta("survey_results_json", "[]") or "[]"
-    try:
-      answers = json.loads(raw_answers)
-      if not isinstance(answers, dict):
-        answers = {}
-    except json.JSONDecodeError:
-      answers = {}
-    try:
-      results = json.loads(raw_results)
-      if not isinstance(results, list):
-        results = []
-    except json.JSONDecodeError:
-      results = []
-    checked_at = self._meta.get_meta("survey_checked_at", "") or ""
+    """Return current survey state from memory, never from the store."""
     return {
-      "pending": self._meta.get_meta("bible_interrupt", "0") == "1",
-      "checked_at": checked_at,
-      "answered_at": checked_at,
+      "pending": self._survey_pending,
+      "checked_at": self._survey_checked_at,
+      "answered_at": self._survey_checked_at,
       "questions": [dict(item) for item in DEFAULT_SURVEY_QUESTIONS],
       "template": survey_mod.template(),
-      "results": results,
-      "answers": {str(k): str(v) for k, v in answers.items()},
+      "results": [dict(row) for row in self._survey_results],
+      "answers": dict(self._survey_answers),
     }
 
   def submit_survey(self, values: Any) -> dict[str, Any]:
-    """Grade and record agent survey answers, rejecting any null values."""
-    current = self.get_survey()["answers"]
-    results: list[dict[str, Any]] = self.get_survey()["results"]
+    """Grade and keep agent survey answers in memory, rejecting any null values."""
+    answers = dict(self._survey_answers)
+    results = list(self._survey_results)
     if isinstance(values, list):
       raw_text = json.dumps(values, ensure_ascii=False)
       results = survey_mod.grade(raw_text)
       for row in results:
-        current[str(row["id"])] = json.dumps(row["answer"], ensure_ascii=False)
+        answers[str(row["id"])] = json.dumps(row["answer"], ensure_ascii=False)
     elif isinstance(values, str):
       stripped = values.strip()
       if not stripped:
         raise ValueError("Survey submission must not be empty")
       results = survey_mod.grade(stripped)
       for row in results:
-        current[str(row["id"])] = json.dumps(row["answer"], ensure_ascii=False)
+        answers[str(row["id"])] = json.dumps(row["answer"], ensure_ascii=False)
     elif isinstance(values, dict) and values:
       for key, val in values.items():
         if val is None:
@@ -340,15 +330,14 @@ class MessageService:
         text = str(val).strip()
         if not text:
           raise ValueError(f"Survey answer for {key!r} cannot be empty")
-        current[str(key).strip()] = text
+        answers[str(key).strip()] = text
     else:
       raise ValueError("Survey submission must be a JSON array or non-empty dictionary")
-    now = self._clock.now_iso()
     with self._cond:
-      self._meta.set_meta("survey_answers_json", json.dumps(current))
-      self._meta.set_meta("survey_results_json", json.dumps(results))
-      self._meta.set_meta("survey_checked_at", now)
-      self._meta.set_meta("bible_interrupt", "0")
+      self._survey_answers = answers
+      self._survey_results = results
+      self._survey_checked_at = self._clock.now_iso()
+      self._survey_pending = False
       self._cond.notify_all()
     return self.get_survey()
 

@@ -293,19 +293,38 @@ class SteeringApp:
     except RuntimeError as exc:
       return (int(HTTPStatus.INTERNAL_SERVER_ERROR), {"error": str(exc)})
 
-  def data_version(self) -> tuple[int, int]:
-    """Return a version tuple reflecting SQLite PRAGMA data_version and in-process mutations."""
+  def data_version(self) -> tuple[int, int, int]:
+    """Return a version tuple covering SQLite, in-process writes, and finished runs."""
     in_proc = int(getattr(self, "_state_version", 0))
+    runs_ver = self.run_stamp()
     db_path = str(getattr(self.store, "db_path", ""))
     if not db_path or db_path == ":memory:":
-      return (0, in_proc)
+      return (0, in_proc, runs_ver)
     try:
       with closing(sqlite3.connect(db_path, timeout=2.0)) as conn:
         row = conn.execute("PRAGMA data_version").fetchone()
         pragma_ver = int(row[0]) if row else 0
-        return (pragma_ver, in_proc)
+        return (pragma_ver, in_proc, runs_ver)
     except sqlite3.Error:
-      return (0, in_proc)
+      return (0, in_proc, runs_ver)
+
+  def run_stamp(self) -> int:
+    """Stamp finished runs so a gate completion reaches clients without polling."""
+    db_path = str(getattr(self.store, "db_path", ""))
+    if not db_path or db_path == ":memory:":
+      return 0
+    runs = Path(db_path).parent / "runs"
+    try:
+      entries = list(runs.glob("*.exit"))
+    except OSError:
+      return 0
+    stamp = len(entries)
+    for entry in entries:
+      try:
+        stamp += entry.stat().st_mtime_ns % 1000000
+      except OSError:
+        continue
+    return stamp
 
   def report_ack_snapshot(self) -> dict[str, tuple[str, str, int]]:
     """Return the latest answer ID, status, and ack count for each live report."""

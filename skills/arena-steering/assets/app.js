@@ -956,14 +956,7 @@ function initEvents() {
 store.subscribe(renderApp);
 initEvents();
 refreshAll(true);
-// Run completion is recorded outside the server, so refresh linked task state.
-setInterval(() => {
-  const state = store.getState();
-  if (!document.hidden && state.activeTab === "tasks" &&
-      (state.tasks || []).some((task) => (task.links?.gate_names || []).length)) {
-    refreshAll();
-  }
-}, 3000);
+// Finished runs reach the client as a change event from the server, so no task polling remains.
 
 connectWebSocket({
   onChange: () => refreshAll(false),
