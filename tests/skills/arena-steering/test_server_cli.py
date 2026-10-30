@@ -6,7 +6,8 @@ import io
 from http import HTTPStatus
 from pathlib import Path
 
-from arena_steering import __version__
+import pytest
+from arena_steering import __version__, cli
 from arena_steering.cli import main as cli_main
 from arena_steering.markdown import render_markdown
 from arena_steering.server import (
@@ -24,10 +25,17 @@ TASK_ID_CLI = "cli-task"
 TASK_ID_BASE = "base-task"
 
 
+@pytest.fixture(autouse=True)
+def _isolate_cli_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+  state_dir = tmp_path / "arena-state"
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: state_dir)
+
+
 def _run_cli(state_dir: Path, *args: str) -> tuple[int, str, str]:
+  assert state_dir == cli.resolve_state_dir()
   out = io.StringIO()
   err = io.StringIO()
-  code = cli_main(["--state-dir", str(state_dir), *args], out=out, err=err)
+  code = cli_main(list(args), out=out, err=err)
   return code, out.getvalue(), err.getvalue()
 
 
@@ -175,7 +183,7 @@ def test_report_acked_events_fire_once_per_ack() -> None:
 
 
 def test_resolve_asset_serves_report_gifs_and_images(tmp_path: Path) -> None:
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   reports_dir = state_dir / "reports"
   reports_dir.mkdir(parents=True)
   gif_bytes = (
@@ -186,7 +194,7 @@ def test_resolve_asset_serves_report_gifs_and_images(tmp_path: Path) -> None:
   (reports_dir / "scroll-fade.gif").write_bytes(gif_bytes)
   (reports_dir / "board.png").write_bytes(png_bytes)
 
-  store = SqliteStore(state_dir / "state.sqlite3")
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
   app = SteeringApp(store)
   resolved_gif = app.resolve_asset("/scroll-fade.gif")
   assert resolved_gif is not None
@@ -204,7 +212,7 @@ def test_resolve_asset_serves_report_gifs_and_images(tmp_path: Path) -> None:
 
 
 def test_resolve_asset_serves_static_contract_paths(tmp_path: Path) -> None:
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   reports_dir = state_dir / "reports"
   uploads_dir = state_dir / "uploads"
   assets_dir = tmp_path / "assets"
@@ -221,7 +229,7 @@ def test_resolve_asset_serves_static_contract_paths(tmp_path: Path) -> None:
   (reports_dir / "board.png").write_bytes(png_bytes)
   (uploads_dir / "shot.png").write_bytes(png_bytes)
 
-  store = SqliteStore(state_dir / "state.sqlite3")
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
   app = SteeringApp(store, assets_dir=assets_dir)
   app.reports.publish_report("static-spec", "Static Spec", "# Static Spec\n")
 
@@ -251,13 +259,13 @@ def test_http_static_paths_do_not_collide_with_report_routes(tmp_path: Path) -> 
 
   from arena_steering.server import create_http_server
 
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   reports_dir = state_dir / "reports"
   reports_dir.mkdir(parents=True)
   png_bytes = b"\x89PNG\r\n\x1a\n"
   (reports_dir / "board.png").write_bytes(png_bytes)
 
-  store = SqliteStore(state_dir / "state.sqlite3")
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
   app = SteeringApp(store)
   app.reports.publish_report("static-spec", "Static Spec", "# Static Spec\n")
   server = create_http_server(app, host="127.0.0.1", port=0)
@@ -349,8 +357,8 @@ def test_server_markdown_it_diff_and_report_summary_cache(tmp_path: Path) -> Non
 
 
 def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
-  state_dir = tmp_path / "state"
-  store = SqliteStore(state_dir / "state.sqlite3")
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
   app = SteeringApp(store)
   app.dispatch("POST", "/messages", {"id": MSG_ID_CLI, "body": "Add CLI tests"})
   store.close()
@@ -448,7 +456,7 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert REPORT_ID_PORT in out
 
   # Dismissed report is evicted from active store while answers survive on republish.
-  recheck_store = SqliteStore(state_dir / "state.sqlite3")
+  recheck_store = SqliteStore(state_dir / "steering-v2.sqlite3")
   assert recheck_store.get_report(REPORT_ID_PORT) is None
   recheck_store.close()
 
@@ -546,9 +554,9 @@ def test_websocket_upgrade_and_rpc() -> None:
 def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> None:
   import base64
 
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
-  store = SqliteStore(state_dir / "state.sqlite3")
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
   app = SteeringApp(store)
 
   payload = base64.b64encode(b"hello upload").decode("ascii")
@@ -617,9 +625,9 @@ def test_http_multipart_upload_and_message_with_file(tmp_path: Path) -> None:
 
   from arena_steering.server import create_http_server
 
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
-  store = SqliteStore(state_dir / "state.sqlite3")
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
   app = SteeringApp(store)
   server = create_http_server(app, host="127.0.0.1", port=0)
   port = server.server_address[1]
@@ -679,7 +687,7 @@ def test_http_multipart_upload_and_message_with_file(tmp_path: Path) -> None:
 
 
 def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
 
   code, out, _ = _run_cli(
@@ -724,7 +732,7 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
   assert code == 0
   assert "root-task" not in out
 
-  store = SqliteStore(state_dir / "state.sqlite3")
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
   app = SteeringApp(store)
   status, payload = app.dispatch("POST", "/api/timezone", {"timezone": "Asia/Manila"})
   assert status == int(HTTPStatus.OK)
@@ -746,7 +754,7 @@ def test_cli_pr_update_and_job_log_use_gh_seam(tmp_path: Path, monkeypatch) -> N
 
   import arena_steering.cli as cli_module
 
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
   body_file = tmp_path / "pr-body.md"
   body_file.write_text("## Summary\n\nBody text.\n", encoding="utf-8")
@@ -806,7 +814,7 @@ def test_cli_worktree_lifecycle_uses_native_git(tmp_path: Path, monkeypatch) -> 
 
   repo = tmp_path / "repo"
   repo.mkdir()
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
 
   def git(*args: str) -> None:
@@ -852,7 +860,7 @@ def _wait_for_run(state_dir: Path, name: str) -> str:
 
 
 def test_cli_run_start_logs_and_after_chaining(tmp_path: Path) -> None:
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
 
   code, out, _ = _run_cli(
@@ -906,7 +914,7 @@ def test_cli_run_start_logs_and_after_chaining(tmp_path: Path) -> None:
 def test_cli_run_pr_checks_uses_detached_gh_watch(tmp_path: Path, monkeypatch) -> None:
   import arena_steering.cli as cli_module
 
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
   spawned: list[list[str]] = []
 
@@ -928,7 +936,7 @@ def test_cli_run_pr_checks_uses_detached_gh_watch(tmp_path: Path, monkeypatch) -
 
 
 def test_run_rejects_missing_dependency_and_active_duplicate(tmp_path: Path) -> None:
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
   code, _, error = _run_cli(
     state_dir, "run", "start", "child", "--after", "missing", "--", "true"
@@ -947,7 +955,7 @@ def test_run_rejects_missing_dependency_and_active_duplicate(tmp_path: Path) -> 
 
 
 def test_run_records_shell_builtin_exit(tmp_path: Path) -> None:
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
   code, _, _ = _run_cli(state_dir, "run", "start", "builtin", "--", "exit", "7")
   assert code == 0
@@ -957,7 +965,7 @@ def test_run_records_shell_builtin_exit(tmp_path: Path) -> None:
 def test_run_concurrent_starts_have_one_winner(tmp_path: Path) -> None:
   from concurrent.futures import ThreadPoolExecutor
 
-  state_dir = tmp_path / "state"
+  state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
 
   def start() -> int:
@@ -967,3 +975,41 @@ def test_run_concurrent_starts_have_one_winner(tmp_path: Path) -> None:
     results = list(pool.map(lambda _: start(), range(2)))
   assert results.count(0) == 1
   assert sum(result != 0 for result in results) == 1
+
+
+def test_fixed_state_location_preserves_v1_database(tmp_path: Path) -> None:
+  import os
+  import subprocess
+  import sys
+
+  state_dir = tmp_path / "arena-state"
+  state_dir.mkdir()
+  legacy = state_dir / "state.sqlite3"
+  legacy.write_bytes(b"legacy state must not be opened")
+  override = tmp_path / "override"
+  entrypoint = (
+    Path(__file__).resolve().parents[3] / "skills/arena-steering/scripts/steer"
+  )
+  env = {**os.environ, "ARENA_STATE_DIR": str(override)}
+  result = subprocess.run(
+    [sys.executable, str(entrypoint), "tasks"],
+    cwd=tmp_path,
+    env=env,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
+  assert legacy.read_bytes() == b"legacy state must not be opened"
+  assert (state_dir / "steering-v2.sqlite3").is_file()
+  assert not override.exists()
+  rejected = subprocess.run(
+    [sys.executable, str(entrypoint), "--state-dir", str(override), "tasks"],
+    cwd=tmp_path,
+    env=env,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert rejected.returncode != 0
+  assert not override.exists()

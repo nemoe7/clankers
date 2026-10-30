@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
 from arena_steering.server import create_http_server, reload_server_handler
 from arena_steering.store import SqliteStore
 from demo import SCROLLSPY_ZONES_SVG, TOKENS_SWATCH_SVG, seed_demo_store
@@ -257,11 +258,14 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert "setInterval" not in timestamps_js
 
 
-def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
-  code = demo_main(["--seed-only", "--state-dir", str(tmp_path)])
+def test_demo_script_seeds_messages_tasks_and_reports(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  monkeypatch.chdir(tmp_path)
+  code = demo_main(["--seed-only"])
   assert code == 0
 
-  store = SqliteStore(tmp_path / "state.sqlite3")
+  store = SqliteStore(tmp_path / "arena-state/demo/state.sqlite3")
   app = seed_demo_store(store)
   assert len(app.messages.list_messages(unread_only=False, include_hidden=True)) >= 35
   assert len(app.tasks.list_tasks(include_finished=True)) >= 40
@@ -285,7 +289,7 @@ def test_demo_script_seeds_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert payload_seen["report"]["seen"] is True
   root_asset = app.resolve_asset("/")
   assert root_asset is not None
-  assert b"<title>clankers - Steering</title>" in root_asset[0]
+  assert f"<title>{tmp_path.name} - Steering</title>".encode() in root_asset[0]
 
   server = create_http_server(app, host="127.0.0.1", port=0)
   try:
