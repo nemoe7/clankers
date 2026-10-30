@@ -43,7 +43,8 @@ Keep session state outside version control.
 - Select a report, navigate its headings, copy its Markdown, dismiss it, and return to the top.
 - Answer radio, checkbox, and free-text fields, including custom choices. The floating submit button remains available while scrolling.
 - View submitted answers and agent acknowledgements. New acknowledgements update an open report through WebSocket, and viewing an acknowledgement marks it seen.
-- Open report images and Mermaid diagrams in the same lightbox as messages. Markdown supports code copying, syntax highlighting, and Mermaid rendering when its vendor asset is available.
+- Open report images and Mermaid diagrams in the same lightbox as messages. Markdown supports tables, strikethrough, highlights, task lists, links, code copying, syntax highlighting, and Mermaid rendering.
+- Mermaid needs its vendor asset. Code blocks also support diff highlighting and a Mermaid source toggle.
 
 ### Session controls
 
@@ -86,6 +87,27 @@ Examples use the repo entry point. Use `--state-dir` with any command to select 
 
 Use `python skills/arena-steering/scripts/steer` in place of `steer` in the table when the entry point is not on `PATH`. Message and answer IDs are six lowercase hexadecimal characters. Task and report IDs use lowercase kebab-case.
 
+## Task and message contracts
+
+- Task types are `report`, `code`, `docs`, `ops`, and `misc`. Statuses are `upcoming`, `in_progress`, `blocked`, and `finished`.
+- New tasks default to `code` and `upcoming`.
+- Each detail must be nonempty and at most 120 characters. Dependencies must exist, and self-dependencies and cycles are rejected.
+- Removing a task removes its dependency links from other tasks.
+- Use `steer task mod ID deets TEXT` to append a detail and `steer task mod ID deets rm NUMBER` to remove one. Detail numbers are displayed from 1.
+- Use `steer task mod ID links [msg|report|task] LINK` to add a link. Use `steer task mod ID links rm TYPE LINK` to remove one, or `steer task mod ID deps [rm] TASK` for dependencies.
+- Message IDs use six lowercase hexadecimal characters. Parent IDs are deduplicated in order and must name existing messages.
+- Blocking messages move from `sent` to `seen` to `acked`. Non-blocking messages need no acknowledgement.
+- An acknowledgement contains nonempty Markdown. Repeated acknowledgements append replies.
+- `read` and `poll` mark delivered items seen rather than acknowledging them.
+
+## Runs and worktrees
+
+Run names use letters, digits, dots, underscores, and hyphens and start with a letter or digit. Active duplicate names and missing dependencies are rejected. If a dependency fails, the waiting run exits with code 125 without starting its command.
+
+Run records, logs, and exit files live under the state directory's `runs/` folder. `run logs` defaults to 50 lines. A completed name can be reused. `poll` waits up to 1,799 seconds, while the HTTP poll accepts a `timeout` query parameter capped at the same limit.
+
+`worktree add` uses native Git and places the named worktree in `.worktrees/` at the repo root. `remove` uses Git's normal safety checks. The commands do not collect or apply worktree patches.
+
 ## Report fields
 
 A field has a label followed by radio or checkbox options, or a labeled text blank. Mark a recommended option with `x`. A choice or checkbox field also offers a custom response in the UI. Field IDs derive from labels, or from an explicit anchor.
@@ -106,6 +128,18 @@ Notes: ___
 
 Field options must be unique, with 1 to 20 options and at most 200 characters per option. Reports retain answer history. The current inbox delivers only the newest unacknowledged answer per report, so earlier unacknowledged submissions can be missed if a later answer is acknowledged first.
 
+### Report lifecycle
+
+- Field IDs can also come from a preceding `<!-- field-id -->` comment. Field markers inside fenced code blocks are not parsed.
+- Each submission must answer every field. Text and choice answers must be nonempty.
+- Checkbox answers need at least one selected or custom value.
+- Submissions append history, mark the report seen, reset acknowledgement visibility, and add formatted answers to linked task details. An acknowledgement can be appended more than once.
+- `seen` records report viewing. `ack_seen` records viewing the latest acknowledged answer and resets on a new answer or acknowledgement.
+- Republish and single-report removal reject a report when its latest answer is unacknowledged. Republish preserves answer history.
+- Dismissal removes report links from tasks, while archived answers remain available for republishing.
+- Stale listing selects answered or dismissed reports whose latest answer is acknowledged. Removal of stale reports uses that selection.
+- These guards share the newest-answer limitation described above.
+
 ## HTTP and WebSocket
 
 Routes accept an optional `/api` prefix. JSON routes return JSON. File uploads accept JSON or multipart form data.
@@ -118,7 +152,7 @@ Routes accept an optional `/api` prefix. JSON routes return JSON. File uploads a
 | `POST /messages/{id}/ack` | Acknowledge a message. |
 | `GET /poll` and `POST /poll/skip` | Wait for work or request a skip. |
 | `GET, POST /tasks` and `GET, PATCH, DELETE /tasks/{id}` | Manage tasks. |
-| `GET, POST /reports` and `GET, PATCH, DELETE /reports/{id}` | List, publish, inspect, update, and dismiss reports. |
+| `GET, POST /reports` and `GET, PATCH, DELETE /reports/{id}` | List, publish, inspect, and dismiss reports. PATCH handles dismissal only. |
 | `POST /reports/{id}/seen` and `/reports/{id}/ack-seen` | Record owner visibility of a report and its acknowledgement. |
 | `POST /reports/{id}/answers` and `/reports/{id}/answers/{answer_id}/ack` | Submit and acknowledge report answers. |
 | `GET, POST /survey` and `POST /survey/interrupt` | Inspect or submit a survey and request a bible check. |
@@ -126,7 +160,70 @@ Routes accept an optional `/api` prefix. JSON routes return JSON. File uploads a
 | `/api/ws` | WebSocket requests, change notifications, heartbeat, reload, and `report.acked` events. |
 | `/static/assets/`, `/static/reports/`, and `/static/uploads/` | Serve UI assets, report files and Markdown, and uploaded files. |
 
-The server rejects paths that escape the relevant static directory. The server resolves Mermaid from the sibling `arena-skill/assets` directory, so that vendor asset must be present for diagram rendering.
+### API payloads and responses
+
+Successful creates return HTTP 201. Other successful route operations return 200. Unknown routes or IDs return 404, unsupported methods return 405, and value-validation errors return 400 with an `error` string.
+
+| Operation | Request or query | Response |
+| --- | --- | --- |
+| List messages | `all=1`, `hidden=1`, `before=ID`, and `limit=N` are optional. | `messages`, `total`, and `has_more`. |
+| Create message | `body`, optional `id`, `hidden`, `blocking`, `parent_ids`, and `attachments`. | `message`, including rendered body and acknowledgement HTML. |
+| Upload | JSON `file` object with `name` and `content_base64` or `text`, or multipart `file`. | `attachment` with name, path, size, presence, and static URL. |
+| Message with file | Message fields plus `file`, `attachments`, or `pasted_text`. | `message`. A long paste uses `pasted-text.txt`. |
+| Acknowledge | `markdown` or `ack`. | `message` or `answer`, depending on the route. |
+| List tasks | `full=0` excludes finished tasks. | `tasks`, each with derived `blocked`. |
+| Create or patch task | `id`, `title`, `type`, `status`, `scope`, `details`, and link lists. PATCH also accepts zero-based `position`. | `task`. Dependency ordering is enforced. |
+| List reports | `stale=1` selects stale reports. `summary=1` omits report bodies. | `reports`. |
+| Publish report | `id`, `title`, and Markdown `body`. | `report`, including parsed fields and rendered blocks. |
+| Patch report | `status` set to `dismissed`. Other values leave it unchanged. | `report`. |
+| Submit answers | `values` keyed by field ID, with an optional answer `id`. | `answer` and updated `report`. |
+| Set timezone | `timezone`, an IANA zone such as `Asia/Manila`. | `timezone`. |
+| Render Markdown | `markdown` and optional `breaks`. | Rendered `html` and `headings`. |
+| Survey | POST accepts `answers` or a direct array or object. The interrupt accepts optional `active`. | `survey`. |
+
+For example, send this JSON body to `POST /api/messages`:
+
+```json
+{"body":"Please review the report.","blocking":true,"parent_ids":[]}
+```
+
+For `POST /api/reports/example/answers`, a choice, checkbox, and text response can use this shape:
+
+```json
+{"values":{"storage-format":"SQLite","checks":["Unit tests"],"notes":"Ready"}}
+```
+
+The IDs and options must match the published report. A custom choice can use `{"selected":"Something else...","custom":"value"}`. A checkbox custom response can use `{"selected":["Unit tests"],"custom":"value"}`.
+
+### WebSocket and survey details
+
+WebSocket RPC requests carry an `id`, `method`, `path`, and JSON-encoded string `body`. Responses carry `type: response`, the same `id`, HTTP `status`, `contentType`, and a JSON-encoded string `body`. Supported methods are GET, POST, PATCH, and DELETE.
+
+The server sends `change`, `reload`, `heartbeat`, and `report.acked` events. Respond to a heartbeat with `{"type":"pong"}`. Messages are limited to 16 MiB, and an idle connection closes after 35 seconds.
+
+The survey accepts a graded JSON array, a JSON array string, or a nonempty key-value object. Array submissions use the schema in [`references/survey.json`](references/survey.json). Submitting clears the bible-check interrupt. The CLI also accepts `key=value` entries or a JSON array.
+
+The server rejects paths that escape the relevant static directory. The server loads Mermaid from sibling `arena-skill/assets`, which must be present for diagram rendering.
+
+## v1 and v2 parity
+
+V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table describes the current repo implementations, not identical interfaces.
+
+| Area | v1 | v2 |
+| --- | --- | --- |
+| Inbox and composer | Notes, acknowledgement receipts, search, Markdown preview, uploads, paste, and reply navigation. | Messages, acknowledgement replies, search, Markdown preview, uploads, paste, and multiple reply parents. |
+| Tasks | Queue, task types, dependencies, report waits, filtering, and drag reorder. | Queue, types, dependencies, report waits, filtering, and API position updates. The browser view does not offer drag reorder. |
+| Reports | Fielded reports, drafts, answer history, acknowledgements, stale listing, pinning, and visibility state. | Fielded reports, answer history, acknowledgements, seen states, and stale listing. No pin command or equivalent visibility-state command is exposed. |
+| Report publication | CLI publication supports local-image embedding, marker checks, and optional submission schema. | CLI publication parses Markdown fields. It does not expose those publication options. |
+| State recovery | Import, compare, save, restore, clear, status, cleanup, and userscript autosave. | SQLite persistence and uploaded files. No equivalent state-management CLI or userscript autosave is exposed. |
+| Downloads and board | Browser download queue with agent approval and a multi-session board. | No Downloads or Board tab, or corresponding routes. |
+| Runs and worktrees | Task-linked detached runs and tracked worktrees with allowed-patch collection. | Named detached runs with dependencies and logs, plus native Git worktree lifecycle commands. |
+| Other CLI tools | Skill and agent discovery, inbox gate, key, outline, image data URI, and broader rename. | Task and report rename, task unlink, PR update, and job-log helpers. It does not expose those v1 discovery and gate utilities. |
+| Rendering and transport | Markdown, Mermaid, image preview, WebSocket, and polling fallback. | Markdown, Mermaid, a lightbox, WebSocket, and polling fallback. Mermaid uses the sibling v1 vendor asset. |
+| Survey and session | Survey results in server memory, interrupt, browser timezone, theme control, and mobile controls. | Survey data persists in SQLite. V2 has an interrupt and responsive views, but no theme selector. |
+| Egress | Separate proxy routes and an opt-in external-channel recipe. | Neither is included in this skill. |
+
+V2 is not a drop-in CLI or state-format replacement for v1. Its current multiple-answer delivery limitation is described above. Consult [v1 commands](../arena-skill/references/commands.md), [v1 reports](../arena-skill/references/reports.md), and the v2 source and tests for edge cases.
 
 ## Implementation and verification
 
