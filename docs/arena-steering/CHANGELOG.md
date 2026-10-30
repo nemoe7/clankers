@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `app.js`: Preload report content on pointer or keyboard intent.
+
 - `references.js`: Navigate known message, report, and task references.
 
 - `store.py`: Deduplicate message retries by client request ID.
