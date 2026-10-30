@@ -1293,11 +1293,6 @@ select,
   font-size: 14px;
 }
 
-.icon-button[data-state="good"] {
-  color: var(--dot-said);
-  border-color: color-mix(in srgb, var(--dot-said) 55%, hsl(var(--border-medium)));
-}
-
 #quiet-msgs[aria-pressed="false"] {
   color: hsl(var(--text-tertiary));
 }

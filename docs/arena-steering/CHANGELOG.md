@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `assets/style.css`: Use the existing positive token for success icons.
+
 - `assets/messages-view.js`: Ignore Enter during active text composition.
 
 - `scripts/arena_steering/store.py`: Retry transient SQLite lock errors during concurrent WAL initialization.

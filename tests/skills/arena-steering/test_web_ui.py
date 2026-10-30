@@ -414,6 +414,7 @@ def test_static_asset_contract_assets() -> None:
   style_css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
   assert STATIC_ASSET_PREFIX in style_css
   assert MARK_RULE in style_css
+  assert "--dot-said" not in style_css
 
   markdown_js = (ASSETS_DIR / "markdown.js").read_text(encoding="utf-8")
   assert "<mark>$1</mark>" in markdown_js
