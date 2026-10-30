@@ -103,7 +103,7 @@ function renderFieldBlock(field, headings, stored = null) {
   const inputType = field.type === "choice" ? "radio" : "checkbox";
   const optionsHtml = options
     .map((opt) => {
-      const checked = recommended.has(opt) || storedSet.has(opt) ? "checked" : "";
+      const checked = storedSet.has(opt) ? "checked" : "";
       const star = recommended.has(opt)
         ? '<span class="option-star" aria-label="Recommended by the agent">*</span> '
         : "";
