@@ -630,7 +630,7 @@ export function renderMessagesView(container, state, handlers) {
   let pasteAsText = false;
   msgEl?.addEventListener("keydown", (event) => {
     pasteAsText = event.key.toLowerCase() === "v" && event.ctrlKey && event.shiftKey;
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       container.querySelector("#form")?.requestSubmit();
     }
