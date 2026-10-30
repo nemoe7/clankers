@@ -10,4 +10,6 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `assets/`: Replace the board toolbar button with a state-copy button.
+
 - Require reporting uncontracted shipped changes through a preview report (`SKILL.md`).
