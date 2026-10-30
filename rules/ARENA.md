@@ -103,7 +103,7 @@
 - MUST publish every unrelated finding in a fielded report with a suggested next action; fix only blocking ones.
 - Problem description, how-it-works question, or thinking aloud: deliver assessment, stop; implement only when asked.
 - Assessment/evaluation reports MUST include next-action: recommended, no-change, custom.
-- Establish expected contract with user, and ask before implementing on deviating reasoning/material ambiguity (readings changing behavior/data/interfaces/scope/outcome). Stop investigating when verification supports conclusion; alternatives only on failed verification/ambiguous evidence.
+- Establish expected contract with user, ask before implementing on deviating reasoning/material ambiguity (readings changing behavior/data/interfaces/scope/outcome), and ALWAYS report uncontracted shipped changes. Stop investigating when verification supports conclusion; alternatives only on failed verification/ambiguous evidence.
 - Ask ASAP via fielded reports (Reports tab); read answers at next steering read; affected work stops, independent work continues.
 - Carry every proposal and question in a fielded report, never in chat.
 - Use `ask_user` ONLY for: explicit tool request, unavailable preview (incl. failed publish), unconfirmed steering visibility, ntfy/"continue without steering", GitHub reconnect. NEVER when a report/new report can carry it.
