@@ -25,7 +25,7 @@ skills/arena-steering/scripts/demo.py --port 8100
 steer read
 steer poll
 steer ack <id> '<Markdown>' [-i <task-id> -t "<title>" -T <type> -S <scope> -d "<detail>"]
-steer msg list [-a, --all] [-H, --hidden]
+steer msg list [-p PAGE] [-s SIZE]
 steer msg <id>
 ```
 

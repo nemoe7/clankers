@@ -60,6 +60,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `steer msg list` defaults to 5 items and accepts page sizes from 5 to 50.
+
 - `steer msg ID` inspects a message without a `show` subcommand.
 
 ### Fixed

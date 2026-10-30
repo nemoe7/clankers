@@ -47,6 +47,28 @@ def test_cli_version_flags() -> None:
   assert out.getvalue().strip() == f"steer {__version__}"
 
 
+def test_cli_message_page_size(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  state_dir.mkdir(parents=True, exist_ok=True)
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  service = cli.MessageService(store, store, store)
+  for index in range(12):
+    service.send_message(f"message {index}", msg_id=f"{index:06x}")
+  store.close()
+
+  code, first, _ = _run_cli(state_dir, "msg", "list")
+  assert code == 0 and len(first.splitlines()) == 5
+  code, second, _ = _run_cli(state_dir, "msg", "list", "-p", "2")
+  assert code == 0 and len(second.splitlines()) == 5
+  assert set(first.splitlines()).isdisjoint(second.splitlines())
+  for size, count in ((5, 5), (7, 7), (50, 12)):
+    code, output, _ = _run_cli(state_dir, "msg", "list", "-s", str(size))
+    assert code == 0 and len(output.splitlines()) == count
+  for size in (4, 51):
+    code, _, error = _run_cli(state_dir, "msg", "list", "-s", str(size))
+    assert code != 0 and "between 5 and 50" in error
+
+
 def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "http.sqlite3")
   app = SteeringApp(store)
