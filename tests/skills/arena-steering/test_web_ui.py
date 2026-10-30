@@ -92,6 +92,11 @@ COMPOSER_REPLY_CHIP_CLASS = "composer-reply-chip"
 PARENT_IDS_FIELD = "parent_ids"
 REPLY_PARENT_IDS_STATE = "replyParentIds"
 TOGGLE_REPLY_PARENT_HANDLER = "onToggleReplyParent"
+STATIC_ASSET_PREFIX = "/static/assets/"
+STATIC_STYLE_HREF = 'href="/static/assets/style.css"'
+STATIC_APP_SRC = 'src="/static/assets/app.js"'
+ROOT_STYLE_HREF = 'href="/style.css"'
+MARK_RULE = "mark {"
 
 # Hex values of the warm Arena tokens in `assets/style.css` `:root`
 # (HSL token channels converted to sRGB, plus its literal hex tokens).
@@ -170,7 +175,7 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert PRELOAD_ATTR in index_html
   assert MODULEPRELOAD_ATTR in index_html
   for js_file in EXPECTED_JS_MODULES:
-    assert f'rel="modulepreload" href="/{js_file}"' in index_html
+    assert f'rel="modulepreload" href="/static/assets/{js_file}"' in index_html
   assert MODAL_SHELL_ID in index_html
   assert CONFIRM_DELETE_TPL in index_html
   assert LUCIDE_CLOSE_ICON in index_html
@@ -387,3 +392,17 @@ def test_multi_message_reply_assets() -> None:
   assert ".composer-reply-bar" in style_css
   assert ".reply-parent-chip" in style_css
   assert ".receipt-id" in style_css
+
+
+def test_static_asset_contract_assets() -> None:
+  index_html = (ASSETS_DIR / "index.html").read_text(encoding="utf-8")
+  assert STATIC_STYLE_HREF in index_html
+  assert STATIC_APP_SRC in index_html
+  assert ROOT_STYLE_HREF not in index_html
+
+  style_css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
+  assert STATIC_ASSET_PREFIX in style_css
+  assert MARK_RULE in style_css
+
+  markdown_js = (ASSETS_DIR / "markdown.js").read_text(encoding="utf-8")
+  assert "<mark>$1</mark>" in markdown_js

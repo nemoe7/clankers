@@ -1,6 +1,6 @@
 @font-face {
   font-family: "baselGrotesk";
-  src: url("/Basel_Grotesk_Book.woff2") format("woff2");
+  src: url("/static/assets/Basel_Grotesk_Book.woff2") format("woff2");
   font-weight: 300;
   font-style: normal;
   font-display: block;
@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: "baselGrotesk";
-  src: url("/Basel_Grotesk_Regular.woff2") format("woff2");
+  src: url("/static/assets/Basel_Grotesk_Regular.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: block;
@@ -16,7 +16,7 @@
 
 @font-face {
   font-family: "baselGrotesk";
-  src: url("/Basel_Grotesk_Medium.woff2") format("woff2");
+  src: url("/static/assets/Basel_Grotesk_Medium.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   font-display: block;
@@ -24,7 +24,7 @@
 
 @font-face {
   font-family: "baselGrotesk";
-  src: url("/Basel_Grotesk_Bold.woff2") format("woff2");
+  src: url("/static/assets/Basel_Grotesk_Bold.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: block;
@@ -41,7 +41,7 @@
 
 @font-face {
   font-family: "baselGroteskMono";
-  src: url("/Basel_Grotesk_Mono_Regular.woff2") format("woff2");
+  src: url("/static/assets/Basel_Grotesk_Mono_Regular.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: block;
@@ -652,6 +652,13 @@ code.msg-id[data-state="good"] {
 .answer.reply[data-highlight="true"] {
   background: color-mix(in srgb, var(--accent) 28%, transparent);
   color: hsl(var(--text-primary));
+}
+
+mark {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 2px;
 }
 
 mark.search-hit {
