@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 - `cli.py`, `services.py`: Unlink one stored answer snapshot from every task that holds it, keeping the answer and its receipts.
 
+- `assets/app.js`: Filter loaded messages in the browser after the first search query.
+
 ### Fixed
 
 - `assets/style.css`: Inset the scrollbar thumb by 2px inside a 10px track and color links blue.
