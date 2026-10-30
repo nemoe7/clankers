@@ -24,6 +24,7 @@ import json
 import math
 import re
 import sys
+import tomllib
 from pathlib import Path
 
 DEFAULT_SHEET = Path(__file__).resolve().parent.parent / "references" / "style.css"
@@ -86,25 +87,21 @@ def on_scale(value: float, scale: float) -> bool:
 
 
 def off_scale(name: str, value: str, tokens: dict[str, str], scale: float) -> bool:
-  """True when a px value is neither zero, on the scale, nor a size the sheet names for it.
+  """Check spacing against the scale, font sizes against the ramp, and radii against the allowed set.
 
-  A spacing property reads the scale alone. A type size names a font size, and never
-  excuses a padding. A layout property such as border-radius may take a size the sheet names.
   Fluid box dimensions (width, height, line-height, outline-width) are not scale tokens.
   """
   match = PX.match(value.strip())
   if not match:
     return False
   number = float(match.group(1))
-  if number == 0 or on_scale(number, scale):
-    return False
-  if name.startswith(SPACING_PROPERTIES):
-    return True
   if name in TYPE_PROPERTIES:
     return number not in named_sizes(tokens, ramp=True)
   if name.startswith(LAYOUT_PROPERTIES):
-    return number not in (named_sizes(tokens, ramp=False) | RADIUS_SIZES)
-  return False
+    return number not in (RADIUS_SIZES | {0.0})
+  if number == 0 or on_scale(number, scale):
+    return False
+  return name.startswith(SPACING_PROPERTIES)
 
 
 def _numeric_value(value):
@@ -308,10 +305,10 @@ def _letter_spacing_finding(element: dict) -> str | None:
   else:
     return None
   if heading:
-    if em_ratio < -0.02 - 1e-4 or em_ratio > -0.005 + 1e-4:
+    if em_ratio < -0.03 - 1e-4 or em_ratio > -0.005 + 1e-4:
       return (
         f"TYP102 {selector}: heading letter-spacing {values['letter-spacing']} "
-        f"({em_ratio:.4f}em) is outside -0.005em to -0.02em"
+        f"({em_ratio:.4f}em) is outside -0.005em to -0.03em"
       )
     return None
   if abs(em_ratio) > 1e-4:
@@ -403,10 +400,14 @@ def _body_width_finding(element: dict, report_width: float) -> str | None:
   if not (is_prose_container or is_multiline_prose):
     return None
   values = element.get("values") or {}
+  standalone = not (
+    _is_card_or_dialog(element)
+    or bool(element.get("in_card_or_dialog", element.get("inCardOrDialog")))
+  )
   raw_max = str(values.get("max-width") or "").strip().lower()
   if raw_max.endswith("ch"):
     max_ch = _numeric_value(raw_max[:-2])
-    if max_ch is not None and (max_ch < 49.5 or max_ch > 75.5):
+    if max_ch is not None and (max_ch > 75.5 or (standalone and max_ch < 49.5)):
       return f"TYP201 {selector}: max-width {values['max-width']} is outside 50 to 75ch"
   bounds = element.get("bounds") or {}
   raw_w = bounds.get("width")
@@ -429,7 +430,6 @@ def _body_width_finding(element: dict, report_width: float) -> str | None:
   if ch_px is None or ch_px <= 0:
     return None
   ch_width = content_w / ch_px
-  standalone = is_prose_container or not bool(element.get("in_card_or_dialog"))
   if ch_width > 75.5 or (standalone and ch_width < 49.5):
     return f"TYP201 {selector}: prose width {ch_width:.1f}ch is outside 50 to 75ch"
   return None
@@ -588,6 +588,9 @@ def _core_principles_findings(element: dict, tokens: dict[str, str]) -> list[str
       out.append(
         f"SPC102 {selector}: asymmetric card inline padding ({values['padding-left']} vs {values['padding-right']})"
       )
+  weight = str(values.get("font-weight") or "").strip().lower()
+  if weight and weight not in {"normal", "bold", "400", "500", "600", "700"}:
+    out.append(f"TYP001 {selector}: font-weight {weight} is outside the house weights")
   raw_ff = str(values.get("font-family") or "").strip()
   if raw_ff:
     families = [
@@ -648,7 +651,16 @@ def check(
       if _verified_list_padding(element, name, str(value), list_status):
         continue
       if off_scale(name, str(value), tokens, scale):
-        findings.append(f"{selector}: {name} is {value}, off the {scale:g} px scale")
+        if name in TYPE_PROPERTIES:
+          findings.append(
+            f"TYP001 {selector}: {name} is {value}, outside the type ramp"
+          )
+        elif name.startswith(LAYOUT_PROPERTIES):
+          findings.append(
+            f"SPC002 {selector}: {name} is {value}, outside the allowed radii"
+          )
+        else:
+          findings.append(f"{selector}: {name} is {value}, off the {scale:g} px scale")
   return findings
 
 
@@ -878,6 +890,25 @@ def point(text: str) -> tuple[float, float]:
   return x, y
 
 
+def check_severities(project: Path) -> dict[str, str]:
+  from annotate import find_nuu_config
+
+  config_path = find_nuu_config(project)
+  config = tomllib.loads(config_path.read_text(encoding="utf-8")) if config_path else {}
+  checks = config.get("checks", {})
+  if not isinstance(checks, dict):
+    raise TypeError("checks must be a table")
+  settings = checks.get("severity", {})
+  if not isinstance(settings, dict):
+    raise TypeError("checks.severity must be a table")
+  defaults = {"TYP101": "review", "TYP201": "review"}
+  for rule, severity in settings.items():
+    if rule not in defaults or severity not in ("review", "error"):
+      raise ValueError(f"invalid checks.severity setting: {rule} = {severity!r}")
+    defaults[rule] = severity
+  return defaults
+
+
 def main(argv: list[str] | None = None) -> int:
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
   parser.add_argument("-s", "--sheet", type=Path, default=DEFAULT_SHEET)
@@ -948,6 +979,11 @@ def main(argv: list[str] | None = None) -> int:
       print(f"{axis}: {'on' if fits else 'off'} the {scale_val:g} px scale")
     return 0 if gap["on_scale"] else 1
 
+  try:
+    severities = check_severities(Path.cwd())
+  except (OSError, ValueError, TypeError) as error:
+    print(f"configuration error: {error}", file=sys.stderr)
+    return 2
   report = json.loads(arguments.report.read_text(encoding="utf-8"))
   findings = check(report, tokens, scale_val)
   if (
@@ -957,10 +993,16 @@ def main(argv: list[str] | None = None) -> int:
   ):
     findings.extend(f"{row['rule']} {row['evidence']}" for row in check_density(report))
   for finding in findings:
-    print(f"{report.get('width')} px {finding}")
-  if findings:
+    rule = finding.split()[0]
+    severity = severities.get(rule, "error")
+    prefix = f"[{severity}] " if rule in severities else ""
+    print(f"{report.get('width')} px {prefix}{finding}")
+  if any(
+    severities.get(finding.split()[0], "error") == "error" for finding in findings
+  ):
     return 1
-  print(f"{report.get('width')} px: every value sits on the sheet")
+  if not findings:
+    print(f"{report.get('width')} px: every value sits on the sheet")
   return 0
 
 

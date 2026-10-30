@@ -31,6 +31,7 @@ from measure import (
   DEFAULT_SCALE,
   DEFAULT_SHEET,
   check_density,
+  check_severities,
   parse_sheet,
   point,
   ruler,
@@ -1052,7 +1053,7 @@ def check_icons(root):
           "column": 1,
           "severity": "advisory",
           "blocking": False,
-          "evidence": f"Multiple inline icon sizes in one source file: {', '.join(sorted(sizes))}",
+          "evidence": f"Multiple inline icon sizes in one source file: {', '.join(sorted(sizes))}; review each surface",
           "criterion": "clause-2",
         }
       )
@@ -1550,6 +1551,9 @@ def main(argv=None):
   if not root.is_dir():
     parser.error("project directory does not exist")
   try:
+    severities = (
+      check_severities(root) if args.command in {"lint", "audit", "collect"} else {}
+    )
     if args.command == "search":
       if args.fetch:
         if not args.dataset:
@@ -1716,6 +1720,9 @@ def main(argv=None):
           "findings", []
         )
         result["status"] = result["rendered"].get("status")
+    for finding in result.get("findings", []):
+      if isinstance(finding, dict) and finding.get("rule") in severities:
+        finding["severity"] = severities[finding["rule"]]
     result = {
       "tool": args.command,
       "version": VERSION,
@@ -1729,7 +1736,12 @@ def main(argv=None):
     print(serialized, end="")
     if result.get("status") == "error":
       return 2
-    if result.get("findings"):
+    if any(
+      not isinstance(finding, dict)
+      or finding.get("rule") not in severities
+      or finding.get("severity") == "error"
+      for finding in result.get("findings", [])
+    ):
       return 1
     if result.get("status") == "not_checked":
       return 3

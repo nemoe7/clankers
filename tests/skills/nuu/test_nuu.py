@@ -1792,7 +1792,7 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
         {
           "selector": "h2",
           "tag": "h2",
-          "values": {"font-size": "20px", "line-height": "24px"},
+          "values": {"font-size": "24px", "line-height": "28.8px"},
         },
         {
           "selector": "p",
@@ -2186,3 +2186,117 @@ def test_num208_button_group_equal_size():
     ],
   }
   assert measure.check_density(equal_report) == []
+
+
+def test_measure_review_severity_and_heading_boundary(tmp_path):
+  report = tmp_path / "measured.json"
+  report.write_text(
+    json.dumps(
+      {
+        "width": 1280,
+        "elements": [
+          {
+            "selector": "h1",
+            "tag": "h1",
+            "values": {
+              "font-size": "32px",
+              "line-height": "48px",
+              "letter-spacing": "-0.96px",
+            },
+          },
+          {
+            "selector": "article.prose",
+            "tag": "article",
+            "ch_px": 8,
+            "bounds": {"width": 320},
+            "values": {},
+          },
+        ],
+      }
+    ),
+    encoding="utf-8",
+  )
+
+  def run(*args):
+    return subprocess.run(
+      [sys.executable, str(SCRIPT), *args],
+      cwd=tmp_path,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+
+  review = run("check", str(report))
+  assert review.returncode == 0
+  assert (
+    "TYP101" in review.stdout
+    and "TYP201" in review.stdout
+    and "TYP102" not in review.stdout
+  )
+  (tmp_path / "docs").mkdir()
+  (tmp_path / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
+  audit = run("audit", "--project", str(tmp_path), "--measured", str(report))
+  assert audit.returncode == 0, audit.stdout
+  findings = json.loads(audit.stdout)["findings"]
+  assert {row["rule"] for row in findings} == {"TYP101", "TYP201"}
+  assert all(row["severity"] == "review" for row in findings)
+  (tmp_path / "nuu.toml").write_text(
+    '[checks.severity]\nTYP101 = "error"\n', encoding="utf-8"
+  )
+  strict = run("check", str(report))
+  assert strict.returncode == 1 and "TYP101" in strict.stdout
+  strict_audit = run("audit", "--project", str(tmp_path), "--measured", str(report))
+  assert strict_audit.returncode == 1
+  assert any(
+    row["severity"] == "error" for row in json.loads(strict_audit.stdout)["findings"]
+  )
+  (tmp_path / "nuu.toml").write_text(
+    '[checks.severity]\nTYP101 = "ignore"\n', encoding="utf-8"
+  )
+  invalid = run("check", str(report))
+  assert invalid.returncode == 2
+  (tmp_path / "nuu.toml").write_text(
+    '[checks.severity]\nTYP201 = "error"\n', encoding="utf-8"
+  )
+  assert run("check", str(report)).returncode == 1
+
+
+def test_study_ramp_and_contextual_prose_width():
+  import sys
+
+  sys.path.insert(0, str(SCRIPT.parent))
+  import measure
+
+  sheet = measure.parse_sheet(
+    (SCRIPT.parent.parent / "references" / "style.css").read_text(encoding="utf-8")
+  )
+  assert measure.named_sizes(sheet, ramp=True) == {11, 12, 14, 16, 18, 22, 24, 28, 32}
+  findings = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {"selector": ".title", "values": {"font-size": "20px", "font-weight": "800"}}
+      ],
+    },
+    sheet,
+  )
+  assert sum(f.startswith("TYP001 ") for f in findings) == 2
+  assert measure.off_scale("font-size", "20px", sheet, 4)
+  assert not measure.off_scale("font-size", "24px", sheet, 4)
+  assert measure.off_scale("border-radius", "8px", sheet, 4)
+  assert measure.off_scale("gap", "6px", sheet, 4)
+  assert not measure.off_scale("gap", "8px", sheet, 4)
+  assert measure.off_scale("gap", "12px", sheet, 8)
+  prose = {
+    "selector": ".prose",
+    "tag": "p",
+    "line_count": 2,
+    "ch_px": 8,
+    "bounds": {"width": 240},
+    "values": {"max-width": "30ch"},
+  }
+  assert measure._body_width_finding(prose, 1280).startswith("TYP201")
+  assert measure._body_width_finding({**prose, "in_card_or_dialog": True}, 1280) is None
+  assert measure._body_width_finding(
+    {**prose, "in_card_or_dialog": True, "values": {"max-width": "80ch"}}, 1280
+  ).startswith("TYP201")

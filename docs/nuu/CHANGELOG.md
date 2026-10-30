@@ -15,6 +15,9 @@ This log has no Unreleased section.
 
 ### Changed
 
+- **2026-10-30, study-backed guidance**: Update the principles, type defaults, examples, and checks.
+- **2026-10-30, measurement policy**: Make `TYP101` and `TYP201` review findings by default, with opt-in errors.
+
 - **Semantic rule IDs (`SKILL.md`, `nuu.py`, `measure.py`, `browser.cjs`)**: Reorganize rule codes into `TYP`, `SPC`, `HRC`, `ACC`, `ICN`, `DOC`, and `RUN` with `nonuu:` alias support.
 - **CLI consolidation (`nuu.py`, `references/nuu.md`)**: Consolidate `nuu` into 7 subcommands (`lint`, `audit`, `walk`, `board`, `annotate`, `search`, `doctor`) and fold static checks into `lint`.
 - **Audit report workflow (`SKILL.md` step 5, `audit-report.md`)**: Use `## Findings` and `## Visual Judgements` headings and pair open findings with cropped 2-column `nuu board` panels.
