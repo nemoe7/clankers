@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TextIO
 
 from . import __version__
+from .gates import FileGateStatus
 from .models import MESSAGE_ID_RE, Message, Report, ReportAnswer, Task
 from .server import SteeringApp, create_http_server
 from .services import MessageService, ReportService, TaskService
@@ -47,7 +48,7 @@ def open_services(
   # Restore state.sqlite3 after v1 is retired and its database no longer collides.
   store = SqliteStore(state_dir / "steering-v2.sqlite3")
   messages = MessageService(store, store, store)
-  tasks = TaskService(store, store)
+  tasks = TaskService(store, store, gates=FileGateStatus(state_dir))
   reports = ReportService(store, store, on_answer_callback=messages.notify_new_work)
   return store, messages, tasks, reports
 
@@ -230,7 +231,7 @@ def main(
     if cmd == "worktree":
       return _run_worktree(cmd_args, stdout)
     if cmd == "run":
-      return _run_run(cmd_args, resolved_state_dir, stdout)
+      return _run_run(cmd_args, resolved_state_dir, stdout, tasks, store)
     if cmd == "init":
       raise ValueError(
         "steer has no init --tz; the browser sets timezone with POST /api/timezone"
@@ -335,6 +336,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     new_p.add_argument("-d", "--detail", action="append", default=[])
     new_p.add_argument("-m", "--msg", action="append", default=[])
     new_p.add_argument("-r", "--report", action="append", default=[])
+    new_p.add_argument("-g", "--gate", action="append", default=[])
     new_p.add_argument(
       "-k", "--task", "--dep", dest="task_ids", action="append", default=[]
     )
@@ -350,6 +352,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
         "msg_ids": parsed.msg,
         "report_ids": parsed.report,
         "task_ids": parsed.task_ids,
+        "gate_names": parsed.gate,
       },
     )
     _, blocked = tasks.get_task(task.id)
@@ -374,7 +377,9 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     elif len(args) == 4:
       updated = tasks.unlink_task(args[1], args[3], link_type=args[2])
     else:
-      raise ValueError("Usage: steer task unlink <id> [<msg|report|task>] <link-id>")
+      raise ValueError(
+        "Usage: steer task unlink <id> [<msg|report|task|gate>] <link-id>"
+      )
     _, blocked = tasks.get_task(updated.id)
     _print_single_task(updated, blocked, out)
     return 0
@@ -403,13 +408,17 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
   elif field == "links":
     if rest[0] == "rm":
       if len(rest) != 3:
-        raise ValueError("Usage: steer task mod <id> links rm <msg|report|task> <id>")
+        raise ValueError(
+          "Usage: steer task mod <id> links rm <msg|report|task|gate> <id>"
+        )
       updated = tasks.mod_links_rm(task_id, rest[1], rest[2])
-    elif len(rest) == 2 and rest[0].lower() in {"msg", "report", "task", "dep"}:
+    elif len(rest) == 2 and rest[0].lower() in {"msg", "report", "task", "dep", "gate"}:
       updated = tasks.mod_links_add(task_id, rest[1], link_type=rest[0])
     else:
       if len(rest) != 1:
-        raise ValueError("Usage: steer task mod <id> links [msg|report|task] <link-id>")
+        raise ValueError(
+          "Usage: steer task mod <id> links [msg|report|task|gate] <link-id>"
+        )
       updated = tasks.mod_links_add(task_id, rest[0])
   elif field == "deps":
     if rest[0] == "rm":
@@ -662,7 +671,9 @@ def _start_locked_run(
   return 0
 
 
-def _run_run(args: list[str], state_dir: Path, out: TextIO) -> int:
+def _run_run(
+  args: list[str], state_dir: Path, out: TextIO, tasks: TaskService, store: SqliteStore
+) -> int:
   if not args:
     raise ValueError("Usage: steer run <start|logs|pr-checks> ...")
   subcmd = args[0]
@@ -678,16 +689,19 @@ def _run_run(args: list[str], state_dir: Path, out: TextIO) -> int:
     start_p = argparse.ArgumentParser(prog="steer run start")
     start_p.add_argument("name")
     start_p.add_argument("-a", "--after", default=None)
+    start_p.add_argument("-t", "--task", default=None)
     parsed = start_p.parse_args(option_args)
     if not command:
       raise ValueError("Usage: steer run start <name> [--after <run>] -- <command...>")
-    return _start_detached_run(
-      state_dir,
-      _safe_local_name(parsed.name),
-      command,
-      after=_safe_local_name(parsed.after) if parsed.after else None,
-      out=out,
-    )
+    name = _safe_local_name(parsed.name)
+    after = _safe_local_name(parsed.after) if parsed.after else None
+    if parsed.task:
+      with store.transaction():
+        tasks.get_task(parsed.task)
+        tasks.mod_links_add(parsed.task, name, link_type="gate")
+        return _start_detached_run(state_dir, name, command, after=after, out=out)
+    return _start_detached_run(state_dir, name, command, after=after, out=out)
+
   if subcmd == "logs":
     logs_p = argparse.ArgumentParser(prog="steer run logs")
     logs_p.add_argument("name")
@@ -818,6 +832,8 @@ def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
       print(f"   Deps: {', '.join(task.deps)}", file=out)
     if task.report_ids:
       print(f"   Reports: {', '.join(task.report_ids)}", file=out)
+    if task.gate_names:
+      print(f"   Gates: {', '.join(task.gate_names)}", file=out)
     for snapshot in task.answer_snapshots:
       _print_answer_snapshot(snapshot, out, "   ")
     for detail_idx, line in enumerate(task.details, 1):
@@ -836,6 +852,8 @@ def _print_single_task(task: Task, blocked: bool, out: TextIO) -> None:
     print(f"- Reports: {', '.join(task.report_ids)}", file=out)
   if task.msg_ids:
     print(f"- Messages: {', '.join(task.msg_ids)}", file=out)
+  if task.gate_names:
+    print(f"- Gates: {', '.join(task.gate_names)}", file=out)
   for snapshot in task.answer_snapshots:
     _print_answer_snapshot(snapshot, out, "- ")
   for idx, line in enumerate(task.details, 1):

@@ -37,6 +37,7 @@ function taskDetailLines(task) {
   const links = task.links || {};
   const taskIds = links.task_ids || task.task_ids || task.deps || [];
   const reportIds = links.report_ids || task.report_ids || [];
+  const gateNames = links.gate_names || [];
   for (const dep of taskIds) {
     lines.push(`Needs: ${dep}`);
   }
@@ -47,6 +48,7 @@ function taskDetailLines(task) {
     lines.push(`Answer ${answer.id} at ${answer.created_at} (${answer.report_title})`);
     for (const field of answer.fields || []) lines.push(`${field.label}: ${JSON.stringify(field.value)}`);
   }
+  for (const gate of gateNames) lines.push(`Gate: ${gate}`);
   for (const d of task.details || []) {
     lines.push(d);
   }

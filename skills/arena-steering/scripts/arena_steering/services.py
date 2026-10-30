@@ -22,6 +22,7 @@ from .models import (
 )
 from .ports import (
   Clock,
+  GateStatus,
   IdGenerator,
   MessageRepository,
   MetaRepository,
@@ -386,10 +387,12 @@ class TaskService:
     tasks: TaskRepository,
     reports: ReportRepository,
     clock: Clock | None = None,
+    gates: GateStatus | None = None,
   ) -> None:
     self._tasks = tasks
     self._reports = reports
     self._clock = clock or UtcClock()
+    self._gates = gates
 
   def is_task_blocked(
     self,
@@ -402,6 +405,10 @@ class TaskService:
     if task.status == "finished":
       return False
     if task.status == "blocked":
+      return True
+    if self._gates is not None and any(
+      self._gates.is_running(gate) for gate in task.gate_names
+    ):
       return True
     tasks_by_id = (
       task_map
@@ -459,6 +466,7 @@ class TaskService:
     report_ids: list[str] | None = None,
     task_ids: list[str] | None = None,
     deps: list[str] | None = None,
+    gate_names: list[str] | None = None,
   ) -> Task:
     if self._tasks.get_task(task_id) is not None:
       raise ValueError(f"Task {task_id!r} already exists")
@@ -475,6 +483,7 @@ class TaskService:
       report_ids=list(report_ids) if report_ids is not None else None,
       task_ids=list(task_ids) if task_ids is not None else None,
       deps=list(deps) if deps is not None else None,
+      gate_names=list(gate_names) if gate_names is not None else None,
       modified_at=now,
     )
     self._validate_details(task)
@@ -558,6 +567,7 @@ class TaskService:
         "msg_ids": [item for item in target.msg_ids if item != cleaned_id],
         "report_ids": [item for item in target.report_ids if item != cleaned_id],
         "task_ids": [item for item in target.task_ids if item != cleaned_id],
+        "gate_names": [item for item in target.gate_names if item != cleaned_id],
       },
       modified_at=self._clock.now_iso(),
     )
@@ -616,9 +626,13 @@ class TaskService:
     msg_ids = list(target.msg_ids)
     report_ids = list(target.report_ids)
     task_ids = list(target.task_ids)
+    gate_names = list(target.gate_names)
     known_task_ids = {item.id for item in queue}
 
-    if explicit_type in {"task", "dep", "deps"} or (
+    if explicit_type == "gate":
+      if cleaned not in gate_names:
+        gate_names.append(cleaned)
+    elif explicit_type in {"task", "dep", "deps"} or (
       explicit_type is None and cleaned in known_task_ids
     ):
       validate_entity_id(cleaned, "Dependency task ID")
@@ -637,7 +651,7 @@ class TaskService:
         report_ids.append(cleaned)
     else:
       raise ValueError(
-        f"Link type must be 'msg', 'report', or 'task', got {link_type!r}"
+        f"Link type must be 'msg', 'report', 'task', or 'gate', got {link_type!r}"
       )
 
     updated = Task(
@@ -652,6 +666,7 @@ class TaskService:
         "msg_ids": msg_ids,
         "report_ids": report_ids,
         "task_ids": task_ids,
+        "gate_names": gate_names,
       },
       modified_at=self._clock.now_iso(),
     )
@@ -664,9 +679,9 @@ class TaskService:
     queue, target = self._load_queue_and_target(task_id)
     cleaned_type = link_type.strip().lower()
     cleaned_id = link_id.strip()
-    if cleaned_type not in {"msg", "report", "task", "dep", "deps"}:
+    if cleaned_type not in {"msg", "report", "task", "dep", "deps", "gate"}:
       raise ValueError(
-        f"Link type must be 'msg', 'report', or 'task', got {link_type!r}"
+        f"Link type must be 'msg', 'report', 'task', or 'gate', got {link_type!r}"
       )
     msg_ids = (
       [item for item in target.msg_ids if item != cleaned_id]
@@ -683,6 +698,11 @@ class TaskService:
       if cleaned_type in {"task", "dep", "deps"}
       else list(target.task_ids)
     )
+    gate_names = (
+      [item for item in target.gate_names if item != cleaned_id]
+      if cleaned_type == "gate"
+      else list(target.gate_names)
+    )
     updated = Task(
       id=target.id,
       title=target.title,
@@ -695,6 +715,7 @@ class TaskService:
         "msg_ids": msg_ids,
         "report_ids": report_ids,
         "task_ids": task_ids,
+        "gate_names": gate_names,
       },
       modified_at=self._clock.now_iso(),
     )
@@ -739,6 +760,14 @@ class TaskService:
     queue, target = self._load_queue_and_target(task_id)
     raw_links = changes.get("links")
     merged_links = {
+      "gate_names": list(
+        changes.get(
+          "gate_names",
+          raw_links.get("gate_names", target.gate_names)
+          if isinstance(raw_links, dict)
+          else target.gate_names,
+        )
+      ),
       "msg_ids": list(
         changes.get(
           "msg_ids",
