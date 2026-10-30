@@ -1488,9 +1488,52 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   border-color: hsl(var(--border-strong));
 }
 
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.composer-attachments[hidden] {
+  display: none;
+}
+
+.composer-attachment-chip {
+  max-width: 100%;
+  padding: 3px 8px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border-medium));
+  border-radius: 999px;
+  background: hsl(var(--surface-primary));
+  color: hsl(var(--text-secondary));
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.composer-attachment-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.card.compose.composer-expanded #msg {
+  min-height: 180px;
+  max-height: 45vh;
+  resize: vertical;
+}
+
+.card.compose.composer-drop-active {
+  border-color: var(--accent);
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+}
+
 .composer-shell {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  grid-template-columns: 34px 34px 34px minmax(0, 1fr) 34px;
   gap: 8px;
   align-items: center;
 }

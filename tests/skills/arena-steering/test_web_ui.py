@@ -97,6 +97,13 @@ STATIC_STYLE_HREF = 'href="/static/assets/style.css"'
 STATIC_APP_SRC = 'src="/static/assets/app.js"'
 ROOT_STYLE_HREF = 'href="/style.css"'
 MARK_RULE = "mark {"
+COMPOSER_ATTACHMENTS_ID = 'id="composer-attachments"'
+ATTACH_FILE_ID = 'id="attach-file"'
+COMPOSER_EXPAND_ID = 'id="composer-expand"'
+COMPOSER_ATTACHMENTS_STATE = "composerAttachments"
+COMPOSER_EXPANDED_STATE = "composerExpanded"
+UPLOAD_FILE_API = "uploadFile"
+SEND_MESSAGE_WITH_FILE_API = "sendMessageWithFile"
 
 # Hex values of the warm Arena tokens in `assets/style.css` `:root`
 # (HSL token channels converted to sRGB, plus its literal hex tokens).
@@ -406,3 +413,43 @@ def test_static_asset_contract_assets() -> None:
 
   markdown_js = (ASSETS_DIR / "markdown.js").read_text(encoding="utf-8")
   assert "<mark>$1</mark>" in markdown_js
+
+
+def test_composer_upload_drop_expand_assets() -> None:
+  messages_js = (ASSETS_DIR / "messages-view.js").read_text(encoding="utf-8")
+  assert COMPOSER_ATTACHMENTS_ID in messages_js
+  assert ATTACH_FILE_ID in messages_js
+  assert COMPOSER_EXPAND_ID in messages_js
+  assert "data-remove-composer-attachment" in messages_js
+  assert "composer-attachment-chip" in messages_js
+  assert "PASTE_ATTACHMENT_CHAR_THRESHOLD = 2400" in messages_js
+  assert "PASTE_ATTACHMENT_LINE_THRESHOLD = 40" in messages_js
+  assert "pasted-text.txt" in messages_js
+  assert 'addEventListener("paste"' in messages_js
+  assert 'addEventListener("drop"' in messages_js
+  assert 'addEventListener("dragover"' in messages_js
+  assert "attachments" in messages_js
+
+  api_js = (ASSETS_DIR / "api.js").read_text(encoding="utf-8")
+  assert UPLOAD_FILE_API in api_js
+  assert SEND_MESSAGE_WITH_FILE_API in api_js
+  assert '"/uploads"' in api_js
+  assert '"/messages/with-file"' in api_js
+  assert "FormData" in api_js
+
+  app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  assert COMPOSER_ATTACHMENTS_STATE in app_js
+  assert "onStageComposerFiles" in app_js
+  assert "onRemoveComposerAttachment" in app_js
+  assert "onToggleComposerExpanded" in app_js
+  assert SEND_MESSAGE_WITH_FILE_API in app_js
+
+  state_js = (ASSETS_DIR / "state.js").read_text(encoding="utf-8")
+  assert COMPOSER_ATTACHMENTS_STATE in state_js
+  assert COMPOSER_EXPANDED_STATE in state_js
+
+  style_css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
+  assert ".composer-attachments" in style_css
+  assert ".composer-attachment-chip" in style_css
+  assert ".composer-expanded" in style_css
+  assert ".composer-drop-active" in style_css
