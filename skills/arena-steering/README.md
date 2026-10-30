@@ -148,7 +148,7 @@ Select checks {#checks}
 Notes: ___
 ```
 
-Field options must be unique, with 1 to 20 options and at most 200 characters per option. Reports retain answer history. The current inbox delivers only the newest unacknowledged answer per report, so earlier unacknowledged submissions can be missed if a later answer is acknowledged first.
+Field options must be unique, with 1 to 20 options and at most 200 characters per option. Reports retain answer history. Like v1, the inbox requires acknowledgement only for the latest answer to each report. Earlier answers remain in history.
 
 ### Report lifecycle
 
@@ -160,7 +160,6 @@ Field options must be unique, with 1 to 20 options and at most 200 characters pe
 - Republish and single-report removal reject a report when its latest answer is unacknowledged. Republish preserves answer history.
 - Dismissal removes report links from tasks, while archived answers remain available for republishing.
 - Stale listing selects answered or dismissed reports whose latest answer is acknowledged. Removal of stale reports uses that selection.
-- These guards share the newest-answer limitation described above.
 
 ## HTTP and WebSocket
 
@@ -239,7 +238,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Message composer | Markdown preview, staging, paste, drop, expansion, reply links, search, and jumps | Preview, staging, paste, drop, expansion, multi-parent replies, search, and jumps | Both use the same paste thresholds and Ctrl+Shift+V bypass, protect Enter during IME composition, and leave Enter to the textarea on coarse-pointer devices. |
 | Message extras | Slash commands, reference navigation, and persisted reply-seen counts | Reference navigation, multi-parent replies, and persisted boolean reply receipts | V2 omits slash commands and does not store or show unread-reply counts. |
 | Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report, dependency, and running-gate blocking, details, search, and filters | Both require task details. V2 intentionally omits drag reorder. Both retain answer snapshots. V2 creates tasks and acknowledges their targets atomically. |
-| Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Multiple-answer delivery has the defect above. |
+| Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Both require acknowledgement only for the latest answer. |
 | Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal | No pin, visibility-state, worker answer, or forward routes. Guards and republish contract differ. |
 | Report publication | Local image embedding, diff marker validation, optional submission format, and publication verification | Markdown publication and field parsing | No matching image embedding, marker-validation flag, schema option, or explicit rendered verification step in the CLI. |
 | Markdown and images | Markdown, code controls, Mermaid, images, and zoomable preview | Markdown, code copying, Mermaid, images, and a lightbox | Mermaid uses sibling v1 assets. Standalone packaging and renderer compatibility need verification. |
@@ -256,7 +255,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Appearance and navigation | Theme control, tab state, mobile navigation, and pinch zoom | Responsive tabs, image wheel zoom, and drag | V1 theme control and pinch gesture are not present in v2 page controls. |
 | Proxy and external channel | Separate egress proxy routes and an opt-in external-channel recipe | No egress proxy or external-channel recipe | Separate from the browser steering server. |
 
-V2 is not a drop-in CLI or state-format replacement for v1. Its current multiple-answer delivery limitation is described above. Consult [v1 commands](../arena-skill/references/commands.md), [v1 reports](../arena-skill/references/reports.md), and the v2 source and tests for edge cases.
+V2 is not a drop-in CLI or state-format replacement for v1. Consult [v1 commands](../arena-skill/references/commands.md), [v1 reports](../arena-skill/references/reports.md), and the v2 source and tests for edge cases.
 
 ## Implementation and verification
 
