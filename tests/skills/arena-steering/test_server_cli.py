@@ -881,6 +881,14 @@ def test_cli_pr_update_and_job_log_use_gh_seam(tmp_path: Path, monkeypatch) -> N
         stdout='{"title":"New title","body":"## Summary\\n\\nBody text.\\n"}',
         stderr="",
       )
+    if args[:3] == ["gh", "run", "view"] and "--json" in args:
+      return subprocess.CompletedProcess(
+        args, 0, stdout="https://github.com/o/r/actions/runs/1\n", stderr=""
+      )
+    if args[:2] == ["gh", "api"]:
+      return subprocess.CompletedProcess(
+        args, 0, stdout="https://github.com/o/r/actions/runs/1/job/9\n", stderr=""
+      )
     if args[:3] == ["gh", "run", "view"]:
       return subprocess.CompletedProcess(args, 0, stdout="job log text\n", stderr="")
     return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
@@ -905,20 +913,51 @@ def test_cli_pr_update_and_job_log_use_gh_seam(tmp_path: Path, monkeypatch) -> N
 
   code, out, _ = _run_cli(state_dir, "job-log", "-r", "41000725677")
   assert code == 0
-  assert out == "job log text\n"
-  assert calls[-1] == ["gh", "run", "view", "41000725677", "--log"]
-
-  code, out, _ = _run_cli(state_dir, "job-log", "-j", "123877772372")
-  assert code == 0
-  assert out == "job log text\n"
+  assert out.strip() == "https://github.com/o/r/actions/runs/1"
   assert calls[-1] == [
     "gh",
     "run",
     "view",
-    "--job",
-    "123877772372",
-    "--log",
+    "41000725677",
+    "--json",
+    "url",
+    "--jq",
+    ".url",
   ]
+
+  code, out, _ = _run_cli(state_dir, "job-log", "-j", "123877772372")
+  assert code == 0
+  assert out.strip() == "https://github.com/o/r/actions/runs/1/job/9"
+  assert calls[-1] == [
+    "gh",
+    "api",
+    "repos/{owner}/{repo}/actions/jobs/123877772372",
+    "--jq",
+    ".html_url",
+  ]
+
+
+def test_cli_job_log_falls_back_to_text(tmp_path: Path, monkeypatch) -> None:
+  import subprocess
+
+  import arena_steering.cli as cli_module
+
+  state_dir = tmp_path / "arena-state"
+  state_dir.mkdir()
+
+  def fake_run(args, **_kwargs):
+    if args[:3] == ["gh", "run", "view"] and "--json" in args:
+      return subprocess.CompletedProcess(args, 1, stdout="", stderr="HTTP 404\n")
+    if args[:3] == ["gh", "run", "view"]:
+      return subprocess.CompletedProcess(args, 0, stdout="line one\n", stderr="")
+    return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+  monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+
+  code, out, _ = _run_cli(state_dir, "job-log", "-r", "77")
+  assert code == 0
+  assert "line one" in out
+  assert "no URL" in out and "404" in out
 
 
 def test_cli_worktree_lifecycle_uses_native_git(tmp_path: Path, monkeypatch) -> None:

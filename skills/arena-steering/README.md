@@ -88,7 +88,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer rename OLD NEW` | Rename a task or report and update its links. |
 | `steer survey` | Show the survey and submission template. Use `-i` for the smallest image, `--template` for the template, `-f FILE` for a submission, or `--interrupt` to request a check. Submissions go to the running server when one is recorded. |
 | `steer pr-update -n NUMBER -t TITLE -f FILE` | Update a pull request with `gh`, then verify its title and body. |
-| `steer job-log -j JOB` or `steer job-log -r RUN` | Print a GitHub Actions log with `gh`. Supply exactly one ID. |
+| `steer job-log -j JOB` or `steer job-log -r RUN` | Print one GitHub log URL for the agent to fetch. When no URL exists, print the log text and the reason. Supply exactly one ID. |
 | `steer worktree add NAME [-b BRANCH]` | Add a native Git worktree under `.worktrees/`. |
 | `steer worktree list`, `remove NAME`, `prune`, or `collect NAME` | List, remove, or prune worktrees, or print the patch a worktree carries against its merge base. |
 | `steer run start [-t TASK] [-a NAME] NAME -- COMMAND` | Start a detached named run and optionally link it to a task. A dependency must exist and pass before its dependent starts. |
@@ -279,7 +279,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Runs | Detached named runs, dependency gating, task links, and later verdict notifications | Detached named runs, task links, logs, dependencies, and PR check watching | Both block linked tasks while a run is active. V2 does not provide later CLI verdict notices. |
 | Worktrees | Tracked detached worktrees with gate and allowed-patch collection | Native Git add, list, remove, and prune under `.worktrees` | Different contract from gated patch collection. |
 | Rename and unlink | Rename note, answer, task, or report. Unlink submissions from task answer lists | Rename task or report and unlink task links by ID and type | Note and answer rename and v1 submission-unlink semantics differ. |
-| GitHub helpers | PR update with verification and job-log URL resolution, including proxy fallback | PR update with verification and job-log output via `gh` | Log return format and proxy fallback differ. |
+| GitHub helpers | PR update with verification, and a job-log URL for the agent to fetch | PR update with verification, and job-log text via `gh` | Log return format differs. |
 | Utilities and gate | `skills`, `agents`, `key`, `gate`, `outline`, and `image-data-uri` | No corresponding v2 commands registered | Utilities and gate are separate from the core inbox. |
 | Live transport | WebSocket, heartbeat, and polling fallback | WebSocket, heartbeat, reconnect, polling fallback, and typed report acknowledgement events | V2 deduplicates browser writes and uploads by request ID. Other clients must supply an ID to get the same protection. |
 | Survey and interrupt | Survey, image prompt, results, and bible check | Survey CLI, image prompt, results modal, and interrupt | Storage, timing, and schema behavior need a contract-level comparison. |

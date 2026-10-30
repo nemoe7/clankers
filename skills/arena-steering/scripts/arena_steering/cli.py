@@ -550,14 +550,59 @@ def _run_pr_update(parsed: argparse.Namespace, out: TextIO) -> int:
   return 0
 
 
+def _gh_url(args: list[str]) -> tuple[str, str]:
+  """Return a log URL and the reason it is missing, when it is."""
+  try:
+    result = subprocess.run(args, check=False, capture_output=True, text=True)
+  except OSError as exc:
+    return "", f"gh could not start: {exc}"
+  if result.returncode != 0:
+    detail = (result.stderr or result.stdout or "").strip().splitlines()
+    return "", f"gh exited {result.returncode}: {detail[0] if detail else 'no detail'}"
+  url = result.stdout.strip()
+  if not url:
+    return "", "gh printed an empty URL"
+  return url, ""
+
+
 def _run_job_log(parsed: argparse.Namespace, out: TextIO) -> int:
+  """Print one log URL for the agent to fetch, else the log text and the reason."""
   if bool(parsed.job_id) == bool(parsed.run_id):
     raise ValueError("Usage: steer job-log -j <job-id> or -r <run-id>")
   if parsed.run_id:
-    args = ["gh", "run", "view", str(parsed.run_id), "--log"]
+    url_args = [
+      "gh",
+      "run",
+      "view",
+      str(parsed.run_id),
+      "--json",
+      "url",
+      "--jq",
+      ".url",
+    ]
+    log_args = ["gh", "run", "view", str(parsed.run_id), "--log"]
+    target = f"run {parsed.run_id}"
   else:
-    args = ["gh", "run", "view", "--job", str(parsed.job_id), "--log"]
-  print(_run_gh(args), end="", file=out)
+    url_args = [
+      "gh",
+      "api",
+      f"repos/{{owner}}/{{repo}}/actions/jobs/{parsed.job_id}",
+      "--jq",
+      ".html_url",
+    ]
+    log_args = ["gh", "run", "view", "--job", str(parsed.job_id), "--log"]
+    target = f"job {parsed.job_id}"
+  url, reason = _gh_url(url_args)
+  if url:
+    print(url, file=out)
+    return 0
+  try:
+    log_text = _run_gh(log_args)
+  except (ValueError, OSError) as exc:
+    print(f"job-log: no URL for {target} ({reason}); log text failed: {exc}", file=out)
+    return 1
+  print(log_text, end="" if log_text.endswith("\n") else "\n", file=out)
+  print(f"job-log: no URL for {target} ({reason})", file=out)
   return 0
 
 
