@@ -2454,6 +2454,40 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  #history {
+    --edge-start: var(--edge-stop-start);
+    --edge-end: var(--edge-stop-end);
+    scroll-padding-block: var(--edge-fade);
+    -webkit-mask-image:
+      linear-gradient(
+        to bottom,
+        transparent var(--edge-stop-start),
+        black var(--edge-start),
+        black calc(100% - var(--edge-end)),
+        transparent calc(100% - var(--edge-stop-end))
+      ),
+      linear-gradient(to left, black var(--scrollbar-carve), transparent var(--scrollbar-carve));
+    mask-image:
+      linear-gradient(
+        to bottom,
+        transparent var(--edge-stop-start),
+        black var(--edge-start),
+        black calc(100% - var(--edge-end)),
+        transparent calc(100% - var(--edge-stop-end))
+      ),
+      linear-gradient(to left, black var(--scrollbar-carve), transparent var(--scrollbar-carve));
+    -webkit-mask-composite: source-over;
+    mask-composite: add;
+  }
+
+  #history[data-scrolled-start] {
+    --edge-start: var(--edge-fade-start);
+  }
+
+  #history[data-scrolled-end] {
+    --edge-end: var(--edge-fade-end);
+  }
+
   .ico-svg > .dot,
   .dot.live,
   .btn[aria-busy="true"] .dot,

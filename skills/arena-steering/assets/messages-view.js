@@ -30,6 +30,7 @@ export function expandMessageHistory() {
 let loadingMoreMessages = false;
 let draftRevision = 0;
 let replyObserver = null;
+let historyResizeObserver = null;
 const pendingReplyReceipts = new Set();
 
 if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => {
@@ -104,6 +105,8 @@ function highlightSearchMatches(root, rawQuery) {
 export function renderMessagesView(container, state, handlers) {
   replyObserver?.disconnect();
   replyObserver = null;
+  historyResizeObserver?.disconnect();
+  historyResizeObserver = null;
   const activeEl = document.activeElement;
   const searchWasFocused =
     Boolean(activeEl && activeEl.id === "log-search" && container.contains(activeEl));
@@ -405,10 +408,17 @@ export function renderMessagesView(container, state, handlers) {
   const logNewestBtn = container.querySelector("#log-newest");
   const logEditedBtn = container.querySelector("#log-edited");
 
-  function syncScrollControls() {
-    if (!historyEl) return;
+  function syncScrollEdges() {
     const dist =
       historyEl.scrollHeight - historyEl.scrollTop - historyEl.clientHeight;
+    historyEl.toggleAttribute("data-scrolled-start", historyEl.scrollTop > 0);
+    historyEl.toggleAttribute("data-scrolled-end", dist > 1);
+    return dist;
+  }
+
+  function syncScrollControls() {
+    if (!historyEl) return;
+    const dist = syncScrollEdges();
     pinnedToBottom = dist <= 24;
     savedScrollTop = historyEl.scrollTop;
     if (logNewestBtn) {
@@ -445,6 +455,10 @@ export function renderMessagesView(container, state, handlers) {
     }
     syncScrollControls();
     historyEl.addEventListener("scroll", syncScrollControls, { passive: true });
+    if (typeof ResizeObserver === "function") {
+      historyResizeObserver = new ResizeObserver(syncScrollEdges);
+      historyResizeObserver.observe(historyEl);
+    }
   }
 
   if (historyEl && typeof IntersectionObserver === "function") {
