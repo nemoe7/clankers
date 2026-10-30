@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `store.py`: Deduplicate message retries by client request ID.
+
 - `composer-uploads.js`: Show upload progress and recover from failed uploads.
 
 - `store.py`: Persist reply-seen flags with atomic revision checks.

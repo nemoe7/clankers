@@ -1,6 +1,7 @@
 // Track staged file uploads independently of the composer view.
 export function createComposerUploads(store, uploadFile) {
   let nextId = 0;
+  const sessionId = crypto.randomUUID();
   const entries = () => store.getState().composerAttachments || [];
   const update = (items) => store.setState({ composerAttachments: items });
 
@@ -22,7 +23,7 @@ export function createComposerUploads(store, uploadFile) {
   return {
     async stage(files) {
       const added = Array.from(files || [], (file) => ({
-        id: String(++nextId), name: file.name, file, status: "uploading",
+        id: `${sessionId}:${++nextId}`, name: file.name, file, status: "uploading",
       }));
       update([...entries(), ...added]);
       await Promise.all(added.map((entry) => upload(entry.id)));

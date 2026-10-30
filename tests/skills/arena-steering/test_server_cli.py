@@ -1058,3 +1058,59 @@ def test_paste_attachment_threshold_boundaries() -> None:
   assert not SteeringApp._paste_needs_attachment("\n".join(["x"] * 14))
   assert SteeringApp._paste_needs_attachment("\n".join(["x"] * 15))
   assert SteeringApp._paste_needs_attachment("x\n" * 14)
+
+
+def test_message_request_id_is_atomic_and_survives_restart(tmp_path: Path) -> None:
+  from concurrent.futures import ThreadPoolExecutor
+  from threading import Barrier
+
+  path = tmp_path / "requests.sqlite3"
+  stores = [SqliteStore(path), SqliteStore(path)]
+  apps = [SteeringApp(store) for store in stores]
+  barrier = Barrier(2)
+  body = {"body": "Retry safely", "request_id": "request-1"}
+
+  def send(app: SteeringApp) -> tuple[int, dict]:
+    barrier.wait()
+    return app.dispatch("POST", "/messages", body)
+
+  with ThreadPoolExecutor(max_workers=2) as pool:
+    results = list(pool.map(send, apps))
+  assert all(status == HTTPStatus.CREATED for status, _ in results)
+  ids = {payload["message"]["id"] for _, payload in results}
+  assert len(ids) == 1
+  assert len(stores[0].list_messages()) == 1
+  for store in stores:
+    store.close()
+
+  store = SqliteStore(path)
+  app = SteeringApp(store)
+  status, result = app.dispatch("POST", "/messages", body)
+  assert status == HTTPStatus.CREATED and result["message"]["id"] in ids
+  status, _ = app.dispatch(
+    "POST", "/messages", {"body": "Different content", "request_id": "request-1"}
+  )
+  assert status == HTTPStatus.BAD_REQUEST
+  status, _ = app.dispatch("POST", "/messages", {"body": "Bad", "request_id": "bad id"})
+  assert status == HTTPStatus.BAD_REQUEST
+  app.dispatch("POST", "/messages", {"body": "Retry safely"})
+  assert len(store.list_messages()) == 2
+  store.close()
+
+
+def test_attachment_message_retry_uses_original_message(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "attachment-requests.sqlite3")
+  app = SteeringApp(store)
+  payload = {
+    "body": "Attachment retry",
+    "request_id": "attachment-request",
+    "attachments": [{"name": "note.txt", "path": "uploads/note.txt", "size_bytes": 3}],
+  }
+  first_status, first = app.dispatch("POST", "/messages/with-file", payload)
+  second_status, second = app.dispatch("POST", "/messages/with-file", payload)
+  assert first_status == second_status == HTTPStatus.CREATED
+  assert first["message"]["id"] == second["message"]["id"]
+  assert len(store.list_messages()) == 1
+  status, _ = app.dispatch("POST", "/messages", payload)
+  assert status == HTTPStatus.BAD_REQUEST
+  store.close()

@@ -606,9 +606,25 @@ class SteeringApp:
       },
     )
 
+  @staticmethod
+  def _message_request_identity(
+    body: dict[str, Any], route: str
+  ) -> tuple[str | None, str]:
+    request_id = body.get("request_id")
+    if request_id is None:
+      return None, ""
+    if not isinstance(request_id, str) or not re.fullmatch(
+      r"[a-zA-Z0-9_-]{1,128}", request_id
+    ):
+      raise ValueError("Invalid request ID")
+    content = {key: value for key, value in body.items() if key != "request_id"}
+    canonical = json.dumps([route, content], sort_keys=True, separators=(",", ":"))
+    return request_id, hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
   def _handle_create_message(
     self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
   ) -> tuple[int, Any]:
+    request_id, fingerprint = self._message_request_identity(body, "/messages")
     attachments = [Attachment.from_dict(raw) for raw in body.get("attachments", [])]
     msg = self.messages.send_message(
       str(body.get("body", "")),
@@ -617,6 +633,8 @@ class SteeringApp:
       attachments=attachments,
       parent_ids=[str(item) for item in (body.get("parent_ids") or [])],
       msg_id=body.get("id"),
+      request_id=request_id,
+      fingerprint=fingerprint,
     )
     return (int(HTTPStatus.CREATED), {"message": self._serialize_message(msg)})
 
@@ -633,6 +651,9 @@ class SteeringApp:
   def _handle_create_message_with_file(
     self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
   ) -> tuple[int, Any]:
+    request_id, fingerprint = self._message_request_identity(
+      body, "/messages/with-file"
+    )
     message_body, attachments = self._message_attachments_from_body(body)
     msg = self.messages.send_message(
       message_body,
@@ -641,6 +662,8 @@ class SteeringApp:
       attachments=attachments,
       parent_ids=[str(item) for item in (body.get("parent_ids") or [])],
       msg_id=body.get("id"),
+      request_id=request_id,
+      fingerprint=fingerprint,
     )
     return (int(HTTPStatus.CREATED), {"message": self._serialize_message(msg)})
 

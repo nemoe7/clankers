@@ -69,6 +69,8 @@ class MessageService:
     attachments: list[Attachment] | None = None,
     parent_ids: list[str] | None = None,
     msg_id: str | None = None,
+    request_id: str | None = None,
+    fingerprint: str = "",
   ) -> Message:
     if not isinstance(body, str) or (not body.strip() and not attachments):
       raise ValueError("Message body or attachment is required")
@@ -98,7 +100,10 @@ class MessageService:
       modified_at=now,
     )
     with self._cond:
-      self._messages.save_message(message)
+      if request_id is not None:
+        message = self._messages.save_message_once(message, request_id, fingerprint)
+      else:
+        self._messages.save_message(message)
       self._cond.notify_all()
     return message
 

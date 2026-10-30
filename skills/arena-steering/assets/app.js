@@ -11,7 +11,7 @@ import {
 } from "./markdown.js";
 import { createModalManager } from "./modal.js";
 import { renderReportsView } from "./reports-view.js";
-import { createStore } from "./state.js";
+import { createStore, writePendingSend } from "./state.js";
 import { renderTasksView } from "./tasks-view.js";
 import { mountRelativeTimers, relativeTime } from "./timestamps.js";
 
@@ -337,21 +337,39 @@ const composerUploads = createComposerUploads(store, (file) => api.uploadFile(fi
 
 const handlers = {
   async onSendMessage(payload) {
-    const attachments = payload.attachments || [];
-    if (attachments.length) {
-      await api.sendMessageWithFile(payload);
-      composerUploads.clearSent(payload.attachmentIds || []);
-    } else {
-      await api.sendMessage(payload);
+    let pending = store.getState().pendingSend;
+    if (store.getState().sending) throw new Error("A send is already in progress");
+    const content = { body: payload.body, parent_ids: payload.parent_ids || [], attachments: payload.attachments || [] };
+    if (pending && JSON.stringify(pending.content) !== JSON.stringify(content)) {
+      throw new Error("Retry the unconfirmed send before sending changes");
     }
-    if ((payload.parent_ids || []).length) {
-      store.setState({ replyParentIds: [] });
+    if (!pending) {
+      pending = { request_id: crypto.randomUUID(), content, rawDraft: payload.rawDraft, attachmentIds: payload.attachmentIds || [] };
+      writePendingSend(pending);
     }
+    store.setState({ pendingSend: pending, sending: true });
     try {
-      await refreshAll(true);
+      const request = { ...pending.content, request_id: pending.request_id };
+      if (request.attachments.length) {
+        await api.sendMessageWithFile(request);
+        composerUploads.clearSent(pending.attachmentIds);
+      } else {
+        await api.sendMessage(request);
+      }
+      if (JSON.stringify(store.getState().replyParentIds || []) === JSON.stringify(request.parent_ids)) {
+        store.setState({ replyParentIds: [] });
+      }
+      writePendingSend(null);
+      store.setState({ pendingSend: null, sending: false });
     } catch (error) {
-      console.error(error);
+      store.setState({ sending: false });
+      throw error;
     }
+    await refreshAll(true);
+  },
+  onDiscardPendingSend() {
+    writePendingSend(null);
+    store.setState({ pendingSend: null });
   },
   async onMarkRepliesSeen(id, revision) {
     try {
