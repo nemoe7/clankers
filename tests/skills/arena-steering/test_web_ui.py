@@ -526,7 +526,8 @@ dialog.showModal = () => { dialog.open = true; };
 dialog.close = () => { dialog.open = false; dialog.handlers.close(); };
 doc.getElementById = id => ({ 'image-modal': dialog, 'image-modal-stage': stage, 'image-modal-close': close })[id];
 vm.runInNewContext(code + '\ninitImageModal();', { document: doc, Math });
-const clone = { style: {}, removeAttribute() {}, setAttribute() {}, getAttribute() { return null; }, querySelector() { return null; } };
+const clone = { style: {}, removeAttribute() {}, setAttribute() {},
+  getAttribute() { return null; }, querySelector() { return null; } };
 const media = { tagName: 'IMG', cloneNode() { return clone; } };
 const target = { closest(selector) { return selector.startsWith('#') ? {} : media; } };
 doc.handlers.click({ target, preventDefault() {} });
@@ -551,7 +552,8 @@ const styleNode = { textContent: '#mermaid-x .node{fill:red}' };
 const svgClone = { style: {}, removeAttribute() {}, setAttribute(name, value) { this[name] = value; },
   getAttribute(name) { return name === 'id' ? 'mermaid-x' : null; },
   querySelector(selector) { return selector === 'style' ? styleNode : null; } };
-const svgMedia = { tagName: 'svg', getBoundingClientRect() { return { width: 866 }; }, cloneNode() { return svgClone; } };
+const svgMedia = { tagName: 'svg', getBoundingClientRect() { return { width: 866 }; },
+  cloneNode() { return svgClone; } };
 const svgTarget = { closest(selector) { return selector.startsWith('#') ? {} : svgMedia; } };
 doc.handlers.click({ target: svgTarget, preventDefault() {} });
 assert.equal(svgClone.class, 'mermaid-svg');

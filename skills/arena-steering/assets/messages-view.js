@@ -338,17 +338,6 @@ export function renderMessagesView(container, state, handlers) {
           ${pendingSend && !state.sending ? `<div class="composer-send-status" role="status">Send unconfirmed. The original may have been sent. <button type="button" id="retry-send">Retry previous send</button> <button type="button" id="discard-send" title="The original send might have succeeded">Discard retry</button></div>` : ""}
           <div class="composer-shell">
             <button
-              id="preview-msg"
-              class="icon-button"
-              type="button"
-              aria-pressed="false"
-              aria-controls="draft-preview"
-              aria-label="Preview Markdown"
-              title="Preview Markdown"
-            >
-              <svg class="markdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z" fill="currentColor" stroke="none"></path></svg>
-            </button>
-            <button
               id="attach-file"
               class="icon-button"
               type="button"
@@ -359,14 +348,15 @@ export function renderMessagesView(container, state, handlers) {
             </button>
             <input id="composer-file-input" type="file" multiple hidden />
             <button
-              id="composer-expand"
+              id="preview-msg"
               class="icon-button"
               type="button"
-              aria-expanded="${composerExpanded ? "true" : "false"}"
-              aria-label="${composerExpanded ? "Collapse composer" : "Expand composer"}"
-              title="${composerExpanded ? "Collapse composer" : "Expand composer"}"
+              aria-pressed="false"
+              aria-controls="draft-preview"
+              aria-label="Preview Markdown"
+              title="Preview Markdown"
             >
-              <svg class="lucide lucide-maximize-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="m3 21 7-7"></path><path d="M9 21H3v-6"></path></svg>
+              <svg class="markdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z" fill="currentColor" stroke="none"></path></svg>
             </button>
             <textarea
               id="msg"
@@ -383,6 +373,16 @@ export function renderMessagesView(container, state, handlers) {
               aria-label="Markdown draft preview, not sent"
               hidden
             ></div>
+            <button
+              id="composer-expand"
+              class="icon-button"
+              type="button"
+              aria-expanded="${composerExpanded ? "true" : "false"}"
+              aria-label="${composerExpanded ? "Collapse composer" : "Expand composer"}"
+              title="${composerExpanded ? "Collapse composer" : "Expand composer"}"
+            >
+              <svg class="lucide lucide-maximize-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="m3 21 7-7"></path><path d="M9 21H3v-6"></path></svg>
+            </button>
             <button
               id="send"
               class="icon-button"
