@@ -341,3 +341,71 @@ def test_reply_seen_migration_marks_legacy_replies_unseen(tmp_path):
   assert not message.replies_seen
   assert store.mark_replies_seen("aa1234", message.replies_revision)
   store.close()
+
+
+def test_task_snapshot_column_migrates_legacy_database(tmp_path):
+  import sqlite3
+
+  path = tmp_path / "legacy-tasks.sqlite3"
+  conn = sqlite3.connect(path)
+  conn.execute(
+    """CREATE TABLE tasks (
+    position INTEGER NOT NULL, id TEXT PRIMARY KEY,
+    title TEXT NOT NULL, type TEXT NOT NULL, status TEXT NOT NULL, scope TEXT NOT NULL,
+    details_json TEXT NOT NULL DEFAULT '[]', links_json TEXT NOT NULL DEFAULT '',
+    msg_ids_json TEXT NOT NULL DEFAULT '[]', report_ids_json TEXT NOT NULL DEFAULT '[]',
+    deps_json TEXT NOT NULL DEFAULT '[]', modified_at TEXT NOT NULL
+  )""".replace("seq INTEGER PRIMARY KEY AUTOINCREMENT, ", "")
+  )
+  conn.execute(
+    "INSERT INTO tasks (position, id, title, type, status, scope, details_json, modified_at) "
+    "VALUES (0, ?, ?, ?, ?, ?, ?, ?)",
+    (
+      "legacy",
+      "Old task",
+      "code",
+      "upcoming",
+      "",
+      '["A detail"]',
+      "2026-01-01T00:00:00Z",
+    ),
+  )
+  conn.commit()
+  conn.close()
+  store = SqliteStore(path)
+  task = store.get_task("legacy")
+  assert (
+    task is not None and task.answer_snapshots == [] and task.details == ["A detail"]
+  )
+  store.save_task_queue([task])
+  store.close()
+  reopened = SqliteStore(path)
+  assert reopened.get_task("legacy").answer_snapshots == []
+  reopened.close()
+
+
+def test_snapshot_migration_backfills_linked_report_answers(tmp_path):
+  import sqlite3
+
+  from arena_steering.services import ReportService, TaskService
+
+  path = tmp_path / "old-linked.sqlite3"
+  store = SqliteStore(path)
+  reports = ReportService(store, store)
+  tasks = TaskService(store, store)
+  reports.publish_report(
+    "choice", "Decision", "Select? {#select}\n- ( ) Yes\n- ( ) No\n"
+  )
+  answer = reports.submit_answer("choice", {"select": "Yes"}, answer_id="ab1234")
+  tasks.create_task("linked", "Linked", details=["Review"], report_ids=["choice"])
+  store.close()
+  conn = sqlite3.connect(path)
+  conn.execute("ALTER TABLE tasks DROP COLUMN answer_snapshots_json")
+  conn.commit()
+  conn.close()
+  migrated = SqliteStore(path)
+  task = migrated.get_task("linked")
+  assert task is not None
+  assert task.answer_snapshots[0]["id"] == answer.id
+  assert task.answer_snapshots[0]["fields"][0]["value"] == "Yes"
+  migrated.close()
