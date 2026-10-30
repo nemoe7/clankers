@@ -84,7 +84,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer reports [-s] [-p PAGE]` | List reports, or stale reports with `-s`, 10 per page. |
 | `steer report ID` | Show report fields and answers. |
 | `steer report pub FILE -i ID -t TITLE [-u]` | Publish and verify a UTF-8 Markdown report. `-u` allows unparsed strike markers. |
-| `steer report rm ID` | Dismiss one report. Use `--stale` to remove stale reports. |
+| `steer report rm ID [ID ...]` | Dismiss one or more reports. Use `--stale` alone to remove stale reports. |
 | `steer rename OLD NEW` | Rename a task or report and update its links. |
 | `steer survey` | Show the survey and submission template. Use `-i` for the smallest image, `--template` for the template, `-f FILE` for a submission, or `--interrupt` to request a check. Submissions go to the running server when one is recorded. |
 | `steer pr-update -n NUMBER -t TITLE -f FILE` | Update a pull request with `gh`, then verify its title and body. |
@@ -200,7 +200,8 @@ Field options must be unique, with 1 to 20 options and at most 200 characters pe
 - Checkbox answers need at least one selected or custom value.
 - Submissions append history, mark the report seen, reset acknowledgement visibility, and add formatted answers to linked task details. An acknowledgement can be appended more than once.
 - `seen` records report viewing. `ack_seen` records viewing the latest acknowledged answer and resets on a new answer or acknowledgement.
-- Republish and single-report removal reject a report when its latest answer is unacknowledged. Republish preserves answer history.
+- Republish and report removal reject a report when its latest answer is unacknowledged. Republish preserves answer history.
+- Multi-ID removal is atomic. A missing or protected report leaves every target in place.
 - Dismissal removes report links from tasks, while archived answers remain available for republishing.
 - Stale listing selects answered or dismissed reports whose latest answer is acknowledged. Removal of stale reports uses that selection.
 

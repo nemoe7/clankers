@@ -1019,9 +1019,13 @@ def _run_report(
     return 0
 
   if subcmd == "rm":
-    if len(args) != 2:
-      raise ValueError("Usage: steer report rm <id|--stale>")
-    removed = reports.remove_report(args[1])
+    targets = args[1:]
+    if not targets or ("--stale" in targets and len(targets) != 1):
+      raise ValueError("Usage: steer report rm <id> [<id> ...] | --stale")
+    removed: list[str] = []
+    with store.transaction():
+      for target in dict.fromkeys(targets):
+        removed.extend(reports.remove_report(target))
     print(
       f"Dismissed reports: {', '.join(removed) if removed else 'none'}",
       file=out,

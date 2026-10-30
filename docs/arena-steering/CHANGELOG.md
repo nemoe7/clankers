@@ -16,6 +16,8 @@ This log has no Unreleased section.
 
 - `cli.py`: Acknowledge multiple message and report-answer IDs atomically with one reply.
 
+- `cli.py`: Remove multiple reports atomically in one command.
+
 - `pre.py`: Block `cat`, `grep`, `head`, `tail`, and `rg` on the bible, because those commands read a file in part.
 
 - `pre.py`, `cli.py`: Run the shell hook through a step registry. Each check is its own class, and `PIPELINE` orders them, so a check can be added, dropped, or tweaked in one line.
