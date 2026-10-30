@@ -214,6 +214,9 @@ export const api = {
   sendMessage({ body, hidden = false, blocking = true, parent_ids = [] }) {
     return requestJson("POST", "/messages", { body, hidden, blocking, parent_ids });
   },
+  markRepliesSeen(id, revision) {
+    return requestJson("POST", `/messages/${encodeURIComponent(id)}/replies-seen`, { revision });
+  },
   async uploadFile(file) {
     const formData = new FormData();
     formData.append("file", file, file.name || "upload.bin");

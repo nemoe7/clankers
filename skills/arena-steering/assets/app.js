@@ -289,7 +289,7 @@ async function refreshAll(force = false) {
     const tasks = taskRes.tasks || [];
     const reportSummaries = repRes.reports || [];
     const survey = health.survey || {};
-    trackMessageAcks(messages, curState.activeTab);
+    trackMessageAcks(messages);
     const selectedReportId =
       curState.selectedReportId &&
       reportSummaries.some((r) => r.id === curState.selectedReportId)
@@ -349,6 +349,14 @@ const handlers = {
     } catch (error) {
       console.error(error);
     }
+  },
+  async onMarkRepliesSeen(id, revision) {
+    try {
+      await api.markRepliesSeen(id, revision);
+    } catch (error) {
+      if (!String(error.message).includes("(409)")) console.error(error);
+    }
+    await refreshAll(true);
   },
   async onStageComposerFiles(files) {
     const current = store.getState().composerAttachments || [];
