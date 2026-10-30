@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.1.0] - 2026-10-30
+
+### Added
+
+- `cli.py`, `services.py`: Unlink one stored answer snapshot from every task that holds it, keeping the answer and its receipts.
+
 ## [2.0.0]
 
 ### Added

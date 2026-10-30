@@ -356,3 +356,58 @@ def test_concurrent_report_answers_preserve_distinct_snapshots(tmp_path) -> None
   assert {item["id"] for item in task.answer_snapshots} == {item.id for item in answers}
   for store in stores:
     store.close()
+
+
+def test_explicit_answer_unlink_keeps_the_answer_and_relinks(tmp_path) -> None:
+  path = tmp_path / "unlink-answer.sqlite3"
+  store = SqliteStore(path)
+  reports = ReportService(store, store)
+  tasks = TaskService(store, store)
+  reports.publish_report(
+    "decision",
+    "Decision",
+    (
+      '<!-- question {"id": "select", "label": "Select?"} -->\n'
+      "Select?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- ( ) No <!-- option {"label": "No"} -->\n'
+    ),
+  )
+  tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  first = reports.submit_answer("decision", {"select": "Yes"}, answer_id="ac0001")
+  second = reports.submit_answer("decision", {"select": "No"}, answer_id="ac0002")
+  reports.ack_answer("decision", second.id, "Read")
+  details = list(tasks.get_task("work")[0].details)
+
+  assert tasks.unlink_answer(first.id) == ["work"]
+  task = tasks.get_task("work")[0]
+  assert [item["id"] for item in task.answer_snapshots] == [second.id]
+  assert task.report_ids == ["decision"]
+  assert task.details == details
+  stored = reports.get_report("decision").answers
+  assert [item.id for item in stored] == [first.id, second.id]
+  assert stored[0].created_at == first.created_at
+  assert stored[1].acks == ["Read"]
+
+  tasks.mod_scalar("work", "title", "Renamed work")
+  assert [item["id"] for item in tasks.get_task("work")[0].answer_snapshots] == [
+    second.id
+  ]
+
+  tasks.mod_links_add("work", "decision", link_type="report")
+  assert {item["id"] for item in tasks.get_task("work")[0].answer_snapshots} == {
+    first.id,
+    second.id,
+  }
+
+  with pytest.raises(KeyError, match="ac0003"):
+    tasks.unlink_answer("ac0003")
+  store.close()
+
+  reopened = SqliteStore(path)
+  tasks = TaskService(reopened, reopened)
+  assert tasks.unlink_answer(first.id) == ["work"]
+  assert [item["id"] for item in tasks.get_task("work")[0].answer_snapshots] == [
+    second.id
+  ]
+  reopened.close()
