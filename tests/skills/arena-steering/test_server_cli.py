@@ -1388,3 +1388,102 @@ def test_gate_links_survive_concurrent_task_edits() -> None:
   task, _ = tasks.get_task("gate-task")
   assert task.gate_names == ["verify"] and task.scope == "code"
   store.close()
+
+
+def test_browser_write_replay_survives_restart(tmp_path: Path) -> None:
+  db_path = tmp_path / "retry.sqlite3"
+  store = SqliteStore(db_path)
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "retry-report", "Retry", "Choose? {#choice}\n- ( ) Yes\n- ( ) No\n"
+  )
+  request = {"_request_id": "action-001", "values": {"choice": "Yes"}}
+  first = app.dispatch("POST", "/reports/retry-report/answers", request)
+  assert first[0] == HTTPStatus.CREATED
+  store.close()
+  store = SqliteStore(db_path)
+  app = SteeringApp(store)
+  assert app.dispatch("POST", "/reports/retry-report/answers", request) == first
+  assert len(app.reports.get_report("retry-report").answers) == 1
+  changed = {"_request_id": "action-001", "values": {"choice": "No"}}
+  assert (
+    app.dispatch("POST", "/reports/retry-report/answers", changed)[0]
+    == HTTPStatus.BAD_REQUEST
+  )
+  assert len(app.reports.get_report("retry-report").answers) == 1
+  store.close()
+
+
+def test_browser_write_replay_concurrent(tmp_path: Path) -> None:
+  from concurrent.futures import ThreadPoolExecutor
+  from threading import Barrier
+
+  db_path = tmp_path / "retry.sqlite3"
+  store = SqliteStore(db_path)
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "retry-report", "Retry", "Choose? {#choice}\n- ( ) Yes\n- ( ) No\n"
+  )
+  store.close()
+  barrier = Barrier(2)
+
+  def send() -> tuple[int, dict]:
+    store = SqliteStore(db_path)
+    app = SteeringApp(store)
+    barrier.wait()
+    result = app.dispatch(
+      "POST",
+      "/reports/retry-report/answers",
+      {
+        "_request_id": "action-001",
+        "values": {"choice": "Yes"},
+      },
+    )
+    store.close()
+    return result
+
+  with ThreadPoolExecutor(max_workers=2) as pool:
+    first, second = list(pool.map(lambda _: send(), range(2)))
+  assert first == second and first[0] == HTTPStatus.CREATED
+  store = SqliteStore(db_path)
+  assert len(SteeringApp(store).reports.get_report("retry-report").answers) == 1
+  store.close()
+
+
+def test_browser_upload_replay_and_orphan_cleanup(tmp_path: Path) -> None:
+  import hashlib
+
+  db_path = tmp_path / "retry.sqlite3"
+  store = SqliteStore(db_path)
+  app = SteeringApp(store)
+  request = {
+    "_request_id": "upload-001",
+    "file": {"name": "sample.txt", "text": "hello"},
+  }
+  first = app.dispatch("POST", "/uploads", request)
+  assert first[0] == HTTPStatus.CREATED
+  upload_path = Path(first[1]["attachment"]["path"])
+  assert upload_path.read_text() == "hello"
+  assert app.dispatch("POST", "/uploads", request) == first
+  assert len(list(upload_path.parent.iterdir())) == 1
+  stale_id = hashlib.sha256(b"abandoned").hexdigest()
+  orphan = upload_path.parent / f"request-{stale_id}-0-sample.txt"
+  orphan.write_text("incomplete")
+  store.close()
+  store = SqliteStore(db_path)
+  app = SteeringApp(store)
+  assert not orphan.exists()
+  assert upload_path.exists()
+  assert app.dispatch("POST", "/uploads", request) == first
+  long_name = "a" * 190 + ".txt"
+  status, long_upload = app.dispatch(
+    "POST",
+    "/uploads",
+    {
+      "_request_id": "long-upload",
+      "file": {"name": long_name, "text": "long name"},
+    },
+  )
+  assert status == HTTPStatus.CREATED
+  assert Path(long_upload["attachment"]["path"]).read_text() == "long name"
+  store.close()

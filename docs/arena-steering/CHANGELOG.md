@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `api.js`, `server.py`, `store.py`: Deduplicate browser writes and uploads across retries.
+
 - `cli.py`, `services.py`: Block linked tasks while named runs are active.
 
 - `models.py`: Preserve distinct report-answer snapshots on linked tasks.

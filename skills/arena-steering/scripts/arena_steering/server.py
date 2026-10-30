@@ -134,6 +134,8 @@ class SteeringApp:
     repo_name: str | None = None,
   ) -> None:
     self.store = store
+    self._browser_write = threading.local()
+    self._clean_uncommitted_uploads()
     default_assets = Path(__file__).resolve().parents[2] / "assets"
     self.assets_dir = Path(assets_dir) if assets_dir is not None else default_assets
     self.repo_name = repo_name or _detect_repo_name(store)
@@ -240,7 +242,44 @@ class SteeringApp:
         )
       return (int(HTTPStatus.NOT_FOUND), {"error": f"Unknown route: {path}"})
     try:
-      status, payload = handler(params, query, body or {})
+      request_body = dict(body or {})
+      request_id = request_body.pop("_request_id", None)
+      if request_id is not None:
+        if method.upper() not in {"POST", "PATCH", "DELETE"}:
+          raise ValueError("Request ID requires a write action")
+        if not isinstance(request_id, str) or not re.fullmatch(
+          r"[a-zA-Z0-9_-]{1,128}", request_id
+        ):
+          raise ValueError("Invalid request ID")
+        canonical = json.dumps(
+          [method.upper(), path, parsed.query, request_body],
+          sort_keys=True,
+          separators=(",", ":"),
+        )
+        fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+        def perform() -> tuple[int, dict[str, Any]]:
+          self._browser_write.request_id = request_id
+          self._browser_write.files = []
+          try:
+            status, payload = handler(params, query, request_body)
+            if not 200 <= status < 300:
+              for file_path in self._browser_write.files:
+                file_path.unlink(missing_ok=True)
+            return status, payload
+          except BaseException:
+            for file_path in self._browser_write.files:
+              file_path.unlink(missing_ok=True)
+            raise
+          finally:
+            del self._browser_write.request_id
+            del self._browser_write.files
+
+        status, payload = self.store.execute_browser_write_once(
+          request_id, fingerprint, perform
+        )
+      else:
+        status, payload = handler(params, query, request_body)
       if method.upper() in {"POST", "PATCH", "DELETE"} and 200 <= status < 300:
         self._state_version = getattr(self, "_state_version", 0) + 1
       return (status, payload)
@@ -400,6 +439,18 @@ class SteeringApp:
     uploads_dir.mkdir(parents=True, exist_ok=True)
     return uploads_dir
 
+  def _clean_uncommitted_uploads(self) -> None:
+    """Remove staged request files left by a crash before database commit."""
+    with self.store.transaction():
+      committed = {
+        hashlib.sha256(request_id.encode("utf-8")).hexdigest()
+        for request_id in self.store.browser_write_ids()
+      }
+      for file_path in self._uploads_dir().glob("request-*"):
+        match = re.fullmatch(r"request-([0-9a-f]{64})-[0-9]+-.*", file_path.name)
+        if match and match.group(1) not in committed:
+          file_path.unlink(missing_ok=True)
+
   @staticmethod
   def _safe_upload_name(name: Any) -> str:
     raw_name = Path(str(name or "")).name.strip()
@@ -428,8 +479,18 @@ class SteeringApp:
       file_body.get("name") or file_body.get("filename") or "upload.bin"
     )
     data = self._upload_bytes(file_body)
-    stored_name = f"{secrets.token_hex(3)}-{int(time.time())}-{safe_name}"
+    request_id = getattr(self._browser_write, "request_id", None)
+    if request_id is not None:
+      digest = hashlib.sha256(request_id.encode("utf-8")).hexdigest()
+      prefix = f"request-{digest}-{len(self._browser_write.files)}-"
+      suffix = Path(safe_name).suffix[:20]
+      stem = safe_name[: -len(suffix)] if suffix else safe_name
+      stored_name = prefix + stem[: 255 - len(prefix) - len(suffix)] + suffix
+    else:
+      stored_name = f"{secrets.token_hex(3)}-{int(time.time())}-{safe_name}"
     stored_path = self._uploads_dir() / stored_name
+    if request_id is not None:
+      self._browser_write.files.append(stored_path)
     stored_path.write_bytes(data)
     return Attachment(
       name=safe_name,

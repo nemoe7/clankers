@@ -34,7 +34,9 @@ Keep session state outside version control.
 - Report links preload content on pointer hover or keyboard focus without marking the report seen.
 - Staged files show uploading, ready, or failed states. Retry or remove failed files before sending.
 - An unconfirmed send retains its draft and offers a retry. With session storage available, the retry uses the original request ID and payload after reload.
-- The server deduplicates request IDs atomically. Discarding a retry does not undo a send that may already have succeeded.
+- Browser write requests use durable IDs and return the original result on retry. Discarding a retry does not undo an action that may already have succeeded.
+- The browser keeps unconfirmed actions in session storage. If session storage is unavailable, it refuses to send a write rather than risk an unsafe retry.
+- Selecting the same file again can resume an unconfirmed upload after reload. A separate action uses a new ID.
 - Message text persists in session storage across reloads and tab changes. File objects do not persist across reloads.
 - A paste over 1,500 Unicode characters or at least 15 lines becomes a text attachment. Ctrl+Shift+V pastes plain text without staging.
 - Choose one or more parent messages by clicking their IDs. Shift-click copies an ID, and parent chips jump to their messages.
@@ -165,6 +167,8 @@ Field options must be unique, with 1 to 20 options and at most 200 characters pe
 
 Routes accept an optional `/api` prefix. JSON routes return JSON. File uploads accept JSON or multipart form data.
 
+Write requests may include `_request_id` to replay the original result safely. The server retains request records with its database.
+
 | Routes | Purpose |
 | --- | --- |
 | `GET /health` | Server health and timezone. |
@@ -235,7 +239,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | --- | --- | --- | --- |
 | Start and configuration | `init`, `serve`, state directory, installed wrapper, and restore installer | `serve`, fixed `arena-state` directory, and browser timezone | No v2 `init --tz` or equivalent install and restore workflow. |
 | Inbox | Read and poll, note history, quiet notes, seen receipts, and acknowledgement receipts | Read and poll, message history, hidden messages, non-blocking messages, and acknowledgement replies | Names and paging differ. |
-| Message composer | Markdown preview, staging, paste, drop, expansion, reply links, search, and jumps | Preview, staging, paste, drop, expansion, multi-parent replies, search, and jumps | Both use the same paste thresholds and Ctrl+Shift+V bypass, protect Enter during IME composition, and leave Enter to the textarea on coarse-pointer devices. |
+| Message composer | Markdown preview, staging, paste, drop, expansion, reply links, search, and jumps | Preview, staging, paste, drop, expansion, multi-parent replies, search, and jumps | Parity for the paste thresholds, Ctrl+Shift+V bypass, IME guard, and touch Enter. V2 adds multi-parent replies. |
 | Message extras | Slash commands, reference navigation, and persisted reply-seen counts | Reference navigation, multi-parent replies, and persisted boolean reply receipts | V2 omits slash commands and does not store or show unread-reply counts. |
 | Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report, dependency, and running-gate blocking, details, search, and filters | Both require task details. V2 intentionally drops drag reorder. Both retain answer snapshots. V2 creates tasks and acknowledges their targets atomically. |
 | Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Both require acknowledgement only for the latest answer. |
@@ -250,7 +254,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Rename and unlink | Rename note, answer, task, or report. Unlink submissions from task answer lists | Rename task or report and unlink task links by ID and type | Note and answer rename and v1 submission-unlink semantics differ. |
 | GitHub helpers | PR update with verification and job-log URL resolution, including proxy fallback | PR update with verification and job-log output via `gh` | Log return format and proxy fallback differ. |
 | Utilities and gate | `skills`, `agents`, `key`, `gate`, `outline`, and `image-data-uri` | No corresponding v2 commands registered | Utilities and gate are separate from the core inbox. |
-| Live transport | WebSocket, heartbeat, and polling fallback | WebSocket, heartbeat, reconnect, polling fallback, and typed report acknowledgement events | V2 deduplicates message sends by request ID. Other retried writes may still duplicate operations. |
+| Live transport | WebSocket, heartbeat, and polling fallback | WebSocket, heartbeat, reconnect, polling fallback, and typed report acknowledgement events | V2 deduplicates browser writes and uploads by request ID. Other clients must supply an ID to get the same protection. |
 | Survey and interrupt | Survey, image prompt, results, and bible check | Survey CLI, image prompt, results modal, and interrupt | Storage, timing, and schema behavior need a contract-level comparison. |
 | Appearance and navigation | Theme control, tab state, mobile navigation, and pinch zoom | Responsive tabs, image wheel zoom, and drag | V1 theme control and pinch gesture are not present in v2 page controls. |
 | Proxy and external channel | Separate egress proxy routes and an opt-in external-channel recipe | No egress proxy or external-channel recipe | Separate from the browser steering server. |
