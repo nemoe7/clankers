@@ -382,10 +382,36 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
   let codeLines = [];
   let inList = false;
   let tableRows = [];
+  let listItems = [];
+
+  const renderList = () => {
+    if (!listItems.length) return "";
+    const out = [];
+    const depths = [];
+    for (const item of listItems) {
+      while (depths.length && item.indent < depths[depths.length - 1]) {
+        out.push("</li></ul>");
+        depths.pop();
+      }
+      if (!depths.length || item.indent > depths[depths.length - 1]) {
+        out.push("<ul>");
+        depths.push(item.indent);
+      } else {
+        out.push("</li>");
+      }
+      out.push(`<li${item.task ? ' class="task-list-item"' : ""}>${item.html}`);
+    }
+    while (depths.length) {
+      out.push("</li></ul>");
+      depths.pop();
+    }
+    return out.join("");
+  };
 
   const closeList = () => {
     if (inList) {
-      html.push("</ul>");
+      html.push(renderList());
+      listItems = [];
       inList = false;
     }
   };
@@ -473,20 +499,30 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
     }
     const bullet = trimmed.match(/^[-*]\s+(.+)$/);
     if (bullet) {
-      if (!inList) {
-        html.push("<ul>");
-        inList = true;
-      }
+      inList = true;
+      const indent = line.length - line.trimStart().length;
       const taskMatch = bullet[1].match(/^\[([ xX])\]\s+(.+)$/);
       if (taskMatch) {
         const checkedAttr =
           taskMatch[1].toLowerCase() === "x" ? " checked" : "";
-        html.push(
-          `<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled${checkedAttr}> ${renderInlineMarkdown(taskMatch[2])}</li>`
-        );
+        listItems.push({
+          indent,
+          task: true,
+          html: `<input type="checkbox" class="task-list-item-checkbox" disabled${checkedAttr}> ${renderInlineMarkdown(taskMatch[2])}`,
+        });
       } else {
-        html.push(`<li>${renderInlineMarkdown(bullet[1])}</li>`);
+        listItems.push({
+          indent,
+          task: false,
+          html: renderInlineMarkdown(bullet[1]),
+        });
       }
+      continue;
+    }
+    if (/^ {0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)) {
+      closeList();
+      closeTable();
+      html.push("<hr>");
       continue;
     }
     closeList();
