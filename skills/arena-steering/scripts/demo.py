@@ -564,22 +564,23 @@ Highlighted ==critical path== updates and ~~deprecated polling flags~~ with unif
 
 ## Storage & View Options
 
-<!-- storage-mode -->
+<!-- question {"id": "storage-mode", "label": "We should use this SQLite synchronous mode"} -->
 We should use this SQLite synchronous mode
-- (x) NORMAL with WAL journal mode for low-latency writes
-- ( ) FULL synchronous mode on every transaction
-- ( ) MEMORY journal mode for ephemeral runs
+- (x) NORMAL with WAL journal mode for low-latency writes <!-- option {"label": "NORMAL with WAL"} -->
+- ( ) FULL synchronous mode on every transaction <!-- option {"label": "FULL synchronous mode on every transaction"} -->
+- ( ) MEMORY journal mode for ephemeral runs <!-- option {"label": "MEMORY journal mode for ephemeral runs"} -->
 
-<!-- enabled-views -->
+<!-- question {"id": "enabled-views", "label": "We should enable these live steering capabilities"} -->
 We should enable these live steering capabilities
-- [x] Inbox messages with Markdown acknowledgements
-- [x] Agent-managed dependency task queue
-- [x] Fielded Markdown reports with custom responses
-- [ ] Experimental webhook forwarding
+- [x] Inbox messages with Markdown acknowledgements <!-- option {"label": "Inbox acknowledgements"} -->
+- [x] Agent-managed dependency task queue <!-- option {"label": "Agent-managed dependency task queue"} -->
+- [x] Fielded Markdown reports with custom responses <!-- option {"label": "Fielded reports"} -->
+- [ ] Experimental webhook forwarding <!-- option {"label": "Experimental webhook forwarding"} -->
 
 ## Reviewer Notes
 
-Additional reviewer note: ___
+<!-- question {"id":"additional-reviewer-note","label":"Additional reviewer note"} -->
+Additional reviewer note:
 """,
   )
 
@@ -626,19 +627,19 @@ export function lockTocSelection(secId, durationMs = 700) {
 
 ## Verification Questions
 
-<!-- density-mode -->
+<!-- question {"id": "density-mode", "label": "Preferred spacing density across list views"} -->
 Preferred spacing density across list views
-- (x) Compact borderless rows with 2ch hanging indent
-- ( ) Padded card containers
+- (x) Compact borderless rows with 2ch hanging indent <!-- option {"label": "Compact rows"} -->
+- ( ) Padded card containers <!-- option {"label": "Padded card containers"} -->
 
-<!-- verified-tabs -->
+<!-- question {"id": "verified-tabs", "label": "Tabs verified in live preview"} -->
 Tabs verified in live preview
-- [x] Messages tab
-- [x] Reports tab
-- [x] Tasks tab
+- [x] Messages tab <!-- option {"label": "Messages tab"} -->
+- [x] Reports tab <!-- option {"label": "Reports tab"} -->
+- [x] Tasks tab <!-- option {"label": "Tasks tab"} -->
 
-<!-- layout-observation -->
-Layout observation note: ___
+<!-- question {"id": "layout-observation", "label": "Layout observation note"} -->
+Layout observation note:
 """,
   )
   ans1 = app.reports.submit_answer(
@@ -699,12 +700,12 @@ stateDiagram-v2
 
 ## Gallery Review
 
-<!-- media-rendering-check -->
+<!-- question {"id": "media-rendering-check", "label": "Verified media asset rendering across formats"} -->
 Verified media asset rendering across formats
-- [x] PNG before/after comparison boards
-- [x] Animated looping GIF89a previews
-- [x] Inline SVG token and scrollspy diagrams
-- [x] Mermaid flowchart, sequence, and state diagrams
+- [x] PNG before/after comparison boards <!-- option {"label": "PNG before/after comparison boards"} -->
+- [x] Animated looping GIF89a previews <!-- option {"label": "Animated looping GIF89a previews"} -->
+- [x] Inline SVG token and scrollspy diagrams <!-- option {"label": "Inline SVG token and scrollspy diagrams"} -->
+- [x] Mermaid flowchart, sequence, and state diagrams <!-- option {"label": "Mermaid diagrams"} -->
 """,
   )
   ans_gallery = app.reports.submit_answer(
@@ -764,7 +765,14 @@ steer poll
   app.reports.publish_report(
     "legacy-migration-draft",
     "Legacy Preview Migration Notes",
-    "# Legacy Migration Notes\n\nWe should archive this draft\n- (x) Yes\n- ( ) No\n",
+    (
+      "# Legacy Migration Notes\n"
+      "\n"
+      '<!-- question {"id":"we-should-archive-this-draft","label":"We should archive this draft"} -->\n'
+      "We should archive this draft\n"
+      '- (x) Yes <!-- option {"label":"Yes"} -->\n'
+      '- ( ) No <!-- option {"label":"No"} -->\n'
+    ),
   )
   ans_legacy = app.reports.submit_answer(
     "legacy-migration-draft",

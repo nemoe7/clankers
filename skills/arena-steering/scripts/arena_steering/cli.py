@@ -222,7 +222,7 @@ def main(
       _print_reports_list(all_reports[start : start + HISTORICAL_PAGE_SIZE], stdout)
       return 0
     if cmd == "report":
-      return _run_report(cmd_args, reports, stdout)
+      return _run_report(cmd_args, reports, store, stdout)
     if cmd == "survey":
       parsed = survey_p.parse_args(cmd_args)
       return _run_survey(parsed, messages, stdout)
@@ -248,7 +248,7 @@ def main(
     if not parsed_root.command:
       parser.print_help(file=stdout)
     return 0
-  except (KeyError, ValueError, IndexError, OSError) as exc:
+  except (KeyError, ValueError, IndexError, OSError, RuntimeError) as exc:
     msg = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
     print(f"Steer error: {msg}", file=stderr)
     return 1
@@ -743,7 +743,9 @@ def _run_run(
   raise ValueError(f"Unknown run subcommand: {subcmd!r}")
 
 
-def _run_report(args: list[str], reports: ReportService, out: TextIO) -> int:
+def _run_report(
+  args: list[str], reports: ReportService, store: SqliteStore, out: TextIO
+) -> int:
   if not args:
     raise ValueError("Usage: steer report <id|pub|rm> ...")
   subcmd = args[0]
@@ -752,14 +754,21 @@ def _run_report(args: list[str], reports: ReportService, out: TextIO) -> int:
     pub_p.add_argument("source")
     pub_p.add_argument("-i", "--id", required=True)
     pub_p.add_argument("-t", "--title", required=True)
+    pub_p.add_argument("-u", "--allow-unparsed-markers", action="store_true")
     parsed = pub_p.parse_args(args[1:])
     source_path = Path(parsed.source)
     if not source_path.is_file():
       raise ValueError(f"Report source file does not exist: {source_path}")
     body = source_path.read_text(encoding="utf-8")
-    report = reports.publish_report(parsed.id, parsed.title, body)
+    report = reports.publish_report(
+      parsed.id,
+      parsed.title,
+      body,
+      allow_unparsed_markers=parsed.allow_unparsed_markers,
+    )
+    SteeringApp(store).verify_published_report(report)
     print(
-      f"Published {report.id}, {len(report.fields)} fields.",
+      f"Published {report.id}, {len(report.fields)} fields. Verified.",
       file=out,
     )
     return 0
@@ -796,7 +805,11 @@ def _print_delivered(delivered: dict[str, list], out: TextIO) -> None:
   for report, ans in ans_pairs:
     print(f"`{ans.id}` answer report {report.id} ({report.title})", file=out)
     for key, val in ans.values.items():
-      print(f"  {key}: {val}", file=out)
+      label = ans.field_labels.get(key, key)
+      formatted = (
+        ", ".join(str(item) for item in val) if isinstance(val, list) else str(val)
+      )
+      print(f"  {label}: {formatted}", file=out)
 
 
 def _print_message(msg: Message, out: TextIO) -> None:

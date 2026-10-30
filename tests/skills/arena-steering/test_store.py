@@ -396,7 +396,14 @@ def test_snapshot_migration_backfills_linked_report_answers(tmp_path):
   reports = ReportService(store, store)
   tasks = TaskService(store, store)
   reports.publish_report(
-    "choice", "Decision", "Select? {#select}\n- ( ) Yes\n- ( ) No\n"
+    "choice",
+    "Decision",
+    (
+      '<!-- question {"id": "select", "label": "Select?"} -->\n'
+      "Select?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- ( ) No <!-- option {"label": "No"} -->\n'
+    ),
   )
   answer = reports.submit_answer("choice", {"select": "Yes"}, answer_id="ab1234")
   tasks.create_task("linked", "Linked", details=["Review"], report_ids=["choice"])

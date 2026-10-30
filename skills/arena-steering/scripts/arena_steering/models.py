@@ -394,11 +394,16 @@ class ReportField:
   id: str = ""
   options: list[str] = field(default_factory=list)
   recommended: list[str] = field(default_factory=list)
+  question: str = ""
+  option_labels: dict[str, str] = field(default_factory=dict)
+  annotated: bool = False
 
   def __post_init__(self) -> None:
     if not isinstance(self.label, str) or not self.label.strip():
       raise ValueError("ReportField.label is required")
     self.label = self.label.strip()
+    self.question = str(self.question or self.label).strip()
+    self.option_labels = dict(self.option_labels)
     if self.type not in REPORT_FIELD_TYPES:
       raise ValueError(f"Invalid ReportField.type: {self.type!r}")
     raw_id = self.id.strip().rstrip("-") if isinstance(self.id, str) else ""
@@ -426,6 +431,13 @@ class ReportField:
       seen.add(text)
       cleaned_options.append(text)
     self.options = cleaned_options
+    if self.option_labels and (
+      set(self.option_labels) != seen
+      or any(
+        not isinstance(v, str) or not v.strip() for v in self.option_labels.values()
+      )
+    ):
+      raise ValueError(f"Field {self.id!r} requires an answer label for each option")
     cleaned_rec = [str(item).strip() for item in self.recommended if str(item).strip()]
     if any(item not in seen for item in cleaned_rec):
       raise ValueError(f"Field {self.id!r} recommends an unknown option")
@@ -440,6 +452,9 @@ class ReportField:
       "type": self.type,
       "options": list(self.options),
       "recommended": list(self.recommended),
+      "question": self.question,
+      "option_labels": dict(self.option_labels),
+      "annotated": self.annotated,
     }
 
   @classmethod
@@ -450,6 +465,9 @@ class ReportField:
       type=str(data["type"]),
       options=[str(item) for item in data.get("options", [])],
       recommended=[str(item) for item in data.get("recommended", [])],
+      question=str(data.get("question", "")),
+      option_labels=dict(data.get("option_labels", {})),
+      annotated=bool(data.get("annotated", False)),
     )
 
 

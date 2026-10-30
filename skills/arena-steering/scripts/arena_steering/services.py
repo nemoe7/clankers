@@ -9,6 +9,7 @@ from functools import wraps
 from typing import Any
 
 from . import survey as survey_mod
+from .markdown import render_report_markdown, unparsed_strike_lines
 from .markdown_fields import format_answer_for_task_detail, parse_report_markdown
 from .models import (
   MESSAGE_ID_RE,
@@ -16,6 +17,7 @@ from .models import (
   Message,
   Report,
   ReportAnswer,
+  ReportField,
   Task,
   validate_entity_id,
   validate_hex_id,
@@ -915,10 +917,44 @@ class ReportService:
     self._id_gen = id_gen or SecretsHexIdGenerator()
     self._on_answer = on_answer_callback
 
+  def publish_report(
+    self, report_id: str, title: str, body: str, *, allow_unparsed_markers: bool = False
+  ) -> Report:
+    blocks, fields = parse_report_markdown(body)
+    if any(not field.annotated for field in fields):
+      raise ValueError("Fielded reports require question and option comments")
+    warnings = unparsed_strike_lines(body)
+    if warnings and not allow_unparsed_markers:
+      raise ValueError(f"Possible unparsed strike markers on lines: {warnings}")
+    rendered = [
+      render_report_markdown(value)
+      for block_type, value in blocks
+      if block_type == "markdown"
+    ]
+    saved = self._publish_report(report_id, title, body, fields)
+    verified = self._reports.get_report(report_id)
+    if (
+      verified is None
+      or verified.id != saved.id
+      or verified.modified_at != saved.modified_at
+      or len(verified.fields) != len(fields)
+      or verified.body != body
+    ):
+      raise RuntimeError("Report publication verification failed after saving")
+    actual_blocks, _ = parse_report_markdown(verified.body)
+    if [
+      render_report_markdown(value)
+      for block_type, value in actual_blocks
+      if block_type == "markdown"
+    ] != rendered:
+      raise RuntimeError("Report rendered verification failed after saving")
+    return verified
+
   @_transactional_task_write
-  def publish_report(self, report_id: str, title: str, body: str) -> Report:
+  def _publish_report(
+    self, report_id: str, title: str, body: str, fields: list[ReportField]
+  ) -> Report:
     validate_entity_id(report_id, "Report.id")
-    _, fields = parse_report_markdown(body)
     existing = self._reports.get_report(report_id)
     if existing is not None and existing.latest_unacked_answer is not None:
       raise ValueError("Report has an unacknowledged answer")
@@ -996,6 +1032,27 @@ class ReportService:
     if not report.fields:
       raise ValueError(f"Report {report_id!r} has no interactive fields to answer")
     cleaned_values = self._validate_submission_values(report, values)
+    for field in report.fields:
+      value = cleaned_values[field.id]
+      if field.type == "choice":
+        if isinstance(value, dict) and value.get("custom"):
+          cleaned_values[field.id] = value["custom"]
+        elif isinstance(value, str):
+          if value.lower().startswith("something else:"):
+            cleaned_values[field.id] = value.partition(":")[2].strip()
+          else:
+            cleaned_values[field.id] = field.option_labels.get(value, value)
+      elif field.type == "checkbox":
+        if isinstance(value, dict):
+          selected = [
+            field.option_labels.get(item, item) for item in value.get("selected", [])
+          ]
+          custom = value.get("custom", "")
+          cleaned_values[field.id] = selected + ([custom] if custom else [])
+        elif isinstance(value, list):
+          cleaned_values[field.id] = [
+            field.option_labels.get(item, item) for item in value
+          ]
     now = self._clock.now_iso()
     ans_id = (
       validate_hex_id(answer_id, "ReportAnswer.id")

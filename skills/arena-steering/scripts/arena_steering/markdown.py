@@ -304,11 +304,12 @@ def render_code_block(raw_lang: str, raw_code: str) -> str:
   )
 
 
-def _create_parser(*, breaks: bool = False) -> MarkdownIt:
-  parser = MarkdownIt("commonmark", {"html": False, "breaks": breaks}).enable(
+def _create_parser(*, breaks: bool = False, report: bool = False) -> MarkdownIt:
+  parser = MarkdownIt("commonmark", {"html": report, "breaks": breaks}).enable(
     ["table", "strikethrough"]
   )
-  _highlight_mark_plugin(parser)
+  if not report:
+    _highlight_mark_plugin(parser)
   _gfm_extensions_plugin(parser)
 
   def _render_link_open(
@@ -360,6 +361,7 @@ def _create_parser(*, breaks: bool = False) -> MarkdownIt:
 
 _PARSER_STANDARD = _create_parser(breaks=False)
 _PARSER_BREAKS = _create_parser(breaks=True)
+_PARSER_REPORT = _create_parser(report=True)
 
 
 def render_markdown(
@@ -374,3 +376,62 @@ def render_markdown(
   if headings is not None:
     env["headings"] = headings
   return str(parser.render(str(markdown or ""), env)).strip()
+
+
+def render_report_markdown(
+  markdown: str, *, headings: list[dict[str, Any]] | None = None
+) -> str:
+  """Render trusted report Markdown with raw HTML and ordinary equals signs."""
+  env: dict[str, Any] = {}
+  if headings is not None:
+    env["headings"] = headings
+  return str(_PARSER_REPORT.render(str(markdown or ""), env)).strip()
+
+
+def unparsed_strike_lines(markdown: str) -> list[int]:
+  """Locate paired strike markers left as text outside code."""
+  parser = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
+  parser.disable("text_join")
+  lines = markdown.splitlines()
+  findings: set[int] = set()
+  for token in parser.parse(markdown):
+    if token.type != "inline" or not token.map:
+      continue
+    start, end = token.map
+    raw = "\n".join(lines[start:end])
+    cursor = 0
+    text = ""
+    offsets: list[int] = []
+    for child in token.children or ():
+      if child.type == "code_inline":
+        opening = raw.find(child.markup, cursor)
+        closing = (
+          raw.find(child.markup, opening + len(child.markup)) if opening >= 0 else -1
+        )
+        cursor = closing + len(child.markup) if closing >= 0 else len(raw)
+        text += "X"
+        offsets.append(cursor)
+        continue
+      if child.type in {"softbreak", "hardbreak"}:
+        newline = raw.find("\n", cursor)
+        cursor = newline + 1 if newline >= 0 else cursor
+        text += "\n"
+        offsets.append(cursor)
+        continue
+      content = (
+        child.markup
+        if child.type in {"text_special", "s_open", "s_close"}
+        else child.content
+      )
+      if not content:
+        continue
+      offset = raw.find(content, cursor)
+      if offset < 0 and end - start > 1:
+        continue
+      offset = max(0, offset)
+      cursor = offset + len(content)
+      text += content if child.type == "text" else "X" * len(content)
+      offsets.extend(offset + i for i in range(len(content)))
+    for match in re.finditer(r"~~(.+?)~~", text):
+      findings.add(start + 1 + raw.count("\n", 0, offsets[match.start()]))
+  return sorted(findings)

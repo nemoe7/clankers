@@ -28,7 +28,7 @@ from urllib.parse import parse_qs, urlparse, urlsplit
 
 from . import __version__
 from .gates import FileGateStatus
-from .markdown import render_markdown
+from .markdown import render_markdown, render_report_markdown
 from .markdown_fields import parse_report_markdown
 from .models import Attachment
 from .services import MessageService, ReportService, TaskService
@@ -288,8 +288,10 @@ class SteeringApp:
         int(HTTPStatus.NOT_FOUND),
         {"error": str(exc.args[0] if exc.args else exc)},
       )
-    except ValueError as exc:
+    except (TypeError, ValueError) as exc:
       return (int(HTTPStatus.BAD_REQUEST), {"error": str(exc)})
+    except RuntimeError as exc:
+      return (int(HTTPStatus.INTERNAL_SERVER_ERROR), {"error": str(exc)})
 
   def data_version(self) -> tuple[int, int]:
     """Return a version tuple reflecting SQLite PRAGMA data_version and in-process mutations."""
@@ -834,12 +836,29 @@ class SteeringApp:
   def _handle_publish_report(
     self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
   ) -> tuple[int, Any]:
+    override = body.get("allow_unparsed_markers", False)
+    if not isinstance(override, bool):
+      raise TypeError("allow_unparsed_markers must be a boolean")
     report = self.reports.publish_report(
       str(body.get("id", "")),
       str(body.get("title", "")),
       str(body.get("body", "")),
+      allow_unparsed_markers=override,
     )
-    return (int(HTTPStatus.CREATED), {"report": self._serialize_report(report)})
+    return (int(HTTPStatus.CREATED), {"report": self.verify_published_report(report)})
+
+  def verify_published_report(self, report: Any) -> dict[str, Any]:
+    """Compare the saved report and independently rendered GET response."""
+    expected = self._serialize_report(report)
+    _REPORT_RENDER_CACHE.pop(report.id, None)
+    status, payload = self._handle_get_report({"id": report.id}, {}, None)
+    actual = payload.get("report", {})
+    keys = ("id", "modified_at", "body", "fields", "blocks")
+    if status != HTTPStatus.OK or any(
+      actual.get(key) != expected.get(key) for key in keys
+    ):
+      raise RuntimeError("Report publication verification failed after saving")
+    return actual
 
   def _handle_get_report(
     self, params: dict[str, str], _query: dict[str, list[str]], _body: Any
@@ -932,7 +951,7 @@ class SteeringApp:
     for btype, val in blocks:
       if btype == "markdown":
         block_headings: list[dict[str, Any]] = []
-        block_html = render_markdown(val, breaks=False, headings=block_headings)
+        block_html = render_report_markdown(val, headings=block_headings)
         serialized_blocks.append(
           {
             "type": "markdown",

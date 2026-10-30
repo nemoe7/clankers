@@ -117,7 +117,12 @@ def test_task_service_mutable_dependency_queue_and_derived_blocking() -> None:
   reports.publish_report(
     "design-doc",
     "Design Doc",
-    "We should use this database\n- (x) SQLite\n- ( ) JSON\n",
+    (
+      '<!-- question {"id": "we-should-use-this-database", "label": "We should use this database"} -->\n'
+      "We should use this database\n"
+      '- (x) SQLite <!-- option {"label": "SQLite"} -->\n'
+      '- ( ) JSON <!-- option {"label": "JSON"} -->\n'
+    ),
   )
   tasks.mod_links_add("task-b", "design-doc")
   assert tasks.get_task("task-b")[1] is True
@@ -153,7 +158,12 @@ def test_report_ack_seen_lifecycle() -> None:
   reports.publish_report(
     "ack-doc",
     "Ack Doc",
-    "We should use this mode\n- (x) Live\n- ( ) Manual\n",
+    (
+      '<!-- question {"id": "we-should-use-this-mode", "label": "We should use this mode"} -->\n'
+      "We should use this mode\n"
+      '- (x) Live <!-- option {"label": "Live"} -->\n'
+      '- ( ) Manual <!-- option {"label": "Manual"} -->\n'
+    ),
   )
   reports.submit_answer(
     "ack-doc", {"we-should-use-this-mode": "Live"}, answer_id="dead02"
@@ -214,7 +224,14 @@ def test_task_answer_snapshots_survive_report_removal_and_edits(tmp_path) -> Non
   reports = ReportService(store, store)
   tasks = TaskService(store, store)
   reports.publish_report(
-    "decision", "Original decision", "Choice? {#choice}\n- ( ) A\n- ( ) B\n"
+    "decision",
+    "Original decision",
+    (
+      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
+      "Choice?\n"
+      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- ( ) B <!-- option {"label": "B"} -->\n'
+    ),
   )
   tasks.create_task(
     "work", "Do work", details=["Act on the answer"], report_ids=["decision"]
@@ -252,7 +269,14 @@ def test_existing_report_answers_are_snapshotted_when_linked(tmp_path) -> None:
   reports = ReportService(store, store)
   tasks = TaskService(store, store)
   reports.publish_report(
-    "decision", "Decision", "Choice? {#choice}\n- ( ) A\n- ( ) B\n"
+    "decision",
+    "Decision",
+    (
+      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
+      "Choice?\n"
+      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- ( ) B <!-- option {"label": "B"} -->\n'
+    ),
   )
   answer = reports.submit_answer("decision", {"choice": "B"}, answer_id="cd0001")
   reports.ack_answer("decision", answer.id, "Read")
@@ -267,12 +291,26 @@ def test_snapshot_keeps_original_report_labels_after_republish(tmp_path) -> None
   reports = ReportService(store, store)
   tasks = TaskService(store, store)
   reports.publish_report(
-    "decision", "Original title", "Original label? {#field}\n- ( ) A\n- ( ) B\n"
+    "decision",
+    "Original title",
+    (
+      '<!-- question {"id": "field", "label": "Original label?"} -->\n'
+      "Original label?\n"
+      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- ( ) B <!-- option {"label": "B"} -->\n'
+    ),
   )
   answer = reports.submit_answer("decision", {"field": "A"}, answer_id="ba1001")
   reports.ack_answer("decision", answer.id, "Read")
   reports.publish_report(
-    "decision", "New title", "New label? {#field}\n- ( ) A\n- ( ) B\n"
+    "decision",
+    "New title",
+    (
+      '<!-- question {"id": "field", "label": "New label?"} -->\n'
+      "New label?\n"
+      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- ( ) B <!-- option {"label": "B"} -->\n'
+    ),
   )
   task = tasks.create_task(
     "work", "Do work", details=["Review"], report_ids=["decision"]
@@ -292,7 +330,14 @@ def test_concurrent_report_answers_preserve_distinct_snapshots(tmp_path) -> None
   reports = [ReportService(store, store) for store in stores]
   tasks = TaskService(stores[0], stores[0])
   reports[0].publish_report(
-    "choice", "Choice", "Select? {#select}\n- ( ) Yes\n- ( ) No\n"
+    "choice",
+    "Choice",
+    (
+      '<!-- question {"id": "select", "label": "Select?"} -->\n'
+      "Select?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- ( ) No <!-- option {"label": "No"} -->\n'
+    ),
   )
   tasks.create_task("work", "Work", details=["Review"], report_ids=["choice"])
   barrier = Barrier(2)
