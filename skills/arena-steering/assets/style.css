@@ -479,6 +479,11 @@ code.msg-id[data-state="good"] {
   font-weight: 600;
 }
 
+.option-star {
+  color: hsl(var(--text-tertiary));
+  font-weight: 600;
+}
+
 .task-list-item {
   list-style: none;
   margin-inline-start: 2ch;

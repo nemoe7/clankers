@@ -16,6 +16,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `assets/reports-view.js`: Prefill a published report with its stored answer and mark a recommended option with `*`.
+- `assets/reports-view.js`: Keep an unsent answer per field in `localStorage` and clear it after submit.
 - `assets/app.js`: Drop the three-second task refresh, because finished runs now push a change event.
 
 - `scripts/arena_steering/services.py`: Keep survey answers, results, and the check stamp in memory instead of SQLite.

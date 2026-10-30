@@ -17,10 +17,60 @@ const TOC_BOTTOM_CLAMP_PX = 8;
 const TOC_CLICK_LOCK_MS = 650;
 
 let lastRenderedReportId = null;
+const DRAFT_KEY = "steer-report-drafts";
+
+function readDrafts() {
+  try {
+    return JSON.parse(window.localStorage.getItem(DRAFT_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function readDraft(reportId, fieldId) {
+  const drafts = readDrafts();
+  const key = `${reportId}:${fieldId}`;
+  return Object.hasOwn(drafts, key) ? drafts[key] : undefined;
+}
+
+function writeDrafts(reportId, values) {
+  try {
+    const drafts = readDrafts();
+    for (const [fieldId, value] of Object.entries(values)) {
+      drafts[`${reportId}:${fieldId}`] = value;
+    }
+    window.localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts));
+  } catch {
+    /* storage can be unavailable, so drafts stay in memory for this render */
+  }
+}
+
+function clearDrafts(reportId) {
+  try {
+    const drafts = readDrafts();
+    for (const key of Object.keys(drafts)) {
+      if (key.startsWith(`${reportId}:`)) delete drafts[key];
+    }
+    window.localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts));
+  } catch {
+    /* nothing to clear when storage is unavailable */
+  }
+}
+
+function storedValuesFor(report) {
+  const merged = {};
+  for (const answer of report.answers || []) {
+    for (const [fieldId, value] of Object.entries(answer.values || {})) {
+      merged[fieldId] = value;
+    }
+  }
+  return merged;
+}
+
 let mobilePickerCollapsed = false;
 let activeScrollCleanup = null;
 
-function renderFieldBlock(field, headings) {
+function renderFieldBlock(field, headings, stored = null) {
   const fieldId = escapeHtml(field.id);
   const label = escapeHtml(field.question || field.label);
   const anchorId = `field-${field.id}`;
@@ -28,27 +78,39 @@ function renderFieldBlock(field, headings) {
     headings.push({ id: anchorId, level: 3, text: field.question || field.label });
   }
   const recommended = new Set(field.recommended || []);
+  const options = field.options || [];
+  const storedList = Array.isArray(stored)
+    ? stored.map(String)
+    : stored === null || stored === undefined || stored === ""
+      ? []
+      : [String(stored)];
+  const storedSet = new Set(storedList);
+  const customStored = storedList.find((item) => !options.includes(item)) || "";
 
   if (field.type === "text") {
+    const textValue = storedList[0] || "";
     return `
       <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="text">
         <div class="field-header">
           <span class="field-label">${label}</span>
           <code class="field-id-chip msg-id">${fieldId}</code>
         </div>
-        <input type="text" class="input field-text-input" name="field-${fieldId}" placeholder="Something else..." aria-label="${label}">
+        <input type="text" class="input field-text-input" name="field-${fieldId}" value="${escapeHtml(textValue)}" placeholder="Something else..." aria-label="${label}">
       </div>
     `;
   }
 
   const inputType = field.type === "choice" ? "radio" : "checkbox";
-  const optionsHtml = (field.options || [])
+  const optionsHtml = options
     .map((opt) => {
-      const checked = recommended.has(opt) ? "checked" : "";
+      const checked = recommended.has(opt) || storedSet.has(opt) ? "checked" : "";
+      const star = recommended.has(opt)
+        ? '<span class="option-star" aria-label="Recommended by the agent">*</span> '
+        : "";
       return `
-        <label class="option-row">
+        <label class="option-row${recommended.has(opt) ? " is-recommended" : ""}">
           <input type="${inputType}" name="field-${fieldId}" value="${escapeHtml(opt)}" ${checked}>
-          <span>${escapeHtml(opt)}</span>
+          <span>${star}${escapeHtml(opt)}</span>
         </label>
       `;
     })
@@ -63,8 +125,8 @@ function renderFieldBlock(field, headings) {
       <div class="options">
         ${optionsHtml}
         <label class="option-row option-custom">
-          <input type="${inputType}" name="field-${fieldId}" value="${CUSTOM_SENTINEL}" class="custom-toggle" aria-label="Something else for ${label}">
-          <input type="text" class="input custom-text-input" placeholder="Something else..." aria-label="Custom response for ${label}">
+          <input type="${inputType}" name="field-${fieldId}" value="${CUSTOM_SENTINEL}" class="custom-toggle" ${customStored ? "checked" : ""} aria-label="Something else for ${label}">
+          <input type="text" class="input custom-text-input" value="${escapeHtml(customStored)}" placeholder="Something else..." aria-label="Custom response for ${label}">
         </label>
       </div>
     </div>
@@ -101,10 +163,18 @@ export function renderReportsView(container, state, handlers) {
   const hasFields = (activeReport.fields || []).length > 0;
   const headings = [];
 
+  const answerValues = storedValuesFor(activeReport);
+  const draftValues = readDrafts();
+  const fieldValues = { ...answerValues };
+  for (const [key, value] of Object.entries(draftValues)) {
+    const prefix = `${activeReport.id}:`;
+    if (key.startsWith(prefix)) fieldValues[key.slice(prefix.length)] = value;
+  }
+
   const renderedBlocks = blocks
     .map((block) => {
       if (block.type === "field") {
-        return renderFieldBlock(block.field, headings);
+        return renderFieldBlock(block.field, headings, fieldValues[block.field.id]);
       }
       if (typeof block.html === "string") {
         if (Array.isArray(block.headings)) {
@@ -437,8 +507,7 @@ export function renderReportsView(container, state, handlers) {
       submitBtn?.click();
     }
   });
-  form?.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  const collectValues = () => {
     const values = {};
     for (const question of container.querySelectorAll(
       ".question[data-field-id]"
@@ -476,6 +545,17 @@ export function renderReportsView(container, state, handlers) {
         if (selected.length) values[fid] = selected;
       }
     }
+    return values;
+  };
+
+  form?.addEventListener("input", () => {
+    writeDrafts(activeReport.id, collectValues());
+  });
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = collectValues();
     await handlers.onSubmitReportAnswer(activeReport.id, values);
+    clearDrafts(activeReport.id);
   });
 }

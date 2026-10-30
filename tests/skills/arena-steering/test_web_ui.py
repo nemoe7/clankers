@@ -273,6 +273,13 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert "border-right: 1px solid hsl(var(--border-faint));" not in style_css
   assert "margin-inline-start: 2ch;" in style_css
 
+  reports_js = (ASSETS_DIR / "reports-view.js").read_text(encoding="utf-8")
+  assert "storedValuesFor(" in reports_js
+  assert "option-star" in reports_js
+  assert "steer-report-drafts" in reports_js
+  assert "clearDrafts(" in reports_js
+  assert ".option-star {" in style_css
+
 
 def test_served_app_pushes_finished_runs(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "state.sqlite3")
