@@ -18,6 +18,8 @@ This log has no Unreleased section.
 
 - `assets/app.js`: Keep survey rechecks separate from the violation button.
 
+- `store.py`: Order messages and pages by write time and ID. Keep old insertion order when replacing legacy sequences, and retain write times across state sync.
+
 ## [2.1.0]
 
 ### Removed
