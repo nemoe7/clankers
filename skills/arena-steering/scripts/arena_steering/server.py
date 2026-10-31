@@ -1072,10 +1072,9 @@ class SteeringApp:
   def _serialize_report(report: Any, *, include_body: bool = True) -> dict[str, Any]:
     payload = report.to_dict()
     for ans in payload.get("answers", []):
-      ans["ack_html"] = (
-        render_markdown(ans["ack"], breaks=True) if ans.get("ack") else ""
-      )
+      ans["ack"] = "\n\n".join(ans.get("acks", []))
       ans["acks_html"] = [render_markdown(a, breaks=True) for a in ans.get("acks", [])]
+      ans["ack_html"] = "\n".join(ans["acks_html"])
     if getattr(report, "status", "") == "dismissed":
       _REPORT_RENDER_CACHE.pop(report.id, None)
     if not include_body:

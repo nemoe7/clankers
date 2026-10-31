@@ -173,6 +173,7 @@ def test_sqlite_store_crud_for_messages_tasks_reports_and_meta(tmp_path: Path) -
     ack_seen=True,
     modified_at=now,
   )
+  store.save_report_answer(report.answers[0])
   store.save_report(report)
   loaded_report = store.get_report("arch-report")
   assert loaded_report == report
@@ -180,6 +181,54 @@ def test_sqlite_store_crud_for_messages_tasks_reports_and_meta(tmp_path: Path) -
   store.set_meta("skip_poll", "1")
   assert store.get_meta("skip_poll") == "1"
   store.close()
+
+
+def test_legacy_report_answers_are_not_migrated(tmp_path: Path) -> None:
+  import json
+  import sqlite3
+
+  path = tmp_path / "legacy-answers.sqlite3"
+  store = SqliteStore(path)
+  store.save_report(
+    Report(
+      id="legacy",
+      title="Legacy",
+      body="",
+      status="answered",
+      modified_at="2026-01-01T00:00:00Z",
+    )
+  )
+  store.close()
+  old_answer = ReportAnswer(
+    id="ee1001",
+    report_id="legacy",
+    values={"choice": "A"},
+    modified_at="2026-01-01T00:00:00Z",
+  )
+  with sqlite3.connect(path) as db:
+    db.execute(
+      "UPDATE reports SET answers_json = ? WHERE id = 'legacy'",
+      (json.dumps([old_answer.to_dict()]),),
+    )
+    db.execute(
+      "INSERT INTO meta(key, value) VALUES (?, ?)",
+      ("report_answers:legacy", json.dumps([old_answer.to_dict()])),
+    )
+
+  reopened = SqliteStore(path)
+  legacy = reopened.get_report("legacy")
+  assert legacy.answers == []
+  assert reopened.list_report_answers() == []
+  assert reopened.get_message(old_answer.id) is None
+  reopened.save_report(legacy)
+  snapshot = reopened.export_rows()
+  assert json.loads(snapshot["reports"][0]["answers_json"]) == [old_answer.to_dict()]
+  target = SqliteStore(":memory:")
+  target.merge_rows(snapshot)
+  assert target.get_report("legacy").answers == []
+  assert target.get_message(old_answer.id) is None
+  reopened.close()
+  target.close()
 
 
 def test_concurrent_first_store_opens(tmp_path: Path) -> None:

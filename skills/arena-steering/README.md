@@ -193,7 +193,9 @@ Radio options use `( )`, and checkbox options use `[ ]`. A question without opti
 
 Selecting SQLite produces `Storage: Use SQLite`. Custom answers use the entered text.
 
-Field options must be unique, with 1 to 20 options and at most 200 characters per option. Reports retain answer history. Like v1, the inbox requires acknowledgement only for the latest answer to each report. Earlier answers remain in history.
+Field options must be unique, with 1 to 20 options and at most 200 characters per option. Each answer is a typed hidden message in the shared message ID namespace. Reports show their answer history, and the inbox delivers an answer only if the latest submission to that report is unacknowledged.
+
+Answer messages remain after report removal and reappear when that ID is republished. Answers embedded in older reports, archives, or snapshots are not migrated. Snapshot merges keep the row with the newer modification time, so a newer row can replace an acknowledgement with an older state.
 
 ### Report lifecycle
 
@@ -210,7 +212,7 @@ Field options must be unique, with 1 to 20 options and at most 200 characters pe
 - `seen` records report viewing. `ack_seen` records viewing the latest acknowledged answer and resets on a new answer or acknowledgement.
 - Republish and report removal reject a report when its latest answer is unacknowledged. Republish preserves answer history.
 - Multi-ID removal is atomic. A missing or protected report leaves every target in place.
-- Dismissal removes report links from tasks, while archived answers remain available for republishing.
+- Dismissal removes report links from tasks, while answer messages remain available for republishing.
 - Stale listing selects answered or dismissed reports whose latest answer is acknowledged. Removal of stale reports uses that selection.
 
 ## HTTP and WebSocket
