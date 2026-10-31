@@ -23,6 +23,7 @@ if str(SCRIPTS_DIR) not in sys.path:
   sys.path.insert(0, str(SCRIPTS_DIR))
 
 from arena_steering import models
+from arena_steering import server as server_mod
 from arena_steering.server import SteeringApp, create_http_server
 from arena_steering.store import SqliteStore, _advance_stamp
 
@@ -294,7 +295,7 @@ def _reseed_demo_store(store: SqliteStore) -> SteeringApp:
 
   store._seeding_demo = True  # type: ignore[attr-defined]
   try:
-    app = SteeringApp(store)
+    app = server_mod.SteeringApp(store)
   finally:
     store._seeding_demo = False  # type: ignore[attr-defined]
 
@@ -979,14 +980,31 @@ steer poll
   return app
 
 
+def _copy_demo_survey(source, target) -> None:
+  with source._cond:
+    answers = dict(source._survey_answers)
+    results = list(source._survey_results)
+    checked_at = source._survey_checked_at
+    pending = source._survey_pending
+  with target._cond:
+    target._survey_answers = answers
+    target._survey_results = results
+    target._survey_checked_at = checked_at
+    target._survey_pending = pending
+    target._cond.notify_all()
+
+
 def _register_demo_reset(
   app: SteeringApp,
   active_apps: weakref.WeakSet | None = None,
   active_lock: RLock | None = None,
+  previous_app: SteeringApp | None = None,
 ) -> None:
   active_apps = active_apps if active_apps is not None else weakref.WeakSet()
   active_lock = active_lock if active_lock is not None else RLock()
   with active_lock:
+    if previous_app is not None:
+      _copy_demo_survey(previous_app.messages, app.messages)
     active_apps.add(app)
   store = app.store
 
@@ -1001,20 +1019,14 @@ def _register_demo_reset(
             "UPDATE reports SET modified_at = ? WHERE id = ?", (stamp, report.id)
           )
     with active_lock:
-      clients = list(active_apps)
-    for active in clients:
-      with active.messages._cond:
-        active.messages._survey_answers = dict(seeded.messages._survey_answers)
-        active.messages._survey_results = list(seeded.messages._survey_results)
-        active.messages._survey_checked_at = seeded.messages._survey_checked_at
-        active.messages._survey_pending = seeded.messages._survey_pending
-        active.messages._cond.notify_all()
-      active._state_version = getattr(active, "_state_version", 0) + 1
+      for active in list(active_apps):
+        _copy_demo_survey(seeded.messages, active.messages)
+        active._state_version = getattr(active, "_state_version", 0) + 1
     return (200, {"reset": True})
 
   app.router.add("POST", "/demo/reset", reset_demo)
   app._after_reload = lambda reloaded: _register_demo_reset(
-    reloaded, active_apps, active_lock
+    reloaded, active_apps, active_lock, app
   )
 
 

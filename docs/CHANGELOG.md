@@ -12,7 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Reset the running demo to sample data without restarting its server (`demo-arena-steer.py`).
+- Reset the running demo to sample data without restarting its server. Preserve survey results and the reset action across reloads (`demo-arena-steer.py`).
 - Route demo changes, reset tests, and connection tests to the Preview test group (`workflows/changed_paths.py`).
 - Assign the composer parity browser test to the Preview test group (`workflows/changed_paths.py`).
 - Assign the message retry browser test to the Preview test group (`workflows/changed_paths.py`).
