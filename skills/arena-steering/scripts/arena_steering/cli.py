@@ -177,7 +177,7 @@ def main(
   ren_p.add_argument("new_id")
 
   pr_update_p = sub.add_parser(
-    "pr-update", help="Update a pull request title and body via gh and verify parity."
+    "pr-update", help="Update a pull request via the GitHub REST API and verify parity."
   )
   pr_update_p.add_argument("-n", "--number", type=int, required=True)
   pr_update_p.add_argument("-t", "--title", required=True)
@@ -332,7 +332,7 @@ def main(
       return _run_rename(parsed, tasks, reports, stdout)
     if cmd == "pr-update":
       parsed = pr_update_p.parse_args(cmd_args)
-      return _run_pr_update(parsed, stdout)
+      return _run_pr_update(parsed, store, stdout)
     if cmd == "job-log":
       parsed = job_log_p.parse_args(cmd_args)
       return _run_job_log(parsed, stdout)
@@ -566,9 +566,10 @@ def _run_rename(
   return 0
 
 
-def _run_gh(args: list[str]) -> str:
+def _run_gh(args: list[str], *, input_text: str | None = None) -> str:
   result = subprocess.run(
     args,
+    input=input_text,
     check=False,
     capture_output=True,
     text=True,
@@ -579,35 +580,44 @@ def _run_gh(args: list[str]) -> str:
   return result.stdout
 
 
-def _run_pr_update(parsed: argparse.Namespace, out: TextIO) -> int:
+def _pr_session_id_hits(store: SqliteStore, title: str, body: str) -> list[str]:
+  """Find stored message, answer, task, or report IDs at token boundaries."""
+  tokens = {
+    *(message.id for message in store.list_messages(include_hidden=True)),
+    *(task.id for task in store.list_tasks()),
+    *(report.id for report in store.list_reports()),
+  }
+  hits = []
+  for label, text in (("title", title), ("body", body)):
+    for line_no, line in enumerate(text.splitlines(), 1):
+      for token in sorted(tokens):
+        if re.search(rf"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])", line):
+          hits.append(f"{label}:{line_no}: {token}")
+  return hits
+
+
+def _run_pr_update(parsed: argparse.Namespace, store: SqliteStore, out: TextIO) -> int:
   body_path = Path(parsed.body_file)
   if not body_path.is_file():
     raise ValueError(f"PR body file does not exist: {body_path}")
   expected_body = body_path.read_text(encoding="utf-8")
+  hits = _pr_session_id_hits(store, parsed.title, expected_body)
+  if hits:
+    raise ValueError(
+      "PR UPDATE BLOCKED: the title or body cites a session-local ID. "
+      "Remove the IDs before updating:\n  " + "\n  ".join(hits)
+    )
+  endpoint = f"repos/{{owner}}/{{repo}}/pulls/{parsed.number}"
   _run_gh(
-    [
-      "gh",
-      "pr",
-      "edit",
-      str(parsed.number),
-      "--title",
-      parsed.title,
-      "--body-file",
-      str(body_path),
-    ]
+    ["gh", "api", endpoint, "-X", "PATCH", "--input", "-"],
+    input_text=json.dumps({"title": parsed.title, "body": expected_body}),
   )
-  raw = _run_gh(
-    [
-      "gh",
-      "pr",
-      "view",
-      str(parsed.number),
-      "--json",
-      "title,body",
-    ]
-  )
-  current = json.loads(raw)
-  if current.get("title") != parsed.title or current.get("body") != expected_body:
+  current = json.loads(_run_gh(["gh", "api", endpoint]))
+  if (
+    not isinstance(current, dict)
+    or current.get("title") != parsed.title
+    or (current.get("body") or "") != expected_body
+  ):
     raise ValueError(f"PR #{parsed.number} title/body did not verify after update")
   print(f"Updated PR #{parsed.number}: {parsed.title}", file=out)
   return 0

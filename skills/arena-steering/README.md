@@ -94,7 +94,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer report rm ID [ID ...]` | Dismiss one or more reports. Use `--stale` alone to remove stale reports. |
 | `steer ren OLD NEW` | Rename a task or report and update its links. |
 | `steer survey` | Show the survey and submission template. Use `-i` for the smallest image, `--template` for the template, or `-f FILE` for a submission. Submissions go to the running server when one is recorded. |
-| `steer pr-update -n NUMBER -t TITLE -f FILE` | Update a pull request with `gh`, then verify its title and body. |
+| `steer pr-update -n NUMBER -t TITLE -f FILE` | Reject session-local IDs, update a pull request through `gh api`, then verify its title and body. |
 | `steer job-log -j JOB` or `steer job-log -r RUN` | Print one GitHub log URL for the agent to fetch. When no URL exists, print the log text and the reason. Supply exactly one ID. |
 | `steer worktree add NAME [-b BRANCH]` | Add a native Git worktree under `.worktrees/`. |
 | `steer worktree list`, `remove NAME`, `prune`, or `collect NAME` | List, remove, or prune worktrees, or print the patch a worktree carries against its merge base. |
