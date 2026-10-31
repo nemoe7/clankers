@@ -299,6 +299,9 @@ def test_demo_lives_in_maintenance_and_retains_port_option(tmp_path: Path) -> No
   )
   assert help_result.returncode == 0, help_result.stderr
   assert "--port" in help_result.stdout
+  live_state = tmp_path / "arena-state" / "state.sqlite3"
+  live_state.parent.mkdir(parents=True)
+  live_state.write_bytes(b"live state is not demo data")
   seed_result = subprocess.run(
     [sys.executable, str(demo), "--seed-only", "--port", "8135"],
     check=False,
@@ -308,6 +311,7 @@ def test_demo_lives_in_maintenance_and_retains_port_option(tmp_path: Path) -> No
   )
   assert seed_result.returncode == 0, seed_result.stderr
   assert (tmp_path / "arena-state" / "demo" / "state.sqlite3").is_file()
+  assert live_state.read_bytes() == b"live state is not demo data"
 
 
 def test_moved_demo_reseeds_a_demo_store_on_reload(tmp_path: Path) -> None:

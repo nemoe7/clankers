@@ -95,14 +95,14 @@ def test_cli_command_group_help_executable(tmp_path: Path, group: str) -> None:
 def test_report_pin_cli_and_http_are_durable() -> None:
   state_dir = cli.resolve_state_dir()
   state_dir.mkdir(parents=True, exist_ok=True)
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   reports = cli.ReportService(store, store)
   reports.publish_report("pin-me", "Pin me", "# Pin me")
   store.close()
 
   code, _, error = _run_cli(state_dir, "report", "pin", "pin-me")
   assert code == 0, error
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   assert store.get_report("pin-me").pinned is True
   app = SteeringApp(store)
   status, result = app.dispatch("PATCH", "/reports/pin-me", {"pinned": False})
@@ -115,7 +115,7 @@ def test_report_pin_cli_and_http_are_durable() -> None:
   assert code == 0, error
   code, _, error = _run_cli(state_dir, "report", "unpin", "pin-me")
   assert code == 0, error
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   assert store.get_report("pin-me").pinned is False
   store.close()
 
@@ -123,7 +123,7 @@ def test_report_pin_cli_and_http_are_durable() -> None:
 def test_cli_message_page_size(tmp_path: Path) -> None:
   state_dir = cli.resolve_state_dir()
   state_dir.mkdir(parents=True, exist_ok=True)
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   service = cli.MessageService(store, store, store)
   for index in range(12):
     service.send_message(f"message {index}", msg_id=f"{index:06x}")
@@ -173,7 +173,7 @@ def test_task_status_api_and_cli_reject_noncanonical_values(
   invalid_status: str,
 ) -> None:
   state_dir = cli.resolve_state_dir()
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
   base = {"id": "work", "title": "Work", "details": ["Do work"]}
   status, _ = app.dispatch("POST", "/tasks", {**base, "status": invalid_status})
@@ -781,7 +781,7 @@ def test_resolve_asset_serves_report_gifs_and_images(tmp_path: Path) -> None:
   (reports_dir / "scroll-fade.gif").write_bytes(gif_bytes)
   (reports_dir / "board.png").write_bytes(png_bytes)
 
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
   resolved_gif = app.resolve_asset("/scroll-fade.gif")
   assert resolved_gif is not None
@@ -824,7 +824,7 @@ def test_resolve_asset_serves_static_contract_paths(tmp_path: Path) -> None:
   (reports_dir / "board.png").write_bytes(png_bytes)
   (uploads_dir / "shot.png").write_bytes(png_bytes)
 
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store, assets_dir=assets_dir)
   app.reports.publish_report("static-spec", "Static Spec", "# Static Spec\n")
 
@@ -860,7 +860,7 @@ def test_http_static_paths_do_not_collide_with_report_routes(tmp_path: Path) -> 
   png_bytes = b"\x89PNG\r\n\x1a\n"
   (reports_dir / "board.png").write_bytes(png_bytes)
 
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
   app.reports.publish_report("static-spec", "Static Spec", "# Static Spec\n")
   server = create_http_server(app, host="127.0.0.1", port=0)
@@ -953,7 +953,7 @@ def test_server_markdown_it_diff_and_report_summary_cache(tmp_path: Path) -> Non
 
 def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   state_dir = tmp_path / "arena-state"
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
   app.dispatch("POST", "/messages", {"id": MSG_ID_CLI, "body": "Add CLI tests"})
   store.close()
@@ -1066,7 +1066,7 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert REPORT_ID_PORT in out
 
   # Dismissed report is evicted from active store while answers survive on republish.
-  recheck_store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  recheck_store = SqliteStore(state_dir / "state.sqlite3")
   assert recheck_store.get_report(REPORT_ID_PORT) is None
   recheck_store.close()
 
@@ -1166,7 +1166,7 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
 
   state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
 
   payload = base64.b64encode(b"hello upload").decode("ascii")
@@ -1237,7 +1237,7 @@ def test_http_multipart_upload_and_message_with_file(tmp_path: Path) -> None:
 
   state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
   server = create_http_server(app, host="127.0.0.1", port=0)
   port = server.server_address[1]
@@ -1352,7 +1352,7 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
   assert code == 0
   assert "root-task" not in out
 
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
   status, payload = app.dispatch("POST", "/api/timezone", {"timezone": "Asia/Manila"})
   assert status == int(HTTPStatus.OK)
@@ -1675,15 +1675,14 @@ def test_run_concurrent_starts_have_one_winner(tmp_path: Path) -> None:
   assert sum(result != 0 for result in results) == 1
 
 
-def test_fixed_state_location_preserves_v1_database(tmp_path: Path) -> None:
+def test_fixed_state_location_uses_state_sqlite3(tmp_path: Path) -> None:
   import os
   import subprocess
   import sys
 
   state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
-  legacy = state_dir / "state.sqlite3"
-  legacy.write_bytes(b"legacy state must not be opened")
+  state_db = state_dir / "state.sqlite3"
   override = tmp_path / "override"
   entrypoint = (
     Path(__file__).resolve().parents[3] / "skills/arena-steering/scripts/steer"
@@ -1698,8 +1697,8 @@ def test_fixed_state_location_preserves_v1_database(tmp_path: Path) -> None:
     check=False,
   )
   assert result.returncode == 0, result.stderr
-  assert legacy.read_bytes() == b"legacy state must not be opened"
-  assert (state_dir / "steering-v2.sqlite3").is_file()
+  assert state_db.is_file()
+  assert not (state_dir / "steering-v2.sqlite3").exists()
   assert not override.exists()
   rejected = subprocess.run(
     [sys.executable, str(entrypoint), "--state-dir", str(override), "tasks"],
@@ -2135,7 +2134,7 @@ def test_gate_links_block_only_while_run_is_active() -> None:
   runs.mkdir()
   marker = runs / "verify.exit"
   (runs / "verify.json").write_text(json.dumps({"exit_path": str(marker)}))
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
   status, created = app.dispatch(
     "POST",
@@ -2158,7 +2157,7 @@ def test_gate_links_block_only_while_run_is_active() -> None:
     marker.write_text(result)
     assert not app.dispatch("GET", "/tasks/gate-task")[1]["task"]["blocked"]
   store.close()
-  reopened = SqliteStore(state_dir / "steering-v2.sqlite3")
+  reopened = SqliteStore(state_dir / "state.sqlite3")
   assert reopened.get_task("gate-task").gate_names == ["verify"]
   reopened.close()
   assert (
@@ -2558,7 +2557,7 @@ def test_cli_removes_answer_detail_without_unlinking_report(tmp_path: Path) -> N
 def test_cli_gate_blocks_until_the_inbox_is_acked() -> None:
   state_dir = cli.resolve_state_dir()
   state_dir.mkdir(parents=True, exist_ok=True)
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   service = cli.MessageService(store, store, store)
   service.send_message("gate me", msg_id="ab12cd")
   store.close()
@@ -2578,7 +2577,7 @@ def test_cli_gate_blocks_until_the_inbox_is_acked() -> None:
 def test_cli_gate_names_a_push_block() -> None:
   state_dir = cli.resolve_state_dir()
   state_dir.mkdir(parents=True, exist_ok=True)
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   service = cli.MessageService(store, store, store)
   service.send_message("gate me", msg_id="ab12ce")
   store.close()
