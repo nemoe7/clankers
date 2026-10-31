@@ -1063,7 +1063,7 @@ def test_job_log_reads_route_to_helper(
   code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
   assert code == pre.END_CALL, out
   assert routed == [target]
-  assert "github.com" in out
+  assert out.splitlines()[-1] == "https://github.com/o/r/actions/runs/1"
 
 
 def test_pr_patch_routes_to_verified_helper(
