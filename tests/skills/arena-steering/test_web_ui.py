@@ -1741,6 +1741,30 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
           page.locator("#tab-reports").click()
         pip.wait_for(state="hidden")
         assert question.is_visible()
+        for width in (1200, 375):
+          page.set_viewport_size({"width": width, "height": 700})
+          alone = page.locator("#tab-reports").evaluate("""tab => {
+            const label = document.createRange();
+            label.selectNodeContents(tab.firstChild);
+            const text = label.getBoundingClientRect();
+            const bounds = tab.getBoundingClientRect();
+            const question = tab.querySelector('#report-needs-answer').getBoundingClientRect();
+            return {
+              textCenter: (text.left + text.right) / 2,
+              tabCenter: (bounds.left + bounds.right) / 2,
+              textRight: text.right,
+              questionLeft: question.left,
+              questionOffsetRight: bounds.right - question.right,
+              questionTop: question.top - bounds.top,
+              questionWidth: question.width,
+              questionHeight: question.height,
+            };
+          }""")
+          assert abs(alone["textCenter"] - alone["tabCenter"]) < 1
+          assert alone["textRight"] <= alone["questionLeft"]
+          assert alone["questionOffsetRight"] == 6
+          assert alone["questionTop"] == 6
+          assert alone["questionWidth"] == alone["questionHeight"] == 7
 
         page.locator("#tab-messages").click()
         answer = app.reports.submit_answer("decision", {"choice": "Yes"})
