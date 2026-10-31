@@ -288,6 +288,12 @@ class SqliteStore:
     with self._lock:
       self._conn.close()
 
+  def data_version(self) -> tuple[int, int]:
+    """Count commits from other connections and changes on this connection."""
+    with self._lock:
+      row = self._conn.execute("PRAGMA data_version").fetchone()
+      return (int(row[0]) if row else 0, self._conn.total_changes)
+
   @contextmanager
   def transaction(self) -> Iterator[None]:
     """Run nested repository writes in one SQLite transaction."""

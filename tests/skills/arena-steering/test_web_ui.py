@@ -2054,3 +2054,79 @@ def test_report_refresh_ignores_delayed_older_detail_response() -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+def test_external_sqlite_write_changes_websocket_data_version(tmp_path: Path) -> None:
+  path = tmp_path / "state.sqlite3"
+  server_store = SqliteStore(path)
+  writer_store = SqliteStore(path)
+  app = SteeringApp(server_store)
+  try:
+    before = app.data_version()
+    assert app.data_version() == before
+    writer_store.set_meta("test_external_write", "changed")
+    after_external = app.data_version()
+    assert after_external != before
+    assert app.data_version() == after_external
+    server_store.set_meta("test_local_write", "changed")
+    after_local = app.data_version()
+    assert after_local != after_external
+    assert app.data_version() == after_local
+  finally:
+    writer_store.close()
+    server_store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_websocket_refreshes_after_external_store_write(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  path = tmp_path / "state.sqlite3"
+  server_store = SqliteStore(path)
+  writer_store = SqliteStore(path)
+  app = SteeringApp(server_store, repo_name="External change")
+  writer = SteeringApp(writer_store)
+  server_store.set_meta("timezone", "UTC")
+  app.messages.send_message("Baseline", msg_id="ac0001")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(timezone_id="UTC")
+        sockets = []
+        frames = []
+
+        def record_socket(socket) -> None:
+          sockets.append(socket)
+          socket.on("framereceived", lambda frame: frames.append(frame))
+
+        page.on("websocket", record_socket)
+        page.goto(f"http://127.0.0.1:{server.server_port}/")
+        page.locator('[data-msg-id="ac0001"]').first.wait_for(state="visible")
+        assert sockets and '{"type":"change"}' in frames
+        with sockets[0].expect_event(
+          "framereceived",
+          predicate=lambda frame: frame == '{"type":"change"}',
+          timeout=6000,
+        ):
+          writer.messages.send_message("Added outside the server", msg_id="ac0002")
+        page.locator('[data-msg-id="ac0002"]').first.wait_for(
+          state="visible", timeout=6000
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    writer_store.close()
+    server_store.close()

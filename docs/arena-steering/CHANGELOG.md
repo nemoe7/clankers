@@ -40,6 +40,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `store.py`, `server.py`: Refresh connected browsers after writes from another process.
+
 - `assets/`, `services.py`, `server.py`, `cli.py`: Show connection and agent activity states. Wake a poll for work or a skip from another process.
 
 - `services.py`, `cli.py`, `server.py`: Add answer details only on the first acknowledgement, and report actual additions. Ignore identical latest submissions.
