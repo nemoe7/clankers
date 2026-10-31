@@ -2,7 +2,7 @@ import { createComposerUploads } from "./composer-uploads.js";
 // Main ES module controller for Arena Steering.
 
 import { api, connectWebSocket } from "./api.js";
-import { expandMessageHistory, renderMessagesView, trackMessageAcks } from "./messages-view.js";
+import { expandMessageHistory, messageQueryKey, renderMessagesView, trackMessageAcks } from "./messages-view.js";
 import {
   escapeHtml,
   highlightCodeBlocks,
@@ -262,14 +262,10 @@ function setLoading(active) {
 }
 
 let messageEpoch = 0;
-let messageLoadingOlder = false;
+let olderPageRequest = null;
 let loadedMessageKey = null;
 let historyCache = null;
 let searchBase = null;
-
-function currentMessageKey(state) {
-  return JSON.stringify([Boolean(state.showHidden), (state.searchQuery || "").trim()]);
-}
 
 export function messageMatchesQuery(message, query) {
   const needle = String(query || "").trim().toLowerCase();
@@ -280,7 +276,13 @@ export function messageMatchesQuery(message, query) {
 
 async function fetchMessagePage({ before = "", reset = false } = {}) {
   const state = store.getState();
-  const key = currentMessageKey(state);
+  const key = messageQueryKey(state);
+  // A routine refresh must not invalidate a slower pagination request. Apply
+  // the latest changes immediately after the older page finishes instead.
+  if (!before && !reset && olderPageRequest?.key === key) {
+    olderPageRequest.refreshRequested = true;
+    return state.messages || [];
+  }
   const epoch = ++messageEpoch;
   const previous = reset || loadedMessageKey !== key ? [] : [...(state.messages || [])];
   if (reset || loadedMessageKey !== key) {
@@ -290,13 +292,13 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
   try {
     const options = { all: true, hidden: Boolean(state.showHidden), query: (state.searchQuery || "").trim() };
     const result = await api.listMessages({ ...options, before });
-    if (epoch !== messageEpoch || currentMessageKey(store.getState()) !== key) return null;
+    if (epoch !== messageEpoch || messageQueryKey(store.getState()) !== key) return null;
     let fresh = result.messages || [];
     let hasMore = result.has_more;
     if (!before && previous.length) {
       while (hasMore && fresh.length < previous.length) {
         const older = await api.listMessages({ ...options, before: fresh[0].id });
-        if (epoch !== messageEpoch || currentMessageKey(store.getState()) !== key) return null;
+        if (epoch !== messageEpoch || messageQueryKey(store.getState()) !== key) return null;
         fresh = [...(older.messages || []), ...fresh];
         hasMore = older.has_more;
       }
@@ -305,14 +307,18 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
     const merged = before
       ? [...fresh, ...previous.filter((item) => !ids.has(item.id))]
       : fresh;
-    store.setState({ messages: merged, messagesHasMore: hasMore, messagesError: "", messagesLoading: false });
+    const current = store.getState();
+    if (current.messagesHasMore !== hasMore || current.messagesError || current.messagesLoading ||
+        JSON.stringify(current.messages) !== JSON.stringify(merged)) {
+      store.setState({ messages: merged, messagesHasMore: hasMore, messagesError: "", messagesLoading: false });
+    }
     const activeQuery = (store.getState().searchQuery || "").trim().toLowerCase();
     if (activeQuery && !before) {
       searchBase = { query: activeQuery, messages: merged, hasMore };
     }
     return merged;
   } catch (error) {
-    if (epoch === messageEpoch && currentMessageKey(store.getState()) === key) {
+    if (epoch === messageEpoch && messageQueryKey(store.getState()) === key) {
       store.setState({ messagesError: `Could not load messages: ${error.message}`, messagesLoading: false });
     }
     return null;
@@ -525,7 +531,7 @@ const handlers = {
     store.setState({ searchQuery: query });
     if (wasSearching && !searching && historyCache) {
       searchBase = null;
-      loadedMessageKey = currentMessageKey(store.getState());
+      loadedMessageKey = messageQueryKey(store.getState());
       store.setState({ messages: historyCache.messages, messagesHasMore: historyCache.hasMore, messagesError: "" });
       historyCache = null;
       fetchMessagePage();
@@ -534,7 +540,7 @@ const handlers = {
     const needle = query.trim().toLowerCase();
     if (searchBase && needle.startsWith(searchBase.query)) {
       messageEpoch += 1;
-      loadedMessageKey = currentMessageKey(store.getState());
+      loadedMessageKey = messageQueryKey(store.getState());
       store.setState({
         messages: searchBase.messages.filter((item) => messageMatchesQuery(item, needle)),
         messagesHasMore: searchBase.hasMore,
@@ -548,12 +554,17 @@ const handlers = {
   },
   async onLoadOlderMessages() {
     const state = store.getState();
-    if (messageLoadingOlder || !state.messagesHasMore || !state.messages.length) return;
-    messageLoadingOlder = true;
+    const key = messageQueryKey(state);
+    if (olderPageRequest?.key === key || !state.messagesHasMore || !state.messages.length) return;
+    const request = { key, refreshRequested: false };
+    olderPageRequest = request;
     try {
       await fetchMessagePage({ before: state.messages[0].id });
     } finally {
-      messageLoadingOlder = false;
+      if (olderPageRequest === request) olderPageRequest = null;
+      if (request.refreshRequested && messageQueryKey(store.getState()) === key) {
+        refreshAll(true);
+      }
     }
   },
   async onOpenSurvey(trigger) {

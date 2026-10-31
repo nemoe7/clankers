@@ -12,6 +12,13 @@ export function referenceTargets(state) {
 
 export function linkReferences(root, state) {
   const targets = referenceTargets(state);
+  // Retained message cards can outlive the set of loaded reference targets.
+  // Reconsider only links generated here, not explicit receipt links.
+  for (const link of root.querySelectorAll("[data-auto-reference]")) {
+    if (targets.get(link.dataset.referenceId) !== link.dataset.referenceType) {
+      link.replaceWith(document.createTextNode(link.textContent || ""));
+    }
+  }
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -29,6 +36,7 @@ export function linkReferences(root, state) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "reference-link";
+      button.dataset.autoReference = "true";
       button.dataset.referenceType = type;
       button.dataset.referenceId = match[0];
       button.textContent = match[0];

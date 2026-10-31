@@ -882,3 +882,515 @@ def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_messages_keep_scroll_target_during_unchanged_polling() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Message scroll regression")
+  for index in range(20):
+    app.messages.send_message(
+      f"Message {index}\n\n" + "Long scrolling content. " * 40,
+      msg_id=f"{index:06x}",
+      blocking=False,
+    )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.add_init_script("""(() => {
+          window.messageResponses = 0;
+          const originalFetch = window.fetch.bind(window);
+          window.fetch = async (...args) => {
+            const response = await originalFetch(...args);
+            if (String(args[0]).includes('/messages?')) {
+              const json = response.json.bind(response);
+              response.json = async () => {
+                const value = await json();
+                requestAnimationFrame(() => { window.messageResponses += 1; });
+                return value;
+              };
+            }
+            return response;
+          };
+        })();""")
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.wait_for_function(
+          "window.messageResponses > 0 && document.querySelectorAll('#history .message').length > 1"
+        )
+        page.wait_for_load_state("networkidle")
+        history = page.locator("#history")
+        bounds = history.bounding_box()
+        assert bounds
+        page.evaluate("""() => {
+          const history = document.querySelector('#history');
+          history.scrollTop = history.scrollHeight / 2;
+        }""")
+        start = history.evaluate("element => element.scrollTop")
+        assert start > 320
+        page.mouse.move(
+          bounds["x"] + bounds["width"] / 2, bounds["y"] + bounds["height"] / 2
+        )
+        page.mouse.wheel(0, -120)
+        page.wait_for_function(
+          "before => document.querySelector('#history').scrollTop < before", arg=start
+        )
+        page.evaluate(
+          "window.scrollTargetBeforePoll = document.querySelector('#history')"
+        )
+        count = page.evaluate("window.messageResponses")
+        page.wait_for_function(
+          "count => window.messageResponses > count", arg=count, timeout=6000
+        )
+        assert page.evaluate(
+          "window.scrollTargetBeforePoll === document.querySelector('#history')"
+        )
+        start = history.evaluate("element => element.scrollTop")
+        page.mouse.wheel(0, -120)
+        page.wait_for_function(
+          "before => document.querySelector('#history').scrollTop < before", arg=start
+        )
+
+        app.messages.send_message(
+          "A new message arrives.", msg_id="aa1234", blocking=False
+        )
+        new_message = page.locator('.message[data-msg-id="aa1234"]')
+        new_message.wait_for(timeout=6000)
+        app.messages.ack("aa1234", "A reply arrives.")
+        new_message.locator(".reply").get_by_text("A reply arrives.").wait_for(
+          timeout=6000
+        )
+        assert page.evaluate(
+          "window.scrollTargetBeforePoll === document.querySelector('#history')"
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize(
+  ("wait_for_poll", "gesture"),
+  [(False, "wheel"), (True, "wheel"), (False, "scrollbar"), (False, "touch")],
+  ids=["quick-wheel", "slow-wheel", "scrollbar-drag", "touch-swipe"],
+)
+def test_messages_keep_scroll_target_while_older_page_loads(
+  wait_for_poll: bool,
+  gesture: str,
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Older message scroll regression")
+  for index in range(45):
+    app.messages.send_message(
+      f"Message {index}\n\n" + "Long scrolling content. " * 40,
+      msg_id=f"{index:06x}",
+      blocking=False,
+    )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+        ignore_default_args=["--hide-scrollbars"],
+      )
+      try:
+        page = browser.new_page(
+          viewport={"width": 411, "height": 800}
+          if gesture == "touch"
+          else {"width": 1200, "height": 700},
+          is_mobile=gesture == "touch",
+          has_touch=gesture == "touch",
+        )
+        page.set_default_timeout(6000)
+        page.add_init_script("""(() => {
+          const originalFetch = window.fetch.bind(window);
+          window.refreshesWhileOlder = 0;
+          window.fetch = async (...args) => {
+            const response = await originalFetch(...args);
+            const url = String(args[0]);
+            if (url.includes('/messages?') && url.includes('before=') && !window.olderWasHeld) {
+              window.olderWasHeld = true;
+              window.olderPending = true;
+              await new Promise(resolve => {
+                window.releaseOlderPage = () => { window.olderPending = false; resolve(); };
+              });
+            } else if (url.includes('/health') && window.olderPending) {
+              window.refreshesWhileOlder += 1;
+            }
+            return response;
+          };
+        })();""")
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 20"
+        )
+        page.wait_for_load_state("networkidle")
+        history = page.locator("#history")
+        bounds = history.bounding_box()
+        assert bounds
+        page.evaluate("""() => {
+          const history = document.querySelector('#history');
+          history.scrollTop = 400;
+          window.olderScrollTarget = history;
+        }""")
+        page.mouse.move(
+          bounds["x"] + bounds["width"] / 2, bounds["y"] + bounds["height"] / 2
+        )
+        page.mouse.wheel(0, -150)
+        page.wait_for_function("typeof window.releaseOlderPage === 'function'")
+        if wait_for_poll:
+          page.wait_for_function("window.refreshesWhileOlder > 0")
+          app.messages.send_message(
+            "Arrived during pagination.", msg_id="aa1234", blocking=False
+          )
+        before_wheel = history.evaluate("element => element.scrollTop")
+        page.mouse.wheel(0, 60)
+        page.wait_for_function(
+          "before => document.querySelector('#history').scrollTop > before",
+          arg=before_wheel,
+        )
+        cdp = None
+        drag_x = drag_y = touch_x = touch_y = 0.0
+        if gesture in {"scrollbar", "touch"}:
+          history.evaluate("element => { element.scrollTop = 1200; }")
+          page.wait_for_function("document.querySelector('#history').scrollTop > 1000")
+          start_gesture = history.evaluate("element => element.scrollTop")
+          if gesture == "scrollbar":
+            metrics = history.evaluate("""element => {
+              const rect = element.getBoundingClientRect();
+              const track = rect.height - 16;
+              const thumb = Math.max(18, track * element.clientHeight / element.scrollHeight);
+              return {x: rect.right - 5, y: rect.top + 8 + thumb / 2 +
+                (track - thumb) * element.scrollTop / (element.scrollHeight - element.clientHeight)};
+            }""")
+            drag_x, drag_y = metrics["x"], metrics["y"]
+            page.screenshot(path=str(tmp_path / "scrollbar-before.png"))
+            page.mouse.move(drag_x, drag_y)
+            page.mouse.down()
+            page.mouse.move(drag_x, drag_y + 8, steps=4)
+          else:
+            cdp = page.context.new_cdp_session(page)
+            touch_x = bounds["x"] + bounds["width"] / 2
+            touch_y = max(150, min(bounds["y"] + bounds["height"] / 2, 650))
+            cdp.send(
+              "Input.dispatchTouchEvent",
+              {"type": "touchStart", "touchPoints": [{"x": touch_x, "y": touch_y}]},
+            )
+            cdp.send(
+              "Input.dispatchTouchEvent",
+              {"type": "touchMove", "touchPoints": [{"x": touch_x, "y": touch_y - 60}]},
+            )
+          page.wait_for_function(
+            "before => document.querySelector('#history').scrollTop > before",
+            arg=start_gesture,
+          )
+          page.evaluate("""() => new Promise(resolve => {
+            const history = document.querySelector('#history');
+            let last = history.scrollTop;
+            let stable = 0;
+            let frames = 0;
+            function tick() {
+              stable = history.scrollTop === last ? stable + 1 : 0;
+              last = history.scrollTop;
+              if (stable >= 3 || ++frames >= 120) resolve(); else requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
+          })""")
+        anchor = page.evaluate("""() => {
+          const history = document.querySelector('#history');
+          const rect = history.getBoundingClientRect();
+          const card = Array.from(history.querySelectorAll('.message')).filter(item => {
+            const box = item.getBoundingClientRect();
+            return box.bottom > rect.top + 40 && box.top < rect.bottom - 40;
+          }).at(-1);
+          window.olderAnchorCard = card;
+          return {id: card.dataset.msgId, top: card.getBoundingClientRect().top - rect.top};
+        }""")
+        page.evaluate("window.releaseOlderPage()")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length > 20"
+        )
+        assert page.evaluate(
+          "window.olderScrollTarget === document.querySelector('#history')"
+        )
+        assert page.evaluate("window.olderAnchorCard.isConnected")
+        after = page.evaluate(
+          """id => {
+          const history = document.querySelector('#history');
+          const card = history.querySelector(`[data-msg-id="${id}"]`);
+          return card.getBoundingClientRect().top - history.getBoundingClientRect().top;
+        }""",
+          anchor["id"],
+        )
+        assert abs(after - anchor["top"]) <= 2
+        if wait_for_poll:
+          page.locator('.message[data-msg-id="aa1234"]').wait_for(timeout=6000)
+        if gesture in {"scrollbar", "touch"}:
+          page.screenshot(path=str(tmp_path / f"scroll-{gesture}-after.png"))
+        start = history.evaluate("element => element.scrollTop")
+        if gesture == "scrollbar":
+          page.mouse.move(drag_x, drag_y + 28, steps=4)
+          page.wait_for_function(
+            "before => document.querySelector('#history').scrollTop > before", arg=start
+          )
+          page.mouse.up()
+        elif gesture == "touch":
+          assert cdp is not None
+          cdp.send(
+            "Input.dispatchTouchEvent",
+            {"type": "touchMove", "touchPoints": [{"x": touch_x, "y": touch_y - 130}]},
+          )
+          page.wait_for_function(
+            "before => document.querySelector('#history').scrollTop > before", arg=start
+          )
+          cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+        else:
+          page.mouse.wheel(0, -120)
+          page.wait_for_function(
+            "before => document.querySelector('#history').scrollTop < before", arg=start
+          )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_message_search_can_page_while_an_old_query_is_loading() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Message search paging regression")
+  for index in range(45):
+    app.messages.send_message(
+      f"Searchable message {index}\n\n" + "Long scrolling content. " * 40,
+      msg_id=f"{index:06x}",
+      blocking=False,
+    )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.set_default_timeout(6000)
+        page.add_init_script("""(() => {
+          const originalFetch = window.fetch.bind(window);
+          window.fetch = async (...args) => {
+            const response = await originalFetch(...args);
+            const url = String(args[0]);
+            if (url.includes('/messages?') && url.includes('before=') && !window.heldOldPage) {
+              window.heldOldPage = true;
+              await new Promise(resolve => { window.releaseOldPage = resolve; });
+              const json = response.json.bind(response);
+              response.json = async () => {
+                const result = await json();
+                requestAnimationFrame(() => { window.oldPageConsumed = true; });
+                return result;
+              };
+            }
+            return response;
+          };
+        })();""")
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 20"
+        )
+        page.wait_for_load_state("networkidle")
+        page.locator("#history").evaluate("element => { element.scrollTop = 300; }")
+        page.wait_for_function("typeof window.releaseOldPage === 'function'")
+        page.locator("#log-search").fill("Searchable")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 20"
+        )
+        page.locator("#history").evaluate("element => { element.scrollTop = 300; }")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length > 20"
+        )
+        page.evaluate("window.releaseOldPage()")
+        page.wait_for_function("window.oldPageConsumed")
+        assert page.locator("#log-search").input_value() == "Searchable"
+        assert page.locator("#history .message").count() == 40
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_retained_message_references_follow_loaded_targets() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Message reference paging regression")
+  app.tasks.create_task("00000a", "Referenced task", details=["Review"])
+  for index in range(45):
+    body = f"Message {index}\n\n" + "Long scrolling content. " * 40
+    if index == 44:
+      body += "\n\nReferences 00000a and 00000b."
+    app.messages.send_message(body, msg_id=f"{index:06x}", blocking=False)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 20"
+        )
+        card = page.locator('.message[data-msg-id="00002c"]')
+        old_task_link = card.locator(
+          '[data-auto-reference][data-reference-id="00000a"]'
+        )
+        old_task_link.wait_for()
+        assert old_task_link.get_attribute("data-reference-type") == "task"
+        assert (
+          card.locator('[data-auto-reference][data-reference-id="00000b"]').count() == 0
+        )
+        page.evaluate(
+          "window.retainedReferenceCard = document.querySelector('.message[data-msg-id=\"00002c\"]')"
+        )
+        page.locator("#history").evaluate("element => { element.scrollTop = 300; }")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 40"
+        )
+        assert page.evaluate("window.retainedReferenceCard.isConnected")
+        assert old_task_link.count() == 0
+        new_message_link = card.locator(
+          '[data-auto-reference][data-reference-id="00000b"]'
+        )
+        assert new_message_link.get_attribute("data-reference-type") == "message"
+        assert "00000a" in card.inner_text()
+        app.tasks.remove_task("00000a")
+        page.wait_for_function(
+          """() => {
+          const card = document.querySelector('.message[data-msg-id="00002c"]');
+          const link = card?.querySelector('[data-auto-reference][data-reference-id="00000a"]');
+          return link?.dataset.referenceType === 'message';
+        }""",
+          timeout=6000,
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_message_page_error_keeps_scroll_target_and_can_retry() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Message page retry regression")
+  for index in range(25):
+    app.messages.send_message(
+      f"Message {index}\n\n" + "Long scrolling content. " * 40,
+      msg_id=f"{index:06x}",
+      blocking=False,
+    )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.add_init_script("""(() => {
+          const originalFetch = window.fetch.bind(window);
+          window.fetch = async (...args) => {
+            const url = String(args[0]);
+            if (url.includes('/messages?') && url.includes('before=') && !window.failedOlderOnce) {
+              window.failedOlderOnce = true;
+              return new Response(JSON.stringify({error: 'try again'}), {
+                status: 503, headers: {'content-type': 'application/json'}
+              });
+            }
+            return originalFetch(...args);
+          };
+        })();""")
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 20"
+        )
+        page.evaluate("""() => {
+          window.retryScrollTarget = document.querySelector('#history');
+          window.retryScrollTarget.scrollTop = 300;
+        }""")
+        error = page.locator('#history [role="alert"]')
+        error.wait_for(timeout=6000)
+        assert page.evaluate(
+          "window.retryScrollTarget === document.querySelector('#history')"
+        )
+        page.evaluate("document.querySelector('#load-older-messages').click()")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 25"
+        )
+        assert page.locator('#history [role="alert"]').is_hidden()
+        assert page.evaluate(
+          "window.retryScrollTarget === document.querySelector('#history')"
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

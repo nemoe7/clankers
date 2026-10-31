@@ -33,7 +33,10 @@ def test_message_edge_flags_follow_scroll_and_resize() -> None:
   script = r"""
 import assert from 'node:assert/strict';
 import { renderMessagesView } from './skills/arena-steering/assets/messages-view.js';
-globalThis.document = { activeElement: null };
+globalThis.document = {
+  activeElement: null,
+  createElement() { return { content: { querySelector() { return null; } } }; },
+};
 const observers = [];
 globalThis.ResizeObserver = class {
   constructor(callback) { this.callback = callback; observers.push(this); }
@@ -48,12 +51,18 @@ const history = {
   set scrollTop(value) { pos = Math.max(0, Math.min(value, this.scrollHeight - this.clientHeight)); },
   toggleAttribute(name, value) { if (value) attrs.add(name); else attrs.delete(name); },
   addEventListener(type, callback) { this.handlers[type] = callback; },
+  removeEventListener(type, callback) {
+    assert.equal(this.handlers[type], callback);
+    delete this.handlers[type];
+    this.removed = (this.removed || 0) + 1;
+  },
   getBoundingClientRect() { return { top: 0, bottom: 200 }; },
   querySelectorAll() { return []; },
 };
 let rendered = false;
 const container = {
   set innerHTML(value) { rendered = true; },
+  replaceChildren() { rendered = true; },
   querySelector(selector) { return rendered && selector === '#history' ? history : null; },
   querySelectorAll() { return []; },
   addEventListener() {},
@@ -80,6 +89,7 @@ observers[0].callback();
 assert.deepEqual(edges(), [false, true], 'resize restores the end fade on overflow');
 renderMessagesView(container, { messages: [], tasks: [] }, {});
 assert.equal(observers[0].disconnected, true, 'rerender disconnects the old observer');
+assert.equal(history.removed, 1, 'rerender replaces the old scroll listener');
 """
   result = subprocess.run(
     ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],

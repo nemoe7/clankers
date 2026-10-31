@@ -27,10 +27,13 @@ export function expandMessageHistory() {
   visibleMessageCount = Infinity;
   pinnedToBottom = false;
 }
-let loadingMoreMessages = false;
+let loadingMoreMessages = null;
 let draftRevision = 0;
 let replyObserver = null;
 let historyResizeObserver = null;
+let historyScrollTarget = null;
+let historyScrollHandler = null;
+const renderedMessageSignatures = new WeakMap();
 const pendingReplyReceipts = new Set();
 
 if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => {
@@ -45,6 +48,10 @@ function stateDotForStatus(status) {
   if (status === "acked") return "said";
   if (status === "seen") return "seen";
   return "sent";
+}
+
+export function messageQueryKey(state) {
+  return JSON.stringify([Boolean(state.showHidden), (state.searchQuery || "").trim()]);
 }
 
 export function trackMessageAcks(messages) {
@@ -102,7 +109,37 @@ function highlightSearchMatches(root, rawQuery) {
   }
 }
 
+// Keep the scroll container and unchanged message cards connected while pages are
+// added. Replacing them interrupts a scrollbar drag or an ongoing touch gesture.
+function updateHistory(history, nextHistory, signatures) {
+  const existing = new Map(
+    Array.from(history.querySelectorAll(":scope > .message"), (node) => [node.dataset.msgId, node])
+  );
+  const nextChildren = Array.from(nextHistory.children);
+  for (let i = 0; i < 2; i += 1) {
+    history.children[i].replaceWith(nextChildren[i]);
+  }
+  const wanted = nextChildren.slice(2).map((node) => {
+    const signature = signatures.get(node.dataset.msgId);
+    const old = existing.get(node.dataset.msgId);
+    const use = old && renderedMessageSignatures.get(old) === signature ? old : node;
+    renderedMessageSignatures.set(use, signature);
+    return use;
+  });
+  const retained = new Set(wanted);
+  for (const old of existing.values()) {
+    if (!retained.has(old)) old.remove();
+  }
+  wanted.forEach((node, index) => {
+    const current = history.children[index + 2] || null;
+    if (node !== current) history.insertBefore(node, current);
+  });
+}
+
 export function renderMessagesView(container, state, handlers) {
+  if (historyScrollTarget && historyScrollHandler) {
+    historyScrollTarget.removeEventListener("scroll", historyScrollHandler);
+  }
   replyObserver?.disconnect();
   replyObserver = null;
   historyResizeObserver?.disconnect();
@@ -167,6 +204,7 @@ export function renderMessagesView(container, state, handlers) {
     }
   }
 
+  const messageSignatures = new Map();
   const historyHtml = visibleMessages.length
     ? visibleMessages
         .map((msg) => {
@@ -216,6 +254,7 @@ export function renderMessagesView(container, state, handlers) {
                 .join(" ")}`
             : "";
           const replySelected = selectedReplyParentIds.includes(msg.id);
+          messageSignatures.set(msg.id, JSON.stringify({ msg, linkedTasks, replySelected, query }));
 
           return `
             <li class="message" data-msg-id="${escapeHtml(msg.id)}" data-hidden="${msg.hidden ? "true" : "false"}">
@@ -248,7 +287,7 @@ export function renderMessagesView(container, state, handlers) {
     ? `Checked <time datetime="${escapeHtml(checkedAt)}" data-timestamp="${escapeHtml(checkedAt)}">${escapeHtml(relativeTime(checkedAt))}</time>`
     : "Live steering active.";
 
-  container.innerHTML = `
+  const markup = `
     <div class="msgs-layout">
       <section class="card log-card" aria-label="Message log">
         <div class="row log-toolbar">
@@ -403,6 +442,33 @@ export function renderMessagesView(container, state, handlers) {
     </div>
   `;
 
+  let reusedHistory = false;
+  if (prevHistory) {
+    const template = document.createElement("template");
+    template.innerHTML = markup;
+    const nextHistory = template.content.querySelector("#history");
+    const replaceSelectors = [".log-toolbar", "#log-edited", "#log-newest", "#log-empty", "#compose"];
+    const canUpdate = nextHistory && replaceSelectors.every(
+      (selector) => container.querySelector(selector) && template.content.querySelector(selector)
+    );
+    if (canUpdate) {
+      for (const selector of replaceSelectors) {
+        container.querySelector(selector).replaceWith(template.content.querySelector(selector));
+      }
+      updateHistory(prevHistory, nextHistory, messageSignatures);
+      reusedHistory = true;
+    } else {
+      container.replaceChildren(template.content);
+    }
+  } else {
+    container.innerHTML = markup;
+  }
+  if (!reusedHistory) {
+    container.querySelectorAll("#history > .message").forEach((node) => {
+      renderedMessageSignatures.set(node, messageSignatures.get(node.dataset.msgId));
+    });
+  }
+
   container.querySelector("#load-older-messages")?.addEventListener("click", () => handlers.onLoadOlderMessages?.());
   const historyEl = container.querySelector("#history");
   const logNewestBtn = container.querySelector("#log-newest");
@@ -424,9 +490,13 @@ export function renderMessagesView(container, state, handlers) {
     if (logNewestBtn) {
       logNewestBtn.hidden = pinnedToBottom;
     }
-    if (hasOlderMessages && !loadingMoreMessages && historyEl.scrollTop <= OLDER_PAGE_TRIGGER_PX && historyEl.scrollHeight > historyEl.clientHeight) {
-      loadingMoreMessages = true;
-      Promise.resolve(handlers.onLoadOlderMessages?.()).finally(() => { loadingMoreMessages = false; });
+    const key = messageQueryKey(state);
+    if (hasOlderMessages && loadingMoreMessages?.key !== key && historyEl.scrollTop <= OLDER_PAGE_TRIGGER_PX && historyEl.scrollHeight > historyEl.clientHeight) {
+      const request = { key };
+      loadingMoreMessages = request;
+      Promise.resolve(handlers.onLoadOlderMessages?.()).finally(() => {
+        if (loadingMoreMessages === request) loadingMoreMessages = null;
+      });
     }
   }
 
@@ -454,7 +524,9 @@ export function renderMessagesView(container, state, handlers) {
       historyEl.scrollTop = savedScrollTop;
     }
     syncScrollControls();
-    historyEl.addEventListener("scroll", syncScrollControls, { passive: true });
+    historyScrollTarget = historyEl;
+    historyScrollHandler = syncScrollControls;
+    historyEl.addEventListener("scroll", historyScrollHandler, { passive: true });
     if (typeof ResizeObserver === "function") {
       historyResizeObserver = new ResizeObserver(syncScrollEdges);
       historyResizeObserver.observe(historyEl);
@@ -503,7 +575,7 @@ export function renderMessagesView(container, state, handlers) {
   });
 
   for (const chip of container.querySelectorAll(".reply-parent-chip")) {
-    chip.addEventListener("click", () => handlers.onNavigateReference?.("message", chip.dataset.parentId));
+    chip.onclick = () => handlers.onNavigateReference?.("message", chip.dataset.parentId);
   }
 
   for (const chip of container.querySelectorAll("[data-remove-reply-parent]")) {
