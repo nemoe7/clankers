@@ -38,6 +38,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `cli.py`: Use `state.sqlite3` for normal v2 state. The demo keeps a separate database.
+
 - `cli.py`: Block session-local IDs in PR updates and use the GitHub REST API.
 
 - `assets/`: Match the v1 composer layout, draft preview, paste, uploads, and controls while retaining v2 retry and reply features.

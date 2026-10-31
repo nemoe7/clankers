@@ -51,8 +51,7 @@ def open_services(
   state_dir: Path,
 ) -> tuple[SqliteStore, MessageService, TaskService, ReportService]:
   """Open SqliteStore and domain services for a state directory."""
-  # Restore state.sqlite3 after v1 is retired and its database no longer collides.
-  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  store = SqliteStore(state_dir / "state.sqlite3")
   messages = MessageService(store, store, store)
   tasks = TaskService(store, store, gates=FileGateStatus(state_dir))
   reports = ReportService(store, store, on_answer_callback=messages.notify_new_work)
