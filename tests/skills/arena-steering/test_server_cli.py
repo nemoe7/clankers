@@ -1330,7 +1330,7 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
   assert code == 0
   assert "child-task" in out
 
-  code, out, _ = _run_cli(state_dir, "rename", "base-task", "root-task")
+  code, out, _ = _run_cli(state_dir, "ren", "base-task", "root-task")
   assert code == 0
   assert "root-task" in out
   code, out, _ = _run_cli(state_dir, "task", "child-task")
@@ -1366,6 +1366,30 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
   code, _, err = _run_cli(state_dir, "init", "--tz", "Asia/Manila")
   assert code == 1
   assert "--tz" in err or "init" in err
+
+
+def test_cli_ren_report_and_help(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  state_dir.mkdir()
+  store, _, _, reports = cli.open_services(state_dir)
+  reports.publish_report("old-report", "Report", "# Report")
+  store.close()
+
+  code, output, error = _run_cli(state_dir, "ren", "old-report", "new-report")
+  assert code == 0, error
+  assert "new-report" in output
+  store, _, _, reports = cli.open_services(state_dir)
+  assert reports.get_report("new-report") is not None
+  with pytest.raises(KeyError, match="Unknown report ID"):
+    reports.get_report("old-report")
+  store.close()
+
+  code, output, _ = _run_cli(state_dir)
+  assert code == 0
+  assert "ren" in output
+  with pytest.raises(SystemExit) as error:
+    _run_cli(state_dir, "rename", "new-report", "other-report")
+  assert error.value.code == 2
 
 
 def test_cli_pr_update_and_job_log_use_gh_seam(tmp_path: Path, monkeypatch) -> None:

@@ -173,9 +173,9 @@ def main(
   )
   survey_p.add_argument("--interrupt", action="store_true", help="Trigger bible check.")
 
-  rename_p = sub.add_parser("rename", help="Move a task or report to a new ID.")
-  rename_p.add_argument("old_id")
-  rename_p.add_argument("new_id")
+  ren_p = sub.add_parser("ren", help="Move a task or report to a new ID.")
+  ren_p.add_argument("old_id")
+  ren_p.add_argument("new_id")
 
   pr_update_p = sub.add_parser(
     "pr-update", help="Update a pull request title and body via gh and verify parity."
@@ -331,8 +331,8 @@ def main(
     if cmd == "survey":
       parsed = survey_p.parse_args(cmd_args)
       return _run_survey(parsed, messages, stdout, resolved_state_dir)
-    if cmd == "rename":
-      parsed = rename_p.parse_args(cmd_args)
+    if cmd == "ren":
+      parsed = ren_p.parse_args(cmd_args)
       return _run_rename(parsed, tasks, reports, stdout)
     if cmd == "pr-update":
       parsed = pr_update_p.parse_args(cmd_args)

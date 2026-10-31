@@ -92,7 +92,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer report pub FILE -i ID -t TITLE [-u]` | Publish and verify a UTF-8 Markdown report. `-u` allows unparsed strike markers. |
 | `steer report pin ID` or `steer report unpin ID` | Exclude a report from staleness, or restore normal expiry. |
 | `steer report rm ID [ID ...]` | Dismiss one or more reports. Use `--stale` alone to remove stale reports. |
-| `steer rename OLD NEW` | Rename a task or report and update its links. |
+| `steer ren OLD NEW` | Rename a task or report and update its links. |
 | `steer survey` | Show the survey and submission template. Use `-i` for the smallest image, `--template` for the template, `-f FILE` for a submission, or `--interrupt` to request a check. Submissions go to the running server when one is recorded. |
 | `steer pr-update -n NUMBER -t TITLE -f FILE` | Update a pull request with `gh`, then verify its title and body. |
 | `steer job-log -j JOB` or `steer job-log -r RUN` | Print one GitHub log URL for the agent to fetch. When no URL exists, print the log text and the reason. Supply exactly one ID. |
