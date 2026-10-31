@@ -119,12 +119,13 @@ def main(
 
   task_p = sub.add_parser(
     "task",
-    help="Show, create, remove, or modify a task.",
-    usage="%(prog)s <id|new|rm|mod|unlink> ...",
+    help="Show the current task, or create, remove, or modify a task.",
+    usage="%(prog)s [-d|--deets] | <id|new|rm|mod|unlink> ...",
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=(
       "Commands:\n"
-      "  ID                                  Show a task.\n"
+      "  [-d|--deets]                        Show the current task and optional details.\n"
+      "  ID                                  Show a task with details.\n"
       "  new ID TITLE -d DETAIL [options]    Create a task.\n"
       "  rm ID                               Remove a task.\n"
       "  mod ID FIELD [rm] VALUE             Update a task.\n"
@@ -429,8 +430,21 @@ def _run_msg(
 
 
 def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
-  if not args:
-    raise ValueError("Usage: steer task <id|new|rm|mod> ...")
+  if not args or args in (["-d"], ["--deets"]):
+    current = next(
+      (
+        (task, blocked)
+        for task, blocked in tasks.list_tasks()
+        if task.status == "upcoming" and not blocked
+      ),
+      None,
+    )
+    if current is None:
+      print("No current task.", file=out)
+    else:
+      task, blocked = current
+      _print_single_task(task, blocked, out, include_details=bool(args))
+    return 0
   subcmd = args[0]
   if subcmd == "new":
     new_p = argparse.ArgumentParser(prog="steer task new")
@@ -1170,7 +1184,9 @@ def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
       print(f"   {detail_idx}. {line}", file=out)
 
 
-def _print_single_task(task: Task, blocked: bool, out: TextIO) -> None:
+def _print_single_task(
+  task: Task, blocked: bool, out: TextIO, *, include_details: bool = True
+) -> None:
   state_str = f"{task.status}, blocked" if blocked else task.status
   print(f"task {task.id}, status {state_str}, type {task.type}", file=out)
   print(task.title, file=out)
@@ -1184,8 +1200,9 @@ def _print_single_task(task: Task, blocked: bool, out: TextIO) -> None:
     print(f"- Messages: {', '.join(task.msg_ids)}", file=out)
   if task.gate_names:
     print(f"- Gates: {', '.join(task.gate_names)}", file=out)
-  for idx, line in enumerate(task.details, 1):
-    print(f"- [{idx}] {line}", file=out)
+  if include_details:
+    for idx, line in enumerate(task.details, 1):
+      print(f"- [{idx}] {line}", file=out)
 
 
 def _print_reports_list(items: list[Report], out: TextIO) -> None:

@@ -38,6 +38,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `cli.py`: Show the current task with `steer task`, and its details with `-d` or `--deets`.
+
 - `cli.py`: Use `state.sqlite3` for normal v2 state. The demo keeps a separate database.
 
 - `cli.py`: Block session-local IDs in PR updates and use the GitHub REST API.

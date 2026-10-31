@@ -82,6 +82,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer msg list [-p PAGE] [-s SIZE]` | List message history. Page size defaults to 5 and ranges from 5 to 50. |
 | `steer msg ID` | Show a message and its acknowledgements and attachments. |
 | `steer tasks [-f] [-p PAGE]` | List upcoming tasks, or page through finished tasks with `-f`. |
+| `steer task [-d]` | Show the first unblocked upcoming task. Add `-d` or `--deets` to include details. |
 | `steer task ID` | Show a task, its details, and blocking state. |
 | `steer task new ID TITLE` | Create a task. Requires at least one `-d` detail. Options include `-T` type, `-s` status, `-S` scope, `-m` message, `-r` report, `-k` dependency, and `-g` gate. |
 | `steer task mod ID FIELD VALUE` | Update `status`, `title`, `type`, or `scope`. Use `deets`, `links`, or `deps` to add or remove details and links. |
