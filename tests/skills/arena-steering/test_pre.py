@@ -221,6 +221,254 @@ def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
     assert not guard.applies(pre.PreContext(line=line, shell="bash")), line
 
 
+@pytest.mark.parametrize(
+  ("line", "blocked"),
+  (
+    ("gh pr merge 42 --squash", True),
+    ("gh pr close 42", True),
+    ("gh pr close 42 --comment '--help'", True),
+    ("gh pr reopen 42", True),
+    ("gh pr merge 42 --help", False),
+    ("gh api repos/o/r/pulls/42/merge -X PUT", True),
+    ("gh api repos/o/r/pulls/42 -X PATCH -f state=closed", True),
+    (
+      "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'",
+      True,
+    ),
+    (
+      (
+        'gh api graphql -f query="mutation ($input: UpdatePullRequestInput!) '
+        '{ updatePullRequest(input: $input) { clientMutationId } }" '
+        '-f variables=\'{"input":{"state":"CLOSED"}}\''
+      ),
+      True,
+    ),
+    (
+      'curl -X PATCH https://api.github.com/repos/o/r/pulls/42 -d \'{"state":"closed"}\'',
+      True,
+    ),
+    ("git push --delete origin feature", True),
+    ("git push --mirror origin", True),
+    ("git push origin :feature", True),
+    ("printf 'gh pr merge 42'", False),
+    ("gh pr view 42", False),
+    ("gh pr edit 42 --title 'Open'", False),
+    ("gh api repos/o/r/pulls/42 -X PATCH -f title=closed", False),
+    ("git push --dry-run origin :feature", False),
+    ("git push -n origin :feature", False),
+  ),
+)
+def test_git_and_pr_state_commands(line: str, blocked: bool) -> None:
+  result = pre.run_pipeline(pre.PreContext(line=line, command=line, shell="bash"))
+  assert result.verdict == (pre.BLOCK if blocked else pre.CONTINUE), line
+  if blocked:
+    assert "BLOCKED" in " ".join(result.messages)
+
+
+def test_pr_api_file_payload_blocks_state_only(tmp_path: Path) -> None:
+  body = tmp_path / "pr.json"
+  line = f"gh api repos/o/r/pulls/42 -X PATCH --input {body}"
+  ctx = pre.PreContext(line=line, command=line)
+  body.write_text('{"state":"closed"}', encoding="utf-8")
+  assert pre.run_pipeline(ctx).verdict == pre.BLOCK
+  body.write_text('{"title":"New title"}', encoding="utf-8")
+  assert pre.run_pipeline(ctx).verdict == pre.CONTINUE
+
+  field = tmp_path / "state.txt"
+  field.write_text("closed\n", encoding="utf-8")
+  line = f"gh api repos/o/r/pulls/42 -X PATCH -F state=@{field}"
+  assert pre.run_pipeline(pre.PreContext(line=line, command=line)).verdict == pre.BLOCK
+
+
+@pytest.fixture
+def _git_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+  repo = tmp_path / "checkout"
+  repo.mkdir()
+
+  def git(*args: str, cwd: Path = repo) -> str:
+    return subprocess.run(
+      ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+  git("init", "-b", "main")
+  git("config", "user.email", "steer@example.test")
+  git("config", "user.name", "Steer Test")
+  (repo / "note.md").write_text("initial\n", encoding="utf-8")
+  git("add", "note.md")
+  git("commit", "-m", "init")
+  monkeypatch.chdir(repo)
+  monkeypatch.setattr(pre, "repo_root", lambda: repo)
+  return repo
+
+
+def test_commit_refuses_staged_capture_and_new_session_id(
+  _isolate_state: Path, _git_checkout: Path
+) -> None:
+  _seed(_isolate_state, "Read the message.", acked=True)
+  store, _, _, _ = cli.open_services(_isolate_state)
+  message_id = store.list_messages(include_hidden=True)[0].id
+  store.close()
+
+  def git(*args: str) -> None:
+    subprocess.run(["git", *args], cwd=_git_checkout, check=True, capture_output=True)
+
+  capture = _git_checkout / "design-wireframe.png"
+  capture.write_bytes(b"image")
+  git("add", capture.name)
+  code, out = _run(
+    "pre", "-l", "git commit -m review", "-c", "git commit -m review", "-s", "bash"
+  )
+  assert code == pre.BLOCK and "design-wireframe.png" in out
+
+  git("reset", "--", capture.name)
+  note = _git_checkout / "note.md"
+  note.write_text(f"initial\nSee {message_id}.\n", encoding="utf-8")
+  git("add", "note.md")
+  code, out = _run(
+    "pre",
+    "-l",
+    "git commit -m review",
+    "-c",
+    "git commit -m review",
+    "-s",
+    "bash",
+    "-d",
+    "git-safe",
+  )
+  assert code == pre.BLOCK and message_id in out
+  assert "note.md" in out
+  nested = "bash -c 'git commit -m review'"
+  code, out = _run("pre", "-l", nested, "-c", nested, "-s", "bash")
+  assert code == pre.BLOCK and message_id in out
+
+  git("commit", "-m", "fixture")
+  note.write_text("initial\n", encoding="utf-8")
+  git("add", "note.md")
+  code, _ = _run(
+    "pre", "-l", "git commit -m review", "-c", "git commit -m review", "-s", "bash"
+  )
+  assert code == pre.CONTINUE
+
+  git("commit", "-m", "remove")
+  note.write_text(f"initial\nSee {message_id}.\n", encoding="utf-8")
+  code, out = _run(
+    "pre", "-l", "git commit -am review", "-c", "git commit -am review", "-s", "bash"
+  )
+  assert code == pre.BLOCK and message_id in out
+
+
+def test_managed_worktree_refuses_commit_push_and_run(
+  _isolate_state: Path, _git_checkout: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Acknowledged note.", acked=True)
+  worktree = _git_checkout / ".worktrees" / "probe"
+  worktree.parent.mkdir()
+  subprocess.run(
+    ["git", "worktree", "add", "--detach", str(worktree), "HEAD"],
+    cwd=_git_checkout,
+    check=True,
+    capture_output=True,
+  )
+  monkeypatch.chdir(worktree)
+  for command in (
+    "git commit -m review",
+    "git push origin topic",
+    "steer run start verify -- true",
+  ):
+    code, out = _run("pre", "-l", command, "-c", command, "-s", "bash")
+    assert code == pre.BLOCK and "WORKTREE BLOCKED" in out, command
+
+  monkeypatch.chdir(_git_checkout)
+  command = f"git -C {worktree} commit -m review"
+  code, out = _run("pre", "-l", command, "-c", command, "-s", "bash")
+  assert code == pre.BLOCK and "WORKTREE BLOCKED" in out
+
+
+def test_push_uses_remote_default_and_fails_closed(
+  _isolate_state: Path, _git_checkout: Path, tmp_path: Path
+) -> None:
+  _seed(_isolate_state, "Acknowledged note.", acked=True)
+  origin = tmp_path / "origin.git"
+  subprocess.run(
+    ["git", "init", "--bare", "-b", "trunk", str(origin)],
+    check=True,
+    capture_output=True,
+  )
+
+  def git(*args: str, cwd: Path = _git_checkout) -> str:
+    return subprocess.run(
+      ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+  git("remote", "add", "origin", str(origin))
+  git("push", "origin", "HEAD:trunk")
+  code, out = _run(
+    "pre",
+    "-l",
+    "git push origin HEAD:trunk",
+    "-c",
+    "git push origin HEAD:trunk",
+    "-s",
+    "bash",
+  )
+  assert code == pre.BLOCK and "trunk" in out
+  code, _ = _run(
+    "pre",
+    "-l",
+    "git push origin HEAD:topic",
+    "-c",
+    "git push origin HEAD:topic",
+    "-s",
+    "bash",
+  )
+  assert code == pre.CONTINUE
+
+  other = tmp_path / "other"
+  git("clone", str(origin), str(other))
+  git("config", "user.email", "steer@example.test", cwd=other)
+  git("config", "user.name", "Steer Test", cwd=other)
+  (other / "new.md").write_text("new\n", encoding="utf-8")
+  git("add", "new.md", cwd=other)
+  git("commit", "-m", "advance", cwd=other)
+  git("push", "origin", "trunk", cwd=other)
+  code, out = _run(
+    "pre",
+    "-l",
+    "git push origin HEAD:topic",
+    "-c",
+    "git push origin HEAD:topic",
+    "-s",
+    "bash",
+    "-d",
+    "git-safe",
+  )
+  assert code == pre.BLOCK and "trunk" in out
+  nested = "bash -c 'git push origin HEAD:topic'"
+  code, out = _run("pre", "-l", nested, "-c", nested, "-s", "bash")
+  assert code == pre.BLOCK and "trunk" in out
+
+  git("remote", "set-url", "origin", str(tmp_path / "missing.git"))
+  code, out = _run(
+    "pre",
+    "-l",
+    "git push origin HEAD:topic",
+    "-c",
+    "git push origin HEAD:topic",
+    "-s",
+    "bash",
+  )
+  assert code == pre.BLOCK and "unavailable" in out.lower()
+
+  extra = tmp_path / "extra.git"
+  git("init", "--bare", "-b", "develop", str(extra))
+  git("remote", "add", "extra", str(extra))
+  git("push", "extra", "HEAD:develop")
+  git("branch", "-m", "develop")
+  git("config", "remote.pushDefault", "extra")
+  code, out = _run("pre", "-l", "git push", "-c", "git push", "-s", "bash")
+  assert code == pre.BLOCK and "develop" in out
+
+
 def test_the_gate_reads_the_stored_count_and_the_done_list_skips_steps(
   _isolate_state: Path,
 ) -> None:
@@ -269,16 +517,16 @@ def test_a_quiet_note_does_not_gate(_isolate_state: Path) -> None:
   assert messages.pending_ids() == []
   store.close()
 
-  code, out = _run("pre", "-c", "git push", "-s", "bash")
+  code, out = _run("pre", "-c", "git push --dry-run", "-s", "bash")
   assert code == pre.CONTINUE
-  assert out == ""
+  assert "BLOCKED" not in out
 
 
 def test_a_clear_inbox_passes_the_gate(_isolate_state: Path) -> None:
   _seed(_isolate_state, "Acked already.", acked=True)
-  code, out = _run("pre", "-c", "git push", "-s", "bash")
+  code, out = _run("pre", "-c", "git push --dry-run", "-s", "bash")
   assert code == pre.CONTINUE
-  assert out == ""
+  assert "BLOCKED" not in out
 
 
 def test_pipeline_order_is_the_registry_order() -> None:

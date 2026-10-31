@@ -7,11 +7,15 @@ registry, so adding, dropping, or reordering a check is one line here.
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import parse_qs, urlsplit
+
+from . import git_safety
 
 CONTINUE = 0
 END_CALL = 2
@@ -69,6 +73,9 @@ class PreContext:
   call_count: int = 0
   active_runs: tuple[str, ...] = ()
   routed: bool = False
+  cwd: Path | None = None
+  checkout_root: Path | None = None
+  session_ids: tuple[str, ...] = ()
 
   def pieces(self) -> list[tuple[list[str], str]]:
     """Name simple commands and the separators that follow them."""
@@ -238,6 +245,265 @@ class PollTimeoutGuard:
       ],
       BLOCK,
     )
+
+
+def _line_commands(ctx: PreContext) -> list[list[str]]:
+  """Include direct commands and shell -c scripts without matching quoted prose."""
+  pieces = [command_words(words) for words, _ in ctx.pieces()]
+  return [
+    *pieces,
+    *(command_words(inner) for words in pieces for inner, _ in embedded_pieces(words)),
+  ]
+
+
+def _api_pr_change(args: list[str], client: str) -> bool:
+  """Recognize GitHub PR-state writes, not title and body updates."""
+  method, endpoint = "", ""
+  fields: dict[str, object] = {}
+  body = False
+  value_flags = {
+    "-X",
+    "--method",
+    "--request",
+    "-d",
+    "--data",
+    "--data-raw",
+    "--json",
+    "--input",
+    "--body-data",
+    "--post-data",
+    "-f",
+    "-F",
+    "--field",
+    "--raw-field",
+  }
+  index = 0
+  while index < len(args):
+    word = args[index]
+    option, equal, value = word.partition("=")
+    if not equal and len(word) > 2 and word[:2] in {"-X", "-d", "-f", "-F"}:
+      option, value, equal = word[:2], word[2:], "="
+    if option in value_flags:
+      if not equal:
+        index += 1
+        value = args[index] if index < len(args) else ""
+      if option in {"-X", "--method", "--request"}:
+        method = value.upper()
+      else:
+        body = True
+        if option in {"-f", "-F", "--field", "--raw-field"}:
+          key, _, field = value.partition("=")
+          if option in {"-F", "--field"} and field.startswith("@") and field != "@-":
+            try:
+              field = Path(field[1:]).read_text(encoding="utf-8").strip()
+            except (OSError, UnicodeError):
+              field = ""
+          fields[key] = field
+        else:
+          if option == "--input" and value != "-":
+            try:
+              value = Path(value).read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+              value = ""
+          try:
+            data = json.loads(value)
+          except (ValueError, TypeError):
+            data = {}
+          if isinstance(data, dict):
+            fields.update(data)
+    elif client == "gh" and (
+      word == "graphql" or word.lstrip("/").startswith("repos/")
+    ):
+      endpoint = word.lstrip("/").split("?", 1)[0]
+    elif word.startswith(("https://", "http://")):
+      url = urlsplit(word)
+      if client == "gh" or url.hostname == "api.github.com":
+        endpoint = url.path.lstrip("/")
+        fields.update({key: values[-1] for key, values in parse_qs(url.query).items()})
+    index += 1
+  if endpoint == "graphql":
+    query = fields.get("query", "")
+    if not isinstance(query, str) or not re.search(r"\bmutation\b", query):
+      return False
+    if re.search(
+      r"\b(?:mergePullRequest|closePullRequest|reopenPullRequest|enablePullRequestAutoMerge|"
+      r"enqueuePullRequest|deleteRef|updateRef|mergeBranch)\s*\(",
+      query,
+    ):
+      return True
+    if not re.search(r"\bupdatePullRequest\s*\(", query):
+      return False
+    if re.search(r"\bstate\s*:\s*(?:CLOSED|OPEN)\b", query):
+      return True
+    variables = fields.get("variables", {})
+    if isinstance(variables, str):
+      try:
+        variables = json.loads(variables)
+      except ValueError:
+        variables = {}
+
+    def state_change(value: object) -> bool:
+      return isinstance(value, dict) and any(
+        (key == "state" and item in ("CLOSED", "OPEN")) or state_change(item)
+        for key, item in value.items()
+      )
+
+    return bool(re.search(r"\binput\s*:\s*\$\w+", query)) and state_change(variables)
+  if (method or ("POST" if body else "GET")) in {"GET", "HEAD"}:
+    return False
+  if re.fullmatch(r"repos/[^/]+/[^/]+/(?:pulls/\d+/merge(?:-async)?|merges)", endpoint):
+    return True
+  if re.fullmatch(r"repos/[^/]+/[^/]+/git/refs/heads/.+", endpoint):
+    return method in {"DELETE", "PATCH"}
+  return bool(
+    method == "PATCH"
+    and re.fullmatch(r"repos/[^/]+/[^/]+/(?:pulls|issues)/\d+", endpoint)
+    and fields.get("state") in ("closed", "open")
+  )
+
+
+def _gh_help(args: list[str]) -> bool:
+  """A help option used as comment text does not make a PR write read-only."""
+  value_flags = {
+    "--comment",
+    "--body",
+    "--subject",
+    "--match-head-commit",
+    "--author-email",
+    "--repo",
+    "-R",
+    "-b",
+  }
+  return any(
+    word in {"--help", "-h"} and (index == 0 or args[index - 1] not in value_flags)
+    for index, word in enumerate(args)
+  )
+
+
+class PrStateGuard:
+  """Stop visible PR merges, closures, reopens, and equivalent API writes."""
+
+  name = "pr-state"
+
+  def applies(self, ctx: PreContext) -> bool:
+    for words in _line_commands(ctx):
+      if not words:
+        continue
+      head, args = Path(words[0]).name, words[1:]
+      if (
+        head == "gh"
+        and args[:1] == ["pr"]
+        and len(args) >= 2
+        and args[1] in {"merge", "close", "reopen"}
+        and not _gh_help(args[2:])
+      ):
+        return True
+      if head == "gh" and args[:1] == ["api"] and _api_pr_change(args[1:], head):
+        return True
+      if head in {"curl", "wget"} and _api_pr_change(args, head):
+        return True
+    return False
+
+  def run(self, ctx: PreContext) -> PreResult:
+    return PreResult(
+      ["PR STATE BLOCKED: visible PR-state write; use reads or metadata edits."],
+      BLOCK,
+    )
+
+
+class DestructivePushGuard:
+  """Block deletes and wholesale ref rewrites before any push executes."""
+
+  name = "push-refs"
+
+  def applies(self, ctx: PreContext) -> bool:
+    for words in _line_commands(ctx):
+      if not words or Path(words[0]).name != "git" or "push" not in words[1:]:
+        continue
+      args = words[words.index("push") + 1 :]
+      if any(arg in {"--help", "-h", "--dry-run", "-n"} for arg in args):
+        continue
+      if any(arg in {"--delete", "-d", "--mirror", "--all", "--prune"} for arg in args):
+        return True
+      if any(arg.lstrip("+").startswith(":") for arg in args):
+        return True
+    return False
+
+  def run(self, ctx: PreContext) -> PreResult:
+    return PreResult(["PUSH BLOCKED: destructive ref change is not permitted."], BLOCK)
+
+
+class GitSafetyGuard:
+  """Inspect staged commits, managed worktrees, and fresh remote push ancestry."""
+
+  name = "git-safe"
+
+  def applies(self, ctx: PreContext) -> bool:
+    return any(self.action(words) for words in _line_commands(ctx))
+
+  def action(self, words: list[str]) -> str:
+    if not words:
+      return ""
+    head, args = Path(words[0]).name, words[1:]
+    if head == "git" and "commit" in args:
+      return "commit"
+    if head == "git" and "push" in args:
+      return "push"
+    if head in {"steer", "arena-preview"} and args[:2] == ["run", "start"]:
+      return "gate"
+    return ""
+
+  def run(self, ctx: PreContext) -> PreResult:
+    current_commands = _line_commands(PreContext(line=ctx.command or ctx.line))
+    if ctx.cwd is None:
+      if any(
+        self.action(words) == "push"
+        and not any(arg in {"--dry-run", "-n", "--help", "-h"} for arg in words)
+        for words in current_commands
+      ):
+        return PreResult(
+          ["PUSH BLOCKED: remote default comparison unavailable."], BLOCK
+        )
+      return PreResult()
+    for words in _line_commands(ctx):
+      action = self.action(words)
+      if action and ctx.checkout_root is not None:
+        target = (
+          git_safety.target_cwd(ctx.cwd, words)
+          if action in {"commit", "push"}
+          else ctx.cwd
+        )
+        if git_safety.managed_worktree(target, ctx.checkout_root):
+          return PreResult(
+            [
+              "WORKTREE BLOCKED: commit, push, and run start belong in the main checkout."
+            ],
+            BLOCK,
+          )
+    for current in current_commands:
+      action = self.action(current)
+      target = (
+        git_safety.target_cwd(ctx.cwd, current)
+        if action in {"commit", "push"}
+        else ctx.cwd
+      )
+      if action == "commit":
+        options = current[current.index("commit") + 1 :]
+        auto_stage = any(
+          word == "--all"
+          or (word.startswith("-") and not word.startswith("--") and "a" in word[1:])
+          for word in options
+        )
+        warning = git_safety.staged_warning(
+          target, ctx.session_ids, include_tracked=auto_stage
+        )
+        if warning:
+          return PreResult([warning], BLOCK)
+      elif action == "push":
+        warning = git_safety.push_warning(target, current)
+        if warning:
+          return PreResult([warning], BLOCK)
+    return PreResult()
 
 
 class InboxGate:
@@ -438,8 +704,11 @@ PIPELINE: tuple[PreStep, ...] = (
   SleepGuard(),
   InboxPipeGuard(),
   PollTimeoutGuard(),
+  PrStateGuard(),
+  DestructivePushGuard(),
   WireframeGuard(),
   InboxGate(),
+  GitSafetyGuard(),
   BibleReadGuard(),
   BarePathReminder(),
   EgressReminder(),
@@ -454,6 +723,7 @@ def run_pipeline(ctx: PreContext) -> PreResult:
     if step.name in finished and not (
       (step.name == "gate" and ctx.is_push())
       or (step.name == "sleep" and ctx.active_runs)
+      or step.name == "git-safe"
     ):
       continue
     if not step.applies(ctx):

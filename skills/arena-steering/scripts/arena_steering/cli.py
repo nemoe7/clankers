@@ -781,6 +781,18 @@ def _run_pre(
   if not pending_ids:
     messages.reset_gate_if_clear()
   count = _call_count(store) if pending_ids else 0
+  text = f"{parsed.line} {parsed.command_text}"
+  session_ids: tuple[str, ...] = ()
+  if "git" in text and "commit" in text:
+    session_ids = tuple(
+      sorted(
+        {
+          *(message.id for message in store.list_messages(include_hidden=True)),
+          *(task.id for task in store.list_tasks()),
+          *(report.id for report in store.list_reports()),
+        }
+      )
+    )
   ctx = pre_mod.PreContext(
     line=str(parsed.line or ""),
     command=str(parsed.command_text or ""),
@@ -790,6 +802,9 @@ def _run_pre(
     call_count=count,
     active_runs=FileGateStatus(Path(store.db_path).parent).running_names(),
     routed=os.environ.get("ARENA_STEER_ROUTE") == "1",
+    cwd=Path.cwd(),
+    checkout_root=pre_mod.repo_root(),
+    session_ids=session_ids,
   )
   result = pre_mod.run_pipeline(ctx)
   for message in result.messages:
