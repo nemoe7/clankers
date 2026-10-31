@@ -71,7 +71,6 @@ class SqliteStore:
           status TEXT NOT NULL,
           scope TEXT NOT NULL,
           details_json TEXT NOT NULL DEFAULT '[]',
-          answer_snapshots_json TEXT NOT NULL DEFAULT '[]',
           links_json TEXT NOT NULL DEFAULT '{"msg_ids":[],"report_ids":[],"task_ids":[]}',
           msg_ids_json TEXT NOT NULL DEFAULT '[]',
           report_ids_json TEXT NOT NULL DEFAULT '[]',
@@ -127,34 +126,6 @@ class SqliteStore:
       task_cols = {
         row["name"] for row in self._conn.execute("PRAGMA table_info(tasks)").fetchall()
       }
-      if "answer_snapshots_json" not in task_cols:
-        self._conn.execute(
-          "ALTER TABLE tasks ADD COLUMN answer_snapshots_json TEXT NOT NULL DEFAULT '[]'"
-        )
-        for row in self._conn.execute("SELECT * FROM tasks").fetchall():
-          links = (
-            json.loads(row["links_json"] or "{}") if "links_json" in task_cols else {}
-          )
-          report_ids = (
-            links.get("report_ids", links.get("report_id", []))
-            if links
-            else json.loads(row["report_ids_json"] or "[]")
-          )
-          if isinstance(report_ids, str):
-            report_ids = [report_ids]
-          snapshots = []
-          for report_id in report_ids:
-            report_row = self._conn.execute(
-              "SELECT * FROM reports WHERE id = ?", (report_id,)
-            ).fetchone()
-            if report_row is not None:
-              report = self._row_to_report(report_row)
-              snapshots.extend(answer.snapshot(report) for answer in report.answers)
-          if snapshots:
-            self._conn.execute(
-              "UPDATE tasks SET answer_snapshots_json = ? WHERE id = ?",
-              (json.dumps(snapshots), row["id"]),
-            )
       if "links_json" not in task_cols:
         self._conn.execute(
           "ALTER TABLE tasks ADD COLUMN links_json TEXT NOT NULL DEFAULT ''"
@@ -470,8 +441,8 @@ class SqliteStore:
           """
           INSERT INTO tasks (
             position, id, title, type, status, scope,
-            details_json, answer_snapshots_json, links_json, msg_ids_json, report_ids_json, deps_json, modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            details_json, links_json, msg_ids_json, report_ids_json, deps_json, modified_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             index,
@@ -481,7 +452,6 @@ class SqliteStore:
             task.status,
             task.scope,
             json.dumps(task.details),
-            json.dumps(task.answer_snapshots),
             json.dumps(task.links),
             json.dumps(task.msg_ids),
             json.dumps(task.report_ids),
@@ -707,6 +677,7 @@ class SqliteStore:
   @staticmethod
   def _row_to_task(row: sqlite3.Row) -> Task:
     keys = row.keys()
+    status = "upcoming" if row["status"] == "blocked" else str(row["status"])
     raw_links = row["links_json"] if "links_json" in keys else ""
     parsed_links = json.loads(raw_links) if raw_links else None
     if isinstance(parsed_links, dict):
@@ -714,10 +685,10 @@ class SqliteStore:
         id=str(row["id"]),
         title=str(row["title"]),
         type=str(row["type"]),
-        status=str(row["status"]),
+        status=status,
         scope=str(row["scope"]),
         details=[str(item) for item in json.loads(row["details_json"] or "[]")],
-        answer_snapshots=json.loads(row["answer_snapshots_json"] or "[]"),
+        allow_long_details=True,
         links=parsed_links,
         modified_at=str(row["modified_at"]),
       )
@@ -725,10 +696,10 @@ class SqliteStore:
       id=str(row["id"]),
       title=str(row["title"]),
       type=str(row["type"]),
-      status=str(row["status"]),
+      status=status,
       scope=str(row["scope"]),
       details=[str(item) for item in json.loads(row["details_json"] or "[]")],
-      answer_snapshots=json.loads(row["answer_snapshots_json"] or "[]"),
+      allow_long_details=True,
       msg_ids=[str(item) for item in json.loads(row["msg_ids_json"] or "[]")],
       report_ids=[str(item) for item in json.loads(row["report_ids_json"] or "[]")],
       task_ids=[str(item) for item in json.loads(row["deps_json"] or "[]")],

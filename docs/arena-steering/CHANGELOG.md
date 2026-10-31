@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 - `scripts/hooks`: Drop the hook wrapper, because the trap line calls `steer gate` alone.
 
+- `cli.py`, `models.py`: Drop task-answer snapshots and answer unlinking.
+
 ### Added
 
 - `cli.py`: Acknowledge multiple message and report-answer IDs atomically with one reply.
@@ -26,11 +28,11 @@ This log has no Unreleased section.
 
 - `services.py`: List pending message and answer IDs without marking them seen.
 
-- `cli.py`, `services.py`: Unlink one stored answer snapshot from every task that holds it, keeping the answer and its receipts.
-
 - `assets/app.js`: Filter loaded messages in the browser after the first search query.
 
 ### Changed
+
+- `services.py`, `models.py`: Derive task blocking and append full report-answer details on submission and when reports are newly linked.
 
 - `cli.py`: Bind `steer serve` to `0.0.0.0:8000` without a port option.
 

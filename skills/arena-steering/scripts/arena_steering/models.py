@@ -13,7 +13,7 @@ ENTITY_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 MESSAGE_STATUSES = ("sent", "seen", "acked")
 TASK_TYPES = ("report", "code", "docs", "ops", "misc")
-TASK_STATUSES = ("upcoming", "in_progress", "blocked", "finished")
+TASK_STATUSES = ("upcoming", "in_progress", "finished")
 REPORT_STATUSES = ("published", "answered", "dismissed")
 REPORT_FIELD_TYPES = ("choice", "checkbox", "text")
 
@@ -210,7 +210,6 @@ class Task:
   scope: str
   details: list[str]
   links: dict[str, list[str]]
-  answer_snapshots: list[dict[str, Any]]
   modified_at: str
 
   def __init__(
@@ -228,8 +227,8 @@ class Task:
     task_ids: list[str] | None = None,
     deps: list[str] | None = None,
     gate_names: list[str] | None = None,
-    answer_snapshots: list[dict[str, Any]] | None = None,
     modified_at: str = "",
+    allow_long_details: bool = False,
   ) -> None:
     validate_entity_id(id, "Task.id")
     if not isinstance(title, str) or not title.strip():
@@ -248,7 +247,7 @@ class Task:
       if not isinstance(line, str) or not line.strip():
         raise ValueError("Task detail line must be a non-empty string")
       text = line.strip()
-      if len(text) > TASK_DETAIL_MAX_LEN:
+      if len(text) > TASK_DETAIL_MAX_LEN and not allow_long_details:
         raise ValueError(
           f"Task detail exceeds {TASK_DETAIL_MAX_LEN} characters ({len(text)}): {text!r}"
         )
@@ -295,7 +294,6 @@ class Task:
       "task_ids": cleaned_tasks,
       "gate_names": cleaned_gates,
     }
-    self.answer_snapshots = [dict(item) for item in (answer_snapshots or [])]
     self.modified_at = str(modified_at or "")
 
   @property
@@ -351,7 +349,6 @@ class Task:
         "task_ids": list(self.task_ids),
         "gate_names": list(self.gate_names),
       },
-      "answer_snapshots": [dict(item) for item in self.answer_snapshots],
       "modified_at": self.modified_at,
     }
     if blocked is not None:
@@ -380,8 +377,8 @@ class Task:
       gate_names=(
         [str(item) for item in data["gate_names"]] if "gate_names" in data else None
       ),
-      answer_snapshots=[dict(item) for item in data.get("answer_snapshots", [])],
       modified_at=str(data.get("modified_at", "")),
+      allow_long_details=True,
     )
 
 
@@ -502,20 +499,6 @@ class ReportAnswer:
     self.created_at = str(self.created_at or self.modified_at)
     self.report_title = str(self.report_title or "")
     self.field_labels = dict(self.field_labels)
-
-  def snapshot(self, report: Report) -> dict[str, Any]:
-    """Preserve submitted values and their labels for a linked task."""
-    labels = self.field_labels or {field.id: field.label for field in report.fields}
-    return {
-      "id": self.id,
-      "report_id": report.id,
-      "report_title": self.report_title or report.title,
-      "created_at": self.created_at,
-      "fields": [
-        {"label": labels.get(field_id, field_id), "value": value}
-        for field_id, value in self.values.items()
-      ],
-    }
 
   def to_dict(self) -> dict[str, Any]:
     return {

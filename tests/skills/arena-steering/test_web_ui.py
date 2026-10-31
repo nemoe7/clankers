@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import runpy
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -739,3 +741,68 @@ assert.equal(context.messageMatchesQuery(message, 'zzz'), false);
   app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
   assert "searchBase && needle.startsWith(searchBase.query)" in app_js
   assert "searchBase = { query: activeQuery, messages: merged, hasMore }" in app_js
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_task_answer_details_render_once_and_wrap_on_mobile(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Task detail regression")
+  answer = "A" * 180
+  app.reports.publish_report(
+    "choice",
+    "Choice",
+    (
+      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
+      "Choice?\n"
+      f'- ( ) {answer} <!-- option {{"label": "{answer}"}} -->\n'
+    ),
+  )
+  app.tasks.create_task(
+    "work", "Review choice", details=["Review"], report_ids=["choice"]
+  )
+  app.reports.submit_answer("choice", {"choice": answer}, answer_id="ba2001")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        for name, width, height in (("desktop", 1200, 700), ("mobile", 390, 844)):
+          context = browser.new_context(viewport={"width": width, "height": height})
+          page = context.new_page()
+          errors: list[str] = []
+          page.on("pageerror", lambda error, errors=errors: errors.append(str(error)))
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          page.locator("#tab-tasks").click()
+          row = page.locator('[data-task-id="work"]').first
+          row.locator("summary").click()
+          page.wait_for_function(
+            """() => {
+              const details = document.querySelector('details.task-details[open]');
+              const list = details?.querySelector('.task-detail-list');
+              return list && details.getBoundingClientRect().bottom >=
+                list.getBoundingClientRect().bottom - 1;
+            }"""
+          )
+          details = row.locator("li.task-detail").all_text_contents()
+          assert details == ["Report: choice", "Review", f"Choice?: {answer}"]
+          assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+          assert not errors
+          page.screenshot(path=str(tmp_path / f"task-details-{name}.png"))
+          context.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

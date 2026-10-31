@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+from collections import Counter
 from functools import wraps
 from typing import Any
 
@@ -13,6 +14,7 @@ from .markdown import render_report_markdown, unparsed_strike_lines
 from .markdown_fields import format_answer_for_task_detail, parse_report_markdown
 from .models import (
   MESSAGE_ID_RE,
+  TASK_DETAIL_MAX_LEN,
   Attachment,
   Message,
   Report,
@@ -34,6 +36,17 @@ from .ports import (
   UtcClock,
 )
 
+
+def _answer_detail_lines(report: Report, answer: ReportAnswer) -> list[str]:
+  current_labels = {field.id: field.label for field in report.fields}
+  return [
+    format_answer_for_task_detail(
+      answer.field_labels.get(field_id) or current_labels.get(field_id, field_id), value
+    )
+    for field_id, value in answer.values.items()
+  ]
+
+
 DEFAULT_SURVEY_QUESTIONS: tuple[dict[str, Any], ...] = tuple(
   {
     "id": q["id"],
@@ -44,14 +57,6 @@ DEFAULT_SURVEY_QUESTIONS: tuple[dict[str, Any], ...] = tuple(
   }
   for q in survey_mod.SPEC["questions"]
 )
-
-
-def _append_snapshot(task: Task, report: Report, answer: ReportAnswer) -> None:
-  if not any(
-    item.get("id") == answer.id and item.get("report_id") == report.id
-    for item in task.answer_snapshots
-  ):
-    task.answer_snapshots.append(json.loads(json.dumps(answer.snapshot(report))))
 
 
 def _transactional_report_write(method: Any) -> Any:
@@ -427,8 +432,6 @@ class TaskService:
     """Derive blocking from unanswered linked reports and unfinished dependencies."""
     if task.status == "finished":
       return False
-    if task.status == "blocked":
-      return True
     if self._gates is not None and any(
       self._gates.is_running(gate) for gate in task.gate_names
     ):
@@ -449,9 +452,7 @@ class TaskService:
         return True
     for rep_id in task.report_ids:
       report = reports_by_id.get(rep_id)
-      if report is not None and (
-        report.needs_answer or report.latest_unacked_answer is not None
-      ):
+      if report is not None and report.needs_answer:
         return True
     return False
 
@@ -510,9 +511,9 @@ class TaskService:
       modified_at=now,
     )
     self._validate_details(task)
-    self._add_report_snapshots(task)
     queue = self._tasks.list_tasks()
     self._validate_deps_exist(task, queue)
+    self._copy_linked_report_answers(task, set())
     ordered = self._enforce_dependency_order([*queue, task])
     self._tasks.save_task_queue(ordered)
     return task
@@ -550,7 +551,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
-      answer_snapshots=target.answer_snapshots,
+      allow_long_details=True,
       links=target.links,
       modified_at=now,
     )
@@ -585,7 +586,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
-      answer_snapshots=target.answer_snapshots,
+      allow_long_details=True,
       links={
         "msg_ids": [item for item in target.msg_ids if item != cleaned_id],
         "report_ids": [item for item in target.report_ids if item != cleaned_id],
@@ -600,31 +601,9 @@ class TaskService:
     return updated
 
   @_transactional_task_write
-  def unlink_answer(self, answer_id: str) -> list[str]:
-    """Drop one stored answer snapshot from every task that holds it."""
-    validate_hex_id(answer_id, "ReportAnswer.id")
-    queue = self._tasks.list_tasks()
-    affected = [
-      item
-      for item in queue
-      if any(snapshot.get("id") == answer_id for snapshot in item.answer_snapshots)
-    ]
-    if not affected:
-      raise KeyError(f"Unknown answer ID: {answer_id}")
-    now = self._clock.now_iso()
-    for item in affected:
-      item.answer_snapshots = [
-        snapshot
-        for snapshot in item.answer_snapshots
-        if snapshot.get("id") != answer_id
-      ]
-      item.modified_at = now
-    self._tasks.save_task_queue(queue)
-    return [item.id for item in affected]
-
-  @_transactional_task_write
   def mod_deets(self, task_id: str, detail: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
+    self._validate_input_details([detail])
     updated = Task(
       id=target.id,
       title=target.title,
@@ -632,7 +611,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=[*target.details, detail],
-      answer_snapshots=target.answer_snapshots,
+      allow_long_details=True,
       links=target.links,
       modified_at=self._clock.now_iso(),
     )
@@ -655,7 +634,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=new_details,
-      answer_snapshots=target.answer_snapshots,
+      allow_long_details=True,
       links=target.links,
       modified_at=self._clock.now_iso(),
     )
@@ -707,7 +686,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
-      answer_snapshots=target.answer_snapshots,
+      allow_long_details=True,
       links={
         "msg_ids": msg_ids,
         "report_ids": report_ids,
@@ -717,8 +696,7 @@ class TaskService:
       modified_at=self._clock.now_iso(),
     )
     self._validate_deps_exist(updated, queue)
-    if cleaned in report_ids:
-      self._add_report_snapshots(updated, [cleaned])
+    self._copy_linked_report_answers(updated, set(target.report_ids))
     self._replace_in_queue(queue, updated)
     return updated
 
@@ -758,7 +736,7 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
-      answer_snapshots=target.answer_snapshots,
+      allow_long_details=True,
       links={
         "msg_ids": msg_ids,
         "report_ids": report_ids,
@@ -791,7 +769,7 @@ class TaskService:
       "status": target.status,
       "scope": target.scope,
       "details": target.details,
-      "answer_snapshots": target.answer_snapshots,
+      "allow_long_details": True,
       "links": target.links,
       "modified_at": self._clock.now_iso(),
     }
@@ -806,6 +784,8 @@ class TaskService:
   ) -> Task:
     """Apply partial updates and optional queue position change for HTTP PATCH."""
     queue, target = self._load_queue_and_target(task_id)
+    if "details" in changes:
+      self._validate_input_details(changes["details"], target.details)
     raw_links = changes.get("links")
     merged_links = {
       "gate_names": list(
@@ -851,16 +831,13 @@ class TaskService:
       status=str(changes.get("status", target.status)),
       scope=str(changes.get("scope", target.scope)),
       details=list(changes.get("details", target.details)),
-      answer_snapshots=target.answer_snapshots,
+      allow_long_details=True,
       links=merged_links,
       modified_at=self._clock.now_iso(),
     )
     self._validate_details(updated)
-    self._add_report_snapshots(
-      updated,
-      [item for item in updated.report_ids if item not in target.report_ids],
-    )
     self._validate_deps_exist(updated, queue)
+    self._copy_linked_report_answers(updated, set(target.report_ids))
     new_queue = [updated if item.id == task_id else item for item in queue]
     if position is not None:
       new_queue = [item for item in new_queue if item.id != task_id]
@@ -870,6 +847,15 @@ class TaskService:
     self._tasks.save_task_queue(ordered)
     return updated
 
+  def _copy_linked_report_answers(self, task: Task, previous_ids: set[str]) -> None:
+    for report_id in task.report_ids:
+      if report_id in previous_ids:
+        continue
+      report = self._reports.get_report(report_id)
+      if report is not None:
+        for answer in report.answers:
+          task.details.extend(_answer_detail_lines(report, answer))
+
   def _load_queue_and_target(self, task_id: str) -> tuple[list[Task], Task]:
     validate_entity_id(task_id, "Task.id")
     queue = self._tasks.list_tasks()
@@ -878,25 +864,31 @@ class TaskService:
         return queue, item
     raise KeyError(f"Unknown task ID: {task_id}")
 
-  def _add_report_snapshots(
-    self, task: Task, report_ids: list[str] | None = None
-  ) -> None:
-    for report_id in task.report_ids if report_ids is None else report_ids:
-      report = self._reports.get_report(report_id)
-      if report is not None:
-        for answer in report.answers:
-          _append_snapshot(task, report, answer)
-
   def _replace_in_queue(self, queue: list[Task], updated: Task) -> None:
     self._validate_details(updated)
-    stored = next((item for item in queue if item.id == updated.id), None)
-    linked_ids = stored.report_ids if stored is not None else []
-    self._add_report_snapshots(
-      updated, [item for item in updated.report_ids if item not in linked_ids]
-    )
     replaced = [updated if item.id == updated.id else item for item in queue]
     ordered = self._enforce_dependency_order(replaced)
     self._tasks.save_task_queue(ordered)
+
+  @staticmethod
+  def _validate_input_details(
+    details: list[str], existing: list[str] | None = None
+  ) -> None:
+    """Allow existing long generated details without accepting new long input."""
+    carried = Counter(
+      line for line in (existing or []) if len(line) > TASK_DETAIL_MAX_LEN
+    )
+    for line in details:
+      if not isinstance(line, str):
+        continue
+      text = line.strip()
+      if len(text) > TASK_DETAIL_MAX_LEN:
+        if carried[text]:
+          carried[text] -= 1
+        else:
+          raise ValueError(
+            f"Task detail exceeds {TASK_DETAIL_MAX_LEN} characters ({len(text)}): {text!r}"
+          )
 
   @staticmethod
   def _validate_details(task: Task) -> None:
@@ -1175,10 +1167,6 @@ class ReportService:
     queue = self._tasks.list_tasks()
     changed = False
     for task in queue:
-      for snapshot in task.answer_snapshots:
-        if snapshot.get("report_id") == old_report_id:
-          snapshot["report_id"] = new_report_id
-          changed = True
       if old_report_id in task.report_ids:
         task.report_ids = [
           new_report_id if report_id == old_report_id else report_id
@@ -1260,21 +1248,14 @@ class ReportService:
   def _append_answer_details_to_linked_tasks(
     self, report: Report, answer: ReportAnswer, now: str
   ) -> None:
-    lines = [
-      format_answer_for_task_detail(field, answer.values[field.id])
-      for field in report.fields
-      if field.id in answer.values
-    ]
+    lines = _answer_detail_lines(report, answer)
     if not lines:
       return
     queue = self._tasks.list_tasks()
     changed = False
     for task in queue:
       if report.id in task.report_ids:
-        _append_snapshot(task, report, answer)
-        for line in lines:
-          if line not in task.details:
-            task.details.append(line)
+        task.details.extend(lines)
         task.modified_at = now
         changed = True
     if changed:

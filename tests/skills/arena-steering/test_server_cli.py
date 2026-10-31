@@ -1295,7 +1295,7 @@ def test_attachment_message_retry_uses_original_message(tmp_path: Path) -> None:
   store.close()
 
 
-def test_cli_lists_persisted_answer_snapshots(tmp_path: Path) -> None:
+def test_cli_lists_persisted_answer_details(tmp_path: Path) -> None:
   from arena_steering.services import ReportService, TaskService
 
   state_dir = cli.resolve_state_dir()
@@ -1319,12 +1319,8 @@ def test_cli_lists_persisted_answer_snapshots(tmp_path: Path) -> None:
   for args in [("tasks",), ("task", "work")]:
     code, out, err = _run_cli(state_dir, *args)
     assert code == 0, err
-    assert (
-      answer.id in out
-      and answer.created_at in out
-      and "Yes" in out
-      and "Decision" in out
-    )
+    assert "Select?: Yes" in out
+    assert answer.id not in out
 
 
 def test_ack_task_rolls_back_both_on_failure(
@@ -1361,7 +1357,7 @@ def test_ack_task_rolls_back_both_on_failure(
   store.close()
 
 
-def test_ack_answer_creates_linked_task_with_answer_snapshot(tmp_path: Path) -> None:
+def test_ack_answer_creates_task_with_report_link(tmp_path: Path) -> None:
   state_dir = cli.resolve_state_dir()
   store, _, _, reports = cli.open_services(state_dir)
   reports.publish_report(
@@ -1389,11 +1385,12 @@ def test_ack_answer_creates_linked_task_with_answer_snapshot(tmp_path: Path) -> 
     "Do work",
   )
   assert code == 0, err
-  assert answer.id in out and "Yes" in out
+  assert answer.id in out
   store, _, tasks, reports = cli.open_services(state_dir)
   task = tasks.get_task("new-task")[0]
   assert task.msg_ids == [] and task.report_ids == ["choice"]
-  assert task.answer_snapshots[0]["id"] == answer.id
+  assert task.details == ["Do work", "Select?: Yes"]
+  assert "answer_snapshots" not in task.to_dict()
   assert reports.get_report("choice").answers[0].status == "acked"
   store.close()
 
@@ -2026,7 +2023,7 @@ def test_annotated_checkbox_labels_and_legacy_saved_report(tmp_path: Path) -> No
   store.close()
 
 
-def test_cli_task_unlink_removes_one_answer_snapshot(tmp_path: Path) -> None:
+def test_cli_removes_answer_detail_without_unlinking_report(tmp_path: Path) -> None:
   state_dir = cli.resolve_state_dir()
   store, _, tasks, reports = cli.open_services(state_dir)
   reports.publish_report(
@@ -2044,20 +2041,21 @@ def test_cli_task_unlink_removes_one_answer_snapshot(tmp_path: Path) -> None:
   reports.ack_answer("decision", answer.id, "Read")
   store.close()
 
-  code, out, err = _run_cli(state_dir, "task", "unlink", answer.id)
+  code, out, err = _run_cli(state_dir, "task", "mod", "work", "deets", "rm", "2")
   assert code == 0, err
-  assert answer.id in out and "1 task" in out
+  assert "Select?: Yes" not in out
 
   code, out, _ = _run_cli(state_dir, "task", "work")
-  assert code == 0 and answer.id not in out
+  assert code == 0 and "Select?: Yes" not in out
 
   store, _, tasks, reports = cli.open_services(state_dir)
-  assert tasks.get_task("work")[0].answer_snapshots == []
+  task = tasks.get_task("work")[0]
+  assert task.details == ["Review"] and task.report_ids == ["decision"]
   assert [item.id for item in reports.get_report("decision").answers] == [answer.id]
   store.close()
 
-  code, _, err = _run_cli(state_dir, "task", "unlink", "ab8802")
-  assert code == 1 and "ab8802" in err
+  code, _, err = _run_cli(state_dir, "task", "unlink", answer.id)
+  assert code == 1 and "Usage" in err
 
 
 def test_cli_gate_blocks_until_the_inbox_is_acked() -> None:
