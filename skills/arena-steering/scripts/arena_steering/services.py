@@ -301,8 +301,9 @@ class MessageService:
       return ("message", msg)
     answer = msg.as_report_answer()
     report = self._reports.get_report(answer.report_id)
-    if report is not None:
+    if report is not None and report.answers and report.answers[-1].id == answer.id:
       report.ack_seen = False
+      report.ack_seen_at = ""
       report.modified_at = now
       self._reports.save_report(report)
     self.reset_gate_if_clear()
@@ -1055,9 +1056,14 @@ class ReportService:
   def mark_ack_seen(self, report_id: str) -> Report:
     report = self.get_report(report_id)
     latest = report.answers[-1] if report.answers else None
-    if latest is not None and latest.status == "acked" and not report.ack_seen:
+    if (
+      latest is not None
+      and latest.status == "acked"
+      and (not report.ack_seen or not report.ack_seen_at)
+    ):
       report.ack_seen = True
-      report.modified_at = self._clock.now_iso()
+      report.ack_seen_at = self._clock.now_iso()
+      report.modified_at = report.ack_seen_at
       self._reports.save_report(report)
     return report
 
@@ -1088,12 +1094,11 @@ class ReportService:
         if all(task.status == "finished" for task in tasks):
           stale.append(report)
         continue
-      stamps = [
-        _report_timestamp(value)
-        for value in (report.updated_at, report.last_viewed_at)
-        if value
-      ]
-      if stamps and now - max(stamps) >= REPORT_IDLE_INTERVAL:
+      if (
+        report.ack_seen
+        and report.ack_seen_at
+        and now - _report_timestamp(report.ack_seen_at) >= REPORT_IDLE_INTERVAL
+      ):
         stale.append(report)
     return stale
 
@@ -1176,6 +1181,7 @@ class ReportService:
     report.status = "answered"
     report.seen = True
     report.ack_seen = False
+    report.ack_seen_at = ""
     report.modified_at = now
     self._reports.save_report(report)
     self._append_answer_details_to_linked_tasks(report, answer, now)
@@ -1193,9 +1199,11 @@ class ReportService:
         ans = self._reports.append_message_ack(
           answer_id, markdown.strip(), now
         ).as_report_answer()
-        report.ack_seen = False
-        report.modified_at = now
-        self._reports.save_report(report)
+        if report.answers[-1].id == answer_id:
+          report.ack_seen = False
+          report.ack_seen_at = ""
+          report.modified_at = now
+          self._reports.save_report(report)
         if self._on_ack is not None:
           self._on_ack()
         return ans
@@ -1234,6 +1242,7 @@ class ReportService:
       answers=renamed_answers,
       seen=existing.seen,
       ack_seen=existing.ack_seen,
+      ack_seen_at=existing.ack_seen_at,
       modified_at=now,
       updated_at=existing.updated_at,
       last_viewed_at=existing.last_viewed_at,

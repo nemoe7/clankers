@@ -600,6 +600,7 @@ class Report:
   answers: list[ReportAnswer] = field(default_factory=list)
   seen: bool = False
   ack_seen: bool = False
+  ack_seen_at: str = ""
   modified_at: str = ""
   updated_at: str = ""
   last_viewed_at: str = ""
@@ -629,6 +630,7 @@ class Report:
     ]
     self.seen = bool(self.seen)
     self.ack_seen = bool(self.ack_seen)
+    self.ack_seen_at = str(self.ack_seen_at or "")
     self.modified_at = str(self.modified_at or "")
     self.updated_at = str(self.updated_at or self.modified_at)
     self.last_viewed_at = str(self.last_viewed_at or "")
@@ -657,6 +659,7 @@ class Report:
       "answers": [item.to_dict() for item in self.answers],
       "seen": self.seen,
       "ack_seen": self.ack_seen,
+      "ack_seen_at": self.ack_seen_at,
       "needs_answer": self.needs_answer,
       "modified_at": self.modified_at,
       "updated_at": self.updated_at,
@@ -675,6 +678,7 @@ class Report:
       answers=[ReportAnswer.from_dict(raw) for raw in data.get("answers", [])],
       seen=bool(data.get("seen", False)),
       ack_seen=bool(data.get("ack_seen", False)),
+      ack_seen_at=str(data.get("ack_seen_at", "")),
       modified_at=str(data.get("modified_at", "")),
       updated_at=str(data.get("updated_at", "")),
       last_viewed_at=str(data.get("last_viewed_at", "")),

@@ -797,28 +797,47 @@ class _ReportTestClock:
     self.current += timedelta(**kwargs)
 
 
-def test_unlinked_report_staleness_uses_latest_publication_or_view() -> None:
+def test_unlinked_report_staleness_starts_when_ack_is_seen() -> None:
   store = SqliteStore(":memory:")
   clock = _ReportTestClock()
   reports = ReportService(store, store, clock=clock)
-  reports.publish_report("idle-report", "Idle report", "# Idle")
-
+  reports.publish_report(
+    "idle-report",
+    "Idle report",
+    '<!-- question {"id":"pick","label":"Pick"} -->\n'
+    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+    '- ( ) No <!-- option {"label":"No"} -->\n',
+  )
+  reports.publish_report("fieldless-report", "Fieldless report", "# Fieldless")
+  clock.advance(hours=2)
+  reports.mark_seen("idle-report")
+  assert reports.list_reports(stale_only=True) == []
+  answer = reports.submit_answer("idle-report", {"pick": "Yes"}, answer_id="aa1001")
+  clock.advance(hours=1)
+  assert reports.list_reports(stale_only=True) == []
+  reports.ack_answer("idle-report", answer.id, "Noted")
+  clock.advance(hours=1)
+  assert reports.list_reports(stale_only=True) == []
+  seen_at = clock.now_iso()
+  assert reports.mark_ack_seen("idle-report").ack_seen_at == seen_at
   clock.advance(minutes=29, seconds=59)
+  reports.mark_seen("idle-report")
+  assert reports.mark_ack_seen("idle-report").ack_seen_at == seen_at
   assert reports.list_reports(stale_only=True) == []
   clock.advance(seconds=1)
   assert [report.id for report in reports.list_reports(stale_only=True)] == [
     "idle-report"
   ]
-
-  reports.mark_seen("idle-report")
+  reports.ack_answer("idle-report", answer.id, "Another acknowledgement")
+  assert reports.list_reports(stale_only=True) == []
+  assert reports.get_report("idle-report").ack_seen_at == ""
+  reports.mark_ack_seen("idle-report")
   clock.advance(minutes=30)
   assert [report.id for report in reports.list_reports(stale_only=True)] == [
     "idle-report"
   ]
-  reports.mark_seen("idle-report")
-  assert reports.list_reports(stale_only=True) == []
-  clock.advance(minutes=30)
-  reports.publish_report("idle-report", "Updated report", "# Updated")
+  reports.submit_answer("idle-report", {"pick": "No"}, answer_id="aa1006")
+  assert reports.get_report("idle-report").ack_seen_at == ""
   assert reports.list_reports(stale_only=True) == []
   store.close()
 
@@ -848,7 +867,15 @@ def test_report_pin_and_linked_task_staleness_survive_restart(tmp_path) -> None:
   clock = _ReportTestClock()
   reports = ReportService(store, store, clock=clock)
   tasks = TaskService(store, store, clock=clock)
-  reports.publish_report("idle-report", "Idle report", "# Idle")
+  reports.publish_report(
+    "idle-report",
+    "Idle report",
+    '<!-- question {"id":"pick","label":"Pick"} -->\n'
+    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+  )
+  answer = reports.submit_answer("idle-report", {"pick": "Yes"}, answer_id="aa1003")
+  reports.ack_answer("idle-report", answer.id, "Read")
+  reports.mark_ack_seen("idle-report")
   reports.publish_report("linked-report", "Linked report", "# Linked")
   reports.pin_report("idle-report", True)
   tasks.create_task("first", "First", details=["First"], report_ids=["linked-report"])
@@ -902,7 +929,14 @@ def test_stale_report_removal_retains_a_pending_answer() -> None:
     ),
   )
   reports.submit_answer("answered-report", {"choice": "Yes"}, answer_id="abc123")
-  clock.advance(minutes=30)
+  tasks = TaskService(store, store, clock=clock)
+  tasks.create_task(
+    "answer-work",
+    "Answer work",
+    status="finished",
+    details=["Done"],
+    report_ids=["answered-report"],
+  )
   assert [report.id for report in reports.list_reports(stale_only=True)] == [
     "answered-report"
   ]
@@ -949,4 +983,53 @@ def test_replaced_answer_stays_nonblocking_after_report_rename() -> None:
   reports.rename_report("decision", "renamed-decision")
   assert not store.get_message(first.id).blocking
   assert store.get_message(newest.id).blocking
+  store.close()
+
+
+def test_ack_seen_timestamp_syncs_and_old_seen_flag_does_not_migrate() -> None:
+  source = SqliteStore(":memory:")
+  target = SqliteStore(":memory:")
+  clock = _ReportTestClock()
+  reports = ReportService(source, source, clock=clock)
+  reports.publish_report(
+    "seen-report",
+    "Seen report",
+    '<!-- question {"id":"pick","label":"Pick"} -->\n'
+    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+  )
+  answer = reports.submit_answer("seen-report", {"pick": "Yes"}, answer_id="aa1002")
+  reports.ack_answer("seen-report", answer.id, "Read")
+  target.merge_rows(source.export_rows())
+  before = source.state_stamp()
+  clock.advance(minutes=1)
+  reports.mark_ack_seen("seen-report")
+  target.merge_rows(source.export_rows(since=before))
+  assert target.get_report("seen-report").ack_seen_at == clock.now_iso()
+  # An old true flag gets no synthetic timestamp, but an explicit view can start it.
+  with source.transaction():
+    source._conn.execute("UPDATE reports SET ack_seen_at = '' WHERE id = 'seen-report'")
+  clock.advance(hours=1)
+  assert reports.list_reports(stale_only=True) == []
+  assert reports.mark_ack_seen("seen-report").ack_seen_at == clock.now_iso()
+  source.close()
+  target.close()
+
+
+def test_acknowledging_an_older_answer_does_not_reset_latest_seen_timer() -> None:
+  store = SqliteStore(":memory:")
+  clock = _ReportTestClock()
+  reports = ReportService(store, store, clock=clock)
+  messages = MessageService(store, store, store, clock=clock)
+  _publish_answer_message_report(reports)
+  first = reports.submit_answer("decision", {"choice": "A"}, answer_id="aa1004")
+  latest = reports.submit_answer("decision", {"choice": "B"}, answer_id="aa1005")
+  reports.ack_answer("decision", latest.id, "Latest read")
+  seen_at = reports.mark_ack_seen("decision").ack_seen_at
+  clock.advance(minutes=15)
+  messages.ack(first.id, "Older read")
+  reports.ack_answer("decision", first.id, "Another older reply")
+  report = reports.get_report("decision")
+  assert report.ack_seen and report.ack_seen_at == seen_at
+  clock.advance(minutes=15)
+  assert [item.id for item in reports.list_reports(stale_only=True)] == ["decision"]
   store.close()
