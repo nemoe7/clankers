@@ -19,7 +19,6 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable, Iterable
-from contextlib import closing
 from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -307,14 +306,9 @@ class SteeringApp:
     """Return a version tuple covering SQLite, in-process writes, and finished runs."""
     in_proc = int(getattr(self, "_state_version", 0))
     runs_ver = self.run_stamp()
-    db_path = str(getattr(self.store, "db_path", ""))
-    if not db_path or db_path == ":memory:":
-      return (0, in_proc, runs_ver)
     try:
-      with closing(sqlite3.connect(db_path, timeout=2.0)) as conn:
-        row = conn.execute("PRAGMA data_version").fetchone()
-        pragma_ver = int(row[0]) if row else 0
-        return (pragma_ver, in_proc, runs_ver)
+      external, local = self.store.data_version()
+      return (external, in_proc + local, runs_ver)
     except sqlite3.Error:
       return (0, in_proc, runs_ver)
 
