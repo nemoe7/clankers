@@ -102,7 +102,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer run logs NAME [-n LINES]` | Show run status and log tail. |
 | `steer run pr-checks [-n NUMBER]` | Start a detached `gh pr checks --watch` run. |
 | `steer gate [-p] [-l LINE]` | Refuse a command or push while a message or report answer waits for an acknowledgement. |
-| `steer skills [-j]` | List skill names, sources, paths, and descriptions. Installed copies win over repo copies. |
+| `steer skills` | List skill names, sources, paths, and descriptions. Installed copies win over repo copies. |
 
 Use `python skills/arena-steering/scripts/steer` in place of `steer` in the table when the entry point is not on `PATH`. Message and answer IDs are six lowercase hexadecimal characters. Task and report IDs use lowercase kebab-case.
 

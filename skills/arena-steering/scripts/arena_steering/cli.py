@@ -209,9 +209,6 @@ def main(
   )
 
   skills_p = sub.add_parser("skills", help="List skill names, descriptions, and paths.")
-  skills_p.add_argument(
-    "-j", "--json", dest="as_json", action="store_true", help="Print JSON."
-  )
 
   worktree_p = sub.add_parser(
     "worktree",
@@ -284,8 +281,8 @@ def main(
       parsed = pre_p.parse_args(cmd_args)
       return _run_pre(parsed, messages, store, stdout)
     if cmd == "skills":
-      parsed = skills_p.parse_args(cmd_args)
-      return _run_skills(parsed, stdout)
+      skills_p.parse_args(cmd_args)
+      return _run_skills(stdout)
     if cmd == "read":
       read_p.parse_args(cmd_args)
       _print_restore_notice(store, stdout)
@@ -782,7 +779,7 @@ def _skill_description(skill_md: Path) -> str:
   return ""
 
 
-def _run_skills(parsed: argparse.Namespace, out: TextIO) -> int:
+def _run_skills(out: TextIO) -> int:
   """List repository and installed skills, preferring the installed copy of a name."""
   root = _repo_root()
   found: dict[str, dict[str, str]] = {}
@@ -803,9 +800,6 @@ def _run_skills(parsed: argparse.Namespace, out: TextIO) -> int:
         "description": _skill_description(skill_md),
       }
   entries = [found[name] for name in sorted(found)]
-  if parsed.as_json:
-    print(json.dumps(entries, indent=2), file=out)
-    return 0
   if not entries:
     print("No skills found.", file=out)
     return 0
