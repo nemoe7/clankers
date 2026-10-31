@@ -261,6 +261,12 @@ def main(
   resolved_state_dir = resolve_state_dir()
   store, messages, tasks, reports = open_services(resolved_state_dir)
   try:
+    if cmd != "serve":
+      try:
+        messages.touch_agent()
+      except (OSError, sqlite3.Error):
+        # Activity is advisory and must not block an otherwise readable inbox.
+        pass
     if cmd == "serve":
       serve_p.parse_args(cmd_args)
       app = SteeringApp(store)

@@ -5,6 +5,7 @@
 - Dark-only Arena surface palette (`hsl(var(--surface-primary))` `#1d1c1b`, `hsl(var(--surface-secondary))` `#252523`, `hsl(var(--surface-tertiary))` `#191817`, `hsl(var(--surface-raised))` `#2c2b28`).
 - Text hierarchy tokens (`--text-primary`, `--text-secondary`, `--text-tertiary`, `--header-primary`) and border tokens (`--border-faint`, `--border-medium`, `--border-strong`).
 - Status and interactive tokens (`--interactive-positive`, `--interactive-link`, `--interactive-negative`, `--interactive-cta`, `--code-bg`).
+- Connection states use `--connection-ok`, `--connection-polling`, `--connection-idle`, and `--connection-down`. The initial state uses muted text color.
 
 ## Typography
 
@@ -27,14 +28,15 @@
 ## Component Inventory
 
 - Centered equal-width `.tab-nav` (`grid-auto-columns: 1fr`) with plain-text `.tab-btn` items and `#report-pip` (`--accent: #e5bb8b`) on `Reports` when unseen or unanswered reports exist.
-- `Messages` log toolbar (`#connection` live pulse dot, `#log-search`, `#skip-poll`, `#quiet-msgs`), `.message` cards, `.code-block` copy headers, and `.card.compose`.
+- `Messages` log toolbar (`#connection` status dot, `#log-search`, `#skip-poll`, `#quiet-msgs`), `.message` cards, `.code-block` copy headers, and `.card.compose`.
 - `Reports` 3-column layout (`#report-toc`, `#report-main` with two-line `#report-status` under `<h1>` and `.field-card` question cards, and `#report-rail` numbered `#report-picker` with top-right unseen dot and unanswered icon plus `Copy`/`Dismiss` actions).
 - `Tasks` borderless sectioned list (`Current` `18px`, `Upcoming` `18px`, `Finished` `18px`) with `16px` task rows/titles, `14px` badges/details, `.select-wrap` type filter (`#task-type-filter`), and search input.
 - Shared `<dialog id="modal-shell">` confirmation modal (`createModalManager`) with equal-width `.modal-actions` buttons.
 
 ## States & Feedback
 
-- Live connection indicator uses Arena's `2s cubic-bezier(0.4, 0, 0.6, 1)` `.animate-pulse` animation and pauses under `prefers-reduced-motion: reduce`.
+- The static connection dot is gray while connecting, green while connected, blue while polling, amber when idle, and red when disconnected.
+- Text and an accessible label identify each state.
 - Message status dots reflect `sent` (neutral), `seen` (`#7fa7d1`), and `acked` (`#8dc07f`) states alongside boundary-scheduled relative timestamps (`nextRelativeDelay`).
 - Copy buttons (`.copy-code`, `#report-copy`) and ID chips (`code.msg-id`) swap to a green check / `data-state="good"` confirmation state on click.
 

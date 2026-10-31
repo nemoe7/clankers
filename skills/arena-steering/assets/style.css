@@ -77,6 +77,10 @@
   --interactive-positive: 125 49% 50%;
   --interactive-negative: 2 86% 63%;
   --interactive-warning: 48 95% 49%;
+  --connection-ok: #22c55e;
+  --connection-polling: #3b82f6;
+  --connection-idle: #f59e0b;
+  --connection-down: #ef4444;
   --interactive-inverted: 60 3% 14%;
   --interactive-cta: 36 45% 98%;
   --interactive-cta-hover: 33 31% 94%;
@@ -613,6 +617,17 @@ code.msg-id[data-state="good"] {
   background-color: hsl(var(--surface-raised));
 }
 
+#connection-dot {
+  width: 10px;
+  height: 10px;
+  background: hsl(var(--text-tertiary));
+}
+
+#connection-dot[data-state="ok"] { background: var(--connection-ok); }
+#connection-dot[data-state="polling"] { background: var(--connection-polling); }
+#connection-dot[data-state="idle"] { background: var(--connection-idle); }
+#connection-dot[data-state="down"] { background: var(--connection-down); }
+
 .log-edited {
   position: absolute;
   left: 50%;
@@ -692,14 +707,6 @@ mark.search-hit {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.dot.survey-warn {
-  background-color: #e5a93b;
-}
-
-.dot.survey-bad {
-  background-color: #d96b6b;
 }
 
 .survey-subtitle {
