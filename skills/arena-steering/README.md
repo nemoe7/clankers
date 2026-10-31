@@ -51,7 +51,7 @@ Keep session state outside version control.
 ### Tasks
 
 - View current, upcoming, and finished work. Search tasks, filter by type, expand details, and load more finished items by scrolling.
-- Task dependencies determine order and blocking. An unanswered linked report or its latest unacknowledged answer also blocks a task.
+- Task dependencies determine order and blocking. An unanswered linked report or a running gate also blocks a task.
 - The task view shows scope, report links, and dependencies. The CLI and HTTP API also manage message links.
 
 ### Reports
@@ -132,15 +132,17 @@ The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. Only 
 
 ## Task and message contracts
 
-- Task types are `report`, `code`, `docs`, `ops`, and `misc`. Statuses are `upcoming`, `in_progress`, `blocked`, and `finished`.
-- New tasks default to `code` and `upcoming`.
-- New and updated tasks require at least one nonempty detail of at most 120 characters.
+- Task types are `report`, `code`, `docs`, `ops`, and `misc`. Statuses are `upcoming`, `in_progress`, and `finished`.
+- New tasks default to `code` and `upcoming`. Blocking is derived from unanswered linked reports, unfinished dependencies, and running gates.
+- Legacy `blocked` statuses read as `upcoming`.
+- New and updated tasks require at least one nonempty detail. Manually entered details have a 120-character limit.
 - Existing empty tasks remain readable but need a detail on their next update.
 - Dependencies must exist. Self-dependencies and cycles are rejected.
-- Linked report answers are stored as distinct task snapshots, with their values, labels, and timestamps. They survive unlinking and report removal.
+- Each report submission appends one full `question label: submitted value` detail per field to every linked task. Generated details have no length limit and remain editable after report removal.
+- Adding a report link copies its existing answers into task details. Unlinking and relinking can repeat those details.
+- Existing task-answer snapshots are not migrated into task details.
 - With one target, `-i ID -t TITLE -d DETAIL` commits a linked task and acknowledgement together. `-T` and `-S` set task type and scope.
 - Multi-ID acknowledgement is atomic. A bad ID leaves every target unchanged.
-- On upgrade, linked historical answers are backfilled. Legacy answers use their last recorded modification time and current field labels when original metadata is unavailable.
 - Removing a task removes its dependency links from other tasks.
 - Use `steer task mod ID deets TEXT` to append a detail and `steer task mod ID deets rm NUMBER` to remove one. Detail numbers are displayed from 1.
 - Use `steer task mod ID links [msg|report|task|gate] LINK` to add a link. Use `steer task mod ID links rm TYPE LINK` to remove one, or `steer task mod ID deps [rm] TASK` for dependencies.
@@ -293,7 +295,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Inbox | Read and poll, note history, quiet notes, seen receipts, and acknowledgement receipts | Read and poll, message history, hidden messages, non-blocking messages, and acknowledgement replies | Names and paging differ. |
 | Message composer | Markdown preview, staging, paste, drop, expansion, reply links, search, and jumps | Preview, staging, paste, drop, expansion, multi-parent replies, search, and jumps | Parity for the paste thresholds, Ctrl+Shift+V bypass, IME guard, and touch Enter. V2 adds multi-parent replies. |
 | Message extras | Slash commands, reference navigation, and persisted reply-seen counts | Reference navigation, multi-parent replies, and persisted boolean reply receipts | V2 omits slash commands and does not store or show unread-reply counts. |
-| Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report, dependency, and running-gate blocking, details, search, and filters | Both require task details. V2 intentionally drops drag reorder. Both retain answer snapshots. V2 creates tasks and acknowledges their targets atomically. |
+| Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report, dependency, and running-gate blocking, details, search, and filters | Both require task details. V2 drops drag reorder and appends report answers as editable details. V2 creates tasks and acknowledges their targets atomically. |
 | Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Both require acknowledgement only for the latest answer. |
 | Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal | No pin, visibility-state, worker answer, or forward routes. Guards and republish contract differ. |
 | Report publication | Local image embedding, diff marker validation, optional submission format, and publication verification | Markdown publication and field parsing | Local image embedding is intentionally dropped. No marker-validation flag, schema option, or explicit rendered verification step is present. |

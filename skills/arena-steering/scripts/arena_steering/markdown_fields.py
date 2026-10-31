@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-from .models import TASK_DETAIL_MAX_LEN, ReportField, kebab_slug, validate_entity_id
+from .models import ReportField, kebab_slug, validate_entity_id
 
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 ANCHOR_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -322,9 +322,9 @@ def parse_report_markdown(
   return blocks, fields
 
 
-def format_answer_for_task_detail(field: ReportField, value: Any) -> str:
-  """Format a field's label and submitted value as a single task detail string."""
-  label = field.label.rstrip(":?.! ")
+def format_answer_for_task_detail(field: ReportField | str, value: Any) -> str:
+  """Format a field or its saved label and value as one task detail."""
+  label = (field if isinstance(field, str) else field.label).strip()
   if isinstance(value, dict):
     selected = value.get("selected")
     custom = str(value.get("custom", "")).strip()
@@ -343,12 +343,7 @@ def format_answer_for_task_detail(field: ReportField, value: Any) -> str:
 
   if not answer_str:
     answer_str = "(none)"
-  line = f"{label}: {answer_str}"
-  if not line.endswith("."):
-    line += "."
-  if len(line) > TASK_DETAIL_MAX_LEN:
-    line = line[: TASK_DETAIL_MAX_LEN - 3].rstrip() + "..."
-  return line
+  return f"{label}: {answer_str}"
 
 
 def _resolve_field_id(

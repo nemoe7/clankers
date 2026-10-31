@@ -52,7 +52,7 @@ Summary note: ___
   assert f2.type == "text"
 
   detail = format_answer_for_task_detail(f0, "Fast mode")
-  assert detail == "We should use this execution mode: Fast mode."
+  assert detail == "We should use this execution mode: Fast mode"
   assert any(block_type == "field" for block_type, _ in blocks)
 
 
@@ -133,8 +133,8 @@ def test_task_service_mutable_dependency_queue_and_derived_blocking() -> None:
     answer_id="dead01",
   )
   assert ans.status == "sent"
-  assert "We should use this database: SQLite." in tasks.get_task("task-b")[0].details
-  assert tasks.get_task("task-b")[1] is True
+  assert "We should use this database: SQLite" in tasks.get_task("task-b")[0].details
+  assert tasks.get_task("task-b")[1] is False
 
   reports.ack_answer("design-doc", "dead01", "Confirmed SQLite.")
   assert tasks.get_task("task-b")[1] is False
@@ -214,7 +214,7 @@ def test_task_details_required_for_create_and_legacy_update(tmp_path) -> None:
   store.close()
 
 
-def test_task_answer_snapshots_survive_report_removal_and_edits(tmp_path) -> None:
+def test_task_answer_details_survive_report_removal_and_edits(tmp_path) -> None:
   from io import StringIO
 
   from arena_steering.cli import _print_single_task, _print_task_list
@@ -240,10 +240,8 @@ def test_task_answer_snapshots_survive_report_removal_and_edits(tmp_path) -> Non
   reports.ack_answer("decision", first.id, "Read")
   second = reports.submit_answer("decision", {"choice": "A"}, answer_id="ab0002")
   reports.ack_answer("decision", second.id, "Read")
-  snapshots = tasks.get_task("work")[0].answer_snapshots
-  assert [item["id"] for item in snapshots] == [first.id, second.id]
-  assert all(item["fields"][0]["value"] == "A" for item in snapshots)
-  assert snapshots[0]["created_at"] == first.created_at
+  details = tasks.get_task("work")[0].details
+  assert details == ["Act on the answer", "Choice?: A", "Choice?: A"]
   tasks.mod_scalar("work", "title", "Updated work")
   tasks.mod_deets("work", "Another detail")
   tasks.patch_task("work", {"scope": "test"})
@@ -253,18 +251,18 @@ def test_task_answer_snapshots_survive_report_removal_and_edits(tmp_path) -> Non
 
   reopened = SqliteStore(path)
   task = reopened.get_task("renamed")
-  assert task is not None and task.answer_snapshots == snapshots
+  assert task is not None and task.details == [*details, "Another detail"]
   assert task.report_ids == []
   out = StringIO()
   _print_task_list([(task, False)], out)
   _print_single_task(task, False, out)
   text = out.getvalue()
-  assert first.id in text and second.id in text and "Original decision" in text
-  assert "Choice" in text and '"A"' in text and first.created_at in text
+  assert text.count("Choice?: A") == 4
+  assert first.id not in text and second.id not in text
   reopened.close()
 
 
-def test_existing_report_answers_are_snapshotted_when_linked(tmp_path) -> None:
+def test_linking_an_answered_report_copies_details_each_time(tmp_path) -> None:
   store = SqliteStore(tmp_path / "link.sqlite3")
   reports = ReportService(store, store)
   tasks = TaskService(store, store)
@@ -282,11 +280,38 @@ def test_existing_report_answers_are_snapshotted_when_linked(tmp_path) -> None:
   reports.ack_answer("decision", answer.id, "Read")
   tasks.create_task("work", "Do work", details=["Act on the answer"])
   tasks.mod_links_add("work", "decision", link_type="report")
-  assert tasks.get_task("work")[0].answer_snapshots[0]["id"] == answer.id
+  task = tasks.get_task("work")[0]
+  assert task.report_ids == ["decision"]
+  assert task.details == ["Act on the answer", "Choice?: B"]
+  tasks.mod_links_add("work", "decision", link_type="report")
+  assert tasks.get_task("work")[0].details == task.details
+  reports.submit_answer("decision", {"choice": "A"}, answer_id="cd0002")
+  assert tasks.get_task("work")[0].details == [
+    "Act on the answer",
+    "Choice?: B",
+    "Choice?: A",
+  ]
+  tasks.mod_links_rm("work", "report", "decision")
+  tasks.mod_links_add("work", "decision", link_type="report")
+  assert tasks.get_task("work")[0].details == [
+    "Act on the answer",
+    "Choice?: B",
+    "Choice?: A",
+    "Choice?: B",
+    "Choice?: A",
+  ]
+  reports.rename_report("decision", "renamed-decision")
+  assert tasks.get_task("work")[0].details == [
+    "Act on the answer",
+    "Choice?: B",
+    "Choice?: A",
+    "Choice?: B",
+    "Choice?: A",
+  ]
   store.close()
 
 
-def test_snapshot_keeps_original_report_labels_after_republish(tmp_path) -> None:
+def test_task_details_keep_original_labels_after_republish(tmp_path) -> None:
   store = SqliteStore(tmp_path / "labels.sqlite3")
   reports = ReportService(store, store)
   tasks = TaskService(store, store)
@@ -300,6 +325,7 @@ def test_snapshot_keeps_original_report_labels_after_republish(tmp_path) -> None
       '- ( ) B <!-- option {"label": "B"} -->\n'
     ),
   )
+  tasks.create_task("work", "Do work", details=["Review"], report_ids=["decision"])
   answer = reports.submit_answer("decision", {"field": "A"}, answer_id="ba1001")
   reports.ack_answer("decision", answer.id, "Read")
   reports.publish_report(
@@ -312,16 +338,31 @@ def test_snapshot_keeps_original_report_labels_after_republish(tmp_path) -> None
       '- ( ) B <!-- option {"label": "B"} -->\n'
     ),
   )
-  task = tasks.create_task(
-    "work", "Do work", details=["Review"], report_ids=["decision"]
+  reports.submit_answer("decision", {"field": "B"}, answer_id="ba1002")
+  task = tasks.get_task("work")[0]
+  assert task.details == ["Review", "Original label?: A", "New label?: B"]
+  created = tasks.create_task(
+    "created-later", "Created later", details=["Review"], report_ids=["decision"]
   )
-  assert task.answer_snapshots[0]["report_title"] == "Original title"
-  assert task.answer_snapshots[0]["fields"][0]["label"] == "Original label?"
-  assert task.answer_snapshots[0]["created_at"] == answer.created_at
+  assert created.details == ["Review", "Original label?: A", "New label?: B"]
+  tasks.create_task("patched-later", "Patched later", details=["Review"])
+  patched = tasks.patch_task("patched-later", {"links": {"report_ids": ["decision"]}})
+  assert patched.details == ["Review", "Original label?: A", "New label?: B"]
+  patched = tasks.patch_task("patched-later", {"report_ids": ["decision"]})
+  assert patched.details == ["Review", "Original label?: A", "New label?: B"]
+  tasks.patch_task("patched-later", {"report_ids": []})
+  patched = tasks.patch_task("patched-later", {"report_ids": ["decision"]})
+  assert patched.details == [
+    "Review",
+    "Original label?: A",
+    "New label?: B",
+    "Original label?: A",
+    "New label?: B",
+  ]
   store.close()
 
 
-def test_concurrent_report_answers_preserve_distinct_snapshots(tmp_path) -> None:
+def test_concurrent_report_answers_append_distinct_details(tmp_path) -> None:
   from concurrent.futures import ThreadPoolExecutor
   from threading import Barrier
 
@@ -353,12 +394,12 @@ def test_concurrent_report_answers_preserve_distinct_snapshots(tmp_path) -> None
   report = reports[0].get_report("choice")
   task = tasks.get_task("work")[0]
   assert {item.id for item in report.answers} == {item.id for item in answers}
-  assert {item["id"] for item in task.answer_snapshots} == {item.id for item in answers}
+  assert task.details == ["Review", "Select?: Yes", "Select?: Yes"]
   for store in stores:
     store.close()
 
 
-def test_explicit_answer_unlink_keeps_the_answer_and_relinks(tmp_path) -> None:
+def test_removing_answer_details_keeps_answers_and_report_links(tmp_path) -> None:
   path = tmp_path / "unlink-answer.sqlite3"
   store = SqliteStore(path)
   reports = ReportService(store, store)
@@ -377,37 +418,152 @@ def test_explicit_answer_unlink_keeps_the_answer_and_relinks(tmp_path) -> None:
   first = reports.submit_answer("decision", {"select": "Yes"}, answer_id="ac0001")
   second = reports.submit_answer("decision", {"select": "No"}, answer_id="ac0002")
   reports.ack_answer("decision", second.id, "Read")
-  details = list(tasks.get_task("work")[0].details)
-
-  assert tasks.unlink_answer(first.id) == ["work"]
+  assert tasks.get_task("work")[0].details == ["Review", "Select?: Yes", "Select?: No"]
+  tasks.mod_deets_rm("work", 2)
   task = tasks.get_task("work")[0]
-  assert [item["id"] for item in task.answer_snapshots] == [second.id]
   assert task.report_ids == ["decision"]
-  assert task.details == details
+  assert task.details == ["Review", "Select?: No"]
   stored = reports.get_report("decision").answers
   assert [item.id for item in stored] == [first.id, second.id]
   assert stored[0].created_at == first.created_at
   assert stored[1].acks == ["Read"]
 
   tasks.mod_scalar("work", "title", "Renamed work")
-  assert [item["id"] for item in tasks.get_task("work")[0].answer_snapshots] == [
-    second.id
-  ]
-
+  tasks.mod_links_rm("work", "report", "decision")
   tasks.mod_links_add("work", "decision", link_type="report")
-  assert {item["id"] for item in tasks.get_task("work")[0].answer_snapshots} == {
-    first.id,
-    second.id,
-  }
-
-  with pytest.raises(KeyError, match="ac0003"):
-    tasks.unlink_answer("ac0003")
+  relinked_details = ["Review", "Select?: No", "Select?: Yes", "Select?: No"]
+  assert tasks.get_task("work")[0].details == relinked_details
   store.close()
 
   reopened = SqliteStore(path)
-  tasks = TaskService(reopened, reopened)
-  assert tasks.unlink_answer(first.id) == ["work"]
-  assert [item["id"] for item in tasks.get_task("work")[0].answer_snapshots] == [
-    second.id
-  ]
+  task = TaskService(reopened, reopened).get_task("work")[0]
+  assert task.details == relinked_details
+  assert task.report_ids == ["decision"]
   reopened.close()
+
+
+def test_report_blocking_follows_answer_need_not_acknowledgement() -> None:
+  store = SqliteStore(":memory:")
+  tasks = TaskService(store, store)
+  reports = ReportService(store, store)
+  reports.publish_report("plain", "Plain", "# No questions")
+  reports.publish_report(
+    "question",
+    "Question",
+    (
+      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
+      "Choice?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+    ),
+  )
+  tasks.create_task("work", "Work", details=["Review"], report_ids=["plain"])
+  assert tasks.get_task("work")[1] is False
+  tasks.mod_links_add("work", "question", link_type="report")
+  assert tasks.get_task("work")[1] is True
+  reports.submit_answer("question", {"choice": "Yes"}, answer_id="b20001")
+  assert tasks.get_task("work")[1] is False
+  assert reports.get_report("question").latest_unacked_answer is not None
+  with pytest.raises(ValueError, match="Invalid Task.status"):
+    tasks.mod_scalar("work", "status", "blocked")
+  with pytest.raises(ValueError, match="Invalid Task.status"):
+    tasks.create_task("manual-block", "Manual", status="blocked", details=["Review"])
+  store.close()
+
+
+def test_report_answers_append_full_details_for_each_submission(tmp_path) -> None:
+  path = tmp_path / "details.sqlite3"
+  store = SqliteStore(path)
+  tasks = TaskService(store, store)
+  reports = ReportService(store, store)
+  option = "A" * 180
+  other = "B" * 170
+  reports.publish_report(
+    "question",
+    "Question",
+    (
+      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
+      "Choice?\n"
+      f'- ( ) {option} <!-- option {{"label": "{option}"}} -->\n'
+      '\n<!-- question {"id": "second", "label": "Second?"} -->\n'
+      "Second?\n"
+      f'- ( ) {other} <!-- option {{"label": "{other}"}} -->\n'
+    ),
+  )
+  for task_id in ("one", "two"):
+    tasks.create_task(task_id, task_id, details=["Review"], report_ids=["question"])
+  values = {"choice": option, "second": other}
+  reports.submit_answer("question", values, answer_id="b20002")
+  reports.submit_answer("question", values, answer_id="b20003")
+  expected = ["Review", f"Choice?: {option}", f"Second?: {other}"]
+  expected.extend([f"Choice?: {option}", f"Second?: {other}"])
+  for task_id in ("one", "two"):
+    task = tasks.get_task(task_id)[0]
+    assert task.details == expected
+    assert "answer_snapshots" not in task.to_dict()
+  tasks.mod_deets_rm("one", 2)
+  tasks.mod_scalar("one", "title", "Renamed")
+  tasks.mod_deets("one", "Short addition")
+  tasks.patch_task("one", {"scope": "checked"})
+  tasks.rename_task("one", "renamed")
+  store.close()
+  reopened = SqliteStore(path)
+  task = reopened.get_task("renamed")
+  assert task is not None
+  assert task.details == [*expected[:1], *expected[2:], "Short addition"]
+  reopened.close()
+
+
+def test_manual_task_detail_limit_survives_generated_long_detail(tmp_path) -> None:
+  store = SqliteStore(tmp_path / "manual-limit.sqlite3")
+  tasks = TaskService(store, store)
+  reports = ReportService(store, store)
+  option = "A" * 180
+  reports.publish_report(
+    "choice",
+    "Choice",
+    (
+      '<!-- question {"id": "choice", "label": "Choice"} -->\n'
+      "Choice\n"
+      f'- ( ) {option} <!-- option {{"label": "{option}"}} -->\n'
+    ),
+  )
+  with pytest.raises(ValueError, match="120"):
+    tasks.create_task("bad", "Bad", details=["x" * 121])
+  tasks.create_task("work", "Work", details=["Review"], report_ids=["choice"])
+  reports.submit_answer("choice", {"choice": option}, answer_id="b20004")
+  with pytest.raises(ValueError, match="120"):
+    tasks.mod_deets("work", "x" * 121)
+  with pytest.raises(ValueError, match="120"):
+    tasks.patch_task("work", {"details": ["x" * 121]})
+  details = tasks.get_task("work")[0].details
+  assert details[1] == f"Choice: {option}"
+  with pytest.raises(ValueError, match="120"):
+    tasks.patch_task("work", {"details": [*details, details[1]]})
+  tasks.patch_task("work", {"details": [*details, "Short"]})
+  assert tasks.get_task("work")[0].details == [*details, "Short"]
+  store.close()
+
+
+def test_linking_existing_long_answer_bypasses_manual_detail_limit() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  tasks = TaskService(store, store)
+  reports.publish_report(
+    "decision",
+    "Decision",
+    (
+      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
+      "Choice?\n"
+      '- ( ) A <!-- option {"label": "A"} -->\n'
+    ),
+  )
+  long_answer = "a" * 180
+  reports.submit_answer("decision", {"choice": long_answer}, answer_id="ab0099")
+  created = tasks.create_task(
+    "work", "Work", details=["Review"], report_ids=["decision"]
+  )
+  assert len(created.details[1]) > 120 and long_answer in created.details[1]
+  tasks.patch_task("work", {"scope": "Updated"})
+  with pytest.raises(ValueError, match="exceeds 120"):
+    tasks.create_task("invalid", "Invalid", details=[long_answer])
+  store.close()

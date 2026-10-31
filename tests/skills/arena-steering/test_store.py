@@ -345,7 +345,7 @@ def test_reply_seen_migration_marks_legacy_replies_unseen(tmp_path):
   store.close()
 
 
-def test_task_snapshot_column_migrates_legacy_database(tmp_path):
+def test_legacy_task_without_answer_snapshots_remains_readable(tmp_path):
   import sqlite3
 
   path = tmp_path / "legacy-tasks.sqlite3"
@@ -376,25 +376,23 @@ def test_task_snapshot_column_migrates_legacy_database(tmp_path):
   conn.close()
   store = SqliteStore(path)
   task = store.get_task("legacy")
-  assert (
-    task is not None and task.answer_snapshots == [] and task.details == ["A detail"]
-  )
+  assert task is not None and task.details == ["A detail"]
+  assert "answer_snapshots" not in task.to_dict()
   store.save_task_queue([task])
   store.close()
   reopened = SqliteStore(path)
-  assert reopened.get_task("legacy").answer_snapshots == []
+  assert reopened.get_task("legacy").details == ["A detail"]
   reopened.close()
 
 
-def test_snapshot_migration_backfills_linked_report_answers(tmp_path):
+def test_old_task_answer_snapshots_are_not_migrated(tmp_path):
   import sqlite3
 
-  from arena_steering.services import ReportService, TaskService
+  from arena_steering.services import ReportService
 
   path = tmp_path / "old-linked.sqlite3"
   store = SqliteStore(path)
   reports = ReportService(store, store)
-  tasks = TaskService(store, store)
   reports.publish_report(
     "choice",
     "Decision",
@@ -405,19 +403,26 @@ def test_snapshot_migration_backfills_linked_report_answers(tmp_path):
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
-  answer = reports.submit_answer("choice", {"select": "Yes"}, answer_id="ab1234")
-  tasks.create_task("linked", "Linked", details=["Review"], report_ids=["choice"])
+  reports.submit_answer("choice", {"select": "Yes"}, answer_id="ab1234")
+  store.save_task_queue(
+    [Task(id="linked", title="Linked", details=["Review"], report_ids=["choice"])]
+  )
   store.close()
   conn = sqlite3.connect(path)
-  conn.execute("ALTER TABLE tasks DROP COLUMN answer_snapshots_json")
+  conn.execute(
+    "ALTER TABLE tasks ADD COLUMN answer_snapshots_json TEXT NOT NULL DEFAULT '[]'"
+  )
+  conn.execute(
+    "UPDATE tasks SET answer_snapshots_json = ? WHERE id = ?",
+    ('[{"id":"ab1234"}]', "linked"),
+  )
   conn.commit()
   conn.close()
-  migrated = SqliteStore(path)
-  task = migrated.get_task("linked")
-  assert task is not None
-  assert task.answer_snapshots[0]["id"] == answer.id
-  assert task.answer_snapshots[0]["fields"][0]["value"] == "Yes"
-  migrated.close()
+  reopened = SqliteStore(path)
+  task = reopened.get_task("linked")
+  assert task is not None and task.details == ["Review"]
+  assert "answer_snapshots" not in task.to_dict()
+  reopened.close()
 
 
 def test_nested_store_transaction_rolls_back_only_inner_changes():
@@ -432,4 +437,46 @@ def test_nested_store_transaction_rolls_back_only_inner_changes():
       pass
   assert store.get_meta("outer") == "saved"
   assert store.get_meta("inner") is None
+  store.close()
+
+
+def test_legacy_blocked_tasks_keep_derived_blocking_after_upgrade(
+  tmp_path: Path,
+) -> None:
+  import sqlite3
+
+  from arena_steering.services import ReportService, TaskService
+
+  path = tmp_path / "legacy-blocked.sqlite3"
+  store = SqliteStore(path)
+  reports = ReportService(store, store)
+  tasks = TaskService(store, store)
+  reports.publish_report(
+    "decision",
+    "Decision",
+    (
+      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
+      "Choice?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+    ),
+  )
+  tasks.create_task("linked", "Linked", details=["Review"], report_ids=["decision"])
+  tasks.create_task("standalone", "Standalone", details=["Review"])
+  store.close()
+  with sqlite3.connect(path) as conn:
+    conn.execute("UPDATE tasks SET status = 'blocked'")
+
+  store = SqliteStore(path)
+  tasks = TaskService(store, store)
+  reports = ReportService(store, store)
+  linked, blocked = tasks.get_task("linked")
+  assert linked.status == "upcoming" and blocked
+  standalone, blocked = tasks.get_task("standalone")
+  assert standalone.status == "upcoming" and not blocked
+  restored = SqliteStore(":memory:")
+  restored.merge_rows(store.export_rows())
+  assert all(task.status == "upcoming" for task in restored.list_tasks())
+  reports.submit_answer("decision", {"choice": "Yes"}, answer_id="ab9999")
+  assert tasks.get_task("linked")[1] is False
+  restored.close()
   store.close()

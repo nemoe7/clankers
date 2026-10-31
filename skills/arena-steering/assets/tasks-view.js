@@ -44,10 +44,6 @@ function taskDetailLines(task) {
   for (const rep of reportIds) {
     lines.push(`Report: ${rep}`);
   }
-  for (const answer of task.answer_snapshots || []) {
-    lines.push(`Answer ${answer.id} at ${answer.created_at} (${answer.report_title})`);
-    for (const field of answer.fields || []) lines.push(`${field.label}: ${JSON.stringify(field.value)}`);
-  }
   for (const gate of gateNames) lines.push(`Gate: ${gate}`);
   for (const d of task.details || []) {
     lines.push(d);
