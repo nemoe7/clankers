@@ -38,6 +38,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `pre.py`, `services.py`: Count blocking inbox work and retain the gate count until it clears.
+
 - `cli.py`: Show the current task with `steer task`, and its details with `-d` or `--deets`.
 
 - `cli.py`: Use `state.sqlite3` for normal v2 state. The demo keeps a separate database.

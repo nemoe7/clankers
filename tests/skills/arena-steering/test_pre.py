@@ -125,6 +125,7 @@ def test_the_gate_reads_the_stored_count_and_the_done_list_skips_steps(
   code, second = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls", "-d", "gate")
   assert code == pre.CONTINUE
   assert second == ""
+  assert _count(_isolate_state) == "1"
   assert "bash blocked in" in first
 
 
@@ -141,7 +142,9 @@ def test_a_pass_through_reports_the_finished_steps(_isolate_state: Path) -> None
   assert out == ""
 
 
-def test_working_the_inbox_restarts_the_countdown(_isolate_state: Path) -> None:
+def test_reading_the_inbox_preserves_the_count_while_work_remains(
+  _isolate_state: Path,
+) -> None:
   _seed(_isolate_state, "Note for the countdown.")
   for _ in range(3):
     _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
@@ -149,13 +152,13 @@ def test_working_the_inbox_restarts_the_countdown(_isolate_state: Path) -> None:
 
   _run("read")
   _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
-  assert _count(_isolate_state) == "1"
+  assert _count(_isolate_state) == "4"
 
 
 def test_a_quiet_note_does_not_gate(_isolate_state: Path) -> None:
   _isolate_state.mkdir(parents=True, exist_ok=True)
   store, messages, _tasks, _reports = cli.open_services(_isolate_state)
-  messages.send_message("Quiet note.", hidden=True)
+  messages.send_message("Quiet note.", hidden=True, blocking=False)
   assert messages.pending_ids() == []
   store.close()
 
@@ -320,3 +323,106 @@ def test_moved_demo_reseeds_a_demo_store_on_reload(tmp_path: Path) -> None:
   assert len(app.messages.list_messages(unread_only=False, include_hidden=True)) >= 35
   assert len(app.tasks.list_tasks(include_finished=True)) >= 40
   store.close()
+
+
+def test_gate_counts_blocking_not_visibility(_isolate_state: Path) -> None:
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  messages.send_message("Hidden blocker", msg_id="ab0001", hidden=True, blocking=True)
+  messages.send_message("Visible blocker", msg_id="ab0002", blocking=True)
+  messages.send_message("Visible nonblocker", msg_id="ab0003", blocking=False)
+  messages.send_message(
+    "Hidden nonblocker", msg_id="ab0004", hidden=True, blocking=False
+  )
+  assert messages.pending_ids() == ["ab0001", "ab0002"]
+  store.close()
+  code, out = _run("pre", "-c", "git push", "-s", "bash", "-l", "git push")
+  assert code == pre.BLOCK
+  assert "ab0001" in out and "ab0002" in out
+  assert "ab0003" not in out and "ab0004" not in out
+
+
+def test_poll_and_partial_ack_keep_count_until_last_blocker(
+  _isolate_state: Path,
+) -> None:
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  messages.send_message("One", msg_id="ab0011", blocking=True)
+  messages.send_message("Two", msg_id="ab0012", hidden=True, blocking=True)
+  store.close()
+  for _ in range(3):
+    _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
+  assert _count(_isolate_state) == "3"
+  assert _run("poll")[0] == 0
+  assert _count(_isolate_state) == "3"
+  assert _run("ack", "ab0011", "Done")[0] == 0
+  assert _count(_isolate_state) == "3"
+  assert _run("ack", "ab0012", "Done")[0] == 0
+  assert _count(_isolate_state) == "0"
+  _seed(_isolate_state, "New work")
+  assert _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")[0] == 0
+  assert _count(_isolate_state) == "1"
+
+
+def test_http_answer_ack_resets_count_only_after_last_blocker(
+  _isolate_state: Path,
+) -> None:
+  store = cli.open_services(_isolate_state)[0]
+  app = cli.SteeringApp(store)
+  app.reports.publish_report(
+    "choice",
+    "Choice",
+    '<!-- question {"id":"pick","label":"Pick"} -->\n'
+    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+  )
+  app.reports.submit_answer("choice", {"pick": "Yes"}, answer_id="ab0021")
+  app.messages.send_message("Other blocker", msg_id="ab0022", hidden=True)
+  store.set_meta(pre.CALL_COUNT_META, "5")
+  status, _ = app.dispatch(
+    "POST", "/reports/choice/answers/ab0021/ack", {"markdown": "Read"}
+  )
+  assert status == 200
+  assert store.get_meta(pre.CALL_COUNT_META) == "5"
+  status, _ = app.dispatch("POST", "/messages/ab0022/ack", {"markdown": "Read"})
+  assert status == 200
+  assert store.get_meta(pre.CALL_COUNT_META) == "0"
+  store.close()
+
+
+def test_gate_allows_inbox_recovery_but_not_mixed_work() -> None:
+  for line in (
+    "steer read",
+    "steer poll",
+    "steer ack ab1234 Done",
+    "steer ack ab1234 Done | tee log",
+  ):
+    ctx = pre.PreContext(
+      line=line,
+      command=line,
+      shell="bash",
+      pending_ids=["ab1234"],
+      call_count=pre.GATE_THRESHOLD,
+    )
+    assert _verdict(ctx) == pre.CONTINUE, line
+  for line in (
+    "steer read && git status",
+    "steer ack ab1234 Done; git push",
+    "steer ack ab1234 Done | git push",
+  ):
+    ctx = pre.PreContext(
+      line=line,
+      command=line,
+      shell="bash",
+      pending_ids=["ab1234"],
+      call_count=pre.GATE_THRESHOLD,
+    )
+    assert _verdict(ctx) == pre.BLOCK, line
+
+
+def test_new_blocker_still_blocks_push_after_gate_step_done() -> None:
+  ctx = pre.PreContext(
+    line="git push",
+    command="git push",
+    shell="bash",
+    done=("gate",),
+    pending_ids=["ab1234"],
+  )
+  assert _verdict(ctx) == pre.BLOCK

@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from functools import wraps
 from typing import Any
 
+from . import pre as pre_mod
 from . import survey as survey_mod
 from .markdown import render_report_markdown, unparsed_strike_lines
 from .markdown_fields import format_answer_for_task_detail, parse_report_markdown
@@ -247,10 +248,21 @@ class MessageService:
       for message in self._messages.list_messages(
         unread_only=False, include_hidden=True
       )
-      if message.type == "message" and message.status != "acked" and not message.hidden
+      if message.type == "message" and message.requires_ack
     ]
     ids.extend(answer.id for answer in self._latest_pending_answers())
     return ids
+
+  def reset_gate_if_clear(self) -> None:
+    """Reset the shell countdown only after all blocking work is acknowledged."""
+    with self._reports.transaction():
+      if not self.pending_ids() and self._meta.get_meta(
+        pre_mod.CALL_COUNT_META
+      ) not in (
+        None,
+        "0",
+      ):
+        self._meta.set_meta(pre_mod.CALL_COUNT_META, "0")
 
   def resolve_ack_target(
     self, target_id: str | None
@@ -285,6 +297,7 @@ class MessageService:
       raise KeyError(f"Unknown message or answer ID: {target_id}")
     msg = self._messages.append_message_ack(target_id, reply, now)
     if msg.type != "report_answer":
+      self.reset_gate_if_clear()
       return ("message", msg)
     answer = msg.as_report_answer()
     report = self._reports.get_report(answer.report_id)
@@ -292,6 +305,7 @@ class MessageService:
       report.ack_seen = False
       report.modified_at = now
       self._reports.save_report(report)
+    self.reset_gate_if_clear()
     return ("report_answer", answer)
 
   def mark_replies_seen(self, msg_id: str, revision: str) -> bool:
@@ -951,12 +965,14 @@ class ReportService:
     clock: Clock | None = None,
     id_gen: IdGenerator | None = None,
     on_answer_callback: Any | None = None,
+    on_ack_callback: Any | None = None,
   ) -> None:
     self._reports = reports
     self._tasks = tasks
     self._clock = clock or UtcClock()
     self._id_gen = id_gen or SecretsHexIdGenerator()
     self._on_answer = on_answer_callback
+    self._on_ack = on_ack_callback
 
   def publish_report(
     self, report_id: str, title: str, body: str, *, allow_unparsed_markers: bool = False
@@ -1139,6 +1155,11 @@ class ReportService:
       previous_at = datetime.fromisoformat(previous.created_at)
       if previous_at >= created_at:
         created_at = previous_at + timedelta(microseconds=1)
+      previous_message = self._reports.get_message(previous.id)
+      if previous_message is not None and previous_message.blocking:
+        previous_message.blocking = False
+        previous_message.modified_at = now
+        self._reports.save_message(previous_message)
     answer = ReportAnswer(
       id=ans_id,
       report_id=report.id,
@@ -1175,6 +1196,8 @@ class ReportService:
         report.ack_seen = False
         report.modified_at = now
         self._reports.save_report(report)
+        if self._on_ack is not None:
+          self._on_ack()
         return ans
     raise KeyError(f"Unknown answer ID {answer_id!r} on report {report_id!r}")
 

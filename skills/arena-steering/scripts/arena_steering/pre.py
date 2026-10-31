@@ -8,6 +8,7 @@ registry, so adding, dropping, or reordering a check is one line here.
 from __future__ import annotations
 
 import re
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -40,6 +41,34 @@ class PreContext:
 
   def is_push(self) -> bool:
     return "git push" in self.command or "git push" in self.line
+
+  def is_inbox_recovery(self) -> bool:
+    """Allow an inbox-only line to clear the gate, including a piped ACK."""
+    text = self.line or self.command
+    if "\n" in text:
+      return False
+    lexer = shlex.shlex(text, posix=True, punctuation_chars="|;&<>()")
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+      words = list(lexer)
+    except ValueError:
+      return False
+    if len(words) < 2 or Path(words[0]).name != "steer":
+      return False
+    if words[1] not in {"read", "poll", "ack"}:
+      return False
+    punctuation = [
+      word for word in words[2:] if word and all(c in "|;&<>()" for c in word)
+    ]
+    if not punctuation:
+      return True
+    if words[1] != "ack" or punctuation != ["|"]:
+      return False
+    pipe = words.index("|")
+    return "git push" not in " ".join(
+      words[pipe + 1 :]
+    ) and not self.command.startswith("git push")
 
   def blocked_part(self) -> str:
     """Name the last simple command of a chained line."""
@@ -76,7 +105,7 @@ class InboxGate:
   name = "gate"
 
   def applies(self, ctx: PreContext) -> bool:
-    return bool(ctx.pending_ids)
+    return bool(ctx.pending_ids) and not ctx.is_inbox_recovery()
 
   def run(self, ctx: PreContext) -> PreResult:
     if ctx.is_push():
@@ -214,7 +243,9 @@ def run_pipeline(ctx: PreContext) -> PreResult:
   messages: list[str] = []
   finished = list(ctx.done)
   for step in PIPELINE:
-    if step.name in finished or not step.applies(ctx):
+    if step.name in finished and not (step.name == "gate" and ctx.is_push()):
+      continue
+    if not step.applies(ctx):
       continue
     result = step.run(ctx)
     messages.extend(result.messages)

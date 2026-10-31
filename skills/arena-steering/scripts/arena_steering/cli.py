@@ -54,7 +54,12 @@ def open_services(
   store = SqliteStore(state_dir / "state.sqlite3")
   messages = MessageService(store, store, store)
   tasks = TaskService(store, store, gates=FileGateStatus(state_dir))
-  reports = ReportService(store, store, on_answer_callback=messages.notify_new_work)
+  reports = ReportService(
+    store,
+    store,
+    on_answer_callback=messages.notify_new_work,
+    on_ack_callback=messages.reset_gate_if_clear,
+  )
   return store, messages, tasks, reports
 
 
@@ -287,14 +292,14 @@ def main(
       _print_restore_notice(store, stdout)
       delivered = messages.read_pending(mark_seen=True)
       _print_delivered(delivered, stdout)
-      _reset_call_count(store)
+      messages.reset_gate_if_clear()
       return 0
     if cmd == "poll":
       poll_p.parse_args(cmd_args)
       _print_restore_notice(store, stdout)
       delivered = messages.poll(timeout_seconds=1799.0)
       _print_delivered(delivered, stdout)
-      _reset_call_count(store)
+      messages.reset_gate_if_clear()
       return 0
     if cmd == "ack":
       parsed = ack_p.parse_args(cmd_args)
@@ -723,14 +728,10 @@ def _call_count(store: SqliteStore) -> int:
 
 def _bump_call_count(store: SqliteStore) -> int:
   """Record one more shell line and return the new count."""
-  count = _call_count(store) + 1
-  store.set_meta(pre_mod.CALL_COUNT_META, str(count))
-  return count
-
-
-def _reset_call_count(store: SqliteStore) -> None:
-  """Restart the countdown after the agent works the inbox."""
-  store.set_meta(pre_mod.CALL_COUNT_META, "0")
+  with store.transaction():
+    count = _call_count(store) + 1
+    store.set_meta(pre_mod.CALL_COUNT_META, str(count))
+    return count
 
 
 def _run_pre(
@@ -741,6 +742,8 @@ def _run_pre(
 ) -> int:
   """Run the pre-command pipeline and return its verdict."""
   pending_ids = messages.pending_ids()
+  if not pending_ids:
+    messages.reset_gate_if_clear()
   count = _call_count(store) if pending_ids else 0
   ctx = pre_mod.PreContext(
     line=str(parsed.line or ""),
@@ -757,7 +760,12 @@ def _run_pre(
     # The shell evals this line, so a later command in the same shell skips
     # the steps that already ran.
     print(f'_arena_preview_done="{" ".join(result.done)}"', file=out)
-  if pending_ids and parsed.shell:
+  if (
+    pending_ids
+    and parsed.shell
+    and "gate" not in ctx.done
+    and not ctx.is_inbox_recovery()
+  ):
     _bump_call_count(store)
   return result.verdict
 
