@@ -140,3 +140,16 @@ def test_cli_survey_posts_to_the_running_server(tmp_path: Path) -> None:
     server.shutdown()
     server.server_close()
     store.close()
+
+
+def test_cli_survey_does_not_offer_interrupt_flag(
+  tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  with pytest.raises(SystemExit) as help_exit:
+    _run_cli(state_dir, "survey", "--help")
+  assert help_exit.value.code == 0
+  assert "--interrupt" not in capsys.readouterr().out
+  with pytest.raises(SystemExit) as rejected:
+    _run_cli(state_dir, "survey", "--interrupt")
+  assert rejected.value.code == 2
