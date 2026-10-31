@@ -1143,6 +1143,10 @@ mark.search-hit {
   overflow-y: auto;
 }
 
+#view-reports {
+  scroll-padding-top: var(--edge-fade);
+}
+
 .card {
   background-color: hsl(var(--surface-secondary));
   border: 1px solid hsl(var(--border-faint));
