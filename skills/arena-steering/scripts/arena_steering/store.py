@@ -666,7 +666,12 @@ class SqliteStore:
 
   def save_report_answer(self, answer: ReportAnswer) -> ReportAnswer:
     """Store an answer as a typed hidden message."""
-    self.save_message(Message.from_report_answer(answer))
+    with self.transaction():
+      message = Message.from_report_answer(answer)
+      existing = self.get_message(answer.id)
+      if existing is not None:
+        message.blocking = existing.blocking
+      self.save_message(message)
     return answer
 
   def rename_report_answers(self, old_id: str, new_id: str, now: str) -> None:

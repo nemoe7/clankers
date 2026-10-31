@@ -128,7 +128,7 @@ _arena_preview_pre() {
 trap '_arena_preview_pre' DEBUG
 ```
 
-The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. Only `gate` reads the store: it blocks a `git push` at once, otherwise it counts shell lines while an inbox item waits and blocks after six. Working the inbox resets that count.
+The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. The gate counts blocking messages, including hidden ones, and the newest unacknowledged answer per report. It blocks a `git push` at once and other work after six calls. Inbox-only reads, polls, and acknowledgements remain available, and the count resets only when no blocking work remains.
 
 `bible` blocks `cat`, `grep`, `head`, `tail`, and `rg` on ARENA.md, AGENTS.md, and a skill SKILL.md. A passing step prints nothing and lands in `_arena_preview_done`, so a later command in one shell skips it. `steer gate` still runs its inbox check alone for an older hook. `install.sh` holds the profile block that installs this line.
 
@@ -195,7 +195,7 @@ Radio options use `( )`, and checkbox options use `[ ]`. A question without opti
 
 Selecting SQLite produces `Storage: Use SQLite`. Custom answers use the entered text.
 
-Field options must be unique, with 1 to 20 options and at most 200 characters per option. Each answer is a typed hidden message in the shared message ID namespace. Reports show their answer history, and the inbox delivers an answer only if the latest submission to that report is unacknowledged.
+Field options must be unique, with 1 to 20 options and at most 200 characters per option. Each answer is a typed hidden message in the shared message ID namespace. Reports show their answer history, and the inbox delivers an answer only if the latest submission to that report is unacknowledged. A newer answer makes earlier answers non-blocking.
 
 Answer messages remain after report removal and reappear when that ID is republished. Answers embedded in older reports, archives, or snapshots are not migrated. Snapshot merges keep the row with the newer modification time, so a newer row can replace an acknowledgement with an older state.
 

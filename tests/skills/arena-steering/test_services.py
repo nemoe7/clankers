@@ -82,8 +82,13 @@ def test_report_answers_are_hidden_messages_with_newest_only_delivery() -> None:
 
   first_message = store.get_message(first.id)
   latest_message = store.get_message(latest.id)
-  assert first_message is not None and first_message.hidden
-  assert latest_message is not None and latest_message.hidden
+  assert (
+    first_message is not None and first_message.hidden and not first_message.blocking
+  )
+  assert (
+    latest_message is not None and latest_message.hidden and latest_message.blocking
+  )
+  assert latest.id in messages.pending_ids() and first.id not in messages.pending_ids()
   delivered = messages.read_pending(mark_seen=True)
   assert [item.id for item in delivered["messages"]] == [ordinary.id]
   assert [answer.id for _, answer in delivered["report_answers"]] == [latest.id]
@@ -932,4 +937,16 @@ def test_linking_existing_long_answer_bypasses_manual_detail_limit() -> None:
   tasks.patch_task("work", {"scope": "Updated"})
   with pytest.raises(ValueError, match="exceeds 120"):
     tasks.create_task("invalid", "Invalid", details=[long_answer])
+  store.close()
+
+
+def test_replaced_answer_stays_nonblocking_after_report_rename() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  _publish_answer_message_report(reports)
+  first = reports.submit_answer("decision", {"choice": "A"}, answer_id="de4001")
+  newest = reports.submit_answer("decision", {"choice": "B"}, answer_id="de4002")
+  reports.rename_report("decision", "renamed-decision")
+  assert not store.get_message(first.id).blocking
+  assert store.get_message(newest.id).blocking
   store.close()

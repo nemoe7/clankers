@@ -122,6 +122,9 @@ class ReportRepository(Protocol):
   def get_message(self, msg_id: str) -> Message | None:
     """Check the shared message ID namespace."""
 
+  def save_message(self, message: Message) -> Message:
+    """Update a shared answer message."""
+
   def list_report_answers(self, report_id: str | None = None) -> list[ReportAnswer]:
     """Project typed answer messages in submission order."""
 
