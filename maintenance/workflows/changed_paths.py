@@ -133,6 +133,7 @@ MODULE_TESTS = {
     "tests/skills/arena-steering/test_survey.py",
     "tests/skills/arena-steering/test_web_ui.py",
     "tests/skills/arena-steering/test_message_scroll_fade.py",
+    "tests/skills/arena-steering/test_message_page_retry_persistence.py",
     "tests/skills/arena-steering/test_report_answer_ui.py",
     "tests/skills/arena-steering/test_pre.py",
   ),
