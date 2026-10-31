@@ -76,6 +76,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/style.css`: Keep the Tasks toolbar divider visible below the edge fade.
+
 - `assets/messages-view.js`, `assets/style.css`: Show an instant scroll-edge fade for reduced motion and keep boundary messages visible.
 
 - `assets/style.css`: Inset the scrollbar thumb by 2px inside a 10px track and color links blue.

@@ -2427,7 +2427,7 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
       content: "";
       position: absolute;
       inset-inline: 0;
-      bottom: calc(-1 * var(--edge-fade));
+      bottom: calc(-1 * var(--edge-fade) - 1px);
       height: var(--edge-fade);
       pointer-events: none;
       background: linear-gradient(to bottom, var(--bg), transparent);

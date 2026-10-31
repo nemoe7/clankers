@@ -806,3 +806,79 @@ def test_task_answer_details_render_once_and_wrap_on_mobile(tmp_path: Path) -> N
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
+  import base64
+
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Task divider regression")
+  app.tasks.create_task("work", "Work", details=["Review"])
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        for name, width, height in (("desktop", 1200, 700), ("mobile", 390, 844)):
+          page = browser.new_page(viewport={"width": width, "height": height})
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          page.locator("#tab-tasks").click()
+          toolbar = page.locator(".tasks-toolbar")
+          rect = toolbar.bounding_box()
+          assert rect is not None
+          screenshot = page.screenshot(path=str(tmp_path / f"tasks-divider-{name}.png"))
+          color = page.evaluate(
+            """async ({png, x, y}) => {
+              const image = new Image();
+              image.src = `data:image/png;base64,${png}`;
+              await image.decode();
+              const canvas = document.createElement('canvas');
+              canvas.width = image.width;
+              canvas.height = image.height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(image, 0, 0);
+              return Array.from(ctx.getImageData(x, y, 1, 1).data).slice(0, 3);
+            }""",
+            {
+              "png": base64.b64encode(screenshot).decode("ascii"),
+              "x": round(rect["x"] + rect["width"] / 2),
+              "y": round(rect["y"] + rect["height"]) - 1,
+            },
+          )
+          colors = toolbar.evaluate(
+            """e => {
+              const style = getComputedStyle(e);
+              const rgb = value => value.match(/\\d+/g).slice(0, 3).map(Number);
+              return {border: rgb(style.borderBottomColor), background: rgb(style.backgroundColor)};
+            }"""
+          )
+          expected_contrast = sum(
+            abs(border - background)
+            for border, background in zip(colors["border"], colors["background"])
+          )
+          visible_contrast = sum(
+            abs(actual - background)
+            for actual, background in zip(color, colors["background"])
+          )
+          assert expected_contrast > 0
+          assert visible_contrast >= expected_contrast / 2
+          assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+          page.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
