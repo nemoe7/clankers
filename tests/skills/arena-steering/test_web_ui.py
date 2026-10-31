@@ -1394,3 +1394,74 @@ def test_message_page_error_keeps_scroll_target_and_can_retry() -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_report_toc_jump_keeps_heading_below_fade(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Report TOC regression")
+  text = "\n\n".join(
+    ["A paragraph with enough content to make the report scroll."] * 25
+  )
+  app.reports.publish_report(
+    "long-report",
+    "Long report",
+    f"# First section\n\n{text}\n\n## Middle section\n\n{text}",
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        for name, width, height in (("desktop", 1372, 700), ("mobile", 390, 844)):
+          page = browser.new_page(viewport={"width": width, "height": height})
+          page.add_init_script("""(() => {
+            const original = Element.prototype.scrollIntoView;
+            Element.prototype.scrollIntoView = function(options) {
+              return original.call(this, {...options, behavior: 'instant'});
+            };
+          })();""")
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          page.locator("#tab-reports").click()
+          link = page.locator(".report-toc-link").filter(has_text="Middle section")
+          link.wait_for(state="attached")
+          target = link.get_attribute("data-toc-target")
+          assert target
+          if name == "desktop":
+            link.click()
+          else:
+            link.evaluate("element => element.click()")
+          result = page.evaluate(
+            """id => {
+            const pane = document.querySelector('#view-reports');
+            const heading = document.getElementById(id);
+            return {
+              offset: heading.getBoundingClientRect().top - pane.getBoundingClientRect().top,
+              fade: parseFloat(getComputedStyle(pane).getPropertyValue('--edge-fade')),
+              scrollTop: pane.scrollTop,
+            };
+          }""",
+            target,
+          )
+          assert result["scrollTop"] > 0
+          assert result["offset"] >= result["fade"] - 1
+          assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+          page.screenshot(path=str(tmp_path / f"report-toc-{name}.png"))
+          page.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

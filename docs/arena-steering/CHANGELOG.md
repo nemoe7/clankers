@@ -76,6 +76,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/style.css`: Keep report headings below the edge fade after a table-of-contents jump.
+
 - `assets/app.js`, `assets/messages-view.js`: Keep scrolling active while older messages load, even during a refresh.
 
 - `assets/style.css`: Keep the Tasks toolbar divider visible below the edge fade.
