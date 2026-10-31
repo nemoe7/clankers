@@ -105,6 +105,8 @@ class SqliteStore:
           replies_seen INTEGER NOT NULL DEFAULT 0,
           modified_at TEXT NOT NULL,
           message_type TEXT NOT NULL DEFAULT 'message',
+          violation_type TEXT NOT NULL DEFAULT '',
+          violation_clause_file TEXT NOT NULL DEFAULT '',
           answer_json TEXT NOT NULL DEFAULT '{}'
         );
 
@@ -179,6 +181,14 @@ class SqliteStore:
       if "answer_json" not in message_cols:
         self._conn.execute(
           "ALTER TABLE messages ADD COLUMN answer_json TEXT NOT NULL DEFAULT '{}'"
+        )
+      if "violation_type" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN violation_type TEXT NOT NULL DEFAULT ''"
+        )
+      if "violation_clause_file" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN violation_clause_file TEXT NOT NULL DEFAULT ''"
         )
       self._conn.execute(
         "CREATE INDEX IF NOT EXISTS messages_report_answer "
@@ -438,8 +448,8 @@ class SqliteStore:
           """
           INSERT INTO messages (
             id, body, hidden, blocking, attachments_json, parent_ids_json, status, acks_json,
-            modified_at, message_type, answer_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            modified_at, message_type, violation_type, violation_clause_file, answer_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             message.id,
@@ -452,6 +462,8 @@ class SqliteStore:
             acks_json,
             message.modified_at,
             message.type,
+            message.violation_type,
+            message.violation_clause_file,
             json.dumps(message.answer_data),
           ),
         )
@@ -469,6 +481,8 @@ class SqliteStore:
               acks_json = ?,
               modified_at = ?,
               message_type = ?,
+              violation_type = ?,
+              violation_clause_file = ?,
               answer_json = ?
           WHERE id = ?
           """,
@@ -483,6 +497,8 @@ class SqliteStore:
             acks_json,
             message.modified_at,
             message.type,
+            message.violation_type,
+            message.violation_clause_file,
             json.dumps(message.answer_data),
             message.id,
           ),
@@ -928,6 +944,10 @@ class SqliteStore:
       replies_seen=bool(row["replies_seen"]) if "replies_seen" in keys else False,
       modified_at=str(row["modified_at"]),
       type=str(row["message_type"]) if "message_type" in keys else "message",
+      violation_type=str(row["violation_type"]) if "violation_type" in keys else "",
+      violation_clause_file=str(row["violation_clause_file"])
+      if "violation_clause_file" in keys
+      else "",
       answer_data=json.loads(row["answer_json"] or "{}")
       if "answer_json" in keys
       else {},

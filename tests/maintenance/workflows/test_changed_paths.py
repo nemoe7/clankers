@@ -211,6 +211,7 @@ def test_module_matrix_selects_owners_and_shared_changes():
     "tests/skills/arena-steering/test_composer_parity.py",
     "tests/skills/arena-steering/test_demo_reset.py",
     "tests/skills/arena-steering/test_connection_pip.py",
+    "tests/skills/arena-steering/test_violation_form.py",
   ],
 )
 def test_browser_test_runs_with_preview_module(path):

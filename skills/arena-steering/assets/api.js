@@ -378,4 +378,7 @@ export const api = {
     const body = active === undefined ? {} : { active: Boolean(active) };
     return requestJson("POST", "/survey/interrupt", body, true);
   },
+  flagViolation(payload) {
+    return requestJson("POST", "/agent-interrupt", payload, true);
+  },
 };
