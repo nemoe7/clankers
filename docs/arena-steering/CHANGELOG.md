@@ -40,6 +40,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `services.py`: Start unlinked report staleness when the user sees an acknowledgement.
+
 - `pre.py`, `services.py`: Count blocking inbox work and retain the gate count until it clears.
 
 - `cli.py`: Show the current task with `steer task`, and its details with `-d` or `--deets`.

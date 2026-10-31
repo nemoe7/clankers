@@ -211,11 +211,11 @@ Answer messages remain after report removal and reappear when that ID is republi
 - Each submission must answer every field. Text and choice answers must be nonempty.
 - Checkbox answers need at least one selected or custom value.
 - Submissions append history, mark the report seen, reset acknowledgement visibility, and add formatted answers to linked task details. An acknowledgement can be appended more than once.
-- `seen` records report viewing. `ack_seen` records viewing the latest acknowledged answer and resets on a new answer or acknowledgement.
+- `seen` records report viewing, while `ack_seen` and `ack_seen_at` record when the user sees the latest acknowledgement. A new answer or another acknowledgement on the latest answer resets them.
 - Republish and explicit-ID removal reject a report when its latest answer is unacknowledged. Republish preserves answer history.
 - Multi-ID removal is atomic. A missing or protected report leaves every target in place.
 - Dismissal removes report links from tasks, while answer messages remain available for republishing.
-- An unlinked report is stale after 30 minutes without publication or a visible view. A linked report is stale when all linked tasks finish.
+- An unlinked report becomes stale only 30 minutes after the user sees its latest acknowledgement. A linked report becomes stale as soon as all linked tasks finish.
 - A pinned report is not stale. Pins survive server restarts, and unpinning restores the normal staleness rules.
 - A visible report refreshes its view time every 30 seconds. A hidden browser tab does not refresh it.
 - Stale removal can remove a report with an unacknowledged answer. The retained answer stays available in the inbox.

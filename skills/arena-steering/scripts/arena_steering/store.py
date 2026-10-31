@@ -133,6 +133,7 @@ class SqliteStore:
           answers_json TEXT NOT NULL DEFAULT '[]',
           seen INTEGER NOT NULL DEFAULT 0,
           ack_seen INTEGER NOT NULL DEFAULT 0,
+          ack_seen_at TEXT NOT NULL DEFAULT '',
           modified_at TEXT NOT NULL,
           updated_at TEXT NOT NULL DEFAULT '',
           last_viewed_at TEXT NOT NULL DEFAULT '',
@@ -201,6 +202,10 @@ class SqliteStore:
       if "ack_seen" not in cols:
         self._conn.execute(
           "ALTER TABLE reports ADD COLUMN ack_seen INTEGER NOT NULL DEFAULT 0"
+        )
+      if "ack_seen_at" not in cols:
+        self._conn.execute(
+          "ALTER TABLE reports ADD COLUMN ack_seen_at TEXT NOT NULL DEFAULT ''"
         )
       if "updated_at" not in cols:
         self._conn.execute(
@@ -716,9 +721,9 @@ class SqliteStore:
         self._conn.execute(
           """
           INSERT INTO reports (
-            id, title, body, fields_json, status, answers_json, seen, ack_seen,
+            id, title, body, fields_json, status, answers_json, seen, ack_seen, ack_seen_at,
             modified_at, updated_at, last_viewed_at, pinned
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             report.id,
@@ -729,6 +734,7 @@ class SqliteStore:
             answers_json,
             int(report.seen),
             int(report.ack_seen),
+            report.ack_seen_at,
             report.modified_at,
             report.updated_at,
             report.last_viewed_at,
@@ -745,6 +751,7 @@ class SqliteStore:
               status = ?,
               seen = ?,
               ack_seen = ?,
+              ack_seen_at = ?,
               modified_at = ?,
               updated_at = ?,
               last_viewed_at = ?,
@@ -758,6 +765,7 @@ class SqliteStore:
             report.status,
             int(report.seen),
             int(report.ack_seen),
+            report.ack_seen_at,
             report.modified_at,
             report.updated_at,
             report.last_viewed_at,
@@ -948,6 +956,7 @@ class SqliteStore:
       answers=self.list_report_answers(str(row["id"])),
       seen=bool(dict(row).get("seen", 0)),
       ack_seen=bool(dict(row).get("ack_seen", 0)),
+      ack_seen_at=str(dict(row).get("ack_seen_at", "")),
       modified_at=str(row["modified_at"]),
       updated_at=str(dict(row).get("updated_at", "")),
       last_viewed_at=str(dict(row).get("last_viewed_at", "")),
