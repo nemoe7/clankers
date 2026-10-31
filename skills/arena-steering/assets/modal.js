@@ -1,6 +1,4 @@
-/**
- * Shared native `<dialog>` modal manager (`nuu` modal-manager recipe).
- */
+// Shared native `<dialog>` modal manager (`nuu` modal-manager recipe).
 
 export function createModalManager(
   shell = typeof document !== "undefined"
@@ -43,6 +41,12 @@ export function createModalManager(
       for (const [slot, text] of Object.entries(slots)) {
         const node = frag.querySelector(`[data-slot="${slot}"]`);
         if (node) node.textContent = text;
+      }
+      if (arguments[1]?.htmlSlots) {
+        for (const [slot, html] of Object.entries(arguments[1].htmlSlots)) {
+          const node = frag.querySelector(`[data-slot="${slot}"]`);
+          if (node) node.innerHTML = html;
+        }
       }
       const actionSlot = frag.querySelector('[data-slot="actions"]');
       actionsEl.replaceChildren(...(actionSlot ? actionSlot.childNodes : []));

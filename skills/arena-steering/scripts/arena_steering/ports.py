@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import secrets
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from typing import Protocol
 
-from .models import Message, Report, Task
+from .models import Message, Report, ReportAnswer, Task
 
 
 class Clock(Protocol):
@@ -48,12 +49,47 @@ class MessageRepository(Protocol):
   ) -> list[Message]:
     """List stored messages in creation order."""
 
+  def list_message_page(
+    self,
+    *,
+    unread_only: bool,
+    include_hidden: bool,
+    query: str,
+    before: str,
+    limit: int,
+  ) -> tuple[list[Message], int, bool]:
+    """Search and page stored messages."""
+
   def save_message(self, message: Message) -> Message:
     """Insert or update a message."""
+
+  def save_message_once(
+    self, message: Message, request_id: str, fingerprint: str
+  ) -> Message:
+    """Atomically create or retrieve a message for a client request."""
+
+  def append_message_ack(self, msg_id: str, reply: str, now: str) -> Message:
+    """Atomically append a reply and reset its receipt."""
+
+  def mark_message_seen(self, msg_id: str, now: str) -> Message:
+    """Mark message delivery without overwriting concurrent replies."""
+
+  def mark_replies_seen(self, msg_id: str, revision: str) -> bool:
+    """Set the receipt if the supplied reply revision is current."""
+
+
+class GateStatus(Protocol):
+  """Read the current state of named gates."""
+
+  def is_running(self, name: str) -> bool:
+    """Return whether the named gate is running."""
 
 
 class TaskRepository(Protocol):
   """Persistence port for the mutable task queue."""
+
+  def transaction(self) -> AbstractContextManager[None]:
+    """Group queue reads and writes in a transaction."""
 
   def get_task(self, task_id: str) -> Task | None:
     """Fetch one task by ID."""
@@ -71,6 +107,9 @@ class TaskRepository(Protocol):
 class ReportRepository(Protocol):
   """Persistence port for reports and their answers."""
 
+  def transaction(self) -> AbstractContextManager[None]:
+    """Group report reads and writes in a transaction."""
+
   def get_report(self, report_id: str) -> Report | None:
     """Fetch one report by ID."""
 
@@ -79,6 +118,24 @@ class ReportRepository(Protocol):
 
   def save_report(self, report: Report) -> Report:
     """Insert or update one report."""
+
+  def get_message(self, msg_id: str) -> Message | None:
+    """Check the shared message ID namespace."""
+
+  def save_message(self, message: Message) -> Message:
+    """Update a shared answer message."""
+
+  def list_report_answers(self, report_id: str | None = None) -> list[ReportAnswer]:
+    """Project typed answer messages in submission order."""
+
+  def save_report_answer(self, answer: ReportAnswer) -> ReportAnswer:
+    """Save one answer as a hidden message."""
+
+  def append_message_ack(self, msg_id: str, reply: str, now: str) -> Message:
+    """Append an answer acknowledgement to its message."""
+
+  def rename_report_answers(self, old_id: str, new_id: str, now: str) -> None:
+    """Update answer references when a report is renamed."""
 
 
 class MetaRepository(Protocol):

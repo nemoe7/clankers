@@ -1,6 +1,4 @@
-/**
- * Relative timestamp formatting and periodic DOM timer (`nuu` relative-timestamps recipe).
- */
+// Relative timestamp formatting and periodic DOM timer (`nuu` relative-timestamps recipe).
 
 export function relativeTime(
   value,
@@ -71,35 +69,69 @@ export function relativeTime(
       : `${years} years ago`;
 }
 
+export function nextRelativeDelay(
+  stampMs,
+  { includeSeconds = false, now = Date.now() } = {}
+) {
+  if (Number.isNaN(stampMs)) return Infinity;
+  const ageMs = Math.max(0, now - stampMs);
+  if (includeSeconds && ageMs < 60_000) {
+    return Math.max(50, 1_000 - (ageMs % 1_000));
+  }
+  if (ageMs < 3_600_000) {
+    return Math.max(250, 60_000 - (ageMs % 60_000));
+  }
+  if (ageMs < 86_400_000) {
+    return Math.max(1_000, 3_600_000 - (ageMs % 3_600_000));
+  }
+  return 3_600_000;
+}
+
 export function mountRelativeTimers(root = document) {
   const selector = "[data-timestamp], time[datetime]";
   const nodes = [
     ...(root.matches?.(selector) ? [root] : []),
     ...root.querySelectorAll(selector),
   ];
+  let timer = 0;
   const refresh = () => {
     const now = Date.now();
+    let minDelay = Infinity;
     for (const node of nodes) {
       const value =
         node.getAttribute("data-timestamp") || node.getAttribute("datetime");
       if (!value) continue;
       const stamp = new Date(value);
-      if (Number.isNaN(stamp.getTime())) continue;
-      node.textContent = relativeTime(stamp, {
+      const stampMs = stamp.getTime();
+      if (Number.isNaN(stampMs)) continue;
+      const includeSeconds =
+        node.getAttribute("data-include-seconds") === "true";
+      const nextText = relativeTime(stamp, {
         compact: node.getAttribute("data-compact") === "true",
-        includeSeconds: node.getAttribute("data-include-seconds") === "true",
+        includeSeconds,
         now,
       });
-      node.title = stamp.toLocaleString();
+      if (node.textContent !== nextText) {
+        node.textContent = nextText;
+      }
+      const nextTitle = stamp.toLocaleString();
+      if (node.title !== nextTitle) {
+        node.title = nextTitle;
+      }
+      const delay = nextRelativeDelay(stampMs, { includeSeconds, now });
+      if (delay < minDelay) {
+        minDelay = delay;
+      }
+    }
+    return minDelay;
+  };
+  const tick = () => {
+    const delay = refresh();
+    if (Number.isFinite(delay)) {
+      timer = window.setTimeout(tick, delay);
     }
   };
-  refresh();
   if (!nodes.length) return () => {};
-  const interval = nodes.some(
-    (node) => node.getAttribute("data-include-seconds") === "true"
-  )
-    ? 1000
-    : 15000;
-  const timer = setInterval(refresh, interval);
-  return () => clearInterval(timer);
+  tick();
+  return () => window.clearTimeout(timer);
 }

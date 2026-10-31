@@ -4,7 +4,7 @@ description: Steer an Arena.ai agent mid-turn through a local preview inbox, dep
 license: MIT
 compatibility: Arena.ai Agent Mode, Python 3.11+, persisted workspace and long-lived process tools.
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 
 # Arena Steering
@@ -14,9 +14,9 @@ Use one `steer` server and one state directory per session (`arena-state` by def
 ## Server and version
 
 ```bash
-skills/arena-steering/scripts/steer --version
-skills/arena-steering/scripts/steer serve --port 8100
-skills/arena-steering/scripts/demo.py --port 8100
+.agents/skills/arena-steering/scripts/install.sh
+steer --version
+steer serve
 ```
 
 ## Messages (`Inbox`)
@@ -25,8 +25,8 @@ skills/arena-steering/scripts/demo.py --port 8100
 steer read
 steer poll
 steer ack <id> '<Markdown>' [-i <task-id> -t "<title>" -T <type> -S <scope> -d "<detail>"]
-steer msg list [-a, --all] [-H, --hidden]
-steer msg show <id>
+steer msg list [-p PAGE] [-s SIZE]
+steer msg <id>
 ```
 
 - Every message ID matches `^[0-9a-f]{6}$`.
@@ -37,19 +37,18 @@ steer msg show <id>
 ```bash
 steer tasks [-f, --full]
 steer task <id>
-steer task new <id> "<title>" [-T <type>] [-s <status>] [-S <scope>] [-d "<detail>"] [-m <msg-id>] [-r <report-id>] [-D <dep-id>]
+steer task new <id> "<title>" [-T <type>] [-s <status>] [-S <scope>] [-d "<detail>"] [-m <msg-id>] [-r <report-id>] [-k <task-id>]
 steer task mod <id> deets <text>
 steer task mod <id> deets rm <1-based-index>
-steer task mod <id> links <msg-id|report-id>
-steer task mod <id> links rm msg|report <id>
-steer task mod <id> deps <task-id>
-steer task mod <id> deps rm <task-id>
+steer task mod <id> links [msg|report|task] <id>
+steer task mod <id> links rm msg|report|task <id>
 steer task mod <id> status|title|type|scope <value>
+steer task unlink <id> [msg|report|task] <link-id>
 steer task rm <id>
 ```
 
-- Tasks sit in a mutable queue where dependents automatically follow their dependencies (`deps[]`).
-- Blocking state derives automatically from unanswered `report_ids[]` and unfinished `deps[]`.
+- Tasks sit in a mutable queue where dependents automatically follow their task links (`links.task_ids[]`).
+- Blocking state derives automatically from unanswered `links.report_ids[]` and unfinished `links.task_ids[]`.
 
 ## Reports (`Reports`)
 
@@ -57,6 +56,8 @@ steer task rm <id>
 steer reports [-s, --stale]
 steer report <id>
 steer report pub <source.md> -i <id> -t "<title>"
+steer report pin ID
+steer report unpin ID
 steer report rm <id|--stale>
 ```
 

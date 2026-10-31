@@ -2,22 +2,34 @@
 
 from __future__ import annotations
 
+import json
+import re
 import threading
+import time
+from collections import Counter
+from datetime import UTC, datetime, timedelta
+from functools import wraps
 from typing import Any
 
+from . import pre as pre_mod
+from . import survey as survey_mod
+from .markdown import render_report_markdown, unparsed_strike_lines
 from .markdown_fields import format_answer_for_task_detail, parse_report_markdown
 from .models import (
   MESSAGE_ID_RE,
+  TASK_DETAIL_MAX_LEN,
   Attachment,
   Message,
   Report,
   ReportAnswer,
+  ReportField,
   Task,
   validate_entity_id,
   validate_hex_id,
 )
 from .ports import (
   Clock,
+  GateStatus,
   IdGenerator,
   MessageRepository,
   MetaRepository,
@@ -26,6 +38,75 @@ from .ports import (
   TaskRepository,
   UtcClock,
 )
+
+REPORT_IDLE_INTERVAL = timedelta(minutes=30)
+POLL_HEARTBEAT_SECONDS = 1.0
+POLL_FRESH_SECONDS = 5.0
+
+
+def _report_timestamp(value: str) -> datetime:
+  stamp = datetime.fromisoformat(value)
+  return stamp.replace(tzinfo=UTC) if stamp.tzinfo is None else stamp.astimezone(UTC)
+
+
+def _append_unique_details(task: Task, lines: list[str]) -> bool:
+  known = set(task.details)
+  added = False
+  for line in lines:
+    if line not in known:
+      task.details.append(line)
+      known.add(line)
+      added = True
+  return added
+
+
+def _answer_detail_lines(report: Report, answer: ReportAnswer) -> list[str]:
+  current_labels = {field.id: field.label for field in report.fields}
+  return [
+    format_answer_for_task_detail(
+      answer.field_labels.get(field_id) or current_labels.get(field_id, field_id), value
+    )
+    for field_id, value in answer.values.items()
+  ]
+
+
+def _append_answer_details_to_linked_tasks(
+  tasks: TaskRepository, report: Report, answer: ReportAnswer, now: str
+) -> dict[str, list[str]]:
+  lines = _answer_detail_lines(report, answer)
+  if not lines:
+    return {}
+  queue = tasks.list_tasks()
+  added: dict[str, list[str]] = {}
+  for task in queue:
+    previous_length = len(task.details)
+    if report.id in task.report_ids and _append_unique_details(task, lines):
+      task.modified_at = now
+      added[task.id] = task.details[previous_length:]
+  if added:
+    tasks.save_task_queue(queue)
+  return added
+
+
+DEFAULT_SURVEY_QUESTIONS: tuple[dict[str, Any], ...] = tuple(
+  {
+    "id": q["id"],
+    "prompt": q["question"],
+    "question": q["question"],
+    "deterministic": bool(q.get("deterministic")),
+    "answer_fields": dict(q["answer_fields"]),
+  }
+  for q in survey_mod.SPEC["questions"]
+)
+
+
+def _transactional_report_write(method: Any) -> Any:
+  @wraps(method)
+  def wrapped(self: Any, *args: Any, **kwargs: Any) -> Any:
+    with self._reports.transaction():
+      return method(self, *args, **kwargs)
+
+  return wrapped
 
 
 class MessageService:
@@ -36,15 +117,22 @@ class MessageService:
     messages: MessageRepository,
     reports: ReportRepository,
     meta: MetaRepository,
+    tasks: TaskRepository,
     clock: Clock | None = None,
     id_gen: IdGenerator | None = None,
   ) -> None:
     self._messages = messages
     self._reports = reports
     self._meta = meta
+    self._tasks = tasks
     self._clock = clock or UtcClock()
     self._id_gen = id_gen or SecretsHexIdGenerator()
     self._cond = threading.Condition()
+    # Survey answers, results, and the check stamp live in memory only, so a restart clears them.
+    self._survey_answers: dict[str, str] = {}
+    self._survey_results: list[dict[str, Any]] = []
+    self._survey_checked_at = ""
+    self._survey_pending = False
 
   def send_message(
     self,
@@ -53,10 +141,21 @@ class MessageService:
     hidden: bool = False,
     blocking: bool = True,
     attachments: list[Attachment] | None = None,
+    parent_ids: list[str] | None = None,
     msg_id: str | None = None,
+    request_id: str | None = None,
+    fingerprint: str = "",
   ) -> Message:
     if not isinstance(body, str) or (not body.strip() and not attachments):
       raise ValueError("Message body or attachment is required")
+    resolved_parent_ids: list[str] = []
+    for parent_id in parent_ids or []:
+      validate_hex_id(parent_id, "Message.parent_ids")
+      if parent_id in resolved_parent_ids:
+        continue
+      if self._messages.get_message(parent_id) is None:
+        raise KeyError(f"Unknown parent message ID: {parent_id}")
+      resolved_parent_ids.append(parent_id)
     resolved_id = (
       validate_hex_id(msg_id, "Message.id")
       if msg_id is not None
@@ -69,12 +168,21 @@ class MessageService:
       hidden=hidden,
       blocking=blocking,
       attachments=list(attachments or []),
+      parent_ids=resolved_parent_ids,
       status="sent",
       acks=[],
       modified_at=now,
     )
     with self._cond:
-      self._messages.save_message(message)
+      if request_id is not None:
+        message = self._messages.save_message_once(message, request_id, fingerprint)
+      else:
+        with self._reports.transaction():
+          if self._messages.get_message(message.id) is not None:
+            if msg_id is not None:
+              raise ValueError(f"Message ID {message.id!r} already exists")
+            message.id = self._unique_hex_id()
+          self._messages.save_message(message)
       self._cond.notify_all()
     return message
 
@@ -84,6 +192,23 @@ class MessageService:
     if msg is None:
       raise KeyError(f"Unknown message ID: {msg_id}")
     return msg
+
+  def list_message_page(
+    self,
+    *,
+    unread_only: bool,
+    include_hidden: bool,
+    query: str,
+    before: str,
+    limit: int,
+  ) -> tuple[list[Message], int, bool]:
+    return self._messages.list_message_page(
+      unread_only=unread_only,
+      include_hidden=include_hidden,
+      query=query,
+      before=before,
+      limit=limit,
+    )
 
   def list_messages(
     self,
@@ -106,42 +231,88 @@ class MessageService:
       items = items[start : start + page_size]
     return items
 
+  def _latest_pending_answers(self) -> list[ReportAnswer]:
+    latest: dict[str, ReportAnswer] = {}
+    for answer in self._reports.list_report_answers():
+      latest[answer.report_id] = answer
+    return [answer for answer in latest.values() if answer.status != "acked"]
+
   def has_pending_deliverables(self) -> bool:
     for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
-      if msg.status == "sent" or msg.requires_ack:
+      if msg.type == "message" and (msg.status == "sent" or msg.requires_ack):
         return True
-    for report in self._reports.list_reports():
-      if report.latest_unacked_answer is not None:
-        return True
-    return False
+    return bool(self._latest_pending_answers())
 
+  @_transactional_report_write
   def read_pending(self, *, mark_seen: bool = True) -> dict[str, Any]:
-    """Return pending unread messages and unacknowledged report answers."""
+    """Return pending unread messages and the newest unacknowledged answer per report."""
     now = self._clock.now_iso()
     delivered_messages: list[Message] = []
     for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
+      if msg.type != "message":
+        continue
       if mark_seen and msg.status == "sent":
-        msg.status = "seen"
-        msg.modified_at = now
-        self._messages.save_message(msg)
+        msg = self._messages.mark_message_seen(msg.id, now)
       delivered_messages.append(msg)
 
     delivered_answers: list[tuple[Report, ReportAnswer]] = []
-    for report in self._reports.list_reports():
-      latest = report.latest_unacked_answer
-      if latest is not None:
-        if mark_seen and latest.status == "sent":
-          latest.status = "seen"
-          latest.modified_at = now
+    for latest in self._latest_pending_answers():
+      report = self._reports.get_report(latest.report_id)
+      if mark_seen and latest.status == "sent":
+        latest = self._messages.mark_message_seen(latest.id, now).as_report_answer()
+        if report is not None:
           report.modified_at = now
           self._reports.save_report(report)
-        delivered_answers.append((report, latest))
+      if report is None:
+        report = Report(
+          id=latest.report_id,
+          title=latest.report_title or latest.report_id,
+          body="",
+          status="answered",
+          answers=[latest],
+        )
+      delivered_answers.append((report, latest))
 
-    return {
-      "messages": delivered_messages,
-      "report_answers": delivered_answers,
-    }
+    return {"messages": delivered_messages, "report_answers": delivered_answers}
 
+  def pending_ids(self) -> list[str]:
+    """Return unacked message and report-answer IDs without marking anything seen."""
+    ids = [
+      message.id
+      for message in self._messages.list_messages(
+        unread_only=False, include_hidden=True
+      )
+      if message.type == "message" and message.requires_ack
+    ]
+    ids.extend(answer.id for answer in self._latest_pending_answers())
+    return ids
+
+  def reset_gate_if_clear(self) -> None:
+    """Reset the shell countdown only after all blocking work is acknowledged."""
+    with self._reports.transaction():
+      if not self.pending_ids() and self._meta.get_meta(
+        pre_mod.CALL_COUNT_META
+      ) not in (
+        None,
+        "0",
+      ):
+        self._meta.set_meta(pre_mod.CALL_COUNT_META, "0")
+
+  def resolve_ack_target(
+    self, target_id: str | None
+  ) -> tuple[str, Message | ReportAnswer]:
+    """Resolve an acknowledgement target without changing it."""
+    if target_id is None:
+      target_id = self._resolve_single_pending_id()
+    validate_hex_id(target_id, "Acknowledgement target ID")
+    message = self._messages.get_message(target_id)
+    if message is not None:
+      if message.type == "report_answer":
+        return "report_answer", message.as_report_answer()
+      return "message", message
+    raise KeyError(f"Unknown message or answer ID: {target_id}")
+
+  @_transactional_report_write
   def ack(
     self, target_id: str | None, markdown: str
   ) -> tuple[str, Message | ReportAnswer]:
@@ -156,64 +327,159 @@ class MessageService:
 
     validate_hex_id(target_id, "Acknowledgement target ID")
     msg = self._messages.get_message(target_id)
-    if msg is not None:
-      msg.acks.append(reply)
-      msg.status = "acked"
-      msg.modified_at = now
-      self._messages.save_message(msg)
+    if msg is None:
+      raise KeyError(f"Unknown message or answer ID: {target_id}")
+    first_ack = msg.status != "acked"
+    msg = self._messages.append_message_ack(target_id, reply, now)
+    if msg.type != "report_answer":
+      self.reset_gate_if_clear()
       return ("message", msg)
+    answer = msg.as_report_answer()
+    report = self._reports.get_report(answer.report_id)
+    if first_ack and report is not None:
+      answer.task_details_added = _append_answer_details_to_linked_tasks(
+        self._tasks, report, answer, now
+      )
+    if report is not None and report.answers and report.answers[-1].id == answer.id:
+      report.ack_seen = False
+      report.ack_seen_at = ""
+      report.modified_at = now
+      self._reports.save_report(report)
+    self.reset_gate_if_clear()
+    return ("report_answer", answer)
 
-    for report in self._reports.list_reports():
-      for ans in report.answers:
-        if ans.id == target_id:
-          ans.acks.append(reply)
-          ans.status = "acked"
-          ans.modified_at = now
-          report.modified_at = now
-          self._reports.save_report(report)
-          return ("report_answer", ans)
+  def mark_replies_seen(self, msg_id: str, revision: str) -> bool:
+    validate_hex_id(msg_id, "Message.id")
+    if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{64}", revision):
+      raise ValueError("Reply revision must be a SHA-256 hex digest")
+    return self._messages.mark_replies_seen(msg_id, revision)
 
-    raise KeyError(f"Unknown message or answer ID: {target_id}")
+  def touch_agent(self) -> None:
+    """Record an agent call and clear the previous turn-end marker."""
+    stamp = self._clock.now_iso()
+    with self._reports.transaction():
+      if self._meta.get_meta("agent_seen_at") != stamp:
+        self._meta.set_meta("agent_seen_at", stamp)
+      if self._meta.get_meta("turn_ended_at"):
+        self._meta.set_meta("turn_ended_at", "")
 
   def trigger_skip_poll(self) -> None:
+    self._meta.set_meta("skip_poll", "1")
     with self._cond:
-      self._meta.set_meta("skip_poll", "1")
       self._cond.notify_all()
 
   def consume_skip_poll(self) -> bool:
-    with self._cond:
+    with self._reports.transaction():
       flag = self._meta.get_meta("skip_poll", "0") == "1"
       if flag:
         self._meta.set_meta("skip_poll", "0")
       return flag
 
   def poll(self, timeout_seconds: float = 0.0) -> dict[str, Any]:
-    """Wait up to timeout_seconds for pending deliverables or skip_poll."""
-    deadline_remaining = max(0.0, min(float(timeout_seconds), 1799.0))
-    with self._cond:
-      if (
-        not self.has_pending_deliverables()
-        and not self.consume_skip_poll()
-        and deadline_remaining > 0
-      ):
-        self._cond.wait(timeout=deadline_remaining)
-        self.consume_skip_poll()
-    return self.read_pending(mark_seen=True)
+    """Wait for deliverables or skip, including writes from other processes."""
+    timeout = max(0.0, min(float(timeout_seconds), 1799.0))
+    deadline = time.monotonic() + timeout
+    skipped = timed_out = False
+    self.touch_agent()
+    if not self.has_pending_deliverables():
+      skipped = self.consume_skip_poll()
+      if not skipped and timeout > 0:
+        with self._reports.transaction():
+          self._meta.set_meta("polling_since", self._clock.now_iso())
+          self._meta.set_meta("polling_at", self._clock.now_iso())
+        try:
+          while not self.has_pending_deliverables():
+            if self.consume_skip_poll():
+              skipped = True
+              break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+              timed_out = True
+              break
+            self._meta.set_meta("polling_at", self._clock.now_iso())
+            # Do not hold the condition while accessing the store: an answer
+            # callback may notify while its store transaction is still open.
+            with self._cond:
+              self._cond.wait(timeout=min(POLL_HEARTBEAT_SECONDS, remaining))
+        finally:
+          with self._reports.transaction():
+            self._meta.set_meta("polling_at", "")
+            self._meta.set_meta("polling_since", "")
+    delivered = self.read_pending(mark_seen=True)
+    if (skipped or timed_out) and not (
+      delivered["messages"] or delivered["report_answers"]
+    ):
+      self._meta.set_meta("turn_ended_at", self._clock.now_iso())
+    return delivered
 
   def notify_new_work(self) -> None:
     with self._cond:
       self._cond.notify_all()
 
+  def get_survey(self) -> dict[str, Any]:
+    """Return current survey state from memory, never from the store."""
+    return {
+      "pending": self._survey_pending,
+      "checked_at": self._survey_checked_at,
+      "answered_at": self._survey_checked_at,
+      "questions": [dict(item) for item in DEFAULT_SURVEY_QUESTIONS],
+      "template": survey_mod.template(),
+      "results": [dict(row) for row in self._survey_results],
+      "answers": dict(self._survey_answers),
+    }
+
+  def submit_survey(self, values: Any) -> dict[str, Any]:
+    """Grade and keep agent survey answers in memory, rejecting any null values."""
+    answers = dict(self._survey_answers)
+    results = list(self._survey_results)
+    if isinstance(values, list):
+      raw_text = json.dumps(values, ensure_ascii=False)
+      results = survey_mod.grade(raw_text)
+      for row in results:
+        answers[str(row["id"])] = json.dumps(row["answer"], ensure_ascii=False)
+    elif isinstance(values, str):
+      stripped = values.strip()
+      if not stripped:
+        raise ValueError("Survey submission must not be empty")
+      results = survey_mod.grade(stripped)
+      for row in results:
+        answers[str(row["id"])] = json.dumps(row["answer"], ensure_ascii=False)
+    elif isinstance(values, dict) and values:
+      for key, val in values.items():
+        if val is None:
+          raise ValueError(f"Survey answer for {key!r} must not be null; use 'unknown'")
+        text = str(val).strip()
+        if not text:
+          raise ValueError(f"Survey answer for {key!r} cannot be empty")
+        answers[str(key).strip()] = text
+    else:
+      raise ValueError("Survey submission must be a JSON array or non-empty dictionary")
+    with self._cond:
+      self._survey_answers = answers
+      self._survey_results = results
+      self._survey_checked_at = self._clock.now_iso()
+      self._survey_pending = False
+      self._cond.notify_all()
+    return self.get_survey()
+
+  def trigger_bible_check(self, active: bool | None = None) -> dict[str, Any]:
+    """Toggle or set the bible check interrupt flag and wake any waiting poll."""
+    with self._cond:
+      cur = self._meta.get_meta("bible_interrupt", "0") == "1"
+      next_state = (not cur) if active is None else bool(active)
+      self._meta.set_meta("bible_interrupt", "1" if next_state else "0")
+      if next_state:
+        self._meta.set_meta("skip_poll", "1")
+      self._cond.notify_all()
+    return self.get_survey()
+
   def _resolve_single_pending_id(self) -> str:
     candidates: list[str] = [
       msg.id
       for msg in self._messages.list_messages(unread_only=True, include_hidden=True)
-      if msg.requires_ack
+      if msg.type == "message" and msg.requires_ack
     ]
-    for report in self._reports.list_reports():
-      latest = report.latest_unacked_answer
-      if latest is not None:
-        candidates.append(latest.id)
+    candidates.extend(answer.id for answer in self._latest_pending_answers())
     if not candidates:
       raise ValueError("No pending message or report answer requires acknowledgement")
     if len(candidates) > 1:
@@ -230,6 +496,15 @@ class MessageService:
     raise RuntimeError("Unable to allocate unique 6-character hex ID")
 
 
+def _transactional_task_write(method: Any) -> Any:
+  @wraps(method)
+  def wrapped(self: Any, *args: Any, **kwargs: Any) -> Any:
+    with self._tasks.transaction():
+      return method(self, *args, **kwargs)
+
+  return wrapped
+
+
 class TaskService:
   """Manage the mutable task queue, dependency ordering, and derived blocking."""
 
@@ -238,10 +513,12 @@ class TaskService:
     tasks: TaskRepository,
     reports: ReportRepository,
     clock: Clock | None = None,
+    gates: GateStatus | None = None,
   ) -> None:
     self._tasks = tasks
     self._reports = reports
     self._clock = clock or UtcClock()
+    self._gates = gates
 
   def is_task_blocked(
     self,
@@ -251,7 +528,11 @@ class TaskService:
     report_map: dict[str, Report] | None = None,
   ) -> bool:
     """Derive blocking from unanswered linked reports and unfinished dependencies."""
-    if task.status == "blocked":
+    if task.status == "finished":
+      return False
+    if self._gates is not None and any(
+      self._gates.is_running(gate) for gate in task.gate_names
+    ):
       return True
     tasks_by_id = (
       task_map
@@ -269,9 +550,7 @@ class TaskService:
         return True
     for rep_id in task.report_ids:
       report = reports_by_id.get(rep_id)
-      if report is not None and (
-        report.needs_answer or report.latest_unacked_answer is not None
-      ):
+      if report is not None and report.needs_answer:
         return True
     return False
 
@@ -294,6 +573,7 @@ class TaskService:
       raise KeyError(f"Unknown task ID: {task_id}")
     return (task, self.is_task_blocked(task))
 
+  @_transactional_task_write
   def create_task(
     self,
     task_id: str,
@@ -303,9 +583,12 @@ class TaskService:
     status: str = "upcoming",
     scope: str = "",
     details: list[str] | None = None,
+    links: dict[str, list[str]] | None = None,
     msg_ids: list[str] | None = None,
     report_ids: list[str] | None = None,
+    task_ids: list[str] | None = None,
     deps: list[str] | None = None,
+    gate_names: list[str] | None = None,
   ) -> Task:
     if self._tasks.get_task(task_id) is not None:
       raise ValueError(f"Task {task_id!r} already exists")
@@ -317,17 +600,22 @@ class TaskService:
       status=status,
       scope=scope,
       details=list(details or []),
-      msg_ids=list(msg_ids or []),
-      report_ids=list(report_ids or []),
-      deps=list(deps or []),
+      links=links,
+      msg_ids=list(msg_ids) if msg_ids is not None else None,
+      report_ids=list(report_ids) if report_ids is not None else None,
+      task_ids=list(task_ids) if task_ids is not None else None,
+      deps=list(deps) if deps is not None else None,
+      gate_names=list(gate_names) if gate_names is not None else None,
       modified_at=now,
     )
+    self._validate_details(task)
     queue = self._tasks.list_tasks()
     self._validate_deps_exist(task, queue)
     ordered = self._enforce_dependency_order([*queue, task])
     self._tasks.save_task_queue(ordered)
     return task
 
+  @_transactional_task_write
   def remove_task(self, task_id: str) -> bool:
     validate_entity_id(task_id, "Task.id")
     queue = self._tasks.list_tasks()
@@ -336,14 +624,83 @@ class TaskService:
       return False
     now = self._clock.now_iso()
     for item in remaining:
-      if task_id in item.deps:
-        item.deps = [dep for dep in item.deps if dep != task_id]
+      if task_id in item.task_ids:
+        item.task_ids = [dep for dep in item.task_ids if dep != task_id]
         item.modified_at = now
     self._tasks.save_task_queue(remaining)
     return True
 
+  @_transactional_task_write
+  def rename_task(self, old_task_id: str, new_task_id: str) -> Task:
+    validate_entity_id(old_task_id, "Task.id")
+    validate_entity_id(new_task_id, "Task.id")
+    if old_task_id == new_task_id:
+      task, _blocked = self.get_task(old_task_id)
+      return task
+    queue, target = self._load_queue_and_target(old_task_id)
+    if any(item.id == new_task_id for item in queue):
+      raise ValueError(f"Task {new_task_id!r} already exists")
+    now = self._clock.now_iso()
+    renamed = Task(
+      id=new_task_id,
+      title=target.title,
+      type=target.type,
+      status=target.status,
+      scope=target.scope,
+      details=target.details,
+      allow_long_details=True,
+      links=target.links,
+      modified_at=now,
+    )
+    self._validate_details(renamed)
+    updated_queue: list[Task] = []
+    for item in queue:
+      if item.id == old_task_id:
+        updated_queue.append(renamed)
+        continue
+      if old_task_id in item.task_ids:
+        item.task_ids = [
+          new_task_id if dep_id == old_task_id else dep_id for dep_id in item.task_ids
+        ]
+        item.modified_at = now
+      updated_queue.append(item)
+    ordered = self._enforce_dependency_order(updated_queue)
+    self._tasks.save_task_queue(ordered)
+    return renamed
+
+  @_transactional_task_write
+  def unlink_task(
+    self, task_id: str, link_id: str, *, link_type: str | None = None
+  ) -> Task:
+    if link_type is not None:
+      return self.mod_links_rm(task_id, link_type, link_id)
+    queue, target = self._load_queue_and_target(task_id)
+    cleaned_id = link_id.strip()
+    updated = Task(
+      id=target.id,
+      title=target.title,
+      type=target.type,
+      status=target.status,
+      scope=target.scope,
+      details=target.details,
+      allow_long_details=True,
+      links={
+        "msg_ids": [item for item in target.msg_ids if item != cleaned_id],
+        "report_ids": [item for item in target.report_ids if item != cleaned_id],
+        "task_ids": [item for item in target.task_ids if item != cleaned_id],
+        "gate_names": [item for item in target.gate_names if item != cleaned_id],
+      },
+      modified_at=self._clock.now_iso(),
+    )
+    if updated.links == target.links:
+      raise ValueError(f"Task {task_id!r} has no link {cleaned_id!r}")
+    self._replace_in_queue(queue, updated)
+    return updated
+
+  @_transactional_task_write
   def mod_deets(self, task_id: str, detail: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
+    self._validate_input_details([detail])
     updated = Task(
       id=target.id,
       title=target.title,
@@ -351,14 +708,14 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=[*target.details, detail],
-      msg_ids=target.msg_ids,
-      report_ids=target.report_ids,
-      deps=target.deps,
+      allow_long_details=True,
+      links=target.links,
       modified_at=self._clock.now_iso(),
     )
     self._replace_in_queue(queue, updated)
     return updated
 
+  @_transactional_task_write
   def mod_deets_rm(self, task_id: str, number: int) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     idx = number - 1 if number >= 1 else number
@@ -374,26 +731,51 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=new_details,
-      msg_ids=target.msg_ids,
-      report_ids=target.report_ids,
-      deps=target.deps,
+      allow_long_details=True,
+      links=target.links,
       modified_at=self._clock.now_iso(),
     )
     self._replace_in_queue(queue, updated)
     return updated
 
-  def mod_links_add(self, task_id: str, link_id: str) -> Task:
+  @_transactional_task_write
+  def mod_links_add(
+    self, task_id: str, link_id: str, *, link_type: str | None = None
+  ) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     cleaned = link_id.strip()
+    explicit_type = link_type.strip().lower() if link_type else None
     msg_ids = list(target.msg_ids)
     report_ids = list(target.report_ids)
-    if MESSAGE_ID_RE.fullmatch(cleaned) and self._reports.get_report(cleaned) is None:
+    task_ids = list(target.task_ids)
+    gate_names = list(target.gate_names)
+    known_task_ids = {item.id for item in queue}
+
+    if explicit_type == "gate":
+      if cleaned not in gate_names:
+        gate_names.append(cleaned)
+    elif explicit_type in {"task", "dep", "deps"} or (
+      explicit_type is None and cleaned in known_task_ids
+    ):
+      validate_entity_id(cleaned, "Dependency task ID")
+      if cleaned not in task_ids:
+        task_ids.append(cleaned)
+    elif explicit_type == "msg" or (
+      explicit_type is None
+      and MESSAGE_ID_RE.fullmatch(cleaned)
+      and self._reports.get_report(cleaned) is None
+    ):
       if cleaned not in msg_ids:
         msg_ids.append(cleaned)
-    else:
+    elif explicit_type in {None, "report"}:
       validate_entity_id(cleaned, "Report or message link ID")
       if cleaned not in report_ids:
         report_ids.append(cleaned)
+    else:
+      raise ValueError(
+        f"Link type must be 'msg', 'report', 'task', or 'gate', got {link_type!r}"
+      )
+
     updated = Task(
       id=target.id,
       title=target.title,
@@ -401,20 +783,28 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
-      msg_ids=msg_ids,
-      report_ids=report_ids,
-      deps=target.deps,
+      allow_long_details=True,
+      links={
+        "msg_ids": msg_ids,
+        "report_ids": report_ids,
+        "task_ids": task_ids,
+        "gate_names": gate_names,
+      },
       modified_at=self._clock.now_iso(),
     )
+    self._validate_deps_exist(updated, queue)
     self._replace_in_queue(queue, updated)
     return updated
 
+  @_transactional_task_write
   def mod_links_rm(self, task_id: str, link_type: str, link_id: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     cleaned_type = link_type.strip().lower()
     cleaned_id = link_id.strip()
-    if cleaned_type not in {"msg", "report"}:
-      raise ValueError(f"Link type must be 'msg' or 'report', got {link_type!r}")
+    if cleaned_type not in {"msg", "report", "task", "dep", "deps", "gate"}:
+      raise ValueError(
+        f"Link type must be 'msg', 'report', 'task', or 'gate', got {link_type!r}"
+      )
     msg_ids = (
       [item for item in target.msg_ids if item != cleaned_id]
       if cleaned_type == "msg"
@@ -425,6 +815,16 @@ class TaskService:
       if cleaned_type == "report"
       else list(target.report_ids)
     )
+    task_ids = (
+      [item for item in target.task_ids if item != cleaned_id]
+      if cleaned_type in {"task", "dep", "deps"}
+      else list(target.task_ids)
+    )
+    gate_names = (
+      [item for item in target.gate_names if item != cleaned_id]
+      if cleaned_type == "gate"
+      else list(target.gate_names)
+    )
     updated = Task(
       id=target.id,
       title=target.title,
@@ -432,54 +832,27 @@ class TaskService:
       status=target.status,
       scope=target.scope,
       details=target.details,
-      msg_ids=msg_ids,
-      report_ids=report_ids,
-      deps=target.deps,
+      allow_long_details=True,
+      links={
+        "msg_ids": msg_ids,
+        "report_ids": report_ids,
+        "task_ids": task_ids,
+        "gate_names": gate_names,
+      },
       modified_at=self._clock.now_iso(),
     )
     self._replace_in_queue(queue, updated)
     return updated
 
+  @_transactional_task_write
   def mod_deps_add(self, task_id: str, dep_task_id: str) -> Task:
-    queue, target = self._load_queue_and_target(task_id)
-    cleaned_dep = validate_entity_id(dep_task_id, "Dependency task ID")
-    deps = list(target.deps)
-    if cleaned_dep not in deps:
-      deps.append(cleaned_dep)
-    updated = Task(
-      id=target.id,
-      title=target.title,
-      type=target.type,
-      status=target.status,
-      scope=target.scope,
-      details=target.details,
-      msg_ids=target.msg_ids,
-      report_ids=target.report_ids,
-      deps=deps,
-      modified_at=self._clock.now_iso(),
-    )
-    self._validate_deps_exist(updated, queue)
-    self._replace_in_queue(queue, updated)
-    return updated
+    return self.mod_links_add(task_id, dep_task_id, link_type="task")
 
+  @_transactional_task_write
   def mod_deps_rm(self, task_id: str, dep_task_id: str) -> Task:
-    queue, target = self._load_queue_and_target(task_id)
-    cleaned_dep = dep_task_id.strip()
-    updated = Task(
-      id=target.id,
-      title=target.title,
-      type=target.type,
-      status=target.status,
-      scope=target.scope,
-      details=target.details,
-      msg_ids=target.msg_ids,
-      report_ids=target.report_ids,
-      deps=[item for item in target.deps if item != cleaned_dep],
-      modified_at=self._clock.now_iso(),
-    )
-    self._replace_in_queue(queue, updated)
-    return updated
+    return self.mod_links_rm(task_id, "task", dep_task_id)
 
+  @_transactional_task_write
   def mod_scalar(self, task_id: str, field_name: str, value: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     key = field_name.strip().lower()
@@ -492,9 +865,8 @@ class TaskService:
       "status": target.status,
       "scope": target.scope,
       "details": target.details,
-      "msg_ids": target.msg_ids,
-      "report_ids": target.report_ids,
-      "deps": target.deps,
+      "allow_long_details": True,
+      "links": target.links,
       "modified_at": self._clock.now_iso(),
     }
     kwargs[key] = value
@@ -502,11 +874,52 @@ class TaskService:
     self._replace_in_queue(queue, updated)
     return updated
 
+  @_transactional_task_write
   def patch_task(
     self, task_id: str, changes: dict[str, Any], *, position: int | None = None
   ) -> Task:
     """Apply partial updates and optional queue position change for HTTP PATCH."""
     queue, target = self._load_queue_and_target(task_id)
+    if "details" in changes:
+      self._validate_input_details(changes["details"], target.details)
+    raw_links = changes.get("links")
+    merged_links = {
+      "gate_names": list(
+        changes.get(
+          "gate_names",
+          raw_links.get("gate_names", target.gate_names)
+          if isinstance(raw_links, dict)
+          else target.gate_names,
+        )
+      ),
+      "msg_ids": list(
+        changes.get(
+          "msg_ids",
+          raw_links.get("msg_ids", target.msg_ids)
+          if isinstance(raw_links, dict)
+          else target.msg_ids,
+        )
+      ),
+      "report_ids": list(
+        changes.get(
+          "report_ids",
+          raw_links.get("report_ids", target.report_ids)
+          if isinstance(raw_links, dict)
+          else target.report_ids,
+        )
+      ),
+      "task_ids": list(
+        changes.get(
+          "task_ids",
+          changes.get(
+            "deps",
+            raw_links.get("task_ids", target.task_ids)
+            if isinstance(raw_links, dict)
+            else target.task_ids,
+          ),
+        )
+      ),
+    }
     updated = Task(
       id=target.id,
       title=str(changes.get("title", target.title)),
@@ -514,11 +927,11 @@ class TaskService:
       status=str(changes.get("status", target.status)),
       scope=str(changes.get("scope", target.scope)),
       details=list(changes.get("details", target.details)),
-      msg_ids=list(changes.get("msg_ids", target.msg_ids)),
-      report_ids=list(changes.get("report_ids", target.report_ids)),
-      deps=list(changes.get("deps", target.deps)),
+      allow_long_details=True,
+      links=merged_links,
       modified_at=self._clock.now_iso(),
     )
+    self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
     new_queue = [updated if item.id == task_id else item for item in queue]
     if position is not None:
@@ -538,9 +951,35 @@ class TaskService:
     raise KeyError(f"Unknown task ID: {task_id}")
 
   def _replace_in_queue(self, queue: list[Task], updated: Task) -> None:
+    self._validate_details(updated)
     replaced = [updated if item.id == updated.id else item for item in queue]
     ordered = self._enforce_dependency_order(replaced)
     self._tasks.save_task_queue(ordered)
+
+  @staticmethod
+  def _validate_input_details(
+    details: list[str], existing: list[str] | None = None
+  ) -> None:
+    """Allow existing long generated details without accepting new long input."""
+    carried = Counter(
+      line for line in (existing or []) if len(line) > TASK_DETAIL_MAX_LEN
+    )
+    for line in details:
+      if not isinstance(line, str):
+        continue
+      text = line.strip()
+      if len(text) > TASK_DETAIL_MAX_LEN:
+        if carried[text]:
+          carried[text] -= 1
+        else:
+          raise ValueError(
+            f"Task detail exceeds {TASK_DETAIL_MAX_LEN} characters ({len(text)}): {text!r}"
+          )
+
+  @staticmethod
+  def _validate_details(task: Task) -> None:
+    if not task.details:
+      raise ValueError("Task requires at least one detail")
 
   @staticmethod
   def _validate_deps_exist(task: Task, existing_queue: list[Task]) -> None:
@@ -587,19 +1026,57 @@ class ReportService:
     clock: Clock | None = None,
     id_gen: IdGenerator | None = None,
     on_answer_callback: Any | None = None,
+    on_ack_callback: Any | None = None,
   ) -> None:
     self._reports = reports
     self._tasks = tasks
     self._clock = clock or UtcClock()
     self._id_gen = id_gen or SecretsHexIdGenerator()
     self._on_answer = on_answer_callback
+    self._on_ack = on_ack_callback
 
-  def publish_report(self, report_id: str, title: str, body: str) -> Report:
+  def publish_report(
+    self, report_id: str, title: str, body: str, *, allow_unparsed_markers: bool = False
+  ) -> Report:
+    blocks, fields = parse_report_markdown(body)
+    if any(not field.annotated for field in fields):
+      raise ValueError("Fielded reports require question and option comments")
+    warnings = unparsed_strike_lines(body)
+    if warnings and not allow_unparsed_markers:
+      raise ValueError(f"Possible unparsed strike markers on lines: {warnings}")
+    rendered = [
+      render_report_markdown(value)
+      for block_type, value in blocks
+      if block_type == "markdown"
+    ]
+    saved = self._publish_report(report_id, title, body, fields)
+    verified = self._reports.get_report(report_id)
+    if (
+      verified is None
+      or verified.id != saved.id
+      or verified.modified_at != saved.modified_at
+      or len(verified.fields) != len(fields)
+      or verified.body != body
+    ):
+      raise RuntimeError("Report publication verification failed after saving")
+    actual_blocks, _ = parse_report_markdown(verified.body)
+    if [
+      render_report_markdown(value)
+      for block_type, value in actual_blocks
+      if block_type == "markdown"
+    ] != rendered:
+      raise RuntimeError("Report rendered verification failed after saving")
+    return verified
+
+  @_transactional_task_write
+  def _publish_report(
+    self, report_id: str, title: str, body: str, fields: list[ReportField]
+  ) -> Report:
     validate_entity_id(report_id, "Report.id")
-    _, fields = parse_report_markdown(body)
     existing = self._reports.get_report(report_id)
     if existing is not None and existing.latest_unacked_answer is not None:
       raise ValueError("Report has an unacknowledged answer")
+    preserved_answers = self._reports.list_report_answers(report_id)
     now = self._clock.now_iso()
     report = Report(
       id=report_id,
@@ -607,10 +1084,47 @@ class ReportService:
       body=body,
       fields=fields,
       status="published",
-      answers=list(existing.answers) if existing is not None else [],
+      answers=preserved_answers,
+      seen=False,
       modified_at=now,
+      updated_at=now,
+      last_viewed_at=existing.last_viewed_at if existing else "",
+      pinned=existing.pinned if existing else False,
     )
     self._reports.save_report(report)
+    return report
+
+  @_transactional_task_write
+  def mark_seen(self, report_id: str) -> Report:
+    report = self.get_report(report_id)
+    report.seen = True
+    report.last_viewed_at = self._clock.now_iso()
+    report.modified_at = report.last_viewed_at
+    self._reports.save_report(report)
+    return report
+
+  @_transactional_task_write
+  def pin_report(self, report_id: str, pinned: bool) -> Report:
+    report = self.get_report(report_id)
+    if report.pinned != pinned:
+      report.pinned = pinned
+      report.modified_at = self._clock.now_iso()
+      self._reports.save_report(report)
+    return report
+
+  @_transactional_task_write
+  def mark_ack_seen(self, report_id: str) -> Report:
+    report = self.get_report(report_id)
+    latest = report.answers[-1] if report.answers else None
+    if (
+      latest is not None
+      and latest.status == "acked"
+      and (not report.ack_seen or not report.ack_seen_at)
+    ):
+      report.ack_seen = True
+      report.ack_seen_at = self._clock.now_iso()
+      report.modified_at = report.ack_seen_at
+      self._reports.save_report(report)
     return report
 
   def get_report(self, report_id: str) -> Report:
@@ -621,49 +1135,123 @@ class ReportService:
     return report
 
   def list_reports(self, *, stale_only: bool = False) -> list[Report]:
-    all_reports = self._reports.list_reports()
-    if stale_only:
-      return [
-        rep
-        for rep in all_reports
-        if rep.status in {"answered", "dismissed"} and rep.latest_unacked_answer is None
-      ]
-    return [rep for rep in all_reports if rep.status != "dismissed"]
+    all_reports = [
+      report for report in self._reports.list_reports() if report.status != "dismissed"
+    ]
+    if not stale_only:
+      return all_reports
+    linked: dict[str, list[Task]] = {}
+    for task in self._tasks.list_tasks():
+      for report_id in task.report_ids:
+        linked.setdefault(report_id, []).append(task)
+    now = _report_timestamp(self._clock.now_iso())
+    stale = []
+    for report in all_reports:
+      if report.pinned:
+        continue
+      tasks = linked.get(report.id, [])
+      if tasks:
+        if all(task.status == "finished" for task in tasks):
+          stale.append(report)
+        continue
+      if (
+        report.ack_seen
+        and report.ack_seen_at
+        and now - _report_timestamp(report.ack_seen_at) >= REPORT_IDLE_INTERVAL
+      ):
+        stale.append(report)
+    return stale
 
   def submit_answer(
+    self, report_id: str, values: dict[str, Any], *, answer_id: str | None = None
+  ) -> ReportAnswer:
+    answer, created = self._submit_answer(report_id, values, answer_id=answer_id)
+    if created and self._on_answer is not None:
+      self._on_answer()
+    return answer
+
+  @_transactional_task_write
+  def _submit_answer(
     self,
     report_id: str,
     values: dict[str, Any],
     *,
     answer_id: str | None = None,
-  ) -> ReportAnswer:
+  ) -> tuple[ReportAnswer, bool]:
     report = self.get_report(report_id)
     if not report.fields:
       raise ValueError(f"Report {report_id!r} has no interactive fields to answer")
     cleaned_values = self._validate_submission_values(report, values)
+    for field in report.fields:
+      value = cleaned_values[field.id]
+      if field.type == "choice":
+        if isinstance(value, dict) and value.get("custom"):
+          cleaned_values[field.id] = value["custom"]
+        elif isinstance(value, str):
+          if value.lower().startswith("something else:"):
+            cleaned_values[field.id] = value.partition(":")[2].strip()
+          else:
+            cleaned_values[field.id] = field.option_labels.get(value, value)
+      elif field.type == "checkbox":
+        if isinstance(value, dict):
+          selected = [
+            field.option_labels.get(item, item) for item in value.get("selected", [])
+          ]
+          custom = value.get("custom", "")
+          cleaned_values[field.id] = selected + ([custom] if custom else [])
+        elif isinstance(value, list):
+          cleaned_values[field.id] = [
+            field.option_labels.get(item, item) for item in value
+          ]
+    latest = report.answers[-1] if report.answers else None
+    if answer_id is not None:
+      ans_id = validate_hex_id(answer_id, "ReportAnswer.id")
+      if self._reports.get_message(ans_id) is not None and not (
+        latest is not None and latest.id == ans_id and latest.values == cleaned_values
+      ):
+        raise ValueError(f"Message ID {ans_id!r} already exists")
+    if latest is not None and latest.values == cleaned_values:
+      return latest, False
     now = self._clock.now_iso()
-    ans_id = (
-      validate_hex_id(answer_id, "ReportAnswer.id")
-      if answer_id is not None
-      else self._id_gen.new_hex_id()
-    )
+    if answer_id is None:
+      for _ in range(64):
+        ans_id = self._id_gen.new_hex_id()
+        if self._reports.get_message(ans_id) is None:
+          break
+      else:
+        raise RuntimeError("Unable to allocate unique 6-character hex ID")
+    created_at = datetime.fromisoformat(now)
+    for previous in report.answers:
+      previous_at = datetime.fromisoformat(previous.created_at)
+      if previous_at >= created_at:
+        created_at = previous_at + timedelta(microseconds=1)
+      previous_message = self._reports.get_message(previous.id)
+      if previous_message is not None and previous_message.blocking:
+        previous_message.blocking = False
+        previous_message.modified_at = now
+        self._reports.save_message(previous_message)
     answer = ReportAnswer(
       id=ans_id,
       report_id=report.id,
       values=cleaned_values,
+      report_title=report.title,
+      field_labels={field.id: field.label for field in report.fields},
       status="sent",
       acks=[],
       modified_at=now,
+      created_at=created_at.isoformat(timespec="microseconds").replace("+00:00", "Z"),
     )
+    self._reports.save_report_answer(answer)
     report.answers.append(answer)
     report.status = "answered"
+    report.seen = True
+    report.ack_seen = False
+    report.ack_seen_at = ""
     report.modified_at = now
     self._reports.save_report(report)
-    self._append_answer_details_to_linked_tasks(report, cleaned_values, now)
-    if self._on_answer is not None:
-      self._on_answer()
-    return answer
+    return answer, True
 
+  @_transactional_task_write
   def ack_answer(self, report_id: str, answer_id: str, markdown: str) -> ReportAnswer:
     report = self.get_report(report_id)
     validate_hex_id(answer_id, "ReportAnswer.id")
@@ -672,14 +1260,82 @@ class ReportService:
     now = self._clock.now_iso()
     for ans in report.answers:
       if ans.id == answer_id:
-        ans.acks.append(markdown.strip())
-        ans.status = "acked"
-        ans.modified_at = now
-        report.modified_at = now
-        self._reports.save_report(report)
+        first_ack = ans.status != "acked"
+        ans = self._reports.append_message_ack(
+          answer_id, markdown.strip(), now
+        ).as_report_answer()
+        if first_ack:
+          ans.task_details_added = _append_answer_details_to_linked_tasks(
+            self._tasks, report, ans, now
+          )
+        if report.answers[-1].id == answer_id:
+          report.ack_seen = False
+          report.ack_seen_at = ""
+          report.modified_at = now
+          self._reports.save_report(report)
+        if self._on_ack is not None:
+          self._on_ack()
         return ans
     raise KeyError(f"Unknown answer ID {answer_id!r} on report {report_id!r}")
 
+  @_transactional_task_write
+  def rename_report(self, old_report_id: str, new_report_id: str) -> Report:
+    validate_entity_id(old_report_id, "Report.id")
+    validate_entity_id(new_report_id, "Report.id")
+    if old_report_id == new_report_id:
+      return self.get_report(old_report_id)
+    existing = self.get_report(old_report_id)
+    if self._reports.get_report(new_report_id) is not None:
+      raise ValueError(f"Report {new_report_id!r} already exists")
+    now = self._clock.now_iso()
+    renamed_answers = [
+      ReportAnswer(
+        id=answer.id,
+        report_id=new_report_id,
+        values=answer.values,
+        status=answer.status,
+        acks=answer.acks,
+        modified_at=answer.modified_at,
+        created_at=answer.created_at,
+        report_title=answer.report_title,
+        field_labels=answer.field_labels,
+      )
+      for answer in existing.answers
+    ]
+    renamed = Report(
+      id=new_report_id,
+      title=existing.title,
+      body=existing.body,
+      fields=existing.fields,
+      status=existing.status,
+      answers=renamed_answers,
+      seen=existing.seen,
+      ack_seen=existing.ack_seen,
+      ack_seen_at=existing.ack_seen_at,
+      modified_at=now,
+      updated_at=existing.updated_at,
+      last_viewed_at=existing.last_viewed_at,
+      pinned=existing.pinned,
+    )
+    self._reports.rename_report_answers(old_report_id, new_report_id, now)
+    self._reports.save_report(renamed)
+    if hasattr(self._reports, "delete_report"):
+      self._reports.delete_report(old_report_id)
+    queue = self._tasks.list_tasks()
+    changed = False
+    for task in queue:
+      if old_report_id in task.report_ids:
+        task.report_ids = [
+          new_report_id if report_id == old_report_id else report_id
+          for report_id in task.report_ids
+        ]
+        task.modified_at = now
+        changed = True
+    if changed:
+      self._tasks.save_task_queue(queue)
+    return self.get_report(new_report_id)
+
+  @_transactional_task_write
   def remove_report(self, target: str) -> list[str]:
     """Dismiss one report by ID or all stale reports when target == '--stale'."""
     now = self._clock.now_iso()
@@ -688,17 +1344,23 @@ class ReportService:
       candidates = self.list_reports(stale_only=True)
       for rep in candidates:
         if rep.status != "dismissed":
-          rep.status = "dismissed"
-          rep.modified_at = now
-          self._reports.save_report(rep)
+          if hasattr(self._reports, "delete_report"):
+            self._reports.delete_report(rep.id)
+          else:
+            rep.status = "dismissed"
+            rep.modified_at = now
+            self._reports.save_report(rep)
           removed.append(rep.id)
     else:
       rep = self.get_report(target)
       if rep.latest_unacked_answer is not None:
         raise ValueError("Cannot remove a report with an unacknowledged answer")
-      rep.status = "dismissed"
-      rep.modified_at = now
-      self._reports.save_report(rep)
+      if hasattr(self._reports, "delete_report"):
+        self._reports.delete_report(rep.id)
+      else:
+        rep.status = "dismissed"
+        rep.modified_at = now
+        self._reports.save_report(rep)
       removed.append(rep.id)
 
     if removed:
@@ -739,28 +1401,6 @@ class ReportService:
       else:
         cleaned[field.id] = _validate_checkbox_value(field.id, field.options, val)
     return cleaned
-
-  def _append_answer_details_to_linked_tasks(
-    self, report: Report, cleaned_values: dict[str, Any], now: str
-  ) -> None:
-    lines = [
-      format_answer_for_task_detail(field, cleaned_values[field.id])
-      for field in report.fields
-      if field.id in cleaned_values
-    ]
-    if not lines:
-      return
-    queue = self._tasks.list_tasks()
-    changed = False
-    for task in queue:
-      if report.id in task.report_ids:
-        for line in lines:
-          if line not in task.details:
-            task.details.append(line)
-        task.modified_at = now
-        changed = True
-    if changed:
-      self._tasks.save_task_queue(queue)
 
 
 def _validate_choice_value(

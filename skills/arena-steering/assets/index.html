@@ -4,58 +4,55 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Arena Steering</title>
-  <link rel="preload" href="/Basel_Grotesk_Regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/Basel_Grotesk_Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/Basel_Grotesk_Medium.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/Basel_Grotesk_Bold.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/Basel_Grotesk_Mono_Regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="modulepreload" href="/timestamps.js">
-  <link rel="modulepreload" href="/markdown.js">
-  <link rel="modulepreload" href="/api.js">
-  <link rel="modulepreload" href="/state.js">
-  <link rel="modulepreload" href="/modal.js">
-  <link rel="modulepreload" href="/inbox-view.js">
-  <link rel="modulepreload" href="/tasks-view.js">
-  <link rel="modulepreload" href="/reports-view.js">
-  <link rel="modulepreload" href="/app.js">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="preload" href="/static/assets/Basel_Grotesk_Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/assets/Basel_Grotesk_Book.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/assets/Basel_Grotesk_Medium.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/assets/Basel_Grotesk_Bold.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/assets/Basel_Grotesk_Mono_Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="modulepreload" href="/static/assets/timestamps.js">
+  <link rel="modulepreload" href="/static/assets/markdown.js">
+  <link rel="modulepreload" href="/static/assets/api.js">
+  <link rel="modulepreload" href="/static/assets/state.js">
+  <link rel="modulepreload" href="/static/assets/modal.js">
+  <link rel="modulepreload" href="/static/assets/messages-view.js">
+  <link rel="modulepreload" href="/static/assets/tasks-view.js">
+  <link rel="modulepreload" href="/static/assets/reports-view.js">
+  <link rel="modulepreload" href="/static/assets/app.js">
+  <link rel="stylesheet" href="/static/assets/style.css">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="topbar-brand">
-        <span class="ico-svg" aria-hidden="true"><i class="dot live"></i></span>
-        <h1 class="brand-title">Arena Steering</h1>
-        <span class="meta-pill" id="version-pill">v2.0.0</span>
-      </div>
-
+      <h1 class="sr-only">Arena Steering</h1>
       <nav class="tab-nav" role="tablist" aria-label="Steering sections">
-        <button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-tab="inbox" id="tab-inbox">
-          Messages <span class="tab-badge" id="badge-inbox">0</span>
-        </button>
-        <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tasks" id="tab-tasks">
-          Tasks <span class="tab-badge" id="badge-tasks">0</span>
+        <button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-tab="messages" id="tab-messages">
+          Messages
         </button>
         <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="reports" id="tab-reports">
-          Reports <span class="tab-badge" id="badge-reports">0</span>
+          Reports <span id="report-needs-answer" role="img" aria-label="Reports need answers" title="Reports need answers" hidden><svg class="lucide lucide-circle-help report-picker-help-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg></span><span class="tab-pip" id="report-pip" role="img" aria-label="No unread reports" title="No unread reports" hidden></span>
+        </button>
+        <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tasks" id="tab-tasks">
+          Tasks
         </button>
       </nav>
-
-      <div class="topbar-actions">
-        <button type="button" class="icon-button" id="theme-toggle" aria-label="Switch to light mode" title="Switch to light mode">
-          <svg class="lucide lucide-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+      <div class="topbar-actions row tight">
+        <button id="agent-interrupt" aria-pressed="false" aria-busy="false" class="icon-button" type="button" aria-label="Ask the agent to read files missing from context" title="Ask the agent to read files missing from context">
+          <svg class="lucide lucide-flag" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"></path></svg>
         </button>
       </div>
     </header>
 
-    <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
-
     <main class="main-content" id="main-root" data-loading="false">
-      <section id="view-inbox" role="tabpanel" aria-labelledby="tab-inbox"></section>
+      <section id="view-messages" role="tabpanel" aria-labelledby="tab-messages"></section>
       <section id="view-tasks" role="tabpanel" aria-labelledby="tab-tasks" hidden></section>
       <section id="view-reports" role="tabpanel" aria-labelledby="tab-reports" hidden></section>
     </main>
   </div>
+
+  <dialog id="image-modal" class="image-modal" aria-label="Image viewer">
+    <button id="image-modal-close" class="icon-button image-modal-close" type="button" aria-label="Close image viewer">×</button>
+    <div id="image-modal-stage" class="image-modal-stage"></div>
+  </dialog>
 
   <dialog id="modal-shell" class="modal-shell" aria-labelledby="modal-title">
     <form method="dialog" class="modal-card">
@@ -78,6 +75,19 @@
     </div>
   </template>
 
-  <script type="module" src="/app.js"></script>
+  <template data-modal-template="survey-results">
+    <div data-slot="content" class="survey-modal-content"></div>
+    <div data-slot="actions">
+      <button id="survey-again" type="submit" value="bible-check" class="btn btn-secondary">
+        <svg class="lucide lucide-rotate-ccw" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+        Survey again
+      </button>
+      <button type="submit" value="cancel" class="btn btn-secondary">Close</button>
+    </div>
+  </template>
+
+  <script src="/static/assets/prism.min.js"></script>
+  <script src="/static/assets/mermaid.min.js"></script>
+  <script type="module" src="/static/assets/app.js"></script>
 </body>
 </html>

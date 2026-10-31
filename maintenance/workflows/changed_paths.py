@@ -130,7 +130,15 @@ MODULE_TESTS = {
     "tests/skills/arena-steering/test_store.py",
     "tests/skills/arena-steering/test_services.py",
     "tests/skills/arena-steering/test_server_cli.py",
+    "tests/skills/arena-steering/test_survey.py",
     "tests/skills/arena-steering/test_web_ui.py",
+    "tests/skills/arena-steering/test_demo_reset.py",
+    "tests/skills/arena-steering/test_connection_pip.py",
+    "tests/skills/arena-steering/test_composer_parity.py",
+    "tests/skills/arena-steering/test_message_scroll_fade.py",
+    "tests/skills/arena-steering/test_message_page_retry_persistence.py",
+    "tests/skills/arena-steering/test_report_answer_ui.py",
+    "tests/skills/arena-steering/test_pre.py",
   ),
   "Nemoizer": ("tests/skills/nemoizer/test_nemoize.py",),  # nonemo: NMO100
   "UI/UX": (
@@ -178,6 +186,7 @@ ARENA_RUNTIME_PATHS = tuple(
 MODULE_PATHS = {
   "Preview": (
     *ARENA_RUNTIME_PATHS,
+    "maintenance/demo-arena-steer.py",
     "tests/skills/arena-skill/test_*",
     "tests/skills/arena-skill/client.test.cjs",
     "tests/skills/arena-skill/mermaid.test.cjs",

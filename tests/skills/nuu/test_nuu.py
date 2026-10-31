@@ -45,18 +45,18 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
 
   before = {path: path.read_bytes() for path in (css, page)}
   findings = run("lint", expected=1)
-  assert {row["rule"] for row in findings["findings"]} >= {"NUL001", "NUL002", "NUL004"}
+  assert {row["rule"] for row in findings["findings"]} >= {"ACC001", "ACC002", "DOC001"}
   assert all(row["line"] > 0 and row["evidence"] for row in findings["findings"])
   page.write_text(
     '<img src="art.svg" alt=""><label>Field<input></label>\n', encoding="utf-8"
   )
-  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"NUL004"}
+  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"DOC001"}
   missing_doc_audit = run("audit", expected=1)
-  assert {row["rule"] for row in missing_doc_audit["findings"]} == {"NUL004"}
+  assert {row["rule"] for row in missing_doc_audit["findings"]} == {"DOC001"}
   nuu_toml = root / "nuu.toml"
   nuu_toml.write_text('[design]\npath = "specs/ui-design.md"\n', encoding="utf-8")
   custom_missing = run("lint", expected=1)["findings"]
-  assert len(custom_missing) == 1 and custom_missing[0]["rule"] == "NUL004"
+  assert len(custom_missing) == 1 and custom_missing[0]["rule"] == "DOC001"
   assert custom_missing[0]["evidence"] == "Missing specs/ui-design.md"
   custom_doc = root / "specs" / "ui-design.md"
   custom_doc.parent.mkdir(exist_ok=True)
@@ -70,24 +70,24 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   assert not run("lint")["findings"]
   page.write_text('<img src="art.svg"> <!-- nonuu: NUL0010 -->\n', encoding="utf-8")
   assert run("lint", expected=1)["findings"]
-  page.write_text('<img src="art.svg"> <!-- nonuu: NUL001 -->\n', encoding="utf-8")
+  page.write_text('<img src="art.svg"> <!-- nonuu: ACC001 -->\n', encoding="utf-8")
   suppressed_lint = run("lint")
   assert not suppressed_lint["findings"]
   assert suppressed_lint["suppressions"] and suppressed_lint["marks"]
-  assert suppressed_lint["suppressions"][0]["rule"] == "NUL001"
+  assert suppressed_lint["suppressions"][0]["rule"] == "ACC001"
   collected = run("collect", expected=3)
   assert collected["suppressions"] and collected["marks"]
-  assert collected["suppressions"][0]["rule"] == "NUL001"
+  assert collected["suppressions"][0]["rule"] == "ACC001"
   css.write_text(before[css].decode() + "button:focus {outline: none !important;}\n")
-  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"NUL003"}
+  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"ACC201"}
   css.write_text(
-    before[css].decode() + "button:focus {outline: none;} /* nonuu: NUL003 */\n"
+    before[css].decode() + "button:focus {outline: none;} /* nonuu: ACC201 */\n"
   )
   assert not run("lint")["findings"]
   css.write_text(before[css].decode() + "button:hover {padding: 12px 24px;}\n")
-  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"NUL005"}
+  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"ACC204"}
   css.write_text(
-    before[css].decode() + "button:hover {padding: 12px 24px;} /* nonuu: NUL005 */\n"
+    before[css].decode() + "button:hover {padding: 12px 24px;} /* nonuu: ACC204 */\n"
   )
   assert not run("lint")["findings"]
   css.write_bytes(before[css])
@@ -108,11 +108,20 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   assert icon_audit["icons"]["ladder"] == ["lucide", "simple-icons", "phosphor"]
   assert icon_audit["icons"]["counts"] == {"lucide": 1, "custom": 1}
   assert {row["rule"] for row in icon_audit["icons"]["findings"]} == {
-    "NUI001",
-    "NUI002",
-    "NUI003",
+    "ICN001",
+    "ICN002",
+    "ICN101",
   }
   assert all(row["blocking"] is False for row in icon_audit["icons"]["findings"])
+  icon_lint = run("lint", "-f", "0,0", "-t", "16,24", "-k", "8")
+  assert icon_lint["icons"]["counts"] == {"lucide": 1, "custom": 1}
+  assert {row["rule"] for row in icon_lint["icons"]["findings"]} == {
+    "ICN001",
+    "ICN002",
+    "ICN101",
+  }
+  assert icon_lint["tokens"]
+  assert icon_lint["ruler"]["on_scale"] is True
   css_icon = root / "select-icon.css"
   css_icon.write_text(
     "select { background-image: linear-gradient(to top right, transparent 38%, currentColor 38%); }\n"
@@ -123,11 +132,11 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   css_nui002 = [
     row
     for row in css_icon_audit["icons"]["findings"]
-    if row["rule"] == "NUI002" and row["path"].endswith("select-icon.css")
+    if row["rule"] == "ICN002" and row["path"].endswith("select-icon.css")
   ]
   assert len(css_nui002) == 2
   css_icon.unlink()
-  page.write_text('<img src="art.svg"> <!-- nonuu: NUL001 -->\n', encoding="utf-8")
+  page.write_text('<img src="art.svg"> <!-- nonuu: ACC001 -->\n', encoding="utf-8")
   before[page] = page.read_bytes()
   manifest = tmp_path / "assets.json"
   asset = root / "art.svg"
@@ -199,6 +208,20 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
     check=False,
   )
   assert check_proc.returncode == 0
+  audit_measured = run("audit", "-M", str(measured))
+  assert audit_measured["rendered"]["status"] == "checked"
+  assert not audit_measured["findings"]
+  assert (
+    run(
+      "search",
+      "-f",
+      "https://example.com/art.svg",
+      "-d",
+      "new.svg",
+      expected=2,
+    )["status"]
+    == "error"
+  )
   ruler_proc = subprocess.run(
     [sys.executable, str(SCRIPT), "ruler", "-f", "0,0", "-t", "16,24", "-k", "8"],
     cwd=tmp_path,
@@ -406,7 +429,7 @@ byId('retry').addEventListener('click',submit);
         < shift_step["dimensionShift"]["after"]["width"]
       )
       assert any(
-        row["rule"] == "NUA309" and row.get("selector") == "#shift"
+        row["rule"] == "ACC205" and row.get("selector") == "#shift"
         for row in report["findings"]
       )
       assert captures[0]["measurements"]["active"]["id"] == flow[-1][
@@ -444,7 +467,7 @@ byId('retry').addEventListener('click',submit);
       assert list_data["list_style_position"] == "outside"
       assert len(list_data["items"][0]["line_starts"]) >= 2
       assert not any(
-        finding.startswith("NUM211 ")
+        finding.startswith("TYP203 ")
         for finding in measure.check(
           {"elements": [list_elements["#list"]]},
           measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8")),
@@ -453,7 +476,7 @@ byId('retry').addEventListener('click',submit);
       clipped = list_elements["#clip"]
       assert clipped["scroll_width"] > clipped["client_width"]
       assert any(
-        row["rule"] == "NUM209"
+        row["rule"] == "SPC204"
         for row in measure.check_density({"elements": [clipped]})
       )
       overlap_page = project / "overlap.html"
@@ -489,10 +512,10 @@ byId('retry').addEventListener('click',submit);
       assert all(
         "#far" not in (row["first"], row["second"]) for row in overlap_data["pairs"]
       )
-      assert any(row["rule"] == "NUM210" for row in overlap_report["findings"])
+      assert any(row["rule"] == "SPC205" for row in overlap_report["findings"])
       house = run("inspect", "--profile", "house", expected=1)
       assert any(row["house_measurements"] for row in house["captures"])
-      assert any(row["rule"] == "NUM201" for row in house["findings"])
+      assert any(row["rule"] == "SPC001" for row in house["findings"])
       live = run("live", "--edit", str(edit_file), "--authorize-edit")
       edit = live["captures"][0]["edit"]
       assert (
@@ -708,8 +731,8 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
   driver_src = driver.read_text(encoding="utf-8")
   assert "hasTouch: touch" in driver_src and "isMobile: touch" in driver_src
   assert "height <= 480" in driver_src
-  assert "NUA307" in driver_src
-  assert "NUA308" in driver_src
+  assert "ACC202" in driver_src
+  assert "ACC203" in driver_src
   bad_ready = subprocess.run(
     ["node", str(driver)],
     input=json.dumps(
@@ -763,17 +786,17 @@ module.exports = {
           }),
           evaluate: async fn => {
             const src = String(fn);
-            if (src.includes('NUA301')) {
+            if (src.includes('ACC003')) {
               if (process.env.FAKE_A11Y_MODE === 'clean') return { status: 'checked', findings: [] };
               return {
                 status: 'checked',
                 findings: [
-                  { rule: 'NUA301', severity: 'review', criterion: '4.1.2', evidence: 'unlabeled' },
-                  { rule: 'NUA302', severity: 'review', criterion: '1.3.1', evidence: 'missing ref' },
-                  { rule: 'NUA303', severity: 'review', criterion: '4.1.2', evidence: 'nested' },
-                  { rule: 'NUA304', severity: 'review', criterion: '4.1.1', evidence: 'duplicate id' },
-                  { rule: 'NUA305', severity: 'review', criterion: '1.3.1', evidence: 'skipped h' },
-                  { rule: 'NUA306', severity: 'review', criterion: '1.4.3', evidence: 'contrast' },
+                  { rule: 'ACC003', severity: 'review', criterion: '4.1.2', evidence: 'unlabeled' },
+                  { rule: 'ACC004', severity: 'review', criterion: '1.3.1', evidence: 'missing ref' },
+                  { rule: 'ACC005', severity: 'review', criterion: '4.1.2', evidence: 'nested' },
+                  { rule: 'ACC006', severity: 'review', criterion: '4.1.1', evidence: 'duplicate id' },
+                  { rule: 'ACC007', severity: 'review', criterion: '1.3.1', evidence: 'skipped h' },
+                  { rule: 'ACC101', severity: 'review', criterion: '1.4.3', evidence: 'contrast' },
                 ],
               };
             }
@@ -837,19 +860,19 @@ module.exports = {
     {**base_req, "ready": "#missing-ready"}, mode="clean"
   )
   assert code_timeout == 0 and ready_timeout["status"] == "findings"
-  assert {row["rule"] for row in ready_timeout["findings"]} == {"NUB104"}
+  assert {row["rule"] for row in ready_timeout["findings"]} == {"RUN102"}
 
   code_a11y, a11y_bad = run_driver(
     {**base_req, "command": "a11y", "a11y": True}, mode="findings"
   )
   assert code_a11y == 0 and a11y_bad["status"] == "findings"
   assert {row["rule"] for row in a11y_bad["findings"]} == {
-    "NUA301",
-    "NUA302",
-    "NUA303",
-    "NUA304",
-    "NUA305",
-    "NUA306",
+    "ACC003",
+    "ACC004",
+    "ACC005",
+    "ACC006",
+    "ACC007",
+    "ACC101",
   }
 
   code_clean, a11y_clean = run_driver(
@@ -905,7 +928,7 @@ module.exports = {
     }
   )
   assert len(main_sparse) == 1
-  assert main_sparse[0]["rule"] == "NUM205"
+  assert main_sparse[0]["rule"] == "SPC201"
   assert "< 0.40" in main_sparse[0]["evidence"]
   for narrow_w in (855, 411):
     assert (
@@ -967,10 +990,10 @@ module.exports = {
   }
   density_findings = measure.check_density(density_report)
   assert [row["rule"] for row in density_findings] == [
-    "NUM205",
-    "NUM206",
-    "NUM207",
-    "NUM208",
+    "SPC201",
+    "SPC202",
+    "SPC203",
+    "HRC102",
   ]
   assert density_findings[0]["selector"] == ".step-row"
   density_file = tmp_path / "density-report.json"
@@ -1001,7 +1024,7 @@ module.exports = {
     ],
   }
   co_findings = measure.check_density(clip_overlap_report)
-  assert [row["rule"] for row in co_findings] == ["NUM209", "NUM210"]
+  assert [row["rule"] for row in co_findings] == ["SPC204", "SPC205"]
 
   font_proj = tmp_path / "FontProject"
   font_proj.mkdir()
@@ -1527,7 +1550,7 @@ def test_design_boards_and_html_typography(tmp_path):
     }
   )
   assert len(bounded_findings) == 1
-  assert bounded_findings[0]["rule"] == "NUM207"
+  assert bounded_findings[0]["rule"] == "SPC203"
   assert bounded_findings[0]["bounds"] == {
     "x": 16.0,
     "y": 95.0,
@@ -1568,7 +1591,7 @@ def test_design_boards_and_html_typography(tmp_path):
     }
   )
   assert len(slack_findings) == 1
-  assert slack_findings[0]["rule"] == "NUM207"
+  assert slack_findings[0]["rule"] == "SPC203"
   assert "400 px" in slack_findings[0]["evidence"]
   assert (
     measure.check_density(
@@ -1651,7 +1674,7 @@ def test_design_boards_and_html_typography(tmp_path):
     encoding="utf-8",
   )
   ts_res = nuu.lint(ts_proj)
-  ts_findings = [row for row in ts_res["findings"] if row["rule"] == "NUL006"]
+  ts_findings = [row for row in ts_res["findings"] if row["rule"] == "HRC201"]
   assert len(ts_findings) == 4
   (ts_proj / "index.html").write_text(
     "<div><span>5min ago</span><code>2026-10-26T02:20:06</code></div>\n",
@@ -1681,11 +1704,11 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     encoding="utf-8",
   )
   bad_lint = nuu.lint(project)
-  assert any(row["rule"] == "NUL007" for row in bad_lint["findings"])
+  assert any(row["rule"] == "TYP202" for row in bad_lint["findings"])
   css.write_text("ul#list { list-style-type: disc; }\n", encoding="utf-8")
   unreset_lint = nuu.lint(project)
   assert any(
-    row["rule"] == "NUL007" and "lacks --indent" in row["evidence"]
+    row["rule"] == "TYP202" and "lacks --indent" in row["evidence"]
     for row in unreset_lint["findings"]
   )
   css.write_text(
@@ -1694,8 +1717,8 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     encoding="utf-8",
   )
   assert nuu.lint(project)["findings"] == []
-  assert "NUL007" in nuu.KNOWN_NUU_RULES
-  assert "NUM211" in nuu.KNOWN_NUU_RULES
+  assert "TYP202" in nuu.KNOWN_NUU_RULES
+  assert "TYP203" in nuu.KNOWN_NUU_RULES
 
   tokens = measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8"))
   list_report = {
@@ -1724,7 +1747,7 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
   misaligned = json.loads(json.dumps(list_report))
   misaligned["elements"][0]["list_indent"]["items"][0]["line_starts"] = [100, 106]
   assert any(
-    finding.startswith("NUM211 ") for finding in measure.check(misaligned, tokens)
+    finding.startswith("TYP203 ") for finding in measure.check(misaligned, tokens)
   )
   unverified = {
     "elements": [{"selector": "ul#list", "values": {"padding-inline-start": "18px"}}]
@@ -1746,7 +1769,7 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
       ]
     }
   )
-  assert any(finding["rule"] == "NUM209" for finding in clipping_findings)
+  assert any(finding["rule"] == "SPC204" for finding in clipping_findings)
 
   overlap_findings = measure.check_density(
     {
@@ -1757,7 +1780,7 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
       },
     }
   )
-  assert [finding["rule"] for finding in overlap_findings] == ["NUM210"]
+  assert [finding["rule"] for finding in overlap_findings] == ["SPC205"]
 
   tokens = measure.parse_sheet(
     (SCRIPT.parent.parent / "references" / "style.css").read_text(encoding="utf-8")
@@ -1769,7 +1792,7 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
         {
           "selector": "h2",
           "tag": "h2",
-          "values": {"font-size": "20px", "line-height": "24px"},
+          "values": {"font-size": "24px", "line-height": "28.8px"},
         },
         {
           "selector": "p",
@@ -1799,7 +1822,7 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     },
     tokens,
   )
-  assert len([f for f in lh_bad if f.startswith("NUM212 ")]) == 2
+  assert len([f for f in lh_bad if f.startswith("TYP101 ")]) == 2
   ls_ok = measure.check(
     {
       "width": 1280,
@@ -1837,7 +1860,7 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     },
     tokens,
   )
-  assert len([f for f in ls_bad if f.startswith("NUM213 ")]) == 2
+  assert len([f for f in ls_bad if f.startswith("TYP102 ")]) == 2
   align_ok = measure.check(
     {
       "width": 1280,
@@ -1875,11 +1898,17 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
           "line_count": 3,
           "values": {"text-align": "justify"},
         },
+        {
+          "selector": "h2.card-title",
+          "tag": "h2",
+          "heading_body_alignment": {"heading_align": "center", "body_align": "start"},
+          "values": {"text-align": "center"},
+        },
       ],
     },
     tokens,
   )
-  assert len([f for f in align_bad if f.startswith("NUM214 ")]) == 2
+  assert len([f for f in align_bad if f.startswith("TYP103 ")]) == 3
   width_ok = measure.check(
     {
       "width": 1280,
@@ -1927,7 +1956,7 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     },
     tokens,
   )
-  assert len([f for f in width_bad if f.startswith("NUM215 ")]) == 2
+  assert len([f for f in width_bad if f.startswith("TYP201 ")]) == 2
   hier_ok = measure.check(
     {
       "width": 1280,
@@ -1935,7 +1964,13 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
         {
           "selector": "section.card",
           "tag": "section",
-          "card_font_sizes": ["16px", "14px", "12px"],
+          "card_font_sizes": ["18px", "14px"],
+          "heading_hierarchy": {
+            "heading_size": 18.0,
+            "heading_weight": 600.0,
+            "sub_size": 14.0,
+            "sub_weight": 400.0,
+          },
           "values": {},
         }
       ],
@@ -1950,14 +1985,25 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
         {
           "selector": "dialog#settings",
           "tag": "dialog",
-          "card_font_sizes": ["20px", "16px", "14px", "12px"],
+          "card_font_sizes": ["18px", "16px", "14px"],
           "values": {},
-        }
+        },
+        {
+          "selector": "section.card-flat",
+          "tag": "section",
+          "heading_hierarchy": {
+            "heading_size": 14.0,
+            "heading_weight": 400.0,
+            "sub_size": 14.0,
+            "sub_weight": 400.0,
+          },
+          "values": {},
+        },
       ],
     },
     tokens,
   )
-  assert len([f for f in hier_bad if f.startswith("NUM216 ")]) == 1
+  assert len([f for f in hier_bad if f.startswith("HRC101 ")]) == 2
   prox_ok = measure.check(
     {
       "width": 1280,
@@ -1982,12 +2028,18 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
           "tag": "form",
           "group_proximity": {"inter_px": 8.0, "intra_px": 8.0},
           "values": {"gap": "8px"},
-        }
+        },
+        {
+          "selector": "section.card",
+          "tag": "section",
+          "group_proximity": {"inter_px": 0.0, "intra_px": 8.0},
+          "values": {},
+        },
       ],
     },
     tokens,
   )
-  assert len([f for f in prox_bad if f.startswith("NUM217 ")]) == 1
+  assert len([f for f in prox_bad if f.startswith("SPC101 ")]) == 2
   core_ok = measure.check(
     {
       "width": 1280,
@@ -1996,7 +2048,12 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
           "selector": "section.card",
           "tag": "section",
           "card_inline_insets": [16.0, 16.0, 16.0],
-          "values": {"font-family": "system-ui, sans-serif", "text-transform": "none"},
+          "values": {
+            "font-family": "system-ui, sans-serif",
+            "text-transform": "none",
+            "padding-left": "16px",
+            "padding-right": "16px",
+          },
         },
         {
           "selector": "span.eyebrow",
@@ -2016,13 +2073,27 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
           "selector": "section.card",
           "tag": "section",
           "card_inline_insets": [16.0, 28.0],
-          "values": {"font-family": "Papyrus, fantasy", "text-transform": "uppercase"},
-        }
+          "button_fill_colors": ["rgb(43, 83, 214)", "rgb(28, 122, 63)"],
+          "values": {
+            "font-family": "Papyrus, fantasy",
+            "text-transform": "uppercase",
+            "padding-left": "32px",
+            "padding-right": "16px",
+          },
+        },
+        {
+          "selector": "p.body",
+          "tag": "p",
+          "values": {"font-style": "italic"},
+        },
       ],
     },
     tokens,
   )
-  assert len([f for f in core_bad if f.startswith("NUM218 ")]) == 3
+  assert (
+    len([f for f in core_bad if f.startswith(("SPC102 ", "TYP002 ", "TYP003 "))]) == 5
+  )
+  assert len([f for f in core_bad if f.startswith("HRC001 ")]) == 1
 
   lint_proj = tmp_path / "nul008_proj"
   (lint_proj / "docs").mkdir(parents=True)
@@ -2044,7 +2115,7 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     check=False,
   )
   lint_payload = json.loads(lint_res.stdout)
-  nul008 = [f for f in lint_payload["findings"] if f["rule"] == "NUL008"]
+  nul008 = [f for f in lint_payload["findings"] if f["rule"] == "HRC001"]
   assert len(nul008) == 2
   assert all(Path(f["path"]).name == "bad.html" for f in nul008)
 
@@ -2073,3 +2144,159 @@ def test_house_style_amendments_stay_synced():
     assert "animation: none" in live_dot
     ranges = (root / "references/recipes/range-sliders.md").read_text(encoding="utf-8")
     assert "at most 11 major-division ticks" in ranges
+
+
+def test_num208_button_group_equal_size():
+  ragged_report = {
+    "width": 1280,
+    "elements": [
+      {
+        "selector": ".tab-nav",
+        "tag": "nav",
+        "role": "tablist",
+        "toolbar_exempt": True,
+        "bounds": {"x": 0, "y": 0, "width": 300, "height": 32},
+        "button_group_sizes": [
+          {"width": 99, "height": 32},
+          {"width": 84, "height": 32},
+          {"width": 68, "height": 32},
+        ],
+      }
+    ],
+  }
+  findings = measure.check_density(ragged_report)
+  assert [row["rule"] for row in findings] == ["HRC102"]
+  assert "buttons in group do not share identical size" in findings[0]["evidence"]
+
+  equal_report = {
+    "width": 1280,
+    "elements": [
+      {
+        "selector": ".tab-nav",
+        "tag": "nav",
+        "role": "tablist",
+        "toolbar_exempt": True,
+        "bounds": {"x": 0, "y": 0, "width": 300, "height": 32},
+        "button_group_sizes": [
+          {"width": 99, "height": 32},
+          {"width": 99, "height": 32},
+          {"width": 99, "height": 32},
+        ],
+      }
+    ],
+  }
+  assert measure.check_density(equal_report) == []
+
+
+def test_measure_review_severity_and_heading_boundary(tmp_path):
+  report = tmp_path / "measured.json"
+  report.write_text(
+    json.dumps(
+      {
+        "width": 1280,
+        "elements": [
+          {
+            "selector": "h1",
+            "tag": "h1",
+            "values": {
+              "font-size": "32px",
+              "line-height": "48px",
+              "letter-spacing": "-0.96px",
+            },
+          },
+          {
+            "selector": "article.prose",
+            "tag": "article",
+            "ch_px": 8,
+            "bounds": {"width": 320},
+            "values": {},
+          },
+        ],
+      }
+    ),
+    encoding="utf-8",
+  )
+
+  def run(*args):
+    return subprocess.run(
+      [sys.executable, str(SCRIPT), *args],
+      cwd=tmp_path,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+
+  review = run("check", str(report))
+  assert review.returncode == 0
+  assert (
+    "TYP101" in review.stdout
+    and "TYP201" in review.stdout
+    and "TYP102" not in review.stdout
+  )
+  (tmp_path / "docs").mkdir()
+  (tmp_path / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
+  audit = run("audit", "--project", str(tmp_path), "--measured", str(report))
+  assert audit.returncode == 0, audit.stdout
+  findings = json.loads(audit.stdout)["findings"]
+  assert {row["rule"] for row in findings} == {"TYP101", "TYP201"}
+  assert all(row["severity"] == "review" for row in findings)
+  (tmp_path / "nuu.toml").write_text(
+    '[checks.severity]\nTYP101 = "error"\n', encoding="utf-8"
+  )
+  strict = run("check", str(report))
+  assert strict.returncode == 1 and "TYP101" in strict.stdout
+  strict_audit = run("audit", "--project", str(tmp_path), "--measured", str(report))
+  assert strict_audit.returncode == 1
+  assert any(
+    row["severity"] == "error" for row in json.loads(strict_audit.stdout)["findings"]
+  )
+  (tmp_path / "nuu.toml").write_text(
+    '[checks.severity]\nTYP101 = "ignore"\n', encoding="utf-8"
+  )
+  invalid = run("check", str(report))
+  assert invalid.returncode == 2
+  (tmp_path / "nuu.toml").write_text(
+    '[checks.severity]\nTYP201 = "error"\n', encoding="utf-8"
+  )
+  assert run("check", str(report)).returncode == 1
+
+
+def test_study_ramp_and_contextual_prose_width():
+  import sys
+
+  sys.path.insert(0, str(SCRIPT.parent))
+  import measure
+
+  sheet = measure.parse_sheet(
+    (SCRIPT.parent.parent / "references" / "style.css").read_text(encoding="utf-8")
+  )
+  assert measure.named_sizes(sheet, ramp=True) == {11, 12, 14, 16, 18, 22, 24, 28, 32}
+  findings = measure.check(
+    {
+      "width": 1280,
+      "elements": [
+        {"selector": ".title", "values": {"font-size": "20px", "font-weight": "800"}}
+      ],
+    },
+    sheet,
+  )
+  assert sum(f.startswith("TYP001 ") for f in findings) == 2
+  assert measure.off_scale("font-size", "20px", sheet, 4)
+  assert not measure.off_scale("font-size", "24px", sheet, 4)
+  assert measure.off_scale("border-radius", "8px", sheet, 4)
+  assert measure.off_scale("gap", "6px", sheet, 4)
+  assert not measure.off_scale("gap", "8px", sheet, 4)
+  assert measure.off_scale("gap", "12px", sheet, 8)
+  prose = {
+    "selector": ".prose",
+    "tag": "p",
+    "line_count": 2,
+    "ch_px": 8,
+    "bounds": {"width": 240},
+    "values": {"max-width": "30ch"},
+  }
+  assert measure._body_width_finding(prose, 1280).startswith("TYP201")
+  assert measure._body_width_finding({**prose, "in_card_or_dialog": True}, 1280) is None
+  assert measure._body_width_finding(
+    {**prose, "in_card_or_dialog": True, "values": {"max-width": "80ch"}}, 1280
+  ).startswith("TYP201")

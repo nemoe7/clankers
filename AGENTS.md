@@ -24,7 +24,7 @@
 - Use a Conventional Commit subject, no body.
 - Stage only task-related files; leave unrelated and user-owned files unstaged.
 - Keep one dated entry per date in `docs/CHANGELOG.md` for `rules/`, `automations/`, `system-prompts/`, and `maintenance/`, extending it while the date holds.
-- Use dates as versions in `docs/CHANGELOG.md` (`## YYYY-MM-DD`, with no bracket and no repeated date), and use SemVer headings in each module's `docs/**/CHANGELOG.md`.
+- Use dates as versions in `docs/CHANGELOG.md` (`## YYYY-MM-DD`, with no bracket and no repeated date), following `docs/archive/CHANGELOG.md`, and use SemVer headings without dates (`## [X.Y.Z]`) in every module changelog, anywhere it lives.
 - Group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain.
 - Omit Unreleased.
 - Omit version numbers from `docs/CHANGELOG.md` entries.

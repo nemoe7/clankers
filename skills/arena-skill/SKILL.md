@@ -91,7 +91,7 @@ If the preview is not visible, acknowledge a delivered note in chat with literal
 
 - On any format-violation, bash-violation, or session summary: read ARENA.md, root AGENTS.md, and this SKILL.md in full via read_file BEFORE any other tool call (plus nested AGENTS.md via `arena-preview agents <path>` when working in their directory); ack violations with ONLY file:ln: clause (single line, no prose/ranges).
 
-ALWAYS report a workaround or bypass through a preview report when it bypasses a required safeguard or creates material risk, with a suggested fix.
+ALWAYS report any workaround, safeguard bypass, or uncontracted shipped change through a preview report with a suggested fix.
 
 ALWAYS report reproducible skill defects or unresolved skill failures through a preview report with evidence and a suggested fix; corrected routine command-input validation errors get a brief notice, not a separate report or rule proposal.
 

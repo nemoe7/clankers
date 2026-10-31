@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -11,7 +13,7 @@ ENTITY_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 MESSAGE_STATUSES = ("sent", "seen", "acked")
 TASK_TYPES = ("report", "code", "docs", "ops", "misc")
-TASK_STATUSES = ("upcoming", "in_progress", "blocked", "finished")
+TASK_STATUSES = ("upcoming", "finished")
 REPORT_STATUSES = ("published", "answered", "dismissed")
 REPORT_FIELD_TYPES = ("choice", "checkbox", "text")
 
@@ -114,9 +116,13 @@ class Message:
   hidden: bool = False
   blocking: bool = True
   attachments: list[Attachment] = field(default_factory=list)
+  parent_ids: list[str] = field(default_factory=list)
   status: str = "sent"
   acks: list[str] = field(default_factory=list)
+  replies_seen: bool = False
   modified_at: str = ""
+  type: str = "message"
+  answer_data: dict[str, Any] = field(default_factory=dict)
 
   def __post_init__(self) -> None:
     validate_hex_id(self.id, "Message.id")
@@ -130,12 +136,81 @@ class Message:
       item if isinstance(item, Attachment) else Attachment.from_dict(item)
       for item in self.attachments
     ]
+    if not isinstance(self.parent_ids, list):
+      raise TypeError("Message.parent_ids must be a list of message IDs")
+    cleaned_parent_ids: list[str] = []
+    for parent_id in self.parent_ids:
+      validate_hex_id(parent_id, "Message.parent_ids")
+      if parent_id not in cleaned_parent_ids:
+        cleaned_parent_ids.append(parent_id)
+    if self.id in cleaned_parent_ids:
+      raise ValueError("Message cannot reply to itself")
+    self.parent_ids = cleaned_parent_ids
     if not isinstance(self.acks, list) or any(
       not isinstance(ack, str) or not ack.strip() for ack in self.acks
     ):
       raise ValueError("Message.acks must be a list of non-empty Markdown strings")
     self.acks = list(self.acks)
     self.modified_at = str(self.modified_at or "")
+    if self.type not in {"message", "report_answer"}:
+      raise ValueError(f"Invalid Message.type: {self.type!r}")
+    if not isinstance(self.answer_data, dict):
+      raise TypeError("Message.answer_data must be a dictionary")
+    self.answer_data = dict(self.answer_data)
+    if self.type == "report_answer":
+      if not self.hidden:
+        raise ValueError("A report-answer message must be hidden")
+      self.as_report_answer()
+
+  def as_report_answer(self) -> ReportAnswer:
+    """Project a typed answer from this message's authoritative status and replies."""
+    if self.type != "report_answer":
+      raise ValueError("Message is not a report answer")
+    return ReportAnswer(
+      id=self.id,
+      report_id=str(self.answer_data.get("report_id", "")),
+      values=dict(self.answer_data.get("values", {})),
+      report_title=str(self.answer_data.get("report_title", "")),
+      field_labels=dict(self.answer_data.get("field_labels", {})),
+      created_at=str(self.answer_data.get("created_at", "")),
+      status=self.status,
+      acks=list(self.acks),
+      modified_at=self.modified_at,
+    )
+
+  @classmethod
+  def from_report_answer(cls, answer: ReportAnswer) -> Message:
+    """Create the hidden inbox record for a report answer."""
+    lines = [f"Answer to report {answer.report_id} ({answer.report_title})"]
+    for key, value in answer.values.items():
+      label = answer.field_labels.get(key, key)
+      text = (
+        ", ".join(str(item) for item in value)
+        if isinstance(value, list)
+        else str(value)
+      )
+      lines.append(f"{label}: {text}")
+    return cls(
+      id=answer.id,
+      body="\n".join(lines),
+      hidden=True,
+      type="report_answer",
+      answer_data={
+        "report_id": answer.report_id,
+        "report_title": answer.report_title,
+        "values": dict(answer.values),
+        "field_labels": dict(answer.field_labels),
+        "created_at": answer.created_at,
+      },
+      status=answer.status,
+      acks=list(answer.acks),
+      modified_at=answer.modified_at,
+    )
+
+  @property
+  def replies_revision(self) -> str:
+    """Digest the reply list for conditional seen updates."""
+    return hashlib.sha256(json.dumps(self.acks).encode("utf-8")).hexdigest()
 
   @property
   def requires_ack(self) -> bool:
@@ -156,9 +231,14 @@ class Message:
       "hidden": self.hidden,
       "blocking": self.blocking,
       "attachments": [item.to_dict() for item in self.attachments],
+      "parent_ids": list(self.parent_ids),
       "status": self.status,
       "acks": list(self.acks),
+      "replies_seen": self.replies_seen,
+      "replies_revision": self.replies_revision,
       "modified_at": self.modified_at,
+      "type": self.type,
+      "answer_data": dict(self.answer_data),
     }
 
   @classmethod
@@ -169,54 +249,151 @@ class Message:
       hidden=bool(data.get("hidden", False)),
       blocking=bool(data.get("blocking", True)),
       attachments=[Attachment.from_dict(raw) for raw in data.get("attachments", [])],
+      parent_ids=[str(item) for item in data.get("parent_ids", [])],
       status=str(data.get("status", "sent")),
       acks=[str(item) for item in data.get("acks", [])],
+      replies_seen=bool(data.get("replies_seen", False)),
       modified_at=str(data.get("modified_at", "")),
+      type=str(data.get("type", "message")),
+      answer_data=dict(data.get("answer_data", {})),
     )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, init=False)
 class Task:
-  """Mutable-queue task item with dependency and report links."""
+  """Mutable-queue task item with unified links (msg_ids, report_ids, task_ids)."""
 
   id: str
   title: str
-  type: str = "code"
-  status: str = "upcoming"
-  scope: str = ""
-  details: list[str] = field(default_factory=list)
-  msg_ids: list[str] = field(default_factory=list)
-  report_ids: list[str] = field(default_factory=list)
-  deps: list[str] = field(default_factory=list)
-  modified_at: str = ""
+  type: str
+  status: str
+  scope: str
+  details: list[str]
+  links: dict[str, list[str]]
+  modified_at: str
 
-  def __post_init__(self) -> None:
-    validate_entity_id(self.id, "Task.id")
-    if not isinstance(self.title, str) or not self.title.strip():
+  def __init__(
+    self,
+    id: str,
+    title: str,
+    type: str = "code",
+    status: str = "upcoming",
+    scope: str = "",
+    details: list[str] | None = None,
+    links: dict[str, list[str]] | None = None,
+    *,
+    msg_ids: list[str] | None = None,
+    report_ids: list[str] | None = None,
+    task_ids: list[str] | None = None,
+    deps: list[str] | None = None,
+    gate_names: list[str] | None = None,
+    modified_at: str = "",
+    allow_long_details: bool = False,
+  ) -> None:
+    validate_entity_id(id, "Task.id")
+    if not isinstance(title, str) or not title.strip():
       raise ValueError("Task.title must be a non-empty string")
-    self.title = self.title.strip()
-    if self.type not in TASK_TYPES:
-      raise ValueError(f"Invalid Task.type: {self.type!r}")
-    if self.status not in TASK_STATUSES:
-      raise ValueError(f"Invalid Task.status: {self.status!r}")
-    self.scope = str(self.scope or "").strip()
+    self.id = id
+    self.title = title.strip()
+    if type not in TASK_TYPES:
+      raise ValueError(f"Invalid Task.type: {type!r}")
+    self.type = type
+    if status not in TASK_STATUSES:
+      raise ValueError(f"Invalid Task.status: {status!r}")
+    self.status = status
+    self.scope = str(scope or "").strip()
     cleaned_details: list[str] = []
-    for line in self.details:
+    for line in details or []:
       if not isinstance(line, str) or not line.strip():
         raise ValueError("Task detail line must be a non-empty string")
       text = line.strip()
-      if len(text) > TASK_DETAIL_MAX_LEN:
+      if len(text) > TASK_DETAIL_MAX_LEN and not allow_long_details:
         raise ValueError(
           f"Task detail exceeds {TASK_DETAIL_MAX_LEN} characters ({len(text)}): {text!r}"
         )
       cleaned_details.append(text)
-    self.details = cleaned_details
-    self.msg_ids = _dedupe_strings(self.msg_ids)
-    self.report_ids = _dedupe_strings(self.report_ids)
-    self.deps = _dedupe_strings(self.deps)
-    if self.id in self.deps:
+    self.details = _dedupe_strings(cleaned_details)
+
+    raw_links = dict(links) if isinstance(links, dict) else {}
+    resolved_msgs = (
+      msg_ids
+      if msg_ids is not None
+      else raw_links.get("msg_ids", raw_links.get("msg_id", []))
+    )
+    resolved_reports = (
+      report_ids
+      if report_ids is not None
+      else raw_links.get("report_ids", raw_links.get("report_id", []))
+    )
+    resolved_tasks = (
+      task_ids
+      if task_ids is not None
+      else (
+        deps
+        if deps is not None
+        else raw_links.get(
+          "task_ids", raw_links.get("task_id", raw_links.get("deps", []))
+        )
+      )
+    )
+    cleaned_msgs = _dedupe_strings([str(x) for x in (resolved_msgs or [])])
+    cleaned_reports = _dedupe_strings([str(x) for x in (resolved_reports or [])])
+    cleaned_tasks = _dedupe_strings([str(x) for x in (resolved_tasks or [])])
+    resolved_gates = (
+      gate_names if gate_names is not None else raw_links.get("gate_names", [])
+    )
+    cleaned_gates = _dedupe_strings([str(x) for x in (resolved_gates or [])])
+    for gate in cleaned_gates:
+      if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", gate):
+        raise ValueError(f"Invalid gate name: {gate!r}")
+    if self.id in cleaned_tasks:
       raise ValueError(f"Task {self.id!r} cannot depend on itself")
-    self.modified_at = str(self.modified_at or "")
+    self.links = {
+      "msg_ids": cleaned_msgs,
+      "report_ids": cleaned_reports,
+      "task_ids": cleaned_tasks,
+      "gate_names": cleaned_gates,
+    }
+    self.modified_at = str(modified_at or "")
+
+  @property
+  def msg_ids(self) -> list[str]:
+    return self.links["msg_ids"]
+
+  @msg_ids.setter
+  def msg_ids(self, value: list[str]) -> None:
+    self.links["msg_ids"] = _dedupe_strings([str(x) for x in value])
+
+  @property
+  def report_ids(self) -> list[str]:
+    return self.links["report_ids"]
+
+  @report_ids.setter
+  def report_ids(self, value: list[str]) -> None:
+    self.links["report_ids"] = _dedupe_strings([str(x) for x in value])
+
+  @property
+  def task_ids(self) -> list[str]:
+    return self.links["task_ids"]
+
+  @task_ids.setter
+  def task_ids(self, value: list[str]) -> None:
+    cleaned = _dedupe_strings([str(x) for x in value])
+    if self.id in cleaned:
+      raise ValueError(f"Task {self.id!r} cannot depend on itself")
+    self.links["task_ids"] = cleaned
+
+  @property
+  def gate_names(self) -> list[str]:
+    return self.links["gate_names"]
+
+  @property
+  def deps(self) -> list[str]:
+    return self.links["task_ids"]
+
+  @deps.setter
+  def deps(self, value: list[str]) -> None:
+    self.task_ids = value
 
   def to_dict(self, *, blocked: bool | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {
@@ -226,9 +403,12 @@ class Task:
       "status": self.status,
       "scope": self.scope,
       "details": list(self.details),
-      "msg_ids": list(self.msg_ids),
-      "report_ids": list(self.report_ids),
-      "deps": list(self.deps),
+      "links": {
+        "msg_ids": list(self.msg_ids),
+        "report_ids": list(self.report_ids),
+        "task_ids": list(self.task_ids),
+        "gate_names": list(self.gate_names),
+      },
       "modified_at": self.modified_at,
     }
     if blocked is not None:
@@ -237,6 +417,7 @@ class Task:
 
   @classmethod
   def from_dict(cls, data: dict[str, Any]) -> Task:
+    raw_links = data.get("links")
     return cls(
       id=str(data["id"]),
       title=str(data["title"]),
@@ -244,10 +425,20 @@ class Task:
       status=str(data.get("status", "upcoming")),
       scope=str(data.get("scope", "")),
       details=[str(item) for item in data.get("details", [])],
-      msg_ids=[str(item) for item in data.get("msg_ids", [])],
-      report_ids=[str(item) for item in data.get("report_ids", [])],
-      deps=[str(item) for item in data.get("deps", [])],
+      links=raw_links if isinstance(raw_links, dict) else None,
+      msg_ids=([str(item) for item in data["msg_ids"]] if "msg_ids" in data else None),
+      report_ids=(
+        [str(item) for item in data["report_ids"]] if "report_ids" in data else None
+      ),
+      task_ids=(
+        [str(item) for item in data["task_ids"]] if "task_ids" in data else None
+      ),
+      deps=([str(item) for item in data["deps"]] if "deps" in data else None),
+      gate_names=(
+        [str(item) for item in data["gate_names"]] if "gate_names" in data else None
+      ),
       modified_at=str(data.get("modified_at", "")),
+      allow_long_details=True,
     )
 
 
@@ -260,11 +451,16 @@ class ReportField:
   id: str = ""
   options: list[str] = field(default_factory=list)
   recommended: list[str] = field(default_factory=list)
+  question: str = ""
+  option_labels: dict[str, str] = field(default_factory=dict)
+  annotated: bool = False
 
   def __post_init__(self) -> None:
     if not isinstance(self.label, str) or not self.label.strip():
       raise ValueError("ReportField.label is required")
     self.label = self.label.strip()
+    self.question = str(self.question or self.label).strip()
+    self.option_labels = dict(self.option_labels)
     if self.type not in REPORT_FIELD_TYPES:
       raise ValueError(f"Invalid ReportField.type: {self.type!r}")
     raw_id = self.id.strip().rstrip("-") if isinstance(self.id, str) else ""
@@ -292,6 +488,13 @@ class ReportField:
       seen.add(text)
       cleaned_options.append(text)
     self.options = cleaned_options
+    if self.option_labels and (
+      set(self.option_labels) != seen
+      or any(
+        not isinstance(v, str) or not v.strip() for v in self.option_labels.values()
+      )
+    ):
+      raise ValueError(f"Field {self.id!r} requires an answer label for each option")
     cleaned_rec = [str(item).strip() for item in self.recommended if str(item).strip()]
     if any(item not in seen for item in cleaned_rec):
       raise ValueError(f"Field {self.id!r} recommends an unknown option")
@@ -306,6 +509,9 @@ class ReportField:
       "type": self.type,
       "options": list(self.options),
       "recommended": list(self.recommended),
+      "question": self.question,
+      "option_labels": dict(self.option_labels),
+      "annotated": self.annotated,
     }
 
   @classmethod
@@ -316,6 +522,9 @@ class ReportField:
       type=str(data["type"]),
       options=[str(item) for item in data.get("options", [])],
       recommended=[str(item) for item in data.get("recommended", [])],
+      question=str(data.get("question", "")),
+      option_labels=dict(data.get("option_labels", {})),
+      annotated=bool(data.get("annotated", False)),
     )
 
 
@@ -329,6 +538,13 @@ class ReportAnswer:
   status: str = "sent"
   acks: list[str] = field(default_factory=list)
   modified_at: str = ""
+  created_at: str = ""
+  report_title: str = ""
+  field_labels: dict[str, str] = field(default_factory=dict)
+  # Per-ACK response data, not part of the stored answer.
+  task_details_added: dict[str, list[str]] = field(
+    default_factory=dict, repr=False, compare=False
+  )
 
   def __post_init__(self) -> None:
     validate_hex_id(self.id, "ReportAnswer.id")
@@ -344,6 +560,9 @@ class ReportAnswer:
       raise ValueError("ReportAnswer.acks must be a list of non-empty Markdown strings")
     self.acks = list(self.acks)
     self.modified_at = str(self.modified_at or "")
+    self.created_at = str(self.created_at or self.modified_at)
+    self.report_title = str(self.report_title or "")
+    self.field_labels = dict(self.field_labels)
 
   def to_dict(self) -> dict[str, Any]:
     return {
@@ -353,6 +572,9 @@ class ReportAnswer:
       "status": self.status,
       "acks": list(self.acks),
       "modified_at": self.modified_at,
+      "created_at": self.created_at,
+      "report_title": self.report_title,
+      "field_labels": dict(self.field_labels),
     }
 
   @classmethod
@@ -364,6 +586,9 @@ class ReportAnswer:
       status=str(data.get("status", "sent")),
       acks=[str(item) for item in data.get("acks", [])],
       modified_at=str(data.get("modified_at", "")),
+      created_at=str(data.get("created_at", "")),
+      report_title=str(data.get("report_title", "")),
+      field_labels=dict(data.get("field_labels", {})),
     )
 
 
@@ -377,7 +602,13 @@ class Report:
   fields: list[ReportField] = field(default_factory=list)
   status: str = "published"
   answers: list[ReportAnswer] = field(default_factory=list)
+  seen: bool = False
+  ack_seen: bool = False
+  ack_seen_at: str = ""
   modified_at: str = ""
+  updated_at: str = ""
+  last_viewed_at: str = ""
+  pinned: bool = False
 
   def __post_init__(self) -> None:
     validate_entity_id(self.id, "Report.id")
@@ -401,7 +632,13 @@ class Report:
       ans if isinstance(ans, ReportAnswer) else ReportAnswer.from_dict(ans)
       for ans in self.answers
     ]
+    self.seen = bool(self.seen)
+    self.ack_seen = bool(self.ack_seen)
+    self.ack_seen_at = str(self.ack_seen_at or "")
     self.modified_at = str(self.modified_at or "")
+    self.updated_at = str(self.updated_at or self.modified_at)
+    self.last_viewed_at = str(self.last_viewed_at or "")
+    self.pinned = bool(self.pinned)
 
   @property
   def needs_answer(self) -> bool:
@@ -424,7 +661,14 @@ class Report:
       "fields": [item.to_dict() for item in self.fields],
       "status": self.status,
       "answers": [item.to_dict() for item in self.answers],
+      "seen": self.seen,
+      "ack_seen": self.ack_seen,
+      "ack_seen_at": self.ack_seen_at,
+      "needs_answer": self.needs_answer,
       "modified_at": self.modified_at,
+      "updated_at": self.updated_at,
+      "last_viewed_at": self.last_viewed_at,
+      "pinned": self.pinned,
     }
 
   @classmethod
@@ -436,7 +680,13 @@ class Report:
       fields=[ReportField.from_dict(raw) for raw in data.get("fields", [])],
       status=str(data.get("status", "published")),
       answers=[ReportAnswer.from_dict(raw) for raw in data.get("answers", [])],
+      seen=bool(data.get("seen", False)),
+      ack_seen=bool(data.get("ack_seen", False)),
+      ack_seen_at=str(data.get("ack_seen_at", "")),
       modified_at=str(data.get("modified_at", "")),
+      updated_at=str(data.get("updated_at", "")),
+      last_viewed_at=str(data.get("last_viewed_at", "")),
+      pinned=bool(data.get("pinned", False)),
     )
 
 
