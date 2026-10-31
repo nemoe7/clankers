@@ -40,6 +40,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `assets/`: Show independent needs-answer and unread markers. Mark unseen acknowledgements on the tab and picker.
+
 - `models.py`, `services.py`, `store.py`: Keep task details unique across edits, answer copies, and sync.
 
 - `services.py`: Start unlinked report staleness when the user sees an acknowledgement.

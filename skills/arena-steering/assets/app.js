@@ -706,31 +706,33 @@ function markVisibleReport(state) {
   });
 }
 
-function reportNeedsAttention(report) {
-  if (!report || report.status === "dismissed") return false;
-  const notYetSeen = !report.seen;
-  const hasUnansweredFields = Boolean(
+function reportNeedsAnswer(report) {
+  return Boolean(
     report.needs_answer ??
       ((report.fields || []).length > 0 && (report.answers || []).length === 0)
   );
-  const answers = report.answers || [];
-  const latest = answers[answers.length - 1];
-  const hasUnseenAck = latest?.status === "acked" && !report.ack_seen;
-  return notYetSeen || hasUnansweredFields || hasUnseenAck;
 }
 
 function renderApp(state) {
   cleanupTimers();
 
   const reports = state.reports || [];
-  const pendingReports = reports.filter((r) => reportNeedsAttention(r)).length;
+  const activeReports = reports.filter((report) => report && report.status !== "dismissed");
+  const hasUnreadReport = activeReports.some((report) => !report.seen);
+  const hasUnseenAck = activeReports.some((report) => {
+    const answers = report.answers || [];
+    return answers[answers.length - 1]?.status === "acked" && !report.ack_seen;
+  });
+  const reportQuestion = document.getElementById("report-needs-answer");
+  if (reportQuestion) reportQuestion.hidden = !activeReports.some(reportNeedsAnswer);
 
   const reportPip = document.getElementById("report-pip");
   if (reportPip) {
-    reportPip.hidden = pendingReports === 0;
-    const label = pendingReports
-      ? "Unread or unanswered report"
-      : "No unread reports";
+    reportPip.hidden = !hasUnreadReport && !hasUnseenAck;
+    reportPip.classList.toggle("is-unseen-ack", !hasUnreadReport && hasUnseenAck);
+    const label = hasUnreadReport
+      ? "Unread report"
+      : hasUnseenAck ? "Unseen answer acknowledgement" : "No unread reports";
     reportPip.title = label;
     reportPip.setAttribute("aria-label", label);
   }

@@ -59,6 +59,7 @@ Keep session state outside version control.
 - Select a report, navigate its headings, copy its Markdown, dismiss it, and return to the top.
 - Answer radio, checkbox, and free-text fields, including custom choices. The floating submit button remains available while scrolling.
 - View submitted answers and agent acknowledgements. New acknowledgements update an open report through WebSocket, and viewing an acknowledgement marks it seen.
+- The Reports tab shows unread and needs-answer markers independently. The tab and picker dots turn green for unseen acknowledgements unless an unread report takes precedence.
 - Open report images and Mermaid diagrams in the same lightbox as messages. Report Markdown supports tables, strikethrough, HTML, task lists, links, code copying, syntax highlighting, and Mermaid rendering.
 - Mermaid needs its vendor asset. Code blocks also support diff highlighting and a Mermaid source toggle.
 

@@ -1666,3 +1666,187 @@ def test_report_toc_jump_keeps_heading_below_fade(tmp_path: Path) -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Report indicators")
+  app.reports.publish_report(
+    "decision",
+    "Decision",
+    '# Decision\n\n<!-- question {"id":"choice","label":"Choice"} -->\nChoice: ___\n',
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.set_default_timeout(5000)
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        pip = page.locator("#report-pip")
+        question = page.locator("#report-needs-answer")
+        pip.wait_for(state="visible")
+        question.wait_for(state="visible")
+        assert pip.get_attribute("aria-label") == "Unread report"
+        assert question.get_attribute("aria-label") == "Reports need answers"
+        assert "is-unseen-ack" not in (pip.get_attribute("class") or "")
+        for width in (1200, 375):
+          page.set_viewport_size({"width": width, "height": 700})
+          geometry = page.locator("#tab-reports").evaluate("""tab => {
+            const label = document.createRange();
+            label.selectNodeContents(tab.firstChild);
+            const text = label.getBoundingClientRect();
+            const bounds = tab.getBoundingClientRect();
+            const pip = tab.querySelector('#report-pip').getBoundingClientRect();
+            const question = tab.querySelector('#report-needs-answer').getBoundingClientRect();
+            return {
+              textCenter: (text.left + text.right) / 2,
+              tabCenter: (bounds.left + bounds.right) / 2,
+              textRight: text.right,
+              pipLeft: pip.left,
+              pipTop: pip.top,
+              pipWidth: pip.width,
+              pipHeight: pip.height,
+              questionLeft: question.left,
+              questionRight: question.right,
+              questionTop: question.top,
+              questionWidth: question.width,
+              questionHeight: question.height,
+              pipOffsetRight: bounds.right - pip.right,
+            };
+          }""")
+          assert abs(geometry["textCenter"] - geometry["tabCenter"]) < 1
+          assert geometry["questionTop"] == geometry["pipTop"]
+          assert geometry["questionWidth"] == geometry["pipWidth"]
+          assert geometry["questionHeight"] == geometry["pipHeight"]
+          assert geometry["textRight"] <= geometry["questionLeft"]
+          assert geometry["questionRight"] < geometry["pipLeft"]
+          assert geometry["pipOffsetRight"] == 6
+        page.set_viewport_size({"width": 1200, "height": 700})
+        page.screenshot(path=str(tmp_path / "report-both-indicators.png"))
+
+        with page.expect_response("**/reports/decision/seen"):
+          page.locator("#tab-reports").click()
+        pip.wait_for(state="hidden")
+        assert question.is_visible()
+
+        page.locator("#tab-messages").click()
+        answer = app.reports.submit_answer("decision", {"choice": "Yes"})
+        app.reports.ack_answer("decision", answer.id, "Received")
+        page.reload()
+        pip.wait_for(state="visible")
+        question.wait_for(state="hidden")
+        assert pip.get_attribute("aria-label") == "Unseen answer acknowledgement"
+        assert "is-unseen-ack" in (pip.get_attribute("class") or "")
+        green = pip.evaluate("element => getComputedStyle(element).backgroundColor")
+
+        app.reports.publish_report(
+          "pending",
+          "Pending",
+          '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
+        )
+        app.reports.mark_seen("pending")
+        page.reload()
+        pip.wait_for(state="visible")
+        assert "is-unseen-ack" in (pip.get_attribute("class") or "")
+        assert question.is_visible()
+
+        app.reports.publish_report("other", "Other", "# Other")
+        page.reload()
+        pip.wait_for(state="visible")
+        assert pip.get_attribute("aria-label") == "Unread report"
+        assert "is-unseen-ack" not in (pip.get_attribute("class") or "")
+        assert question.is_visible()
+        assert (
+          pip.evaluate("element => getComputedStyle(element).backgroundColor") != green
+        )
+
+        app.reports.mark_seen("other")
+        page.reload()
+        pip.wait_for(state="visible")
+        assert "is-unseen-ack" in (pip.get_attribute("class") or "")
+        app.reports.mark_ack_seen("decision")
+        page.reload()
+        question.wait_for(state="visible")
+        assert pip.is_hidden()
+        app.reports.submit_answer("pending", {"note": "Noted"})
+        page.reload()
+        question.wait_for(state="hidden")
+        assert pip.is_hidden()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_report_picker_identifies_unseen_acknowledgements() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Report picker indicators")
+  app.reports.publish_report("viewer", "Viewer", "# Viewer")
+  app.reports.mark_seen("viewer")
+  app.reports.publish_report(
+    "decision",
+    "Decision",
+    '<!-- question {"id":"choice","label":"Choice"} -->\nChoice: ___\n',
+  )
+  answer = app.reports.submit_answer("decision", {"choice": "Yes"})
+  app.reports.ack_answer("decision", answer.id, "Received")
+  app.reports.publish_report("unread", "Unread", "# Unread")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.set_default_timeout(5000)
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        decision = page.locator('[data-report-id="decision"]')
+        unread = page.locator('[data-report-id="unread"]')
+        ack_dot = decision.locator(".report-picker-unseen-dot")
+        unread_dot = unread.locator(".report-picker-unseen-dot")
+        ack_dot.wait_for(state="visible")
+        unread_dot.wait_for(state="visible")
+        assert ack_dot.get_attribute("aria-label") == "Unseen answer acknowledgement"
+        assert "is-unseen-ack" in (ack_dot.get_attribute("class") or "")
+        assert "is-unseen-ack" not in (unread_dot.get_attribute("class") or "")
+        assert ack_dot.evaluate("el => getComputedStyle(el).backgroundColor") != (
+          unread_dot.evaluate("el => getComputedStyle(el).backgroundColor")
+        )
+        with page.expect_response("**/reports/decision/ack-seen"):
+          decision.click()
+        ack_dot.wait_for(state="hidden")
+        assert unread_dot.is_visible()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
