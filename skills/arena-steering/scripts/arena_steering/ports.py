@@ -7,7 +7,7 @@ from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from typing import Protocol
 
-from .models import Message, Report, Task
+from .models import Message, Report, ReportAnswer, Task
 
 
 class Clock(Protocol):
@@ -118,6 +118,21 @@ class ReportRepository(Protocol):
 
   def save_report(self, report: Report) -> Report:
     """Insert or update one report."""
+
+  def get_message(self, msg_id: str) -> Message | None:
+    """Check the shared message ID namespace."""
+
+  def list_report_answers(self, report_id: str | None = None) -> list[ReportAnswer]:
+    """Project typed answer messages in submission order."""
+
+  def save_report_answer(self, answer: ReportAnswer) -> ReportAnswer:
+    """Save one answer as a hidden message."""
+
+  def append_message_ack(self, msg_id: str, reply: str, now: str) -> Message:
+    """Append an answer acknowledgement to its message."""
+
+  def rename_report_answers(self, old_id: str, new_id: str, now: str) -> None:
+    """Update answer references when a report is renamed."""
 
 
 class MetaRepository(Protocol):

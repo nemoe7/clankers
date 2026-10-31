@@ -6,6 +6,7 @@ import json
 import re
 import threading
 from collections import Counter
+from datetime import datetime, timedelta
 from functools import wraps
 from typing import Any
 
@@ -134,7 +135,12 @@ class MessageService:
       if request_id is not None:
         message = self._messages.save_message_once(message, request_id, fingerprint)
       else:
-        self._messages.save_message(message)
+        with self._reports.transaction():
+          if self._messages.get_message(message.id) is not None:
+            if msg_id is not None:
+              raise ValueError(f"Message ID {message.id!r} already exists")
+            message.id = self._unique_hex_id()
+          self._messages.save_message(message)
       self._cond.notify_all()
     return message
 
@@ -183,40 +189,49 @@ class MessageService:
       items = items[start : start + page_size]
     return items
 
+  def _latest_pending_answers(self) -> list[ReportAnswer]:
+    latest: dict[str, ReportAnswer] = {}
+    for answer in self._reports.list_report_answers():
+      latest[answer.report_id] = answer
+    return [answer for answer in latest.values() if answer.status != "acked"]
+
   def has_pending_deliverables(self) -> bool:
     for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
-      if msg.status == "sent" or msg.requires_ack:
+      if msg.type == "message" and (msg.status == "sent" or msg.requires_ack):
         return True
-    for report in self._reports.list_reports():
-      if report.latest_unacked_answer is not None:
-        return True
-    return False
+    return bool(self._latest_pending_answers())
 
   @_transactional_report_write
   def read_pending(self, *, mark_seen: bool = True) -> dict[str, Any]:
-    """Return pending unread messages and unacknowledged report answers."""
+    """Return pending unread messages and the newest unacknowledged answer per report."""
     now = self._clock.now_iso()
     delivered_messages: list[Message] = []
     for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
+      if msg.type != "message":
+        continue
       if mark_seen and msg.status == "sent":
         msg = self._messages.mark_message_seen(msg.id, now)
       delivered_messages.append(msg)
 
     delivered_answers: list[tuple[Report, ReportAnswer]] = []
-    for report in self._reports.list_reports():
-      latest = report.latest_unacked_answer
-      if latest is not None:
-        if mark_seen and latest.status == "sent":
-          latest.status = "seen"
-          latest.modified_at = now
+    for latest in self._latest_pending_answers():
+      report = self._reports.get_report(latest.report_id)
+      if mark_seen and latest.status == "sent":
+        latest = self._messages.mark_message_seen(latest.id, now).as_report_answer()
+        if report is not None:
           report.modified_at = now
           self._reports.save_report(report)
-        delivered_answers.append((report, latest))
+      if report is None:
+        report = Report(
+          id=latest.report_id,
+          title=latest.report_title or latest.report_id,
+          body="",
+          status="answered",
+          answers=[latest],
+        )
+      delivered_answers.append((report, latest))
 
-    return {
-      "messages": delivered_messages,
-      "report_answers": delivered_answers,
-    }
+    return {"messages": delivered_messages, "report_answers": delivered_answers}
 
   def pending_ids(self) -> list[str]:
     """Return unacked message and report-answer IDs without marking anything seen."""
@@ -225,12 +240,9 @@ class MessageService:
       for message in self._messages.list_messages(
         unread_only=False, include_hidden=True
       )
-      if message.status != "acked" and not message.hidden
+      if message.type == "message" and message.status != "acked" and not message.hidden
     ]
-    for report in self._reports.list_reports():
-      latest = report.latest_unacked_answer
-      if latest is not None:
-        ids.append(latest.id)
+    ids.extend(answer.id for answer in self._latest_pending_answers())
     return ids
 
   def resolve_ack_target(
@@ -242,11 +254,9 @@ class MessageService:
     validate_hex_id(target_id, "Acknowledgement target ID")
     message = self._messages.get_message(target_id)
     if message is not None:
+      if message.type == "report_answer":
+        return "report_answer", message.as_report_answer()
       return "message", message
-    for report in self._reports.list_reports():
-      for answer in report.answers:
-        if answer.id == target_id:
-          return "report_answer", answer
     raise KeyError(f"Unknown message or answer ID: {target_id}")
 
   @_transactional_report_write
@@ -264,21 +274,18 @@ class MessageService:
 
     validate_hex_id(target_id, "Acknowledgement target ID")
     msg = self._messages.get_message(target_id)
-    if msg is not None:
-      return ("message", self._messages.append_message_ack(target_id, reply, now))
-
-    for report in self._reports.list_reports():
-      for ans in report.answers:
-        if ans.id == target_id:
-          ans.acks.append(reply)
-          ans.status = "acked"
-          ans.modified_at = now
-          report.ack_seen = False
-          report.modified_at = now
-          self._reports.save_report(report)
-          return ("report_answer", ans)
-
-    raise KeyError(f"Unknown message or answer ID: {target_id}")
+    if msg is None:
+      raise KeyError(f"Unknown message or answer ID: {target_id}")
+    msg = self._messages.append_message_ack(target_id, reply, now)
+    if msg.type != "report_answer":
+      return ("message", msg)
+    answer = msg.as_report_answer()
+    report = self._reports.get_report(answer.report_id)
+    if report is not None:
+      report.ack_seen = False
+      report.modified_at = now
+      self._reports.save_report(report)
+    return ("report_answer", answer)
 
   def mark_replies_seen(self, msg_id: str, revision: str) -> bool:
     validate_hex_id(msg_id, "Message.id")
@@ -376,12 +383,9 @@ class MessageService:
     candidates: list[str] = [
       msg.id
       for msg in self._messages.list_messages(unread_only=True, include_hidden=True)
-      if msg.requires_ack
+      if msg.type == "message" and msg.requires_ack
     ]
-    for report in self._reports.list_reports():
-      latest = report.latest_unacked_answer
-      if latest is not None:
-        candidates.append(latest.id)
+    candidates.extend(answer.id for answer in self._latest_pending_answers())
     if not candidates:
       raise ValueError("No pending message or report answer requires acknowledgement")
     if len(candidates) > 1:
@@ -988,11 +992,7 @@ class ReportService:
     existing = self._reports.get_report(report_id)
     if existing is not None and existing.latest_unacked_answer is not None:
       raise ValueError("Report has an unacknowledged answer")
-    preserved_answers: list[ReportAnswer] = []
-    if existing is not None:
-      preserved_answers = list(existing.answers)
-    elif hasattr(self._reports, "get_archived_report_answers"):
-      preserved_answers = list(self._reports.get_archived_report_answers(report_id))
+    preserved_answers = self._reports.list_report_answers(report_id)
     now = self._clock.now_iso()
     report = Report(
       id=report_id,
@@ -1084,11 +1084,22 @@ class ReportService:
             field.option_labels.get(item, item) for item in value
           ]
     now = self._clock.now_iso()
-    ans_id = (
-      validate_hex_id(answer_id, "ReportAnswer.id")
-      if answer_id is not None
-      else self._id_gen.new_hex_id()
-    )
+    if answer_id is not None:
+      ans_id = validate_hex_id(answer_id, "ReportAnswer.id")
+      if self._reports.get_message(ans_id) is not None:
+        raise ValueError(f"Message ID {ans_id!r} already exists")
+    else:
+      for _ in range(64):
+        ans_id = self._id_gen.new_hex_id()
+        if self._reports.get_message(ans_id) is None:
+          break
+      else:
+        raise RuntimeError("Unable to allocate unique 6-character hex ID")
+    created_at = datetime.fromisoformat(now)
+    for previous in report.answers:
+      previous_at = datetime.fromisoformat(previous.created_at)
+      if previous_at >= created_at:
+        created_at = previous_at + timedelta(microseconds=1)
     answer = ReportAnswer(
       id=ans_id,
       report_id=report.id,
@@ -1098,7 +1109,9 @@ class ReportService:
       status="sent",
       acks=[],
       modified_at=now,
+      created_at=created_at.isoformat(timespec="microseconds").replace("+00:00", "Z"),
     )
+    self._reports.save_report_answer(answer)
     report.answers.append(answer)
     report.status = "answered"
     report.seen = True
@@ -1117,9 +1130,9 @@ class ReportService:
     now = self._clock.now_iso()
     for ans in report.answers:
       if ans.id == answer_id:
-        ans.acks.append(markdown.strip())
-        ans.status = "acked"
-        ans.modified_at = now
+        ans = self._reports.append_message_ack(
+          answer_id, markdown.strip(), now
+        ).as_report_answer()
         report.ack_seen = False
         report.modified_at = now
         self._reports.save_report(report)
@@ -1161,6 +1174,7 @@ class ReportService:
       ack_seen=existing.ack_seen,
       modified_at=now,
     )
+    self._reports.rename_report_answers(old_report_id, new_report_id, now)
     self._reports.save_report(renamed)
     if hasattr(self._reports, "delete_report"):
       self._reports.delete_report(old_report_id)
@@ -1176,7 +1190,7 @@ class ReportService:
         changed = True
     if changed:
       self._tasks.save_task_queue(queue)
-    return renamed
+    return self.get_report(new_report_id)
 
   @_transactional_task_write
   def remove_report(self, target: str) -> list[str]:

@@ -121,6 +121,8 @@ class Message:
   acks: list[str] = field(default_factory=list)
   replies_seen: bool = False
   modified_at: str = ""
+  type: str = "message"
+  answer_data: dict[str, Any] = field(default_factory=dict)
 
   def __post_init__(self) -> None:
     validate_hex_id(self.id, "Message.id")
@@ -150,6 +152,60 @@ class Message:
       raise ValueError("Message.acks must be a list of non-empty Markdown strings")
     self.acks = list(self.acks)
     self.modified_at = str(self.modified_at or "")
+    if self.type not in {"message", "report_answer"}:
+      raise ValueError(f"Invalid Message.type: {self.type!r}")
+    if not isinstance(self.answer_data, dict):
+      raise TypeError("Message.answer_data must be a dictionary")
+    self.answer_data = dict(self.answer_data)
+    if self.type == "report_answer":
+      if not self.hidden:
+        raise ValueError("A report-answer message must be hidden")
+      self.as_report_answer()
+
+  def as_report_answer(self) -> ReportAnswer:
+    """Project a typed answer from this message's authoritative status and replies."""
+    if self.type != "report_answer":
+      raise ValueError("Message is not a report answer")
+    return ReportAnswer(
+      id=self.id,
+      report_id=str(self.answer_data.get("report_id", "")),
+      values=dict(self.answer_data.get("values", {})),
+      report_title=str(self.answer_data.get("report_title", "")),
+      field_labels=dict(self.answer_data.get("field_labels", {})),
+      created_at=str(self.answer_data.get("created_at", "")),
+      status=self.status,
+      acks=list(self.acks),
+      modified_at=self.modified_at,
+    )
+
+  @classmethod
+  def from_report_answer(cls, answer: ReportAnswer) -> Message:
+    """Create the hidden inbox record for a report answer."""
+    lines = [f"Answer to report {answer.report_id} ({answer.report_title})"]
+    for key, value in answer.values.items():
+      label = answer.field_labels.get(key, key)
+      text = (
+        ", ".join(str(item) for item in value)
+        if isinstance(value, list)
+        else str(value)
+      )
+      lines.append(f"{label}: {text}")
+    return cls(
+      id=answer.id,
+      body="\n".join(lines),
+      hidden=True,
+      type="report_answer",
+      answer_data={
+        "report_id": answer.report_id,
+        "report_title": answer.report_title,
+        "values": dict(answer.values),
+        "field_labels": dict(answer.field_labels),
+        "created_at": answer.created_at,
+      },
+      status=answer.status,
+      acks=list(answer.acks),
+      modified_at=answer.modified_at,
+    )
 
   @property
   def replies_revision(self) -> str:
@@ -181,6 +237,8 @@ class Message:
       "replies_seen": self.replies_seen,
       "replies_revision": self.replies_revision,
       "modified_at": self.modified_at,
+      "type": self.type,
+      "answer_data": dict(self.answer_data),
     }
 
   @classmethod
@@ -196,6 +254,8 @@ class Message:
       acks=[str(item) for item in data.get("acks", [])],
       replies_seen=bool(data.get("replies_seen", False)),
       modified_at=str(data.get("modified_at", "")),
+      type=str(data.get("type", "message")),
+      answer_data=dict(data.get("answer_data", {})),
     )
 
 

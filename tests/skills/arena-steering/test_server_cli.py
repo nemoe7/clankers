@@ -183,6 +183,20 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   )
   assert status == int(HTTPStatus.CREATED)
   assert r_ans["answer"]["id"] == "cafe01"
+  _, visible = app.dispatch("GET", "/messages?all=1")
+  assert "cafe01" not in [item["id"] for item in visible["messages"]]
+  _, hidden = app.dispatch("GET", "/messages?all=1&hidden=1")
+  answer_message = next(item for item in hidden["messages"] if item["id"] == "cafe01")
+  assert answer_message["hidden"] and answer_message["type"] == "report_answer"
+  assert answer_message["answer_data"]["report_id"] == "router-spec"
+  _, projected = app.dispatch("GET", "/reports/router-spec")
+  assert projected["report"]["answers"][0]["id"] == "cafe01"
+  status, _ = app.dispatch("POST", "/messages", {"id": "cafe01", "body": "Collision"})
+  assert status == int(HTTPStatus.BAD_REQUEST)
+  status, direct = app.dispatch(
+    "POST", "/messages/cafe01/ack", {"markdown": "Direct reply"}
+  )
+  assert status == int(HTTPStatus.OK) and direct["answer"]["acks"] == ["Direct reply"]
 
   status, r_acked = app.dispatch(
     "POST",
@@ -191,6 +205,12 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   )
   assert status == int(HTTPStatus.OK)
   assert r_acked["answer"]["status"] == "acked"
+  _, projected = app.dispatch("GET", "/reports/router-spec")
+  answer = projected["report"]["answers"][0]
+  assert answer["ack"] == "Direct reply\n\nConfirmed 0.0.0.0."
+  assert (
+    "Direct reply" in answer["ack_html"] and "Confirmed 0.0.0.0." in answer["ack_html"]
+  )
 
   status, r_ack_seen = app.dispatch("POST", "/reports/router-spec/ack-seen")
   assert status == int(HTTPStatus.OK)
@@ -1796,6 +1816,10 @@ def test_browser_write_replay_survives_restart(tmp_path: Path) -> None:
   app = SteeringApp(store)
   assert app.dispatch("POST", "/reports/retry-report/answers", request) == first
   assert len(app.reports.get_report("retry-report").answers) == 1
+  answer_messages = [
+    item for item in store.list_messages() if item.type == "report_answer"
+  ]
+  assert [item.id for item in answer_messages] == [first[1]["answer"]["id"]]
   changed = {"_request_id": "action-001", "values": {"choice": "No"}}
   assert (
     app.dispatch("POST", "/reports/retry-report/answers", changed)[0]

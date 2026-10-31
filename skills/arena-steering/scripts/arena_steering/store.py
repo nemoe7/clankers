@@ -60,7 +60,9 @@ class SqliteStore:
           status TEXT NOT NULL DEFAULT 'sent',
           acks_json TEXT NOT NULL DEFAULT '[]',
           replies_seen INTEGER NOT NULL DEFAULT 0,
-          modified_at TEXT NOT NULL
+          modified_at TEXT NOT NULL,
+          message_type TEXT NOT NULL DEFAULT 'message',
+          answer_json TEXT NOT NULL DEFAULT '{}'
         );
 
         CREATE TABLE IF NOT EXISTS tasks (
@@ -123,6 +125,18 @@ class SqliteStore:
         self._conn.execute(
           "ALTER TABLE messages ADD COLUMN replies_seen INTEGER NOT NULL DEFAULT 0"
         )
+      if "message_type" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'message'"
+        )
+      if "answer_json" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN answer_json TEXT NOT NULL DEFAULT '{}'"
+        )
+      self._conn.execute(
+        "CREATE INDEX IF NOT EXISTS messages_report_answer "
+        "ON messages(message_type, json_extract(answer_json, '$.report_id'))"
+      )
       task_cols = {
         row["name"] for row in self._conn.execute("PRAGMA table_info(tasks)").fetchall()
       }
@@ -287,8 +301,9 @@ class SqliteStore:
         self._conn.execute(
           """
           INSERT INTO messages (
-            id, body, hidden, blocking, attachments_json, parent_ids_json, status, acks_json, modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id, body, hidden, blocking, attachments_json, parent_ids_json, status, acks_json,
+            modified_at, message_type, answer_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             message.id,
@@ -300,6 +315,8 @@ class SqliteStore:
             message.status,
             acks_json,
             message.modified_at,
+            message.type,
+            json.dumps(message.answer_data),
           ),
         )
       else:
@@ -314,7 +331,9 @@ class SqliteStore:
               status = ?,
               replies_seen = CASE WHEN acks_json = ? THEN replies_seen ELSE 0 END,
               acks_json = ?,
-              modified_at = ?
+              modified_at = ?,
+              message_type = ?,
+              answer_json = ?
           WHERE id = ?
           """,
           (
@@ -327,6 +346,8 @@ class SqliteStore:
             acks_json,
             acks_json,
             message.modified_at,
+            message.type,
+            json.dumps(message.answer_data),
             message.id,
           ),
         )
@@ -350,6 +371,10 @@ class SqliteStore:
         if existing is None:
           raise ValueError("Original message for request ID is missing")
         return self._row_to_message(existing)
+      if self._conn.execute(
+        "SELECT 1 FROM messages WHERE id = ?", (message.id,)
+      ).fetchone():
+        raise ValueError(f"Message ID {message.id!r} already exists")
       self._conn.execute(
         """INSERT INTO messages
           (id, body, hidden, blocking, attachments_json, parent_ids_json, status, acks_json, modified_at)
@@ -473,47 +498,51 @@ class SqliteStore:
         )
     return True
 
+  def list_report_answers(self, report_id: str | None = None) -> list[ReportAnswer]:
+    """Project report answers from their hidden messages in submission order."""
+    where = "message_type = 'report_answer'"
+    params: tuple[str, ...] = ()
+    if report_id is not None:
+      where += " AND json_extract(answer_json, '$.report_id') = ?"
+      params = (report_id,)
+    with self._lock:
+      rows = self._conn.execute(
+        f"SELECT * FROM messages WHERE {where} "
+        "ORDER BY json_extract(answer_json, '$.created_at'), id",
+        params,
+      ).fetchall()
+      return [self._row_to_message(row).as_report_answer() for row in rows]
+
+  def save_report_answer(self, answer: ReportAnswer) -> ReportAnswer:
+    """Store an answer as a typed hidden message."""
+    self.save_message(Message.from_report_answer(answer))
+    return answer
+
+  def rename_report_answers(self, old_id: str, new_id: str, now: str) -> None:
+    """Move answer references with a report rename."""
+    with self.transaction():
+      for answer in self.list_report_answers(old_id):
+        answer.report_id = new_id
+        answer.modified_at = now
+        self.save_report_answer(answer)
+
   def get_report(self, report_id: str) -> Report | None:
     with self._lock:
       row = self._conn.execute(
         "SELECT * FROM reports WHERE id = ?", (report_id,)
       ).fetchone()
-    return self._row_to_report(row) if row is not None else None
+      return self._row_to_report(row) if row is not None else None
 
   def list_reports(self) -> list[Report]:
     with self._lock:
       rows = self._conn.execute("SELECT * FROM reports ORDER BY seq ASC").fetchall()
-    return [self._row_to_report(row) for row in rows]
+      return [self._row_to_report(row) for row in rows]
 
   def delete_report(self, report_id: str) -> bool:
-    """Evict a report row from `reports` while preserving its answers in `meta`."""
+    """Remove the report row while retaining its answer messages."""
     with self.transaction():
-      row = self._conn.execute(
-        "SELECT answers_json FROM reports WHERE id = ?", (report_id,)
-      ).fetchone()
-      if row is None:
-        return False
-      answers_json = str(row["answers_json"] or "[]")
-      self._conn.execute(
-        """
-        INSERT INTO meta (key, value) VALUES (?, ?)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-        """,
-        (f"report_answers:{report_id}", answers_json),
-      )
-      self._conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
-    return True
-
-  def get_archived_report_answers(self, report_id: str) -> list[ReportAnswer]:
-    """Return preserved answers for a previously dismissed report."""
-    raw = self.get_meta(f"report_answers:{report_id}", "[]") or "[]"
-    try:
-      items = json.loads(raw)
-      if isinstance(items, list):
-        return [ReportAnswer.from_dict(item) for item in items]
-    except json.JSONDecodeError:
-      pass
-    return []
+      cursor = self._conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+      return cursor.rowcount > 0
 
   def save_report(self, report: Report) -> Report:
     with self.transaction():
@@ -521,7 +550,8 @@ class SqliteStore:
         "SELECT seq FROM reports WHERE id = ?", (report.id,)
       ).fetchone()
       fields_json = json.dumps([item.to_dict() for item in report.fields])
-      answers_json = json.dumps([item.to_dict() for item in report.answers])
+      # The compatibility column is not authoritative and old answers are not migrated.
+      answers_json = "[]"
       if existing is None:
         self._conn.execute(
           """
@@ -550,7 +580,6 @@ class SqliteStore:
               body = ?,
               fields_json = ?,
               status = ?,
-              answers_json = ?,
               seen = ?,
               ack_seen = ?,
               modified_at = ?
@@ -561,7 +590,6 @@ class SqliteStore:
             report.body,
             fields_json,
             report.status,
-            answers_json,
             int(report.seen),
             int(report.ack_seen),
             report.modified_at,
@@ -672,6 +700,10 @@ class SqliteStore:
       acks=[str(item) for item in json.loads(row["acks_json"] or "[]")],
       replies_seen=bool(row["replies_seen"]) if "replies_seen" in keys else False,
       modified_at=str(row["modified_at"]),
+      type=str(row["message_type"]) if "message_type" in keys else "message",
+      answer_data=json.loads(row["answer_json"] or "{}")
+      if "answer_json" in keys
+      else {},
     )
 
   @staticmethod
@@ -706,8 +738,7 @@ class SqliteStore:
       modified_at=str(row["modified_at"]),
     )
 
-  @staticmethod
-  def _row_to_report(row: sqlite3.Row) -> Report:
+  def _row_to_report(self, row: sqlite3.Row) -> Report:
     return Report(
       id=str(row["id"]),
       title=str(row["title"]),
@@ -716,9 +747,7 @@ class SqliteStore:
         ReportField.from_dict(item) for item in json.loads(row["fields_json"] or "[]")
       ],
       status=str(row["status"]),
-      answers=[
-        ReportAnswer.from_dict(item) for item in json.loads(row["answers_json"] or "[]")
-      ],
+      answers=self.list_report_answers(str(row["id"])),
       seen=bool(dict(row).get("seen", 0)),
       ack_seen=bool(dict(row).get("ack_seen", 0)),
       modified_at=str(row["modified_at"]),

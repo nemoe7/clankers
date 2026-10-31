@@ -56,6 +56,241 @@ Summary note: ___
   assert any(block_type == "field" for block_type, _ in blocks)
 
 
+def _publish_answer_message_report(reports: ReportService) -> None:
+  reports.publish_report(
+    "decision",
+    "A decision",
+    (
+      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
+      "Choice?\n"
+      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- ( ) B <!-- option {"label": "B"} -->\n'
+    ),
+  )
+
+
+def test_report_answers_are_hidden_messages_with_newest_only_delivery() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  messages = MessageService(store, store, store)
+  _publish_answer_message_report(reports)
+  ordinary = messages.send_message("Quiet note", hidden=True, msg_id="de1000")
+  first = reports.submit_answer("decision", {"choice": "A"}, answer_id="de1001")
+  latest = reports.submit_answer("decision", {"choice": "B"}, answer_id="de1002")
+
+  first_message = store.get_message(first.id)
+  latest_message = store.get_message(latest.id)
+  assert first_message is not None and first_message.hidden
+  assert latest_message is not None and latest_message.hidden
+  delivered = messages.read_pending(mark_seen=True)
+  assert [item.id for item in delivered["messages"]] == [ordinary.id]
+  assert [answer.id for _, answer in delivered["report_answers"]] == [latest.id]
+  assert messages.ack(ordinary.id, "Quiet note read")[0] == "message"
+  assert store.get_message(first.id).status == "sent"
+  assert store.get_message(latest.id).status == "seen"
+  assert reports.get_report("decision").answers[-1].status == "seen"
+
+  target_type, answer = messages.ack(None, "Reviewed")
+  assert target_type == "report_answer" and answer.id == latest.id
+  assert store.get_message(latest.id).acks == ["Reviewed"]
+  assert reports.get_report("decision").answers[-1].acks == ["Reviewed"]
+  assert not messages.has_pending_deliverables()
+  store.close()
+
+
+def test_report_answer_survives_report_deletion_and_republication() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  messages = MessageService(store, store, store)
+  _publish_answer_message_report(reports)
+  answer = reports.submit_answer("decision", {"choice": "A"}, answer_id="de2001")
+
+  # Simulate removal without the service's existing pending-answer guard.
+  assert store.delete_report("decision")
+  delivered = messages.read_pending(mark_seen=True)
+  assert [
+    (report.id, report.title, item.id) for report, item in delivered["report_answers"]
+  ] == [("decision", "A decision", answer.id)]
+  assert messages.ack(answer.id, "Still available")[0] == "report_answer"
+  _publish_answer_message_report(reports)
+  restored = reports.get_report("decision").answers
+  assert [item.id for item in restored] == [answer.id]
+  assert restored[0].acks == ["Still available"]
+  store.close()
+
+
+def test_report_answer_survives_snapshot_merge_after_report_deletion() -> None:
+  source = SqliteStore(":memory:")
+  reports = ReportService(source, source)
+  _publish_answer_message_report(reports)
+  answer = reports.submit_answer("decision", {"choice": "B"}, answer_id="de3001")
+  assert source.delete_report("decision")
+  snapshot = source.export_rows()
+  assert any(row["id"] == answer.id for row in snapshot["messages"])
+
+  target = SqliteStore(":memory:")
+  target.merge_rows(snapshot)
+  messages = MessageService(target, target, target)
+  delivered = messages.read_pending(mark_seen=False)
+  assert [(report.id, item.id) for report, item in delivered["report_answers"]] == [
+    ("decision", answer.id)
+  ]
+  assert messages.ack(answer.id, "Merged")[0] == "report_answer"
+  _publish_answer_message_report(ReportService(target, target))
+  assert ReportService(target, target).get_report("decision").answers[0].acks == [
+    "Merged"
+  ]
+  source.close()
+  target.close()
+
+
+def test_snapshot_merge_preserves_newest_answer_order() -> None:
+  source = SqliteStore(":memory:")
+  reports = ReportService(source, source)
+  _publish_answer_message_report(reports)
+  first = reports.submit_answer("decision", {"choice": "A"}, answer_id="de3101")
+  newest = reports.submit_answer("decision", {"choice": "B"}, answer_id="de3102")
+  rows = source.export_rows()
+  answer_rows = {row["id"]: row for row in rows["messages"]}
+
+  target = SqliteStore(":memory:")
+  target.merge_rows({"reports": rows["reports"], "messages": [answer_rows[newest.id]]})
+  target.merge_rows({"messages": [answer_rows[first.id]]})
+  assert [item.id for item in target.get_report("decision").answers] == [
+    first.id,
+    newest.id,
+  ]
+  messages = MessageService(target, target, target)
+  assert [
+    item.id for _, item in messages.read_pending(mark_seen=False)["report_answers"]
+  ] == [newest.id]
+  source.close()
+  target.close()
+
+
+def test_snapshot_answer_order_is_stable_for_equal_creation_times() -> None:
+  import json
+
+  source = SqliteStore(":memory:")
+  reports = ReportService(source, source)
+  _publish_answer_message_report(reports)
+  reports.submit_answer("decision", {"choice": "A"}, answer_id="de3151")
+  reports.submit_answer("decision", {"choice": "B"}, answer_id="de3152")
+  rows = source.export_rows()["messages"]
+  for row in rows:
+    data = json.loads(row["answer_json"])
+    data["created_at"] = "2026-01-01T00:00:00.000000Z"
+    row["answer_json"] = json.dumps(data)
+
+  left, right = SqliteStore(":memory:"), SqliteStore(":memory:")
+  left.merge_rows({"messages": rows})
+  right.merge_rows({"messages": list(reversed(rows))})
+  assert [answer.id for answer in left.list_report_answers()] == [
+    answer.id for answer in right.list_report_answers()
+  ]
+  source.close()
+  left.close()
+  right.close()
+
+
+def test_snapshot_merge_uses_newer_answer_row_even_if_a_reply_is_lost() -> None:
+  import json
+  from copy import deepcopy
+
+  source = SqliteStore(":memory:")
+  reports = ReportService(source, source)
+  _publish_answer_message_report(reports)
+  answer = reports.submit_answer("decision", {"choice": "A"}, answer_id="de3201")
+  snapshot = source.export_rows()
+  older = deepcopy(snapshot["messages"][0])
+  older["modified_at"] = "2030-01-01T00:00:00Z"
+  acked = deepcopy(older)
+  acked.update(
+    status="acked", acks_json=json.dumps(["Read"]), modified_at="2031-01-01T00:00:00Z"
+  )
+  newer_without_reply = deepcopy(older)
+  newer_without_reply["modified_at"] = "2032-01-01T00:00:00Z"
+
+  target = SqliteStore(":memory:")
+  target.merge_rows({"reports": snapshot["reports"], "messages": [older]})
+  target.merge_rows({"messages": [acked]})
+  target.merge_rows({"messages": [older]})
+  assert target.get_report("decision").answers[0].acks == ["Read"]
+  target.merge_rows({"messages": [newer_without_reply]})
+  merged = target.get_report("decision").answers[0]
+  assert merged.id == answer.id and merged.acks == [] and merged.status == "sent"
+  source.close()
+  target.close()
+
+
+def test_report_answer_rename_preserves_its_hidden_message() -> None:
+  class Clock:
+    value = "2026-01-01T00:00:00Z"
+
+    def now_iso(self) -> str:
+      return self.value
+
+  clock = Clock()
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store, clock=clock)
+  messages = MessageService(store, store, store)
+  _publish_answer_message_report(reports)
+  answer = reports.submit_answer("decision", {"choice": "A"}, answer_id="de3501")
+  clock.value = "2026-01-01T00:01:00Z"
+  renamed = reports.rename_report("decision", "renamed")
+  assert renamed.answers == reports.get_report("renamed").answers
+
+  message = store.get_message(answer.id)
+  assert message is not None and message.hidden and message.type == "report_answer"
+  assert message.as_report_answer().report_id == "renamed"
+  delivered = messages.read_pending(mark_seen=False)["report_answers"]
+  assert [(report.id, item.id) for report, item in delivered] == [
+    ("renamed", answer.id)
+  ]
+  assert messages.ack(answer.id, "Read after rename")[0] == "report_answer"
+  assert reports.get_report("renamed").answers[0].acks == ["Read after rename"]
+  _publish_answer_message_report(reports)
+  assert reports.get_report("decision").answers == []
+  store.close()
+
+
+def test_report_answers_share_the_message_id_namespace() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  messages = MessageService(store, store, store)
+  _publish_answer_message_report(reports)
+  messages.send_message("Ordinary", msg_id="de4001")
+  with pytest.raises(ValueError):
+    reports.submit_answer("decision", {"choice": "A"}, answer_id="de4001")
+  assert messages.get_message("de4001").body == "Ordinary"
+  assert reports.get_report("decision").answers == []
+
+  reports.submit_answer("decision", {"choice": "B"}, answer_id="de4002")
+  with pytest.raises(ValueError):
+    messages.send_message("Do not overwrite an answer", msg_id="de4002")
+  assert reports.get_report("decision").answers[0].values == {"choice": "B"}
+  store.close()
+
+
+def test_generated_report_answer_ids_skip_existing_messages() -> None:
+  class Ids:
+    values = iter(["de5001", "de5002"])
+
+    def new_hex_id(self) -> str:
+      return next(self.values)
+
+  store = SqliteStore(":memory:")
+  messages = MessageService(store, store, store)
+  reports = ReportService(store, store, id_gen=Ids())
+  _publish_answer_message_report(reports)
+  messages.send_message("Existing message", msg_id="de5001")
+  answer = reports.submit_answer("decision", {"choice": "A"})
+  assert answer.id == "de5002"
+  assert store.get_message("de5001").body == "Existing message"
+  assert store.get_message(answer.id).type == "report_answer"
+  store.close()
+
+
 def test_message_service_lifecycle_and_acks() -> None:
   store = SqliteStore(":memory:")
   svc = MessageService(store, store, store)

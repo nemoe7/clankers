@@ -32,6 +32,10 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `models.py`, `services.py`, `store.py`: Store report answers as durable hidden messages and derive report history from them.
+
+- `server.py`: Render all acknowledgement replies in report views.
+
 - `services.py`, `models.py`: Derive task blocking and append full report-answer details on submission and when reports are newly linked.
 
 - `cli.py`: Bind `steer serve` to `0.0.0.0:8000` without a port option.
