@@ -34,6 +34,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `assets/app.js`, `assets/messages-view.js`: Keep older-message errors visible through refreshes until the user retries.
+
 - `models.py`, `store.py`, `assets/tasks-view.js`: Keep upcoming and finished task statuses, and show the first unblocked upcoming task as current.
 
 - `models.py`, `services.py`, `store.py`, `assets/app.js`: Track report activity and task links for staleness, and retain pending answers on stale removal.
