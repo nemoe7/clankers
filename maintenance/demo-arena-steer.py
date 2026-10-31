@@ -264,7 +264,7 @@ def _set_demo_timestamps(store: SqliteStore) -> None:
       (iso_ago(320),),
     )
     conn.execute(
-      "UPDATE tasks SET modified_at = ? WHERE status = 'in_progress'",
+      "UPDATE tasks SET modified_at = ? WHERE id IN ('web-ui-assets', 'hot-reload-server')",
       (iso_ago(60),),
     )
 
@@ -792,7 +792,7 @@ steer poll
   )
   app.reports.remove_report("legacy-migration-draft")
 
-  # 3. Tasks covering `Current` (`in_progress`), `Upcoming` (`upcoming` unblocked + blocked by report + blocked by dep),
+  # 3. Tasks covering `Current` (first unblocked `upcoming`), `Upcoming` (blocked and unblocked),
   #    and `Finished` (`finished`, 35 total so downward scroll paginates 30 + 5), across all 5 types.
   app.tasks.create_task(
     "core-models-store",
@@ -856,7 +856,7 @@ steer poll
     "web-ui-assets",
     "Refine Inbox, Reports, and Tasks views with Arena tokens",
     type="code",
-    status="in_progress",
+    status="upcoming",
     scope="skills/arena-steering/assets/",
     details=[
       "Loaded Arena dark-mode CSS tokens and Basel Grotesk fonts into style.css.",
@@ -870,7 +870,7 @@ steer poll
     "hot-reload-server",
     "Maintain in-process hot-reload watcher on port 8100",
     type="ops",
-    status="in_progress",
+    status="upcoming",
     scope="skills/arena-steering/scripts/arena_steering/server.py",
     details=[
       "Swaps server.RequestHandlerClass in-process without dropping TCP connections.",

@@ -13,7 +13,7 @@ ENTITY_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 MESSAGE_STATUSES = ("sent", "seen", "acked")
 TASK_TYPES = ("report", "code", "docs", "ops", "misc")
-TASK_STATUSES = ("upcoming", "in_progress", "finished")
+TASK_STATUSES = ("upcoming", "finished")
 REPORT_STATUSES = ("published", "answered", "dismissed")
 REPORT_FIELD_TYPES = ("choice", "checkbox", "text")
 

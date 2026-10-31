@@ -93,6 +93,12 @@ def test_task_validation_and_detail_limit() -> None:
     Task(id="self-dep", title="Cycle", links={"task_ids": ["self-dep"]})
 
 
+@pytest.mark.parametrize("status", ["in_progress", "blocked", "other"])
+def test_task_status_rejects_other_values(status: str) -> None:
+  with pytest.raises(ValueError, match="Invalid Task.status"):
+    Task(id="work", title="Work", status=status, details=["Do work"])
+
+
 def test_report_field_auto_kebab_id_and_choice_rules() -> None:
   field = ReportField(
     label="We should use this mode?",
@@ -532,6 +538,113 @@ def test_report_pin_migrates_and_survives_state_merge(tmp_path: Path) -> None:
   source.save_report(report)
   target.merge_rows(source.export_rows())
   assert target.get_report("old-report").pinned is False
+  source.close()
+  target.close()
+
+
+def test_legacy_in_progress_tasks_convert_without_reordering_and_sync(
+  tmp_path: Path,
+) -> None:
+  path = tmp_path / "legacy-progress.sqlite3"
+  store = SqliteStore(path)
+  original = [
+    Task(
+      id="first", title="First", details=["Do work"], modified_at="2025-01-01T00:00:00Z"
+    ),
+    Task(
+      id="second",
+      title="Second",
+      details=["Do work"],
+      modified_at="2025-01-01T00:00:00Z",
+    ),
+    Task(
+      id="third",
+      title="Third",
+      status="finished",
+      details=["Do work"],
+      modified_at="2025-01-01T00:00:00Z",
+    ),
+  ]
+  store.save_task_queue(original)
+  with store.transaction():
+    store._conn.execute(
+      "UPDATE tasks SET status = 'in_progress' WHERE id IN ('first', 'second')"
+    )
+  snapshot = store.export_rows()
+  cursor = store.state_stamp()
+  store.close()
+
+  upgraded = SqliteStore(path)
+  tasks = upgraded.list_tasks()
+  assert [task.id for task in tasks] == ["first", "second", "third"]
+  assert [task.status for task in tasks] == ["upcoming", "upcoming", "finished"]
+  changed = upgraded.export_rows(since=cursor)["tasks"]
+  assert {row["id"] for row in changed} == {"first", "second"}
+  assert all(row["status"] == "upcoming" for row in changed)
+  previous = {row["id"]: row["modified_at"] for row in snapshot["tasks"]}
+  assert all(row["modified_at"] > previous[row["id"]] for row in changed)
+  assert [row["status"] for row in upgraded.export_rows()["tasks"]] == [
+    "upcoming",
+    "upcoming",
+    "finished",
+  ]
+  peer = SqliteStore()
+  peer.merge_rows(snapshot)
+  with peer.transaction():
+    for row in snapshot["tasks"]:
+      if row["status"] == "in_progress":
+        peer._conn.execute(
+          "UPDATE tasks SET status = ?, modified_at = ? WHERE id = ?",
+          (row["status"], row["modified_at"], row["id"]),
+        )
+  assert set(peer.merge_rows({"tasks": changed})["updated"]) == {"first", "second"}
+  assert [task.status for task in peer.list_tasks()] == [
+    "upcoming",
+    "upcoming",
+    "finished",
+  ]
+  peer.close()
+  upgraded.close()
+
+
+@pytest.mark.parametrize("legacy_status", ["in_progress", "blocked"])
+def test_merging_legacy_task_status_normalizes_the_stored_row(
+  legacy_status: str,
+) -> None:
+  source = SqliteStore()
+  source.save_task_queue([Task(id="work", title="Work", details=["Do work"])])
+  snapshot = source.export_rows()
+  snapshot["tasks"][0]["status"] = legacy_status
+  with source.transaction():
+    source._conn.execute(
+      "UPDATE tasks SET status = ? WHERE id = 'work'", (legacy_status,)
+    )
+  target = SqliteStore()
+  target.merge_rows(snapshot)
+  assert target.list_tasks()[0].status == "upcoming"
+  normalized = target.export_rows()["tasks"][0]
+  assert normalized["status"] == "upcoming"
+  assert normalized["modified_at"] > snapshot["tasks"][0]["modified_at"]
+  assert source.merge_rows({"tasks": [normalized]})["updated"] == ["work"]
+  assert source.export_rows()["tasks"][0]["status"] == "upcoming"
+  source.close()
+  target.close()
+
+
+def test_merging_unknown_task_status_is_atomic() -> None:
+  source = SqliteStore()
+  source.save_task_queue(
+    [
+      Task(id="first", title="First", details=["Do work"]),
+      Task(id="work", title="Work", details=["Do work"]),
+    ]
+  )
+  snapshot = source.export_rows()
+  snapshot["tasks"][1]["status"] = "other"
+  target = SqliteStore()
+  with pytest.raises(ValueError, match="Invalid Task.status"):
+    target.merge_rows(snapshot)
+  assert target.list_tasks() == []
   source.close()
   target.close()
 

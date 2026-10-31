@@ -13,9 +13,18 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from .models import Attachment, Message, Report, ReportAnswer, ReportField, Task
+from .models import (
+  TASK_STATUSES,
+  Attachment,
+  Message,
+  Report,
+  ReportAnswer,
+  ReportField,
+  Task,
+)
 
 STATE_TABLES = ("messages", "tasks", "reports")
+LEGACY_TASK_STATUSES = frozenset({"in_progress", "blocked"})
 _STATE_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
@@ -206,6 +215,15 @@ class SqliteStore:
           "ALTER TABLE reports ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"
         )
       self._init_state_tracking()
+      now = datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+      legacy = self._conn.execute(
+        "SELECT id, modified_at FROM tasks WHERE status IN ('in_progress', 'blocked')"
+      ).fetchall()
+      for row in legacy:
+        self._conn.execute(
+          "UPDATE tasks SET status = 'upcoming', modified_at = ? WHERE id = ?",
+          (_advance_stamp(str(row["modified_at"]), now), row["id"]),
+        )
 
   def _init_state_tracking(self) -> None:
     # Arrival order stays independent of the clocks in merged rows.
@@ -807,6 +825,23 @@ class SqliteStore:
             f"SELECT modified_at FROM {table} WHERE id=?", (row_id,)
           ).fetchone()
           incoming_stamp = str(data.get("modified_at") or "")
+          if current is not None and _timestamp_us(incoming_stamp) <= _timestamp_us(
+            str(current["modified_at"])
+          ):
+            result["skipped"].append(row_id)
+            continue
+          if table == "tasks" and "status" in data:
+            status = data["status"]
+            if isinstance(status, str) and status in LEGACY_TASK_STATUSES:
+              data["status"] = "upcoming"
+              now = (
+                datetime.now(UTC)
+                .isoformat(timespec="microseconds")
+                .replace("+00:00", "Z")
+              )
+              data["modified_at"] = _advance_stamp(incoming_stamp, now)
+            elif status not in TASK_STATUSES:
+              raise ValueError(f"Invalid Task.status: {status!r}")
           if current is None:
             names = ",".join(data)
             marks = ",".join("?" for _ in data)
@@ -814,17 +849,13 @@ class SqliteStore:
               f"INSERT INTO {table} ({names}) VALUES ({marks})", tuple(data.values())
             )
             result["added"].append(row_id)
-          elif _timestamp_us(incoming_stamp) > _timestamp_us(
-            str(current["modified_at"])
-          ):
+          else:
             sets = ",".join(f"{key}=?" for key in data if key != "id")
             values = [value for key, value in data.items() if key != "id"]
             self._conn.execute(
               f"UPDATE {table} SET {sets} WHERE id=?", (*values, row_id)
             )
             result["updated"].append(row_id)
-          else:
-            result["skipped"].append(row_id)
     return result
 
   def get_meta(self, key: str, default: str | None = None) -> str | None:
@@ -871,7 +902,7 @@ class SqliteStore:
   @staticmethod
   def _row_to_task(row: sqlite3.Row) -> Task:
     keys = row.keys()
-    status = "upcoming" if row["status"] == "blocked" else str(row["status"])
+    status = "upcoming" if row["status"] in LEGACY_TASK_STATUSES else str(row["status"])
     raw_links = row["links_json"] if "links_json" in keys else ""
     parsed_links = json.loads(raw_links) if raw_links else None
     if isinstance(parsed_links, dict):
