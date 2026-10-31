@@ -203,6 +203,13 @@ def test_module_matrix_selects_owners_and_shared_changes():
     assert {row["name"] for row in changed_paths.module_matrix([shared])} == all_names
 
 
+def test_report_answer_browser_test_runs_with_preview_module():
+  path = "tests/skills/arena-steering/test_report_answer_ui.py"
+  selected = changed_paths.module_matrix([path])
+  assert [row["name"] for row in selected] == ["Preview"]
+  assert path in selected[0]["command"]
+
+
 def test_module_test_ownership_is_complete_and_unique():
   root = Path(changed_paths.__file__).resolve().parents[2]
   owned = [path for paths in changed_paths.MODULE_TESTS.values() for path in paths]
