@@ -36,9 +36,10 @@
         </button>
       </nav>
       <div class="topbar-actions row tight">
-        <button id="agent-interrupt" aria-pressed="false" aria-busy="false" class="icon-button" type="button" aria-label="Ask the agent to read files missing from context" title="Ask the agent to read files missing from context">
+        <button id="agent-interrupt" aria-pressed="false" aria-busy="false" class="icon-button" type="button" aria-label="Flag a violation" title="Flag a violation">
           <svg class="lucide lucide-flag" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"></path></svg>
         </button>
+        <p id="violation-status" class="violation-status" role="alert" hidden></p>
       </div>
     </header>
 
@@ -72,6 +73,22 @@
     <div data-slot="actions">
       <button type="submit" value="cancel" class="btn btn-secondary">Cancel</button>
       <button type="submit" value="confirm" class="btn btn-danger">Confirm</button>
+    </div>
+  </template>
+
+  <template data-modal-template="violation-flag">
+    <div id="violation-form" class="violation-form">
+      <label for="violation-reason">Violation type</label>
+      <select id="violation-reason" class="select" required></select>
+      <label for="violation-clause-file">Clause file (optional)</label>
+      <select id="violation-clause-file" class="select"></select>
+      <label for="violation-note">Cited reason (optional)</label>
+      <textarea id="violation-note" class="textarea" rows="3" placeholder="Which clause, and what happened?"></textarea>
+      <p id="violation-error" class="violation-error" role="alert" hidden></p>
+    </div>
+    <div data-slot="actions">
+      <button type="submit" value="cancel" formnovalidate class="btn btn-secondary">Cancel</button>
+      <button id="violation-submit" type="button" class="btn btn-primary">Send flag</button>
     </div>
   </template>
 

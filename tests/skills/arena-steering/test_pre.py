@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -47,6 +48,33 @@ def _count(state_dir: Path) -> str | None:
 
 def _verdict(ctx: pre.PreContext) -> int:
   return pre.run_pipeline(ctx).verdict
+
+
+@pytest.mark.parametrize("failure_point", ("resolve", "open", "query"))
+def test_pre_allows_work_but_blocks_pushes_when_state_is_unreadable(
+  failure_point: str, _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Acknowledged note.", acked=True)
+
+  def unavailable(*_args: object, **_kwargs: object) -> None:
+    raise sqlite3.OperationalError("state unreadable")
+
+  if failure_point == "resolve":
+    monkeypatch.setattr(cli, "resolve_state_dir", unavailable)
+  elif failure_point == "open":
+    monkeypatch.setattr(cli, "open_services", unavailable)
+  else:
+    monkeypatch.setattr(cli.MessageService, "pending_ids", unavailable)
+
+  code, out = _run("pre", "-c", "printf ok", "-l", "printf ok", "-s", "bash")
+  assert code == pre.CONTINUE
+  assert "STATE UNAVAILABLE" in out
+
+  code, out = _run(
+    "pre", "-c", "git push origin branch", "-l", "git push origin branch", "-s", "bash"
+  )
+  assert code == pre.BLOCK
+  assert "PUSH BLOCKED" in out
 
 
 def test_a_push_blocks_the_moment_a_note_waits() -> None:
@@ -195,8 +223,19 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
   python.chmod(0o755)
   profile = home / ".bash_profile"
-  profile.write_text("# Existing profile content\n", encoding="utf-8")
-  env = {**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin"}
+  profile.write_text(
+    "# Existing profile content\n"
+    'trap \'printf "%s\\n" "$BASH_COMMAND" >> "$HOME/prior-debug.log"\' DEBUG\n',
+    encoding="utf-8",
+  )
+  outside = tmp_path / "outside"
+  outside.mkdir()
+  env = {
+    **os.environ,
+    "HOME": str(home),
+    "PATH": "/usr/bin:/bin",
+    "STEER_STATE_DIR": str(tmp_path / "override"),
+  }
   install = scripts / "install.sh"
   for _ in range(2):
     result = subprocess.run(
@@ -220,7 +259,71 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   )
   assert result.returncode == 0, result.stderr
   assert str(home / ".local" / "bin" / "steer") in result.stdout
-  assert "steer 2.1.0" in result.stdout
+  assert "steer 2.2.0" in result.stdout
+
+  shell = subprocess.run(
+    [
+      "bash",
+      "-c",
+      'source "$HOME/.bash_profile"; source "$HOME/.bash_profile"; printf "safe command\\n"; trap -p DEBUG',
+    ],
+    check=False,
+    cwd=outside,
+    env=env,
+    capture_output=True,
+    text=True,
+  )
+  assert shell.returncode == 0, shell.stderr
+  assert "safe command" in shell.stdout
+  assert "STATE UNAVAILABLE" in shell.stdout
+  assert shell.stdout.count("arena-steering-gate") == 1
+  assert "safe command" in (home / "prior-debug.log").read_text(encoding="utf-8")
+
+  unavailable_push = subprocess.run(
+    [
+      "bash",
+      "-c",
+      'source "$HOME/.bash_profile"; git() { echo push-ran; }; git push origin fake',
+    ],
+    check=False,
+    cwd=outside,
+    env=env,
+    capture_output=True,
+    text=True,
+  )
+  assert unavailable_push.returncode == pre.BLOCK
+  assert "PUSH BLOCKED" in unavailable_push.stdout
+  assert "push-ran" not in unavailable_push.stdout
+
+  read = subprocess.run(
+    ["bash", "-c", 'source "$HOME/.bash_profile"; steer read'],
+    check=False,
+    cwd=outside,
+    env=env,
+    capture_output=True,
+    text=True,
+  )
+  assert read.returncode == 0, read.stderr
+  assert (project / "arena-state" / "state.sqlite3").is_file()
+  assert not (outside / "arena-state").exists()
+  assert not (tmp_path / "override").exists()
+
+  _seed(project / "arena-state", "Read and acknowledge this note.")
+  push = subprocess.run(
+    [
+      "bash",
+      "-c",
+      'source "$HOME/.bash_profile"; git() { echo push-ran; }; git push origin fake',
+    ],
+    check=False,
+    cwd=outside,
+    env=env,
+    capture_output=True,
+    text=True,
+  )
+  assert push.returncode == pre.BLOCK
+  assert "PUSH BLOCKED" in push.stdout
+  assert "push-ran" not in push.stdout
 
 
 def test_installer_does_not_overwrite_an_unrelated_steer(tmp_path: Path) -> None:

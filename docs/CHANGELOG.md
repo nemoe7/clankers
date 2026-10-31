@@ -16,6 +16,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Route demo changes, reset tests, and connection tests to the Preview test group (`workflows/changed_paths.py`).
 - Assign the composer parity browser test to the Preview test group (`workflows/changed_paths.py`).
 - Assign the message retry browser test to the Preview test group (`workflows/changed_paths.py`).
+- Assign the browser violation regression to the Preview test group (`workflows/changed_paths.py`).
+- Ignore `.agents/` during Gitleaks scans while retaining the default rules (`.gitleaks.toml`).
 - Move the configurable steering demo out of the shipped skill (`demo-arena-steer.py`).
 
 ## 2026-10-30

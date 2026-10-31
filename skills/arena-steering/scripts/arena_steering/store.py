@@ -45,6 +45,10 @@ def _timestamp_iso(value: int) -> str:
   )
 
 
+def _message_write_stamp(previous: str, proposed: str) -> str:
+  return _timestamp_iso(max(_timestamp_us(previous) + 1, _timestamp_us(proposed)))
+
+
 def _advance_stamp(previous: str, proposed: str) -> str:
   old, new = _timestamp_us(previous), _timestamp_us(proposed)
   if new > old and proposed > previous:
@@ -93,8 +97,8 @@ class SqliteStore:
       self._conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS messages (
-          seq INTEGER PRIMARY KEY AUTOINCREMENT,
-          id TEXT UNIQUE NOT NULL,
+          id TEXT PRIMARY KEY NOT NULL,
+          written_at TEXT NOT NULL,
           body TEXT NOT NULL,
           hidden INTEGER NOT NULL DEFAULT 0,
           blocking INTEGER NOT NULL DEFAULT 1,
@@ -105,6 +109,8 @@ class SqliteStore:
           replies_seen INTEGER NOT NULL DEFAULT 0,
           modified_at TEXT NOT NULL,
           message_type TEXT NOT NULL DEFAULT 'message',
+          violation_type TEXT NOT NULL DEFAULT '',
+          violation_clause_file TEXT NOT NULL DEFAULT '',
           answer_json TEXT NOT NULL DEFAULT '{}'
         );
 
@@ -180,6 +186,29 @@ class SqliteStore:
         self._conn.execute(
           "ALTER TABLE messages ADD COLUMN answer_json TEXT NOT NULL DEFAULT '{}'"
         )
+      if "violation_type" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN violation_type TEXT NOT NULL DEFAULT ''"
+        )
+      if "violation_clause_file" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN violation_clause_file TEXT NOT NULL DEFAULT ''"
+        )
+      if "written_at" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN written_at TEXT NOT NULL DEFAULT ''"
+        )
+        last = ""
+        for row in self._conn.execute(
+          "SELECT id, modified_at FROM messages ORDER BY seq"
+        ).fetchall():
+          last = _message_write_stamp(last, str(row["modified_at"]))
+          self._conn.execute(
+            "UPDATE messages SET written_at = ? WHERE id = ?", (last, row["id"])
+          )
+      self._conn.execute(
+        "CREATE INDEX IF NOT EXISTS messages_written_at ON messages(written_at, id)"
+      )
       self._conn.execute(
         "CREATE INDEX IF NOT EXISTS messages_report_answer "
         "ON messages(message_type, json_extract(answer_json, '$.report_id'))"
@@ -361,7 +390,9 @@ class SqliteStore:
     self, *, unread_only: bool = False, include_hidden: bool = True
   ) -> list[Message]:
     with self._lock:
-      rows = self._conn.execute("SELECT * FROM messages ORDER BY seq ASC").fetchall()
+      rows = self._conn.execute(
+        "SELECT * FROM messages ORDER BY written_at ASC, id ASC"
+      ).fetchall()
     messages = [self._row_to_message(row) for row in rows]
     if not include_hidden:
       messages = [msg for msg in messages if not msg.hidden]
@@ -401,17 +432,24 @@ class SqliteStore:
       cursor = None
       if before:
         row = self._conn.execute(
-          f"SELECT seq FROM messages WHERE id = ? AND {where}", [before, *params]
+          f"SELECT written_at FROM messages WHERE id = ? AND {where}", [before, *params]
         ).fetchone()
         if row is None:
           raise ValueError(
             "Message page cursor is missing or does not match the filters"
           )
         cursor = row[0]
-      page_where = where + (" AND seq < ?" if cursor is not None else "")
-      page_params = [*params, *([cursor] if cursor is not None else []), limit + 1]
+      page_where = where + (
+        " AND (written_at, id) < (?, ?)" if cursor is not None else ""
+      )
+      page_params = [
+        *params,
+        *([cursor, before] if cursor is not None else []),
+        limit + 1,
+      ]
       rows = self._conn.execute(
-        f"SELECT * FROM messages WHERE {page_where} ORDER BY seq DESC LIMIT ?",
+        f"SELECT * FROM messages WHERE {page_where} "
+        "ORDER BY written_at DESC, id DESC LIMIT ?",
         page_params,
       ).fetchall()
     has_more = len(rows) > limit
@@ -421,10 +459,16 @@ class SqliteStore:
       has_more,
     )
 
+  def _message_written_at(self, proposed: str) -> str:
+    row = self._conn.execute(
+      "SELECT written_at FROM messages ORDER BY written_at DESC, id DESC LIMIT 1"
+    ).fetchone()
+    return _message_write_stamp(str(row[0]) if row is not None else "", proposed)
+
   def save_message(self, message: Message) -> Message:
     with self.transaction():
       existing = self._conn.execute(
-        "SELECT seq, modified_at FROM messages WHERE id = ?", (message.id,)
+        "SELECT modified_at FROM messages WHERE id = ?", (message.id,)
       ).fetchone()
       if existing is not None:
         message.modified_at = _advance_stamp(
@@ -437,12 +481,14 @@ class SqliteStore:
         self._conn.execute(
           """
           INSERT INTO messages (
-            id, body, hidden, blocking, attachments_json, parent_ids_json, status, acks_json,
-            modified_at, message_type, answer_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id, written_at, body, hidden, blocking, attachments_json, parent_ids_json,
+            status, acks_json, modified_at, message_type, violation_type,
+            violation_clause_file, answer_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             message.id,
+            self._message_written_at(message.modified_at),
             message.body,
             int(message.hidden),
             int(message.blocking),
@@ -452,6 +498,8 @@ class SqliteStore:
             acks_json,
             message.modified_at,
             message.type,
+            message.violation_type,
+            message.violation_clause_file,
             json.dumps(message.answer_data),
           ),
         )
@@ -469,6 +517,8 @@ class SqliteStore:
               acks_json = ?,
               modified_at = ?,
               message_type = ?,
+              violation_type = ?,
+              violation_clause_file = ?,
               answer_json = ?
           WHERE id = ?
           """,
@@ -483,6 +533,8 @@ class SqliteStore:
             acks_json,
             message.modified_at,
             message.type,
+            message.violation_type,
+            message.violation_clause_file,
             json.dumps(message.answer_data),
             message.id,
           ),
@@ -513,10 +565,12 @@ class SqliteStore:
         raise ValueError(f"Message ID {message.id!r} already exists")
       self._conn.execute(
         """INSERT INTO messages
-          (id, body, hidden, blocking, attachments_json, parent_ids_json, status, acks_json, modified_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+          (id, written_at, body, hidden, blocking, attachments_json, parent_ids_json,
+           status, acks_json, modified_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
           message.id,
+          self._message_written_at(message.modified_at),
           message.body,
           int(message.hidden),
           int(message.blocking),
@@ -806,6 +860,9 @@ class SqliteStore:
         else:
           rows = self._conn.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
         out[table] = [dict(row) for row in rows]
+        if table == "messages":
+          for row in out[table]:
+            row.pop("seq", None)
       return out
 
   def state_stamp(self) -> str:
@@ -851,6 +908,16 @@ class SqliteStore:
           ):
             result["skipped"].append(row_id)
             continue
+          if table == "messages":
+            if current is None:
+              stamp = data.get("written_at")
+              data["written_at"] = (
+                _timestamp_iso(_timestamp_us(str(stamp)))
+                if stamp
+                else self._message_written_at(incoming_stamp)
+              )
+            else:
+              data.pop("written_at", None)
           if table == "tasks" and "details_json" in data:
             raw_details = json.loads(data["details_json"])
             unique_details = list(
@@ -928,6 +995,10 @@ class SqliteStore:
       replies_seen=bool(row["replies_seen"]) if "replies_seen" in keys else False,
       modified_at=str(row["modified_at"]),
       type=str(row["message_type"]) if "message_type" in keys else "message",
+      violation_type=str(row["violation_type"]) if "violation_type" in keys else "",
+      violation_clause_file=str(row["violation_clause_file"])
+      if "violation_clause_file" in keys
+      else "",
       answer_data=json.loads(row["answer_json"] or "{}")
       if "answer_json" in keys
       else {},

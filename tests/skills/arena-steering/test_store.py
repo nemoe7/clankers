@@ -18,7 +18,7 @@ from arena_steering.models import (
 from arena_steering.ports import SecretsHexIdGenerator, UtcClock
 from arena_steering.store import SqliteStore
 
-EXPECTED_INITIAL_VERSION = "2.1.0"
+EXPECTED_INITIAL_VERSION = "2.2.0"
 
 
 def test_package_exposes_current_semver_version() -> None:
@@ -371,6 +371,89 @@ def test_concurrent_reply_and_seen_never_hide_the_new_reply(tmp_path):
     assert not first.get_message("aa1234").replies_seen
   first.close()
   second.close()
+
+
+def test_message_write_stamps_keep_pages_and_sync_stable_on_collision() -> None:
+  stamp = "2026-01-01T00:00:00.000000Z"
+  first, second = SqliteStore(), SqliteStore()
+  first.save_message(Message(id="fe0001", body="First", modified_at=stamp))
+  second.save_message_once(
+    Message(id="0a0001", body="Second", modified_at=stamp), "request-1", "fingerprint"
+  )
+  first_row = first.export_rows()["messages"][0]
+  second_row = second.export_rows()["messages"][0]
+  assert first_row["written_at"] == second_row["written_at"] == stamp
+
+  left, right = SqliteStore(), SqliteStore()
+  left.merge_rows({"messages": [first_row, second_row]})
+  right.merge_rows({"messages": [second_row, first_row]})
+  for store in (left, right):
+    assert [msg.id for msg in store.list_messages()] == ["0a0001", "fe0001"]
+    page, total, has_more = store.list_message_page(
+      unread_only=False, include_hidden=True, query="", before="fe0001", limit=1
+    )
+    assert [msg.id for msg in page] == ["0a0001"]
+    assert total == 2 and not has_more
+
+  cursor = second.state_stamp()
+  second.append_message_ack("0a0001", "Read", stamp)
+  changes = second.export_rows(since=cursor)["messages"]
+  assert [row["id"] for row in changes] == ["0a0001"]
+  assert changes[0]["written_at"] == stamp
+  left.merge_rows({"messages": changes})
+  assert [msg.id for msg in left.list_messages()] == ["0a0001", "fe0001"]
+  assert left.get_message("0a0001").acks == ["Read"]
+  for store in (first, second, left, right):
+    store.close()
+
+
+def test_legacy_message_order_migrates_to_write_stamps(tmp_path: Path) -> None:
+  import sqlite3
+
+  path = tmp_path / "legacy-order.sqlite3"
+  with sqlite3.connect(path) as conn:
+    conn.execute(
+      """CREATE TABLE messages (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL,
+        body TEXT NOT NULL, hidden INTEGER NOT NULL DEFAULT 0,
+        blocking INTEGER NOT NULL DEFAULT 1,
+        attachments_json TEXT NOT NULL DEFAULT '[]',
+        parent_ids_json TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'sent', acks_json TEXT NOT NULL DEFAULT '[]',
+        replies_seen INTEGER NOT NULL DEFAULT 0, modified_at TEXT NOT NULL,
+        message_type TEXT NOT NULL DEFAULT 'message',
+        violation_type TEXT NOT NULL DEFAULT '',
+        violation_clause_file TEXT NOT NULL DEFAULT '',
+        answer_json TEXT NOT NULL DEFAULT '{}'
+      )"""
+    )
+    conn.executemany(
+      "INSERT INTO messages (id, body, modified_at) VALUES (?, ?, ?)",
+      [
+        ("fe0001", "First", "2026-01-03T00:00:00Z"),
+        ("0a0001", "Second", "2026-01-01T00:00:00Z"),
+      ],
+    )
+  store = SqliteStore(path)
+  rows = store.export_rows()["messages"]
+  assert [msg.id for msg in store.list_messages()] == ["fe0001", "0a0001"]
+  assert all("seq" not in row and row["written_at"] for row in rows)
+  assert rows[0]["written_at"] < rows[1]["written_at"]
+  old_snapshot = [
+    {key: value for key, value in row.items() if key != "written_at"} for row in rows
+  ]
+  restored = SqliteStore()
+  restored.merge_rows({"messages": old_snapshot})
+  assert [msg.id for msg in restored.list_messages()] == ["fe0001", "0a0001"]
+  restored.close()
+  store.save_message(
+    Message(id="aa0003", body="Third", modified_at="2025-01-01T00:00:00Z")
+  )
+  assert [msg.id for msg in store.list_messages()] == ["fe0001", "0a0001", "aa0003"]
+  store.close()
+  reopened = SqliteStore(path)
+  assert [msg.id for msg in reopened.list_messages()] == ["fe0001", "0a0001", "aa0003"]
+  reopened.close()
 
 
 def test_reply_seen_migration_marks_legacy_replies_unseen(tmp_path):

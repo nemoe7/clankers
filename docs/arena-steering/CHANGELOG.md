@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.2.0]
+
+### Added
+
+- `scripts/install.sh`: Enable the Bash gate in login shells, preserve a prior DEBUG trap, and keep installation idempotent.
+
+- `models.py`, `services.py`, `store.py`, `server.py`: Persist hidden blocking violation flags with a reason, an optional clause file, and tab context. Validate input and track acknowledgements.
+
+- `assets/`: Show tab-specific violation forms, a pending indicator, cancellation, and retry feedback.
+
+### Changed
+
+- `cli.py`, `pre.py`: Resolve state from the installed checkout rather than the current directory. Warn on unreadable state, but refuse pushes.
+
+- `assets/app.js`: Keep survey rechecks separate from the violation button.
+
+- `store.py`: Order messages and pages by write time and ID. Keep old insertion order when replacing legacy sequences, and retain write times across state sync.
+
 ## [2.1.0]
 
 ### Removed

@@ -140,6 +140,8 @@ class MessageService:
     *,
     hidden: bool = False,
     blocking: bool = True,
+    violation_type: str = "",
+    violation_clause_file: str = "",
     attachments: list[Attachment] | None = None,
     parent_ids: list[str] | None = None,
     msg_id: str | None = None,
@@ -167,6 +169,8 @@ class MessageService:
       body=body,
       hidden=hidden,
       blocking=blocking,
+      violation_type=violation_type,
+      violation_clause_file=violation_clause_file,
       attachments=list(attachments or []),
       parent_ids=resolved_parent_ids,
       status="sent",
@@ -274,6 +278,17 @@ class MessageService:
       delivered_answers.append((report, latest))
 
     return {"messages": delivered_messages, "report_answers": delivered_answers}
+
+  def pending_violation(self) -> Message | None:
+    """Return the oldest unacknowledged violation message."""
+    return next(
+      (
+        msg
+        for msg in self._messages.list_messages(unread_only=True, include_hidden=True)
+        if msg.type == "message" and msg.violation_type and msg.requires_ack
+      ),
+      None,
+    )
 
   def pending_ids(self) -> list[str]:
     """Return unacked message and report-answer IDs without marking anything seen."""

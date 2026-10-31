@@ -2,8 +2,9 @@
 useDefault = true
 
 [allowlist]
-description = "Ignore vendored third-party bundles"
+description = "Ignore installed agent copies and vendored bundles"
 paths = [
+  '''^\.agents/''',
   '''(^|/)assets/mermaid\.min\.js$''',
   '''(^|/)assets/markdown-it\.min\.js$''',
 ]

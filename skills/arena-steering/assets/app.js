@@ -156,11 +156,31 @@ function applyConnection(requestId, health, error = false) {
   paintConnection(document.getElementById("view-messages"), connection);
 }
 
+function paintViolationFlag(health) {
+  const button = document.getElementById("agent-interrupt");
+  if (!button) return;
+  const pending = Boolean(health.agent_interrupt_pending);
+  const label = pending
+    ? `Flagged${health.violation_type ? `: ${health.violation_type.replaceAll("-", " ")}` : ""}. Click to cancel.`
+    : "Flag a violation";
+  button.setAttribute("aria-pressed", String(pending));
+  button.setAttribute("aria-label", label);
+  button.title = label;
+}
+
+function setViolationStatus(message) {
+  const status = document.getElementById("violation-status");
+  if (!status) return;
+  status.textContent = message;
+  status.hidden = !message;
+}
+
 async function getHealthWithConnection() {
   const requestId = ++healthRequestId;
   try {
     const health = await api.getHealth();
     applyConnection(requestId, health);
+    if (requestId === appliedHealthRequestId) paintViolationFlag(health);
     return health;
   } catch (error) {
     applyConnection(requestId, null, true);
@@ -941,6 +961,61 @@ function initImageModal() {
   });
 }
 
+function openViolationForm(health, trigger) {
+  const tab = store.getState().activeTab;
+  const types = health.violation_types?.[tab];
+  if (!Array.isArray(types) || !types.length) {
+    throw new Error("Violation types are unavailable. Click to retry.");
+  }
+  const reportId = tab === "reports" ? store.getState().selectedReportId : null;
+  modal.open("violation-flag", { title: "Flag a violation", trigger });
+  const form = document.getElementById("violation-form");
+  const reason = document.getElementById("violation-reason");
+  const clause = document.getElementById("violation-clause-file");
+  const note = document.getElementById("violation-note");
+  const submit = document.getElementById("violation-submit");
+  const errorText = document.getElementById("violation-error");
+  reason.replaceChildren(...types.map((type) =>
+    new Option(type.replaceAll("-", " ").replace(/^./, (char) => char.toUpperCase()), type)
+  ));
+  clause.replaceChildren(
+    new Option("No clause file", ""),
+    ...(Array.isArray(health.read_set) ? health.read_set : []).map((path) => new Option(path, path)),
+  );
+  submit.addEventListener("click", async () => {
+    if (submit.disabled) return;
+    errorText.hidden = true;
+    if (!reason.value) {
+      errorText.textContent = "Choose a violation type.";
+      errorText.hidden = false;
+      return;
+    }
+    const payload = {
+      armed: true,
+      tab,
+      reason: reason.value,
+      clause_file: clause.value || null,
+      note: note.value.trim() || null,
+    };
+    if (tab === "reports" && reportId) payload.report_id = reportId;
+    submit.disabled = true;
+    submit.setAttribute("aria-busy", "true");
+    try {
+      const response = await api.flagViolation(payload);
+      paintViolationFlag(response);
+      const shell = document.getElementById("modal-shell");
+      if (shell.open && shell.querySelector("#violation-form") === form) shell.close("confirm");
+      void refreshAll(true);
+    } catch (error) {
+      errorText.textContent = `Could not send flag: ${error.message}. Click to retry.`;
+      errorText.hidden = false;
+    } finally {
+      submit.disabled = false;
+      submit.setAttribute("aria-busy", "false");
+    }
+  });
+}
+
 function initEvents() {
   initImageModal();
   syncViewportHeight();
@@ -979,11 +1054,23 @@ function initEvents() {
 
   const interruptBtn = document.getElementById("agent-interrupt");
   interruptBtn?.addEventListener("click", async () => {
+    if (interruptBtn.disabled) return;
+    interruptBtn.disabled = true;
     interruptBtn.setAttribute("aria-busy", "true");
+    setViolationStatus("");
     try {
-      await api.triggerBibleCheck();
-      await refreshAll(true);
+      const health = await getHealthWithConnection();
+      if (health.agent_interrupt_pending) {
+        const response = await api.flagViolation({ armed: false });
+        paintViolationFlag(response);
+        await refreshAll(true);
+      } else {
+        openViolationForm(health, interruptBtn);
+      }
+    } catch (error) {
+      setViolationStatus(`Could not update flag: ${error.message}. Click to retry.`);
     } finally {
+      interruptBtn.disabled = false;
       interruptBtn.setAttribute("aria-busy", "false");
     }
   });

@@ -122,6 +122,8 @@ class Message:
   replies_seen: bool = False
   modified_at: str = ""
   type: str = "message"
+  violation_type: str = ""
+  violation_clause_file: str = ""
   answer_data: dict[str, Any] = field(default_factory=dict)
 
   def __post_init__(self) -> None:
@@ -154,6 +156,16 @@ class Message:
     self.modified_at = str(self.modified_at or "")
     if self.type not in {"message", "report_answer"}:
       raise ValueError(f"Invalid Message.type: {self.type!r}")
+    if not isinstance(self.violation_type, str):
+      raise TypeError("Message.violation_type must be text")
+    if not isinstance(self.violation_clause_file, str):
+      raise TypeError("Message.violation_clause_file must be text")
+    if self.violation_type and (
+      self.type != "message" or not self.hidden or not self.blocking
+    ):
+      raise ValueError("Violation flags must be hidden blocking messages")
+    if self.violation_clause_file and not self.violation_type:
+      raise ValueError("A clause file requires a violation flag")
     if not isinstance(self.answer_data, dict):
       raise TypeError("Message.answer_data must be a dictionary")
     self.answer_data = dict(self.answer_data)
@@ -238,6 +250,8 @@ class Message:
       "replies_revision": self.replies_revision,
       "modified_at": self.modified_at,
       "type": self.type,
+      "violation_type": self.violation_type,
+      "violation_clause_file": self.violation_clause_file,
       "answer_data": dict(self.answer_data),
     }
 
@@ -255,6 +269,8 @@ class Message:
       replies_seen=bool(data.get("replies_seen", False)),
       modified_at=str(data.get("modified_at", "")),
       type=str(data.get("type", "message")),
+      violation_type=data.get("violation_type", ""),
+      violation_clause_file=data.get("violation_clause_file", ""),
       answer_data=dict(data.get("answer_data", {})),
     )
 
