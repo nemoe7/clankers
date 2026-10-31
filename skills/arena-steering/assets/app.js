@@ -140,12 +140,22 @@ const REPORT_VIEW_INTERVAL = 30_000;
 let lastReportView = { id: null, at: 0 };
 let reportViewTimer = null;
 
+function isNewerReportVersion(candidate, baseline) {
+  const candidateMs = Date.parse(candidate);
+  const baselineMs = Date.parse(baseline);
+  if (!Number.isFinite(candidateMs) || !Number.isFinite(baselineMs)) return false;
+  if (candidateMs !== baselineMs) return candidateMs > baselineMs;
+  // Date.parse drops the microseconds that the store uses to break write ties.
+  const remainingMicros = (stamp) => Number((stamp.match(/T\d\d:\d\d:\d\d\.(\d+)/)?.[1] || "").padEnd(6, "0").slice(3, 6));
+  return remainingMicros(candidate) > remainingMicros(baseline);
+}
+
 async function ensureReportCached(reportId, expectedModifiedAt = null, { quiet = false } = {}) {
   if (!reportId) return null;
   const cached = reportCache.get(reportId);
   if (
     cached &&
-    (!expectedModifiedAt || cached.modified_at === expectedModifiedAt) &&
+    (!expectedModifiedAt || cached.modified_at === expectedModifiedAt || isNewerReportVersion(cached.modified_at, expectedModifiedAt)) &&
     Array.isArray(cached.report?.blocks)
   ) {
     return cached.report;
@@ -157,6 +167,10 @@ async function ensureReportCached(reportId, expectedModifiedAt = null, { quiet =
     try {
       const res = await api.getReport(reportId);
       if (res?.report) {
+        const current = reportCache.get(reportId);
+        if (current && Array.isArray(current.report?.blocks) && isNewerReportVersion(current.modified_at, res.report.modified_at)) {
+          return current.report;
+        }
         reportCache.set(reportId, {
           modified_at: res.report.modified_at,
           report: res.report,
@@ -177,6 +191,10 @@ function hydrateReportsWithCache(summaries) {
   const activeIds = new Set();
   const merged = (summaries || []).map((summary) => {
     activeIds.add(summary.id);
+    const cached = reportCache.get(summary.id);
+    if (cached && isNewerReportVersion(cached.modified_at, summary.modified_at)) {
+      return cached.report;
+    }
     if (Array.isArray(summary.blocks)) {
       reportCache.set(summary.id, {
         modified_at: summary.modified_at,
@@ -184,7 +202,6 @@ function hydrateReportsWithCache(summaries) {
       });
       return summary;
     }
-    const cached = reportCache.get(summary.id);
     if (cached && cached.modified_at === summary.modified_at) {
       return {
         ...cached.report,

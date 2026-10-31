@@ -41,6 +41,7 @@ This log has no Unreleased section.
 ### Changed
 
 - `assets/`: Show independent needs-answer and unread markers. A lone question marker uses the default dot position. Mark unseen acknowledgements on the tab and picker.
+- `assets/`: Keep newer report content when delayed responses arrive, preserving focused drafts during view-only refreshes.
 
 - `models.py`, `services.py`, `store.py`: Keep task details unique across edits, answer copies, and sync.
 

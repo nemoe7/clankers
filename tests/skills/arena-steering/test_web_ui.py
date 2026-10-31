@@ -1874,3 +1874,177 @@ def test_report_picker_identifies_unseen_acknowledgements() -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize(
+  ("first_stamp", "next_stamp"),
+  [
+    ("2027-01-01T00:00:00Z", "2027-01-01T00:20:00Z"),
+    ("2027-01-01T00:00:00.000001Z", "2027-01-01T00:00:00.000002Z"),
+  ],
+)
+def test_report_refresh_preserves_focus_after_stale_list_response(
+  first_stamp: str, next_stamp: str
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Report refresh race")
+  app.reports.publish_report(
+    "decision",
+    "Decision",
+    '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
+  )
+
+  class Clock:
+    stamp = first_stamp
+
+    def now_iso(self) -> str:
+      return self.stamp
+
+  clock = Clock()
+  app.reports._clock = clock
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.set_default_timeout(5000)
+        page.clock.install()
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        with page.expect_response("**/reports/decision/seen"):
+          page.locator("#tab-reports").click()
+        field = page.locator(".field-text-input")
+        field.fill("Draft")
+        field.focus()
+        original = field.element_handle()
+        held = []
+
+        def delay_list(route) -> None:
+          response = route.fetch()
+          held.append((route, response))
+          page.evaluate("console.log('report-list-held')")
+
+        page.route("**/reports?*", delay_list, times=1)
+        with page.expect_console_message(
+          lambda message: message.text == "report-list-held"
+        ):
+          page.clock.fast_forward(3_000)
+        clock.stamp = next_stamp
+        with page.expect_response("**/reports/decision/seen"):
+          page.clock.fast_forward(31_000)
+        page.evaluate(
+          "() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))"
+        )
+        assert original.evaluate("el => el === document.activeElement")
+        with page.expect_response("**/reports?*"):
+          held[0][0].fulfill(response=held[0][1])
+        page.evaluate(
+          "() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))"
+        )
+        assert original.evaluate(
+          "el => el.isConnected && el === document.activeElement"
+        )
+        assert original.input_value() == "Draft"
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_report_refresh_ignores_delayed_older_detail_response() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Report detail race")
+  field_md = '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n'
+  app.reports.publish_report(
+    "decision", "Decision", "# First report body\n\n" + field_md
+  )
+
+  class Clock:
+    stamp = "2027-01-01T00:00:00.000001Z"
+
+    def now_iso(self) -> str:
+      return self.stamp
+
+  clock = Clock()
+  app.reports._clock = clock
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.set_default_timeout(5000)
+        page.clock.install()
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        with page.expect_response("**/reports/decision/seen"):
+          page.locator("#tab-reports").click()
+        page.get_by_role("heading", name="First report body").wait_for()
+        held = []
+
+        def delay_detail(route) -> None:
+          response = route.fetch()
+          held.append((route, response))
+          page.evaluate("console.log('report-detail-held')")
+
+        page.route("**/reports/decision", delay_detail, times=1)
+        clock.stamp = "2027-01-01T00:00:00.000002Z"
+        app.reports.publish_report(
+          "decision", "Decision", "# Older report body\n\n" + field_md
+        )
+        with page.expect_console_message(
+          lambda message: message.text == "report-detail-held"
+        ):
+          page.clock.fast_forward(3_000)
+        clock.stamp = "2027-01-01T00:00:00.000003Z"
+        app.reports.publish_report(
+          "decision", "Decision", "# Newest report body\n\n" + field_md
+        )
+        page.clock.fast_forward(3_000)
+        page.get_by_role("heading", name="Newest report body").wait_for()
+        field = page.locator(".field-text-input")
+        field.fill("Draft")
+        field.focus()
+        original = field.element_handle()
+        with page.expect_response("**/reports/decision"):
+          held[0][0].fulfill(response=held[0][1])
+        page.evaluate(
+          "() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))"
+        )
+        assert original.evaluate(
+          "el => el.isConnected && el === document.activeElement"
+        )
+        assert original.input_value() == "Draft"
+        assert page.get_by_role("heading", name="Newest report body").is_visible()
+        assert page.get_by_role("heading", name="Older report body").count() == 0
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
