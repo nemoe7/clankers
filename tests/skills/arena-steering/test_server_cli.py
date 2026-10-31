@@ -25,6 +25,7 @@ SECOND_DETAIL_TOKEN = "detail-token-two"
 REPORT_ID_PORT = "port-report"
 TASK_ID_CLI = "cli-task"
 TASK_ID_BASE = "base-task"
+PR_VERIFICATION_ERROR = "did not verify"
 
 
 @pytest.fixture(autouse=True)
@@ -1402,10 +1403,14 @@ def test_cli_pr_update_and_job_log_use_gh_seam(tmp_path: Path, monkeypatch) -> N
   body_file = tmp_path / "pr-body.md"
   body_file.write_text("## Summary\n\nBody text.\n", encoding="utf-8")
   calls: list[list[str]] = []
+  inputs: list[str | None] = []
 
-  def fake_run(args, **_kwargs):
+  def fake_run(args, **kwargs):
     calls.append(list(args))
-    if args[:3] == ["gh", "pr", "view"]:
+    inputs.append(kwargs.get("input"))
+    if args[:3] == ["gh", "api", "repos/{owner}/{repo}/pulls/122"]:
+      if "PATCH" in args:
+        return subprocess.CompletedProcess(args, 0, stdout="{}", stderr="")
       return subprocess.CompletedProcess(
         args,
         0,
@@ -1438,9 +1443,20 @@ def test_cli_pr_update_and_job_log_use_gh_seam(tmp_path: Path, monkeypatch) -> N
   )
   assert code == 0
   assert "Updated PR #122" in out
-  assert calls[0][:3] == ["gh", "pr", "edit"]
-  assert "--body-file" in calls[0]
-  assert calls[1][:3] == ["gh", "pr", "view"]
+  assert calls[0] == [
+    "gh",
+    "api",
+    "repos/{owner}/{repo}/pulls/122",
+    "-X",
+    "PATCH",
+    "--input",
+    "-",
+  ]
+  assert json.loads(inputs[0]) == {
+    "title": "New title",
+    "body": "## Summary\n\nBody text.\n",
+  }
+  assert calls[1] == ["gh", "api", "repos/{owner}/{repo}/pulls/122"]
 
   code, out, _ = _run_cli(state_dir, "job-log", "-r", "41000725677")
   assert code == 0
@@ -2641,3 +2657,138 @@ def test_serve_binds_a_fixed_host_on_the_v1_port() -> None:
   assert cli.SERVE_PORT == 8000
   with pytest.raises(SystemExit):
     cli.main(["serve", "--host", "127.0.0.1"], out=io.StringIO(), err=io.StringIO())
+
+
+@pytest.mark.parametrize(
+  ("location", "token"),
+  [
+    ("title", "aa11bb"),
+    ("body", "cc22dd"),
+    ("body", "review-task"),
+    ("title", "decision-report"),
+  ],
+)
+def test_cli_pr_update_blocks_session_local_ids(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch, location: str, token: str
+) -> None:
+  state_dir = cli.resolve_state_dir()
+  store, messages, tasks, reports = cli.open_services(state_dir)
+  messages.send_message("Hidden note", msg_id="aa11bb", hidden=True)
+  tasks.create_task("review-task", "Review", details=["Review"])
+  reports.publish_report(
+    "decision-report",
+    "Decision",
+    '<!-- question {"id": "select", "label": "Select?"} -->\n'
+    'Select?\n- ( ) Yes <!-- option {"label": "Yes"} -->\n',
+  )
+  reports.submit_answer("decision-report", {"select": "Yes"}, answer_id="cc22dd")
+  store.close()
+  body_file = tmp_path / "body.md"
+  body_file.write_text(f"Body cites {token}.\n" if location == "body" else "Body.\n")
+  title = f"Title cites {token}" if location == "title" else "Safe title"
+
+  def forbidden_run(*_args, **_kwargs):
+    raise AssertionError("An unsafe update must not call GitHub")
+
+  monkeypatch.setattr(cli.subprocess, "run", forbidden_run)
+  code, _out, err = _run_cli(
+    state_dir, "pr-update", "-n", "122", "-t", title, "-f", str(body_file)
+  )
+  assert code == 1
+  assert "session-local" in err and token in err
+
+
+def test_cli_pr_update_allows_unrelated_longer_hex_strings(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  import subprocess
+
+  state_dir = cli.resolve_state_dir()
+  store, messages, _, _ = cli.open_services(state_dir)
+  messages.send_message("Hidden note", msg_id="aa11bb", hidden=True)
+  store.close()
+  body_file = tmp_path / "body.md"
+  body_file.write_text("A longer SHA aaa11bb9 is not the message ID.\n")
+  calls = []
+
+  def fake_run(args, **_kwargs):
+    calls.append(args)
+    return subprocess.CompletedProcess(
+      args,
+      0,
+      stdout=json.dumps({"title": "Safe title", "body": body_file.read_text()}),
+      stderr="",
+    )
+
+  monkeypatch.setattr(cli.subprocess, "run", fake_run)
+  code, _, err = _run_cli(
+    state_dir, "pr-update", "-n", "122", "-t", "Safe title", "-f", str(body_file)
+  )
+  assert code == 0, err
+  assert len(calls) == 2
+
+
+def test_cli_pr_update_blocks_retained_answer_after_report_removal(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  state_dir = cli.resolve_state_dir()
+  store, _, _, reports = cli.open_services(state_dir)
+  reports.publish_report(
+    "gone-report",
+    "Decision",
+    '<!-- question {"id": "select", "label": "Select?"} -->\n'
+    'Select?\n- ( ) Yes <!-- option {"label": "Yes"} -->\n',
+  )
+  answer = reports.submit_answer("gone-report", {"select": "Yes"}, answer_id="dd33ee")
+  reports.ack_answer("gone-report", answer.id, "Read")
+  reports.remove_report("gone-report")
+  store.close()
+  body_file = tmp_path / "body.md"
+  body_file.write_text("The response was dd33ee.\n")
+
+  def forbidden_run(*_args, **_kwargs):
+    raise AssertionError("An unsafe update must not call GitHub")
+
+  monkeypatch.setattr(cli.subprocess, "run", forbidden_run)
+  code, _, err = _run_cli(
+    state_dir, "pr-update", "-n", "122", "-t", "Safe title", "-f", str(body_file)
+  )
+  assert code == 1
+  assert "session-local" in err and "dd33ee" in err
+
+
+@pytest.mark.parametrize("failure", ["patch", "get", "mismatch", "invalid-json"])
+def test_cli_pr_update_reports_api_failures(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+  import subprocess
+
+  state_dir = cli.resolve_state_dir()
+  body_file = tmp_path / "body.md"
+  body_file.write_text("Body.\n")
+  calls = []
+
+  def fake_run(args, **_kwargs):
+    calls.append(args)
+    is_patch = "PATCH" in args
+    if (failure == "patch" and is_patch) or (failure == "get" and not is_patch):
+      return subprocess.CompletedProcess(args, 1, stdout="", stderr="API unavailable")
+    if not is_patch and failure == "invalid-json":
+      return subprocess.CompletedProcess(args, 0, stdout="not JSON", stderr="")
+    body = "mismatch" if failure == "mismatch" else "Body.\n"
+    return subprocess.CompletedProcess(
+      args, 0, stdout=json.dumps({"title": "Title", "body": body}), stderr=""
+    )
+
+  monkeypatch.setattr(cli.subprocess, "run", fake_run)
+  code, _, err = _run_cli(
+    state_dir, "pr-update", "-n", "122", "-t", "Title", "-f", str(body_file)
+  )
+  assert code == 1
+  if failure in {"patch", "get"}:
+    assert "API unavailable" in err
+  elif failure == "mismatch":
+    assert PR_VERIFICATION_ERROR in err
+  else:
+    assert "Expecting value" in err
+  assert len(calls) == (1 if failure == "patch" else 2)
