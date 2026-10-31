@@ -44,4 +44,67 @@ case ":$PATH:" in
 esac
 EOF
 fi
+GATE_MARKER="# arena-steering-gate"
+if ! grep -qxF "$GATE_MARKER" "$PROFILE"; then
+  cat >> "$PROFILE" <<'EOF'
+
+# arena-steering-gate
+_steer_gate() {
+  if [ "${_steer_gate_running:-}" = 1 ]; then return 0; fi
+  _steer_gate_running=1
+  local command=$BASH_COMMAND reply status line
+  if [ -z "${_steer_line:-}" ]; then
+    _steer_line="$(tr '\0' ' ' < "/proc/$$/cmdline" 2>/dev/null)" || :
+  fi
+  [ -n "${_steer_line:-}" ] || _steer_line=$command
+  if reply="$("$HOME/.local/bin/steer" pre --line "$_steer_line" --command "$command" --shell "${0##*/}" --done "${_arena_preview_done:-}")"; then
+    status=0
+  else
+    status=$?
+  fi
+  if [ -n "$reply" ]; then
+    while IFS= read -r line; do
+      case "$line" in
+        _arena_preview_done=*)
+          _arena_preview_done=${line#_arena_preview_done=}
+          _arena_preview_done=${_arena_preview_done#\"}
+          _arena_preview_done=${_arena_preview_done%\"}
+          ;;
+        *) printf '%s\n' "$line" ;;
+      esac
+    done <<< "$reply"
+  fi
+  _steer_gate_running=
+  case $status in
+    2) exit 0 ;;
+    130) exit 130 ;;
+    0) return 0 ;;
+    *)
+      printf 'STEER WARNING: gate exited %s; work may continue.\n' "$status" >&2
+      case "$command $_steer_line" in
+        *"git push"*) printf 'PUSH BLOCKED: steering gate failed.\n' >&2; exit 130 ;;
+      esac
+      ;;
+  esac
+}
+_steer_previous=$(trap -p DEBUG)
+case $_steer_previous in
+  *arena-steering-gate-trap*) ;;
+  *)
+    if [ -n "$_steer_previous" ]; then
+      # Bash quotes trap -p output, so its original action stays one argument.
+      eval "_steer_previous_parts=( ${_steer_previous#trap -- } )"
+      _steer_previous_action=${_steer_previous_parts[0]}
+      unset _steer_previous_parts
+      printf -v _steer_hook '%s\n%s' "$_steer_previous_action" '_steer_gate : # arena-steering-gate-trap'
+    else
+      _steer_hook='_steer_gate : # arena-steering-gate-trap'
+    fi
+    trap "$_steer_hook" DEBUG
+    unset _steer_hook _steer_previous_action
+    ;;
+esac
+unset _steer_previous
+EOF
+fi
 printf 'Installed steer in %s. Open a new login shell or source %s.\n' "$COMMAND" "$PROFILE"
