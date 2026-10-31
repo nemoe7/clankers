@@ -174,6 +174,115 @@ SLATE_DEMO_COLORS = (
 )
 
 
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize(("width", "height"), [(1372, 883), (411, 799)])
+@pytest.mark.parametrize("source", ["message", "draft"])
+def test_markdown_checklists_use_hanging_indent(
+  tmp_path: Path, width: int, height: int, source: str
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Checklist regression")
+  long_text = (
+    "Keep wrapped lines aligned with the first line of text when this checklist item "
+    "is long enough to span several lines. "
+  ) * 3
+  body = (
+    "- Plain bullet\n"
+    + "- [x] "
+    + long_text
+    + "\n  - [ ] Nested "
+    + long_text
+    + "\n- [ ] Another task\n\n- [ ] A loose task\n\n- [x] Another loose task\n"
+  )
+  app.messages.send_message(body, msg_id="cb0001", blocking=False)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        message = page.locator('[data-msg-id="cb0001"] .message-text')
+        message.wait_for()
+        if source == "draft":
+          page.locator("#msg").fill(body)
+          page.locator("#preview-msg").click()
+          target = page.locator("#draft-preview")
+        else:
+          target = message
+        items = target.locator("li.task-list-item")
+        items.first.wait_for()
+        assert items.count() == 5
+        page.evaluate("document.fonts.ready")
+        page.screenshot(path=str(tmp_path / f"checklist-{source}-{width}.png"))
+        for index in range(items.count()):
+          metrics = items.nth(index).evaluate("""li => {
+            const list = li.parentElement;
+            const checkbox = li.querySelector('input[type=checkbox]');
+            const listBox = list.getBoundingClientRect();
+            const itemBox = li.getBoundingClientRect();
+            const checkBox = checkbox.getBoundingClientRect();
+            const probe = document.createElement('span');
+            probe.textContent = '0';
+            probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+            li.append(probe);
+            const ch = probe.getBoundingClientRect().width;
+            probe.remove();
+            const starts = new Map();
+            const walker = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+              if (node.parentElement.closest('li') !== li) continue;
+              for (let i = 0; i < node.length; i++) {
+                if (/\\s/.test(node.data[i])) continue;
+                const range = document.createRange();
+                range.setStart(node, i);
+                range.setEnd(node, i + 1);
+                const rect = range.getBoundingClientRect();
+                const top = Math.round(rect.top);
+                starts.set(top, Math.min(starts.get(top) ?? Infinity, rect.left));
+              }
+            }
+            return {
+              listLeft: listBox.left,
+              itemLeft: itemBox.left,
+              checkboxLeft: checkBox.left,
+              checkboxRight: checkBox.right,
+              padding: parseFloat(getComputedStyle(list).paddingInlineStart),
+              ch,
+              starts: [...starts.entries()].sort((a, b) => a[0] - b[0]).map(x => x[1]),
+            };
+          }""")
+          assert metrics["padding"] == pytest.approx(2 * metrics["ch"], abs=1)
+          assert metrics["itemLeft"] == pytest.approx(
+            metrics["listLeft"] + metrics["padding"], abs=1
+          )
+          assert metrics["checkboxLeft"] >= metrics["listLeft"] - 1
+          assert metrics["itemLeft"] - metrics["checkboxRight"] >= 2
+          if index < 2:
+            assert len(metrics["starts"]) >= 2
+          assert all(
+            start == pytest.approx(metrics["itemLeft"], abs=1)
+            for start in metrics["starts"]
+          ), (index, metrics)
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
 def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   for font in EXPECTED_FONTS:
     font_path = ASSETS_DIR / font
@@ -279,7 +388,8 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   # Tables follow the GitHub shape: a single bottom rule per row, no vertical rules.
   assert "padding: 6px 13px;" in style_css
   assert "border-right: 1px solid hsl(var(--border-faint));" not in style_css
-  assert "margin-inline-start: 2ch;" in style_css
+  assert "padding-inline-start: 2ch;" in style_css
+  assert "inset-inline-start: -2ch;" in style_css
 
   reports_js = (ASSETS_DIR / "reports-view.js").read_text(encoding="utf-8")
   assert "storedValuesFor(" in reports_js
