@@ -133,9 +133,9 @@ The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. Only 
 
 ## Task and message contracts
 
-- Task types are `report`, `code`, `docs`, `ops`, and `misc`. Statuses are `upcoming`, `in_progress`, and `finished`.
+- Task types are `report`, `code`, `docs`, `ops`, and `misc`. Statuses are `upcoming` and `finished`.
 - New tasks default to `code` and `upcoming`. Blocking is derived from unanswered linked reports, unfinished dependencies, and running gates.
-- Legacy `blocked` statuses read as `upcoming`.
+- The first unblocked upcoming task is current. Legacy `in_progress` and `blocked` statuses become `upcoming` without reordering.
 - New and updated tasks require at least one nonempty detail. Manually entered details have a 120-character limit.
 - Existing empty tasks remain readable but need a detail on their next update.
 - Dependencies must exist. Self-dependencies and cycles are rejected.

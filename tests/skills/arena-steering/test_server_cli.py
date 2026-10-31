@@ -167,6 +167,94 @@ def test_http_message_pages_and_database_search(tmp_path: Path) -> None:
   store.close()
 
 
+@pytest.mark.parametrize("invalid_status", ["in_progress", "blocked", "other"])
+def test_task_status_api_and_cli_reject_noncanonical_values(
+  invalid_status: str,
+) -> None:
+  state_dir = cli.resolve_state_dir()
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  app = SteeringApp(store)
+  base = {"id": "work", "title": "Work", "details": ["Do work"]}
+  status, _ = app.dispatch("POST", "/tasks", {**base, "status": invalid_status})
+  assert status == HTTPStatus.BAD_REQUEST
+  assert app.dispatch("POST", "/tasks", base)[0] == HTTPStatus.CREATED
+  status, _ = app.dispatch("PATCH", "/tasks/work", {"status": invalid_status})
+  assert status == HTTPStatus.BAD_REQUEST
+  assert app.dispatch("GET", "/tasks/work")[1]["task"]["status"] == "upcoming"
+  store.close()
+
+  code, _, error = _run_cli(state_dir, "task", "mod", "work", "status", invalid_status)
+  assert code != 0 and "Invalid Task.status" in error
+  code, _, error = _run_cli(
+    state_dir,
+    "task",
+    "new",
+    "another",
+    "Another",
+    "-d",
+    "Do work",
+    "-s",
+    invalid_status,
+  )
+  assert code != 0 and "Invalid Task.status" in error
+
+
+def test_tasks_view_uses_first_unblocked_upcoming_task(tmp_path: Path) -> None:
+  import subprocess
+
+  store = SqliteStore(tmp_path / "tasks.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "decision",
+    "Decision",
+    (
+      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
+      "Choice?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- ( ) No <!-- option {"label": "No"} -->\n'
+    ),
+  )
+  app.tasks.create_task("blocked", "Blocked", details=["Wait"], report_ids=["decision"])
+  app.tasks.create_task("ready", "Ready", details=["Work"])
+  app.tasks.create_task("legacy", "Legacy", details=["Work"])
+  with store.transaction():
+    store._conn.execute("UPDATE tasks SET status = 'in_progress' WHERE id = 'legacy'")
+  code, payload = app.dispatch("GET", "/tasks")
+  assert code == HTTPStatus.OK
+  script = """
+import assert from 'node:assert/strict';
+import { renderTasksView } from './skills/arena-steering/assets/tasks-view.js';
+const container = {
+  innerHTML: '', scrollTop: 0,
+  querySelector() { return null; },
+  querySelectorAll() { return []; },
+};
+renderTasksView(container, { tasks: JSON.parse(process.argv[1]) });
+const current = container.innerHTML.split('id="tasks-current"')[1].split('id="tasks-upcoming"')[0];
+const upcoming = container.innerHTML.split('id="tasks-upcoming"')[1].split('id="tasks-finished"')[0];
+assert.match(current, /data-task-id="ready"/);
+assert.doesNotMatch(current, /data-task-id="blocked"|data-task-id="legacy"/);
+assert.match(upcoming, /data-task-id="blocked"/);
+assert.match(upcoming, /data-task-id="legacy"/);
+"""
+  result = subprocess.run(
+    [
+      "node",
+      "--experimental-default-type=module",
+      "--input-type=module",
+      "-e",
+      script,
+      json.dumps(payload["tasks"]),
+    ],
+    cwd=Path(__file__).resolve().parents[3],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
+  store.close()
+
+
 def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "http.sqlite3")
   app = SteeringApp(store)
@@ -223,10 +311,10 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   status, t_patched = app.dispatch(
     "PATCH",
     "/tasks/build-router",
-    {"status": "in_progress", "details": ["Registered REST endpoints."]},
+    {"status": "finished", "details": ["Registered REST endpoints."]},
   )
   assert status == int(HTTPStatus.OK)
-  assert t_patched["task"]["status"] == "in_progress"
+  assert t_patched["task"]["status"] == "finished"
   status, _ = app.dispatch("PATCH", "/tasks/build-router", {"details": []})
   assert status == int(HTTPStatus.BAD_REQUEST)
 

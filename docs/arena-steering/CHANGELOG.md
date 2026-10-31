@@ -34,6 +34,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `models.py`, `store.py`, `assets/tasks-view.js`: Keep upcoming and finished task statuses, and show the first unblocked upcoming task as current.
+
 - `models.py`, `services.py`, `store.py`, `assets/app.js`: Track report activity and task links for staleness, and retain pending answers on stale removal.
 
 - `models.py`, `services.py`, `store.py`: Store report answers as durable hidden messages and derive report history from them.

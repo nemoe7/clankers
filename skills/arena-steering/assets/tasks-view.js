@@ -106,19 +106,8 @@ export function renderTasksView(container, state) {
   const activeTasks = allTasks.filter((t) => t.status !== "finished");
   const finishedTasks = allTasks.filter((t) => t.status === "finished");
 
-  const inProgress = activeTasks.filter((t) => t.status === "in_progress");
-  const firstUnblocked =
-    inProgress.length > 0
-      ? null
-      : activeTasks.find((t) => !t.blocked) || null;
-
-  const currentSet = new Set(
-    inProgress.length > 0
-      ? inProgress.map((t) => t.id)
-      : firstUnblocked
-        ? [firstUnblocked.id]
-        : []
-  );
+  const firstUnblocked = activeTasks.find((t) => !t.blocked) || null;
+  const currentSet = new Set(firstUnblocked ? [firstUnblocked.id] : []);
 
   const currentTasks = activeTasks
     .filter((t) => currentSet.has(t.id))
