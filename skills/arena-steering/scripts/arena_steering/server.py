@@ -141,7 +141,7 @@ class SteeringApp:
     default_assets = Path(__file__).resolve().parents[2] / "assets"
     self.assets_dir = Path(assets_dir) if assets_dir is not None else default_assets
     self.repo_name = repo_name or _detect_repo_name(store)
-    self.messages = MessageService(store, store, store)
+    self.messages = MessageService(store, store, store, store)
     self.tasks = TaskService(
       store,
       store,
@@ -864,7 +864,10 @@ class SteeringApp:
     markdown = str(body.get("markdown", body.get("ack", "")))
     target_type, acked = self.messages.ack(params["id"], markdown)
     if target_type == "report_answer":
-      return (int(HTTPStatus.OK), {"answer": acked.to_dict()})
+      payload = {"answer": acked.to_dict()}
+      if acked.task_details_added:
+        payload["task_details_added"] = acked.task_details_added
+      return (int(HTTPStatus.OK), payload)
     return (int(HTTPStatus.OK), {"message": self._serialize_message(acked)})
 
   def _handle_replies_seen(
@@ -1064,7 +1067,10 @@ class SteeringApp:
   ) -> tuple[int, Any]:
     markdown = str(body.get("markdown", body.get("ack", "")))
     answer = self.reports.ack_answer(params["id"], params["answer_id"], markdown)
-    return (int(HTTPStatus.OK), {"answer": answer.to_dict()})
+    payload = {"answer": answer.to_dict()}
+    if answer.task_details_added:
+      payload["task_details_added"] = answer.task_details_added
+    return (int(HTTPStatus.OK), payload)
 
   @staticmethod
   def _serialize_message(msg: Any) -> dict[str, Any]:

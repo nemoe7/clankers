@@ -67,6 +67,24 @@ def _answer_detail_lines(report: Report, answer: ReportAnswer) -> list[str]:
   ]
 
 
+def _append_answer_details_to_linked_tasks(
+  tasks: TaskRepository, report: Report, answer: ReportAnswer, now: str
+) -> dict[str, list[str]]:
+  lines = _answer_detail_lines(report, answer)
+  if not lines:
+    return {}
+  queue = tasks.list_tasks()
+  added: dict[str, list[str]] = {}
+  for task in queue:
+    previous_length = len(task.details)
+    if report.id in task.report_ids and _append_unique_details(task, lines):
+      task.modified_at = now
+      added[task.id] = task.details[previous_length:]
+  if added:
+    tasks.save_task_queue(queue)
+  return added
+
+
 DEFAULT_SURVEY_QUESTIONS: tuple[dict[str, Any], ...] = tuple(
   {
     "id": q["id"],
@@ -96,12 +114,14 @@ class MessageService:
     messages: MessageRepository,
     reports: ReportRepository,
     meta: MetaRepository,
+    tasks: TaskRepository,
     clock: Clock | None = None,
     id_gen: IdGenerator | None = None,
   ) -> None:
     self._messages = messages
     self._reports = reports
     self._meta = meta
+    self._tasks = tasks
     self._clock = clock or UtcClock()
     self._id_gen = id_gen or SecretsHexIdGenerator()
     self._cond = threading.Condition()
@@ -306,12 +326,17 @@ class MessageService:
     msg = self._messages.get_message(target_id)
     if msg is None:
       raise KeyError(f"Unknown message or answer ID: {target_id}")
+    first_ack = msg.status != "acked"
     msg = self._messages.append_message_ack(target_id, reply, now)
     if msg.type != "report_answer":
       self.reset_gate_if_clear()
       return ("message", msg)
     answer = msg.as_report_answer()
     report = self._reports.get_report(answer.report_id)
+    if first_ack and report is not None:
+      answer.task_details_added = _append_answer_details_to_linked_tasks(
+        self._tasks, report, answer, now
+      )
     if report is not None and report.answers and report.answers[-1].id == answer.id:
       report.ack_seen = False
       report.ack_seen_at = ""
@@ -550,7 +575,6 @@ class TaskService:
     self._validate_details(task)
     queue = self._tasks.list_tasks()
     self._validate_deps_exist(task, queue)
-    self._copy_linked_report_answers(task, set())
     ordered = self._enforce_dependency_order([*queue, task])
     self._tasks.save_task_queue(ordered)
     return task
@@ -733,7 +757,6 @@ class TaskService:
       modified_at=self._clock.now_iso(),
     )
     self._validate_deps_exist(updated, queue)
-    self._copy_linked_report_answers(updated, set(target.report_ids))
     self._replace_in_queue(queue, updated)
     return updated
 
@@ -874,7 +897,6 @@ class TaskService:
     )
     self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
-    self._copy_linked_report_answers(updated, set(target.report_ids))
     new_queue = [updated if item.id == task_id else item for item in queue]
     if position is not None:
       new_queue = [item for item in new_queue if item.id != task_id]
@@ -883,15 +905,6 @@ class TaskService:
     ordered = self._enforce_dependency_order(new_queue)
     self._tasks.save_task_queue(ordered)
     return updated
-
-  def _copy_linked_report_answers(self, task: Task, previous_ids: set[str]) -> None:
-    for report_id in task.report_ids:
-      if report_id in previous_ids:
-        continue
-      report = self._reports.get_report(report_id)
-      if report is not None:
-        for answer in report.answers:
-          _append_unique_details(task, _answer_detail_lines(report, answer))
 
   def _load_queue_and_target(self, task_id: str) -> tuple[list[Task], Task]:
     validate_entity_id(task_id, "Task.id")
@@ -1116,8 +1129,8 @@ class ReportService:
   def submit_answer(
     self, report_id: str, values: dict[str, Any], *, answer_id: str | None = None
   ) -> ReportAnswer:
-    answer = self._submit_answer(report_id, values, answer_id=answer_id)
-    if self._on_answer is not None:
+    answer, created = self._submit_answer(report_id, values, answer_id=answer_id)
+    if created and self._on_answer is not None:
       self._on_answer()
     return answer
 
@@ -1128,7 +1141,7 @@ class ReportService:
     values: dict[str, Any],
     *,
     answer_id: str | None = None,
-  ) -> ReportAnswer:
+  ) -> tuple[ReportAnswer, bool]:
     report = self.get_report(report_id)
     if not report.fields:
       raise ValueError(f"Report {report_id!r} has no interactive fields to answer")
@@ -1154,12 +1167,17 @@ class ReportService:
           cleaned_values[field.id] = [
             field.option_labels.get(item, item) for item in value
           ]
-    now = self._clock.now_iso()
+    latest = report.answers[-1] if report.answers else None
     if answer_id is not None:
       ans_id = validate_hex_id(answer_id, "ReportAnswer.id")
-      if self._reports.get_message(ans_id) is not None:
+      if self._reports.get_message(ans_id) is not None and not (
+        latest is not None and latest.id == ans_id and latest.values == cleaned_values
+      ):
         raise ValueError(f"Message ID {ans_id!r} already exists")
-    else:
+    if latest is not None and latest.values == cleaned_values:
+      return latest, False
+    now = self._clock.now_iso()
+    if answer_id is None:
       for _ in range(64):
         ans_id = self._id_gen.new_hex_id()
         if self._reports.get_message(ans_id) is None:
@@ -1195,8 +1213,7 @@ class ReportService:
     report.ack_seen_at = ""
     report.modified_at = now
     self._reports.save_report(report)
-    self._append_answer_details_to_linked_tasks(report, answer, now)
-    return answer
+    return answer, True
 
   @_transactional_task_write
   def ack_answer(self, report_id: str, answer_id: str, markdown: str) -> ReportAnswer:
@@ -1207,9 +1224,14 @@ class ReportService:
     now = self._clock.now_iso()
     for ans in report.answers:
       if ans.id == answer_id:
+        first_ack = ans.status != "acked"
         ans = self._reports.append_message_ack(
           answer_id, markdown.strip(), now
         ).as_report_answer()
+        if first_ack:
+          ans.task_details_added = _append_answer_details_to_linked_tasks(
+            self._tasks, report, ans, now
+          )
         if report.answers[-1].id == answer_id:
           report.ack_seen = False
           report.ack_seen_at = ""
@@ -1343,21 +1365,6 @@ class ReportService:
       else:
         cleaned[field.id] = _validate_checkbox_value(field.id, field.options, val)
     return cleaned
-
-  def _append_answer_details_to_linked_tasks(
-    self, report: Report, answer: ReportAnswer, now: str
-  ) -> None:
-    lines = _answer_detail_lines(report, answer)
-    if not lines:
-      return
-    queue = self._tasks.list_tasks()
-    changed = False
-    for task in queue:
-      if report.id in task.report_ids and _append_unique_details(task, lines):
-        task.modified_at = now
-        changed = True
-    if changed:
-      self._tasks.save_task_queue(queue)
 
 
 def _validate_choice_value(

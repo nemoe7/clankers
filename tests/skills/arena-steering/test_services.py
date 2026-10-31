@@ -74,7 +74,7 @@ def _publish_answer_message_report(reports: ReportService) -> None:
 def test_report_answers_are_hidden_messages_with_newest_only_delivery() -> None:
   store = SqliteStore(":memory:")
   reports = ReportService(store, store)
-  messages = MessageService(store, store, store)
+  messages = MessageService(store, store, store, store)
   _publish_answer_message_report(reports)
   ordinary = messages.send_message("Quiet note", hidden=True, msg_id="de1000")
   first = reports.submit_answer("decision", {"choice": "A"}, answer_id="de1001")
@@ -108,7 +108,7 @@ def test_report_answers_are_hidden_messages_with_newest_only_delivery() -> None:
 def test_report_answer_survives_report_deletion_and_republication() -> None:
   store = SqliteStore(":memory:")
   reports = ReportService(store, store)
-  messages = MessageService(store, store, store)
+  messages = MessageService(store, store, store, store)
   _publish_answer_message_report(reports)
   answer = reports.submit_answer("decision", {"choice": "A"}, answer_id="de2001")
 
@@ -137,7 +137,7 @@ def test_report_answer_survives_snapshot_merge_after_report_deletion() -> None:
 
   target = SqliteStore(":memory:")
   target.merge_rows(snapshot)
-  messages = MessageService(target, target, target)
+  messages = MessageService(target, target, target, target)
   delivered = messages.read_pending(mark_seen=False)
   assert [(report.id, item.id) for report, item in delivered["report_answers"]] == [
     ("decision", answer.id)
@@ -167,7 +167,7 @@ def test_snapshot_merge_preserves_newest_answer_order() -> None:
     first.id,
     newest.id,
   ]
-  messages = MessageService(target, target, target)
+  messages = MessageService(target, target, target, target)
   assert [
     item.id for _, item in messages.read_pending(mark_seen=False)["report_answers"]
   ] == [newest.id]
@@ -240,7 +240,7 @@ def test_report_answer_rename_preserves_its_hidden_message() -> None:
   clock = Clock()
   store = SqliteStore(":memory:")
   reports = ReportService(store, store, clock=clock)
-  messages = MessageService(store, store, store)
+  messages = MessageService(store, store, store, store)
   _publish_answer_message_report(reports)
   answer = reports.submit_answer("decision", {"choice": "A"}, answer_id="de3501")
   clock.value = "2026-01-01T00:01:00Z"
@@ -264,7 +264,7 @@ def test_report_answer_rename_preserves_its_hidden_message() -> None:
 def test_report_answers_share_the_message_id_namespace() -> None:
   store = SqliteStore(":memory:")
   reports = ReportService(store, store)
-  messages = MessageService(store, store, store)
+  messages = MessageService(store, store, store, store)
   _publish_answer_message_report(reports)
   messages.send_message("Ordinary", msg_id="de4001")
   with pytest.raises(ValueError):
@@ -287,7 +287,7 @@ def test_generated_report_answer_ids_skip_existing_messages() -> None:
       return next(self.values)
 
   store = SqliteStore(":memory:")
-  messages = MessageService(store, store, store)
+  messages = MessageService(store, store, store, store)
   reports = ReportService(store, store, id_gen=Ids())
   _publish_answer_message_report(reports)
   messages.send_message("Existing message", msg_id="de5001")
@@ -300,7 +300,7 @@ def test_generated_report_answer_ids_skip_existing_messages() -> None:
 
 def test_message_service_lifecycle_and_acks() -> None:
   store = SqliteStore(":memory:")
-  svc = MessageService(store, store, store)
+  svc = MessageService(store, store, store, store)
 
   msg = svc.send_message("Please review the schema", msg_id="ab12cd")
   assert msg.id == "ab12cd"
@@ -320,7 +320,7 @@ def test_message_service_lifecycle_and_acks() -> None:
 
 def test_message_service_stores_parent_ids_for_multi_message_replies() -> None:
   store = SqliteStore(":memory:")
-  svc = MessageService(store, store, store)
+  svc = MessageService(store, store, store, store)
 
   svc.send_message("First parent", msg_id="aa1001")
   svc.send_message("Second parent", msg_id="bb2002")
@@ -375,10 +375,13 @@ def test_task_service_mutable_dependency_queue_and_derived_blocking() -> None:
     answer_id="dead01",
   )
   assert ans.status == "sent"
-  assert "We should use this database: SQLite" in tasks.get_task("task-b")[0].details
+  assert (
+    "We should use this database: SQLite" not in tasks.get_task("task-b")[0].details
+  )
   assert tasks.get_task("task-b")[1] is False
 
   reports.ack_answer("design-doc", "dead01", "Confirmed SQLite.")
+  assert "We should use this database: SQLite" in tasks.get_task("task-b")[0].details
   assert tasks.get_task("task-b")[1] is False
 
   tasks.mod_deets("task-b", "Added integration check.")
@@ -395,7 +398,7 @@ def test_task_service_mutable_dependency_queue_and_derived_blocking() -> None:
 def test_report_ack_seen_lifecycle() -> None:
   store = SqliteStore(":memory:")
   reports = ReportService(store, store)
-  messages = MessageService(store, store, store)
+  messages = MessageService(store, store, store, store)
 
   reports.publish_report(
     "ack-doc",
@@ -504,7 +507,7 @@ def test_task_answer_details_survive_report_removal_and_edits(tmp_path) -> None:
   reopened.close()
 
 
-def test_linking_an_answered_report_copies_missing_details(tmp_path) -> None:
+def test_linking_an_answered_report_does_not_copy_details(tmp_path) -> None:
   store = SqliteStore(tmp_path / "link.sqlite3")
   reports = ReportService(store, store)
   tasks = TaskService(store, store)
@@ -524,28 +527,18 @@ def test_linking_an_answered_report_copies_missing_details(tmp_path) -> None:
   tasks.mod_links_add("work", "decision", link_type="report")
   task = tasks.get_task("work")[0]
   assert task.report_ids == ["decision"]
-  assert task.details == ["Act on the answer", "Choice?: B"]
+  assert task.details == ["Act on the answer"]
   tasks.mod_links_add("work", "decision", link_type="report")
   assert tasks.get_task("work")[0].details == task.details
-  reports.submit_answer("decision", {"choice": "A"}, answer_id="cd0002")
-  assert tasks.get_task("work")[0].details == [
-    "Act on the answer",
-    "Choice?: B",
-    "Choice?: A",
-  ]
+  second = reports.submit_answer("decision", {"choice": "A"}, answer_id="cd0002")
+  assert tasks.get_task("work")[0].details == ["Act on the answer"]
+  reports.ack_answer("decision", second.id, "Read")
+  assert tasks.get_task("work")[0].details == ["Act on the answer", "Choice?: A"]
   tasks.mod_links_rm("work", "report", "decision")
   tasks.mod_links_add("work", "decision", link_type="report")
-  assert tasks.get_task("work")[0].details == [
-    "Act on the answer",
-    "Choice?: B",
-    "Choice?: A",
-  ]
+  assert tasks.get_task("work")[0].details == ["Act on the answer", "Choice?: A"]
   reports.rename_report("decision", "renamed-decision")
-  assert tasks.get_task("work")[0].details == [
-    "Act on the answer",
-    "Choice?: B",
-    "Choice?: A",
-  ]
+  assert tasks.get_task("work")[0].details == ["Act on the answer", "Choice?: A"]
   store.close()
 
 
@@ -576,25 +569,22 @@ def test_task_details_keep_original_labels_after_republish(tmp_path) -> None:
       '- ( ) B <!-- option {"label": "B"} -->\n'
     ),
   )
-  reports.submit_answer("decision", {"field": "B"}, answer_id="ba1002")
+  second = reports.submit_answer("decision", {"field": "B"}, answer_id="ba1002")
+  reports.ack_answer("decision", second.id, "Read")
   task = tasks.get_task("work")[0]
   assert task.details == ["Review", "Original label?: A", "New label?: B"]
   created = tasks.create_task(
     "created-later", "Created later", details=["Review"], report_ids=["decision"]
   )
-  assert created.details == ["Review", "Original label?: A", "New label?: B"]
+  assert created.details == ["Review"]
   tasks.create_task("patched-later", "Patched later", details=["Review"])
   patched = tasks.patch_task("patched-later", {"links": {"report_ids": ["decision"]}})
-  assert patched.details == ["Review", "Original label?: A", "New label?: B"]
+  assert patched.details == ["Review"]
   patched = tasks.patch_task("patched-later", {"report_ids": ["decision"]})
-  assert patched.details == ["Review", "Original label?: A", "New label?: B"]
+  assert patched.details == ["Review"]
   tasks.patch_task("patched-later", {"report_ids": []})
   patched = tasks.patch_task("patched-later", {"report_ids": ["decision"]})
-  assert patched.details == [
-    "Review",
-    "Original label?: A",
-    "New label?: B",
-  ]
+  assert patched.details == ["Review"]
   store.close()
 
 
@@ -628,9 +618,11 @@ def test_concurrent_report_answers_keep_unique_details(tmp_path) -> None:
   with ThreadPoolExecutor(max_workers=2) as pool:
     answers = list(pool.map(submit, range(2)))
   report = reports[0].get_report("choice")
-  task = tasks.get_task("work")[0]
-  assert {item.id for item in report.answers} == {item.id for item in answers}
-  assert task.details == ["Review", "Select?: Yes"]
+  assert len(report.answers) == 1
+  assert {item.id for item in answers} == {report.answers[0].id}
+  assert tasks.get_task("work")[0].details == ["Review"]
+  reports[0].ack_answer("choice", report.answers[0].id, "Read")
+  assert tasks.get_task("work")[0].details == ["Review", "Select?: Yes"]
   for store in stores:
     store.close()
 
@@ -652,6 +644,7 @@ def test_removing_answer_details_keeps_answers_and_report_links(tmp_path) -> Non
   )
   tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
   first = reports.submit_answer("decision", {"select": "Yes"}, answer_id="ac0001")
+  reports.ack_answer("decision", first.id, "Read")
   second = reports.submit_answer("decision", {"select": "No"}, answer_id="ac0002")
   reports.ack_answer("decision", second.id, "Read")
   assert tasks.get_task("work")[0].details == ["Review", "Select?: Yes", "Select?: No"]
@@ -667,7 +660,7 @@ def test_removing_answer_details_keeps_answers_and_report_links(tmp_path) -> Non
   tasks.mod_scalar("work", "title", "Renamed work")
   tasks.mod_links_rm("work", "report", "decision")
   tasks.mod_links_add("work", "decision", link_type="report")
-  relinked_details = ["Review", "Select?: No", "Select?: Yes"]
+  relinked_details = ["Review", "Select?: No"]
   assert tasks.get_task("work")[0].details == relinked_details
   store.close()
 
@@ -706,7 +699,7 @@ def test_report_blocking_follows_answer_need_not_acknowledgement() -> None:
   store.close()
 
 
-def test_report_answers_append_full_details_for_each_submission(tmp_path) -> None:
+def test_ack_adds_full_details_and_identical_submission_is_unchanged(tmp_path) -> None:
   path = tmp_path / "details.sqlite3"
   store = SqliteStore(path)
   tasks = TaskService(store, store)
@@ -728,8 +721,11 @@ def test_report_answers_append_full_details_for_each_submission(tmp_path) -> Non
   for task_id in ("one", "two"):
     tasks.create_task(task_id, task_id, details=["Review"], report_ids=["question"])
   values = {"choice": option, "second": other}
-  reports.submit_answer("question", values, answer_id="b20002")
-  reports.submit_answer("question", values, answer_id="b20003")
+  first = reports.submit_answer("question", values, answer_id="b20002")
+  duplicate = reports.submit_answer("question", values, answer_id="b20003")
+  assert duplicate.id == first.id
+  assert tasks.get_task("one")[0].details == ["Review"]
+  reports.ack_answer("question", first.id, "Read")
   expected = ["Review", f"Choice?: {option}", f"Second?: {other}"]
   for task_id in ("one", "two"):
     task = tasks.get_task(task_id)[0]
@@ -765,7 +761,8 @@ def test_manual_task_detail_limit_survives_generated_long_detail(tmp_path) -> No
   with pytest.raises(ValueError, match="120"):
     tasks.create_task("bad", "Bad", details=["x" * 121])
   tasks.create_task("work", "Work", details=["Review"], report_ids=["choice"])
-  reports.submit_answer("choice", {"choice": option}, answer_id="b20004")
+  answer = reports.submit_answer("choice", {"choice": option}, answer_id="b20004")
+  reports.ack_answer("choice", answer.id, "Read")
   with pytest.raises(ValueError, match="120"):
     tasks.mod_deets("work", "x" * 121)
   with pytest.raises(ValueError, match="120"):
@@ -911,7 +908,7 @@ def test_stale_report_removal_retains_a_pending_answer() -> None:
   store = SqliteStore(":memory:")
   clock = _ReportTestClock()
   reports = ReportService(store, store, clock=clock)
-  messages = MessageService(store, store, store, clock=clock)
+  messages = MessageService(store, store, store, store, clock=clock)
   reports.publish_report(
     "answered-report",
     "Answered report",
@@ -942,7 +939,7 @@ def test_stale_report_removal_retains_a_pending_answer() -> None:
   store.close()
 
 
-def test_linking_existing_long_answer_bypasses_manual_detail_limit() -> None:
+def test_ack_existing_long_answer_bypasses_manual_detail_limit() -> None:
   store = SqliteStore(":memory:")
   reports = ReportService(store, store)
   tasks = TaskService(store, store)
@@ -956,11 +953,16 @@ def test_linking_existing_long_answer_bypasses_manual_detail_limit() -> None:
     ),
   )
   long_answer = "a" * 180
-  reports.submit_answer("decision", {"choice": long_answer}, answer_id="ab0099")
+  answer = reports.submit_answer(
+    "decision", {"choice": long_answer}, answer_id="ab0099"
+  )
   created = tasks.create_task(
     "work", "Work", details=["Review"], report_ids=["decision"]
   )
-  assert len(created.details[1]) > 120 and long_answer in created.details[1]
+  assert created.details == ["Review"]
+  reports.ack_answer("decision", answer.id, "Read")
+  details = tasks.get_task("work")[0].details
+  assert len(details[1]) > 120 and long_answer in details[1]
   tasks.patch_task("work", {"scope": "Updated"})
   with pytest.raises(ValueError, match="exceeds 120"):
     tasks.create_task("invalid", "Invalid", details=[long_answer])
@@ -1012,7 +1014,7 @@ def test_acknowledging_an_older_answer_does_not_reset_latest_seen_timer() -> Non
   store = SqliteStore(":memory:")
   clock = _ReportTestClock()
   reports = ReportService(store, store, clock=clock)
-  messages = MessageService(store, store, store, clock=clock)
+  messages = MessageService(store, store, store, store, clock=clock)
   _publish_answer_message_report(reports)
   first = reports.submit_answer("decision", {"choice": "A"}, answer_id="aa1004")
   latest = reports.submit_answer("decision", {"choice": "B"}, answer_id="aa1005")
@@ -1046,8 +1048,10 @@ def test_answer_copy_keeps_unique_details_when_relinked() -> None:
   tasks = TaskService(store, store)
   _publish_answer_message_report(reports)
   tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
-  reports.submit_answer("decision", {"choice": "A"}, answer_id="ff0001")
-  reports.submit_answer("decision", {"choice": "A"}, answer_id="ff0002")
+  answer = reports.submit_answer("decision", {"choice": "A"}, answer_id="ff0001")
+  duplicate = reports.submit_answer("decision", {"choice": "A"}, answer_id="ff0002")
+  assert duplicate.id == answer.id
+  reports.ack_answer("decision", answer.id, "Read")
   assert tasks.get_task("work")[0].details == ["Review", "Choice?: A"]
   tasks.mod_links_rm("work", "report", "decision")
   tasks.mod_links_add("work", "decision", link_type="report")
@@ -1075,5 +1079,82 @@ def test_state_merge_normalizes_duplicate_task_details() -> None:
     "Review",
     "More",
   ]
+  source.close()
+  target.close()
+
+
+def test_answer_details_wait_for_first_ack_and_ignore_links() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  tasks = TaskService(store, store)
+  messages = MessageService(store, store, store, store)
+  _publish_answer_message_report(reports)
+  tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  first = reports.submit_answer("decision", {"choice": "A"}, answer_id="fa0001")
+  assert tasks.get_task("work")[0].details == ["Review"]
+
+  _, acked = messages.ack(first.id, "Read")
+  assert acked.task_details_added == {"work": ["Choice?: A"]}
+  assert tasks.get_task("work")[0].details == ["Review", "Choice?: A"]
+  tasks.mod_deets_rm("work", 2)
+  tasks.mod_links_rm("work", "report", "decision")
+  tasks.mod_links_add("work", "decision", link_type="report")
+  assert tasks.get_task("work")[0].details == ["Review"]
+  _, repeated = messages.ack(first.id, "Read again")
+  assert repeated.task_details_added == {}
+  assert tasks.get_task("work")[0].details == ["Review"]
+
+  later = reports.submit_answer("decision", {"choice": "B"}, answer_id="fa0002")
+  assert tasks.get_task("work")[0].details == ["Review"]
+  acked_later = reports.ack_answer("decision", later.id, "Read later")
+  assert acked_later.task_details_added == {"work": ["Choice?: B"]}
+  assert tasks.get_task("work")[0].details == ["Review", "Choice?: B"]
+  tasks.create_task("late", "Late", details=["Review"], report_ids=["decision"])
+  assert tasks.get_task("late")[0].details == ["Review"]
+  store.close()
+
+
+def test_identical_latest_report_submission_is_a_noop() -> None:
+  store = SqliteStore(":memory:")
+  notifications = []
+  reports = ReportService(
+    store, store, on_answer_callback=lambda: notifications.append(1)
+  )
+  _publish_answer_message_report(reports)
+  first = reports.submit_answer("decision", {"choice": "A"}, answer_id="fb0001")
+  duplicate = reports.submit_answer("decision", {"choice": "A"}, answer_id="fb0002")
+  assert duplicate.id == first.id
+  assert len(reports.get_report("decision").answers) == 1
+  assert len(notifications) == 1
+  reports.ack_answer("decision", first.id, "Read")
+  reports.mark_ack_seen("decision")
+  before = reports.get_report("decision")
+  again = reports.submit_answer("decision", {"choice": "A"}, answer_id="fb0003")
+  after = reports.get_report("decision")
+  assert again.id == first.id and again.status == "acked"
+  assert after.ack_seen and after.ack_seen_at == before.ack_seen_at
+  assert after.modified_at == before.modified_at
+  assert len(notifications) == 1
+  newer = reports.submit_answer("decision", {"choice": "B"}, answer_id="fb0004")
+  assert newer.id != first.id and len(notifications) == 2
+  store.close()
+
+
+def test_ack_answer_details_sync_without_repeating_on_receiver() -> None:
+  source = SqliteStore(":memory:")
+  target = SqliteStore(":memory:")
+  reports = ReportService(source, source)
+  tasks = TaskService(source, source)
+  _publish_answer_message_report(reports)
+  tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  answer = reports.submit_answer("decision", {"choice": "A"}, answer_id="fc0001")
+  reports.ack_answer("decision", answer.id, "Read")
+  target.merge_rows(source.export_rows())
+  assert target.get_task("work").details == ["Review", "Choice?: A"]
+  target_tasks = TaskService(target, target)
+  target_tasks.mod_deets_rm("work", 2)
+  repeated = ReportService(target, target).ack_answer("decision", answer.id, "Again")
+  assert repeated.task_details_added == {}
+  assert target.get_task("work").details == ["Review"]
   source.close()
   target.close()

@@ -149,8 +149,9 @@ The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. The g
 - New and updated tasks require at least one nonempty detail. Manually entered details have a 120-character limit.
 - Existing empty tasks remain readable but need a detail on their next update.
 - Dependencies must exist. Self-dependencies and cycles are rejected.
-- Each report submission appends one full `question label: submitted value` detail per field to every linked task. Generated details have no length limit and remain editable after report removal.
-- Answer details are not duplicated.
+- The first acknowledgement of an answer appends missing `question label: submitted value` details to tasks linked at that time. Generated details have no length limit and remain editable after report removal.
+- Repeated acknowledgements, links, and relinks do not add answer details. Later answers can add new details when first acknowledged.
+- Acknowledgement output lists only details actually added to tasks.
 - Existing task-answer snapshots are not migrated into task details.
 - With one target, `-i ID -t TITLE -d DETAIL` commits a linked task and acknowledgement together. `-T` and `-S` set task type and scope.
 - Multi-ID acknowledgement is atomic. A bad ID leaves every target unchanged.
@@ -220,7 +221,8 @@ Answer messages remain after report removal and reappear when that ID is republi
 - A verification failure does not guarantee rollback.
 - Each submission must answer every field. Text and choice answers must be nonempty.
 - Checkbox answers need at least one selected or custom value.
-- Submissions append history, mark the report seen, reset acknowledgement visibility, and add formatted answers to linked task details. An acknowledgement can be appended more than once.
+- A changed submission appends history, marks the report seen, and resets acknowledgement visibility. An identical latest submission creates no answer or agent inbox notification.
+- An acknowledgement can be appended more than once, but only its first reply can add details to currently linked tasks.
 - `seen` records report viewing, while `ack_seen` and `ack_seen_at` record when the user sees the latest acknowledgement. A new answer or another acknowledgement on the latest answer resets them.
 - Republish and explicit-ID removal reject a report when its latest answer is unacknowledged. Republish preserves answer history.
 - Multi-ID removal is atomic. A missing or protected report leaves every target in place.
@@ -273,7 +275,7 @@ Successful creates return HTTP 201. Other successful route operations return 200
 | Create message | `body`, optional `id`, `request_id`, `hidden`, `blocking`, `parent_ids`, and `attachments`. | `message`, including rendered body and acknowledgement HTML. |
 | Upload | JSON `file` object with `name` and `content_base64` or `text`, or multipart `file`. | `attachment` with name, path, size, presence, and static URL. |
 | Message with file | Message fields plus `file`, `attachments`, or `pasted_text`. | `message`. A long paste uses `pasted-text.txt`. |
-| Acknowledge | `markdown` or `ack`. | `message` or `answer`, depending on the route. |
+| Acknowledge | `markdown` or `ack`. | `message` or `answer`, depending on the route. `task_details_added` appears only when an answer acknowledgement adds details. |
 | List tasks | `full=0` excludes finished tasks. | `tasks`, each with derived `blocked`. |
 | Create or patch task | `id`, `title`, `type`, `status`, `scope`, `details`, and link lists. PATCH also accepts zero-based `position`. | `task`. Dependency ordering is enforced. |
 | List reports | `stale=1` selects stale reports. `summary=1` omits report bodies. | `reports`. |

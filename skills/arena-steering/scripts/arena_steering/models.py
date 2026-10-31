@@ -541,6 +541,10 @@ class ReportAnswer:
   created_at: str = ""
   report_title: str = ""
   field_labels: dict[str, str] = field(default_factory=dict)
+  # Per-ACK response data, not part of the stored answer.
+  task_details_added: dict[str, list[str]] = field(
+    default_factory=dict, repr=False, compare=False
+  )
 
   def __post_init__(self) -> None:
     validate_hex_id(self.id, "ReportAnswer.id")

@@ -875,6 +875,7 @@ def test_task_answer_details_render_once_and_wrap_on_mobile(tmp_path: Path) -> N
     "work", "Review choice", details=["Review"], report_ids=["choice"]
   )
   app.reports.submit_answer("choice", {"choice": answer}, answer_id="ba2001")
+  app.reports.ack_answer("choice", "ba2001", "Read")
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
