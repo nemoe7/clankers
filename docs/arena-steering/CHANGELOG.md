@@ -76,6 +76,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/app.js`, `assets/messages-view.js`: Keep scrolling active while older messages load, even during a refresh.
+
 - `assets/style.css`: Keep the Tasks toolbar divider visible below the edge fade.
 
 - `assets/messages-view.js`, `assets/style.css`: Show an instant scroll-edge fade for reduced motion and keep boundary messages visible.
