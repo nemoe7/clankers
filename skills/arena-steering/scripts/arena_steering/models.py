@@ -601,6 +601,9 @@ class Report:
   seen: bool = False
   ack_seen: bool = False
   modified_at: str = ""
+  updated_at: str = ""
+  last_viewed_at: str = ""
+  pinned: bool = False
 
   def __post_init__(self) -> None:
     validate_entity_id(self.id, "Report.id")
@@ -627,6 +630,9 @@ class Report:
     self.seen = bool(self.seen)
     self.ack_seen = bool(self.ack_seen)
     self.modified_at = str(self.modified_at or "")
+    self.updated_at = str(self.updated_at or self.modified_at)
+    self.last_viewed_at = str(self.last_viewed_at or "")
+    self.pinned = bool(self.pinned)
 
   @property
   def needs_answer(self) -> bool:
@@ -653,6 +659,9 @@ class Report:
       "ack_seen": self.ack_seen,
       "needs_answer": self.needs_answer,
       "modified_at": self.modified_at,
+      "updated_at": self.updated_at,
+      "last_viewed_at": self.last_viewed_at,
+      "pinned": self.pinned,
     }
 
   @classmethod
@@ -667,6 +676,9 @@ class Report:
       seen=bool(data.get("seen", False)),
       ack_seen=bool(data.get("ack_seen", False)),
       modified_at=str(data.get("modified_at", "")),
+      updated_at=str(data.get("updated_at", "")),
+      last_viewed_at=str(data.get("last_viewed_at", "")),
+      pinned=bool(data.get("pinned", False)),
     )
 
 

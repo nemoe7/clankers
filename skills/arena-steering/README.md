@@ -90,6 +90,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer reports [-s] [-p PAGE]` | List reports, or stale reports with `-s`, 10 per page. |
 | `steer report ID` | Show report fields and answers. |
 | `steer report pub FILE -i ID -t TITLE [-u]` | Publish and verify a UTF-8 Markdown report. `-u` allows unparsed strike markers. |
+| `steer report pin ID` or `steer report unpin ID` | Exclude a report from staleness, or restore normal expiry. |
 | `steer report rm ID [ID ...]` | Dismiss one or more reports. Use `--stale` alone to remove stale reports. |
 | `steer rename OLD NEW` | Rename a task or report and update its links. |
 | `steer survey` | Show the survey and submission template. Use `-i` for the smallest image, `--template` for the template, `-f FILE` for a submission, or `--interrupt` to request a check. Submissions go to the running server when one is recorded. |
@@ -210,10 +211,13 @@ Answer messages remain after report removal and reappear when that ID is republi
 - Checkbox answers need at least one selected or custom value.
 - Submissions append history, mark the report seen, reset acknowledgement visibility, and add formatted answers to linked task details. An acknowledgement can be appended more than once.
 - `seen` records report viewing. `ack_seen` records viewing the latest acknowledged answer and resets on a new answer or acknowledgement.
-- Republish and report removal reject a report when its latest answer is unacknowledged. Republish preserves answer history.
+- Republish and explicit-ID removal reject a report when its latest answer is unacknowledged. Republish preserves answer history.
 - Multi-ID removal is atomic. A missing or protected report leaves every target in place.
 - Dismissal removes report links from tasks, while answer messages remain available for republishing.
-- Stale listing selects answered or dismissed reports whose latest answer is acknowledged. Removal of stale reports uses that selection.
+- An unlinked report is stale after 30 minutes without publication or a visible view. A linked report is stale when all linked tasks finish.
+- A pinned report is not stale. Pins survive server restarts, and unpinning restores the normal staleness rules.
+- A visible report refreshes its view time every 30 seconds. A hidden browser tab does not refresh it.
+- Stale removal can remove a report with an unacknowledged answer. The retained answer stays available in the inbox.
 
 ## HTTP and WebSocket
 
@@ -229,7 +233,7 @@ Write requests may include `_request_id` to replay the original result safely. T
 | `POST /messages/{id}/ack` | Acknowledge a message. |
 | `GET /poll` and `POST /poll/skip` | Wait for work or request a skip. |
 | `GET, POST /tasks` and `GET, PATCH, DELETE /tasks/{id}` | Manage tasks. |
-| `GET, POST /reports` and `GET, PATCH, DELETE /reports/{id}` | List, publish, inspect, and dismiss reports. PATCH handles dismissal only. |
+| `GET, POST /reports` and `GET, PATCH, DELETE /reports/{id}` | List, publish, inspect, dismiss, pin, and unpin reports. |
 | `POST /reports/{id}/seen` and `/reports/{id}/ack-seen` | Record owner visibility of a report and its acknowledgement. |
 | `POST /reports/{id}/answers` and `/reports/{id}/answers/{answer_id}/ack` | Submit and acknowledge report answers. |
 | `GET, POST /survey` and `POST /survey/interrupt` | Inspect or submit a survey and request a bible check. |
@@ -255,7 +259,7 @@ Successful creates return HTTP 201. Other successful route operations return 200
 | Create or patch task | `id`, `title`, `type`, `status`, `scope`, `details`, and link lists. PATCH also accepts zero-based `position`. | `task`. Dependency ordering is enforced. |
 | List reports | `stale=1` selects stale reports. `summary=1` omits report bodies. | `reports`. |
 | Publish report | `id`, `title`, Markdown `body`, and optional boolean `allow_unparsed_markers`. | Verified `report`, including parsed fields and rendered blocks. |
-| Patch report | `status` set to `dismissed`. Other values leave it unchanged. | `report`. |
+| Patch report | `status` set to `dismissed`, or boolean `pinned`. | `report`. |
 | Submit answers | `values` keyed by field ID, with an optional answer `id`. | `answer` and updated `report`. |
 | Set timezone | `timezone`, an IANA zone such as `Asia/Manila`. | `timezone`. |
 | Render Markdown | `markdown` and optional `breaks`. | Rendered `html` and `headings`. |
@@ -299,7 +303,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Message extras | Slash commands, reference navigation, and persisted reply-seen counts | Reference navigation, multi-parent replies, and persisted boolean reply receipts | V2 omits slash commands and does not store or show unread-reply counts. |
 | Tasks | Typed queue, status, details, report waits, dependencies, ordering, drag reorder, filters, and linked answers | Typed queue, derived report, dependency, and running-gate blocking, details, search, and filters | Both require task details. V2 drops drag reorder and appends report answers as editable details. V2 creates tasks and acknowledges their targets atomically. |
 | Reports | Fielded Markdown, recommended choices, custom choices, locally saved drafts, submissions, and acknowledgements | Fielded reports, custom choices, history, acknowledgements, seen stamps, table of contents, and floating submit | V2 loses an unsent answer on a tab round trip. Both require acknowledgement only for the latest answer. |
-| Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal | No pin, visibility-state, worker answer, or forward routes. Guards and republish contract differ. |
+| Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal, pin and unpin, and viewed stamps | Worker answer and forward routes are absent. Guards and republish contract differ. |
 | Report publication | Local image embedding, diff marker validation, optional submission format, and publication verification | Markdown publication and field parsing | Local image embedding is intentionally dropped. No marker-validation flag, schema option, or explicit rendered verification step is present. |
 | Markdown and images | Markdown, code controls, Mermaid, images, and zoomable preview | Markdown, code copying, Mermaid, images, and a lightbox | V2 bundles Mermaid. Renderer compatibility needs verification. |
 | State recovery | Import, compare, save, restore, clear, size status, clean, and userscript autosave | SQLite persists normal state | No matching state-management or userscript-autosave CLI commands. Backups do not imply attachment bytes are preserved. |

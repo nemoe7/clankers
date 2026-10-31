@@ -90,7 +90,10 @@ class SqliteStore:
           answers_json TEXT NOT NULL DEFAULT '[]',
           seen INTEGER NOT NULL DEFAULT 0,
           ack_seen INTEGER NOT NULL DEFAULT 0,
-          modified_at TEXT NOT NULL
+          modified_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL DEFAULT '',
+          last_viewed_at TEXT NOT NULL DEFAULT '',
+          pinned INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS message_requests (
@@ -155,6 +158,18 @@ class SqliteStore:
       if "ack_seen" not in cols:
         self._conn.execute(
           "ALTER TABLE reports ADD COLUMN ack_seen INTEGER NOT NULL DEFAULT 0"
+        )
+      if "updated_at" not in cols:
+        self._conn.execute(
+          "ALTER TABLE reports ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"
+        )
+      if "last_viewed_at" not in cols:
+        self._conn.execute(
+          "ALTER TABLE reports ADD COLUMN last_viewed_at TEXT NOT NULL DEFAULT ''"
+        )
+      if "pinned" not in cols:
+        self._conn.execute(
+          "ALTER TABLE reports ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"
         )
 
   def close(self) -> None:
@@ -557,8 +572,8 @@ class SqliteStore:
           """
           INSERT INTO reports (
             id, title, body, fields_json, status, answers_json, seen, ack_seen,
-            modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            modified_at, updated_at, last_viewed_at, pinned
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             report.id,
@@ -570,6 +585,9 @@ class SqliteStore:
             int(report.seen),
             int(report.ack_seen),
             report.modified_at,
+            report.updated_at,
+            report.last_viewed_at,
+            int(report.pinned),
           ),
         )
       else:
@@ -582,7 +600,10 @@ class SqliteStore:
               status = ?,
               seen = ?,
               ack_seen = ?,
-              modified_at = ?
+              modified_at = ?,
+              updated_at = ?,
+              last_viewed_at = ?,
+              pinned = ?
           WHERE id = ?
           """,
           (
@@ -593,6 +614,9 @@ class SqliteStore:
             int(report.seen),
             int(report.ack_seen),
             report.modified_at,
+            report.updated_at,
+            report.last_viewed_at,
+            int(report.pinned),
             report.id,
           ),
         )
@@ -751,4 +775,7 @@ class SqliteStore:
       seen=bool(dict(row).get("seen", 0)),
       ack_seen=bool(dict(row).get("ack_seen", 0)),
       modified_at=str(row["modified_at"]),
+      updated_at=str(dict(row).get("updated_at", "")),
+      last_viewed_at=str(dict(row).get("last_viewed_at", "")),
+      pinned=bool(dict(row).get("pinned", 0)),
     )

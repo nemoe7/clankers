@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from arena_steering.markdown_fields import (
   format_answer_for_task_detail,
@@ -776,6 +778,135 @@ def test_manual_task_detail_limit_survives_generated_long_detail(tmp_path) -> No
     tasks.patch_task("work", {"details": [*details, details[1]]})
   tasks.patch_task("work", {"details": [*details, "Short"]})
   assert tasks.get_task("work")[0].details == [*details, "Short"]
+  store.close()
+
+
+class _ReportTestClock:
+  def __init__(self) -> None:
+    self.current = datetime(2026, 1, 1, tzinfo=UTC)
+
+  def now_iso(self) -> str:
+    return self.current.isoformat().replace("+00:00", "Z")
+
+  def advance(self, **kwargs: int) -> None:
+    self.current += timedelta(**kwargs)
+
+
+def test_unlinked_report_staleness_uses_latest_publication_or_view() -> None:
+  store = SqliteStore(":memory:")
+  clock = _ReportTestClock()
+  reports = ReportService(store, store, clock=clock)
+  reports.publish_report("idle-report", "Idle report", "# Idle")
+
+  clock.advance(minutes=29, seconds=59)
+  assert reports.list_reports(stale_only=True) == []
+  clock.advance(seconds=1)
+  assert [report.id for report in reports.list_reports(stale_only=True)] == [
+    "idle-report"
+  ]
+
+  reports.mark_seen("idle-report")
+  clock.advance(minutes=30)
+  assert [report.id for report in reports.list_reports(stale_only=True)] == [
+    "idle-report"
+  ]
+  reports.mark_seen("idle-report")
+  assert reports.list_reports(stale_only=True) == []
+  clock.advance(minutes=30)
+  reports.publish_report("idle-report", "Updated report", "# Updated")
+  assert reports.list_reports(stale_only=True) == []
+  store.close()
+
+
+def test_report_view_timestamp_syncs_with_incremental_state() -> None:
+  source = SqliteStore(":memory:")
+  target = SqliteStore(":memory:")
+  clock = _ReportTestClock()
+  reports = ReportService(source, source, clock=clock)
+  reports.publish_report("idle-report", "Idle report", "# Idle")
+  before_view = clock.now_iso()
+  target.merge_rows(source.export_rows())
+
+  clock.advance(minutes=1)
+  reports.mark_seen("idle-report")
+  changes = source.export_rows(since=before_view)
+  assert [row["id"] for row in changes["reports"]] == ["idle-report"]
+  target.merge_rows(changes)
+  assert target.get_report("idle-report").last_viewed_at == clock.now_iso()
+  source.close()
+  target.close()
+
+
+def test_report_pin_and_linked_task_staleness_survive_restart(tmp_path) -> None:
+  db_file = tmp_path / "stale.sqlite3"
+  store = SqliteStore(db_file)
+  clock = _ReportTestClock()
+  reports = ReportService(store, store, clock=clock)
+  tasks = TaskService(store, store, clock=clock)
+  reports.publish_report("idle-report", "Idle report", "# Idle")
+  reports.publish_report("linked-report", "Linked report", "# Linked")
+  reports.pin_report("idle-report", True)
+  tasks.create_task("first", "First", details=["First"], report_ids=["linked-report"])
+  tasks.create_task(
+    "second", "Second", details=["Second"], report_ids=["linked-report"]
+  )
+
+  clock.advance(hours=2)
+  tasks.mod_scalar("first", "status", "finished")
+  assert reports.list_reports(stale_only=True) == []
+  tasks.mod_scalar("second", "status", "finished")
+  assert [report.id for report in reports.list_reports(stale_only=True)] == [
+    "linked-report"
+  ]
+  reports.pin_report("linked-report", True)
+  reports.publish_report("linked-report", "Revised", "# Revised")
+  assert reports.get_report("linked-report").pinned is True
+  reports.rename_report("linked-report", "renamed-report")
+  assert reports.get_report("renamed-report").pinned is True
+  assert reports.list_reports(stale_only=True) == []
+  store.close()
+
+  store = SqliteStore(db_file)
+  reports = ReportService(store, store, clock=clock)
+  assert reports.get_report("idle-report").pinned is True
+  assert reports.get_report("renamed-report").pinned is True
+  reports.pin_report("idle-report", False)
+  assert [report.id for report in reports.list_reports(stale_only=True)] == [
+    "idle-report"
+  ]
+  reports.pin_report("renamed-report", False)
+  assert {report.id for report in reports.list_reports(stale_only=True)} == {
+    "idle-report",
+    "renamed-report",
+  }
+  store.close()
+
+
+def test_stale_report_removal_retains_a_pending_answer() -> None:
+  store = SqliteStore(":memory:")
+  clock = _ReportTestClock()
+  reports = ReportService(store, store, clock=clock)
+  messages = MessageService(store, store, store, clock=clock)
+  reports.publish_report(
+    "answered-report",
+    "Answered report",
+    (
+      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
+      "Choice?\n"
+      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+    ),
+  )
+  reports.submit_answer("answered-report", {"choice": "Yes"}, answer_id="abc123")
+  clock.advance(minutes=30)
+  assert [report.id for report in reports.list_reports(stale_only=True)] == [
+    "answered-report"
+  ]
+  assert reports.remove_report("--stale") == ["answered-report"]
+  assert "abc123" in messages.pending_ids()
+  delivered = messages.read_pending(mark_seen=False)
+  assert [answer.id for _, answer in delivered["report_answers"]] == ["abc123"]
+  messages.ack("abc123", "Noted.")
+  assert "abc123" not in messages.pending_ids()
   store.close()
 
 

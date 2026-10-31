@@ -6,7 +6,7 @@ import json
 import re
 import threading
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from functools import wraps
 from typing import Any
 
@@ -36,6 +36,13 @@ from .ports import (
   TaskRepository,
   UtcClock,
 )
+
+REPORT_IDLE_INTERVAL = timedelta(minutes=30)
+
+
+def _report_timestamp(value: str) -> datetime:
+  stamp = datetime.fromisoformat(value)
+  return stamp.replace(tzinfo=UTC) if stamp.tzinfo is None else stamp.astimezone(UTC)
 
 
 def _answer_detail_lines(report: Report, answer: ReportAnswer) -> list[str]:
@@ -1003,6 +1010,9 @@ class ReportService:
       answers=preserved_answers,
       seen=False,
       modified_at=now,
+      updated_at=now,
+      last_viewed_at=existing.last_viewed_at if existing else "",
+      pinned=existing.pinned if existing else False,
     )
     self._reports.save_report(report)
     return report
@@ -1010,8 +1020,18 @@ class ReportService:
   @_transactional_task_write
   def mark_seen(self, report_id: str) -> Report:
     report = self.get_report(report_id)
-    if not report.seen:
-      report.seen = True
+    report.seen = True
+    report.last_viewed_at = self._clock.now_iso()
+    report.modified_at = report.last_viewed_at
+    self._reports.save_report(report)
+    return report
+
+  @_transactional_task_write
+  def pin_report(self, report_id: str, pinned: bool) -> Report:
+    report = self.get_report(report_id)
+    if report.pinned != pinned:
+      report.pinned = pinned
+      report.modified_at = self._clock.now_iso()
       self._reports.save_report(report)
     return report
 
@@ -1033,14 +1053,33 @@ class ReportService:
     return report
 
   def list_reports(self, *, stale_only: bool = False) -> list[Report]:
-    all_reports = self._reports.list_reports()
-    if stale_only:
-      return [
-        rep
-        for rep in all_reports
-        if rep.status in {"answered", "dismissed"} and rep.latest_unacked_answer is None
+    all_reports = [
+      report for report in self._reports.list_reports() if report.status != "dismissed"
+    ]
+    if not stale_only:
+      return all_reports
+    linked: dict[str, list[Task]] = {}
+    for task in self._tasks.list_tasks():
+      for report_id in task.report_ids:
+        linked.setdefault(report_id, []).append(task)
+    now = _report_timestamp(self._clock.now_iso())
+    stale = []
+    for report in all_reports:
+      if report.pinned:
+        continue
+      tasks = linked.get(report.id, [])
+      if tasks:
+        if all(task.status == "finished" for task in tasks):
+          stale.append(report)
+        continue
+      stamps = [
+        _report_timestamp(value)
+        for value in (report.updated_at, report.last_viewed_at)
+        if value
       ]
-    return [rep for rep in all_reports if rep.status != "dismissed"]
+      if stamps and now - max(stamps) >= REPORT_IDLE_INTERVAL:
+        stale.append(report)
+    return stale
 
   def submit_answer(
     self, report_id: str, values: dict[str, Any], *, answer_id: str | None = None
@@ -1173,6 +1212,9 @@ class ReportService:
       seen=existing.seen,
       ack_seen=existing.ack_seen,
       modified_at=now,
+      updated_at=existing.updated_at,
+      last_viewed_at=existing.last_viewed_at,
+      pinned=existing.pinned,
     )
     self._reports.rename_report_answers(old_report_id, new_report_id, now)
     self._reports.save_report(renamed)

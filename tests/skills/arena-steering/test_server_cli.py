@@ -48,6 +48,34 @@ def test_cli_version_flags() -> None:
   assert out.getvalue().strip() == f"steer {__version__}"
 
 
+def test_report_pin_cli_and_http_are_durable() -> None:
+  state_dir = cli.resolve_state_dir()
+  state_dir.mkdir(parents=True, exist_ok=True)
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  reports = cli.ReportService(store, store)
+  reports.publish_report("pin-me", "Pin me", "# Pin me")
+  store.close()
+
+  code, _, error = _run_cli(state_dir, "report", "pin", "pin-me")
+  assert code == 0, error
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  assert store.get_report("pin-me").pinned is True
+  app = SteeringApp(store)
+  status, result = app.dispatch("PATCH", "/reports/pin-me", {"pinned": False})
+  assert status == HTTPStatus.OK and result["report"]["pinned"] is False
+  status, _ = app.dispatch("PATCH", "/reports/pin-me", {"pinned": "false"})
+  assert status == HTTPStatus.BAD_REQUEST
+  store.close()
+
+  code, _, error = _run_cli(state_dir, "report", "pin", "pin-me")
+  assert code == 0, error
+  code, _, error = _run_cli(state_dir, "report", "unpin", "pin-me")
+  assert code == 0, error
+  store = SqliteStore(state_dir / "steering-v2.sqlite3")
+  assert store.get_report("pin-me").pinned is False
+  store.close()
+
+
 def test_cli_message_page_size(tmp_path: Path) -> None:
   state_dir = cli.resolve_state_dir()
   state_dir.mkdir(parents=True, exist_ok=True)
@@ -1494,16 +1522,25 @@ def test_cli_report_rm_deduplicates_ids_and_keeps_stale_separate(
 def test_cli_report_rm_stale_keeps_unacknowledged_answers(tmp_path: Path) -> None:
   state_dir = cli.resolve_state_dir()
   _seed_report_removal_batch(state_dir)
-  store, _, tasks, _ = cli.open_services(state_dir)
+  store, _, tasks, reports = cli.open_services(state_dir)
   tasks.mod_scalar("linked-work", "status", "finished")
+  reports.pin_report("empty", True)
   store.close()
   code, out, err = _run_cli(state_dir, "report", "rm", "--stale")
   assert code == 0, err
-  assert "ready" in out and "protected" not in out
-  store, _, _, _ = cli.open_services(state_dir)
+  assert "ready" in out and "protected" in out and "empty" not in out
+  store, messages, tasks, _ = cli.open_services(state_dir)
   assert store.get_report("ready") is None
-  assert store.get_report("protected") is not None
+  assert store.get_report("protected") is None
+  assert store.get_report("empty").pinned is True
+  assert tasks.get_task("linked-work")[0].report_ids == ["empty"]
+  assert messages.pending_ids() == ["bc1002"]
   store.close()
+  code, out, err = _run_cli(state_dir, "read")
+  assert code == 0, err
+  assert "bc1002" in out and "Protected" in out
+  code, _, err = _run_cli(state_dir, "ack", "bc1002", "Noted")
+  assert code == 0, err
 
 
 def _seed_ack_batch(state_dir: Path) -> None:

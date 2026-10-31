@@ -489,6 +489,53 @@ def test_nested_store_transaction_rolls_back_only_inner_changes():
   store.close()
 
 
+def test_report_pin_migrates_and_survives_state_merge(tmp_path: Path) -> None:
+  import sqlite3
+
+  path = tmp_path / "legacy-report.sqlite3"
+  conn = sqlite3.connect(path)
+  conn.execute(
+    """CREATE TABLE reports (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      fields_json TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'published',
+      answers_json TEXT NOT NULL DEFAULT '[]',
+      seen INTEGER NOT NULL DEFAULT 0,
+      ack_seen INTEGER NOT NULL DEFAULT 0,
+      modified_at TEXT NOT NULL
+    )"""
+  )
+  conn.execute(
+    "INSERT INTO reports (id, title, body, modified_at) VALUES (?, ?, ?, ?)",
+    ("old-report", "Old report", "# Old", "2026-01-01T00:00:00Z"),
+  )
+  conn.commit()
+  conn.close()
+
+  source = SqliteStore(path)
+  report = source.get_report("old-report")
+  assert report is not None
+  assert report.updated_at == "2026-01-01T00:00:00Z"
+  assert report.last_viewed_at == "" and report.pinned is False
+  report.pinned = True
+  report.modified_at = "2026-01-02T00:00:00Z"
+  source.save_report(report)
+
+  target = SqliteStore(":memory:")
+  target.merge_rows(source.export_rows())
+  assert target.get_report("old-report").pinned is True
+  report.pinned = False
+  report.modified_at = "2026-01-03T00:00:00Z"
+  source.save_report(report)
+  target.merge_rows(source.export_rows())
+  assert target.get_report("old-report").pinned is False
+  source.close()
+  target.close()
+
+
 def test_legacy_blocked_tasks_keep_derived_blocking_after_upgrade(
   tmp_path: Path,
 ) -> None:
