@@ -653,6 +653,89 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   assert "push-ran" not in push.stdout
 
 
+def test_installer_exit_hook_preserves_prior_trap_and_call_status(
+  tmp_path: Path,
+) -> None:
+  root = Path(__file__).resolve().parents[3]
+  project = tmp_path / "project with spaces"
+  scripts = project / ".agents" / "skills" / "arena-steering" / "scripts"
+  shutil.copytree(root / "skills" / "arena-steering" / "scripts", scripts)
+  shutil.copytree(
+    root / "skills" / "arena-steering" / "references", scripts.parent / "references"
+  )
+  home = tmp_path / "home with spaces"
+  python = home / ".agents" / ".steer-venv" / "bin" / "python"
+  python.parent.mkdir(parents=True)
+  python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+  python.chmod(0o755)
+  profile = home / ".bash_profile"
+  profile.write_text(
+    'trap \'printf "prior-exit:%s\\n" "$?" >> "$HOME/prior-exit.log"\' EXIT\n',
+    encoding="utf-8",
+  )
+  env = {**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin"}
+  for _ in range(2):
+    installed = subprocess.run(
+      ["bash", str(scripts / "install.sh")],
+      cwd=project,
+      env=env,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert installed.returncode == 0, installed.stderr
+  assert "arena-steering-exit-trap" in profile.read_text(encoding="utf-8")
+
+  command = home / ".local" / "bin" / "steer"
+  command.write_text(
+    '#!/bin/bash\ncase "$1" in\n'
+    "  pre) exit 0 ;;\n"
+    '  post-exit) printf "%s\\n" "$*" >> "$HOME/post-exit.log" ;;\n'
+    "esac\n",
+    encoding="utf-8",
+  )
+  command.chmod(0o755)
+  for status in (0, 5):
+    shell = subprocess.run(
+      [
+        "bash",
+        "-c",
+        (
+          f'source "$HOME/.bash_profile"; source "$HOME/.bash_profile"; '
+          f"git() {{ return {status}; }}; git push origin topic"
+        ),
+      ],
+      cwd=project,
+      env=env,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert shell.returncode == status, shell.stderr
+  strict = subprocess.run(
+    [
+      "bash",
+      "-c",
+      'source "$HOME/.bash_profile"; set -e; git() { return 7; }; git push origin topic',
+    ],
+    cwd=project,
+    env=env,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert strict.returncode == 7, strict.stderr
+  exits = (home / "post-exit.log").read_text(encoding="utf-8").splitlines()
+  assert len(exits) == 3
+  assert "--rc 0" in exits[0] and "git push origin topic" in exits[0]
+  assert "--rc 5" in exits[1] and "--rc 7" in exits[2]
+  assert (home / "prior-exit.log").read_text(encoding="utf-8").splitlines() == [
+    "prior-exit:0",
+    "prior-exit:5",
+    "prior-exit:7",
+  ]
+
+
 def test_installer_does_not_overwrite_an_unrelated_steer(tmp_path: Path) -> None:
   root = Path(__file__).resolve().parents[3]
   home = tmp_path / "home"
@@ -856,3 +939,221 @@ def test_new_blocker_still_blocks_push_after_gate_step_done() -> None:
     pending_ids=["ab1234"],
   )
   assert _verdict(ctx) == pre.BLOCK
+
+
+@pytest.mark.parametrize(
+  ("line", "name"),
+  (
+    ("pytest -q", "pytest"),
+    (".venv/bin/python -m pytest tests -q", "pytest"),
+    ("env CI=1 pytest -q", "pytest"),
+    ("timeout 5 pytest -q", "pytest"),
+    ("tox -q", "tox"),
+    ("nox -s test", "nox"),
+    ("node --test", "node-tests"),
+    ("npm test", "npm-tests"),
+    ("npm run test:unit", "npm-tests"),
+    ("npx vitest run", "npx-tests"),
+    ("go test ./...", "go-tests"),
+    ("cargo test", "cargo-tests"),
+    ("gh pr checks 124 --watch", "pr-checks"),
+    ("gh run watch 123", "run-watch"),
+  ),
+)
+def test_test_and_check_waits_route_to_background(
+  _isolate_state: Path,
+  monkeypatch: pytest.MonkeyPatch,
+  line: str,
+  name: str,
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  started: list[tuple[str, list[str]]] = []
+
+  def start(_state: Path, run_name: str, command: list[str], **_kwargs: object) -> int:
+    started.append((run_name, command))
+    return 0
+
+  monkeypatch.setattr(cli, "_start_detached_run", start)
+  code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.END_CALL, (line, out)
+  assert started == [(name, ["bash", "-c", line])]
+  assert "background" in out
+
+
+@pytest.mark.parametrize(
+  ("line", "command"),
+  (
+    ("printf ready && pytest -q", "pytest -q"),
+    ("gh pr checks 124 --watch | tee checks.log", "gh pr checks 124 --watch"),
+    ("pytest -q; printf done", "pytest -q"),
+  ),
+)
+def test_mixed_test_wait_lines_refuse_replay(
+  _isolate_state: Path,
+  monkeypatch: pytest.MonkeyPatch,
+  line: str,
+  command: str,
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  monkeypatch.setattr(
+    cli,
+    "_start_detached_run",
+    lambda *_args, **_kwargs: pytest.fail("mixed line was replayed"),
+  )
+  code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
+  assert code == pre.BLOCK, (line, out)
+  assert "mixed" in out.lower()
+
+
+@pytest.mark.parametrize(
+  "line",
+  (
+    'printf "pytest -q"',
+    "pytest --help",
+    "command -v pytest",
+    "gh pr checks --help",
+    "steer run start checks -- gh pr checks --watch",
+  ),
+)
+def test_inert_test_words_do_not_route(_isolate_state: Path, line: str) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  code, _ = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.CONTINUE
+
+
+def test_routed_test_child_does_not_route_itself(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  monkeypatch.setenv("ARENA_STEER_ROUTE", "1")
+  code, _ = _run("pre", "-l", "pytest -q", "-c", "pytest -q", "-s", "bash")
+  assert code == pre.CONTINUE
+
+
+def test_route_rechecks_even_if_an_earlier_shell_command_marked_it_done() -> None:
+  result = pre.run_pipeline(
+    pre.PreContext(line="pytest -q", command="pytest -q", done=("route",))
+  )
+  assert result.verdict == pre.END_CALL
+  assert result.route == pre.RouteRequest("run", ("pytest",))
+
+
+@pytest.mark.parametrize(
+  ("line", "target"),
+  (
+    ("gh api repos/o/r/actions/jobs/123/logs", ("123", None)),
+    ("curl https://api.github.com/repos/o/r/actions/runs/456/logs", (None, "456")),
+  ),
+)
+def test_job_log_reads_route_to_helper(
+  _isolate_state: Path,
+  monkeypatch: pytest.MonkeyPatch,
+  line: str,
+  target: tuple[str | None, str | None],
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  routed: list[tuple[str | None, str | None]] = []
+
+  def job_log(parsed: object, out: io.StringIO) -> int:
+    routed.append((parsed.job_id, parsed.run_id))
+    print("https://github.com/o/r/actions/runs/1", file=out)
+    return 0
+
+  monkeypatch.setattr(cli, "_run_job_log", job_log)
+  code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.END_CALL, out
+  assert routed == [target]
+  assert "github.com" in out
+
+
+def test_pr_patch_routes_to_verified_helper(
+  _isolate_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  body = tmp_path / "pr.md"
+  body.write_text("## Summary\n\nBody.\n", encoding="utf-8")
+  line = f"gh api repos/o/r/pulls/42 -X PATCH -f title='New title' -F body=@{body}"
+  routed: list[tuple[int, str, str]] = []
+
+  def pr_update(parsed: object, _store: object, out: io.StringIO) -> int:
+    routed.append((parsed.number, parsed.title, parsed.body_file))
+    print("Updated PR #42", file=out)
+    return 0
+
+  monkeypatch.setattr(cli, "_run_pr_update", pr_update)
+  code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.END_CALL, out
+  assert routed == [(42, "New title", str(body))]
+
+
+def test_routing_failure_blocks_original_line(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+
+  def fail(*_args: object, **_kwargs: object) -> int:
+    raise ValueError("helper unavailable")
+
+  monkeypatch.setattr(cli, "_run_pr_update", fail)
+  line = "gh api repos/o/r/pulls/42 -X PATCH -f title=Updated -F body=@pr.md"
+  code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.BLOCK and "helper unavailable" in out
+
+  monkeypatch.setattr(cli, "_start_detached_run", fail)
+  code, out = _run("pre", "-l", "pytest -q", "-c", "pytest -q", "-s", "bash")
+  assert code == pre.BLOCK and "helper unavailable" in out
+
+
+@pytest.mark.parametrize(
+  "line",
+  (
+    "curl -X PATCH https://api.github.com/repos/o/r/pulls/42 -d title=Incomplete",
+    "printf ready && gh api repos/o/r/actions/jobs/123/logs",
+    "gh api repos/o/r/pulls/42 -X PATCH -f title=Updated -F body=@pr.md | cat",
+    "jq -n --arg title Updated --rawfile body pr.md '{}' | gh api repos/o/r/pulls/42 -X PATCH --input -",
+  ),
+)
+def test_incomplete_or_mixed_github_routes_block(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch, line: str
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  monkeypatch.setattr(
+    cli, "_run_job_log", lambda *_args: pytest.fail("unsafe job log was routed")
+  )
+  monkeypatch.setattr(
+    cli, "_run_pr_update", lambda *_args: pytest.fail("unsafe PR edit was routed")
+  )
+  code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.BLOCK, (line, out)
+
+
+@pytest.mark.parametrize(
+  ("line", "rc", "watch"),
+  (
+    ("git push origin topic", "0", True),
+    ("gh pr create --title Draft", "0", True),
+    ("git push --dry-run origin topic", "0", False),
+    ("git push -n origin topic", "0", False),
+    ("printf 'git push origin topic'", "0", False),
+    ("command -v git push", "0", False),
+    ("git push origin topic", "1", False),
+  ),
+)
+def test_exit_watches_checks_only_after_successful_push_or_pr_creation(
+  _isolate_state: Path,
+  monkeypatch: pytest.MonkeyPatch,
+  line: str,
+  rc: str,
+  watch: bool,
+) -> None:
+  started: list[tuple[str, list[str]]] = []
+
+  def start(_state: Path, name: str, command: list[str], **_kwargs: object) -> int:
+    started.append((name, command))
+    return 0
+
+  monkeypatch.setattr(cli, "_start_detached_run", start)
+  code, out = _run("post-exit", "--line", line, "--rc", rc)
+  assert code == 0, out
+  expected = [("pr-checks", ["gh", "pr", "checks", "--watch"])] if watch else []
+  assert started == expected

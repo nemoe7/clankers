@@ -33,7 +33,7 @@ SHELL_WRAPPER = re.compile(
 )
 
 
-def command_words(words: list[str]) -> list[str]:
+def command_words(words: list[str], *, unwrap_timeout: bool = False) -> list[str]:
   """Skip assignments and ordinary shell wrappers before naming the command."""
   index = 0
   while index < len(words):
@@ -47,7 +47,19 @@ def command_words(words: list[str]) -> list[str]:
         or ASSIGNMENT.match(words[index])
         or re.fullmatch(r"\d+(?:\.\d+)?", words[index])
       ):
+        if head == "command" and words[index] in {"-v", "-V"}:
+          return []  # A lookup must not become the command being looked up.
         index += 1
+    elif head == "timeout" and unwrap_timeout:
+      index += 1
+      while index < len(words):
+        option = words[index]
+        if option in {"-s", "--signal", "-k", "--kill-after"}:
+          index += 2
+        elif option.startswith("-") or re.fullmatch(r"\d+(?:\.\d+)?[smhd]?", option):
+          index += 1
+        else:
+          break
     else:
       break
   return words[index:]
@@ -156,13 +168,22 @@ def embedded_pieces(words: list[str]) -> list[tuple[list[str], str]]:
   return []
 
 
+@dataclass(frozen=True)
+class RouteRequest:
+  """A shell line the CLI must handle instead of executing it again."""
+
+  kind: str
+  args: tuple[str, ...]
+
+
 @dataclass
 class PreResult:
-  """One step outcome: the text to print and the verdict to return."""
+  """One step outcome: the text to print, verdict, and optional route."""
 
   messages: list[str] = field(default_factory=list)
   verdict: int = CONTINUE
   done: tuple[str, ...] = ()
+  route: RouteRequest | None = None
 
 
 class PreStep(Protocol):
@@ -247,12 +268,18 @@ class PollTimeoutGuard:
     )
 
 
-def _line_commands(ctx: PreContext) -> list[list[str]]:
+def _line_commands(ctx: PreContext, *, unwrap_timeout: bool = False) -> list[list[str]]:
   """Include direct commands and shell -c scripts without matching quoted prose."""
-  pieces = [command_words(words) for words, _ in ctx.pieces()]
+  pieces = [
+    command_words(words, unwrap_timeout=unwrap_timeout) for words, _ in ctx.pieces()
+  ]
   return [
     *pieces,
-    *(command_words(inner) for words in pieces for inner, _ in embedded_pieces(words)),
+    *(
+      command_words(inner, unwrap_timeout=unwrap_timeout)
+      for words in pieces
+      for inner, _ in embedded_pieces(words)
+    ),
   ]
 
 
@@ -700,6 +727,175 @@ class BibleReadGuard:
     )
 
 
+TEST_RUNNERS = {"pytest", "py.test", "tox", "nox"}
+TEST_COMMANDS = (
+  (("npm", "test"), "npm-tests"),
+  (("npm", "run", "test*"), "npm-tests"),
+  (("yarn", "test"), "yarn-tests"),
+  (("pnpm", "test"), "pnpm-tests"),
+  (("make", "test"), "make-tests"),
+  (("npx", "jest"), "npx-tests"),
+  (("npx", "vitest"), "npx-tests"),
+  (("npx", "mocha"), "npx-tests"),
+  (("npx", "ava"), "npx-tests"),
+  (("go", "test"), "go-tests"),
+  (("cargo", "test"), "cargo-tests"),
+  (("dotnet", "test"), "dotnet-tests"),
+  (("mvn", "test"), "mvn-tests"),
+  (("mvnw", "test"), "mvn-tests"),
+  (("gradle", "test"), "gradle-tests"),
+  (("gradlew", "test"), "gradle-tests"),
+)
+GITHUB_LOG = re.compile(r"/?repos/[^/]+/[^/]+/actions/(jobs|runs)/(\d+)/logs/?$")
+GITHUB_PR = re.compile(r"/?repos/[^/]+/[^/]+/pulls/(\d+)/?$")
+
+
+def _test_route(words: list[str]) -> RouteRequest | None:
+  if not words:
+    return None
+  head, args = Path(words[0]).name, words[1:]
+  if any(flag in args for flag in ("--help", "-h", "--version", "-V")):
+    return None
+  if head in TEST_RUNNERS:
+    return RouteRequest("run", ("pytest" if head == "py.test" else head,))
+  if head.startswith("python") and args[:2] == ["-m", "pytest"]:
+    return RouteRequest("run", ("pytest",))
+  if head == "node" and args[:1] == ["--test"]:
+    return RouteRequest("run", ("node-tests",))
+  if head == "gh" and args[:2] in (["pr", "checks"], ["run", "watch"]):
+    return RouteRequest("run", ("pr-checks" if args[0] == "pr" else "run-watch",))
+  for command, name in TEST_COMMANDS:
+    if head != command[0]:
+      continue
+    selected = args[: len(command) - 1]
+    if len(selected) == len(command) - 1 and all(
+      value.startswith(expected[:-1]) if expected.endswith("*") else value == expected
+      for value, expected in zip(selected, command[1:])
+    ):
+      return RouteRequest("run", (name,))
+  return None
+
+
+def _pr_patch_fields(args: list[str]) -> tuple[str, str]:
+  title, body_file = "", ""
+  for index, word in enumerate(args):
+    value = ""
+    if word in {"-f", "-F", "--field", "--raw-field"} and index + 1 < len(args):
+      value = args[index + 1]
+    elif word.startswith(("--field=", "--raw-field=")):
+      value = word.split("=", 1)[1]
+    elif word.startswith(("-f", "-F")) and len(word) > 2:
+      value = word[2:]
+    key, sep, field = value.partition("=")
+    if sep and key == "title":
+      title = field
+    elif sep and key == "body" and field.startswith("@"):
+      body_file = field[1:]
+  return title, body_file
+
+
+def _github_route(words: list[str]) -> RouteRequest | None:
+  if not words:
+    return None
+  head, args = Path(words[0]).name, words[1:]
+  if head not in {"gh", "curl"} or (head == "gh" and args[:1] != ["api"]):
+    return None
+  if any(flag in args for flag in ("--help", "-h", "--version", "-V")):
+    return None
+  for arg in args:
+    url = urlsplit(arg)
+    if url.scheme:
+      if url.hostname != "api.github.com":
+        continue
+      path = url.path
+    elif head == "gh":
+      path = arg.split("?", 1)[0]
+    else:
+      continue
+    if match := GITHUB_LOG.fullmatch(path):
+      log_type, number = match.groups()
+      return RouteRequest("job-log", (log_type, number))
+    if match := GITHUB_PR.fullmatch(path):
+      method = ""
+      for index, flag in enumerate(args):
+        if flag in {"-X", "--method", "--request"} and index + 1 < len(args):
+          method = args[index + 1].upper()
+        elif flag.startswith(("-X", "--method=", "--request=")):
+          method = flag.split("=", 1)[-1].upper() if "=" in flag else flag[2:].upper()
+      if method == "PATCH":
+        title, body_file = _pr_patch_fields(args)
+        if title and body_file:
+          return RouteRequest("pr-update", (match.group(1), title, body_file))
+        if head == "curl":
+          return RouteRequest("pr-update-manual", (match.group(1),))
+        return RouteRequest("pr-update-possible", (match.group(1),))
+  return None
+
+
+def post_push_watch(line: str) -> bool:
+  """A successful line needs a check watch only after a real push or PR creation."""
+  for words in _line_commands(PreContext(line=line), unwrap_timeout=True):
+    if not words:
+      continue
+    head, args = Path(words[0]).name, words[1:]
+    if any(flag in args for flag in ("--help", "-h", "--version", "-V")):
+      continue
+    if head == "gh" and args[:2] == ["pr", "create"]:
+      return True
+    if head == "git" and "push" in args:
+      options = args[args.index("push") + 1 :]
+      if not any(flag in options for flag in ("-n", "--dry-run")):
+        return True
+  return False
+
+
+class RouteGuard:
+  """Route single test, check-wait, PR-update, and job-log lines safely."""
+
+  name = "route"
+
+  def applies(self, ctx: PreContext) -> bool:
+    return not ctx.routed and any(
+      _test_route(words) or _github_route(words)
+      for words in _line_commands(ctx, unwrap_timeout=True)
+    )
+
+  def run(self, ctx: PreContext) -> PreResult:
+    pieces = ctx.pieces()
+    if (
+      len(pieces) != 1
+      or pieces[0][1] != ";"
+      or (ctx.command and shell_line(ctx.line) != shell_line(ctx.command))
+    ):
+      return PreResult(
+        [
+          (
+            "RUN BLOCKED: automatic routing would replay a mixed shell line. "
+            "Use `steer run start <name> -- <remaining command>` or the GitHub helper."
+          )
+        ],
+        BLOCK,
+      )
+    route = next(
+      request
+      for words in _line_commands(ctx, unwrap_timeout=True)
+      if (request := _test_route(words) or _github_route(words)) is not None
+    )
+    if route.kind == "pr-update-possible":
+      return PreResult()  # Ordinary single-field metadata PATCHes remain allowed.
+    if route.kind == "pr-update-manual":
+      return PreResult(
+        [
+          (
+            f"PR UPDATE ROUTED: use `steer pr-update -n {route.args[0]} "
+            "-t <title> -f <workspace-file>` instead of direct curl PATCH."
+          )
+        ],
+        BLOCK,
+      )
+    return PreResult(verdict=END_CALL, route=route)
+
+
 PIPELINE: tuple[PreStep, ...] = (
   SleepGuard(),
   InboxPipeGuard(),
@@ -710,6 +906,7 @@ PIPELINE: tuple[PreStep, ...] = (
   InboxGate(),
   GitSafetyGuard(),
   BibleReadGuard(),
+  RouteGuard(),
   BarePathReminder(),
   EgressReminder(),
 )
@@ -723,7 +920,7 @@ def run_pipeline(ctx: PreContext) -> PreResult:
     if step.name in finished and not (
       (step.name == "gate" and ctx.is_push())
       or (step.name == "sleep" and ctx.active_runs)
-      or step.name == "git-safe"
+      or step.name in {"git-safe", "route"}
     ):
       continue
     if not step.applies(ctx):
@@ -734,7 +931,7 @@ def run_pipeline(ctx: PreContext) -> PreResult:
       if step.name not in finished:
         finished.append(step.name)
       continue
-    return PreResult(messages, result.verdict, tuple(finished))
+    return PreResult(messages, result.verdict, tuple(finished), result.route)
   return PreResult(messages, CONTINUE, tuple(finished))
 
 

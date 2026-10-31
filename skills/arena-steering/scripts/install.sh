@@ -107,4 +107,34 @@ esac
 unset _steer_previous
 EOF
 fi
+EXIT_MARKER="# arena-steering-exit"
+if ! grep -qxF "$EXIT_MARKER" "$PROFILE"; then
+  cat >> "$PROFILE" <<'EOF'
+
+# arena-steering-exit
+_steer_on_exit() {
+  _steer_exit_rc=$1
+  _steer_gate_running=1
+  "$HOME/.local/bin/steer" post-exit --rc "$_steer_exit_rc" --line "${_steer_line:-}" >&2 || :
+  return "$_steer_exit_rc"
+}
+_steer_previous_exit=$(trap -p EXIT)
+case $_steer_previous_exit in
+  *arena-steering-exit-trap*) ;;
+  *)
+    if [ -n "$_steer_previous_exit" ]; then
+      eval "_steer_exit_parts=( ${_steer_previous_exit#trap -- } )"
+      _steer_exit_action=${_steer_exit_parts[0]}
+      unset _steer_exit_parts
+      printf -v _steer_exit_hook '%s\n%s\n%s' '_steer_exit_rc=$?; set +e; _steer_on_exit "$_steer_exit_rc"' "$_steer_exit_action" 'exit "$_steer_exit_rc" # arena-steering-exit-trap'
+    else
+      _steer_exit_hook='_steer_exit_rc=$?; set +e; _steer_on_exit "$_steer_exit_rc"; exit "$_steer_exit_rc" # arena-steering-exit-trap'
+    fi
+    trap "$_steer_exit_hook" EXIT
+    unset _steer_exit_hook _steer_exit_action
+    ;;
+esac
+unset _steer_previous_exit
+EOF
+fi
 printf 'Installed steer in %s. Open a new login shell or source %s.\n' "$COMMAND" "$PROFILE"

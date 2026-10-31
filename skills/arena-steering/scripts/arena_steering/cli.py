@@ -213,6 +213,12 @@ def main(
     "-d", "--done", default="", help="Steps this shell already finished."
   )
 
+  post_exit_p = sub.add_parser(
+    "post-exit", help="Watch PR checks after a successful shell push or PR creation."
+  )
+  post_exit_p.add_argument("--line", default="", help="The completed shell line.")
+  post_exit_p.add_argument("--rc", type=int, required=True, help="Shell exit status.")
+
   skills_p = sub.add_parser("skills", help="List skill names, descriptions, and paths.")
 
   worktree_p = sub.add_parser(
@@ -249,6 +255,12 @@ def main(
 
   cmd = remaining[0]
   cmd_args = remaining[1:]
+  if cmd == "post-exit":
+    parsed = post_exit_p.parse_args(cmd_args)
+    try:
+      return _run_post_exit(parsed, resolve_state_dir(), stdout)
+    except OSError:
+      return 0  # The exit hook must never change the completed line's status.
   group_parsers = {
     "task": task_p,
     "report": report_p,
@@ -770,6 +782,48 @@ def _pre_state_unavailable(parsed: argparse.Namespace, reason: str, out: TextIO)
   return pre_mod.CONTINUE
 
 
+def _run_pre_route(
+  route: pre_mod.RouteRequest, line: str, store: SqliteStore, out: TextIO
+) -> int:
+  """Complete a routed line before the trap ends the shell call."""
+  try:
+    if route.kind == "run":
+      name = route.args[0]
+      _start_detached_run(
+        Path(store.db_path).parent,
+        name,
+        ["bash", "-c", pre_mod.shell_line(line)],
+        out=out,
+      )
+      print(f"routed {name}: background run. Verdict on later call.", file=out)
+    elif route.kind == "pr-update":
+      number, title, body_file = route.args
+      if _run_pr_update(
+        argparse.Namespace(number=int(number), title=title, body_file=body_file),
+        store,
+        out,
+      ):
+        raise ValueError("pr-update could not verify this pull request")
+    elif route.kind == "job-log":
+      log_type, number = route.args
+      if _run_job_log(
+        argparse.Namespace(
+          job_id=number if log_type == "jobs" else None,
+          run_id=number if log_type == "runs" else None,
+        ),
+        out,
+      ):
+        raise ValueError("job-log could not retrieve this log")
+    else:
+      raise ValueError(f"Unsupported route: {route.kind}")
+  except (ValueError, OSError) as exc:
+    print(
+      f"RUN BLOCKED: helper failed, so the original line did not run: {exc}", file=out
+    )
+    return pre_mod.BLOCK
+  return pre_mod.END_CALL
+
+
 def _run_pre(
   parsed: argparse.Namespace,
   messages: MessageService,
@@ -820,6 +874,8 @@ def _run_pre(
     and not ctx.is_inbox_recovery()
   ):
     _bump_call_count(store)
+  if result.route is not None:
+    return _run_pre_route(result.route, parsed.line or parsed.command_text, store, out)
   return result.verdict
 
 
@@ -1047,6 +1103,25 @@ def _start_locked_run(
     proc.terminate()
     raise
   print(f"Started run {name} (pid {proc.pid})", file=out)
+  return 0
+
+
+def _run_post_exit(parsed: argparse.Namespace, state_dir: Path, out: TextIO) -> int:
+  """Start a best-effort check watch after a successful push or PR creation."""
+  if parsed.rc != 0 or not pre_mod.post_push_watch(parsed.line):
+    return 0
+  if "pr-checks" in FileGateStatus(state_dir).running_names():
+    return 0
+  try:
+    _start_detached_run(
+      state_dir, "pr-checks", ["gh", "pr", "checks", "--watch"], out=out
+    )
+  except (OSError, ValueError) as exc:
+    print(f"PR checks watch could not start: {exc}", file=out)
+    return 0  # Preserve the original shell status even if the watch cannot start.
+  print(
+    "routed pr-checks: background watch after push. Verdict on later call.", file=out
+  )
   return 0
 
 
