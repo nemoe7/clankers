@@ -724,7 +724,10 @@ function renderApp(state) {
     return answers[answers.length - 1]?.status === "acked" && !report.ack_seen;
   });
   const reportQuestion = document.getElementById("report-needs-answer");
-  if (reportQuestion) reportQuestion.hidden = !activeReports.some(reportNeedsAnswer);
+  if (reportQuestion) {
+    reportQuestion.hidden = !activeReports.some(reportNeedsAnswer);
+    reportQuestion.classList.toggle("is-alone", !hasUnreadReport && !hasUnseenAck);
+  }
 
   const reportPip = document.getElementById("report-pip");
   if (reportPip) {

@@ -1074,6 +1074,10 @@ mark.search-hit {
   color: var(--accent);
 }
 
+#report-needs-answer.is-alone {
+  right: 5px;
+}
+
 #report-needs-answer .report-picker-help-icon {
   width: 7px;
   height: 7px;
