@@ -2593,13 +2593,10 @@ def test_cli_skills_lists_repo_and_installed_skills(
   assert "alpha-skill [repo]" in out and "Alpha description." in out
   assert "beta-skill [installed]" in out and "Beta description." in out
 
-  code, out, _ = _run_cli(cli.resolve_state_dir(), "skills", "--json")
-  assert code == 0
-  entries = json.loads(out)
-  assert [entry["name"] for entry in entries] == ["alpha-skill", "beta-skill"]
-  assert all(
-    set(entry) == {"name", "source", "path", "description"} for entry in entries
-  )
+  for flag in ("-j", "--json"):
+    with pytest.raises(SystemExit) as rejected:
+      _run_cli(cli.resolve_state_dir(), "skills", flag)
+    assert rejected.value.code == 2
 
 
 def test_cli_worktree_collect_prints_the_patch(
