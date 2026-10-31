@@ -46,6 +46,17 @@ def _report_timestamp(value: str) -> datetime:
   return stamp.replace(tzinfo=UTC) if stamp.tzinfo is None else stamp.astimezone(UTC)
 
 
+def _append_unique_details(task: Task, lines: list[str]) -> bool:
+  known = set(task.details)
+  added = False
+  for line in lines:
+    if line not in known:
+      task.details.append(line)
+      known.add(line)
+      added = True
+  return added
+
+
 def _answer_detail_lines(report: Report, answer: ReportAnswer) -> list[str]:
   current_labels = {field.id: field.label for field in report.fields}
   return [
@@ -880,7 +891,7 @@ class TaskService:
       report = self._reports.get_report(report_id)
       if report is not None:
         for answer in report.answers:
-          task.details.extend(_answer_detail_lines(report, answer))
+          _append_unique_details(task, _answer_detail_lines(report, answer))
 
   def _load_queue_and_target(self, task_id: str) -> tuple[list[Task], Task]:
     validate_entity_id(task_id, "Task.id")
@@ -1342,8 +1353,7 @@ class ReportService:
     queue = self._tasks.list_tasks()
     changed = False
     for task in queue:
-      if report.id in task.report_ids:
-        task.details.extend(lines)
+      if report.id in task.report_ids and _append_unique_details(task, lines):
         task.modified_at = now
         changed = True
     if changed:

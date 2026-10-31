@@ -312,7 +312,7 @@ class Task:
           f"Task detail exceeds {TASK_DETAIL_MAX_LEN} characters ({len(text)}): {text!r}"
         )
       cleaned_details.append(text)
-    self.details = cleaned_details
+    self.details = _dedupe_strings(cleaned_details)
 
     raw_links = dict(links) if isinstance(links, dict) else {}
     resolved_msgs = (

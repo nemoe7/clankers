@@ -607,9 +607,11 @@ class SqliteStore:
       }
       self._conn.execute("DELETE FROM tasks")
       for index, task in enumerate(tasks):
+        task.details = list(dict.fromkeys(line.strip() for line in task.details))
         row = previous.get(task.id)
         if row is not None and (
           int(row["position"]) != index
+          or json.loads(row["details_json"] or "[]") != task.details
           or self._row_to_task(row).to_dict() != task.to_dict()
         ):
           task.modified_at = _advance_stamp(str(row["modified_at"]), task.modified_at)
@@ -843,6 +845,19 @@ class SqliteStore:
           ):
             result["skipped"].append(row_id)
             continue
+          if table == "tasks" and "details_json" in data:
+            raw_details = json.loads(data["details_json"])
+            unique_details = list(
+              dict.fromkeys(str(line).strip() for line in raw_details)
+            )
+            if unique_details != raw_details:
+              data["details_json"] = json.dumps(unique_details)
+              now = (
+                datetime.now(UTC)
+                .isoformat(timespec="microseconds")
+                .replace("+00:00", "Z")
+              )
+              data["modified_at"] = _advance_stamp(incoming_stamp, now)
           if table == "tasks" and "status" in data:
             status = data["status"]
             if isinstance(status, str) and status in LEGACY_TASK_STATUSES:

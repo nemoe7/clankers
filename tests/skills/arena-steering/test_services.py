@@ -483,7 +483,7 @@ def test_task_answer_details_survive_report_removal_and_edits(tmp_path) -> None:
   second = reports.submit_answer("decision", {"choice": "A"}, answer_id="ab0002")
   reports.ack_answer("decision", second.id, "Read")
   details = tasks.get_task("work")[0].details
-  assert details == ["Act on the answer", "Choice?: A", "Choice?: A"]
+  assert details == ["Act on the answer", "Choice?: A"]
   tasks.mod_scalar("work", "title", "Updated work")
   tasks.mod_deets("work", "Another detail")
   tasks.patch_task("work", {"scope": "test"})
@@ -499,12 +499,12 @@ def test_task_answer_details_survive_report_removal_and_edits(tmp_path) -> None:
   _print_task_list([(task, False)], out)
   _print_single_task(task, False, out)
   text = out.getvalue()
-  assert text.count("Choice?: A") == 4
+  assert text.count("Choice?: A") == 2
   assert first.id not in text and second.id not in text
   reopened.close()
 
 
-def test_linking_an_answered_report_copies_details_each_time(tmp_path) -> None:
+def test_linking_an_answered_report_copies_missing_details(tmp_path) -> None:
   store = SqliteStore(tmp_path / "link.sqlite3")
   reports = ReportService(store, store)
   tasks = TaskService(store, store)
@@ -539,14 +539,10 @@ def test_linking_an_answered_report_copies_details_each_time(tmp_path) -> None:
     "Act on the answer",
     "Choice?: B",
     "Choice?: A",
-    "Choice?: B",
-    "Choice?: A",
   ]
   reports.rename_report("decision", "renamed-decision")
   assert tasks.get_task("work")[0].details == [
     "Act on the answer",
-    "Choice?: B",
-    "Choice?: A",
     "Choice?: B",
     "Choice?: A",
   ]
@@ -598,13 +594,11 @@ def test_task_details_keep_original_labels_after_republish(tmp_path) -> None:
     "Review",
     "Original label?: A",
     "New label?: B",
-    "Original label?: A",
-    "New label?: B",
   ]
   store.close()
 
 
-def test_concurrent_report_answers_append_distinct_details(tmp_path) -> None:
+def test_concurrent_report_answers_keep_unique_details(tmp_path) -> None:
   from concurrent.futures import ThreadPoolExecutor
   from threading import Barrier
 
@@ -636,7 +630,7 @@ def test_concurrent_report_answers_append_distinct_details(tmp_path) -> None:
   report = reports[0].get_report("choice")
   task = tasks.get_task("work")[0]
   assert {item.id for item in report.answers} == {item.id for item in answers}
-  assert task.details == ["Review", "Select?: Yes", "Select?: Yes"]
+  assert task.details == ["Review", "Select?: Yes"]
   for store in stores:
     store.close()
 
@@ -673,7 +667,7 @@ def test_removing_answer_details_keeps_answers_and_report_links(tmp_path) -> Non
   tasks.mod_scalar("work", "title", "Renamed work")
   tasks.mod_links_rm("work", "report", "decision")
   tasks.mod_links_add("work", "decision", link_type="report")
-  relinked_details = ["Review", "Select?: No", "Select?: Yes", "Select?: No"]
+  relinked_details = ["Review", "Select?: No", "Select?: Yes"]
   assert tasks.get_task("work")[0].details == relinked_details
   store.close()
 
@@ -737,7 +731,6 @@ def test_report_answers_append_full_details_for_each_submission(tmp_path) -> Non
   reports.submit_answer("question", values, answer_id="b20002")
   reports.submit_answer("question", values, answer_id="b20003")
   expected = ["Review", f"Choice?: {option}", f"Second?: {other}"]
-  expected.extend([f"Choice?: {option}", f"Second?: {other}"])
   for task_id in ("one", "two"):
     task = tasks.get_task(task_id)[0]
     assert task.details == expected
@@ -1033,3 +1026,54 @@ def test_acknowledging_an_older_answer_does_not_reset_latest_seen_timer() -> Non
   clock.advance(minutes=15)
   assert [item.id for item in reports.list_reports(stale_only=True)] == ["decision"]
   store.close()
+
+
+def test_task_details_are_unique_on_create_and_update() -> None:
+  store = SqliteStore(":memory:")
+  tasks = TaskService(store, store)
+  task = tasks.create_task("work", "Work", details=["Repeat", " Repeat ", "Other"])
+  assert task.details == ["Repeat", "Other"]
+  assert tasks.mod_deets("work", "Repeat").details == ["Repeat", "Other"]
+  task = tasks.patch_task("work", {"details": ["Other", "Other", "New", "New"]})
+  assert task.details == ["Other", "New"]
+  assert store.get_task("work").details == ["Other", "New"]
+  store.close()
+
+
+def test_answer_copy_keeps_unique_details_when_relinked() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  tasks = TaskService(store, store)
+  _publish_answer_message_report(reports)
+  tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  reports.submit_answer("decision", {"choice": "A"}, answer_id="ff0001")
+  reports.submit_answer("decision", {"choice": "A"}, answer_id="ff0002")
+  assert tasks.get_task("work")[0].details == ["Review", "Choice?: A"]
+  tasks.mod_links_rm("work", "report", "decision")
+  tasks.mod_links_add("work", "decision", link_type="report")
+  assert tasks.get_task("work")[0].details == ["Review", "Choice?: A"]
+  store.close()
+
+
+def test_state_merge_normalizes_duplicate_task_details() -> None:
+  import json
+
+  source = SqliteStore(":memory:")
+  target = SqliteStore(":memory:")
+  task = TaskService(source, source).create_task("work", "Work", details=["Review"])
+  snapshot = source.export_rows()
+  row = snapshot["tasks"][0]
+  row["details_json"] = json.dumps(["Review", " Review ", "More", "More"])
+  target.merge_rows(snapshot)
+  assert target.get_task("work").details == ["Review", "More"]
+  merged = target.export_rows()["tasks"][0]
+  assert json.loads(merged["details_json"]) == ["Review", "More"]
+  assert merged["modified_at"] > task.modified_at
+  source.merge_rows(target.export_rows())
+  assert source.get_task("work").details == ["Review", "More"]
+  assert json.loads(source.export_rows()["tasks"][0]["details_json"]) == [
+    "Review",
+    "More",
+  ]
+  source.close()
+  target.close()

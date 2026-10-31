@@ -40,6 +40,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `models.py`, `services.py`, `store.py`: Keep task details unique across edits, answer copies, and sync.
+
 - `services.py`: Start unlinked report staleness when the user sees an acknowledgement.
 
 - `pre.py`, `services.py`: Count blocking inbox work and retain the gate count until it clears.
