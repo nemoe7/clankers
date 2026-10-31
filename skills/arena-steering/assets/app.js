@@ -411,22 +411,29 @@ async function refreshAll(force = false) {
   }
 }
 
-const composerUploads = createComposerUploads(store, (file) => api.uploadFile(file));
+const composerUploads = createComposerUploads(store, (file, options) => api.uploadFile(file, options));
 
 const handlers = {
+  onRenderDraft(markdown) {
+    return api.renderMarkdown(markdown, { breaks: true });
+  },
   async onSendMessage(payload) {
     let pending = store.getState().pendingSend;
     if (store.getState().sending) throw new Error("A send is already in progress");
-    const content = { body: payload.body, parent_ids: payload.parent_ids || [], attachments: payload.attachments || [] };
-    if (pending && JSON.stringify(pending.content) !== JSON.stringify(content)) {
-      throw new Error("Retry the unconfirmed send before sending changes");
-    }
-    if (!pending) {
-      pending = { request_id: crypto.randomUUID(), content, rawDraft: payload.rawDraft, attachmentIds: payload.attachmentIds || [] };
-      writePendingSend(pending);
-    }
-    store.setState({ pendingSend: pending, sending: true });
+    store.setState({ sending: true, composerError: "" });
     try {
+      const attachments = pending
+        ? payload.attachments || []
+        : await composerUploads.readyForSend(payload.attachmentIds || []);
+      const content = { body: payload.body, parent_ids: payload.parent_ids || [], attachments };
+      if (pending && JSON.stringify(pending.content) !== JSON.stringify(content)) {
+        throw new Error("Retry the unconfirmed send before sending changes");
+      }
+      if (!pending) {
+        pending = { request_id: crypto.randomUUID(), content, rawDraft: payload.rawDraft, attachmentIds: payload.attachmentIds || [] };
+        writePendingSend(pending);
+      }
+      store.setState({ pendingSend: pending });
       const request = { ...pending.content, request_id: pending.request_id };
       if (request.attachments.length) {
         await api.sendMessageWithFile(request);
@@ -440,10 +447,11 @@ const handlers = {
       writePendingSend(null);
       store.setState({ pendingSend: null, sending: false });
     } catch (error) {
-      store.setState({ sending: false });
+      store.setState({ sending: false, composerError: String(error.message || error) });
       throw error;
     }
-    await refreshAll(true);
+    // Do not keep a confirmed draft editable while an unrelated refresh waits.
+    void refreshAll(true);
   },
   onDiscardPendingSend() {
     writePendingSend(null);
@@ -512,6 +520,11 @@ const handlers = {
     store.setState({
       composerExpanded: !store.getState().composerExpanded,
     });
+  },
+  onSetComposerExpanded(expanded) {
+    if (store.getState().composerExpanded !== expanded) {
+      store.setState({ composerExpanded: expanded });
+    }
   },
   onToggleReplyParent(parentId) {
     if (!parentId) return;

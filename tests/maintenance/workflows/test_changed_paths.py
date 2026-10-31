@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import changed_paths
+import pytest
 
 
 def git(repo: Path, *arguments: str) -> str:
@@ -203,8 +204,14 @@ def test_module_matrix_selects_owners_and_shared_changes():
     assert {row["name"] for row in changed_paths.module_matrix([shared])} == all_names
 
 
-def test_report_answer_browser_test_runs_with_preview_module():
-  path = "tests/skills/arena-steering/test_report_answer_ui.py"
+@pytest.mark.parametrize(
+  "path",
+  [
+    "tests/skills/arena-steering/test_report_answer_ui.py",
+    "tests/skills/arena-steering/test_composer_parity.py",
+  ],
+)
+def test_browser_test_runs_with_preview_module(path):
   selected = changed_paths.module_matrix([path])
   assert [row["name"] for row in selected] == ["Preview"]
   assert path in selected[0]["command"]

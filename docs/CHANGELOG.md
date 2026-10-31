@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Assign the composer parity browser test to the Preview test group (`workflows/changed_paths.py`).
 - Assign the message retry browser test to the Preview test group (`workflows/changed_paths.py`).
 - Move the configurable steering demo out of the shipped skill (`demo-arena-steer.py`).
 

@@ -12,6 +12,11 @@ const EYE_OPEN_SVG = `<svg class="lucide lucide-eye" width="16" height="16" view
 const EYE_CLOSED_SVG = `<svg class="lucide lucide-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path><path d="m2 2 20 20"></path></svg>`;
 const SKIP_FORWARD_SVG = `<svg class="lucide lucide-skip-forward" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4v16"></path><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"></path></svg>`;
 const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`;
+const EXPAND_SVG = `<svg class="lucide lucide-maximize-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="m3 21 7-7"></path><path d="M9 21H3v-6"></path></svg>`;
+const COLLAPSE_SVG = `<svg class="lucide lucide-minimize-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 10 7-7"></path><path d="M20 10h-6V4"></path><path d="m3 21 7-7"></path><path d="M4 14h6v6"></path></svg>`;
+const FILE_SVG = `<svg class="lucide lucide-file-text" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"></path><path d="M14 2v6h6"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>`;
+const SEND_SVG = `<svg class="lucide lucide-arrow-up" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>`;
+const SENDING_SVG = `<svg class="lucide lucide-loader-circle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>`;
 
 const MESSAGE_PAGE_SIZE = 15;
 const OLDER_PAGE_TRIGGER_PX = 320;
@@ -29,6 +34,10 @@ export function expandMessageHistory() {
 }
 let loadingMoreMessages = null;
 let draftRevision = 0;
+let draftPreviewActive = false;
+let draftPreviewSequence = 0;
+let draftPreviewCache = { text: null, html: "" };
+let dropAreaAbort = null;
 let replyObserver = null;
 let historyResizeObserver = null;
 let historyScrollTarget = null;
@@ -43,6 +52,28 @@ if (typeof document !== "undefined") document.addEventListener("visibilitychange
     replyObserver.observe(target);
   }
 });
+
+function attachmentState(item) {
+  if (item.status === "uploading") return "uploading…";
+  if (item.status === "failed") return "upload failed";
+  const size = Number(item.file?.size || 0);
+  if (size < 1000) return `${size} B`;
+  if (size < 1000000) return `${Math.round(size / 1000)} kB`;
+  return `${(size / 1000000).toFixed(2)} MB`;
+}
+
+function renderComposerAttachment(item, sending) {
+  const name = escapeHtml(item.name || "attachment");
+  const lead = item.previewUrl
+    ? `<img class="composer-attachment-lead" src="${escapeHtml(item.previewUrl)}" alt="${name}" width="32" height="32">`
+    : `<span class="composer-attachment-lead" aria-hidden="true">${FILE_SVG}</span>`;
+  return `<span class="composer-attachment-chip" data-upload-status="${escapeHtml(item.status)}">
+    ${lead}
+    <span class="composer-attachment-name" title="${name}">${name} · ${escapeHtml(attachmentState(item))}</span>
+    ${item.status === "failed" ? `<button type="button" data-retry-composer-attachment="${escapeHtml(item.id)}" aria-label="Retry ${name}" ${sending ? "disabled" : ""}>Retry</button>` : ""}
+    <button type="button" data-remove-composer-attachment="${escapeHtml(item.id)}" aria-label="Remove ${name}" ${sending ? "disabled" : ""}>×</button>
+  </span>`;
+}
 
 function stateDotForStatus(status) {
   if (status === "acked") return "said";
@@ -152,6 +183,7 @@ export function renderMessagesView(container, state, handlers) {
   const prevMsgEl = container.querySelector("#msg");
   const draftWasFocused = Boolean(prevMsgEl && activeEl === prevMsgEl);
   const draftValue = prevMsgEl?.value ?? readComposerDraft();
+  if (!draftValue.trim()) draftPreviewActive = false;
   const draftSelStart = draftWasFocused ? prevMsgEl.selectionStart : null;
   const draftSelEnd = draftWasFocused ? prevMsgEl.selectionEnd : null;
 
@@ -191,6 +223,7 @@ export function renderMessagesView(container, state, handlers) {
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
 
   const visibleMessages = state.messages || [];
+  const placeholder = (visibleMessages.at(-1)?.body || "What should happen next?").split(/\r?\n/, 1)[0];
   const hasOlderMessages = Boolean(state.messagesHasMore);
 
   const linkedTasksByMsg = new Map();
@@ -344,7 +377,7 @@ export function renderMessagesView(container, state, handlers) {
         <p id="log-empty" class="receipt" role="status" ${visibleMessages.length || state.messagesError || state.messagesLoading ? "hidden" : ""}>${query ? "No matching messages." : "No messages yet."}</p>
       </section>
 
-      <section class="card compose ${composerExpanded ? "composer-expanded" : ""}" id="compose" aria-label="Send message">
+      <section class="card compose ${composerExpanded ? "composer-expanded" : ""}" id="compose" aria-label="Send message" ${composerAttachments.length ? 'data-attachments="true"' : ""}>
         <form id="form">
           <div
             id="composer-reply-bar"
@@ -360,31 +393,22 @@ export function renderMessagesView(container, state, handlers) {
               )
               .join("")}
           </div>
-          <div
-            id="composer-attachments"
-            class="composer-attachments"
-            aria-label="Staged attachments"
-            ${composerAttachments.length ? "" : "hidden"}
-          >
-            ${composerAttachments
-              .map(
-                (att) =>
-                  `<span class="composer-attachment-chip" data-upload-status="${escapeHtml(att.status)}">
-                    <span>${escapeHtml(att.name || "attachment")} · ${escapeHtml(att.status)}</span>
-                    ${att.status === "failed" ? `<button type="button" data-retry-composer-attachment="${escapeHtml(att.id)}" aria-label="Retry ${escapeHtml(att.name)}">Retry</button>` : ""}
-                    <button type="button" data-remove-composer-attachment="${escapeHtml(att.id)}" aria-label="Remove ${escapeHtml(att.name)}">×</button>
-                  </span>`
-              )
-              .join("")}
-          </div>
+          ${state.composerError ? `<div class="composer-send-status" role="status">${escapeHtml(state.composerError)}</div>` : ""}
           ${pendingSend && !state.sending ? `<div class="composer-send-status" role="status">Send unconfirmed. The original may have been sent. <button type="button" id="retry-send">Retry previous send</button> <button type="button" id="discard-send" title="The original send might have succeeded">Discard retry</button></div>` : ""}
           <div class="composer-shell">
+            <div
+              id="composer-attachments"
+              class="composer-attachments"
+              aria-label="Staged attachments"
+              ${composerAttachments.length ? "" : "hidden"}
+            >${composerAttachments.map((item) => renderComposerAttachment(item, state.sending)).join("")}</div>
             <button
               id="attach-file"
               class="icon-button"
               type="button"
               aria-label="Attach file"
               title="Attach file"
+              ${state.sending ? "disabled" : ""}
             >
               <svg class="lucide lucide-paperclip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"></path></svg>
             </button>
@@ -393,7 +417,7 @@ export function renderMessagesView(container, state, handlers) {
               id="preview-msg"
               class="icon-button"
               type="button"
-              aria-pressed="false"
+              aria-pressed="${draftPreviewActive ? "true" : "false"}"
               aria-controls="draft-preview"
               aria-label="Preview Markdown"
               title="Preview Markdown"
@@ -403,9 +427,10 @@ export function renderMessagesView(container, state, handlers) {
             <textarea
               id="msg"
               name="msg"
-              rows="${composerExpanded ? 8 : 1}"
+              rows="1"
               aria-label="Your message"
-              placeholder="What should happen next?"
+              placeholder="${escapeHtml(placeholder)}"
+              ${draftPreviewActive ? "hidden" : ""}
             ></textarea>
             <div
               id="draft-preview"
@@ -413,8 +438,8 @@ export function renderMessagesView(container, state, handlers) {
               tabindex="0"
               role="region"
               aria-label="Markdown draft preview, not sent"
-              hidden
-            ></div>
+              ${draftPreviewActive ? "" : "hidden"}
+            >${draftPreviewActive && draftPreviewCache.text === draftValue ? draftPreviewCache.html : ""}</div>
             <button
               id="composer-expand"
               class="icon-button"
@@ -422,19 +447,21 @@ export function renderMessagesView(container, state, handlers) {
               aria-expanded="${composerExpanded ? "true" : "false"}"
               aria-label="${composerExpanded ? "Collapse composer" : "Expand composer"}"
               title="${composerExpanded ? "Collapse composer" : "Expand composer"}"
+              aria-controls="msg draft-preview"
+              ${composerExpanded ? "" : "hidden"}
             >
-              <svg class="lucide lucide-maximize-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="m3 21 7-7"></path><path d="M9 21H3v-6"></path></svg>
+              ${composerExpanded ? COLLAPSE_SVG : EXPAND_SVG}
             </button>
             <button
               id="send"
               class="icon-button"
               type="submit"
-              aria-label="Send message"
-              title="Send message"
-              aria-busy="false"
-              ${state.sending || composerAttachments.some((item) => item.status !== "ready") ? "disabled" : ""}
+              aria-label="${state.sending ? "Sending message" : "Send message"}"
+              title="${state.sending ? "Sending message" : "Send message"}"
+              aria-busy="${state.sending ? "true" : "false"}"
+              ${state.sending ? "disabled" : ""}
             >
-              <svg class="lucide lucide-arrow-up" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>
+              ${state.sending ? SENDING_SVG : SEND_SVG}
             </button>
           </div>
         </form>
@@ -615,6 +642,7 @@ export function renderMessagesView(container, state, handlers) {
 
   container.querySelector("#composer-expand")?.addEventListener("click", () => {
     handlers.onToggleComposerExpanded?.();
+    container.querySelector(draftPreviewActive ? "#draft-preview" : "#msg")?.focus();
   });
 
   container.querySelector("#survey-open")?.addEventListener("click", (ev) => {
@@ -659,22 +687,111 @@ export function renderMessagesView(container, state, handlers) {
       }
     }
   }
+  const previewBtn = container.querySelector("#preview-msg");
+  const draftPreview = container.querySelector("#draft-preview");
+  const composeSection = container.querySelector("#compose");
+  const expandBtn = container.querySelector("#composer-expand");
+  let previewTooltipTimer = null;
+
+  function clearPreviewTooltip() {
+    clearTimeout(previewTooltipTimer);
+    if (!previewBtn) return;
+    delete previewBtn.dataset.tooltip;
+    previewBtn.setAttribute("aria-label", "Preview Markdown");
+    previewBtn.title = "Preview Markdown";
+  }
+
+  async function renderDraftPreview() {
+    if (!draftPreview || !msgEl) return;
+    const text = msgEl.value;
+    if (draftPreviewCache.text === text) {
+      draftPreview.innerHTML = draftPreviewCache.html;
+      hydrateMermaidBlocks(draftPreview);
+      return;
+    }
+    const sequence = ++draftPreviewSequence;
+    draftPreview.textContent = "Rendering draft…";
+    try {
+      const result = await handlers.onRenderDraft(text);
+      if (sequence !== draftPreviewSequence || !draftPreviewActive) return;
+      const panel = container.querySelector("#draft-preview");
+      if (!panel || container.querySelector("#msg")?.value !== text) return;
+      // The renderer's newline after each break must not create a second visual line.
+      const html = result.html.replace(/<br\s*\/?>\r?\n/gi, "<br>");
+      draftPreviewCache = { text, html };
+      panel.innerHTML = html;
+      hydrateMermaidBlocks(panel);
+    } catch (error) {
+      if (sequence !== draftPreviewSequence || !draftPreviewActive) return;
+      const panel = container.querySelector("#draft-preview");
+      if (panel) panel.textContent = `Preview unavailable: ${error.message}. Use Write to continue, as sending still works.`;
+    }
+  }
+
+  function growComposer() {
+    if (!msgEl || !composeSection) return;
+    const priorHistoryHeight = historyEl?.clientHeight || 0;
+    const priorNoteHeight = parseFloat(msgEl.style.height) || 0;
+    const wasMultiline = Boolean(composeSection.dataset.multiline);
+    const hasAttachments = Boolean(composeSection.dataset.attachments);
+    delete composeSection.dataset.multiline;
+    if (!msgEl.value && composerExpanded) {
+      handlers.onSetComposerExpanded?.(false);
+      return;
+    }
+    msgEl.style.height = "auto";
+    msgEl.style.overflowY = msgEl.value ? "auto" : "hidden";
+    const css = window.getComputedStyle(msgEl);
+    const single = parseFloat(css.lineHeight) + parseFloat(css.paddingTop) + parseFloat(css.paddingBottom);
+    const multiline = Boolean(msgEl.value && (wasMultiline || draftPreviewActive || msgEl.value.includes("\n") || msgEl.scrollHeight > Math.ceil(single)));
+    if (multiline) composeSection.dataset.multiline = "true";
+    const border = parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth);
+    const nextHeight = !msgEl.value || composerExpanded || msgEl.hidden ? 0 : msgEl.scrollHeight + border;
+    msgEl.style.height = nextHeight ? `${nextHeight}px` : "";
+    if (expandBtn) expandBtn.hidden = !multiline && !composerExpanded;
+    const nextHistoryHeight = historyEl?.clientHeight || 0;
+    const heightDrop = priorHistoryHeight > nextHistoryHeight
+      ? priorHistoryHeight - nextHistoryHeight
+      : nextHistoryHeight > 0
+        ? Math.max(0, nextHeight - priorNoteHeight) + (!wasMultiline && multiline && !hasAttachments ? 38 : 0)
+        : 0;
+    if (historyEl && heightDrop > 0 && !composerExpanded) {
+      historyEl.scrollTop = pinnedToBottom
+        ? historyEl.scrollHeight
+        : Math.min(historyEl.scrollHeight, historyEl.scrollTop + heightDrop);
+      syncScrollControls();
+    }
+  }
+
   msgEl?.addEventListener("input", () => {
     draftRevision += 1;
     writeComposerDraft(msgEl.value);
+    clearPreviewTooltip();
+    growComposer();
   });
-  const previewBtn = container.querySelector("#preview-msg");
-  const draftPreview = container.querySelector("#draft-preview");
+  growComposer();
+  if (draftPreviewActive && draftPreview) renderDraftPreview();
 
   previewBtn?.addEventListener("click", () => {
-    const active = previewBtn.getAttribute("aria-pressed") === "true";
-    const next = !active;
-    previewBtn.setAttribute("aria-pressed", next ? "true" : "false");
-    if (draftPreview && msgEl) {
-      draftPreview.innerHTML = renderMarkdownBlock(msgEl.value);
-      hydrateMermaidBlocks(draftPreview);
-      draftPreview.hidden = !next;
-      msgEl.hidden = next;
+    if (!draftPreview || !msgEl) return;
+    if (!draftPreviewActive && !msgEl.value.trim()) {
+      clearPreviewTooltip();
+      previewBtn.setAttribute("aria-label", "Write something first");
+      previewBtn.title = "Write something first";
+      previewBtn.dataset.tooltip = "Write something first";
+      previewTooltipTimer = setTimeout(clearPreviewTooltip, 1500);
+      return;
+    }
+    clearPreviewTooltip();
+    draftPreviewActive = !draftPreviewActive;
+    previewBtn.setAttribute("aria-pressed", draftPreviewActive ? "true" : "false");
+    draftPreview.hidden = !draftPreviewActive;
+    msgEl.hidden = draftPreviewActive;
+    growComposer();
+    if (draftPreviewActive) renderDraftPreview();
+    else {
+      draftPreviewSequence += 1;
+      msgEl.focus();
     }
   });
 
@@ -695,14 +812,14 @@ export function renderMessagesView(container, state, handlers) {
   msgEl?.addEventListener("paste", async (event) => {
     const plainPaste = pasteAsText;
     pasteAsText = false;
-    if (plainPaste) return;
+    if (plainPaste || state.sending) return;
     const files = Array.from(event.clipboardData?.files || []);
+    const pastedText = event.clipboardData?.getData("text/plain") || "";
     if (files.length) {
-      event.preventDefault();
+      if (!pastedText) event.preventDefault();
       await handlers.onStageComposerFiles?.(files);
       return;
     }
-    const pastedText = event.clipboardData?.getData("text/plain") || "";
     const lineCount = pastedText.split("\n").length;
     if (
       Array.from(pastedText).length > PASTE_ATTACHMENT_CHAR_THRESHOLD ||
@@ -716,24 +833,31 @@ export function renderMessagesView(container, state, handlers) {
     }
   });
 
-  const composeSection = container.querySelector("#compose");
-  container.addEventListener("dragover", (event) => {
-    if (!event.dataTransfer?.types?.includes("Files")) return;
-    event.preventDefault();
-    composeSection?.classList.add("composer-drop-active");
-  });
-  container.addEventListener("dragleave", (event) => {
-    if (event.target === container) {
+  const dropArea = container.querySelector(".msgs-layout");
+  dropAreaAbort?.abort();
+  if (dropArea) {
+    dropAreaAbort = new AbortController();
+    const listenerOptions = { signal: dropAreaAbort.signal };
+    const showDrop = (event) => {
+      if (state.sending || !event.dataTransfer?.types?.includes("Files")) return;
+      event.preventDefault();
+      composeSection?.classList.add("composer-drop-active");
+    };
+    dropArea.addEventListener("dragenter", showDrop, listenerOptions);
+    dropArea.addEventListener("dragover", showDrop, listenerOptions);
+    dropArea.addEventListener("dragleave", (event) => {
+      if (!dropArea.contains(event.relatedTarget)) {
+        composeSection?.classList.remove("composer-drop-active");
+      }
+    }, listenerOptions);
+    dropArea.addEventListener("drop", async (event) => {
+      const files = Array.from(event.dataTransfer?.files || []);
+      if (state.sending || !files.length) return;
+      event.preventDefault();
       composeSection?.classList.remove("composer-drop-active");
-    }
-  });
-  container.addEventListener("drop", async (event) => {
-    const files = Array.from(event.dataTransfer?.files || []);
-    if (!files.length) return;
-    event.preventDefault();
-    composeSection?.classList.remove("composer-drop-active");
-    await handlers.onStageComposerFiles?.(files);
-  });
+      await handlers.onStageComposerFiles?.(files);
+    }, listenerOptions);
+  }
 
   async function submitPayload(payload, submittedDraft) {
     const submittedRevision = draftRevision;
@@ -746,7 +870,15 @@ export function renderMessagesView(container, state, handlers) {
     const currentMsgEl = container.querySelector("#msg");
     if (draftRevision === submittedRevision && (currentMsgEl ? currentMsgEl.value === submittedDraft : readComposerDraft() === submittedDraft)) {
       writeComposerDraft("");
-      if (currentMsgEl && currentMsgEl.value === submittedDraft) currentMsgEl.value = "";
+      draftPreviewActive = false;
+      if (currentMsgEl && currentMsgEl.value === submittedDraft) {
+        currentMsgEl.value = "";
+        currentMsgEl.hidden = false;
+        const currentPreview = container.querySelector("#draft-preview");
+        if (currentPreview) currentPreview.hidden = true;
+        container.querySelector("#preview-msg")?.setAttribute("aria-pressed", "false");
+        currentMsgEl.dispatchEvent(new Event("input", { bubbles: true }));
+      }
     }
   }
 
@@ -761,9 +893,11 @@ export function renderMessagesView(container, state, handlers) {
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
     const submittedDraft = msgEl?.value || "";
-    const body = submittedDraft.trim();
-    if (!body && !composerAttachments.length) return;
-    if (state.sending || composerAttachments.some((item) => item.status !== "ready")) return;
+    const text = submittedDraft.trim();
+    if (!text && !composerAttachments.length) return;
+    if (state.sending) return;
+    const names = composerAttachments.map((item) => item.name);
+    const body = text ? submittedDraft : (names.length === 1 ? `File: ${names[0]}` : `Files: ${names.join(", ")}`);
     pinnedToBottom = true;
     submitPayload({
       body,

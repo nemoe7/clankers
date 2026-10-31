@@ -43,7 +43,7 @@ Keep session state outside version control.
 - Browser write requests use durable IDs and return the original result on retry. Discarding a retry does not undo an action that may already have succeeded.
 - The browser keeps unconfirmed actions in session storage. If session storage is unavailable, it refuses to send a write rather than risk an unsafe retry.
 - Selecting the same file again can resume an unconfirmed upload after reload. A separate action uses a new ID.
-- Message text persists in session storage across reloads and tab changes. File objects do not persist across reloads.
+- Message text persists in local storage across reloads and browser tabs, with session storage as a fallback. File objects do not persist across reloads.
 - A paste over 1,500 Unicode characters or at least 15 lines becomes a text attachment. Ctrl+Shift+V pastes plain text without staging.
 - Choose one or more parent messages by clicking their IDs. Shift-click copies an ID, and parent chips jump to their messages.
 - Open message images and Mermaid diagrams in a lightbox. Use the wheel to zoom, drag to pan, and Escape or the close button to exit.
