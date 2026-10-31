@@ -715,3 +715,21 @@ def test_push_workflows_ignore_synced_agents_directory():
     push = triggers.get("push") or {}
     ignored = push.get("paths-ignore") or []
     assert ".agents/**" in ignored, name
+
+
+def test_gitleaks_ignores_installed_agents_and_keeps_default_rules():
+  import re
+  import tomllib
+
+  config = tomllib.loads((gate_workflows.ROOT / ".gitleaks.toml").read_text())
+  assert config["extend"]["useDefault"] is True
+  patterns = [re.compile(pattern) for pattern in config["allowlist"]["paths"]]
+
+  def ignored(path: str) -> bool:
+    return any(pattern.search(path) for pattern in patterns)
+
+  assert ignored(".agents/skills/arena-skill/SKILL.md")
+  assert ignored(".agents/skills/arena-skill/assets/mermaid.min.js")
+  assert ignored("skills/arena-skill/assets/mermaid.min.js")
+  assert not ignored("skills/arena-steering/scripts/arena_steering/store.py")
+  assert not ignored("docs/CHANGELOG.md")
