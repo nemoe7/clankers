@@ -491,7 +491,7 @@ export function renderMessagesView(container, state, handlers) {
       logNewestBtn.hidden = pinnedToBottom;
     }
     const key = messageQueryKey(state);
-    if (hasOlderMessages && loadingMoreMessages?.key !== key && historyEl.scrollTop <= OLDER_PAGE_TRIGGER_PX && historyEl.scrollHeight > historyEl.clientHeight) {
+    if (hasOlderMessages && !state.messagesError && loadingMoreMessages?.key !== key && historyEl.scrollTop <= OLDER_PAGE_TRIGGER_PX && historyEl.scrollHeight > historyEl.clientHeight) {
       const request = { key };
       loadingMoreMessages = request;
       Promise.resolve(handlers.onLoadOlderMessages?.()).finally(() => {

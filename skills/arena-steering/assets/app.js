@@ -268,6 +268,7 @@ function setLoading(active) {
 let messageEpoch = 0;
 let olderPageRequest = null;
 let loadedMessageKey = null;
+let olderPageErrorKey = null;
 let historyCache = null;
 let searchBase = null;
 
@@ -291,6 +292,7 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
   const previous = reset || loadedMessageKey !== key ? [] : [...(state.messages || [])];
   if (reset || loadedMessageKey !== key) {
     loadedMessageKey = key;
+    olderPageErrorKey = null;
     store.setState({ messages: [], messagesHasMore: false, messagesError: "", messagesLoading: true });
   }
   try {
@@ -312,9 +314,11 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
       ? [...fresh, ...previous.filter((item) => !ids.has(item.id))]
       : fresh;
     const current = store.getState();
-    if (current.messagesHasMore !== hasMore || current.messagesError || current.messagesLoading ||
+    const retainedError = !before && olderPageErrorKey === key ? current.messagesError : "";
+    if (before) olderPageErrorKey = null;
+    if (current.messagesHasMore !== hasMore || current.messagesError !== retainedError || current.messagesLoading ||
         JSON.stringify(current.messages) !== JSON.stringify(merged)) {
-      store.setState({ messages: merged, messagesHasMore: hasMore, messagesError: "", messagesLoading: false });
+      store.setState({ messages: merged, messagesHasMore: hasMore, messagesError: retainedError, messagesLoading: false });
     }
     const activeQuery = (store.getState().searchQuery || "").trim().toLowerCase();
     if (activeQuery && !before) {
@@ -323,6 +327,7 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
     return merged;
   } catch (error) {
     if (epoch === messageEpoch && messageQueryKey(store.getState()) === key) {
+      if (before) olderPageErrorKey = key;
       store.setState({ messagesError: `Could not load messages: ${error.message}`, messagesLoading: false });
     }
     return null;
