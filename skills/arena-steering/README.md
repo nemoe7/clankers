@@ -25,7 +25,13 @@ python maintenance/demo-arena-steer.py --port 8100
 
 V2 uses `arena-state/state.sqlite3` in the working directory. Do not open a v1 database with v2. Existing databases are not migrated. Uploaded files live in `arena-state/uploads/`.
 
-The demo uses `arena-state/demo/` and reseeds its own database on startup.
+The demo uses `arena-state/demo/` and reseeds its own database on startup. Reset a running demo without restarting it:
+
+```cmd
+python maintenance/demo-arena-steer.py --reset --port 8100
+```
+
+Reset replaces the demo data with sample data and refreshes connected clients. It does not affect a normal steering server.
 
 Keep session state outside version control.
 

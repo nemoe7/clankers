@@ -42,6 +42,7 @@ This log has no Unreleased section.
 
 - `assets/`: Show independent needs-answer and unread markers. A lone question marker uses the default dot position. Mark unseen acknowledgements on the tab and picker.
 - `assets/`: Keep newer report content when delayed responses arrive, preserving focused drafts during view-only refreshes.
+- `server.py`: Preserve demo-only reset registration across hot reloads.
 
 - `models.py`, `services.py`, `store.py`: Keep task details unique across edits, answer copies, and sync.
 

@@ -8,9 +8,13 @@ import json
 import os
 import struct
 import sys
+import urllib.error
+import urllib.request
+import weakref
 import zlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import RLock
 
 SCRIPTS_DIR = (
   Path(__file__).resolve().parents[1] / "skills" / "arena-steering" / "scripts"
@@ -18,9 +22,9 @@ SCRIPTS_DIR = (
 if str(SCRIPTS_DIR) not in sys.path:
   sys.path.insert(0, str(SCRIPTS_DIR))
 
-from arena_steering.models import Attachment
+from arena_steering import models
 from arena_steering.server import SteeringApp, create_http_server
-from arena_steering.store import SqliteStore
+from arena_steering.store import SqliteStore, _advance_stamp
 
 
 def _build_demo_board_png(width: int = 480, height: int = 140) -> bytes:
@@ -240,7 +244,8 @@ def _set_demo_timestamps(store: SqliteStore) -> None:
   }
   for idx in range(11, 36):
     msg_offsets[f"a{idx:05d}"] = 10800 + (36 - idx) * 600
-  with store._lock, store._conn as conn:
+  with store.transaction():
+    conn = store._conn
     for mid, secs in msg_offsets.items():
       stamp = iso_ago(secs)
       conn.execute(
@@ -270,12 +275,20 @@ def _set_demo_timestamps(store: SqliteStore) -> None:
 
 
 def reseed_demo_store(store: SqliteStore) -> SteeringApp:
+  """Replace the demo rows in one transaction."""
+  with store.transaction():
+    return _reseed_demo_store(store)
+
+
+def _reseed_demo_store(store: SqliteStore) -> SteeringApp:
   """Clear and populate Messages, Tasks, Reports, Survey, and media assets."""
-  with store._lock, store._conn as conn:
-    conn.execute("DELETE FROM messages")
-    conn.execute("DELETE FROM tasks")
-    conn.execute("DELETE FROM reports")
-    conn.execute("DELETE FROM meta")
+  conn = store._conn
+  conn.execute("DELETE FROM messages")
+  conn.execute("DELETE FROM tasks")
+  conn.execute("DELETE FROM reports")
+  conn.execute("DELETE FROM meta")
+  conn.execute("DELETE FROM message_requests")
+  conn.execute("DELETE FROM browser_write_requests")
 
   _write_demo_media_files(store)
 
@@ -320,13 +333,13 @@ def reseed_demo_store(store: SqliteStore) -> SteeringApp:
     blocking=True,
     hidden=False,
     attachments=[
-      Attachment(
+      models.Attachment(
         name="arena-tokens.json",
         path="uploads/arena-tokens.json",
         size_bytes=29324,
         present=True,
       ),
-      Attachment(
+      models.Attachment(
         name="inbox-capture.png",
         path="uploads/inbox-capture.png",
         size_bytes=14280,
@@ -380,7 +393,7 @@ def reseed_demo_store(store: SqliteStore) -> SteeringApp:
     blocking=True,
     hidden=False,
     attachments=[
-      Attachment(
+      models.Attachment(
         name="ui-motion-preview.gif",
         path="uploads/ui-motion-preview.gif",
         size_bytes=8192,
@@ -414,7 +427,7 @@ def reseed_demo_store(store: SqliteStore) -> SteeringApp:
     blocking=True,
     hidden=False,
     attachments=[
-      Attachment(
+      models.Attachment(
         name="stale-heap-profile.json",
         path="uploads/stale-heap-profile.json",
         size_bytes=184320,
@@ -437,7 +450,7 @@ def reseed_demo_store(store: SqliteStore) -> SteeringApp:
     blocking=True,
     hidden=False,
     attachments=[
-      Attachment(
+      models.Attachment(
         name="modulepreload-trace.txt",
         path="uploads/modulepreload-trace.txt",
         size_bytes=4120,
@@ -966,10 +979,50 @@ steer poll
   return app
 
 
+def _register_demo_reset(
+  app: SteeringApp,
+  active_apps: weakref.WeakSet | None = None,
+  active_lock: RLock | None = None,
+) -> None:
+  active_apps = active_apps if active_apps is not None else weakref.WeakSet()
+  active_lock = active_lock if active_lock is not None else RLock()
+  with active_lock:
+    active_apps.add(app)
+  store = app.store
+
+  def reset_demo(_params: dict, _query: dict, _body: dict) -> tuple[int, dict]:
+    with store.transaction():
+      previous = {report.id: report.modified_at for report in store.list_reports()}
+      seeded = reseed_demo_store(store)
+      for report in store.list_reports():
+        if report.id in previous:
+          stamp = _advance_stamp(previous[report.id], report.modified_at)
+          store._conn.execute(
+            "UPDATE reports SET modified_at = ? WHERE id = ?", (stamp, report.id)
+          )
+    with active_lock:
+      clients = list(active_apps)
+    for active in clients:
+      with active.messages._cond:
+        active.messages._survey_answers = dict(seeded.messages._survey_answers)
+        active.messages._survey_results = list(seeded.messages._survey_results)
+        active.messages._survey_checked_at = seeded.messages._survey_checked_at
+        active.messages._survey_pending = seeded.messages._survey_pending
+        active.messages._cond.notify_all()
+      active._state_version = getattr(active, "_state_version", 0) + 1
+    return (200, {"reset": True})
+
+  app.router.add("POST", "/demo/reset", reset_demo)
+  app._after_reload = lambda reloaded: _register_demo_reset(
+    reloaded, active_apps, active_lock
+  )
+
+
 def seed_demo_store(store: SqliteStore) -> SteeringApp:
-  """Populate Inbox, Tasks, Reports, and in-memory survey answers for UI inspection."""
-  # The survey lives in memory only, so the served app must be the one that answered it.
-  return reseed_demo_store(store)
+  """Populate the demo and expose its in-process reset action."""
+  app = reseed_demo_store(store)
+  _register_demo_reset(app)
+  return app
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -977,12 +1030,33 @@ def main(argv: list[str] | None = None) -> int:
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--host", default="0.0.0.0")
   parser.add_argument("--port", type=int, default=default_port)
-  parser.add_argument(
+  modes = parser.add_mutually_exclusive_group()
+  modes.add_argument(
     "--seed-only",
     action="store_true",
     help="Seed the state database and exit without starting the HTTP server.",
   )
+  modes.add_argument(
+    "--reset", action="store_true", help="Reset the running demo without restarting it."
+  )
   args = parser.parse_args(argv)
+
+  if args.reset:
+    host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
+    request = urllib.request.Request(
+      f"http://{host}:{args.port}/demo/reset",
+      data=b"{}",
+      headers={"Content-Type": "application/json"},
+    )
+    try:
+      with urllib.request.urlopen(request, timeout=10) as response:
+        if response.status != 200:
+          raise RuntimeError(f"Demo reset returned HTTP {response.status}")
+    except (urllib.error.URLError, TimeoutError, RuntimeError) as exc:
+      print(f"Could not reset the running demo: {exc}", file=sys.stderr)
+      return 1
+    print("Running Arena Steering demo reset to its sample data.")
+    return 0
 
   state_dir = Path("arena-state/demo")
   state_dir.mkdir(parents=True, exist_ok=True)
