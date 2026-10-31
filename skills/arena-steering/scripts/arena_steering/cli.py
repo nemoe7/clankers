@@ -171,7 +171,6 @@ def main(
     action="store_true",
     help="Print the unfilled JSON array template.",
   )
-  survey_p.add_argument("--interrupt", action="store_true", help="Trigger bible check.")
 
   ren_p = sub.add_parser("ren", help="Move a task or report to a new ID.")
   ren_p.add_argument("old_id")
@@ -1275,10 +1274,6 @@ def _run_survey(
     return 0
   if getattr(parsed, "template", False):
     print(json.dumps(survey_mod.template(), indent=2), file=out)
-    return 0
-  if parsed.interrupt:
-    survey = messages.trigger_bible_check(active=True)
-    print(f"Survey bible check pending={survey['pending']}", file=out)
     return 0
   state_dir = state_dir or resolve_state_dir()
   if getattr(parsed, "file", None):

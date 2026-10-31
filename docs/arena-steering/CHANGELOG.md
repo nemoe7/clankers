@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Removed
 
+- `cli.py`: Drop the survey interrupt flag. Bible checks are blocking messages.
+
 - `cli.py`: Drop the unused JSON option from `steer skills`.
 
 - `scripts/hooks`: Drop the hook wrapper, because the trap line calls `steer gate` alone.
