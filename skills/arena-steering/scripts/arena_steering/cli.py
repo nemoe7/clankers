@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import sqlite3
@@ -787,6 +788,8 @@ def _run_pre(
     done=tuple(str(parsed.done or "").split()),
     pending_ids=pending_ids,
     call_count=count,
+    active_runs=FileGateStatus(Path(store.db_path).parent).running_names(),
+    routed=os.environ.get("ARENA_STEER_ROUTE") == "1",
   )
   result = pre_mod.run_pipeline(ctx)
   for message in result.messages:
@@ -1001,6 +1004,7 @@ def _start_locked_run(
   try:
     proc = subprocess.Popen(
       ["/bin/sh", "-c", "\n".join(script_lines)],
+      env={**os.environ, "ARENA_STEER_ROUTE": "1"},
       stdout=log_handle,
       stderr=subprocess.STDOUT,
       stdin=subprocess.DEVNULL,

@@ -21,6 +21,40 @@ GATE_THRESHOLD = 6
 CALL_COUNT_META = "pre_call_count"
 WIREFRAME_SUFFIX = "-wireframe.png"
 NETWORK_WORDS = ("curl", "wget", "git clone", "git fetch", "git ls-remote")
+SHELL_NAMES = {"bash", "sh", "dash", "zsh", "ksh"}
+COMMAND_WRAPPERS = {"env", "command", "nice", "nohup", "stdbuf", "sudo", "time"}
+ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*=")
+SHELL_WRAPPER = re.compile(
+  r"^(?:\S*/)?(?:bash|sh|dash|zsh|ksh)\s+(?:-[\w-]+\s+)*-[\w]*c\s+"
+)
+
+
+def command_words(words: list[str]) -> list[str]:
+  """Skip assignments and ordinary shell wrappers before naming the command."""
+  index = 0
+  while index < len(words):
+    head = Path(words[index]).name
+    if ASSIGNMENT.match(words[index]):
+      index += 1
+    elif head in COMMAND_WRAPPERS:
+      index += 1
+      while index < len(words) and (
+        words[index].startswith("-")
+        or ASSIGNMENT.match(words[index])
+        or re.fullmatch(r"\d+(?:\.\d+)?", words[index])
+      ):
+        index += 1
+    else:
+      break
+  return words[index:]
+
+
+def shell_line(text: str) -> str:
+  """Drop the Bash launcher without losing the command it runs."""
+  text = SHELL_WRAPPER.sub("", text.strip(), count=1)
+  if len(text) >= 2 and text[0] == text[-1] and text[0] in ("'", '"'):
+    return text[1:-1]
+  return text
 
 
 @dataclass
@@ -33,6 +67,33 @@ class PreContext:
   done: tuple[str, ...] = ()
   pending_ids: list[str] = field(default_factory=list)
   call_count: int = 0
+  active_runs: tuple[str, ...] = ()
+  routed: bool = False
+
+  def pieces(self) -> list[tuple[list[str], str]]:
+    """Name simple commands and the separators that follow them."""
+    lexer = shlex.shlex(
+      shell_line(self.line or self.command),
+      posix=True,
+      punctuation_chars="|;&()\n",
+    )
+    lexer.whitespace = " \t\r"
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+      tokens = list(lexer)
+    except ValueError:
+      return []
+    result: list[tuple[list[str], str]] = []
+    current: list[str] = []
+    for token in [*tokens, ";"]:
+      if token in {"|", "|&", ";", "&&", "||", "&", "(", ")", "\n"}:
+        if current:
+          result.append((current, token))
+        current = []
+      else:
+        current.append(token)
+    return result
 
   def touches(self, *words: str) -> bool:
     """Report whether the command contains any of these substrings."""
@@ -44,7 +105,7 @@ class PreContext:
 
   def is_inbox_recovery(self) -> bool:
     """Allow an inbox-only line to clear the gate, including a piped ACK."""
-    text = self.line or self.command
+    text = shell_line(self.line or self.command)
     if "\n" in text:
       return False
     lexer = shlex.shlex(text, posix=True, punctuation_chars="|;&<>()")
@@ -78,6 +139,16 @@ class PreContext:
     return parts[-1] if parts else text.strip()
 
 
+def embedded_pieces(words: list[str]) -> list[tuple[list[str], str]]:
+  """Read the command string passed to a shell's -c option, if present."""
+  if not words or Path(words[0]).name not in SHELL_NAMES:
+    return []
+  for index in range(1, len(words) - 1):
+    if words[index].startswith("-") and "c" in words[index][1:]:
+      return PreContext(line=words[index + 1]).pieces()
+  return []
+
+
 @dataclass
 class PreResult:
   """One step outcome: the text to print and the verdict to return."""
@@ -97,6 +168,76 @@ class PreStep(Protocol):
 
   def run(self, ctx: PreContext) -> PreResult:
     """Return the messages and verdict for the line."""
+
+
+class InboxPipeGuard:
+  """Keep inbox reads and polls from losing their output to a pipe."""
+
+  name = "inbox-pipe"
+
+  def applies(self, ctx: PreContext) -> bool:
+    def inbox_read(words: list[str]) -> bool:
+      words = command_words(words)
+      return (
+        len(words) >= 2
+        and Path(words[0]).name in {"steer", "arena-preview"}
+        and words[1] in {"read", "poll"}
+      )
+
+    for words, separator in ctx.pieces():
+      words = command_words(words)
+      if separator in {"|", "|&"} and inbox_read(words):
+        return True
+      if any(
+        inbox_read(inner) and (separator in {"|", "|&"} or following in {"|", "|&"})
+        for inner, following in embedded_pieces(words)
+      ):
+        return True
+    return False
+
+  def run(self, ctx: PreContext) -> PreResult:
+    return PreResult(
+      ["INBOX BLOCKED: read and poll need full output. Run without a pipe."],
+      BLOCK,
+    )
+
+
+class PollTimeoutGuard:
+  """Keep a shell timeout from cutting off a poll's own wait."""
+
+  name = "poll-timeout"
+
+  def applies(self, ctx: PreContext) -> bool:
+    def poll(words: list[str]) -> bool:
+      words = command_words(words)
+      return (
+        len(words) >= 2
+        and Path(words[0]).name in {"steer", "arena-preview"}
+        and words[1] == "poll"
+      )
+
+    for words, _ in ctx.pieces():
+      words = command_words(words)
+      if not words or Path(words[0]).name != "timeout":
+        continue
+      args = words[1:]
+      while args and args[0].startswith("-"):
+        option, *args = args
+        if option in {"-s", "--signal", "-k", "--kill-after"} and args:
+          args = args[1:]
+      target = command_words(args[1:]) if args else []  # Skip the duration.
+      if poll(target) or any(poll(inner) for inner, _ in embedded_pieces(target)):
+        return True
+    return False
+
+  def run(self, ctx: PreContext) -> PreResult:
+    return PreResult(
+      [
+        "TIMEOUT BANNED: do not wrap `steer poll` in shell `timeout`.",
+        "Set the Bash tool timeout to 1800 seconds. Poll returns within 1799 seconds.",
+      ],
+      BLOCK,
+    )
 
 
 class InboxGate:
@@ -175,21 +316,86 @@ class EgressReminder:
     )
 
 
+SLEEP_IDLE_CAP_SECONDS = 60
+SLEEP_UNIT_SECONDS = {"s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0}
+SLEEP_LOG_READERS = {"cat", "head", "tail", "grep", "rg", "sed", "less"}
+
+
+def _sleep_seconds(args: list[str]) -> float:
+  total = 0.0
+  for arg in args:
+    unit = arg[-1:].lower()
+    number = arg[:-1] if unit in SLEEP_UNIT_SECONDS else arg
+    try:
+      value = float(number)
+    except ValueError:
+      continue
+    if value > 0:
+      total += value * SLEEP_UNIT_SECONDS.get(unit, 1.0)
+  return total
+
+
 class SleepGuard:
-  """Block a sleep that holds a steering call open."""
+  """Block sleeps beside steering work, logs, or a live run, and long waits."""
 
   name = "sleep"
 
   def applies(self, ctx: PreContext) -> bool:
-    return "sleep" in ctx.line and (
-      "steer " in ctx.line or "arena-preview " in ctx.line
+    return not ctx.routed and any(
+      words and Path(words[0]).name == "sleep" for words, _ in self.commands(ctx)
     )
 
+  def commands(self, ctx: PreContext) -> list[tuple[list[str], str]]:
+    """Include shell -c commands and skip harmless wrapper words."""
+    pieces = ctx.pieces()
+    commands = [(command_words(words), separator) for words, separator in pieces]
+    return [
+      *commands,
+      *(
+        (command_words(inner), following)
+        for words, _ in commands
+        for inner, following in embedded_pieces(words)
+      ),
+    ]
+
   def run(self, ctx: PreContext) -> PreResult:
-    return PreResult(
-      ["SLEEP BLOCKED: never sleep beside a steering call. Run the call alone."],
-      BLOCK,
-    )
+    commands = [
+      (Path(words[0]).name, words[1:]) for words, _ in self.commands(ctx) if words
+    ]
+    if any(head in {"steer", "arena-preview", "preview.py"} for head, _ in commands):
+      return PreResult(
+        [
+          "SLEEP BLOCKED: a sleep beside a steering call holds the turn. Run the call alone."
+        ],
+        BLOCK,
+      )
+    if any(
+      head in SLEEP_LOG_READERS and any(arg.endswith(".log") for arg in args)
+      for head, args in commands
+    ):
+      return PreResult(
+        [
+          "SLEEP BLOCKED: a sleep beside a .log read holds the turn. Read the run later."
+        ],
+        BLOCK,
+      )
+    if ctx.active_runs:
+      names = ", ".join(ctx.active_runs)
+      return PreResult(
+        [
+          f"SLEEP BLOCKED: background run ({names}) is live. Use a worktree or poll when it is the only blocked task."
+        ],
+        BLOCK,
+      )
+    if any(
+      head == "sleep" and _sleep_seconds(args) >= SLEEP_IDLE_CAP_SECONDS
+      for head, args in commands
+    ):
+      return PreResult(
+        ["SLEEP BLOCKED: a long sleep holds the turn. Start a background run instead."],
+        BLOCK,
+      )
+    return PreResult()
 
 
 class BibleReadGuard:
@@ -230,6 +436,8 @@ class BibleReadGuard:
 
 PIPELINE: tuple[PreStep, ...] = (
   SleepGuard(),
+  InboxPipeGuard(),
+  PollTimeoutGuard(),
   WireframeGuard(),
   InboxGate(),
   BibleReadGuard(),
@@ -243,7 +451,10 @@ def run_pipeline(ctx: PreContext) -> PreResult:
   messages: list[str] = []
   finished = list(ctx.done)
   for step in PIPELINE:
-    if step.name in finished and not (step.name == "gate" and ctx.is_push()):
+    if step.name in finished and not (
+      (step.name == "gate" and ctx.is_push())
+      or (step.name == "sleep" and ctx.active_runs)
+    ):
       continue
     if not step.applies(ctx):
       continue

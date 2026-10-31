@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import shutil
 import sqlite3
@@ -125,6 +126,81 @@ def test_each_guard_holds_its_own_rule() -> None:
   )
 
 
+@pytest.mark.parametrize(
+  ("line", "running", "expected"),
+  (
+    ("sleep 60", (), pre.BLOCK),
+    ("FOO=bar sleep 60", (), pre.BLOCK),
+    ("time sleep 60", (), pre.BLOCK),
+    ("sleep 1 && tail -n 2 verify.log", (), pre.BLOCK),
+    ("sleep 59", (), pre.CONTINUE),
+    ('printf "sleep 60"', (), pre.CONTINUE),
+    ("sleep 1", ("verify",), pre.BLOCK),
+  ),
+)
+def test_sleep_cases(line: str, running: tuple[str, ...], expected: int) -> None:
+  ctx = pre.PreContext(line=line, command=line, shell="bash", active_runs=running)
+  assert pre.run_pipeline(ctx).verdict == expected
+
+
+def test_active_run_blocks_sleep_but_not_its_own_worker(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Acknowledged note.", acked=True)
+  runs = _isolate_state / "runs"
+  runs.mkdir()
+  exit_path = runs / "verify.exit"
+  (runs / "verify.json").write_text(
+    json.dumps({"exit_path": str(exit_path)}), encoding="utf-8"
+  )
+
+  code, out = _run("pre", "-l", "sleep 1", "-c", "sleep 1", "-s", "bash", "-d", "sleep")
+  assert code == pre.BLOCK
+  assert "verify" in out
+
+  monkeypatch.setenv("ARENA_STEER_ROUTE", "1")
+  code, _ = _run("pre", "-l", "sleep 60", "-c", "sleep 60", "-s", "bash")
+  assert code == pre.CONTINUE
+  monkeypatch.delenv("ARENA_STEER_ROUTE")
+
+  exit_path.write_text("0", encoding="utf-8")
+  code, _ = _run("pre", "-l", "sleep 1", "-c", "sleep 1", "-s", "bash")
+  assert code == pre.CONTINUE
+
+
+@pytest.mark.parametrize(
+  ("line", "expected"),
+  (
+    ("steer read | cat", pre.BLOCK),
+    ("steer poll | tee /dev/null", pre.BLOCK),
+    ("bash -c steer poll | cat", pre.BLOCK),
+    ("bash -c 'steer read | cat'", pre.BLOCK),
+    ("env LANG=C steer poll | cat", pre.BLOCK),
+    ("timeout 10 steer poll", pre.BLOCK),
+    ("timeout 1800 steer poll", pre.BLOCK),
+    ("timeout 10 bash -c 'steer poll'", pre.BLOCK),
+    ('printf "timeout 10 steer poll"', pre.CONTINUE),
+    ("timeout 10 steer read", pre.CONTINUE),
+    ("timeout 10 printf steer poll", pre.CONTINUE),
+    ("steer ack a1b2c3 done | cat", pre.CONTINUE),
+  ),
+)
+def test_inbox_pipes_and_poll_timeout(line: str, expected: int) -> None:
+  result = pre.run_pipeline(pre.PreContext(line=line, command=line, shell="bash"))
+  assert result.verdict == expected
+
+
+def test_piped_ack_remains_available_after_the_gate_limit() -> None:
+  ctx = pre.PreContext(
+    line="steer ack a1b2c3 done | cat",
+    command="steer ack a1b2c3 done",
+    shell="bash",
+    pending_ids=["a1b2c3"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert pre.run_pipeline(ctx).verdict == pre.CONTINUE
+
+
 def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
   guard = pre.BibleReadGuard()
   for line in (
@@ -133,6 +209,9 @@ def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
     "head -20 ARENA.md",
     "tail -n 5 skills/arena-skill/SKILL.md",
     "cat skills/arena-steering/SKILL.md",
+    "cat AGENTS.md | head -n 5",
+    "head -n 5 < ARENA.md",
+    "cat .agents/skills/arena-skill/SKILL.md | tail -n 5",
   ):
     ctx = pre.PreContext(line=line, shell="bash")
     assert guard.applies(ctx), line

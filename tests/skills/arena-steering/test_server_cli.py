@@ -1616,12 +1616,14 @@ def test_cli_run_pr_checks_uses_detached_gh_watch(tmp_path: Path, monkeypatch) -
   state_dir = tmp_path / "arena-state"
   state_dir.mkdir()
   spawned: list[list[str]] = []
+  child_envs: list[dict[str, str]] = []
 
   class FakeProcess:
     pid = 4242
 
-  def fake_popen(args, **_kwargs):
+  def fake_popen(args, **kwargs):
     spawned.append(list(args))
+    child_envs.append(kwargs["env"])
     return FakeProcess()
 
   monkeypatch.setattr(cli_module.subprocess, "Popen", fake_popen)
@@ -1630,6 +1632,7 @@ def test_cli_run_pr_checks_uses_detached_gh_watch(tmp_path: Path, monkeypatch) -
   assert code == 0
   assert "Started run pr-checks" in out
   assert spawned
+  assert child_envs[0]["ARENA_STEER_ROUTE"] == "1"
   assert "gh pr checks 122 --watch" in " ".join(spawned[0])
   assert (state_dir / "runs" / "pr-checks.json").is_file()
 

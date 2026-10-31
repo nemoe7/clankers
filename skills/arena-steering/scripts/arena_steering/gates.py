@@ -18,3 +18,11 @@ class FileGateStatus:
       return False
     record = json.loads(record_path.read_text(encoding="utf-8"))
     return not Path(record["exit_path"]).is_file()
+
+  def running_names(self) -> tuple[str, ...]:
+    """List live named runs without inspecting temporary record files."""
+    return tuple(
+      path.stem
+      for path in sorted(self._runs.glob("*.json"))
+      if not path.name.startswith(".") and self.is_running(path.stem)
+    )
