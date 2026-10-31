@@ -4,7 +4,7 @@ description: Steer an Arena.ai agent mid-turn through a local preview inbox, dep
 license: MIT
 compatibility: Arena.ai Agent Mode, Python 3.11+, persisted workspace and long-lived process tools.
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
 ---
 
 # Arena Steering

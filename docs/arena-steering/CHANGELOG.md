@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.2.0]
+
+### Added
+
+- `models.py`, `services.py`, `store.py`, `server.py`: Persist hidden blocking violation flags with a reason, an optional clause file, and tab context. Validate input and track acknowledgements.
+
+- `assets/`: Show tab-specific violation forms, a pending indicator, cancellation, and retry feedback.
+
+### Changed
+
+- `assets/app.js`: Keep survey rechecks separate from the violation button.
+
 ## [2.1.0]
 
 ### Removed

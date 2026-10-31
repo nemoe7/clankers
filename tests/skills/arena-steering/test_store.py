@@ -18,7 +18,7 @@ from arena_steering.models import (
 from arena_steering.ports import SecretsHexIdGenerator, UtcClock
 from arena_steering.store import SqliteStore
 
-EXPECTED_INITIAL_VERSION = "2.1.0"
+EXPECTED_INITIAL_VERSION = "2.2.0"
 
 
 def test_package_exposes_current_semver_version() -> None:

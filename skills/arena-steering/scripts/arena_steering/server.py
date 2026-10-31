@@ -20,6 +20,7 @@ import threading
 import time
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
+from functools import lru_cache
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -69,6 +70,32 @@ PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500
 PASTE_ATTACHMENT_LINE_THRESHOLD = 15
 PASTE_ATTACHMENT_NAME = "pasted-text.txt"
 PASTE_ATTACHMENT_BODY = "Pasted text attached."
+BIBLE_SCAN_SKIP = {
+  ".git",
+  ".venv",
+  "arena-state",
+  "build",
+  "dist",
+  "node_modules",
+  "__pycache__",
+}
+VIOLATION_TYPES = {
+  "messages": (
+    "bash-violation",
+    "process-violation",
+    "missing-details",
+    "out-of-scope",
+    "task-not-created",
+  ),
+  "reports": ("format-violation", "unnecessary-report", "wall-of-text"),
+  "tasks": (
+    "current-task-violation",
+    "empty-task-list",
+    "missing-details",
+    "out-of-scope",
+    "task-not-created",
+  ),
+}
 
 
 def _body_bool(value: Any, default: bool) -> bool:
@@ -110,8 +137,8 @@ class Router:
     return None, {}, allowed
 
 
-def _detect_repo_name(store: SqliteStore) -> str:
-  """Resolve repository directory name from store path or current working directory."""
+def _detect_repo_root(store: SqliteStore) -> Path:
+  """Find the checkout from the state database or working directory."""
   candidates: list[Path] = []
   db_path = getattr(store, "db_path", "")
   if db_path and db_path != ":memory:":
@@ -121,8 +148,34 @@ def _detect_repo_name(store: SqliteStore) -> str:
     cur = start if start.is_dir() else start.parent
     for parent in (cur, *cur.parents):
       if (parent / ".git").exists():
-        return parent.name
-  return Path.cwd().resolve().name or "Workspace"
+        return parent
+  return Path.cwd().resolve()
+
+
+@lru_cache(maxsize=4)
+def _read_set_files(root: Path) -> tuple[str, ...]:
+  """List the clause files in the checkout bible."""
+  files: list[str] = []
+  if (root / "ARENA.md").is_file():
+    files.append("ARENA.md")
+  for directory, names, filenames in os.walk(root, followlinks=False):
+    names[:] = sorted(name for name in names if name not in BIBLE_SCAN_SKIP)
+    if "AGENTS.md" in filenames:
+      path = Path(directory) / "AGENTS.md"
+      if path.is_file() and path.resolve().is_relative_to(root):
+        files.append(path.relative_to(root).as_posix())
+  for name in (
+    ".agents/skills/arena-skill/SKILL.md",
+    "skills/arena-skill/SKILL.md",
+  ):
+    if (root / name).is_file():
+      files.append(name)
+      break
+  return tuple(files)
+
+
+def _detect_repo_name(store: SqliteStore) -> str:
+  return _detect_repo_root(store).name or "Workspace"
 
 
 class SteeringApp:
@@ -140,6 +193,7 @@ class SteeringApp:
     default_assets = Path(__file__).resolve().parents[2] / "assets"
     self.assets_dir = Path(assets_dir) if assets_dir is not None else default_assets
     self.repo_name = repo_name or _detect_repo_name(store)
+    self._read_set = _read_set_files(_detect_repo_root(store))
     self.messages = MessageService(store, store, store, store)
     self.tasks = TaskService(
       store,
@@ -225,6 +279,7 @@ class SteeringApp:
     self.router.add("GET", "/survey", self._handle_get_survey)
     self.router.add("POST", "/survey", self._handle_submit_survey)
     self.router.add("POST", "/survey/interrupt", self._handle_survey_interrupt)
+    self.router.add("POST", "/agent-interrupt", self._handle_agent_interrupt)
     self.router.add("POST", "/timezone", self._handle_set_timezone)
     self.router.add("POST", "/markdown", self._handle_render_markdown)
     self.router.add("GET", "/state/snapshot", self._handle_state_snapshot)
@@ -598,6 +653,7 @@ class SteeringApp:
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
     survey = self.messages.get_survey()
+    violation = self.messages.pending_violation()
     heartbeat = self.store.get_meta("polling_at", "") or ""
     try:
       stamp = datetime.fromisoformat(heartbeat)
@@ -615,6 +671,10 @@ class SteeringApp:
         "repo": self.repo_name,
         "asset_version": self.asset_signature_hash(),
         "timezone": self.store.get_meta("timezone", "") or "",
+        "agent_interrupt_pending": violation is not None,
+        "violation_type": violation.violation_type if violation else "",
+        "violation_types": VIOLATION_TYPES,
+        "read_set": self._read_set,
         "survey": survey,
         "polling": polling,
         "polling_since": self.store.get_meta("polling_since") if polling else None,
@@ -767,6 +827,76 @@ class SteeringApp:
     active = body.get("active") if isinstance(body, dict) and "active" in body else None
     survey = self.messages.trigger_bible_check(active=active)
     return (int(HTTPStatus.OK), {"survey": survey})
+
+  def _handle_agent_interrupt(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+  ) -> tuple[int, Any]:
+    armed = body.get("armed", True)
+    if not isinstance(armed, bool):
+      raise TypeError("armed must be true or false")
+    if not armed:
+      with self.store.transaction():
+        pending = self.messages.pending_violation()
+        if pending is not None:
+          self.messages.ack(pending.id, "Disarmed on the page.")
+      return (int(HTTPStatus.OK), {"agent_interrupt_pending": False})
+
+    tab = body.get("tab")
+    if not isinstance(tab, str) or tab not in VIOLATION_TYPES:
+      raise ValueError("tab must name a preview tab")
+    reason = body.get("reason")
+    if not isinstance(reason, str) or reason not in VIOLATION_TYPES[tab]:
+      raise ValueError("reason must name a violation type for this tab")
+    clause_file = body.get("clause_file")
+    if clause_file not in (None, "") and (
+      not isinstance(clause_file, str) or clause_file not in self._read_set
+    ):
+      raise ValueError("clause_file must name a path in the bible")
+    clause_file = clause_file or ""
+    note = body.get("note")
+    if note is not None and not isinstance(note, str):
+      raise ValueError("note must be text")
+    cited = " ".join((note or "").split())
+    report_id = body.get("report_id")
+    if report_id is not None and tab != "reports":
+      raise ValueError("report_id is only valid for reports")
+    if report_id is not None:
+      try:
+        report = self.reports.get_report(report_id)
+      except KeyError as exc:
+        raise ValueError("report_id must name an existing report") from exc
+      if report.status != "published":
+        raise ValueError("report_id must name a published report")
+
+    heading = f"User flagged violation: {reason}."
+    if cited:
+      heading += f" Cited: {cited}"
+    lines = [heading]
+    if tab == "reports" and report_id is not None:
+      lines.append(f"Report: {report.id}")
+    elif tab == "tasks":
+      current = next(
+        (task for task, blocked in self.tasks.list_tasks() if not blocked), None
+      )
+      if current is not None and reason != "empty-task-list":
+        lines.append(f"Current task: {current.id}. Is this what you are working on?")
+      else:
+        lines.append("The task list is empty. Maybe a task should have spawned.")
+    lines.append("Fix the cause, then ack with only file:ln: clause.")
+    with self.store.transaction():
+      pending = self.messages.pending_violation()
+      if pending is None:
+        pending = self.messages.send_message(
+          "\n".join(lines),
+          hidden=True,
+          blocking=True,
+          violation_type=reason,
+          violation_clause_file=clause_file,
+        )
+    return (
+      int(HTTPStatus.OK),
+      {"agent_interrupt_pending": True, "violation_type": pending.violation_type},
+    )
 
   def _handle_render_markdown(
     self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]

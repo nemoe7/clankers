@@ -220,7 +220,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   )
   assert result.returncode == 0, result.stderr
   assert str(home / ".local" / "bin" / "steer") in result.stdout
-  assert "steer 2.1.0" in result.stdout
+  assert "steer 2.2.0" in result.stdout
 
 
 def test_installer_does_not_overwrite_an_unrelated_steer(tmp_path: Path) -> None:
