@@ -56,6 +56,8 @@ steer task rm <id>
 steer reports [-s, --stale]
 steer report <id>
 steer report pub <source.md> -i <id> -t "<title>"
+steer report pin ID
+steer report unpin ID
 steer report rm <id|--stale>
 ```
 

@@ -134,7 +134,11 @@ let cleanupTimers = () => {};
 let knownAssetVersion = null;
 let reportedTimezone = null;
 let lastDataSignature = "";
+let lastReportRenderSignature = null;
 let lastViewportHeight = 0;
+const REPORT_VIEW_INTERVAL = 30_000;
+let lastReportView = { id: null, at: 0 };
+let reportViewTimer = null;
 
 async function ensureReportCached(reportId, expectedModifiedAt = null, { quiet = false } = {}) {
   if (!reportId) return null;
@@ -582,20 +586,7 @@ const handlers = {
     }
   },
   async onSelectReport(reportId) {
-    const curReports = store.getState().reports || [];
-    const target = curReports.find((r) => r.id === reportId);
-    if (target && !target.seen) {
-      const seenRes = await api.markReportSeen(reportId).catch(() => null);
-      if (seenRes?.report) {
-        reportCache.set(reportId, {
-          modified_at: seenRes.report.modified_at,
-          report: seenRes.report,
-        });
-      }
-      store.setState({ selectedReportId: reportId });
-      await refreshAll(true);
-      return;
-    }
+    const target = (store.getState().reports || []).find((r) => r.id === reportId);
     await ensureReportCached(reportId, target?.modified_at);
     const hydrated = hydrateReportsWithCache(store.getState().reports || []);
     store.setState({ selectedReportId: reportId, reports: hydrated });
@@ -666,6 +657,37 @@ function handleReportAcked(event) {
   store.setState({ reports: nextReports });
 }
 
+function markVisibleReport(state) {
+  const id = state.activeTab === "reports" && !document.hidden ? state.selectedReportId : null;
+  if (!id) {
+    if (reportViewTimer !== null) window.clearTimeout(reportViewTimer);
+    reportViewTimer = null;
+    lastReportView = { id: null, at: 0 };
+    return;
+  }
+  if (reportViewTimer === null) {
+    reportViewTimer = window.setTimeout(() => {
+      reportViewTimer = null;
+      markVisibleReport(store.getState());
+    }, REPORT_VIEW_INTERVAL);
+  }
+  const now = Date.now();
+  if (lastReportView.id === id && now - lastReportView.at < REPORT_VIEW_INTERVAL) return;
+  lastReportView = { id, at: now };
+  const requestedVersion = (state.reports || []).find((report) => report.id === id)?.modified_at;
+  api.markReportSeen(id).then((result) => {
+    if (!result?.report) return;
+    const current = store.getState();
+    const existing = (current.reports || []).find((report) => report.id === id);
+    if (!existing || existing.modified_at !== requestedVersion) return;
+    reportCache.set(id, { modified_at: result.report.modified_at, report: result.report });
+    const reports = current.reports.map((report) => report.id === id ? result.report : report);
+    store.setState({ reports });
+  }).catch(() => {
+    if (lastReportView.id === id && lastReportView.at === now) lastReportView = { id: null, at: 0 };
+  });
+}
+
 function reportNeedsAttention(report) {
   if (!report || report.status === "dismissed") return false;
   const notYetSeen = !report.seen;
@@ -708,7 +730,9 @@ function renderApp(state) {
   if (messagesEl) messagesEl.hidden = state.activeTab !== "messages";
   if (tasksEl) tasksEl.hidden = state.activeTab !== "tasks";
   if (reportsEl) reportsEl.hidden = state.activeTab !== "reports";
+  markVisibleReport(state);
 
+  if (state.activeTab !== "reports") lastReportRenderSignature = null;
   if (state.activeTab === "messages" && messagesEl) {
     renderMessagesView(messagesEl, state, handlers);
     highlightCodeBlocks(messagesEl);
@@ -716,9 +740,19 @@ function renderApp(state) {
   } else if (state.activeTab === "tasks" && tasksEl) {
     renderTasksView(tasksEl, state, handlers);
   } else if (state.activeTab === "reports" && reportsEl) {
-    renderReportsView(reportsEl, state, handlers);
-    highlightCodeBlocks(reportsEl);
-    hydrateMermaidBlocks(reportsEl);
+    const visibleReports = reports.map((report) => {
+      const visible = { ...report };
+      delete visible.modified_at;
+      delete visible.last_viewed_at;
+      return visible;
+    });
+    const signature = JSON.stringify([state.selectedReportId, visibleReports]);
+    if (signature !== lastReportRenderSignature) {
+      lastReportRenderSignature = signature;
+      renderReportsView(reportsEl, state, handlers);
+      highlightCodeBlocks(reportsEl);
+      hydrateMermaidBlocks(reportsEl);
+    }
     maybeMarkAckSeen(reports.find((r) => r.id === state.selectedReportId));
   }
 
@@ -844,6 +878,7 @@ function initEvents() {
   window.addEventListener("resize", syncViewportHeight);
   window.visualViewport?.addEventListener("resize", syncViewportHeight);
   window.visualViewport?.addEventListener("scroll", syncViewportHeight);
+  document.addEventListener("visibilitychange", () => markVisibleReport(store.getState()));
 
   window.addEventListener(
     "keydown",

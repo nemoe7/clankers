@@ -16,6 +16,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `cli.py`, `services.py`: Pin or unpin reports to control stale removal.
+
 - `cli.py`: Acknowledge multiple message and report-answer IDs atomically with one reply.
 
 - `cli.py`: Remove multiple reports atomically in one command.
@@ -31,6 +33,8 @@ This log has no Unreleased section.
 - `assets/app.js`: Filter loaded messages in the browser after the first search query.
 
 ### Changed
+
+- `models.py`, `services.py`, `store.py`, `assets/app.js`: Track report activity and task links for staleness, and retain pending answers on stale removal.
 
 - `models.py`, `services.py`, `store.py`: Store report answers as durable hidden messages and derive report history from them.
 

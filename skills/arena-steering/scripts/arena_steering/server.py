@@ -1009,6 +1009,8 @@ class SteeringApp:
     self, params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
   ) -> tuple[int, Any]:
     report = self.reports.get_report(params["id"])
+    if "pinned" in body and not isinstance(body["pinned"], bool):
+      raise ValueError("Report pinned must be a boolean")
     new_status = str(body.get("status", "")).strip()
     if new_status == "dismissed":
       self.reports.remove_report(report.id)
@@ -1018,6 +1020,8 @@ class SteeringApp:
         int(HTTPStatus.OK),
         {"report": self._serialize_report(report, include_body=False)},
       )
+    if "pinned" in body:
+      report = self.reports.pin_report(report.id, body["pinned"])
     return (int(HTTPStatus.OK), {"report": self._serialize_report(report)})
 
   def _handle_delete_report(

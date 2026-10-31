@@ -253,8 +253,9 @@ export function renderReportsView(container, state, handlers) {
         .join("")}</div>`
     : "";
 
-  const modIso = escapeHtml(activeReport.modified_at || "");
-  const modRel = escapeHtml(relativeTime(activeReport.modified_at));
+  const updatedAt = activeReport.updated_at || activeReport.modified_at;
+  const modIso = escapeHtml(updatedAt || "");
+  const modRel = escapeHtml(relativeTime(updatedAt));
   const statusBlockHtml = `
     <div id="report-status" class="report-meta muted" role="status">
       <code class="msg-id">${escapeHtml(activeReport.id)}</code>

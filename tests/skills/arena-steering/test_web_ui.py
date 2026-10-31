@@ -812,6 +812,97 @@ def test_task_answer_details_render_once_and_wrap_on_mobile(tmp_path: Path) -> N
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+def test_report_view_staleness_tracks_visible_browser_activity(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Report view regression")
+  app.reports.publish_report("one", "First report", "# First report")
+  app.reports.publish_report("two", "Second report", "# Second report")
+
+  class Clock:
+    stamp = "2027-01-01T00:00:00Z"
+
+    def now_iso(self) -> str:
+      return self.stamp
+
+  clock = Clock()
+  app.reports._clock = clock
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.clock.install()
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+
+        def update_before_view(route) -> None:
+          body = (
+            "# Latest report body\n\n"
+            '<!-- question {"id":"note","label":"Note"} -->\n'
+            "Note\n"
+          )
+          app.reports.publish_report("one", "First report", body)
+          route.continue_()
+
+        page.route("**/reports/one/seen", update_before_view, times=1)
+        with page.expect_response("**/reports/one/seen", timeout=2500):
+          page.locator("#tab-reports").click()
+        assert store.get_report("one").last_viewed_at == clock.stamp
+        page.locator('[data-report-id="one"].is-seen').wait_for(
+          state="attached", timeout=1500
+        )
+        page.get_by_role("heading", name="Latest report body", exact=True).wait_for(
+          timeout=1500
+        )
+
+        field = page.locator(".field-text-input")
+        field.fill("Draft answer")
+        field.focus()
+        clock.stamp = "2027-01-01T00:20:00Z"
+        with page.expect_response("**/reports/one/seen", timeout=2500):
+          page.clock.fast_forward(31_000)
+        assert store.get_report("one").last_viewed_at == clock.stamp
+        page.evaluate(
+          "() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))"
+        )
+        assert field.evaluate("element => element === document.activeElement")
+        assert field.input_value() == "Draft answer"
+        assert (
+          page.locator("#report-status time").get_attribute("datetime")
+          == "2027-01-01T00:00:00Z"
+        )
+        with page.expect_response("**/reports/two/seen", timeout=2500):
+          page.locator('[data-report-id="two"]').click()
+        with page.expect_response("**/reports/one/seen", timeout=2500):
+          page.locator('[data-report-id="one"]').click()
+        page.locator("#tab-messages").click()
+        clock.stamp = "2027-01-01T00:40:00Z"
+        page.clock.fast_forward(31_000)
+        assert store.get_report("one").last_viewed_at == "2027-01-01T00:20:00Z"
+        with page.expect_response("**/reports/one/seen", timeout=2500):
+          page.locator("#tab-reports").click()
+        assert store.get_report("one").last_viewed_at == clock.stamp
+        page.screenshot(path=str(tmp_path / "report-view.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
   import base64
 

@@ -982,7 +982,7 @@ def _run_report(
   args: list[str], reports: ReportService, store: SqliteStore, out: TextIO
 ) -> int:
   if not args:
-    raise ValueError("Usage: steer report <id|pub|rm> ...")
+    raise ValueError("Usage: steer report <id|pub|pin|unpin|rm> ...")
   subcmd = args[0]
   if subcmd == "pub":
     pub_p = argparse.ArgumentParser(prog="steer report pub")
@@ -1006,6 +1006,13 @@ def _run_report(
       f"Published {report.id}, {len(report.fields)} fields. Verified.",
       file=out,
     )
+    return 0
+
+  if subcmd in {"pin", "unpin"}:
+    if len(args) != 2:
+      raise ValueError(f"Usage: steer report {subcmd} <id>")
+    reports.pin_report(args[1], subcmd == "pin")
+    print(f"{'Pinned' if subcmd == 'pin' else 'Unpinned'} {args[1]}.", file=out)
     return 0
 
   if subcmd == "rm":
