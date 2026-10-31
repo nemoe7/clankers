@@ -141,11 +141,12 @@ The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. The g
 - Existing empty tasks remain readable but need a detail on their next update.
 - Dependencies must exist. Self-dependencies and cycles are rejected.
 - Each report submission appends one full `question label: submitted value` detail per field to every linked task. Generated details have no length limit and remain editable after report removal.
-- Adding a report link copies its existing answers into task details. Unlinking and relinking can repeat those details.
+- Answer details are not duplicated.
 - Existing task-answer snapshots are not migrated into task details.
 - With one target, `-i ID -t TITLE -d DETAIL` commits a linked task and acknowledgement together. `-T` and `-S` set task type and scope.
 - Multi-ID acknowledgement is atomic. A bad ID leaves every target unchanged.
 - Removing a task removes its dependency links from other tasks.
+- Task details are unique after trimming whitespace.
 - Use `steer task mod ID deets TEXT` to append a detail and `steer task mod ID deets rm NUMBER` to remove one. Detail numbers are displayed from 1.
 - Use `steer task mod ID links [msg|report|task|gate] LINK` to add a link. Use `steer task mod ID links rm TYPE LINK` to remove one, or `steer task mod ID deps [rm] TASK` for dependencies.
 - Message IDs use six lowercase hexadecimal characters. Parent IDs are deduplicated in order and must name existing messages.
