@@ -73,7 +73,9 @@ Keep session state outside version control.
 
 ### Session controls
 
-- Open survey results from the connection indicator and request a fresh bible check. The interrupt control can also request attention.
+- The connection indicator shows connecting, connected, polling, no agent, and disconnected states.
+- Open survey results from its button and request a fresh bible check. The interrupt control can also request attention.
+- A poll heartbeat stays blue while the agent waits. The indicator shows no agent after 3 minutes without activity following a turn end, or 32 minutes without activity otherwise.
 - The browser reports its timezone to the server. Displayed timestamps use that timezone.
 - The client uses WebSocket for live updates, reconnects after a disconnect, and falls back to polling. Add `?transport=poll` to force the polling path.
 - The active tab and selected report persist in browser session storage.
@@ -244,7 +246,7 @@ Write requests may include `_request_id` to replay the original result safely. T
 
 | Routes | Purpose |
 | --- | --- |
-| `GET /health` | Server health and timezone. |
+| `GET /health` | Server health, timezone, survey, and agent activity. |
 | `GET, POST /messages` and `GET /messages/{id}` | List, create, and inspect messages. |
 | `POST /messages/with-file` and `POST /uploads` | Create an attachment-bearing message or stage an upload. |
 | `POST /messages/{id}/ack` | Acknowledge a message. |

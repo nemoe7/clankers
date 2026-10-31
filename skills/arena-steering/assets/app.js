@@ -2,7 +2,7 @@ import { createComposerUploads } from "./composer-uploads.js";
 // Main ES module controller for Arena Steering.
 
 import { api, connectWebSocket } from "./api.js";
-import { expandMessageHistory, messageQueryKey, renderMessagesView, trackMessageAcks } from "./messages-view.js";
+import { expandMessageHistory, messageQueryKey, paintConnection, renderMessagesView, trackMessageAcks } from "./messages-view.js";
 import {
   escapeHtml,
   highlightCodeBlocks,
@@ -139,6 +139,34 @@ let lastViewportHeight = 0;
 const REPORT_VIEW_INTERVAL = 30_000;
 let lastReportView = { id: null, at: 0 };
 let reportViewTimer = null;
+let healthRequestId = 0;
+let appliedHealthRequestId = 0;
+
+function applyConnection(requestId, health, error = false) {
+  if (requestId < appliedHealthRequestId) return;
+  appliedHealthRequestId = requestId;
+  const connection = error ? { error: true } : {
+    loaded: true,
+    polling: Boolean(health.polling),
+    polling_since: health.polling_since,
+    agent_seen_at: health.agent_seen_at,
+    turn_ended_at: health.turn_ended_at,
+  };
+  store.getState().connection = connection;
+  paintConnection(document.getElementById("view-messages"), connection);
+}
+
+async function getHealthWithConnection() {
+  const requestId = ++healthRequestId;
+  try {
+    const health = await api.getHealth();
+    applyConnection(requestId, health);
+    return health;
+  } catch (error) {
+    applyConnection(requestId, null, true);
+    throw error;
+  }
+}
 
 function isNewerReportVersion(candidate, baseline) {
   const candidateMs = Date.parse(candidate);
@@ -355,7 +383,7 @@ async function refreshAll(force = false) {
   try {
     const curState = store.getState();
     const [health, msgRes, taskRes, repRes] = await Promise.all([
-      api.getHealth(),
+      getHealthWithConnection(),
       fetchMessagePage(),
       api.listTasks({ full: true }),
       api.listReports({ stale: false, summary: true }),
@@ -775,6 +803,7 @@ function renderApp(state) {
   if (state.activeTab !== "reports") lastReportRenderSignature = null;
   if (state.activeTab === "messages" && messagesEl) {
     renderMessagesView(messagesEl, state, handlers);
+    paintConnection(messagesEl, state.connection);
     highlightCodeBlocks(messagesEl);
     hydrateMermaidBlocks(messagesEl);
   } else if (state.activeTab === "tasks" && tasksEl) {
@@ -1042,7 +1071,8 @@ function initEvents() {
 store.subscribe(renderApp);
 initEvents();
 refreshAll(true);
-// Finished runs reach the client as a change event from the server, so no task polling remains.
+// Agent heartbeats live in a separate process, so refresh only this small health signal.
+setInterval(() => { void getHealthWithConnection().catch(() => {}); }, 3000);
 
 connectWebSocket({
   onChange: () => refreshAll(false),

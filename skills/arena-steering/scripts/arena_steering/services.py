@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from functools import wraps
@@ -39,6 +40,8 @@ from .ports import (
 )
 
 REPORT_IDLE_INTERVAL = timedelta(minutes=30)
+POLL_HEARTBEAT_SECONDS = 1.0
+POLL_FRESH_SECONDS = 5.0
 
 
 def _report_timestamp(value: str) -> datetime:
@@ -351,30 +354,63 @@ class MessageService:
       raise ValueError("Reply revision must be a SHA-256 hex digest")
     return self._messages.mark_replies_seen(msg_id, revision)
 
+  def touch_agent(self) -> None:
+    """Record an agent call and clear the previous turn-end marker."""
+    stamp = self._clock.now_iso()
+    with self._reports.transaction():
+      if self._meta.get_meta("agent_seen_at") != stamp:
+        self._meta.set_meta("agent_seen_at", stamp)
+      if self._meta.get_meta("turn_ended_at"):
+        self._meta.set_meta("turn_ended_at", "")
+
   def trigger_skip_poll(self) -> None:
+    self._meta.set_meta("skip_poll", "1")
     with self._cond:
-      self._meta.set_meta("skip_poll", "1")
       self._cond.notify_all()
 
   def consume_skip_poll(self) -> bool:
-    with self._cond:
+    with self._reports.transaction():
       flag = self._meta.get_meta("skip_poll", "0") == "1"
       if flag:
         self._meta.set_meta("skip_poll", "0")
       return flag
 
   def poll(self, timeout_seconds: float = 0.0) -> dict[str, Any]:
-    """Wait up to timeout_seconds for pending deliverables or skip_poll."""
-    deadline_remaining = max(0.0, min(float(timeout_seconds), 1799.0))
-    with self._cond:
-      if (
-        not self.has_pending_deliverables()
-        and not self.consume_skip_poll()
-        and deadline_remaining > 0
-      ):
-        self._cond.wait(timeout=deadline_remaining)
-        self.consume_skip_poll()
-    return self.read_pending(mark_seen=True)
+    """Wait for deliverables or skip, including writes from other processes."""
+    timeout = max(0.0, min(float(timeout_seconds), 1799.0))
+    deadline = time.monotonic() + timeout
+    skipped = timed_out = False
+    self.touch_agent()
+    if not self.has_pending_deliverables():
+      skipped = self.consume_skip_poll()
+      if not skipped and timeout > 0:
+        with self._reports.transaction():
+          self._meta.set_meta("polling_since", self._clock.now_iso())
+          self._meta.set_meta("polling_at", self._clock.now_iso())
+        try:
+          while not self.has_pending_deliverables():
+            if self.consume_skip_poll():
+              skipped = True
+              break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+              timed_out = True
+              break
+            self._meta.set_meta("polling_at", self._clock.now_iso())
+            # Do not hold the condition while accessing the store: an answer
+            # callback may notify while its store transaction is still open.
+            with self._cond:
+              self._cond.wait(timeout=min(POLL_HEARTBEAT_SECONDS, remaining))
+        finally:
+          with self._reports.transaction():
+            self._meta.set_meta("polling_at", "")
+            self._meta.set_meta("polling_since", "")
+    delivered = self.read_pending(mark_seen=True)
+    if (skipped or timed_out) and not (
+      delivered["messages"] or delivered["report_answers"]
+    ):
+      self._meta.set_meta("turn_ended_at", self._clock.now_iso())
+    return delivered
 
   def notify_new_work(self) -> None:
     with self._cond:

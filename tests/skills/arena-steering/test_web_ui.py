@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import runpy
 import subprocess
 import threading
@@ -378,8 +379,12 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert "node.textContent !== nextText" in timestamps_js
   assert "setInterval" not in timestamps_js
 
-  # Finished runs arrive as a server change event, so the Tasks tab never polls.
-  assert "setInterval" not in app_js
+  # Finished runs arrive as a server change event. Only agent health is polled.
+  intervals = re.findall(r"setInterval\(\(\) => \{(.*?)\},\s*\d+\)", app_js, re.DOTALL)
+  assert len(intervals) == 1
+  assert "getHealthWithConnection" in intervals[0]
+  assert "refreshAll" not in intervals[0]
+  assert "listTasks" not in intervals[0]
 
   markdown_js = (ASSETS_DIR / "markdown.js").read_text(encoding="utf-8")
   assert "const renderList = () =>" in markdown_js

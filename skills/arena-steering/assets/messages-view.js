@@ -18,6 +18,44 @@ const FILE_SVG = `<svg class="lucide lucide-file-text" width="16" height="16" vi
 const SEND_SVG = `<svg class="lucide lucide-arrow-up" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>`;
 const SENDING_SVG = `<svg class="lucide lucide-loader-circle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>`;
 
+const AGENT_QUIET_MS = 180_000;
+const AGENT_CALL_MS = 1_920_000;
+
+function connectionStamp(value) {
+  if (typeof value !== "string" || !value) return null;
+  const stamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value) ? `${value}Z` : value;
+  const parsed = Date.parse(stamp);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function connectionPresentation(connection = {}, now = Date.now()) {
+  if (connection.error) return { state: "down", label: "Disconnected", text: "Connection failed" };
+  if (!connection.loaded) return { state: "connecting", label: "Connecting", text: "Connecting…" };
+  if (connection.polling) {
+    const since = connectionStamp(connection.polling_since);
+    const seconds = since === null ? 0 : Math.max(0, Math.floor((now - since) / 1000));
+    const duration = seconds >= 60 ? `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s` : `${seconds}s`;
+    return { state: "polling", label: "Connected", text: `Polling… ${duration}` };
+  }
+  const ended = connectionStamp(connection.turn_ended_at);
+  const seen = connectionStamp(connection.agent_seen_at);
+  const idle = ended !== null ? now - ended > AGENT_QUIET_MS : seen !== null && now - seen > AGENT_CALL_MS;
+  return idle
+    ? { state: "idle", label: "No agent", text: "Agent 404" }
+    : { state: "ok", label: "Connected", text: "Connected" };
+}
+
+export function paintConnection(container, connection) {
+  const dot = container?.querySelector("#connection-dot");
+  const text = container?.querySelector("#connection-text");
+  if (!dot || !text) return;
+  const current = connectionPresentation(connection);
+  dot.dataset.state = current.state;
+  dot.setAttribute("aria-label", current.label);
+  text.textContent = current.text;
+  text.title = current.text;
+}
+
 const MESSAGE_PAGE_SIZE = 15;
 const OLDER_PAGE_TRIGGER_PX = 320;
 const PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500;
@@ -307,15 +345,6 @@ export function renderMessagesView(container, state, handlers) {
 
   const survey = state.survey || {};
   const checkedAt = survey.checked_at || "";
-  const surveyResults = Array.isArray(survey.results) ? survey.results : [];
-  let dotStateClass = "live animate-pulse";
-  if (surveyResults.length > 0) {
-    if (surveyResults.some((item) => item.correct === false)) {
-      dotStateClass = "survey-bad";
-    } else if (surveyResults.some((item) => item.correct !== true)) {
-      dotStateClass = "survey-warn";
-    }
-  }
   const lastCheckHtml = checkedAt
     ? `Checked <time datetime="${escapeHtml(checkedAt)}" data-timestamp="${escapeHtml(checkedAt)}">${escapeHtml(relativeTime(checkedAt))}</time>`
     : "Live steering active.";
@@ -327,9 +356,9 @@ export function renderMessagesView(container, state, handlers) {
           <div class="stack">
             <p id="connection" role="status">
               <button id="survey-open" type="button" aria-label="Open survey results" title="Open survey results">
-                <span id="connection-dot" class="dot ${dotStateClass}" role="img" aria-label="Connected"></span>
+                <span id="connection-dot" class="dot" data-state="connecting" role="img" aria-label="Connecting"></span>
               </button>
-              <span id="connection-text">Connected</span>
+              <span id="connection-text">Connecting…</span>
             </p>
             <p id="last-check" class="muted">${lastCheckHtml}</p>
           </div>

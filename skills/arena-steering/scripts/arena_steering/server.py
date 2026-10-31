@@ -32,7 +32,7 @@ from .gates import FileGateStatus
 from .markdown import render_markdown, render_report_markdown
 from .markdown_fields import parse_report_markdown
 from .models import Attachment
-from .services import MessageService, ReportService, TaskService
+from .services import POLL_FRESH_SECONDS, MessageService, ReportService, TaskService
 from .store import SqliteStore
 
 RouteHandler = Callable[[dict[str, str], dict[str, list[str]], Any], tuple[int, Any]]
@@ -604,6 +604,15 @@ class SteeringApp:
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
     survey = self.messages.get_survey()
+    heartbeat = self.store.get_meta("polling_at", "") or ""
+    try:
+      stamp = datetime.fromisoformat(heartbeat)
+      if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=UTC)
+      age = (datetime.now(UTC) - stamp).total_seconds()
+      polling = 0 <= age < POLL_FRESH_SECONDS
+    except ValueError:
+      polling = False
     return (
       int(HTTPStatus.OK),
       {
@@ -613,6 +622,10 @@ class SteeringApp:
         "asset_version": self.asset_signature_hash(),
         "timezone": self.store.get_meta("timezone", "") or "",
         "survey": survey,
+        "polling": polling,
+        "polling_since": self.store.get_meta("polling_since") if polling else None,
+        "agent_seen_at": self.store.get_meta("agent_seen_at") or None,
+        "turn_ended_at": self.store.get_meta("turn_ended_at") or None,
       },
     )
 
