@@ -26,6 +26,7 @@ REPORT_ID_PORT = "port-report"
 TASK_ID_CLI = "cli-task"
 TASK_ID_BASE = "base-task"
 PR_VERIFICATION_ERROR = "did not verify"
+NO_CURRENT_TASK = "No current task"
 
 
 @pytest.fixture(autouse=True)
@@ -2791,3 +2792,67 @@ def test_cli_pr_update_reports_api_failures(
   else:
     assert "Expecting value" in err
   assert len(calls) == (1 if failure == "patch" else 2)
+
+
+def test_cli_bare_task_shows_first_unblocked_without_details(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  store, _, tasks, reports = cli.open_services(state_dir)
+  reports.publish_report(
+    "waiting-report",
+    "Decision",
+    '<!-- question {"id": "select", "label": "Select?"} -->\n'
+    'Select?\n- ( ) Yes <!-- option {"label": "Yes"} -->\n',
+  )
+  tasks.create_task(
+    "blocked-task", "Blocked", details=["Waiting"], report_ids=["waiting-report"]
+  )
+  tasks.create_task(
+    "ready-task", "Ready", scope="Ready scope", details=["Detailed step"]
+  )
+  store.close()
+
+  code, out, err = _run_cli(state_dir, "task")
+  assert code == 0, err
+  assert "ready-task" in out and "Ready scope" in out
+  assert "blocked-task" not in out and "Detailed step" not in out
+  for flag in ("-d", "--deets"):
+    code, out, err = _run_cli(state_dir, "task", flag)
+    assert code == 0, err
+    assert "ready-task" in out and "Detailed step" in out
+  code, out, err = _run_cli(state_dir, "task", "ready-task")
+  assert code == 0, err
+  assert "Detailed step" in out
+
+
+def test_cli_bare_task_handles_no_unblocked_work(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  code, out, err = _run_cli(state_dir, "task")
+  assert code == 0, err
+  assert NO_CURRENT_TASK in out
+  store, _, tasks, _ = cli.open_services(state_dir)
+  tasks.create_task("done-task", "Done", status="finished", details=["Done"])
+  store.close()
+  code, out, err = _run_cli(state_dir, "task", "--deets")
+  assert code == 0, err
+  assert NO_CURRENT_TASK in out
+
+
+def test_cli_bare_task_excludes_non_upcoming_items(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  finished = cli.Task("done-task", "Done", status="finished")
+  legacy = cli.Task("legacy-task", "Legacy")
+  legacy.status = "legacy"
+  blocked = cli.Task("blocked-task", "Blocked")
+  ready = cli.Task("ready-task", "Ready")
+  items = [(finished, False), (legacy, False), (blocked, True), (ready, False)]
+  monkeypatch.setattr(cli.TaskService, "list_tasks", lambda self: items)
+
+  code, out, err = _run_cli(cli.resolve_state_dir(), "task")
+  assert code == 0, err
+  assert "ready-task" in out
+  assert "done-task" not in out and "legacy-task" not in out
+  items.pop()
+  code, out, err = _run_cli(cli.resolve_state_dir(), "task", "--deets")
+  assert code == 0, err
+  assert NO_CURRENT_TASK in out
