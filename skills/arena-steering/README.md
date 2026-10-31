@@ -238,10 +238,14 @@ Write requests may include `_request_id` to replay the original result safely. T
 | `POST /reports/{id}/answers` and `/reports/{id}/answers/{answer_id}/ack` | Submit and acknowledge report answers. |
 | `GET, POST /survey` and `POST /survey/interrupt` | Inspect or submit a survey and request a bible check. |
 | `POST /timezone` and `POST /markdown` | Set the display timezone and render Markdown. |
-| `GET /state/snapshot`, `GET /state/changes?since=`, and `POST /state/merge` | Export every row, export newer rows, and merge a document by ID. |
+| `GET /state/snapshot`, `GET /state/changes?since=`, and `POST /state/merge` | Export every row, export changed rows, and merge a document by ID. |
 | `GET, POST /state/assets` | List upload paths with sizes and hashes, and store one asset by hash. |
 | `/api/ws` | WebSocket requests, change notifications, heartbeat, reload, and `report.acked` events. |
 | `/static/assets/`, `/static/reports/`, and `/static/uploads/` | Serve UI assets, report files and Markdown, and uploaded files. |
+
+For state sync, treat `state_version` as an opaque cursor for one database. Pass the last returned value as `since` and replace it with the next response's value.
+
+Older cursors can return a full snapshot once. Row merges still keep the newer modification time. Changes do not include deletions, and assets sync separately.
 
 ### API payloads and responses
 

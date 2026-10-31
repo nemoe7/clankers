@@ -250,6 +250,271 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   store.close()
 
 
+def test_state_changes_sync_same_second_messages_and_answers(tmp_path: Path) -> None:
+  class FixedClock:
+    def now_iso(self) -> str:
+      return "2026-01-01T00:00:00Z"
+
+  source = SqliteStore(tmp_path / "source.sqlite3")
+  target = SqliteStore(tmp_path / "target.sqlite3")
+  app = SteeringApp(source)
+  app.messages._clock = FixedClock()
+  app.reports._clock = FixedClock()
+  app.dispatch("POST", "/messages", {"id": "aa1001", "body": "First"})
+  _, snapshot = app.dispatch("GET", "/state/snapshot")
+  target.merge_rows(snapshot)
+  cursor = snapshot["state_version"]
+
+  app.dispatch("POST", "/messages", {"id": "aa1002", "body": "Second"})
+  app.dispatch("POST", "/messages/aa1001/ack", {"markdown": "Read"})
+  body = (
+    '<!-- question {"id":"choice","label":"Choice"} -->\n'
+    "Choice\n"
+    '- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+  )
+  app.reports.publish_report("decision", "Decision", body)
+  app.reports.submit_answer("decision", {"choice": "Yes"}, answer_id="aa1003")
+  _, changes = app.dispatch("GET", "/state/changes?since=" + cursor)
+  assert {row["id"] for row in changes["messages"]} == {"aa1001", "aa1002", "aa1003"}
+  initial_message = snapshot["messages"][0]
+  updated_message = next(row for row in changes["messages"] if row["id"] == "aa1001")
+  assert updated_message["modified_at"] > initial_message["modified_at"]
+  assert [row["id"] for row in changes["reports"]] == ["decision"]
+  target.merge_rows(changes)
+  assert target.get_message("aa1001").acks == ["Read"]
+  assert target.get_report("decision").answers[0].id == "aa1003"
+
+  app.dispatch("POST", "/messages/aa1003/ack", {"markdown": "Answer received"})
+  _, answer_ack = app.dispatch(
+    "GET", "/state/changes?since=" + changes["state_version"]
+  )
+  target.merge_rows(answer_ack)
+  assert target.get_report("decision").answers[0].acks == ["Answer received"]
+  _, quiet = app.dispatch("GET", "/state/changes?since=" + answer_ack["state_version"])
+  assert quiet["messages"] == [] and quiet["reports"] == []
+  source.close()
+  target.close()
+
+
+def test_state_syncs_same_second_task_and_report_updates(tmp_path: Path) -> None:
+  class FixedClock:
+    def now_iso(self) -> str:
+      return "2026-01-01T00:00:00Z"
+
+  source = SqliteStore(tmp_path / "task-source.sqlite3")
+  target = SqliteStore(tmp_path / "task-target.sqlite3")
+  app = SteeringApp(source)
+  app.tasks._clock = FixedClock()
+  app.reports._clock = FixedClock()
+  app.tasks.create_task("work", "Work", details=["Review"])
+  app.reports.publish_report("report", "Report", "# Report")
+  _, snapshot = app.dispatch("GET", "/state/snapshot")
+  target.merge_rows(snapshot)
+
+  app.tasks.patch_task("work", {"title": "Updated"})
+  app.reports.pin_report("report", True)
+  _, changes = app.dispatch("GET", "/state/changes?since=" + snapshot["state_version"])
+  target.merge_rows(changes)
+  assert target.get_task("work").title == "Updated"
+  assert target.get_report("report").pinned is True
+  source.close()
+  target.close()
+
+
+def test_state_cursor_survives_clock_skew_older_imports_and_restart(
+  tmp_path: Path,
+) -> None:
+  path = tmp_path / "clock-skew.sqlite3"
+  store = SqliteStore(path)
+  app = SteeringApp(store)
+  store.merge_rows(
+    {
+      "messages": [
+        {"id": "cc1001", "body": "Future", "modified_at": "2099-01-01T00:00:00Z"}
+      ]
+    }
+  )
+  _, snapshot = app.dispatch("GET", "/state/snapshot")
+  store.merge_rows(
+    {
+      "messages": [
+        {"id": "cc1002", "body": "Imported", "modified_at": "2020-01-01T00:00:00Z"}
+      ]
+    }
+  )
+  app.dispatch("POST", "/messages", {"id": "cc1003", "body": "Local"})
+  _, changes = app.dispatch("GET", "/state/changes?since=" + snapshot["state_version"])
+  assert {row["id"] for row in changes["messages"]} == {"cc1002", "cc1003"}
+  cursor = changes["state_version"]
+  store.close()
+
+  store = SqliteStore(path)
+  app = SteeringApp(store)
+  _, quiet = app.dispatch("GET", "/state/changes?since=" + cursor)
+  assert quiet["messages"] == []
+  _, legacy_future = app.dispatch("GET", "/state/changes?since=9998-01-01T00:00:00Z")
+  assert {row["id"] for row in legacy_future["messages"]} == {
+    "cc1001",
+    "cc1002",
+    "cc1003",
+  }
+  app.dispatch("POST", "/messages", {"id": "cc1004", "body": "After restart"})
+  _, after_restart = app.dispatch("GET", "/state/changes?since=" + cursor)
+  assert [row["id"] for row in after_restart["messages"]] == ["cc1004"]
+  store.close()
+
+
+def test_legacy_state_cursor_resyncs_without_changing_old_rows(tmp_path: Path) -> None:
+  import sqlite3
+
+  path = tmp_path / "legacy.sqlite3"
+  store = SqliteStore(path)
+  store.merge_rows(
+    {
+      "messages": [
+        {"id": "dd1001", "body": "Old", "modified_at": "2099-01-01T00:00:00Z"}
+      ]
+    }
+  )
+  before = store.export_rows()
+  store.close()
+  with sqlite3.connect(path) as connection:
+    triggers = connection.execute(
+      "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE '%_state_%'"
+    ).fetchall()
+    for (name,) in triggers:
+      connection.execute(f'DROP TRIGGER "{name}"')
+    connection.execute("DROP TABLE state_row_versions")
+    connection.execute("DROP TABLE state_clock")
+
+  store = SqliteStore(path)
+  app = SteeringApp(store)
+  _, changes = app.dispatch("GET", "/state/changes?since=2099-01-01T00:00:00Z")
+  assert changes["messages"] == before["messages"]
+  assert store.export_rows() == before
+  _, quiet = app.dispatch("GET", "/state/changes?since=" + changes["state_version"])
+  assert quiet["messages"] == []
+  store.close()
+
+
+def test_state_merge_compares_timestamps_chronologically(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "timestamp-merge.sqlite3")
+  old = {"id": "ee1002", "body": "Old", "modified_at": "2030-01-01T00:00:00Z"}
+  newer = {**old, "body": "New", "modified_at": "2030-01-01T00:00:00.000001Z"}
+  equivalent = {
+    **old,
+    "body": "Equal",
+    "modified_at": "2029-12-31T19:00:00.000001-05:00",
+  }
+  store.merge_rows({"messages": [old]})
+  assert store.merge_rows({"messages": [newer]})["updated"] == ["ee1002"]
+  assert store.merge_rows({"messages": [equivalent]})["skipped"] == ["ee1002"]
+  assert store.get_message("ee1002").body == "New"
+  store.close()
+
+
+@pytest.mark.parametrize(
+  "stamp",
+  ["2030-01-01T00:00:00Z", "2030-01-01T00:00:00.5Z", "2030-01-01T05:30:00+05:30"],
+)
+def test_same_time_row_update_sorts_after_legacy_stamp(
+  tmp_path: Path, stamp: str
+) -> None:
+  from datetime import datetime
+
+  store = SqliteStore(tmp_path / "legacy-merge.sqlite3")
+  store.merge_rows(
+    {"messages": [{"id": "ee1003", "body": "Original", "modified_at": stamp}]}
+  )
+  first = store.append_message_ack("ee1003", "First", stamp)
+  second = store.append_message_ack("ee1003", "Second", stamp)
+  assert first.modified_at > stamp
+  assert second.modified_at > first.modified_at
+  assert datetime.fromisoformat(second.modified_at) > datetime.fromisoformat(
+    first.modified_at
+  )
+  store.close()
+
+
+def test_state_cursor_rolls_back_with_the_write(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "rollback.sqlite3")
+  app = SteeringApp(store)
+  _, before = app.dispatch("GET", "/state/snapshot")
+  with pytest.raises(RuntimeError, match="rollback"), store.transaction():
+    app.messages.send_message("Pending", msg_id="ee1001")
+    raise RuntimeError("rollback")
+  _, after = app.dispatch("GET", "/state/changes?since=" + before["state_version"])
+  assert after["state_version"] == before["state_version"]
+  assert after["messages"] == []
+  store.close()
+
+
+def test_state_changes_include_concurrent_database_writers(tmp_path: Path) -> None:
+  from concurrent.futures import ThreadPoolExecutor
+
+  path = tmp_path / "writers.sqlite3"
+  first, second = SqliteStore(path), SqliteStore(path)
+  apps = [SteeringApp(first), SteeringApp(second)]
+  _, snapshot = apps[0].dispatch("GET", "/state/snapshot")
+
+  def write_batch(index: int) -> None:
+    for number in range(10):
+      msg_id = f"{index + 1:02x}aa{number:02x}"
+      apps[index].messages.send_message("Concurrent", msg_id=msg_id)
+
+  with ThreadPoolExecutor(max_workers=2) as pool:
+    list(pool.map(write_batch, range(2)))
+  _, changes = apps[0].dispatch(
+    "GET", "/state/changes?since=" + snapshot["state_version"]
+  )
+  assert {row["id"] for row in changes["messages"]} == {
+    f"{index + 1:02x}aa{number:02x}" for index in range(2) for number in range(10)
+  }
+  first.close()
+  second.close()
+
+
+def test_state_snapshot_cursor_covers_interleaved_sqlite_writes(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  from threading import Event, Thread
+
+  path = tmp_path / "concurrent.sqlite3"
+  reader = SqliteStore(path)
+  writer = SqliteStore(path)
+  app = SteeringApp(reader)
+  other = SteeringApp(writer)
+  app.dispatch("POST", "/messages", {"id": "bb1001", "body": "Before"})
+  exported, attempted, written = Event(), Event(), Event()
+  original_export = reader.export_rows
+
+  def export_then_pause(since: str | None = None) -> dict:
+    rows = original_export(since)
+    exported.set()
+    assert attempted.wait(2)
+    written.wait(0.5)
+    return rows
+
+  def write_during_export() -> None:
+    assert exported.wait(2)
+    attempted.set()
+    other.dispatch("POST", "/messages", {"id": "bb1002", "body": "During"})
+    written.set()
+
+  monkeypatch.setattr(reader, "export_rows", export_then_pause)
+  thread = Thread(target=write_during_export)
+  thread.start()
+  _, snapshot = app.dispatch("GET", "/state/snapshot")
+  thread.join(timeout=5)
+  assert not thread.is_alive() and written.is_set()
+  monkeypatch.setattr(reader, "export_rows", original_export)
+  _, changes = app.dispatch("GET", "/state/changes?since=" + snapshot["state_version"])
+  received = {row["id"] for row in snapshot["messages"] + changes["messages"]}
+  assert received == {"bb1001", "bb1002"}
+  reader.close()
+  writer.close()
+
+
 def test_state_endpoints_snapshot_changes_merge_and_assets(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "state-sync.sqlite3")
   app = SteeringApp(store)

@@ -10,11 +10,45 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .models import Attachment, Message, Report, ReportAnswer, ReportField, Task
 
 STATE_TABLES = ("messages", "tasks", "reports")
+_STATE_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def _timestamp_us(value: str) -> int:
+  if not value:
+    return 0
+  stamp = datetime.fromisoformat(value)
+  stamp = stamp.replace(tzinfo=UTC) if stamp.tzinfo is None else stamp.astimezone(UTC)
+  delta = stamp - _STATE_EPOCH
+  return (delta.days * 86400 + delta.seconds) * 1_000_000 + delta.microseconds
+
+
+def _timestamp_iso(value: int) -> str:
+  return (
+    (_STATE_EPOCH + timedelta(microseconds=value))
+    .isoformat(timespec="microseconds")
+    .replace("+00:00", "Z")
+  )
+
+
+def _advance_stamp(previous: str, proposed: str) -> str:
+  old, new = _timestamp_us(previous), _timestamp_us(proposed)
+  if new > old and proposed > previous:
+    return proposed
+  previous_time = datetime.fromisoformat(previous) if previous else _STATE_EPOCH
+  zone = previous_time.tzinfo or UTC
+  advanced = (_STATE_EPOCH + timedelta(microseconds=max(old + 1, new))).astimezone(zone)
+  candidate = advanced.isoformat(timespec="microseconds").replace("+00:00", "Z")
+  # Older peers compare stamps as text, including second-only timestamps.
+  if candidate <= previous:
+    advanced = advanced.replace(microsecond=0) + timedelta(seconds=1, microseconds=1)
+    candidate = advanced.isoformat(timespec="microseconds").replace("+00:00", "Z")
+  return candidate
 
 
 class SqliteStore:
@@ -171,6 +205,60 @@ class SqliteStore:
         self._conn.execute(
           "ALTER TABLE reports ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"
         )
+      self._init_state_tracking()
+
+  def _init_state_tracking(self) -> None:
+    # Arrival order stays independent of the clocks in merged rows.
+    self._conn.execute(
+      "CREATE TABLE IF NOT EXISTS state_clock "
+      "(singleton INTEGER PRIMARY KEY CHECK (singleton = 1), revision_us INTEGER NOT NULL)"
+    )
+    self._conn.execute(
+      "CREATE TABLE IF NOT EXISTS state_row_versions "
+      "(table_name TEXT NOT NULL, row_id TEXT NOT NULL, revision_us INTEGER NOT NULL, "
+      "PRIMARY KEY (table_name, row_id)) WITHOUT ROWID"
+    )
+    if (
+      self._conn.execute("SELECT 1 FROM state_clock WHERE singleton = 1").fetchone()
+      is None
+    ):
+      initial = time.time_ns() // 1_000
+      for table in STATE_TABLES:
+        for row in self._conn.execute(f"SELECT modified_at FROM {table}"):
+          initial = max(initial, _timestamp_us(str(row[0] or "")))
+      initial += 1
+      self._conn.execute("INSERT INTO state_clock VALUES (1, ?)", (initial,))
+      for table in STATE_TABLES:
+        self._conn.execute(
+          f"INSERT INTO state_row_versions SELECT ?, id, ? FROM {table}",
+          (table, initial),
+        )
+    now_us = (
+      "CAST(strftime('%s', 'now') AS INTEGER) * 1000000 + "
+      "CAST(substr(strftime('%f', 'now'), 4, 3) AS INTEGER) * 1000"
+    )
+    for table in STATE_TABLES:
+      for action in ("INSERT", "UPDATE"):
+        self._conn.execute(
+          f"""
+          CREATE TRIGGER IF NOT EXISTS {table}_state_{action.lower()} AFTER {action} ON {table}
+          BEGIN
+            UPDATE state_clock SET revision_us = MAX(revision_us + 1, {now_us}) WHERE singleton = 1;
+            INSERT INTO state_row_versions VALUES ('{table}', NEW.id,
+              (SELECT revision_us FROM state_clock WHERE singleton = 1))
+            ON CONFLICT(table_name, row_id) DO UPDATE SET revision_us = excluded.revision_us;
+          END
+          """
+        )
+      self._conn.execute(
+        f"""
+        CREATE TRIGGER IF NOT EXISTS {table}_state_delete AFTER DELETE ON {table}
+        BEGIN
+          UPDATE state_clock SET revision_us = MAX(revision_us + 1, {now_us}) WHERE singleton = 1;
+          DELETE FROM state_row_versions WHERE table_name = '{table}' AND row_id = OLD.id;
+        END
+        """
+      )
 
   def close(self) -> None:
     """Close the underlying SQLite connection."""
@@ -307,8 +395,12 @@ class SqliteStore:
   def save_message(self, message: Message) -> Message:
     with self.transaction():
       existing = self._conn.execute(
-        "SELECT seq FROM messages WHERE id = ?", (message.id,)
+        "SELECT seq, modified_at FROM messages WHERE id = ?", (message.id,)
       ).fetchone()
+      if existing is not None:
+        message.modified_at = _advance_stamp(
+          str(existing["modified_at"]), message.modified_at
+        )
       attachments_json = json.dumps([item.to_dict() for item in message.attachments])
       parent_ids_json = json.dumps(message.parent_ids)
       acks_json = json.dumps(message.acks)
@@ -422,6 +514,7 @@ class SqliteStore:
         raise KeyError(f"Unknown message ID: {msg_id}")
       message = self._row_to_message(row)
       message.acks.append(reply)
+      now = _advance_stamp(message.modified_at, now)
       self._conn.execute(
         "UPDATE messages SET acks_json = ?, replies_seen = 0, status = 'acked', modified_at = ? WHERE id = ?",
         (json.dumps(message.acks), now, msg_id),
@@ -434,22 +527,28 @@ class SqliteStore:
   def mark_message_seen(self, msg_id: str, now: str) -> Message:
     """Mark delivery without writing a stale reply list."""
     with self.transaction():
-      self._conn.execute(
-        "UPDATE messages SET status = 'seen', modified_at = ? WHERE id = ? AND status = 'sent'",
-        (now, msg_id),
-      )
       row = self._conn.execute(
         "SELECT * FROM messages WHERE id = ?", (msg_id,)
       ).fetchone()
       if row is None:
         raise KeyError(f"Unknown message ID: {msg_id}")
+      if row["status"] == "sent":
+        now = _advance_stamp(str(row["modified_at"]), now)
+        self._conn.execute(
+          "UPDATE messages SET status = 'seen', modified_at = ? WHERE id = ?",
+          (now, msg_id),
+        )
+        row = self._conn.execute(
+          "SELECT * FROM messages WHERE id = ?", (msg_id,)
+        ).fetchone()
       return self._row_to_message(row)
 
   def mark_replies_seen(self, msg_id: str, revision: str) -> bool:
     """Mark replies seen only if the rendered revision is still current."""
     with self.transaction():
       row = self._conn.execute(
-        "SELECT acks_json FROM messages WHERE id = ?", (msg_id,)
+        "SELECT acks_json, replies_seen, modified_at FROM messages WHERE id = ?",
+        (msg_id,),
       ).fetchone()
       if row is None:
         raise KeyError(f"Unknown message ID: {msg_id}")
@@ -458,7 +557,12 @@ class SqliteStore:
       actual = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
       if not hmac.compare_digest(actual, revision):
         return False
-      self._conn.execute("UPDATE messages SET replies_seen = 1 WHERE id = ?", (msg_id,))
+      if not row["replies_seen"]:
+        now = _advance_stamp(str(row["modified_at"]), datetime.now(UTC).isoformat())
+        self._conn.execute(
+          "UPDATE messages SET replies_seen = 1, modified_at = ? WHERE id = ?",
+          (now, msg_id),
+        )
       return True
 
   def get_task(self, task_id: str) -> Task | None:
@@ -475,8 +579,17 @@ class SqliteStore:
 
   def save_task_queue(self, tasks: list[Task]) -> list[Task]:
     with self.transaction():
+      previous = {
+        str(row["id"]): row for row in self._conn.execute("SELECT * FROM tasks")
+      }
       self._conn.execute("DELETE FROM tasks")
       for index, task in enumerate(tasks):
+        row = previous.get(task.id)
+        if row is not None and (
+          int(row["position"]) != index
+          or self._row_to_task(row).to_dict() != task.to_dict()
+        ):
+          task.modified_at = _advance_stamp(str(row["modified_at"]), task.modified_at)
         self._conn.execute(
           """
           INSERT INTO tasks (
@@ -506,12 +619,17 @@ class SqliteStore:
       cur = self._conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
       if cur.rowcount == 0:
         return False
-      rows = self._conn.execute("SELECT id FROM tasks ORDER BY position ASC").fetchall()
+      rows = self._conn.execute(
+        "SELECT id, position, modified_at FROM tasks ORDER BY position ASC"
+      ).fetchall()
       for index, row in enumerate(rows):
-        self._conn.execute(
-          "UPDATE tasks SET position = ? WHERE id = ?", (index, row["id"])
-        )
-    return True
+        if int(row["position"]) != index:
+          now = _advance_stamp(str(row["modified_at"]), datetime.now(UTC).isoformat())
+          self._conn.execute(
+            "UPDATE tasks SET position = ?, modified_at = ? WHERE id = ?",
+            (index, now, row["id"]),
+          )
+      return True
 
   def list_report_answers(self, report_id: str | None = None) -> list[ReportAnswer]:
     """Project report answers from their hidden messages in submission order."""
@@ -562,8 +680,12 @@ class SqliteStore:
   def save_report(self, report: Report) -> Report:
     with self.transaction():
       existing = self._conn.execute(
-        "SELECT seq FROM reports WHERE id = ?", (report.id,)
+        "SELECT seq, modified_at FROM reports WHERE id = ?", (report.id,)
       ).fetchone()
+      if existing is not None:
+        report.modified_at = _advance_stamp(
+          str(existing["modified_at"]), report.modified_at
+        )
       fields_json = json.dumps([item.to_dict() for item in report.fields])
       # The compatibility column is not authoritative and old answers are not migrated.
       answers_json = "[]"
@@ -623,13 +745,24 @@ class SqliteStore:
     return report
 
   def export_rows(self, since: str | None = None) -> dict[str, list[dict[str, object]]]:
-    """Return every stored row per table, or only rows newer than a stamp."""
+    """Return rows changed after this database's cursor, or a full snapshot."""
     with self._lock:
+      cursor = _timestamp_us(since) if since else None
+      latest = int(
+        self._conn.execute(
+          "SELECT revision_us FROM state_clock WHERE singleton = 1"
+        ).fetchone()[0]
+      )
+      if cursor is not None and cursor > latest:
+        cursor = None
       out: dict[str, list[dict[str, object]]] = {}
       for table in STATE_TABLES:
-        if since:
+        if cursor is not None:
           rows = self._conn.execute(
-            f"SELECT * FROM {table} WHERE modified_at > ? ORDER BY rowid", (since,)
+            f"SELECT source.* FROM {table} source JOIN state_row_versions version "
+            "ON version.table_name = ? AND version.row_id = source.id "
+            "WHERE version.revision_us > ? ORDER BY source.rowid",
+            (table, cursor),
           ).fetchall()
         else:
           rows = self._conn.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
@@ -637,16 +770,19 @@ class SqliteStore:
       return out
 
   def state_stamp(self) -> str:
-    """Return the newest `modified_at` across every stored row."""
+    """Return the database's monotonic state cursor as a UTC timestamp."""
     with self._lock:
-      stamps: list[str] = []
-      for table in STATE_TABLES:
-        row = self._conn.execute(
-          f"SELECT MAX(modified_at) AS stamp FROM {table}"
-        ).fetchone()
-        if row is not None and row["stamp"]:
-          stamps.append(str(row["stamp"]))
-      return max(stamps, default="")
+      row = self._conn.execute(
+        "SELECT revision_us FROM state_clock WHERE singleton = 1"
+      ).fetchone()
+      return _timestamp_iso(int(row[0]))
+
+  def export_state(
+    self, since: str | None = None
+  ) -> tuple[dict[str, list[dict[str, object]]], str]:
+    """Capture rows and their cursor in one database transaction."""
+    with self.transaction():
+      return self.export_rows(since), self.state_stamp()
 
   def merge_rows(
     self, document: dict[str, list[dict[str, object]]]
@@ -678,7 +814,9 @@ class SqliteStore:
               f"INSERT INTO {table} ({names}) VALUES ({marks})", tuple(data.values())
             )
             result["added"].append(row_id)
-          elif incoming_stamp > str(current["modified_at"]):
+          elif _timestamp_us(incoming_stamp) > _timestamp_us(
+            str(current["modified_at"])
+          ):
             sets = ",".join(f"{key}=?" for key in data if key != "id")
             values = [value for key, value in data.items() if key != "id"]
             self._conn.execute(

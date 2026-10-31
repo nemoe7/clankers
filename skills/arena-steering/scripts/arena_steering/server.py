@@ -633,12 +633,12 @@ class SteeringApp:
   def _handle_state_snapshot(
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
-    rows = self.store.export_rows()
+    rows, state_version = self.store.export_state()
     return (
       int(HTTPStatus.OK),
       {
         "schema": STATE_SCHEMA_VERSION,
-        "state_version": self.store.state_stamp(),
+        "state_version": state_version,
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
         **rows,
       },
@@ -648,13 +648,13 @@ class SteeringApp:
     self, _params: dict[str, str], query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
     since = (query.get("since") or [""])[0].strip()
-    rows = self.store.export_rows(since=since or None)
+    rows, state_version = self.store.export_state(since=since or None)
     return (
       int(HTTPStatus.OK),
       {
         "schema": STATE_SCHEMA_VERSION,
         "since": since,
-        "state_version": self.store.state_stamp(),
+        "state_version": state_version,
         **rows,
       },
     )
