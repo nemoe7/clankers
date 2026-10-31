@@ -1060,6 +1060,25 @@ mark.search-hit {
   background-color: var(--accent);
 }
 
+#report-pip.is-unseen-ack {
+  background-color: hsl(var(--interactive-positive));
+}
+
+#report-needs-answer {
+  position: absolute;
+  top: 5px;
+  right: 13px;
+  display: inline-flex;
+  width: 7px;
+  height: 7px;
+  color: var(--accent);
+}
+
+#report-needs-answer .report-picker-help-icon {
+  width: 7px;
+  height: 7px;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -2134,6 +2153,10 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   background-color: var(--accent);
   display: inline-block;
   flex: none;
+}
+
+.report-picker-unseen-dot.is-unseen-ack {
+  background-color: hsl(var(--interactive-positive));
 }
 
 .report-picker-meta {

@@ -206,13 +206,16 @@ export function renderReportsView(container, state, handlers) {
     .map((rep, idx) => {
       const isActive = rep.id === activeReport.id;
       const isUnseen = !rep.seen;
+      const answers = rep.answers || [];
+      const hasUnseenAck = answers[answers.length - 1]?.status === "acked" && !rep.ack_seen;
       const needsAnswer = Boolean(
         rep.needs_answer ??
           ((rep.fields || []).length > 0 && (rep.answers || []).length === 0)
       );
+      const unseenLabel = isUnseen ? "Unseen report" : "Unseen answer acknowledgement";
       const markersHtml =
-        isUnseen || needsAnswer
-          ? `<span class="report-picker-markers">${needsAnswer ? `<span class="report-picker-unanswered" title="Needs answers" aria-label="Needs answers">${UNANSWERED_SVG}</span>` : ""}${isUnseen ? `<span class="report-picker-unseen-dot" title="Unseen report" aria-label="Unseen report"></span>` : ""}</span>`
+        isUnseen || hasUnseenAck || needsAnswer
+          ? `<span class="report-picker-markers">${needsAnswer ? `<span class="report-picker-unanswered" title="Needs answers" aria-label="Needs answers">${UNANSWERED_SVG}</span>` : ""}${isUnseen || hasUnseenAck ? `<span class="report-picker-unseen-dot ${!isUnseen && hasUnseenAck ? "is-unseen-ack" : ""}" title="${unseenLabel}" aria-label="${unseenLabel}"></span>` : ""}</span>`
           : "";
       return `
         <button
