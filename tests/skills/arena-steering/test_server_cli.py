@@ -48,6 +48,49 @@ def test_cli_version_flags() -> None:
   assert out.getvalue().strip() == f"steer {__version__}"
 
 
+@pytest.mark.parametrize("flag", ["-h", "--help"])
+@pytest.mark.parametrize(
+  ("group", "commands"),
+  [
+    ("task", ("new ID TITLE", "rm ID", "mod ID", "unlink ID")),
+    ("report", ("pub FILE", "pin ID", "unpin ID", "rm ID")),
+    ("run", ("start", "logs NAME", "pr-checks")),
+    ("worktree", ("add NAME", "list", "remove NAME", "prune", "collect NAME")),
+  ],
+)
+def test_cli_command_group_help(
+  flag: str, group: str, commands: tuple[str, ...]
+) -> None:
+  state_dir = cli.resolve_state_dir()
+  code, output, error = _run_cli(state_dir, group, flag)
+  assert code == 0, error
+  assert f"usage: steer {group}" in output
+  assert all(command in output for command in commands)
+  assert not error
+  assert not state_dir.exists()
+
+
+@pytest.mark.parametrize("group", ["task", "report", "run", "worktree"])
+def test_cli_command_group_help_executable(tmp_path: Path, group: str) -> None:
+  import subprocess
+  import sys
+
+  entrypoint = (
+    Path(__file__).resolve().parents[3] / "skills/arena-steering/scripts/steer"
+  )
+  result = subprocess.run(
+    [sys.executable, str(entrypoint), group, "--help"],
+    cwd=tmp_path,
+    check=False,
+    capture_output=True,
+    text=True,
+  )
+  assert result.returncode == 0, result.stderr
+  assert f"usage: steer {group}" in result.stdout
+  assert not result.stderr
+  assert not (tmp_path / "arena-state").exists()
+
+
 def test_report_pin_cli_and_http_are_durable() -> None:
   state_dir = cli.resolve_state_dir()
   state_dir.mkdir(parents=True, exist_ok=True)

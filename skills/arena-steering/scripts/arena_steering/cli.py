@@ -118,13 +118,39 @@ def main(
   )
   tasks_p.add_argument("-p", "--page", type=int, default=1)
 
-  sub.add_parser("task", help="Show, create, remove, or modify a task.")
+  task_p = sub.add_parser(
+    "task",
+    help="Show, create, remove, or modify a task.",
+    usage="%(prog)s <id|new|rm|mod|unlink> ...",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog=(
+      "Commands:\n"
+      "  ID                                  Show a task.\n"
+      "  new ID TITLE -d DETAIL [options]    Create a task.\n"
+      "  rm ID                               Remove a task.\n"
+      "  mod ID FIELD [rm] VALUE             Update a task.\n"
+      "  unlink ID [TYPE] LINK               Remove a task link."
+    ),
+  )
 
   reports_p = sub.add_parser("reports", help="List active or stale reports (10/page).")
   reports_p.add_argument("-s", "--stale", action="store_true")
   reports_p.add_argument("-p", "--page", type=int, default=1)
 
-  sub.add_parser("report", help="Show, publish, or remove a report.")
+  report_p = sub.add_parser(
+    "report",
+    help="Show, publish, or remove a report.",
+    usage="%(prog)s <id|pub|pin|unpin|rm> ...",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog=(
+      "Commands:\n"
+      "  ID                          Show a report.\n"
+      "  pub FILE -i ID -t TITLE     Publish a report.\n"
+      "  pin ID                      Pin a report.\n"
+      "  unpin ID                    Unpin a report.\n"
+      "  rm ID [ID ...] | --stale    Remove reports."
+    ),
+  )
 
   survey_p = sub.add_parser("survey", help="Inspect or submit bible survey answers.")
   survey_p.add_argument("entries", nargs="*", help="[<json-array> | <key=value> ...]")
@@ -187,8 +213,32 @@ def main(
     "-j", "--json", dest="as_json", action="store_true", help="Print JSON."
   )
 
-  sub.add_parser("worktree", help="Manage native git worktrees under .worktrees/.")
-  sub.add_parser("run", help="Start detached runs and read their logs.")
+  worktree_p = sub.add_parser(
+    "worktree",
+    help="Manage native git worktrees under .worktrees/.",
+    usage="%(prog)s <add|list|remove|prune|collect> ...",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog=(
+      "Commands:\n"
+      "  add NAME [-b BRANCH]    Add a worktree.\n"
+      "  list                    List worktrees.\n"
+      "  remove NAME             Remove a worktree.\n"
+      "  prune                   Prune worktree records.\n"
+      "  collect NAME            Print a worktree patch."
+    ),
+  )
+  run_p = sub.add_parser(
+    "run",
+    help="Start detached runs and read their logs.",
+    usage="%(prog)s <start|logs|pr-checks> ...",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog=(
+      "Commands:\n"
+      "  start [-t TASK] [-a RUN] NAME -- COMMAND    Start a detached run.\n"
+      "  logs NAME [-n LINES]                        Read run status and logs.\n"
+      "  pr-checks [-n NUMBER]                       Watch PR checks."
+    ),
+  )
 
   remaining = args_list
   if not remaining:
@@ -197,6 +247,15 @@ def main(
 
   cmd = remaining[0]
   cmd_args = remaining[1:]
+  group_parsers = {
+    "task": task_p,
+    "report": report_p,
+    "worktree": worktree_p,
+    "run": run_p,
+  }
+  if cmd in group_parsers and cmd_args in (["-h"], ["--help"]):
+    group_parsers[cmd].print_help(file=stdout)
+    return 0
 
   resolved_state_dir = resolve_state_dir()
   store, messages, tasks, reports = open_services(resolved_state_dir)
