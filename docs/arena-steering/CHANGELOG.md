@@ -84,6 +84,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `store.py`, `server.py`: Keep state changes and their cursors consistent for same-second writes and clock skew.
+
 - `assets/style.css`: Keep report headings below the edge fade after a table-of-contents jump.
 
 - `assets/app.js`, `assets/messages-view.js`: Keep scrolling active while older messages load, even during a refresh.
