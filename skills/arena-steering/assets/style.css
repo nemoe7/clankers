@@ -485,13 +485,16 @@ code.msg-id[data-state="good"] {
 }
 
 .task-list-item {
+  position: relative;
   list-style: none;
-  margin-inline-start: 2ch;
 }
 
 .task-list-item-checkbox {
-  margin-right: 6px;
-  vertical-align: middle;
+  position: absolute;
+  font: inherit;
+  inset-inline-start: -2ch;
+  inset-block-start: 0.25em;
+  margin: 0;
 }
 
 .report hr,

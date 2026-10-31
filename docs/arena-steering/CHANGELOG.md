@@ -84,6 +84,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/style.css`, `markdown.py`, `assets/markdown.js`: Align checklist markers and wrapped text within the 2ch list indent.
+
 - `cli.py`: Show task, report, run, and worktree command-group help without opening state.
 
 - `store.py`, `server.py`: Keep state changes and their cursors consistent for same-second writes and clock skew.

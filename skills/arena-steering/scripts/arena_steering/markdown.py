@@ -211,7 +211,7 @@ def _gfm_extensions_plugin(parser: MarkdownIt) -> None:
           checked_attr = " checked" if checked else ""
           checkbox.content = (
             '<input type="checkbox" class="task-list-item-checkbox" '
-            f"disabled{checked_attr}> "
+            f"disabled{checked_attr}>"
           )
           token.children.insert(0, checkbox)
           li_tok = tokens[idx - 2]

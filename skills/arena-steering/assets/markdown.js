@@ -508,7 +508,7 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
         listItems.push({
           indent,
           task: true,
-          html: `<input type="checkbox" class="task-list-item-checkbox" disabled${checkedAttr}> ${renderInlineMarkdown(taskMatch[2])}`,
+          html: `<input type="checkbox" class="task-list-item-checkbox" disabled${checkedAttr}>${renderInlineMarkdown(taskMatch[2])}`,
         });
       } else {
         listItems.push({
