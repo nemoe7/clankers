@@ -125,7 +125,7 @@ def test_cli_message_page_size(tmp_path: Path) -> None:
   state_dir = cli.resolve_state_dir()
   state_dir.mkdir(parents=True, exist_ok=True)
   store = SqliteStore(state_dir / "state.sqlite3")
-  service = cli.MessageService(store, store, store)
+  service = cli.MessageService(store, store, store, store)
   for index in range(12):
     service.send_message(f"message {index}", msg_id=f"{index:06x}")
   store.close()
@@ -2559,7 +2559,7 @@ def test_cli_gate_blocks_until_the_inbox_is_acked() -> None:
   state_dir = cli.resolve_state_dir()
   state_dir.mkdir(parents=True, exist_ok=True)
   store = SqliteStore(state_dir / "state.sqlite3")
-  service = cli.MessageService(store, store, store)
+  service = cli.MessageService(store, store, store, store)
   service.send_message("gate me", msg_id="ab12cd")
   store.close()
 
@@ -2579,7 +2579,7 @@ def test_cli_gate_names_a_push_block() -> None:
   state_dir = cli.resolve_state_dir()
   state_dir.mkdir(parents=True, exist_ok=True)
   store = SqliteStore(state_dir / "state.sqlite3")
-  service = cli.MessageService(store, store, store)
+  service = cli.MessageService(store, store, store, store)
   service.send_message("gate me", msg_id="ab12ce")
   store.close()
 
@@ -2856,3 +2856,144 @@ def test_cli_bare_task_excludes_non_upcoming_items(
   code, out, err = _run_cli(cli.resolve_state_dir(), "task", "--deets")
   assert code == 0, err
   assert NO_CURRENT_TASK in out
+
+
+def test_cli_ack_reports_only_actual_task_detail_additions(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
+  store, _, tasks, reports = cli.open_services(state_dir)
+  reports.publish_report(
+    "decision",
+    "Decision",
+    '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
+  )
+  tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  answer = reports.submit_answer("decision", {"note": "Yes"}, answer_id="fd0001")
+  store.close()
+  code, first, error = _run_cli(state_dir, "ack", answer.id, "Received")
+  assert code == 0, error
+  assert "work" in first and "Note: Yes" in first
+  store, _, tasks, _ = cli.open_services(state_dir)
+  tasks.mod_deets_rm("work", 2)
+  store.close()
+  code, repeated, error = _run_cli(state_dir, "ack", answer.id, "Received again")
+  assert code == 0, error
+  assert repeated == f"ok {answer.id}\n"
+
+
+def test_http_ack_reports_only_actual_task_detail_additions() -> None:
+  store = SqliteStore(":memory:")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "decision",
+    "Decision",
+    '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
+  )
+  app.tasks.create_task("one", "One", details=["Review"], report_ids=["decision"])
+  app.tasks.create_task("two", "Two", details=["Note: Yes"], report_ids=["decision"])
+  app.tasks.create_task("other", "Other", details=["Review"])
+  status, first = app.dispatch(
+    "POST", "/reports/decision/answers", {"id": "aa0021", "values": {"note": "Yes"}}
+  )
+  assert status == HTTPStatus.CREATED
+  status, duplicate = app.dispatch(
+    "POST", "/reports/decision/answers", {"id": "aa0022", "values": {"note": "Yes"}}
+  )
+  assert 200 <= status < 300
+  assert duplicate["answer"]["id"] == first["answer"]["id"]
+  assert len(duplicate["report"]["answers"]) == 1
+  status, acked = app.dispatch("POST", "/messages/aa0021/ack", {"markdown": "Read"})
+  assert status == HTTPStatus.OK
+  assert acked["task_details_added"] == {"one": ["Note: Yes"]}
+  assert "task_details_added" not in acked["answer"]
+  status, repeated = app.dispatch(
+    "POST", "/reports/decision/answers/aa0021/ack", {"markdown": "Read again"}
+  )
+  assert status == HTTPStatus.OK and "task_details_added" not in repeated
+  _, second = app.dispatch(
+    "POST", "/reports/decision/answers", {"id": "aa0023", "values": {"note": "No"}}
+  )
+  status, later = app.dispatch(
+    "POST", "/reports/decision/answers/aa0023/ack", {"markdown": "Read newer"}
+  )
+  assert status == HTTPStatus.OK
+  assert second["answer"]["id"] == "aa0023"
+  assert later["task_details_added"] == {"one": ["Note: No"], "two": ["Note: No"]}
+  _, projected = app.dispatch("GET", "/reports/decision")
+  assert all(
+    "task_details_added" not in answer for answer in projected["report"]["answers"]
+  )
+  assert app.tasks.get_task("other")[0].details == ["Review"]
+  store.close()
+
+
+@pytest.mark.parametrize("route", ["message", "report"])
+def test_http_ack_rolls_back_answer_and_details_on_save_failure(
+  route: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  store = SqliteStore(":memory:")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "decision",
+    "Decision",
+    '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
+  )
+  app.tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  app.reports.submit_answer("decision", {"note": "Yes"}, answer_id="aa0024")
+  original = store.save_task_queue
+
+  def fail_after_save(queue) -> None:
+    original(queue)
+    raise RuntimeError("task save failed")
+
+  monkeypatch.setattr(store, "save_task_queue", fail_after_save)
+  path = (
+    "/messages/aa0024/ack"
+    if route == "message"
+    else "/reports/decision/answers/aa0024/ack"
+  )
+  status, result = app.dispatch("POST", path, {"markdown": "Read"})
+  assert status == HTTPStatus.INTERNAL_SERVER_ERROR
+  assert "task save failed" in result["error"]
+  assert app.reports.get_report("decision").answers[0].status == "sent"
+  assert app.reports.get_report("decision").answers[0].acks == []
+  assert app.tasks.get_task("work")[0].details == ["Review"]
+  monkeypatch.setattr(store, "save_task_queue", original)
+  status, result = app.dispatch("POST", path, {"markdown": "Read"})
+  assert status == HTTPStatus.OK
+  assert result["task_details_added"] == {"work": ["Note: Yes"]}
+  store.close()
+
+
+def test_cli_multi_ack_rolls_back_all_detail_additions(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  state_dir = cli.resolve_state_dir()
+  store, _, tasks, reports = cli.open_services(state_dir)
+  for report_id, answer_id in (("first", "aa0031"), ("second", "aa0032")):
+    reports.publish_report(
+      report_id,
+      report_id,
+      '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
+    )
+    tasks.create_task(report_id, report_id, details=["Review"], report_ids=[report_id])
+    reports.submit_answer(report_id, {"note": report_id}, answer_id=answer_id)
+  store.close()
+  original = SqliteStore.save_task_queue
+  calls = 0
+
+  def fail_second(self, queue) -> None:
+    nonlocal calls
+    calls += 1
+    original(self, queue)
+    if calls == 2:
+      raise RuntimeError("second task save failed")
+
+  monkeypatch.setattr(SqliteStore, "save_task_queue", fail_second)
+  code, output, error = _run_cli(state_dir, "ack", "aa0031", "aa0032", "Read")
+  assert code == 1 and output == "" and "second task save failed" in error
+  store, _, tasks, reports = cli.open_services(state_dir)
+  for report_id in ("first", "second"):
+    assert reports.get_report(report_id).answers[0].status == "sent"
+    assert reports.get_report(report_id).answers[0].acks == []
+    assert tasks.get_task(report_id)[0].details == ["Review"]
+  store.close()

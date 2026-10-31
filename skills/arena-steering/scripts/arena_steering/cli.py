@@ -52,7 +52,7 @@ def open_services(
 ) -> tuple[SqliteStore, MessageService, TaskService, ReportService]:
   """Open SqliteStore and domain services for a state directory."""
   store = SqliteStore(state_dir / "state.sqlite3")
-  messages = MessageService(store, store, store)
+  messages = MessageService(store, store, store, store)
   tasks = TaskService(store, store, gates=FileGateStatus(state_dir))
   reports = ReportService(
     store,
@@ -395,8 +395,14 @@ def _run_ack(
         report_ids=[target.report_id] if target_type == "report_answer" else [],
       )
       target_ids = [target.id]
-    acked_ids = [messages.ack(target, markdown)[1].id for target in target_ids]
-  print(f"ok {' '.join(acked_ids)}", file=out)
+    acked = [messages.ack(target, markdown)[1] for target in target_ids]
+  print(f"ok {' '.join(item.id for item in acked)}", file=out)
+  for item in acked:
+    if isinstance(item, ReportAnswer):
+      for task_id, details in item.task_details_added.items():
+        print(f"Added to task {task_id}:", file=out)
+        for detail in details:
+          print(f"- {detail}", file=out)
   if created:
     _, blocked = tasks.get_task(created.id)
     _print_single_task(created, blocked, out)

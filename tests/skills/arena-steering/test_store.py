@@ -322,7 +322,7 @@ def test_reply_seen_revision_rejects_stale_views_and_survives_restart(tmp_path):
   path = tmp_path / "replies.sqlite3"
   first = SqliteStore(path)
   second = SqliteStore(path)
-  messages = MessageService(first, first, first)
+  messages = MessageService(first, first, first, first)
   messages.send_message("Review", msg_id="aa1234")
   messages.ack("aa1234", "First reply")
   old = first.get_message("aa1234")
@@ -349,7 +349,7 @@ def test_concurrent_reply_and_seen_never_hide_the_new_reply(tmp_path):
 
   path = tmp_path / "race.sqlite3"
   first, second = SqliteStore(path), SqliteStore(path)
-  service = MessageService(first, first, first)
+  service = MessageService(first, first, first, first)
   service.send_message("Review", msg_id="aa1234")
   service.ack("aa1234", "Initial")
   for index in range(10):
