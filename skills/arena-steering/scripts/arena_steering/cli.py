@@ -41,8 +41,8 @@ def _snippet_words(text: str, max_words: int = 6) -> str:
 
 
 def resolve_state_dir() -> Path:
-  """Return the fixed state directory for this working directory."""
-  path = Path("arena-state")
+  """Return the fixed state directory for this checkout."""
+  path = pre_mod.repo_root() / "arena-state"
   path.mkdir(parents=True, exist_ok=True)
   return path
 
@@ -258,8 +258,18 @@ def main(
     group_parsers[cmd].print_help(file=stdout)
     return 0
 
-  resolved_state_dir = resolve_state_dir()
-  store, messages, tasks, reports = open_services(resolved_state_dir)
+  try:
+    resolved_state_dir = resolve_state_dir()
+    if cmd == "pre" and not (resolved_state_dir / "state.sqlite3").is_file():
+      parsed = pre_p.parse_args(cmd_args)
+      return _pre_state_unavailable(parsed, "state database is missing", stdout)
+    store, messages, tasks, reports = open_services(resolved_state_dir)
+  except (OSError, sqlite3.Error) as exc:
+    if cmd == "pre":
+      parsed = pre_p.parse_args(cmd_args)
+      return _pre_state_unavailable(parsed, str(exc), stdout)
+    print(f"Steer error: {exc}", file=stderr)
+    return 1
   try:
     if cmd != "serve":
       try:
@@ -289,7 +299,10 @@ def main(
       return _run_gate(messages, parsed, stdout)
     if cmd == "pre":
       parsed = pre_p.parse_args(cmd_args)
-      return _run_pre(parsed, messages, store, stdout)
+      try:
+        return _run_pre(parsed, messages, store, stdout)
+      except (OSError, sqlite3.Error) as exc:
+        return _pre_state_unavailable(parsed, str(exc), stdout)
     if cmd == "skills":
       skills_p.parse_args(cmd_args)
       return _run_skills(stdout)
@@ -744,6 +757,16 @@ def _bump_call_count(store: SqliteStore) -> int:
     count = _call_count(store) + 1
     store.set_meta(pre_mod.CALL_COUNT_META, str(count))
     return count
+
+
+def _pre_state_unavailable(parsed: argparse.Namespace, reason: str, out: TextIO) -> int:
+  """Keep work open while state is unreadable, but refuse an unverified push."""
+  ctx = pre_mod.PreContext(line=parsed.line, command=parsed.command_text)
+  if ctx.is_push():
+    print(f"PUSH BLOCKED: steering state unavailable ({reason}).", file=out)
+    return pre_mod.BLOCK
+  print(f"STATE UNAVAILABLE: pre-command gate skipped ({reason}).", file=out)
+  return pre_mod.CONTINUE
 
 
 def _run_pre(

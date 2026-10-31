@@ -259,4 +259,5 @@ def run_pipeline(ctx: PreContext) -> PreResult:
 
 def repo_root() -> Path:
   """Return the checkout root that holds the state directory."""
-  return Path(__file__).resolve().parents[3]
+  checkout = Path(__file__).resolve().parents[3].parent
+  return checkout.parent if checkout.name == ".agents" else checkout

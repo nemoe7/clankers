@@ -1678,20 +1678,26 @@ def test_run_concurrent_starts_have_one_winner(tmp_path: Path) -> None:
 
 def test_fixed_state_location_uses_state_sqlite3(tmp_path: Path) -> None:
   import os
+  import shutil
   import subprocess
   import sys
 
-  state_dir = tmp_path / "arena-state"
+  project = tmp_path / "checkout with spaces"
+  scripts = project / "skills" / "arena-steering" / "scripts"
+  source = Path(__file__).resolve().parents[3] / "skills/arena-steering"
+  shutil.copytree(source / "scripts", scripts)
+  shutil.copytree(source / "references", scripts.parent / "references")
+  outside = tmp_path / "outside"
+  outside.mkdir()
+  state_dir = project / "arena-state"
   state_dir.mkdir()
   state_db = state_dir / "state.sqlite3"
   override = tmp_path / "override"
-  entrypoint = (
-    Path(__file__).resolve().parents[3] / "skills/arena-steering/scripts/steer"
-  )
+  entrypoint = scripts / "steer"
   env = {**os.environ, "ARENA_STATE_DIR": str(override)}
   result = subprocess.run(
     [sys.executable, str(entrypoint), "tasks"],
-    cwd=tmp_path,
+    cwd=outside,
     env=env,
     capture_output=True,
     text=True,
@@ -1700,10 +1706,11 @@ def test_fixed_state_location_uses_state_sqlite3(tmp_path: Path) -> None:
   assert result.returncode == 0, result.stderr
   assert state_db.is_file()
   assert not (state_dir / "steering-v2.sqlite3").exists()
+  assert not (outside / "arena-state").exists()
   assert not override.exists()
   rejected = subprocess.run(
     [sys.executable, str(entrypoint), "--state-dir", str(override), "tasks"],
-    cwd=tmp_path,
+    cwd=outside,
     env=env,
     capture_output=True,
     text=True,
