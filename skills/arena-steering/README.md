@@ -220,6 +220,10 @@ Answer messages remain after report removal and reappear when that ID is republi
 - A visible report refreshes its view time every 30 seconds. A hidden browser tab does not refresh it.
 - Stale removal can remove a report with an unacknowledged answer. The retained answer stays available in the inbox.
 
+## State backup plan
+
+The [backup and clear contract](../../docs/arena-steering/state-backup.md) describes planned userscript and container behavior. It is not implemented yet.
+
 ## HTTP and WebSocket
 
 Routes accept an optional `/api` prefix. JSON routes return JSON. File uploads accept JSON or multipart form data.

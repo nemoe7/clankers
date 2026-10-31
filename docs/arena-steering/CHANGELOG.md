@@ -20,6 +20,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `state-backup.md`: Document the planned v2 backup and clear contract.
+
 - `cli.py`, `services.py`: Pin or unpin reports to control stale removal.
 
 - `cli.py`: Acknowledge multiple message and report-answer IDs atomically with one reply.
