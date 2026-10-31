@@ -149,6 +149,29 @@ def test_running_demo_reset_refreshes_connected_browser(tmp_path: Path) -> None:
     store.close()
 
 
+def test_running_demo_reset_uses_the_current_app_class(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  store = SqliteStore(tmp_path / "demo" / "state.sqlite3")
+  app = DEMO["seed_demo_store"](store)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  try:
+    reloaded = reload_server_handler(server, app)
+
+    def stale_app(_store: SqliteStore) -> None:
+      raise TypeError("old server constructor")
+
+    demo_globals = DEMO["seed_demo_store"].__globals__
+    monkeypatch.setitem(demo_globals, "SteeringApp", stale_app)
+    status, body = reloaded.dispatch("POST", "/demo/reset")
+    assert status == HTTPStatus.OK and body["reset"] is True
+    assert reloaded.store.get_message("a00001") is not None
+    reloaded.store.close()
+  finally:
+    server.server_close()
+    store.close()
+
+
 def test_running_demo_reset_survives_server_hot_reload(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "demo" / "state.sqlite3")
   app = DEMO["seed_demo_store"](store)
@@ -156,6 +179,7 @@ def test_running_demo_reset_survives_server_hot_reload(tmp_path: Path) -> None:
   try:
     old_version = app.data_version()
     reloaded = reload_server_handler(server, app)
+    assert reloaded.messages.get_survey() == app.messages.get_survey()
     reloaded.messages.send_message("Before reset", msg_id="fa0005")
     status, body = reloaded.dispatch("POST", "/demo/reset")
     assert status == HTTPStatus.OK and body["reset"] is True
