@@ -28,10 +28,28 @@ function writeSessionValue(key, value) {
 }
 
 export function readComposerDraft() {
+  try {
+    if (typeof localStorage !== "undefined") {
+      const draft = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (draft !== null) return draft;
+    }
+  } catch {
+    // Fall back to the current tab when local storage is unavailable.
+  }
   return readSessionValue(DRAFT_STORAGE_KEY) || "";
 }
 
 export function writeComposerDraft(value) {
+  try {
+    if (typeof localStorage !== "undefined") {
+      if (value) localStorage.setItem(DRAFT_STORAGE_KEY, String(value));
+      else localStorage.removeItem(DRAFT_STORAGE_KEY);
+      writeSessionValue(DRAFT_STORAGE_KEY, null);
+      return;
+    }
+  } catch {
+    // Fall back to the current tab when local storage is unavailable.
+  }
   writeSessionValue(DRAFT_STORAGE_KEY, value);
 }
 
@@ -63,6 +81,7 @@ export function createStore(initial = {}) {
     replyParentIds: [],
     composerAttachments: [],
     composerExpanded: false,
+    composerError: "",
     pendingSend: readPendingSend(),
     sending: false,
     selectedReportId: savedReportId || null,

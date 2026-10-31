@@ -38,6 +38,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `assets/`: Match the v1 composer layout, draft preview, paste, uploads, and controls while retaining v2 retry and reply features.
+
 - `cli.py`: Rename the `rename` command to `ren`.
 - `assets/app.js`, `assets/messages-view.js`: Keep older-message errors visible through refreshes until the user retries.
 

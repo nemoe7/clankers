@@ -242,10 +242,10 @@ async function requestJson(method, path, body = undefined, interactive = false) 
   }
 }
 
-async function requestForm(path, formData, file) {
+async function requestForm(path, formData, file, { automaticRetry = false } = {}) {
   const hash = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
   const digest = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  const id = beginWrite(JSON.stringify(["POST", path, file.name, digest]), true);
+  const id = beginWrite(JSON.stringify(["POST", path, file.name, digest]), !automaticRetry);
   formData.append("_request_id", id);
   let confirmed = false;
   try {
@@ -287,10 +287,10 @@ export const api = {
   markRepliesSeen(id, revision) {
     return requestJson("POST", `/messages/${encodeURIComponent(id)}/replies-seen`, { revision });
   },
-  async uploadFile(file) {
+  async uploadFile(file, options = {}) {
     const formData = new FormData();
     formData.append("file", file, file.name || "upload.bin");
-    const payload = await requestForm("/uploads", formData, file);
+    const payload = await requestForm("/uploads", formData, file, options);
     return payload.attachment;
   },
   sendMessageWithFile({
