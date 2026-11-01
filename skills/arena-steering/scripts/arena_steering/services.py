@@ -1195,8 +1195,16 @@ class ReportService:
     self._on_ack = on_ack_callback
 
   def publish_report(
-    self, report_id: str, title: str, body: str, *, allow_unparsed_markers: bool = False
+    self,
+    report_id: str,
+    title: str,
+    body: str,
+    *,
+    allow_unparsed_markers: bool = False,
+    source_file: str = "",
   ) -> Report:
+    if not isinstance(source_file, str) or "\n" in source_file or "\r" in source_file:
+      raise ValueError("Report source file must be a single-line path")
     blocks, fields = parse_report_markdown(body)
     if any(not field.annotated for field in fields):
       raise ValueError("Fielded reports require question and option comments")
@@ -1208,7 +1216,7 @@ class ReportService:
       for block_type, value in blocks
       if block_type == "markdown"
     ]
-    saved = self._publish_report(report_id, title, body, fields)
+    saved = self._publish_report(report_id, title, body, fields, source_file)
     verified = self._reports.get_report(report_id)
     if (
       verified is None
@@ -1216,6 +1224,7 @@ class ReportService:
       or verified.modified_at != saved.modified_at
       or len(verified.fields) != len(fields)
       or verified.body != body
+      or verified.source_file != source_file
     ):
       raise RuntimeError("Report publication verification failed after saving")
     actual_blocks, _ = parse_report_markdown(verified.body)
@@ -1229,7 +1238,12 @@ class ReportService:
 
   @_transactional_task_write
   def _publish_report(
-    self, report_id: str, title: str, body: str, fields: list[ReportField]
+    self,
+    report_id: str,
+    title: str,
+    body: str,
+    fields: list[ReportField],
+    source_file: str,
   ) -> Report:
     validate_entity_id(report_id, "Report.id")
     existing = self._reports.get_report(report_id)
@@ -1250,7 +1264,19 @@ class ReportService:
       pub_at=existing.pub_at if existing else "",
       last_viewed_at=existing.last_viewed_at if existing else "",
       pinned=existing.pinned if existing else False,
+      source_file=source_file,
     )
+    self._reports.save_report(report)
+    return report
+
+  @_transactional_task_write
+  def unpublish_report(self, report_id: str) -> Report:
+    """Hide a flagged report while retaining its linked tasks and answers."""
+    report = self.get_report(report_id)
+    if report.status != "published":
+      raise ValueError("Only a published report can be flagged")
+    report.status = "dismissed"
+    report.modified_at = self._clock.now_iso()
     self._reports.save_report(report)
     return report
 

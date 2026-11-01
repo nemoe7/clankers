@@ -235,7 +235,9 @@ Answer messages remain after report removal and reappear when that ID is republi
 - `seen` records report viewing, while `ack_seen` and `ack_seen_at` record when the user sees the latest acknowledgement. A new answer or another acknowledgement on the latest answer resets them.
 - Republish and explicit-ID removal reject a report when its latest answer is unacknowledged. Republish preserves answer history.
 - Multi-ID removal is atomic. A missing or protected report leaves every target in place.
-- Dismissal removes report links from tasks, while answer messages remain available for republishing.
+- Explicit removal removes report links from tasks, while answer messages remain available for republishing.
+- A report violation flag unpublishes its report without removing its links or answers, so waiting tasks unblock.
+- CLI publication saves the source path for the flag note. Earlier or API-only reports may have no recorded path.
 - An unlinked report becomes stale only 30 minutes after the user sees its latest acknowledgement. A linked report becomes stale as soon as all linked tasks finish.
 - A pinned report is not stale. Pins survive server restarts, and unpinning restores the normal staleness rules.
 - A visible report refreshes its view time every 30 seconds. A hidden browser tab does not refresh it.

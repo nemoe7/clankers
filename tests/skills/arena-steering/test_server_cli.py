@@ -1056,6 +1056,9 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   )
   assert code == 0
   assert REPORT_ID_PORT in out
+  source_store = SqliteStore(state_dir / "state.sqlite3")
+  assert source_store.get_report(REPORT_ID_PORT).source_file == str(report_md.resolve())
+  source_store.close()
 
   code, out, _ = _run_cli(
     state_dir, "task", "mod", TASK_ID_CLI, "links", REPORT_ID_PORT

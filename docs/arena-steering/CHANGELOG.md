@@ -26,6 +26,8 @@ This log has no Unreleased section.
 
 - `SKILL.md`: Check related upcoming task titles and scopes before publishing a report.
 
+- `server.py`, `services.py`, `store.py`: Unpublish flagged reports while keeping task links and answers. Store CLI report source paths for the flag note.
+
 ### Changed
 
 - `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.

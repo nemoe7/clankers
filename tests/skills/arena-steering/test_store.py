@@ -611,13 +611,16 @@ def test_report_pin_migrates_and_survives_state_merge(tmp_path: Path) -> None:
   assert report.pub_at
   assert "seq" not in source.export_rows()["reports"][0]
   assert report.last_viewed_at == "" and report.pinned is False
+  assert report.source_file == ""
   report.pinned = True
+  report.source_file = "arena-state/reports/old.md"
   report.modified_at = "2026-01-02T00:00:00Z"
   source.save_report(report)
 
   target = SqliteStore(":memory:")
   target.merge_rows(source.export_rows())
   assert target.get_report("old-report").pinned is True
+  assert target.get_report("old-report").source_file == report.source_file
   report.pinned = False
   report.modified_at = "2026-01-03T00:00:00Z"
   source.save_report(report)

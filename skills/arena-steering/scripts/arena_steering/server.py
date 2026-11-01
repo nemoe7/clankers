@@ -882,6 +882,7 @@ class SteeringApp:
     report_id = body.get("report_id")
     if report_id is not None and tab != "reports":
       raise ValueError("report_id is only valid for reports")
+    report = None
     if report_id is not None:
       try:
         report = self.reports.get_report(report_id)
@@ -894,8 +895,9 @@ class SteeringApp:
     if cited:
       heading += f" Cited: {cited}"
     lines = [heading]
-    if tab == "reports" and report_id is not None:
+    if report is not None:
       lines.append(f"Report: {report.id}")
+      lines.append(f"Source file: {report.source_file or 'unavailable (not recorded)'}")
     elif tab == "tasks":
       current = next(
         (task for task, blocked in self.tasks.list_tasks() if not blocked), None
@@ -907,7 +909,13 @@ class SteeringApp:
     lines.append("Fix the cause, then ack with only file:ln: clause.")
     with self.store.transaction():
       pending = self.messages.pending_violation()
+      if report is not None and pending is not None:
+        raise ValueError(
+          "A violation is already pending; ack it before flagging a report"
+        )
       if pending is None:
+        if report is not None:
+          self.reports.unpublish_report(report.id)
         pending = self.messages.send_message(
           "\n".join(lines),
           hidden=True,

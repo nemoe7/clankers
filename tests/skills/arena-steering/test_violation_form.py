@@ -11,6 +11,8 @@ import pytest
 from arena_steering.server import SteeringApp, create_http_server
 from arena_steering.store import SqliteStore
 
+SOURCE_FILE_UNAVAILABLE = "Source file: unavailable"
+
 
 def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
   db_path = tmp_path / "state.sqlite3"
@@ -118,6 +120,126 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
       {"tab": "reports", "reason": "format-violation", "report_id": "missing"},
     )
     assert status == HTTPStatus.BAD_REQUEST
+  finally:
+    store.close()
+
+
+def test_flagged_report_is_unpublished_without_losing_links_or_answers(
+  tmp_path: Path,
+) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    body = '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n'
+    app.reports.publish_report("flagged", "Flagged", body)
+    app.reports.publish_report("other", "Other", body)
+    app.tasks.create_task(
+      "waiting", "Waiting", details=["Review the answer"], report_ids=["flagged"]
+    )
+    assert app.tasks.get_task("waiting")[1] is True
+
+    status, result = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "flagged"},
+    )
+    assert status == HTTPStatus.OK and result["agent_interrupt_pending"] is True
+    assert app.reports.get_report("flagged").status == "dismissed"
+    assert app.tasks.get_task("waiting")[1] is False
+    assert app.tasks.get_task("waiting")[0].report_ids == ["flagged"]
+    assert app.reports.get_report("other").status == "published"
+    assert [report.id for report in app.reports.list_reports()] == ["other"]
+    flag = app.messages.pending_violation()
+    assert flag is not None and SOURCE_FILE_UNAVAILABLE in flag.body
+
+    app.messages.ack(flag.id, "Read the clause.")
+    answer = app.reports.submit_answer("other", {"note": "keep"}, answer_id="aa1201")
+    answer = app.reports.ack_answer("other", answer.id, "Read the answer.")
+    app.reports.publish_report("other", "Other", body)
+    status, _ = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "wall-of-text", "report_id": "other"},
+    )
+    assert status == HTTPStatus.OK
+    assert app.reports.get_report("other").status == "dismissed"
+    assert app.reports.get_report("other").answers == [answer]
+    assert store.get_message(answer.id) is not None
+  finally:
+    store.close()
+
+
+def test_report_flag_failure_keeps_report_published(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.reports.publish_report("review", "Review", "Report body.")
+    earlier = app.messages.send_message(
+      "Previous flag", hidden=True, blocking=True, violation_type="bash-violation"
+    )
+    status, _ = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "review"},
+    )
+    assert status == HTTPStatus.BAD_REQUEST
+    assert app.reports.get_report("review").status == "published"
+    app.messages.ack(earlier.id, "Read the earlier flag.")
+
+    def fail_message(*_args: object, **_kwargs: object) -> None:
+      raise RuntimeError("Could not save the flag")
+
+    monkeypatch.setattr(app.messages, "send_message", fail_message)
+    status, result = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "review"},
+    )
+    assert status == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert result["error"] == "Could not save the flag"
+    assert app.reports.get_report("review").status == "published"
+  finally:
+    store.close()
+
+
+def test_report_flag_names_the_persisted_source_file(tmp_path: Path) -> None:
+  db_path = tmp_path / "state.sqlite3"
+  store = SqliteStore(db_path)
+  try:
+    app = SteeringApp(store)
+    app.reports.publish_report(
+      "source-report",
+      "Source report",
+      "Report body.",
+      source_file="arena-state/reports/source.md",
+    )
+  finally:
+    store.close()
+
+  store = SqliteStore(db_path)
+  try:
+    app = SteeringApp(store)
+    assert app.reports.get_report("source-report").source_file == (
+      "arena-state/reports/source.md"
+    )
+    app.reports.publish_report(
+      "source-report",
+      "Source report",
+      "Revised body.",
+      source_file="arena-state/reports/revised.md",
+    )
+    status, _ = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "source-report"},
+    )
+    assert status == HTTPStatus.OK
+    flag = app.messages.pending_violation()
+    assert flag is not None
+    assert "Source file: arena-state/reports/revised.md" in flag.body
+    assert app.reports.get_report("source-report").status == "dismissed"
   finally:
     store.close()
 

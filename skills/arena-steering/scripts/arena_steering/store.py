@@ -146,7 +146,8 @@ class SqliteStore:
           updated_at TEXT NOT NULL DEFAULT '',
           pub_at TEXT NOT NULL DEFAULT '',
           last_viewed_at TEXT NOT NULL DEFAULT '',
-          pinned INTEGER NOT NULL DEFAULT 0
+          pinned INTEGER NOT NULL DEFAULT 0,
+          source_file TEXT NOT NULL DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS message_requests (
@@ -262,6 +263,10 @@ class SqliteStore:
       if "pinned" not in cols:
         self._conn.execute(
           "ALTER TABLE reports ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"
+        )
+      if "source_file" not in cols:
+        self._conn.execute(
+          "ALTER TABLE reports ADD COLUMN source_file TEXT NOT NULL DEFAULT ''"
         )
       if "pub_at" not in cols:
         self._conn.execute(
@@ -822,8 +827,8 @@ class SqliteStore:
           """
           INSERT INTO reports (
             id, title, body, fields_json, status, answers_json, seen, ack_seen, ack_seen_at,
-            modified_at, updated_at, pub_at, last_viewed_at, pinned
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            modified_at, updated_at, pub_at, last_viewed_at, pinned, source_file
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             report.id,
@@ -840,6 +845,7 @@ class SqliteStore:
             report.pub_at,
             report.last_viewed_at,
             int(report.pinned),
+            report.source_file,
           ),
         )
       else:
@@ -856,7 +862,8 @@ class SqliteStore:
               modified_at = ?,
               updated_at = ?,
               last_viewed_at = ?,
-              pinned = ?
+              pinned = ?,
+              source_file = ?
           WHERE id = ?
           """,
           (
@@ -871,6 +878,7 @@ class SqliteStore:
             report.updated_at,
             report.last_viewed_at,
             int(report.pinned),
+            report.source_file,
             report.id,
           ),
         )
@@ -1092,4 +1100,5 @@ class SqliteStore:
       pub_at=str(row["pub_at"]),
       last_viewed_at=str(dict(row).get("last_viewed_at", "")),
       pinned=bool(dict(row).get("pinned", 0)),
+      source_file=str(dict(row).get("source_file", "")),
     )

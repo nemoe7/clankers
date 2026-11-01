@@ -1426,6 +1426,7 @@ def _run_report(
       parsed.title,
       body,
       allow_unparsed_markers=parsed.allow_unparsed_markers,
+      source_file=str(source_path.resolve()),
     )
     SteeringApp(store).verify_published_report(report)
     print(

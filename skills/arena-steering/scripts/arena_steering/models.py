@@ -669,6 +669,7 @@ class Report:
   pub_at: str = ""
   last_viewed_at: str = ""
   pinned: bool = False
+  source_file: str = ""
 
   def __post_init__(self) -> None:
     validate_entity_id(self.id, "Report.id")
@@ -700,6 +701,8 @@ class Report:
     self.pub_at = str(self.pub_at or "")
     self.last_viewed_at = str(self.last_viewed_at or "")
     self.pinned = bool(self.pinned)
+    if not isinstance(self.source_file, str):
+      raise TypeError("Report.source_file must be text")
 
   @property
   def needs_answer(self) -> bool:
@@ -731,6 +734,7 @@ class Report:
       "pub_at": self.pub_at,
       "last_viewed_at": self.last_viewed_at,
       "pinned": self.pinned,
+      "source_file": self.source_file,
     }
 
   @classmethod
@@ -750,6 +754,7 @@ class Report:
       pub_at=str(data.get("pub_at", "")),
       last_viewed_at=str(data.get("last_viewed_at", "")),
       pinned=bool(data.get("pinned", False)),
+      source_file=data.get("source_file", ""),
     )
 
 
