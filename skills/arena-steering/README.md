@@ -220,6 +220,7 @@ Answer messages remain after report removal and reappear when that ID is republi
 
 ### Report lifecycle
 
+- Reports list by first publication time, then ID. Republish and rename keep that time, and state sync carries it.
 - Existing saved reports retain their original fields. New and republished fielded reports require question and option comments.
 - Code fences are not parsed as fields.
 - Reports allow arbitrary HTML from trusted authors. Active HTML can access the viewer's origin and data.

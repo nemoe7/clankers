@@ -608,6 +608,8 @@ def test_report_pin_migrates_and_survives_state_merge(tmp_path: Path) -> None:
   report = source.get_report("old-report")
   assert report is not None
   assert report.updated_at == "2026-01-01T00:00:00Z"
+  assert report.pub_at
+  assert "seq" not in source.export_rows()["reports"][0]
   assert report.last_viewed_at == "" and report.pinned is False
   report.pinned = True
   report.modified_at = "2026-01-02T00:00:00Z"

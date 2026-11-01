@@ -1175,6 +1175,7 @@ class ReportService:
       seen=False,
       modified_at=now,
       updated_at=now,
+      pub_at=existing.pub_at if existing else "",
       last_viewed_at=existing.last_viewed_at if existing else "",
       pinned=existing.pinned if existing else False,
     )
@@ -1401,6 +1402,7 @@ class ReportService:
       ack_seen_at=existing.ack_seen_at,
       modified_at=now,
       updated_at=existing.updated_at,
+      pub_at=existing.pub_at,
       last_viewed_at=existing.last_viewed_at,
       pinned=existing.pinned,
     )

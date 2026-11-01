@@ -789,6 +789,43 @@ class _ReportTestClock:
     self.current += timedelta(**kwargs)
 
 
+def test_report_publication_order_survives_republish_rename_and_sync() -> None:
+  store = SqliteStore(":memory:")
+  columns = {row["name"] for row in store._conn.execute("PRAGMA table_info(reports)")}
+  assert "pub_at" in columns and "seq" not in columns
+  clock = _ReportTestClock()
+  reports = ReportService(store, store, clock=clock)
+  first = reports.publish_report("z-report", "First", "# First")
+  second = reports.publish_report("a-report", "Second", "# Second")
+  assert first.pub_at < second.pub_at
+  assert type(first).from_dict(first.to_dict()).pub_at == first.pub_at
+  assert [report.id for report in reports.list_reports()] == ["z-report", "a-report"]
+
+  peer = SqliteStore(":memory:")
+  snapshot = store.export_rows()
+  assert all("seq" not in row and row["pub_at"] for row in snapshot["reports"])
+  peer.merge_rows(snapshot)
+  assert [report.id for report in peer.list_reports()] == ["z-report", "a-report"]
+  cursor = store.state_stamp()
+
+  clock.advance(hours=1)
+  republished = reports.publish_report("z-report", "Updated", "# Updated")
+  assert republished.pub_at == first.pub_at
+  renamed = reports.rename_report("z-report", "renamed-report")
+  assert renamed.pub_at == first.pub_at
+  assert [report.id for report in reports.list_reports()] == [
+    "renamed-report",
+    "a-report",
+  ]
+  changed = store.export_rows(since=cursor)["reports"]
+  assert {row["id"] for row in changed} == {"renamed-report"}
+  peer.merge_rows(store.export_rows())
+  assert peer.get_report("renamed-report").pub_at == first.pub_at
+  assert peer.get_report("a-report").pub_at == second.pub_at
+  store.close()
+  peer.close()
+
+
 def test_unlinked_report_staleness_starts_when_ack_is_seen() -> None:
   store = SqliteStore(":memory:")
   clock = _ReportTestClock()

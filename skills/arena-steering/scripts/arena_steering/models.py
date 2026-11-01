@@ -666,6 +666,7 @@ class Report:
   ack_seen_at: str = ""
   modified_at: str = ""
   updated_at: str = ""
+  pub_at: str = ""
   last_viewed_at: str = ""
   pinned: bool = False
 
@@ -696,6 +697,7 @@ class Report:
     self.ack_seen_at = str(self.ack_seen_at or "")
     self.modified_at = str(self.modified_at or "")
     self.updated_at = str(self.updated_at or self.modified_at)
+    self.pub_at = str(self.pub_at or "")
     self.last_viewed_at = str(self.last_viewed_at or "")
     self.pinned = bool(self.pinned)
 
@@ -726,6 +728,7 @@ class Report:
       "needs_answer": self.needs_answer,
       "modified_at": self.modified_at,
       "updated_at": self.updated_at,
+      "pub_at": self.pub_at,
       "last_viewed_at": self.last_viewed_at,
       "pinned": self.pinned,
     }
@@ -744,6 +747,7 @@ class Report:
       ack_seen_at=str(data.get("ack_seen_at", "")),
       modified_at=str(data.get("modified_at", "")),
       updated_at=str(data.get("updated_at", "")),
+      pub_at=str(data.get("pub_at", "")),
       last_viewed_at=str(data.get("last_viewed_at", "")),
       pinned=bool(data.get("pinned", False)),
     )

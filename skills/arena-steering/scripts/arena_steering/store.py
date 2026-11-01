@@ -133,8 +133,7 @@ class SqliteStore:
         );
 
         CREATE TABLE IF NOT EXISTS reports (
-          seq INTEGER PRIMARY KEY AUTOINCREMENT,
-          id TEXT UNIQUE NOT NULL,
+          id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
           body TEXT NOT NULL,
           fields_json TEXT NOT NULL DEFAULT '[]',
@@ -145,6 +144,7 @@ class SqliteStore:
           ack_seen_at TEXT NOT NULL DEFAULT '',
           modified_at TEXT NOT NULL,
           updated_at TEXT NOT NULL DEFAULT '',
+          pub_at TEXT NOT NULL DEFAULT '',
           last_viewed_at TEXT NOT NULL DEFAULT '',
           pinned INTEGER NOT NULL DEFAULT 0
         );
@@ -263,6 +263,16 @@ class SqliteStore:
         self._conn.execute(
           "ALTER TABLE reports ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"
         )
+      if "pub_at" not in cols:
+        self._conn.execute(
+          "ALTER TABLE reports ADD COLUMN pub_at TEXT NOT NULL DEFAULT ''"
+        )
+        self._conn.execute(
+          "UPDATE reports SET pub_at = COALESCE(NULLIF(updated_at, ''), modified_at)"
+        )
+      self._conn.execute(
+        "CREATE INDEX IF NOT EXISTS reports_pub_at ON reports(pub_at, id)"
+      )
       self._init_state_tracking()
       now = datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
       legacy = self._conn.execute(
@@ -777,7 +787,7 @@ class SqliteStore:
 
   def list_reports(self) -> list[Report]:
     with self._lock:
-      rows = self._conn.execute("SELECT * FROM reports ORDER BY seq ASC").fetchall()
+      rows = self._conn.execute("SELECT * FROM reports ORDER BY pub_at, id").fetchall()
       return [self._row_to_report(row) for row in rows]
 
   def delete_report(self, report_id: str) -> bool:
@@ -789,11 +799,20 @@ class SqliteStore:
   def save_report(self, report: Report) -> Report:
     with self.transaction():
       existing = self._conn.execute(
-        "SELECT seq, modified_at FROM reports WHERE id = ?", (report.id,)
+        "SELECT modified_at, pub_at FROM reports WHERE id = ?", (report.id,)
       ).fetchone()
       if existing is not None:
         report.modified_at = _advance_stamp(
           str(existing["modified_at"]), report.modified_at
+        )
+        report.pub_at = str(existing["pub_at"])
+      elif not report.pub_at:
+        latest = self._conn.execute(
+          "SELECT pub_at FROM reports ORDER BY pub_at DESC LIMIT 1"
+        ).fetchone()
+        report.pub_at = _message_write_stamp(
+          str(latest["pub_at"]) if latest else "",
+          report.modified_at or datetime.now(UTC).isoformat(),
         )
       fields_json = json.dumps([item.to_dict() for item in report.fields])
       # The compatibility column is not authoritative and old answers are not migrated.
@@ -803,8 +822,8 @@ class SqliteStore:
           """
           INSERT INTO reports (
             id, title, body, fields_json, status, answers_json, seen, ack_seen, ack_seen_at,
-            modified_at, updated_at, last_viewed_at, pinned
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            modified_at, updated_at, pub_at, last_viewed_at, pinned
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             report.id,
@@ -818,6 +837,7 @@ class SqliteStore:
             report.ack_seen_at,
             report.modified_at,
             report.updated_at,
+            report.pub_at,
             report.last_viewed_at,
             int(report.pinned),
           ),
@@ -879,7 +899,7 @@ class SqliteStore:
         else:
           rows = self._conn.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
         out[table] = [dict(row) for row in rows]
-        if table == "messages":
+        if table in {"messages", "reports"}:
           for row in out[table]:
             row.pop("seq", None)
       return out
@@ -1069,6 +1089,7 @@ class SqliteStore:
       ack_seen_at=str(dict(row).get("ack_seen_at", "")),
       modified_at=str(row["modified_at"]),
       updated_at=str(dict(row).get("updated_at", "")),
+      pub_at=str(row["pub_at"]),
       last_viewed_at=str(dict(row).get("last_viewed_at", "")),
       pinned=bool(dict(row).get("pinned", 0)),
     )
