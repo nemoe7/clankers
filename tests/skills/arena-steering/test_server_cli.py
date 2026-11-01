@@ -700,6 +700,17 @@ def test_state_endpoints_snapshot_changes_merge_and_assets(tmp_path: Path) -> No
 
   uploads = app._uploads_dir()
   (uploads / "note.txt").write_bytes(b"hello")
+  app.dispatch(
+    "POST",
+    "/messages",
+    {
+      "id": "aabbcc",
+      "body": "Attached file.",
+      "attachments": [
+        {"name": "note.txt", "path": str(uploads / "note.txt"), "size_bytes": 5}
+      ],
+    },
+  )
   status, listed = app.dispatch("GET", "/state/assets")
   assert status == int(HTTPStatus.OK)
   entry = next(item for item in listed["assets"] if item["path"] == "uploads/note.txt")
@@ -714,6 +725,98 @@ def test_state_endpoints_snapshot_changes_merge_and_assets(tmp_path: Path) -> No
   assert status == int(HTTPStatus.OK) and pushed["stored"] is True
   status, again = app.dispatch("POST", "/state/assets", payload)
   assert again["stored"] is False
+  _, listed = app.dispatch("GET", "/state/assets")
+  assert [asset["path"] for asset in listed["assets"]] == ["uploads/note.txt"]
+
+
+def test_state_merge_removes_only_uploads_orphaned_by_deletions(tmp_path: Path) -> None:
+  source = SqliteStore(tmp_path / "source" / "state.sqlite3")
+  target = SqliteStore(tmp_path / "target" / "state.sqlite3")
+  source_app, target_app = SteeringApp(source), SteeringApp(target)
+  _, uploaded = source_app.dispatch(
+    "POST", "/uploads", {"name": "shared.txt", "text": "shared"}
+  )
+  attachment = uploaded["attachment"]
+  for message_id in ("ab1001", "ab1002"):
+    source_app.dispatch(
+      "POST",
+      "/messages",
+      {"id": message_id, "body": "Shared.", "attachments": [attachment]},
+    )
+  _, snapshot = source_app.dispatch("GET", "/state/snapshot")
+  target_app.dispatch("POST", "/state/merge", snapshot)
+  _, pushed = target_app.dispatch(
+    "POST",
+    "/state/assets",
+    {
+      "path": f"uploads/{Path(attachment['path']).name}",
+      "content": base64.b64encode(b"shared").decode("ascii"),
+    },
+  )
+  assert pushed["stored"] is True
+  copy = target_app._uploads_dir() / Path(attachment["path"]).name
+  _, staged = target_app.dispatch(
+    "POST", "/uploads", {"name": "pending.txt", "text": "pending"}
+  )
+  staged_path = Path(staged["attachment"]["path"])
+  prefix_path = copy.with_name(copy.name[:-4])
+  prefix_path.write_bytes(b"unattached prefix")
+  _, assets = target_app.dispatch("GET", "/state/assets")
+  assert [asset["path"] for asset in assets["assets"]] == [f"uploads/{copy.name}"]
+
+  cursor = snapshot["state_version"]
+  for message_id, keep_copy in (("ab1001", True), ("ab1002", False)):
+    with source.transaction():
+      source._conn.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+    _, change = source_app.dispatch("GET", "/state/changes?since=" + cursor)
+    _, merged = target_app.dispatch("POST", "/state/merge", change)
+    assert merged["deleted"] == [message_id]
+    assert copy.exists() is keep_copy
+    assert staged_path.read_text() == "pending"
+    assert prefix_path.read_bytes() == b"unattached prefix"
+    cursor = change["state_version"]
+  _, assets = target_app.dispatch("GET", "/state/assets")
+  assert assets["assets"] == []
+  assert target_app.dispatch("POST", "/state/merge", snapshot)[1]["skipped"] == [
+    "ab1001",
+    "ab1002",
+  ]
+  assert staged_path.is_file()
+  source.close()
+  target.close()
+
+
+def test_state_merge_stale_deletion_keeps_later_edit_and_upload(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  _, uploaded = app.dispatch(
+    "POST", "/uploads", {"name": "keep.txt", "text": "content"}
+  )
+  attachment = uploaded["attachment"]
+  app.dispatch(
+    "POST",
+    "/messages",
+    {"id": "ab1003", "body": "Before", "attachments": [attachment]},
+  )
+  message = store.get_message("ab1003")
+  message.body = "Later edit"
+  message.modified_at = "2099-01-01T00:00:00Z"
+  store.save_message(message)
+
+  _, merged = app.dispatch(
+    "POST",
+    "/state/merge",
+    {
+      "deleted": {"messages": [{"id": "ab1003", "modified_at": "2020-01-01T00:00:00Z"}]}
+    },
+  )
+  assert merged["skipped"] == ["ab1003"]
+  assert merged["assets_removed"] == []
+  assert store.get_message("ab1003").body == "Later edit"
+  assert Path(attachment["path"]).is_file()
+  _, assets = app.dispatch("GET", "/state/assets")
+  assert len(assets["assets"]) == 1
+  store.close()
 
 
 def test_router_create_message_accepts_parent_ids() -> None:

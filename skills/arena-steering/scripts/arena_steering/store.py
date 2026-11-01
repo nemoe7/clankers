@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import sqlite3
 import threading
 import time
@@ -12,6 +13,8 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
+from urllib.parse import unquote
 
 from .models import (
   TASK_STATUSES,
@@ -298,8 +301,16 @@ class SqliteStore:
     self._conn.execute(
       "CREATE TABLE IF NOT EXISTS state_row_versions "
       "(table_name TEXT NOT NULL, row_id TEXT NOT NULL, revision_us INTEGER NOT NULL, "
-      "PRIMARY KEY (table_name, row_id)) WITHOUT ROWID"
+      "deleted_at TEXT NOT NULL DEFAULT '', PRIMARY KEY (table_name, row_id)) WITHOUT ROWID"
     )
+    version_columns = {
+      row["name"] for row in self._conn.execute("PRAGMA table_info(state_row_versions)")
+    }
+    upgrading = "deleted_at" not in version_columns
+    if upgrading:
+      self._conn.execute(
+        "ALTER TABLE state_row_versions ADD COLUMN deleted_at TEXT NOT NULL DEFAULT ''"
+      )
     if (
       self._conn.execute("SELECT 1 FROM state_clock WHERE singleton = 1").fetchone()
       is None
@@ -312,7 +323,8 @@ class SqliteStore:
       self._conn.execute("INSERT INTO state_clock VALUES (1, ?)", (initial,))
       for table in STATE_TABLES:
         self._conn.execute(
-          f"INSERT INTO state_row_versions SELECT ?, id, ? FROM {table}",
+          f"INSERT INTO state_row_versions (table_name, row_id, revision_us) "
+          f"SELECT ?, id, ? FROM {table}",
           (table, initial),
         )
     now_us = (
@@ -320,15 +332,20 @@ class SqliteStore:
       "CAST(substr(strftime('%f', 'now'), 4, 3) AS INTEGER) * 1000"
     )
     for table in STATE_TABLES:
+      if upgrading:
+        for action in ("insert", "update", "delete"):
+          self._conn.execute(f"DROP TRIGGER IF EXISTS {table}_state_{action}")
       for action in ("INSERT", "UPDATE"):
         self._conn.execute(
           f"""
           CREATE TRIGGER IF NOT EXISTS {table}_state_{action.lower()} AFTER {action} ON {table}
           BEGIN
             UPDATE state_clock SET revision_us = MAX(revision_us + 1, {now_us}) WHERE singleton = 1;
-            INSERT INTO state_row_versions VALUES ('{table}', NEW.id,
-              (SELECT revision_us FROM state_clock WHERE singleton = 1))
-            ON CONFLICT(table_name, row_id) DO UPDATE SET revision_us = excluded.revision_us;
+            INSERT INTO state_row_versions (table_name, row_id, revision_us, deleted_at)
+              VALUES ('{table}', NEW.id,
+                (SELECT revision_us FROM state_clock WHERE singleton = 1), '')
+            ON CONFLICT(table_name, row_id) DO UPDATE SET
+              revision_us = excluded.revision_us, deleted_at = '';
           END
           """
         )
@@ -337,10 +354,35 @@ class SqliteStore:
         CREATE TRIGGER IF NOT EXISTS {table}_state_delete AFTER DELETE ON {table}
         BEGIN
           UPDATE state_clock SET revision_us = MAX(revision_us + 1, {now_us}) WHERE singleton = 1;
-          DELETE FROM state_row_versions WHERE table_name = '{table}' AND row_id = OLD.id;
+          INSERT INTO state_row_versions (table_name, row_id, revision_us, deleted_at)
+            VALUES ('{table}', OLD.id,
+              (SELECT revision_us FROM state_clock WHERE singleton = 1),
+              MAX(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                COALESCE(strftime('%Y-%m-%dT%H:%M:%fZ', OLD.modified_at, '+0.001 seconds'),
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))))
+          ON CONFLICT(table_name, row_id) DO UPDATE SET
+            revision_us = excluded.revision_us, deleted_at = excluded.deleted_at;
         END
         """
       )
+
+  def _stamp_deleted_row(self, table: str, row_id: str, modified_at: str) -> None:
+    deleted_at = _advance_stamp(modified_at, datetime.now(UTC).isoformat())
+    self._conn.execute(
+      "UPDATE state_row_versions SET deleted_at = ? WHERE table_name = ? AND row_id = ?",
+      (deleted_at, table, row_id),
+    )
+
+  def _stamp_after_deletion(self, table: str, row_id: str, proposed: str) -> str:
+    row = self._conn.execute(
+      "SELECT deleted_at FROM state_row_versions WHERE table_name = ? AND row_id = ?",
+      (table, row_id),
+    ).fetchone()
+    return (
+      _advance_stamp(str(row["deleted_at"]), proposed)
+      if row and row["deleted_at"]
+      else proposed
+    )
 
   def close(self) -> None:
     """Close the underlying SQLite connection."""
@@ -504,6 +546,10 @@ class SqliteStore:
         message.modified_at = _advance_stamp(
           str(existing["modified_at"]), message.modified_at
         )
+      else:
+        message.modified_at = self._stamp_after_deletion(
+          "messages", message.id, message.modified_at
+        )
       attachments_json = json.dumps([item.to_dict() for item in message.attachments])
       parent_ids_json = json.dumps(message.parent_ids)
       acks_json = json.dumps(message.acks)
@@ -593,6 +639,9 @@ class SqliteStore:
         "SELECT 1 FROM messages WHERE id = ?", (message.id,)
       ).fetchone():
         raise ValueError(f"Message ID {message.id!r} already exists")
+      message.modified_at = self._stamp_after_deletion(
+        "messages", message.id, message.modified_at
+      )
       self._conn.execute(
         """INSERT INTO messages
           (id, written_at, body, hidden, blocking, attachments_json, parent_ids_json,
@@ -699,7 +748,11 @@ class SqliteStore:
       for index, task in enumerate(tasks):
         task.details = list(dict.fromkeys(line.strip() for line in task.details))
         row = previous.get(task.id)
-        if row is not None and (
+        if row is None:
+          task.modified_at = self._stamp_after_deletion(
+            "tasks", task.id, task.modified_at
+          )
+        elif (
           int(row["position"]) != index
           or json.loads(row["details_json"] or "[]") != task.details
           or self._row_to_task(row).to_dict() != task.to_dict()
@@ -731,13 +784,21 @@ class SqliteStore:
             task.modified_at,
           ),
         )
+      kept_ids = {task.id for task in tasks}
+      for task_id, row in previous.items():
+        if task_id not in kept_ids:
+          self._stamp_deleted_row("tasks", task_id, str(row["modified_at"]))
     return list(tasks)
 
   def delete_task(self, task_id: str) -> bool:
     with self.transaction():
-      cur = self._conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
-      if cur.rowcount == 0:
+      row = self._conn.execute(
+        "SELECT modified_at FROM tasks WHERE id = ?", (task_id,)
+      ).fetchone()
+      if row is None:
         return False
+      self._conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+      self._stamp_deleted_row("tasks", task_id, str(row["modified_at"]))
       rows = self._conn.execute(
         "SELECT id, position, modified_at FROM tasks ORDER BY position ASC"
       ).fetchall()
@@ -798,8 +859,14 @@ class SqliteStore:
   def delete_report(self, report_id: str) -> bool:
     """Remove the report row while retaining its answer messages."""
     with self.transaction():
-      cursor = self._conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
-      return cursor.rowcount > 0
+      row = self._conn.execute(
+        "SELECT modified_at FROM reports WHERE id = ?", (report_id,)
+      ).fetchone()
+      if row is None:
+        return False
+      self._conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+      self._stamp_deleted_row("reports", report_id, str(row["modified_at"]))
+      return True
 
   def save_report(self, report: Report) -> Report:
     with self.transaction():
@@ -811,7 +878,11 @@ class SqliteStore:
           str(existing["modified_at"]), report.modified_at
         )
         report.pub_at = str(existing["pub_at"])
-      elif not report.pub_at:
+      else:
+        report.modified_at = self._stamp_after_deletion(
+          "reports", report.id, report.modified_at
+        )
+      if existing is None and not report.pub_at:
         latest = self._conn.execute(
           "SELECT pub_at FROM reports ORDER BY pub_at DESC LIMIT 1"
         ).fetchone()
@@ -884,8 +955,32 @@ class SqliteStore:
         )
     return report
 
-  def export_rows(self, since: str | None = None) -> dict[str, list[dict[str, object]]]:
-    """Return rows changed after this database's cursor, or a full snapshot."""
+  @staticmethod
+  def _upload_path_pattern(relative_path: str) -> re.Pattern[str]:
+    return re.compile(rf"(?<![\w.-]){re.escape(relative_path)}(?![\w./-])")
+
+  @classmethod
+  def row_references_upload(cls, row: dict[str, object], relative_path: str) -> bool:
+    pattern = cls._upload_path_pattern(relative_path)
+    return any(
+      pattern.search(unquote(value)) for value in row.values() if isinstance(value, str)
+    )
+
+  def referenced_uploads(self, paths: list[str]) -> set[str]:
+    """Find upload paths still mentioned by surviving state rows."""
+    patterns = {path: self._upload_path_pattern(path) for path in paths}
+    referenced: set[str] = set()
+    with self._lock:
+      for table in STATE_TABLES:
+        for row in self._conn.execute(f"SELECT * FROM {table}"):
+          text = " ".join(unquote(value) for value in row if isinstance(value, str))
+          referenced.update(
+            path for path, pattern in patterns.items() if pattern.search(text)
+          )
+    return referenced
+
+  def export_rows(self, since: str | None = None) -> dict[str, Any]:
+    """Return rows and deletions changed after this database's cursor, or a full snapshot."""
     with self._lock:
       cursor = _timestamp_us(since) if since else None
       latest = int(
@@ -895,7 +990,8 @@ class SqliteStore:
       )
       if cursor is not None and cursor > latest:
         cursor = None
-      out: dict[str, list[dict[str, object]]] = {}
+      out: dict[str, Any] = {}
+      deleted: dict[str, list[dict[str, str]]] = {}
       for table in STATE_TABLES:
         if cursor is not None:
           rows = self._conn.execute(
@@ -910,6 +1006,18 @@ class SqliteStore:
         if table in {"messages", "reports"}:
           for row in out[table]:
             row.pop("seq", None)
+        version_filter = " AND revision_us > ?" if cursor is not None else ""
+        params = (table, cursor) if cursor is not None else (table,)
+        tombstones = self._conn.execute(
+          "SELECT row_id, deleted_at FROM state_row_versions "
+          f"WHERE table_name = ? AND deleted_at != ''{version_filter} ORDER BY row_id",
+          params,
+        ).fetchall()
+        deleted[table] = [
+          {"id": str(row["row_id"]), "modified_at": str(row["deleted_at"])}
+          for row in tombstones
+        ]
+      out["deleted"] = deleted
       return out
 
   def state_stamp(self) -> str:
@@ -920,18 +1028,19 @@ class SqliteStore:
       ).fetchone()
       return _timestamp_iso(int(row[0]))
 
-  def export_state(
-    self, since: str | None = None
-  ) -> tuple[dict[str, list[dict[str, object]]], str]:
+  def export_state(self, since: str | None = None) -> tuple[dict[str, Any], str]:
     """Capture rows and their cursor in one database transaction."""
     with self.transaction():
       return self.export_rows(since), self.state_stamp()
 
-  def merge_rows(
-    self, document: dict[str, list[dict[str, object]]]
-  ) -> dict[str, list[str]]:
-    """Merge rows by ID in one transaction, keeping the newer `modified_at`."""
-    result: dict[str, list[str]] = {"added": [], "updated": [], "skipped": []}
+  def merge_rows(self, document: dict[str, Any]) -> dict[str, list[str]]:
+    """Merge rows and deletions by ID, keeping the later operation."""
+    result: dict[str, list[str]] = {
+      "added": [],
+      "updated": [],
+      "deleted": [],
+      "skipped": [],
+    }
     with self.transaction():
       for table in STATE_TABLES:
         columns = [
@@ -955,6 +1064,19 @@ class SqliteStore:
           ):
             result["skipped"].append(row_id)
             continue
+          if current is None:
+            version = self._conn.execute(
+              "SELECT deleted_at FROM state_row_versions WHERE table_name = ? AND row_id = ?",
+              (table, row_id),
+            ).fetchone()
+            if (
+              version is not None
+              and version["deleted_at"]
+              and _timestamp_us(incoming_stamp)
+              <= _timestamp_us(str(version["deleted_at"]))
+            ):
+              result["skipped"].append(row_id)
+              continue
           if table == "messages":
             if current is None:
               stamp = data.get("written_at")
@@ -1004,6 +1126,58 @@ class SqliteStore:
               f"UPDATE {table} SET {sets} WHERE id=?", (*values, row_id)
             )
             result["updated"].append(row_id)
+      deleted = document.get("deleted") or {}
+      if not isinstance(deleted, dict):
+        raise TypeError("Deleted rows must be grouped by state table")
+      for table in STATE_TABLES:
+        for raw in deleted.get(table, []) or []:
+          if not isinstance(raw, dict):
+            raise TypeError("A deletion must name a row and modification time")
+          row_id = str(raw.get("id") or "")
+          stamp = str(raw.get("modified_at") or "")
+          if not row_id or not stamp:
+            result["skipped"].append(row_id)
+            continue
+          incoming_us = _timestamp_us(stamp)
+          current = self._conn.execute(
+            f"SELECT modified_at FROM {table} WHERE id = ?", (row_id,)
+          ).fetchone()
+          if (
+            current is not None
+            and _timestamp_us(str(current["modified_at"])) > incoming_us
+          ):
+            result["skipped"].append(row_id)
+            continue
+          prior = self._conn.execute(
+            "SELECT deleted_at FROM state_row_versions WHERE table_name = ? AND row_id = ?",
+            (table, row_id),
+          ).fetchone()
+          if (
+            prior is not None
+            and prior["deleted_at"]
+            and _timestamp_us(str(prior["deleted_at"])) >= incoming_us
+          ):
+            result["skipped"].append(row_id)
+            continue
+          deleted_at = _timestamp_iso(incoming_us)
+          if current is not None:
+            self._conn.execute(f"DELETE FROM {table} WHERE id = ?", (row_id,))
+            self._conn.execute(
+              "UPDATE state_row_versions SET deleted_at = ? WHERE table_name = ? AND row_id = ?",
+              (deleted_at, table, row_id),
+            )
+          else:
+            self._conn.execute(
+              "UPDATE state_clock SET revision_us = revision_us + 1 WHERE singleton = 1"
+            )
+            self._conn.execute(
+              "INSERT INTO state_row_versions (table_name, row_id, revision_us, deleted_at) "
+              "VALUES (?, ?, (SELECT revision_us FROM state_clock WHERE singleton = 1), ?) "
+              "ON CONFLICT(table_name, row_id) DO UPDATE SET "
+              "revision_us = excluded.revision_us, deleted_at = excluded.deleted_at",
+              (table, row_id, deleted_at),
+            )
+          result["deleted"].append(row_id)
     return result
 
   def get_meta(self, key: str, default: str | None = None) -> str | None:

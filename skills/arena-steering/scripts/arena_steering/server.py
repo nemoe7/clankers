@@ -34,7 +34,7 @@ from .markdown import render_markdown, render_report_markdown
 from .markdown_fields import parse_report_markdown
 from .models import Attachment
 from .services import POLL_FRESH_SECONDS, MessageService, ReportService, TaskService
-from .store import SqliteStore
+from .store import STATE_TABLES, SqliteStore
 
 RouteHandler = Callable[[dict[str, str], dict[str, list[str]], Any], tuple[int, Any]]
 
@@ -758,20 +758,46 @@ class SteeringApp:
     if schema != STATE_SCHEMA_VERSION:
       raise ValueError(f"Unknown state schema: {schema!r}")
     source = str(body.get("source") or "unknown container")
-    counts = self.store.merge_rows(body)
-    total = len(counts["added"]) + len(counts["updated"])
-    if total:
-      self._state_version = int(getattr(self, "_state_version", 0)) + 1
-      self.store.set_meta(
-        "state_restore_notice",
-        json.dumps(
-          {
-            "source": source,
-            "added": len(counts["added"]),
-            "updated": len(counts["updated"]),
-          }
-        ),
-      )
+    removed_assets: list[str] = []
+    with self.store.transaction():
+      before = self.store.export_rows() if body.get("deleted") else None
+      counts = self.store.merge_rows(body)
+      total = len(counts["added"]) + len(counts["updated"]) + len(counts["deleted"])
+      if total:
+        self._state_version = int(getattr(self, "_state_version", 0)) + 1
+        self.store.set_meta(
+          "state_restore_notice",
+          json.dumps(
+            {
+              "source": source,
+              "added": len(counts["added"]),
+              "updated": len(counts["updated"]),
+              "deleted": len(counts["deleted"]),
+            }
+          ),
+        )
+      if counts["deleted"] and before is not None:
+        after = self.store.export_rows()
+        deleted_ids = set(counts["deleted"])
+        gone = [
+          row
+          for table in STATE_TABLES
+          for row in before[table]
+          if row["id"] in deleted_ids
+          and not any(item["id"] == row["id"] for item in after[table])
+        ]
+        uploads = self._uploads_dir()
+        files = [path for path in uploads.rglob("*") if path.is_file()]
+        candidates = [
+          (path, f"uploads/{path.relative_to(uploads).as_posix()}") for path in files
+        ]
+        referenced = self.store.referenced_uploads([rel for _, rel in candidates])
+        for path, rel in candidates:
+          if rel not in referenced and any(
+            self.store.row_references_upload(row, rel) for row in gone
+          ):
+            path.unlink(missing_ok=True)
+            removed_assets.append(rel)
     return (
       int(HTTPStatus.OK),
       {
@@ -780,6 +806,8 @@ class SteeringApp:
         "source": source,
         "added": counts["added"],
         "updated": counts["updated"],
+        "deleted": counts["deleted"],
+        "assets_removed": removed_assets,
         "skipped": counts["skipped"],
       },
     )
@@ -788,17 +816,20 @@ class SteeringApp:
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
     uploads = self._uploads_dir()
-    assets = []
-    for path in sorted(uploads.rglob("*")):
-      if not path.is_file():
-        continue
-      assets.append(
-        {
-          "path": f"uploads/{path.relative_to(uploads).as_posix()}",
-          "size": path.stat().st_size,
-          "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-        }
-      )
+    files = [path for path in sorted(uploads.rglob("*")) if path.is_file()]
+    candidates = [
+      (path, f"uploads/{path.relative_to(uploads).as_posix()}") for path in files
+    ]
+    referenced = self.store.referenced_uploads([rel for _, rel in candidates])
+    assets = [
+      {
+        "path": rel,
+        "size": path.stat().st_size,
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+      }
+      for path, rel in candidates
+      if rel in referenced
+    ]
     return (int(HTTPStatus.OK), {"assets": assets})
 
   def _handle_state_asset_push(

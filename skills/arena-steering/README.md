@@ -273,7 +273,9 @@ Write requests may include `_request_id` to replay the original result safely. T
 
 For state sync, treat `state_version` as an opaque cursor for one database. Pass the last returned value as `since` and replace it with the next response's value.
 
-Older cursors can return a full snapshot once. Row merges still keep the newer modification time. Changes do not include deletions, and assets sync separately.
+Older cursors can return a full snapshot once. State responses include a `deleted` map for `messages`, `tasks`, and `reports`, with `id` and `modified_at` per tombstone. Merges keep the later edit or deletion for each ID.
+
+`GET /state/assets` lists only uploads referenced by surviving state rows, not staged files. A synced deletion removes a formerly referenced upload only if no surviving row references it. Keep never-referenced staged files local and transfer listed attachment bytes separately.
 
 ### API payloads and responses
 
@@ -338,7 +340,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Report lifecycle | Stale listing, pin and unpin, state and visibility, guarded unpublish, and worker answer and forward | Stale listing and removal, pin and unpin, and viewed stamps | Worker answer and forward routes are absent. Guards and republish contract differ. |
 | Report publication | Local image embedding, diff marker validation, optional submission format, and publication verification | Fielded Markdown, `-u` marker override, and saved/rendered verification | No automatic local-image embedding or v1 submission schema option. Likely unparsed paired `~~` markers fail by default. |
 | Markdown and images | Markdown, code controls, Mermaid, images, and zoomable preview | Markdown, code copying, Mermaid, images, and a lightbox | V2 bundles Mermaid. Renderer compatibility needs verification. |
-| State recovery | Import, compare, save, restore, clear, size status, clean, and userscript autosave | SQLite plus snapshot, changes, merge, and asset HTTP routes | No v1 import/clear CLI or userscript autosave. Transfer attachment bytes separately. Row deletions do not sync yet. |
+| State recovery | Import, compare, save, restore, clear, size status, clean, and userscript autosave | SQLite plus snapshot, changes, merge, deletion tombstones, and referenced-upload HTTP routes | No v1 import/clear CLI or userscript autosave. Transfer referenced attachment bytes separately. Never-referenced staged uploads do not sync. |
 | Downloads | Browser download queue, approval for agent requests, retries, and optional proxy fallback | Upload staging and static attachment serving | V2 intentionally drops browser downloads and agent download requests. |
 | Multi-session | Board, allowlist, main session, heartbeat, messages, attachments, and wake | Native Git worktrees | V2 intentionally drops the multi-session board. Worktrees do not replace coordination. |
 | Runs | Detached named runs, dependency gating, task links, and later verdict notifications | Detached named runs, task links, logs, dependencies, and PR check watching | Both block linked tasks while a run is active. V2 does not provide later CLI verdict notices. |

@@ -28,6 +28,8 @@ This log has no Unreleased section.
 
 - `server.py`, `services.py`, `store.py`: Unpublish flagged reports while keeping task links and answers. Store CLI report source paths for the flag note.
 
+- `store.py`, `server.py`: Export and merge deletion tombstones for messages, tasks, and reports. Keep the later edit or deletion for each ID.
+
 ### Changed
 
 - `pre.py`: Scope the governing-skill read guard to the v2 skill. Keep root governing files protected.
@@ -45,6 +47,8 @@ This log has no Unreleased section.
 - `assets/app.js`: Keep survey rechecks separate from the violation button.
 
 - `store.py`: Order messages and pages by write time and ID. Keep old insertion order when replacing legacy sequences, and retain write times across state sync.
+
+- `server.py`: List only uploads referenced by surviving state. After an accepted synced deletion, remove orphaned files with no surviving references. Retain staged files that were never referenced.
 
 ## [2.1.0]
 

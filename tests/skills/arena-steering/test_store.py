@@ -777,3 +777,144 @@ def test_legacy_blocked_tasks_keep_derived_blocking_after_upgrade(
   assert tasks.get_task("linked")[1] is False
   restored.close()
   store.close()
+
+
+def test_state_deletions_survive_restart_and_later_edits_win(tmp_path: Path) -> None:
+  from datetime import datetime, timedelta
+
+  source_path = tmp_path / "source.sqlite3"
+  source = SqliteStore(source_path)
+  target = SqliteStore()
+  future = "2099-01-01T00:00:00.000000Z"
+  source.save_message(
+    Message(id="de1001", body="Remove me", modified_at="2020-01-01T00:00:00Z")
+  )
+  source.save_task_queue(
+    [Task(id="remove-task", title="Remove task", modified_at=future)]
+  )
+  source.save_report(
+    Report(id="remove-report", title="Remove report", body="Old", modified_at=future)
+  )
+  original = source.export_rows()
+  target.merge_rows(original)
+  cursor = source.state_stamp()
+
+  assert source.delete_task("remove-task") is True
+  assert source.delete_report("remove-report") is True
+  with source.transaction():
+    source._conn.execute("DELETE FROM messages WHERE id = ?", ("de1001",))
+  changed = source.export_rows(since=cursor)
+  for table, row_id in (
+    ("messages", "de1001"),
+    ("tasks", "remove-task"),
+    ("reports", "remove-report"),
+  ):
+    assert changed[table] == []
+    assert [row["id"] for row in changed["deleted"][table]] == [row_id]
+  assert source.export_rows()["deleted"] == changed["deleted"]
+  assert changed["deleted"]["tasks"][0]["modified_at"] > future
+  assert changed["deleted"]["reports"][0]["modified_at"] > future
+
+  applied = target.merge_rows(changed)
+  assert set(applied["deleted"]) == {"de1001", "remove-task", "remove-report"}
+  assert target.get_message("de1001") is None
+  assert target.get_task("remove-task") is None
+  assert target.get_report("remove-report") is None
+  assert set(target.merge_rows(original)["skipped"]) == set(applied["deleted"])
+  source.close()
+  source = SqliteStore(source_path)
+  assert source.export_rows()["deleted"] == changed["deleted"]
+
+  tombstone = changed["deleted"]["reports"][0]["modified_at"]
+  assert target.merge_rows(
+    {"reports": [{**original["reports"][0], "modified_at": tombstone}]}
+  )["skipped"] == ["remove-report"]
+  later = datetime.fromisoformat(tombstone) + timedelta(microseconds=1)
+  later_row = {
+    **original["reports"][0],
+    "body": "Later edit",
+    "modified_at": later.isoformat(),
+  }
+  assert target.merge_rows({"reports": [later_row]})["added"] == ["remove-report"]
+  assert target.get_report("remove-report").body == "Later edit"
+  assert target.export_rows()["deleted"]["reports"] == []
+  source.close()
+  target.close()
+
+
+def test_stale_deletions_do_not_remove_later_edits() -> None:
+  store = SqliteStore()
+  future = "2099-01-01T00:00:00Z"
+  store.save_message(Message(id="de1002", body="Later message", modified_at=future))
+  store.save_task_queue([Task(id="later-task", title="Later task", modified_at=future)])
+  store.save_report(
+    Report(id="later-report", title="Later report", body="Later", modified_at=future)
+  )
+  deleted = {
+    "messages": [{"id": "de1002", "modified_at": "2020-01-01T00:00:00Z"}],
+    "tasks": [{"id": "later-task", "modified_at": "2020-01-01T00:00:00Z"}],
+    "reports": [{"id": "later-report", "modified_at": "2020-01-01T00:00:00Z"}],
+  }
+  assert set(store.merge_rows({"deleted": deleted})["skipped"]) == {
+    "de1002",
+    "later-task",
+    "later-report",
+  }
+  assert store.get_message("de1002").body == "Later message"
+  assert store.get_task("later-task").title == "Later task"
+  assert store.get_report("later-report").body == "Later"
+  assert store.export_rows()["deleted"] == {table: [] for table in deleted}
+  store.close()
+
+
+def test_local_recreation_after_a_delete_uses_a_later_stamp() -> None:
+  store = SqliteStore()
+  future = "2099-01-01T00:00:00.000000Z"
+  store.save_task_queue([Task(id="reused", title="Old", modified_at=future)])
+  store.save_task_queue([])
+  task_deleted_at = store.export_rows()["deleted"]["tasks"][0]["modified_at"]
+  store.save_task_queue(
+    [Task(id="reused", title="New", modified_at="2026-01-01T00:00:00Z")]
+  )
+  assert store.get_task("reused").modified_at > task_deleted_at
+
+  store.save_report(Report(id="reused", title="Old", body="Old", modified_at=future))
+  store.delete_report("reused")
+  report_deleted_at = store.export_rows()["deleted"]["reports"][0]["modified_at"]
+  store.save_report(
+    Report(id="reused", title="New", body="New", modified_at="2026-01-01T00:00:00Z")
+  )
+  assert store.get_report("reused").modified_at > report_deleted_at
+  store.close()
+
+
+def test_existing_v2_state_versions_migrate_without_losing_rows(tmp_path: Path) -> None:
+  import sqlite3
+
+  path = tmp_path / "v2-before-deletions.sqlite3"
+  store = SqliteStore(path)
+  store.save_message(Message(id="ab1100", body="Keep me"))
+  cursor = store.state_stamp()
+  store.close()
+  with sqlite3.connect(path) as connection:
+    versions = connection.execute(
+      "SELECT table_name, row_id, revision_us FROM state_row_versions"
+    ).fetchall()
+    for (name,) in connection.execute(
+      "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE '%_state_%'"
+    ).fetchall():
+      connection.execute(f'DROP TRIGGER "{name}"')
+    connection.execute("DROP TABLE state_row_versions")
+    connection.execute(
+      "CREATE TABLE state_row_versions (table_name TEXT NOT NULL, row_id TEXT NOT NULL, "
+      "revision_us INTEGER NOT NULL, PRIMARY KEY (table_name, row_id)) WITHOUT ROWID"
+    )
+    connection.executemany("INSERT INTO state_row_versions VALUES (?, ?, ?)", versions)
+
+  store = SqliteStore(path)
+  assert [row["id"] for row in store.export_rows()["messages"]] == ["ab1100"]
+  with store.transaction():
+    store._conn.execute("DELETE FROM messages WHERE id = ?", ("ab1100",))
+  changed = store.export_rows(since=cursor)
+  assert [row["id"] for row in changed["deleted"]["messages"]] == ["ab1100"]
+  store.close()
