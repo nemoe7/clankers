@@ -11,6 +11,7 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
+from _reload_isolation import run_reload_in_child
 from arena_steering.server import SteeringApp, create_http_server, reload_server_handler
 from arena_steering.store import SqliteStore
 
@@ -150,8 +151,10 @@ def test_running_demo_reset_refreshes_connected_browser(tmp_path: Path) -> None:
 
 
 def test_running_demo_reset_uses_the_current_app_class(
-  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> None:
+  if run_reload_in_child(request):
+    return
   store = SqliteStore(tmp_path / "demo" / "state.sqlite3")
   app = DEMO["seed_demo_store"](store)
   server = create_http_server(app, host="0.0.0.0", port=0)
@@ -172,7 +175,11 @@ def test_running_demo_reset_uses_the_current_app_class(
     store.close()
 
 
-def test_running_demo_reset_survives_server_hot_reload(tmp_path: Path) -> None:
+def test_running_demo_reset_survives_server_hot_reload(
+  tmp_path: Path, request: pytest.FixtureRequest
+) -> None:
+  if run_reload_in_child(request):
+    return
   store = SqliteStore(tmp_path / "demo" / "state.sqlite3")
   app = DEMO["seed_demo_store"](store)
   server = create_http_server(app, host="0.0.0.0", port=0)

@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 
 import pytest
+from _reload_isolation import run_reload_in_child
 from arena_steering.server import (
   SteeringApp,
   create_http_server,
@@ -420,8 +421,10 @@ def test_served_app_pushes_finished_runs(tmp_path: Path) -> None:
 
 
 def test_demo_script_seeds_messages_tasks_and_reports(
-  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> None:
+  if run_reload_in_child(request):
+    return
   monkeypatch.chdir(tmp_path)
   code = demo_main(["--seed-only"])
   assert code == 0
