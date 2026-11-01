@@ -129,6 +129,7 @@ MODULE_TESTS = {
   "Preview": (
     "tests/skills/arena-steering/test_store.py",
     "tests/skills/arena-steering/test_services.py",
+    "tests/skills/arena-steering/test_task_chains.py",
     "tests/skills/arena-steering/test_server_cli.py",
     "tests/skills/arena-steering/test_survey.py",
     "tests/skills/arena-steering/test_web_ui.py",
@@ -187,6 +188,7 @@ ARENA_RUNTIME_PATHS = tuple(
 MODULE_PATHS = {
   "Preview": (
     *ARENA_RUNTIME_PATHS,
+    "skills/arena-steering/*",
     "maintenance/demo-arena-steer.py",
     "tests/skills/arena-skill/test_*",
     "tests/skills/arena-skill/client.test.cjs",

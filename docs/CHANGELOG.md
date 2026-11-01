@@ -13,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - Seed finished steering demo tasks as historical rows while live task creation requires phase completion checks (`demo-arena-steer.py`).
+- Route steering source changes and the task-chain regression through Preview CI tests (`workflows/changed_paths.py`).
 
 ## 2026-10-31
 

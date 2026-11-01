@@ -226,6 +226,14 @@ def test_demo_script_runs_with_preview_module():
   assert "tests/skills/arena-steering/test_demo_reset.py" in selected[0]["command"]
 
 
+def test_v2_steering_source_runs_task_chain_regressions():
+  selected = changed_paths.module_matrix(
+    ["skills/arena-steering/scripts/arena_steering/services.py"]
+  )
+  assert [row["name"] for row in selected] == ["Preview"]
+  assert "tests/skills/arena-steering/test_task_chains.py" in selected[0]["command"]
+
+
 def test_module_test_ownership_is_complete_and_unique():
   root = Path(changed_paths.__file__).resolve().parents[2]
   owned = [path for paths in changed_paths.MODULE_TESTS.values() for path in paths]
