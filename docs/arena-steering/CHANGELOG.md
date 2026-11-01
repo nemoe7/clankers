@@ -20,6 +20,8 @@ This log has no Unreleased section.
 
 - `git_safety.py`, `services.py`, `cli.py`, `server.py`: Refuse dirty-tree completion for every task phase and persist one hidden blocking violation across CLI and browser writes.
 
+- `services.py`, `cli.py`: Flag rapid repeated agent polls once, with worktree guidance. Keep browser polling exempt.
+
 ### Changed
 
 - `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.

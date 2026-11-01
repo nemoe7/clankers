@@ -147,6 +147,60 @@ def test_cli_agent_call_clears_turn_end(
     store.close()
 
 
+def test_cli_repeated_fast_poll_flags_once_without_flagging_browser(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: state_dir)
+  store, messages, _, _ = cli.open_services(state_dir)
+  messages.send_message("Pending work", blocking=True)
+  assert cli.main(["poll"], out=io.StringIO(), err=io.StringIO()) == 0
+
+  browser = SteeringApp(store)
+  assert browser.dispatch("GET", "/poll?timeout=0")[0] == 200
+  out = io.StringIO()
+  assert cli.main(["poll"], out=out, err=io.StringIO()) == 2
+  flag = messages.pending_violation()
+  assert flag is not None and flag.hidden and flag.requires_ack
+  assert flag.violation_type == "repeat-poll"
+  assert cli.main(["poll"], out=io.StringIO(), err=io.StringIO()) == 2
+  assert messages.pending_violation().id == flag.id
+  store.close()
+
+
+def test_cli_poll_repeat_uses_v1_timing_and_resets_after_read(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  import arena_steering.services as service_module
+
+  now = [1000]
+  monkeypatch.setattr(service_module.time, "time", lambda: now[0])
+  state_dir = tmp_path / "arena-state"
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: state_dir)
+  store, messages, _, _ = cli.open_services(state_dir)
+  messages.send_message("Pending work", blocking=True)
+
+  def poll() -> int:
+    return cli.main(["poll"], out=io.StringIO(), err=io.StringIO())
+
+  assert poll() == 0
+  now[0] += 46
+  assert poll() == 0
+  assert cli.main(["read"], out=io.StringIO(), err=io.StringIO()) == 0
+  now[0] += 1
+  assert poll() == 0
+  now[0] += 45
+  assert poll() == 2
+  flag = messages.pending_violation()
+  assert flag is not None and flag.violation_type == "repeat-poll"
+  messages.ack(flag.id, "Read; work resumed.")
+  messages.record_poll_duration(1.0)
+  now[0] += 1
+  assert poll() == 0
+  assert messages.pending_violation() is None
+  store.close()
+
+
 @pytest.mark.skipif(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",

@@ -10,6 +10,7 @@ import shlex
 import sqlite3
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -300,6 +301,8 @@ def main(
       except (OSError, sqlite3.Error):
         # Activity is advisory and must not block an otherwise readable inbox.
         pass
+    if cmd not in {"poll", "pre", "serve"}:
+      messages.clear_poll_repeat()
     if cmd == "serve":
       serve_p.parse_args(cmd_args)
       app = SteeringApp(store)
@@ -339,7 +342,13 @@ def main(
     if cmd == "poll":
       poll_p.parse_args(cmd_args)
       _print_restore_notice(store, stdout)
+      violation = messages.check_repeat_poll()
+      if violation is not None:
+        print(violation.body, file=stdout)
+        return 2
+      started = time.monotonic()
       delivered = messages.poll(timeout_seconds=1799.0)
+      messages.record_poll_duration(time.monotonic() - started)
       _print_delivered(delivered, stdout)
       messages.reset_gate_if_clear()
       return 0

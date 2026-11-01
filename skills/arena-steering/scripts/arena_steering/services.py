@@ -44,6 +44,8 @@ from .ports import (
 REPORT_IDLE_INTERVAL = timedelta(minutes=30)
 POLL_HEARTBEAT_SECONDS = 1.0
 POLL_FRESH_SECONDS = 5.0
+POLL_REPEAT_SECONDS = 45
+POLL_IMMEDIATE_SECONDS = 1.0
 
 
 def _report_timestamp(value: str) -> datetime:
@@ -292,19 +294,23 @@ class MessageService:
       None,
     )
 
-  def flag_dirty_finish(self) -> Message:
-    """Persist one blocking flag after a dirty-tree finish attempt rolls back."""
+  def flag_violation_once(self, violation_type: str, body: str) -> Message:
+    """Keep one pending hidden blocking flag for each automatic violation type."""
     with self._reports.transaction():
       for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
-        if msg.violation_type == "dirty-task-finish" and msg.requires_ack:
+        if msg.violation_type == violation_type and msg.requires_ack:
           return msg
       return self.send_message(
-        "Automatic violation: Tried to finish a task with a dirty Git tree. "
-        "Read and acknowledge this flag, then clean the tree before retrying.",
-        hidden=True,
-        blocking=True,
-        violation_type="dirty-task-finish",
+        body, hidden=True, blocking=True, violation_type=violation_type
       )
+
+  def flag_dirty_finish(self) -> Message:
+    """Persist one blocking flag after a dirty-tree finish attempt rolls back."""
+    return self.flag_violation_once(
+      "dirty-task-finish",
+      "Automatic violation: Tried to finish a task with a dirty Git tree. "
+      "Read and acknowledge this flag, then clean the tree before retrying.",
+    )
 
   def pending_ids(self) -> list[str]:
     """Return unacked message and report-answer IDs without marking anything seen."""
@@ -405,6 +411,39 @@ class MessageService:
       if flag:
         self._meta.set_meta("skip_poll", "0")
       return flag
+
+  def clear_poll_repeat(self) -> None:
+    """Reset consecutive agent polls after another agent command."""
+    if self._meta.get_meta("poll_repeat_at") not in (None, "0"):
+      self._meta.set_meta("poll_repeat_at", "0")
+
+  def check_repeat_poll(self) -> Message | None:
+    """Flag a fast repeat before starting another agent poll."""
+    now = int(time.time())
+    with self._reports.transaction():
+      previous = self._meta.get_meta("poll_repeat_at")
+      self._meta.set_meta("poll_repeat_at", str(now))
+      try:
+        recent = (
+          previous is not None and 0 <= now - int(previous) <= POLL_REPEAT_SECONDS
+        )
+      except ValueError:
+        recent = False
+      if not recent or self._meta.get_meta("poll_immediate") != "1":
+        return None
+      return self.flag_violation_once(
+        "repeat-poll",
+        "Automatic violation: Repeated a poll within 45 seconds after a poll returned in under one second. "
+        "Read and acknowledge this flag, then work the open task. "
+        "While a gate runs, use `steer worktree add NAME` for independent work. "
+        "Validate at the root and poll only when no unblocked work remains.",
+      )
+
+  def record_poll_duration(self, seconds: float) -> None:
+    """Remember whether the last agent poll returned immediately."""
+    self._meta.set_meta(
+      "poll_immediate", "1" if seconds < POLL_IMMEDIATE_SECONDS else "0"
+    )
 
   def poll(self, timeout_seconds: float = 0.0) -> dict[str, Any]:
     """Wait for deliverables or skip, including writes from other processes."""
