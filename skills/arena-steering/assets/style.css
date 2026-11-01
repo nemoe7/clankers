@@ -865,13 +865,18 @@ mark.search-hit {
   bottom: calc(100% + 6px);
   z-index: 20;
   display: none;
-  min-width: 220px;
-  max-width: 320px;
+  min-width: min(220px, calc(100vw - 72px));
+  max-width: min(320px, calc(100vw - 72px));
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid hsl(var(--border-strong));
   background: hsl(var(--surface-overlay));
   box-shadow: 0 8px 20px rgb(0 0 0 / 0.45);
+}
+
+.survey-cap-pill:last-child .survey-answer-tooltip {
+  left: auto;
+  right: 0;
 }
 
 .survey-id-wrap:hover .survey-answer-tooltip,
@@ -2716,6 +2721,15 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
+}
+
+.modal-shell:has(.survey-modal-content) .modal-card {
+  max-height: calc(100dvh - 40px);
+}
+
+.modal-shell:has(.survey-modal-content) .modal-body {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .violation-form {

@@ -54,6 +54,8 @@ This log has no Unreleased section.
 
 - `store.py`: Replace stale row-change triggers when an existing v2 database already has the tombstone column.
 
+- `assets/style.css`: Keep survey tooltips within the dialog and footer actions visible in short viewports.
+
 ## [2.1.0]
 
 ### Removed

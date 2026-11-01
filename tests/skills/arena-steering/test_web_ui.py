@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import runpy
@@ -11,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from _reload_isolation import run_reload_in_child
+from arena_steering import survey
 from arena_steering.server import (
   SteeringApp,
   create_http_server,
@@ -174,6 +176,63 @@ SLATE_DEMO_COLORS = (
   "(245, 158, 11)",
   "(52, 211, 153)",
 )
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize(("width", "height"), [(411, 799), (855, 325), (1372, 883)])
+def test_survey_modal_keeps_tooltip_and_actions_in_view(
+  tmp_path: Path, width: int, height: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.submit_survey(json.dumps(survey.template()))
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#survey-open").click()
+        page.locator(".survey-cap-pill").last.hover()
+        sizes = page.evaluate("""() => {
+          const rect = selector => document.querySelector(selector).getBoundingClientRect();
+          const shell = rect('#modal-shell');
+          const tooltip = rect('.survey-cap-pill:last-child .survey-answer-tooltip');
+          const footer = rect('#modal-actions');
+          const body = document.querySelector('#modal-body');
+          return {
+            shellLeft: shell.left, shellRight: shell.right,
+            tooltipLeft: tooltip.left, tooltipRight: tooltip.right,
+            footerTop: footer.top, footerBottom: footer.bottom,
+            bodyHeight: body.clientHeight, contentHeight: body.scrollHeight
+          };
+        }""")
+        assert sizes["tooltipLeft"] >= sizes["shellLeft"] - 1
+        assert sizes["tooltipRight"] <= sizes["shellRight"] + 1
+        assert sizes["footerTop"] >= 0
+        assert sizes["footerBottom"] <= height
+        if height < 400:
+          assert sizes["contentHeight"] > sizes["bodyHeight"]
+        page.locator('#modal-actions button[value="cancel"]').click()
+        assert not page.locator("#modal-shell").is_visible()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
 
 
 @pytest.mark.skipif(
