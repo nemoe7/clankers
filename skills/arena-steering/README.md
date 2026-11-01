@@ -10,14 +10,14 @@ Requirements: Python 3.11 or later, Bash, a persistent workspace, and a process 
 .agents/skills/arena-steering/scripts/install.sh
 ```
 
-The installer prepares `markdown-it-py`, installs `steer` in `~/.local/bin`, and adds that directory to `~/.bash_profile`. It also replaces the repository's `commit-msg` hook with an inline validator. It refuses a custom `core.hooksPath` and does not read or ship the commit specification. Open a new login shell or source that profile, then run:
+The installer prepares `markdown-it-py`, installs `steer` in `~/.local/bin`, and adds that directory to `~/.bash_profile`. It also replaces the repo's `commit-msg` hook with an inline validator. It refuses a custom `core.hooksPath` and does not read or ship the commit specification. Open a new login shell or source that profile, then run:
 
 ```cmd
 steer --version
 steer serve
 ```
 
-The server listens on all interfaces at port 8000. Expose it only in a trusted preview environment, and open the preview URL supplied by the host. The repository demo starts a separate server with sample data and a configurable port:
+The server listens on all interfaces at port 8000. Expose it only in a trusted preview environment, and open the preview URL supplied by the host. The repo demo starts a separate server with sample data and a configurable port:
 
 ```cmd
 python maintenance/demo-arena-steer.py --port 8100
@@ -165,7 +165,7 @@ The steps, in order, are `sleep`, `inbox-pipe`, `poll-timeout`, `pr-state`, `pus
 - Multi-ID acknowledgement is atomic. A bad ID leaves every target unchanged.
 - Removing a task removes its dependency links from other tasks.
 - Task details are unique after trimming whitespace.
-- Use `steer task mod ID deets TEXT` to append a detail and `steer task mod ID deets rm NUMBER` to remove one. Detail numbers are displayed from 1.
+- Use `steer task mod ID deets TEXT` to append a detail and `steer task mod ID deets rm NUMBER` to remove one. The CLI displays detail numbers from 1.
 - Use `steer task mod ID links [msg|report|task|gate] LINK` to add a link. Use `steer task mod ID links rm TYPE LINK` to remove one, or `steer task mod ID deps [rm] TASK` for dependencies.
 - Message IDs use six lowercase hexadecimal characters. Parent IDs are deduplicated in order and must name existing messages.
 - Blocking messages move from `sent` to `seen` to `acked`. Non-blocking messages need no acknowledgement.

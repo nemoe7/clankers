@@ -1,5 +1,3 @@
-<!-- nonemo: NMO100 -->
-
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/), and this module uses [Semantic Versioning](https://semver.org/).
@@ -179,7 +177,7 @@ This log has no Unreleased section.
 
 - `assets/style.css`: Dim the page behind the image viewer with a translucent backdrop.
 
-- `assets/messages-view.js`: Fetch the older message page before the top is reached.
+- `assets/messages-view.js`: Fetch the older message page before scrolling reaches the top.
 
 ## [2.0.0]
 

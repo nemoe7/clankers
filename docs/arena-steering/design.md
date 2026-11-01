@@ -54,7 +54,7 @@
 
 ## Visual Reference
 
-- The repository demo runs via `maintenance/demo-arena-steer.py` on port `8100` by default.
+- The repo demo runs via `maintenance/demo-arena-steer.py` on port `8100` by default.
 - Verified via headless Chromium screenshots at `1372x883` desktop and `411x799` mobile viewports across `Messages`, `Reports`, and `Tasks`.
 
 ## Deviations & Suppressions
