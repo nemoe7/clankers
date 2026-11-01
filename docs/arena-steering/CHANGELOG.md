@@ -38,6 +38,8 @@ This log has no Unreleased section.
 
 - `cli.py`, `pre.py`: Resolve state from the installed checkout rather than the current directory. Warn on unreadable state, but refuse pushes.
 
+- `README.md`: Correct state path wording to checkout root, not working directory.
+
 - `assets/app.js`: Keep survey rechecks separate from the violation button.
 
 - `store.py`: Order messages and pages by write time and ID. Keep old insertion order when replacing legacy sequences, and retain write times across state sync.

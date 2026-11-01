@@ -23,7 +23,7 @@ The server listens on all interfaces at port 8000. Expose it only in a trusted p
 python maintenance/demo-arena-steer.py --port 8100
 ```
 
-V2 uses `arena-state/state.sqlite3` in the working directory. Do not open a v1 database with v2. Existing databases are not migrated. Uploaded files live in `arena-state/uploads/`.
+V2 uses `arena-state/state.sqlite3` at the checkout root, regardless of the working directory. Do not open a v1 database with v2. Existing databases are not migrated. Uploaded files live in `arena-state/uploads/`.
 
 The demo uses `arena-state/demo/` and reseeds its own database on startup. Reset a running demo without restarting it:
 
