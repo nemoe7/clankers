@@ -101,7 +101,7 @@ def main(
   ack_p.add_argument("parts", nargs="+", help="[<id> ...] <markdown>")
   ack_p.add_argument("-i", "--id", dest="task_id", default=None)
   ack_p.add_argument("-t", "--title", dest="task_title", default=None)
-  ack_p.add_argument("-T", "--type", dest="task_type", default="code")
+  ack_p.add_argument("-T", "--type", dest="task_types", action="append", default=[])
   ack_p.add_argument("-S", "--scope", dest="task_scope", default="")
   ack_p.add_argument("-d", "--detail", dest="task_details", action="append", default=[])
 
@@ -132,7 +132,8 @@ def main(
       "Commands:\n"
       "  [-d|--deets]                        Show the current task and optional details.\n"
       "  ID                                  Show a task with details.\n"
-      "  new ID TITLE -d DETAIL [options]    Create a task.\n"
+      "  new ID TITLE -d DETAIL [-T TYPE ...]  Create ordered phases.\n"
+      "  finish ID [-c COMMIT]               Validate and advance one phase.\n"
       "  rm ID                               Remove a task.\n"
       "  mod ID FIELD [rm] VALUE             Update a task.\n"
       "  unlink ID [TYPE] LINK               Remove a task link."
@@ -421,7 +422,8 @@ def _run_ack(
       created = tasks.create_task(
         parsed.task_id,
         parsed.task_title,
-        type=parsed.task_type,
+        type=parsed.task_types[0] if parsed.task_types else "code",
+        types=parsed.task_types or None,
         scope=parsed.task_scope,
         details=parsed.task_details,
         msg_ids=[target.id] if target_type == "message" else [],
@@ -494,7 +496,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     new_p = argparse.ArgumentParser(prog="steer task new")
     new_p.add_argument("id")
     new_p.add_argument("title")
-    new_p.add_argument("-T", "--type", default="code")
+    new_p.add_argument("-T", "--type", dest="types", action="append", default=[])
     new_p.add_argument("-s", "--status", default="upcoming")
     new_p.add_argument("-S", "--scope", default="")
     new_p.add_argument("-d", "--detail", action="append", default=[])
@@ -508,7 +510,8 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     task = tasks.create_task(
       parsed.id,
       parsed.title,
-      type=parsed.type,
+      type=parsed.types[0] if parsed.types else "code",
+      types=parsed.types or None,
       status=parsed.status,
       scope=parsed.scope,
       details=parsed.detail,
@@ -519,6 +522,16 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
         "gate_names": parsed.gate,
       },
     )
+    _, blocked = tasks.get_task(task.id)
+    _print_single_task(task, blocked, out)
+    return 0
+
+  if subcmd == "finish":
+    finish_p = argparse.ArgumentParser(prog="steer task finish")
+    finish_p.add_argument("id")
+    finish_p.add_argument("-c", "--commit", default=None)
+    parsed = finish_p.parse_args(args[1:])
+    task = tasks.finish_phase(parsed.id, commit_hash=parsed.commit)
     _, blocked = tasks.get_task(task.id)
     _print_single_task(task, blocked, out)
     return 0
@@ -593,11 +606,19 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
       if len(rest) != 1:
         raise ValueError("Usage: steer task mod <id> deps <task-id>")
       updated = tasks.mod_deps_add(task_id, rest[0])
+  elif field == "types":
+    updated = tasks.mod_types(task_id, rest)
+  elif field == "status" and rest[0] == "finished":
+    if len(rest) > 2:
+      raise ValueError("Usage: steer task mod <id> status finished [commit-hash]")
+    updated = tasks.finish_phase(
+      task_id, commit_hash=rest[1] if len(rest) == 2 else None
+    )
   elif field in {"status", "title", "type", "scope"}:
     updated = tasks.mod_scalar(task_id, field, " ".join(rest))
   else:
     raise ValueError(
-      f"Unknown task mod field {field!r}; expected deets, links, deps, status, title, type, or scope"
+      f"Unknown task mod field {field!r}; expected deets, links, deps, status, title, type, types, or scope"
     )
 
   _, blocked = tasks.get_task(updated.id)
@@ -1457,6 +1478,16 @@ def _print_message(msg: Message, out: TextIO) -> None:
     print(f"ack: {ack_text}", file=out)
 
 
+def _task_type_label(task: Task) -> str:
+  if len(task.types) == 1:
+    return task.type
+  phases = " → ".join(
+    f"{phase_type}{' (done)' if index < task.phase_index else ' (current)' if index == task.phase_index else ''}"
+    for index, phase_type in enumerate(task.types)
+  )
+  return f"{task.type}; {phases}"
+
+
 def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
   if not items:
     print("Tasks: 0", file=out)
@@ -1464,7 +1495,10 @@ def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
   print(f"Tasks: {len(items)}", file=out)
   for idx, (task, blocked) in enumerate(items, 1):
     state_str = f"{task.status}, blocked" if blocked else task.status
-    print(f"{idx}  {task.id} [{state_str}] ({task.type}) - {task.title}", file=out)
+    print(
+      f"{idx}  {task.id} [{state_str}] ({_task_type_label(task)}) - {task.title}",
+      file=out,
+    )
     if task.scope:
       print(f"   Scope: {task.scope}", file=out)
     if task.deps:
@@ -1481,7 +1515,7 @@ def _print_single_task(
   task: Task, blocked: bool, out: TextIO, *, include_details: bool = True
 ) -> None:
   state_str = f"{task.status}, blocked" if blocked else task.status
-  print(f"task {task.id}, status {state_str}, type {task.type}", file=out)
+  print(f"task {task.id}, status {state_str}, type {_task_type_label(task)}", file=out)
   print(task.title, file=out)
   if task.scope:
     print(f"- Scope: {task.scope}", file=out)

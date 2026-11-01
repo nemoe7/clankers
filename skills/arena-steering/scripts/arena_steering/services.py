@@ -7,12 +7,14 @@ import re
 import threading
 import time
 from collections import Counter
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from functools import wraps
 from typing import Any
 
 from . import pre as pre_mod
 from . import survey as survey_mod
+from .git_safety import GitCheckError, verify_completion_commit
 from .markdown import render_report_markdown, unparsed_strike_lines
 from .markdown_fields import format_answer_for_task_detail, parse_report_markdown
 from .models import (
@@ -529,11 +531,15 @@ class TaskService:
     reports: ReportRepository,
     clock: Clock | None = None,
     gates: GateStatus | None = None,
+    commit_verifier: Callable[[str], str] | None = None,
   ) -> None:
     self._tasks = tasks
     self._reports = reports
     self._clock = clock or UtcClock()
     self._gates = gates
+    self._commit_verifier = commit_verifier or (
+      lambda commit: verify_completion_commit(pre_mod.repo_root(), commit)
+    )
 
   def is_task_blocked(
     self,
@@ -563,9 +569,18 @@ class TaskService:
       dep_task = tasks_by_id.get(dep_id)
       if dep_task is not None and dep_task.status != "finished":
         return True
+    if task.type == "report":
+      return False  # Publication itself satisfies a report phase.
+    completed_reports = {
+      evidence
+      for phase_type, evidence in zip(
+        task.types[: task.phase_index], task.phase_evidence[: task.phase_index]
+      )
+      if phase_type == "report" and evidence is not None
+    }
     for rep_id in task.report_ids:
       report = reports_by_id.get(rep_id)
-      if report is not None and report.needs_answer:
+      if rep_id not in completed_reports and report is not None and report.needs_answer:
         return True
     return False
 
@@ -595,6 +610,7 @@ class TaskService:
     title: str,
     *,
     type: str = "code",
+    types: list[str] | None = None,
     status: str = "upcoming",
     scope: str = "",
     details: list[str] | None = None,
@@ -607,11 +623,14 @@ class TaskService:
   ) -> Task:
     if self._tasks.get_task(task_id) is not None:
       raise ValueError(f"Task {task_id!r} already exists")
+    if status == "finished":
+      raise ValueError("Create an upcoming task, then finish its phase with evidence")
     now = self._clock.now_iso()
     task = Task(
       id=task_id,
       title=title,
       type=type,
+      types=types,
       status=status,
       scope=scope,
       details=list(details or []),
@@ -629,6 +648,83 @@ class TaskService:
     ordered = self._enforce_dependency_order([*queue, task])
     self._tasks.save_task_queue(ordered)
     return task
+
+  def _copy_task(self, task: Task, **changes: Any) -> Task:
+    data = task.to_dict()
+    data.update(changes)
+    data["modified_at"] = self._clock.now_iso()
+    return Task.from_dict(data)
+
+  def _complete_phase(
+    self, task: Task, queue: list[Task], commit_hash: str | None = None
+  ) -> Task:
+    if task.status == "finished":
+      raise ValueError("Task is already finished")
+    reports = {item.id: item for item in self._reports.list_reports()}
+    if self.is_task_blocked(
+      task, task_map={item.id: item for item in queue}, report_map=reports
+    ):
+      raise ValueError(
+        "Task is blocked by a dependency, report answer, or running gate"
+      )
+    evidence: str | None = None
+    if task.type == "report":
+      evidence = next(
+        (
+          rep_id
+          for rep_id in task.report_ids
+          if (rep := reports.get(rep_id)) is not None
+          and (rep.status == "published" or bool(rep.answers))
+        ),
+        None,
+      )
+      if evidence is None:
+        raise ValueError(
+          "Report phase requires a linked published report or received answer"
+        )
+    elif task.type in {"code", "docs"}:
+      if not isinstance(commit_hash, str) or not re.fullmatch(
+        r"[0-9a-f]{40}", commit_hash
+      ):
+        raise ValueError("Code and docs phases require a full commit hash")
+      used_commits = {
+        value
+        for item in queue
+        for phase_type, value in zip(item.types, item.phase_evidence)
+        if phase_type in {"code", "docs"} and value is not None
+      }
+      if commit_hash in used_commits:
+        raise ValueError(
+          "Commit hash already used by another task phase; use a unique commit"
+        )
+      try:
+        evidence = self._commit_verifier(commit_hash)
+      except GitCheckError as exc:
+        raise ValueError(str(exc)) from exc
+      if evidence in used_commits:
+        raise ValueError(
+          "Commit hash already used by another task phase; use a unique commit"
+        )
+    elif commit_hash is not None:
+      raise ValueError("Only code and docs phases take a commit hash")
+    index = task.phase_index
+    phase_evidence = list(task.phase_evidence)
+    phase_evidence[index] = evidence
+    next_index = index + 1
+    return self._copy_task(
+      task,
+      status="finished" if next_index == len(task.types) else "upcoming",
+      phase_index=next_index,
+      phase_evidence=phase_evidence,
+    )
+
+  @_transactional_task_write
+  def finish_phase(self, task_id: str, *, commit_hash: str | None = None) -> Task:
+    """Validate the current phase and advance once, without rewinding later phases."""
+    queue, target = self._load_queue_and_target(task_id)
+    updated = self._complete_phase(target, queue, commit_hash)
+    self._replace_in_queue(queue, updated)
+    return updated
 
   @_transactional_task_write
   def remove_task(self, task_id: str) -> bool:
@@ -656,17 +752,7 @@ class TaskService:
     if any(item.id == new_task_id for item in queue):
       raise ValueError(f"Task {new_task_id!r} already exists")
     now = self._clock.now_iso()
-    renamed = Task(
-      id=new_task_id,
-      title=target.title,
-      type=target.type,
-      status=target.status,
-      scope=target.scope,
-      details=target.details,
-      allow_long_details=True,
-      links=target.links,
-      modified_at=now,
-    )
+    renamed = self._copy_task(target, id=new_task_id)
     self._validate_details(renamed)
     updated_queue: list[Task] = []
     for item in queue:
@@ -691,21 +777,14 @@ class TaskService:
       return self.mod_links_rm(task_id, link_type, link_id)
     queue, target = self._load_queue_and_target(task_id)
     cleaned_id = link_id.strip()
-    updated = Task(
-      id=target.id,
-      title=target.title,
-      type=target.type,
-      status=target.status,
-      scope=target.scope,
-      details=target.details,
-      allow_long_details=True,
+    updated = self._copy_task(
+      target,
       links={
         "msg_ids": [item for item in target.msg_ids if item != cleaned_id],
         "report_ids": [item for item in target.report_ids if item != cleaned_id],
         "task_ids": [item for item in target.task_ids if item != cleaned_id],
         "gate_names": [item for item in target.gate_names if item != cleaned_id],
       },
-      modified_at=self._clock.now_iso(),
     )
     if updated.links == target.links:
       raise ValueError(f"Task {task_id!r} has no link {cleaned_id!r}")
@@ -716,17 +795,7 @@ class TaskService:
   def mod_deets(self, task_id: str, detail: str) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     self._validate_input_details([detail])
-    updated = Task(
-      id=target.id,
-      title=target.title,
-      type=target.type,
-      status=target.status,
-      scope=target.scope,
-      details=[*target.details, detail],
-      allow_long_details=True,
-      links=target.links,
-      modified_at=self._clock.now_iso(),
-    )
+    updated = self._copy_task(target, details=[*target.details, detail])
     self._replace_in_queue(queue, updated)
     return updated
 
@@ -739,17 +808,7 @@ class TaskService:
         f"Detail number {number} out of range (1..{len(target.details)})"
       )
     new_details = [item for i, item in enumerate(target.details) if i != idx]
-    updated = Task(
-      id=target.id,
-      title=target.title,
-      type=target.type,
-      status=target.status,
-      scope=target.scope,
-      details=new_details,
-      allow_long_details=True,
-      links=target.links,
-      modified_at=self._clock.now_iso(),
-    )
+    updated = self._copy_task(target, details=new_details)
     self._replace_in_queue(queue, updated)
     return updated
 
@@ -791,21 +850,14 @@ class TaskService:
         f"Link type must be 'msg', 'report', 'task', or 'gate', got {link_type!r}"
       )
 
-    updated = Task(
-      id=target.id,
-      title=target.title,
-      type=target.type,
-      status=target.status,
-      scope=target.scope,
-      details=target.details,
-      allow_long_details=True,
+    updated = self._copy_task(
+      target,
       links={
         "msg_ids": msg_ids,
         "report_ids": report_ids,
         "task_ids": task_ids,
         "gate_names": gate_names,
       },
-      modified_at=self._clock.now_iso(),
     )
     self._validate_deps_exist(updated, queue)
     self._replace_in_queue(queue, updated)
@@ -840,21 +892,14 @@ class TaskService:
       if cleaned_type == "gate"
       else list(target.gate_names)
     )
-    updated = Task(
-      id=target.id,
-      title=target.title,
-      type=target.type,
-      status=target.status,
-      scope=target.scope,
-      details=target.details,
-      allow_long_details=True,
+    updated = self._copy_task(
+      target,
       links={
         "msg_ids": msg_ids,
         "report_ids": report_ids,
         "task_ids": task_ids,
         "gate_names": gate_names,
       },
-      modified_at=self._clock.now_iso(),
     )
     self._replace_in_queue(queue, updated)
     return updated
@@ -873,21 +918,27 @@ class TaskService:
     key = field_name.strip().lower()
     if key not in {"status", "title", "type", "scope"}:
       raise ValueError(f"Unsupported scalar task field: {field_name!r}")
-    kwargs: dict[str, Any] = {
-      "id": target.id,
-      "title": target.title,
-      "type": target.type,
-      "status": target.status,
-      "scope": target.scope,
-      "details": target.details,
-      "allow_long_details": True,
-      "links": target.links,
-      "modified_at": self._clock.now_iso(),
-    }
-    kwargs[key] = value
-    updated = Task(**kwargs)
+    if key == "status":
+      if value not in {"upcoming", "finished"}:
+        raise ValueError(f"Invalid Task.status: {value!r}")
+      if value == "finished":
+        updated = self._complete_phase(target, queue)
+      elif target.status == "finished":
+        raise ValueError("Cannot rewind finished task phases")
+      else:
+        updated = self._copy_task(target)
+    elif key == "type":
+      if target.phase_index or len(target.types) > 1:
+        raise ValueError("Cannot change a task type after setting its phase chain")
+      updated = self._copy_task(target, type=value, types=[value])
+    else:
+      updated = self._copy_task(target, **{key: value})
     self._replace_in_queue(queue, updated)
     return updated
+
+  def mod_types(self, task_id: str, types: list[str]) -> Task:
+    """Set the ordered phase types before the first phase is finished."""
+    return self.patch_task(task_id, {"types": types})
 
   @_transactional_task_write
   def patch_task(
@@ -895,8 +946,25 @@ class TaskService:
   ) -> Task:
     """Apply partial updates and optional queue position change for HTTP PATCH."""
     queue, target = self._load_queue_and_target(task_id)
+    if any(
+      key in changes
+      for key in ("phase_index", "phase_evidence", "current_phase", "remaining_phases")
+    ):
+      raise ValueError("Task phase progress changes only through finishing a phase")
     if "details" in changes:
       self._validate_input_details(changes["details"], target.details)
+    types = changes.get("types", target.types)
+    if "type" in changes and "types" not in changes and changes["type"] != target.type:
+      if len(target.types) > 1 or target.phase_index:
+        raise ValueError("Cannot change a task type after setting its phase chain")
+      types = [changes["type"]]
+    if types != target.types and target.phase_index:
+      raise ValueError("Cannot change phase types after phase progress")
+    finishing = changes.get("status") == "finished"
+    if target.status == "finished" and changes.get("status") == "upcoming":
+      raise ValueError("Cannot rewind finished task phases")
+    if "commit_hash" in changes and not finishing:
+      raise ValueError("A commit hash can only accompany phase completion")
     raw_links = changes.get("links")
     merged_links = {
       "gate_names": list(
@@ -935,19 +1003,23 @@ class TaskService:
         )
       ),
     }
-    updated = Task(
-      id=target.id,
+    updated = self._copy_task(
+      target,
       title=str(changes.get("title", target.title)),
       type=str(changes.get("type", target.type)),
-      status=str(changes.get("status", target.status)),
+      types=types,
+      phase_evidence=target.phase_evidence
+      if types == target.types
+      else [None] * len(types),
+      status=target.status if finishing else str(changes.get("status", target.status)),
       scope=str(changes.get("scope", target.scope)),
       details=list(changes.get("details", target.details)),
-      allow_long_details=True,
       links=merged_links,
-      modified_at=self._clock.now_iso(),
     )
     self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
+    if finishing:
+      updated = self._complete_phase(updated, queue, changes.get("commit_hash"))
     new_queue = [updated if item.id == task_id else item for item in queue]
     if position is not None:
       new_queue = [item for item in new_queue if item.id != task_id]
@@ -1339,10 +1411,16 @@ class ReportService:
     queue = self._tasks.list_tasks()
     changed = False
     for task in queue:
-      if old_report_id in task.report_ids:
+      if old_report_id in task.report_ids or old_report_id in task.phase_evidence:
         task.report_ids = [
           new_report_id if report_id == old_report_id else report_id
           for report_id in task.report_ids
+        ]
+        task.phase_evidence = [
+          new_report_id
+          if evidence == old_report_id and task.types[index] == "report"
+          else evidence
+          for index, evidence in enumerate(task.phase_evidence)
         ]
         task.modified_at = now
         changed = True

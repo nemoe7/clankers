@@ -1868,6 +1868,23 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   vertical-align: middle;
 }
 
+.task-phases {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.task-phases .task-type {
+  margin-left: 0;
+}
+
+.task-type[data-phase-state="finished"] {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
 .task-type[data-task-type="code"] {
   color: #90caf9;
   background-color: rgba(30, 136, 229, 0.16);

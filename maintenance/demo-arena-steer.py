@@ -806,65 +806,70 @@ steer poll
   )
   app.reports.remove_report("legacy-migration-draft")
 
-  # 3. Tasks covering `Current` (first unblocked `upcoming`), `Upcoming` (blocked and unblocked),
-  #    and `Finished` (`finished`, 35 total so downward scroll paginates 30 + 5), across all 5 types.
-  app.tasks.create_task(
-    "core-models-store",
-    "Build domain models, protocol ports, and SQLite store",
-    type="code",
-    status="finished",
-    scope="skills/arena-steering/scripts/arena_steering/",
-    details=[
-      "Defined Message, Task, Report, ReportField, and ReportAnswer models.",
-      "Implemented thread-safe SqliteStore in WAL mode.",
-    ],
-    msg_ids=["a00001"],
-  )
-  app.tasks.create_task(
-    "draft-architecture-spec",
-    "Publish initial Arena Steering architecture specification",
-    type="report",
-    status="finished",
-    scope="arena-state/reports/",
-    details=[
-      "Published steering-architecture report with choice, checkbox, and text fields.",
-    ],
-    msg_ids=["a00001"],
-    report_ids=["steering-architecture", "visual-diff-gallery"],
-  )
-  app.tasks.create_task(
-    "configure-ci-gates",
-    "Wire ruff, pytest, and prose lint gates for steering skill",
-    type="ops",
-    status="finished",
-    scope="maintenance/",
-    details=[
-      "Configured pytest and ruff validation suites for arena_steering.",
-    ],
-    msg_ids=["a00004"],
-  )
-  app.tasks.create_task(
-    "update-readme-index",
-    "Register arena-steering in repository skill documentation",
-    type="docs",
-    status="finished",
-    scope="skills/arena-steering/SKILL.md",
-    details=[
-      "Documented steer CLI workflow and REST API endpoints.",
-    ],
-  )
+  # 3. Seed historical finished tasks directly. Live task writes validate each phase.
+  #    Keep all 5 types and 35 finished rows for task view pagination.
+  stamp = datetime.now(UTC).isoformat()
+  completed = [
+    models.Task(
+      "core-models-store",
+      "Build domain models, protocol ports, and SQLite store",
+      type="code",
+      status="finished",
+      scope="skills/arena-steering/scripts/arena_steering/",
+      details=[
+        "Defined Message, Task, Report, ReportField, and ReportAnswer models.",
+        "Implemented thread-safe SqliteStore in WAL mode.",
+      ],
+      msg_ids=["a00001"],
+      modified_at=stamp,
+    ),
+    models.Task(
+      "draft-architecture-spec",
+      "Publish initial Arena Steering architecture specification",
+      type="report",
+      status="finished",
+      scope="arena-state/reports/",
+      details=[
+        "Published steering-architecture report with choice, checkbox, and text fields.",
+      ],
+      msg_ids=["a00001"],
+      report_ids=["steering-architecture", "visual-diff-gallery"],
+      modified_at=stamp,
+    ),
+    models.Task(
+      "configure-ci-gates",
+      "Wire ruff, pytest, and prose lint gates for steering skill",
+      type="ops",
+      status="finished",
+      scope="maintenance/",
+      details=["Configured pytest and ruff validation suites for arena_steering."],
+      msg_ids=["a00004"],
+      modified_at=stamp,
+    ),
+    models.Task(
+      "update-readme-index",
+      "Register arena-steering in repository skill documentation",
+      type="docs",
+      status="finished",
+      scope="skills/arena-steering/SKILL.md",
+      details=["Documented steer CLI workflow and REST API endpoints."],
+      modified_at=stamp,
+    ),
+  ]
   task_types = ("code", "docs", "report", "ops", "misc")
   for idx in range(1, 32):
-    app.tasks.create_task(
-      f"finished-milestone-{idx:02d}",
-      f"Complete steering verification milestone #{idx:02d}",
-      type=task_types[idx % len(task_types)],
-      status="finished",
-      scope="skills/arena-steering/",
-      details=[
-        f"Verified milestone #{idx:02d} regression suite and UI state.",
-      ],
+    completed.append(
+      models.Task(
+        f"finished-milestone-{idx:02d}",
+        f"Complete steering verification milestone #{idx:02d}",
+        type=task_types[idx % len(task_types)],
+        status="finished",
+        scope="skills/arena-steering/",
+        details=[f"Verified milestone #{idx:02d} regression suite and UI state."],
+        modified_at=stamp,
+      )
     )
+  store.save_task_queue(completed)
 
   app.tasks.create_task(
     "web-ui-assets",

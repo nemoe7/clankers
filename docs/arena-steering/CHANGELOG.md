@@ -16,6 +16,8 @@ This log has no Unreleased section.
 
 - `assets/`: Show tab-specific violation forms, a pending indicator, cancellation, and retry feedback.
 
+- `models.py`, `store.py`, `services.py`, `cli.py`, `server.py`, `assets/`: Store ordered task phases, validate report or unique pushed commit evidence before advancing, and show phase progress.
+
 ### Changed
 
 - `cli.py`, `pre.py`: Resolve state from the installed checkout rather than the current directory. Warn on unreadable state, but refuse pushes.

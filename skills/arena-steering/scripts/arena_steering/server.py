@@ -1059,6 +1059,7 @@ class SteeringApp:
       str(body.get("id", "")),
       str(body.get("title", "")),
       type=str(body.get("type", "code")),
+      types=body.get("types"),
       status=str(body.get("status", "upcoming")),
       scope=str(body.get("scope", "")),
       details=[str(x) for x in body.get("details", [])],

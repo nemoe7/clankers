@@ -20,13 +20,26 @@ export function expandTaskTarget(id) {
   openTaskDetails.add(id);
 }
 
-function formatTypeBadge(type) {
+function formatTypeBadge(type, state) {
   const normalized = (type || "misc").toLowerCase();
   const label =
     normalized === "ops" || normalized === "operations"
       ? "Ops"
       : normalized.charAt(0).toUpperCase() + normalized.slice(1);
-  return `<span class="task-type" data-task-type="${escapeHtml(normalized)}">${escapeHtml(label)}</span>`;
+  return `<span class="task-type" data-task-type="${escapeHtml(normalized)}" data-phase-state="${state}">${escapeHtml(label)}</span>`;
+}
+
+function formatTaskPhases(task) {
+  const types = task.types?.length ? task.types : [task.type || "misc"];
+  const index = Number.isInteger(task.phase_index)
+    ? task.phase_index
+    : task.status === "finished" ? types.length : 0;
+  const chips = types.map((type, position) =>
+    formatTypeBadge(type, position < index ? "finished" : position === index ? "current" : "upcoming")
+  );
+  return types.length === 1
+    ? chips[0]
+    : `<span class="task-phases" aria-label="Ordered task phases">${chips.join("")}</span>`;
 }
 
 function taskDetailLines(task) {
@@ -62,6 +75,7 @@ function taskMatchesFilter(task) {
     task.id,
     task.title,
     task.type || "",
+    ...(task.types || []),
     ...taskDetailLines(task),
   ]
     .join(" ")
@@ -93,7 +107,7 @@ function renderTaskRow(task) {
   return `
     <li class="task" data-task-id="${escapeHtml(task.id)}" title="Task ${escapeHtml(task.id)}">
       <span class="task-title" data-blocked="${task.blocked ? "true" : "false"}">${escapeHtml(task.title)}</span>
-      ${formatTypeBadge(task.type)}
+      ${formatTaskPhases(task)}
       ${detailsHtml}
     </li>
   `;

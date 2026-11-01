@@ -119,6 +119,9 @@ class SqliteStore:
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
           type TEXT NOT NULL,
+          types_json TEXT NOT NULL DEFAULT '[]',
+          phase_index INTEGER NOT NULL DEFAULT 0,
+          phase_evidence_json TEXT NOT NULL DEFAULT '[]',
           status TEXT NOT NULL,
           scope TEXT NOT NULL,
           details_json TEXT NOT NULL DEFAULT '[]',
@@ -219,6 +222,18 @@ class SqliteStore:
       if "links_json" not in task_cols:
         self._conn.execute(
           "ALTER TABLE tasks ADD COLUMN links_json TEXT NOT NULL DEFAULT ''"
+        )
+      if "types_json" not in task_cols:
+        self._conn.execute(
+          "ALTER TABLE tasks ADD COLUMN types_json TEXT NOT NULL DEFAULT '[]'"
+        )
+      if "phase_index" not in task_cols:
+        self._conn.execute(
+          "ALTER TABLE tasks ADD COLUMN phase_index INTEGER NOT NULL DEFAULT 0"
+        )
+      if "phase_evidence_json" not in task_cols:
+        self._conn.execute(
+          "ALTER TABLE tasks ADD COLUMN phase_evidence_json TEXT NOT NULL DEFAULT '[]'"
         )
       cols = {
         row["name"]
@@ -678,15 +693,19 @@ class SqliteStore:
         self._conn.execute(
           """
           INSERT INTO tasks (
-            position, id, title, type, status, scope,
-            details_json, links_json, msg_ids_json, report_ids_json, deps_json, modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            position, id, title, type, types_json, phase_index, phase_evidence_json,
+            status, scope, details_json, links_json, msg_ids_json, report_ids_json,
+            deps_json, modified_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             index,
             task.id,
             task.title,
             task.type,
+            json.dumps(task.types),
+            task.phase_index,
+            json.dumps(task.phase_evidence),
             task.status,
             task.scope,
             json.dumps(task.details),
@@ -1010,30 +1029,29 @@ class SqliteStore:
     status = "upcoming" if row["status"] in LEGACY_TASK_STATUSES else str(row["status"])
     raw_links = row["links_json"] if "links_json" in keys else ""
     parsed_links = json.loads(raw_links) if raw_links else None
+    raw_types = json.loads(row["types_json"] or "[]") if "types_json" in keys else []
+    common = {
+      "id": str(row["id"]),
+      "title": str(row["title"]),
+      "type": str(row["type"]),
+      "types": raw_types or None,
+      "phase_index": int(row["phase_index"]) if raw_types else None,
+      "phase_evidence": json.loads(row["phase_evidence_json"] or "[]")
+      if raw_types
+      else None,
+      "status": status,
+      "scope": str(row["scope"]),
+      "details": [str(item) for item in json.loads(row["details_json"] or "[]")],
+      "allow_long_details": True,
+      "modified_at": str(row["modified_at"]),
+    }
     if isinstance(parsed_links, dict):
-      return Task(
-        id=str(row["id"]),
-        title=str(row["title"]),
-        type=str(row["type"]),
-        status=status,
-        scope=str(row["scope"]),
-        details=[str(item) for item in json.loads(row["details_json"] or "[]")],
-        allow_long_details=True,
-        links=parsed_links,
-        modified_at=str(row["modified_at"]),
-      )
+      return Task(**common, links=parsed_links)
     return Task(
-      id=str(row["id"]),
-      title=str(row["title"]),
-      type=str(row["type"]),
-      status=status,
-      scope=str(row["scope"]),
-      details=[str(item) for item in json.loads(row["details_json"] or "[]")],
-      allow_long_details=True,
+      **common,
       msg_ids=[str(item) for item in json.loads(row["msg_ids_json"] or "[]")],
       report_ids=[str(item) for item in json.loads(row["report_ids_json"] or "[]")],
       task_ids=[str(item) for item in json.loads(row["deps_json"] or "[]")],
-      modified_at=str(row["modified_at"]),
     )
 
   def _row_to_report(self, row: sqlite3.Row) -> Report:

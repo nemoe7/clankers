@@ -23,6 +23,7 @@ MSG_ID_CLI = "a0b1c2"
 ACK_MARKDOWN = "ack-token-verified"
 SECOND_DETAIL_TOKEN = "detail-token-two"
 REPORT_ID_PORT = "port-report"
+TEST_COMMIT_HASH = "a" * 40
 TASK_ID_CLI = "cli-task"
 TASK_ID_BASE = "base-task"
 PR_VERIFICATION_ERROR = "did not verify"
@@ -260,6 +261,7 @@ assert.match(upcoming, /data-task-id="legacy"/);
 def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "http.sqlite3")
   app = SteeringApp(store)
+  app.tasks._commit_verifier = lambda commit: commit
 
   status, created = app.dispatch(
     "POST",
@@ -313,7 +315,11 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   status, t_patched = app.dispatch(
     "PATCH",
     "/tasks/build-router",
-    {"status": "finished", "details": ["Registered REST endpoints."]},
+    {
+      "status": "finished",
+      "commit_hash": TEST_COMMIT_HASH,
+      "details": ["Registered REST endpoints."],
+    },
   )
   assert status == int(HTTPStatus.OK)
   assert t_patched["task"]["status"] == "finished"
@@ -995,7 +1001,15 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   expected_error = "at least one detail"
   assert code != 0 and expected_error in err
   code, out, _ = _run_cli(
-    state_dir, "task", "new", TASK_ID_BASE, "Base task", "-d", "Build the base."
+    state_dir,
+    "task",
+    "new",
+    TASK_ID_BASE,
+    "Base task",
+    "-T",
+    "ops",
+    "-d",
+    "Build the base.",
   )
   assert code == 0
   assert TASK_ID_BASE in out
@@ -1903,6 +1917,7 @@ def _seed_report_removal_batch(state_dir: Path) -> str:
   tasks.create_task(
     "linked-work",
     "Linked work",
+    type="ops",
     details=["Review reports"],
     report_ids=["ready", "protected", "empty"],
   )
@@ -2834,13 +2849,54 @@ def test_cli_bare_task_shows_first_unblocked_without_details(tmp_path: Path) -> 
   assert "Detailed step" in out
 
 
+def test_cli_chain_creation_and_phase_finish() -> None:
+  state_dir = cli.resolve_state_dir()
+  store, _, _, reports = cli.open_services(state_dir)
+  reports.publish_report("decision", "Decision", "# Decision")
+
+  code, _, error = _run_cli(
+    state_dir,
+    "task",
+    "new",
+    "chain",
+    "Review then operate",
+    "-d",
+    "Review.",
+    "-T",
+    "report",
+    "-T",
+    "ops",
+    "-r",
+    "decision",
+  )
+  assert code == 0, error
+  created = store.get_task("chain")
+  assert created is not None
+  assert created.types == ["report", "ops"] and created.phase_index == 0
+  code, _, error = _run_cli(state_dir, "task", "finish", "chain")
+  assert code == 0, error
+  advanced = store.get_task("chain")
+  assert advanced is not None
+  assert advanced.status == "upcoming" and advanced.type == "ops"
+  assert advanced.phase_index == 1 and advanced.phase_evidence[0] == "decision"
+  code, _, _ = _run_cli(state_dir, "task", "mod", "chain", "types", "code")
+  assert code != 0 and store.get_task("chain").types == ["report", "ops"]
+  code, _, error = _run_cli(state_dir, "task", "mod", "chain", "status", "finished")
+  assert code == 0, error
+  finished = store.get_task("chain")
+  assert finished is not None
+  assert finished.status == "finished" and finished.phase_index == 2
+  store.close()
+
+
 def test_cli_bare_task_handles_no_unblocked_work(tmp_path: Path) -> None:
   state_dir = cli.resolve_state_dir()
   code, out, err = _run_cli(state_dir, "task")
   assert code == 0, err
   assert NO_CURRENT_TASK in out
   store, _, tasks, _ = cli.open_services(state_dir)
-  tasks.create_task("done-task", "Done", status="finished", details=["Done"])
+  tasks.create_task("done-task", "Done", type="ops", details=["Done"])
+  tasks.finish_phase("done-task")
   store.close()
   code, out, err = _run_cli(state_dir, "task", "--deets")
   assert code == 0, err

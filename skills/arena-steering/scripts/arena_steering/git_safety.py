@@ -191,3 +191,42 @@ def push_warning(cwd: Path, words: list[str]) -> str:
   except GitCheckError:
     return "PUSH BLOCKED: remote default comparison unavailable. No push ran; check the remote and retry."
   return ""
+
+
+def verify_completion_commit(cwd: Path, commit_hash: str) -> str:
+  """Require a clean checkout and a commit on its pushed branch."""
+  if not isinstance(commit_hash, str) or not re.fullmatch(r"[0-9a-f]{40}", commit_hash):
+    raise GitCheckError("A full 40-character commit hash is required")
+  if _git(cwd, "status", "--porcelain=v1", "--untracked-files=all").stdout:
+    raise GitCheckError("Task completion requires a clean Git tree")
+  branch = _git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD").stdout.strip()
+  remote = (
+    _git(
+      cwd, "config", "--get", f"branch.{branch}.remote", allowed=(0, 1)
+    ).stdout.strip()
+    or "origin"
+  )
+  ref = (
+    _git(
+      cwd, "config", "--get", f"branch.{branch}.merge", allowed=(0, 1)
+    ).stdout.strip()
+    or f"refs/heads/{branch}"
+  )
+  if not ref.startswith("refs/heads/"):
+    raise GitCheckError("Remote branch comparison unavailable")
+  try:
+    _git(cwd, "fetch", "--quiet", "--no-tags", remote, ref)
+    remote_contains_head = _git(
+      cwd, "merge-base", "--is-ancestor", "HEAD", "FETCH_HEAD", allowed=(0, 1)
+    )
+  except GitCheckError as exc:
+    raise GitCheckError("Remote branch comparison unavailable") from exc
+  if remote_contains_head.returncode:
+    raise GitCheckError("Local-only commits remain; push before finishing the task")
+  commit = _git(
+    cwd, "rev-parse", "--verify", f"{commit_hash}^{{commit}}"
+  ).stdout.strip()
+  on_branch = _git(cwd, "merge-base", "--is-ancestor", commit, "HEAD", allowed=(0, 1))
+  if on_branch.returncode:
+    raise GitCheckError("Commit is not on the current branch")
+  return commit

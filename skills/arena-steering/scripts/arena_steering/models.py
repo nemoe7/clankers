@@ -282,6 +282,9 @@ class Task:
   id: str
   title: str
   type: str
+  types: list[str]
+  phase_index: int
+  phase_evidence: list[str | None]
   status: str
   scope: str
   details: list[str]
@@ -298,6 +301,9 @@ class Task:
     details: list[str] | None = None,
     links: dict[str, list[str]] | None = None,
     *,
+    types: list[str] | None = None,
+    phase_index: int | None = None,
+    phase_evidence: list[str | None] | None = None,
     msg_ids: list[str] | None = None,
     report_ids: list[str] | None = None,
     task_ids: list[str] | None = None,
@@ -313,10 +319,37 @@ class Task:
     self.title = title.strip()
     if type not in TASK_TYPES:
       raise ValueError(f"Invalid Task.type: {type!r}")
-    self.type = type
+    if types is not None and (
+      not isinstance(types, list)
+      or not types
+      or any(item not in TASK_TYPES for item in types)
+    ):
+      raise ValueError(f"Invalid Task.types: {types!r}")
+    self.types = list(types) if types is not None else [type]
     if status not in TASK_STATUSES:
       raise ValueError(f"Invalid Task.status: {status!r}")
     self.status = status
+    index = len(self.types) if status == "finished" else 0
+    self.phase_index = index if phase_index is None else phase_index
+    if (
+      not isinstance(self.phase_index, int)
+      or isinstance(self.phase_index, bool)
+      or not 0 <= self.phase_index <= len(self.types)
+      or (self.phase_index == len(self.types)) != (status == "finished")
+    ):
+      raise ValueError(f"Invalid Task.phase_index: {self.phase_index!r}")
+    self.type = self.types[min(self.phase_index, len(self.types) - 1)]
+    evidence = [None] * len(self.types) if phase_evidence is None else phase_evidence
+    if (
+      not isinstance(evidence, list)
+      or len(evidence) != len(self.types)
+      or any(
+        item is not None and (not isinstance(item, str) or not item)
+        for item in evidence
+      )
+    ):
+      raise ValueError(f"Invalid Task.phase_evidence: {evidence!r}")
+    self.phase_evidence = list(evidence)
     self.scope = str(scope or "").strip()
     cleaned_details: list[str] = []
     for line in details or []:
@@ -416,6 +449,13 @@ class Task:
       "id": self.id,
       "title": self.title,
       "type": self.type,
+      "types": list(self.types),
+      "phase_index": self.phase_index,
+      "phase_evidence": list(self.phase_evidence),
+      "current_phase": self.type if self.status == "upcoming" else None,
+      "remaining_phases": self.types[self.phase_index + 1 :]
+      if self.status == "upcoming"
+      else [],
       "status": self.status,
       "scope": self.scope,
       "details": list(self.details),
@@ -438,6 +478,9 @@ class Task:
       id=str(data["id"]),
       title=str(data["title"]),
       type=str(data.get("type", "code")),
+      types=list(data["types"]) if "types" in data else None,
+      phase_index=data.get("phase_index"),
+      phase_evidence=list(data["phase_evidence"]) if "phase_evidence" in data else None,
       status=str(data.get("status", "upcoming")),
       scope=str(data.get("scope", "")),
       details=[str(item) for item in data.get("details", [])],

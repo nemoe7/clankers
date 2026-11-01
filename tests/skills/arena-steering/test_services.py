@@ -345,7 +345,9 @@ def test_task_service_mutable_dependency_queue_and_derived_blocking() -> None:
   reports = ReportService(store, store)
 
   tasks.create_task("task-b", "Build consumer", details=["Build consumer."])
-  tasks.create_task("task-a", "Build foundation", details=["Build foundation."])
+  tasks.create_task(
+    "task-a", "Build foundation", type="ops", details=["Build foundation."]
+  )
   tasks.mod_deps_add("task-b", "task-a")
 
   ordered = tasks.list_tasks(include_finished=True)
@@ -868,9 +870,11 @@ def test_report_pin_and_linked_task_staleness_survive_restart(tmp_path) -> None:
   reports.mark_ack_seen("idle-report")
   reports.publish_report("linked-report", "Linked report", "# Linked")
   reports.pin_report("idle-report", True)
-  tasks.create_task("first", "First", details=["First"], report_ids=["linked-report"])
   tasks.create_task(
-    "second", "Second", details=["Second"], report_ids=["linked-report"]
+    "first", "First", type="ops", details=["First"], report_ids=["linked-report"]
+  )
+  tasks.create_task(
+    "second", "Second", type="ops", details=["Second"], report_ids=["linked-report"]
   )
 
   clock.advance(hours=2)
@@ -923,10 +927,11 @@ def test_stale_report_removal_retains_a_pending_answer() -> None:
   tasks.create_task(
     "answer-work",
     "Answer work",
-    status="finished",
+    type="ops",
     details=["Done"],
     report_ids=["answered-report"],
   )
+  tasks.finish_phase("answer-work")
   assert [report.id for report in reports.list_reports(stale_only=True)] == [
     "answered-report"
   ]

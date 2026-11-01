@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-01
+
+### Changed
+
+#### maintenance
+
+- Seed finished steering demo tasks as historical rows while live task creation requires phase completion checks (`demo-arena-steer.py`).
+
 ## 2026-10-31
 
 ### Changed

@@ -57,7 +57,8 @@ Keep session state outside version control.
 ### Tasks
 
 - View current, upcoming, and finished work. Search tasks, filter by type, expand details, and load more finished items by scrolling.
-- Task dependencies determine order and blocking. An unanswered linked report or a running gate also blocks a task.
+- See ordered phase chips for each task. Finished phases fade and receive a strikethrough.
+- Task dependencies, unanswered linked questions, and running gates can block work. A report used for an earlier phase does not block later work.
 - The task view shows scope, report links, and dependencies. The CLI and HTTP API also manage message links.
 
 ### Reports
@@ -95,8 +96,9 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer tasks [-f] [-p PAGE]` | List upcoming tasks, or page through finished tasks with `-f`. |
 | `steer task [-d]` | Show the first unblocked upcoming task. Add `-d` or `--deets` to include details. |
 | `steer task ID` | Show a task, its details, and blocking state. |
-| `steer task new ID TITLE` | Create a task. Requires at least one `-d` detail. Options include `-T` type, `-s` status, `-S` scope, `-m` message, `-r` report, `-k` dependency, and `-g` gate. |
-| `steer task mod ID FIELD VALUE` | Update `status`, `title`, `type`, or `scope`. Use `deets`, `links`, or `deps` to add or remove details and links. |
+| `steer task new ID TITLE -d DETAIL [-T TYPE ...]` | Create an upcoming task. Repeat `-T` for ordered phases such as `-T report -T code`. Options also include `-S` scope, `-m` message, `-r` report, `-k` dependency, and `-g` gate. |
+| `steer task finish ID [-c COMMIT]` | Validate and advance one phase. Code and docs need a unique pushed commit hash and a clean tree. The task finishes after its last phase. |
+| `steer task mod ID FIELD VALUE` | Update `title`, `type`, or `scope`; set phases with `types TYPE ...` before progress. Use `status finished [COMMIT]` to advance, or `deets`, `links`, and `deps` to edit details and links. |
 | `steer task unlink ID [TYPE] LINK` | Remove an inferred or explicit `msg`, `report`, or `task` link. |
 | `steer task rm ID` | Remove a task. |
 | `steer reports [-s] [-p PAGE]` | List reports, or stale reports with `-s`, 10 per page. |
@@ -145,8 +147,12 @@ The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. The g
 
 ## Task and message contracts
 
-- Task types are `report`, `code`, `docs`, `ops`, and `misc`. Statuses are `upcoming` and `finished`.
-- New tasks default to `code` and `upcoming`. Blocking is derived from unanswered linked reports, unfinished dependencies, and running gates.
+- Task phases use ordered types (`report`, `code`, `docs`, `ops`, `misc`), with one type for existing single-phase tasks. Statuses are `upcoming` and `finished`.
+- New tasks default to one `code` phase and `upcoming` status. Each finish request validates the current phase, advances it, and finishes the task after the last phase.
+- A report phase needs a linked published report or received answer.
+- Code and docs phases need a unique full commit hash and a clean Git tree. Missing remote comparison or local-only commits block completion.
+- Ops and misc phases need no extra evidence.
+- Unanswered linked questions block later phases, except the report that satisfied a completed report phase. Dependencies and running gates still block tasks.
 - The first unblocked upcoming task is current. Legacy `in_progress` and `blocked` statuses become `upcoming` without reordering.
 - New and updated tasks require at least one nonempty detail. Manually entered details have a 120-character limit.
 - Existing empty tasks remain readable but need a detail on their next update.
@@ -155,7 +161,7 @@ The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. The g
 - Repeated acknowledgements, links, and relinks do not add answer details. Later answers can add new details when first acknowledged.
 - Acknowledgement output lists only details actually added to tasks.
 - Existing task-answer snapshots are not migrated into task details.
-- With one target, `-i ID -t TITLE -d DETAIL` commits a linked task and acknowledgement together. `-T` and `-S` set task type and scope.
+- With one target, `-i ID -t TITLE -d DETAIL` commits a linked task and acknowledgement together. Repeat `-T` for ordered phases and use `-S` for scope.
 - Multi-ID acknowledgement is atomic. A bad ID leaves every target unchanged.
 - Removing a task removes its dependency links from other tasks.
 - Task details are unique after trimming whitespace.
@@ -279,7 +285,7 @@ Successful creates return HTTP 201. Other successful route operations return 200
 | Message with file | Message fields plus `file`, `attachments`, or `pasted_text`. | `message`. A long paste uses `pasted-text.txt`. |
 | Acknowledge | `markdown` or `ack`. | `message` or `answer`, depending on the route. `task_details_added` appears only when an answer acknowledgement adds details. |
 | List tasks | `full=0` excludes finished tasks. | `tasks`, each with derived `blocked`. |
-| Create or patch task | `id`, `title`, `type`, `status`, `scope`, `details`, and link lists. PATCH also accepts zero-based `position`. | `task`. Dependency ordering is enforced. |
+| Create or patch task | `id`, `title`, single `type` or ordered `types`, `scope`, `details`, and link lists. PATCH accepts zero-based `position`, or `status: "finished"` to advance with `commit_hash` for code or docs. | `task` includes `type`, `types`, `current_phase`, `remaining_phases`, `phase_index`, and `phase_evidence`. Progress cannot be patched directly. |
 | List reports | `stale=1` selects stale reports. `summary=1` omits report bodies. | `reports`. |
 | Publish report | `id`, `title`, Markdown `body`, and optional boolean `allow_unparsed_markers`. | Verified `report`, including parsed fields and rendered blocks. |
 | Patch report | `status` set to `dismissed`, or boolean `pinned`. | `report`. |
