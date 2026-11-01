@@ -5,11 +5,16 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 
 class GitCheckError(Exception):
   """A Git result that cannot justify allowing a guarded operation."""
+
+
+class DirtyTreeError(GitCheckError):
+  """Task completion found tracked or untracked checkout changes."""
 
 
 def _git(
@@ -193,12 +198,27 @@ def push_warning(cwd: Path, words: list[str]) -> str:
   return ""
 
 
+def require_clean_tree(cwd: Path) -> None:
+  """Refuse task completion when Git sees tracked or untracked checkout changes."""
+  if _git(cwd, "status", "--porcelain=v1", "--untracked-files=all").stdout:
+    raise DirtyTreeError("Task completion requires a clean Git tree")
+
+
+def completion_tree_check(state_dir: Path) -> Callable[[], None] | None:
+  """Guard only the installed checkout state, not isolated or in-memory stores."""
+  if state_dir.name != "arena-state":
+    return None
+  checkout = state_dir.parent.resolve()
+  if not (checkout / ".git").exists():
+    return None
+  return lambda: require_clean_tree(checkout)
+
+
 def verify_completion_commit(cwd: Path, commit_hash: str) -> str:
   """Require a clean checkout and a commit on its pushed branch."""
   if not isinstance(commit_hash, str) or not re.fullmatch(r"[0-9a-f]{40}", commit_hash):
     raise GitCheckError("A full 40-character commit hash is required")
-  if _git(cwd, "status", "--porcelain=v1", "--untracked-files=all").stdout:
-    raise GitCheckError("Task completion requires a clean Git tree")
+  require_clean_tree(cwd)
   branch = _git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD").stdout.strip()
   remote = (
     _git(

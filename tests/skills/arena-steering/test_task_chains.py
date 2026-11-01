@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import sqlite3
 import subprocess
@@ -10,6 +11,7 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
+from arena_steering import cli
 from arena_steering.models import Task
 from arena_steering.server import SteeringApp, create_http_server
 from arena_steering.services import ReportService, TaskService
@@ -329,6 +331,82 @@ def test_browser_shows_faded_finished_phase_chip(tmp_path: Path) -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+def test_dirty_checkout_finish_raises_one_persisted_violation(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  checkout = tmp_path / "checkout"
+  checkout.mkdir()
+
+  def git(*args: str) -> str:
+    result = subprocess.run(
+      ["git", *args], cwd=checkout, capture_output=True, text=True, check=True
+    )
+    return result.stdout.strip()
+
+  git("init", "-b", "test")
+  git("config", "user.name", "Test")
+  git("config", "user.email", "test@example.com")
+  (checkout / ".gitignore").write_text("arena-state/\n")
+  git("add", ".gitignore")
+  git("commit", "-m", "test: ignore installed state")
+
+  state_dir = checkout / "arena-state"
+  from arena_steering.git_safety import DirtyTreeError
+
+  store, messages, tasks, _ = cli.open_services(state_dir)
+  tasks.create_task("review", "Review", type="misc", details=["Review."])
+  for phase_type in ("ops", "report", "code", "docs"):
+    tasks.create_task(phase_type, phase_type, type=phase_type, details=["Review."])
+  assert not git("status", "--porcelain=v1", "--untracked-files=all")
+  (checkout / "unfinished.txt").write_text("dirty")
+  for task_id in ("review", "ops", "report", "code", "docs"):
+    with pytest.raises(DirtyTreeError, match="clean Git tree"):
+      tasks.finish_phase(task_id, commit_hash=FIRST_COMMIT)
+  assert tasks.get_task("review")[0].status == "upcoming"
+  flag = messages.pending_violation()
+  assert flag is not None and flag.hidden and flag.requires_ack
+  assert flag.violation_type == "dirty-task-finish"
+
+  with pytest.raises(DirtyTreeError, match="clean Git tree"):
+    tasks.mod_scalar("review", "status", "finished")
+  with pytest.raises(DirtyTreeError, match="clean Git tree"):
+    tasks.patch_task("review", {"status": "finished"})
+  assert messages.pending_ids() == [flag.id]
+  messages.ack(flag.id, "Read; investigating the dirty tree.")
+  app = SteeringApp(store)
+  status, response = app.dispatch(
+    "PATCH", "/tasks/review", {"status": "finished", "_request_id": "dirty-finish"}
+  )
+  assert status == HTTPStatus.BAD_REQUEST
+  assert "clean Git tree" in response["error"]
+  http_flag = messages.pending_violation()
+  assert http_flag is not None and http_flag.id != flag.id
+  other_store, other_messages, _, _ = cli.open_services(state_dir)
+  assert other_messages.pending_violation().id == http_flag.id
+  other_store.close()
+  messages.ack(http_flag.id, "Read; checking the CLI finish.")
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: state_dir)
+  errors = io.StringIO()
+  assert cli.main(["task", "finish", "review"], out=io.StringIO(), err=errors) == 1
+  assert "clean Git tree" in errors.getvalue()
+  cli_flag = messages.pending_violation()
+  assert cli_flag is not None and cli_flag.id not in {flag.id, http_flag.id}
+  assert messages.pending_ids() == [cli_flag.id]
+
+  (checkout / "unfinished.txt").unlink()
+  assert not git("status", "--porcelain=v1", "--untracked-files=all")
+  messages.ack(cli_flag.id, "Read and corrected.")
+  (checkout / ".gitignore").write_text("arena-state/\n# tracked change\n")
+  with pytest.raises(DirtyTreeError, match="clean Git tree"):
+    tasks.finish_phase("review")
+  tracked_flag = messages.pending_violation()
+  assert tracked_flag is not None and tracked_flag.id != cli_flag.id
+  git("restore", ".gitignore")
+  messages.ack(tracked_flag.id, "Read and corrected.")
+  assert tasks.finish_phase("review").status == "finished"
+  store.close()
 
 
 def test_git_completion_checks_clean_tree_and_remote(tmp_path: Path) -> None:

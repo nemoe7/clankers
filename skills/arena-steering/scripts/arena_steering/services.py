@@ -14,7 +14,7 @@ from typing import Any
 
 from . import pre as pre_mod
 from . import survey as survey_mod
-from .git_safety import GitCheckError, verify_completion_commit
+from .git_safety import DirtyTreeError, GitCheckError, verify_completion_commit
 from .markdown import render_report_markdown, unparsed_strike_lines
 from .markdown_fields import format_answer_for_task_detail, parse_report_markdown
 from .models import (
@@ -292,6 +292,20 @@ class MessageService:
       None,
     )
 
+  def flag_dirty_finish(self) -> Message:
+    """Persist one blocking flag after a dirty-tree finish attempt rolls back."""
+    with self._reports.transaction():
+      for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
+        if msg.violation_type == "dirty-task-finish" and msg.requires_ack:
+          return msg
+      return self.send_message(
+        "Automatic violation: Tried to finish a task with a dirty Git tree. "
+        "Read and acknowledge this flag, then clean the tree before retrying.",
+        hidden=True,
+        blocking=True,
+        violation_type="dirty-task-finish",
+      )
+
   def pending_ids(self) -> list[str]:
     """Return unacked message and report-answer IDs without marking anything seen."""
     ids = [
@@ -516,8 +530,14 @@ class MessageService:
 def _transactional_task_write(method: Any) -> Any:
   @wraps(method)
   def wrapped(self: Any, *args: Any, **kwargs: Any) -> Any:
-    with self._tasks.transaction():
-      return method(self, *args, **kwargs)
+    try:
+      with self._tasks.transaction():
+        return method(self, *args, **kwargs)
+    except DirtyTreeError:
+      on_dirty_finish = getattr(self, "_on_dirty_finish", None)
+      if on_dirty_finish is not None:
+        on_dirty_finish()
+      raise
 
   return wrapped
 
@@ -532,11 +552,15 @@ class TaskService:
     clock: Clock | None = None,
     gates: GateStatus | None = None,
     commit_verifier: Callable[[str], str] | None = None,
+    clean_tree_verifier: Callable[[], None] | None = None,
+    on_dirty_finish: Callable[[], None] | None = None,
   ) -> None:
     self._tasks = tasks
     self._reports = reports
     self._clock = clock or UtcClock()
     self._gates = gates
+    self._clean_tree_verifier = clean_tree_verifier
+    self._on_dirty_finish = on_dirty_finish
     self._commit_verifier = commit_verifier or (
       lambda commit: verify_completion_commit(pre_mod.repo_root(), commit)
     )
@@ -660,6 +684,13 @@ class TaskService:
   ) -> Task:
     if task.status == "finished":
       raise ValueError("Task is already finished")
+    if self._clean_tree_verifier is not None:
+      try:
+        self._clean_tree_verifier()
+      except DirtyTreeError:
+        raise
+      except GitCheckError as exc:
+        raise ValueError(str(exc)) from exc
     reports = {item.id: item for item in self._reports.list_reports()}
     if self.is_task_blocked(
       task, task_map={item.id: item for item in queue}, report_map=reports
@@ -699,6 +730,8 @@ class TaskService:
         )
       try:
         evidence = self._commit_verifier(commit_hash)
+      except DirtyTreeError:
+        raise
       except GitCheckError as exc:
         raise ValueError(str(exc)) from exc
       if evidence in used_commits:

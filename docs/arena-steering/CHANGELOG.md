@@ -18,6 +18,8 @@ This log has no Unreleased section.
 
 - `models.py`, `store.py`, `services.py`, `cli.py`, `server.py`, `assets/`: Store ordered task phases, validate report or unique pushed commit evidence before advancing, and show phase progress.
 
+- `git_safety.py`, `services.py`, `cli.py`, `server.py`: Refuse dirty-tree completion for every task phase and persist one hidden blocking violation across CLI and browser writes.
+
 ### Changed
 
 - `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.

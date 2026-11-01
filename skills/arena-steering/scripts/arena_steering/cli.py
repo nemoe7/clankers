@@ -20,6 +20,7 @@ from typing import TextIO
 from . import __version__
 from . import pre as pre_mod
 from .gates import FileGateStatus
+from .git_safety import DirtyTreeError, completion_tree_check
 from .models import MESSAGE_ID_RE, Message, Report, ReportAnswer, Task
 from .server import SteeringApp, create_http_server
 from .services import MessageService, ReportService, TaskService
@@ -54,7 +55,14 @@ def open_services(
   """Open SqliteStore and domain services for a state directory."""
   store = SqliteStore(state_dir / "state.sqlite3")
   messages = MessageService(store, store, store, store)
-  tasks = TaskService(store, store, gates=FileGateStatus(state_dir))
+  tree_check = completion_tree_check(state_dir)
+  tasks = TaskService(
+    store,
+    store,
+    gates=FileGateStatus(state_dir),
+    clean_tree_verifier=tree_check,
+    on_dirty_finish=messages.flag_dirty_finish if tree_check is not None else None,
+  )
   reports = ReportService(
     store,
     store,
@@ -388,6 +396,9 @@ def main(
     if not parsed_root.command:
       parser.print_help(file=stdout)
     return 0
+  except DirtyTreeError as exc:
+    print(f"Steer error: {exc}", file=stderr)
+    return 1
   except (KeyError, ValueError, IndexError, OSError, RuntimeError) as exc:
     msg = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
     print(f"Steer error: {msg}", file=stderr)

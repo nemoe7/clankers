@@ -29,6 +29,7 @@ from urllib.parse import parse_qs, urlparse, urlsplit
 
 from . import __version__
 from .gates import FileGateStatus
+from .git_safety import DirtyTreeError, completion_tree_check
 from .markdown import render_markdown, render_report_markdown
 from .markdown_fields import parse_report_markdown
 from .models import Attachment
@@ -195,11 +196,15 @@ class SteeringApp:
     self.repo_name = repo_name or _detect_repo_name(store)
     self._read_set = _read_set_files(_detect_repo_root(store))
     self.messages = MessageService(store, store, store, store)
+    state_dir = Path(store.db_path).parent if store.db_path != ":memory:" else None
+    tree_check = completion_tree_check(state_dir) if state_dir is not None else None
     self.tasks = TaskService(
       store,
       store,
-      gates=FileGateStatus(Path(store.db_path).parent)
-      if store.db_path != ":memory:"
+      gates=FileGateStatus(state_dir) if state_dir is not None else None,
+      clean_tree_verifier=tree_check,
+      on_dirty_finish=self.messages.flag_dirty_finish
+      if tree_check is not None
       else None,
     )
     self.reports = ReportService(
@@ -326,7 +331,11 @@ class SteeringApp:
           self._browser_write.request_id = request_id
           self._browser_write.files = []
           try:
-            status, payload = handler(params, query, request_body)
+            try:
+              status, payload = handler(params, query, request_body)
+            except DirtyTreeError as exc:
+              # Commit the flag after the task savepoint rolls back.
+              status, payload = int(HTTPStatus.BAD_REQUEST), {"error": str(exc)}
             if not 200 <= status < 300:
               for file_path in self._browser_write.files:
                 file_path.unlink(missing_ok=True)
@@ -347,6 +356,8 @@ class SteeringApp:
       if method.upper() in {"POST", "PATCH", "DELETE"} and 200 <= status < 300:
         self._state_version = getattr(self, "_state_version", 0) + 1
       return (status, payload)
+    except DirtyTreeError as exc:
+      return (int(HTTPStatus.BAD_REQUEST), {"error": str(exc)})
     except KeyError as exc:
       return (
         int(HTTPStatus.NOT_FOUND),
