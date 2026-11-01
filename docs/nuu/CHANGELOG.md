@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.70]
+
+### Added
+
+- **Dialog action visibility (`ACC203`, `browser.cjs`)**: Flag action rows outside the visible dialog or viewport while allowing the dialog body to scroll.
+
+### Fixed
+
+- **Browser engine discovery (`browser.cjs`)**: Ignore unsupported private Playwright engines when choosing a public browser.
+
 ## [0.1.69]
 
 ### Added

@@ -553,6 +553,132 @@ byId('retry').addEventListener('click',submit);
       thread.join()
 
 
+def test_rendered_survey_dialog_actions_and_tooltip_stay_visible(tmp_path):
+  """An opened, focused modal reveals defects a default-page audit cannot see."""
+  import http.server
+  import os
+  import threading
+
+  import pytest
+
+  if not os.environ.get("NEMO_UI_BROWSER_TEST"):
+    pytest.skip("Optional browser integration is not enabled")
+  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
+  markup = """<!doctype html><html><head><style>
+*,*::before,*::after {box-sizing:border-box}
+body {margin:0;background:#171717;color:#eee;font:14px sans-serif}
+button {font:inherit;min-height:32px}
+.modal-shell {width:calc(100vw - 32px);max-width:440px;padding:0;border:0;
+  background:transparent;color:inherit}
+.modal-card {display:flex;flex-direction:column;gap:12px;padding:20px;
+  border:1px solid #777;border-radius:6px;background:#282828}
+.modal-body {min-height:auto}
+.survey-cap-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.survey-cap-pill {position:relative;padding:8px;border:1px solid #777}
+#answer-tip {display:none;position:absolute;left:0;bottom:calc(100% + 6px);
+  min-width:220px;padding:8px;border:1px solid #aaa;background:#353535;color:#fff}
+#last-pill:focus-within #answer-tip {display:block}
+.survey-results {width:100%;border-collapse:collapse}
+.survey-results tr {height:38px}
+.fixed .modal-card {max-height:calc(100dvh - 40px)}
+.fixed .modal-body {min-height:0;overflow-y:auto}
+.fixed #answer-tip {left:auto;right:0;min-width:min(220px,calc(100vw - 72px))}
+</style></head><body class="MODE">
+<button id="open" onclick="document.getElementById('survey').showModal()">Survey</button>
+<dialog id="survey" class="modal-shell" aria-labelledby="title">
+<form method="dialog" class="modal-card">
+<header><h2 id="title">Survey Verification</h2></header>
+<div class="modal-body"><p>Answered earlier · 4 of 6 verified</p>
+<p>Deterministic checks</p><div class="survey-cap-grid">
+<div class="survey-cap-pill">Reasoning</div>
+<div class="survey-cap-pill">Vision</div>
+<div class="survey-cap-pill" id="last-pill" tabindex="0">Sorted
+<div id="answer-tip" role="tooltip">sorted: true</div></div></div>
+<p>Knowledge calibration</p><table class="survey-results">
+<tr><td>Question</td><td>Confidence</td></tr>
+<tr><td>One</td><td>95%</td></tr><tr><td>Two</td><td>80%</td></tr>
+<tr><td>Three</td><td>70%</td></tr><tr><td>Four</td><td>60%</td></tr>
+</table><footer id="nested-info"><a href="#title">More information</a></footer></div>
+<footer id="actions" class="modal-actions"><button type="submit">Close</button></footer>
+</form></dialog></body></html>"""
+  for mode in ("old", "fixed"):
+    (tmp_path / f"{mode}.html").write_text(
+      markup.replace('class="MODE"', f'class="{mode}"'), encoding="utf-8"
+    )
+
+  class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, directory=str(tmp_path), **kwargs)
+
+    def log_message(self, *_args):
+      pass
+
+  with http.server.ThreadingHTTPServer(("0.0.0.0", 0), Handler) as server:
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def inspect(mode, width, *, open_modal=True):
+      flow = (
+        [
+          {"action": "click", "selector": "#open"},
+          {"action": "focus", "selector": "#last-pill"},
+          {"action": "visible", "selector": "#answer-tip"},
+        ]
+        if open_modal
+        else []
+      )
+      request = {
+        "command": "audit",
+        "url": f"http://127.0.0.1:{server.server_port}/{mode}.html",
+        "widths": [width],
+        "heights": {"855": 325, "411": 799},
+        "timeout": 8,
+        "engine": "chromium",
+        "executable": config["executable"],
+        "output": str(tmp_path / f"{mode}-{width}-{open_modal}"),
+        "flow": flow,
+        "selector": "#survey,#actions,#answer-tip",
+      }
+      result = subprocess.run(
+        ["node", str(SCRIPT.with_name("browser.cjs"))],
+        input=json.dumps(request),
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, **config.get("env", {})},
+      )
+      assert result.returncode == 0, result.stderr or result.stdout
+      report = json.loads(result.stdout)
+      assert report["captures"][0]["status"] == "captured", report
+      return report
+
+    try:
+      hidden = inspect("old", 855, open_modal=False)
+      assert not any(row["rule"] == "ACC203" for row in hidden["findings"])
+      for width in (855, 411):
+        before, after = inspect("old", width), inspect("fixed", width)
+        problems = {
+          row.get("selector") for row in before["findings"] if row["rule"] == "ACC203"
+        }
+        assert "#answer-tip" in problems
+        for report in (before, after):
+          assert not any(
+            row["rule"] == "ACC203" and row.get("selector") == "#nested-info"
+            for row in report["findings"]
+          )
+        if width == 855:
+          assert "#actions" in problems  # Footer sat below the viewport.
+        fixed_overflow = [
+          row
+          for row in after["findings"]
+          if row["rule"] == "ACC203"
+          and row.get("selector") in {"#answer-tip", "#actions"}
+        ]
+        assert not fixed_overflow, fixed_overflow
+    finally:
+      server.shutdown()
+
+
 def test_authorized_asset_fetch_keeps_destinations_and_redirect_guards(tmp_path):
   import http.server
   import threading
