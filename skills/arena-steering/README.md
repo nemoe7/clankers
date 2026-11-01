@@ -141,7 +141,7 @@ _arena_preview_pre() {
 trap '_arena_preview_pre' DEBUG
 ```
 
-The steps are `sleep`, `wireframe`, `gate`, `bible`, `bare`, and `egress`. The gate counts blocking messages, including hidden ones, and the newest unacknowledged answer per report. It blocks a `git push` at once and other work after six calls. Inbox-only reads, polls, and acknowledgements remain available, and the count resets only when no blocking work remains.
+The steps, in order, are `sleep`, `inbox-pipe`, `poll-timeout`, `pr-state`, `push-refs`, `wireframe`, `gate`, `git-safe`, `bible`, `route`, `ack-quote`, and `bare`. The gate counts blocking messages, including hidden ones, and the newest unacknowledged answer per report. It blocks a `git push` at once and other work after six calls. Inbox-only reads, polls, and acknowledgements remain available, and the count resets only when no blocking work remains.
 
 `bible` blocks `cat`, `grep`, `head`, `tail`, and `rg` on ARENA.md, AGENTS.md, and a skill SKILL.md. A passing step prints nothing and lands in `_arena_preview_done`, so a later command in one shell skips it. `steer gate` still runs its inbox check alone for an older hook. `install.sh` holds the profile block that installs this line.
 

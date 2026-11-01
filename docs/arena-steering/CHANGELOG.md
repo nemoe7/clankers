@@ -38,7 +38,7 @@ This log has no Unreleased section.
 
 - `cli.py`, `pre.py`: Resolve state from the installed checkout rather than the current directory. Warn on unreadable state, but refuse pushes.
 
-- `README.md`: Correct state path wording to checkout root, not working directory.
+- `README.md`: Correct state path wording to checkout root, not working directory, and list pre-command steps in registry order.
 
 - `assets/app.js`: Keep survey rechecks separate from the violation button.
 
