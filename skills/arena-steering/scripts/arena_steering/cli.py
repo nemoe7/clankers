@@ -218,6 +218,7 @@ def main(
   )
   post_exit_p.add_argument("--line", default="", help="The completed shell line.")
   post_exit_p.add_argument("--rc", type=int, required=True, help="Shell exit status.")
+  post_exit_p.add_argument("--elapsed", type=float, default=0, help="Elapsed seconds.")
 
   skills_p = sub.add_parser("skills", help="List skill names, descriptions, and paths.")
 
@@ -259,7 +260,7 @@ def main(
     parsed = post_exit_p.parse_args(cmd_args)
     try:
       return _run_post_exit(parsed, resolve_state_dir(), stdout)
-    except OSError:
+    except (OSError, sqlite3.Error, ValueError):
       return 0  # The exit hook must never change the completed line's status.
   group_parsers = {
     "task": task_p,
@@ -782,6 +783,67 @@ def _pre_state_unavailable(parsed: argparse.Namespace, reason: str, out: TextIO)
   return pre_mod.CONTINUE
 
 
+READ_SET_LAST_META = "read_set_last_at"
+READ_SET_INTERVAL_SECONDS = 15 * 60
+
+
+def _schedule_instruction_check(
+  line: str,
+  messages: MessageService,
+  store: SqliteStore,
+  *,
+  moment: datetime | None = None,
+) -> None:
+  """Mint one hidden instruction checkpoint after each elapsed interval."""
+  words = pre_mod._line_commands(pre_mod.PreContext(line=line))
+  if len(words) == 1 and words[0][:2] in (["steer", "poll"], ["arena-preview", "poll"]):
+    return
+  now = moment or datetime.now(UTC)
+  with store.transaction():
+    stamp = store.get_meta(READ_SET_LAST_META)
+    if stamp is None:
+      store.set_meta(READ_SET_LAST_META, now.isoformat())
+      return
+    try:
+      previous = datetime.fromisoformat(stamp)
+      if previous.tzinfo is None:
+        previous = previous.replace(tzinfo=UTC)
+    except ValueError:
+      previous = now
+    if (now - previous).total_seconds() < READ_SET_INTERVAL_SECONDS:
+      return
+    if any(
+      item.hidden and item.requires_ack and item.body.startswith("15min bible check")
+      for item in messages.list_messages()
+    ):
+      return
+    root = pre_mod.repo_root()
+    paths = [
+      root / "ARENA.md",
+      root / "AGENTS.md",
+      root / ".agents/skills/arena-skill/SKILL.md",
+    ]
+    listed = "\n".join(f"- `{path}`" for path in paths if path.is_file())
+    messages.send_message(
+      "15min bible check\n"
+      "Read each listed path fully with read_file only when its full text is absent "
+      "from context, then acknowledge this note.\n"
+      "Answer the survey only when required bible text was absent before this check. "
+      "Use existing knowledge only.\n"
+      "When answering, read only references/survey.json (or bare `steer survey`) "
+      "and the image path from `steer survey -i`, in JSON order.\n"
+      "Do not search, fetch, open other files, run code, or ask another system "
+      "for answers.\n"
+      "Give complete answers with lower confidence when uncertain. Boolean "
+      "answers need true or false and confidence above 0.\n"
+      "Use unknown with confidence 0 only if the whole question is unknown.\n"
+      f"{listed}",
+      hidden=True,
+      blocking=True,
+    )
+    store.set_meta(READ_SET_LAST_META, now.isoformat())
+
+
 def _run_pre_route(
   route: pre_mod.RouteRequest, line: str, store: SqliteStore, out: TextIO
 ) -> int:
@@ -831,6 +893,8 @@ def _run_pre(
   out: TextIO,
 ) -> int:
   """Run the pre-command pipeline and return its verdict."""
+  if not os.environ.get("ARENA_STEER_ROUTE"):
+    _schedule_instruction_check(parsed.line or parsed.command_text, messages, store)
   pending_ids = messages.pending_ids()
   if not pending_ids:
     messages.reset_gate_if_clear()
@@ -1106,22 +1170,114 @@ def _start_locked_run(
   return 0
 
 
-def _run_post_exit(parsed: argparse.Namespace, state_dir: Path, out: TextIO) -> int:
-  """Start a best-effort check watch after a successful push or PR creation."""
-  if parsed.rc != 0 or not pre_mod.post_push_watch(parsed.line):
-    return 0
-  if "pr-checks" in FileGateStatus(state_dir).running_names():
+def _unpushed_commit_count(root: Path) -> int:
+  """Count local commits ahead of the matching origin branch or configured upstream."""
+  if not (root / ".git").exists():
     return 0
   try:
-    _start_detached_run(
-      state_dir, "pr-checks", ["gh", "pr", "checks", "--watch"], out=out
+    branch = subprocess.run(
+      ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+      timeout=5,
     )
-  except (OSError, ValueError) as exc:
-    print(f"PR checks watch could not start: {exc}", file=out)
-    return 0  # Preserve the original shell status even if the watch cannot start.
-  print(
-    "routed pr-checks: background watch after push. Verdict on later call.", file=out
+    if branch.returncode or not branch.stdout.strip():
+      return 0
+    for target in (f"refs/remotes/origin/{branch.stdout.strip()}", "@{upstream}"):
+      result = subprocess.run(
+        ["git", "rev-list", "--count", f"{target}..HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
+      )
+      if result.returncode == 0:
+        return max(0, int(result.stdout.strip()))
+  except (OSError, subprocess.TimeoutExpired, ValueError):
+    pass
+  return 0
+
+
+def _slow_call_hint(line: str, elapsed: float) -> str:
+  """Suggest a detached run only for slow ordinary shell work."""
+  if elapsed < 10 or pre_mod.PreContext(line=line).is_inbox_recovery():
+    return ""
+  if any(
+    words
+    and Path(words[0]).name in {"steer", "arena-preview"}
+    and words[1:2] == ["run"]
+    for words in pre_mod._line_commands(pre_mod.PreContext(line=line))
+  ):
+    return ""
+  return (
+    f"Bash call took {elapsed:.1f}s (>= 10s). "
+    "Use `steer run start -t <task-id> <name> -- <cmd>` for slow commands."
   )
+
+
+def _exit_state_reminders(state_dir: Path) -> list[str]:
+  """Read pending, stale, and unpushed work without changing the inbox."""
+  if not (state_dir / "state.sqlite3").is_file():
+    return []
+  store, messages, _, reports = open_services(state_dir)
+  try:
+    pending = messages.read_pending(mark_seen=False)
+    notes = sum(
+      msg.requires_ack for msg in pending["messages"] if msg.type == "message"
+    )
+    answers = len(pending["report_answers"])
+    parts = []
+    counts = []
+    if notes:
+      counts.append(f"{notes} note{'s' if notes != 1 else ''}")
+    if answers:
+      counts.append(f"{answers} answer{'s' if answers != 1 else ''}")
+    if counts:
+      parts.append("unacked " + ", ".join(counts))
+    if len(reports.list_reports()) >= 10:
+      stale = len(reports.list_reports(stale_only=True))
+      if stale:
+        parts.append(f"Unpublish {stale} stale report{'s' if stale != 1 else ''}.")
+    unpushed = _unpushed_commit_count(pre_mod.repo_root())
+    if unpushed:
+      if store.get_meta("repo_private") == "1":
+        parts.append(
+          f"{unpushed} commit/s unpushed. Private repo: push small batches (<=3)."
+        )
+      else:
+        parts.append(
+          f"{unpushed} commit/s unpushed. ALWAYS push. NEVER delay for batch."
+        )
+    return parts
+  finally:
+    store.close()
+
+
+def _run_post_exit(parsed: argparse.Namespace, state_dir: Path, out: TextIO) -> int:
+  """Watch checks and print advice without changing the completed shell status."""
+  if (
+    parsed.rc == 0
+    and pre_mod.post_push_watch(parsed.line)
+    and "pr-checks" not in FileGateStatus(state_dir).running_names()
+  ):
+    try:
+      _start_detached_run(
+        state_dir, "pr-checks", ["gh", "pr", "checks", "--watch"], out=out
+      )
+      print(
+        "routed pr-checks: background watch after push. Verdict on later call.",
+        file=out,
+      )
+    except (OSError, ValueError) as exc:
+      print(f"PR checks watch could not start: {exc}", file=out)
+  slow = _slow_call_hint(parsed.line, parsed.elapsed)
+  if slow:
+    print(slow, file=out)
+  for reminder in _exit_state_reminders(state_dir):
+    print(reminder, file=out)
   return 0
 
 

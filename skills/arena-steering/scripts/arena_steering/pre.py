@@ -24,7 +24,6 @@ BLOCK = 130
 GATE_THRESHOLD = 6
 CALL_COUNT_META = "pre_call_count"
 WIREFRAME_SUFFIX = "-wireframe.png"
-NETWORK_WORDS = ("curl", "wget", "git clone", "git fetch", "git ls-remote")
 SHELL_NAMES = {"bash", "sh", "dash", "zsh", "ksh"}
 COMMAND_WRAPPERS = {"env", "command", "nice", "nohup", "stdbuf", "sudo", "time"}
 ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*=")
@@ -583,30 +582,59 @@ class WireframeGuard:
     )
 
 
+ACK_QUOTE = re.compile(
+  r'(?:^|[;&|]\s*)\s*(?:\S*/)?(?:steer|arena-preview)\s+ack\b[^;|]*?"'
+)
+
+
+class AckQuoteReminder:
+  """Warn before an ACK's double-quoted backticks run as shell commands."""
+
+  name = "ack-quote"
+
+  def applies(self, ctx: PreContext) -> bool:
+    text = shell_line(ctx.line or ctx.command)
+    match = ACK_QUOTE.search(text)
+    if match is None:
+      return False
+    escaped = False
+    for char in text[match.end() :]:
+      if char == "`" and not escaped:
+        return True
+      if char == '"' and not escaped:
+        break
+      escaped = char == "\\" and not escaped
+      if char != "\\":
+        escaped = False
+    return False
+
+  def run(self, ctx: PreContext) -> PreResult:
+    return PreResult(
+      [
+        "ACK WARNING: double-quoted backticks run as shell commands. Single-quote the ACK text."
+      ]
+    )
+
+
 class BarePathReminder:
-  """Remind the agent to call the entry point by name."""
+  """Remind the agent to call the executable by name, not by script path."""
 
   name = "bare"
 
   def applies(self, ctx: PreContext) -> bool:
-    return "/scripts/steer" in ctx.line
+    for words in _line_commands(ctx):
+      if words and words[0].endswith("/scripts/steer"):
+        return True
+      if (
+        len(words) > 1
+        and Path(words[0]).name.startswith("python")
+        and words[1].endswith("/scripts/steer")
+      ):
+        return True
+    return False
 
   def run(self, ctx: PreContext) -> PreResult:
     return PreResult(["Use bare `steer` from any directory. Drop full path."])
-
-
-class EgressReminder:
-  """Remind the agent about the proxy route for network commands."""
-
-  name = "egress"
-
-  def applies(self, ctx: PreContext) -> bool:
-    return ctx.touches(*NETWORK_WORDS)
-
-  def run(self, ctx: PreContext) -> PreResult:
-    return PreResult(
-      ["Use the proxy route for egress. Check the skill reference first."]
-    )
 
 
 SLEEP_IDLE_CAP_SECONDS = 60
@@ -907,8 +935,8 @@ PIPELINE: tuple[PreStep, ...] = (
   GitSafetyGuard(),
   BibleReadGuard(),
   RouteGuard(),
+  AckQuoteReminder(),
   BarePathReminder(),
-  EgressReminder(),
 )
 
 
@@ -920,7 +948,7 @@ def run_pipeline(ctx: PreContext) -> PreResult:
     if step.name in finished and not (
       (step.name == "gate" and ctx.is_push())
       or (step.name == "sleep" and ctx.active_runs)
-      or step.name in {"git-safe", "route"}
+      or step.name in {"git-safe", "route", "ack-quote"}
     ):
       continue
     if not step.applies(ctx):

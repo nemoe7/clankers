@@ -9,6 +9,8 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -486,13 +488,12 @@ def test_the_gate_reads_the_stored_count_and_the_done_list_skips_steps(
 
 def test_a_pass_through_reports_the_finished_steps(_isolate_state: Path) -> None:
   _seed(_isolate_state, "Acked already.", acked=True)
-  code, out = _run("pre", "-l", "curl https://example.test", "-s", "bash")
+  line = "/repo/skills/arena-steering/scripts/steer --version"
+  code, out = _run("pre", "-l", line, "-s", "bash")
   assert code == pre.CONTINUE
-  assert '_arena_preview_done="egress"' in out
+  assert '_arena_preview_done="bare"' in out
 
-  code, out = _run(
-    "pre", "-l", "curl https://example.test", "-s", "bash", "-d", "egress"
-  )
+  code, out = _run("pre", "-l", line, "-s", "bash", "-d", "bare")
   assert code == pre.CONTINUE
   assert out == ""
 
@@ -728,6 +729,7 @@ def test_installer_exit_hook_preserves_prior_trap_and_call_status(
   exits = (home / "post-exit.log").read_text(encoding="utf-8").splitlines()
   assert len(exits) == 3
   assert "--rc 0" in exits[0] and "git push origin topic" in exits[0]
+  assert all("--elapsed " in exit_line for exit_line in exits)
   assert "--rc 5" in exits[1] and "--rc 7" in exits[2]
   assert (home / "prior-exit.log").read_text(encoding="utf-8").splitlines() == [
     "prior-exit:0",
@@ -1157,3 +1159,228 @@ def test_exit_watches_checks_only_after_successful_push_or_pr_creation(
   assert code == 0, out
   expected = [("pr-checks", ["gh", "pr", "checks", "--watch"])] if watch else []
   assert started == expected
+
+
+@pytest.mark.parametrize(
+  ("line", "warn"),
+  (
+    ('steer ack abc123 "Read the `section`"', True),
+    ('steer ack abc123 "Read the \\`section\\`"', False),
+    ("steer ack abc123 'Read the `section`'", False),
+    ('printf "steer ack abc123 `section`"', False),
+  ),
+)
+def test_ack_backtick_warning_only_on_executable_double_quoted_ack(
+  line: str, warn: bool
+) -> None:
+  result = pre.run_pipeline(pre.PreContext(line=line, command=line))
+  assert result.verdict == pre.CONTINUE
+  assert ("Single-quote" in " ".join(result.messages)) == warn
+
+
+@pytest.mark.parametrize(
+  ("line", "warn"),
+  (
+    ("/repo/.agents/skills/arena-steering/scripts/steer read", True),
+    ("python /repo/.agents/skills/arena-steering/scripts/steer read", True),
+    ("env LANG=C /repo/skills/arena-steering/scripts/steer read", True),
+    ("printf '/repo/skills/arena-steering/scripts/steer'", False),
+    ("rg '/repo/skills/arena-steering/scripts/steer' file.txt", False),
+  ),
+)
+def test_bare_path_warning_checks_executable_not_arguments(
+  line: str, warn: bool
+) -> None:
+  result = pre.run_pipeline(pre.PreContext(line=line, command=line))
+  assert result.verdict == pre.CONTINUE
+  assert ("Use bare `steer`" in " ".join(result.messages)) == warn
+
+
+def test_network_destination_and_port_warnings_remain_deferred() -> None:
+  for line in ("curl https://example.test", "steer serve --port 8123"):
+    result = pre.run_pipeline(pre.PreContext(line=line, command=line))
+    assert result.verdict == pre.CONTINUE
+    assert not any(
+      "proxy" in text.lower() or "port" in text.lower() for text in result.messages
+    )
+
+
+@pytest.mark.parametrize(
+  ("line", "elapsed", "warn"),
+  (
+    ("printf ok", "10", True),
+    ("printf ok", "9", False),
+    ("steer poll", "11", False),
+    ("steer run logs verify", "11", False),
+  ),
+)
+def test_exit_warns_on_slow_unrouted_calls(
+  _isolate_state: Path, line: str, elapsed: str, warn: bool
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  code, out = _run("post-exit", "--line", line, "--rc", "0", "--elapsed", elapsed)
+  assert code == 0
+  assert (">= 10s" in out) == warn
+
+
+def test_exit_reminds_without_acking_or_incrementing_pending_items(
+  _isolate_state: Path,
+) -> None:
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  messages.send_message("Blocking note", msg_id="ab1001", blocking=True)
+  messages.send_message("Quiet note", msg_id="ab1002", blocking=False)
+  store.set_meta(pre.CALL_COUNT_META, "3")
+  store.close()
+
+  code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
+  assert code == 0
+  assert "unacked 1 note" in out
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert messages.pending_ids() == ["ab1001"]
+  assert store.get_meta(pre.CALL_COUNT_META) == "3"
+  store.close()
+
+
+def test_exit_counts_latest_report_answer_with_notes(_isolate_state: Path) -> None:
+  store, messages, _, reports = cli.open_services(_isolate_state)
+  messages.send_message("Blocking note", msg_id="ab1003")
+  reports.publish_report(
+    "choice",
+    "Choice",
+    '<!-- question {"id":"pick","label":"Pick"} -->\n'
+    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+  )
+  reports.submit_answer("choice", {"pick": "Yes"}, answer_id="ab1004")
+  store.close()
+  code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
+  assert code == 0 and "1 note" in out and "1 answer" in out
+
+
+def test_exit_reminds_about_stale_reports(_isolate_state: Path) -> None:
+  store, _, _, reports = cli.open_services(_isolate_state)
+  for index in range(10):
+    reports.publish_report(f"report-{index}", f"Report {index}", "Body")
+  stale = reports.get_report("report-0")
+  stale.ack_seen = True
+  stale.ack_seen_at = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+  store.save_report(stale)
+  store.close()
+
+  code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
+  assert code == 0
+  assert "1 stale report" in out
+
+
+def test_exit_reminds_about_unpushed_commits(
+  _isolate_state: Path, _git_checkout: Path, tmp_path: Path
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  remote = tmp_path / "origin.git"
+
+  def git(*args: str) -> None:
+    subprocess.run(["git", *args], cwd=_git_checkout, check=True, capture_output=True)
+
+  subprocess.run(
+    ["git", "init", "--bare", "-b", "main", str(remote)],
+    check=True,
+    capture_output=True,
+  )
+  git("remote", "add", "origin", str(remote))
+  git("push", "-u", "origin", "main")
+  (_git_checkout / "note.md").write_text("second\n", encoding="utf-8")
+  git("add", "note.md")
+  git("commit", "-m", "second")
+  code, out = _run("post-exit", "--line", "git commit -m second", "--rc", "0")
+  assert code == 0 and "1 commit/s unpushed" in out
+  git("push", "origin", "main")
+  code, out = _run("post-exit", "--line", "git push origin main", "--rc", "0")
+  assert code == 0 and "unpushed" not in out
+
+
+def test_instruction_checkpoints_wait_fifteen_minutes_and_deduplicate(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  root = _isolate_state.parent / "checkout"
+  skill = root / ".agents" / "skills" / "arena-skill" / "SKILL.md"
+  skill.parent.mkdir(parents=True)
+  for path in (root / "ARENA.md", root / "AGENTS.md", skill):
+    path.write_text("Read the full file.\n", encoding="utf-8")
+  monkeypatch.setattr(pre, "repo_root", lambda: root)
+  _seed(_isolate_state, "Acknowledged", acked=True)
+
+  code, _ = _run("pre", "-l", "printf ok", "-c", "printf ok", "-s", "bash")
+  assert code == 0
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert messages.pending_ids() == []
+  store.set_meta(
+    "read_set_last_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()
+  )
+  store.close()
+
+  code, _ = _run("pre", "-l", "steer poll", "-c", "steer poll", "-s", "bash")
+  assert code == 0
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert messages.pending_ids() == []
+  store.close()
+
+  code, _ = _run("pre", "-l", "printf ok", "-c", "printf ok", "-s", "bash")
+  assert code == 0
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  due = [msg for msg in messages.list_messages() if msg.hidden and msg.requires_ack]
+  assert len(due) == 1
+  assert "15min bible check" in due[0].body
+  for path in (root / "ARENA.md", root / "AGENTS.md", skill):
+    assert str(path) in due[0].body
+  assert messages.pending_ids() == [due[0].id]
+  store.close()
+
+  _run("pre", "-l", "printf ok", "-c", "printf ok", "-s", "bash")
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert (
+    len([msg for msg in messages.list_messages() if "15min bible check" in msg.body])
+    == 1
+  )
+  store.close()
+
+  assert _run("ack", due[0].id, "Read in full; text already in context")[0] == 0
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(
+    "read_set_last_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()
+  )
+  store.close()
+  _run("pre", "-l", "printf ok", "-c", "printf ok", "-s", "bash")
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert (
+    len([msg for msg in messages.list_messages() if "15min bible check" in msg.body])
+    == 2
+  )
+  store.close()
+
+
+def test_concurrent_instruction_ticks_only_mint_one_checkpoint(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  root = _isolate_state.parent / "checkout"
+  root.mkdir()
+  (root / "ARENA.md").write_text("Read in full.\n", encoding="utf-8")
+  monkeypatch.setattr(pre, "repo_root", lambda: root)
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(
+    "read_set_last_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()
+  )
+  store.close()
+  with ThreadPoolExecutor(max_workers=3) as pool:
+    results = list(
+      pool.map(
+        lambda _: _run("pre", "-l", "printf ok", "-c", "printf ok", "-s", "bash"),
+        range(3),
+      )
+    )
+  assert all(code == 0 for code, _ in results)
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert (
+    len([msg for msg in messages.list_messages() if "15min bible check" in msg.body])
+    == 1
+  )
+  store.close()

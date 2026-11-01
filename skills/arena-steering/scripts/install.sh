@@ -115,7 +115,7 @@ if ! grep -qxF "$EXIT_MARKER" "$PROFILE"; then
 _steer_on_exit() {
   _steer_exit_rc=$1
   _steer_gate_running=1
-  "$HOME/.local/bin/steer" post-exit --rc "$_steer_exit_rc" --line "${_steer_line:-}" >&2 || :
+  "$HOME/.local/bin/steer" post-exit --rc "$_steer_exit_rc" --line "${_steer_line:-}" --elapsed "$SECONDS" >&2 || :
   return "$_steer_exit_rc"
 }
 _steer_previous_exit=$(trap -p EXIT)
