@@ -32,6 +32,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `pre.py`: Scope the governing-skill read guard to the v2 skill. Keep root governing files protected.
+
 - `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.
 
 - `models.py`, `services.py`, `store.py`: Order reports by first-publication time and ID. Keep that stamp through republish, rename, and state sync.

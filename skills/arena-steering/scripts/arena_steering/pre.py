@@ -736,7 +736,7 @@ class BibleReadGuard:
 
   VERBS = ("cat", "grep", "head", "tail", "rg")
   NAMES = ("ARENA.md", "AGENTS.md")
-  SKILL_DIRS = ("arena-skill", "arena-steering")
+  SKILL_DIRS = ("arena-steering",)
 
   def applies(self, ctx: PreContext) -> bool:
     if not ctx.touches(*[f"{verb} " for verb in self.VERBS]):

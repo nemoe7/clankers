@@ -283,21 +283,26 @@ def test_piped_ack_remains_available_after_the_gate_limit() -> None:
 
 def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
   guard = pre.BibleReadGuard()
+  assert guard.SKILL_DIRS == ("arena-steering",)
   for line in (
     "rg -n 'gate' AGENTS.md",
     "grep -n gate ARENA.md",
     "head -20 ARENA.md",
-    "tail -n 5 skills/arena-skill/SKILL.md",
+    "tail -n 5 skills/arena-steering/SKILL.md",
     "cat skills/arena-steering/SKILL.md",
     "cat AGENTS.md | head -n 5",
     "head -n 5 < ARENA.md",
-    "cat .agents/skills/arena-skill/SKILL.md | tail -n 5",
+    "cat .agents/skills/arena-steering/SKILL.md | tail -n 5",
   ):
     ctx = pre.PreContext(line=line, shell="bash")
     assert guard.applies(ctx), line
     assert guard.run(ctx).verdict == pre.BLOCK, line
 
-  for line in ("rg -n gate skills/arena-steering", "head -20 assets/app.js"):
+  for line in (
+    "rg -n gate skills/arena-steering",
+    "head -20 assets/app.js",
+    "tail -n 5 skills/unrelated/SKILL.md",
+  ):
     assert not guard.applies(pre.PreContext(line=line, shell="bash")), line
 
 
