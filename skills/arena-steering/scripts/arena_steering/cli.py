@@ -968,6 +968,19 @@ def _run_pre(
   result = pre_mod.run_pipeline(ctx)
   for message in result.messages:
     print(message, file=out)
+  if (
+    result.blocked_by == "gate"
+    and ctx.shell
+    and not ctx.is_push()
+    and ctx.call_count >= pre_mod.GATE_THRESHOLD
+  ):
+    flag = messages.flag_violation_once(
+      "bash-cadence",
+      f"Automatic violation: Bash blocked after {pre_mod.GATE_THRESHOLD} calls while inbox items waited. "
+      "Read the inbox with `steer read` when reminded. "
+      "Acknowledge each pending note and answer with `steer ack ID MARKDOWN` before resuming.",
+    )
+    print(f"Violation flag: {flag.id}", file=out)
   if parsed.shell and set(result.done) - set(ctx.done):
     # The shell evals this line, so a later command in the same shell skips
     # the steps that already ran.

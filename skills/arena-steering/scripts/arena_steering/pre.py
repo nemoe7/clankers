@@ -177,12 +177,13 @@ class RouteRequest:
 
 @dataclass
 class PreResult:
-  """One step outcome: the text to print, verdict, and optional route."""
+  """One step outcome: the text to print, verdict, route, and blocking guard."""
 
   messages: list[str] = field(default_factory=list)
   verdict: int = CONTINUE
   done: tuple[str, ...] = ()
   route: RouteRequest | None = None
+  blocked_by: str = ""
 
 
 class PreStep(Protocol):
@@ -959,7 +960,13 @@ def run_pipeline(ctx: PreContext) -> PreResult:
       if step.name not in finished:
         finished.append(step.name)
       continue
-    return PreResult(messages, result.verdict, tuple(finished), result.route)
+    return PreResult(
+      messages,
+      result.verdict,
+      tuple(finished),
+      result.route,
+      step.name if result.verdict == BLOCK else "",
+    )
   return PreResult(messages, CONTINUE, tuple(finished))
 
 

@@ -22,6 +22,8 @@ This log has no Unreleased section.
 
 - `services.py`, `cli.py`: Flag rapid repeated agent polls once, with worktree guidance. Keep browser polling exempt.
 
+- `pre.py`, `services.py`, `cli.py`: Raise one blocking flag when the six-call pending-inbox gate stops Bash. Keep early reminders flag-free.
+
 ### Changed
 
 - `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.

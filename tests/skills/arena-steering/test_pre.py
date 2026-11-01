@@ -105,6 +105,41 @@ def test_the_gate_counts_calls_before_it_blocks() -> None:
   assert str(pre.GATE_THRESHOLD) in " ".join(late.messages)
 
 
+def test_six_call_bash_block_persists_one_violation_only_for_inbox_gate(
+  _isolate_state: Path,
+) -> None:
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  note = messages.send_message("Pending work", msg_id="ab0091")
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD - 1))
+  store.close()
+
+  command = ("pre", "-c", "printf ok", "-l", "printf ok", "-s", "bash")
+  assert _run(*command)[0] == pre.CONTINUE
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert store.get_meta(pre.CALL_COUNT_META) == str(pre.GATE_THRESHOLD)
+  assert messages.pending_violation() is None
+  store.close()
+
+  assert _run(*command)[0] == pre.BLOCK
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  flag = messages.pending_violation()
+  assert flag is not None and flag.hidden and flag.requires_ack
+  assert flag.violation_type == "bash-cadence"
+  assert set(messages.pending_ids()) == {note.id, flag.id}
+  assert _run(*command)[0] == pre.BLOCK
+  assert messages.pending_violation().id == flag.id
+  messages.ack(flag.id, "Read and correcting the cadence.")
+
+  for line in ("sleep 60", "git push origin branch", "steer read"):
+    code, _ = _run("pre", "-c", line, "-l", line, "-s", "bash")
+    assert code == (pre.CONTINUE if line == "steer read" else pre.BLOCK)
+    assert messages.pending_violation() is None
+  assert _run("read")[0] == 0
+  assert _run("ack", note.id, "Read and done.")[0] == 0
+  assert store.get_meta(pre.CALL_COUNT_META) == "0"
+  store.close()
+
+
 def test_each_guard_holds_its_own_rule() -> None:
   clear = pre.PreContext(shell="bash")
   assert _verdict(pre.PreContext(**{**clear.__dict__, "line": "sleep 5 && x"})) == 0
