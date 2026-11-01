@@ -918,3 +918,25 @@ def test_existing_v2_state_versions_migrate_without_losing_rows(tmp_path: Path) 
   changed = store.export_rows(since=cursor)
   assert [row["id"] for row in changed["deleted"]["messages"]] == ["ab1100"]
   store.close()
+
+
+def test_partial_tombstone_upgrade_replaces_stale_state_triggers(
+  tmp_path: Path,
+) -> None:
+  import sqlite3
+
+  path = tmp_path / "partly-upgraded.sqlite3"
+  store = SqliteStore(path)
+  store.save_message(Message(id="ab1200", body="Existing"))
+  store.close()
+  with sqlite3.connect(path) as connection:
+    connection.execute("DROP TRIGGER messages_state_insert")
+    connection.execute(
+      "CREATE TRIGGER messages_state_insert AFTER INSERT ON messages "
+      "BEGIN INSERT INTO state_row_versions VALUES ('messages', NEW.id, 1); END"
+    )
+
+  store = SqliteStore(path)
+  store.save_message(Message(id="ab1201", body="After upgrade"))
+  assert {row["id"] for row in store.export_rows()["messages"]} == {"ab1200", "ab1201"}
+  store.close()

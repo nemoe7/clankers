@@ -50,6 +50,10 @@ This log has no Unreleased section.
 
 - `server.py`: List only uploads referenced by surviving state. After an accepted synced deletion, remove orphaned files with no surviving references. Retain staged files that were never referenced.
 
+### Fixed
+
+- `store.py`: Replace stale row-change triggers when an existing v2 database already has the tombstone column.
+
 ## [2.1.0]
 
 ### Removed

@@ -332,9 +332,16 @@ class SqliteStore:
       "CAST(substr(strftime('%f', 'now'), 4, 3) AS INTEGER) * 1000"
     )
     for table in STATE_TABLES:
-      if upgrading:
-        for action in ("insert", "update", "delete"):
-          self._conn.execute(f"DROP TRIGGER IF EXISTS {table}_state_{action}")
+      for action in ("insert", "update", "delete"):
+        name = f"{table}_state_{action}"
+        trigger = self._conn.execute(
+          "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", (name,)
+        ).fetchone()
+        # A prior column upgrade can leave three-value triggers behind.
+        if trigger is not None and (
+          upgrading or "deleted_at" not in str(trigger["sql"])
+        ):
+          self._conn.execute(f"DROP TRIGGER {name}")
       for action in ("INSERT", "UPDATE"):
         self._conn.execute(
           f"""
