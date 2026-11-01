@@ -545,6 +545,11 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   shutil.copytree(
     root / "skills" / "arena-steering" / "references", scripts.parent / "references"
   )
+  subprocess.run(
+    ["git", "init", "--quiet", "-b", "main", str(project)],
+    check=True,
+    capture_output=True,
+  )
   home = tmp_path / "home with spaces"
   python = home / ".agents" / ".steer-venv" / "bin" / "python"
   python.parent.mkdir(parents=True)
@@ -664,6 +669,11 @@ def test_installer_exit_hook_preserves_prior_trap_and_call_status(
   shutil.copytree(
     root / "skills" / "arena-steering" / "references", scripts.parent / "references"
   )
+  subprocess.run(
+    ["git", "init", "--quiet", "-b", "main", str(project)],
+    check=True,
+    capture_output=True,
+  )
   home = tmp_path / "home with spaces"
   python = home / ".agents" / ".steer-venv" / "bin" / "python"
   python.parent.mkdir(parents=True)
@@ -736,6 +746,111 @@ def test_installer_exit_hook_preserves_prior_trap_and_call_status(
     "prior-exit:5",
     "prior-exit:7",
   ]
+
+
+def test_installer_enforces_commit_messages_without_a_runtime_spec(
+  tmp_path: Path,
+) -> None:
+  root = Path(__file__).resolve().parents[3]
+  project = tmp_path / "project with spaces"
+  scripts = project / ".agents" / "skills" / "arena-steering" / "scripts"
+  shutil.copytree(root / "skills" / "arena-steering" / "scripts", scripts)
+  subprocess.run(
+    ["git", "init", "--quiet", "-b", "main", str(project)],
+    check=True,
+    capture_output=True,
+  )
+  home = tmp_path / "home with spaces"
+  python = home / ".agents" / ".steer-venv" / "bin" / "python"
+  python.parent.mkdir(parents=True)
+  python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+  python.chmod(0o755)
+  env = {**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin"}
+  for _ in range(2):
+    installed = subprocess.run(
+      ["bash", str(scripts / "install.sh")],
+      cwd=project,
+      env=env,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert installed.returncode == 0, installed.stderr
+
+  hook = project / ".git" / "hooks" / "commit-msg"
+  assert hook.is_file() and os.access(hook, os.X_OK)
+  config = subprocess.run(
+    ["git", "config", "--local", "--get", "core.hooksPath"],
+    cwd=project,
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  assert config.stdout.strip() == str(hook.parent)
+  hook_source = hook.read_text(encoding="utf-8")
+  assert "COMMIT-SPEC.txt" not in hook_source
+  (project / "rules").mkdir()
+  (project / "rules" / "COMMIT-SPEC.txt").write_text("not the spec\n", encoding="utf-8")
+  message_file = tmp_path / "COMMIT_EDITMSG"
+
+  for message in (
+    "feat(git): install a project commit hook\n",
+    "fix!: remove old behavior\n",
+    "docs: " + "a" * 66 + "\n",
+  ):
+    message_file.write_text(message, encoding="utf-8")
+    result = subprocess.run(
+      [str(hook), str(message_file)],
+      cwd=project,
+      env=env,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert message_file.read_text(encoding="utf-8") == message
+
+  for message in (
+    "unknown: reject this type\n",
+    "fix: Add a hook\n",
+    "fix: add a hook.\n",
+    "fix(scope with spaces): add a hook\n",
+    "docs: " + "a" * 67 + "\n",
+    "fix: add a hook\n\nBody text\n",
+    "fix: add a hook\n\nCo-authored-by: agent <agent@example.test>\n",
+  ):
+    message_file.write_text(message, encoding="utf-8")
+    result = subprocess.run(
+      [str(hook), str(message_file)],
+      cwd=project,
+      env=env,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert result.returncode != 0, message
+    assert "commit-msg:" in result.stderr
+    assert message_file.read_text(encoding="utf-8") == message
+
+  custom_hooks = tmp_path / "custom hooks"
+  custom_hooks.mkdir()
+  subprocess.run(
+    ["git", "config", "--local", "core.hooksPath", str(custom_hooks)],
+    cwd=project,
+    capture_output=True,
+    check=True,
+  )
+  refused = subprocess.run(
+    ["bash", str(scripts / "install.sh")],
+    cwd=project,
+    env=env,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert refused.returncode != 0
+  assert "core.hooksPath" in refused.stderr
+  assert hook.read_text(encoding="utf-8") == hook_source
 
 
 def test_installer_does_not_overwrite_an_unrelated_steer(tmp_path: Path) -> None:

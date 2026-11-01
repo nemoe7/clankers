@@ -10,7 +10,7 @@ Requirements: Python 3.11 or later, Bash, a persistent workspace, and a process 
 .agents/skills/arena-steering/scripts/install.sh
 ```
 
-The installer prepares `markdown-it-py`, installs `steer` in `~/.local/bin`, and adds that directory to `~/.bash_profile`. Open a new login shell or source that profile, then run:
+The installer prepares `markdown-it-py`, installs `steer` in `~/.local/bin`, and adds that directory to `~/.bash_profile`. It also replaces the repository's `commit-msg` hook with an inline validator. It refuses a custom `core.hooksPath` and does not read or ship the commit specification. Open a new login shell or source that profile, then run:
 
 ```cmd
 steer --version

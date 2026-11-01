@@ -20,6 +20,14 @@ if [ -e "$COMMAND" ]; then
   [ -f "$COMMAND" ] && grep -qxF "$COMMAND_MARKER" "$COMMAND" || fail "$COMMAND already exists"
 fi
 
+GIT_DIR="$(git -C "$SCRIPTS_DIR" rev-parse --absolute-git-dir 2>/dev/null)" || fail "cannot locate the Git directory"
+GIT_HOOKS="$GIT_DIR/hooks"
+GIT_HOOK="$GIT_HOOKS/commit-msg"
+LOCAL_HOOKS="$(git -C "$SCRIPTS_DIR" config --local --get core.hooksPath 2>/dev/null || true)"
+if [ -n "$LOCAL_HOOKS" ] && [ "$LOCAL_HOOKS" != "$GIT_HOOKS" ]; then
+  fail "core.hooksPath=$LOCAL_HOOKS; refuse replacement"
+fi
+
 if [ ! -x "$PYTHON" ]; then
   python3 -m venv "$VENV" || fail "cannot create $VENV"
 fi
@@ -137,4 +145,62 @@ esac
 unset _steer_previous_exit
 EOF
 fi
+
+mkdir -p "$GIT_HOOKS" || fail "cannot create $GIT_HOOKS"
+cat > "$GIT_HOOK" <<'COMMIT_MSG_HOOK' || fail "cannot write $GIT_HOOK"
+#!/bin/sh
+set -eu
+if [ "$#" -ne 1 ]; then
+  echo "commit-msg hook: expected the commit message file" >&2
+  exit 1
+fi
+exec python3 - "$1" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+def reject(message):
+  print(f"commit-msg: {message}", file=sys.stderr)
+  raise SystemExit(1)
+
+allowed_types = "feat fix refactor perf style docs test build chore ci revert".split()
+subject_limit = 72
+
+try:
+  message = Path(sys.argv[1]).read_text(encoding="utf-8")
+except OSError as error:
+  reject(f"cannot read commit message: {error}")
+
+lines = [
+  line
+  for line in message.splitlines()
+  if line.strip() and not line.lstrip().startswith("#")
+]
+if len(lines) != 1:
+  reject("use one subject line and no body")
+
+subject = lines[0]
+if subject != subject.strip():
+  reject("subject cannot start or end with whitespace")
+if len(subject) > subject_limit:
+  reject(f"subject must be at most {subject_limit} characters")
+
+types = "|".join(re.escape(commit_type) for commit_type in allowed_types)
+pattern = re.compile(
+  rf"^(?:{types})(?:\([^()\s]+\))?!?: (?P<description>.+)$"
+)
+match = pattern.fullmatch(subject)
+if not match:
+  reject(
+    "subject must match <type>[optional scope][!]: <description>; "
+    f"allowed types: {', '.join(allowed_types)}"
+  )
+if not match.group("description")[0].islower():
+  reject("description must start with a lowercase letter")
+if subject.endswith("."):
+  reject("subject must not end with a period")
+PY
+COMMIT_MSG_HOOK
+chmod 755 "$GIT_HOOK" || fail "cannot make $GIT_HOOK executable"
+git -C "$SCRIPTS_DIR" config --local core.hooksPath "$GIT_HOOKS" || fail "cannot set core.hooksPath"
 printf 'Installed steer in %s. Open a new login shell or source %s.\n' "$COMMAND" "$PROFILE"
