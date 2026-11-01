@@ -115,3 +115,8 @@ This README is human documentation and is not part of the installed skill payloa
 - [Pencil & Paper: UX Design Documentation Guide](https://www.pencilandpaper.io/articles/ux-design-documentation-guide)
 - [Figma: Guide to Developer Handoff](https://www.figma.com/best-practices/guide-to-developer-handoff/)
 - [Figma: Components, Styles, and Shared Libraries](https://www.figma.com/best-practices/components-styles-and-shared-libraries/)
+
+### Credits
+
+- `nuu` visual-reference structure and composite image-board examples: [UI Prep, The Best Way to Document UX/UI Design](https://www.uiprep.com/blog/the-best-way-to-document-ux-ui-design).
+- `nuu` catalog data (`../../skills/nuu/data/vendor/ui-ux-pro-max/`): adapted under the MIT License (`../../skills/nuu/data/vendor/ui-ux-pro-max/LICENSE.txt`).
