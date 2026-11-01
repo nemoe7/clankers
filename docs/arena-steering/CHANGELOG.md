@@ -24,6 +24,8 @@ This log has no Unreleased section.
 
 - `pre.py`, `services.py`, `cli.py`: Raise one blocking flag when the six-call pending-inbox gate stops Bash. Keep early reminders flag-free.
 
+- `SKILL.md`: Check related upcoming task titles and scopes before publishing a report.
+
 ### Changed
 
 - `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.
