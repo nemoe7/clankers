@@ -1411,6 +1411,39 @@ def test_exit_counts_latest_report_answer_with_notes(_isolate_state: Path) -> No
   assert code == 0 and "1 note" in out and "1 answer" in out
 
 
+def test_exit_labels_hidden_violation_separately_from_note_and_answer(
+  _isolate_state: Path,
+) -> None:
+  store, messages, _, reports = cli.open_services(_isolate_state)
+  messages.send_message(
+    "Read the violation clause",
+    msg_id="ab1005",
+    hidden=True,
+    violation_type="bash-violation",
+  )
+  messages.send_message("Blocking note", msg_id="ab1006")
+  reports.publish_report(
+    "choice",
+    "Choice",
+    '<!-- question {"id":"pick","label":"Pick"} -->\n'
+    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+  )
+  reports.submit_answer("choice", {"pick": "Yes"}, answer_id="ab1007")
+  store.close()
+
+  code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
+  assert code == 0
+  assert "1 violation" in out
+  assert "1 note" in out
+  assert "1 answer" in out
+  assert "2 notes" not in out
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert set(messages.pending_ids()) == {"ab1005", "ab1006", "ab1007"}
+  violation = store.get_message("ab1005")
+  assert violation is not None and violation.hidden and violation.requires_ack
+  store.close()
+
+
 def test_exit_reminds_about_stale_reports(_isolate_state: Path) -> None:
   store, _, _, reports = cli.open_services(_isolate_state)
   for index in range(10):

@@ -1246,12 +1246,16 @@ def _exit_state_reminders(state_dir: Path) -> list[str]:
   store, messages, _, reports = open_services(state_dir)
   try:
     pending = messages.read_pending(mark_seen=False)
-    notes = sum(
-      msg.requires_ack for msg in pending["messages"] if msg.type == "message"
-    )
+    pending_notes = [
+      msg for msg in pending["messages"] if msg.type == "message" and msg.requires_ack
+    ]
+    violations = sum(bool(msg.violation_type) for msg in pending_notes)
+    notes = len(pending_notes) - violations
     answers = len(pending["report_answers"])
     parts = []
     counts = []
+    if violations:
+      counts.append(f"{violations} violation{'s' if violations != 1 else ''}")
     if notes:
       counts.append(f"{notes} note{'s' if notes != 1 else ''}")
     if answers:

@@ -20,6 +20,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.
+
 - `models.py`, `services.py`, `store.py`: Order reports by first-publication time and ID. Keep that stamp through republish, rename, and state sync.
 
 - `assets/app.js`, `server.py`, `scripts/install.sh`: Refresh the validated IANA zone on page load. The installed Bash gate sets `TZ` only when unset.
