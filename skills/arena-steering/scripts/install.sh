@@ -21,6 +21,7 @@ if [ -e "$COMMAND" ]; then
 fi
 
 GIT_DIR="$(git -C "$SCRIPTS_DIR" rev-parse --absolute-git-dir 2>/dev/null)" || fail "cannot locate the Git directory"
+REPO_ROOT="$(git -C "$SCRIPTS_DIR" rev-parse --show-toplevel 2>/dev/null)" || fail "cannot locate the checkout"
 GIT_HOOKS="$GIT_DIR/hooks"
 GIT_HOOK="$GIT_HOOKS/commit-msg"
 LOCAL_HOOKS="$(git -C "$SCRIPTS_DIR" config --local --get core.hooksPath 2>/dev/null || true)"
@@ -52,6 +53,11 @@ case ":$PATH:" in
 esac
 EOF
 fi
+ROOT_MARKER="# arena-steering-root"
+if ! grep -qxF "$ROOT_MARKER" "$PROFILE"; then
+  printf -v root_quoted '%q' "$REPO_ROOT"
+  printf '\n%s\n_steer_repo_root=%s\n' "$ROOT_MARKER" "$root_quoted" >> "$PROFILE"
+fi
 GATE_MARKER="# arena-steering-gate"
 if ! grep -qxF "$GATE_MARKER" "$PROFILE"; then
   cat >> "$PROFILE" <<'EOF'
@@ -61,6 +67,10 @@ _steer_gate() {
   if [ "${_steer_gate_running:-}" = 1 ]; then return 0; fi
   _steer_gate_running=1
   local command=$BASH_COMMAND reply status line
+  if [ -z "${TZ:-}" ] && [ -n "${_steer_repo_root:-}" ] && [ -s "$_steer_repo_root/arena-state/display_tz" ]; then
+    IFS= read -r TZ < "$_steer_repo_root/arena-state/display_tz" || :
+    [ -n "$TZ" ] && export TZ
+  fi
   if [ -z "${_steer_line:-}" ]; then
     _steer_line="$(tr '\0' ' ' < "/proc/$$/cmdline" 2>/dev/null)" || :
   fi

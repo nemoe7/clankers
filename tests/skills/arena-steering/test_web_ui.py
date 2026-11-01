@@ -2130,3 +2130,41 @@ def test_websocket_refreshes_after_external_store_write(tmp_path: Path) -> None:
     thread.join(timeout=5)
     writer_store.close()
     server_store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_browser_repairs_preexisting_timezone_handoff(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  path = tmp_path / "state.sqlite3"
+  store = SqliteStore(path)
+  store.set_meta("timezone", "Asia/Manila")
+  app = SteeringApp(store, repo_name="Timezone")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(timezone_id="Asia/Manila")
+        with page.expect_response("**/timezone", timeout=6000) as response:
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        assert response.value.status == 200
+        assert (path.parent / "display_tz").read_text(
+          encoding="utf-8"
+        ) == "Asia/Manila\n"
+        page.screenshot(path=str(tmp_path / "timezone-preview.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

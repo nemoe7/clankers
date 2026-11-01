@@ -20,6 +20,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `assets/app.js`, `server.py`, `scripts/install.sh`: Refresh the validated IANA zone on page load. The installed Bash gate sets `TZ` only when unset.
+
 - `cli.py`, `pre.py`: Resolve state from the installed checkout rather than the current directory. Warn on unreadable state, but refuse pushes.
 
 - `assets/app.js`: Keep survey rechecks separate from the violation button.

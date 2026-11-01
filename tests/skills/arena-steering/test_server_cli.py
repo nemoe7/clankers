@@ -1372,16 +1372,29 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
   status, payload = app.dispatch("POST", "/api/timezone", {"timezone": "Asia/Manila"})
   assert status == int(HTTPStatus.OK)
   assert payload == {"timezone": "Asia/Manila"}
+  assert (state_dir / "display_tz").read_text(encoding="utf-8") == "Asia/Manila\n"
   status, health = app.dispatch("GET", "/health")
   assert status == int(HTTPStatus.OK)
   assert health["timezone"] == "Asia/Manila"
   status, payload = app.dispatch("POST", "/api/timezone", {"timezone": "Not/AZone"})
   assert status == int(HTTPStatus.BAD_REQUEST)
+  assert (state_dir / "display_tz").read_text(encoding="utf-8") == "Asia/Manila\n"
   store.close()
 
   code, _, err = _run_cli(state_dir, "init", "--tz", "Asia/Manila")
   assert code == 1
   assert "--tz" in err or "init" in err
+
+
+def test_timezone_handoff_write_failure_remains_retryable(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  (state_dir / "display_tz").mkdir()
+  status, _ = app.dispatch("POST", "/timezone", {"timezone": "Asia/Manila"})
+  assert status == int(HTTPStatus.INTERNAL_SERVER_ERROR)
+  assert store.get_meta("timezone") is None
+  store.close()
 
 
 def test_cli_ren_report_and_help(tmp_path: Path) -> None:

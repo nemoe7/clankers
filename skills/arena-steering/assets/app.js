@@ -423,11 +423,7 @@ async function refreshAll(force = false) {
     }
     const browserTimezone =
       Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-    if (
-      browserTimezone &&
-      health.timezone !== browserTimezone &&
-      reportedTimezone !== browserTimezone
-    ) {
+    if (browserTimezone && reportedTimezone !== browserTimezone) {
       reportedTimezone = browserTimezone;
       api.setTimezone(browserTimezone).catch(() => {
         reportedTimezone = null;

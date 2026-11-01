@@ -695,6 +695,17 @@ class SteeringApp:
       ZoneInfo(timezone_name)
     except Exception as exc:
       raise ValueError(f"Unknown timezone: {timezone_name}") from exc
+    if self.store.db_path != ":memory:":
+      state_dir = Path(self.store.db_path).parent
+      try:
+        with tempfile.TemporaryDirectory(dir=state_dir) as staged_dir:
+          staged = Path(staged_dir) / "display_tz"
+          staged.write_text(f"{timezone_name}\n", encoding="utf-8")
+          staged.replace(state_dir / "display_tz")
+      except OSError as exc:
+        raise RuntimeError(
+          "Could not save browser timezone for the agent shell"
+        ) from exc
     self.store.set_meta("timezone", timezone_name)
     return (int(HTTPStatus.OK), {"timezone": timezone_name})
 

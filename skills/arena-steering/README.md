@@ -77,7 +77,7 @@ Keep session state outside version control.
 - The connection indicator shows connecting, connected, polling, no agent, and disconnected states.
 - Open survey results from its button and request a fresh bible check. The interrupt control can also request attention.
 - A poll heartbeat stays blue while the agent waits. The indicator shows no agent after 3 minutes without activity following a turn end, or 32 minutes without activity otherwise.
-- The browser reports its timezone to the server. Displayed timestamps use that timezone.
+- The browser reports its timezone to the server. Displayed timestamps use that zone, and the installed Bash gate exports it as `TZ` only when unset.
 - The client uses WebSocket for live updates, reconnects after a disconnect, and falls back to polling. Add `?transport=poll` to force the polling path.
 - The active tab and selected report persist in browser session storage.
 

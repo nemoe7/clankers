@@ -641,6 +641,46 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   assert not (outside / "arena-state").exists()
   assert not (tmp_path / "override").exists()
 
+  zone_env = {key: value for key, value in env.items() if key != "TZ"}
+  live_shell = subprocess.run(
+    [
+      "bash",
+      "-c",
+      (
+        'source "$HOME/.bash_profile"; printf "%s" "${TZ:-}" > "$HOME/tz-before"; '
+        'printf "Asia/Manila\\n" > "$_steer_repo_root/arena-state/display_tz"; '
+        'printf "%s" "${TZ:-}" > "$HOME/tz-after"'
+      ),
+    ],
+    check=False,
+    cwd=outside,
+    env=zone_env,
+    capture_output=True,
+    text=True,
+  )
+  assert live_shell.returncode == 0, live_shell.stderr
+  assert (home / "tz-before").read_text(encoding="utf-8") == ""
+  assert (home / "tz-after").read_text(encoding="utf-8") == "Asia/Manila"
+
+  for initial, expected in ((None, "Asia/Manila"), ("UTC", "UTC")):
+    zone_env = {key: value for key, value in env.items() if key != "TZ"}
+    if initial is not None:
+      zone_env["TZ"] = initial
+    zone_shell = subprocess.run(
+      [
+        "bash",
+        "-c",
+        'source "$HOME/.bash_profile"; printf "%s" "${TZ:-}" > "$HOME/tz-result"',
+      ],
+      check=False,
+      cwd=outside,
+      env=zone_env,
+      capture_output=True,
+      text=True,
+    )
+    assert zone_shell.returncode == 0, zone_shell.stderr
+    assert (home / "tz-result").read_text(encoding="utf-8") == expected
+
   _seed(project / "arena-state", "Read and acknowledge this note.")
   push = subprocess.run(
     [
