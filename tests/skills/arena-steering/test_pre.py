@@ -105,7 +105,7 @@ def test_the_gate_counts_calls_before_it_blocks() -> None:
   assert str(pre.GATE_THRESHOLD) in " ".join(late.messages)
 
 
-def test_six_call_bash_block_persists_one_violation_only_for_inbox_gate(
+def test_six_call_bash_block_persists_one_violation_for_inbox_gate(
   _isolate_state: Path,
 ) -> None:
   store, messages, _, _ = cli.open_services(_isolate_state)
@@ -133,10 +133,53 @@ def test_six_call_bash_block_persists_one_violation_only_for_inbox_gate(
   for line in ("sleep 60", "git push origin branch", "steer read"):
     code, _ = _run("pre", "-c", line, "-l", line, "-s", "bash")
     assert code == (pre.CONTINUE if line == "steer read" else pre.BLOCK)
-    assert messages.pending_violation() is None
+    if line == "sleep 60":
+      sleep_flag = messages.pending_violation()
+      assert sleep_flag is not None and sleep_flag.violation_type == "bash-sleep"
+      messages.ack(sleep_flag.id, "Avoided the sleep.")
+    else:
+      assert messages.pending_violation() is None
   assert _run("read")[0] == 0
   assert _run("ack", note.id, "Read and done.")[0] == 0
   assert store.get_meta(pre.CALL_COUNT_META) == "0"
+  store.close()
+
+
+@pytest.mark.parametrize(
+  ("line", "violation_type", "guidance"),
+  (
+    ("steer read | cat", "bash-inbox-pipe", "Run `steer read` or `steer poll` alone"),
+    ("sleep 60", "bash-sleep", "Use a worktree"),
+    ("git add shot-wireframe.png", "bash-commit-content", "Remove captures"),
+  ),
+)
+def test_blocked_bash_patterns_persist_distinct_deduplicated_flags(
+  _isolate_state: Path, line: str, violation_type: str, guidance: str
+) -> None:
+  _seed(_isolate_state, "Ready", acked=True)
+  command = ("pre", "-c", line, "-l", line, "-s", "bash")
+  assert _run(*command)[0] == pre.BLOCK
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  flag = messages.pending_violation()
+  assert flag is not None and flag.hidden and flag.requires_ack
+  assert flag.violation_type == violation_type
+  assert guidance in flag.body
+  code, out = _run(*command)
+  assert code == pre.BLOCK and flag.id in out
+  assert messages.pending_violation().id == flag.id
+  assert messages.pending_ids() == [flag.id]
+  store.close()
+
+
+@pytest.mark.parametrize(
+  "line", ("steer ack a1b2c3 done | cat", "sleep 59", "git add plain.png")
+)
+def test_allowed_bash_patterns_do_not_flag(_isolate_state: Path, line: str) -> None:
+  _seed(_isolate_state, "Ready", acked=True)
+  code, _ = _run("pre", "-c", line, "-l", line, "-s", "bash")
+  assert code == pre.CONTINUE
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert messages.pending_violation() is None
   store.close()
 
 
@@ -356,6 +399,11 @@ def test_commit_refuses_staged_capture_and_new_session_id(
     "pre", "-l", "git commit -m review", "-c", "git commit -m review", "-s", "bash"
   )
   assert code == pre.BLOCK and "design-wireframe.png" in out
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  staged_flag = messages.pending_violation()
+  assert staged_flag is not None and staged_flag.violation_type == "bash-commit-content"
+  messages.ack(staged_flag.id, "Removed the capture.")
+  store.close()
 
   git("reset", "--", capture.name)
   note = _git_checkout / "note.md"
@@ -374,9 +422,17 @@ def test_commit_refuses_staged_capture_and_new_session_id(
   )
   assert code == pre.BLOCK and message_id in out
   assert "note.md" in out
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  session_flag = messages.pending_violation()
+  assert (
+    session_flag is not None and session_flag.violation_type == "bash-commit-content"
+  )
   nested = "bash -c 'git commit -m review'"
   code, out = _run("pre", "-l", nested, "-c", nested, "-s", "bash")
   assert code == pre.BLOCK and message_id in out
+  assert messages.pending_violation().id == session_flag.id
+  messages.ack(session_flag.id, "Removed the session ID.")
+  store.close()
 
   git("commit", "-m", "fixture")
   note.write_text("initial\n", encoding="utf-8")
@@ -392,6 +448,25 @@ def test_commit_refuses_staged_capture_and_new_session_id(
     "pre", "-l", "git commit -am review", "-c", "git commit -am review", "-s", "bash"
   )
   assert code == pre.BLOCK and message_id in out
+
+
+def test_commit_comparison_failure_does_not_flag_content(
+  _isolate_state: Path, _git_checkout: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Ready", acked=True)
+  monkeypatch.setattr(
+    pre.git_safety,
+    "staged_warning",
+    lambda _cwd, _ids, **_kwargs: "COMMIT BLOCKED: Git changes could not be checked.",
+  )
+  code, out = _run(
+    "pre", "-l", "git commit -m review", "-c", "git commit -m review", "-s", "bash"
+  )
+  assert code == pre.BLOCK
+  assert out.splitlines()[0] == "COMMIT BLOCKED: Git changes could not be checked."
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert messages.pending_violation() is None
+  store.close()
 
 
 def test_managed_worktree_refuses_commit_push_and_run(

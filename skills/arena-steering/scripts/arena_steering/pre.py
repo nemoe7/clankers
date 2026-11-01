@@ -525,7 +525,15 @@ class GitSafetyGuard:
           target, ctx.session_ids, include_tracked=auto_stage
         )
         if warning:
-          return PreResult([warning], BLOCK)
+          content = warning.startswith(
+            (
+              "WIREFRAME BLOCKED: commit includes captures:",
+              "COMMIT BLOCKED: an added line cites a session-local ID ",
+            )
+          )
+          return PreResult(
+            [warning], BLOCK, blocked_by="commit-content" if content else ""
+          )
       elif action == "push":
         warning = git_safety.push_warning(target, current)
         if warning:
@@ -580,6 +588,7 @@ class WireframeGuard:
     return PreResult(
       [f"WIREFRAME BLOCKED: never stage or commit {WIREFRAME_SUFFIX} captures."],
       BLOCK,
+      blocked_by="commit-content",
     )
 
 
@@ -965,7 +974,7 @@ def run_pipeline(ctx: PreContext) -> PreResult:
       result.verdict,
       tuple(finished),
       result.route,
-      step.name if result.verdict == BLOCK else "",
+      (result.blocked_by or step.name) if result.verdict == BLOCK else "",
     )
   return PreResult(messages, CONTINUE, tuple(finished))
 

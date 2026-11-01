@@ -981,6 +981,33 @@ def _run_pre(
       "Acknowledge each pending note and answer with `steer ack ID MARKDOWN` before resuming.",
     )
     print(f"Violation flag: {flag.id}", file=out)
+  flag_reasons = {
+    "inbox-pipe": (
+      "bash-inbox-pipe",
+      (
+        "Automatic violation: Bash blocked a piped steering inbox read or poll. "
+        "Run `steer read` or `steer poll` alone to keep the full output visible."
+      ),
+    ),
+    "sleep": (
+      "bash-sleep",
+      (
+        "Automatic violation: Bash blocked a sleep beside steering or logs, during a run, "
+        "or for at least 60 seconds. Use a worktree while another task can progress. "
+        "Poll only when a gate blocks the sole task."
+      ),
+    ),
+    "commit-content": (
+      "bash-commit-content",
+      (
+        "Automatic violation: Bash blocked a stage or commit with a wireframe capture or "
+        "session-local ID. Remove captures from staging and IDs from added lines before retrying."
+      ),
+    ),
+  }
+  if ctx.shell and (reason := flag_reasons.get(result.blocked_by)) is not None:
+    flag = messages.flag_violation_once(*reason)
+    print(f"Violation flag: {flag.id}", file=out)
   if parsed.shell and set(result.done) - set(ctx.done):
     # The shell evals this line, so a later command in the same shell skips
     # the steps that already ran.

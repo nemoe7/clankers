@@ -24,6 +24,8 @@ This log has no Unreleased section.
 
 - `pre.py`, `services.py`, `cli.py`: Raise one blocking flag when the six-call pending-inbox gate stops Bash. Keep early reminders flag-free.
 
+- `pre.py`, `cli.py`: Flag blocked inbox pipes, sleeps, and commit-content checks separately. Keep each flag pending until acknowledged.
+
 - `SKILL.md`: Check related upcoming task titles and scopes before publishing a report.
 
 - `server.py`, `services.py`, `store.py`: Unpublish flagged reports while keeping task links and answers. Store CLI report source paths for the flag note.
