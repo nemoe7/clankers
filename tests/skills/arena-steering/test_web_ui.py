@@ -90,6 +90,7 @@ OPTION_CUSTOM_CLASS = "option-custom"
 ON_THIS_PAGE_TEXT = "On this page"
 REPORT_PICKER_META_CLASS = "report-picker-meta"
 TASK_SECTION_TITLE_FONT_SIZE = "font-size: 18px;"
+EARLIER_LINK_BLUE_RGB = "rgb(110, 163, 214)"
 
 
 NOTES_PIP_ID = 'id="notes-pip"'
@@ -427,9 +428,13 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
           "element => getComputedStyle(element).fontFamily"
         )
         receipt = page.locator('.message[data-msg-id="cc0401"] .receipt')
+        task_code = receipt.locator(
+          '.reference-link[data-reference-id="ref013"] > code'
+        )
+        assert task_code.count() == 1
         assert (
-          receipt.locator('.reference-link[data-reference-id="ref013"] > code').count()
-          == 1
+          task_code.evaluate("element => getComputedStyle(element).color")
+          == EARLIER_LINK_BLUE_RGB
         )
         assert (
           receipt.locator('.reply-parent-chip[data-parent-id="cc0400"] > code').count()
@@ -447,12 +452,14 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
               const linear = channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
               return sum + linear * [0.2126, 0.7152, 0.0722][i];
             }, 0);
-            const color = getComputedStyle(element).color;
-            const background = getComputedStyle(element.closest('.message')).backgroundColor;
-            const a = luminance(color), b = luminance(background);
-            return {color, background, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)};
-          }""")
-          assert contrast["ratio"] >= 4.5, (interaction, contrast)
+          const code = element.querySelector('code');
+          const color = getComputedStyle(code).color;
+          const background = getComputedStyle(code).backgroundColor;
+          const a = luminance(color), b = luminance(background);
+          return {color, background, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)};
+        }""")
+        assert contrast["color"] == EARLIER_LINK_BLUE_RGB, (interaction, contrast)
+        assert contrast["ratio"] >= 4.5, (interaction, contrast)
         page.screenshot(path=str(tmp_path / f"checklist-message-{width}.png"))
 
         page.locator("#tab-reports").click()
