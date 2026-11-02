@@ -359,16 +359,20 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
   store = SqliteStore()
   app = SteeringApp(store, repo_name="Nuu UI repairs")
   app.tasks.create_task("ref012", "Reference task", details=["Review reference"])
-  app.tasks.create_task(
-    "ref013",
-    "Linked task",
-    details=["See `ref012`, plain ref012, `ref012/extra`, and ``ref012``"],
-  )
   checklist = (
     '- [ ] Review **one** & "two" &lt;three&gt; [details](https://example.com) `ref012`\n'
     "  - [x] Nested `item`\n\nPlain ref012 and `ref012/extra` stay unlinked."
   )
-  app.messages.send_message(checklist, msg_id="cc0401", blocking=False)
+  app.messages.send_message("Parent message", msg_id="cc0400", blocking=False)
+  app.messages.send_message(
+    checklist, msg_id="cc0401", parent_ids=["cc0400"], blocking=False
+  )
+  app.tasks.create_task(
+    "ref013",
+    "Linked task",
+    details=["See `ref012`, plain ref012, `ref012/extra`, and ``ref012``"],
+    msg_ids=["cc0401"],
+  )
 
   def png_chunk(tag: bytes, data: bytes) -> bytes:
     return (
@@ -418,6 +422,19 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
         reference = message.locator('button.reference-link[data-reference-id="ref012"]')
         reference.wait_for()
         assert reference.count() == 1
+        assert reference.locator(":scope > code").count() == 1
+        assert "baselGroteskMono" in reference.locator("code").evaluate(
+          "element => getComputedStyle(element).fontFamily"
+        )
+        receipt = page.locator('.message[data-msg-id="cc0401"] .receipt')
+        assert (
+          receipt.locator('.reference-link[data-reference-id="ref013"] > code').count()
+          == 1
+        )
+        assert (
+          receipt.locator('.reply-parent-chip[data-parent-id="cc0400"] > code').count()
+          == 1
+        )
         for interaction in (None, "hover", "focus"):
           if interaction == "hover":
             reference.hover()
@@ -446,10 +463,15 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
         )
         report_checkbox.wait_for()
         assert report_checkbox.count() == 1
+        assert report.locator(".report-meta [data-auto-reference]").count() == 0
         assert report.get_by_role("checkbox", name="Nested item").count() == 1
         assert report.get_by_role("link", name="details").count() == 1
         assert (
           report.locator('[data-auto-reference][data-reference-id="ref012"]').count()
+          == 1
+        )
+        assert (
+          report.locator('.reference-link[data-reference-id="ref012"] > code').count()
           == 1
         )
         image_el = report.locator('img[alt="Wide evidence"]')
@@ -482,7 +504,7 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
         detail.wait_for(state="attached")
         assert (
           detail.locator(
-            'code [data-auto-reference][data-reference-id="ref012"]'
+            '[data-auto-reference][data-reference-id="ref012"] > code'
           ).count()
           == 1
         )
@@ -1729,6 +1751,9 @@ def test_retained_message_references_follow_loaded_targets() -> None:
         )
         assert page.evaluate("window.retainedReferenceCard.isConnected")
         assert old_task_link.count() == 0
+        assert (
+          card.locator("code").filter(has_text=re.compile(r"^00000a$")).count() == 1
+        )
         new_message_link = card.locator(
           '[data-auto-reference][data-reference-id="00000b"]'
         )

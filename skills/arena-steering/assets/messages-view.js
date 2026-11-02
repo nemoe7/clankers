@@ -313,14 +313,14 @@ export function renderMessagesView(container, state, handlers) {
             : "";
           const linkedTasks = linkedTasksByMsg.get(msg.id) || [];
           const tasksSuffix = linkedTasks.length
-            ? ` · ${linkedTasks.map((tid) => `<button type="button" class="reference-link" data-reference-type="task" data-reference-id="${escapeHtml(tid)}">${escapeHtml(tid)}</button>`).join(", ")}`
+            ? ` · ${linkedTasks.map((tid) => `<button type="button" class="reference-link" data-reference-type="task" data-reference-id="${escapeHtml(tid)}"><code>${escapeHtml(tid)}</code></button>`).join(", ")}`
             : "";
           const parentIds = Array.isArray(msg.parent_ids) ? msg.parent_ids : [];
           const parentsSuffix = parentIds.length
             ? ` · ${parentIds
                 .map(
                   (pid) =>
-                    `<button type="button" class="reply-parent-chip" data-parent-id="${escapeHtml(pid)}" title="Go to parent message">↪ ${escapeHtml(pid)}</button>`
+                    `<button type="button" class="reply-parent-chip" data-parent-id="${escapeHtml(pid)}" title="Go to parent message">↪ <code>${escapeHtml(pid)}</code></button>`
                 )
                 .join(" ")}`
             : "";

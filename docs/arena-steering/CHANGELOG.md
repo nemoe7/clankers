@@ -34,6 +34,8 @@ This log has no Unreleased section.
 
 - `assets/references.js`: Link complete backticked IDs in messages, reports, and task details without linking plain text.
 
+- `assets/references.js`, `assets/messages-view.js`: Put linked IDs inside code elements, including task receipts and reply-parent chips.
+
 - `pre.py`: Scope the governing-skill read guard to the v2 skill. Keep root governing files protected.
 
 - `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.

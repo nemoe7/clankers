@@ -17,7 +17,9 @@ function referenceButton(id, type) {
   button.dataset.autoReference = "true";
   button.dataset.referenceType = type;
   button.dataset.referenceId = id;
-  button.textContent = id;
+  const code = document.createElement("code");
+  code.textContent = id;
+  button.append(code);
   button.title = `Open ${type} ${id}`;
   return button;
 }
@@ -28,7 +30,7 @@ export function linkReferences(root, state) {
   // Reconsider only links generated here, not explicit receipt links.
   for (const link of root.querySelectorAll("[data-auto-reference]")) {
     if (targets.get(link.dataset.referenceId) !== link.dataset.referenceType) {
-      link.replaceWith(document.createTextNode(link.textContent || ""));
+      link.replaceWith(link.querySelector(":scope > code") || document.createTextNode(link.textContent || ""));
     }
   }
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -40,8 +42,9 @@ export function linkReferences(root, state) {
         parent.closest("a, button, pre, script, style, svg, .mermaid, .receipt")) continue;
     const text = node.nodeValue || "";
     if (parent.tagName === "CODE") {
+      if (parent.classList.contains("msg-id")) continue;
       const type = targets.get(text);
-      if (type && parent.textContent === text) node.replaceWith(referenceButton(text, type));
+      if (type && parent.textContent === text) parent.replaceWith(referenceButton(text, type));
       continue;
     }
     // Task details are escaped plain text, so their complete backticked IDs need an inline code element.
@@ -53,9 +56,7 @@ export function linkReferences(root, state) {
       const type = targets.get(match[1]);
       if (!type) continue;
       fragments.append(document.createTextNode(text.slice(last, match.index)));
-      const code = document.createElement("code");
-      code.append(referenceButton(match[1], type));
-      fragments.append(code);
+      fragments.append(referenceButton(match[1], type));
       last = match.index + match[0].length;
     }
     if (last) {
