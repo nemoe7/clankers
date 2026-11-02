@@ -2222,7 +2222,7 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   margin: 0 0 2px;
 }
 
-.report-content img,
+article#report.report img,
 .message-text img {
   display: block;
   max-width: 100%;
@@ -2879,4 +2879,8 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+}
+
+.message .reference-link {
+  color: #9cc7ef;
 }

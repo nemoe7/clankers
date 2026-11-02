@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
 import runpy
+import struct
 import subprocess
 import threading
+import zlib
 from pathlib import Path
 
 import pytest
@@ -335,6 +338,134 @@ def test_markdown_checklists_use_hanging_indent(
             start == pytest.approx(metrics["itemLeft"], abs=1)
             for start in metrics["starts"]
           ), (index, metrics)
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize(("width", "height"), [(411, 799), (855, 325), (1372, 883)])
+def test_nuu_repairs_checklists_reference_contrast_and_report_media(
+  tmp_path: Path, width: int, height: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Nuu UI repairs")
+  app.tasks.create_task("ref012", "Reference task", details=["Review reference"])
+  checklist = (
+    '- [ ] Review **one** & "two" &lt;three&gt; [details](https://example.com) ref012\n'
+    "  - [x] Nested `item`"
+  )
+  app.messages.send_message(checklist, msg_id="cc0401", blocking=False)
+
+  def png_chunk(tag: bytes, data: bytes) -> bytes:
+    return (
+      struct.pack(">I", len(data))
+      + tag
+      + data
+      + struct.pack(">I", zlib.crc32(tag + data))
+    )
+
+  row = b"\0" + b"\x64\x8c\xbe" * 240 + b"\xfa\xa0\x50" * 240
+  png = (
+    b"\x89PNG\r\n\x1a\n"
+    + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 480, 200, 8, 2, 0, 0, 0))
+    + png_chunk(b"IDAT", zlib.compress(row * 200))
+    + png_chunk(b"IEND", b"")
+  )
+  image = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+  app.reports.publish_report(
+    "repair",
+    "Repair evidence",
+    f"# Repair evidence\n\n{checklist}\n\n![Wide evidence]({image})\n\n"
+    '<!-- question {"id":"note","label":"Note"} -->\nNote: ___',
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        message = page.locator('[data-msg-id="cc0401"] .message-text')
+        message.wait_for()
+        assert (
+          message.get_by_role(
+            "checkbox", name=re.compile(r'Review one & "two" <three> details ref012')
+          ).count()
+          == 1
+        ), message.aria_snapshot()
+        assert message.get_by_role("checkbox", name="Nested item").count() == 1
+        assert message.get_by_role("link", name="details").count() == 1
+        reference = message.locator('button.reference-link[data-reference-id="ref012"]')
+        reference.wait_for()
+        for interaction in (None, "hover", "focus"):
+          if interaction == "hover":
+            reference.hover()
+          elif interaction == "focus":
+            reference.focus()
+          contrast = reference.evaluate("""element => {
+            const rgb = color => (color.match(/[\\d.]+/g) || []).slice(0, 3).map(Number);
+            const luminance = color => rgb(color).reduce((sum, value, i) => {
+              const channel = value / 255;
+              const linear = channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+              return sum + linear * [0.2126, 0.7152, 0.0722][i];
+            }, 0);
+            const color = getComputedStyle(element).color;
+            const background = getComputedStyle(element.closest('.message')).backgroundColor;
+            const a = luminance(color), b = luminance(background);
+            return {color, background, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)};
+          }""")
+          assert contrast["ratio"] >= 4.5, (interaction, contrast)
+        page.screenshot(path=str(tmp_path / f"checklist-message-{width}.png"))
+
+        page.locator("#tab-reports").click()
+        report = page.locator("article#report.report")
+        report.wait_for()
+        report_checkbox = report.get_by_role(
+          "checkbox", name=re.compile(r'Review one & "two" <three> details ref012')
+        )
+        report_checkbox.wait_for()
+        assert report_checkbox.count() == 1
+        assert report.get_by_role("checkbox", name="Nested item").count() == 1
+        assert report.get_by_role("link", name="details").count() == 1
+        image_el = report.locator('img[alt="Wide evidence"]')
+        image_el.wait_for(state="visible")
+        page.wait_for_function(
+          "() => document.querySelector('article#report.report img')?.naturalWidth === 480"
+        )
+        media = image_el.evaluate("""img => {
+          const panel = img.closest('article#report.report');
+          const rect = img.getBoundingClientRect(), bounds = panel.getBoundingClientRect();
+          const style = getComputedStyle(img);
+          return {width: rect.width, height: rect.height, right: rect.right,
+            borderWidth: parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth),
+            borderHeight: parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth),
+            naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+            panelWidth: bounds.width, panelRight: bounds.right,
+            scrollWidth: panel.scrollWidth, clientWidth: panel.clientWidth};
+        }""")
+        assert media["width"] - media["borderWidth"] <= media["naturalWidth"] + 1, media
+        assert media["width"] <= media["panelWidth"] + 1, media
+        assert media["right"] <= media["panelRight"] + 1, media
+        assert media["scrollWidth"] <= media["clientWidth"] + 1, media
+        assert (media["height"] - media["borderHeight"]) / (
+          media["width"] - media["borderWidth"]
+        ) == pytest.approx(media["naturalHeight"] / media["naturalWidth"], abs=0.01)
+        page.screenshot(path=str(tmp_path / f"checklist-report-{width}.png"))
       finally:
         browser.close()
   finally:

@@ -207,11 +207,25 @@ def _gfm_extensions_plugin(parser: MarkdownIt) -> None:
           first_child = token.children[0]
           if first_child.type == "text":
             first_child.content = TASK_ITEM_RE.sub(r"\2", first_child.content, count=1)
+          label_text = "".join(
+            " " if child.type in {"softbreak", "hardbreak"} else child.content
+            for child in token.children
+            if child.type
+            in {
+              "text",
+              "text_special",
+              "code_inline",
+              "image",
+              "softbreak",
+              "hardbreak",
+            }
+          )
+          label_text = " ".join(label_text.split())
           checkbox = Token("html_inline", "", 0)
           checked_attr = " checked" if checked else ""
           checkbox.content = (
             '<input type="checkbox" class="task-list-item-checkbox" '
-            f"disabled{checked_attr}>"
+            f'disabled{checked_attr} aria-label="{html.escape(label_text, quote=True)}">'
           )
           token.children.insert(0, checkbox)
           li_tok = tokens[idx - 2]

@@ -54,6 +54,8 @@ This log has no Unreleased section.
 
 - `pre.py`, `cli.py`: Exempt marked detached runs and exact Arena maintenance calls from inbox cadence while keeping pushes guarded.
 
+- `markdown.py`, `assets/markdown.js`, `assets/style.css`: Name checklist inputs, raise message reference contrast, and fit report images to their panel.
+
 - `store.py`: Replace stale row-change triggers when an existing v2 database already has the tombstone column.
 
 - `assets/style.css`: Keep survey tooltips within the dialog and footer actions visible in short viewports.

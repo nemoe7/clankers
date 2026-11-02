@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from arena_steering import __version__, cli
 from arena_steering.cli import main as cli_main
-from arena_steering.markdown import render_markdown
+from arena_steering.markdown import render_markdown, render_report_markdown
 from arena_steering.server import (
   PASTE_ATTACHMENT_CHAR_THRESHOLD,
   PASTE_ATTACHMENT_LINE_THRESHOLD,
@@ -1028,7 +1028,27 @@ def test_server_markdown_it_diff_and_report_summary_cache(tmp_path: Path) -> Non
   assert "<mark>token</mark>" in rendered
   assert "<s>removed</s>" in rendered
   assert 'href="https://example.com"' in rendered
-  assert 'class="task-list-item-checkbox" disabled checked' in rendered
+  assert (
+    'class="task-list-item-checkbox" disabled checked aria-label="Ship task list"'
+    in rendered
+  )
+  assert (
+    'class="task-list-item-checkbox" disabled aria-label="Pending item"' in rendered
+  )
+  labeled = render_markdown(
+    '- [ ] Review **one** & "two" <three> [details](https://example.com) ref012\n'
+  )
+  assert (
+    'aria-label="Review one &amp; &quot;two&quot; &lt;three&gt; details ref012"'
+    in labeled
+  )
+  reported = render_report_markdown(
+    '- [ ] Review **one** & "two" &lt;three&gt; [details](https://example.com) ref012\n'
+  )
+  assert (
+    'aria-label="Review one &amp; &quot;two&quot; &lt;three&gt; details ref012"'
+    in reported
+  )
   assert '<span class="token coord">@@ -1,2 +1,2 @@</span>' in rendered
   assert '<span class="token deleted">-old_line</span>' in rendered
   assert '<span class="token inserted">+new_line</span>' in rendered
