@@ -2081,6 +2081,94 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+@pytest.mark.parametrize("width,height", [(390, 844), (855, 700), (1372, 700)])
+def test_report_picker_keeps_selected_item_visible_and_fades_edges(
+  width: int, height: int, tmp_path: Path
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Report picker scroll regression")
+  for idx in range(1, 12):
+    app.reports.publish_report(f"report-{idx:02d}", f"Report {idx}", f"# Report {idx}")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.set_default_timeout(5000)
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        picker = page.locator("#report-picker")
+        items = picker.locator(".report-picker-link")
+        assert items.count() == 11
+        last = items.nth(10)
+        last_id = last.get_attribute("data-report-id")
+        assert last_id
+        assert picker.evaluate("element => element.scrollHeight > element.clientHeight")
+        assert picker.get_attribute("data-scrolled-start") is None
+        assert picker.get_attribute("data-scrolled-end") is not None
+        assert (
+          picker.evaluate("element => getComputedStyle(element).maskImage") != "none"
+        )
+        page.screenshot(path=str(tmp_path / f"report-picker-top-{width}.png"))
+
+        picker.evaluate("element => { element.scrollTop = element.scrollHeight; }")
+        page.wait_for_function(
+          "document.querySelector('#report-picker')?.hasAttribute('data-scrolled-start')"
+        )
+        before = picker.evaluate("element => element.scrollTop")
+        assert before > 0
+        assert picker.get_attribute("data-scrolled-end") is None
+        last.click()
+        page.wait_for_function(
+          "id => document.querySelector('#report-picker [aria-current=true]')?.dataset.reportId === id",
+          arg=last_id,
+        )
+        after = picker.evaluate("""element => {
+          const selected = element.querySelector('[aria-current="true"]');
+          const viewport = element.getBoundingClientRect();
+          const row = selected.getBoundingClientRect();
+          return {
+            top: element.scrollTop,
+            selectedVisible: row.top >= viewport.top - 1 && row.bottom <= viewport.bottom + 1,
+            topFade: element.hasAttribute('data-scrolled-start'),
+            bottomFade: element.hasAttribute('data-scrolled-end'),
+            mask: getComputedStyle(element).maskImage,
+          };
+        }""")
+        assert after["top"] >= before - 2, (before, after)
+        assert after["selectedVisible"], after
+        assert after["topFade"] and not after["bottomFade"], after
+        assert after["mask"] != "none", after
+        if width < 1200:
+          toggle = page.locator("#report-picker-toggle")
+          toggle.click()
+          assert picker.is_hidden()
+          toggle.click()
+          assert picker.is_visible()
+          assert picker.evaluate("element => element.scrollTop") >= before - 2
+          assert picker.get_attribute("data-scrolled-start") is not None
+        page.screenshot(path=str(tmp_path / f"report-picker-{width}.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 def test_report_picker_identifies_unseen_acknowledgements() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()

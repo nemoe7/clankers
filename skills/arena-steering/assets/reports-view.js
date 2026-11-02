@@ -68,6 +68,7 @@ function storedValuesFor(report) {
 }
 
 let mobilePickerCollapsed = false;
+let pickerScrollTop = 0;
 let activeScrollCleanup = null;
 
 function renderFieldBlock(field, headings, stored = null) {
@@ -138,10 +139,13 @@ export function renderReportsView(container, state, handlers) {
     activeScrollCleanup();
     activeScrollCleanup = null;
   }
+  const previousPicker = container.querySelector("#report-picker");
+  if (previousPicker?.clientHeight) pickerScrollTop = previousPicker.scrollTop;
 
   const reports = state.reports || [];
   if (!reports.length) {
     lastRenderedReportId = null;
+    pickerScrollTop = 0;
     container.dataset.scrollable = "false";
     container.innerHTML = `<div class="reports-layout"><p class="muted" id="report-status">No report published yet.</p></div>`;
     return;
@@ -352,6 +356,24 @@ export function renderReportsView(container, state, handlers) {
   }
 
   const railEl = container.querySelector("#report-rail");
+  const pickerEl = container.querySelector("#report-picker");
+  const syncPickerScroll = () => {
+    if (!pickerEl?.isConnected || !pickerEl.clientHeight) return;
+    pickerScrollTop = pickerEl.scrollTop;
+    pickerEl.toggleAttribute("data-scrolled-start", pickerEl.scrollTop > 0);
+    pickerEl.toggleAttribute(
+      "data-scrolled-end",
+      pickerEl.scrollHeight - pickerEl.clientHeight - pickerEl.scrollTop > 1
+    );
+  };
+  const restorePickerScroll = () => {
+    if (!pickerEl?.clientHeight) return;
+    pickerEl.scrollTop = pickerScrollTop;
+    syncPickerScroll();
+  };
+  pickerEl?.addEventListener("scroll", syncPickerScroll, { passive: true });
+  restorePickerScroll();
+
   const pickerToggleBtn = container.querySelector("#report-picker-toggle");
   pickerToggleBtn?.addEventListener("click", () => {
     mobilePickerCollapsed = !mobilePickerCollapsed;
@@ -362,6 +384,7 @@ export function renderReportsView(container, state, handlers) {
       "aria-expanded",
       mobilePickerCollapsed ? "false" : "true"
     );
+    restorePickerScroll();
   });
 
   const scrollTopBtn = container.querySelector("#report-scroll-top");

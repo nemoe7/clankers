@@ -2123,11 +2123,46 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
 }
 
 .report-picker {
+  --picker-fade-start: 0px;
+  --picker-fade-end: 0px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   max-height: 220px;
   overflow-y: auto;
+  scroll-padding-block: 20px;
+}
+
+.report-picker[data-scrolled-start] {
+  --picker-fade-start: 20px;
+}
+
+.report-picker[data-scrolled-end] {
+  --picker-fade-end: 20px;
+}
+
+.report-picker[data-scrolled-start],
+.report-picker[data-scrolled-end] {
+  -webkit-mask-image:
+    linear-gradient(
+      to bottom,
+      transparent 0,
+      black var(--picker-fade-start),
+      black calc(100% - var(--picker-fade-end)),
+      transparent 100%
+    ),
+    linear-gradient(to left, black var(--scrollbar-carve), transparent var(--scrollbar-carve));
+  mask-image:
+    linear-gradient(
+      to bottom,
+      transparent 0,
+      black var(--picker-fade-start),
+      black calc(100% - var(--picker-fade-end)),
+      transparent 100%
+    ),
+    linear-gradient(to left, black var(--scrollbar-carve), transparent var(--scrollbar-carve));
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
 }
 
 .report-picker-link {

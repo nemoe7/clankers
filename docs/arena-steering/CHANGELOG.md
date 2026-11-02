@@ -38,6 +38,8 @@ This log has no Unreleased section.
 
 - `assets/style.css`: Restore the earlier blue for message links while keeping code-chip text contrast above 4.5:1.
 
+- `assets/reports-view.js`, `assets/style.css`: Retain the Reports picker position across report changes and fade its scrollable edges on desktop and mobile.
+
 - `pre.py`: Scope the governing-skill read guard to the v2 skill. Keep root governing files protected.
 
 - `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.
