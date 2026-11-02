@@ -1341,6 +1341,103 @@ def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+@pytest.mark.parametrize("width,height", [(390, 844), (1200, 700)])
+def test_messages_stay_at_bottom_after_send_and_reply_only_when_already_there(
+  width: int, height: int, tmp_path: Path
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Messages bottom pinning")
+  for idx in range(12):
+    app.messages.send_message(
+      f"Older message {idx}. " + "Long scrolling content. " * 40,
+      msg_id=f"{idx + 1:06x}",
+      blocking=False,
+    )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.set_default_timeout(6000)
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        history = page.locator("#history")
+        history.locator(".message").last.wait_for()
+        assert history.evaluate("el => el.scrollHeight > el.clientHeight")
+        page.locator("#msg").fill("Sent at bottom")
+        history.evaluate("el => { el.scrollTop = el.scrollHeight; }")
+        assert (
+          history.evaluate("el => el.scrollHeight - el.scrollTop - el.clientHeight")
+          <= 1
+        )
+        page.locator("#send").click()
+        sent = history.locator(".message").filter(has_text="Sent at bottom")
+        sent.wait_for()
+        assert (
+          history.evaluate("el => el.scrollHeight - el.scrollTop - el.clientHeight")
+          <= 24
+        )
+        sent_id = sent.get_attribute("data-msg-id")
+        assert sent_id
+        app.messages.ack(sent_id, "Reply at bottom. " + "Long reply content. " * 40)
+        sent.locator(".reply").get_by_text("Reply at bottom", exact=False).wait_for()
+        assert (
+          history.evaluate("el => el.scrollHeight - el.scrollTop - el.clientHeight")
+          <= 24
+        )
+        page.screenshot(path=str(tmp_path / f"messages-pinned-{width}.png"))
+
+        page.locator("#msg").fill("Sent while reading earlier messages")
+        history.evaluate("el => { el.scrollTop = el.scrollHeight / 2; }")
+        assert history.evaluate("el => el.scrollTop") > 100
+        anchor = history.evaluate("""element => {
+          const viewport = element.getBoundingClientRect();
+          const card = [...element.querySelectorAll('.message')].reverse().find(item => {
+            const rect = item.getBoundingClientRect();
+            return rect.bottom > viewport.top + 40 && rect.top < viewport.bottom - 40;
+          });
+          return card && {
+            id: card.dataset.msgId,
+            offset: card.getBoundingClientRect().top - viewport.top,
+          };
+        }""")
+        assert anchor
+        page.locator("#send").click()
+        history.locator(".message").filter(
+          has_text="Sent while reading earlier messages"
+        ).wait_for()
+        after = history.evaluate(
+          """(element, id) => {
+          const card = [...element.querySelectorAll('.message')].find(item => item.dataset.msgId === id);
+          return {
+            distance: element.scrollHeight - element.scrollTop - element.clientHeight,
+            offset: card?.getBoundingClientRect().top - element.getBoundingClientRect().top,
+          };
+        }""",
+          anchor["id"],
+        )
+        assert abs(after["offset"] - anchor["offset"]) <= 30, (anchor, after)
+        assert after["distance"] > 100, after
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 def test_messages_keep_scroll_target_during_unchanged_polling() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()

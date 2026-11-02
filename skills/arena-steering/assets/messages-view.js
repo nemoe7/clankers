@@ -560,24 +560,20 @@ export function renderMessagesView(container, state, handlers) {
     if (query) {
       highlightSearchMatches(historyEl, state.searchQuery);
     }
-    if (anchorMsgId) {
-      const anchorCard = historyEl.querySelector(
-        `.message[data-msg-id="${CSS.escape(anchorMsgId)}"]`
-      );
-      if (anchorCard) {
-        historyEl.scrollTop = savedScrollTop ?? 0;
-        const historyRect = historyEl.getBoundingClientRect();
-        const curOffset = anchorCard.getBoundingClientRect().top - historyRect.top;
-        historyEl.scrollTop += curOffset - anchorOffsetTop;
-      } else if (pinnedToBottom || savedScrollTop === null) {
-        historyEl.scrollTop = historyEl.scrollHeight;
-      } else {
-        historyEl.scrollTop = savedScrollTop;
-      }
-    } else if (pinnedToBottom || savedScrollTop === null) {
+    if (pinnedToBottom || savedScrollTop === null) {
       historyEl.scrollTop = historyEl.scrollHeight;
     } else {
       historyEl.scrollTop = savedScrollTop;
+      if (anchorMsgId) {
+        const anchorCard = historyEl.querySelector(
+          `.message[data-msg-id="${CSS.escape(anchorMsgId)}"]`
+        );
+        if (anchorCard) {
+          const historyRect = historyEl.getBoundingClientRect();
+          const curOffset = anchorCard.getBoundingClientRect().top - historyRect.top;
+          historyEl.scrollTop += curOffset - anchorOffsetTop;
+        }
+      }
     }
     syncScrollControls();
     historyScrollTarget = historyEl;
@@ -784,10 +780,8 @@ export function renderMessagesView(container, state, handlers) {
       : nextHistoryHeight > 0
         ? Math.max(0, nextHeight - priorNoteHeight) + (!wasMultiline && multiline && !hasAttachments ? 38 : 0)
         : 0;
-    if (historyEl && heightDrop > 0 && !composerExpanded) {
-      historyEl.scrollTop = pinnedToBottom
-        ? historyEl.scrollHeight
-        : Math.min(historyEl.scrollHeight, historyEl.scrollTop + heightDrop);
+    if (historyEl && heightDrop > 0 && pinnedToBottom && !composerExpanded) {
+      historyEl.scrollTop = historyEl.scrollHeight;
       syncScrollControls();
     }
   }

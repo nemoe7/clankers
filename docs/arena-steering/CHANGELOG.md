@@ -40,6 +40,8 @@ This log has no Unreleased section.
 
 - `assets/reports-view.js`, `assets/style.css`: Retain the Reports picker position across report changes and fade its scrollable edges on desktop and mobile.
 
+- `assets/messages-view.js`: Keep Messages at the bottom when new content arrives there, without moving readers who scrolled up.
+
 - `pre.py`: Scope the governing-skill read guard to the v2 skill. Keep root governing files protected.
 
 - `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.
