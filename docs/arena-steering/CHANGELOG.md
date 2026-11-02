@@ -62,6 +62,12 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`: Exempt exact Arena process and port probes from inbox blocking and call counts. Recognize standalone `ss` and `netstat` with any flags. Keep altered mixed lines guarded.
+
+- `pre.py`: Let standalone mkdir calls pass the pending-inbox gate and still count. Keep mixed lines guarded.
+
+- `pre.py`: Distinguish remote Git pushes from local stash pushes in guards and post-push checks.
+
 - `pre.py`: Hide pending IDs in six-call Bash blocks while keeping the read and acknowledgment recovery steps.
 
 - `assets/`: Fill the Reports sidebar with the picker until answers appear, then give the picker and acknowledgements separate scrolling areas with edge fades.

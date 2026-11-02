@@ -7,6 +7,7 @@ registry, so adding, dropping, or reordering a check is one line here.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shlex
@@ -72,13 +73,27 @@ def shell_line(text: str) -> str:
   return text
 
 
-ARENA_PROBE_COMMANDS = {"ss -ltn", "netstat -ltn", "source ~/.profile"}
+ARENA_PROBE_COMMANDS = {"source ~/.profile"}
+ARENA_PORT_PROBE = (
+  "(command -v ss >/dev/null 2>&1 && ss -ltnH) || netstat -ltn 2>/dev/null || true"
+)
+ARENA_PROCESS_PROBE_SHA256 = (
+  "98cec4863048f02988a62faac41ce8c46bb987e3ec4e843769d123b67d48b665"
+)
 ARENA_WORKSPACE_VERBS = {"read", "edit", "write"}
 
 
 def arena_maintenance_call(line: str, command: str) -> bool:
   """Recognize whole Arena utility calls, not user lines that merely mention them."""
   text = shell_line(line).strip()
+  if text == ARENA_PORT_PROBE:
+    return True
+  if (
+    "===ARENA_ENTRY===" in text
+    and "===ARENA_PORTS===" in text
+    and hashlib.sha256(text.encode()).hexdigest() == ARENA_PROCESS_PROBE_SHA256
+  ):
+    return True
   if not text or text != shell_line(command).strip():
     return False
   if text in ARENA_PROBE_COMMANDS:
@@ -89,7 +104,8 @@ def arena_maintenance_call(line: str, command: str) -> bool:
     words = shlex.split(text)
   except ValueError:
     return False
-  return (
+  direct = command_words(words)
+  return (bool(direct) and Path(direct[0]).name in {"ss", "netstat"}) or (
     len(words) >= 2
     and Path(words[0]).name == "arena-workspace"
     and words[1] in ARENA_WORKSPACE_VERBS
@@ -143,10 +159,27 @@ class PreContext:
     return any(word in text for word in words)
 
   def is_push(self) -> bool:
-    return "git push" in self.command or "git push" in self.line
+    return any(remote_git_push(words) for words in _line_commands(self))
 
   def is_arena_maintenance(self) -> bool:
     return arena_maintenance_call(self.line, self.command)
+
+  def is_standalone_mkdir(self) -> bool:
+    if (
+      self.line
+      and self.command
+      and shell_line(self.line).strip() != shell_line(self.command).strip()
+    ):
+      return False
+    if any(
+      mark in shell_line(self.line or self.command) for mark in ("$(", "`", "<", ">")
+    ):
+      return False
+    pieces = self.pieces()
+    if len(pieces) != 1 or pieces[0][1] != ";":
+      return False
+    words = command_words(pieces[0][0])
+    return bool(words) and Path(words[0]).name == "mkdir"
 
   def is_inbox_recovery(self) -> bool:
     """Allow an inbox-only line to clear the gate, including a piped ACK."""
@@ -171,10 +204,7 @@ class PreContext:
       return True
     if words[1] != "ack" or punctuation != ["|"]:
       return False
-    pipe = words.index("|")
-    return "git push" not in " ".join(
-      words[pipe + 1 :]
-    ) and not self.command.startswith("git push")
+    return not (self.is_push() or PreContext(line=self.command).is_push())
 
   def blocked_part(self) -> str:
     """Name the last simple command of a chained line."""
@@ -308,6 +338,46 @@ def _line_commands(ctx: PreContext, *, unwrap_timeout: bool = False) -> list[lis
       for inner, _ in embedded_pieces(words)
     ),
   ]
+
+
+def remote_git_push(words: list[str]) -> bool:
+  """Recognize Git's push subcommand, not `git stash push` or option values."""
+  if not words or Path(words[0]).name != "git":
+    return False
+  args = words[1:]
+  index = 0
+  values = {
+    "-C",
+    "-c",
+    "--git-dir",
+    "--work-tree",
+    "--namespace",
+    "--super-prefix",
+    "--config-env",
+  }
+  flags = {"-p", "--paginate", "-P", "--no-pager", "--no-replace-objects", "--bare"}
+  prefixes = (
+    "-C",
+    "-c",
+    "--git-dir=",
+    "--work-tree=",
+    "--namespace=",
+    "--super-prefix=",
+    "--config-env=",
+  )
+  while index < len(args):
+    word = args[index]
+    if word in {"-h", "--help", "-v", "--version"}:
+      return False
+    if word in values:
+      index += 2
+    elif word in flags or word.startswith(prefixes):
+      index += 1
+    elif word.startswith("-"):
+      return "push" in args[index + 1 :]
+    else:
+      return word == "push"
+  return False
 
 
 def _api_pr_change(args: list[str], client: str) -> bool:
@@ -472,7 +542,7 @@ class DestructivePushGuard:
 
   def applies(self, ctx: PreContext) -> bool:
     for words in _line_commands(ctx):
-      if not words or Path(words[0]).name != "git" or "push" not in words[1:]:
+      if not remote_git_push(words):
         continue
       args = words[words.index("push") + 1 :]
       if any(arg in {"--help", "-h", "--dry-run", "-n"} for arg in args):
@@ -499,10 +569,10 @@ class GitSafetyGuard:
     if not words:
       return ""
     head, args = Path(words[0]).name, words[1:]
+    if remote_git_push(words):
+      return "push"
     if head == "git" and "commit" in args:
       return "commit"
-    if head == "git" and "push" in args:
-      return "push"
     if head in {"steer", "arena-preview"} and args[:2] == ["run", "start"]:
       return "gate"
     return ""
@@ -574,7 +644,7 @@ class InboxGate:
   name = "gate"
 
   def applies(self, ctx: PreContext) -> bool:
-    if not ctx.pending_ids or ctx.is_inbox_recovery():
+    if not ctx.pending_ids or ctx.is_inbox_recovery() or ctx.is_standalone_mkdir():
       return False
     return ctx.is_push() or not (ctx.routed or ctx.is_arena_maintenance())
 
@@ -909,7 +979,7 @@ def post_push_watch(line: str) -> bool:
       continue
     if head == "gh" and args[:2] == ["pr", "create"]:
       return True
-    if head == "git" and "push" in args:
+    if remote_git_push(words):
       options = args[args.index("push") + 1 :]
       if not any(flag in options for flag in ("-n", "--dry-run")):
         return True

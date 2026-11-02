@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -94,6 +95,46 @@ def test_a_push_blocks_the_moment_a_note_waits() -> None:
   assert "abc123" in " ".join(result.messages)
 
 
+@pytest.mark.parametrize(
+  "line",
+  (
+    "git stash push",
+    "git stash push --all",
+    "git stash push -m 'do not git push'",
+    "git -C push stash push",
+  ),
+)
+def test_local_stash_push_does_not_trigger_remote_push_guards(
+  _isolate_state: Path, line: str
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  code, output = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) == "1"
+  assert (
+    pre.run_pipeline(pre.PreContext(line=line, command=line)).verdict == pre.CONTINUE
+  )
+  assert not pre.post_push_watch(line)
+
+
+@pytest.mark.parametrize(
+  "line",
+  (
+    "git -C /workspace push origin topic",
+    "git --no-pager push origin topic",
+    "git --git-dir=repo.git push origin topic",
+  ),
+)
+def test_git_global_options_keep_remote_push_guarded(line: str) -> None:
+  result = pre.run_pipeline(
+    pre.PreContext(line=line, command=line, shell="bash", pending_ids=["ab1234"])
+  )
+  assert result.verdict == pre.BLOCK
+  assert result.blocked_by == "gate"
+  assert "PUSH BLOCKED" in " ".join(result.messages)
+  assert pre.post_push_watch(line)
+
+
 def test_the_gate_counts_calls_before_it_blocks() -> None:
   base = pre.PreContext(line="ls", command="ls", shell="bash", pending_ids=["abc123"])
   early = pre.run_pipeline(pre.PreContext(**{**base.__dict__, "call_count": 2}))
@@ -129,7 +170,10 @@ def test_six_call_block_hides_pending_ids_but_keeps_recovery_steps() -> None:
   ("line", "command"),
   (
     ("/bin/bash -l -c ss -ltn", "ss -ltn"),
+    ("/bin/bash -l -c ss -ltnH", "ss -ltnH"),
     ("/bin/bash -l -c netstat -ltn", "netstat -ltn"),
+    ("/bin/bash -l -c netstat -ltnp", "netstat -ltnp"),
+    (pre.ARENA_PORT_PROBE, "command -v ss"),
     ("/bin/bash -l -c source ~/.profile", "source ~/.profile"),
     (
       "/bin/bash -l -c 'arena-workspace read /home/user/project/README.md'",
@@ -148,6 +192,76 @@ def test_arena_platform_shells_do_not_spend_inbox_call_budget(
   code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.CONTINUE, out
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+
+def test_exact_arena_process_probe_skips_block_and_call_count(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  script = "ports_observed=1\necho '===ARENA_ENTRY==='\necho '===ARENA_PORTS==='"
+  monkeypatch.setattr(
+    pre,
+    "ARENA_PROCESS_PROBE_SHA256",
+    hashlib.sha256(script.encode()).hexdigest(),
+    raising=False,
+  )
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  code, output = _run("pre", "-l", script, "-c", "ports_observed=1", "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+  changed = script + "\necho extra"
+  code, output = _run("pre", "-l", changed, "-c", "ports_observed=1", "-s", "bash")
+  assert code == pre.BLOCK, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
+
+
+@pytest.mark.parametrize(
+  ("line", "command"),
+  (
+    ("mkdir -p 'cache dir'", "mkdir -p 'cache dir'"),
+    ("/bin/bash -l -c 'mkdir -p cache'", "mkdir -p cache"),
+  ),
+)
+def test_standalone_mkdir_runs_but_counts_while_inbox_waits(
+  _isolate_state: Path, line: str, command: str
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert messages.pending_violation() is None
+  store.close()
+
+
+@pytest.mark.parametrize(
+  ("line", "command"),
+  (
+    ("mkdir -p cache && printf extra", "mkdir -p cache"),
+    ("mkdir -p cache | cat", "mkdir -p cache"),
+    ('mkdir "$(touch /tmp/marker)"', 'mkdir "$(touch /tmp/marker)"'),
+    ("mkdir cache > /tmp/marker", "mkdir cache > /tmp/marker"),
+  ),
+)
+def test_mixed_mkdir_lines_stay_inbox_gated(
+  _isolate_state: Path, line: str, command: str
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
+  assert code == pre.BLOCK, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
 def test_marked_detached_shell_does_not_spend_inbox_call_budget(
@@ -174,6 +288,7 @@ def test_marked_detached_shell_does_not_spend_inbox_call_budget(
   ("line", "command"),
   (
     ("/bin/bash -l -c 'ss -ltn && printf extra'", "ss -ltn"),
+    (pre.ARENA_PORT_PROBE + "; printf extra", "command -v ss"),
     (
       "/bin/bash -l -c 'arena-workspace read /home/user/project/README.md; printf extra'",
       "arena-workspace read /home/user/project/README.md",
@@ -1287,6 +1402,7 @@ def test_gate_allows_inbox_recovery_but_not_mixed_work() -> None:
     "steer read && git status",
     "steer ack ab1234 Done; git push",
     "steer ack ab1234 Done | git push",
+    "steer ack ab1234 Done | git -C /workspace push origin topic",
   ):
     ctx = pre.PreContext(
       line=line,
