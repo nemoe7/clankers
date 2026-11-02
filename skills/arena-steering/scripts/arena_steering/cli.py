@@ -934,7 +934,10 @@ def _run_pre(
   out: TextIO,
 ) -> int:
   """Run the pre-command pipeline and return its verdict."""
-  if not os.environ.get("ARENA_STEER_ROUTE"):
+  routed = os.environ.get("ARENA_STEER_ROUTE") == "1"
+  if not routed and not pre_mod.arena_maintenance_call(
+    parsed.line, parsed.command_text
+  ):
     _schedule_instruction_check(parsed.line or parsed.command_text, messages, store)
   pending_ids = messages.pending_ids()
   if not pending_ids:
@@ -960,7 +963,7 @@ def _run_pre(
     pending_ids=pending_ids,
     call_count=count,
     active_runs=FileGateStatus(Path(store.db_path).parent).running_names(),
-    routed=os.environ.get("ARENA_STEER_ROUTE") == "1",
+    routed=routed,
     cwd=Path.cwd(),
     checkout_root=pre_mod.repo_root(),
     session_ids=session_ids,
@@ -1017,6 +1020,7 @@ def _run_pre(
     and parsed.shell
     and "gate" not in ctx.done
     and not ctx.is_inbox_recovery()
+    and not (ctx.routed or ctx.is_arena_maintenance())
   ):
     _bump_call_count(store)
   if result.route is not None:

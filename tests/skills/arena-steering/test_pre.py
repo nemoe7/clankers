@@ -22,6 +22,7 @@ from arena_steering.server import scripts_signature
 @pytest.fixture(autouse=True)
 def _isolate_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
   state_dir = tmp_path / "arena-state"
+  monkeypatch.delenv("ARENA_STEER_ROUTE", raising=False)
   monkeypatch.setattr(cli, "resolve_state_dir", lambda: state_dir)
   return state_dir
 
@@ -103,6 +104,75 @@ def test_the_gate_counts_calls_before_it_blocks() -> None:
   )
   assert late.verdict == pre.BLOCK
   assert str(pre.GATE_THRESHOLD) in " ".join(late.messages)
+
+
+@pytest.mark.parametrize(
+  ("line", "command"),
+  (
+    ("/bin/bash -l -c ss -ltn", "ss -ltn"),
+    ("/bin/bash -l -c netstat -ltn", "netstat -ltn"),
+    ("/bin/bash -l -c source ~/.profile", "source ~/.profile"),
+    (
+      "/bin/bash -l -c 'arena-workspace read /home/user/project/README.md'",
+      "arena-workspace read /home/user/project/README.md",
+    ),
+  ),
+)
+def test_arena_platform_shells_do_not_spend_inbox_call_budget(
+  _isolate_state: Path, line: str, command: str
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
+  assert code == pre.CONTINUE, out
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+
+def test_marked_detached_shell_does_not_spend_inbox_call_budget(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  monkeypatch.setenv("ARENA_STEER_ROUTE", "1")
+
+  code, out = _run("pre", "-l", "printf ok", "-c", "printf ok", "-s", "bash")
+  assert code == pre.CONTINUE, out
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+  code, out = _run(
+    "pre", "-l", "git push origin topic", "-c", "git push origin topic", "-s", "bash"
+  )
+  assert code == pre.BLOCK
+  assert "PUSH BLOCKED" in out
+
+
+@pytest.mark.parametrize(
+  ("line", "command"),
+  (
+    ("/bin/bash -l -c 'ss -ltn && printf extra'", "ss -ltn"),
+    (
+      "/bin/bash -l -c 'arena-workspace read /home/user/project/README.md; printf extra'",
+      "arena-workspace read /home/user/project/README.md",
+    ),
+  ),
+)
+def test_mixed_platform_probe_remains_inbox_gated(
+  _isolate_state: Path, line: str, command: str
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
+  assert code == pre.BLOCK
+  assert "BASH BLOCKED" in out
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
 def test_six_call_bash_block_persists_one_violation_for_inbox_gate(

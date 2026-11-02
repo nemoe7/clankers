@@ -52,6 +52,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`, `cli.py`: Exempt marked detached runs and exact Arena maintenance calls from inbox cadence while keeping pushes guarded.
+
 - `store.py`: Replace stale row-change triggers when an existing v2 database already has the tombstone column.
 
 - `assets/style.css`: Keep survey tooltips within the dialog and footer actions visible in short viewports.

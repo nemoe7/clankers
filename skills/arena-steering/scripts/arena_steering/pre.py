@@ -72,6 +72,30 @@ def shell_line(text: str) -> str:
   return text
 
 
+ARENA_PROBE_COMMANDS = {"ss -ltn", "netstat -ltn", "source ~/.profile"}
+ARENA_WORKSPACE_VERBS = {"read", "edit", "write"}
+
+
+def arena_maintenance_call(line: str, command: str) -> bool:
+  """Recognize whole Arena utility calls, not user lines that merely mention them."""
+  text = shell_line(line).strip()
+  if not text or text != shell_line(command).strip():
+    return False
+  if text in ARENA_PROBE_COMMANDS:
+    return True
+  if any(operator in text for operator in (";", "|", "&", "\n", "`", "$(")):
+    return False
+  try:
+    words = shlex.split(text)
+  except ValueError:
+    return False
+  return (
+    len(words) >= 2
+    and Path(words[0]).name == "arena-workspace"
+    and words[1] in ARENA_WORKSPACE_VERBS
+  )
+
+
 @dataclass
 class PreContext:
   """Everything a step may read for one shell line."""
@@ -120,6 +144,9 @@ class PreContext:
 
   def is_push(self) -> bool:
     return "git push" in self.command or "git push" in self.line
+
+  def is_arena_maintenance(self) -> bool:
+    return arena_maintenance_call(self.line, self.command)
 
   def is_inbox_recovery(self) -> bool:
     """Allow an inbox-only line to clear the gate, including a piped ACK."""
@@ -547,7 +574,9 @@ class InboxGate:
   name = "gate"
 
   def applies(self, ctx: PreContext) -> bool:
-    return bool(ctx.pending_ids) and not ctx.is_inbox_recovery()
+    if not ctx.pending_ids or ctx.is_inbox_recovery():
+      return False
+    return ctx.is_push() or not (ctx.routed or ctx.is_arena_maintenance())
 
   def run(self, ctx: PreContext) -> PreResult:
     if ctx.is_push():
