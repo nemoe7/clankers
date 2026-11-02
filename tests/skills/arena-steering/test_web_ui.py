@@ -2178,6 +2178,127 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+@pytest.mark.parametrize(
+  "width,height,report_count", [(390, 844, 15), (1372, 700, 15), (1372, 900, 3)]
+)
+def test_long_report_acknowledgements_do_not_hide_the_report_picker(
+  width: int, height: int, report_count: int, tmp_path: Path
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Long report acknowledgement regression")
+  for idx in range(1, report_count):
+    app.reports.publish_report(
+      f"report-{idx:02d}", f"Report {idx:02d}", f"# Report {idx:02d}"
+    )
+  app.reports.publish_report(
+    "long-ack",
+    "Long acknowledgement",
+    '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
+  )
+  answer = app.reports.submit_answer("long-ack", {"note": "Reviewed"})
+  app.reports.ack_answer(
+    "long-ack", answer.id, "Acknowledged the report details. " * 100
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.set_default_timeout(5000)
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        picker = page.locator("#report-picker")
+        picker.locator('[data-report-id="long-ack"]').click()
+        page.locator("#report-ack-history").wait_for(state="visible")
+        geometry = picker.evaluate("""element => {
+          const rail = element.closest('#report-rail');
+          const ack = rail.querySelector('#report-ack-history');
+          return {
+            height: element.clientHeight,
+            rowHeight: element.querySelector('button').getBoundingClientRect().height,
+            scrollHeight: element.scrollHeight,
+            pickerTop: element.getBoundingClientRect().top,
+            pickerBottom: element.getBoundingClientRect().bottom,
+            activeTop: element.querySelector('[aria-current="true"]').getBoundingClientRect().top,
+            activeBottom: element.querySelector('[aria-current="true"]').getBoundingClientRect().bottom,
+            railHeight: rail.clientHeight,
+            railScrollHeight: rail.scrollHeight,
+            railOverflow: getComputedStyle(rail).overflowY,
+            railBottom: rail.getBoundingClientRect().bottom,
+            ackHeight: ack.clientHeight,
+            ackScrollHeight: ack.scrollHeight,
+            ackOverflow: getComputedStyle(ack).overflowY,
+            ackBottom: ack.getBoundingClientRect().bottom,
+            ackEndFade: ack.hasAttribute('data-scrolled-end'),
+            ackMask: getComputedStyle(ack).maskImage,
+          };
+        }""")
+        page.screenshot(path=str(tmp_path / f"report-switch-long-ack-{width}.png"))
+        assert geometry["rowHeight"] > 0, geometry
+        assert geometry["height"] >= geometry["rowHeight"], geometry
+        assert geometry["activeTop"] >= geometry["pickerTop"] - 1, geometry
+        assert geometry["activeBottom"] <= geometry["pickerBottom"] + 1, geometry
+        if report_count > 3:
+          assert geometry["scrollHeight"] > geometry["height"], geometry
+        assert geometry["ackHeight"] > geometry["rowHeight"], geometry
+        assert geometry["ackScrollHeight"] > geometry["ackHeight"], geometry
+        assert geometry["ackOverflow"] == "auto", geometry
+        assert geometry["ackEndFade"], geometry
+        assert "linear-gradient" in geometry["ackMask"], geometry
+        if width >= 1200:
+          assert geometry["railOverflow"] == "hidden", geometry
+          assert geometry["railScrollHeight"] <= geometry["railHeight"] + 1, geometry
+          assert geometry["railBottom"] >= height - 1, geometry
+          assert geometry["ackBottom"] >= height - 1, geometry
+          if report_count == 3:
+            assert geometry["ackHeight"] > 320, geometry
+        scrolls = picker.evaluate("""element => {
+          const ack = element.closest('#report-rail').querySelector('#report-ack-history');
+          element.scrollTop = 0;
+          ack.scrollTop = ack.scrollHeight;
+          return { picker: element.scrollTop, ack: ack.scrollTop };
+        }""")
+        assert scrolls["picker"] == 0, scrolls
+        assert scrolls["ack"] > 0, scrolls
+        page.wait_for_function("""() => {
+          const ack = document.querySelector('#report-ack-history');
+          return ack?.hasAttribute('data-scrolled-start') && !ack.hasAttribute('data-scrolled-end');
+        }""")
+        picker.locator('[data-report-id="report-02"]').click()
+        page.wait_for_function(
+          "document.querySelector('#report-picker [aria-current=true]')?.dataset.reportId === 'report-02'"
+        )
+        assert page.locator("#report h1").inner_text() == "Report 02"
+        assert page.locator("#report-ack-history").count() == 0
+        if width >= 1200:
+          expanded = picker.evaluate("""element => ({
+            height: element.clientHeight,
+            railHeight: element.closest('#report-rail').clientHeight,
+            bottom: element.getBoundingClientRect().bottom,
+          })""")
+          assert expanded["height"] >= expanded["railHeight"] - 60, expanded
+          assert expanded["bottom"] >= height - 1, expanded
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 @pytest.mark.parametrize("width,height", [(390, 844), (855, 700), (1372, 700)])
 def test_report_picker_keeps_selected_item_visible_and_fades_edges(
   width: int, height: int, tmp_path: Path
@@ -2185,7 +2306,8 @@ def test_report_picker_keeps_selected_item_visible_and_fades_edges(
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store, repo_name="Report picker scroll regression")
-  for idx in range(1, 12):
+  report_count = 30
+  for idx in range(1, report_count + 1):
     app.reports.publish_report(f"report-{idx:02d}", f"Report {idx}", f"# Report {idx}")
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -2204,8 +2326,8 @@ def test_report_picker_keeps_selected_item_visible_and_fades_edges(
         page.locator("#tab-reports").click()
         picker = page.locator("#report-picker")
         items = picker.locator(".report-picker-link")
-        assert items.count() == 11
-        last = items.nth(10)
+        assert items.count() == report_count
+        last = items.nth(report_count - 1)
         last_id = last.get_attribute("data-report-id")
         assert last_id
         assert picker.evaluate("element => element.scrollHeight > element.clientHeight")

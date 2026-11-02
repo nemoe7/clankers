@@ -357,22 +357,43 @@ export function renderReportsView(container, state, handlers) {
 
   const railEl = container.querySelector("#report-rail");
   const pickerEl = container.querySelector("#report-picker");
+  const ackEl = container.querySelector("#report-ack-history");
+  const syncScrollEdges = (element) => {
+    if (!element?.isConnected || !element.clientHeight) return;
+    element.toggleAttribute("data-scrolled-start", element.scrollTop > 0);
+    element.toggleAttribute(
+      "data-scrolled-end",
+      element.scrollHeight - element.clientHeight - element.scrollTop > 1
+    );
+  };
   const syncPickerScroll = () => {
     if (!pickerEl?.isConnected || !pickerEl.clientHeight) return;
     pickerScrollTop = pickerEl.scrollTop;
-    pickerEl.toggleAttribute("data-scrolled-start", pickerEl.scrollTop > 0);
-    pickerEl.toggleAttribute(
-      "data-scrolled-end",
-      pickerEl.scrollHeight - pickerEl.clientHeight - pickerEl.scrollTop > 1
-    );
+    syncScrollEdges(pickerEl);
   };
   const restorePickerScroll = () => {
     if (!pickerEl?.clientHeight) return;
     pickerEl.scrollTop = pickerScrollTop;
     syncPickerScroll();
   };
+  const keepSelectedPickerItemVisible = () => {
+    if (!pickerEl?.clientHeight) return;
+    const selected = pickerEl.querySelector('[aria-current="true"]');
+    if (!selected) return;
+    const pickerBounds = pickerEl.getBoundingClientRect();
+    const selectedBounds = selected.getBoundingClientRect();
+    if (selectedBounds.top < pickerBounds.top) {
+      pickerEl.scrollTop += selectedBounds.top - pickerBounds.top;
+    } else if (selectedBounds.bottom > pickerBounds.bottom) {
+      pickerEl.scrollTop += selectedBounds.bottom - pickerBounds.bottom;
+    }
+    syncPickerScroll();
+  };
   pickerEl?.addEventListener("scroll", syncPickerScroll, { passive: true });
+  ackEl?.addEventListener("scroll", () => syncScrollEdges(ackEl), { passive: true });
   restorePickerScroll();
+  if (swappedReport || !previousPicker) keepSelectedPickerItemVisible();
+  syncScrollEdges(ackEl);
 
   const pickerToggleBtn = container.querySelector("#report-picker-toggle");
   pickerToggleBtn?.addEventListener("click", () => {
@@ -385,6 +406,7 @@ export function renderReportsView(container, state, handlers) {
       mobilePickerCollapsed ? "false" : "true"
     );
     restorePickerScroll();
+    if (!mobilePickerCollapsed) keepSelectedPickerItemVisible();
   });
 
   const scrollTopBtn = container.querySelector("#report-scroll-top");

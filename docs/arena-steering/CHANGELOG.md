@@ -62,6 +62,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/`: Fill the Reports sidebar with the picker until answers appear, then give the picker and acknowledgements separate scrolling areas with edge fades.
+
 - `pre.py`: Check each Bash command before blocking partial instruction reads. Filename-only inventories no longer trigger the read guard.
 
 - `pre.py`, `cli.py`: Exempt marked detached runs and exact Arena maintenance calls from inbox cadence while keeping pushes guarded.
