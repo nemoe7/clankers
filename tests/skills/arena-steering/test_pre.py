@@ -106,6 +106,25 @@ def test_the_gate_counts_calls_before_it_blocks() -> None:
   assert str(pre.GATE_THRESHOLD) in " ".join(late.messages)
 
 
+def test_six_call_block_hides_pending_ids_but_keeps_recovery_steps() -> None:
+  pending_ids = ["ab1234", "cd5678"]
+  result = pre.run_pipeline(
+    pre.PreContext(
+      line="git status",
+      command="git status",
+      shell="bash",
+      pending_ids=pending_ids,
+      call_count=pre.GATE_THRESHOLD,
+    )
+  )
+  output = "\n".join(result.messages)
+  assert result.verdict == pre.BLOCK
+  assert f"BASH BLOCKED AFTER {pre.GATE_THRESHOLD} CALLS." in output
+  assert "steer read" in output and "steer ack" in output
+  assert "Pending:" not in output
+  assert all(message_id not in output for message_id in pending_ids)
+
+
 @pytest.mark.parametrize(
   ("line", "command"),
   (

@@ -596,7 +596,6 @@ class InboxGate:
       [
         f"BASH BLOCKED AFTER {GATE_THRESHOLD} CALLS.",
         "Read the inbox, then ack every item: `steer read`, then `steer ack <id> <markdown>`.",
-        "Pending: " + ", ".join(ctx.pending_ids),
         f"Blocked by the part `{ctx.blocked_part()}`. Run the inbox calls alone.",
       ],
       BLOCK,
