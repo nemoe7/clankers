@@ -181,6 +181,22 @@ class PreContext:
     words = command_words(pieces[0][0])
     return bool(words) and Path(words[0]).name == "mkdir"
 
+  def is_single_push(self) -> bool:
+    """Allow a checked, single push to finish without a second EXIT-trap check."""
+    if not self.line or not self.command:
+      return False
+    text = shell_line(self.line).strip()
+    if text != shell_line(self.command).strip():
+      return False
+    if any(mark in text for mark in (";", "|", "&", "\n", "`", "$(", "<", ">")):
+      return False
+    pieces = self.pieces()
+    return (
+      len(pieces) == 1
+      and pieces[0][1] == ";"
+      and remote_git_push(command_words(pieces[0][0]))
+    )
+
   def is_inbox_recovery(self) -> bool:
     """Allow an inbox-only line to clear the gate, including a piped ACK."""
     text = shell_line(self.line or self.command)

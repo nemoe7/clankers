@@ -1025,6 +1025,13 @@ def _run_pre(
     _bump_call_count(store)
   if result.route is not None:
     return _run_pre_route(result.route, parsed.line or parsed.command_text, store, out)
+  if (
+    ctx.shell
+    and not pending_ids
+    and result.verdict == pre_mod.CONTINUE
+    and ctx.is_single_push()
+  ):
+    print("_steer_single_push_approved=1", file=out)
   return result.verdict
 
 

@@ -62,6 +62,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`, `cli.py`, `scripts/install.sh`: Avoid a second inbox check during shell exit for a standalone push admitted before a note arrived. Keep mixed pushes guarded and refresh the managed gate in existing profiles.
+
 - `pre.py`: Exempt exact Arena process and port probes from inbox blocking and call counts. Recognize standalone `ss` and `netstat` with any flags. Keep altered mixed lines guarded.
 
 - `pre.py`: Let standalone mkdir calls pass the pending-inbox gate and still count. Keep mixed lines guarded.

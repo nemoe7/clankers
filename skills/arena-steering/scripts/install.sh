@@ -63,8 +63,10 @@ if ! grep -qxF "$GATE_MARKER" "$PROFILE"; then
   cat >> "$PROFILE" <<'EOF'
 
 # arena-steering-gate
+_steer_single_push_approved=
 _steer_gate() {
   if [ "${_steer_gate_running:-}" = 1 ]; then return 0; fi
+  if [ "${_steer_single_push_approved:-}" = 1 ]; then return 0; fi
   _steer_gate_running=1
   local command=$BASH_COMMAND reply status line
   if [ -z "${TZ:-}" ] && [ -n "${_steer_repo_root:-}" ] && [ -s "$_steer_repo_root/arena-state/display_tz" ]; then
@@ -87,6 +89,9 @@ _steer_gate() {
           _arena_preview_done=${line#_arena_preview_done=}
           _arena_preview_done=${_arena_preview_done#\"}
           _arena_preview_done=${_arena_preview_done%\"}
+          ;;
+        _steer_single_push_approved=1)
+          _steer_single_push_approved=1
           ;;
         *) printf '%s\n' "$line" ;;
       esac
@@ -155,6 +160,22 @@ esac
 unset _steer_previous_exit
 EOF
 fi
+
+GATE_BLOCK=$(awk '/^# arena-steering-gate$/ {copy=1} copy && /^EOF$/ {exit} copy {print}' "$SCRIPTS_DIR/install.sh")
+[ -n "$GATE_BLOCK" ] || fail "cannot read the managed gate block"
+STEER_GATE_BLOCK="$GATE_BLOCK" "$PYTHON" - "$PROFILE" <<'PY' || fail "cannot refresh the managed gate block"
+from pathlib import Path
+import os
+import sys
+
+profile = Path(sys.argv[1])
+text = profile.read_text(encoding="utf-8")
+start = text.index("# arena-steering-gate\n")
+end = text.index("# arena-steering-exit\n", start)
+updated = text[:start] + os.environ["STEER_GATE_BLOCK"] + "\n\n" + text[end:]
+if updated != text:
+  profile.write_text(updated, encoding="utf-8")
+PY
 
 mkdir -p "$GIT_HOOKS" || fail "cannot create $GIT_HOOKS"
 cat > "$GIT_HOOK" <<'COMMIT_MSG_HOOK' || fail "cannot write $GIT_HOOK"

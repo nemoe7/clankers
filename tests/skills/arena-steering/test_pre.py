@@ -908,6 +908,19 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
   profile_text = profile.read_text(encoding="utf-8")
   assert profile_text.count("# Existing profile content") == 1
+  profile.write_text(
+    profile_text.replace("_steer_single_push_approved=\n", "", 1), encoding="utf-8"
+  )
+  refreshed = subprocess.run(
+    ["bash", str(install)],
+    check=False,
+    cwd=project,
+    env=env,
+    capture_output=True,
+    text=True,
+  )
+  assert refreshed.returncode == 0, refreshed.stderr
+  assert profile.read_text(encoding="utf-8") == profile_text
   result = subprocess.run(
     ["bash", "-c", 'source "$HOME/.bash_profile"; command -v steer; steer --version'],
     check=False,
@@ -1025,6 +1038,21 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   assert "push-ran" not in push.stdout
 
 
+def test_clear_inbox_single_push_arms_exit_guard_only_for_whole_line(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  line = "/bin/bash -lc git push --dry-run"
+  code, output = _run("pre", "-l", line, "-c", "git push --dry-run", "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert "_steer_single_push_approved=1" in output
+
+  mixed = "git push --dry-run; printf extra"
+  code, output = _run("pre", "-l", mixed, "-c", "git push --dry-run", "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert "_steer_single_push_approved=1" not in output
+
+
 def test_installer_exit_hook_preserves_prior_trap_and_call_status(
   tmp_path: Path,
 ) -> None:
@@ -1065,8 +1093,10 @@ def test_installer_exit_hook_preserves_prior_trap_and_call_status(
 
   command = home / ".local" / "bin" / "steer"
   command.write_text(
-    '#!/bin/bash\ncase "$1" in\n'
-    "  pre) exit 0 ;;\n"
+    '#!/bin/sh\ncase "$1" in\n'
+    '  pre) if [ -e "$HOME/late-note" ]; then printf "PUSH BLOCKED\\n"; exit 130; fi; '
+    'case " $* " in *" --command git push origin topic "*) '
+    'printf "_steer_single_push_approved=1\\n" ;; esac ;;\n'
     '  post-exit) printf "%s\\n" "$*" >> "$HOME/post-exit.log" ;;\n'
     "esac\n",
     encoding="utf-8",
@@ -1112,6 +1142,28 @@ def test_installer_exit_hook_preserves_prior_trap_and_call_status(
     "prior-exit:5",
     "prior-exit:7",
   ]
+
+  fake_git = home / ".local" / "bin" / "git"
+  fake_git.write_text(
+    '#!/bin/sh\nprintf done > "$HOME/remote-updated"\n'
+    'printf pending > "$HOME/late-note"\n',
+    encoding="utf-8",
+  )
+  fake_git.chmod(0o755)
+  late_note = subprocess.run(
+    ["bash", "-c", "git push origin topic"],
+    cwd=project,
+    env={**env, "BASH_ENV": str(profile)},
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert (home / "remote-updated").read_text(encoding="utf-8") == "done"
+  assert late_note.returncode == 0, late_note.stdout
+  assert "PUSH BLOCKED" not in late_note.stdout
+  assert (
+    "--rc 0" in (home / "post-exit.log").read_text(encoding="utf-8").splitlines()[-1]
+  )
 
 
 def test_installer_enforces_commit_messages_without_a_runtime_spec(
