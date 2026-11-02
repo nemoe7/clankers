@@ -32,6 +32,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `assets/style.css`: Apply the approved thin, flat scrollbar style in Chromium and other browsers. Remove redundant hover rules.
+
 - `server.py`: Keep unprefixed REST and static paths plus `/api/ws` as canonical. Remove `/api/` REST and static aliases and the `/ws` WebSocket alias.
 
 - `assets/references.js`: Link complete backticked IDs in messages, reports, and task details without linking plain text.

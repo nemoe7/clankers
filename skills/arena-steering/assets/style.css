@@ -146,15 +146,13 @@ a {
   box-sizing: border-box;
 }
 
-@supports not selector(::-webkit-scrollbar) {
-  * {
-    scrollbar-width: thin; /* nonuu: SPC001 */
-    scrollbar-color: hsl(var(--surface-raised-alt) / 0.4) transparent; /* nonuu: SPC001 */
-  }
+* {
+  scrollbar-width: thin; /* nonuu: SPC001 */
+  scrollbar-color: hsl(var(--surface-raised-alt) / 0.4) transparent; /* nonuu: SPC001 */
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 15px;
   height: 10px;
 }
 
@@ -164,22 +162,10 @@ a {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--surface-raised-alt) / 0.4);
-  border: 2px solid var(--bg); /* nonuu: SPC002 */
+  background: hsl(var(--surface-raised-alt) / 0.2);
+  border: 1px solid transparent;
   background-clip: padding-box;
-  border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--surface-raised-alt) / 0.4);
-  background-clip: padding-box;
-  border-radius: 9999px;
-}
-
-:not(:hover)::-webkit-scrollbar-thumb {
-  background: hsl(var(--surface-raised-alt) / 0.4);
-  background-clip: padding-box;
-  border-radius: 9999px;
+  border-radius: 0;
 }
 
 html,

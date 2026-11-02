@@ -69,7 +69,11 @@ TOPBAR_BRAND_CLASS = "topbar-brand"
 ARENA_SCROLLBAR_RULE = (
   "scrollbar-color: hsl(var(--surface-raised-alt) / 0.4) transparent;"
 )
-SCROLLBAR_NO_HIGHLIGHT_RULE = "::-webkit-scrollbar-thumb:hover"
+SCROLLBAR_WIDTH_RULE = "::-webkit-scrollbar {\n  width: 15px;\n  height: 10px;\n}"
+SCROLLBAR_FLAT_THUMB_RULE = (
+  "border: 1px solid transparent;\n  background-clip: padding-box;\n  border-radius: 0;"
+)
+SCROLLBAR_HOVER_RULE = "::-webkit-scrollbar-thumb:hover"
 FONT_DISPLAY_BLOCK = "font-display: block;"
 EDGE_LOADING_KEYFRAME = "nuu-edge-loading"
 CUSTOM_OPTION_MARKER = "__custom__"
@@ -573,7 +577,9 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert MESSAGE_TEXT_FONT_SIZE in style_css
   assert TASK_SECTION_TITLE_FONT_SIZE in style_css
   assert ARENA_SCROLLBAR_RULE in style_css
-  assert SCROLLBAR_NO_HIGHLIGHT_RULE in style_css
+  assert SCROLLBAR_WIDTH_RULE in style_css
+  assert SCROLLBAR_FLAT_THUMB_RULE in style_css
+  assert SCROLLBAR_HOVER_RULE not in style_css
   assert "grid-auto-columns: 1fr;" in style_css
   assert ".main-content:has(> #view-messages:not([hidden]))" in style_css
   assert "margin-block: 0 8px;" in style_css
