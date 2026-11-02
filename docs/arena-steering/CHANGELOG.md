@@ -32,6 +32,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `assets/references.js`: Link complete backticked IDs in messages, reports, and task details without linking plain text.
+
 - `pre.py`: Scope the governing-skill read guard to the v2 skill. Keep root governing files protected.
 
 - `cli.py`: Count unacknowledged violations separately from notes and answers in shell reminders.

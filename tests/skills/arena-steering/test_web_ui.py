@@ -359,9 +359,14 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
   store = SqliteStore()
   app = SteeringApp(store, repo_name="Nuu UI repairs")
   app.tasks.create_task("ref012", "Reference task", details=["Review reference"])
+  app.tasks.create_task(
+    "ref013",
+    "Linked task",
+    details=["See `ref012`, plain ref012, `ref012/extra`, and ``ref012``"],
+  )
   checklist = (
-    '- [ ] Review **one** & "two" &lt;three&gt; [details](https://example.com) ref012\n'
-    "  - [x] Nested `item`"
+    '- [ ] Review **one** & "two" &lt;three&gt; [details](https://example.com) `ref012`\n'
+    "  - [x] Nested `item`\n\nPlain ref012 and `ref012/extra` stay unlinked."
   )
   app.messages.send_message(checklist, msg_id="cc0401", blocking=False)
 
@@ -412,6 +417,7 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
         assert message.get_by_role("link", name="details").count() == 1
         reference = message.locator('button.reference-link[data-reference-id="ref012"]')
         reference.wait_for()
+        assert reference.count() == 1
         for interaction in (None, "hover", "focus"):
           if interaction == "hover":
             reference.hover()
@@ -442,6 +448,10 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
         assert report_checkbox.count() == 1
         assert report.get_by_role("checkbox", name="Nested item").count() == 1
         assert report.get_by_role("link", name="details").count() == 1
+        assert (
+          report.locator('[data-auto-reference][data-reference-id="ref012"]').count()
+          == 1
+        )
         image_el = report.locator('img[alt="Wide evidence"]')
         image_el.wait_for(state="visible")
         page.wait_for_function(
@@ -466,6 +476,20 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
           media["width"] - media["borderWidth"]
         ) == pytest.approx(media["naturalHeight"] / media["naturalWidth"], abs=0.01)
         page.screenshot(path=str(tmp_path / f"checklist-report-{width}.png"))
+
+        page.locator("#tab-tasks").click()
+        detail = page.locator('[data-task-id="ref013"] .task-detail')
+        detail.wait_for(state="attached")
+        assert (
+          detail.locator(
+            'code [data-auto-reference][data-reference-id="ref012"]'
+          ).count()
+          == 1
+        )
+        assert (
+          detail.locator('[data-auto-reference][data-reference-id="ref012"]').count()
+          == 1
+        )
       finally:
         browser.close()
   finally:
@@ -1668,7 +1692,7 @@ def test_retained_message_references_follow_loaded_targets() -> None:
   for index in range(45):
     body = f"Message {index}\n\n" + "Long scrolling content. " * 40
     if index == 44:
-      body += "\n\nReferences 00000a and 00000b."
+      body += "\n\nReferences `00000a` and `00000b`; plain 00000a stays plain."
     app.messages.send_message(body, msg_id=f"{index:06x}", blocking=False)
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1691,6 +1715,7 @@ def test_retained_message_references_follow_loaded_targets() -> None:
           '[data-auto-reference][data-reference-id="00000a"]'
         )
         old_task_link.wait_for()
+        assert old_task_link.count() == 1
         assert old_task_link.get_attribute("data-reference-type") == "task"
         assert (
           card.locator('[data-auto-reference][data-reference-id="00000b"]').count() == 0
@@ -1717,6 +1742,9 @@ def test_retained_message_references_follow_loaded_targets() -> None:
           return link?.dataset.referenceType === 'message';
         }""",
           timeout=6000,
+        )
+        assert (
+          card.locator('[data-auto-reference][data-reference-id="00000a"]').count() == 1
         )
       finally:
         browser.close()
