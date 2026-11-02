@@ -363,6 +363,10 @@ def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
     "cat AGENTS.md | head -n 5",
     "head -n 5 < ARENA.md",
     "cat .agents/skills/arena-steering/SKILL.md | tail -n 5",
+    "env rg -n gate AGENTS.md",
+    "bash -lc 'rg -n gate AGENTS.md'",
+    "find skills -name AGENTS.md -print && rg -n gate AGENTS.md",
+    "rg -n gate AGENTS.md && find skills -name ARENA.md -print",
   ):
     ctx = pre.PreContext(line=line, shell="bash")
     assert guard.applies(ctx), line
@@ -372,6 +376,9 @@ def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
     "rg -n gate skills/arena-steering",
     "head -20 assets/app.js",
     "tail -n 5 skills/unrelated/SKILL.md",
+    "rg -n gate skills/arena-steering && find skills -name AGENTS.md -print",
+    "find skills -name ARENA.md -print && rg -n gate tests/skills/arena-steering/test_pre.py",
+    "printf AGENTS.md | head -n 1",
   ):
     assert not guard.applies(pre.PreContext(line=line, shell="bash")), line
 

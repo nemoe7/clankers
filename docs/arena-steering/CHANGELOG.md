@@ -62,6 +62,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`: Check each Bash command before blocking partial instruction reads. Filename-only inventories no longer trigger the read guard.
+
 - `pre.py`, `cli.py`: Exempt marked detached runs and exact Arena maintenance calls from inbox cadence while keeping pushes guarded.
 
 - `markdown.py`, `assets/markdown.js`, `assets/style.css`: Name checklist inputs, raise message reference contrast, and fit report images to their panel.

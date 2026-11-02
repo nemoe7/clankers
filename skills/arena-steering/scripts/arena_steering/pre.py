@@ -768,23 +768,24 @@ class BibleReadGuard:
   SKILL_DIRS = ("arena-steering",)
 
   def applies(self, ctx: PreContext) -> bool:
-    if not ctx.touches(*[f"{verb} " for verb in self.VERBS]):
-      return False
-    return self.bible_path(ctx.line) is not None
+    return self.bible_path(ctx.line or ctx.command) is not None
 
   def bible_path(self, line: str) -> str | None:
-    """Name the bible file this line reads, if it reads one."""
-    for token in re.split(r"[\s'\"=<>|;&()]+", line):
-      name = token.rsplit("/", 1)[-1]
-      if name in self.NAMES:
-        return token
-      parent = token.rsplit("/", 2)[-2] if token.count("/") >= 2 else ""
-      if name == "SKILL.md" and parent in self.SKILL_DIRS:
-        return token
+    """Name the bible file a read command uses, if it uses one."""
+    for words in _line_commands(PreContext(line=line)):
+      if not words or Path(words[0]).name not in self.VERBS:
+        continue
+      for token in words[1:]:
+        name = token.rsplit("/", 1)[-1]
+        if name in self.NAMES:
+          return token
+        parent = token.rsplit("/", 2)[-2] if token.count("/") >= 2 else ""
+        if name == "SKILL.md" and parent in self.SKILL_DIRS:
+          return token
     return None
 
   def run(self, ctx: PreContext) -> PreResult:
-    found = self.bible_path(ctx.line) or "the bible"
+    found = self.bible_path(ctx.line or ctx.command) or "the bible"
     return PreResult(
       [
         f"BIBLE BLOCKED: `{found}` cannot be read in part.",
