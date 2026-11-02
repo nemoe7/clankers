@@ -398,7 +398,7 @@ def main(
       return _run_run(cmd_args, resolved_state_dir, stdout, tasks, store)
     if cmd == "init":
       raise ValueError(
-        "steer has no init --tz; the browser sets timezone with POST /api/timezone"
+        "steer has no init --tz; the browser sets timezone with POST /timezone"
       )
 
     parsed_root = parser.parse_args(remaining)

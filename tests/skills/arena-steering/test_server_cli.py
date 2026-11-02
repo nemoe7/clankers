@@ -1233,6 +1233,46 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert TASK_ID_CLI in out
 
 
+def test_only_browser_paths_remain_canonical() -> None:
+  import http.client
+  import threading
+
+  from arena_steering.server import create_http_server
+
+  store = SqliteStore(":memory:")
+  app = SteeringApp(store)
+  assert app.dispatch("GET", "/health")[0] == int(HTTPStatus.OK)
+  assert app.dispatch("GET", "/api/health")[0] == int(HTTPStatus.NOT_FOUND)
+  assert app.dispatch("POST", "/api/messages", {"body": "alias"})[0] == int(
+    HTTPStatus.NOT_FOUND
+  )
+  assert app.dispatch("GET", "/messages")[1]["messages"] == []
+
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+
+  def get(path: str) -> int:
+    conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+    try:
+      conn.request("GET", path)
+      response = conn.getresponse()
+      response.read()
+      return response.status
+    finally:
+      conn.close()
+
+  try:
+    assert get("/static/assets/style.css") == int(HTTPStatus.OK)
+    assert get("/api/static/assets/style.css") == int(HTTPStatus.NOT_FOUND)
+    assert get("/ws") == int(HTTPStatus.NOT_FOUND)
+    assert get("/api/ws") == int(HTTPStatus.BAD_REQUEST)
+  finally:
+    server.shutdown()
+    server.server_close()
+    store.close()
+
+
 def test_websocket_upgrade_and_rpc() -> None:
   import base64
   import json
@@ -1313,7 +1353,7 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   payload = base64.b64encode(b"hello upload").decode("ascii")
   status, uploaded = app.dispatch(
     "POST",
-    "/api/uploads",
+    "/uploads",
     {"name": "../notes.txt", "content_base64": payload},
   )
   assert status == int(HTTPStatus.CREATED)
@@ -1332,7 +1372,7 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   long_paste = "x" * (PASTE_ATTACHMENT_CHAR_THRESHOLD + 1)
   status, created = app.dispatch(
     "POST",
-    "/api/messages/with-file",
+    "/messages/with-file",
     {"body": "See attached paste.", "pasted_text": long_paste},
   )
   assert status == int(HTTPStatus.CREATED)
@@ -1348,7 +1388,7 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   )
   status, created = app.dispatch(
     "POST",
-    "/api/messages/with-file",
+    "/messages/with-file",
     {"pasted_text": many_lines},
   )
   assert status == int(HTTPStatus.CREATED)
@@ -1357,7 +1397,7 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
 
   status, created = app.dispatch(
     "POST",
-    "/api/messages/with-file",
+    "/messages/with-file",
     {
       "file": {"name": "spec.md", "content_base64": payload},
       "parent_ids": [msg["id"]],
@@ -1416,13 +1456,13 @@ def test_http_multipart_upload_and_message_with_file(tmp_path: Path) -> None:
       conn.close()
 
   try:
-    status, uploaded = post_multipart("/api/uploads", {}, "multi.txt", b"multi body")
+    status, uploaded = post_multipart("/uploads", {}, "multi.txt", b"multi body")
     assert status == int(HTTPStatus.CREATED)
     assert uploaded["attachment"]["name"] == "multi.txt"
     assert Path(uploaded["attachment"]["path"]).read_bytes() == b"multi body"
 
     status, created = post_multipart(
-      "/api/messages/with-file",
+      "/messages/with-file",
       {"body": "Multipart note", "blocking": "false"},
       "note.txt",
       b"attached note",
@@ -1495,14 +1535,14 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
 
   store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
-  status, payload = app.dispatch("POST", "/api/timezone", {"timezone": "Asia/Manila"})
+  status, payload = app.dispatch("POST", "/timezone", {"timezone": "Asia/Manila"})
   assert status == int(HTTPStatus.OK)
   assert payload == {"timezone": "Asia/Manila"}
   assert (state_dir / "display_tz").read_text(encoding="utf-8") == "Asia/Manila\n"
   status, health = app.dispatch("GET", "/health")
   assert status == int(HTTPStatus.OK)
   assert health["timezone"] == "Asia/Manila"
-  status, payload = app.dispatch("POST", "/api/timezone", {"timezone": "Not/AZone"})
+  status, payload = app.dispatch("POST", "/timezone", {"timezone": "Not/AZone"})
   assert status == int(HTTPStatus.BAD_REQUEST)
   assert (state_dir / "display_tz").read_text(encoding="utf-8") == "Asia/Manila\n"
   store.close()

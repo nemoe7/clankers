@@ -299,8 +299,6 @@ class SteeringApp:
     """Dispatch a request and return (status_code, json_payload)."""
     parsed = urlparse(raw_url)
     path = parsed.path.rstrip("/") or "/"
-    if path.startswith("/api/") and path != "/api":
-      path = path[len("/api") :] or "/"
     query = parse_qs(parsed.query)
     handler, params, allowed = self.router.match(method, path)
     if handler is None:
@@ -440,7 +438,6 @@ class SteeringApp:
   def resolve_asset(self, request_path: str) -> tuple[bytes, str] | None:
     """Resolve a static file inside assets_dir or state files without path traversal."""
     clean = request_path.split("?", 1)[0].lstrip("/")
-    clean = clean.removeprefix("api/")
     if clean.startswith(STATIC_ASSETS_PREFIX):
       rel = clean[len(STATIC_ASSETS_PREFIX) :] or "index.html"
       candidate = self._resolve_under(self.assets_dir, rel)
@@ -474,7 +471,6 @@ class SteeringApp:
   def is_static_request(request_path: str) -> bool:
     """Return True for file paths that must not be routed as JSON resources."""
     clean = request_path.split("?", 1)[0].lstrip("/")
-    clean = clean.removeprefix("api/")
     if clean.startswith("static/"):
       return True
     if clean.startswith("uploads/"):
@@ -1382,14 +1378,10 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
     def do_GET(self) -> None:
       parsed = urlparse(self.path)
       path = parsed.path.rstrip("/") or "/"
-      if path in {"/api/ws", "/ws"}:
+      if path == "/api/ws":
         self._handle_websocket()
         return
-      route_path = (
-        (path[len("/api") :] or "/")
-        if path.startswith("/api/") and path != "/api"
-        else path
-      )
+      route_path = path
       if app.is_static_request(route_path):
         asset = app.resolve_asset(route_path)
         if asset is None:
@@ -1447,7 +1439,7 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
         or len(str(request_id)) > 80
         or method not in ("GET", "POST", "PATCH", "DELETE")
         or not path.startswith("/")
-        or urlsplit(path).path in {"/api/ws", "/ws"}
+        or urlsplit(path).path == "/api/ws"
         or not isinstance(raw_body, str)
       ):
         raise ValueError("Invalid WebSocket request")

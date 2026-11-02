@@ -251,7 +251,7 @@ The [backup and clear contract](../../docs/arena-steering/state-backup.md) descr
 
 ## HTTP and WebSocket
 
-Routes accept an optional `/api` prefix. JSON routes return JSON. File uploads accept JSON or multipart form data.
+REST and static routes use the unprefixed paths below. The WebSocket endpoint is `/api/ws`. JSON routes return JSON. File uploads accept JSON or multipart form data.
 
 Write requests may include `_request_id` to replay the original result safely. The server retains request records with its database.
 
@@ -301,13 +301,13 @@ Successful creates return HTTP 201. Other successful route operations return 200
 | Render Markdown | `markdown` and optional `breaks`. | Rendered `html` and `headings`. |
 | Survey | POST accepts `answers` or a direct array or object. The interrupt accepts optional `active`. | `survey`. |
 
-For example, send this JSON body to `POST /api/messages`:
+For example, send this JSON body to `POST /messages`:
 
 ```json
 {"body":"Please review the report.","blocking":true,"parent_ids":[]}
 ```
 
-For `POST /api/reports/example/answers`, a choice, checkbox, and text response can use this shape:
+For `POST /reports/example/answers`, a choice, checkbox, and text response can use this shape:
 
 ```json
 {"values":{"storage-format":"SQLite","checks":["Unit tests"],"notes":"Ready"}}

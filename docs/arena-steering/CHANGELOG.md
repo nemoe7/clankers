@@ -32,6 +32,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `server.py`: Keep unprefixed REST and static paths plus `/api/ws` as canonical. Remove `/api/` REST and static aliases and the `/ws` WebSocket alias.
+
 - `assets/references.js`: Link complete backticked IDs in messages, reports, and task details without linking plain text.
 
 - `assets/references.js`, `assets/messages-view.js`: Put linked IDs inside code elements, including task receipts and reply-parent chips.
