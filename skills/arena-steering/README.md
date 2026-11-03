@@ -147,10 +147,6 @@ The steps, in order, are `sleep`, `inbox-pipe`, `poll-timeout`, `pr-state`, `pus
 
 Arena-owned detached runs and exact platform utility calls do not spend the six-call budget. Ordinary Bash, mixed lines, and pushes remain guarded. The `BASH_COMMAND_POLICY` command-name-or-pattern map in `pre.py` sets `(count, block)` at the pending-inbox threshold. Immediate guards, including pending pushes, stay separate.
 
-With `ARENA_BASH_PROBE` set, the hook publishes a live `command | counted | blocked` table for each unique full Bash line, including allowed lines. `counted` means eligible for the six-call budget when inbox work is pending. `blocked` is the actual verdict. First observations stay fixed.
-
-Ignored state retains the unredacted input, and the table escapes only display syntax. Capture is off by default. The hook cannot recover earlier calls or middleware blocks that never reach it.
-
 `bible` blocks `cat`, `grep`, `head`, `tail`, and `rg` on ARENA.md, AGENTS.md, and a skill SKILL.md. A passing step prints nothing and lands in `_arena_preview_done`, so a later command in one shell skips it. `steer gate` still runs its inbox check alone for an older hook. `install.sh` holds the profile block that installs this line.
 
 ## Task and message contracts

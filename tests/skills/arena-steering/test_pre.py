@@ -26,7 +26,6 @@ PENDING_ACK_PUSH_REASON = "a note or answer awaits an ack"
 def _isolate_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
   state_dir = tmp_path / "arena-state"
   monkeypatch.delenv("ARENA_STEER_ROUTE", raising=False)
-  monkeypatch.delenv("ARENA_BASH_PROBE", raising=False)
   monkeypatch.setattr(cli, "resolve_state_dir", lambda: state_dir)
   return state_dir
 
@@ -83,101 +82,6 @@ def test_pre_allows_work_but_blocks_pushes_when_state_is_unreadable(
   )
   assert code == pre.BLOCK
   assert "PUSH BLOCKED" in out
-
-
-def test_bash_probe_stays_off_without_session_opt_in(_isolate_state: Path) -> None:
-  from arena_steering import bash_probe
-
-  _seed(_isolate_state, "Done", acked=True)
-  line = "python3 -c 'print(1)'"
-  assert _run("pre", "-l", line, "-c", line, "-s", "bash")[0] == pre.CONTINUE
-  store, _messages, _tasks, _reports = cli.open_services(_isolate_state)
-  assert store.get_report(bash_probe.REPORT_ID) is None
-  assert not (_isolate_state / "reports" / bash_probe.EVENTS_NAME).exists()
-  store.close()
-
-
-def test_bash_probe_reports_unique_full_lines_with_first_count_and_block(
-  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-  from arena_steering import bash_probe
-
-  monkeypatch.setenv("ARENA_BASH_PROBE", "1")
-  _seed(_isolate_state, "Pending work")
-  store, _messages, _tasks, _reports = cli.open_services(_isolate_state)
-  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD - 1))
-  store.close()
-
-  allowed = "printf 'alpha|beta'"
-  blocked = "printf 'second|line' && printf done"
-
-  def command(line: str) -> int:
-    return _run("pre", "-l", line, "-c", line, "-s", "bash")[0]
-
-  assert command(allowed) == pre.CONTINUE
-  assert command(allowed) == pre.BLOCK  # First observation stays counted/allowed.
-  assert command(blocked) == pre.BLOCK
-  assert command("steer read") == pre.CONTINUE
-
-  rows = [
-    json.loads(line)
-    for line in (_isolate_state / "reports" / bash_probe.EVENTS_NAME)
-    .read_text()
-    .splitlines()
-  ]
-  assert [(row["command"], row["counted"], row["blocked"]) for row in rows] == [
-    (allowed, True, False),
-    (blocked, True, True),
-    ("steer read", False, False),
-  ]
-  store, _messages, _tasks, _reports = cli.open_services(_isolate_state)
-  report = store.get_report(bash_probe.REPORT_ID)
-  assert report is not None and report.status == "published"
-  from arena_steering.markdown import render_report_markdown
-
-  assert report.body.count("\n| ") == len(rows) + 2
-  assert r"alpha\|beta" in report.body
-  assert "alpha|beta" in render_report_markdown(report.body)
-  assert report.body.count("<code") == 0
-  assert Path(report.source_file).read_text() == report.body
-  store.close()
-
-
-def test_bash_probe_keeps_backticks_pipes_and_newlines_in_one_table_cell() -> None:
-  from arena_steering import bash_probe
-  from arena_steering.markdown import render_report_markdown
-
-  line = "printf '`one|two`'\nprintf 'three'"
-  cell = bash_probe._command_cell(line)
-  rendered = render_report_markdown(
-    f"| command | counted | blocked |\n| --- | --- | --- |\n| {cell} | yes | no |\n"
-  )
-  assert "<td><code>printf '`one|two`'\\nprintf 'three'</code></td>" in rendered
-  assert rendered.count("<tr>") == 2  # One header and one command row.
-
-
-def test_bash_probe_marks_python_countable_without_a_pending_note(
-  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-  from arena_steering import bash_probe
-
-  monkeypatch.setenv("ARENA_BASH_PROBE", "1")
-  _seed(_isolate_state, "Done", acked=True)
-  line = "python3 -c 'print(1)'"
-  code, _ = _run("pre", "-l", line, "-c", line, "-s", "bash")
-  assert code == pre.CONTINUE
-  store, _messages, _tasks, _reports = cli.open_services(_isolate_state)
-  assert store.get_meta(pre.CALL_COUNT_META) in (None, "0")
-  rows = [
-    json.loads(row)
-    for row in (_isolate_state / "reports" / bash_probe.EVENTS_NAME)
-    .read_text()
-    .splitlines()
-  ]
-  assert rows[0]["command"] == line
-  assert rows[0]["counted"] is True
-  assert rows[0]["blocked"] is False
-  store.close()
 
 
 def test_bash_command_policy_keeps_counting_and_threshold_separate() -> None:
