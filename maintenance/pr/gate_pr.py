@@ -3,12 +3,13 @@
 The commit rules are the inline constants `ALLOWED_TYPES` and `SUBJECT_LIMIT`, which state
 `rules/COMMIT-SPEC.txt` and are never read from it. The PR body rules come from the locked
 heading order. The last two headings may stay out when their section holds nothing. The gate
-reports every failure with its section and line. The gate never edits the input.
+reports every failure with its section and line and never edits the input.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -283,6 +284,9 @@ def run_ste_lint(text: str) -> tuple[bool, str]:
       [sys.executable, str(STE_LINT), "--context", "description", str(path)],
       capture_output=True,
       text=True,
+      encoding="utf-8",
+      errors="replace",
+      env={**os.environ, "PYTHONUTF8": "1"},
       check=False,
     )
   output = (result.stdout + result.stderr).strip()
@@ -366,7 +370,7 @@ def run_version_checks(revision_range: str) -> list[Failure]:
 
   The job validates both module gates, then requires a higher version for every changed
   module. A module the base does not hold skips its bump, and a missing base skips every
-  bump, so a local pass matches the remote verdict."""
+  bump. A local pass matches the remote verdict."""
   failures: list[Failure] = []
   for script, arguments in (
     (USERSCRIPT_GATE, ("--self-check",)),
