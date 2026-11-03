@@ -19,6 +19,8 @@ from arena_steering import cli, pre
 from arena_steering.cli import main as cli_main
 from arena_steering.server import scripts_signature
 
+PENDING_ACK_PUSH_REASON = "a note or answer awaits an ack"
+
 
 @pytest.fixture(autouse=True)
 def _isolate_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -896,7 +898,9 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     "STEER_STATE_DIR": str(tmp_path / "override"),
   }
   install = scripts / "install.sh"
-  for _ in range(2):
+  state_dir = project / "arena-state"
+  database = state_dir / "state.sqlite3"
+  for attempt in range(2):
     result = subprocess.run(
       ["bash", str(install)],
       check=False,
@@ -906,6 +910,13 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
       text=True,
     )
     assert result.returncode == 0, result.stderr
+    assert database.is_file()
+    if attempt == 0:
+      _seed(state_dir, "Keep this note through reinstall.", acked=True)
+  with sqlite3.connect(database) as connection:
+    assert connection.execute("SELECT body FROM messages").fetchall() == [
+      ("Keep this note through reinstall.",)
+    ]
   profile_text = profile.read_text(encoding="utf-8")
   assert profile_text.count("# Existing profile content") == 1
   profile.write_text(
@@ -921,6 +932,10 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   )
   assert refreshed.returncode == 0, refreshed.stderr
   assert profile.read_text(encoding="utf-8") == profile_text
+  with sqlite3.connect(database) as connection:
+    assert connection.execute("SELECT body FROM messages").fetchall() == [
+      ("Keep this note through reinstall.",)
+    ]
   result = subprocess.run(
     ["bash", "-c", 'source "$HOME/.bash_profile"; command -v steer; steer --version'],
     check=False,
@@ -947,15 +962,15 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   )
   assert shell.returncode == 0, shell.stderr
   assert "safe command" in shell.stdout
-  assert "STATE UNAVAILABLE" in shell.stdout
+  assert "STATE UNAVAILABLE" not in shell.stdout
   assert shell.stdout.count("arena-steering-gate") == 1
   assert "safe command" in (home / "prior-debug.log").read_text(encoding="utf-8")
 
-  unavailable_push = subprocess.run(
+  clear_inbox_push = subprocess.run(
     [
       "bash",
       "-c",
-      'source "$HOME/.bash_profile"; git() { echo push-ran; }; git push origin fake',
+      'source "$HOME/.bash_profile"; git() { echo push-ran; }; git push --dry-run origin fake',
     ],
     check=False,
     cwd=outside,
@@ -963,9 +978,26 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     capture_output=True,
     text=True,
   )
-  assert unavailable_push.returncode == pre.BLOCK
-  assert "PUSH BLOCKED" in unavailable_push.stdout
-  assert "push-ran" not in unavailable_push.stdout
+  assert clear_inbox_push.returncode == 0, clear_inbox_push.stderr
+  assert "STATE UNAVAILABLE" not in clear_inbox_push.stdout
+  assert "push-ran" in clear_inbox_push.stdout
+
+  _seed(state_dir, "Read and acknowledge this note.")
+  pending_push = subprocess.run(
+    [
+      "bash",
+      "-c",
+      'source "$HOME/.bash_profile"; git() { echo push-ran; }; git push --dry-run origin fake',
+    ],
+    check=False,
+    cwd=outside,
+    env=env,
+    capture_output=True,
+    text=True,
+  )
+  assert pending_push.returncode == pre.BLOCK
+  assert PENDING_ACK_PUSH_REASON in pending_push.stdout
+  assert "push-ran" not in pending_push.stdout
 
   read = subprocess.run(
     ["bash", "-c", 'source "$HOME/.bash_profile"; steer read'],
@@ -1020,12 +1052,11 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     assert zone_shell.returncode == 0, zone_shell.stderr
     assert (home / "tz-result").read_text(encoding="utf-8") == expected
 
-  _seed(project / "arena-state", "Read and acknowledge this note.")
   push = subprocess.run(
     [
       "bash",
       "-c",
-      'source "$HOME/.bash_profile"; git() { echo push-ran; }; git push origin fake',
+      'source "$HOME/.bash_profile"; git() { echo push-ran; }; git push --dry-run origin fake',
     ],
     check=False,
     cwd=outside,
@@ -1034,7 +1065,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     text=True,
   )
   assert push.returncode == pre.BLOCK
-  assert "PUSH BLOCKED" in push.stdout
+  assert PENDING_ACK_PUSH_REASON in push.stdout
   assert "push-ran" not in push.stdout
 
 
@@ -1173,6 +1204,9 @@ def test_installer_enforces_commit_messages_without_a_runtime_spec(
   project = tmp_path / "project with spaces"
   scripts = project / ".agents" / "skills" / "arena-steering" / "scripts"
   shutil.copytree(root / "skills" / "arena-steering" / "scripts", scripts)
+  shutil.copytree(
+    root / "skills" / "arena-steering" / "references", scripts.parent / "references"
+  )
   subprocess.run(
     ["git", "init", "--quiet", "-b", "main", str(project)],
     check=True,

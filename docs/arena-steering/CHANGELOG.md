@@ -32,6 +32,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `scripts/install.sh`: Initialize the default SQLite store during installation so pre-command gates work immediately. Keep existing store data on reinstall.
+
 - `assets/style.css`: Apply the approved thin, flat scrollbar style in Chromium and other browsers. Remove redundant hover rules.
 
 - `server.py`: Keep unprefixed REST and static paths plus `/api/ws` as canonical. Remove `/api/` REST and static aliases and the `/ws` WebSocket alias.

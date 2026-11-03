@@ -37,6 +37,16 @@ if ! env -u PYTHONPATH "$PYTHON" -c 'import markdown_it' >/dev/null 2>&1; then
   "$PYTHON" -m pip install --quiet 'markdown-it-py==4.2.0' || fail "cannot install markdown-it-py"
 fi
 
+"$PYTHON" - "$SCRIPTS_DIR" <<'PY' || fail "cannot initialize the default store"
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from arena_steering.cli import open_services, resolve_state_dir
+
+store, *_services = open_services(resolve_state_dir())
+store.close()
+PY
+
 mkdir -p "$BIN_DIR"
 printf -v python_quoted '%q' "$PYTHON"
 printf -v entry_quoted '%q' "$SCRIPTS_DIR/steer"
