@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.12
+// @name         Arena.ai | NemoUtils | v1.13.13
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.12
+// @version      1.13.13
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -26,7 +26,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.12";
+  var USERSCRIPT_VERSION = "1.13.13";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
   var proxyBoardEgressVersion = "";
   var USERSCRIPT_BOOT_VERSION = (function () {
@@ -4803,8 +4803,8 @@
   var RESET_BOUNDARY_HOURS = [2, 8, 14, 20];
   var RESET_WINDOW_KEY = "clankers-arena-state-reset-window";
 
-// The window spans 150 seconds either side of 02:00, 08:00, 14:00 or 20:00 PHT.
-   // And PHT holds UTC+8 all year, so the boundary math runs on fixed offsets.
+  // The window spans 150 seconds on either side of 02:00, 08:00, 14:00, or 20:00 PHT.
+  // PHT stays at UTC+8, so boundary math uses fixed offsets.
   function previousBoundary(when) {
     var SHIFT = 8 * 3600000;
     var DAY = 86400000;
@@ -4828,8 +4828,8 @@
     return at - prev <= RESET_WINDOW_MS || prev + 6 * 3600000 - at <= RESET_WINDOW_MS;
   }
 
-// Only a URL-only move qualifies: a branch mismatch or a missing branch keeps the prompt.
-// And a switch set to off keeps it at every hour.
+  // Only a URL-only move qualifies. Branch mismatch or no branch keeps the prompt.
+  // A switch set to off keeps it at every hour.
   function resetWindowAccepts(when, on, branch, remembered, base, rememberedBranch) {
     if (!on) return false;
     if (!branch || !remembered || remembered === base) return false;
