@@ -162,7 +162,7 @@ function paintViolationFlag(health) {
   const pending = Boolean(health.agent_interrupt_pending);
   const label = pending
     ? `Flagged${health.violation_type ? `: ${health.violation_type.replaceAll("-", " ")}` : ""}. Click to cancel.`
-    : "Flag a violation";
+    : "Flag violation";
   button.setAttribute("aria-pressed", String(pending));
   button.setAttribute("aria-label", label);
   button.title = label;
@@ -964,7 +964,7 @@ function openViolationForm(health, trigger) {
     throw new Error("Violation types are unavailable. Click to retry.");
   }
   const reportId = tab === "reports" ? store.getState().selectedReportId : null;
-  modal.open("violation-flag", { title: "Flag a violation", trigger });
+  modal.open("violation-flag", { title: "Flag violation", trigger });
   const form = document.getElementById("violation-form");
   const reason = document.getElementById("violation-reason");
   const clause = document.getElementById("violation-clause-file");

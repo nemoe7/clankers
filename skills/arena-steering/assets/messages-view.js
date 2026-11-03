@@ -334,7 +334,7 @@ export function renderMessagesView(container, state, handlers) {
               ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
               <p class="receipt">
                 <span class="state-dot" data-state="${dotState}" title="Status: ${escapeHtml(msg.status)}"></span>
-                <code class="msg-id receipt-id" data-msg-id="${escapeHtml(msg.id)}" data-reply-selected="${replySelected ? "true" : "false"}" title="Reply to message; Shift+Click copies ID">${escapeHtml(msg.id)}</code>
+                <code class="msg-id receipt-id" data-msg-id="${escapeHtml(msg.id)}" data-reply-selected="${replySelected ? "true" : "false"}" title="Reply to message. Shift+Click copies ID">${escapeHtml(msg.id)}</code>
                 · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${parentsSuffix}${flagsSuffix}${filesSuffix}${tasksSuffix}
               </p>
             </li>
@@ -423,7 +423,7 @@ export function renderMessagesView(container, state, handlers) {
               .join("")}
           </div>
           ${state.composerError ? `<div class="composer-send-status" role="status">${escapeHtml(state.composerError)}</div>` : ""}
-          ${pendingSend && !state.sending ? `<div class="composer-send-status" role="status">Send unconfirmed. The original may have been sent. <button type="button" id="retry-send">Retry previous send</button> <button type="button" id="discard-send" title="The original send might have succeeded">Discard retry</button></div>` : ""}
+          ${pendingSend && !state.sending ? `<div class="composer-send-status" role="status">Send unconfirmed. The original may have been sent. <button type="button" id="retry-send">Retry previous send</button> <button type="button" id="discard-send" title="Original send might have succeeded">Discard retry</button></div>` : ""}
           <div class="composer-shell">
             <div
               id="composer-attachments"

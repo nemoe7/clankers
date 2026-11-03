@@ -49,8 +49,8 @@ def test_preview_path():
     environment["XDG_CONFIG_HOME"] = str(home / ".config")
     environment.pop("BASH_ENV", None)
     environment.pop("GIT_CONFIG_GLOBAL", None)
-    # A shell that carries the marker skips the gate by design, so a sweep started from a
-    # routed child must drop it or every block case below passes for the wrong reason.
+    # A shell carrying the marker skips the gate by design. Routed children must drop it so
+    # block cases do not pass for the wrong reason.
     environment.pop("ARENA_PREVIEW_ROUTE", None)
     environment["ARENA_PREVIEW_STATE_DIR"] = str(home / "arena-state")
     install = minify.TARGETS[1] / "scripts/install.sh"
@@ -145,7 +145,7 @@ def test_preview_path():
       "1",
     ]
 
-    # A commit, push or checks command reminds once per shell. Any other command stays quiet.
+    # A commit, push, or checks command reminds once per shell. Any other command stays quiet.
     reminder = "arena-preview task <id> --status finished"
     event_result = subprocess.run(
       [

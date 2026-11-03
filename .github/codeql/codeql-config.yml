@@ -1,5 +1,8 @@
-# The proxy accepts a caller URL by design. `allowed_url` rejects private, link-local, metadata, and single-label hosts. Exclude `py/full-ssrf` because it reports that design. Keep every other Python rule.
-# The viewer forwards a caller preview URL by design. `isAllowedPreview` accepts only HTTPS sandbox roots. Exclude `js/request-forgery` because it cannot model the pattern allowlist. Keep every other JavaScript rule.
+# The proxy accepts a caller URL by design and `allowed_url` rejects private, link-local,
+#   metadata, and single-label hosts. Exclude `py/full-ssrf` because it reports that design.
+
+# The viewer forwards a caller preview URL by design and `isAllowedPreview` accepts only HTTPS
+#   sandbox roots. Exclude `js/request-forgery` because it cannot model the pattern allowlist.
 query-filters:
   - exclude:
       id: py/full-ssrf

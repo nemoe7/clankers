@@ -4803,8 +4803,8 @@
   var RESET_BOUNDARY_HOURS = [2, 8, 14, 20];
   var RESET_WINDOW_KEY = "clankers-arena-state-reset-window";
 
-  // The window spans 150 seconds either side of 02:00, 08:00, 14:00 or 20:00 PHT, and PHT
-  // holds UTC+8 all year, so the boundary math runs on fixed offsets.
+// The window spans 150 seconds either side of 02:00, 08:00, 14:00 or 20:00 PHT.
+   // And PHT holds UTC+8 all year, so the boundary math runs on fixed offsets.
   function previousBoundary(when) {
     var SHIFT = 8 * 3600000;
     var DAY = 86400000;
@@ -4828,8 +4828,8 @@
     return at - prev <= RESET_WINDOW_MS || prev + 6 * 3600000 - at <= RESET_WINDOW_MS;
   }
 
-  // Only a URL-only move qualifies: a branch mismatch or a missing branch keeps the prompt,
-  // and a switch set to off keeps it at every hour.
+// Only a URL-only move qualifies: a branch mismatch or a missing branch keeps the prompt.
+// And a switch set to off keeps it at every hour.
   function resetWindowAccepts(when, on, branch, remembered, base, rememberedBranch) {
     if (!on) return false;
     if (!branch || !remembered || remembered === base) return false;

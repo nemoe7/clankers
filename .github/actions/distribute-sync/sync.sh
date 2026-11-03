@@ -9,8 +9,8 @@ for f in $FILES; do
   [ -f "$GITHUB_WORKSPACE/$SRC_ROOT/$f" ] || { echo "::error::$SRC_ROOT/$f missing"; exit 1; }
 done
 
-# Tracked files, minus the pages that stay here and the owner-run packages under
-# arena-egress-proxy/ and arena-preview-proxy/, which stay beside the published images.
+# Tracked files, minus the pages that stay here. The owner-run packages under
+# arena-egress-proxy/ and arena-preview-proxy/ stay beside the published images.
 skill_files() {
   local out
   out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" \

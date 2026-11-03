@@ -494,12 +494,8 @@ def _reseed_demo_store(store: SqliteStore) -> SteeringApp:
     msg_id="a00010",
   )
 
-  # 2. Reports covering:
-  #    - `steering-architecture`: published, unseen (`seen=False`), unanswered (`needs_answer=True`)
-  #    - `ui-layout-audit`: answered with 1 acked answer + 1 unacked answer (`seen=True`)
-  #    - `visual-diff-gallery`: answered with all answers acked (`seen=True`)
-  #    - `runtime-metrics`: published read-only report (`0` fields, `seen=False`)
-  #    - `legacy-migration-draft`: dismissed report (evicted from active list with archived answer in meta)
+  # 2. Reports cover steering-architecture (unseen, unanswered), ui-layout-audit (mixed acks),
+  #    visual-diff-gallery (acked), runtime-metrics (read-only), legacy-migration-draft (dismissed).
   app.reports.publish_report(
     "steering-architecture",
     "Arena Steering: Architecture & Storage Config",
@@ -806,8 +802,8 @@ steer poll
   )
   app.reports.remove_report("legacy-migration-draft")
 
-  # 3. Seed historical finished tasks directly. Live task writes validate each phase.
-  #    Keep all 5 types and 35 finished rows for task view pagination.
+  # 3. Seed historical finished tasks directly. Live task writes validate each phase and keep
+  #    35 finished rows for task view pagination.
   stamp = datetime.now(UTC).isoformat()
   completed = [
     models.Task(

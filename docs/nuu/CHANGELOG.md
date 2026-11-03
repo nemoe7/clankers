@@ -10,7 +10,7 @@ This log has no Unreleased section.
 
 ### Changed
 
-- **Scrollbar alignment (`style.css`, `recipes/scrollbars.md`, `SKILL.md`, `nuu.md`, `measure.py`)**: Match arena-steering scrollbar — `15px` track width, transparent track with `margin: 8px 0`, `1px` transparent thumb border, global `*` Firefox fallback; keep pill thumb (`9999px`), theme-adaptive `var(--scrollbar-thumb)` colors, no arrows, keyboard-nav hover highlights. Exempt `::-webkit-scrollbar-*` selectors from `measure.py` SPC001/SPC002 checks.
+- **Scrollbar alignment (`style.css`, `recipes/scrollbars.md`, `SKILL.md`, `nuu.md`, `measure.py`)**: Match arena-steering scrollbar — `15px` track width, transparent track with `margin: 8px 0`, `1px` transparent thumb border, global `*` Firefox fallback. Keep pill thumb (`9999px`), theme-adaptive `var(--scrollbar-thumb)` colors, no arrows, keyboard-nav hover highlights. Exempt `::-webkit-scrollbar-*` selectors from `measure.py` SPC001/SPC002 checks.
 
 ## [0.1.70]
 

@@ -467,8 +467,8 @@ class MessageService:
               timed_out = True
               break
             self._meta.set_meta("polling_at", self._clock.now_iso())
-            # Do not hold the condition while accessing the store: an answer
-            # callback may notify while its store transaction is still open.
+            # Do not hold the condition while accessing the store. An answer
+            # callback may notify while its store transaction is open.
             with self._cond:
               self._cond.wait(timeout=min(POLL_HEARTBEAT_SECONDS, remaining))
         finally:

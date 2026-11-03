@@ -2,13 +2,11 @@
 """Check the gpt-plugins collection and, with --archive, its packaged zip.
 
 The collection ships one Agent Plugins manifest and the skills listed in
-EXPECTED_SKILLS. `gpt-plugins/refs/skills/` holds the readable sources and
-`gpt-plugins/skills/` holds manually compressed copies. Structure checks do not
-prove semantic parity. Review every clause against refs.
-Packaging rewrites nothing, so `--archive` compares the zip members with the
-committed bytes and rejects anything the collection does not ship, including
-`refs/`. The check compares the manifest against the canonical schema fetched from
-agent-plugins.org, never a vendored copy.
+EXPECTED_SKILLS, with refs holding sources and compressed copies. Structure
+checks do not prove semantic parity, so review every clause against refs.
+Packaging rewrites nothing, so `--archive` compares zip members with committed
+bytes and rejects unshipped files, including `refs/`. The manifest is compared
+against the canonical schema from agent-plugins.org, never a vendored copy.
 """
 
 from __future__ import annotations
@@ -476,7 +474,7 @@ def check_references(errors: list[str]) -> None:
 
 
 def check_tree(errors: list[str]) -> None:
-  """Reject any collection file the manifest, refs and shipped skills do not account for."""
+  """Reject any collection file the manifest, refs, and shipped skills do not account for."""
   if not PLUGIN.is_dir():
     errors.append("gpt-plugins/ is missing")
     return

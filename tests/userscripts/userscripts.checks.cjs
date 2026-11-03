@@ -1,4 +1,4 @@
-// The Arena and ChatGPT bundles carry no checks of their own. Outside a browser each feature publishes its helpers through `exposeChecks`, and this file drives them, so the installed scripts ship runtime code only.
+// The Arena and ChatGPT bundles carry no checks of their own. Outside a browser each feature publishes its helpers through `exposeChecks`. This file drives them, so the installed scripts ship runtime code only.
 // Run: node --test tests/userscripts/userscripts.checks.cjs
 
 const fs = require("node:fs");
@@ -305,7 +305,7 @@ function checkPromptFill(api) {
     [shouldWrite("clankers read ARENA.md AGENTS.md", "other", "clankers", null), true],
     [shouldWrite("draft", "clankers", "clankers", null), false],
     [shouldWrite(promptForSlug("other", promptFillText), "clankers", "other", "other"), true],
-    // One fill per repo per page: the observer sees no second write, even when the
+    // One fill per repo per page: the observer sees no second write. This holds even when the
     // editor hands the text back with different whitespace or the send clears it.
     [shouldWrite(prompt, "clankers", "clankers", "clankers"), false],
     [shouldWrite("clankers read ARENA.md AGENTS.md in full before your first edit, and follow both.\n", "clankers", "clankers", "clankers"), false],
@@ -487,7 +487,7 @@ function checkOpenSteering(api) {
       "clankers"), "clankers - Steering :8000"],
     [steeringRowText([["clankers - Steering", ":8000"], ["Start preview", ":8000"]],
       "clankers"), "clankers - Steering :8000"],
-    // This project's running row outranks a newer row for another project, and a nameless
+    // This project's running row outranks a newer row for another project. A nameless
     // running row outranks a named one for another project.
     [steeringRowText([["clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
       "clankers"), "clankers - Steering :8000"],
@@ -795,7 +795,7 @@ function checkTranscriptTrim(api) {
   var goneAction = actionContainer();
   var goneRoot = messageRoot([rowBox(goneRows)], [goneAction], false);
   var goneRemoved = trimPlan(logDoc([goneRoot], true), "20");
-  // An answered question appends a fresh empty root behind the rows, and the keep
+  // An answered question appends a fresh empty root behind the rows. The keep
   // budget must stay with those rows instead of clearing the page.
   var questionRows = rows(30);
   var questionAction = actionContainer();
@@ -804,8 +804,8 @@ function checkTranscriptTrim(api) {
   var questionRemoved = trimPlan(logDoc([questionRoot, questionTail], true), "20");
   var detached = rows(4);
   detached[0].parentElement = null;
-  // One pass cuts at most the cap, so a large backlog drains in steps instead
-  // of one blocking burst the page must reconcile at once.
+  // One pass cuts at most the cap, so a large backlog drains in steps. The page
+  // then never reconciles one blocking burst at once.
   var cappedTrim = trimRows(rows(300), 50);
   var outerBox = rowBox(rows(1));
   var nestedBox = rowBox(rows(2), outerBox);
@@ -842,7 +842,7 @@ function checkTranscriptTrim(api) {
     // The newest root keeps exactly its K newest rows: the ten oldest hide and empty.
     [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "20"), 10],
     [rootRowsRemoved, 30],
-    // Cut rows stay as hidden empty shells: the page reinstates removed nodes, so the trim hides and empties instead of deleting.
+    // Cut rows stay as hidden empty shells: the page reinstates removed nodes. The trim hides and empties instead of deleting.
     // The older root hides in full while the newest root keeps its 20 newest rows.
     [cleared(rootRows[0][24]), true],
     [rootRows[0][24].parentElement !== null, true],
@@ -853,7 +853,7 @@ function checkTranscriptTrim(api) {
     [rootRows[1][5].textContent, "row"],
     [rootNodes[1].hiddenClass, false],
     [rootActions[0].removed, true],
-    // The action container leaves only with a root that lost every row: the newest
+    // The action container leaves only with a root that lost every row. The newest
     // root keeps its rows, so its actions, and the newest rows inside them, stay.
     [rootActions[1].removed, false],
     // A lone root is the newest one: it keeps every row and never hides.
@@ -879,7 +879,7 @@ function checkTranscriptTrim(api) {
     [goneRows[24].removed, false],
     [goneAction.removed, false],
     [goneRoot.parentElement !== null, true],
-    // The empty root an answered question appends takes no keep budget: the rows
+    // The empty root an answered question appends takes no keep budget. The rows
     // behind it keep their 20 newest, their action stays, and the page does not clear.
     [questionRemoved, 10],
     [cleared(questionRows[0]), true],
@@ -899,8 +899,8 @@ function checkTranscriptTrim(api) {
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === QUESTION_SELECTOR ? {} : null; } }), false],
     [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Stop generating"; } }]; }, querySelector: function () { return null; } }), true],
     [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Send"; } }]; }, querySelector: function () { return null; } }), false],
-    // Quiet means the whole page holding still, not the row count alone: the page streams into existing
-    // rows after the last row lands, so a fresh mutation keeps the trim waiting even while the count holds.
+    // Quiet means the whole page holding still, not the row count alone. The page streams into existing
+    // rows after the last row lands. A fresh mutation keeps the trim waiting even while the count holds.
     [quietReady({ rows: null, rowsAt: 0, mutationAt: 0 }, 10, 100000), false],
     [quietReady({ rows: 10, rowsAt: 100000, mutationAt: 0 }, 10, 100500), false],
     [(function () {
@@ -1185,7 +1185,7 @@ function checkTabTitle(api, logging) {
       },
     };
   }
-  // The root-bounded model reads a real tree, so the checks build one: every node answers
+  // The root-bounded model reads a real tree, so the checks build one. Every node answers
   // the selectors the feature uses, and the chain walks land on real children.
   function matches(node, selector) {
     if (!node || !node.attrs) {
@@ -1326,7 +1326,7 @@ function checkTabTitle(api, logging) {
     return row;
   }
   // The buttonless rows: a size-4 icon beside a single body-sm span. The fetch row keeps the
-  // page's URL in an anchor inside that span, so the anchor's copy never joins the label.
+  // page's URL in an anchor inside that span. The anchor's copy never joins the label.
   function fetchRow(iconClass, text, url) {
     var icon = node("svg", iconClass, []);
     var span = node("span", "body-sm text-text-tertiary min-w-0 flex-1 truncate leading-4", []);
@@ -1650,7 +1650,7 @@ function checkTabTitle(api, logging) {
     [desiredTitle(pollPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4"],
     [expireHold(), null],
     [desiredTitle(playPage), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
-    // The trailing div is never the row: with two rows the first one marks, and the
+    // The trailing div is never the row: with two rows the first one marks. The
     // third row lands only when it takes the second-to-last place.
     [expireHold(), null],
     [desiredTitle(trailingPage), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
@@ -1721,7 +1721,7 @@ function checkTabTitle(api, logging) {
     [expireHold(), null],
     [waitingSignal(waitingDoc()), true],
     [waitingSignal(blankWaitingDoc()), true],
-    // The owner's action row carries the very same canvas as its icon, so the canvas alone
+    // The owner's action row carries the very same canvas as its icon. The canvas alone
     // never reads as a waiting line and never outranks the Bash row.
     [waitingSignal(actionCanvasDoc()), false],
     [waitingSignal(setDoc), false],
@@ -1760,7 +1760,7 @@ function checkTabTitle(api, logging) {
     [actionEmoji("Agent chat"), "\u2699\uFE0F"],
     [actionEmoji(null), null],
     [liveLabel(directAction), "Bash sleep 25"],
-    // The buttonless rows keep their label in a body-sm span, and the fetch row's URL anchor
+    // The buttonless rows keep their label in a body-sm span. The fetch row's URL anchor
     // never joins the label words.
     [liveLabel(fetchRunningRow()), "Fetching"],
     [liveLabel(fetchRow("text-text-tertiary size-4 shrink-0", "Fetched", "https://example.test/page")), "Fetched"],
@@ -1851,7 +1851,7 @@ function checkTabTitle(api, logging) {
   } finally {
     console.log = restoreConsole;
   }
-  // One line per change stays, and the plain unchanged line is gone: a second
+  // One line per change stays, and the plain unchanged line is gone. A second
   // sync with the title already in place writes nothing at all.
   var quiet = [];
   var louder = console.log;
@@ -2044,7 +2044,7 @@ function checkHideElements(api) {
   var plusRow = actionGroup([plusButton]);
   var unrelatedRow = actionGroup([action("Retry"), action("View details")]);
   var mixedRow = actionGroup([mixedPlusButton, action("View details")]);
-  // One document answers every selector, so the sync pass itself is under test: a target left out of syncDocument leaves its element unhidden here.
+  // One document answers every selector, so the sync pass itself is under test. A target left out of syncDocument leaves its element unhidden here.
   // The library answers twice, once for the collapsed rail and once for the open nav list.
   var fullDoc = {
     querySelector: function (selector) {
@@ -2243,7 +2243,7 @@ function checkStateDownload(api, session, logging) {
   var repo = "clankers";
   var branch = "main";
   // The name carries the repository, then the branch, then the server's stamp and the record
-  // counts, so two repos and their branches never collide in one folder.
+  // counts. Two repos and their branches never collide in one folder.
   assert.equal(
     stateFileName(repo, branch, "2026-10-06T06:12:33.123456+00:00", counts),
     "clankers-main-20261006T061233-n12-t4.ndjson",
@@ -2271,7 +2271,7 @@ function checkStateDownload(api, session, logging) {
   assert.equal(repeated.type, "unchanged");
   assert.equal(repeated.name, "clankers-main-20261006T061233-n12-t4.ndjson");
   assert.match(repeated.message, /unchanged since the last write/);
-  // A stamp that goes backward is a wiped or replaced preview, so nothing overwrites the
+  // A stamp that goes backward is a wiped or replaced preview. Nothing overwrites the
   // owner's file with an older state.
   var stale = stateDownload(repo, branch, "2026-10-05T20:00:00", counts, "2026-10-06T06:12:33");
   assert.equal(stale.type, "stale");
@@ -2307,7 +2307,7 @@ function checkStateDownload(api, session, logging) {
   );
   assert.equal(rolledBackTask.type, "stale");
   assert.match(rolledBackTask.message, /task stamp went backward/);
-  // A forced save takes the state whatever the memory says: the same stamp, an older
+  // A forced save takes the state whatever the memory says. The same stamp, an older
   // stamp and a rolled-back pair all write, and the write moves the reference.
   assert.equal(
     stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33", null, true).type,
@@ -2379,7 +2379,7 @@ function checkStateDownload(api, session, logging) {
     "download",
   );
   // The repo bar carries the pair and the branch anchor, so the name scopes to this repo and
-  // branch and two repos never collide in one folder.
+  // branch. Two repos never collide in one folder.
   var branchLink = {
     getAttribute: function (name) {
       if (name === "href") return "https://github.com/nemoe7/clankers/tree/arena%2F01a0fd4f-clankers";
@@ -2407,8 +2407,8 @@ function checkStateDownload(api, session, logging) {
     stateFileName(scope.repo, scope.branch, "2026-10-06T08:33:57+00:00", null),
     "clankers-arena-01a0fd4f-clankers-20261006T083357.ndjson",
   );
-  // An ongoing session renders the repository as a bare chip without its owner, so a slash-less slug-like span in the
-  // bar still names the repository for the selector and the fill, instead of falling through to a header session token.
+  // An ongoing session renders the repository as a bare chip without its owner. A slash-less slug-like span in the
+  // bar still names the repository for the selector and the fill. It never falls through to a header session token.
   var bareBar = {
     querySelectorAll: function (selector) {
       if (selector === "span.truncate") return [{ textContent: "daedalus" }];
@@ -2447,7 +2447,7 @@ function checkStateDownload(api, session, logging) {
     return [{ textContent: "not a repo read ARENA.md" }];
   };
   assert.equal(readSlug(promptDoc), "previous");
-  // A new chat on /agent has no session bar, so the composer's own selector row carries the
+  // A new chat on /agent has no session bar. The composer's own selector row carries the
   // repository chip ahead of the branch chip, and the fill reads it there.
   var composerDoc = {
     querySelector: function () { return null; },
@@ -2459,7 +2459,7 @@ function checkStateDownload(api, session, logging) {
   assert.equal(readSlug(composerDoc), "clankers");
   assert.equal(stateRepo(composerDoc), "clankers");
   // The leading chip is the repository, so a chip that is not the owner/repo form never
-  // answers, and the title still carries the read.
+  // answers. The title still carries the read.
   var branchChipDoc = {
     querySelector: function () { return null; },
     querySelectorAll: function (selector) {
@@ -2469,8 +2469,8 @@ function checkStateDownload(api, session, logging) {
     title: "Arena | clankers",
   };
   assert.equal(readSlug(branchChipDoc), "clankers");
-  // A branch with a slash wears the owner/repo shape too, so two such chips stay ambiguous and
-  // the title decides instead of a branch.
+  // A branch with a slash wears the owner/repo shape too, so two such chips stay ambiguous. The
+  // title decides instead of a branch.
   var branchFirstDoc = {
     querySelector: function () { return null; },
     querySelectorAll: function (selector) {
@@ -2480,8 +2480,8 @@ function checkStateDownload(api, session, logging) {
     title: "Arena | clankers",
   };
   assert.equal(readSlug(branchFirstDoc), "clankers");
-  // A selected diff branch puts the session branch beside the repository chip, and the tab title stays bare on that page.
-  // The branch wears the platform namespace, so the chip read still names the repository with nothing else to fall back on.
+  // A selected diff branch puts the session branch beside the repository chip. The tab title stays bare on that page.
+  // The branch wears the platform namespace. The chip read still names the repository with nothing else to fall back on.
   var diffBranchDoc = {
     querySelector: function () { return null; },
     querySelectorAll: function (selector) {
@@ -2503,7 +2503,7 @@ function checkStateDownload(api, session, logging) {
     title: "Arena",
   };
   assert.equal(readSlug(otherBranchDoc), null);
-  // The page's own chip outranks the title, because the title can still name the previous
+  // The page's own chip outranks the title. The title can still name the previous
   // session after a new chat opens on the same tab.
   var staleTitleDoc = {
     querySelector: function () { return null; },
@@ -2524,7 +2524,7 @@ function checkStateDownload(api, session, logging) {
   );
   session.value = null;
   assert.equal(stateRepo({ querySelector: function () { return null; } }), "");
-  // One storage scope per repo and branch, so a second tab of another session never
+  // One storage scope per repo and branch. A second tab of another session never
   // shares the stamp memory or the chosen file with this one.
   assert.equal(stateScopeKey("clankers", "main"), stateScopeKey("clankers", "main"));
   assert.notEqual(stateScopeKey("clankers", "main"), stateScopeKey("widget", "main"));
@@ -2649,7 +2649,7 @@ function checkStateDownload(api, session, logging) {
   assert.ok(comparedLine("force-stamp", { group: "note" }));
   assert.ok(comparedLine("force-stamp", { group: "task" }));
   assert.doesNotMatch(compared.join("\n"), /2026-|http|private/);
-  // A save moves when the session branch is unknown, or when the preview URL differs from the one that last wrote this scope.
+  // A save moves when the session branch is unknown. It also moves when the preview URL differs from the one that last wrote this scope.
   // A moved save that would write asks before it writes. A forced save never asks.
   assert.equal(saveMoved("", "", "https://p.example"), true, "No branch moves the save");
   assert.equal(saveMoved("arena/x", "", "https://p.example"), false, "A first write does not move");

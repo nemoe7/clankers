@@ -1,8 +1,8 @@
 """Contract check for the artifacts workflow, which its own jobs run.
 
 The validation and packaging jobs each asserted this contract in an inline heredoc.
-Both now call this script, so one copy of the rule covers the pull request check and
-the main-branch package run.
+Both now call this script, so one copy of the rule covers the pull request check.
+It also covers the main-branch package run.
 """
 
 from __future__ import annotations

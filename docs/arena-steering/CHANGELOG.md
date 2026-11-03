@@ -68,13 +68,13 @@ This log has no Unreleased section.
 
 - `store.py`: Order messages and pages by write time and ID. Keep old insertion order when replacing legacy sequences, and retain write times across state sync.
 
-- `server.py`: List only uploads referenced by surviving state. After an accepted synced deletion, remove orphaned files with no surviving references. Retain staged files that were never referenced.
+- `server.py`: List only uploads referenced by surviving state. After an accepted synced deletion, remove orphaned files with no surviving references, and retain staged files that were never referenced.
 
 ### Fixed
 
 - `pre.py`, `cli.py`, `scripts/install.sh`: Avoid a second inbox check during shell exit for a standalone push admitted before a note arrived. Keep mixed pushes guarded and refresh the managed gate in existing profiles.
 
-- `pre.py`: Exempt exact Arena process and port probes from inbox blocking and call counts. Recognize standalone `ss` and `netstat` with any flags. Keep altered mixed lines guarded.
+- `pre.py`: Exempt exact Arena process and port probes from inbox blocking and call counts. Recognize standalone `ss` and `netstat` with any flags while keeping altered mixed lines guarded.
 
 - `pre.py`: Let standalone mkdir calls pass the pending-inbox gate and still count. Keep mixed lines guarded.
 
@@ -134,7 +134,7 @@ This log has no Unreleased section.
 
 - `services.py`, `cli.py`, `server.py`: Add answer details only on the first acknowledgement, and report actual additions. Ignore identical latest submissions.
 
-- `assets/`: Show independent needs-answer and unread markers. A lone question marker uses the default dot position. Mark unseen acknowledgements on the tab and picker.
+- `assets/`: Show independent needs-answer and unread markers. A lone question marker uses the default dot position, and unseen acknowledgements get marks on the tab and picker.
 - `assets/`: Keep newer report content when delayed responses arrive, preserving focused drafts during view-only refreshes.
 - `server.py`, `demo-arena-steer.py`: Preserve the demo reset action and survey state across hot reloads.
 

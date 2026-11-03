@@ -230,9 +230,8 @@ class PreContext:
     return parts[-1] if parts else text.strip()
 
 
-# Count means eligible for the pending-inbox budget. Block means the six-call
-# gate applies at its limit. Unconditional guards, including pending pushes,
-# still run separately before this policy.
+# Count means eligible for the pending-inbox budget. Block means the six-call gate applies at its limit.
+# Unconditional guards, including pending pushes, still run separately before this policy.
 BASH_COMMAND_POLICY: dict[str, tuple[bool, bool]] = {
   "python3": (True, True),
   "python": (True, True),

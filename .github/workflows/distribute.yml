@@ -15,7 +15,7 @@ on:
       - ".github/workflows/distribute.yml"
   schedule:
     # Daily reconciliation: 03:17 UTC stays away from the top of the hour, when scheduled runs queue behind peak load.
-    # The schedule repairs missed, failed and partial synchronization in every target group.
+    # The schedule repairs missed, failed, and partial synchronization in every target group.
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:

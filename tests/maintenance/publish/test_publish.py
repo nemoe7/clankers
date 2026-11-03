@@ -180,7 +180,7 @@ def test_reconcile_lifecycle():
     assert gh.gist["files"]["folder-a.md"]["content"] == "nested\n"
 
     # The last eligible files can disappear: when only a collision survives, preserve its old
-    # Gist file while deleting every unrelated stale name, then delete the whole empty Gist.
+    # Gist file. Delete every unrelated stale name, then delete the whole empty Gist.
     write(root, "folder-a.md", "colliding again\n")
     (root / "rules/README.md").unlink()
     (root / "rules/new.md").unlink()
@@ -264,7 +264,7 @@ def test_reconcile_rejects_invalid_gist():
 
 
 def test_api_serializes_json_payloads():
-  # JSON for arbitrary Unicode, quotes and newlines goes on stdin without shell expansion.
+  # JSON for arbitrary Unicode, quotes, and newlines goes on stdin without shell expansion.
   with patch.object(sync.subprocess, "run") as process:
     process.return_value = subprocess.CompletedProcess(
       [], 0, stdout='{"id":"abc"}', stderr=""

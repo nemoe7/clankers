@@ -77,7 +77,7 @@ def minify(source: Path, binary: str, flags: tuple[str, ...]) -> str:
 
   if result.returncode or result.stderr.strip():
     # A warning is a failure here. Clean-css reported an unterminated string once by dropping every
-    # rule it swallowed, which a size budget cannot see and a browser may hide (commit 99b126e).
+    # rule it swallowed. A size budget cannot see this and a browser may hide it (commit 99b126e).
     raise RuntimeError(
       f"{binary} on {source.name}:\n{result.stderr.strip() or 'failed'}"
     )
@@ -116,7 +116,7 @@ def check_python(source: str, built: str, filename: str) -> None:
 
 
 def minify_python(source: str, filename: str) -> str:
-  """Remove comments, docstrings and excess whitespace, not behavior."""
+  """Remove comments, docstrings, and excess whitespace, not behavior."""
   if version("python-minifier") != PYTHON_MINIFIER_VERSION:
     raise RuntimeError(f"install python-minifier=={PYTHON_MINIFIER_VERSION}")
   import python_minifier

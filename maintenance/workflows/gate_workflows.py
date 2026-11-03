@@ -1,8 +1,9 @@
 """Gate for the workflow set: required files, least-privilege permissions and job-scoped secrets.
 
-actionlint checks the syntax and zizmor audits the security. This gate holds the repository
-contract that both tools leave implicit: the exact file set, a read-only top level, no
-privileged trigger for untrusted code, and credentials that stay inside their job.
+actionlint checks the syntax and zizmor audits the security. This gate holds the
+repository contract that both tools leave implicit. The contract is the exact file
+set and a read-only top level. No privileged trigger for untrusted code, and
+credentials stay inside their job.
 """
 
 from __future__ import annotations
@@ -30,8 +31,8 @@ REQUIRED_FILES = (
 FORBIDDEN_PR_PERMISSIONS = ("contents", "actions", "packages", "id-token")
 READ_ONLY_VALUES = ("read", "none")
 
-# A job whose `if` names an event that is not a pull request never runs pull request code,
-# so that job alone may carry a forbidden scope inside a pull request workflow.
+# A job whose `if` names an event that is not a pull request never runs pull request
+# code. So that job alone may carry a forbidden scope inside a pull request workflow.
 NON_PULL_REQUEST_EVENT_RE = re.compile(
   r"github\.event_name\s*(?:!=\s*'pull_request'"
   r"|==\s*'(?:push|workflow_dispatch|schedule|release|repository_dispatch)')"
@@ -144,7 +145,7 @@ def audit_document(name: str, document: object) -> list[str]:
           findings.append(
             f"{where}: `secrets.` must not appear in a step `{field}` string"
           )
-    # The build context of an image publish is the package's own directory, so the
+    # The build context of an image publish is the package's own directory. The
     # directory name and the image name stay one word.
     for step in job.get("steps", []) or []:
       if not isinstance(step, dict):

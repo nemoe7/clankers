@@ -98,7 +98,7 @@ jobs:
       - name: Install Validation Dependencies
         run: uv pip install --system -r requirements.txt
 
-      # The required behaviour of this file is part of the check: the triggers, the job
+      # The required behaviour of this file is part of the check. The triggers, the job
       # conditions, the version-bump flag, the archive name and the artifact name are assertions.
       - name: Check Workflow Contract
         run: python maintenance/workflows/check_artifacts.py

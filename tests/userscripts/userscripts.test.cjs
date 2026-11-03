@@ -187,7 +187,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const defaults = load();
   assert.equal(defaults.menus.size, menusFor(stored));
   if (domain === "arena") {
-    // The owner's shape decision: one module's entries share a prefix, a switch names its state in parentheses, and no entry carries a role word.
+    // The owner's shape decision: one module's entries share a prefix, a switch names its state in parentheses. No entry carries a role word.
     // The modules sit in one order, and one module's entries stay together: Composer, Proxy, Steering, Transcript, State, Page, Userscript.
     const expected = [
       "Composer - fill (ON)",
@@ -375,8 +375,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     toggle.callback();
     assert.equal(stored.get("transcript-trim"), true);
 
-    // The count line belongs to the Transcript group, so it sits with its two switches rather
-    // than at the bottom the manager appends it to.
+    // The count line belongs to the Transcript group.
+    // So it sits with its two switches rather than at the bottom the manager appends it to.
     assert.deepEqual(
       [...counted.menus.values()].map((item) => item.label),
       [
@@ -483,8 +483,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.throws(() => allOff.menus.values().next().value.callback(), /Storage write failed/);
   assert.deepEqual([...allOff.menus.values()].map((item) => item.label), labelsBefore);
   assert.ok([...stored.values()].every((value) => value === false));
-  // The global pause stops every feature where it stands, with no reload, and the resume
-  // brings back the features whose own switch is ON.
+// The global pause stops every feature where it stands.
+    // With no reload, the resume brings back the features whose own switch is ON.
   if (domain === "arena") {
     // Storage-failure check above keeps write rejection active. Pause writes again.
     refuseWrite = false;
@@ -834,8 +834,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 
     captchaVisible = false;
     goto("/agent");
-    // The HTTP timers scatter each call inside its own band: a tick waits a random moment
-    // before the request, so no fixed beat forms.
+    // The HTTP timers scatter each call inside its own band.
+    // A tick waits a random moment before the request, so no fixed beat forms.
     const httpCalls = () => posts.length + fetches.length;
     const callsBefore = httpCalls();
     intervals.filter((item) => item.ms === 60000).forEach((item) => item.fn());
@@ -871,8 +871,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     popstates.forEach((fn) => fn());
     flush();
     assert.equal(clicked, 1, "The steering click returns when the check clears");
-    // A session route and a return to a new chat: the fill memory left with the route,
-    // so the same repo fills its new conversation again.
+    // A session route and a return to a new chat.
+    // The fill memory left with the route, so the same repo fills its new conversation again.
     composer.innerText = "";
     goto("/agent");
     popstates.forEach((fn) => fn());
@@ -885,8 +885,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 }
 {
   const { test } = require("node:test");
-  // The tab title reads the last message root: the newest row's type carries the mark, a user
-  // root carries none, and every row mark ends with the stop control.
+// The tab title reads the last message root: the newest row's type carries the mark.
+// A user root carries none, and every row mark ends with the stop control.
   test("tab title row mark", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const page = { title: "" };
@@ -3570,8 +3570,8 @@ for raw in sys.stdin:
       sync();
       assert.equal(page.title, "Arena | clankers \u03B2 \uD83D\uDDA5\uFE0F");
 
-      // Unanswered report prefix '* ': prepends for main and standalone sessions waiting on submission,
-      // never for worker sessions, 0-field reports, or answered reports with unseen acknowledgements.
+      // Unanswered report prefix '* ' prepends for main and standalone sessions waiting on submission.
+      // Never for worker sessions, 0-field reports, or answered reports with unseen acknowledgements.
       const boardWithWorkerWaiting = boardApi.normalizeBoard(
         Object.assign({}, sampleBoard, {
           worker_reports: {
@@ -4973,8 +4973,8 @@ for raw in sys.stdin:
       await new Promise((r) => setImmediate(r));
       assert.equal(tabBeta.previewPosts.length, beforeBroadcastPosts, "in-flight guard queues trailing rerun without overlapping");
 
-      // Release the held sync: both the held sync and the queued trailing rerun complete immediately without waiting,
-      // delivering the beta wake once while skipping duplicate no-op preview POSTs.
+      // Release the held sync: both the held sync and the queued trailing rerun complete immediately.
+      // Without waiting, the queued trailing rerun delivers the beta wake once while skipping duplicate no-op preview POSTs.
       const release = tabBeta.getReleaseHeldSync();
       release();
       await new Promise((r) => setImmediate(r));
@@ -5147,8 +5147,8 @@ for raw in sys.stdin:
       const receivedBroadcasts = [];
       broadcastSpy.onmessage = (ev) => receivedBroadcasts.push(ev.data);
 
-      // Initial passive sync strips tombstoned gone9999 branch from client push, wakes siblings on passive revision advance,
-      // and posts consolidated tombstone state to preview because preview still held gone9999:
+      // Initial passive sync strips tombstoned gone9999 branch from client push.
+      // Wakes siblings on passive revision advance, and posts consolidated tombstone state to preview because preview still held gone9999.
       wireCalls.length = 0;
       await boardApi.seedPreviewBoardOnFirstConnect("https://8000-worker-beta.e2b.app", "", "clankers");
       const firstProxyPost = wireCalls.find(c => c.method === "POST" && c.url === "https://arena-proxy.example.ts.net/v1/board");

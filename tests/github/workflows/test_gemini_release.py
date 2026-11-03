@@ -1,4 +1,4 @@
-"Offline release-history, reduction and API-boundary tests. `pytest` runs them."
+"Offline release-history, reduction, and API-boundary tests. `pytest` runs them."
 
 import hashlib
 import io
@@ -261,7 +261,7 @@ def test_release_pipeline():
     assert raw == [identity for identity, _ in units]
     step_lines = [call.args[0] for call in steps.call_args_list]
     # The log names the packing decision: the counted payload, its ceiling and the
-    # request count, so a chunked run reads as steps and not as unexplained calls.
+    # request count. So a chunked run reads as steps and not as unexplained calls.
     assert any(
       "over the 350 ceiling; packed into 3 request(s)" in line for line in step_lines
     )
@@ -371,7 +371,7 @@ def test_release_pipeline():
   assert chunk_ids == [str(n) for n in range(8)]
   assert [item["id"] for item in reduced] == ["summary:0", "summary:1", "summary:2"]
   # release_body receives those ready items, and their text must survive the
-  # hand-off: an item unpacked like a pair carries the literal keys instead.
+  # hand-off. An item unpacked like a pair carries the literal keys instead.
   carried = []
   shared = [{"id": "summary:0", "text": "combined text"}]
 
@@ -510,7 +510,7 @@ def test_release_pipeline():
       "request timed out after 180s: The read operation timed out",
     )
   # The ladder moves to the next model on a request failure or blocked output, not
-  # on an oversized request, and names every rung when all of them fail.
+  # on an oversized request. It names every rung when all of them fail.
   good = {
     "candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "ok"}]}}]
   }

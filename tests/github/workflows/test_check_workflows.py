@@ -645,7 +645,7 @@ def test_artifacts_release_job_keeps_the_release_semantics():
 
 def test_artifacts_publishes_both_proxy_images_from_one_matrix():
   jobs = load_workflow("artifacts.yml")["jobs"]
-  # The two image jobs differ in path, context and tag alone, so one matrix carries both.
+  # The two image jobs differ in path, context, and tag alone, so one matrix carries both.
   assert [name for name in jobs if "image" in name] == ["publish-proxy-images"]
   job = jobs["publish-proxy-images"]
   assert "github.event_name != 'pull_request'" in job["if"]

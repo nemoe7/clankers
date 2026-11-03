@@ -105,9 +105,9 @@ function renderFieldBlock(field, headings, stored = null) {
   const optionsHtml = options
     .map((opt) => {
       const checked = storedSet.has(opt) ? "checked" : "";
-      const star = recommended.has(opt)
-        ? '<span class="option-star" aria-label="Recommended by the agent">*</span> '
-        : "";
+       const star = recommended.has(opt)
+         ? '<span class="option-star" aria-label="Recommended by agent">*</span> '
+         : "";
       return `
         <label class="option-row${recommended.has(opt) ? " is-recommended" : ""}">
           <input type="${inputType}" name="field-${fieldId}" value="${escapeHtml(opt)}" ${checked}>
