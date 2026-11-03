@@ -2861,3 +2861,91 @@ def test_state_refresh_preserves_unaffected_view_controls(tmp_path: Path) -> Non
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_markdown_tables_match_github_across_views(width: int, tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  markdown = (
+    "| Label | Value |\n| :--- | ---: |\n| First | short |\n| Second | "
+    + "a" * 200
+    + " |\n"
+  )
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Markdown table styling")
+  app.messages.send_message(markdown, blocking=False)
+  app.reports.publish_report(
+    "table-report", "Table report", "# Table report\n\n" + markdown
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 700})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        for tab, selector in (
+          ("messages", ".message-text table"),
+          ("reports", ".report table"),
+        ):
+          if tab == "reports":
+            page.locator("#tab-reports").click()
+          table = page.locator(selector).first
+          table.wait_for()
+          metrics = table.evaluate("""table => {
+            const cell = table.querySelector('tbody td');
+            const rows = table.querySelectorAll('tbody tr');
+            const style = getComputedStyle(cell);
+            const pane = table.closest('#history, #report-main');
+            return {
+              padding: [style.paddingTop, style.paddingLeft],
+              borders: [style.borderTopWidth, style.borderRightWidth,
+                style.borderBottomWidth, style.borderLeftWidth],
+              whiteSpace: style.whiteSpace,
+              striped: getComputedStyle(rows[0]).backgroundColor !==
+                getComputedStyle(rows[1]).backgroundColor,
+              headerWeight: Number(getComputedStyle(table.querySelector('th')).fontWeight),
+              rightAligned: getComputedStyle(table.querySelector('th:last-child')).textAlign,
+              overflow: getComputedStyle(table).overflowX,
+              scrollable: table.scrollWidth > table.clientWidth + 1,
+              contained: table.getBoundingClientRect().right <= pane.getBoundingClientRect().right + 1,
+            };
+          }""")
+          assert metrics == {
+            "padding": ["6px", "13px"],
+            "borders": ["1px"] * 4,
+            "whiteSpace": "normal",
+            "striped": True,
+            "headerWeight": 700,
+            "rightAligned": "right",
+            "overflow": "auto",
+            "scrollable": True,
+            "contained": True,
+          }, (tab, width, metrics)
+          page.screenshot(
+            path=str(tmp_path / f"markdown-table-{tab}-{width}.png"),
+            animations="disabled",
+          )
+          assert (
+            table.evaluate(
+              "el => { el.scrollLeft = el.scrollWidth; return el.scrollLeft; }"
+            )
+            > 0
+          )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

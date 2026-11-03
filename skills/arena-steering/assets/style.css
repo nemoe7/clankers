@@ -439,9 +439,9 @@ code.msg-id[data-state="good"] {
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  border-spacing: 0;
   border-collapse: collapse;
-  border: 1px solid hsl(var(--border-faint));
-  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
   font-size: 14px;
   margin: 10px 0;
 }
@@ -451,22 +451,26 @@ code.msg-id[data-state="good"] {
 .message-text th,
 .message-text td {
   text-align: left;
-  border-bottom: 1px solid hsl(var(--border-faint));
+  border: 1px solid hsl(var(--border-faint));
   padding: 6px 13px;
   overflow-wrap: normal;
-  white-space: nowrap;
+  white-space: normal;
 }
 
-.report tbody tr:last-child td,
-.message-text tbody tr:last-child td {
-  border-bottom: 0;
+.report tr,
+.message-text tr {
+  background-color: hsl(var(--surface-primary));
+}
+
+.report tbody tr:nth-child(2n),
+.message-text tbody tr:nth-child(2n) {
+  background-color: hsl(var(--surface-secondary));
 }
 
 .report th,
 .message-text th {
-  background-color: hsl(var(--surface-secondary));
   color: hsl(var(--header-primary));
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .option-star {

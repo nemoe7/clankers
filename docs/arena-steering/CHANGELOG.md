@@ -48,6 +48,10 @@ This log has no Unreleased section.
 
 - `assets/reports-view.js`, `assets/style.css`: Retain the Reports picker position across report changes and fade its scrollable edges on desktop and mobile.
 
+- `assets/style.css`: Give Markdown tables in Messages and Reports GitHub-style borders and stripes with existing theme colors.
+
+- `assets/style.css`: Let cells wrap at spaces while keeping wide tables scrollable within their views.
+
 - `assets/messages-view.js`: Keep Messages at the bottom when new content arrives there, without moving readers who scrolled up.
 
 - `pre.py`: Scope the governing-skill read guard to the v2 skill. Keep root governing files protected.
