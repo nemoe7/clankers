@@ -212,6 +212,25 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
         page = browser.new_page(viewport={"width": width, "height": height})
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
         page.locator("#survey-open").click()
+        page.locator(".survey-cap-pill").first.hover()
+        first = page.evaluate("""() => {
+          const rect = selector => document.querySelector(selector).getBoundingClientRect();
+          const tip = document.querySelector('.survey-cap-pill:first-child .survey-answer-tooltip');
+          const tooltip = tip.getBoundingClientRect();
+          const pill = rect('.survey-cap-pill:first-child');
+          const heading = rect('.survey-section-label');
+          return {
+            background: getComputedStyle(tip).backgroundColor,
+            tooltipTop: tooltip.top, tooltipBottom: tooltip.bottom,
+            pillTop: pill.top, headingTop: heading.top, headingBottom: heading.bottom
+          };
+        }""")
+        assert first["background"].startswith("rgb(")
+        assert first["tooltipTop"] >= first["pillTop"] - 1
+        assert (
+          first["tooltipTop"] >= first["headingBottom"] - 1
+          or first["tooltipBottom"] <= first["headingTop"] + 1
+        )
         page.locator(".survey-cap-pill").last.hover()
         sizes = page.evaluate("""() => {
           const rect = selector => document.querySelector(selector).getBoundingClientRect();

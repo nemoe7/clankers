@@ -856,13 +856,19 @@ mark.search-hit {
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid hsl(var(--border-strong));
-  background: hsl(var(--surface-overlay));
+  background: hsl(var(--surface-floating));
   box-shadow: 0 8px 20px rgb(0 0 0 / 0.45);
 }
 
-.survey-cap-pill:last-child .survey-answer-tooltip {
-  left: auto;
-  right: 0;
+.survey-cap-pill .survey-answer-tooltip {
+  inset: 1px;
+  min-width: 0;
+  max-width: none;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 5px;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 .survey-id-wrap:hover .survey-answer-tooltip,
@@ -878,6 +884,13 @@ mark.search-hit {
   gap: 10px;
   padding: 2px 0;
   font-size: 12px;
+}
+
+.survey-cap-pill .survey-answer-row {
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  font-size: 11px;
 }
 
 .survey-answer-key {
