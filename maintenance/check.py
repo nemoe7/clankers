@@ -113,8 +113,8 @@ EXPECTED_LINTED = (
 )
 
 # This comment identifies the documented markdownlint count. Root AGENTS.md is agent-facing and excluded.
-# Add a path only when it has no STE violations. CI and `check.py --ste` use this same list.
-STE_DOCS = (
+# Add a path only when it has no Nemoize violations. CI uses this same list.
+NEMOIZE_DOCS = (
   "docs/userscripts/arena/README.md",
   "docs/userscripts/chatgpt/README.md",
   "maintenance/README.md",
@@ -141,7 +141,7 @@ STE_DOCS = (
   "docs/userscripts/chatgpt/CHANGELOG.md",
   "docs/workflows/gemini-release/CHANGELOG.md",
 )
-STE_LINT = "skills/nemoizer/scripts/nemoize.py"
+NEMOIZE = "skills/nemoizer/scripts/nemoize.py"
 CODE_SPAN_RE = re.compile(r"(`+)[^`\n]*?\1")
 SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?:\s+|$)")
 LIST_OR_BLOCK_RE = re.compile(r"^(?:[-*+>|#]|\d+[.)] )")
@@ -198,23 +198,23 @@ def parse_args() -> argparse.Namespace:
   return parser.parse_args()
 
 
-def check_ste(errors: list[str]) -> None:
-  """Run the vendored STE linter over the covered prose. Any hard violation is an error."""
+def check_nemoize(errors: list[str]) -> None:
+  """Run the vendored nemoizer over the covered prose. Any hard violation is an error."""
   result = subprocess.run(
-    [sys.executable, str(ROOT / STE_LINT), *(str(ROOT / doc) for doc in STE_DOCS)],
+    [sys.executable, str(ROOT / NEMOIZE), *(str(ROOT / doc) for doc in NEMOIZE_DOCS)],
     capture_output=True,
     text=True,
     check=False,
   )
   if result.returncode:
     output = (result.stdout + result.stderr).strip()
-    errors.append(f"STE lint failed:\n{output}")
+    errors.append(f"Nemoize failed:\n{output}")
 
 
 def check_nemoizer(errors: list[str]) -> None:
   """Run nemoize.py over the repository root; exclusions live in pyproject.toml."""
   result = subprocess.run(
-    [sys.executable, str(ROOT / STE_LINT), "."],
+    [sys.executable, str(ROOT / NEMOIZE), "."],
     cwd=ROOT,
     capture_output=True,
     text=True,
@@ -921,6 +921,8 @@ def run_check(name: str, errors: list[str], check: Callable[[], Any]) -> Any:
   span = time.perf_counter() - started
   if found:
     print(f"FAIL {name}: {found} problem(s) in {span:.2f}s")
+    for error in errors[before:]:
+      print(f"- {error}")
   else:
     print(f"ok {name} in {span:.2f}s")
   return reported
@@ -944,7 +946,7 @@ def main() -> int:
 
   errors: list[str] = []
   skills = run_check("repository", errors, lambda: validate(errors))
-  run_check("STE lint", errors, lambda: check_ste(errors))
+  run_check("Nemoize", errors, lambda: check_nemoize(errors))
   run_check(
     "Nemoizer domains",  # nonemo: NMO100
     errors,

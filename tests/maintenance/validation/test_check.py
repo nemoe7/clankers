@@ -108,7 +108,7 @@ def test_internal_links_checks_docs_and_skill_readmes(tmp_path, monkeypatch):
 
 
 def test_ste_linter_keeps_the_tool_standalone(tmp_path):
-  source = check.ROOT / check.STE_LINT
+  source = check.ROOT / check.NEMOIZE
   standalone = tmp_path / "standalone"
   shutil.copytree(
     source.parent, standalone, ignore=shutil.ignore_patterns("__pycache__")
@@ -128,7 +128,7 @@ def test_main_enforces_rotation_findings(monkeypatch, capsys):
     check, "parse_args", lambda: SimpleNamespace(update=False, ste=False)
   )
   monkeypatch.setattr(check, "validate", lambda errors: (0, 0))
-  monkeypatch.setattr(check, "check_ste", lambda errors: None)
+  monkeypatch.setattr(check, "check_nemoize", lambda errors: None)
   monkeypatch.setattr(
     check,
     "check_nemoizer",
@@ -160,7 +160,7 @@ def test_ste_docs_cover_moved_module_docs_and_changelogs():
     "docs/workflows/gemini-release/README.md",
     "docs/workflows/gemini-release/CHANGELOG.md",
   }
-  assert expected <= set(check.STE_DOCS)
-  assert "CHANGELOG.md" not in check.STE_DOCS
+  assert expected <= set(check.NEMOIZE_DOCS)
+  assert "CHANGELOG.md" not in check.NEMOIZE_DOCS
   assert not (check.ROOT / "CHANGELOG.md").exists()
-  assert all((check.ROOT / doc).is_file() for doc in check.STE_DOCS)
+  assert all((check.ROOT / doc).is_file() for doc in check.NEMOIZE_DOCS)
