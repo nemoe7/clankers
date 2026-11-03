@@ -225,11 +225,6 @@ def parse_args() -> argparse.Namespace:
     action="store_true",
     help="Update README measurements before validation.",
   )
-  parser.add_argument(
-    "--ste",
-    action="store_true",
-    help="Run only the ASD-STE100 lint over the covered documentation.",
-  )
   return parser.parse_args()
 
 
@@ -1055,15 +1050,6 @@ def main() -> int:
       print("README measurements already up to date.")
 
   errors: list[str] = []
-  if args.ste:
-    run_check("STE lint", errors, lambda: check_ste(errors))
-    if errors:
-      print(errors[0])
-      return 1
-    print(
-      f"STE lint passed in {time.perf_counter() - started:.2f}s: {len(STE_DOCS)} files."
-    )
-    return 0
   skills = run_check("repository", errors, lambda: validate(errors))
   run_check("STE lint", errors, lambda: check_ste(errors))
   run_check(

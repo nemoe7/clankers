@@ -104,7 +104,6 @@ def test_code_targets_skip_vendored_content():
   targets = extract_prose.code_targets()
 
   assert Path("maintenance/lint_prose.py") in targets
-  assert Path(".agents/skills/asd-ste100/scripts/ste-lint.py") not in targets
 
 
 def test_vendored_agent_skills_stay_out_of_code_targets():

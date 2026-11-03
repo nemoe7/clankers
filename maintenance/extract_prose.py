@@ -31,7 +31,6 @@ comment_lines = _PROSE.comment_lines
 AGENT_SKILLS = Path(".agents/skills")
 FIRST_PARTY_AGENT_SKILL = AGENT_SKILLS / "arena-skill"
 VENDORED_PARTS = (
-  Path(".agents/skills/asd-ste100"),
   Path("skills/refs/arena-skill/assets/markdown-it.min.js"),
   Path("skills/arena-skill/assets/markdown-it.min.js"),
   Path(".agents/skills/arena-skill/assets/markdown-it.min.js"),

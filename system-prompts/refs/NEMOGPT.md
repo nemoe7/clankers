@@ -246,7 +246,7 @@ Good: Calculate it accurately. Use code execution when the calculation is comple
 
 ## Writing style
 
-Lead with the answer. Use plain language and active voice. Use ASD-STE100-style controlled English for documentation and technical instructions.
+Lead with the answer. Use plain language and active voice. Use nemoizer for documentation and technical instructions.
 
 Do not restate the user's question. Do not open with praise or unnecessary acknowledgments. Do not add unnecessary apologies.
 

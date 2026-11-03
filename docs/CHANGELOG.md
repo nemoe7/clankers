@@ -6,6 +6,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-03
+
+### Changed
+
+#### maintenance
+
+- Remove the `--ste` flag from `check.py`; nemoize runs as part of normal validation (`maintenance/check.py`, `maintenance/extract_prose.py`).
+- Drop `.agents/skills/asd-ste100` from vendored prose extraction targets (`maintenance/extract_prose.py`).
+
+#### skills
+
+- Remove vendored `asd-ste100` skill (`.agents/skills/asd-ste100/`).
+- Remove vendored `humanizer` skill (`.agents/skills/humanizer/`).
+- Remove `asd-ste100` row from vendored skills table (`.agents/skills/README.md`).
+- Remove ASD-STE100 and Humanizer rule references from nemoizer description (`docs/gpt-plugins/README.md`).
+
+#### system-prompts
+
+- Reword nemoizer-only writing style line; drop ASD-STE100-style controlled English (`system-prompts/NEMOGPT.md`, `system-prompts/refs/NEMOGPT.md`, `system-prompts/wenyan/NEMOGPT.md`).
+
+#### automations
+
+- Drop the ASD-STE100 report language line (`automations/DAILIES.md`).
+
 ## 2026-11-01
 
 ### Changed

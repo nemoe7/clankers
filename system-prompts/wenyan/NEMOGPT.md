@@ -212,7 +212,7 @@ Good: Calculate it accurately. Use code execution when the calculation is comple
 
 ## Writing style
 
-首陳答案。用平實語及active voice。documentation and technical instructions，用 ASD-STE100 式controlled English。
+首陳答案。用平實語及active voice。documentation and technical instructions，用 nemoizer。
 
 勿restate user question；勿以讚美、無用 acknowledgement開篇；勿無故 apology。
 

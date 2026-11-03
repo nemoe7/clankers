@@ -141,7 +141,6 @@ Monitor the official stable release channel of each item below, preferring its G
 ## 4. Output
 
 - Title the report `# Dailies — YYYY-MM-DD` when it has actionable findings.
-- Write the report in ASD-STE100 Simplified Technical English.
 - Write the top-level sections exactly, in this order: `## 1. Updates`, `## 2. Wiki`, `## 3. Repo Audit`.
 - Keep Updates to its compact table plus the `### <Software>` headings section 1 allows.
 - Keep Wiki to `### Add` and `### Update/remove`, with the Add table `Repo | Section | Why | Docs`.

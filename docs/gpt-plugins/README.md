@@ -21,7 +21,7 @@ One Agent Plugins 1.0.0 collection and seven single-skill plugins for GPT-specif
 | [gpt-github](../../gpt-plugins/skills/gpt-github/SKILL.md) | Apply the owner's git and GitHub rules to every git or GitHub action. |
 | [gpt-display](../../gpt-plugins/skills/gpt-display/SKILL.md) | Choose and author supported response representations: DIL interfaces, source bindings, charts, maps, host actions, and Mermaid diagrams. |
 | [gpt-question](../../gpt-plugins/skills/gpt-question/SKILL.md) | Ask for needed user input with supported interactive forms and visible custom answers. |
-| [nemoizer](../../skills/nemoizer/SKILL.md) | Write and edit prose, comments, and documentation with ASD-STE100 and Humanizer rules, and audit code comments and tests. |
+| [nemoizer](../../skills/nemoizer/SKILL.md) | Write and edit prose, comments, and documentation, and audit code comments and tests. |
 
 ## Edit a skill
 

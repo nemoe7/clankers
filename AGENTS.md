@@ -158,7 +158,7 @@ Read these first:
 - markdownlint covers `rules/**/*.md` — 11 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`.
   - **MD060 enabled**, **MD013 disabled**.
 - Python: Ruff, configured by `pyproject.toml`, which owns the selection and the pinned version; run `ruff format` before other local gates.
-- Prose style: write and edit the documentation prose of this repository (`docs/` and every `README.md`) with `nemoizer` (`skills/nemoizer/scripts/nemoizer`), falling back to ASD-STE100 (`.agents/skills/asd-ste100/scripts/ste-lint.py`) and Humanizer when `nemoizer` is unavailable; both linters MUST pass on changed text.
+- Prose style: write and edit the documentation prose of this repository (`docs/` and every `README.md`) with `nemoizer` (`skills/nemoizer/scripts/nemoizer`), falling back to ASD-STE100 and Humanizer when `nemoizer` is unavailable; both linters MUST pass on changed text.
   - Rules, skills and agent-facing files such as this one stay outside the linter's scope.
   - A copy of a third-party file stays outside it too, because the copy belongs to its upstream: no rewrite of a vendored file, and no path into the gate for one.
 
