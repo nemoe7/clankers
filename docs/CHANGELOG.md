@@ -21,6 +21,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Remove the `--ste` flag from `check.py`. Nemoize runs as part of normal validation (`maintenance/check.py`, `maintenance/extract_prose.py`).
 - Drop `.agents/skills/asd-ste100` from vendored prose extraction targets (`maintenance/extract_prose.py`).
 - Remove the obsolete `--ste` CI step because repo validation checks covered docs (`.github/workflows/ci.yml`).
+- Use fenced clause diff blocks instead of proposal tables (`maintenance/amendment-template.md`, `AGENTS.md`).
 
 #### skills
 

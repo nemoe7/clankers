@@ -2,7 +2,7 @@
 
 Use a short filename in the heading, such as `ARENA.md` or `nuu/SKILL.md`. Always edit baseline `refs` files first, then squash approved lines into live copies. Render `approve`, `reject`, and `custom` with native option controls when the harness supports them.
 
-```markdown
+````markdown
 ## <filename.ext> - <clause-name>
 
 Citations:
@@ -10,9 +10,13 @@ Citations:
 
 Failure: <one sentence stating the failure this amendment prevents.>
 
-| Line | Diff | Reason |
-| --- | --- | --- |
-| <N> | <unchanged text ~~removed~~ <mark>inserted</mark>> | <one sentence stating what changes.> |
+```diff
+@@ -<old-line>,1 +<new-line>,1 @@
+-<exact old clause>
++<exact new clause>
+```
+
+Reason: <one sentence stating what changes.>
 
 Final clause:
 <exact final clause without diff markup or backticks>
@@ -20,4 +24,4 @@ Final clause:
 - approve
 - reject
 - custom
-```
+````

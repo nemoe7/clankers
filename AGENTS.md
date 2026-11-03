@@ -93,14 +93,14 @@ Read these first:
 - MUST name the failure each proposed amendment prevents.
 - Apply this section's AGENTS.md proposal and approval requirements only to `rules/**/CORE.md`; other AGENTS.md files are exempt.
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
-- Before editing a clause, follow maintenance/amendment-template.md and show one <filename.ext> - <clause-name> section per clause. Put one Line | Diff | Reason row per changed line.
-  - Put `Final clause:` with the exact final clause verbatim below its table, without diff markup, backticks, or deleted text; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
-  - In Diff, keep unchanged wording verbatim, strike only removed text with ~~...~~, highlight only inserted text with `<mark>...</mark>` (or `==...==` on Arena), and omit change labels.
-  - Omit only unchanged context with `...`.
+- Before editing a clause, follow maintenance/amendment-template.md and show one <filename.ext> - <clause-name> section per clause with a fenced `diff` block per changed clause.
+  - Put `Final clause:` with the exact final clause verbatim below its `diff` block, without diff markup, backticks, or deleted text; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
+  - In each `diff` block, prefix removed lines with `-` and inserted lines with `+`; keep unchanged context verbatim, and omit change labels.
+  - Omit only unchanged context; never replace changed clause text with `...`.
   - Never wrap clauses in backticks in proposals, acks, and reports.
   - Each clause takes approve, reject, or custom (rendered as fielded report options on Arena).
-  - Put its options directly under its clause, and start a new table for the next clause under the same file heading.
-  - Put it above form fields; a form without it is not a proposal.
+  - Put its options directly under its clause, and start a new fenced `diff` block for the next clause under the same file heading.
+  - Put each clause's `diff` block, Reason, and Final clause above the form fields; a form without them is not a proposal.
   - List per-clause Citations: sub-items as `<rules/GUIDELINES.md or system-prompts/GUIDELINES.md>, Section <N> <Title>: "<guideline rule text>"` and `Failure:`.
   - Code changes need no proposal; keep them lean.
 - Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
@@ -116,7 +116,7 @@ Read these first:
 - For skills, restrict this section's clause-proposal and approval requirements to first-party agent-facing text; unchanged third-party copies are exempt.
 - Every clause change takes a proposal on its initial refs wording, owner-supplied text included; the compressed live mirrors and platform copies follow the approved line.
 - A custom answer on a clause takes a fresh proposal of the new wording; the line lands only after that proposal is approved.
-- Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
+- Report at the level the user approves from — the clause change and why, not a full implementation patch; the fenced `diff` block describes only the proposed clause.
 - Multiple reports may coexist; reports, inboxes and receipts stay uncommitted and are NEVER pushed.
 
 ## Budgets
