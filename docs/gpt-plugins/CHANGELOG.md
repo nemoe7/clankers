@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [1.10.30]
+
+### Fixed
+
+- `skills/nemoizer/scripts/`: Bound source scans and subprocesses, force UTF-8 output, and honor repository-root exclusions.
+
 ## [1.10.29]
 
 ### Added
