@@ -48,6 +48,8 @@ extend-exclude = [
   "!skills/**/README.md",
   "rules/**",
   "**/*.min.js",
+  "skills/nuu/data/vendor",
+  "skills/refs/nuu/data/vendor",
 ]
 
 [[tool.nemoizer.files]]

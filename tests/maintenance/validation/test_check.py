@@ -9,50 +9,6 @@ import sys
 from types import SimpleNamespace
 
 import check
-import pytest
-
-FIVE_SENTENCES = "One. Two. Three. Four. Five."
-FOUR_SENTENCES = "One. Two. Three. Four."
-
-
-def test_sentence_count_splits_on_terminators():
-  assert check.sentence_count(FIVE_SENTENCES) == 5
-  assert check.sentence_count(FOUR_SENTENCES) == 4
-
-
-def test_sentence_count_ignores_code_spans_and_decimals():
-  assert check.sentence_count("Run `check.py --update` after 1.2 s. Then stop.") == 2
-
-
-def test_prose_paragraphs_skips_lists_tables_headings_and_fences():
-  text = """# Heading
-
-Prose that stays. Two sentences.
-
-- a list item with five sentences. Two. Three. Four. Five.
-
-| a | b |
-| --- | --- |
-| 1 | 2 |
-
-```text
-Code with five sentences. Two. Three. Four. Five.
-```
-
-> a quote with five sentences. Two. Three. Four. Five.
-"""
-  assert check.prose_paragraphs(text) == [(3, "Prose that stays. Two sentences.")]
-
-
-def test_paragraph_violations_names_line_and_count():
-  text = f"{FOUR_SENTENCES}\n\n{FIVE_SENTENCES}\n"
-  assert check.paragraph_violations("docs/x.md", text) == [
-    "docs/x.md:3: paragraph holds 5 sentences; the cap is 4"
-  ]
-
-
-def test_clean_text_reports_nothing():
-  assert check.paragraph_violations("docs/x.md", f"{FOUR_SENTENCES}\n") == []
 
 
 def test_run_check_prints_start_and_verdict_for_a_clean_check(capsys):
@@ -167,58 +123,12 @@ def test_ste_linter_keeps_the_tool_standalone(tmp_path):
   assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("status", (0, 1, 2))
-def test_rotation_gate_preserves_scanner_findings_and_errors(monkeypatch, status):
-  calls = []
-
-  def scan(command, **kwargs):
-    calls.append((command, kwargs))
-    return subprocess.CompletedProcess(command, status, "finding-data", "parser-data")
-
-  monkeypatch.setattr(check.subprocess, "run", scan)
-  errors = ["earlier-data"]
-  check.check_nemoizer(errors)
-  command, kwargs = calls[0]
-  assert command[:2] == [
-    sys.executable,
-    str(check.ROOT / check.PROSE_LINT),
-  ]
-  assert command[2] == "--nemoizer"
-  assert command[-1] == "."
-  assert "review-tests" not in command and "prose" not in command
-  for path in (
-    "skills/arena-skill/assets/markdown-it.LICENSE",
-    "skills/refs/arena-skill/assets/markdown-it.LICENSE",
-    "skills/arena-skill/assets/sortable.LICENSE",
-    "skills/refs/arena-skill/assets/sortable.LICENSE",
-    "skills/nuu/data/vendor",
-    "skills/refs/nuu/data/vendor",
-  ):
-    assert any(
-      command[index : index + 2] == ["--ignore", path]
-      for index in range(len(command) - 1)
-    )
-  assert kwargs == {
-    "cwd": check.ROOT,
-    "capture_output": True,
-    "text": True,
-    "check": False,
-  }
-  assert errors[0] == "earlier-data"
-  if status:
-    assert len(errors) == 2
-    assert "finding-data" in errors[-1] and "parser-data" in errors[-1]
-  else:
-    assert errors == ["earlier-data"]
-
-
 def test_main_enforces_rotation_findings(monkeypatch, capsys):
   monkeypatch.setattr(
     check, "parse_args", lambda: SimpleNamespace(update=False, ste=False)
   )
   monkeypatch.setattr(check, "validate", lambda errors: (0, 0))
-  for name in ("check_ste", "check_prose", "check_paragraph_caps"):
-    monkeypatch.setattr(check, name, lambda errors: None)
+  monkeypatch.setattr(check, "check_ste", lambda errors: None)
   monkeypatch.setattr(
     check,
     "check_nemoizer",

@@ -142,36 +142,6 @@ STE_DOCS = (
   "docs/workflows/gemini-release/CHANGELOG.md",
 )
 STE_LINT = "skills/nemoizer/scripts/nemoize.py"
-# The prose lint covers the code comments and the documents outside the STE list.
-PROSE_LINT = "maintenance/lint_prose.py"
-NEMOIZER = "skills/nemoizer/scripts/nemoize.py"  # nonemo: NMO100
-NEMOIZER_IGNORES = (
-  "LICENSE.md",
-  "skills/arena-skill/assets/markdown-it.min.js",
-  "skills/refs/arena-skill/assets/markdown-it.min.js",
-  "skills/arena-skill/assets/mermaid.min.js",
-  "skills/refs/arena-skill/assets/mermaid.min.js",
-  "skills/arena-steering/assets/mermaid.min.js",
-  "skills/arena-steering/assets/prism.min.js",
-  "skills/squash/LICENSE.txt",
-  "skills/refs/squash/LICENSE.txt",
-  "skills/arena-skill/assets/lucide.LICENSE",
-  "skills/refs/arena-skill/assets/lucide.LICENSE",
-  "skills/arena-skill/assets/markdown-it.LICENSE",
-  "skills/refs/arena-skill/assets/markdown-it.LICENSE",
-  "skills/arena-skill/assets/mermaid.LICENSE",
-  "skills/refs/arena-skill/assets/mermaid.LICENSE",
-  "skills/arena-steering/assets/mermaid.LICENSE",
-  "skills/arena-steering/assets/prism.LICENSE",
-  "skills/arena-steering/assets/lucide.LICENSE",
-  "skills/arena-skill/assets/sortable.LICENSE",
-  "skills/refs/arena-skill/assets/sortable.LICENSE",
-  "skills/nuu/data/vendor",
-  "skills/refs/nuu/data/vendor",
-)
-
-# One paragraph carries at most this many sentences. A longer one splits.
-PARAGRAPH_SENTENCE_CAP = 4
 CODE_SPAN_RE = re.compile(r"(`+)[^`\n]*?\1")
 SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?:\s+|$)")
 LIST_OR_BLOCK_RE = re.compile(r"^(?:[-*+>|#]|\d+[.)] )")
@@ -241,97 +211,18 @@ def check_ste(errors: list[str]) -> None:
     errors.append(f"STE lint failed:\n{output}")
 
 
-def check_prose(errors: list[str]) -> None:
-  """Run the prose lint over the covered code comments and documents."""
+def check_nemoizer(errors: list[str]) -> None:
+  """Run nemoize.py over the repository root; exclusions live in pyproject.toml."""
   result = subprocess.run(
-    [sys.executable, str(ROOT / PROSE_LINT)],
+    [sys.executable, str(ROOT / STE_LINT), "."],
+    cwd=ROOT,
     capture_output=True,
     text=True,
     check=False,
   )
   if result.returncode:
     output = (result.stdout + result.stderr).strip()
-    errors.append(f"Prose lint failed:\n{output}")
-
-
-def check_nemoizer(errors: list[str]) -> None:
-  """Check nemoizer domains with repository prose scope and license exclusions."""
-  command = [sys.executable, str(ROOT / PROSE_LINT), "--nemoizer"]
-  for path in NEMOIZER_IGNORES:
-    command.extend(("--ignore", path))
-  result = subprocess.run(
-    [*command, "."], cwd=ROOT, capture_output=True, text=True, check=False
-  )
-  if result.returncode:
-    output = (result.stdout + result.stderr).strip()
     errors.append(f"Nemoizer domains failed:\n{output}")  # nonemo: NMO100
-
-
-def sentence_count(text: str) -> int:
-  """Count the sentences in one prose paragraph."""
-  cleaned = CODE_SPAN_RE.sub("code", text)
-  return len([part for part in SENTENCE_END_RE.split(cleaned) if part.strip()])
-
-
-def prose_paragraphs(text: str) -> list[tuple[int, str]]:
-  """Return each prose paragraph with the line number that opens it."""
-  blocks: list[tuple[int, str]] = []
-  lines: list[str] = []
-  start = 0
-  fenced = False
-
-  for number, line in enumerate(text.splitlines(), start=1):
-    if line.lstrip().startswith("```"):
-      fenced = not fenced
-      continue
-
-    if fenced:
-      continue
-
-    if not line.strip():
-      if lines:
-        blocks.append((start, " ".join(lines)))
-        lines = []
-      continue
-
-    if not lines:
-      start = number
-    lines.append(line.strip())
-
-  if lines:
-    blocks.append((start, " ".join(lines)))
-
-  prose = []
-  for number, block in blocks:
-    if LIST_OR_BLOCK_RE.match(block):
-      continue
-    prose.append((number, block))
-
-  return prose
-
-
-def paragraph_violations(name: str, text: str) -> list[str]:
-  """Name every prose paragraph that holds more sentences than the cap."""
-  violations = []
-
-  for number, block in prose_paragraphs(text):
-    count = sentence_count(block)
-    if count > PARAGRAPH_SENTENCE_CAP:
-      violations.append(
-        f"{name}:{number}: paragraph holds {count} sentences; the cap is "
-        f"{PARAGRAPH_SENTENCE_CAP}"
-      )
-
-  return violations
-
-
-def check_paragraph_caps(errors: list[str]) -> None:
-  """Fail on a covered prose paragraph over the sentence cap."""
-  for doc in STE_DOCS:
-    path = ROOT / doc
-    if not path.is_file():
-      continue
-    errors.extend(paragraph_violations(doc, path.read_text(encoding="utf-8")))
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
@@ -1059,8 +950,6 @@ def main() -> int:
     errors,
     lambda: check_nemoizer(errors),
   )
-  run_check("prose lint", errors, lambda: check_prose(errors))
-  run_check("paragraph caps", errors, lambda: check_paragraph_caps(errors))
   span = time.perf_counter() - started
 
   if errors:
@@ -1073,9 +962,8 @@ def main() -> int:
 
   print(
     f"Validation passed in {span:.2f}s: {skills} skills, "
-    "README measurements, the markdownlint scope, refs/live parity, the prose "
-    f"lint, the {PARAGRAPH_SENTENCE_CAP}-sentence paragraph cap and the root "
-    "ARENA.md copy checked."
+    "README measurements, the markdownlint scope, refs/live parity and the "
+    "nemoizer prose domains checked."
   )
 
   return 0

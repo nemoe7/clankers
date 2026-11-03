@@ -170,10 +170,7 @@ MODULE_TESTS = {
     "tests/skills/arena-skill/arena-egress-proxy/test_arena_proxy.py",
     "tests/skills/arena-skill/arena-preview-proxy/test_preview_proxy.py",
   ),
-  "Repository Prose and Validation": (
-    "tests/maintenance/validation/test_lint_prose.py",
-    "tests/maintenance/validation/test_check.py",
-  ),
+  "Repository Prose and Validation": ("tests/maintenance/validation/test_check.py",),
 }
 ARENA_SKILL_PATHS = (
   "skills/refs/arena-skill",
@@ -240,8 +237,6 @@ MODULE_PATHS = {
   ),
   "Repository Prose and Validation": (
     "maintenance/check.py",
-    "maintenance/lint_prose.py",
-    "maintenance/extract_prose.py",
     "pyproject.toml",
     ".markdownlint*",
     "README.md",
