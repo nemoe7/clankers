@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.14]
+
+### Fixed
+
+- Scan files in parallel with a 10 second per-file cap, report skipped files, and print pytest-style progress dots (`scripts/nemoize.py`).
+- Feed Node subprocesses UTF-8 and cap each call at 10 seconds (`scripts/prose.py`).
+- Match exclusion patterns against the config root so a subdirectory target keeps them (`scripts/nemoize.py`).
+
 ## [0.1.13]
 
 ### Added

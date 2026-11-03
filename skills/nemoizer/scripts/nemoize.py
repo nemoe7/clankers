@@ -8,12 +8,15 @@ import configparser
 import contextlib
 import fnmatch
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 import tokenize
 import tomllib
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 try:
@@ -478,7 +481,7 @@ SKIP_DIRS = {
   "out",
 }
 SKIP_PATHS = (
-  ".agents/skills",
+  ".agents",
   "arena-state",
   "AGENTS.md",
   "**/AGENTS.md",
@@ -910,10 +913,13 @@ def walk(targets, ignores):
         yield path
       continue
     root = path if path.is_dir() else Path(".")
+    # Exclusion patterns are rooted at the config's project root, never at the walk target.
+    # A subdirectory target keeps the same relative paths.
+    skip_root = ACTIVE_CONFIG.get("root") or root
     candidates = [
       candidate
       for candidate in sorted(root.rglob("*"))
-      if candidate.is_file() and not skipped(candidate, root, ignores)
+      if candidate.is_file() and not skipped(candidate, skip_root, ignores)
     ]
     ignored_set = git_ignored(root, candidates)
     for candidate in candidates:
@@ -3083,6 +3089,11 @@ def is_test_file(path, text, helpers):
 
 def main(argv=None):
   global ACTIVE_CONFIG, BASE_CONFIG
+  # Windows consoles default to cp1252. Force UTF-8 output so findings with any
+  # decoded character print instead of crashing the report.
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   argv = list(sys.argv[1:] if argv is None else argv)
   if argv[:1] == ["prose"]:
     return prose_main(argv[1:])
@@ -3166,15 +3177,20 @@ def main(argv=None):
     return 0
   errors, tests = [], []
   helpers = {Path(path).resolve() for path in test_helpers}
-  for path in walk([*targets, *test_helpers], arguments.ignore):
+  files = list(walk([*targets, *test_helpers], arguments.ignore))
+  total = len(files)
+
+  def process_one(path):
+    result = {"test": None, "error": None, "rows": [], "text": None}
     text = text_file(path)
+    result["text"] = text
     try:
       if is_test_file(path, text or "", helpers):
-        tests.append(str(path))
+        result["test"] = str(path)
       if text is None:
-        continue
+        return result
       file_cfg = file_config(path, text)
-      rows = source_prose(
+      result["rows"] = source_prose(
         path,
         text,
         context
@@ -3194,7 +3210,79 @@ def main(argv=None):
       RuntimeError,
       RecursionError,
     ) as error:
-      errors.append(f"{path}: {type(error).__name__}: {error}")
+      result["error"] = f"{path}: {type(error).__name__}: {error}"
+    return result
+
+  results = {}
+  skipped = []
+  workers = min(8, (os.cpu_count() or 4))
+  file_timeout = 10.0
+  pending = {}
+  next_index = 0
+
+  def submit_more(count):
+    nonlocal next_index
+    for _ in range(count):
+      if next_index >= len(files):
+        return
+      future = pool.submit(process_one, files[next_index])
+      pending[future] = (files[next_index], time.monotonic() + file_timeout)
+      next_index += 1
+
+  pool = ThreadPoolExecutor(max_workers=workers)
+  submit_more(workers)
+  done_count = 0
+  while pending:
+    timeout = max(
+      min(deadline for _, deadline in pending.values()) - time.monotonic(), 0
+    )
+    done, _ = wait(list(pending), timeout=timeout, return_when=FIRST_COMPLETED)
+    now = time.monotonic()
+    expired = [
+      future
+      for future, (_, deadline) in pending.items()
+      if future not in done and deadline <= now
+    ]
+    for future in done | set(expired):
+      path = pending[future][0]
+      del pending[future]
+      if future in expired:
+        skipped.append(path)
+      else:
+        try:
+          results[path] = future.result()
+        except Exception as error:
+          results[path] = {
+            "test": None,
+            "error": f"{path}: {type(error).__name__}: {error}",
+            "rows": [],
+            "text": None,
+          }
+      done_count += 1
+      print(".", end="", file=sys.stderr, flush=True)
+      if done_count % 25 == 0 or done_count == total:
+        print(f" [{done_count * 100 // total:>3}%]", file=sys.stderr, flush=True)
+      submit_more(1)
+  if skipped:
+    print(
+      "\nSkipped (no result within 10s):\n" + "\n".join(str(path) for path in skipped),
+      file=sys.stderr,
+    )
+  pool.shutdown(wait=False)
+  for path in files:
+    result = results.get(path) or {
+      "test": None,
+      "error": None,
+      "rows": [],
+      "text": None,
+    }
+    if result["test"]:
+      tests.append(result["test"])
+    if result["error"]:
+      errors.append(result["error"])
+      continue
+    text = result["text"]
+    if text is None:
       continue
     lines = text.splitlines()
     findings.extend(
@@ -3206,7 +3294,7 @@ def main(argv=None):
         lines[row["line"] - 1] if 0 < row["line"] <= len(lines) else None,
         status=row.get("status"),
       )
-      for row in rows
+      for row in result["rows"]
     )
     if arguments.audit:
       findings.extend(docs_drift_findings(path, text, ACTIVE_CONFIG.get("root")))
