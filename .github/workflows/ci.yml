@@ -61,10 +61,6 @@ jobs:
         run: |
           node --check skills/arena-skill/assets/app.js
 
-      # The covered list lives in maintenance/check.py (STE_DOCS), shared with the local gate.
-      - name: Lint Covered Docs
-        run: python maintenance/check.py --ste
-
       - name: Check Workflow Set
         run: python maintenance/workflows/gate_workflows.py
 

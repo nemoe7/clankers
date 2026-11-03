@@ -20,6 +20,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Exclude the retired arena-skill trees, its tests, prompt-fill text, archive changelog, and markdown outside READMEs under automations, system-prompts, and gpt-plugins (`pyproject.toml`).
 - Remove the `--ste` flag from `check.py`. Nemoize runs as part of normal validation (`maintenance/check.py`, `maintenance/extract_prose.py`).
 - Drop `.agents/skills/asd-ste100` from vendored prose extraction targets (`maintenance/extract_prose.py`).
+- Remove the obsolete `--ste` CI step because repo validation checks covered docs (`.github/workflows/ci.yml`).
 
 #### skills
 
