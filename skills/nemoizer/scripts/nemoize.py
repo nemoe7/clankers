@@ -890,9 +890,11 @@ def git_ignored(root, candidates):
       input="\0".join(rel_map),
       capture_output=True,
       text=True,
+      encoding="utf-8",
+      errors="replace",
       check=False,
     )
-  except OSError:
+  except (OSError, UnicodeError):
     return set()
   if proc.returncode not in (0, 1):
     return set()
@@ -2923,6 +2925,8 @@ def javascript_pairs(text):
     input=text,
     capture_output=True,
     text=True,
+    encoding="utf-8",
+    errors="replace",
     timeout=NODE_TIMEOUT,
     check=False,
   )
