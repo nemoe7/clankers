@@ -142,7 +142,6 @@ def test_main_enforces_rotation_findings(monkeypatch, capsys):
 def test_ste_docs_cover_moved_module_docs_and_changelogs():
   expected = {
     "docs/CHANGELOG.md",
-    "docs/archive/CHANGELOG.md",
     "docs/arena-skill/README.md",
     "docs/arena-skill/CHANGELOG.md",
     "docs/nemoizer/README.md",
@@ -161,6 +160,7 @@ def test_ste_docs_cover_moved_module_docs_and_changelogs():
     "docs/workflows/gemini-release/CHANGELOG.md",
   }
   assert expected <= set(check.NEMOIZE_DOCS)
+  assert "docs/archive/CHANGELOG.md" not in check.NEMOIZE_DOCS
   assert "CHANGELOG.md" not in check.NEMOIZE_DOCS
   assert not (check.ROOT / "CHANGELOG.md").exists()
   assert all((check.ROOT / doc).is_file() for doc in check.NEMOIZE_DOCS)
