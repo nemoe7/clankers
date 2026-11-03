@@ -24,6 +24,10 @@ This log has no Unreleased section.
 
 - `pre.py`, `cli.py`: Flag blocked inbox pipes, sleeps, and commit-content checks separately. Keep each flag pending until acknowledged.
 
+- `pre.py`, `cli.py`: Store command-pattern count and threshold-block policy as editable boolean pairs while keeping immediate guards separate.
+
+- `bash_probe.py`, `cli.py`: When `ARENA_BASH_PROBE` is set, publish unique full Bash lines in a live counted/blocked table. Keep first verdicts and raw input in ignored state.
+
 - `SKILL.md`: Check related upcoming task titles and scopes before publishing a report.
 
 - `server.py`, `services.py`, `store.py`: Unpublish flagged reports while keeping task links and answers. Store CLI report source paths for the flag note.

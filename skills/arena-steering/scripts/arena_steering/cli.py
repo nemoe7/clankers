@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
-from . import __version__
+from . import __version__, bash_probe
 from . import pre as pre_mod
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
@@ -322,13 +322,36 @@ def main(
       return 0
     if cmd == "gate":
       parsed = gate_p.parse_args(cmd_args)
-      return _run_gate(messages, parsed, stdout)
+      verdict = _run_gate(messages, parsed, stdout)
+      if os.environ.get("ARENA_BASH_PROBE") is not None:
+        _observe_bash_line(
+          resolved_state_dir,
+          store,
+          reports,
+          parsed.line,
+          counted=False,
+          blocked=verdict == pre_mod.BLOCK,
+          out=stdout,
+        )
+      return verdict
     if cmd == "pre":
       parsed = pre_p.parse_args(cmd_args)
+      counted_out: list[bool] = []
       try:
-        return _run_pre(parsed, messages, store, stdout)
+        verdict = _run_pre(parsed, messages, store, stdout, counted_out)
       except (OSError, sqlite3.Error) as exc:
-        return _pre_state_unavailable(parsed, str(exc), stdout)
+        verdict = _pre_state_unavailable(parsed, str(exc), stdout)
+      if parsed.shell and os.environ.get("ARENA_BASH_PROBE") is not None:
+        _observe_bash_line(
+          resolved_state_dir,
+          store,
+          reports,
+          parsed.line or parsed.command_text,
+          counted=bool(counted_out and counted_out[0]),
+          blocked=verdict == pre_mod.BLOCK,
+          out=stdout,
+        )
+      return verdict
     if cmd == "skills":
       skills_p.parse_args(cmd_args)
       return _run_skills(stdout)
@@ -927,11 +950,31 @@ def _run_pre_route(
   return pre_mod.END_CALL
 
 
+def _observe_bash_line(
+  state_dir: Path,
+  store: SqliteStore,
+  reports: ReportService,
+  line: str,
+  *,
+  counted: bool,
+  blocked: bool,
+  out: TextIO,
+) -> None:
+  try:
+    bash_probe.record(
+      state_dir, store, reports, command=line, counted=counted, blocked=blocked
+    )
+  except Exception as exc:
+    # Reporting must never turn an allowed command into a block or undo a block.
+    print(f"BASH REPORT FAILED: {exc}", file=out)
+
+
 def _run_pre(
   parsed: argparse.Namespace,
   messages: MessageService,
   store: SqliteStore,
   out: TextIO,
+  counted_out: list[bool] | None = None,
 ) -> int:
   """Run the pre-command pipeline and return its verdict."""
   routed = os.environ.get("ARENA_STEER_ROUTE") == "1"
@@ -1015,14 +1058,13 @@ def _run_pre(
     # The shell evals this line, so a later command in the same shell skips
     # the steps that already ran.
     print(f'_arena_preview_done="{" ".join(result.done)}"', file=out)
-  if (
-    pending_ids
-    and parsed.shell
-    and "gate" not in ctx.done
-    and not ctx.is_inbox_recovery()
-    and not (ctx.routed or ctx.is_arena_maintenance())
-  ):
+  countable = bool(
+    parsed.shell and "gate" not in ctx.done and pre_mod.bash_command_policy(ctx)[0]
+  )
+  if pending_ids and countable:
     _bump_call_count(store)
+  if counted_out is not None:
+    counted_out.append(countable)
   if result.route is not None:
     return _run_pre_route(result.route, parsed.line or parsed.command_text, store, out)
   if (

@@ -230,6 +230,40 @@ class PreContext:
     return parts[-1] if parts else text.strip()
 
 
+# Count means eligible for the pending-inbox budget. Block means the six-call
+# gate applies at its limit. Unconditional guards, including pending pushes,
+# still run separately before this policy.
+BASH_COMMAND_POLICY: dict[str, tuple[bool, bool]] = {
+  "python3": (True, True),
+  "python": (True, True),
+  "standalone mkdir": (True, False),
+  "inbox recovery": (False, False),
+  "arena utility": (False, False),
+  "routed background": (False, False),
+  "*": (True, True),
+}
+
+
+def bash_command_policy(ctx: PreContext) -> tuple[bool, bool]:
+  """Classify one Bash line without weakening the unconditional guards."""
+  if ctx.routed:
+    return BASH_COMMAND_POLICY["routed background"]
+  if ctx.is_arena_maintenance():
+    return BASH_COMMAND_POLICY["arena utility"]
+  if ctx.is_inbox_recovery():
+    return BASH_COMMAND_POLICY["inbox recovery"]
+  if ctx.is_standalone_mkdir():
+    return BASH_COMMAND_POLICY["standalone mkdir"]
+  pieces = ctx.pieces()
+  if len(pieces) == 1 and pieces[0][1] == ";":
+    words = command_words(pieces[0][0])
+    if words:
+      key = Path(words[0]).name
+      if key in BASH_COMMAND_POLICY:
+        return BASH_COMMAND_POLICY[key]
+  return BASH_COMMAND_POLICY["*"]
+
+
 def embedded_pieces(words: list[str]) -> list[tuple[list[str], str]]:
   """Read the command string passed to a shell's -c option, if present."""
   if not words or Path(words[0]).name not in SHELL_NAMES:
@@ -660,9 +694,11 @@ class InboxGate:
   name = "gate"
 
   def applies(self, ctx: PreContext) -> bool:
-    if not ctx.pending_ids or ctx.is_inbox_recovery() or ctx.is_standalone_mkdir():
+    if not ctx.pending_ids:
       return False
-    return ctx.is_push() or not (ctx.routed or ctx.is_arena_maintenance())
+    if ctx.is_push():
+      return True
+    return bash_command_policy(ctx)[1]
 
   def run(self, ctx: PreContext) -> PreResult:
     if ctx.is_push():
