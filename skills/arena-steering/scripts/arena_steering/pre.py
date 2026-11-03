@@ -693,10 +693,12 @@ class InboxGate:
   name = "gate"
 
   def applies(self, ctx: PreContext) -> bool:
+    if ctx.pending_ids and ctx.is_push():
+      return True
+    if ctx.is_arena_maintenance():
+      return False
     if not ctx.pending_ids:
       return False
-    if ctx.is_push():
-      return True
     return bash_command_policy(ctx)[1]
 
   def run(self, ctx: PreContext) -> PreResult:

@@ -329,6 +329,28 @@ def test_arena_platform_shells_do_not_spend_inbox_call_budget(
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
 
 
+def test_port_probe_bypasses_inbox_gate_even_if_policy_would_block(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  probe = pre.PreContext(
+    line=pre.ARENA_PORT_PROBE,
+    command="command -v ss",
+    pending_ids=["pending"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  monkeypatch.setattr(pre, "bash_command_policy", lambda _ctx: (True, True))
+  assert not pre.InboxGate().applies(probe)
+
+  push = pre.PreContext(
+    line="git push origin topic",
+    command="git push origin topic",
+    pending_ids=["pending"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  monkeypatch.setattr(pre, "bash_command_policy", lambda _ctx: (False, False))
+  assert pre.InboxGate().applies(push)
+
+
 def test_exact_arena_process_probe_skips_block_and_call_count(
   _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
