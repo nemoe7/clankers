@@ -1,6 +1,6 @@
 [tool.pytest.ini_options]
 # One root `pytest` runs every Python test. Product `gate_*.py` files stay gates, not tests.
-# Every run splits across the workers, local and CI both, so the config is the single source.
+# Every run splits across the workers, local, and CI both, so the config is the single source.
 addopts = "-n auto"
 testpaths = [
   "tests",
@@ -50,6 +50,19 @@ extend-exclude = [
   "**/*.min.js",
   "skills/nuu/data/vendor",
   "skills/refs/nuu/data/vendor",
+  "docs/archive/CHANGELOG.md",
+  "skills/arena-skill/**",
+  "skills/refs/arena-skill/**",
+  "tests/skills/arena-skill/**",
+  "tests/skills/arena-preview-proxy/**",
+  "automations/**/*.md",
+  "!automations/**/README.md",
+  "system-prompts/**/*.md",
+  "!system-prompts/**/README.md",
+  "gpt-plugins/**/*.md",
+  "!gpt-plugins/**/README.md",
+  "userscripts/arena-prompt-fill.txt",
+  "userscripts/refs/arena-prompt-fill.txt",
 ]
 
 [[tool.nemoizer.files]]

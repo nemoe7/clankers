@@ -12,7 +12,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Remove the `--ste` flag from `check.py`; nemoize runs as part of normal validation (`maintenance/check.py`, `maintenance/extract_prose.py`).
+- Print each failed check's findings under its FAIL line. Rename the STE lint check to Nemoize and its constants (`maintenance/check.py`).
+- Decode every `check.py` subprocess as UTF-8. Compare the markdownlint scope on POSIX separators so the check holds on Windows (`maintenance/check.py`).
+- Nemoizer scans files in parallel with a 10 second per-file cap, reports skipped files, and prints progress dots (`skills/nemoizer/scripts/nemoize.py`, `skills/nemoizer/scripts/prose.py`).
+- Feed Node subprocesses UTF-8 and cap each call at 10 seconds (`skills/nemoizer/scripts/prose.py`).
+- Match nemoizer exclusion patterns against the config root so a subdirectory target keeps them (`skills/nemoizer/scripts/nemoize.py`).
+- Exclude the retired arena-skill trees, its tests, prompt-fill text, archive changelog, and markdown outside READMEs under automations, system-prompts, and gpt-plugins (`pyproject.toml`).
+- Remove the `--ste` flag from `check.py`. Nemoize runs as part of normal validation (`maintenance/check.py`, `maintenance/extract_prose.py`).
 - Drop `.agents/skills/asd-ste100` from vendored prose extraction targets (`maintenance/extract_prose.py`).
 
 #### skills
@@ -24,7 +30,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### system-prompts
 
-- Reword nemoizer-only writing style line; drop ASD-STE100-style controlled English (`system-prompts/NEMOGPT.md`, `system-prompts/refs/NEMOGPT.md`, `system-prompts/wenyan/NEMOGPT.md`).
+- Reword nemoizer-only writing style line. Drop ASD-STE100-style controlled English (`system-prompts/NEMOGPT.md`, `system-prompts/refs/NEMOGPT.md`, `system-prompts/wenyan/NEMOGPT.md`).
 
 #### automations
 
