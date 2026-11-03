@@ -6,6 +6,10 @@ This log has no Unreleased section.
 
 ## [2.2.1]
 
+### Added
+
+- `blocked_bash.py`, `cli.py`, `scripts/install.sh`: Append unredacted blocked Bash calls to permission-restricted local JSONL, including failed hook pushes.
+
 ### Changed
 
 - `cli.py`: Limit task lists to IDs and titles while single-task inspection keeps scope, links, and details.

@@ -20,6 +20,7 @@ from typing import TextIO
 
 from . import __version__
 from . import pre as pre_mod
+from .blocked_bash import append_blocked_bash
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
 from .models import MESSAGE_ID_RE, Message, Report, ReportAnswer, Task
@@ -282,16 +283,21 @@ def main(
     group_parsers[cmd].print_help(file=stdout)
     return 0
 
+  resolved_state_dir: Path | None = None
   try:
     resolved_state_dir = resolve_state_dir()
     if cmd == "pre" and not (resolved_state_dir / "state.sqlite3").is_file():
       parsed = pre_p.parse_args(cmd_args)
-      return _pre_state_unavailable(parsed, "state database is missing", stdout)
+      return _pre_state_unavailable(
+        parsed, "state database is missing", stdout, state_dir=resolved_state_dir
+      )
     store, messages, tasks, reports = open_services(resolved_state_dir)
   except (OSError, sqlite3.Error) as exc:
     if cmd == "pre":
       parsed = pre_p.parse_args(cmd_args)
-      return _pre_state_unavailable(parsed, str(exc), stdout)
+      return _pre_state_unavailable(
+        parsed, str(exc), stdout, state_dir=resolved_state_dir
+      )
     print(f"Steer error: {exc}", file=stderr)
     return 1
   try:
@@ -322,13 +328,15 @@ def main(
       return 0
     if cmd == "gate":
       parsed = gate_p.parse_args(cmd_args)
-      return _run_gate(messages, parsed, stdout)
+      return _run_gate(messages, parsed, resolved_state_dir, stdout)
     if cmd == "pre":
       parsed = pre_p.parse_args(cmd_args)
       try:
         return _run_pre(parsed, messages, store, stdout)
       except (OSError, sqlite3.Error) as exc:
-        return _pre_state_unavailable(parsed, str(exc), stdout)
+        return _pre_state_unavailable(
+          parsed, str(exc), stdout, state_dir=resolved_state_dir
+        )
     if cmd == "skills":
       skills_p.parse_args(cmd_args)
       return _run_skills(stdout)
@@ -814,10 +822,37 @@ def _bump_call_count(store: SqliteStore) -> int:
     return count
 
 
-def _pre_state_unavailable(parsed: argparse.Namespace, reason: str, out: TextIO) -> int:
+def _audit_blocked_bash(
+  state_dir: Path, *, line: str, command: str, blocked_by: str, out: TextIO
+) -> None:
+  """Keep a failed audit write from allowing a blocked shell command."""
+  try:
+    append_blocked_bash(state_dir, line=line, command=command, blocked_by=blocked_by)
+  except OSError as exc:
+    print(f"BLOCK AUDIT FAILED: {exc}", file=out)
+
+
+def _pre_state_unavailable(
+  parsed: argparse.Namespace,
+  reason: str,
+  out: TextIO,
+  *,
+  state_dir: Path | None = None,
+) -> int:
   """Keep work open while state is unreadable, but refuse an unverified push."""
   ctx = pre_mod.PreContext(line=parsed.line, command=parsed.command_text)
   if ctx.is_push():
+    if parsed.shell:
+      if state_dir is None:
+        print("BLOCK AUDIT FAILED: state directory unavailable.", file=out)
+      else:
+        _audit_blocked_bash(
+          state_dir,
+          line=parsed.line,
+          command=parsed.command_text,
+          blocked_by="state-unavailable",
+          out=out,
+        )
     print(f"PUSH BLOCKED: steering state unavailable ({reason}).", file=out)
     return pre_mod.BLOCK
   print(f"STATE UNAVAILABLE: pre-command gate skipped ({reason}).", file=out)
@@ -969,6 +1004,14 @@ def _run_pre(
     session_ids=session_ids,
   )
   result = pre_mod.run_pipeline(ctx)
+  if result.verdict == pre_mod.BLOCK and parsed.shell:
+    _audit_blocked_bash(
+      Path(store.db_path).parent,
+      line=parsed.line,
+      command=parsed.command_text,
+      blocked_by=result.blocked_by,
+      out=out,
+    )
   for message in result.messages:
     print(message, file=out)
   if (
@@ -1021,7 +1064,18 @@ def _run_pre(
   if pending_ids and countable:
     _bump_call_count(store)
   if result.route is not None:
-    return _run_pre_route(result.route, parsed.line or parsed.command_text, store, out)
+    routed_verdict = _run_pre_route(
+      result.route, parsed.line or parsed.command_text, store, out
+    )
+    if routed_verdict == pre_mod.BLOCK and parsed.shell:
+      _audit_blocked_bash(
+        Path(store.db_path).parent,
+        line=parsed.line,
+        command=parsed.command_text,
+        blocked_by="route",
+        out=out,
+      )
+    return routed_verdict
   if (
     ctx.shell
     and not pending_ids
@@ -1032,11 +1086,20 @@ def _run_pre(
   return result.verdict
 
 
-def _run_gate(messages: MessageService, parsed: argparse.Namespace, out: TextIO) -> int:
+def _run_gate(
+  messages: MessageService, parsed: argparse.Namespace, state_dir: Path, out: TextIO
+) -> int:
   """Refuse a command while a message or report answer waits for an acknowledgement."""
   waiting = messages.pending_ids()
   if not waiting:
     return 0
+  _audit_blocked_bash(
+    state_dir,
+    line=parsed.line,
+    command=parsed.line,
+    blocked_by="gate-command",
+    out=out,
+  )
   if parsed.push:
     print(
       "PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox.",

@@ -115,7 +115,18 @@ _steer_gate() {
     *)
       printf 'STEER WARNING: gate exited %s; work may continue.\n' "$status" >&2
       case "$command $_steer_line" in
-        *"git push"*) printf 'PUSH BLOCKED: steering gate failed.\n' >&2; exit 130 ;;
+        *"git push"*)
+          printf 'PUSH BLOCKED: steering gate failed.\n' >&2
+          if [ -n "${_steer_repo_root:-}" ]; then
+            local audit_script="$_steer_repo_root/.agents/skills/arena-steering/scripts/arena_steering/blocked_bash.py"
+            [ -f "$audit_script" ] || audit_script="$_steer_repo_root/skills/arena-steering/scripts/arena_steering/blocked_bash.py"
+            if [ -f "$audit_script" ] && \
+              python3 "$audit_script" "$_steer_repo_root/arena-state" "$_steer_line" "$command" >&2; then
+              exit 130
+            fi
+          fi
+          printf 'BLOCK AUDIT FAILED: unavailable hook fallback.\n' >&2
+          exit 130 ;;
       esac
       ;;
   esac

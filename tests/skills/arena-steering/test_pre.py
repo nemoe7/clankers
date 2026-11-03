@@ -186,6 +186,101 @@ def test_the_gate_counts_calls_before_it_blocks() -> None:
   assert str(pre.GATE_THRESHOLD) in " ".join(late.messages)
 
 
+def test_blocked_bash_probe_records_every_guard_without_redaction(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  line = "sleep 60 && printf 'literal=keep me Ω\nstill here'"
+  assert _run("pre", "-l", line, "-c", "sleep 60", "-s", "bash")[0] == pre.BLOCK
+  assert (
+    _run("pre", "-l", "steer read | cat", "-c", "steer read", "-s", "bash")[0]
+    == pre.BLOCK
+  )
+  assert (
+    _run(
+      "pre", "-l", "git push origin topic", "-c", "git push origin topic", "-s", "bash"
+    )[0]
+    == pre.BLOCK
+  )
+
+  audit_path = _isolate_state / "blocked-bash.jsonl"
+  assert not (audit_path.stat().st_mode & 0o077)
+  rows = [
+    json.loads(row) for row in audit_path.read_text(encoding="utf-8").splitlines()
+  ]
+  assert [row["blocked_by"] for row in rows] == ["sleep", "inbox-pipe", "gate"]
+  assert rows[0]["line"] == line and rows[0]["command"] == "sleep 60"
+  assert rows[1]["line"] == "steer read | cat"
+  assert rows[2]["line"] == "git push origin topic"
+  assert all(row["at"].endswith("Z") for row in rows)
+  assert _run("pre", "-l", "ss -ltn", "-c", "ss -ltn", "-s", "bash")[0] == pre.CONTINUE
+  assert len(audit_path.read_text(encoding="utf-8").splitlines()) == len(rows)
+
+
+def test_blocked_audit_write_failure_still_blocks_shell(
+  _isolate_state: Path, tmp_path: Path
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  target = tmp_path / "untouched.txt"
+  target.write_text("untouched", encoding="utf-8")
+  (_isolate_state / "blocked-bash.jsonl").symlink_to(target)
+  code, out = _run("pre", "-l", "sleep 60", "-c", "sleep 60", "-s", "bash")
+  assert code == pre.BLOCK and "BLOCK AUDIT FAILED" in out
+  assert target.read_text(encoding="utf-8") == "untouched"
+
+
+def test_missing_state_push_writes_block_audit(_isolate_state: Path) -> None:
+  _isolate_state.mkdir()
+  line = "git push origin topic"
+  code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.BLOCK and "PUSH BLOCKED" in out
+  rows = [
+    json.loads(row)
+    for row in (_isolate_state / "blocked-bash.jsonl")
+    .read_text(encoding="utf-8")
+    .splitlines()
+  ]
+  assert [(row["line"], row["blocked_by"]) for row in rows] == [
+    (line, "state-unavailable")
+  ]
+
+
+def test_failed_routed_bash_writes_block_audit(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Ready", acked=True)
+
+  def fail_route(*_args: object, **_kwargs: object) -> None:
+    raise ValueError("helper unavailable")
+
+  monkeypatch.setattr(cli, "_start_detached_run", fail_route)
+  line = "pytest -q"
+  code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.BLOCK and "RUN BLOCKED" in out
+  rows = [
+    json.loads(row)
+    for row in (_isolate_state / "blocked-bash.jsonl")
+    .read_text(encoding="utf-8")
+    .splitlines()
+  ]
+  assert [(row["line"], row["blocked_by"]) for row in rows] == [(line, "route")]
+
+
+def test_direct_gate_writes_block_audit(_isolate_state: Path) -> None:
+  _seed(_isolate_state, "Pending work")
+  code, out = _run("gate", "-l", "printf test")
+  assert code == 1 and "BASH BLOCKED" in out
+  rows = [
+    json.loads(row)
+    for row in (_isolate_state / "blocked-bash.jsonl")
+    .read_text(encoding="utf-8")
+    .splitlines()
+  ]
+  assert [(row["line"], row["blocked_by"]) for row in rows] == [
+    ("printf test", "gate-command")
+  ]
+
+
 def test_six_call_block_hides_pending_ids_but_keeps_recovery_steps() -> None:
   pending_ids = ["ab1234", "cd5678"]
   result = pre.run_pipeline(
@@ -1334,6 +1429,58 @@ def test_installer_exit_hook_preserves_prior_trap_and_call_status(
   assert (
     "--rc 0" in (home / "post-exit.log").read_text(encoding="utf-8").splitlines()[-1]
   )
+
+
+def test_installer_failed_gate_logs_a_blocked_push(tmp_path: Path) -> None:
+  root = Path(__file__).resolve().parents[3]
+  project = tmp_path / "project with spaces"
+  scripts = project / ".agents" / "skills" / "arena-steering" / "scripts"
+  shutil.copytree(root / "skills" / "arena-steering" / "scripts", scripts)
+  shutil.copytree(
+    root / "skills" / "arena-steering" / "references", scripts.parent / "references"
+  )
+  subprocess.run(["git", "init", "--quiet", "-b", "main", str(project)], check=True)
+  home = tmp_path / "home with spaces"
+  python = home / ".agents" / ".steer-venv" / "bin" / "python"
+  python.parent.mkdir(parents=True)
+  python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+  python.chmod(0o755)
+  env = {**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin"}
+  installed = subprocess.run(
+    ["bash", str(scripts / "install.sh")],
+    cwd=project,
+    env=env,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert installed.returncode == 0, installed.stderr
+  command = home / ".local" / "bin" / "steer"
+  command.write_text('#!/bin/sh\n[ "$1" = pre ] && exit 1\nexit 0\n', encoding="utf-8")
+  command.chmod(0o755)
+  shell = subprocess.run(
+    [
+      "bash",
+      "-c",
+      'source "$HOME/.bash_profile"; git() { printf push-ran; }; git push origin topic',
+    ],
+    cwd=project,
+    env=env,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert shell.returncode == pre.BLOCK
+  assert "push-ran" not in shell.stdout
+  rows = [
+    json.loads(row)
+    for row in (project / "arena-state" / "blocked-bash.jsonl")
+    .read_text(encoding="utf-8")
+    .splitlines()
+  ]
+  assert len(rows) == 1 and rows[0]["blocked_by"] == "hook-unavailable"
+  assert "git push origin topic" in rows[0]["line"]
+  assert rows[0]["command"] == "git push origin topic"
 
 
 def test_installer_enforces_commit_messages_without_a_runtime_spec(
