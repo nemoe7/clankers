@@ -52,7 +52,7 @@ def test_release_pipeline():
     Path("binary").write_bytes(b"\0\1\2\3")
     git("add", ".")
     git("commit", "-q", "-m", "feat: next change")
-    git("commit", "-q", "-m", "feat: merge side")
+    git("merge", "--no-ff", "side", "-m", "feat: merge side")
     git("tag", "-a", "v2", "-m", "annotated target")
     target = release.tag_sha("v2")
     git("update-ref", "refs/remotes/origin/main", target)
