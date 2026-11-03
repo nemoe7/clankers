@@ -297,11 +297,12 @@ export function renderMessagesView(container, state, handlers) {
                 .join("")}</div>`
             : "";
           const dotState = stateDotForStatus(msg.status);
+          const status = escapeHtml(msg.status);
+          const stateLabel = escapeHtml(`${msg.hidden ? "Hidden message. " : ""}Status: ${msg.status}`);
           const iso = escapeHtml(msg.modified_at || "");
           const rel = escapeHtml(relativeTime(msg.modified_at));
           const extraFlags = [];
           if (!msg.blocking) extraFlags.push("checkpoint");
-          if (msg.hidden) extraFlags.push("hidden");
           const flagsSuffix = extraFlags.length
             ? ` · ${escapeHtml(extraFlags.join(", "))}`
             : "";
@@ -340,7 +341,7 @@ export function renderMessagesView(container, state, handlers) {
               ${acksHtml}
               ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
               <p class="receipt">
-                <span class="state-dot" data-state="${dotState}" title="Status: ${escapeHtml(msg.status)}"></span>
+                <span class="state-dot" data-state="${dotState}" role="img" aria-label="${stateLabel}"${msg.status === "seen" ? "" : ` title="Status: ${status}"`}></span>
                 <code class="msg-id receipt-id" data-msg-id="${escapeHtml(msg.id)}" data-reply-selected="${replySelected ? "true" : "false"}" title="Reply to message. Shift+Click copies ID">${escapeHtml(msg.id)}</code>
                 · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${parentsSuffix}${flagsSuffix}${filesSuffix}${tasksSuffix}
               </p>

@@ -4,6 +4,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.2.1]
+
+### Changed
+
+- `cli.py`: Limit task lists to IDs and titles while single-task inspection keeps scope, links, and details.
+
+- `assets/messages-view.js`: Remove hidden and seen status text from message receipts. Keep state names available to screen readers and retain other status tooltips.
+
+### Fixed
+
+- `pre.py`, `scripts/install.sh`: Register DEBUG after login setup and keep approved utility shells unblocked during EXIT cleanup. Recheck pending pushes.
+
 ## [2.2.0]
 
 ### Added
@@ -33,8 +45,6 @@ This log has no Unreleased section.
 - `store.py`, `server.py`: Export and merge deletion tombstones for messages, tasks, and reports. Keep the later edit or deletion for each ID.
 
 ### Changed
-
-- `cli.py`: Limit task lists to IDs and titles while single-task inspection keeps scope, links, and details.
 
 - `scripts/install.sh`: Initialize the default SQLite store during installation so pre-command gates work immediately. Keep existing store data on reinstall.
 
@@ -75,8 +85,6 @@ This log has no Unreleased section.
 - `server.py`: List only uploads referenced by surviving state. After an accepted synced deletion, remove orphaned files with no surviving references, and retain staged files that were never referenced.
 
 ### Fixed
-
-- `pre.py`, `scripts/install.sh`: Register DEBUG after login setup and keep approved utility shells unblocked during EXIT cleanup. Recheck pending pushes.
 
 - `pre.py`, `cli.py`, `scripts/install.sh`: Avoid a second inbox check during shell exit for a standalone push admitted before a note arrived. Keep mixed pushes guarded and refresh the managed gate in existing profiles.
 

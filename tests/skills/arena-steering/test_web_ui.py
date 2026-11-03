@@ -929,6 +929,49 @@ assert.match(container.innerHTML, /linked-task/);
   assert result.returncode == 0, result.stderr
 
 
+def test_message_receipts_hide_redundant_status_text_but_name_state() -> None:
+  script = r"""
+import assert from 'node:assert/strict';
+import { renderMessagesView } from './skills/arena-steering/assets/messages-view.js';
+globalThis.document = { activeElement: null };
+const container = {
+  innerHTML: '',
+  querySelector() { return null; },
+  querySelectorAll() { return []; },
+  addEventListener() {},
+};
+renderMessagesView(container, {
+  showHidden: true,
+  messages: [
+    {id: 'aa0001', body: 'Hidden seen', status: 'seen', hidden: true, blocking: false},
+    {id: 'aa0002', body: 'Seen', status: 'seen', hidden: false, blocking: true},
+    {id: 'aa0003', body: 'Sent', status: 'sent', hidden: false, blocking: false},
+  ],
+}, {});
+const card = id => container.innerHTML.match(
+  new RegExp(`<li class="message" data-msg-id="${id}"[\\s\\S]*?</li>`)
+)?.[0];
+const hidden = card('aa0001'), seen = card('aa0002'), sent = card('aa0003');
+assert.ok(hidden && seen && sent);
+assert.match(hidden, /data-hidden="true"/);
+assert.match(hidden, /role="img" aria-label="Hidden message. Status: seen"/);
+assert.doesNotMatch(hidden, /· hidden|title="Status: seen"/);
+assert.match(hidden, /· checkpoint/);
+assert.match(seen, /role="img" aria-label="Status: seen"/);
+assert.doesNotMatch(seen, /title="Status: seen"/);
+assert.match(sent, /role="img" aria-label="Status: sent" title="Status: sent"/);
+assert.match(sent, /· checkpoint/);
+"""
+  result = subprocess.run(
+    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
+    cwd=SKILL_DIR.parents[1],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
+
+
 def test_image_lightbox_assets() -> None:
   index = (ASSETS_DIR / "index.html").read_text(encoding="utf-8")
   app = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
