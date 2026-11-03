@@ -120,24 +120,6 @@ _steer_gate() {
       ;;
   esac
 }
-_steer_previous=$(trap -p DEBUG)
-case $_steer_previous in
-  *arena-steering-gate-trap*) ;;
-  *)
-    if [ -n "$_steer_previous" ]; then
-      # Bash quotes trap -p output, so its original action stays one argument.
-      eval "_steer_previous_parts=( ${_steer_previous#trap -- } )"
-      _steer_previous_action=${_steer_previous_parts[0]}
-      unset _steer_previous_parts
-      printf -v _steer_hook '%s\n%s' "$_steer_previous_action" '_steer_gate : # arena-steering-gate-trap'
-    else
-      _steer_hook='_steer_gate : # arena-steering-gate-trap'
-    fi
-    trap "$_steer_hook" DEBUG
-    unset _steer_hook _steer_previous_action
-    ;;
-esac
-unset _steer_previous
 EOF
 fi
 EXIT_MARKER="# arena-steering-exit"
@@ -186,6 +168,32 @@ updated = text[:start] + os.environ["STEER_GATE_BLOCK"] + "\n\n" + text[end:]
 if updated != text:
   profile.write_text(updated, encoding="utf-8")
 PY
+
+DEBUG_MARKER="# arena-steering-debug"
+if ! grep -qxF "$DEBUG_MARKER" "$PROFILE"; then
+  cat >> "$PROFILE" <<'EOF'
+
+# arena-steering-debug
+_steer_previous=$(trap -p DEBUG)
+case $_steer_previous in
+  *arena-steering-gate-trap*) unset _steer_previous ;;
+  *)
+    if [ -n "$_steer_previous" ]; then
+      # Bash quotes trap -p output, so its original action stays one argument.
+      eval "_steer_previous_parts=( ${_steer_previous#trap -- } )"
+      _steer_previous_action=${_steer_previous_parts[0]}
+      unset _steer_previous_parts
+      printf -v _steer_hook '%s\n%s' "$_steer_previous_action" '_steer_gate : # arena-steering-gate-trap'
+    else
+      _steer_hook='_steer_gate : # arena-steering-gate-trap'
+    fi
+    unset _steer_previous _steer_previous_action
+    # Keep the DEBUG registration last: following cleanup commands could block platform probes.
+    trap "$_steer_hook" DEBUG
+    ;;
+esac
+EOF
+fi
 
 mkdir -p "$GIT_HOOKS" || fail "cannot create $GIT_HOOKS"
 cat > "$GIT_HOOK" <<'COMMIT_MSG_HOOK' || fail "cannot write $GIT_HOOK"

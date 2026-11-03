@@ -159,7 +159,12 @@ class PreContext:
     return any(word in text for word in words)
 
   def is_push(self) -> bool:
-    return any(remote_git_push(words) for words in _line_commands(self))
+    return any(
+      remote_git_push(words)
+      for source in (self.line, self.command)
+      if source
+      for words in _line_commands(PreContext(line=source))
+    )
 
   def is_arena_maintenance(self) -> bool:
     return arena_maintenance_call(self.line, self.command)
@@ -1114,6 +1119,9 @@ def run_pipeline(ctx: PreContext) -> PreResult:
     ):
       continue
     if not step.applies(ctx):
+      if step.name == "gate" and ctx.is_arena_maintenance():
+        # An exact utility shell still runs profile cleanup before EXIT.
+        finished.append(step.name)
       continue
     result = step.run(ctx)
     messages.extend(result.messages)

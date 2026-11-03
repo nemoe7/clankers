@@ -74,6 +74,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`, `scripts/install.sh`: Register DEBUG after login setup and keep approved utility shells unblocked during EXIT cleanup. Recheck pending pushes.
+
 - `pre.py`, `cli.py`, `scripts/install.sh`: Avoid a second inbox check during shell exit for a standalone push admitted before a note arrived. Keep mixed pushes guarded and refresh the managed gate in existing profiles.
 
 - `pre.py`: Exempt exact Arena process and port probes from inbox blocking and call counts. Recognize standalone `ss` and `netstat` with any flags while keeping altered mixed lines guarded.

@@ -231,6 +231,40 @@ def test_arena_platform_shells_do_not_spend_inbox_call_budget(
   code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.CONTINUE, out
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  assert '_arena_preview_done="gate"' in out
+
+
+@pytest.mark.parametrize(
+  ("line", "command", "cleanup"),
+  (
+    ("/bin/bash -lc ss -ltnH", "ss -ltnH", "[ -f ~/.profile ]"),
+    ("/bin/bash -lc netstat -ltnp", "netstat -ltnp", "unset _steer_hook"),
+    ("/bin/bash -lc source ~/.profile", "source ~/.profile", "[ -f ~/.profile ]"),
+    (
+      "/bin/bash -lc 'arena-workspace read /home/user/project/README.md'",
+      "arena-workspace read /home/user/project/README.md",
+      "unset _steer_hook",
+    ),
+  ),
+)
+def test_exact_maintenance_shell_skips_its_cleanup_without_widening_the_match(
+  _isolate_state: Path, line: str, command: str, cleanup: str
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
+  assert code == pre.CONTINUE, out
+  assert '_arena_preview_done="gate"' in out
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  blocked, out = _run("pre", "-l", line, "-c", cleanup, "-s", "bash")
+  assert blocked == pre.BLOCK, out
+  count_after_block = _count(_isolate_state)
+  assert count_after_block == str(pre.GATE_THRESHOLD + 1)
+  code, out = _run("pre", "-l", line, "-c", cleanup, "-s", "bash", "--done", "gate")
+  assert code == pre.CONTINUE, out
+  assert _count(_isolate_state) == count_after_block
 
 
 def test_port_probe_bypasses_inbox_gate_even_if_policy_would_block(
@@ -253,6 +287,15 @@ def test_port_probe_bypasses_inbox_gate_even_if_policy_would_block(
   )
   monkeypatch.setattr(pre, "bash_command_policy", lambda _ctx: (False, False))
   assert pre.InboxGate().applies(push)
+  nested_push = pre.PreContext(
+    line="/bin/bash -lc ss -ltnH",
+    command="git push origin topic",
+    done=("gate",),
+    pending_ids=["pending"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert pre.InboxGate().applies(nested_push)
+  assert pre.run_pipeline(nested_push).verdict == pre.BLOCK
 
 
 def test_exact_arena_process_probe_skips_block_and_call_count(
@@ -1042,6 +1085,43 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   assert "push-ran" in clear_inbox_push.stdout
 
   _seed(state_dir, "Read and acknowledge this note.")
+  for utility in ("ss", "netstat"):
+    probe = home / ".local" / "bin" / utility
+    probe.write_text('#!/bin/sh\nprintf "port-probe-ran\\n"\n', encoding="utf-8")
+    probe.chmod(0o755)
+  store, _messages, _tasks, _reports = cli.open_services(state_dir)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  for command in ("ss -ltnH", "netstat -ltnp"):
+    first_probe = subprocess.run(
+      ["bash", "-lc", command],
+      check=False,
+      cwd=outside,
+      env=env,
+      capture_output=True,
+      text=True,
+    )
+    assert first_probe.returncode == 0, first_probe.stdout + first_probe.stderr
+    assert "port-probe-ran" in first_probe.stdout
+    assert _count(state_dir) == str(pre.GATE_THRESHOLD)
+    assert command in (home / "prior-debug.log").read_text(encoding="utf-8")
+  (home / ".local" / "bin" / "netstat").write_text(
+    "#!/bin/sh\nexit 5\n", encoding="utf-8"
+  )
+  failing_probe = subprocess.run(
+    ["bash", "-lc", "netstat -ltnp"],
+    check=False,
+    cwd=outside,
+    env=env,
+    capture_output=True,
+    text=True,
+  )
+  assert failing_probe.returncode == 5, failing_probe.stdout + failing_probe.stderr
+  assert _count(state_dir) == str(pre.GATE_THRESHOLD)
+  store, _messages, _tasks, _reports = cli.open_services(state_dir)
+  store.set_meta(pre.CALL_COUNT_META, "0")
+  store.close()
+
   pending_push = subprocess.run(
     [
       "bash",
