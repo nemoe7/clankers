@@ -1017,12 +1017,14 @@ def check_case_collisions(errors: list[str], root: Path | None = None) -> None:
 
 
 def run_check(name: str, errors: list[str], check: Callable[[], Any]) -> Any:
-  """Run one named check, print its verdict and span, and return what it reported.
+  """Run one named check, print its start and verdict, and return what it reported.
 
   Checks append errors to one shared list. Count only the errors this check adds.
+  The start line flushes immediately so a slow run shows progress as it goes.
   """
   started = time.perf_counter()
   before = len(errors)
+  print(f"== {name} ...", flush=True)
   reported = check()
   found = len(errors) - before
   span = time.perf_counter() - started

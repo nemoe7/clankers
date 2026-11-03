@@ -55,27 +55,49 @@ def test_clean_text_reports_nothing():
   assert check.paragraph_violations("docs/x.md", f"{FOUR_SENTENCES}\n") == []
 
 
-def test_run_check_prints_one_line_for_a_clean_check(capsys):
+def test_run_check_prints_start_and_verdict_for_a_clean_check(capsys):
   errors: list[str] = []
   assert check.run_check("sample", errors, lambda: "reported") == "reported"
-  line = capsys.readouterr().out.strip()
-  assert line.startswith("ok sample in ") and line.endswith("s")
+  lines = capsys.readouterr().out.strip().splitlines()
+  assert lines[0] == "== sample ..."
+  assert lines[1].startswith("ok sample in ") and lines[1].endswith("s")
 
 
-def test_run_check_names_the_check_that_found_problems(capsys):
+def test_run_check_prints_start_line_before_a_failing_check(capsys):
   errors: list[str] = []
 
   def failing() -> None:
     errors.extend(["one problem", "two problems"])
 
   assert check.run_check("sample", errors, failing) is None
-  assert capsys.readouterr().out.startswith("FAIL sample: 2 problem(s) in ")
+  out = capsys.readouterr().out
+  assert out.startswith("== sample ...\n")
+  assert "FAIL sample: 2 problem(s) in " in out
 
 
 def test_run_check_counts_only_the_problems_it_added(capsys):
   errors = ["an earlier problem"]
   check.run_check("sample", errors, lambda: errors.append("a new problem"))
-  assert capsys.readouterr().out.startswith("FAIL sample: 1 problem(s) in ")
+  out = capsys.readouterr().out
+  assert "FAIL sample: 1 problem(s) in " in out
+
+
+def test_run_check_flushes_the_start_line(monkeypatch):
+  flushed = []
+  real_stdout = sys.stdout
+
+  class Wrapper:
+    def write(self, data: str) -> int:
+      return real_stdout.write(data)
+
+    def flush(self) -> None:
+      flushed.append(True)
+      real_stdout.flush()
+
+  monkeypatch.setattr(sys, "stdout", Wrapper())
+  errors: list[str] = []
+  check.run_check("sample", errors, lambda: None)
+  assert flushed == [True]
 
 
 def test_lint_count_claims_include_root_agent_guide():
