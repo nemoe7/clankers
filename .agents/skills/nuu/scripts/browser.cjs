@@ -816,6 +816,34 @@ async function a11yChecks(page) {
       }
     }
 
+    // An overflowing dialog can hide its actions even when its own box fits the
+    // viewport. Check the action row, not scrollHeight: the body may scroll by design.
+    for (const dialog of document.querySelectorAll('dialog[open], [role="dialog"], [role="alertdialog"]')) {
+      if (!isVisible(dialog)) continue;
+      const box = dialog.getBoundingClientRect();
+      const visible = {left: Math.max(0, box.left), top: Math.max(0, box.top),
+        right: Math.min(innerWidth, box.right), bottom: Math.min(innerHeight, box.bottom)};
+      for (const actions of dialog.querySelectorAll(':scope > footer, :scope > form > footer, .modal-actions, [data-slot="actions"]')) {
+        if (actions.closest('dialog, [role="dialog"], [role="alertdialog"]') !== dialog ||
+            !isVisible(actions) || !actions.querySelector(interactiveSelector)) continue;
+        const rect = actions.getBoundingClientRect();
+        const outside = [];
+        if (rect.left < visible.left - 0.5) outside.push('left');
+        if (rect.top < visible.top - 0.5) outside.push('top');
+        if (rect.right > visible.right + 0.5) outside.push('right');
+        if (rect.bottom > visible.bottom + 0.5) outside.push('bottom');
+        if (outside.length === 0) continue;
+        findings.push({
+          rule: 'ACC203',
+          severity: 'review',
+          criterion: '2.4.11',
+          selector: selectorFor(actions),
+          bounds: boundsOf(actions),
+          evidence: `Dialog actions ${selectorFor(actions)} extend past the ${outside.join(', ')} edge of visible ${selectorFor(dialog)}`,
+        });
+      }
+    }
+
     const prevFocus = document.activeElement;
     for (const control of document.querySelectorAll(interactiveSelector)) {
       if (!isVisible(control)) continue;
@@ -1121,8 +1149,10 @@ async function run() {
   }
   const pw = dependency();
   if (!pw) return {status: 'not_checked', reason: 'playwright_unavailable', captures: []};
-  const engines = Object.entries(pw).filter(([, value]) =>
-    typeof value?.launch === 'function' && typeof value?.executablePath === 'function');
+  const engines = ['chromium', 'firefox', 'webkit']
+    .map(name => [name, pw[name]])
+    .filter(([, value]) =>
+      typeof value?.launch === 'function' && typeof value?.executablePath === 'function');
   const available = engines.map(([name, engine]) => ({name,
     executable: engine.executablePath(), available: fs.existsSync(engine.executablePath())}));
   if (request.command === 'doctor') {

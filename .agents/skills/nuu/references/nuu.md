@@ -83,5 +83,5 @@ Suppress a rule-ID finding on a line with `nonuu: <ID>` (legacy `NU*` aliases re
 - [references/recipes/live-dot.md](recipes/live-dot.md): `8x8 px` pulsing `.dot` in a fixed `16x16 px` slot, with row text naming the state.
 - [references/recipes/scroll-edge-fade.md](recipes/scroll-edge-fade.md): scroll-driven CSS edge-fade mask (`@supports (animation-timeline: scroll(self))`).
 - [references/recipes/floating-overlay-scroll-fade.md](recipes/floating-overlay-scroll-fade.md): full-bleed scroll container fade behind floating header and composer overlays.
-- [references/recipes/scrollbars.md](recipes/scrollbars.md): use a 6 px rounded thumb (`var(--scrollbar-thumb)`) in a 10 px track. Omit arrows and hover highlights unless keyboard navigation is active.
+- [references/recipes/scrollbars.md](recipes/scrollbars.md): pill-thumb scrollbar (`var(--scrollbar-thumb)`) in a `15px` track (`transparent`) with `margin: 8px 0`, `9999px` radius, no arrows, keyboard-nav hover highlights; global `*` fallback for Firefox.
 - [references/recipes/overflow-and-clipping.md](recipes/overflow-and-clipping.md): focus-ring, shadow, and tooltip anti-clipping rules.
