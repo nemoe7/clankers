@@ -1,5 +1,6 @@
 // Reports tab view with left TOC rail, center report column, and right report selector rail.
 
+import { reconcileView } from "./dom.js";
 import { escapeHtml, renderMarkdownBlock } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 
@@ -70,6 +71,7 @@ function storedValuesFor(report) {
 let mobilePickerCollapsed = false;
 let pickerScrollTop = 0;
 let activeScrollCleanup = null;
+let reportRenderEvents = null;
 
 function renderFieldBlock(field, headings, stored = null) {
   const fieldId = escapeHtml(field.id);
@@ -135,6 +137,11 @@ function renderFieldBlock(field, headings, stored = null) {
 }
 
 export function renderReportsView(container, state, handlers) {
+  reportRenderEvents?.abort();
+  reportRenderEvents = new AbortController();
+  const signal = reportRenderEvents.signal;
+  const listen = (target, type, callback, options = {}) =>
+    target?.addEventListener(type, callback, { ...options, signal });
   if (typeof activeScrollCleanup === "function") {
     activeScrollCleanup();
     activeScrollCleanup = null;
@@ -273,7 +280,7 @@ export function renderReportsView(container, state, handlers) {
     ? renderedBlocks.replace("</h1>", `</h1>${statusBlockHtml}`)
     : `<div class="prose-block"><h1>${escapeHtml(activeReport.title)}</h1>${statusBlockHtml}</div>${renderedBlocks}`;
 
-  container.innerHTML = `
+  const markup = `
     <div class="reports-layout">
       <aside id="report-toc" class="report-toc scroll-panel" aria-label="Report contents" ${headings.length ? "" : "hidden"}>
         <div class="report-toc-list">
@@ -345,6 +352,8 @@ export function renderReportsView(container, state, handlers) {
       >${ARROW_UP_SVG}</button>
     </div>
   `;
+  if (swappedReport) container.innerHTML = markup;
+  else reconcileView(container, markup);
 
   if (swappedReport) {
     container.scrollTop = 0;
@@ -389,14 +398,14 @@ export function renderReportsView(container, state, handlers) {
     }
     syncPickerScroll();
   };
-  pickerEl?.addEventListener("scroll", syncPickerScroll, { passive: true });
-  ackEl?.addEventListener("scroll", () => syncScrollEdges(ackEl), { passive: true });
+  listen(pickerEl, "scroll", syncPickerScroll, { passive: true });
+  listen(ackEl, "scroll", () => syncScrollEdges(ackEl), { passive: true });
   restorePickerScroll();
   if (swappedReport || !previousPicker) keepSelectedPickerItemVisible();
   syncScrollEdges(ackEl);
 
   const pickerToggleBtn = container.querySelector("#report-picker-toggle");
-  pickerToggleBtn?.addEventListener("click", () => {
+  listen(pickerToggleBtn, "click", () => {
     mobilePickerCollapsed = !mobilePickerCollapsed;
     if (railEl) {
       railEl.dataset.mobileCollapsed = mobilePickerCollapsed ? "true" : "false";
@@ -410,7 +419,7 @@ export function renderReportsView(container, state, handlers) {
   });
 
   const scrollTopBtn = container.querySelector("#report-scroll-top");
-  scrollTopBtn?.addEventListener("click", () => {
+  listen(scrollTopBtn, "click", () => {
     if (typeof container.scrollTo === "function") {
       container.scrollTo({ top: 0, behavior: "smooth" });
     } else {
@@ -477,13 +486,13 @@ export function renderReportsView(container, state, handlers) {
   syncScrollState();
 
   for (const btn of container.querySelectorAll("[data-report-id]")) {
-    btn.addEventListener("click", () => {
+    listen(btn, "click", () => {
       handlers.onSelectReport(btn.dataset.reportId);
     });
   }
 
   for (const link of container.querySelectorAll("[data-toc-target]")) {
-    link.addEventListener("click", (event) => {
+    listen(link, "click", (event) => {
       event.preventDefault();
       const targetId = link.dataset.tocTarget;
       tocClickLockId = targetId;
@@ -510,10 +519,10 @@ export function renderReportsView(container, state, handlers) {
     const customToggle = question.querySelector(".custom-toggle");
     const customInput = question.querySelector(".custom-text-input");
     if (!customToggle || !customInput) continue;
-    customInput.addEventListener("focus", () => {
+    listen(customInput, "focus", () => {
       customToggle.checked = true;
     });
-    customInput.addEventListener("input", () => {
+    listen(customInput, "input", () => {
       if (customInput.value.trim()) {
         customToggle.checked = true;
       }
@@ -521,7 +530,7 @@ export function renderReportsView(container, state, handlers) {
   }
 
   const copyBtn = container.querySelector("#copy-report-btn");
-  copyBtn?.addEventListener("click", async () => {
+  listen(copyBtn, "click", async () => {
     try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard
@@ -542,14 +551,14 @@ export function renderReportsView(container, state, handlers) {
   });
 
   const dismissBtn = container.querySelector("#dismiss-report-btn");
-  dismissBtn?.addEventListener("click", async () => {
+  listen(dismissBtn, "click", async () => {
     await handlers.onDismissReport(activeReport.id, dismissBtn);
   });
 
   const form = container.querySelector("#report-answer-form");
   const submitBtn = container.querySelector("#report-submit");
   const submitFloat = container.querySelector("#report-submit-float");
-  submitFloat?.addEventListener("click", () => {
+  listen(submitFloat, "click", () => {
     if (typeof form?.requestSubmit === "function") {
       form.requestSubmit(submitBtn || undefined);
     } else {
@@ -597,11 +606,11 @@ export function renderReportsView(container, state, handlers) {
     return values;
   };
 
-  form?.addEventListener("input", () => {
+  listen(form, "input", () => {
     writeDrafts(activeReport.id, collectValues());
   });
 
-  form?.addEventListener("submit", async (event) => {
+  listen(form, "submit", async (event) => {
     event.preventDefault();
     const values = collectValues();
     await handlers.onSubmitReportAnswer(activeReport.id, values);

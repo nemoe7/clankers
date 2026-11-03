@@ -44,6 +44,7 @@ EXPECTED_FONTS = (
 EXPECTED_JS_MODULES = (
   "api.js",
   "app.js",
+  "dom.js",
   "messages-view.js",
   "markdown.js",
   "modal.js",
@@ -870,7 +871,7 @@ def test_composer_upload_drop_expand_assets() -> None:
   assert "PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500" in messages_js
   assert "PASTE_ATTACHMENT_LINE_THRESHOLD = 15" in messages_js
   assert "pasted-text.txt" in messages_js
-  assert 'addEventListener("paste"' in messages_js
+  assert 'listen(msgEl, "paste"' in messages_js
   assert 'addEventListener("drop"' in messages_js
   assert 'addEventListener("dragover"' in messages_js
   assert "attachments" in messages_js
@@ -2746,6 +2747,113 @@ def test_browser_repairs_preexisting_timezone_handoff(tmp_path: Path) -> None:
           encoding="utf-8"
         ) == "Asia/Manila\n"
         page.screenshot(path=str(tmp_path / "timezone-preview.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_state_refresh_preserves_unaffected_view_controls(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="State refresh DOM preservation")
+  app.tasks.create_task("initial-work", "Work already here", details=["Review"])
+  app.reports.publish_report(
+    "draft",
+    "Draft answer",
+    '# Draft\n\n<!-- question {"id":"note","label":"Note"} -->\nNote\n',
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.clock.install()
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        observations = {}
+
+        message_draft = page.locator("#msg")
+        message_draft.fill("Unsent message draft")
+        message_draft.focus()
+        original_message = message_draft.element_handle()
+        original_composer = page.locator("#compose").element_handle()
+        app.messages.send_message(
+          "An external message", msg_id="e00001", blocking=False
+        )
+        page.clock.fast_forward(3100)
+        page.locator('.message[data-msg-id="e00001"]').wait_for()
+        observations["messages"] = {
+          "composer": original_composer.evaluate("el => el.isConnected"),
+          "draft": original_message.evaluate("el => el.isConnected"),
+          "value": message_draft.input_value(),
+          "focused": message_draft.evaluate("el => el === document.activeElement"),
+        }
+        page.screenshot(path=str(tmp_path / "messages-state-refresh.png"))
+        page.locator("#send").click()
+        page.locator(".message").filter(has_text="Unsent message draft").wait_for()
+        page.wait_for_function("document.querySelector('#msg')?.value === ''")
+        assert message_draft.evaluate("el => el === document.activeElement")
+
+        page.locator("#tab-tasks").click()
+        task_search = page.locator("#task-search")
+        task_search.fill("Work")
+        task_search.focus()
+        original_search = task_search.element_handle()
+        app.tasks.create_task(
+          "external-work", "Work from elsewhere", details=["Review"]
+        )
+        page.clock.fast_forward(3100)
+        page.locator('li.task[data-task-id="external-work"]').wait_for()
+        observations["tasks"] = {
+          "search": original_search.evaluate("el => el.isConnected"),
+          "value": task_search.input_value(),
+          "focused": task_search.evaluate("el => el === document.activeElement"),
+        }
+        page.screenshot(path=str(tmp_path / "tasks-state-refresh.png"))
+
+        page.locator("#tab-reports").click()
+        answer = page.locator(".field-text-input")
+        answer.fill("Unsaved report answer")
+        answer.focus()
+        original_answer = answer.element_handle()
+        app.reports.publish_report("other", "Other report", "# Other report")
+        page.clock.fast_forward(3100)
+        page.locator('[data-report-id="other"]').wait_for()
+        observations["reports"] = {
+          "answer": original_answer.evaluate("el => el.isConnected"),
+          "value": answer.input_value(),
+          "focused": answer.evaluate("el => el === document.activeElement"),
+        }
+        page.screenshot(path=str(tmp_path / "reports-state-refresh.png"))
+
+        assert observations == {
+          "messages": {
+            "composer": True,
+            "draft": True,
+            "value": "Unsent message draft",
+            "focused": True,
+          },
+          "tasks": {"search": True, "value": "Work", "focused": True},
+          "reports": {
+            "answer": True,
+            "value": "Unsaved report answer",
+            "focused": True,
+          },
+        }
       finally:
         browser.close()
   finally:

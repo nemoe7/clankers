@@ -6,6 +6,7 @@ import {
   renderMarkdownBlock,
 } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
+import { reconcileElement } from "./dom.js";
 import { readComposerDraft, writeComposerDraft } from "./state.js";
 
 const EYE_OPEN_SVG = `<svg class="lucide lucide-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
@@ -76,6 +77,7 @@ let draftPreviewActive = false;
 let draftPreviewSequence = 0;
 let draftPreviewCache = { text: null, html: "" };
 let dropAreaAbort = null;
+let viewEventAbort = null;
 let replyObserver = null;
 let historyResizeObserver = null;
 let historyScrollTarget = null;
@@ -186,7 +188,7 @@ function updateHistory(history, nextHistory, signatures) {
   );
   const nextChildren = Array.from(nextHistory.children);
   for (let i = 0; i < 2; i += 1) {
-    history.children[i].replaceWith(nextChildren[i]);
+    reconcileElement(history.children[i], nextChildren[i]);
   }
   const wanted = nextChildren.slice(2).map((node) => {
     const signature = signatures.get(node.dataset.msgId);
@@ -206,6 +208,11 @@ function updateHistory(history, nextHistory, signatures) {
 }
 
 export function renderMessagesView(container, state, handlers) {
+  viewEventAbort?.abort();
+  viewEventAbort = new AbortController();
+  const signal = viewEventAbort.signal;
+  const listen = (target, type, callback, options = {}) =>
+    target?.addEventListener(type, callback, { ...options, signal });
   if (historyScrollTarget && historyScrollHandler) {
     historyScrollTarget.removeEventListener("scroll", historyScrollHandler);
   }
@@ -509,7 +516,7 @@ export function renderMessagesView(container, state, handlers) {
     );
     if (canUpdate) {
       for (const selector of replaceSelectors) {
-        container.querySelector(selector).replaceWith(template.content.querySelector(selector));
+        reconcileElement(container.querySelector(selector), template.content.querySelector(selector));
       }
       updateHistory(prevHistory, nextHistory, messageSignatures);
       reusedHistory = true;
@@ -525,7 +532,7 @@ export function renderMessagesView(container, state, handlers) {
     });
   }
 
-  container.querySelector("#load-older-messages")?.addEventListener("click", () => handlers.onLoadOlderMessages?.());
+  listen(container.querySelector("#load-older-messages"), "click", () => handlers.onLoadOlderMessages?.());
   const historyEl = container.querySelector("#history");
   const logNewestBtn = container.querySelector("#log-newest");
   const logEditedBtn = container.querySelector("#log-edited");
@@ -615,14 +622,14 @@ export function renderMessagesView(container, state, handlers) {
     }
   }
 
-  logNewestBtn?.addEventListener("click", () => {
+  listen(logNewestBtn, "click", () => {
     if (!historyEl) return;
     pinnedToBottom = true;
     historyEl.scrollTo({ top: historyEl.scrollHeight, behavior: "smooth" });
     logNewestBtn.hidden = true;
   });
 
-  logEditedBtn?.addEventListener("click", () => {
+  listen(logEditedBtn, "click", () => {
     if (unreadEditedMsgId) handlers.onNavigateReference?.("message", unreadEditedMsgId);
   });
 
@@ -631,7 +638,7 @@ export function renderMessagesView(container, state, handlers) {
   }
 
   for (const chip of container.querySelectorAll("[data-remove-reply-parent]")) {
-    chip.addEventListener("click", () => {
+    listen(chip, "click", () => {
       handlers.onToggleReplyParent?.(chip.dataset.removeReplyParent);
     });
   }
@@ -639,7 +646,7 @@ export function renderMessagesView(container, state, handlers) {
   for (const chip of container.querySelectorAll(
     "[data-remove-composer-attachment]"
   )) {
-    chip.addEventListener("click", () => {
+    listen(chip, "click", () => {
       handlers.onRemoveComposerAttachment?.(
         chip.dataset.removeComposerAttachment
       );
@@ -647,17 +654,17 @@ export function renderMessagesView(container, state, handlers) {
   }
 
   for (const button of container.querySelectorAll("[data-retry-composer-attachment]")) {
-    button.addEventListener("click", () => {
+    listen(button, "click", () => {
       handlers.onRetryComposerAttachment?.(button.dataset.retryComposerAttachment);
     });
   }
 
   const attachBtn = container.querySelector("#attach-file");
   const fileInput = container.querySelector("#composer-file-input");
-  attachBtn?.addEventListener("click", () => {
+  listen(attachBtn, "click", () => {
     fileInput?.click();
   });
-  fileInput?.addEventListener("change", async () => {
+  listen(fileInput, "change", async () => {
     const files = Array.from(fileInput.files || []);
     fileInput.value = "";
     if (files.length) {
@@ -665,21 +672,21 @@ export function renderMessagesView(container, state, handlers) {
     }
   });
 
-  container.querySelector("#composer-expand")?.addEventListener("click", () => {
+  listen(container.querySelector("#composer-expand"), "click", () => {
     handlers.onToggleComposerExpanded?.();
     container.querySelector(draftPreviewActive ? "#draft-preview" : "#msg")?.focus();
   });
 
-  container.querySelector("#survey-open")?.addEventListener("click", (ev) => {
+  listen(container.querySelector("#survey-open"), "click", (ev) => {
     handlers.onOpenSurvey?.(ev.currentTarget);
   });
 
-  searchInput?.addEventListener("input", () => {
+  listen(searchInput, "input", () => {
     handlers.onSearchChange?.(searchInput.value);
   });
 
   const skipBtn = container.querySelector("#skip-poll");
-  skipBtn?.addEventListener("click", async () => {
+  listen(skipBtn, "click", async () => {
     skipPollFeedbackUntil = Date.now() + 1000;
     skipBtn.dataset.state = "good";
     skipBtn.innerHTML = CHECK_SVG;
@@ -693,7 +700,7 @@ export function renderMessagesView(container, state, handlers) {
     }, 1000);
   });
 
-  container.querySelector("#quiet-msgs")?.addEventListener("click", () => {
+  listen(container.querySelector("#quiet-msgs"), "click", () => {
     handlers.onToggleHidden?.();
   });
 
@@ -786,7 +793,7 @@ export function renderMessagesView(container, state, handlers) {
     }
   }
 
-  msgEl?.addEventListener("input", () => {
+  listen(msgEl, "input", () => {
     draftRevision += 1;
     writeComposerDraft(msgEl.value);
     clearPreviewTooltip();
@@ -795,7 +802,7 @@ export function renderMessagesView(container, state, handlers) {
   growComposer();
   if (draftPreviewActive && draftPreview) renderDraftPreview();
 
-  previewBtn?.addEventListener("click", () => {
+  listen(previewBtn, "click", () => {
     if (!draftPreview || !msgEl) return;
     if (!draftPreviewActive && !msgEl.value.trim()) {
       clearPreviewTooltip();
@@ -819,7 +826,7 @@ export function renderMessagesView(container, state, handlers) {
   });
 
   let pasteAsText = false;
-  msgEl?.addEventListener("keydown", (event) => {
+  listen(msgEl, "keydown", (event) => {
     pasteAsText = event.key.toLowerCase() === "v" && event.ctrlKey && event.shiftKey;
     if (
       event.key === "Enter" && !event.shiftKey && !event.isComposing &&
@@ -830,9 +837,9 @@ export function renderMessagesView(container, state, handlers) {
     }
   });
 
-  msgEl?.addEventListener("keyup", () => { pasteAsText = false; });
-  msgEl?.addEventListener("focusout", () => { pasteAsText = false; });
-  msgEl?.addEventListener("paste", async (event) => {
+  listen(msgEl, "keyup", () => { pasteAsText = false; });
+  listen(msgEl, "focusout", () => { pasteAsText = false; });
+  listen(msgEl, "paste", async (event) => {
     const plainPaste = pasteAsText;
     pasteAsText = false;
     if (plainPaste || state.sending) return;
@@ -901,19 +908,20 @@ export function renderMessagesView(container, state, handlers) {
         if (currentPreview) currentPreview.hidden = true;
         container.querySelector("#preview-msg")?.setAttribute("aria-pressed", "false");
         currentMsgEl.dispatchEvent(new Event("input", { bubbles: true }));
+        if (!container.hidden && currentMsgEl.isConnected) currentMsgEl.focus();
       }
     }
   }
 
-  container.querySelector("#discard-send")?.addEventListener("click", () => handlers.onDiscardPendingSend?.());
+  listen(container.querySelector("#discard-send"), "click", () => handlers.onDiscardPendingSend?.());
 
-  container.querySelector("#retry-send")?.addEventListener("click", () => {
+  listen(container.querySelector("#retry-send"), "click", () => {
     if (!pendingSend) return;
     submitPayload({ ...pendingSend.content, attachmentIds: pendingSend.attachmentIds, rawDraft: pendingSend.rawDraft }, pendingSend.rawDraft);
   });
 
   const form = container.querySelector("#form");
-  form?.addEventListener("submit", (event) => {
+  listen(form, "submit", (event) => {
     event.preventDefault();
     const submittedDraft = msgEl?.value || "";
     const text = submittedDraft.trim();

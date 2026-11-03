@@ -92,6 +92,10 @@ This log has no Unreleased section.
 
 - `assets/style.css`: Keep survey tooltips within the dialog and footer actions visible in short viewports.
 
+- `assets/dom.js`, `assets/index.html`, `assets/messages-view.js`, `assets/tasks-view.js`, `assets/reports-view.js`: Preserve live controls and focus through state updates.
+
+- `assets/messages-view.js`: Focus the cleared composer after Send.
+
 ## [2.1.0]
 
 ### Removed

@@ -1,5 +1,6 @@
 // Tasks tab view for Arena Steering (`Current`, `Upcoming`, `Finished`).
 
+import { reconcileView } from "./dom.js";
 import { escapeHtml } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 
@@ -12,6 +13,7 @@ let taskSearchQuery = "";
 let taskTypeFilter = "all";
 let visibleFinishedCount = FINISHED_TASK_PAGE_SIZE;
 const openTaskDetails = new Set();
+let taskRenderEvents = null;
 
 export function expandTaskTarget(id) {
   taskSearchQuery = "";
@@ -114,6 +116,9 @@ function renderTaskRow(task) {
 }
 
 export function renderTasksView(container, state) {
+  taskRenderEvents?.abort();
+  taskRenderEvents = new AbortController();
+  const signal = taskRenderEvents.signal;
   const prevScrollTop = container.scrollTop || 0;
   const allTasks = state.tasks || [];
 
@@ -147,7 +152,7 @@ export function renderTasksView(container, state) {
     ? `Updated <time datetime="${escapeHtml(latestModified)}" data-timestamp="${escapeHtml(latestModified)}">${escapeHtml(relativeTime(latestModified))}</time>`
     : "No task list yet.";
 
-  container.innerHTML = `
+  reconcileView(container, `
     <div class="tasks-layout">
       <div class="row tight tasks-toolbar">
         <p id="tasks-status" class="muted" role="status">${statusHtml}</p>
@@ -192,25 +197,19 @@ export function renderTasksView(container, state) {
         </ul>
       </div>
     </div>
-  `;
+  `);
 
   const searchEl = container.querySelector("#task-search");
   searchEl?.addEventListener("input", () => {
     taskSearchQuery = searchEl.value.trim().toLowerCase();
     renderTasksView(container, state);
-    const nextSearch = container.querySelector("#task-search");
-    if (nextSearch) {
-      nextSearch.focus();
-      const len = nextSearch.value.length;
-      nextSearch.setSelectionRange(len, len);
-    }
-  });
+  }, { signal });
 
   const filterEl = container.querySelector("#task-type-filter");
   filterEl?.addEventListener("change", () => {
     taskTypeFilter = filterEl.value;
     renderTasksView(container, state);
-  });
+  }, { signal });
 
   for (const detailsEl of container.querySelectorAll("details.task-details")) {
     detailsEl.addEventListener("toggle", () => {
@@ -221,7 +220,7 @@ export function renderTasksView(container, state) {
       } else {
         openTaskDetails.delete(id);
       }
-    });
+    }, { signal });
   }
 
   container.scrollTop = prevScrollTop;
