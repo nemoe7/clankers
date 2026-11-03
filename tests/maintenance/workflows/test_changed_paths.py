@@ -43,7 +43,7 @@ def init_repo(tmp_path: Path) -> Path:
     },
   )
   git(repo, "add", "-A")
-  git(repo, "commit", "-q", "-m", "base")
+  git(repo, "commit", "-q", "-m", "chore: base")
   return repo
 
 
@@ -54,7 +54,7 @@ def base_of(repo: Path) -> str:
 def commit_change(repo: Path, name: str, text: str = "changed\n") -> None:
   write(repo, {name: text})
   git(repo, "add", "-A")
-  git(repo, "commit", "-q", "-m", f"change {name}")
+  git(repo, "commit", "-q", "-m", f"chore: change {name}")
 
 
 def outputs(path: Path) -> str:
@@ -284,7 +284,7 @@ def test_renames_select_both_source_modules(tmp_path):
   target.parent.mkdir(parents=True, exist_ok=True)
   (repo / old).rename(target)
   git(repo, "add", "-A")
-  git(repo, "commit", "-q", "-m", "move source")
+  git(repo, "commit", "-q", "-m", "chore: move source")
   paths = changed_paths.changed_files(base, (), str(repo))
   assert {old, new} <= set(paths)
   assert changed_paths.module_matrix(paths) == changed_paths.module_matrix([old, new])

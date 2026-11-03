@@ -95,7 +95,7 @@ def fixture(tmp_path, scenario):
   git(seed, "init", "--quiet", "--initial-branch=main")
   (seed / "ARENA.md").write_text("old\n")
   (seed / "owner.txt").write_text(OWNER_DATA)
-  commit(seed, SUBJECT if scenario == "root" else "base")
+  commit(seed, SUBJECT if scenario == "root" else "chore: base")
   if scenario == "merge":
     git(seed, "checkout", "--quiet", "-b", "side")
     (seed / "side.txt").write_text("side\n")
