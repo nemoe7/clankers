@@ -87,7 +87,7 @@ Component and interaction patterns live in `references/recipes/`: [modal-manager
 - `references/recipes/relative-timestamps.md`: singular, plural, and compact relative timestamp table (`just now`, `Xmin ago`, `yesterday`, `last week`, `last month`, `last year`).
 - `references/recipes/scroll-edge-fade.md`: scroll-driven CSS `mask-image` edge fade (`@supports (animation-timeline: scroll(self))`).
 - `references/recipes/floating-overlay-scroll-fade.md`: full-bleed scroll container fade behind floating header and composer overlays (`backdrop-filter: blur()`, `padding-inline`, and `@supports (animation-timeline: scroll(self))`).
-- `references/recipes/scrollbars.md`: thin `6px` rounded-thumb scrollbar (`var(--scrollbar-thumb)`) in a `10px` track on `var(--bg)` without arrow buttons or hover highlights unless keyboard navigation is active.
+- `references/recipes/scrollbars.md`: pill-thumb scrollbar (`var(--scrollbar-thumb)`) in a `15px` track (`transparent`) with `margin: 8px 0`, no arrow buttons, keyboard-nav hover highlights; global `*` fallback rule for Firefox.
 - `references/recipes/overflow-and-clipping.md`: anti-clipping and anti-overlap rules (`SPC204`, `SPC205`, `ACC203`) for flex/grid rows, focus rings, sticky headers, and viewport-clamped tooltips.
 
 ## Learn
