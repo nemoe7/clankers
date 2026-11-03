@@ -34,6 +34,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `cli.py`: Limit task lists to IDs and titles while single-task inspection keeps scope, links, and details.
+
 - `scripts/install.sh`: Initialize the default SQLite store during installation so pre-command gates work immediately. Keep existing store data on reinstall.
 
 - `assets/style.css`: Apply the approved thin, flat scrollbar style in Chromium and other browsers. Remove redundant hover rules.

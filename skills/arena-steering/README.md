@@ -95,7 +95,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer ack [ID ...] MARKDOWN` | Acknowledge one or more messages or report answers with one reply. Omit IDs only when one item is pending. |
 | `steer msg list [-p PAGE] [-s SIZE]` | List message history. Page size defaults to 5 and ranges from 5 to 50. |
 | `steer msg ID` | Show a message and its acknowledgements and attachments. |
-| `steer tasks [-f] [-p PAGE]` | List upcoming tasks, or page through finished tasks with `-f`. |
+| `steer tasks [-f] [-p PAGE]` | List only IDs and titles for upcoming or finished tasks; print nothing when empty. |
 | `steer task [-d]` | Show the first unblocked upcoming task. Add `-d` or `--deets` to include details. |
 | `steer task ID` | Show a task, its details, and blocking state. |
 | `steer task new ID TITLE -d DETAIL [-T TYPE ...]` | Create an upcoming task. Repeat `-T` for ordered phases such as `-T report -T code`. Options also include `-S` scope, `-m` message, `-r` report, `-k` dependency, and `-g` gate. |

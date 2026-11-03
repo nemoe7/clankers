@@ -500,11 +500,13 @@ def test_task_answer_details_survive_report_removal_and_edits(tmp_path) -> None:
   task = reopened.get_task("renamed")
   assert task is not None and task.details == [*details, "Another detail"]
   assert task.report_ids == []
+  summary = StringIO()
+  _print_task_list([(task, False)], summary)
+  assert summary.getvalue().splitlines() == ["renamed - Updated work"]
   out = StringIO()
-  _print_task_list([(task, False)], out)
   _print_single_task(task, False, out)
   text = out.getvalue()
-  assert text.count("Choice?: A") == 2
+  assert text.count("Choice?: A") == 1
   assert first.id not in text and second.id not in text
   reopened.close()
 

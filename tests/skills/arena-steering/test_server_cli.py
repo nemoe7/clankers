@@ -51,6 +51,35 @@ def test_cli_version_flags() -> None:
   assert out.getvalue().strip() == f"steer {__version__}"
 
 
+def test_task_lists_only_titles_and_ids_but_single_task_keeps_details() -> None:
+  state_dir = cli.resolve_state_dir()
+  for args in (("tasks",), ("tasks", "--finished")):
+    code, empty, error = _run_cli(state_dir, *args)
+    assert code == 0, error
+    assert empty == ""
+  store, _, tasks, _ = cli.open_services(state_dir)
+  tasks.create_task(
+    "queued-task",
+    "Draft preview",
+    type="ops",
+    scope="Private scope",
+    details=["Long details"],
+  )
+  tasks.create_task("done-task", "Shipped", type="ops", details=["Finished details"])
+  tasks.finish_phase("done-task")
+  store.close()
+
+  code, upcoming, error = _run_cli(state_dir, "tasks")
+  assert code == 0, error
+  assert upcoming.splitlines() == ["queued-task - Draft preview"]
+  code, finished, error = _run_cli(state_dir, "tasks", "--finished")
+  assert code == 0, error
+  assert finished.splitlines() == ["done-task - Shipped"]
+  code, details, error = _run_cli(state_dir, "task", "queued-task")
+  assert code == 0, error
+  assert "Private scope" in details and "Long details" in details
+
+
 @pytest.mark.parametrize("flag", ["-h", "--help"])
 @pytest.mark.parametrize(
   ("group", "commands"),
@@ -1143,7 +1172,10 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
 
   code, out, _ = _run_cli(state_dir, "tasks")
   assert code == 0
-  assert out.index(TASK_ID_BASE) < out.index(TASK_ID_CLI)
+  assert out.splitlines() == [
+    f"{TASK_ID_BASE} - Base task",
+    f"{TASK_ID_CLI} - Build steer CLI",
+  ]
 
   code, out, _ = _run_cli(
     state_dir, "task", "mod", TASK_ID_CLI, "deets", SECOND_DETAIL_TOKEN
@@ -1220,13 +1252,11 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
 
   code, out_upcoming, _ = _run_cli(state_dir, "tasks")
   assert code == 0
-  assert f"{TASK_ID_BASE} [" not in out_upcoming
-  assert f"{TASK_ID_CLI} [" in out_upcoming
+  assert out_upcoming.splitlines() == [f"{TASK_ID_CLI} - Build steer CLI"]
 
   code, out_finished, _ = _run_cli(state_dir, "tasks", "--finished", "--page", "1")
   assert code == 0
-  assert f"{TASK_ID_BASE} [finished]" in out_finished
-  assert f"{TASK_ID_CLI} [" not in out_finished
+  assert out_finished.splitlines() == [f"{TASK_ID_BASE} - Base task"]
 
   code, out, _ = _run_cli(state_dir, "task", "rm", TASK_ID_CLI)
   assert code == 0
@@ -1982,7 +2012,7 @@ def test_attachment_message_retry_uses_original_message(tmp_path: Path) -> None:
   store.close()
 
 
-def test_cli_lists_persisted_answer_details(tmp_path: Path) -> None:
+def test_cli_single_task_keeps_persisted_answer_details(tmp_path: Path) -> None:
   from arena_steering.services import ReportService, TaskService
 
   state_dir = cli.resolve_state_dir()
@@ -2003,11 +2033,13 @@ def test_cli_lists_persisted_answer_details(tmp_path: Path) -> None:
   reports.ack_answer("decision", answer.id, "Read")
   reports.remove_report("decision")
   store.close()
-  for args in [("tasks",), ("task", "work")]:
-    code, out, err = _run_cli(state_dir, *args)
-    assert code == 0, err
-    assert "Select?: Yes" in out
-    assert answer.id not in out
+  code, summary, err = _run_cli(state_dir, "tasks")
+  assert code == 0, err
+  assert summary.splitlines() == ["work - Work"]
+  code, detail, err = _run_cli(state_dir, "task", "work")
+  assert code == 0, err
+  assert "Select?: Yes" in detail
+  assert answer.id not in detail
 
 
 def test_ack_task_rolls_back_both_on_failure(

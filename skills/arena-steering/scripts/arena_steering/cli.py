@@ -1562,26 +1562,8 @@ def _task_type_label(task: Task) -> str:
 
 
 def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
-  if not items:
-    print("Tasks: 0", file=out)
-    return
-  print(f"Tasks: {len(items)}", file=out)
-  for idx, (task, blocked) in enumerate(items, 1):
-    state_str = f"{task.status}, blocked" if blocked else task.status
-    print(
-      f"{idx}  {task.id} [{state_str}] ({_task_type_label(task)}) - {task.title}",
-      file=out,
-    )
-    if task.scope:
-      print(f"   Scope: {task.scope}", file=out)
-    if task.deps:
-      print(f"   Deps: {', '.join(task.deps)}", file=out)
-    if task.report_ids:
-      print(f"   Reports: {', '.join(task.report_ids)}", file=out)
-    if task.gate_names:
-      print(f"   Gates: {', '.join(task.gate_names)}", file=out)
-    for detail_idx, line in enumerate(task.details, 1):
-      print(f"   {detail_idx}. {line}", file=out)
+  for task, _blocked in items:
+    print(f"{task.id} - {task.title}", file=out)
 
 
 def _print_single_task(
