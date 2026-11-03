@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -14,6 +15,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+# Windows consoles default to cp1252. UTF-8 mode makes every Python child
+# emit UTF-8, so `encoding="utf-8"` readers never lose characters.
+CHILD_ENV = {**os.environ, "PYTHONUTF8": "1"}
+
 import yaml
 from markdown_it import MarkdownIt
 
@@ -21,8 +26,8 @@ ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 DOCS = ROOT / "docs"
 SKILLS = ROOT / "skills"
-# Vendored agent-facing skills live only under `.agents/skills/`, which this script deliberately never
-# reads: they are not owner skills, so they are neither checked here nor listed in `skills/README.md`.
+# Vendored agent-facing skills live only under `.agents/skills/`. This script never reads them:
+# they are not owner skills, so they are neither checked here nor listed in `skills/README.md`.
 RULES = ROOT / "rules"
 
 EXPECTED_SKILL_FIELDS = {
@@ -131,7 +136,6 @@ NEMOIZE_DOCS = (
   "rules/refs/README.md",
   "docs/gpt-plugins/README.md",
   "docs/CHANGELOG.md",
-  "docs/archive/CHANGELOG.md",
   "docs/arena-skill/CHANGELOG.md",
   "docs/nemoizer/CHANGELOG.md",
   "docs/nuu/CHANGELOG.md",
@@ -161,7 +165,7 @@ PLAIN_PAIRS = {
   "COMMIT-SPEC.txt": "COMMIT-SPEC.txt",
 }
 
-# Kilo mode overrides live under a directory on both sides, so the check pairs them by
+# Kilo mode overrides live under a directory on both sides. The check pairs them by
 # name and compares them the plain way: live compresses wording, never adds rules.
 KILO_PAIRS = ("plan.md", "code.md", "debug.md")
 
@@ -204,6 +208,9 @@ def check_nemoize(errors: list[str]) -> None:
     [sys.executable, str(ROOT / NEMOIZE), *(str(ROOT / doc) for doc in NEMOIZE_DOCS)],
     capture_output=True,
     text=True,
+    encoding="utf-8",
+    errors="replace",
+    env=CHILD_ENV,
     check=False,
   )
   if result.returncode:
@@ -212,12 +219,15 @@ def check_nemoize(errors: list[str]) -> None:
 
 
 def check_nemoizer(errors: list[str]) -> None:
-  """Run nemoize.py over the repository root; exclusions live in pyproject.toml."""
+  """Run nemoize.py over the repository root. Exclusions live in pyproject.toml."""
   result = subprocess.run(
     [sys.executable, str(ROOT / NEMOIZE), "."],
     cwd=ROOT,
     capture_output=True,
     text=True,
+    encoding="utf-8",
+    errors="replace",
+    env=CHILD_ENV,
     check=False,
   )
   if result.returncode:
@@ -351,6 +361,8 @@ def load_token_counts(paths: list[Path]) -> dict[str, int]:
         cwd=_NODE_CWD,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=True,
       )
     except (OSError, subprocess.CalledProcessError) as exc:
@@ -468,8 +480,8 @@ def strip_jsonc_comments(text: str) -> str:
 def expand_ignore_pattern(pattern: str) -> set[Path]:
   """Expand one markdownlint ignore pattern to the paths it excludes.
 
-  ``Path.glob`` resolves a trailing ``**`` to directories only, while
-  markdownlint's globby excludes everything below a matched directory, so
+  ``Path.glob`` resolves a trailing ``**`` to directories only. Markdownlint's
+  globby excludes everything below a matched directory, so
   this check expands directory matches recursively.
   """
   matched: set[Path] = set()
@@ -620,7 +632,9 @@ def check_lint_scope(errors: list[str]) -> None:
     errors.append(".markdownlint-cli2.jsonc is missing")
     return
 
-  actual = tuple(sorted(str(path.relative_to(ROOT)) for path in linted_rule_files()))
+  actual = tuple(
+    sorted(path.relative_to(ROOT).as_posix() for path in linted_rule_files())
+  )
 
   if actual != EXPECTED_LINTED:
     errors.append(
@@ -893,6 +907,8 @@ def check_case_collisions(errors: list[str], root: Path | None = None) -> None:
     ["git", "-C", str(repo_root), "ls-files"],
     capture_output=True,
     text=True,
+    encoding="utf-8",
+    errors="replace",
     check=False,
   )
   if proc.returncode != 0:
@@ -929,6 +945,12 @@ def run_check(name: str, errors: list[str], check: Callable[[], Any]) -> Any:
 
 
 def main() -> int:
+  # Windows consoles default to cp1252. Force UTF-8 output so any decoded
+  # replacement character prints instead of crashing the report.
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
+
   args = parse_args()
   started = time.perf_counter()
 

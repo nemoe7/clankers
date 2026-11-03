@@ -26,16 +26,16 @@ def test_run_check_prints_start_line_before_a_failing_check(capsys):
     errors.extend(["one problem", "two problems"])
 
   assert check.run_check("sample", errors, failing) is None
-  out = capsys.readouterr().out
-  assert out.startswith("== sample ...\n")
-  assert "FAIL sample: 2 problem(s) in " in out
+  printed = capsys.readouterr().out
+  assert printed.startswith("== sample ...\n")
+  assert "FAIL sample: 2 problem(s) in " in printed
 
 
 def test_run_check_counts_only_the_problems_it_added(capsys):
   errors = ["an earlier problem"]
   check.run_check("sample", errors, lambda: errors.append("a new problem"))
-  out = capsys.readouterr().out
-  assert "FAIL sample: 1 problem(s) in " in out
+  printed = capsys.readouterr().out
+  assert "FAIL sample: 1 problem(s) in " in printed
 
 
 def test_run_check_flushes_the_start_line(monkeypatch):
