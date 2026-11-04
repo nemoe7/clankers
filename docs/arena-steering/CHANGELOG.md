@@ -24,6 +24,8 @@ This log has no Unreleased section.
 
 - `SKILL.md`: Read attached images before acknowledgment, report missing bytes, and limit complete text reads to 4 KiB.
 
+- `SKILL.md`: Omit the task-priority flag unless the user states a priority.
+
 - `models.py`, `store.py`, `services.py`: Lock report body changes after the first answer. Explicit removal detaches task links and orphans old answers, including pending ones.
 
 - `store.py`, `services.py`: Start same-ID republication without inherited answers, and keep orphan acknowledgements from modifying new tasks.

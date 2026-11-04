@@ -50,6 +50,7 @@ steer task rm <id>
 
 - Tasks sit in a mutable queue where dependents automatically follow their task links (`links.task_ids[]`).
 - Blocking state derives automatically from unanswered `links.report_ids[]` and unfinished `links.task_ids[]`.
+- When creating a task, omit `-p` unless the user states a priority.
 
 ## Reports (`Reports`)
 
