@@ -128,8 +128,13 @@ class ReportRepository(Protocol):
   def save_message(self, message: Message) -> Message:
     """Update a shared answer message."""
 
-  def list_report_answers(self, report_id: str | None = None) -> list[ReportAnswer]:
-    """Project typed answer messages in submission order."""
+  def list_report_answers(
+    self, report_id: str | None = None, *, include_orphaned: bool = False
+  ) -> list[ReportAnswer]:
+    """Project active answers, optionally including orphans."""
+
+  def orphan_report_answers(self, report_id: str) -> None:
+    """Detach retained answers from a removed report."""
 
   def save_report_answer(self, answer: ReportAnswer) -> ReportAnswer:
     """Save one answer as a hidden message."""

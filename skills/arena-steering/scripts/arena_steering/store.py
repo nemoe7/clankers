@@ -885,9 +885,13 @@ class SqliteStore:
           )
       return True
 
-  def list_report_answers(self, report_id: str | None = None) -> list[ReportAnswer]:
-    """Project report answers from their hidden messages in submission order."""
+  def list_report_answers(
+    self, report_id: str | None = None, *, include_orphaned: bool = False
+  ) -> list[ReportAnswer]:
+    """Project active answers, optionally including orphans, in submission order."""
     where = "message_type = 'report_answer'"
+    if not include_orphaned:
+      where += " AND COALESCE(json_extract(answer_json, '$.orphaned'), 0) = 0"
     params: tuple[str, ...] = ()
     if report_id is not None:
       where += " AND json_extract(answer_json, '$.report_id') = ?"
@@ -899,6 +903,13 @@ class SqliteStore:
         params,
       ).fetchall()
       return [self._row_to_message(row).as_report_answer() for row in rows]
+
+  def orphan_report_answers(self, report_id: str) -> None:
+    """Keep submissions in the inbox while detaching them from a removed report."""
+    with self.transaction():
+      for answer in self.list_report_answers(report_id):
+        answer.orphaned = True
+        self.save_report_answer(answer)
 
   def save_report_answer(self, answer: ReportAnswer) -> ReportAnswer:
     """Store an answer as a typed hidden message."""
@@ -931,13 +942,14 @@ class SqliteStore:
       return [self._row_to_report(row) for row in rows]
 
   def delete_report(self, report_id: str) -> bool:
-    """Remove the report row while retaining its answer messages."""
+    """Remove a report while orphaning its answer messages."""
     with self.transaction():
       row = self._conn.execute(
         "SELECT modified_at FROM reports WHERE id = ?", (report_id,)
       ).fetchone()
       if row is None:
         return False
+      self.orphan_report_answers(report_id)
       self._conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
       self._stamp_deleted_row("reports", report_id, str(row["modified_at"]))
       return True

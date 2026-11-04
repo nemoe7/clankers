@@ -105,24 +105,148 @@ def test_report_answers_are_hidden_messages_with_newest_only_delivery() -> None:
   store.close()
 
 
-def test_report_answer_survives_report_deletion_and_republication() -> None:
+def test_removed_answers_stay_orphaned_after_republish() -> None:
   store = SqliteStore(":memory:")
   reports = ReportService(store, store)
   messages = MessageService(store, store, store, store)
   _publish_answer_message_report(reports)
-  answer = reports.submit_answer("decision", {"choice": "A"}, answer_id="de2001")
+  old_answer = reports.submit_answer("decision", {"choice": "A"}, answer_id="de2001")
 
-  # Simulate removal without the service's existing pending-answer guard.
-  assert store.delete_report("decision")
+  assert reports.remove_report("decision") == ["decision"]
+  assert store.list_report_answers("decision") == []
+  orphan = store.list_report_answers(include_orphaned=True)[0]
+  assert orphan.id == old_answer.id and orphan.orphaned
+  _publish_answer_message_report(reports)
+  assert reports.get_report("decision").answers == []
+  new_answer = reports.submit_answer("decision", {"choice": "B"}, answer_id="de2002")
   delivered = messages.read_pending(mark_seen=True)
   assert [
-    (report.id, report.title, item.id) for report, item in delivered["report_answers"]
-  ] == [("decision", "A decision", answer.id)]
-  assert messages.ack(answer.id, "Still available")[0] == "report_answer"
+    (report.title, answer.id) for report, answer in delivered["report_answers"]
+  ] == [
+    ("A decision", old_answer.id),
+    ("A decision", new_answer.id),
+  ]
+  assert messages.ack(old_answer.id, "Still available")[0] == "report_answer"
+  assert reports.get_report("decision").answers[0].id == new_answer.id
+  assert reports.get_report("decision").answers[0].acks == []
+  assert messages.ack(new_answer.id, "New decision")[0] == "report_answer"
+  assert reports.get_report("decision").answers[0].acks == ["New decision"]
+  store.close()
+
+
+def test_legacy_removed_report_answers_orphan_on_republication() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
   _publish_answer_message_report(reports)
-  restored = reports.get_report("decision").answers
-  assert [item.id for item in restored] == [answer.id]
-  assert restored[0].acks == ["Still available"]
+  body = reports.get_report("decision").body
+  reports.submit_answer("decision", {"choice": "A"}, answer_id="de2006")
+  with store.transaction():
+    store._conn.execute("DELETE FROM reports WHERE id = 'decision'")
+  assert [answer.id for answer in store.list_report_answers("decision")] == ["de2006"]
+
+  assert reports.publish_report("decision", "New decision", body).answers == []
+  assert store.list_report_answers("decision") == []
+  assert store.list_report_answers(include_orphaned=True)[0].orphaned
+  delivered = MessageService(store, store, store, store).read_pending(mark_seen=False)
+  assert [report.title for report, _ in delivered["report_answers"]] == ["A decision"]
+  store.close()
+
+
+def test_repeated_same_id_removal_keeps_each_pending_orphan_deliverable() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  messages = MessageService(store, store, store, store)
+  _publish_answer_message_report(reports)
+  body = reports.get_report("decision").body
+  reports.submit_answer("decision", {"choice": "A"}, answer_id="de2003")
+  reports.remove_report("decision")
+  reports.publish_report("decision", "Second", body)
+  reports.submit_answer("decision", {"choice": "B"}, answer_id="de2004")
+  reports.remove_report("decision")
+  reports.publish_report("decision", "Third", body)
+  reports.submit_answer("decision", {"choice": "A"}, answer_id="de2005")
+
+  delivered = messages.read_pending(mark_seen=False)["report_answers"]
+  assert [(report.title, answer.id) for report, answer in delivered] == [
+    ("A decision", "de2003"),
+    ("Second", "de2004"),
+    ("Third", "de2005"),
+  ]
+  messages.ack("de2003", "Old")
+  assert [answer.id for answer in reports.get_report("decision").answers] == ["de2005"]
+  assert messages.pending_ids() == ["de2004", "de2005"]
+  store.close()
+
+
+def test_answered_report_body_is_locked_but_owner_can_revise_answers() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  _publish_answer_message_report(reports)
+  body = reports.get_report("decision").body
+  first = reports.submit_answer("decision", {"choice": "A"}, answer_id="de2011")
+  with pytest.raises(ValueError, match="Cannot edit report body after an answer"):
+    reports.publish_report("decision", "Changed", body + "\nNew instructions")
+  assert reports.publish_report("decision", "Retitled", body).answers[0].id == first.id
+  reports.ack_answer("decision", first.id, "Read")
+
+  with pytest.raises(ValueError, match="Cannot edit report body after an answer"):
+    reports.publish_report("decision", "Changed", body + "\nNew instructions")
+  assert reports.get_report("decision").body == body
+  reports.publish_report("decision", "Retitled", body)
+  revised = reports.submit_answer("decision", {"choice": "B"}, answer_id="de2012")
+  assert [answer.id for answer in reports.get_report("decision").answers] == [
+    first.id,
+    revised.id,
+  ]
+  store.close()
+
+
+def test_unpublish_answered_report_detaches_task_links_without_losing_answers() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  tasks = TaskService(store, store)
+  _publish_answer_message_report(reports)
+  tasks.create_task(
+    "work", "Do work", size=3, details=["Review"], report_ids=["decision"]
+  )
+  answer = reports.submit_answer("decision", {"choice": "A"}, answer_id="de2021")
+  reports.ack_answer("decision", answer.id, "Read")
+  details = tasks.get_task("work")[0].details
+  assert details == ["Review", "Choice?: A"]
+
+  unpublished = reports.unpublish_report("decision")
+  assert unpublished.status == "dismissed"
+  assert [item.id for item in unpublished.answers] == [answer.id]
+  task = tasks.get_task("work")[0]
+  assert task.report_ids == [] and task.details == details
+  assert store.list_report_answers("decision")[0].acks == ["Read"]
+  with pytest.raises(ValueError, match="Cannot edit report body after an answer"):
+    reports.publish_report("decision", "Changed", unpublished.body + "\nNew")
+  assert reports.remove_report("decision") == ["decision"]
+  assert store.list_report_answers("decision") == []
+  assert store.list_report_answers(include_orphaned=True)[0].orphaned
+  _publish_answer_message_report(reports)
+  assert reports.get_report("decision").answers == []
+  store.close()
+
+
+def test_superseded_orphan_answers_stay_stored_without_redelivery() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store)
+  messages = MessageService(store, store, store, store)
+  _publish_answer_message_report(reports)
+  first = reports.submit_answer("decision", {"choice": "A"}, answer_id="de2031")
+  latest = reports.submit_answer("decision", {"choice": "B"}, answer_id="de2032")
+  assert reports.remove_report("decision") == ["decision"]
+  assert [answer.id for answer in store.list_report_answers(include_orphaned=True)] == [
+    first.id,
+    latest.id,
+  ]
+  assert [answer.id for _, answer in messages.read_pending()["report_answers"]] == [
+    latest.id
+  ]
+  messages.ack(latest.id, "Read")
+  assert not messages.has_pending_deliverables()
   store.close()
 
 
@@ -144,9 +268,8 @@ def test_report_answer_survives_snapshot_merge_after_report_deletion() -> None:
   ]
   assert messages.ack(answer.id, "Merged")[0] == "report_answer"
   _publish_answer_message_report(ReportService(target, target))
-  assert ReportService(target, target).get_report("decision").answers[0].acks == [
-    "Merged"
-  ]
+  assert ReportService(target, target).get_report("decision").answers == []
+  assert target.list_report_answers(include_orphaned=True)[0].acks == ["Merged"]
   source.close()
   target.close()
 
@@ -575,6 +698,9 @@ def test_task_details_keep_original_labels_after_republish(tmp_path) -> None:
   )
   answer = reports.submit_answer("decision", {"field": "A"}, answer_id="ba1001")
   reports.ack_answer("decision", answer.id, "Read")
+  assert reports.remove_report("decision") == ["decision"]
+  assert tasks.get_task("work")[0].report_ids == []
+  assert tasks.get_task("work")[0].details == ["Review", "Original label?: A"]
   reports.publish_report(
     "decision",
     "New title",
@@ -585,6 +711,8 @@ def test_task_details_keep_original_labels_after_republish(tmp_path) -> None:
       '- ( ) B <!-- option {"label": "B"} -->\n'
     ),
   )
+  assert reports.get_report("decision").answers == []
+  tasks.mod_links_add("work", "decision", link_type="report")
   second = reports.submit_answer("decision", {"field": "B"}, answer_id="ba1002")
   reports.ack_answer("decision", second.id, "Read")
   task = tasks.get_task("work")[0]
@@ -1006,11 +1134,15 @@ def test_stale_report_removal_retains_a_pending_answer() -> None:
     "answered-report"
   ]
   assert reports.remove_report("--stale") == ["answered-report"]
+  assert store.list_report_answers("answered-report") == []
+  assert store.list_report_answers(include_orphaned=True)[0].orphaned
+  assert tasks.get_task("answer-work")[0].report_ids == []
   assert "abc123" in messages.pending_ids()
   delivered = messages.read_pending(mark_seen=False)
   assert [answer.id for _, answer in delivered["report_answers"]] == ["abc123"]
   messages.ack("abc123", "Noted.")
   assert "abc123" not in messages.pending_ids()
+  assert tasks.get_task("answer-work")[0].details == ["Done"]
   store.close()
 
 

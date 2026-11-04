@@ -22,6 +22,12 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `models.py`, `store.py`, `services.py`: Lock report body changes after the first answer. Explicit removal detaches task links and orphans old answers, including pending ones.
+
+- `store.py`, `services.py`: Start same-ID republication without inherited answers, and keep orphan acknowledgements from modifying new tasks.
+
+- `services.py`: Detach task report links on a violation flag while keeping its dismissed report and answer-derived task details.
+
 - `cli.py`: Limit task lists to IDs and titles while single-task inspection keeps scope, links, and details.
 
 - `assets/messages-view.js`: Remove hidden and seen status text from message receipts. Keep state names available to screen readers and retain other status tooltips.

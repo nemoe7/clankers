@@ -125,7 +125,7 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
     store.close()
 
 
-def test_flagged_report_is_unpublished_without_losing_links_or_answers(
+def test_flagged_report_unlinks_tasks_without_losing_answers_or_details(
   tmp_path: Path,
 ) -> None:
   store = SqliteStore(tmp_path / "state.sqlite3")
@@ -151,15 +151,21 @@ def test_flagged_report_is_unpublished_without_losing_links_or_answers(
     assert status == HTTPStatus.OK and result["agent_interrupt_pending"] is True
     assert app.reports.get_report("flagged").status == "dismissed"
     assert app.tasks.get_task("waiting")[1] is False
-    assert app.tasks.get_task("waiting")[0].report_ids == ["flagged"]
+    assert app.tasks.get_task("waiting")[0].report_ids == []
+    assert app.tasks.get_task("waiting")[0].details == ["Review the answer"]
     assert app.reports.get_report("other").status == "published"
     assert [report.id for report in app.reports.list_reports()] == ["other"]
     flag = app.messages.pending_violation()
     assert flag is not None and SOURCE_FILE_UNAVAILABLE in flag.body
 
     app.messages.ack(flag.id, "Read the clause.")
+    app.tasks.create_task(
+      "answered-work", "Answered work", size=3, details=["Review"], report_ids=["other"]
+    )
     answer = app.reports.submit_answer("other", {"note": "keep"}, answer_id="aa1201")
     answer = app.reports.ack_answer("other", answer.id, "Read the answer.")
+    original_details = app.tasks.get_task("answered-work")[0].details
+    assert original_details == ["Review", "Note: keep"]
     app.reports.publish_report("other", "Other", body)
     status, _ = app.dispatch(
       "POST",
@@ -169,6 +175,8 @@ def test_flagged_report_is_unpublished_without_losing_links_or_answers(
     assert status == HTTPStatus.OK
     assert app.reports.get_report("other").status == "dismissed"
     assert app.reports.get_report("other").answers == [answer]
+    assert app.tasks.get_task("answered-work")[0].report_ids == []
+    assert app.tasks.get_task("answered-work")[0].details == original_details
     assert store.get_message(answer.id) is not None
   finally:
     store.close()

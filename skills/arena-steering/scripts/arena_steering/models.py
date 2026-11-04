@@ -209,6 +209,7 @@ class Message:
       values=dict(self.answer_data.get("values", {})),
       report_title=str(self.answer_data.get("report_title", "")),
       field_labels=dict(self.answer_data.get("field_labels", {})),
+      orphaned=self.answer_data.get("orphaned", False),
       created_at=str(self.answer_data.get("created_at", "")),
       status=self.status,
       acks=list(self.acks),
@@ -238,6 +239,7 @@ class Message:
         "values": dict(answer.values),
         "field_labels": dict(answer.field_labels),
         "created_at": answer.created_at,
+        "orphaned": answer.orphaned,
       },
       status=answer.status,
       acks=list(answer.acks),
@@ -643,7 +645,7 @@ class ReportField:
 
 @dataclass(slots=True)
 class ReportAnswer:
-  """Owner form submission attached to a published report."""
+  """Owner form submission that can outlive its report."""
 
   id: str
   report_id: str
@@ -654,6 +656,7 @@ class ReportAnswer:
   created_at: str = ""
   report_title: str = ""
   field_labels: dict[str, str] = field(default_factory=dict)
+  orphaned: bool = False
   # Per-ACK response data, not part of the stored answer.
   task_details_added: dict[str, list[str]] = field(
     default_factory=dict, repr=False, compare=False
@@ -676,6 +679,8 @@ class ReportAnswer:
     self.created_at = str(self.created_at or self.modified_at)
     self.report_title = str(self.report_title or "")
     self.field_labels = dict(self.field_labels)
+    if not isinstance(self.orphaned, bool):
+      raise TypeError("ReportAnswer.orphaned must be a boolean")
 
   def to_dict(self) -> dict[str, Any]:
     return {
@@ -688,6 +693,7 @@ class ReportAnswer:
       "created_at": self.created_at,
       "report_title": self.report_title,
       "field_labels": dict(self.field_labels),
+      "orphaned": self.orphaned,
     }
 
   @classmethod
@@ -702,6 +708,7 @@ class ReportAnswer:
       created_at=str(data.get("created_at", "")),
       report_title=str(data.get("report_title", "")),
       field_labels=dict(data.get("field_labels", {})),
+      orphaned=data.get("orphaned", False),
     )
 
 

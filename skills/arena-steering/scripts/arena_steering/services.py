@@ -243,9 +243,15 @@ class MessageService:
 
   def _latest_pending_answers(self) -> list[ReportAnswer]:
     latest: dict[str, ReportAnswer] = {}
-    for answer in self._reports.list_report_answers():
-      latest[answer.report_id] = answer
-    return [answer for answer in latest.values() if answer.status != "acked"]
+    orphaned: list[ReportAnswer] = []
+    for answer in self._reports.list_report_answers(include_orphaned=True):
+      if answer.orphaned:
+        message = self._messages.get_message(answer.id)
+        if message is not None and message.blocking and answer.status != "acked":
+          orphaned.append(answer)
+      else:
+        latest[answer.report_id] = answer
+    return orphaned + [answer for answer in latest.values() if answer.status != "acked"]
 
   def has_pending_deliverables(self) -> bool:
     for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
@@ -267,7 +273,7 @@ class MessageService:
 
     delivered_answers: list[tuple[Report, ReportAnswer]] = []
     for latest in self._latest_pending_answers():
-      report = self._reports.get_report(latest.report_id)
+      report = None if latest.orphaned else self._reports.get_report(latest.report_id)
       if mark_seen and latest.status == "sent":
         latest = self._messages.mark_message_seen(latest.id, now).as_report_answer()
         if report is not None:
@@ -374,7 +380,7 @@ class MessageService:
       self.reset_gate_if_clear()
       return ("message", msg)
     answer = msg.as_report_answer()
-    report = self._reports.get_report(answer.report_id)
+    report = None if answer.orphaned else self._reports.get_report(answer.report_id)
     if first_ack and report is not None:
       answer.task_details_added = _append_answer_details_to_linked_tasks(
         self._tasks, report, answer, now
@@ -1289,9 +1295,14 @@ class ReportService:
   ) -> Report:
     validate_entity_id(report_id, "Report.id")
     existing = self._reports.get_report(report_id)
-    if existing is not None and existing.latest_unacked_answer is not None:
-      raise ValueError("Report has an unacknowledged answer")
+    if existing is None:
+      # Old databases may retain answers from a report removed before orphaning.
+      self._reports.orphan_report_answers(report_id)
     preserved_answers = self._reports.list_report_answers(report_id)
+    if existing is not None and existing.body != body and preserved_answers:
+      raise ValueError(
+        "Cannot edit report body after an answer; remove the report before republishing"
+      )
     now = self._clock.now_iso()
     report = Report(
       id=report_id,
@@ -1313,13 +1324,15 @@ class ReportService:
 
   @_transactional_task_write
   def unpublish_report(self, report_id: str) -> Report:
-    """Hide a flagged report while retaining its linked tasks and answers."""
+    """Unlink a flagged report while preserving its answer history."""
     report = self.get_report(report_id)
-    if report.status != "published":
-      raise ValueError("Only a published report can be flagged")
+    if report.status not in {"published", "answered"}:
+      raise ValueError("Only a published or answered report can be flagged")
+    now = self._clock.now_iso()
     report.status = "dismissed"
-    report.modified_at = self._clock.now_iso()
+    report.modified_at = now
     self._reports.save_report(report)
+    self._detach_report_links({report_id}, now)
     return report
 
   @_transactional_task_write
@@ -1574,42 +1587,37 @@ class ReportService:
   def remove_report(self, target: str) -> list[str]:
     """Dismiss one report by ID or all stale reports when target == '--stale'."""
     now = self._clock.now_iso()
+    candidates = (
+      [rep for rep in self.list_reports(stale_only=True) if rep.status != "dismissed"]
+      if target == "--stale"
+      else [self.get_report(target)]
+    )
     removed: list[str] = []
-    if target == "--stale":
-      candidates = self.list_reports(stale_only=True)
-      for rep in candidates:
-        if rep.status != "dismissed":
-          if hasattr(self._reports, "delete_report"):
-            self._reports.delete_report(rep.id)
-          else:
-            rep.status = "dismissed"
-            rep.modified_at = now
-            self._reports.save_report(rep)
-          removed.append(rep.id)
-    else:
-      rep = self.get_report(target)
-      if rep.latest_unacked_answer is not None:
-        raise ValueError("Cannot remove a report with an unacknowledged answer")
+    for rep in candidates:
       if hasattr(self._reports, "delete_report"):
         self._reports.delete_report(rep.id)
       else:
+        self._reports.orphan_report_answers(rep.id)
         rep.status = "dismissed"
         rep.modified_at = now
         self._reports.save_report(rep)
       removed.append(rep.id)
 
-    if removed:
-      removed_set = set(removed)
-      queue = self._tasks.list_tasks()
-      changed = False
-      for task in queue:
-        if any(rid in removed_set for rid in task.report_ids):
-          task.report_ids = [rid for rid in task.report_ids if rid not in removed_set]
-          task.modified_at = now
-          changed = True
-      if changed:
-        self._tasks.save_task_queue(queue)
+    self._detach_report_links(set(removed), now)
     return removed
+
+  def _detach_report_links(self, report_ids: set[str], now: str) -> None:
+    if not report_ids:
+      return
+    queue = self._tasks.list_tasks()
+    changed = False
+    for task in queue:
+      if any(rid in report_ids for rid in task.report_ids):
+        task.report_ids = [rid for rid in task.report_ids if rid not in report_ids]
+        task.modified_at = now
+        changed = True
+    if changed:
+      self._tasks.save_task_queue(queue)
 
   @staticmethod
   def _validate_submission_values(

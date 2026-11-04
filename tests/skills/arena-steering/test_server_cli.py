@@ -529,6 +529,48 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   store.close()
 
 
+def test_http_report_body_lock_allows_explicit_same_id_republication(
+  tmp_path: Path,
+) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  body = (
+    '<!-- question {"id":"choice","label":"Choose"} -->\n'
+    'Choose\n- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+  )
+  status, _ = app.dispatch(
+    "POST", "/reports", {"id": "decision", "title": "Decision", "body": body}
+  )
+  assert status == int(HTTPStatus.CREATED)
+  status, answer = app.dispatch(
+    "POST", "/reports/decision/answers", {"id": "aa1234", "values": {"choice": "Yes"}}
+  )
+  assert status == int(HTTPStatus.CREATED)
+  status, _ = app.dispatch(
+    "POST", f"/messages/{answer['answer']['id']}/ack", {"markdown": "Read"}
+  )
+  assert status == int(HTTPStatus.OK)
+
+  status, blocked = app.dispatch(
+    "POST", "/reports", {"id": "decision", "title": "Changed", "body": body + "\nNew"}
+  )
+  assert status == int(HTTPStatus.BAD_REQUEST)
+  assert "Cannot edit report body after an answer" in blocked["error"]
+  assert app.reports.get_report("decision").body == body
+  status, removed = app.dispatch("DELETE", "/reports/decision")
+  assert status == int(HTTPStatus.OK) and removed["dismissed"] == ["decision"]
+  assert store.list_report_answers("decision") == []
+  status, republished = app.dispatch(
+    "POST",
+    "/reports",
+    {"id": "decision", "title": "New decision", "body": body + "\nNew"},
+  )
+  assert status == int(HTTPStatus.CREATED)
+  assert republished["report"]["answers"] == []
+  assert store.list_report_answers(include_orphaned=True)[0].acks == ["Read"]
+  store.close()
+
+
 def test_state_changes_sync_same_second_messages_and_answers(tmp_path: Path) -> None:
   class FixedClock:
     def now_iso(self) -> str:
@@ -2408,18 +2450,51 @@ def test_cli_report_rm_batches_ids_and_preserves_answers(tmp_path: Path) -> None
   assert store.get_report("protected") is not None
   assert tasks.get_task("linked-work")[0].report_ids == ["protected"]
   restored = reports.publish_report("ready", "Ready", body)
-  assert restored.answers[-1].id == "bc1001"
-  assert restored.answers[-1].acks == ["Read"]
+  assert restored.answers == []
+  orphan = store.list_report_answers(include_orphaned=True)[0]
+  assert orphan.id == "bc1001" and orphan.acks == ["Read"] and orphan.orphaned
   store.close()
 
 
-@pytest.mark.parametrize("bad_id", ["protected", "missing"])
-def test_cli_report_rm_batch_failure_rolls_back_all(
-  tmp_path: Path, bad_id: str
+def test_cli_report_rm_keeps_pending_answer_orphaned_after_republish(
+  tmp_path: Path,
 ) -> None:
   state_dir = cli.resolve_state_dir()
+  body = _seed_report_removal_batch(state_dir)
+  code, _, err = _run_cli(state_dir, "report", "rm", "protected")
+  assert code == 0, err
+  store, messages, tasks, reports = cli.open_services(state_dir)
+  assert store.get_report("protected") is None
+  assert tasks.get_task("linked-work")[0].report_ids == ["ready", "empty"]
+  assert store.list_report_answers("protected") == []
+  assert messages.pending_ids() == ["bc1002"]
+  assert reports.publish_report("protected", "New choice", body).answers == []
+  tasks.create_task(
+    "new-work",
+    "Follow-up",
+    size=3,
+    type="ops",
+    details=["Review"],
+    report_ids=["protected"],
+  )
+  store.close()
+
+  code, output, err = _run_cli(state_dir, "read")
+  assert code == 0, err
+  assert "bc1002" in output and "Protected" in output
+  code, _, err = _run_cli(state_dir, "ack", "bc1002", "Noted")
+  assert code == 0, err
+  reopened = SqliteStore(state_dir / "state.sqlite3")
+  assert reopened.get_report("protected").answers == []
+  assert reopened.get_task("new-work").details == ["Review"]
+  assert reopened.list_report_answers(include_orphaned=True)[-1].acks == ["Noted"]
+  reopened.close()
+
+
+def test_cli_report_rm_batch_failure_rolls_back_all(tmp_path: Path) -> None:
+  state_dir = cli.resolve_state_dir()
   _seed_report_removal_batch(state_dir)
-  code, out, _ = _run_cli(state_dir, "report", "rm", "ready", bad_id, "empty")
+  code, out, _ = _run_cli(state_dir, "report", "rm", "ready", "missing", "empty")
   assert code != 0
   assert "Dismissed" not in out
   store, _, tasks, _ = cli.open_services(state_dir)
