@@ -24,6 +24,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/style.css`: Let Reports prose use the full content width rather than stop at 72ch. Keep tables scrollable.
+
 - `assets/style.css`: Keep the first-line composer hint on one visual line without an edge fade, while draft text still wraps.
 
 - `pre.py`: Exempt the pinned isolated reader when the full script and hook command match, with only a canonical JSON path and positive range. Keep altered Python and shell chains gated.

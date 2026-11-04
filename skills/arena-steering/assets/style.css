@@ -2558,19 +2558,6 @@ article#report.report img,
   max-width: none;
 }
 
-.prose-block > p,
-.prose-block > ul,
-.prose-block > ol,
-.prose-block > blockquote,
-.prose-block > h1,
-.prose-block > h2,
-.prose-block > h3,
-.prose-block > h4,
-.prose-block > h5,
-.prose-block > h6 {
-  max-width: 72ch;
-}
-
 .prose-block > .code-block {
   width: 100%;
   max-width: 100%;

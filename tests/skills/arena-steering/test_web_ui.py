@@ -3115,7 +3115,12 @@ def test_markdown_tables_match_github_across_views(width: int, tmp_path: Path) -
   app = SteeringApp(store, repo_name="Markdown table styling")
   app.messages.send_message(markdown, blocking=False)
   app.reports.publish_report(
-    "table-report", "Table report", "# Table report\n\n" + markdown
+    "table-report",
+    "Table report",
+    "# Table report\n\n"
+    + "A report paragraph uses the available width. " * 24
+    + "\n\n"
+    + markdown,
   )
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -3136,6 +3141,13 @@ def test_markdown_tables_match_github_across_views(width: int, tmp_path: Path) -
         ):
           if tab == "reports":
             page.locator("#tab-reports").click()
+            paragraph = page.locator(".report .prose-block > p").first
+            paragraph.wait_for()
+            prose = paragraph.evaluate("""element => ({
+              width: element.getBoundingClientRect().width,
+              available: element.parentElement.getBoundingClientRect().width,
+            })""")
+            assert prose["width"] >= prose["available"] - 1, (width, prose)
           table = page.locator(selector).first
           table.wait_for()
           metrics = table.evaluate("""table => {
