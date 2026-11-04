@@ -3103,9 +3103,8 @@ def test_report_picker_keeps_selected_item_visible_and_fades_edges(
         assert picker.evaluate("element => element.scrollHeight > element.clientHeight")
         assert picker.get_attribute("data-scrolled-start") is None
         assert picker.get_attribute("data-scrolled-end") is not None
-        assert (
-          picker.evaluate("element => getComputedStyle(element).maskImage") != "none"
-        )
+        top_mask = picker.evaluate("element => getComputedStyle(element).maskImage")
+        assert top_mask.count("linear-gradient(") == 1, top_mask
         page.screenshot(path=str(tmp_path / f"report-picker-top-{width}.png"))
 
         picker.evaluate("element => { element.scrollTop = element.scrollHeight; }")
@@ -3135,7 +3134,7 @@ def test_report_picker_keeps_selected_item_visible_and_fades_edges(
         assert after["top"] >= before - 2, (before, after)
         assert after["selectedVisible"], after
         assert after["topFade"] and not after["bottomFade"], after
-        assert after["mask"] != "none", after
+        assert after["mask"].count("linear-gradient(") == 1, after
         if width < 1200:
           toggle = page.locator("#report-picker-toggle")
           toggle.click()

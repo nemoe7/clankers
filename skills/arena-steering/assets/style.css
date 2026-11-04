@@ -2281,6 +2281,24 @@ code.msg-id {
   mask-composite: add;
 }
 
+.report-picker[data-scrolled-start],
+.report-picker[data-scrolled-end] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--rail-fade-start),
+    black calc(100% - var(--rail-fade-end)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--rail-fade-start),
+    black calc(100% - var(--rail-fade-end)),
+    transparent 100%
+  );
+}
+
 .report-picker-link {
   display: flex;
   flex-direction: row;
