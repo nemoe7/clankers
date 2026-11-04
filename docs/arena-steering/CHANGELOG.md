@@ -38,6 +38,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/style.css`, `test_web_ui.py`: Fade the Reports top edge over 36 px of scroll. Leave empty and at-top views clear.
+
 - `assets/style.css`: Match the custom Reports answer's left padding to standard answers while keeping the radio layout and input height.
 
 - `pre.py`: Guard partial reads of any `AGENTS.md`, root `ARENA.md`, and the installed steering skill. Permit searches of the checked-in skill source and nested `ARENA.md` files.

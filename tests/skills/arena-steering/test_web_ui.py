@@ -3049,7 +3049,7 @@ def test_message_page_error_keeps_scroll_target_and_can_retry() -> None:
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
-def test_report_toc_jump_keeps_heading_below_fade(tmp_path: Path) -> None:
+def test_report_toc_jump_and_top_fade_follow_scroll(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store, repo_name="Report TOC regression")
@@ -3072,7 +3072,11 @@ def test_report_toc_jump_keeps_heading_below_fade(tmp_path: Path) -> None:
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
       try:
-        for name, width, height in (("desktop", 1372, 700), ("mobile", 390, 844)):
+        for name, width, height in (
+          ("desktop", 1372, 883),
+          ("landscape", 855, 325),
+          ("mobile", 411, 799),
+        ):
           page = browser.new_page(viewport={"width": width, "height": height})
           page.add_init_script("""(() => {
             const original = Element.prototype.scrollIntoView;
@@ -3084,12 +3088,24 @@ def test_report_toc_jump_keeps_heading_below_fade(tmp_path: Path) -> None:
           page.locator("#tab-reports").click()
           link = page.locator(".report-toc-link").filter(has_text="Middle section")
           link.wait_for(state="attached")
+          top = page.evaluate("""() => {
+            const pane = document.querySelector('#view-reports');
+            const fade = getComputedStyle(document.querySelector('.reports-layout'), '::before');
+            return { remaining: pane.scrollHeight - pane.clientHeight, opacity: Number(fade.opacity) };
+          }""")
+          assert top["remaining"] >= 36, top
+          assert top["opacity"] < 0.01, top
           target = link.get_attribute("data-toc-target")
           assert target
           if name == "desktop":
             link.click()
           else:
             link.evaluate("element => element.click()")
+          page.wait_for_function("""() => {
+            const pane = document.querySelector('#view-reports');
+            const fade = getComputedStyle(document.querySelector('.reports-layout'), '::before');
+            return pane.scrollTop >= 36 && Number(fade.opacity) > 0.99;
+          }""")
           result = page.evaluate(
             """id => {
             const pane = document.querySelector('#view-reports');
@@ -3098,14 +3114,37 @@ def test_report_toc_jump_keeps_heading_below_fade(tmp_path: Path) -> None:
               offset: heading.getBoundingClientRect().top - pane.getBoundingClientRect().top,
               fade: parseFloat(getComputedStyle(pane).getPropertyValue('--edge-fade')),
               scrollTop: pane.scrollTop,
+              topOpacity: Number(getComputedStyle(document.querySelector('.reports-layout'), '::before').opacity),
             };
           }""",
             target,
           )
-          assert result["scrollTop"] > 0
+          assert result["scrollTop"] >= 36, result
           assert result["offset"] >= result["fade"] - 1
+          assert result["topOpacity"] > 0.99, result
           assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
           page.screenshot(path=str(tmp_path / f"report-toc-{name}.png"))
+          page.emulate_media(reduced_motion="reduce")
+          assert (
+            page.evaluate("""() =>
+            getComputedStyle(document.querySelector('.reports-layout'), '::before').content
+          """)
+            == "none"
+          )
+          page.emulate_media(reduced_motion="no-preference")
+          page.evaluate("""async () => {
+            const { renderReportsView } = await import('/static/assets/reports-view.js');
+            renderReportsView(document.querySelector('#view-reports'), { reports: [] }, {});
+          }""")
+          empty = page.evaluate("""() => {
+            const pane = document.querySelector('#view-reports');
+            return {
+              remaining: pane.scrollHeight - pane.clientHeight,
+              opacity: Number(getComputedStyle(document.querySelector('.reports-layout'), '::before').opacity),
+            };
+          }""")
+          assert empty["remaining"] == 0, empty
+          assert empty["opacity"] < 0.01, empty
           page.close()
       finally:
         browser.close()
