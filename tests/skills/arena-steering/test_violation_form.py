@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from arena_steering.server import SteeringApp, create_http_server
+from arena_steering.services import BIBLE_READ, with_bible_read
 from arena_steering.store import SqliteStore
 
 SOURCE_FILE_UNAVAILABLE = "Source file: unavailable"
@@ -45,6 +46,15 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
     assert violation.violation_type == flag["reason"]
     assert violation.violation_clause_file == flag["clause_file"]
     assert "Cited: " + flag["note"] in violation.body
+    assert BIBLE_READ == "If full bible missing, use read_file for {paths}"
+    assert violation.body.endswith(with_bible_read("").strip())
+    root = Path(__file__).resolve().parents[3]
+    for relative in (
+      "AGENTS.md",
+      "ARENA.md",
+      ".agents/skills/arena-steering/SKILL.md",
+    ):
+      assert str(root / relative) in violation.body
     assert violation.id in app.messages.pending_ids()
 
     status, duplicate = app.dispatch("POST", "/agent-interrupt", flag)

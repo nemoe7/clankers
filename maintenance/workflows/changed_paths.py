@@ -143,6 +143,7 @@ MODULE_TESTS = {
     "tests/skills/arena-steering/test_message_page_retry_persistence.py",
     "tests/skills/arena-steering/test_report_answer_ui.py",
     "tests/skills/arena-steering/test_pre.py",
+    "tests/skills/arena-steering/test_installed_cli_path.py",
   ),
   "Nemoizer": ("tests/skills/nemoizer/test_nemoize.py",),  # nonemo: NMO100
   "UI/UX": (

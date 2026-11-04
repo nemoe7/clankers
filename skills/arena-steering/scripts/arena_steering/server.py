@@ -34,7 +34,13 @@ from .git_safety import DirtyTreeError, completion_tree_check
 from .markdown import render_markdown, render_report_markdown
 from .markdown_fields import parse_report_markdown
 from .models import Attachment, Task
-from .services import POLL_FRESH_SECONDS, MessageService, ReportService, TaskService
+from .services import (
+  POLL_FRESH_SECONDS,
+  MessageService,
+  ReportService,
+  TaskService,
+  with_bible_read,
+)
 from .store import STATE_TABLES, SqliteStore
 
 RouteHandler = Callable[[dict[str, str], dict[str, list[str]], Any], tuple[int, Any]]
@@ -945,7 +951,7 @@ class SteeringApp:
       if report.status != "published":
         raise ValueError("report_id must name a published report")
 
-    heading = f"User flagged violation: {reason}."
+    heading = f"VIOLATION: {reason}. Ack with file:ln: clause then fix cause."
     if cited:
       heading += f" Cited: {cited}"
     lines = [heading]
@@ -960,7 +966,6 @@ class SteeringApp:
         lines.append(f"Current task: {current.id}. Is this what you are working on?")
       else:
         lines.append("The task list is empty. Maybe a task should have spawned.")
-    lines.append("Fix the cause, then ack with only file:ln: clause.")
     with self.store.transaction():
       pending = self.messages.pending_violation()
       if report is not None and pending is not None:
@@ -971,7 +976,7 @@ class SteeringApp:
         if report is not None:
           self.reports.unpublish_report(report.id)
         pending = self.messages.send_message(
-          "\n".join(lines),
+          with_bible_read("\n".join(lines)),
           hidden=True,
           blocking=True,
           violation_type=reason,

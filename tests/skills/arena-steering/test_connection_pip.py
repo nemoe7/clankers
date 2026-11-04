@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from arena_steering import cli
 from arena_steering.server import SteeringApp, create_http_server
+from arena_steering.services import with_bible_read
 from arena_steering.store import SqliteStore
 
 
@@ -163,6 +164,9 @@ def test_cli_repeated_fast_poll_flags_once_without_flagging_browser(
   flag = messages.pending_violation()
   assert flag is not None and flag.hidden and flag.requires_ack
   assert flag.violation_type == "repeat-poll"
+  assert flag.body == with_bible_read(
+    "VIOLATION: Repeat poll. Use worktree if more task open."
+  )
   assert cli.main(["poll"], out=io.StringIO(), err=io.StringIO()) == 2
   assert messages.pending_violation().id == flag.id
   store.close()

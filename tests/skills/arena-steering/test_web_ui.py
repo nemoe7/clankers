@@ -186,6 +186,16 @@ SLATE_DEMO_COLORS = (
 )
 
 
+def test_reports_copy_uses_only_confirmed_selection_method() -> None:
+  subprocess.run(
+    ["node", str(ROOT / "tests/skills/arena-steering/copy_report_unit.cjs")],
+    cwd=ROOT,
+    capture_output=True,
+    check=True,
+    text=True,
+  )
+
+
 @pytest.mark.skipif(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",

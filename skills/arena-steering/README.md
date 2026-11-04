@@ -117,7 +117,6 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | `steer run start [-t TASK] [-a NAME] NAME -- COMMAND` | Start a detached named run and optionally link it to a task. A dependency must exist and pass before its dependent starts. |
 | `steer run logs NAME [-n LINES]` | Show run status and log tail. |
 | `steer run pr-checks [-n NUMBER]` | Start a detached `gh pr checks --watch` run. |
-| `steer gate [-p] [-l LINE]` | Refuse a command or push while a message or report answer waits for an acknowledgement. |
 | `steer skills` | List skill names, sources, paths, and descriptions. Installed copies win over repo copies. |
 
 Use `python skills/arena-steering/scripts/steer` in place of `steer` in the table when the entry point is not on `PATH`. Message and answer IDs are six lowercase hexadecimal characters. Task and report IDs use lowercase kebab-case.
@@ -147,7 +146,7 @@ The steps, in order, are `sleep`, `inbox-pipe`, `poll-timeout`, `pr-state`, `pus
 
 Arena-owned detached runs and exact platform utility calls do not spend the six-call budget. Ordinary Bash, mixed lines, and pushes remain guarded. The `BASH_COMMAND_POLICY` command-name-or-pattern map in `pre.py` sets `(count, block)` at the pending-inbox threshold. Immediate guards, including pending pushes, stay separate.
 
-`bible` blocks `cat`, `grep`, `head`, `tail`, and `rg` on ARENA.md, AGENTS.md, and a skill SKILL.md. A passing step prints nothing and lands in `_arena_preview_done`, so a later command in one shell skips it. `steer gate` still runs its inbox check alone for an older hook. `install.sh` holds the profile block that installs this line.
+`bible` blocks `cat`, `grep`, `head`, `tail`, and `rg` on ARENA.md, AGENTS.md, and a skill SKILL.md. A passing step prints nothing and lands in `_arena_preview_done`, so a later command in one shell skips it. `install.sh` holds the profile block that installs the `steer pre` hook.
 
 ## Task and message contracts
 

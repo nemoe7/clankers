@@ -18,8 +18,9 @@ import pytest
 from arena_steering import cli, pre
 from arena_steering.cli import main as cli_main
 from arena_steering.server import scripts_signature
+from arena_steering.services import with_bible_read
 
-PENDING_ACK_PUSH_REASON = "a note or answer awaits an ack"
+PENDING_ACK_PUSH_REASON = "Inbox has pending"
 
 
 @pytest.fixture(autouse=True)
@@ -130,7 +131,7 @@ def test_a_push_blocks_the_moment_a_note_waits() -> None:
   )
   result = pre.run_pipeline(ctx)
   assert result.verdict == pre.BLOCK
-  assert "PUSH BLOCKED" in result.messages[0]
+  assert result.messages[0].startswith("VIOLATION: Push blocked. Inbox has pending.")
   assert "abc123" in " ".join(result.messages)
 
 
@@ -170,7 +171,7 @@ def test_git_global_options_keep_remote_push_guarded(line: str) -> None:
   )
   assert result.verdict == pre.BLOCK
   assert result.blocked_by == "gate"
-  assert "PUSH BLOCKED" in " ".join(result.messages)
+  assert PENDING_ACK_PUSH_REASON in " ".join(result.messages)
   assert pre.post_push_watch(line)
 
 
@@ -256,7 +257,7 @@ def test_failed_routed_bash_writes_block_audit(
   monkeypatch.setattr(cli, "_start_detached_run", fail_route)
   line = "pytest -q"
   code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
-  assert code == pre.BLOCK and "RUN BLOCKED" in out
+  assert code == pre.BLOCK and "Run failed: helper unavailable." in out
   rows = [
     json.loads(row)
     for row in (_isolate_state / "blocked-bash.jsonl")
@@ -264,21 +265,6 @@ def test_failed_routed_bash_writes_block_audit(
     .splitlines()
   ]
   assert [(row["line"], row["blocked_by"]) for row in rows] == [(line, "route")]
-
-
-def test_direct_gate_writes_block_audit(_isolate_state: Path) -> None:
-  _seed(_isolate_state, "Pending work")
-  code, out = _run("gate", "-l", "printf test")
-  assert code == 1 and "BASH BLOCKED" in out
-  rows = [
-    json.loads(row)
-    for row in (_isolate_state / "blocked-bash.jsonl")
-    .read_text(encoding="utf-8")
-    .splitlines()
-  ]
-  assert [(row["line"], row["blocked_by"]) for row in rows] == [
-    ("printf test", "gate-command")
-  ]
 
 
 def test_six_call_block_hides_pending_ids_but_keeps_recovery_steps() -> None:
@@ -294,7 +280,8 @@ def test_six_call_block_hides_pending_ids_but_keeps_recovery_steps() -> None:
   )
   output = "\n".join(result.messages)
   assert result.verdict == pre.BLOCK
-  assert f"BASH BLOCKED AFTER {pre.GATE_THRESHOLD} CALLS." in output
+  assert "VIOLATION: Bash blocked. Read and ack all NOW." in output
+  assert f"Threshold: {pre.GATE_THRESHOLD} calls." in output
   assert "steer read" in output and "steer ack" in output
   assert "Pending:" not in output
   assert all(message_id not in output for message_id in pending_ids)
@@ -636,7 +623,8 @@ def test_marked_detached_shell_does_not_spend_inbox_call_budget(
     "pre", "-l", "git push origin topic", "-c", "git push origin topic", "-s", "bash"
   )
   assert code == pre.BLOCK
-  assert "PUSH BLOCKED" in out
+  assert PENDING_ACK_PUSH_REASON in out
+  assert "If full bible missing, use read_file for" in out
 
 
 @pytest.mark.parametrize(
@@ -660,7 +648,7 @@ def test_mixed_platform_probe_remains_inbox_gated(
 
   code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.BLOCK
-  assert "BASH BLOCKED" in out
+  assert "VIOLATION: Bash blocked." in out
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
@@ -684,6 +672,10 @@ def test_six_call_bash_block_persists_one_violation_for_inbox_gate(
   flag = messages.pending_violation()
   assert flag is not None and flag.hidden and flag.requires_ack
   assert flag.violation_type == "bash-cadence"
+  assert flag.body == with_bible_read(
+    f"VIOLATION: Bash blocked after {pre.GATE_THRESHOLD} calls. "
+    "`steer read` and `steer ack` now."
+  )
   assert set(messages.pending_ids()) == {note.id, flag.id}
   assert _run(*command)[0] == pre.BLOCK
   assert messages.pending_violation().id == flag.id
@@ -707,9 +699,12 @@ def test_six_call_bash_block_persists_one_violation_for_inbox_gate(
 @pytest.mark.parametrize(
   ("line", "violation_type", "guidance"),
   (
-    ("steer read | cat", "bash-inbox-pipe", "Run `steer read` or `steer poll` alone"),
-    ("sleep 60", "bash-sleep", "Use a worktree"),
-    ("git add shot-wireframe.png", "bash-commit-content", "Remove captures"),
+    ("steer read | cat", "bash-inbox-pipe", "VIOLATION: Inbox piped."),
+    (
+      "sleep 60",
+      "bash-sleep",
+      "VIOLATION: Sleep blocked. Use worktree if more task open, else poll.",
+    ),
   ),
 )
 def test_blocked_bash_patterns_persist_distinct_deduplicated_flags(
@@ -722,11 +717,99 @@ def test_blocked_bash_patterns_persist_distinct_deduplicated_flags(
   flag = messages.pending_violation()
   assert flag is not None and flag.hidden and flag.requires_ack
   assert flag.violation_type == violation_type
-  assert guidance in flag.body
+  assert flag.body == with_bible_read(guidance)
   code, out = _run(*command)
   assert code == pre.BLOCK and flag.id in out
   assert messages.pending_violation().id == flag.id
   assert messages.pending_ids() == [flag.id]
+  store.close()
+
+
+@pytest.mark.parametrize(
+  ("line", "notice", "is_violation"),
+  (
+    ("steer read | cat", "VIOLATION: Inbox piped.", True),
+    (
+      "git push origin --delete old-ref",
+      "VIOLATION: Push blocked. Destructive mod found.",
+      True,
+    ),
+    ("git add shot-wireframe.png", "Commit has wireframe. Remove and retry.", False),
+  ),
+)
+def test_owner_supplied_pre_notices_have_only_conditional_violation_guidance(
+  _isolate_state: Path, line: str, notice: str, is_violation: bool
+) -> None:
+  _seed(_isolate_state, "Ready", acked=True)
+  code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
+  assert code == pre.BLOCK and notice in out
+  assert ("If full bible missing, use read_file for" in out) == is_violation
+  if line.startswith("steer read"):
+    assert "Run `steer read` or `steer poll` alone" in out
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  flag = messages.pending_violation()
+  if line.startswith("steer read"):
+    assert flag is not None and flag.violation_type == "bash-inbox-pipe"
+  else:
+    assert flag is None
+  store.close()
+
+
+@pytest.mark.parametrize(
+  ("line", "notice"),
+  (
+    ("timeout 10 steer poll", "VIOLATION: timeout wrapped poll."),
+    ("gh pr close 42", "VIOLATION: PR mod blocked."),
+    ("sleep 60; steer read", "VIOLATION: Sleep BANNED."),
+    ("sleep 1; cat runner.log", "VIOLATION: Sleep log read BANNED."),
+    ("sleep 60", "VIOLATION: Sleep BANNED over"),
+    ("rg -n needle AGENTS.md", "VIOLATION: Partial read blocked:"),
+    ("pytest -q; echo status", "VIOLATION: Mixed shell blocked for auto detach."),
+  ),
+)
+def test_other_immediate_violations_show_conditional_bible_guidance(
+  _isolate_state: Path, line: str, notice: str
+) -> None:
+  _seed(_isolate_state, "Ready", acked=True)
+  code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
+  assert code == pre.BLOCK
+  assert notice in out
+  assert "If full bible missing, use read_file for" in out
+  assert ".agents/skills/arena-steering/SKILL.md" in out
+
+
+def test_sleep_during_live_run_names_it_and_shows_bible_guidance(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Ready", acked=True)
+  monkeypatch.setattr(cli.FileGateStatus, "running_names", lambda _self: ["verify"])
+  line = "sleep 1"
+  code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
+  assert code == pre.BLOCK
+  assert "VIOLATION: Sleep run BANNED." in out
+  assert "Live run: verify." in out
+  assert "If full bible missing, use read_file for" in out
+
+
+def test_unknown_cwd_push_uses_nonviolation_recovery() -> None:
+  line = "git push origin topic"
+  result = pre.GitSafetyGuard().run(pre.PreContext(line=line, command=line))
+  assert result.verdict == pre.BLOCK
+  assert result.messages == [
+    "Push blocked. remote default compare failed. Check remote and retry."
+  ]
+
+
+def test_wireframe_stage_warning_has_no_violation_flag(_isolate_state: Path) -> None:
+  _seed(_isolate_state, "Ready", acked=True)
+  line = "git add shot-wireframe.png"
+  code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
+  assert code == pre.BLOCK and "Commit has wireframe. Remove and retry." in out
+  assert "Violation flag:" not in out
+  assert "If full bible missing" not in out
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert messages.pending_violation() is None
+  assert messages.pending_ids() == []
   store.close()
 
 
@@ -1032,7 +1115,27 @@ def test_git_and_pr_state_commands(line: str, blocked: bool) -> None:
   result = pre.run_pipeline(pre.PreContext(line=line, command=line, shell="bash"))
   assert result.verdict == (pre.BLOCK if blocked else pre.CONTINUE), line
   if blocked:
-    assert "BLOCKED" in " ".join(result.messages)
+    notice = " ".join(result.messages)
+    assert "BLOCKED" in notice or notice.startswith("VIOLATION:")
+
+
+def test_routed_pr_session_id_violation_keeps_its_immediate_notice(
+  _isolate_state: Path, tmp_path: Path
+) -> None:
+  _isolate_state.mkdir()
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  note = messages.send_message("Ready", msg_id="aa11bb")
+  messages.ack(note.id, "Reviewed.")
+  store.close()
+  body = tmp_path / "pr-body.md"
+  body.write_text("Review aa11bb.\n", encoding="utf-8")
+  line = f"gh api repos/o/r/pulls/12 -X PATCH -f title=Safe -F body=@{body}"
+  code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.BLOCK
+  assert "VIOLATION: Cited session-local ID in PR data." in out
+  assert "body:1: aa11bb" in out
+  assert "If full bible missing, use read_file for" in out
+  assert "Run failed:" not in out
 
 
 def test_pr_api_file_payload_blocks_state_only(tmp_path: Path) -> None:
@@ -1089,10 +1192,9 @@ def test_commit_refuses_staged_capture_and_new_session_id(
     "pre", "-l", "git commit -m review", "-c", "git commit -m review", "-s", "bash"
   )
   assert code == pre.BLOCK and "design-wireframe.png" in out
+  assert "Remove before commit." in out
   store, messages, _, _ = cli.open_services(_isolate_state)
-  staged_flag = messages.pending_violation()
-  assert staged_flag is not None and staged_flag.violation_type == "bash-commit-content"
-  messages.ack(staged_flag.id, "Removed the capture.")
+  assert messages.pending_violation() is None
   store.close()
 
   git("reset", "--", capture.name)
@@ -1113,15 +1215,17 @@ def test_commit_refuses_staged_capture_and_new_session_id(
   assert code == pre.BLOCK and message_id in out
   assert "note.md" in out
   store, messages, _, _ = cli.open_services(_isolate_state)
-  session_flag = messages.pending_violation()
-  assert (
-    session_flag is not None and session_flag.violation_type == "bash-commit-content"
-  )
+  assert "VIOLATION: Cited session-local ID." in out
+  assert "note.md:2:" in out
+  assert "Remove the citation and retry." in out
+  assert "If full bible missing" in out
+  assert "Violation flag:" not in out
+  assert messages.pending_violation() is None
   nested = "bash -c 'git commit -m review'"
   code, out = _run("pre", "-l", nested, "-c", nested, "-s", "bash")
   assert code == pre.BLOCK and message_id in out
-  assert messages.pending_violation().id == session_flag.id
-  messages.ack(session_flag.id, "Removed the session ID.")
+  assert "VIOLATION: Cited session-local ID." in out
+  assert messages.pending_violation() is None
   store.close()
 
   git("commit", "-m", "fixture")
@@ -1166,11 +1270,11 @@ def test_commit_name_collision_guides_safe_rename(
   stage_css("alias-token")
   code, out = _run(*command)
   assert code == pre.BLOCK
-  assert "steer ren alias-token <unused-kebab-id>" in out
+  assert "style.css:1: alias-token" in out
+  assert "steer ren OLD_ID NEW_ID" in out
+  assert "If full bible missing" in out
   store, messages, _, _ = cli.open_services(_isolate_state)
-  flag = messages.pending_violation()
-  assert flag is not None and "steer ren" in flag.body
-  messages.ack(flag.id, "Renamed the record.")
+  assert messages.pending_violation() is None
   store.close()
 
   assert _run("ren", "alias-token", "renamed-record")[0] == 0
@@ -1195,13 +1299,14 @@ def test_commit_comparison_failure_does_not_flag_content(
   monkeypatch.setattr(
     pre.git_safety,
     "staged_warning",
-    lambda _cwd, _ids, **_kwargs: "COMMIT BLOCKED: Git changes could not be checked.",
+    lambda _cwd, _ids, **_kwargs: "Git changes failed detect. Retry after recover.",
   )
   code, out = _run(
     "pre", "-l", "git commit -m review", "-c", "git commit -m review", "-s", "bash"
   )
   assert code == pre.BLOCK
-  assert out.splitlines()[0] == "COMMIT BLOCKED: Git changes could not be checked."
+  assert out.splitlines()[0] == "Git changes failed detect. Retry after recover."
+  assert "If full bible missing" not in out
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_violation() is None
   store.close()
@@ -1226,12 +1331,13 @@ def test_managed_worktree_refuses_commit_push_and_run(
     "steer run start verify -- true",
   ):
     code, out = _run("pre", "-l", command, "-c", command, "-s", "bash")
-    assert code == pre.BLOCK and "WORKTREE BLOCKED" in out, command
+    assert code == pre.BLOCK and "blocked in worktree" in out, command
+    assert "If full bible missing" not in out
 
   monkeypatch.chdir(_git_checkout)
   command = f"git -C {worktree} commit -m review"
   code, out = _run("pre", "-l", command, "-c", command, "-s", "bash")
-  assert code == pre.BLOCK and "WORKTREE BLOCKED" in out
+  assert code == pre.BLOCK and "blocked in worktree" in out
 
 
 def test_push_uses_remote_default_and_fails_closed(
@@ -1262,6 +1368,8 @@ def test_push_uses_remote_default_and_fails_closed(
     "bash",
   )
   assert code == pre.BLOCK and "trunk" in out
+  assert "VIOLATION: Push blocked. Only push main." in out
+  assert "If full bible missing, use read_file for" in out
   code, _ = _run(
     "pre",
     "-l",
@@ -1293,6 +1401,8 @@ def test_push_uses_remote_default_and_fails_closed(
     "git-safe",
   )
   assert code == pre.BLOCK and "trunk" in out
+  assert "Push blocked. Rebase default and retry." in out
+  assert "If full bible missing" not in out
   nested = "bash -c 'git push origin HEAD:topic'"
   code, out = _run("pre", "-l", nested, "-c", nested, "-s", "bash")
   assert code == pre.BLOCK and "trunk" in out
@@ -1307,7 +1417,9 @@ def test_push_uses_remote_default_and_fails_closed(
     "-s",
     "bash",
   )
-  assert code == pre.BLOCK and "unavailable" in out.lower()
+  assert code == pre.BLOCK
+  assert "remote default compare failed. Check remote and retry." in out
+  assert "If full bible missing" not in out
 
   extra = tmp_path / "extra.git"
   git("init", "--bare", "-b", "develop", str(extra))
@@ -1331,7 +1443,7 @@ def test_the_gate_reads_the_stored_count_and_the_done_list_skips_steps(
   assert code == pre.CONTINUE
   assert second == ""
   assert _count(_isolate_state) == "1"
-  assert "bash blocked in" in first
+  assert "bash block in" in first
 
 
 def test_a_pass_through_reports_the_finished_steps(_isolate_state: Path) -> None:

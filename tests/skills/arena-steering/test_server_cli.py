@@ -3153,40 +3153,6 @@ def test_cli_removes_answer_detail_without_unlinking_report(tmp_path: Path) -> N
   assert code == 1 and "Usage" in err
 
 
-def test_cli_gate_blocks_until_the_inbox_is_acked() -> None:
-  state_dir = cli.resolve_state_dir()
-  state_dir.mkdir(parents=True, exist_ok=True)
-  store = SqliteStore(state_dir / "state.sqlite3")
-  service = cli.MessageService(store, store, store, store)
-  service.send_message("gate me", msg_id="ab12cd")
-  store.close()
-
-  code, out, _ = _run_cli(state_dir, "gate", "-l", "git push origin main")
-  assert code == 1
-  assert "BASH BLOCKED" in out
-  assert "ab12cd" in out
-  assert "origin" in out
-
-  _run_cli(state_dir, "ack", "ab12cd", "acked")
-
-  code, out, _ = _run_cli(state_dir, "gate")
-  assert code == 0 and out == ""
-
-
-def test_cli_gate_names_a_push_block() -> None:
-  state_dir = cli.resolve_state_dir()
-  state_dir.mkdir(parents=True, exist_ok=True)
-  store = SqliteStore(state_dir / "state.sqlite3")
-  service = cli.MessageService(store, store, store, store)
-  service.send_message("gate me", msg_id="ab12ce")
-  store.close()
-
-  code, out, _ = _run_cli(state_dir, "gate", "--push")
-  assert code == 1
-  assert "PUSH BLOCKED" in out
-  assert "Pending: ab12ce" in out
-
-
 def test_cli_skills_lists_repo_and_installed_skills(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3293,7 +3259,10 @@ def test_cli_pr_update_blocks_session_local_ids(
     state_dir, "pr-update", "-n", "122", "-t", title, "-f", str(body_file)
   )
   assert code == 1
-  assert "session-local" in err and token in err
+  assert "VIOLATION: Cited session-local ID in PR data." in err
+  assert "steer ren OLD_ID NEW_ID" in err
+  assert f"{location}:1: {token}" in err
+  assert "If full bible missing, use read_file for" in err
 
 
 def test_cli_pr_update_allows_unrelated_longer_hex_strings(

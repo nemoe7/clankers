@@ -33,7 +33,7 @@ from .models import (
   Task,
 )
 from .server import SteeringApp, create_http_server
-from .services import MessageService, ReportService, TaskService
+from .services import MessageService, ReportService, TaskService, with_bible_read
 from .store import SqliteStore
 
 BIND_HOST = "0.0.0.0"
@@ -214,16 +214,6 @@ def main(
   job_log_p.add_argument("-j", "--job", dest="job_id", default=None)
   job_log_p.add_argument("-r", "--run", dest="run_id", default=None)
 
-  gate_p = sub.add_parser(
-    "gate", help="Refuse a shell command while the inbox has pending items."
-  )
-  gate_p.add_argument(
-    "-p", "--push", action="store_true", help="Gate a push instead of a command."
-  )
-  gate_p.add_argument(
-    "-l", "--line", default="", help="Command line passed by the shell hook."
-  )
-
   pre_p = sub.add_parser("pre", help="Run the pre-command pipeline for a shell line.")
   pre_p.add_argument("-l", "--line", default="", help="Whole shell line.")
   pre_p.add_argument(
@@ -336,9 +326,6 @@ def main(
         server_file.unlink(missing_ok=True)
         httpd.server_close()
       return 0
-    if cmd == "gate":
-      parsed = gate_p.parse_args(cmd_args)
-      return _run_gate(messages, parsed, resolved_state_dir, stdout)
     if cmd == "pre":
       parsed = pre_p.parse_args(cmd_args)
       try:
@@ -735,8 +722,11 @@ def _run_pr_update(parsed: argparse.Namespace, store: SqliteStore, out: TextIO) 
   hits = _pr_session_id_hits(store, parsed.title, expected_body)
   if hits:
     raise ValueError(
-      "PR UPDATE BLOCKED: the title or body cites a session-local ID. "
-      "Remove the IDs before updating:\n  " + "\n  ".join(hits)
+      with_bible_read(
+        "VIOLATION: Cited session-local ID in PR data. "
+        "If name clash `steer ren OLD_ID NEW_ID` and retry."
+        "\nLocations:\n  " + "\n  ".join(hits)
+      )
     )
   endpoint = f"repos/{{owner}}/{{repo}}/pulls/{parsed.number}"
   _run_gh(
@@ -980,9 +970,12 @@ def _run_pre_route(
     else:
       raise ValueError(f"Unsupported route: {route.kind}")
   except (ValueError, OSError) as exc:
-    print(
-      f"RUN BLOCKED: helper failed, so the original line did not run: {exc}", file=out
-    )
+    if str(exc).startswith("VIOLATION:"):
+      print(exc, file=out)
+    else:
+      print(
+        f"Run failed: {exc}. Original did not run. Fix and retry safely.", file=out
+      )
     return pre_mod.BLOCK
   return pre_mod.END_CALL
 
@@ -1041,7 +1034,10 @@ def _run_pre(
       out=out,
     )
   for message in result.messages:
-    print(message, file=out)
+    print(
+      with_bible_read(message) if message.startswith("VIOLATION:") else message,
+      file=out,
+    )
   if (
     result.blocked_by == "gate"
     and ctx.shell
@@ -1050,34 +1046,15 @@ def _run_pre(
   ):
     flag = messages.flag_violation_once(
       "bash-cadence",
-      f"Automatic violation: Bash blocked after {pre_mod.GATE_THRESHOLD} calls while inbox items waited. "
-      "Read the inbox with `steer read` when reminded. "
-      "Acknowledge each pending note and answer with `steer ack ID MARKDOWN` before resuming.",
+      f"VIOLATION: Bash blocked after {pre_mod.GATE_THRESHOLD} calls. "
+      "`steer read` and `steer ack` now.",
     )
     print(f"Violation flag: {flag.id}", file=out)
   flag_reasons = {
-    "inbox-pipe": (
-      "bash-inbox-pipe",
-      (
-        "Automatic violation: Bash blocked a piped steering inbox read or poll. "
-        "Run `steer read` or `steer poll` alone to keep the full output visible."
-      ),
-    ),
+    "inbox-pipe": ("bash-inbox-pipe", "VIOLATION: Inbox piped."),
     "sleep": (
       "bash-sleep",
-      (
-        "Automatic violation: Bash blocked a sleep beside steering or logs, during a run, "
-        "or for at least 60 seconds. Use a worktree while another task can progress. "
-        "Poll only when a gate blocks the sole task."
-      ),
-    ),
-    "commit-content": (
-      "bash-commit-content",
-      (
-        "Automatic violation: Bash blocked a stage or commit with a wireframe capture or "
-        "session-local ID. Remove captures and genuine citations before retrying. "
-        "For a task or report name collision, use `steer ren <old-id> <unused-kebab-id>` instead."
-      ),
+      "VIOLATION: Sleep blocked. Use worktree if more task open, else poll.",
     ),
   }
   if ctx.shell and (reason := flag_reasons.get(result.blocked_by)) is not None:
@@ -1113,41 +1090,6 @@ def _run_pre(
   ):
     print("_steer_single_push_approved=1", file=out)
   return result.verdict
-
-
-def _run_gate(
-  messages: MessageService, parsed: argparse.Namespace, state_dir: Path, out: TextIO
-) -> int:
-  """Refuse a command while a message or report answer waits for an acknowledgement."""
-  waiting = messages.pending_ids()
-  if not waiting:
-    return 0
-  _audit_blocked_bash(
-    state_dir,
-    line=parsed.line,
-    command=parsed.line,
-    blocked_by="gate-command",
-    out=out,
-  )
-  if parsed.push:
-    print(
-      "PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox.",
-      file=out,
-    )
-  else:
-    print("BASH BLOCKED: a note or answer awaits an ack.", file=out)
-  print(
-    "Read the inbox, then ack every item: `steer read`, then `steer ack <id> <markdown>`.",
-    file=out,
-  )
-  print("Pending: " + ", ".join(waiting), file=out)
-  blocker = parsed.line.strip()
-  if blocker:
-    print(
-      f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",
-      file=out,
-    )
-  return 1
 
 
 def _skill_description(skill_md: Path) -> str:

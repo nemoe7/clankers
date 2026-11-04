@@ -463,7 +463,10 @@ class InboxPipeGuard:
 
   def run(self, ctx: PreContext) -> PreResult:
     return PreResult(
-      ["INBOX BLOCKED: read and poll need full output. Run without a pipe."],
+      [
+        "VIOLATION: Inbox piped.",
+        "Run `steer read` or `steer poll` alone to keep the full output visible.",
+      ],
       BLOCK,
     )
 
@@ -499,8 +502,8 @@ class PollTimeoutGuard:
   def run(self, ctx: PreContext) -> PreResult:
     return PreResult(
       [
-        "TIMEOUT BANNED: do not wrap `steer poll` in shell `timeout`.",
-        "Set the Bash tool timeout to 1800 seconds. Poll returns within 1799 seconds.",
+        "VIOLATION: timeout wrapped poll. Set Bash tool timeout 1800s.",
+        "Poll returns within 1799s. Do not use shell `timeout`.",
       ],
       BLOCK,
     )
@@ -711,7 +714,10 @@ class PrStateGuard:
 
   def run(self, ctx: PreContext) -> PreResult:
     return PreResult(
-      ["PR STATE BLOCKED: visible PR-state write; use reads or metadata edits."],
+      [
+        "VIOLATION: PR mod blocked. NEVER merge, close, reopen.",
+        "Use PR reads or metadata edits instead of state writes.",
+      ],
       BLOCK,
     )
 
@@ -735,7 +741,13 @@ class DestructivePushGuard:
     return False
 
   def run(self, ctx: PreContext) -> PreResult:
-    return PreResult(["PUSH BLOCKED: destructive ref change is not permitted."], BLOCK)
+    return PreResult(
+      [
+        "VIOLATION: Push blocked. Destructive mod found.",
+        "Remove destructive push flags or ref deletion, then retry safely.",
+      ],
+      BLOCK,
+    )
 
 
 class GitSafetyGuard:
@@ -767,7 +779,8 @@ class GitSafetyGuard:
         for words in current_commands
       ):
         return PreResult(
-          ["PUSH BLOCKED: remote default comparison unavailable."], BLOCK
+          ["Push blocked. remote default compare failed. Check remote and retry."],
+          BLOCK,
         )
       return PreResult()
     for words in _line_commands(ctx):
@@ -779,10 +792,9 @@ class GitSafetyGuard:
           else ctx.cwd
         )
         if git_safety.managed_worktree(target, ctx.checkout_root):
+          command = "run start" if action == "gate" else action
           return PreResult(
-            [
-              "WORKTREE BLOCKED: commit, push, and run start belong in the main checkout."
-            ],
+            [f"{command} blocked in worktree. Run in the main checkout."],
             BLOCK,
           )
     for current in current_commands:
@@ -808,8 +820,8 @@ class GitSafetyGuard:
         if warning:
           content = warning.startswith(
             (
-              "WIREFRAME BLOCKED: commit includes captures:",
-              "COMMIT BLOCKED: an added line cites a session-local ID ",
+              "Wireframe found staged.",
+              "VIOLATION: Cited session-local ID.",
             )
           )
           return PreResult(
@@ -840,8 +852,8 @@ class InboxGate:
     if ctx.is_push():
       return PreResult(
         [
-          "PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox.",
-          "Read the inbox, then ack every item: `steer read`, then `steer ack <id> <markdown>`.",
+          "VIOLATION: Push blocked. Inbox has pending. Read and ack all. Retry.",
+          "Nothing left the sandbox. Use `steer read`, then `steer ack` for each item.",
           "Pending: " + ", ".join(ctx.pending_ids),
           f"Blocked by the part `{ctx.blocked_part()}`. Run the inbox calls alone.",
         ],
@@ -849,11 +861,11 @@ class InboxGate:
       )
     remaining = GATE_THRESHOLD - ctx.call_count
     if remaining > 0:
-      return PreResult([f"bash blocked in {remaining} calls: ack the inbox."])
+      return PreResult([f"bash block in {remaining} calls. Read and ack now."])
     return PreResult(
       [
-        f"BASH BLOCKED AFTER {GATE_THRESHOLD} CALLS.",
-        "Read the inbox, then ack every item: `steer read`, then `steer ack <id> <markdown>`.",
+        "VIOLATION: Bash blocked. Read and ack all NOW.",
+        f"Threshold: {GATE_THRESHOLD} calls. Use `steer read`, then `steer ack` for each item.",
         f"Blocked by the part `{ctx.blocked_part()}`. Run the inbox calls alone.",
       ],
       BLOCK,
@@ -872,7 +884,7 @@ class WireframeGuard:
     if WIREFRAME_SUFFIX not in ctx.line.lower():
       return PreResult()
     return PreResult(
-      [f"WIREFRAME BLOCKED: never stage or commit {WIREFRAME_SUFFIX} captures."],
+      ["Commit has wireframe. Remove and retry."],
       BLOCK,
       blocked_by="commit-content",
     )
@@ -991,7 +1003,7 @@ class SleepGuard:
     if any(head in {"steer", "arena-preview", "preview.py"} for head, _ in commands):
       return PreResult(
         [
-          "SLEEP BLOCKED: a sleep beside a steering call holds the turn. Run the call alone."
+          "VIOLATION: Sleep BANNED. Run alone."
         ],
         BLOCK,
       )
@@ -1001,7 +1013,7 @@ class SleepGuard:
     ):
       return PreResult(
         [
-          "SLEEP BLOCKED: a sleep beside a .log read holds the turn. Read the run later."
+          "VIOLATION: Sleep log read BANNED. Read log later, start worktree for open task, poll if no more task."
         ],
         BLOCK,
       )
@@ -1009,7 +1021,8 @@ class SleepGuard:
       names = ", ".join(ctx.active_runs)
       return PreResult(
         [
-          f"SLEEP BLOCKED: background run ({names}) is live. Use a worktree or poll when it is the only blocked task."
+          "VIOLATION: Sleep run BANNED. Read log later, start worktree for open task, poll if no more task.",
+          f"Live run: {names}.",
         ],
         BLOCK,
       )
@@ -1018,7 +1031,9 @@ class SleepGuard:
       for head, args in commands
     ):
       return PreResult(
-        ["SLEEP BLOCKED: a long sleep holds the turn. Start a background run instead."],
+        [
+          f"VIOLATION: Sleep BANNED over {SLEEP_IDLE_CAP_SECONDS}s. Use detached runs."
+        ],
         BLOCK,
       )
     return PreResult()
@@ -1058,8 +1073,8 @@ class BibleReadGuard:
     found = self.bible_path(ctx) or "the bible"
     return PreResult(
       [
-        f"BIBLE BLOCKED: `{found}` cannot be read in part.",
-        "Use read_file for the full file: ARENA.md, AGENTS.md, and SKILL.md.",
+        f"VIOLATION: Partial read blocked: `{found}`. Use `read_file` only if absent from context.",
+        "Read protected bible files in full, never through Bash.",
       ],
       BLOCK,
     )
@@ -1208,9 +1223,11 @@ class RouteGuard:
       return PreResult(
         [
           (
-            "RUN BLOCKED: automatic routing would replay a mixed shell line. "
-            "Use `steer run start <name> -- <remaining command>` or the GitHub helper."
-          )
+            "VIOLATION: Mixed shell blocked for auto detach. "
+            "Use separate calls or explicit `steer run start`."
+          ),
+          "For a detached command, use `steer run start <name> -- <remaining command>`.",
+          "For a GitHub call, use its helper.",
         ],
         BLOCK,
       )
@@ -1225,7 +1242,7 @@ class RouteGuard:
       return PreResult(
         [
           (
-            f"PR UPDATE ROUTED: use `steer pr-update -n {route.args[0]} "
+            f"PR PATCH routed. Use `steer pr-update -n {route.args[0]} "
             "-t <title> -f <workspace-file>` instead of direct curl PATCH."
           )
         ],

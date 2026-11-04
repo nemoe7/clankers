@@ -46,6 +46,19 @@ POLL_HEARTBEAT_SECONDS = 1.0
 POLL_FRESH_SECONDS = 5.0
 POLL_REPEAT_SECONDS = 45
 POLL_IMMEDIATE_SECONDS = 1.0
+BIBLE_READ = "If full bible missing, use read_file for {paths}"
+_BIBLE_PATHS = (
+  "AGENTS.md",
+  "ARENA.md",
+  ".agents/skills/arena-steering/SKILL.md",
+)
+
+
+def with_bible_read(body: str) -> str:
+  """Append the separate, conditional full-bible reminder to a true violation."""
+  root = pre_mod.repo_root()
+  paths = ", ".join(str(root / relative) for relative in _BIBLE_PATHS)
+  return body + "\n" + BIBLE_READ.format(paths=paths)
 
 
 def _report_timestamp(value: str) -> datetime:
@@ -309,15 +322,14 @@ class MessageService:
         if msg.violation_type == violation_type and msg.requires_ack:
           return msg
       return self.send_message(
-        body, hidden=True, blocking=True, violation_type=violation_type
+        with_bible_read(body), hidden=True, blocking=True, violation_type=violation_type
       )
 
   def flag_dirty_finish(self) -> Message:
     """Persist one blocking flag after a dirty-tree finish attempt rolls back."""
     return self.flag_violation_once(
       "dirty-task-finish",
-      "Automatic violation: Tried to finish a task with a dirty Git tree. "
-      "Read and acknowledge this flag, then clean the tree before retrying.",
+      "VIOLATION: Finish task with dirty tree. Clean tree then retry.",
     )
 
   def pending_ids(self) -> list[str]:
@@ -441,10 +453,7 @@ class MessageService:
         return None
       return self.flag_violation_once(
         "repeat-poll",
-        "Automatic violation: Repeated a poll within 45 seconds after a poll returned in under one second. "
-        "Read and acknowledge this flag, then work the open task. "
-        "While a gate runs, use `steer worktree add NAME` for independent work. "
-        "Validate at the root and poll only when no unblocked work remains.",
+        "VIOLATION: Repeat poll. Use worktree if more task open.",
       )
 
   def record_poll_duration(self, seconds: float) -> None:

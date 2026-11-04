@@ -14,7 +14,7 @@ import pytest
 from arena_steering import cli
 from arena_steering.models import Task
 from arena_steering.server import SteeringApp, create_http_server
-from arena_steering.services import ReportService, TaskService
+from arena_steering.services import ReportService, TaskService, with_bible_read
 from arena_steering.store import SqliteStore
 
 QUESTION = (
@@ -444,6 +444,9 @@ def test_dirty_checkout_finish_raises_one_persisted_violation(
   flag = messages.pending_violation()
   assert flag is not None and flag.hidden and flag.requires_ack
   assert flag.violation_type == "dirty-task-finish"
+  assert flag.body == with_bible_read(
+    "VIOLATION: Finish task with dirty tree. Clean tree then retry."
+  )
 
   with pytest.raises(DirtyTreeError, match="clean Git tree"):
     tasks.mod_scalar("review", "status", "finished")

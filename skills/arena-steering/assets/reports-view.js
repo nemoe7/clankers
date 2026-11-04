@@ -73,6 +73,24 @@ let pickerScrollTop = 0;
 let activeScrollCleanup = null;
 let reportRenderEvents = null;
 
+function copyReportMarkdown(text) {
+  const field = document.createElement("textarea");
+  field.value = text;
+  field.setAttribute("readonly", "");
+  try {
+    document.body.append(field);
+    field.select();
+    return (
+      typeof document.execCommand === "function" &&
+      document.execCommand("copy") === true
+    );
+  } catch {
+    return false;
+  } finally {
+    field.remove();
+  }
+}
+
 function renderFieldBlock(field, headings, stored = null) {
   const fieldId = escapeHtml(field.id);
   const label = escapeHtml(field.question || field.label);
@@ -533,25 +551,28 @@ export function renderReportsView(container, state, handlers) {
   }
 
   const copyBtn = container.querySelector("#copy-report-btn");
-  listen(copyBtn, "click", async () => {
-    try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard
-        .writeText(activeReport.body || "")
-        .catch(() => {});
-    }
-      copyBtn.dataset.state = "good";
-      copyBtn.innerHTML = CHECK_SVG;
-      setTimeout(() => {
-        if (copyBtn.isConnected) {
-          delete copyBtn.dataset.state;
-          copyBtn.innerHTML = COPY_SVG;
-        }
-      }, 1400);
-    } catch {
-      copyBtn.dataset.state = "bad";
-    }
+  let copyResetTimer;
+  listen(copyBtn, "click", () => {
+    const copied = copyReportMarkdown(activeReport.body || "");
+    const originalTitle = "Copy report Markdown";
+    const originalLabel = `Copy report ${activeReport.id}`;
+    const resultLabel = copied
+      ? "Copied through the selection fallback"
+      : "Copy failed. Browser did not copy report Markdown.";
+    clearTimeout(copyResetTimer);
+    copyBtn.dataset.state = copied ? "good" : "bad";
+    copyBtn.innerHTML = copied ? CHECK_SVG : DISMISS_SVG;
+    copyBtn.title = resultLabel;
+    copyBtn.setAttribute("aria-label", resultLabel);
+    copyResetTimer = setTimeout(() => {
+      if (!copyBtn.isConnected) return;
+      delete copyBtn.dataset.state;
+      copyBtn.innerHTML = COPY_SVG;
+      copyBtn.title = originalTitle;
+      copyBtn.setAttribute("aria-label", originalLabel);
+    }, 1400);
   });
+  signal.addEventListener("abort", () => clearTimeout(copyResetTimer), { once: true });
 
   const dismissBtn = container.querySelector("#dismiss-report-btn");
   listen(dismissBtn, "click", async () => {

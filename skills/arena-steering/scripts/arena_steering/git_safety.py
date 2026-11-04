@@ -86,14 +86,16 @@ def staged_warning(
       if name.lower().endswith("-wireframe.png")
     ]
     if captures:
-      return "WIREFRAME BLOCKED: commit includes captures: " + ", ".join(captures)
+      return "Wireframe found staged. Remove before commit. Captures: " + ", ".join(
+        captures
+      )
     if not ids:
       return ""
     diffs = [_git(cwd, "diff", "--cached", "-U0", "--no-color", "--").stdout]
     if include_tracked:
       diffs.append(_git(cwd, "diff", "-U0", "--no-color", "--").stdout)
   except GitCheckError:
-    return "COMMIT BLOCKED: Git changes could not be checked. Retry after Git recovers."
+    return "Git changes failed detect. Retry after recover."
   patterns = {
     ident: re.compile(rf"(?<![0-9A-Za-z]){re.escape(ident)}(?![0-9A-Za-z])")
     for ident in ids
@@ -115,13 +117,12 @@ def staged_warning(
         for ident, pattern in patterns.items():
           if pattern.search(line):
             warning = (
-              "COMMIT BLOCKED: an added line cites a session-local ID "
-              f"({path}:{number}: {ident}). Remove a genuine citation before committing."
+              "VIOLATION: Cited session-local ID. "
+              f"{path}:{number}: {ident}. Remove the citation and retry."
             )
             if ident in renamable_ids:
               warning += (
-                " If this is a name collision instead, rename the task or report with "
-                f"`steer ren {ident} <unused-kebab-id>` and retry."
+                " If name clash `steer ren OLD_ID NEW_ID` and retry."
               )
             return warning
   return ""
@@ -193,18 +194,25 @@ def push_warning(cwd: Path, words: list[str]) -> str:
       raise GitCheckError("remote HEAD did not name a branch")
     default = match.group(1)
     if _pushes_default(cwd, refs, default):
-      return f"PUSH BLOCKED: cannot update the remote default branch ({default})."
+      current = _git(
+        cwd, "symbolic-ref", "--quiet", "--short", "HEAD", allowed=(0, 1)
+      ).stdout.strip()
+      allowed = current or "a non-default branch"
+      return (
+        f"VIOLATION: Push blocked. Only push {allowed}. "
+        f"Forbidden target: {remote}/{default}."
+      )
     _git(cwd, "fetch", "--quiet", "--no-tags", remote, f"refs/heads/{default}")
     ancestry = _git(
       cwd, "merge-base", "--is-ancestor", "FETCH_HEAD", "HEAD", allowed=(0, 1)
     )
     if ancestry.returncode == 1:
       return (
-        f"PUSH BLOCKED: {remote}/{default} is not an ancestor of HEAD. "
-        f"Fetch {remote}, rebase on {remote}/{default}, and retry."
+        "Push blocked. Rebase default and retry. "
+        f"{remote}/{default} is not an ancestor of HEAD."
       )
   except GitCheckError:
-    return "PUSH BLOCKED: remote default comparison unavailable. No push ran; check the remote and retry."
+    return "Push blocked. remote default compare failed. Check remote and retry."
   return ""
 
 
