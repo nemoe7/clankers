@@ -106,7 +106,6 @@ Read these first:
 - Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
 - Run an amendment proposal task first, before any other queued work.
 - NEVER commit or push report artifacts.
-- A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
 - Ledger prose: neutral wording — actions, files, numbers; no narrative, rationale or story.
 - Every entry terse: one entry per event, no story between facts.
 - Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; MUST use `nemoizer`, falling back to ASD-STE100 and Humanizer when unavailable.

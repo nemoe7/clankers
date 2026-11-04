@@ -8,6 +8,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-11-04
 
+### Changed
+
+#### rules
+
+- Require substantive answers to delivered messages in their own acknowledgement before chat (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+- Remove the short-report-to-chat exception (`AGENTS.md`).
+
 ### Fixed
 
 #### maintenance

@@ -62,7 +62,7 @@
 
 - The stderr reminder is the only read schedule; the Bash gate stays a repair, NEVER the schedule. Block mechanics: the skill reference, Read cadence. A call with no reminder line MAY signal a sandbox reset: run the reset steps before other work.
 - Before the first start there is no inbox to poll, and a missing state file then is no failed read.
-- Answer each delivered note where the user reads it: run `ack <id> <Markdown>` for exactly that note, with the answer rendered in the message log.
+- ALWAYS provide the substantive answer to each delivered message in its own `ack <id> <Markdown>` call before any chat follow-up.
 - One call carries one answer text, so acknowledge notes separately when the answers differ.
 - NEVER blindly acknowledge all pending notes.
 - Refer to a note by its ID, NEVER by its sequence number or list position: the first six characters in prose, task details, reports and notes. Extend the prefix when two notes share it.
