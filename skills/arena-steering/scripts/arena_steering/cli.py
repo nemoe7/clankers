@@ -113,7 +113,9 @@ def main(
 
   read_p = sub.add_parser("read", help="Read pending messages and report answers.")
 
-  poll_p = sub.add_parser("poll", help="Wait for pending messages or skip_poll.")
+  poll_p = sub.add_parser(
+    "poll", help="Wait for inbox work, a runnable task, or Skip poll."
+  )
 
   ack_p = sub.add_parser("ack", help="Acknowledge a message or report answer.")
   ack_p.add_argument("parts", nargs="+", help="[<id> ...] <markdown>")
@@ -351,12 +353,20 @@ def main(
       if violation is not None:
         print(violation.body, file=stdout)
         return 2
+
+      def next_runnable_task() -> Task | None:
+        return next((task for task, blocked in tasks.list_tasks() if not blocked), None)
+
       started = time.monotonic()
-      delivered = messages.poll(timeout_seconds=1799.0)
+      delivered = messages.poll(timeout_seconds=1799.0, next_task=next_runnable_task)
       messages.record_poll_duration(time.monotonic() - started)
-      _print_delivered(delivered, stdout)
+      print(f"Poll: {delivered['status']}", file=stdout)
+      if delivered["messages"] or delivered["report_answers"]:
+        _print_delivered(delivered, stdout)
+      elif (task := delivered["next_task"]) is not None:
+        print(f"Next task: {task.title} | {task.id} | {task.type}", file=stdout)
       messages.reset_gate_if_clear()
-      return 0
+      return 1 if delivered["status"] == "timeout" else 0
     if cmd == "ack":
       parsed = ack_p.parse_args(cmd_args)
       return _run_ack(parsed, messages, tasks, store, stdout)

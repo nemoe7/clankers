@@ -91,7 +91,7 @@ Examples use the repo entry point. Run a long-lived server separately from one-s
 | --- | --- |
 | `steer serve` | Start the server on `0.0.0.0:8000`, the same port v1 used. |
 | `steer read` | Deliver pending messages and report answers. |
-| `steer poll` | Wait for work or a skip-poll request. |
+| `steer poll` | Wait for an inbox item, the first ranked runnable task, or Skip poll. Print a separate ready, timeout, or skipped status. A timeout exits 1. |
 | `steer ack [ID ...] MARKDOWN` | Acknowledge one or more messages or report answers with one reply. Omit IDs only when one item is pending. |
 | `steer msg list [-p PAGE] [-s SIZE]` | List message history. Page size defaults to 5 and ranges from 5 to 50. |
 | `steer msg ID` | Show a message and its acknowledgements and attachments. |

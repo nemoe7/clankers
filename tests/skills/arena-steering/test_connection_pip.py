@@ -123,13 +123,56 @@ def test_timed_out_poll_marks_turn_end() -> None:
   store = SqliteStore()
   app = SteeringApp(store)
   try:
-    app.messages.poll(timeout_seconds=0.05)
+    result = app.messages.poll(timeout_seconds=0.05)
+    assert result["status"] == "timeout"
     assert store.get_meta("turn_ended_at")
     assert not store.get_meta("polling_at")
     app.messages.touch_agent()
     assert not store.get_meta("turn_ended_at")
   finally:
     store.close()
+
+
+def test_agent_poll_wakes_for_task_created_on_another_connection(
+  tmp_path: Path,
+) -> None:
+  db = tmp_path / "state.sqlite3"
+  polling_store = SqliteStore(db)
+  other_store = SqliteStore(db)
+  poller = SteeringApp(polling_store)
+  sender = SteeringApp(other_store)
+  delivered: list[dict] = []
+
+  def next_task():
+    return next(
+      (task for task, blocked in poller.tasks.list_tasks() if not blocked), None
+    )
+
+  thread = threading.Thread(
+    target=lambda: delivered.append(
+      poller.messages.poll(timeout_seconds=3, next_task=next_task)
+    ),
+    daemon=True,
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not other_store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    assert other_store.get_meta("polling_at")
+    sender.tasks.create_task(
+      "new-task", "New task", size=3, type="docs", details=["Verify task wake."]
+    )
+    thread.join(timeout=2.5)
+    assert not thread.is_alive()
+    assert delivered[0]["status"] == "ready"
+    assert delivered[0]["next_task"].id == "new-task"
+    assert not polling_store.get_meta("turn_ended_at")
+    assert not polling_store.get_meta("polling_at")
+  finally:
+    thread.join(timeout=6)
+    polling_store.close()
+    other_store.close()
 
 
 def test_cli_agent_call_clears_turn_end(

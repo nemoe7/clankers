@@ -48,6 +48,92 @@ def _run_cli(state_dir: Path, *args: str) -> tuple[int, str, str]:
   return code, out.getvalue(), err.getvalue()
 
 
+def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.reports.publish_report(
+      "decision",
+      "Decision",
+      '<!-- question {"id":"pick","label":"Pick"} -->\n'
+      'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+    )
+    app.tasks.create_task(
+      "blocked",
+      "Blocked task",
+      size=1,
+      priority="P1",
+      report_ids=["decision"],
+      details=["Wait for decision."],
+    )
+    app.tasks.create_task(
+      "later", "Later task", size=1, priority="P3", details=["Later work."]
+    )
+    app.tasks.create_task(
+      "first", "First task", size=2, priority="P2", type="docs", details=["First work."]
+    )
+    app.tasks.create_task(
+      "second", "Second task", size=2, priority="P2", details=["Second work."]
+    )
+    app.messages.trigger_skip_poll()
+
+    code, out, err = _run_cli(state_dir, "poll")
+    assert (code, err) == (0, "")
+    assert out == "Poll: ready\nNext task: First task | first | docs\n"
+    assert store.get_meta("skip_poll") == "1"  # Ready work outranks Skip poll.
+    app.messages.consume_skip_poll()
+    assert app.dispatch("GET", "/poll?timeout=0") == (
+      HTTPStatus.OK,
+      {"messages": [], "report_answers": []},
+    )
+  finally:
+    store.close()
+
+
+def test_cli_poll_delivers_inbox_before_ready_task(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.tasks.create_task("first", "First task", size=2, details=["First work."])
+    message_body = "Read the note first"
+    app.messages.send_message(message_body, msg_id=MSG_ID_CLI)
+    code, out, err = _run_cli(state_dir, "poll")
+    assert (code, err) == (0, "")
+    assert out.startswith("Poll: ready\nInbox ")
+    assert message_body in out
+    assert "Next task:" not in out
+  finally:
+    store.close()
+
+
+def test_cli_poll_distinguishes_skip_and_timeout(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.messages.trigger_skip_poll()
+    code, out, err = _run_cli(state_dir, "poll")
+    assert (code, out, err) == (0, "Poll: skipped\n", "")
+    assert store.get_meta("turn_ended_at")
+    _run_cli(state_dir, "read")  # A real command resets the fast-repeat guard.
+
+    original_poll = cli.MessageService.poll
+
+    def short_poll(self, timeout_seconds=0.0, *, next_task=None):
+      return original_poll(self, timeout_seconds=0.05, next_task=next_task)
+
+    monkeypatch.setattr(cli.MessageService, "poll", short_poll)
+    code, out, err = _run_cli(state_dir, "poll")
+    assert (code, out, err) == (1, "Poll: timeout\n", "")
+    assert store.get_meta("turn_ended_at")
+  finally:
+    store.close()
+
+
 def test_cli_version_flags() -> None:
   out = io.StringIO()
   code = cli_main(["--version"], out=out)

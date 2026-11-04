@@ -462,20 +462,31 @@ class MessageService:
       "poll_immediate", "1" if seconds < POLL_IMMEDIATE_SECONDS else "0"
     )
 
-  def poll(self, timeout_seconds: float = 0.0) -> dict[str, Any]:
-    """Wait for deliverables or skip, including writes from other processes."""
+  def poll(
+    self,
+    timeout_seconds: float = 0.0,
+    *,
+    next_task: Callable[[], Task | None] | None = None,
+  ) -> dict[str, Any]:
+    """Wait for inbox work, an agent task, or skip across store connections."""
     timeout = max(0.0, min(float(timeout_seconds), 1799.0))
     deadline = time.monotonic() + timeout
     skipped = timed_out = False
+    task: Task | None = None
     self.touch_agent()
     if not self.has_pending_deliverables():
-      skipped = self.consume_skip_poll()
-      if not skipped and timeout > 0:
+      task = next_task() if next_task is not None else None
+      if task is None:
+        skipped = self.consume_skip_poll()
+      if task is None and not skipped and timeout > 0:
         with self._reports.transaction():
           self._meta.set_meta("polling_since", self._clock.now_iso())
           self._meta.set_meta("polling_at", self._clock.now_iso())
         try:
           while not self.has_pending_deliverables():
+            task = next_task() if next_task is not None else None
+            if task is not None:
+              break
             if self.consume_skip_poll():
               skipped = True
               break
@@ -493,10 +504,17 @@ class MessageService:
             self._meta.set_meta("polling_at", "")
             self._meta.set_meta("polling_since", "")
     delivered = self.read_pending(mark_seen=True)
-    if (skipped or timed_out) and not (
-      delivered["messages"] or delivered["report_answers"]
-    ):
+    inbox_ready = bool(delivered["messages"] or delivered["report_answers"])
+    if (skipped or timed_out) and not inbox_ready and task is None:
       self._meta.set_meta("turn_ended_at", self._clock.now_iso())
+    delivered["status"] = (
+      "ready"
+      if inbox_ready or task is not None
+      else "skipped"
+      if skipped
+      else "timeout"
+    )
+    delivered["next_task"] = None if inbox_ready else task
     return delivered
 
   def notify_new_work(self) -> None:
