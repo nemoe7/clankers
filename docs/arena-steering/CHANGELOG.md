@@ -24,6 +24,10 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`: Accept only a literal login-shell PATH prefix before one quoted `steer ack`. Reject changed assignments, pipes, and extra commands.
+
+- `pre.py`: Exempt literal single-quoted `mkdir -p` paths paired with profile sourcing in the observed login shell. Reject broken quotes, changed options, and extra commands.
+
 - `git_safety.py`, `pre.py`, `cli.py`: Point blocked commits to `steer ren` only for task or report name collisions. Keep real citations blocked, and distinguish them from matching source text.
 
 - `markdown.py`, `server.py`, `assets/api.js`, `assets/app.js`: Show one visual break per source line in Messages and its draft preview. Keep Reports Markdown unchanged.

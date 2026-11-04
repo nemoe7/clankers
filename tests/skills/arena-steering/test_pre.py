@@ -441,6 +441,37 @@ def test_standalone_mkdir_runs_but_counts_while_inbox_waits(
   store.close()
 
 
+def test_quoted_mkdir_profile_mismatch_does_not_count_or_block(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  home = Path.home()
+  line = f"/bin/bash -l -c mkdir -p '{home}'"
+  for path in (str(home), str(home / "child"), "/samples/other", "space; $(literal)"):
+    candidate = f"/bin/bash -l -c mkdir -p '{path}'"
+    code, output = _run("pre", "-l", candidate, "-c", "source ~/.profile", "-s", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+  for changed_line, changed_command in (
+    (f"/bin/bash -l -c mkdir -pv '{home}'", "source ~/.profile"),
+    (f"/bin/bash -l -c mkdir -p '{home}' && printf extra", "source ~/.profile"),
+    (line, "source ~/.bash_profile"),
+    (f"mkdir -p '{home}'", "source ~/.profile"),
+  ):
+    code, output = _run("pre", "-l", changed_line, "-c", changed_command, "-s", "bash")
+    assert code == pre.BLOCK, output
+
+  monkeypatch.setenv("HOME", "/tmp/rogue' && printf extra; #")
+  injected = f"/bin/bash -l -c mkdir -p '{Path.home()}'"
+  code, output = _run("pre", "-l", injected, "-c", "source ~/.profile", "-s", "bash")
+  assert code == pre.BLOCK, output
+
+
 @pytest.mark.parametrize(
   ("line", "command"),
   (
@@ -682,6 +713,37 @@ def test_piped_ack_remains_available_after_the_gate_limit() -> None:
     call_count=pre.GATE_THRESHOLD,
   )
   assert pre.run_pipeline(ctx).verdict == pre.CONTINUE
+
+
+def test_login_path_ack_wrapper_exempts_only_one_literal_ack(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  script = "PATH=\"$HOME/.local/bin:$PATH\" steer ack a1b2c3 'Acknowledged.'"
+  line = f"/bin/bash -l -c {script}"
+  code, output = _run("pre", "-l", line, "-c", script, "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+  for changed in (
+    script + " && printf extra",
+    script + " | cat",
+    script + " && git push origin topic",
+    script.replace(".local/bin", "bin"),
+    script.replace("'Acknowledged.'", '"$(touch extra)"'),
+    script.replace("a1b2c3", "not-an-id"),
+  ):
+    code, output = _run(
+      "pre", "-l", f"/bin/bash -l -c {changed}", "-c", changed, "-s", "bash"
+    )
+    assert code == pre.BLOCK, output
+
+  code, output = _run("pre", "-l", line, "-c", "git push origin topic", "-s", "bash")
+  assert code == pre.BLOCK, output
 
 
 def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:

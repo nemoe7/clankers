@@ -74,6 +74,10 @@ def shell_line(text: str) -> str:
 
 
 ARENA_PROBE_COMMANDS = {"source ~/.profile"}
+PROFILE_MKDIR_LAUNCHER = re.compile(r"/bin/bash -l -c mkdir -p '[^'\r\n]+'")
+LOGIN_ACK_WRAPPER = re.compile(
+  r"""PATH="\$HOME/\.local/bin:\$PATH" steer ack [0-9a-f]{6} '[^'\r\n]+'"""
+)
 ARENA_PORT_PROBE = (
   "(command -v ss >/dev/null 2>&1 && ss -ltnH) || netstat -ltn 2>/dev/null || true"
 )
@@ -86,6 +90,10 @@ ARENA_WORKSPACE_VERBS = {"read", "edit", "write"}
 def arena_maintenance_call(line: str, command: str) -> bool:
   """Recognize whole Arena utility calls, not user lines that merely mention them."""
   text = shell_line(line).strip()
+  if command.strip() == "source ~/.profile" and PROFILE_MKDIR_LAUNCHER.fullmatch(
+    line.strip()
+  ):
+    return True
   if text == ARENA_PORT_PROBE:
     return True
   if (
@@ -205,6 +213,13 @@ class PreContext:
 
   def is_inbox_recovery(self) -> bool:
     """Allow an inbox-only line to clear the gate, including a piped ACK."""
+    if (
+      self.line
+      and self.command
+      and self.line.strip() == f"/bin/bash -l -c {self.command.strip()}"
+      and LOGIN_ACK_WRAPPER.fullmatch(self.command.strip())
+    ):
+      return True
     text = shell_line(self.line or self.command)
     if "\n" in text:
       return False
