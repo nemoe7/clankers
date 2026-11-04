@@ -127,6 +127,7 @@ class PreContext:
   cwd: Path | None = None
   checkout_root: Path | None = None
   session_ids: tuple[str, ...] = ()
+  renamable_ids: tuple[str, ...] = ()
 
   def pieces(self) -> list[tuple[list[str], str]]:
     """Name simple commands and the separators that follow them."""
@@ -673,7 +674,10 @@ class GitSafetyGuard:
           for word in options
         )
         warning = git_safety.staged_warning(
-          target, ctx.session_ids, include_tracked=auto_stage
+          target,
+          ctx.session_ids,
+          renamable_ids=ctx.renamable_ids,
+          include_tracked=auto_stage,
         )
         if warning:
           content = warning.startswith(

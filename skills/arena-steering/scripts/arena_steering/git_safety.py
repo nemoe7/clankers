@@ -66,7 +66,11 @@ def managed_worktree(cwd: Path, checkout: Path) -> bool:
 
 
 def staged_warning(
-  cwd: Path, ids: tuple[str, ...], *, include_tracked: bool = False
+  cwd: Path,
+  ids: tuple[str, ...],
+  *,
+  renamable_ids: tuple[str, ...] = (),
+  include_tracked: bool = False,
 ) -> str:
   """Check changes a commit would stage, including tracked files with -a."""
   try:
@@ -110,10 +114,16 @@ def staged_warning(
           continue
         for ident, pattern in patterns.items():
           if pattern.search(line):
-            return (
+            warning = (
               "COMMIT BLOCKED: an added line cites a session-local ID "
-              f"({path}:{number}: {ident}). Remove it before committing."
+              f"({path}:{number}: {ident}). Remove a genuine citation before committing."
             )
+            if ident in renamable_ids:
+              warning += (
+                " If this is a name collision instead, rename the task or report with "
+                f"`steer ren {ident} <unused-kebab-id>` and retry."
+              )
+            return warning
   return ""
 
 

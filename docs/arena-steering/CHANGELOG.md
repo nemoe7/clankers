@@ -24,6 +24,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `git_safety.py`, `pre.py`, `cli.py`: Point blocked commits to `steer ren` only for task or report name collisions. Keep real citations blocked, and distinguish them from matching source text.
+
 - `markdown.py`, `server.py`, `assets/api.js`, `assets/app.js`: Show one visual break per source line in Messages and its draft preview. Keep Reports Markdown unchanged.
 
 - `assets/style.css`: Keep Reports markers clear of the label when the Bash log button shares a narrow header.
@@ -307,7 +309,7 @@ This log has no Unreleased section.
 - `scripts/arena_steering/` and `assets/`: Store `parent_ids[]` on messages, toggle composer reply parents from receipt IDs, copy IDs on Shift+Click, and render clickable `↪ <id>` parent chips.
 - `scripts/arena_steering/server.py` and `assets/`: Serve nested UI assets, report files and raw Markdown, and uploads under `/static/assets/`, `/static/reports/`, and `/static/uploads/`.
 - `scripts/arena_steering/server.py`: Add JSON and multipart `POST /api/uploads` and `POST /api/messages/with-file`. Store uploads under `/static/uploads/` and convert long pasted text into a `.txt` attachment.
-- `scripts/arena_steering/`, `assets/api.js`, and `assets/app.js`: Add `steer rename`, `steer task unlink`, `steer pr-update`, and `steer job-log`, plus browser `POST /api/timezone` instead of `init --tz`.
+- `scripts/arena_steering/`, `assets/api.js`, and `assets/app.js`: Add `steer ren`, `steer task unlink`, `steer pr-update`, and `steer job-log`, plus browser `POST /api/timezone` instead of `init --tz`.
 - `assets/`: Stage full-page file drops, `#attach-file` picks, and long pastes as removable chips in `#composer-attachments`, with `#composer-expand` for a taller composer.
 - `scripts/arena_steering/cli.py`: Add native `git worktree` lifecycle commands under `.worktrees/`, detached `steer run start` with `--after` chaining and `steer run logs`, plus a `steer run pr-checks` watcher.
 - `assets/messages-view.js`: Fix message rendering when a task links to a message.

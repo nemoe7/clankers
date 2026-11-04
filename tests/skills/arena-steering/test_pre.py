@@ -863,6 +863,54 @@ def test_commit_refuses_staged_capture_and_new_session_id(
     "pre", "-l", "git commit -am review", "-c", "git commit -am review", "-s", "bash"
   )
   assert code == pre.BLOCK and message_id in out
+  assert "steer ren" not in out
+
+
+@pytest.mark.parametrize("entity_type", ("task", "report"))
+def test_commit_name_collision_guides_safe_rename(
+  _isolate_state: Path, _git_checkout: Path, entity_type: str
+) -> None:
+  _isolate_state.mkdir(parents=True, exist_ok=True)
+  store, messages, tasks, reports = cli.open_services(_isolate_state)
+  if entity_type == "task":
+    tasks.create_task("alias-token", "Alias", size=3, details=["Rename-safe test"])
+  else:
+    reports.publish_report("alias-token", "Alias", "# Alias")
+  store.close()
+
+  def stage_css(selector: str) -> None:
+    (_git_checkout / "style.css").write_text(
+      f".{selector} {{ display: block; }}\n", encoding="utf-8"
+    )
+    subprocess.run(
+      ["git", "add", "style.css"], cwd=_git_checkout, check=True, capture_output=True
+    )
+
+  line = "git commit -m review"
+  command = ("pre", "-l", line, "-c", line, "-s", "bash")
+  stage_css("alias-token")
+  code, out = _run(*command)
+  assert code == pre.BLOCK
+  assert "steer ren alias-token <unused-kebab-id>" in out
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  flag = messages.pending_violation()
+  assert flag is not None and "steer ren" in flag.body
+  messages.ack(flag.id, "Renamed the record.")
+  store.close()
+
+  assert _run("ren", "alias-token", "renamed-record")[0] == 0
+  store, _, _, _ = cli.open_services(_isolate_state)
+  assert (store.get_task if entity_type == "task" else store.get_report)(
+    "renamed-record"
+  ) is not None
+  assert (store.get_task if entity_type == "task" else store.get_report)(
+    "alias-token"
+  ) is None
+  store.close()
+  assert _run(*command)[0] == pre.CONTINUE
+
+  stage_css("renamed-record")
+  assert _run(*command)[0] == pre.BLOCK
 
 
 def test_commit_comparison_failure_does_not_flag_content(

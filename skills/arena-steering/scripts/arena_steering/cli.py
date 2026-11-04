@@ -1005,14 +1005,16 @@ def _run_pre(
   count = _call_count(store) if pending_ids else 0
   text = f"{parsed.line} {parsed.command_text}"
   session_ids: tuple[str, ...] = ()
+  renamable_ids: tuple[str, ...] = ()
   if "git" in text and "commit" in text:
+    task_ids = {task.id for task in store.list_tasks()}
+    report_ids = {report.id for report in store.list_reports()}
+    renamable_ids = tuple(sorted(task_ids | report_ids))
     session_ids = tuple(
       sorted(
-        {
-          *(message.id for message in store.list_messages(include_hidden=True)),
-          *(task.id for task in store.list_tasks()),
-          *(report.id for report in store.list_reports()),
-        }
+        {message.id for message in store.list_messages(include_hidden=True)}
+        | task_ids
+        | report_ids
       )
     )
   ctx = pre_mod.PreContext(
@@ -1027,6 +1029,7 @@ def _run_pre(
     cwd=Path.cwd(),
     checkout_root=pre_mod.repo_root(),
     session_ids=session_ids,
+    renamable_ids=renamable_ids,
   )
   result = pre_mod.run_pipeline(ctx)
   if result.verdict == pre_mod.BLOCK and parsed.shell:
@@ -1072,7 +1075,8 @@ def _run_pre(
       "bash-commit-content",
       (
         "Automatic violation: Bash blocked a stage or commit with a wireframe capture or "
-        "session-local ID. Remove captures from staging and IDs from added lines before retrying."
+        "session-local ID. Remove captures and genuine citations before retrying. "
+        "For a task or report name collision, use `steer ren <old-id> <unused-kebab-id>` instead."
       ),
     ),
   }
