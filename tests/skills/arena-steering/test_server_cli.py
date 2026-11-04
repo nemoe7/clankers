@@ -920,6 +920,25 @@ def test_state_merge_stale_deletion_keeps_later_edit_and_upload(tmp_path: Path) 
   store.close()
 
 
+def test_cli_read_and_msg_show_list_every_parent_id_without_parent_text() -> None:
+  state_dir = cli.resolve_state_dir()
+  store = SqliteStore(state_dir / "state.sqlite3")
+  service = cli.MessageService(store, store, store, store)
+  for parent_id, body in (("aa1001", "Private first"), ("bb2002", "Private second")):
+    parent = service.send_message(body, msg_id=parent_id)
+    parent.status = "acked"
+    store.save_message(parent)
+  service.send_message("Child only", msg_id="cc3003", parent_ids=["aa1001", "bb2002"])
+  store.close()
+
+  for args in (("read",), ("msg", "cc3003")):
+    code, output, error = _run_cli(state_dir, *args)
+    assert code == 0, error
+    assert "`cc3003`" in output
+    assert "parents: aa1001, bb2002" in output
+    assert "Private first" not in output and "Private second" not in output
+
+
 def test_router_create_message_accepts_parent_ids() -> None:
   store = SqliteStore(":memory:")
   app = SteeringApp(store)

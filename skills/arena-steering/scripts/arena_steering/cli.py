@@ -1635,6 +1635,8 @@ def _print_message(msg: Message, out: TextIO) -> None:
   if not msg.blocking:
     flags.append("non-blocking")
   print(f"`{msg.id}` ({', '.join(flags)}) [{msg.modified_at}]", file=out)
+  if msg.parent_ids:
+    print("parents: " + ", ".join(msg.parent_ids), file=out)
   if msg.body:
     print(msg.body, file=out)
   for att in msg.attachments:

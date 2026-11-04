@@ -24,6 +24,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `cli.py`: List every stored parent ID when `steer read` or `steer msg ID` displays a child message. Do not embed parent text.
+
 - `pre.py`: Exempt only the complete checkout-directory validator after confirming each path stays inside the checkout through symlinks. Reject altered tests and added commands.
 
 - `pre.py`: Exempt a pinned platform stop script with one eight-hex process name from the sleep guard and inbox count. Keep changed scripts blocked.
