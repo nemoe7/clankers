@@ -200,6 +200,56 @@ def test_reports_copy_uses_only_confirmed_selection_method() -> None:
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+@pytest.mark.parametrize("width", [390, 1200])
+def test_reports_copy_in_isolated_browser_selects_full_markdown(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="Reports Copy browser probe")
+  body = "# Browser Copy probe\n\nPlain *Markdown* text.\n"
+  app.reports.publish_report("copy-probe", "Copy probe", body)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 750})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        copy_btn = page.locator("#copy-report-btn")
+        copy_btn.wait_for()
+        page.evaluate("""() => {
+          window.__copiedSelection = null;
+          document.addEventListener('copy', () => {
+            const field = document.activeElement;
+            window.__copiedSelection = field?.value?.slice(
+              field.selectionStart, field.selectionEnd
+            ) || null;
+          }, { once: true });
+        }""")
+        copy_btn.click()
+        assert page.evaluate("window.__copiedSelection") == body
+        assert copy_btn.get_attribute("data-state") == "good"
+        assert page.locator("textarea[readonly]").count() == 0
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 @pytest.mark.parametrize(("width", "height"), [(411, 799), (855, 325), (1372, 883)])
 def test_survey_modal_keeps_tooltip_and_actions_in_view(
   tmp_path: Path, width: int, height: int
