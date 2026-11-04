@@ -134,20 +134,19 @@ def test_timed_out_poll_marks_turn_end() -> None:
     store.close()
 
 
-def test_agent_poll_checks_task_once_at_entry() -> None:
+def test_agent_poll_uses_initial_task_without_wait() -> None:
   store = SqliteStore()
   app = SteeringApp(store)
-  task_checks: list[bool] = []
-
-  def next_task():
-    task_checks.append(True)
-
   try:
-    delivered = app.messages.poll(timeout_seconds=0.4, next_task=next_task)
-    assert delivered["status"] == "timeout"
-    assert delivered["next_task"] is None
-    assert task_checks == [True]
-    assert store.get_meta("turn_ended_at")
+    task = app.tasks.create_task(
+      "initial", "Initial task", size=2, details=["Do the first task."]
+    )
+    app.messages.trigger_skip_poll()
+    delivered = app.messages.poll(timeout_seconds=0.4, initial_task=task)
+    assert delivered["status"] == "ready"
+    assert delivered["next_task"].id == "initial"
+    assert store.get_meta("skip_poll") == "1"
+    assert not store.get_meta("turn_ended_at")
   finally:
     store.close()
 
@@ -183,9 +182,7 @@ def test_agent_poll_wakes_for_gate_linked_task_present_at_start(tmp_path: Path) 
 
   thread = threading.Thread(
     target=lambda: delivered.append(
-      poller.messages.poll(
-        timeout_seconds=2, next_task=lambda: None, gate_task=gate_task
-      )
+      poller.messages.poll(timeout_seconds=2, gate_task=gate_task)
     ),
     daemon=True,
   )

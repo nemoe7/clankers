@@ -116,9 +116,9 @@ def test_cli_poll_wakes_when_initial_gate_finishes(
   assert app.tasks.get_task("gate-task")[1]
   original_poll = cli.MessageService.poll
 
-  def short_poll(self, timeout_seconds=0.0, *, next_task=None, gate_task=None):
+  def short_poll(self, timeout_seconds=0.0, *, initial_task=None, gate_task=None):
     return original_poll(
-      self, timeout_seconds=1, next_task=next_task, gate_task=gate_task
+      self, timeout_seconds=1, initial_task=initial_task, gate_task=gate_task
     )
 
   monkeypatch.setattr(cli.MessageService, "poll", short_poll)
@@ -175,9 +175,9 @@ def test_cli_poll_distinguishes_skip_and_timeout(
 
     original_poll = cli.MessageService.poll
 
-    def short_poll(self, timeout_seconds=0.0, *, next_task=None, gate_task=None):
+    def short_poll(self, timeout_seconds=0.0, *, initial_task=None, gate_task=None):
       return original_poll(
-        self, timeout_seconds=0.05, next_task=next_task, gate_task=gate_task
+        self, timeout_seconds=0.05, initial_task=initial_task, gate_task=gate_task
       )
 
     monkeypatch.setattr(cli.MessageService, "poll", short_poll)

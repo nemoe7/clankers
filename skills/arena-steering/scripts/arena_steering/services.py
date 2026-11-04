@@ -466,7 +466,7 @@ class MessageService:
     self,
     timeout_seconds: float = 0.0,
     *,
-    next_task: Callable[[], Task | None] | None = None,
+    initial_task: Task | None = None,
     gate_task: Callable[[], Task | None] | None = None,
   ) -> dict[str, Any]:
     """Wait for inbox work, an initial task, a linked gate, or Skip."""
@@ -476,7 +476,7 @@ class MessageService:
     task: Task | None = None
     self.touch_agent()
     if not self.has_pending_deliverables():
-      task = next_task() if next_task is not None else None
+      task = initial_task
       if task is None:
         skipped = self.consume_skip_poll()
       if task is None and not skipped and timeout > 0:

@@ -375,7 +375,7 @@ def main(
       started = time.monotonic()
       delivered = messages.poll(
         timeout_seconds=1799.0,
-        next_task=lambda: initial_task,
+        initial_task=initial_task,
         gate_task=unblocked_gate_task if waiting_gate_ids else None,
       )
       messages.record_poll_duration(time.monotonic() - started)
