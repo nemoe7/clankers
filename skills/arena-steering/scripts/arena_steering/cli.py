@@ -922,7 +922,7 @@ def _schedule_instruction_check(
     paths = [
       root / "ARENA.md",
       root / "AGENTS.md",
-      root / ".agents/skills/arena-skill/SKILL.md",
+      root / ".agents/skills/arena-steering/SKILL.md",
     ]
     listed = "\n".join(f"- `{path}`" for path in paths if path.is_file())
     messages.send_message(

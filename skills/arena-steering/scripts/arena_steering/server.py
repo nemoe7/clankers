@@ -173,13 +173,9 @@ def _read_set_files(root: Path) -> tuple[str, ...]:
       path = Path(directory) / "AGENTS.md"
       if path.is_file() and path.resolve().is_relative_to(root):
         files.append(path.relative_to(root).as_posix())
-  for name in (
-    ".agents/skills/arena-skill/SKILL.md",
-    "skills/arena-skill/SKILL.md",
-  ):
-    if (root / name).is_file():
-      files.append(name)
-      break
+  name = ".agents/skills/arena-steering/SKILL.md"
+  if (root / name).is_file():
+    files.append(name)
   return tuple(files)
 
 

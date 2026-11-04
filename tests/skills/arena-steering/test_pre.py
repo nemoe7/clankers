@@ -2471,9 +2471,11 @@ def test_instruction_checkpoints_wait_fifteen_minutes_and_deduplicate(
   _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
   root = _isolate_state.parent / "checkout"
-  skill = root / ".agents" / "skills" / "arena-skill" / "SKILL.md"
+  skill = root / ".agents" / "skills" / "arena-steering" / "SKILL.md"
+  old_skill = root / ".agents" / "skills" / "arena-skill" / "SKILL.md"
   skill.parent.mkdir(parents=True)
-  for path in (root / "ARENA.md", root / "AGENTS.md", skill):
+  old_skill.parent.mkdir(parents=True)
+  for path in (root / "ARENA.md", root / "AGENTS.md", skill, old_skill):
     path.write_text("Read the full file.\n", encoding="utf-8")
   monkeypatch.setattr(pre, "repo_root", lambda: root)
   _seed(_isolate_state, "Acknowledged", acked=True)
@@ -2501,6 +2503,7 @@ def test_instruction_checkpoints_wait_fifteen_minutes_and_deduplicate(
   assert "15min bible check" in due[0].body
   for path in (root / "ARENA.md", root / "AGENTS.md", skill):
     assert str(path) in due[0].body
+  assert str(old_skill) not in due[0].body
   assert messages.pending_ids() == [due[0].id]
   store.close()
 

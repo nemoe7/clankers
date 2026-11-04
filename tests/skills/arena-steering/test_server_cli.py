@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from arena_steering.server import (
   PASTE_ATTACHMENT_CHAR_THRESHOLD,
   PASTE_ATTACHMENT_LINE_THRESHOLD,
   SteeringApp,
+  _read_set_files,
   make_request_handler,
 )
 from arena_steering.store import SqliteStore
@@ -51,6 +53,43 @@ def test_cli_version_flags() -> None:
   code = cli_main(["--version"], out=out)
   assert code == 0
   assert out.getvalue().strip() == f"steer {__version__}"
+
+
+def test_v2_bible_lists_only_its_installed_skill_stub(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  v2_path = ".agents/skills/arena-steering/SKILL.md"
+  old_path = ".agents/skills/arena-skill/SKILL.md"
+  fallback_path = "skills/arena-skill/SKILL.md"
+  for name in (v2_path, old_path, fallback_path):
+    target = tmp_path / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("placeholder", encoding="utf-8")
+  read_set = _read_set_files(tmp_path)
+  assert v2_path in read_set
+  assert old_path not in read_set
+  assert fallback_path not in read_set
+  (tmp_path / v2_path).unlink()
+  _read_set_files.cache_clear()
+  assert old_path not in _read_set_files(tmp_path)
+  assert fallback_path not in _read_set_files(tmp_path)
+  (tmp_path / v2_path).write_text("stub", encoding="utf-8")
+  _read_set_files.cache_clear()
+
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  messages = cli.MessageService(store, store, store, store)
+  monkeypatch.setattr(cli.pre_mod, "repo_root", lambda: tmp_path)
+  moment = datetime.now(UTC)
+  store.set_meta(cli.READ_SET_LAST_META, (moment - timedelta(minutes=16)).isoformat())
+  cli._schedule_instruction_check("echo ready", messages, store, moment=moment)
+  checkpoint = next(
+    msg
+    for msg in messages.list_messages(unread_only=False, include_hidden=True)
+    if msg.body.startswith("15min bible check")
+  )
+  assert str(tmp_path / v2_path) in checkpoint.body
+  assert str(tmp_path / old_path) not in checkpoint.body
+  store.close()
 
 
 def test_blocked_bash_log_endpoint_reads_full_local_entries_without_syncing(

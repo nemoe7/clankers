@@ -26,6 +26,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `cli.py`, `server.py`, `.agents/skills/arena-steering/SKILL.md`: Point v2 bible reminders and read sets to its future installed skill path. The repo-only stub directs readers to the checked-in v2 skill without releasing it.
+
 - `server.py`, `assets/tasks-view.js`, `assets/style.css`: Show a blue task-title shimmer only for an active linked gate. Keep report blockers and finished gates static.
 
 - `assets/style.css`: Let Reports prose use the full content width rather than stop at 72ch. Keep tables scrollable.
