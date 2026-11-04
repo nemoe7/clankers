@@ -2243,6 +2243,67 @@ def test_task_marker_tracks_first_line_of_wrapped_title(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+def test_main_panel_keeps_small_shared_header_gap(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="Panel header gap")
+  app.tasks.create_task("one-task", "One task", size=2, details=["Review"])
+  app.reports.publish_report("one-report", "One report", "# One report")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        for width, height, expected_gap in (
+          (1372, 883, 12),
+          (855, 325, 6),
+          (411, 799, 10),
+        ):
+          page = browser.new_page(
+            viewport={"width": width, "height": height},
+            reduced_motion="reduce",
+          )
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          for tab in ("messages", "reports", "tasks"):
+            page.locator(f"#tab-{tab}").click()
+            gap = page.evaluate("""() => {
+              const header = document.querySelector('.topbar');
+              const main = document.querySelector('.main-content');
+              const panel = main.querySelector('section[role="tabpanel"]:not([hidden])');
+              return {
+                padding: parseFloat(getComputedStyle(main).paddingTop),
+                distance: panel.getBoundingClientRect().top - header.getBoundingClientRect().bottom,
+                overflow: document.documentElement.scrollWidth > innerWidth,
+              };
+            }""")
+            assert gap["padding"] == expected_gap, (width, height, tab, gap)
+            assert abs(gap["distance"] - expected_gap) < 1, (
+              width,
+              height,
+              tab,
+              gap,
+            )
+            assert not gap["overflow"], (width, height, tab, gap)
+          page.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 def test_tasks_toolbar_row_divider_and_fade_follow_scroll(tmp_path: Path) -> None:
   import base64
 

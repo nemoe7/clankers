@@ -44,7 +44,7 @@ This log has no Unreleased section.
 
 - `assets/style.css`, `test_web_ui.py`: Fade report-table edges only while more columns remain past that edge. Keep native scrolling.
 
-- `assets/style.css`: Remove shared main-panel top padding and the Tasks-only fade gap. Retain inline and bottom spacing.
+- `assets/style.css`, `test_web_ui.py`: Restore a smaller shared top gap below the header in all tabs while removing the Tasks-only fade gap. Retain inline and bottom spacing.
 
 - `assets/style.css`, `test_web_ui.py`: Fade the Reports top edge over 36 px of scroll. Leave empty and at-top views clear.
 
