@@ -918,8 +918,11 @@ class BarePathReminder:
   name = "bare"
 
   def applies(self, ctx: PreContext) -> bool:
+    installed = Path.home() / ".local/bin/steer"
     for words in _line_commands(ctx):
-      if words and words[0].endswith("/scripts/steer"):
+      if words and (
+        words[0].endswith("/scripts/steer") or Path(words[0]).expanduser() == installed
+      ):
         return True
       if (
         len(words) > 1
@@ -930,7 +933,9 @@ class BarePathReminder:
     return False
 
   def run(self, ctx: PreContext) -> PreResult:
-    return PreResult(["Use bare `steer` from any directory. Drop full path."])
+    return PreResult(
+      ["Use bare `steer` from any directory. It works without the full path."]
+    )
 
 
 SLEEP_IDLE_CAP_SECONDS = 60
