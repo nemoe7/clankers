@@ -607,14 +607,18 @@ export function renderReportsView(container, state, handlers) {
       submitBtn?.click();
     }
   });
-  const collectValues = () => {
+  const collectValues = (includeSuggestedDefaults = false) => {
     const values = {};
     for (const question of container.querySelectorAll(
       ".question[data-field-id]"
     )) {
       const fid = question.dataset.fieldId;
       const ftype = question.dataset.fieldType;
-      if (question.dataset.suggestedDefault === "true" && question.dataset.userTouched !== "true") continue;
+      if (
+        !includeSuggestedDefaults &&
+        question.dataset.suggestedDefault === "true" &&
+        question.dataset.userTouched !== "true"
+      ) continue;
       if (ftype === "text") {
         const val =
           question.querySelector(".field-text-input")?.value.trim() || "";
@@ -667,7 +671,7 @@ export function renderReportsView(container, state, handlers) {
 
   listen(form, "submit", async (event) => {
     event.preventDefault();
-    const values = collectValues();
+    const values = collectValues(true);
     await handlers.onSubmitReportAnswer(activeReport.id, values);
     clearDrafts(activeReport.id);
   });

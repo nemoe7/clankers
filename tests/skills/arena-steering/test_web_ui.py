@@ -4085,6 +4085,77 @@ def test_fallback_poll_refreshes_without_analytics_across_reload(
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
 @pytest.mark.parametrize("width", [390, 1200])
+def test_report_recommendations_submit_only_after_explicit_submit(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  body = (
+    '<!-- question {"id":"route","label":"Route"} -->\n'
+    "Choose a route\n"
+    '- (x) Guided review <!-- option {"label":"Guided"} -->\n'
+    '- ( ) Manual review <!-- option {"label":"Manual"} -->\n\n'
+    '<!-- question {"id":"signal","label":"Signal"} -->\n'
+    "Choose signals\n"
+    '- [x] First signal <!-- option {"label":"First"} -->\n'
+    '- [ ] Second signal <!-- option {"label":"Second"} -->\n'
+  )
+  app.reports.publish_report("recommend-only", "Recommended choices", body)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        assert page.locator(
+          '[data-field-id="route"] input[value="Guided review"]'
+        ).is_checked()
+        assert page.locator(
+          '[data-field-id="signal"] input[value="First signal"]'
+        ).is_checked()
+        assert app.reports.get_report("recommend-only").answers == []
+        page.screenshot(path=str(tmp_path / f"recommend-before-{width}.png"))
+        with (
+          page.expect_request("**/reports/recommend-only/answers") as request,
+          page.expect_response("**/reports/recommend-only/answers") as response,
+        ):
+          page.locator("#report-submit-float").click()
+        assert request.value.post_data_json["values"] == {
+          "route": "Guided review",
+          "signal": ["First signal"],
+        }
+        assert response.value.status == HTTPStatus.CREATED
+        assert app.reports.get_report("recommend-only").answers[-1].values == {
+          "route": "Guided",
+          "signal": ["First"],
+        }
+        page.locator("#report-picker .report-picker-unanswered").wait_for(
+          state="detached", timeout=6000
+        )
+        page.screenshot(path=str(tmp_path / f"recommend-after-{width}.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
 def test_report_recommendations_preselect_without_becoming_owner_answers(
   tmp_path: Path, width: int
 ) -> None:
@@ -4126,10 +4197,22 @@ def test_report_recommendations_preselect_without_becoming_owner_answers(
         assert signal.is_checked()
         assert app.reports.get_report("recommend").answers == []
         page.locator('[data-field-id="note"] .field-text-input').fill("Only my note")
-        with page.expect_request("**/reports/recommend/answers") as first_request:
+        with (
+          page.expect_request("**/reports/recommend/answers") as first_request,
+          page.expect_response("**/reports/recommend/answers") as first_response,
+        ):
           page.locator("#report-submit-float").click()
-        assert first_request.value.post_data_json["values"] == {"note": "Only my note"}
-        assert app.reports.get_report("recommend").answers == []
+        assert first_request.value.post_data_json["values"] == {
+          "route": "Guided review",
+          "signals": ["First signal"],
+          "note": "Only my note",
+        }
+        assert first_response.value.status == HTTPStatus.CREATED
+        assert app.reports.get_report("recommend").answers[-1].values == {
+          "route": "Guided",
+          "signals": ["First"],
+          "note": "Only my note",
+        }
         page.reload()
         page.locator("#tab-reports").click()
         assert route.is_checked()
@@ -4141,15 +4224,6 @@ def test_report_recommendations_preselect_without_becoming_owner_answers(
         page.locator("#tab-reports").click()
         assert not signal.is_checked()
         signal.click()
-        with page.expect_response("**/reports/recommend/answers") as answer_response:
-          page.locator("#report-submit-float").click()
-        assert answer_response.value.status == HTTPStatus.CREATED
-        answer = app.reports.get_report("recommend").answers[-1]
-        assert answer.values == {
-          "route": "Guided",
-          "signals": ["First"],
-          "note": "Only my note",
-        }
         page.reload()
         page.locator("#tab-reports").click()
         assert route.is_checked()
