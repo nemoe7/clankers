@@ -119,6 +119,7 @@ class Message:
   blocking: bool = True
   attachments: list[Attachment] = field(default_factory=list)
   parent_ids: list[str] = field(default_factory=list)
+  parent_refs: list[dict[str, str]] = field(default_factory=list)
   status: str = "sent"
   acks: list[str] = field(default_factory=list)
   replies_seen: bool = False
@@ -147,9 +148,31 @@ class Message:
       validate_hex_id(parent_id, "Message.parent_ids")
       if parent_id not in cleaned_parent_ids:
         cleaned_parent_ids.append(parent_id)
-    if self.id in cleaned_parent_ids:
-      raise ValueError("Message cannot reply to itself")
-    self.parent_ids = cleaned_parent_ids
+    if not isinstance(self.parent_refs, list):
+      raise TypeError("Message.parent_refs must be a list")
+    seen_refs: set[tuple[str, str]] = set()
+    cleaned_refs: list[dict[str, str]] = []
+    for raw in [
+      *self.parent_refs,
+      *({"type": "message", "id": pid} for pid in cleaned_parent_ids),
+    ]:
+      if not isinstance(raw, dict) or set(raw) != {"type", "id"}:
+        raise TypeError("Message.parent_refs entries need type and id")
+      parent_type, parent_id = raw["type"], raw["id"]
+      if parent_type not in {"message", "task", "report"}:
+        raise ValueError("Invalid parent type")
+      if parent_type == "message":
+        validate_hex_id(parent_id, "Message.parent_refs")
+        if parent_id == self.id:
+          raise ValueError("Message cannot reply to itself")
+      else:
+        validate_entity_id(parent_id, "Message.parent_refs")
+      key = (parent_type, parent_id)
+      if key not in seen_refs:
+        seen_refs.add(key)
+        cleaned_refs.append({"type": parent_type, "id": parent_id})
+    self.parent_refs = cleaned_refs
+    self.parent_ids = [ref["id"] for ref in cleaned_refs if ref["type"] == "message"]
     if not isinstance(self.acks, list) or any(
       not isinstance(ack, str) or not ack.strip() for ack in self.acks
     ):
@@ -246,6 +269,7 @@ class Message:
       "blocking": self.blocking,
       "attachments": [item.to_dict() for item in self.attachments],
       "parent_ids": list(self.parent_ids),
+      "parent_refs": [dict(ref) for ref in self.parent_refs],
       "status": self.status,
       "acks": list(self.acks),
       "replies_seen": self.replies_seen,
@@ -266,6 +290,7 @@ class Message:
       blocking=bool(data.get("blocking", True)),
       attachments=[Attachment.from_dict(raw) for raw in data.get("attachments", [])],
       parent_ids=[str(item) for item in data.get("parent_ids", [])],
+      parent_refs=data.get("parent_refs", []),
       status=str(data.get("status", "sent")),
       acks=[str(item) for item in data.get("acks", [])],
       replies_seen=bool(data.get("replies_seen", False)),

@@ -148,20 +148,13 @@ class MessageService:
     violation_clause_file: str = "",
     attachments: list[Attachment] | None = None,
     parent_ids: list[str] | None = None,
+    parent_refs: list[dict[str, str]] | None = None,
     msg_id: str | None = None,
     request_id: str | None = None,
     fingerprint: str = "",
   ) -> Message:
     if not isinstance(body, str) or (not body.strip() and not attachments):
       raise ValueError("Message body or attachment is required")
-    resolved_parent_ids: list[str] = []
-    for parent_id in parent_ids or []:
-      validate_hex_id(parent_id, "Message.parent_ids")
-      if parent_id in resolved_parent_ids:
-        continue
-      if self._messages.get_message(parent_id) is None:
-        raise KeyError(f"Unknown parent message ID: {parent_id}")
-      resolved_parent_ids.append(parent_id)
     resolved_id = (
       validate_hex_id(msg_id, "Message.id")
       if msg_id is not None
@@ -176,11 +169,20 @@ class MessageService:
       violation_type=violation_type,
       violation_clause_file=violation_clause_file,
       attachments=list(attachments or []),
-      parent_ids=resolved_parent_ids,
+      parent_ids=parent_ids or [],
+      parent_refs=[] if parent_refs is None else parent_refs,
       status="sent",
       acks=[],
       modified_at=now,
     )
+    repositories = {
+      "message": self._messages.get_message,
+      "task": self._tasks.get_task,
+      "report": self._reports.get_report,
+    }
+    for ref in message.parent_refs:
+      if repositories[ref["type"]](ref["id"]) is None:
+        raise KeyError(f"Unknown parent {ref['type']} ID: {ref['id']}")
     with self._cond:
       if request_id is not None:
         message = self._messages.save_message_once(message, request_id, fingerprint)

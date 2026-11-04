@@ -109,6 +109,7 @@ class SqliteStore:
           blocking INTEGER NOT NULL DEFAULT 1,
           attachments_json TEXT NOT NULL DEFAULT '[]',
           parent_ids_json TEXT NOT NULL DEFAULT '[]',
+          parent_refs_json TEXT NOT NULL DEFAULT '[]',
           status TEXT NOT NULL DEFAULT 'sent',
           acks_json TEXT NOT NULL DEFAULT '[]',
           replies_seen INTEGER NOT NULL DEFAULT 0,
@@ -185,6 +186,10 @@ class SqliteStore:
       if "parent_ids_json" not in message_cols:
         self._conn.execute(
           "ALTER TABLE messages ADD COLUMN parent_ids_json TEXT NOT NULL DEFAULT '[]'"
+        )
+      if "parent_refs_json" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN parent_refs_json TEXT NOT NULL DEFAULT '[]'"
         )
       if "replies_seen" not in message_cols:
         self._conn.execute(
@@ -581,15 +586,16 @@ class SqliteStore:
         )
       attachments_json = json.dumps([item.to_dict() for item in message.attachments])
       parent_ids_json = json.dumps(message.parent_ids)
+      parent_refs_json = json.dumps(message.parent_refs)
       acks_json = json.dumps(message.acks)
       if existing is None:
         self._conn.execute(
           """
           INSERT INTO messages (
             id, written_at, body, hidden, blocking, attachments_json, parent_ids_json,
-            status, acks_json, modified_at, message_type, violation_type,
+            parent_refs_json, status, acks_json, modified_at, message_type, violation_type,
             violation_clause_file, answer_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             message.id,
@@ -599,6 +605,7 @@ class SqliteStore:
             int(message.blocking),
             attachments_json,
             parent_ids_json,
+            parent_refs_json,
             message.status,
             acks_json,
             message.modified_at,
@@ -617,6 +624,7 @@ class SqliteStore:
               blocking = ?,
               attachments_json = ?,
               parent_ids_json = ?,
+              parent_refs_json = ?,
               status = ?,
               replies_seen = CASE WHEN acks_json = ? THEN replies_seen ELSE 0 END,
               acks_json = ?,
@@ -633,6 +641,7 @@ class SqliteStore:
             int(message.blocking),
             attachments_json,
             parent_ids_json,
+            parent_refs_json,
             message.status,
             acks_json,
             acks_json,
@@ -674,8 +683,8 @@ class SqliteStore:
       self._conn.execute(
         """INSERT INTO messages
           (id, written_at, body, hidden, blocking, attachments_json, parent_ids_json,
-           status, acks_json, modified_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           parent_refs_json, status, acks_json, modified_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
           message.id,
           self._message_written_at(message.modified_at),
@@ -684,6 +693,7 @@ class SqliteStore:
           int(message.blocking),
           json.dumps([item.to_dict() for item in message.attachments]),
           json.dumps(message.parent_ids),
+          json.dumps(message.parent_refs),
           message.status,
           json.dumps(message.acks),
           message.modified_at,
@@ -1315,6 +1325,9 @@ class SqliteStore:
         for item in json.loads(row["attachments_json"] or "[]")
       ],
       parent_ids=[str(item) for item in json.loads(parent_ids_json or "[]")],
+      parent_refs=json.loads(row["parent_refs_json"] or "[]")
+      if "parent_refs_json" in keys
+      else [],
       status=str(row["status"]),
       acks=[str(item) for item in json.loads(row["acks_json"] or "[]")],
       replies_seen=bool(row["replies_seen"]) if "replies_seen" in keys else False,

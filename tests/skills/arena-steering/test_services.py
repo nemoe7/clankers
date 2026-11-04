@@ -335,6 +335,16 @@ def test_message_service_stores_parent_ids_for_multi_message_replies() -> None:
 
   with pytest.raises(KeyError, match="Unknown parent message ID"):
     svc.send_message("Missing parent", parent_ids=["dd4004"], msg_id="ee5005")
+  with pytest.raises(KeyError, match="Unknown parent task ID"):
+    svc.send_message("Missing task", parent_refs=[{"type": "task", "id": "missing"}])
+  with pytest.raises(ValueError, match="parent type"):
+    svc.send_message("Wrong type", parent_refs=[{"type": "unknown", "id": "abc123"}])
+  with pytest.raises(KeyError, match="Unknown parent report ID"):
+    svc.send_message(
+      "Missing report", parent_refs=[{"type": "report", "id": "missing"}]
+    )
+  with pytest.raises(ValueError, match="Message.parent_refs"):
+    svc.send_message("Invalid ID", parent_refs=[{"type": "task", "id": "not safe"}])
 
   store.close()
 

@@ -171,7 +171,8 @@ Arena-owned detached runs and exact platform utility calls do not spend the six-
 - Task details are unique after trimming whitespace.
 - Use `steer task mod ID deets TEXT` to append a detail and `steer task mod ID deets rm NUMBER` to remove one. The CLI displays detail numbers from 1.
 - Use `steer task mod ID links [msg|report|task|gate] LINK` to add a link. Use `steer task mod ID links rm TYPE LINK` to remove one, or `steer task mod ID deps [rm] TASK` for dependencies.
-- Message IDs use six lowercase hexadecimal characters. Parent IDs are deduplicated in order and must name existing messages.
+- Message IDs use six lowercase hexadecimal characters. Legacy parent IDs name existing messages.
+- Typed parent refs name existing messages, tasks, or reports. Both parent lists deduplicate in order.
 - Blocking messages move from `sent` to `seen` to `acked`. Non-blocking messages need no acknowledgement.
 - An acknowledgement contains nonempty Markdown. Repeated acknowledgements append replies.
 - The message acknowledgement route returns an answer object when its target is a report answer.
@@ -289,7 +290,7 @@ Successful creates return HTTP 201. Other successful route operations return 200
 | --- | --- | --- |
 | Mark message replies seen | `revision` is the rendered reply-list digest. | `message` and `matched`. Stale revisions return HTTP 409. |
 | List messages | `all=1`, `hidden=1`, `before=ID`, and `q=TEXT` are optional. Pages contain at most 20 messages. | `messages`, `total`, and `has_more`. |
-| Create message | `body`, optional `id`, `request_id`, `hidden`, `blocking`, `parent_ids`, and `attachments`. | `message`, including rendered body and acknowledgement HTML. |
+| Create message | `body`, optional `id`, `request_id`, `hidden`, `blocking`, `parent_ids`, `parent_refs`, and `attachments`. | `message`, including rendered body and acknowledgement HTML. |
 | Upload | JSON `file` object with `name` and `content_base64` or `text`, or multipart `file`. | `attachment` with name, path, size, presence, and static URL. |
 | Message with file | Message fields plus `file`, `attachments`, or `pasted_text`. | `message`. A long paste uses `pasted-text.txt`. |
 | Acknowledge | `markdown` or `ack`. | `message` or `answer`, depending on the route. `task_details_added` appears only when an answer acknowledgement adds details. |
@@ -302,6 +303,8 @@ Successful creates return HTTP 201. Other successful route operations return 200
 | Set timezone | `timezone`, an IANA zone such as `Asia/Manila`. | `timezone`. |
 | Render Markdown | `markdown` and optional `breaks`. | Rendered `html` and `headings`. |
 | Survey | POST accepts `answers` or a direct array or object. The interrupt accepts optional `active`. | `survey`. |
+
+`parent_refs` takes objects with an `id` and a `type` of `message`, `task`, or `report`. The server checks that each target exists. Legacy `parent_ids` contains message IDs only, and child responses include both fields.
 
 For example, send this JSON body to `POST /messages`:
 

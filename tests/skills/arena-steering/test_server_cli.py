@@ -962,6 +962,44 @@ def test_router_create_message_accepts_parent_ids() -> None:
   store.close()
 
 
+def test_router_round_trips_typed_parents_and_child_read() -> None:
+  state_dir = cli.resolve_state_dir()
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.send_message("Message parent", msg_id="aa1001")
+  app.tasks.create_task("task-parent", "Task parent", size=3, details=["Parent task"])
+  app.reports.publish_report("report-parent", "Report parent", "Body")
+  refs = [
+    {"type": "task", "id": "task-parent"},
+    {"type": "message", "id": "aa1001"},
+    {"type": "report", "id": "report-parent"},
+  ]
+  status, created = app.dispatch(
+    "POST",
+    "/messages",
+    {
+      "id": "bb2002",
+      "body": "Child",
+      "parent_refs": refs,
+      "parent_ids": ["aa1001"],
+      "request_id": "typed-parent-1",
+    },
+  )
+  assert status == int(HTTPStatus.CREATED)
+  assert created["message"]["parent_refs"] == refs
+  assert created["message"]["parent_ids"] == ["aa1001"]
+  store.close()
+
+  reopened = SqliteStore(state_dir / "state.sqlite3")
+  assert reopened.get_message("bb2002").parent_refs == refs
+  reopened.close()
+  code, output, error = _run_cli(state_dir, "msg", "bb2002")
+  assert code == 0, error
+  expected_parents = "parents: task task-parent, message aa1001, report report-parent"
+  assert expected_parents in output
+  assert "Task parent" not in output and "Report parent" not in output
+
+
 def test_report_acked_events_fire_once_per_ack() -> None:
   store = SqliteStore(":memory:")
   app = SteeringApp(store)

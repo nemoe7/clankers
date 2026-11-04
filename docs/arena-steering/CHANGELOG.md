@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `models.py`, `services.py`, `store.py`, `server.py`, `cli.py`: Store typed message, task, and report parents on child messages. Keep legacy message parent IDs and show all parent types on child reads.
+
 - `models.py`, `services.py`, `store.py`, `cli.py`, `server.py`, `assets/tasks-view.js`: Require Fibonacci sizes and rank upcoming tasks by priority, size, and insertion order. Keep dependencies ahead, preserve finished history, show rank fields only in details, and reject manual position edits.
 
 - `blocked_bash.py`, `cli.py`, `scripts/install.sh`: Append unredacted blocked Bash calls to permission-restricted local JSONL, including failed hook pushes.
