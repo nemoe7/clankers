@@ -990,6 +990,62 @@ def test_static_asset_contract_assets() -> None:
   assert "<mark>$1</mark>" in markdown_js
 
 
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 900])
+def test_composer_hint_stays_on_one_line_without_fading_or_changing_draft(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  first_line = "First line " + "details " * 30
+  app.messages.send_message(first_line + "\nSecond line must stay out", msg_id="abc123")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        composer = page.locator("#msg")
+        composer.wait_for()
+        assert composer.get_attribute("placeholder") == first_line
+        geometry = composer.evaluate("""element => ({
+          height: element.clientHeight,
+          scrollHeight: element.scrollHeight,
+          wrap: getComputedStyle(element).whiteSpace,
+          mask: getComputedStyle(element).maskImage,
+        })""")
+        assert geometry["wrap"] == "nowrap", geometry
+        assert geometry["scrollHeight"] <= geometry["height"] + 1, geometry
+        assert geometry["mask"] == "none", geometry
+        page.screenshot(path=str(tmp_path / f"composer-hint-{width}.png"))
+
+        composer.fill("A draft that wraps as needed")
+        assert (
+          composer.evaluate("element => getComputedStyle(element).whiteSpace")
+          != "nowrap"
+        )
+        assert composer.input_value() == "A draft that wraps as needed"
+        assert composer.evaluate("element => document.activeElement === element")
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=3)
+    store.close()
+
+
 def test_composer_upload_drop_expand_assets() -> None:
   messages_js = (ASSETS_DIR / "messages-view.js").read_text(encoding="utf-8")
   assert "readComposerDraft" in messages_js

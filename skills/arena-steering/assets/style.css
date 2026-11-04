@@ -1761,6 +1761,14 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   opacity: 0.5;
 }
 
+#msg:placeholder-shown {
+  white-space: nowrap;
+  overflow-x: hidden;
+  -webkit-mask-image: none;
+  mask-image: none;
+  animation: none;
+}
+
 .draft-preview {
   min-height: 112px;
   max-height: 240px;
