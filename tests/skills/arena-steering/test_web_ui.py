@@ -1854,8 +1854,30 @@ def test_task_search_highlights_matches_and_clear_collapses_details() -> None:
           details = row.locator("details.task-details")
           details.locator("summary").click()
           assert details.get_attribute("open") is not None
+          title = row.locator(".task-title")
+          detail = row.locator(".task-detail").filter(has_text="Alpha detail")
+          original_title_width = title.evaluate(
+            "el => el.getBoundingClientRect().width"
+          )
+          original_suffix_x = detail.evaluate("""el => {
+            const range = document.createRange();
+            range.setStart(el.firstChild, 6);
+            range.setEnd(el.firstChild, 7);
+            return range.getBoundingClientRect().x;
+          }""")
 
           search.fill("Alpha")
+          highlighted_title_width = title.evaluate(
+            "el => el.getBoundingClientRect().width"
+          )
+          highlighted_suffix_x = detail.evaluate("""el => {
+            const range = document.createRange();
+            range.setStart(el.lastChild, 1);
+            range.setEnd(el.lastChild, 2);
+            return range.getBoundingClientRect().x;
+          }""")
+          assert abs(highlighted_title_width - original_title_width) <= 1
+          assert abs(highlighted_suffix_x - original_suffix_x) <= 1
           assert row.locator(".task-title mark.search-hit").all_text_contents() == [
             "Alpha"
           ]

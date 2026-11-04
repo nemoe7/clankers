@@ -707,6 +707,10 @@ mark.search-hit {
   padding: 0 2px;
 }
 
+#view-tasks mark.search-hit {
+  padding-inline: 0;
+}
+
 .survey-modal-content {
   --survey-success: #45b36b;
   --survey-warning: #e5a93b;
