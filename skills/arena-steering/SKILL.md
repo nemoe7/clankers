@@ -14,6 +14,7 @@ Use one `steer` server and one state directory per session (`arena-state` by def
 ## Server and version
 
 At every turn start, follow [the v2 turn-start recipe](references/recipes/turn-start.md).
+For any browser work, follow [the browser runtime recipe](references/recipes/browser-runtime.md) as standard local tooling.
 
 ## Messages (`Inbox`)
 

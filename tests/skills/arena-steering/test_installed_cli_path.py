@@ -8,6 +8,26 @@ import pytest
 from arena_steering import pre
 
 INSTALLED = Path.home() / ".local/bin/steer"
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_browser_recipe_is_standard_tooling_without_installer_changes() -> None:
+  skill = (ROOT / "skills/arena-steering/SKILL.md").read_text(encoding="utf-8")
+  recipe = (
+    ROOT / "skills/arena-steering/references/recipes/browser-runtime.md"
+  ).read_text(encoding="utf-8")
+  installer = (ROOT / "skills/arena-steering/scripts/install.sh").read_text(
+    encoding="utf-8"
+  )
+  assert (
+    "For any browser work, follow [the browser runtime recipe]"
+    "(references/recipes/browser-runtime.md) as standard local tooling."
+  ) in skill
+  assert "Inflate `bin/al2023.tar.br`" in recipe
+  assert "Call `setupLambdaEnvironment`" in recipe
+  assert "NEVER use a Playwright-managed browser." in recipe
+  assert "Python" not in recipe and "pip " not in recipe
+  assert "@sparticuz/chromium" not in installer
 
 
 @pytest.mark.parametrize(
