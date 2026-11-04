@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from datetime import UTC, datetime
@@ -40,6 +41,7 @@ from .store import SqliteStore
 
 BIND_HOST = "0.0.0.0"
 SERVE_PORT = 8000
+JOB_LOG_HTTP_TIMEOUT = 10
 HISTORICAL_PAGE_SIZE = 10
 MESSAGE_PAGE_MIN = 5
 MESSAGE_PAGE_MAX = 50
@@ -214,7 +216,9 @@ def main(
   pr_update_p.add_argument("-t", "--title", required=True)
   pr_update_p.add_argument("-f", "--body-file", required=True)
 
-  job_log_p = sub.add_parser("job-log", help="Print a GitHub Actions log via gh.")
+  job_log_p = sub.add_parser(
+    "job-log", help="Print a fetchable signed job log URL (or a run page URL)."
+  )
   job_log_p.add_argument("-j", "--job", dest="job_id", default=None)
   job_log_p.add_argument("-r", "--run", dest="run_id", default=None)
 
@@ -804,8 +808,64 @@ def _gh_url(args: list[str]) -> tuple[str, str]:
   return url, ""
 
 
+class _NoLogRedirect(urllib.request.HTTPRedirectHandler):
+  """Leave GitHub's short-lived signed log Location available to the caller."""
+
+  def redirect_request(self, request, fp, code, msg, headers, newurl):
+    return None
+
+
+def _signed_job_log_url(job_id: str) -> tuple[str, str]:
+  """Resolve the job-logs API's 302 without downloading or printing credentials."""
+  if not re.fullmatch(r"[1-9][0-9]*", job_id):
+    return "", "job ID must be a positive integer"
+  repo, reason = _gh_url(
+    ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]
+  )
+  if not repo:
+    return "", f"repository lookup failed: {reason}"
+  if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+    return "", "repository lookup returned an invalid name"
+  try:
+    token = _run_gh(["gh", "auth", "token"]).strip()
+  except (OSError, ValueError) as exc:
+    return "", f"GitHub authentication failed: {exc}"
+  if not token:
+    return "", "GitHub authentication returned an empty token"
+  request = urllib.request.Request(
+    f"https://api.github.com/repos/{repo}/actions/jobs/{job_id}/logs",
+    headers={
+      "Authorization": f"Bearer {token}",
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  )
+  try:
+    with urllib.request.build_opener(_NoLogRedirect()).open(
+      request, timeout=JOB_LOG_HTTP_TIMEOUT
+    ) as response:
+      return "", f"GitHub API returned HTTP {response.status} without a redirect"
+  except urllib.error.HTTPError as exc:
+    if exc.code != 302:
+      return "", f"GitHub API returned HTTP {exc.code}"
+    location = exc.headers.get("Location", "")
+    try:
+      url = urllib.parse.urlsplit(location)
+    except ValueError:
+      return "", "GitHub API returned an invalid log redirect"
+    if (
+      url.scheme != "https"
+      or not url.hostname
+      or any(char in location for char in "\r\n")
+    ):
+      return "", "GitHub API returned a non-HTTPS log redirect"
+    return location, ""
+  except (urllib.error.URLError, TimeoutError, OSError) as exc:
+    return "", f"GitHub API log lookup failed: {exc}"
+
+
 def _run_job_log(parsed: argparse.Namespace, out: TextIO) -> int:
-  """Print one log URL for the agent to fetch, else the log text and the reason."""
+  """Print a fetchable job log URL or run page, else the log text and reason."""
   if bool(parsed.job_id) == bool(parsed.run_id):
     raise ValueError("Usage: steer job-log -j <job-id> or -r <run-id>")
   if parsed.run_id:
@@ -821,17 +881,11 @@ def _run_job_log(parsed: argparse.Namespace, out: TextIO) -> int:
     ]
     log_args = ["gh", "run", "view", str(parsed.run_id), "--log"]
     target = f"run {parsed.run_id}"
+    url, reason = _gh_url(url_args)
   else:
-    url_args = [
-      "gh",
-      "api",
-      f"repos/{{owner}}/{{repo}}/actions/jobs/{parsed.job_id}",
-      "--jq",
-      ".html_url",
-    ]
     log_args = ["gh", "run", "view", "--job", str(parsed.job_id), "--log"]
     target = f"job {parsed.job_id}"
-  url, reason = _gh_url(url_args)
+    url, reason = _signed_job_log_url(str(parsed.job_id))
   if url:
     print(url, file=out)
     return 0

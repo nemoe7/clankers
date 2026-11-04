@@ -15,6 +15,7 @@ Use one `steer` server and one state directory per session (`arena-state` by def
 
 At every turn start, follow [the v2 turn-start recipe](references/recipes/turn-start.md).
 For any browser work, follow [the browser runtime recipe](references/recipes/browser-runtime.md) as standard local tooling.
+For GitHub Actions logs, follow [the direct job-log recipe](references/recipes/job-logs.md).
 
 ## Messages (`Inbox`)
 

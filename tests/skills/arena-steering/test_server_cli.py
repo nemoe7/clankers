@@ -34,6 +34,7 @@ TASK_ID_CLI = "cli-task"
 TASK_ID_BASE = "base-task"
 PR_VERIFICATION_ERROR = "did not verify"
 NO_CURRENT_TASK = "No current task"
+JOB_LOG_FALLBACK_TEXT = "job log text"
 
 
 @pytest.fixture(autouse=True)
@@ -2348,15 +2349,35 @@ def test_cli_pr_update_and_job_log_use_gh_seam(tmp_path: Path, monkeypatch) -> N
       return subprocess.CompletedProcess(
         args, 0, stdout="https://github.com/o/r/actions/runs/1\n", stderr=""
       )
-    if args[:2] == ["gh", "api"]:
-      return subprocess.CompletedProcess(
-        args, 0, stdout="https://github.com/o/r/actions/runs/1/job/9\n", stderr=""
-      )
+    if args[:3] == ["gh", "repo", "view"]:
+      return subprocess.CompletedProcess(args, 0, stdout="o/r\n", stderr="")
+    if args[:3] == ["gh", "auth", "token"]:
+      return subprocess.CompletedProcess(args, 0, stdout="test-token\n", stderr="")
     if args[:3] == ["gh", "run", "view"]:
       return subprocess.CompletedProcess(args, 0, stdout="job log text\n", stderr="")
     return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
+  import urllib.error
+
+  class FakeOpener:
+    def open(self, request, *, timeout):
+      assert request.full_url == (
+        "https://api.github.com/repos/o/r/actions/jobs/123877772372/logs"
+      )
+      assert request.get_header("Authorization") == "Bearer test-token"
+      assert timeout == cli_module.JOB_LOG_HTTP_TIMEOUT
+      raise urllib.error.HTTPError(
+        request.full_url,
+        302,
+        "Found",
+        {"Location": "https://signed.example.test/log?signature=redacted"},
+        None,
+      )
+
   monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+  monkeypatch.setattr(
+    cli_module.urllib.request, "build_opener", lambda *_handlers: FakeOpener()
+  )
 
   code, out, _ = _run_cli(
     state_dir,
@@ -2401,14 +2422,12 @@ def test_cli_pr_update_and_job_log_use_gh_seam(tmp_path: Path, monkeypatch) -> N
 
   code, out, _ = _run_cli(state_dir, "job-log", "-j", "123877772372")
   assert code == 0
-  assert out.strip() == "https://github.com/o/r/actions/runs/1/job/9"
-  assert calls[-1] == [
-    "gh",
-    "api",
-    "repos/{owner}/{repo}/actions/jobs/123877772372",
-    "--jq",
-    ".html_url",
+  assert out.strip() == "https://signed.example.test/log?signature=redacted"
+  assert calls[-2:] == [
+    ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+    ["gh", "auth", "token"],
   ]
+  assert "test-token" not in out
 
 
 def test_cli_job_log_falls_back_to_text(tmp_path: Path, monkeypatch) -> None:
@@ -2432,6 +2451,53 @@ def test_cli_job_log_falls_back_to_text(tmp_path: Path, monkeypatch) -> None:
   assert code == 0
   assert "line one" in out
   assert "no URL" in out and "404" in out
+
+
+def test_cli_job_log_falls_back_when_signed_redirect_fails(
+  tmp_path: Path, monkeypatch
+) -> None:
+  import subprocess
+  import urllib.error
+
+  import arena_steering.cli as cli_module
+
+  def fake_run(args, **_kwargs):
+    if args[:3] == ["gh", "repo", "view"]:
+      return subprocess.CompletedProcess(args, 0, stdout="o/r\n", stderr="")
+    if args[:3] == ["gh", "auth", "token"]:
+      return subprocess.CompletedProcess(args, 0, stdout="test-token\n", stderr="")
+    if args[:3] == ["gh", "run", "view"]:
+      assert args == ["gh", "run", "view", "--job", "12", "--log"]
+      return subprocess.CompletedProcess(args, 0, stdout="job log text\n", stderr="")
+    raise AssertionError(args)
+
+  class FakeOpener:
+    def open(self, request, *, timeout):
+      assert timeout == cli_module.JOB_LOG_HTTP_TIMEOUT
+      raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, None)
+
+  monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+  monkeypatch.setattr(
+    cli_module.urllib.request, "build_opener", lambda *_handlers: FakeOpener()
+  )
+  code, out, _ = _run_cli(tmp_path / "arena-state", "job-log", "-j", "12")
+  assert code == 0
+  assert JOB_LOG_FALLBACK_TEXT in out
+  assert "HTTP 403" in out
+  assert "test-token" not in out
+
+
+def test_direct_job_log_recipe_uses_the_fetchable_url() -> None:
+  root = Path(__file__).resolve().parents[3]
+  recipe = (root / "skills/arena-steering/references/recipes/job-logs.md").read_text()
+  skill = (root / "skills/arena-steering/SKILL.md").read_text()
+  assert "references/recipes/job-logs.md" in skill
+  assert "steer job-log -j" in recipe
+  assert "functions.fetch_page" in recipe
+  assert not any(
+    obsolete in recipe.lower()
+    for obsolete in ("v1", "arena-skill", "agent-key", "egress-proxy")
+  )
 
 
 def test_cli_worktree_lifecycle_uses_native_git(tmp_path: Path, monkeypatch) -> None:
