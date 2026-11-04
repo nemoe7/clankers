@@ -973,9 +973,7 @@ def _run_pre_route(
     if str(exc).startswith("VIOLATION:"):
       print(exc, file=out)
     else:
-      print(
-        f"Run failed: {exc}. Original did not run. Fix and retry safely.", file=out
-      )
+      print(f"Run failed: {exc}. Original did not run. Fix and retry safely.", file=out)
     return pre_mod.BLOCK
   return pre_mod.END_CALL
 

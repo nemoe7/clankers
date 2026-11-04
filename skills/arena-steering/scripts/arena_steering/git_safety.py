@@ -121,9 +121,7 @@ def staged_warning(
               f"{path}:{number}: {ident}. Remove the citation and retry."
             )
             if ident in renamable_ids:
-              warning += (
-                " If name clash `steer ren OLD_ID NEW_ID` and retry."
-              )
+              warning += " If name clash `steer ren OLD_ID NEW_ID` and retry."
             return warning
   return ""
 

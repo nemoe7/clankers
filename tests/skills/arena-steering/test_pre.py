@@ -257,7 +257,9 @@ def test_failed_routed_bash_writes_block_audit(
   monkeypatch.setattr(cli, "_start_detached_run", fail_route)
   line = "pytest -q"
   code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
-  assert code == pre.BLOCK and "Run failed: helper unavailable." in out
+  assert (
+    code == pre.BLOCK and "Run failed: helper unavailable." in out  # nonemo: NMT100
+  )
   rows = [
     json.loads(row)
     for row in (_isolate_state / "blocked-bash.jsonl")
@@ -280,7 +282,7 @@ def test_six_call_block_hides_pending_ids_but_keeps_recovery_steps() -> None:
   )
   output = "\n".join(result.messages)
   assert result.verdict == pre.BLOCK
-  assert "VIOLATION: Bash blocked. Read and ack all NOW." in output
+  assert "VIOLATION: Bash blocked. Read and ack all NOW." in output  # nonemo: NMT100
   assert f"Threshold: {pre.GATE_THRESHOLD} calls." in output
   assert "steer read" in output and "steer ack" in output
   assert "Pending:" not in output
@@ -624,7 +626,7 @@ def test_marked_detached_shell_does_not_spend_inbox_call_budget(
   )
   assert code == pre.BLOCK
   assert PENDING_ACK_PUSH_REASON in out
-  assert "If full bible missing, use read_file for" in out
+  assert "If full bible missing, use read_file for" in out  # nonemo: NMT100
 
 
 @pytest.mark.parametrize(
@@ -648,7 +650,7 @@ def test_mixed_platform_probe_remains_inbox_gated(
 
   code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.BLOCK
-  assert "VIOLATION: Bash blocked." in out
+  assert "VIOLATION: Bash blocked." in out  # nonemo: NMT100
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
@@ -743,9 +745,11 @@ def test_owner_supplied_pre_notices_have_only_conditional_violation_guidance(
   _seed(_isolate_state, "Ready", acked=True)
   code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
   assert code == pre.BLOCK and notice in out
-  assert ("If full bible missing, use read_file for" in out) == is_violation
+  assert (
+    "If full bible missing, use read_file for" in out  # nonemo: NMT100
+  ) == is_violation
   if line.startswith("steer read"):
-    assert "Run `steer read` or `steer poll` alone" in out
+    assert "Run `steer read` or `steer poll` alone" in out  # nonemo: NMT100
   store, messages, _, _ = cli.open_services(_isolate_state)
   flag = messages.pending_violation()
   if line.startswith("steer read"):
@@ -774,7 +778,7 @@ def test_other_immediate_violations_show_conditional_bible_guidance(
   code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
   assert code == pre.BLOCK
   assert notice in out
-  assert "If full bible missing, use read_file for" in out
+  assert "If full bible missing, use read_file for" in out  # nonemo: NMT100
   assert ".agents/skills/arena-steering/SKILL.md" in out
 
 
@@ -786,9 +790,9 @@ def test_sleep_during_live_run_names_it_and_shows_bible_guidance(
   line = "sleep 1"
   code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
   assert code == pre.BLOCK
-  assert "VIOLATION: Sleep run BANNED." in out
-  assert "Live run: verify." in out
-  assert "If full bible missing, use read_file for" in out
+  assert "VIOLATION: Sleep run BANNED." in out  # nonemo: NMT100
+  assert "Live run: verify." in out  # nonemo: NMT100
+  assert "If full bible missing, use read_file for" in out  # nonemo: NMT100
 
 
 def test_unknown_cwd_push_uses_nonviolation_recovery() -> None:
@@ -804,9 +808,12 @@ def test_wireframe_stage_warning_has_no_violation_flag(_isolate_state: Path) -> 
   _seed(_isolate_state, "Ready", acked=True)
   line = "git add shot-wireframe.png"
   code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
-  assert code == pre.BLOCK and "Commit has wireframe. Remove and retry." in out
+  assert (
+    code == pre.BLOCK
+    and "Commit has wireframe. Remove and retry." in out  # nonemo: NMT100
+  )
   assert "Violation flag:" not in out
-  assert "If full bible missing" not in out
+  assert "If full bible missing" not in out  # nonemo: NMT100
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_violation() is None
   assert messages.pending_ids() == []
@@ -1132,9 +1139,9 @@ def test_routed_pr_session_id_violation_keeps_its_immediate_notice(
   line = f"gh api repos/o/r/pulls/12 -X PATCH -f title=Safe -F body=@{body}"
   code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
   assert code == pre.BLOCK
-  assert "VIOLATION: Cited session-local ID in PR data." in out
+  assert "VIOLATION: Cited session-local ID in PR data." in out  # nonemo: NMT100
   assert "body:1: aa11bb" in out
-  assert "If full bible missing, use read_file for" in out
+  assert "If full bible missing, use read_file for" in out  # nonemo: NMT100
   assert "Run failed:" not in out
 
 
@@ -1192,7 +1199,7 @@ def test_commit_refuses_staged_capture_and_new_session_id(
     "pre", "-l", "git commit -m review", "-c", "git commit -m review", "-s", "bash"
   )
   assert code == pre.BLOCK and "design-wireframe.png" in out
-  assert "Remove before commit." in out
+  assert "Remove before commit." in out  # nonemo: NMT100
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_violation() is None
   store.close()
@@ -1215,16 +1222,16 @@ def test_commit_refuses_staged_capture_and_new_session_id(
   assert code == pre.BLOCK and message_id in out
   assert "note.md" in out
   store, messages, _, _ = cli.open_services(_isolate_state)
-  assert "VIOLATION: Cited session-local ID." in out
+  assert "VIOLATION: Cited session-local ID." in out  # nonemo: NMT100
   assert "note.md:2:" in out
-  assert "Remove the citation and retry." in out
-  assert "If full bible missing" in out
+  assert "Remove the citation and retry." in out  # nonemo: NMT100
+  assert "If full bible missing" in out  # nonemo: NMT100
   assert "Violation flag:" not in out
   assert messages.pending_violation() is None
   nested = "bash -c 'git commit -m review'"
   code, out = _run("pre", "-l", nested, "-c", nested, "-s", "bash")
   assert code == pre.BLOCK and message_id in out
-  assert "VIOLATION: Cited session-local ID." in out
+  assert "VIOLATION: Cited session-local ID." in out  # nonemo: NMT100
   assert messages.pending_violation() is None
   store.close()
 
@@ -1272,7 +1279,7 @@ def test_commit_name_collision_guides_safe_rename(
   assert code == pre.BLOCK
   assert "style.css:1: alias-token" in out
   assert "steer ren OLD_ID NEW_ID" in out
-  assert "If full bible missing" in out
+  assert "If full bible missing" in out  # nonemo: NMT100
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_violation() is None
   store.close()
@@ -1306,7 +1313,7 @@ def test_commit_comparison_failure_does_not_flag_content(
   )
   assert code == pre.BLOCK
   assert out.splitlines()[0] == "Git changes failed detect. Retry after recover."
-  assert "If full bible missing" not in out
+  assert "If full bible missing" not in out  # nonemo: NMT100
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_violation() is None
   store.close()
@@ -1331,13 +1338,13 @@ def test_managed_worktree_refuses_commit_push_and_run(
     "steer run start verify -- true",
   ):
     code, out = _run("pre", "-l", command, "-c", command, "-s", "bash")
-    assert code == pre.BLOCK and "blocked in worktree" in out, command
-    assert "If full bible missing" not in out
+    assert code == pre.BLOCK and "blocked in worktree" in out, command  # nonemo: NMT100
+    assert "If full bible missing" not in out  # nonemo: NMT100
 
   monkeypatch.chdir(_git_checkout)
   command = f"git -C {worktree} commit -m review"
   code, out = _run("pre", "-l", command, "-c", command, "-s", "bash")
-  assert code == pre.BLOCK and "blocked in worktree" in out
+  assert code == pre.BLOCK and "blocked in worktree" in out  # nonemo: NMT100
 
 
 def test_push_uses_remote_default_and_fails_closed(
@@ -1368,8 +1375,8 @@ def test_push_uses_remote_default_and_fails_closed(
     "bash",
   )
   assert code == pre.BLOCK and "trunk" in out
-  assert "VIOLATION: Push blocked. Only push main." in out
-  assert "If full bible missing, use read_file for" in out
+  assert "VIOLATION: Push blocked. Only push main." in out  # nonemo: NMT100
+  assert "If full bible missing, use read_file for" in out  # nonemo: NMT100
   code, _ = _run(
     "pre",
     "-l",
@@ -1401,8 +1408,8 @@ def test_push_uses_remote_default_and_fails_closed(
     "git-safe",
   )
   assert code == pre.BLOCK and "trunk" in out
-  assert "Push blocked. Rebase default and retry." in out
-  assert "If full bible missing" not in out
+  assert "Push blocked. Rebase default and retry." in out  # nonemo: NMT100
+  assert "If full bible missing" not in out  # nonemo: NMT100
   nested = "bash -c 'git push origin HEAD:topic'"
   code, out = _run("pre", "-l", nested, "-c", nested, "-s", "bash")
   assert code == pre.BLOCK and "trunk" in out
@@ -1418,8 +1425,10 @@ def test_push_uses_remote_default_and_fails_closed(
     "bash",
   )
   assert code == pre.BLOCK
-  assert "remote default compare failed. Check remote and retry." in out
-  assert "If full bible missing" not in out
+  assert (
+    "remote default compare failed. Check remote and retry." in out  # nonemo: NMT100
+  )
+  assert "If full bible missing" not in out  # nonemo: NMT100
 
   extra = tmp_path / "extra.git"
   git("init", "--bare", "-b", "develop", str(extra))

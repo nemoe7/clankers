@@ -3259,10 +3259,10 @@ def test_cli_pr_update_blocks_session_local_ids(
     state_dir, "pr-update", "-n", "122", "-t", title, "-f", str(body_file)
   )
   assert code == 1
-  assert "VIOLATION: Cited session-local ID in PR data." in err
+  assert "VIOLATION: Cited session-local ID in PR data." in err  # nonemo: NMT100
   assert "steer ren OLD_ID NEW_ID" in err
   assert f"{location}:1: {token}" in err
-  assert "If full bible missing, use read_file for" in err
+  assert "If full bible missing, use read_file for" in err  # nonemo: NMT100
 
 
 def test_cli_pr_update_allows_unrelated_longer_hex_strings(

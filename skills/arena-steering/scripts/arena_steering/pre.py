@@ -1002,9 +1002,7 @@ class SleepGuard:
     ]
     if any(head in {"steer", "arena-preview", "preview.py"} for head, _ in commands):
       return PreResult(
-        [
-          "VIOLATION: Sleep BANNED. Run alone."
-        ],
+        ["VIOLATION: Sleep BANNED. Run alone."],
         BLOCK,
       )
     if any(
@@ -1031,9 +1029,7 @@ class SleepGuard:
       for head, args in commands
     ):
       return PreResult(
-        [
-          f"VIOLATION: Sleep BANNED over {SLEEP_IDLE_CAP_SECONDS}s. Use detached runs."
-        ],
+        [f"VIOLATION: Sleep BANNED over {SLEEP_IDLE_CAP_SECONDS}s. Use detached runs."],
         BLOCK,
       )
     return PreResult()
