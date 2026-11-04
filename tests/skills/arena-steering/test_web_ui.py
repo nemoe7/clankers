@@ -2257,7 +2257,12 @@ def test_displayed_ids_choose_typed_composer_parents(
         page.locator("#tab-tasks").click()
         task_row = page.locator('.task[data-task-id="task-parent"]')
         assert "task-parent" not in task_row.inner_text()
-        task_row.locator('button.task-title[data-parent-type="task"]').click()
+        task_title = task_row.locator('button.task-title[data-parent-type="task"]')
+        task_title.hover()
+        assert task_title.get_attribute("title") == "task-parent"
+        assert "task-parent" in (task_title.get_attribute("aria-label") or "")
+        page.screenshot(path=str(tmp_path / f"task-id-hover-{width}.png"))
+        task_title.click()
         page.locator('#tab-messages[aria-selected="true"]').wait_for()
         assert page.locator("#msg").evaluate("el => document.activeElement === el")
         page.locator("#tab-reports").click()

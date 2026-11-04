@@ -128,7 +128,7 @@ function renderTaskRow(task, selectedParentRefs) {
 
   return `
     <li class="task" data-task-id="${escapeHtml(task.id)}">
-      <button type="button" class="task-title" data-blocked="${task.blocked ? "true" : "false"}" data-gate-running="${task.status === "upcoming" && task.running_gate === true ? "true" : "false"}" data-parent-type="task" data-parent-id="${escapeHtml(task.id)}" aria-label="${escapeHtml(task.title)}: task ${escapeHtml(task.id)} as message parent" aria-pressed="${selected ? "true" : "false"}" title="${selected ? "Remove" : "Select"} task as message parent">${highlightTaskText(task.title)}</button>
+      <button type="button" class="task-title" data-blocked="${task.blocked ? "true" : "false"}" data-gate-running="${task.status === "upcoming" && task.running_gate === true ? "true" : "false"}" data-parent-type="task" data-parent-id="${escapeHtml(task.id)}" aria-label="${escapeHtml(task.title)}: task ${escapeHtml(task.id)} as message parent" aria-pressed="${selected ? "true" : "false"}" title="${escapeHtml(task.id)}">${highlightTaskText(task.title)}</button>
       ${formatTaskPhases(task)}
       ${detailsHtml}
     </li>
