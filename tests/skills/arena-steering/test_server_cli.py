@@ -115,7 +115,7 @@ def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> Non
     store.close()
 
 
-def test_cli_poll_wakes_when_initial_gate_finishes(
+def test_cli_poll_ignores_blocked_tasks_after_gate_finishes(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
   state_dir = tmp_path / "arena-state"
@@ -138,10 +138,8 @@ def test_cli_poll_wakes_when_initial_gate_finishes(
   assert app.tasks.get_task("gate-task")[1]
   original_poll = cli.MessageService.poll
 
-  def short_poll(self, timeout_seconds=0.0, *, initial_task=None, gate_task=None):
-    return original_poll(
-      self, timeout_seconds=1, initial_task=initial_task, gate_task=gate_task
-    )
+  def short_poll(self, timeout_seconds=0.0, **kwargs):
+    return original_poll(self, timeout_seconds=0.25, **kwargs)
 
   monkeypatch.setattr(cli.MessageService, "poll", short_poll)
   results: list[tuple[int, str, str]] = []
@@ -157,9 +155,14 @@ def test_cli_poll_wakes_when_initial_gate_finishes(
     exit_path.write_text("0", encoding="utf-8")
     thread.join(timeout=1.5)
     assert not thread.is_alive()
-    assert results == [
-      (0, "DO NOT END TURN, CONTINUE TASK: Gate task | gate-task | docs\n", "")
-    ]
+    assert results == [(0, "Poll waited fully. End turn.\n", "")]
+    assert not app.tasks.get_task("gate-task")[1]
+    _run_cli(state_dir, "read")  # Clear the fast-repeat guard before a new poll.
+    assert _run_cli(state_dir, "poll") == (
+      0,
+      "DO NOT END TURN, CONTINUE TASK: Gate task | gate-task | docs\n",
+      "",
+    )
   finally:
     thread.join(timeout=2)
     store.close()
@@ -197,10 +200,8 @@ def test_cli_poll_distinguishes_skip_and_timeout(
 
     original_poll = cli.MessageService.poll
 
-    def short_poll(self, timeout_seconds=0.0, *, initial_task=None, gate_task=None):
-      return original_poll(
-        self, timeout_seconds=0.05, initial_task=initial_task, gate_task=gate_task
-      )
+    def short_poll(self, timeout_seconds=0.0, **kwargs):
+      return original_poll(self, timeout_seconds=0.05, **kwargs)
 
     monkeypatch.setattr(cli.MessageService, "poll", short_poll)
     code, out, err = _run_cli(state_dir, "poll")

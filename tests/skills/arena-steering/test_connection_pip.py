@@ -151,7 +151,7 @@ def test_agent_poll_uses_initial_task_without_wait() -> None:
     store.close()
 
 
-def test_agent_poll_wakes_for_gate_linked_task_present_at_start(tmp_path: Path) -> None:
+def test_agent_poll_does_not_recheck_gate_linked_task(tmp_path: Path) -> None:
   db = tmp_path / "state.sqlite3"
   polling_store = SqliteStore(db)
   other_store = SqliteStore(db)
@@ -169,21 +169,8 @@ def test_agent_poll_wakes_for_gate_linked_task_present_at_start(tmp_path: Path) 
   gate_id = "gate-task"
   assert poller.tasks.has_running_gate(poller.tasks.get_task(gate_id)[0])
   delivered: list[dict] = []
-
-  def gate_task():
-    return next(
-      (
-        task
-        for task, blocked in poller.tasks.list_tasks()
-        if task.id == gate_id and not blocked
-      ),
-      None,
-    )
-
   thread = threading.Thread(
-    target=lambda: delivered.append(
-      poller.messages.poll(timeout_seconds=2, gate_task=gate_task)
-    ),
+    target=lambda: delivered.append(poller.messages.poll(timeout_seconds=0.25)),
     daemon=True,
   )
   thread.start()
@@ -195,8 +182,9 @@ def test_agent_poll_wakes_for_gate_linked_task_present_at_start(tmp_path: Path) 
     exit_path.write_text("0", encoding="utf-8")
     thread.join(timeout=1.5)
     assert not thread.is_alive()
-    assert delivered[0]["status"] == "ready"
-    assert delivered[0]["next_task"].id == "gate-task"
+    assert delivered[0]["status"] == "timeout"
+    assert delivered[0]["next_task"] is None
+    assert not poller.tasks.get_task(gate_id)[1]
   finally:
     thread.join(timeout=3)
     polling_store.close()

@@ -467,9 +467,8 @@ class MessageService:
     timeout_seconds: float = 0.0,
     *,
     initial_task: Task | None = None,
-    gate_task: Callable[[], Task | None] | None = None,
   ) -> dict[str, Any]:
-    """Wait for inbox work, an initial task, a linked gate, or Skip."""
+    """Wait for inbox work, an initial runnable task, or Skip."""
     timeout = max(0.0, min(float(timeout_seconds), 1799.0))
     deadline = time.monotonic() + timeout
     skipped = timed_out = False
@@ -485,9 +484,6 @@ class MessageService:
           self._meta.set_meta("polling_at", self._clock.now_iso())
         try:
           while not self.has_pending_deliverables():
-            task = gate_task() if gate_task is not None else None
-            if task is not None:
-              break
             if self.consume_skip_poll():
               skipped = True
               break
