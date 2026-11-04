@@ -418,6 +418,57 @@ def test_exact_arena_process_probe_skips_block_and_call_count(
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
+def test_isolated_reader_requires_whole_pinned_script_and_safe_arguments(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  template = (
+    Path(__file__)
+    .with_name("reader_tool_template.sh")
+    .read_text(encoding="utf-8")
+    .strip()
+  )
+  launcher = "/bin/bash -l -c "
+  assert template.startswith(launcher + "python3 -I - <<'PY'\n")
+
+  for path, offset, limit in (
+    ("/checkout/target.txt", 1, 10000),
+    (str(pre.repo_root() / "README.md"), 70, 260),
+    (str(pre.repo_root() / "tests" / "test.py"), 438, 25),
+  ):
+    line = (
+      template.replace('path = "/checkout/target.txt"', f"path = {json.dumps(path)}")
+      .replace("offset = 1", f"offset = {offset}")
+      .replace("limit = 10000", f"limit = {limit}")
+    )
+    command = line.removeprefix(launcher)
+    code, output = _run("pre", "-l", line + " ", "-c", command + "\n", "-s", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+  for changed in (
+    template + "\npython3 -c 'print(1)'",
+    template.replace("python3 -I - <<'PY'", "python3 - <<'PY'"),
+    template.replace("max_bytes = 262144", "max_bytes = 1"),
+    template.replace('path = "/checkout/target.txt"', "path = os.environ['HOME']"),
+    template.replace('path = "/checkout/target.txt"', 'path = "relative.txt"'),
+    template.replace('path = "/checkout/target.txt"', 'path = "/checkout/$(touch x)"'),
+    template.replace("offset = 1", "offset = int(input())"),
+    template.replace("limit = 10000", "limit = 0"),
+  ):
+    code, output = _run(
+      "pre", "-l", changed, "-c", changed.removeprefix(launcher), "-s", "bash"
+    )
+    assert code == pre.BLOCK, output
+
+  code, output = _run("pre", "-l", template, "-c", "python3 -I - <<'PY'", "-s", "bash")
+  assert code == pre.BLOCK, output
+
+
 @pytest.mark.parametrize(
   ("line", "command"),
   (

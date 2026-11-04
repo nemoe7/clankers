@@ -89,6 +89,45 @@ STOP_PROCESS_NAME = re.compile(r"clankers-steering-[0-9a-f]{8}")
 STOP_PROCESS_SCRIPT_SHA256 = (
   "34229acc3bb28de2035839b6a592ac81c7d4d01bc25f7b74bc361facbb885f39"
 )
+ISOLATED_READER_SHA256 = (
+  "387e3514ed96d946f84178cc5b262b7740321b2638d1de359fd7fd2dac6df6b3"
+)
+
+
+def _isolated_reader(line: str, command: str) -> bool:
+  """Match the complete isolated read-only script, varying only path and range."""
+  launcher = "/bin/bash -l -c "
+  if not line.startswith(launcher + "python3 -I - <<'PY'"):
+    return False
+  text = line.replace("\r\n", "\n").strip()
+  if text.removeprefix(launcher) != command.replace("\r\n", "\n").strip():
+    return False
+  path_pattern = r'^path = ("(?:\\.|[^"\\])*")$'
+  path_match = re.search(path_pattern, text, flags=re.MULTILINE)
+  if path_match is None:
+    return False
+  encoded = path_match.group(1)
+  try:
+    path = json.loads(encoded)
+  except json.JSONDecodeError:
+    return False
+  if (
+    not isinstance(path, str)
+    or not Path(path).is_absolute()
+    or any(marker in path for marker in ("$(", "`", "\x00"))
+    or json.dumps(path) != encoded
+  ):
+    return False
+  text, count = re.subn(path_pattern, "path = <path>", text, flags=re.MULTILINE)
+  if count != 1:
+    return False
+  for name in ("offset", "limit"):
+    text, count = re.subn(
+      rf"^{name} = ([1-9][0-9]*)$", f"{name} = <{name}>", text, flags=re.MULTILINE
+    )
+    if count != 1:
+      return False
+  return hashlib.sha256(text.encode()).hexdigest() == ISOLATED_READER_SHA256
 
 
 def _checkout_directory_validator(line: str, command: str, root: Path | None) -> bool:
@@ -153,6 +192,8 @@ def arena_maintenance_call(
 ) -> bool:
   """Recognize whole Arena utility calls, not user lines that merely mention them."""
   text = shell_line(line).strip()
+  if _isolated_reader(line, command):
+    return True
   if _checkout_directory_validator(line, command, checkout_root):
     return True
   if _platform_stop_process(line, command):
