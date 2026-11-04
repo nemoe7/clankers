@@ -244,7 +244,7 @@ pre > code {
   background-color: hsl(var(--surface-tertiary));
   color: hsl(var(--text-primary));
   font-family: var(--font-basel-grotesk-mono);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.2;
 }
 
@@ -265,6 +265,15 @@ pre > code {
   padding: 10px 12px;
   border-radius: 0;
   background-color: hsl(var(--surface-secondary));
+}
+
+.code-block pre > code {
+  font-size: 14px;
+}
+
+.answer.reply .code-block pre > code,
+.answer.reply .code-block-header {
+  font-size: 12px;
 }
 
 .code-block .token.comment,
@@ -2662,8 +2671,6 @@ article#report.report img,
 #report h6 { font-size: 11px; }
 
 #report :not(pre) > code:not(.msg-id),
-#report .code-block pre > code,
-#report .code-block-header,
 #report .mermaid-svg { font-size: 14px; }
 #report h1 > code:not(.msg-id) { font-size: 28px; }
 #report h2 > code:not(.msg-id) { font-size: 22px; }

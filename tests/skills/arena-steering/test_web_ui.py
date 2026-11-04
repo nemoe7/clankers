@@ -1673,6 +1673,131 @@ def test_report_content_uses_next_nuu_type_step_without_resizing_chrome(
     store.close()
 
 
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 855, 1372])
+def test_fenced_markdown_code_uses_one_smaller_type_token(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="Fenced code ramp")
+  app.messages.send_message(
+    "Message prose with `inline`.\n\n```python\nprint('message')\n```",
+    msg_id="fc0001",
+    blocking=False,
+  )
+  app.messages.ack("fc0001", "Reply prose.\n\n```text\nreply line\n```")
+  app.reports.publish_report(
+    "fenced-code",
+    "Fenced code",
+    "Report prose with `inline`.\n\n```python\nprint('report')\n```\n\n"
+    '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
+  )
+  answer = app.reports.submit_answer("fenced-code", {"note": "Answered"})
+  app.reports.ack_answer(
+    "fenced-code", answer.id, "Report reply prose.\n\n```text\nack line\n```"
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator('.message[data-msg-id="fc0001"] .code-block').first.wait_for()
+        page.evaluate("""async () => {
+          const { renderMarkdownBlock } = await import('/static/assets/markdown.js');
+          const holder = document.createElement('div');
+          holder.id = 'client-markdown';
+          holder.className = 'message-text';
+          holder.innerHTML = renderMarkdownBlock('Client prose.\\n\\n```python\\nprint(1)\\n```');
+          document.querySelector('#view-messages').append(holder);
+          const loose = document.createElement('pre');
+          loose.id = 'loose-code';
+          loose.innerHTML = '<code>not Markdown fenced code</code>';
+          holder.append(loose);
+        }""")
+        page.locator("#client-markdown .code-block").wait_for()
+        selectors = {
+          "body": ".message > .message-text p",
+          "fence": ".message > .message-text .code-block pre > code",
+          "label": ".message > .message-text .code-block-header",
+          "inline": ".message > .message-text p > code",
+          "client": "#client-markdown .code-block pre > code",
+          "client_label": "#client-markdown .code-block-header",
+          "reply": ".answer.reply .code-block pre > code",
+          "reply_label": ".answer.reply .code-block-header",
+          "reply_prose": ".answer.reply p",
+          "loose": "#loose-code > code",
+        }
+
+        def sizes(wanted: dict[str, str]) -> dict[str, float]:
+          return page.evaluate(
+            """selectors => Object.fromEntries(
+            Object.entries(selectors).map(([key, selector]) => {
+              const element = document.querySelector(selector);
+              if (!element) throw new Error(`Missing ${key}: ${selector}`);
+              return [key, parseFloat(getComputedStyle(element).fontSize)];
+            })
+          )""",
+            wanted,
+          )
+
+        measured = sizes(selectors)
+        assert measured["body"] == 16
+        assert (
+          measured["fence"]
+          == measured["label"]
+          == measured["client"]
+          == measured["client_label"]
+          == 14
+        )
+        assert measured["fence"] < measured["body"]
+        assert measured["inline"] == measured["loose"] == 14.4
+        assert measured["reply_prose"] == 13
+        assert measured["reply"] == measured["reply_label"] == 12
+        assert measured["reply"] < measured["reply_prose"]
+        page.screenshot(path=str(tmp_path / f"fenced-code-messages-{width}.png"))
+
+        page.locator("#tab-reports").click()
+        page.locator("#report .code-block pre > code").wait_for()
+        page.locator("#report-ack-history .code-block").wait_for()
+        report = sizes(
+          {
+            "prose": "#report p",
+            "fence": "#report .code-block pre > code",
+            "label": "#report .code-block-header",
+            "inline": "#report p > code",
+            "ack_prose": "#report-ack-history p",
+            "ack_fence": "#report-ack-history .code-block pre > code",
+            "ack_label": "#report-ack-history .code-block-header",
+          }
+        )
+        assert report["prose"] == 16
+        assert report["fence"] == report["label"] == report["inline"] == 14
+        assert report["fence"] < report["prose"]
+        assert report["ack_prose"] == 13
+        assert report["ack_fence"] == report["ack_label"] == 12
+        assert report["ack_fence"] < report["ack_prose"]
+        page.screenshot(path=str(tmp_path / f"fenced-code-{width}.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
 def test_composer_upload_manager_handles_failures_and_concurrent_changes():
   script = r"""
 import assert from 'node:assert/strict';
