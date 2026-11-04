@@ -2151,6 +2151,98 @@ def test_task_gate_shimmer_uses_two_blue_shades() -> None:
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+@pytest.mark.parametrize("width", [390, 1200])
+def test_task_marker_tracks_first_line_of_wrapped_title(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.tasks.create_task(
+    "wrapped-title",
+    "Investigate the alignment of task list bullets when a very long "
+    "task title wraps across multiple lines even in a wide desktop viewport",
+    size=3,
+    details=["Review marker"],
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 850})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-tasks").click()
+        title = page.locator('li.task[data-task-id="wrapped-title"] > .task-title')
+        lines = title.evaluate("""element => {
+          const text = element.firstChild;
+          const range = document.createRange();
+          range.setStart(text, 0);
+          range.setEnd(text, 1);
+          const first = range.getBoundingClientRect();
+          range.setStart(text, text.length - 1);
+          range.setEnd(text, text.length);
+          const last = range.getBoundingClientRect();
+          return {left: element.getBoundingClientRect().left,
+            firstY: first.y, firstHeight: first.height, lastY: last.y};
+        }""")
+        assert lines["lastY"] - lines["firstY"] > lines["firstHeight"]
+        screenshot = page.screenshot(path=str(tmp_path / f"task-marker-{width}.png"))
+        marker = page.evaluate(
+          """async ({png, left, firstY, firstHeight, lastY}) => {
+          const image = new Image();
+          image.src = `data:image/png;base64,${png}`;
+          await image.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = image.width;
+          canvas.height = image.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(image, 0, 0);
+          const pixels = ctx.getImageData(0, 0, image.width, image.height).data;
+          const hits = [];
+          for (let y = Math.floor(firstY) - 3; y <= Math.ceil(lastY + firstHeight) + 3; y++) {
+            for (let x = Math.round(left) - 20; x <= Math.round(left) - 8; x++) {
+              const index = (y * image.width + x) * 4;
+              if (pixels[index] > 120 && pixels[index + 1] > 120 && pixels[index + 2] > 120) {
+                hits.push(y);
+                break;
+              }
+            }
+          }
+          return hits.length ? {top: hits[0], bottom: hits.at(-1)} : null;
+        }""",
+          {"png": base64.b64encode(screenshot).decode("ascii"), **lines},
+        )
+        assert marker is not None
+        marker_center = (marker["top"] + marker["bottom"]) / 2
+        first_center = lines["firstY"] + lines["firstHeight"] / 2
+        assert abs(marker_center - first_center) < lines["firstHeight"] / 2, (
+          width,
+          marker_center,
+          first_center,
+        )
+        title.click()
+        page.locator('#tab-messages[aria-selected="true"]').wait_for()
+        assert page.locator("#msg").evaluate("el => document.activeElement === el")
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
   import base64
 

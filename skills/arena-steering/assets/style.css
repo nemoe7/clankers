@@ -1955,6 +1955,7 @@ code.msg-id {
   font-size: 16px;
   font-weight: 400;
   text-align: left;
+  vertical-align: top;
   cursor: pointer;
 }
 
