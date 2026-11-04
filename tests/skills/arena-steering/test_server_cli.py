@@ -1655,6 +1655,38 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   store.close()
 
 
+def test_message_attachments_expose_only_present_served_upload_urls(
+  tmp_path: Path,
+) -> None:
+  store = SqliteStore(tmp_path / "arena-state" / "state.sqlite3")
+  app = SteeringApp(store)
+  status, uploaded = app.dispatch(
+    "POST", "/uploads", {"name": "sample.png", "content_base64": "aGVsbG8="}
+  )
+  assert status == int(HTTPStatus.CREATED)
+  image = uploaded["attachment"]
+  outside = tmp_path / "private.png"
+  outside.write_bytes(b"private")
+  attachments = [
+    image,
+    {"name": "private.png", "path": str(outside), "present": True},
+    {"name": "missing.png", "path": image["path"], "present": False},
+  ]
+  status, created = app.dispatch(
+    "POST", "/messages/with-file", {"body": "Files", "attachments": attachments}
+  )
+  assert status == int(HTTPStatus.CREATED)
+  returned = created["message"]["attachments"]
+  assert returned[0]["url"] == image["url"]
+  assert "url" not in returned[1]
+  assert "url" not in returned[2]
+
+  status, listed = app.dispatch("GET", "/messages?all=1")
+  assert status == int(HTTPStatus.OK)
+  assert listed["messages"][0]["attachments"] == returned
+  store.close()
+
+
 def test_http_multipart_upload_and_message_with_file(tmp_path: Path) -> None:
   import http.client
   import json

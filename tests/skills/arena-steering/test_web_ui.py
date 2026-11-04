@@ -1263,6 +1263,110 @@ assert.equal(stage.firstElementChild, null);
   assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+
+  def png_chunk(tag: bytes, data: bytes) -> bytes:
+    return (
+      struct.pack(">I", len(data))
+      + tag
+      + data
+      + struct.pack(">I", zlib.crc32(tag + data))
+    )
+
+  png = (
+    b"\x89PNG\r\n\x1a\n"
+    + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+    + png_chunk(b"IDAT", zlib.compress(b"\x00\xff\x80\x40\xff"))
+    + png_chunk(b"IEND", b"")
+  )
+  _, uploaded = app.dispatch(
+    "POST",
+    "/uploads",
+    {"name": "evidence.png", "content_base64": base64.b64encode(png).decode("ascii")},
+  )
+  image = {**uploaded["attachment"], "name": 'A "photo" <today>.png'}
+  _, uploaded_text = app.dispatch(
+    "POST", "/uploads", {"name": "notes.txt", "text": "Keep as text."}
+  )
+  _, created = app.dispatch(
+    "POST",
+    "/messages/with-file",
+    {
+      "body": "See attached files.",
+      "attachments": [
+        image,
+        uploaded_text["attachment"],
+        {"name": "gone.png", "path": image["path"], "present": False},
+      ],
+    },
+  )
+  msg_id = created["message"]["id"]
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        card = page.locator(f'.message[data-msg-id="{msg_id}"]')
+        thumb = card.get_by_role("button", name='View image A "photo" <today>.png')
+        thumb.wait_for()
+        assert card.locator(".message-attachment-preview").count() == 1
+        assert thumb.locator("img").evaluate(
+          "image => image.complete && image.naturalWidth === 1"
+        )
+        assert card.locator(".receipt-filename").all_inner_texts() == [
+          "notes.txt",
+          "gone.png (missing)",
+        ]
+        assert card.locator('img[src$=".txt"]').count() == 0
+        bounds, card_bounds = thumb.bounding_box(), card.bounding_box()
+        assert bounds and card_bounds
+        assert bounds["width"] <= 180
+        assert bounds["x"] >= card_bounds["x"] - 1
+        assert (
+          bounds["x"] + bounds["width"] <= card_bounds["x"] + card_bounds["width"] + 1
+        )
+
+        thumb.click()
+        viewer = page.locator("#image-modal")
+        viewer.wait_for(state="visible")
+        assert (
+          page.locator("#image-modal-stage > img").get_attribute("src") == image["url"]
+        )
+        page.keyboard.press("Escape")
+        viewer.wait_for(state="hidden")
+        thumb.focus()
+        page.keyboard.press("Enter")
+        viewer.wait_for(state="visible")
+        page.locator("#image-modal-close").click()
+        viewer.wait_for(state="hidden")
+        page.screenshot(path=str(tmp_path / f"attachment-{width}.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=3)
+    store.close()
+
+
 def test_composer_upload_manager_handles_failures_and_concurrent_changes():
   script = r"""
 import assert from 'node:assert/strict';

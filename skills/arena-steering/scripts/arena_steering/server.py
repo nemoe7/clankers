@@ -592,7 +592,11 @@ class SteeringApp:
 
   def _serialize_attachment(self, attachment: Attachment) -> dict[str, Any]:
     data = attachment.to_dict()
+    if not attachment.present:
+      return data
     stored_path = Path(attachment.path)
+    if not stored_path.is_file():
+      return data
     try:
       relative = stored_path.resolve().relative_to(self._uploads_dir().resolve())
     except ValueError:
@@ -1299,9 +1303,11 @@ class SteeringApp:
     payload["running_gate"] = self.tasks.has_running_gate(task)
     return payload
 
-  @staticmethod
-  def _serialize_message(msg: Any) -> dict[str, Any]:
+  def _serialize_message(self, msg: Any) -> dict[str, Any]:
     payload = msg.to_dict()
+    payload["attachments"] = [
+      self._serialize_attachment(attachment) for attachment in msg.attachments
+    ]
     payload["body_html"] = render_markdown(msg.body, breaks=True, pre_wrap=True)
     payload["acks_html"] = [
       render_markdown(ack, breaks=True, pre_wrap=True) for ack in msg.acks

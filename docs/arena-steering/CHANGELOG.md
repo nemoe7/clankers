@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `server.py`, `assets/messages-view.js`, `assets/app.js`, `assets/style.css`: Expose served image URLs, render message thumbnails, and open them in the existing viewer. Leave missing and nonimage files as labels.
+
 - `models.py`, `services.py`, `store.py`, `server.py`, `cli.py`: Store typed message, task, and report parents on child messages. Keep legacy message parent IDs and show all parent types on child reads.
 
 - `models.py`, `services.py`, `store.py`, `cli.py`, `server.py`, `assets/tasks-view.js`: Require Fibonacci sizes and rank upcoming tasks by priority, size, and insertion order. Keep dependencies ahead, preserve finished history, show rank fields only in details, and reject manual position edits.

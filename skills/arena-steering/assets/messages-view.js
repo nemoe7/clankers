@@ -320,9 +320,13 @@ export function renderMessagesView(container, state, handlers) {
             ? `<span class="receipt-file">${attachments
                 .map((att) => {
                   const name = escapeHtml(att.name || "");
-                  return att.present === false
-                    ? ` · ${name} (missing)`
-                    : ` · ${name}`;
+                  const preview = att.present !== false && typeof att.url === "string"
+                    && att.url.startsWith("/static/uploads/")
+                    && /\.(?:png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(String(att.name || ""));
+                  if (preview) {
+                    return `<button class="message-attachment-preview" type="button" aria-label="View image ${name}" title="View image ${name}"><img src="${escapeHtml(att.url)}" alt="" loading="lazy" decoding="async"><span class="message-attachment-name">${name}</span></button>`;
+                  }
+                  return `<span class="receipt-filename">${name}${att.present === false ? " (missing)" : ""}</span>`;
                 })
                 .join("")}</span>`
             : "";
