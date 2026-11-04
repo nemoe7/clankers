@@ -391,7 +391,7 @@ def main(
           file=stdout,
         )
       messages.reset_gate_if_clear()
-      return 1 if delivered["status"] == "timeout" else 0
+      return 0
     if cmd == "ack":
       parsed = ack_p.parse_args(cmd_args)
       return _run_ack(parsed, messages, tasks, store, stdout)
