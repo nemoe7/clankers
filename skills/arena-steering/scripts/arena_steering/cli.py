@@ -853,7 +853,7 @@ def _audit_blocked_bash(
   """Keep a failed audit write from allowing a blocked shell command."""
   try:
     append_blocked_bash(state_dir, line=line, command=command, blocked_by=blocked_by)
-  except OSError as exc:
+  except (OSError, RuntimeError) as exc:
     print(f"BLOCK AUDIT FAILED: {exc}", file=out)
 
 

@@ -14,6 +14,8 @@ This log has no Unreleased section.
 
 - `blocked_bash.py`, `server.py`, `assets/`: Show full blocked Bash entries in a local modal beside the violation flag. Render each field as text and exclude the log from state sync and reports.
 
+- `blocked_bash.py`, `server.py`, `assets/`: Dismiss one local audit row at a time with locked, atomic JSONL replacement. Keep the remaining entries private and intact.
+
 ### Changed
 
 - `cli.py`: Limit task lists to IDs and titles while single-task inspection keeps scope, links, and details.

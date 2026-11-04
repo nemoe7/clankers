@@ -957,7 +957,7 @@ function initImageModal() {
   });
 }
 
-function renderBlockedBashEntry(entry) {
+function renderBlockedBashEntry(entry, onDismiss, canDismiss) {
   const article = document.createElement("article");
   article.className = "blocked-bash-entry";
   const fields = document.createElement("dl");
@@ -974,7 +974,14 @@ function renderBlockedBashEntry(entry) {
     value.textContent = entry[key];
     fields.append(name, value);
   }
-  article.append(fields);
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "btn btn-secondary audit-row-dismiss";
+  dismiss.textContent = "Dismiss";
+  dismiss.disabled = !canDismiss;
+  dismiss.setAttribute("aria-label", `Dismiss blocked Bash call at ${entry.at}`);
+  dismiss.addEventListener("click", () => void onDismiss(entry));
+  article.append(fields, dismiss);
   return article;
 }
 
@@ -982,16 +989,40 @@ async function openBlockedBashLog(trigger) {
   const closed = modal.open("blocked-bash-log", { title: "Blocked Bash log", trigger });
   const status = document.getElementById("blocked-bash-status");
   const log = document.getElementById("blocked-bash-log");
+  const shell = document.getElementById("modal-shell");
   void closed.then(() => log.replaceChildren());
-  try {
+
+  const refresh = async (focusAfter = false) => {
     const { entries } = await api.listBlockedBash();
-    if (!log.isConnected || !document.getElementById("modal-shell").open) return;
-    status.textContent = entries.length
-      ? `${entries.length} blocked Bash ${entries.length === 1 ? "call" : "calls"} recorded locally.`
-      : "No blocked Bash calls recorded locally.";
-    log.replaceChildren(...entries.map(renderBlockedBashEntry));
+    if (!log.isConnected || !shell.open) return;
+    const canDismiss = entries.every((entry) => /^[0-9a-f]{64}$/.test(entry.id));
+    status.textContent = !canDismiss
+      ? "Log entries are readable, but dismissal requires a preview server restart."
+      : entries.length
+        ? `${entries.length} blocked Bash ${entries.length === 1 ? "call" : "calls"} recorded locally.`
+        : "No blocked Bash calls recorded locally.";
+    log.replaceChildren(...entries.map((entry) => renderBlockedBashEntry(entry, dismissEntry, canDismiss)));
+    if (focusAfter) (log.querySelector(".audit-row-dismiss") || log).focus();
+  };
+  const dismissEntry = async (entry) => {
+    const buttons = log.querySelectorAll(".audit-row-dismiss");
+    buttons.forEach((button) => { button.disabled = true; });
+    let deleted = false;
+    try {
+      await api.dismissBlockedBash(entry.id);
+      deleted = true;
+      await refresh(true);
+    } catch (error) {
+      if (status.isConnected && shell.open) {
+        status.textContent = `Could not dismiss the local log entry: ${error.message}. Close and reopen to retry.`;
+      }
+      if (!deleted) buttons.forEach((button) => { button.disabled = false; });
+    }
+  };
+  try {
+    await refresh();
   } catch (error) {
-    if (status.isConnected) {
+    if (status.isConnected && shell.open) {
       status.textContent = `Could not read the local log: ${error.message}. Close and reopen to retry.`;
     }
   }

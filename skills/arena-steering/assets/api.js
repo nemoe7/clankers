@@ -262,6 +262,15 @@ async function requestForm(path, formData, file, { automaticRetry = false } = {}
   }
 }
 
+async function blockedBashRequest(method, path) {
+  const response = await fetch(path, { method, cache: "no-store", mode: "same-origin" });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed (${response.status})`);
+  }
+  return payload;
+}
+
 export const api = {
   getHealth() {
     return requestJson("GET", "/health");
@@ -381,13 +390,11 @@ export const api = {
     return requestJson("POST", "/survey/interrupt", body, true);
   },
   async listBlockedBash() {
-    // Do not send the unredacted local log over the cross-origin WebSocket API.
-    const response = await fetch("/blocked-bash", { cache: "no-store" });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || `Request failed (${response.status})`);
-    }
-    return payload;
+    // Keep the unredacted local audit off the WebSocket and state-sync paths.
+    return blockedBashRequest("GET", "/blocked-bash");
+  },
+  async dismissBlockedBash(entryId) {
+    return blockedBashRequest("DELETE", `/blocked-bash/${encodeURIComponent(entryId)}`);
   },
   flagViolation(payload) {
     return requestJson("POST", "/agent-interrupt", payload, true);

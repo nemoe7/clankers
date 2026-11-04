@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-04
+
+### Fixed
+
+#### maintenance
+
+- Assign blocked-Bash dismissal and task-priority regressions to the Preview test group (`workflows/changed_paths.py`).
+
 ## 2026-11-03
 
 ### Changed

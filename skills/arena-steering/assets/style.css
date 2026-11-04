@@ -2858,6 +2858,11 @@ article#report.report img,
   overflow-wrap: anywhere;
 }
 
+.audit-row-dismiss {
+  display: block;
+  margin: var(--space-3) 0 0 auto;
+}
+
 @media (max-width: 600px) {
   .blocked-bash-entry dl {
     grid-template-columns: minmax(0, 1fr);

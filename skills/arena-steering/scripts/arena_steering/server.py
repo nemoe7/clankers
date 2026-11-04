@@ -28,7 +28,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse, urlsplit
 
 from . import __version__
-from .blocked_bash import read_blocked_bash
+from .blocked_bash import dismiss_blocked_bash, read_blocked_bash
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
 from .markdown import render_markdown, render_report_markdown
@@ -81,6 +81,13 @@ BIBLE_SCAN_SKIP = {
   "node_modules",
   "__pycache__",
 }
+
+
+def _is_blocked_bash_path(url: str) -> bool:
+  path = urlsplit(url).path.rstrip("/")
+  return path == "/blocked-bash" or path.startswith("/blocked-bash/")
+
+
 VIOLATION_TYPES = {
   "messages": (
     "bash-violation",
@@ -252,6 +259,7 @@ class SteeringApp:
   def _register_routes(self) -> None:
     self.router.add("GET", "/health", self._handle_health)
     self.router.add("GET", "/blocked-bash", self._handle_blocked_bash_log)
+    self.router.add("DELETE", "/blocked-bash/{id}", self._handle_dismiss_blocked_bash)
     self.router.add("GET", "/messages", self._handle_list_messages)
     self.router.add("POST", "/messages", self._handle_create_message)
     self.router.add(
@@ -666,6 +674,14 @@ class SteeringApp:
     )
     entries = read_blocked_bash(state_dir) if state_dir is not None else []
     return int(HTTPStatus.OK), {"entries": entries}
+
+  def _handle_dismiss_blocked_bash(
+    self, params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    if self.store.db_path == ":memory:":
+      raise KeyError("Blocked Bash entry no longer present")
+    dismiss_blocked_bash(Path(self.store.db_path).parent, params["id"])
+    return int(HTTPStatus.OK), {"dismissed": True}
 
   def _handle_health(
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
@@ -1464,7 +1480,7 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
         if not isinstance(parsed_body, dict):
           raise ValueError("JSON request body must be an object")
         body_dict = parsed_body
-      if method == "GET" and urlsplit(path).path.rstrip("/") == "/blocked-bash":
+      if _is_blocked_bash_path(path):
         status, payload = (
           int(HTTPStatus.FORBIDDEN),
           {"error": "Blocked Bash log requires same-origin HTTP"},
@@ -1704,7 +1720,7 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       self.send_header("Content-Type", content_type)
       self.send_header("Content-Length", str(length))
       self.send_header("Cache-Control", "no-store")
-      if urlsplit(self.path).path.rstrip("/") == "/blocked-bash":
+      if _is_blocked_bash_path(self.path):
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
       else:
         self.send_header("Access-Control-Allow-Origin", "*")

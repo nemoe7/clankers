@@ -336,6 +336,58 @@ def test_blocked_bash_modal_shows_full_escaped_local_entries(
         button.click()
         page.locator("#blocked-bash-log .blocked-bash-entry").nth(1).wait_for()
         assert page.locator("#blocked-bash-log .blocked-bash-entry").count() == 2
+        delete_response = page.request.delete(
+          f"http://127.0.0.1:{server.server_port}/blocked-bash/invalid",
+          headers={"Origin": "https://example.invalid"},
+        )
+        assert delete_response.status == 400
+        assert delete_response.headers["cross-origin-resource-policy"] == "same-origin"
+        assert "access-control-allow-origin" not in delete_response.headers
+
+        page.locator("#blocked-bash-log .blocked-bash-entry").first.locator(
+          "button.audit-row-dismiss"
+        ).click()
+        page.wait_for_function(
+          "() => document.querySelectorAll('#blocked-bash-log .blocked-bash-entry').length === 1"
+        )
+        remaining = page.locator("#blocked-bash-log .blocked-bash-entry").first
+        assert remaining.locator('[data-field="line"]').text_content() == "second call"
+        assert remaining.locator("button.audit-row-dismiss").is_enabled()
+        assert [
+          entry["line"] for entry in app.dispatch("GET", "/blocked-bash")[1]["entries"]
+        ] == ["second call"]
+        remaining.locator("button.audit-row-dismiss").click()
+        page.wait_for_function(
+          "() => document.querySelectorAll('#blocked-bash-log .blocked-bash-entry').length === 0"
+        )
+        assert page.locator("#blocked-bash-status").text_content()
+        assert app.dispatch("GET", "/blocked-bash") == (200, {"entries": []})
+
+        page.locator('#modal-actions button[value="cancel"]').click()
+        page.route(
+          "**/blocked-bash",
+          lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+              {
+                "entries": [
+                  {
+                    "at": "stale",
+                    "line": "stale",
+                    "command": "stale",
+                    "blocked_by": "gate",
+                  }
+                ]
+              }
+            ),
+          ),
+        )
+        button.click()
+        stale_row = page.locator("#blocked-bash-log .blocked-bash-entry").first
+        stale_row.wait_for()
+        assert not stale_row.locator("button.audit-row-dismiss").is_enabled()
+        assert page.locator("#blocked-bash-status").text_content()
       finally:
         browser.close()
   finally:
