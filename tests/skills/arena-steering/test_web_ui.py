@@ -2262,8 +2262,8 @@ def test_main_panel_keeps_small_shared_header_gap(tmp_path: Path) -> None:
       try:
         for width, height, expected_gap in (
           (1372, 883, 12),
-          (855, 325, 6),
-          (411, 799, 10),
+          (855, 325, 4),
+          (411, 799, 8),
         ):
           page = browser.new_page(
             viewport={"width": width, "height": height},
