@@ -29,6 +29,9 @@ steer msg <id>
 
 - Every message ID matches `^[0-9a-f]{6}$`.
 - `blocking=true` messages advance `sent -> seen -> acked`; `blocking=false` messages advance `sent -> seen` on `read` or `poll`.
+- ALWAYS read attached images with `functions.read_file` before acknowledging their note.
+- Report missing attachment bytes instead of inferring content from a listed path.
+- Read complete text attachments only up to 4 KiB. Inspect larger text in bounded slices or with a handwritten task-specific parser.
 
 ## Tasks (`Tasks`)
 
