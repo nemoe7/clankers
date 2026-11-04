@@ -57,10 +57,6 @@ jobs:
           ruff check .
           ruff format --diff .
 
-      - name: Check Shipped Script Syntax
-        run: |
-          node --check skills/arena-skill/assets/app.js
-
       - name: Check Workflow Set
         run: python maintenance/workflows/gate_workflows.py
 

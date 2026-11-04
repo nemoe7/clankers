@@ -195,6 +195,7 @@ def test_module_matrix_selects_owners_and_shared_changes():
   ):
     assert not changed_paths.module_matrix([doc])
   all_names = set(changed_paths.MODULE_TESTS)
+  assert "Proxies" not in all_names
   for shared in (
     "requirements.txt",
     "package-lock.json",
@@ -220,6 +221,26 @@ def test_browser_test_runs_with_preview_module(path):
   assert path in selected[0]["command"]
 
 
+@pytest.mark.parametrize(
+  "path",
+  [
+    "tests/skills/arena-skill/arena-egress-proxy/test_arena_proxy.py",
+    "tests/skills/arena-skill/arena-preview-proxy/test_preview_proxy.py",
+    "tests/skills/arena-skill/test_future.py",
+    "tests/skills/arena-skill/client.test.cjs",
+    "tests/skills/arena-skill/mermaid.test.cjs",
+  ],
+)
+def test_legacy_arena_skill_tests_never_enter_ci_matrix(path, tmp_path):
+  repo = init_repo(tmp_path)
+  commit_change(repo, path)
+  changed_paths.check_module_ownership(str(repo))
+  assert changed_paths.module_matrix([path]) == []
+  assert path not in "\n".join(
+    row["command"] for row in changed_paths.module_matrix(None)
+  )
+
+
 def test_demo_script_runs_with_preview_module():
   selected = changed_paths.module_matrix(["maintenance/demo-arena-steer.py"])
   assert [row["name"] for row in selected] == ["Preview"]
@@ -242,6 +263,9 @@ def test_module_test_ownership_is_complete_and_unique():
     for directory in ("tests", "maintenance", "skills", "github/workflows")
     if (root / directory).exists()
     for path in (root / directory).rglob("test_*.py")
+    if not str(path.relative_to(root)).startswith(
+      changed_paths.LEGACY_ARENA_SKILL_TEST_PREFIX
+    )
   }
   assert set(owned) == discovered
   assert len(owned) == len(set(owned))

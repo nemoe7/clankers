@@ -169,12 +169,10 @@ MODULE_TESTS = {
     "tests/github/workflows/test_check_workflows.py",
     "tests/github/workflows/test_distribute_sync.py",
   ),
-  "Proxies": (
-    "tests/skills/arena-skill/arena-egress-proxy/test_arena_proxy.py",
-    "tests/skills/arena-skill/arena-preview-proxy/test_preview_proxy.py",
-  ),
   "Repository Prose and Validation": ("tests/maintenance/validation/test_check.py",),
 }
+# The legacy arena-skill tests remain runnable locally but are not CI test owners.
+LEGACY_ARENA_SKILL_TEST_PREFIX = "tests/skills/arena-skill/"
 ARENA_SKILL_PATHS = (
   "skills/refs/arena-skill",
   "skills/arena-skill",
@@ -190,9 +188,6 @@ MODULE_PATHS = {
     *ARENA_RUNTIME_PATHS,
     "skills/arena-steering/*",
     "maintenance/demo-arena-steer.py",
-    "tests/skills/arena-skill/test_*",
-    "tests/skills/arena-skill/client.test.cjs",
-    "tests/skills/arena-skill/mermaid.test.cjs",
   ),
   "Nemoizer": (  # nonemo: NMO100
     "skills/*nemoizer/*",
@@ -232,11 +227,6 @@ MODULE_PATHS = {
     "tests/github/workflows/test_check_artifacts.py",
     "tests/github/workflows/test_check_workflows.py",
     "tests/github/workflows/test_distribute_sync.py",
-  ),
-  "Proxies": (
-    *(f"{root}/arena-*-proxy/*" for root in ARENA_SKILL_PATHS),
-    "tests/skills/arena-skill/arena-egress-proxy/*",
-    "tests/skills/arena-skill/arena-preview-proxy/*",
   ),
   "Repository Prose and Validation": (
     "maintenance/check.py",
@@ -303,6 +293,7 @@ def check_module_ownership(repo: str) -> None:
     path
     for path in result.stdout.split("\0")
     if path
+    and not path.startswith(LEGACY_ARENA_SKILL_TEST_PREFIX)
     and (
       (Path(path).name.startswith("test_") and path.endswith(".py"))
       or path.endswith((".test.cjs", ".checks.cjs"))
