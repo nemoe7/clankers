@@ -28,6 +28,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse, urlsplit
 
 from . import __version__
+from .analytics import FallbackAnalytics
 from .blocked_bash import dismiss_blocked_bash, read_blocked_bash
 from .display_paths import home_relative
 from .gates import FileGateStatus
@@ -200,6 +201,9 @@ class SteeringApp:
     repo_name: str | None = None,
   ) -> None:
     self.store = store
+    self.analytics = FallbackAnalytics(
+      Path(store.db_path).parent if store.db_path != ":memory:" else None
+    )
     self._browser_write = threading.local()
     self._clean_uncommitted_uploads()
     default_assets = Path(__file__).resolve().parents[2] / "assets"
@@ -261,6 +265,7 @@ class SteeringApp:
 
   def _register_routes(self) -> None:
     self.router.add("GET", "/health", self._handle_health)
+    self.router.add("POST", "/analytics/fallback", self._handle_fallback_analytics)
     self.router.add("GET", "/blocked-bash", self._handle_blocked_bash_log)
     self.router.add("DELETE", "/blocked-bash/{id}", self._handle_dismiss_blocked_bash)
     self.router.add("GET", "/messages", self._handle_list_messages)
@@ -364,7 +369,11 @@ class SteeringApp:
         )
       else:
         status, payload = handler(params, query, request_body)
-      if method.upper() in {"POST", "PATCH", "DELETE"} and 200 <= status < 300:
+      if (
+        method.upper() in {"POST", "PATCH", "DELETE"}
+        and 200 <= status < 300
+        and path != "/analytics/fallback"
+      ):
         self._state_version = getattr(self, "_state_version", 0) + 1
       return (status, payload)
     except DirtyTreeError as exc:
@@ -689,6 +698,22 @@ class SteeringApp:
       raise KeyError("Blocked Bash entry no longer present")
     dismiss_blocked_bash(Path(self.store.db_path).parent, params["id"])
     return int(HTTPStatus.OK), {"dismissed": True}
+
+  def _handle_fallback_analytics(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+  ) -> tuple[int, Any]:
+    client_id = body.get("client_id")
+    total = body.get("total")
+    if not isinstance(client_id, str) or not re.fullmatch(
+      r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}", client_id
+    ):
+      raise ValueError("Invalid fallback analytics client ID")
+    if type(total) is not int or not 0 <= total <= 1_000_000_000:
+      raise ValueError("Fallback analytics total must be a nonnegative integer")
+    return (
+      int(HTTPStatus.OK),
+      {"fallback_ticks": self.analytics.record(client_id, total)},
+    )
 
   def _handle_health(
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any

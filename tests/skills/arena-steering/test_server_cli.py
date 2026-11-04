@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from arena_steering import __version__, cli
+from arena_steering.analytics import FallbackAnalytics
 from arena_steering.blocked_bash import append_blocked_bash
 from arena_steering.cli import main as cli_main
 from arena_steering.markdown import render_markdown, render_report_markdown
@@ -99,6 +100,72 @@ def test_cli_inbox_header_uses_browser_timezone_and_utc_fallback(
     )
   finally:
     store.close()
+
+
+def test_fallback_share_uses_elapsed_wall_time_and_can_exceed_100_percent(
+  tmp_path: Path,
+) -> None:
+  analytics = FallbackAnalytics(tmp_path)
+  try:
+    started = datetime.fromisoformat(str(analytics.snapshot()["started_at"]))
+    assert analytics.snapshot(now=started)["percent"] is None
+    assert analytics.record("550e8400-e29b-41d4-a716-446655440000", 2) == 2
+    thirty_seconds = analytics.snapshot(now=started + timedelta(seconds=30))
+    assert thirty_seconds["elapsed_seconds"] == 30
+    assert thirty_seconds["percent"] == 20
+    assert analytics.record("550e8400-e29b-41d4-a716-446655440001", 12) == 14
+    assert analytics.snapshot(now=started + timedelta(seconds=30))["percent"] == 140
+  finally:
+    analytics.close()
+
+
+def test_fallback_tick_analytics_deduplicates_and_stays_out_of_change_feed(
+  tmp_path: Path,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  first = "550e8400-e29b-41d4-a716-446655440000"
+  second = "550e8400-e29b-41d4-a716-446655440001"
+  try:
+    version = app.data_version()
+    for client_id, total, expected_count in (
+      (first, 1, 1),
+      (first, 1, 1),
+      (first, 4, 4),
+      (second, 2, 6),
+      (first, 3, 6),
+    ):
+      status, result = app.dispatch(
+        "POST", "/analytics/fallback", {"client_id": client_id, "total": total}
+      )
+      assert status == HTTPStatus.OK
+      assert result["fallback_ticks"] == expected_count
+      assert app.data_version() == version
+    for data in (
+      {"client_id": "invalid", "total": 5},
+      {"client_id": first, "total": -1},
+      {"client_id": first, "total": True},
+    ):
+      assert (
+        app.dispatch("POST", "/analytics/fallback", data)[0] == HTTPStatus.BAD_REQUEST
+      )
+    code, output, error = _run_cli(state_dir, "fallback-stats")
+    assert (code, error) == (0, "")
+    assert "Fallback ticks: 6" in output
+    assert "3 seconds" in output
+    assert "%" in output
+  finally:
+    store.close()
+  reopened = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    restarted = SteeringApp(reopened)
+    status, result = restarted.dispatch(
+      "POST", "/analytics/fallback", {"client_id": first, "total": 4}
+    )
+    assert status == HTTPStatus.OK and result["fallback_ticks"] == 6
+  finally:
+    reopened.close()
 
 
 def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> None:

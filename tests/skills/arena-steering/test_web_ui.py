@@ -3610,3 +3610,55 @@ def test_seen_reply_receipt_keeps_message_height(
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_fallback_poll_analytics_counts_browser_ticks_across_reload(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.clock.install()
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        with page.expect_response("**/analytics/fallback", timeout=6000) as first:
+          page.clock.fast_forward(3_100)
+        assert first.value.status == HTTPStatus.OK
+        assert app.analytics.snapshot()["fallback_ticks"] == 1
+        stored = json.loads(
+          page.evaluate("sessionStorage.getItem('steer:fallbackAnalytics')")
+        )
+        assert stored["total"] == 1
+        page.reload()
+        with page.expect_response("**/analytics/fallback", timeout=6000) as second:
+          page.clock.fast_forward(3_100)
+        assert second.value.status == HTTPStatus.OK
+        assert app.analytics.snapshot()["fallback_ticks"] == 2
+        persisted = json.loads(
+          page.evaluate("sessionStorage.getItem('steer:fallbackAnalytics')")
+        )
+        assert persisted == {"client_id": stored["client_id"], "total": 2}
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    app.analytics.close()
+    store.close()

@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from . import __version__, git_safety
 from . import pre as pre_mod
+from .analytics import FALLBACK_SECONDS, FallbackAnalytics
 from .blocked_bash import append_blocked_bash
 from .display_paths import home_relative
 from .gates import FileGateStatus
@@ -115,6 +116,9 @@ def main(
   serve_p = sub.add_parser("serve", help="Start the local steering HTTP server.")
 
   read_p = sub.add_parser("read", help="Read pending messages and report answers.")
+  fallback_stats_p = sub.add_parser(
+    "fallback-stats", help="Show session fallback-poll ticks and time share."
+  )
 
   poll_p = sub.add_parser(
     "poll", help="Wait for inbox work, a runnable task, or Skip poll."
@@ -351,6 +355,29 @@ def main(
       delivered = messages.read_pending(mark_seen=True)
       _print_delivered(delivered, stdout, store.get_meta("timezone", "") or "")
       messages.reset_gate_if_clear()
+      return 0
+    if cmd == "fallback-stats":
+      fallback_stats_p.parse_args(cmd_args)
+      analytics = FallbackAnalytics(resolved_state_dir)
+      try:
+        stats = analytics.snapshot()
+      finally:
+        analytics.close()
+      percent = stats["percent"]
+      print(f"Fallback ticks: {stats['fallback_ticks']}", file=stdout)
+      print(f"Analytics started: {stats['started_at']}", file=stdout)
+      print(f"Elapsed: {stats['elapsed_seconds']:.1f} seconds", file=stdout)
+      print(
+        f"Fallback time share: {percent:.2f}%"
+        if percent is not None
+        else "Fallback time share: n/a (no elapsed time)",
+        file=stdout,
+      )
+      print(
+        f"Count × {FALLBACK_SECONDS} seconds / elapsed time; "
+        "concurrent tabs can exceed 100%.",
+        file=stdout,
+      )
       return 0
     if cmd == "poll":
       poll_p.parse_args(cmd_args)
