@@ -364,7 +364,10 @@ def main(
       if delivered["messages"] or delivered["report_answers"]:
         _print_delivered(delivered, stdout)
       elif (task := delivered["next_task"]) is not None:
-        print(f"Next task: {task.title} | {task.id} | {task.type}", file=stdout)
+        print(
+          f"DO NOT END TURN, CONTINUE TASK: {task.title} | {task.id} | {task.type}",
+          file=stdout,
+        )
       messages.reset_gate_if_clear()
       return 1 if delivered["status"] == "timeout" else 0
     if cmd == "ack":

@@ -80,7 +80,9 @@ def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> Non
 
     code, out, err = _run_cli(state_dir, "poll")
     assert (code, err) == (0, "")
-    assert out == "Poll: ready\nNext task: First task | first | docs\n"
+    assert out == (
+      "Poll: ready\nDO NOT END TURN, CONTINUE TASK: First task | first | docs\n"
+    )
     assert store.get_meta("skip_poll") == "1"  # Ready work outranks Skip poll.
     app.messages.consume_skip_poll()
     assert app.dispatch("GET", "/poll?timeout=0") == (
@@ -103,7 +105,7 @@ def test_cli_poll_delivers_inbox_before_ready_task(tmp_path: Path) -> None:
     assert (code, err) == (0, "")
     assert out.startswith("Poll: ready\nInbox ")
     assert message_body in out
-    assert "Next task:" not in out
+    assert "DO NOT END TURN, CONTINUE TASK:" not in out
   finally:
     store.close()
 
