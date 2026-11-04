@@ -1194,7 +1194,7 @@ mark.search-hit {
   flex-direction: column;
   width: 100%;
   margin: auto;
-  padding: 18px 0 20px;
+  padding: 0 0 20px;
   overflow: hidden;
 }
 
@@ -2486,7 +2486,7 @@ article#report.report img,
   }
 
   .main-content {
-    padding: 14px 0 16px;
+    padding: 0 0 16px;
   }
 
   .main-content > section[role="tabpanel"]:not([hidden]) {
@@ -2568,7 +2568,7 @@ article#report.report img,
   }
 
   .main-content {
-    padding: 8px 0 10px;
+    padding: 0 0 10px;
   }
 
   .main-content > section[role="tabpanel"]:not([hidden]) {
@@ -2800,7 +2800,6 @@ article#report.report img,
 
     .reports-layout::before,
     .reports-layout::after,
-    .tasks-layout::before,
     .tasks-layout::after {
       content: "";
       position: sticky;
@@ -2811,8 +2810,7 @@ article#report.report img,
       pointer-events: none;
     }
 
-    .reports-layout::before,
-    .tasks-layout::before {
+    .reports-layout::before {
       top: 0;
       margin-bottom: calc(-1 * var(--edge-fade));
       background: linear-gradient(to bottom, var(--bg), transparent);
