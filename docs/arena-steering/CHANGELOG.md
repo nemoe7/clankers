@@ -38,6 +38,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/style.css`, `test_web_ui.py`: Match mobile and desktop header tab widths. Keep both Reports markers above the mobile label without crowding header actions.
+
 - `assets/style.css`, `test_web_ui.py`: Keep the Tasks toolbar on one row across viewports. Preserve search and filter focus order.
 
 - `assets/style.css`, `test_web_ui.py`: Anchor the Tasks top fade below its sticky toolbar after scrolling. Keep it absent at rest.

@@ -1058,12 +1058,6 @@ mark.search-hit {
   gap: 4px;
 }
 
-@media (max-width: 600px) {
-  .tab-nav {
-    grid-template-columns: 1fr 1.3fr 0.7fr;
-  }
-}
-
 .tab-btn {
   position: relative;
   width: 100%;
@@ -1132,6 +1126,13 @@ mark.search-hit {
 #report-needs-answer .report-picker-help-icon {
   width: 7px;
   height: 7px;
+}
+
+@media (max-width: 30em) {
+  #report-pip,
+  #report-needs-answer {
+    top: -4px;
+  }
 }
 
 .btn {

@@ -3317,8 +3317,17 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
         assert pip.get_attribute("aria-label") == "Unread report"
         assert question.get_attribute("aria-label") == "Reports need answers"
         assert "is-unseen-ack" not in (pip.get_attribute("class") or "")
-        for width in (1200, 375):
-          page.set_viewport_size({"width": width, "height": 700})
+        for width, height in (
+          (1372, 883),
+          (855, 325),
+          (411, 799),
+          (375, 700),
+        ):
+          page.set_viewport_size({"width": width, "height": height})
+          tab_widths = page.locator(".tab-nav .tab-btn").evaluate_all(
+            "tabs => tabs.map(tab => tab.getBoundingClientRect().width)"
+          )
+          assert max(tab_widths) - min(tab_widths) < 1, (width, tab_widths)
           geometry = page.locator("#tab-reports").evaluate("""tab => {
             const label = document.createRange();
             label.selectNodeContents(tab.firstChild);
@@ -3330,6 +3339,10 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
               textCenter: (text.left + text.right) / 2,
               tabCenter: (bounds.left + bounds.right) / 2,
               textRight: text.right,
+              textTop: text.top,
+              navRight: document.querySelector('.tab-nav').getBoundingClientRect().right,
+              actionsLeft: document.querySelector('.topbar-actions').getBoundingClientRect().left,
+              overflow: document.documentElement.scrollWidth > innerWidth,
               pipLeft: pip.left,
               pipTop: pip.top,
               pipWidth: pip.width,
@@ -3337,6 +3350,7 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
               questionLeft: question.left,
               questionRight: question.right,
               questionTop: question.top,
+              questionBottom: question.bottom,
               questionWidth: question.width,
               questionHeight: question.height,
               pipOffsetRight: bounds.right - pip.right,
@@ -3346,9 +3360,20 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
           assert geometry["questionTop"] == geometry["pipTop"]
           assert geometry["questionWidth"] == geometry["pipWidth"]
           assert geometry["questionHeight"] == geometry["pipHeight"]
-          assert geometry["textRight"] <= geometry["questionLeft"]
+          assert (
+            geometry["textRight"] <= geometry["questionLeft"]
+            or geometry["textTop"] >= geometry["questionBottom"]
+          ), (width, geometry)
           assert geometry["questionRight"] < geometry["pipLeft"]
           assert geometry["pipOffsetRight"] == 6
+          assert geometry["navRight"] + 8 <= geometry["actionsLeft"]
+          assert not geometry["overflow"]
+        page.locator("#tab-tasks").focus()
+        page.keyboard.press("Tab")
+        assert page.evaluate("document.activeElement.id") == "blocked-bash-open"
+        page.locator("#tab-tasks").click()
+        assert page.locator('#tab-tasks[aria-selected="true"]').count() == 1
+        page.locator("#tab-messages").click()
         page.set_viewport_size({"width": 1200, "height": 700})
         page.screenshot(path=str(tmp_path / "report-both-indicators.png"))
 
@@ -3378,7 +3403,7 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
           assert abs(alone["textCenter"] - alone["tabCenter"]) < 1
           assert alone["textRight"] <= alone["questionLeft"]
           assert alone["questionOffsetRight"] == 6
-          assert alone["questionTop"] == 6
+          assert alone["questionTop"] == (-3 if width <= 480 else 6)
           assert alone["questionWidth"] == alone["questionHeight"] == 7
 
         page.locator("#tab-messages").click()
