@@ -155,7 +155,7 @@ def test_cli_poll_ignores_blocked_tasks_after_gate_finishes(
     exit_path.write_text("0", encoding="utf-8")
     thread.join(timeout=1.5)
     assert not thread.is_alive()
-    assert results == [(0, "Poll waited fully. End turn.\n", "")]
+    assert results == [(0, "running: verify\nPoll waited fully. End turn.\n", "")]
     assert not app.tasks.get_task("gate-task")[1]
     _run_cli(state_dir, "read")  # Clear the fast-repeat guard before a new poll.
     assert _run_cli(state_dir, "poll") == (
@@ -163,6 +163,49 @@ def test_cli_poll_ignores_blocked_tasks_after_gate_finishes(
       "DO NOT END TURN, CONTINUE TASK: Gate task | gate-task | docs\n",
       "",
     )
+  finally:
+    thread.join(timeout=2)
+    store.close()
+
+
+def test_cli_poll_prints_live_linked_gate_once_while_waiting(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True)
+  (runs / "verify.json").write_text(
+    json.dumps({"exit_path": str(runs / "verify.exit")}), encoding="utf-8"
+  )
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  app.tasks.create_task(
+    "gate-task", "Gate task", size=2, gate_names=["verify"], details=["Wait."]
+  )
+  original_poll = cli.MessageService.poll
+
+  def short_poll(self, timeout_seconds=0.0, **kwargs):
+    return original_poll(self, timeout_seconds=0.25, **kwargs)
+
+  monkeypatch.setattr(cli.MessageService, "poll", short_poll)
+  stdout, stderr = io.StringIO(), io.StringIO()
+  codes: list[int] = []
+  thread = threading.Thread(
+    target=lambda: codes.append(cli_main(["poll"], out=stdout, err=stderr)),
+    daemon=True,
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    assert store.get_meta("polling_at")
+    assert thread.is_alive()
+    assert stdout.getvalue() == "running: verify\n"
+    thread.join(timeout=1.5)
+    assert codes == [0]
+    assert stdout.getvalue() == "running: verify\nPoll waited fully. End turn.\n"
+    assert stderr.getvalue() == ""
   finally:
     thread.join(timeout=2)
     store.close()

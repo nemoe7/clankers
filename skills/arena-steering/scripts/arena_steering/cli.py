@@ -354,11 +354,20 @@ def main(
         print(violation.body, file=stdout)
         return 2
 
-      initial_task = next(
-        (task for task, blocked in tasks.list_tasks() if not blocked), None
-      )
-
+      listed_tasks = tasks.list_tasks()
+      initial_task = next((task for task, blocked in listed_tasks if not blocked), None)
       gate_status = FileGateStatus(resolved_state_dir)
+      if initial_task is None and not messages.has_pending_deliverables():
+        running = set(gate_status.running_names())
+        linked_runs = dict.fromkeys(
+          name
+          for task, _ in listed_tasks
+          for name in task.gate_names
+          if name in running
+        )
+        for name in linked_runs:
+          print(f"running: {name}", file=stdout, flush=True)
+
       started = time.monotonic()
       delivered = messages.poll(
         timeout_seconds=1799.0,
