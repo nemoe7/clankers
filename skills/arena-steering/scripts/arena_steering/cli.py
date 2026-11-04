@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from . import __version__, git_safety
 from . import pre as pre_mod
 from .blocked_bash import append_blocked_bash
+from .display_paths import home_relative
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
 from .models import (
@@ -950,21 +951,22 @@ def _schedule_instruction_check(
       root / "AGENTS.md",
       root / ".agents/skills/arena-steering/SKILL.md",
     ]
-    listed = "\n".join(f"- `{path}`" for path in paths if path.is_file())
+    listed = "\n".join(f"- `{home_relative(path)}`" for path in paths if path.is_file())
     messages.send_message(
       "15min bible check\n"
-      "Read each listed path fully with read_file only when its full text is absent "
-      "from context, then acknowledge this note.\n"
-      "Answer the survey only when required bible text was absent before this check. "
-      "Use existing knowledge only.\n"
-      "When answering, read only references/survey.json (or bare `steer survey`) "
-      "and the image path from `steer survey -i`, in JSON order.\n"
+      "if bible missing from context:\n"
+      f"{listed}\n"
+      "Read every listed path in full with read_file and follow its rules.\n"
+      "Answer the survey, ack this note, and continue. "
+      "If no bible text was missing, only ack and continue.\n"
+      "For the survey, use existing knowledge only. Read only references/survey.json "
+      "(or bare `steer survey`) and the image path from `steer survey -i`, "
+      "in JSON order.\n"
       "Do not search, fetch, open other files, run code, or ask another system "
       "for answers.\n"
       "Give complete answers with lower confidence when uncertain. Boolean "
       "answers need true or false and confidence above 0.\n"
-      "Use unknown with confidence 0 only if the whole question is unknown.\n"
-      f"{listed}",
+      "Use unknown with confidence 0 only if the whole question is unknown.",
       hidden=True,
       blocking=True,
     )

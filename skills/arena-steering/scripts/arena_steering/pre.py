@@ -18,6 +18,7 @@ from typing import Protocol
 from urllib.parse import parse_qs, urlsplit
 
 from . import git_safety
+from .display_paths import home_relative
 
 CONTINUE = 0
 END_CALL = 2
@@ -1062,7 +1063,7 @@ class BibleReadGuard:
           continue
         target = Path(os.path.abspath(path if path.is_absolute() else cwd / path))
         if target in protected:
-          return token
+          return home_relative(target)
     return None
 
   def run(self, ctx: PreContext) -> PreResult:

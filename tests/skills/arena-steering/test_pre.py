@@ -58,6 +58,28 @@ def _verdict(ctx: pre.PreContext) -> int:
   return pre.run_pipeline(ctx).verdict
 
 
+def test_notice_paths_resolve_against_runtime_home(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  home = tmp_path / "owner"
+  checkout = home / "checkout"
+  checkout.mkdir(parents=True)
+  monkeypatch.setenv("HOME", str(home))
+  monkeypatch.setattr(pre, "repo_root", lambda: checkout)
+  violation = with_bible_read("VIOLATION: Example.")
+  assert "~/checkout/AGENTS.md" in violation
+  assert "~/checkout/ARENA.md" in violation
+  assert "~/checkout/.agents/skills/arena-steering/SKILL.md" in violation
+  assert str(checkout) not in violation
+  ctx = pre.PreContext(
+    line=f"rg -n gate {checkout / 'AGENTS.md'}",
+    cwd=checkout,
+    checkout_root=checkout,
+  )
+  blocked = pre.BibleReadGuard().run(ctx)
+  assert "~/checkout/AGENTS.md" in blocked.messages[0]
+
+
 @pytest.mark.parametrize("failure_point", ("resolve", "open", "query"))
 def test_pre_allows_work_but_blocks_pushes_when_state_is_unreadable(
   failure_point: str, _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
@@ -1220,6 +1242,7 @@ def test_commit_refuses_staged_capture_and_new_session_id(
     "pre", "-l", "git commit -m review", "-c", "git commit -m review", "-s", "bash"
   )
   assert code == pre.BLOCK and "design-wireframe.png" in out
+  assert f"Captures: ~/{os.path.relpath(capture, Path.home())}" in out
   assert "Remove before commit." in out  # nonemo: NMT100
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_violation() is None
@@ -1244,7 +1267,7 @@ def test_commit_refuses_staged_capture_and_new_session_id(
   assert "note.md" in out
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert "VIOLATION: Cited session-local ID." in out  # nonemo: NMT100
-  assert "note.md:2:" in out
+  assert f"~/{os.path.relpath(note, Path.home())}:2:" in out
   assert "Remove the citation and retry." in out  # nonemo: NMT100
   assert "If full bible missing" in out  # nonemo: NMT100
   assert "Violation flag:" not in out
@@ -2758,6 +2781,7 @@ def test_instruction_checkpoints_wait_fifteen_minutes_and_deduplicate(
   _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
   root = _isolate_state.parent / "checkout"
+  monkeypatch.setenv("HOME", str(_isolate_state.parent))
   skill = root / ".agents" / "skills" / "arena-steering" / "SKILL.md"
   old_skill = root / ".agents" / "skills" / "arena-skill" / "SKILL.md"
   skill.parent.mkdir(parents=True)
@@ -2789,8 +2813,9 @@ def test_instruction_checkpoints_wait_fifteen_minutes_and_deduplicate(
   assert len(due) == 1
   assert "15min bible check" in due[0].body
   for path in (root / "ARENA.md", root / "AGENTS.md", skill):
-    assert str(path) in due[0].body
-  assert str(old_skill) not in due[0].body
+    assert f"`~/{path.relative_to(root.parent).as_posix()}`" in due[0].body
+  assert f"`~/{old_skill.relative_to(root.parent).as_posix()}`" not in due[0].body
+  assert "if bible missing from context:" in due[0].body
   assert messages.pending_ids() == [due[0].id]
   store.close()
 

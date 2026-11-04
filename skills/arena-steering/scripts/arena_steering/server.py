@@ -29,6 +29,7 @@ from urllib.parse import parse_qs, urlparse, urlsplit
 
 from . import __version__
 from .blocked_bash import dismiss_blocked_bash, read_blocked_bash
+from .display_paths import home_relative
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
 from .markdown import render_markdown, render_report_markdown
@@ -957,7 +958,13 @@ class SteeringApp:
     lines = [heading]
     if report is not None:
       lines.append(f"Report: {report.id}")
-      lines.append(f"Source file: {report.source_file or 'unavailable (not recorded)'}")
+      source = Path(report.source_file) if report.source_file else None
+      if source is not None and not source.is_absolute():
+        source = _detect_repo_root(self.store) / source
+      listed = (
+        home_relative(source) if source is not None else "unavailable (not recorded)"
+      )
+      lines.append(f"Source file: {listed}")
     elif tab == "tasks":
       current = next(
         (task for task, blocked in self.tasks.list_tasks() if not blocked), None

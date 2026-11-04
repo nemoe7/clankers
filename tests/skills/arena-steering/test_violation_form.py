@@ -8,6 +8,7 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
+from arena_steering.display_paths import home_relative
 from arena_steering.server import SteeringApp, create_http_server
 from arena_steering.services import BIBLE_READ, with_bible_read
 from arena_steering.store import SqliteStore
@@ -54,7 +55,7 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
       "ARENA.md",
       ".agents/skills/arena-steering/SKILL.md",
     ):
-      assert str(root / relative) in violation.body
+      assert home_relative(root / relative) in violation.body
     assert violation.id in app.messages.pending_ids()
 
     status, duplicate = app.dispatch("POST", "/agent-interrupt", flag)
@@ -261,8 +262,26 @@ def test_report_flag_names_the_persisted_source_file(tmp_path: Path) -> None:
     assert status == HTTPStatus.OK
     flag = app.messages.pending_violation()
     assert flag is not None
-    assert "Source file: arena-state/reports/revised.md" in flag.body
+    assert (
+      f"Source file: {home_relative(Path.cwd() / 'arena-state/reports/revised.md')}"
+      in flag.body
+    )
     assert app.reports.get_report("source-report").status == "dismissed"
+    app.messages.ack(flag.id, "Read the clause.")
+    absolute = tmp_path / "reports" / "absolute.md"
+    app.reports.publish_report(
+      "absolute-report", "Absolute report", "Report body.", source_file=str(absolute)
+    )
+    status, _ = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "absolute-report"},
+    )
+    assert status == HTTPStatus.OK
+    second = app.messages.pending_violation()
+    assert (
+      second is not None and f"Source file: {home_relative(absolute)}" in second.body
+    )
   finally:
     store.close()
 

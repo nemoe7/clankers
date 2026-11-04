@@ -14,6 +14,7 @@ from typing import Any
 
 from . import pre as pre_mod
 from . import survey as survey_mod
+from .display_paths import home_relative
 from .git_safety import DirtyTreeError, GitCheckError, verify_completion_commit
 from .markdown import render_report_markdown, unparsed_strike_lines
 from .markdown_fields import format_answer_for_task_detail, parse_report_markdown
@@ -57,7 +58,7 @@ _BIBLE_PATHS = (
 def with_bible_read(body: str) -> str:
   """Append the separate, conditional full-bible reminder to a true violation."""
   root = pre_mod.repo_root()
-  paths = ", ".join(str(root / relative) for relative in _BIBLE_PATHS)
+  paths = ", ".join(home_relative(root / relative) for relative in _BIBLE_PATHS)
   return body + "\n" + BIBLE_READ.format(paths=paths)
 
 

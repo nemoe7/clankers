@@ -8,6 +8,8 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from .display_paths import home_relative
+
 
 class GitCheckError(Exception):
   """A Git result that cannot justify allowing a guarded operation."""
@@ -87,7 +89,7 @@ def staged_warning(
     ]
     if captures:
       return "Wireframe found staged. Remove before commit. Captures: " + ", ".join(
-        captures
+        home_relative(cwd / name) for name in captures
       )
     if not ids:
       return ""
@@ -118,7 +120,8 @@ def staged_warning(
           if pattern.search(line):
             warning = (
               "VIOLATION: Cited session-local ID. "
-              f"{path}:{number}: {ident}. Remove the citation and retry."
+              f"{home_relative(cwd / path)}:{number}: {ident}. "
+              "Remove the citation and retry."
             )
             if ident in renamable_ids:
               warning += " If name clash `steer ren OLD_ID NEW_ID` and retry."

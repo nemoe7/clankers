@@ -366,6 +366,7 @@ def test_v2_bible_lists_only_its_installed_skill_stub(
   store = SqliteStore(tmp_path / "state.sqlite3")
   messages = cli.MessageService(store, store, store, store)
   monkeypatch.setattr(cli.pre_mod, "repo_root", lambda: tmp_path)
+  monkeypatch.setenv("HOME", str(tmp_path))
   moment = datetime.now(UTC)
   store.set_meta(cli.READ_SET_LAST_META, (moment - timedelta(minutes=16)).isoformat())
   cli._schedule_instruction_check("echo ready", messages, store, moment=moment)
@@ -374,8 +375,12 @@ def test_v2_bible_lists_only_its_installed_skill_stub(
     for msg in messages.list_messages(unread_only=False, include_hidden=True)
     if msg.body.startswith("15min bible check")
   )
-  assert str(tmp_path / v2_path) in checkpoint.body
-  assert str(tmp_path / old_path) not in checkpoint.body
+  assert f"`~/{v2_path}`" in checkpoint.body
+  assert f"`~/{old_path}`" not in checkpoint.body
+  assert "if bible missing from context:" in checkpoint.body  # nonemo: NMT100
+  assert (
+    "Read every listed path in full with read_file" in checkpoint.body  # nonemo: NMT100
+  )
   store.close()
 
 
