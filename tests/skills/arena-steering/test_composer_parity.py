@@ -212,8 +212,22 @@ def test_preview_matches_server_markdown_and_paragraph_breaks() -> None:
       "document.querySelector('#draft-preview strong')?.textContent === 'line'"
     )
     assert preview.locator("p").count() == 2
-    assert preview.locator("p").first.locator("br").count() == 1
-    assert preview.locator("p").first.inner_text() == "First line\nSecond line"
+    first = preview.locator("p").first
+    assert first.locator("br").count() == 0
+    assert first.inner_text() == "First line\nSecond line"
+    spacing = first.evaluate("""p => {
+      const text = p.firstChild;
+      const at = text.textContent.indexOf('\\n');
+      const firstLine = document.createRange();
+      firstLine.setStart(text, 0); firstLine.setEnd(text, at);
+      const secondLine = document.createRange();
+      secondLine.setStart(text, at + 1); secondLine.setEnd(text, text.textContent.length);
+      return {
+        gap: secondLine.getBoundingClientRect().top - firstLine.getBoundingClientRect().top,
+        lineHeight: parseFloat(getComputedStyle(p).lineHeight),
+      };
+    }""")
+    assert spacing["gap"] == pytest.approx(spacing["lineHeight"], abs=1)
     assert preview.locator("p").nth(1).inner_text() == "Separate paragraph"
 
 

@@ -476,7 +476,7 @@ const composerUploads = createComposerUploads(store, (file, options) => api.uplo
 
 const handlers = {
   onRenderDraft(markdown) {
-    return api.renderMarkdown(markdown, { breaks: true });
+    return api.renderMarkdown(markdown, { breaks: true, preWrap: true });
   },
   async onSendMessage(payload) {
     let pending = store.getState().pendingSend;

@@ -961,7 +961,12 @@ class SteeringApp:
     markdown = str(body.get("markdown", ""))
     breaks = bool(body.get("breaks", True))
     headings: list[dict[str, Any]] = []
-    rendered = render_markdown(markdown, breaks=breaks, headings=headings)
+    rendered = render_markdown(
+      markdown,
+      breaks=breaks,
+      pre_wrap=bool(body.get("pre_wrap", False)),
+      headings=headings,
+    )
     return (int(HTTPStatus.OK), {"html": rendered, "headings": headings})
 
   def _handle_list_messages(
@@ -1270,8 +1275,10 @@ class SteeringApp:
   @staticmethod
   def _serialize_message(msg: Any) -> dict[str, Any]:
     payload = msg.to_dict()
-    payload["body_html"] = render_markdown(msg.body, breaks=True)
-    payload["acks_html"] = [render_markdown(ack, breaks=True) for ack in msg.acks]
+    payload["body_html"] = render_markdown(msg.body, breaks=True, pre_wrap=True)
+    payload["acks_html"] = [
+      render_markdown(ack, breaks=True, pre_wrap=True) for ack in msg.acks
+    ]
     return payload
 
   @staticmethod

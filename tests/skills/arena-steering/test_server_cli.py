@@ -1042,6 +1042,50 @@ def test_http_static_paths_do_not_collide_with_report_routes(tmp_path: Path) -> 
     store.close()
 
 
+def test_message_markdown_uses_one_visual_break_per_line(tmp_path: Path) -> None:
+  source = "test\nlong message\ntest"
+  expected = "<p>test\nlong message\ntest</p>"
+  ordinary = "<p>test<br />\nlong message<br />\ntest</p>"
+  assert render_markdown(source, breaks=True, pre_wrap=True) == expected
+  assert render_markdown(source, breaks=True) == ordinary
+  assert render_markdown("one  \ntwo", breaks=True, pre_wrap=True) == "<p>one\ntwo</p>"
+  assert render_markdown("one\n\n**two**", breaks=True, pre_wrap=True) == (
+    "<p>one</p>\n<p><strong>two</strong></p>"
+  )
+  code = "```txt\none\n two\n```"
+  assert render_markdown(code, breaks=True, pre_wrap=True) == render_markdown(code)
+  tight_list = "- first  \n  second\n- next"
+  assert render_markdown(tight_list, breaks=True, pre_wrap=True) == render_markdown(
+    tight_list, breaks=True
+  )
+  assert render_markdown("one  \ntwo") == "<p>one<br />\ntwo</p>"
+  assert render_report_markdown("one  \ntwo") == "<p>one<br />\ntwo</p>"
+
+  store = SqliteStore(tmp_path / "line-breaks.sqlite3")
+  try:
+    app = SteeringApp(store)
+    status, created = app.dispatch(
+      "POST", "/messages", {"id": "aa1111", "body": source, "blocking": False}
+    )
+    assert status == int(HTTPStatus.CREATED)
+    assert created["message"]["body_html"] == expected
+    status, preview = app.dispatch(
+      "POST", "/markdown", {"markdown": source, "pre_wrap": True}
+    )
+    assert status == int(HTTPStatus.OK)
+    assert preview["html"] == expected
+    status, normal = app.dispatch("POST", "/markdown", {"markdown": source})
+    assert status == int(HTTPStatus.OK)
+    assert normal["html"] == ordinary
+    status, acked = app.dispatch(
+      "POST", "/messages/aa1111/ack", {"markdown": "reply\nsecond line"}
+    )
+    assert status == int(HTTPStatus.OK)
+    assert acked["message"]["acks_html"] == ["<p>reply\nsecond line</p>"]
+  finally:
+    store.close()
+
+
 def test_server_markdown_it_diff_and_report_summary_cache(tmp_path: Path) -> None:
   headings: list[dict[str, object]] = []
   rendered = render_markdown(

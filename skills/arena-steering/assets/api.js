@@ -340,8 +340,10 @@ export const api = {
   getReport(reportId) {
     return requestJson("GET", `/reports/${encodeURIComponent(reportId)}`);
   },
-  renderMarkdown(markdown, { breaks = true } = {}) {
-    return requestJson("POST", "/markdown", { markdown, breaks });
+  renderMarkdown(markdown, { breaks = true, preWrap = false } = {}) {
+    const payload = { markdown, breaks };
+    if (preWrap) payload.pre_wrap = true;
+    return requestJson("POST", "/markdown", payload);
   },
   dismissReport(reportId) {
     return requestJson("DELETE", `/reports/${encodeURIComponent(reportId)}`, undefined, true);

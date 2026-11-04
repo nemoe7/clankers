@@ -18,6 +18,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `markdown.py`, `server.py`, `assets/api.js`, `assets/app.js`: Show one visual break per source line in Messages and its draft preview. Keep Reports Markdown unchanged.
+
 - `pre.py`, `scripts/install.sh`: Register DEBUG after login setup and keep approved utility shells unblocked during EXIT cleanup. Recheck pending pushes.
 
 ## [2.2.0]

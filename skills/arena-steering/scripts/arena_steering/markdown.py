@@ -376,12 +376,15 @@ def _create_parser(*, breaks: bool = False, report: bool = False) -> MarkdownIt:
 _PARSER_STANDARD = _create_parser(breaks=False)
 _PARSER_BREAKS = _create_parser(breaks=True)
 _PARSER_REPORT = _create_parser(report=True)
+_PARAGRAPH_HTML = re.compile(r"<p>.*?</p>", re.DOTALL)
+_PARAGRAPH_BREAK = re.compile(r"<br\s*/?>")
 
 
 def render_markdown(
   markdown: str,
   *,
   breaks: bool = False,
+  pre_wrap: bool = False,
   headings: list[dict[str, Any]] | None = None,
 ) -> str:
   """Render CommonMark text to safe HTML using markdown-it-py."""
@@ -389,7 +392,13 @@ def render_markdown(
   env: dict[str, Any] = {}
   if headings is not None:
     env["headings"] = headings
-  return str(parser.render(str(markdown or ""), env)).strip()
+  rendered = str(parser.render(str(markdown or ""), env)).strip()
+  if pre_wrap:
+    # Only paragraphs use pre-wrap. Tight list items still need break tags.
+    return _PARAGRAPH_HTML.sub(
+      lambda match: _PARAGRAPH_BREAK.sub("", match.group(0)), rendered
+    )
+  return rendered
 
 
 def render_report_markdown(
