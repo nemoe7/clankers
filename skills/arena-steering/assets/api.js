@@ -380,6 +380,15 @@ export const api = {
     const body = active === undefined ? {} : { active: Boolean(active) };
     return requestJson("POST", "/survey/interrupt", body, true);
   },
+  async listBlockedBash() {
+    // Do not send the unredacted local log over the cross-origin WebSocket API.
+    const response = await fetch("/blocked-bash", { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || `Request failed (${response.status})`);
+    }
+    return payload;
+  },
   flagViolation(payload) {
     return requestJson("POST", "/agent-interrupt", payload, true);
   },

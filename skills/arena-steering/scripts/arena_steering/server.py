@@ -28,6 +28,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse, urlsplit
 
 from . import __version__
+from .blocked_bash import read_blocked_bash
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
 from .markdown import render_markdown, render_report_markdown
@@ -250,6 +251,7 @@ class SteeringApp:
 
   def _register_routes(self) -> None:
     self.router.add("GET", "/health", self._handle_health)
+    self.router.add("GET", "/blocked-bash", self._handle_blocked_bash_log)
     self.router.add("GET", "/messages", self._handle_list_messages)
     self.router.add("POST", "/messages", self._handle_create_message)
     self.router.add(
@@ -655,6 +657,15 @@ class SteeringApp:
     sig = assets_signature(self.assets_dir)
     digest = hashlib.sha256(repr(sig).encode("utf-8")).hexdigest()
     return digest[:12]
+
+  def _handle_blocked_bash_log(
+    self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    state_dir = (
+      Path(self.store.db_path).parent if self.store.db_path != ":memory:" else None
+    )
+    entries = read_blocked_bash(state_dir) if state_dir is not None else []
+    return int(HTTPStatus.OK), {"entries": entries}
 
   def _handle_health(
     self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
@@ -1456,7 +1467,13 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
         if not isinstance(parsed_body, dict):
           raise ValueError("JSON request body must be an object")
         body_dict = parsed_body
-      status, payload = app.dispatch(method, path, body_dict)
+      if method == "GET" and urlsplit(path).path.rstrip("/") == "/blocked-bash":
+        status, payload = (
+          int(HTTPStatus.FORBIDDEN),
+          {"error": "Blocked Bash log requires same-origin HTTP"},
+        )
+      else:
+        status, payload = app.dispatch(method, path, body_dict)
       reply = json.dumps(
         {
           "type": "response",
@@ -1690,11 +1707,14 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       self.send_header("Content-Type", content_type)
       self.send_header("Content-Length", str(length))
       self.send_header("Cache-Control", "no-store")
-      self.send_header("Access-Control-Allow-Origin", "*")
-      self.send_header(
-        "Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS"
-      )
-      self.send_header("Access-Control-Allow-Headers", "Content-Type")
+      if urlsplit(self.path).path.rstrip("/") == "/blocked-bash":
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+      else:
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header(
+          "Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS"
+        )
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
   return SteeringRequestHandler
 

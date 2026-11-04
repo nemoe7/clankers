@@ -957,6 +957,46 @@ function initImageModal() {
   });
 }
 
+function renderBlockedBashEntry(entry) {
+  const article = document.createElement("article");
+  article.className = "blocked-bash-entry";
+  const fields = document.createElement("dl");
+  for (const [key, label] of [
+    ["at", "Time (UTC)"],
+    ["line", "Full line"],
+    ["command", "Command"],
+    ["blocked_by", "Reason"],
+  ]) {
+    const name = document.createElement("dt");
+    name.textContent = label;
+    const value = document.createElement("dd");
+    value.dataset.field = key;
+    value.textContent = entry[key];
+    fields.append(name, value);
+  }
+  article.append(fields);
+  return article;
+}
+
+async function openBlockedBashLog(trigger) {
+  const closed = modal.open("blocked-bash-log", { title: "Blocked Bash log", trigger });
+  const status = document.getElementById("blocked-bash-status");
+  const log = document.getElementById("blocked-bash-log");
+  void closed.then(() => log.replaceChildren());
+  try {
+    const { entries } = await api.listBlockedBash();
+    if (!log.isConnected || !document.getElementById("modal-shell").open) return;
+    status.textContent = entries.length
+      ? `${entries.length} blocked Bash ${entries.length === 1 ? "call" : "calls"} recorded locally.`
+      : "No blocked Bash calls recorded locally.";
+    log.replaceChildren(...entries.map(renderBlockedBashEntry));
+  } catch (error) {
+    if (status.isConnected) {
+      status.textContent = `Could not read the local log: ${error.message}. Close and reopen to retry.`;
+    }
+  }
+}
+
 function openViolationForm(health, trigger) {
   const tab = store.getState().activeTab;
   const types = health.violation_types?.[tab];
@@ -1047,6 +1087,10 @@ function initEvents() {
       store.setState({ activeTab: btn.dataset.tab });
     });
   }
+
+  document.getElementById("blocked-bash-open")?.addEventListener("click", (event) => {
+    void openBlockedBashLog(event.currentTarget);
+  });
 
   const interruptBtn = document.getElementById("agent-interrupt");
   interruptBtn?.addEventListener("click", async () => {

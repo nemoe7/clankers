@@ -1045,6 +1045,12 @@ mark.search-hit {
   gap: 4px;
 }
 
+@media (max-width: 600px) {
+  .tab-nav {
+    grid-template-columns: 1fr 1.3fr 0.7fr;
+  }
+}
+
 .tab-btn {
   position: relative;
   width: 100%;
@@ -2792,6 +2798,74 @@ article#report.report img,
 .modal-shell:has(.survey-modal-content) .modal-body {
   min-height: 0;
   overflow-y: auto;
+}
+
+.modal-shell:has(.blocked-bash-content) {
+  max-width: min(920px, calc(100vw - 32px));
+}
+
+.modal-shell:has(.blocked-bash-content) .modal-card {
+  max-height: calc(100dvh - 32px);
+}
+
+.modal-shell:has(.blocked-bash-content) .modal-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.blocked-bash-content {
+  min-width: 0;
+}
+
+#blocked-bash-status {
+  margin: 0 0 var(--space-3);
+  font-size: 13px;
+}
+
+.blocked-bash-log {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.blocked-bash-entry {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: hsl(var(--surface-secondary));
+}
+
+.blocked-bash-entry dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--space-3);
+  row-gap: var(--space-2);
+  margin: 0;
+}
+
+.blocked-bash-entry dt {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.blocked-bash-entry dd {
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-basel-grotesk-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .blocked-bash-entry dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .blocked-bash-entry dt:not(:first-child) {
+    margin-top: var(--space-2);
+  }
 }
 
 .violation-form {

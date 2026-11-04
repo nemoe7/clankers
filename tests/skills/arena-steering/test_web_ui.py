@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 from _reload_isolation import run_reload_in_child
 from arena_steering import survey
+from arena_steering.blocked_bash import append_blocked_bash
 from arena_steering.server import (
   SteeringApp,
   create_http_server,
@@ -254,6 +255,87 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
           assert sizes["contentHeight"] > sizes["bodyHeight"]
         page.locator('#modal-actions button[value="cancel"]').click()
         assert not page.locator("#modal-shell").is_visible()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize(("width", "height"), [(390, 844), (1200, 700), (855, 325)])
+def test_blocked_bash_modal_shows_full_escaped_local_entries(
+  tmp_path: Path, width: int, height: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  line = '<img src=x onerror="window.__injected=true"> ' + "x" * 8192 + "\nnext line"
+  command = 'printf "<script>alert(1)</script>"'
+  append_blocked_bash(tmp_path, line=line, command=command, blocked_by="guard <reason>")
+  app = SteeringApp(store)
+  _, payload = app.dispatch("GET", "/blocked-bash")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        response = page.request.get(
+          f"http://127.0.0.1:{server.server_port}/blocked-bash",
+          headers={"Origin": "https://example.invalid"},
+        )
+        assert response.status == 200
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["cross-origin-resource-policy"] == "same-origin"
+        assert "access-control-allow-origin" not in response.headers
+        button = page.locator("#blocked-bash-open")
+        button.click()
+        row = page.locator("#blocked-bash-log .blocked-bash-entry").first
+        row.wait_for()
+        for field, expected in (
+          ("at", payload["entries"][0]["at"]),
+          ("line", line),
+          ("command", command),
+          ("blocked_by", "guard <reason>"),
+        ):
+          assert row.locator(f'[data-field="{field}"]').text_content() == expected
+        assert (
+          page.locator("#blocked-bash-log img, #blocked-bash-log script").count() == 0
+        )
+        assert page.evaluate("() => window.__injected ?? false") is False
+        assert (
+          button.bounding_box()["x"]
+          < page.locator("#agent-interrupt").bounding_box()["x"]
+        )
+        assert page.locator("#modal-body").evaluate(
+          "el => el.scrollHeight > el.clientHeight"
+        )
+        shell = page.locator("#modal-shell").bounding_box()
+        footer = page.locator("#modal-actions").bounding_box()
+        assert shell["x"] >= 0 and shell["x"] + shell["width"] <= width
+        assert footer["y"] + footer["height"] <= height
+
+        page.locator('#modal-actions button[value="cancel"]').click()
+        assert not page.locator("#modal-shell").is_visible()
+        assert button.evaluate("el => el === document.activeElement") is True
+        append_blocked_bash(
+          tmp_path, line="second call", command="second", blocked_by="other"
+        )
+        button.click()
+        page.locator("#blocked-bash-log .blocked-bash-entry").nth(1).wait_for()
+        assert page.locator("#blocked-bash-log .blocked-bash-entry").count() == 2
       finally:
         browser.close()
   finally:

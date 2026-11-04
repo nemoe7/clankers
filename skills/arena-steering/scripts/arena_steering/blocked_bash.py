@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -28,6 +29,43 @@ def append_blocked_bash(
     with os.fdopen(fd, "a", encoding="utf-8") as log:
       fd = -1
       log.write(json.dumps(row, ensure_ascii=False) + "\n")
+  finally:
+    if fd >= 0:
+      os.close(fd)
+
+
+def read_blocked_bash(state_dir: Path) -> list[dict[str, str]]:
+  """Read every local audit entry without following links or hiding bad rows."""
+  flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
+  try:
+    fd = os.open(state_dir / LOG_NAME, flags)
+  except FileNotFoundError:
+    return []
+  except OSError as exc:
+    raise RuntimeError("Blocked Bash log is unavailable") from exc
+  try:
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+      raise RuntimeError("Blocked Bash log is not a regular file")
+    with os.fdopen(fd, "r", encoding="utf-8") as log:
+      fd = -1
+      entries: list[dict[str, str]] = []
+      try:
+        for number, line in enumerate(log, start=1):
+          try:
+            entry = json.loads(line)
+          except json.JSONDecodeError as exc:
+            raise RuntimeError(
+              f"Invalid blocked Bash log entry at line {number}"
+            ) from exc
+          if not isinstance(entry, dict) or any(
+            not isinstance(entry.get(field), str)
+            for field in ("at", "line", "command", "blocked_by")
+          ):
+            raise RuntimeError(f"Invalid blocked Bash log entry at line {number}")
+          entries.append(entry)
+      except UnicodeError as exc:
+        raise RuntimeError("Blocked Bash log is not UTF-8") from exc
+      return entries
   finally:
     if fd >= 0:
       os.close(fd)

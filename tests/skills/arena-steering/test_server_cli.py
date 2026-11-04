@@ -10,12 +10,14 @@ from pathlib import Path
 
 import pytest
 from arena_steering import __version__, cli
+from arena_steering.blocked_bash import append_blocked_bash
 from arena_steering.cli import main as cli_main
 from arena_steering.markdown import render_markdown, render_report_markdown
 from arena_steering.server import (
   PASTE_ATTACHMENT_CHAR_THRESHOLD,
   PASTE_ATTACHMENT_LINE_THRESHOLD,
   SteeringApp,
+  make_request_handler,
 )
 from arena_steering.store import SqliteStore
 
@@ -49,6 +51,66 @@ def test_cli_version_flags() -> None:
   code = cli_main(["--version"], out=out)
   assert code == 0
   assert out.getvalue().strip() == f"steer {__version__}"
+
+
+def test_blocked_bash_log_endpoint_reads_full_local_entries_without_syncing(
+  tmp_path: Path,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    assert app.dispatch("GET", "/blocked-bash") == (HTTPStatus.OK, {"entries": []})
+
+    line = 'printf "<script>alert(1)</script>" --demo=' + "x" * 4096 + "\nnext line"
+    command = 'printf "<script>alert(1)</script>"'
+    append_blocked_bash(
+      state_dir, line=line, command=command, blocked_by="guard <reason>"
+    )
+    append_blocked_bash(
+      state_dir, line="second call", command="second", blocked_by="different guard"
+    )
+    status, payload = app.dispatch("GET", "/blocked-bash")
+    assert status == HTTPStatus.OK
+    assert len(payload["entries"]) == 2
+    first, second = payload["entries"]
+    assert first["at"].endswith("Z")
+    assert first["line"] == line
+    assert first["command"] == command
+    assert first["blocked_by"] == "guard <reason>"
+    assert second["line"] == "second call"
+    log_path = state_dir / "blocked-bash.jsonl"
+    assert log_path.stat().st_mode & 0o777 == 0o600
+
+    status, snapshot = app.dispatch("GET", "/state/snapshot")
+    assert status == HTTPStatus.OK
+    assert line not in json.dumps(snapshot)
+
+    handler = object.__new__(make_request_handler(app))
+    replies: list[dict[str, object]] = []
+    handler.ws_send = lambda _opcode, data: replies.append(json.loads(data))
+    handler.ws_dispatch(
+      {"id": "blocked-log", "method": "GET", "path": "/blocked-bash", "body": ""}
+    )
+    assert replies[0]["status"] == HTTPStatus.FORBIDDEN
+    assert line not in str(replies)
+
+    log_path.unlink()
+    target = tmp_path / "outside.jsonl"
+    target.write_text('{"line": "not a local log"}\n', encoding="utf-8")
+    log_path.symlink_to(target)
+    status, payload = app.dispatch("GET", "/blocked-bash")
+    assert status == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert "outside" not in payload["error"]
+    assert "not a local log" not in payload["error"]
+
+    log_path.unlink()
+    log_path.write_text("not JSON\n", encoding="utf-8")
+    status, payload = app.dispatch("GET", "/blocked-bash")
+    assert status == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert payload["error"] == "Invalid blocked Bash log entry at line 1"
+  finally:
+    store.close()
 
 
 def test_task_lists_only_titles_and_ids_but_single_task_keeps_details() -> None:

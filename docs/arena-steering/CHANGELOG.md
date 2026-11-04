@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 - `blocked_bash.py`, `cli.py`, `scripts/install.sh`: Append unredacted blocked Bash calls to permission-restricted local JSONL, including failed hook pushes.
 
+- `blocked_bash.py`, `server.py`, `assets/`: Show full blocked Bash entries in a local modal beside the violation flag. Render each field as text and exclude the log from state sync and reports.
+
 ### Changed
 
 - `cli.py`: Limit task lists to IDs and titles while single-task inspection keeps scope, links, and details.
@@ -19,6 +21,8 @@ This log has no Unreleased section.
 ### Fixed
 
 - `markdown.py`, `server.py`, `assets/api.js`, `assets/app.js`: Show one visual break per source line in Messages and its draft preview. Keep Reports Markdown unchanged.
+
+- `assets/style.css`: Keep Reports markers clear of the label when the Bash log button shares a narrow header.
 
 - `pre.py`, `scripts/install.sh`: Register DEBUG after login setup and keep approved utility shells unblocked during EXIT cleanup. Recheck pending pushes.
 
